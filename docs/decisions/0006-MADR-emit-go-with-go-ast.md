@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-09
 decision-makers: Repository owner
 ---
@@ -16,7 +16,7 @@ The emit sources are about 2,100 lines: `types.go` 1,505, `dispatch.go` 277, `he
 
 ## Decision Drivers
 
-* The owner asked to stop depending on Jennifer for schema emission.
+* The owner said Jennifer must no longer be a dependency at all. That means no `require`, no `replace`, no `exclude`, no `go.sum` line, and no Go import.
 * The generator should keep its only third-party requirement from growing, and this change removes one.
 * The published SDK surface is the generated files. An emitter swap that changes those files changes the SDK.
 * Jennifer's fluent calls do not map one-to-one onto `go/ast` nodes. The port is a rewrite of the emit package, not a rename of an import.
@@ -29,20 +29,20 @@ The emit sources are about 2,100 lines: `types.go` 1,505, `dispatch.go` 277, `he
 
 ## Decision Outcome
 
-Chosen option: "Build `*ast.File` values and print them with `go/format`", because that is the standard-library AST path and it removes Jennifer. This decision is proposed until the owner approves it.
+Chosen option: "Build `*ast.File` values and print them with `go/format`", because that is the standard-library AST path and it removes Jennifer completely. The owner accepted this on 2026-10-09.
 
 Small constructors in `cmd/generate` may return `ast.Expr`, `ast.Stmt`, and `ast.Decl`. They are local helpers. They are not a new code-generation library. `load` and `ir` stay. The generated files are regenerated from the current schema. A diff against the current generated files, after `gofmt` on both sides, must be empty before Jennifer is removed. A nonempty diff stops the work.
 
 ### Consequences
 
-* Good, because `cmd/generate` no longer requires `github.com/dave/jennifer`.
+* Good, because `github.com/dave/jennifer` is not a requirement of either module, directly or indirectly.
 * Good, because the emitted tree is ordinary `go/ast`.
 * Neutral, because the emit sources become more verbose. `go/ast` has no fluent builder.
 * Bad, because comment placement and blank lines can differ under `go/printer` even when the Go means the same thing. Those differences still fail the empty-diff gate.
 
 ### Confirmation
 
-`cmd/generate/go.mod` has no Jennifer requirement. `jenwrap.go` is gone. No emit file imports `github.com/dave/jennifer/jen`. Regenerating and running `gofmt` leaves `constants_gen.go`, `types_gen.go`, `agent_gen.go`, `client_gen.go`, and `helpers_gen.go` unchanged. `go test ./...` passes at the root and in `cmd/generate`.
+Neither `go.mod` requires `github.com/dave/jennifer`. Neither file contains a `replace` or an `exclude` for it. `cmd/generate/go.sum` does not name it. `jenwrap.go` is gone. No `.go` file imports `github.com/dave/jennifer/jen`. `go list -m all` in `cmd/generate` does not list it. Regenerating and running `gofmt` leaves `constants_gen.go`, `types_gen.go`, `agent_gen.go`, `client_gen.go`, and `helpers_gen.go` unchanged. `go test ./...` passes at the root and in `cmd/generate`.
 
 ## Pros and Cons of the Options
 
@@ -64,6 +64,6 @@ Small constructors in `cmd/generate` may return `ast.Expr`, `ast.Stmt`, and `ast
 
 ## More Information
 
-[0005-MADR-separate-module-from-coder.md](0005-MADR-separate-module-from-coder.md) renames the module path and leaves Jennifer in place. This decision does not perform that rename. The two plans can land in either order. Whichever runs second updates the import path or the requirement it finds.
+[0005-MADR-separate-module-from-coder.md](0005-MADR-separate-module-from-coder.md) renames the module path. This decision owns the removal of Jennifer. 0005 must not add Jennifer back. This decision does not perform the rename. The two plans can land in either order. Whichever runs second updates the import path or the requirement it finds.
 
 Implementation is [0006-PLAN-emit-go-with-go-ast.md](0006-PLAN-emit-go-with-go-ast.md).

@@ -19,7 +19,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0004 | PLAN | [Implement the schema 1.25.0 pin](decisions/0004-PLAN-pin-acp-schema-1-25-0.md) | complete |
 | 0005 | MADR | [Separate this module from github.com/coder/acp-go-sdk](decisions/0005-MADR-separate-module-from-coder.md) | accepted |
 | 0005 | PLAN | [Implement the separation from github.com/coder/acp-go-sdk](decisions/0005-PLAN-separate-module-from-coder.md) | proposed |
-| 0006 | MADR | [Emit generated Go with go/ast instead of Jennifer](decisions/0006-MADR-emit-go-with-go-ast.md) | proposed |
+| 0006 | MADR | [Emit generated Go with go/ast instead of Jennifer](decisions/0006-MADR-emit-go-with-go-ast.md) | accepted |
 | 0006 | PLAN | [Implement go/ast emission](decisions/0006-PLAN-emit-go-with-go-ast.md) | proposed |
 
 ## I want to…

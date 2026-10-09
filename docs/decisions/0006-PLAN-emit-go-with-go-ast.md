@@ -34,7 +34,7 @@ Out of scope:
 2. Add local constructors that return `go/ast` nodes, and a writer that prints an `*ast.File` with `go/format`. Do not import Jennifer from the new writer.
 3. Port `WriteConstantsJen` to that writer. Regenerate `constants_gen.go`. Compare it with the file from before this step after `gofmt` on both. An empty diff is required. A nonempty diff stops this plan.
 4. Port `WriteHelpersJen` the same way, then `WriteDispatchJen`, then `WriteTypesJen`. After each writer, regenerate only the files that writer owns and require an empty `gofmt` diff before the next writer.
-5. When all five generated files match, delete `jenwrap.go`, remove Jennifer from `cmd/generate/go.mod`, and tidy that module. Rename the `Write*Jen` functions so the names no longer say Jen. Update `main.go`.
+5. When all five generated files match, delete `jenwrap.go` and every import of `github.com/dave/jennifer/jen`. Remove the requirement from `cmd/generate/go.mod`. Tidy that module so `go.sum` no longer names it, and delete `go.sum` if tidy leaves it empty. Do not add a `replace` or an `exclude`. Rename the `Write*Jen` functions so the names no longer say Jen. Update `main.go`.
 6. Run `go test ./...` at the repository root and in `cmd/generate`.
 
 The files each writer owns:
@@ -46,8 +46,10 @@ The files each writer owns:
 
 ## Verification
 
-* No file under `cmd/generate` imports `github.com/dave/jennifer/jen`.
-* `cmd/generate/go.mod` does not require Jennifer.
+* No `.go` file imports `github.com/dave/jennifer/jen`.
+* Neither `go.mod` requires, replaces, or excludes `github.com/dave/jennifer`.
+* `cmd/generate/go.sum` does not name `github.com/dave/jennifer`. If the sum file would be empty, it is deleted.
+* `go list -m all` in `cmd/generate` does not list `github.com/dave/jennifer`.
 * `gofmt` of the five generated files matches the pre-port bytes after `gofmt`.
 * `go test ./...` exits 0 at the root and in `cmd/generate`.
 * `gofmt -l` on the edited generator Go files prints nothing.

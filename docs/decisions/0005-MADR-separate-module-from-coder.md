@@ -70,3 +70,7 @@ The root module path becomes `github.com/maccavelli/acp-go-sdk2`. The generator 
 [0004-MADR-pin-acp-schema-1-25-0.md](0004-MADR-pin-acp-schema-1-25-0.md) left the README `go get` line on the Coder path at `@v0.13.5`. This decision replaces that path. It does not invent a module tag. The schema stamp stays `1.25.0`.
 
 Implementation is [0005-PLAN-separate-module-from-coder.md](0005-PLAN-separate-module-from-coder.md).
+
+## Amendment 2026-10-09, Jennifer
+
+The owner said Jennifer must no longer be a dependency at all. [0006-MADR-emit-go-with-go-ast.md](0006-MADR-emit-go-with-go-ast.md) accepts that removal. The sentences in this decision that leave Jennifer required no longer stand. This decision still does not perform the generator rewrite.
