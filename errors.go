@@ -39,30 +39,37 @@ func (e *RequestError) Error() string {
 	return fmt.Sprintf("code %d: %s", e.Code, e.Message)
 }
 
+// NewParseError returns a JSON-RPC parse error (-32700).
 func NewParseError(data any) *RequestError {
 	return &RequestError{Code: -32700, Message: "Parse error", Data: data}
 }
 
+// NewInvalidRequest returns a JSON-RPC invalid-request error (-32600).
 func NewInvalidRequest(data any) *RequestError {
 	return &RequestError{Code: -32600, Message: "Invalid request", Data: data}
 }
 
+// NewMethodNotFound returns a JSON-RPC method-not-found error (-32601).
 func NewMethodNotFound(method string) *RequestError {
 	return &RequestError{Code: -32601, Message: "Method not found", Data: map[string]any{"method": method}}
 }
 
+// NewInvalidParams returns a JSON-RPC invalid-params error (-32602).
 func NewInvalidParams(data any) *RequestError {
 	return &RequestError{Code: -32602, Message: "Invalid params", Data: data}
 }
 
+// NewInternalError returns a JSON-RPC internal error (-32603).
 func NewInternalError(data any) *RequestError {
 	return &RequestError{Code: -32603, Message: "Internal error", Data: data}
 }
 
+// NewRequestCancelled returns a JSON-RPC request-cancelled error (-32800).
 func NewRequestCancelled(data any) *RequestError {
 	return &RequestError{Code: -32800, Message: "Request cancelled", Data: data}
 }
 
+// NewAuthRequired returns an ACP authentication-required error (-32000).
 func NewAuthRequired(data any) *RequestError {
 	return &RequestError{Code: -32000, Message: "Authentication required", Data: data}
 }
@@ -72,11 +79,12 @@ func toReqErr(err error) *RequestError {
 	if err == nil {
 		return nil
 	}
-	if re, ok := err.(*RequestError); ok {
+	var re *RequestError
+	if errors.As(err, &re) {
 		return re
 	}
 	if errors.Is(err, context.Canceled) {
-		return NewRequestCancelled(map[string]any{"error": err.Error()})
+		return NewRequestCancelled(map[string]any{jsonErrorField: err.Error()})
 	}
-	return NewInternalError(map[string]any{"error": err.Error()})
+	return NewInternalError(map[string]any{jsonErrorField: err.Error()})
 }

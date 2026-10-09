@@ -8,16 +8,13 @@ code, helper APIs, and library version remain in sync.
 ## Prerequisites
 
 - `make`, `curl`, and `git` in your `PATH`.
-- [mise](https://mise.jdx.dev) for the toolchain. Run `mise install` once to
-  provision Go, `treefmt`, and the formatters/linters that `make fmt` and
-  `make check` invoke.
-- The repository must have an Actions secret named `ANTHROPIC_API_KEY` so the
-  release-notes workflow can update GitHub Release bodies after publication.
+- Go at the version in the `go` line of `go.mod`.
+- `gofmt`, `golangci-lint` v2.14.0, and `make pre-add-check`.
 
 ## Bump the Schema Version
 
 1. Decide which upstream ACP schema tag to adopt (for example `v0.4.3`).
-1. Update `schema/version` and regenerate code. There are two supported ways to
+2. Update `schema/version` and regenerate code. There are two supported ways to
    do this:
 
 ### Option A: Use the release helper
@@ -30,7 +27,7 @@ The helper performs the following steps:
 
 - writes the requested number to `schema/version`
 - runs `make version` to download the new schema files and regenerate Go code
-- runs `make fmt`, `make test`, and `make check`
+- runs `make fmt`, `make test`, and `make pre-add-check`
 - asserts that `schema/version` and `version` now match
 
 If any command fails, fix the issue and rerun the helper. The target does not
@@ -43,12 +40,12 @@ printf '0.4.3\n' > schema/version
 make version
 make fmt
 GOCACHE=$(pwd)/.gocache make test
-make check
+make pre-add-check
 cmp -s schema/version version
 ```
 
 `make version` downloads the schema files for the requested ACP tag, regenerates
-all Go code, and formats the repository with `gofumpt`. The `cmp` command is a
+all Go code, and formats the repository with `gofmt`. The `cmp` command is a
 lightweight guard that ensures both `schema/version` and the top-level `version`
 file agree before you publish.
 
@@ -56,8 +53,8 @@ file agree before you publish.
 
 1. Inspect the changes: `git status` and `git diff` should show updated schema
    files, generated Go code, and the version files.
-1. Commit with a descriptive message such as `release: v0.4.3`.
-1. Push the branch to GitHub and open a pull request if review is required.
+2. Commit with `git commit --no-edit`. The repository hook writes the message.
+3. Push the branch to GitHub and open a pull request if review is required.
 
 ## Tag and Publish
 
@@ -68,12 +65,8 @@ file agree before you publish.
    git push origin v0.4.3
    ```
 
-1. Create a GitHub release for the tag. Include a summary of notable changes and
+2. Create a GitHub release for the tag. Include a summary of notable changes and
    reference the upstream ACP schema version.
-
-After the GitHub release is published, CI runs `communique` and replaces the
-release body with generated notes. The workflow requires a `v*` release tag and
-the `ANTHROPIC_API_KEY` Actions secret.
 
 Consumers rely on the `vX.Y.Z` semver tag for `go get`, so ensure the tag is
 pushed before announcing the release.
@@ -82,8 +75,6 @@ pushed before announcing the release.
 
 - If the new schema introduces breaking changes, update examples and docs in
   the same commit.
-- Release-note automation updates GitHub Release bodies only; it does not
-  maintain a `CHANGELOG.md`.
 - The helper uses a repository-local Go build cache (`.gocache`) to avoid
   sandbox restrictions in CI and local development. You can delete it with
   `rm -rf .gocache` if needed.

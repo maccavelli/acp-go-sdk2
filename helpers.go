@@ -1,10 +1,23 @@
 package acp
 
+const (
+	blockTypeText         = "text"
+	blockTypeImage        = "image"
+	blockTypeAudio        = "audio"
+	blockTypeResourceLink = "resource_link"
+	blockTypeResource     = "resource"
+	blockTypeContent      = "content"
+	blockTypeDiff         = "diff"
+	blockTypeTerminal     = "terminal"
+	rawInputPathKey       = "path"
+	rawInputContentKey    = "content"
+)
+
 // TextBlock constructs a text content block.
 func TextBlock(text string) ContentBlock {
 	return ContentBlock{Text: &ContentBlockText{
 		Text: text,
-		Type: "text",
+		Type: blockTypeText,
 	}}
 }
 
@@ -13,7 +26,7 @@ func ImageBlock(data string, mimeType string) ContentBlock {
 	return ContentBlock{Image: &ContentBlockImage{
 		Data:     data,
 		MimeType: mimeType,
-		Type:     "image",
+		Type:     blockTypeImage,
 	}}
 }
 
@@ -22,7 +35,7 @@ func AudioBlock(data string, mimeType string) ContentBlock {
 	return ContentBlock{Audio: &ContentBlockAudio{
 		Data:     data,
 		MimeType: mimeType,
-		Type:     "audio",
+		Type:     blockTypeAudio,
 	}}
 }
 
@@ -30,7 +43,7 @@ func AudioBlock(data string, mimeType string) ContentBlock {
 func ResourceLinkBlock(name string, uri string) ContentBlock {
 	return ContentBlock{ResourceLink: &ContentBlockResourceLink{
 		Name: name,
-		Type: "resource_link",
+		Type: blockTypeResourceLink,
 		Uri:  uri,
 	}}
 }
@@ -39,7 +52,7 @@ func ResourceLinkBlock(name string, uri string) ContentBlock {
 func ResourceBlock(res EmbeddedResourceResource) ContentBlock {
 	return ContentBlock{Resource: &ContentBlockResource{
 		Resource: res,
-		Type:     "resource",
+		Type:     blockTypeResource,
 	}}
 }
 
@@ -47,7 +60,7 @@ func ResourceBlock(res EmbeddedResourceResource) ContentBlock {
 func ToolContent(block ContentBlock) ToolCallContent {
 	return ToolCallContent{Content: &ToolCallContentContent{
 		Content: block,
-		Type:    "content",
+		Type:    blockTypeContent,
 	}}
 }
 
@@ -61,7 +74,7 @@ func ToolDiffContent(path string, newText string, oldText ...string) ToolCallCon
 		NewText: newText,
 		OldText: o,
 		Path:    path,
-		Type:    "diff",
+		Type:    blockTypeDiff,
 	}}
 }
 
@@ -69,7 +82,7 @@ func ToolDiffContent(path string, newText string, oldText ...string) ToolCallCon
 func ToolTerminalRef(terminalID string) ToolCallContent {
 	return ToolCallContent{Terminal: &ToolCallContentTerminal{
 		TerminalId: terminalID,
-		Type:       "terminal",
+		Type:       blockTypeTerminal,
 	}}
 }
 
@@ -113,6 +126,7 @@ func UpdatePlan(entries ...PlanEntry) SessionUpdate {
 	return SessionUpdate{Plan: &SessionUpdatePlan{Entries: entries}}
 }
 
+// ToolCallStartOpt modifies a tool_call start update before it is built.
 type ToolCallStartOpt func(tc *SessionUpdateToolCall)
 
 // StartToolCall constructs a tool_call update with required fields and applies optional modifiers.
@@ -154,12 +168,12 @@ func WithStartLocations(l []ToolCallLocation) ToolCallStartOpt {
 		tc.Locations = l
 		if len(l) == 1 && l[0].Path != "" {
 			if tc.RawInput == nil {
-				tc.RawInput = map[string]any{"path": l[0].Path}
+				tc.RawInput = map[string]any{rawInputPathKey: l[0].Path}
 			} else {
 				m, ok := tc.RawInput.(map[string]any)
 				if ok {
-					if _, exists := m["path"]; !exists {
-						m["path"] = l[0].Path
+					if _, exists := m[rawInputPathKey]; !exists {
+						m[rawInputPathKey] = l[0].Path
 					}
 				}
 			}
@@ -181,6 +195,7 @@ func WithStartRawOutput(v any) ToolCallStartOpt {
 	}
 }
 
+// ToolCallUpdateOpt modifies a tool_call_update before it is built.
 type ToolCallUpdateOpt func(tu *SessionToolCallUpdate)
 
 // UpdateToolCall constructs a tool_call_update with the given ID and applies optional modifiers.
@@ -243,17 +258,17 @@ func WithUpdateRawOutput(v any) ToolCallUpdateOpt {
 
 // StartReadToolCall constructs a 'tool_call' update for reading a file: kind=read, status=pending, locations=[{path}], rawInput={path}.
 func StartReadToolCall(id ToolCallId, title string, path string, opts ...ToolCallStartOpt) SessionUpdate {
-	base := []ToolCallStartOpt{WithStartKind(ToolKindRead), WithStartStatus(ToolCallStatusPending), WithStartLocations([]ToolCallLocation{{Path: path}}), WithStartRawInput(map[string]any{"path": path})}
-	args := append(base, opts...)
-	return StartToolCall(id, title, args...)
+	base := []ToolCallStartOpt{WithStartKind(ToolKindRead), WithStartStatus(ToolCallStatusPending), WithStartLocations([]ToolCallLocation{{Path: path}}), WithStartRawInput(map[string]any{rawInputPathKey: path})}
+	base = append(base, opts...)
+	return StartToolCall(id, title, base...)
 }
 
 // StartEditToolCall constructs a 'tool_call' update for editing content: kind=edit, status=pending, locations=[{path}], rawInput={path, content}.
 func StartEditToolCall(id ToolCallId, title string, path string, content any, opts ...ToolCallStartOpt) SessionUpdate {
 	base := []ToolCallStartOpt{WithStartKind(ToolKindEdit), WithStartStatus(ToolCallStatusPending), WithStartLocations([]ToolCallLocation{{Path: path}}), WithStartRawInput(map[string]any{
-		"content": content,
-		"path":    path,
+		rawInputContentKey: content,
+		rawInputPathKey:    path,
 	})}
-	args := append(base, opts...)
-	return StartToolCall(id, title, args...)
+	base = append(base, opts...)
+	return StartToolCall(id, title, base...)
 }

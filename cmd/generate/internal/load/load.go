@@ -83,7 +83,7 @@ func (d *Definition) UnmarshalJSON(b []byte) error {
 
 // ReadMeta loads schema/meta.json.
 func ReadMeta(schemaDir string) (*Meta, error) {
-	metaBytes, err := os.ReadFile(filepath.Join(schemaDir, "meta.json"))
+	metaBytes, err := os.ReadFile(filepath.Join(schemaDir, "meta.json")) //nolint:gosec // schemaDir is the generator's explicit input.
 	if err != nil {
 		return nil, fmt.Errorf("read meta.json: %w", err)
 	}
@@ -96,7 +96,7 @@ func ReadMeta(schemaDir string) (*Meta, error) {
 
 // ReadSchema loads schema/schema.json.
 func ReadSchema(schemaDir string) (*Schema, error) {
-	schemaBytes, err := os.ReadFile(filepath.Join(schemaDir, "schema.json"))
+	schemaBytes, err := os.ReadFile(filepath.Join(schemaDir, "schema.json")) //nolint:gosec // schemaDir is the generator's explicit input.
 	if err != nil {
 		return nil, fmt.Errorf("read schema.json: %w", err)
 	}
@@ -110,7 +110,7 @@ func ReadSchema(schemaDir string) (*Schema, error) {
 // ReadMetaUnstable loads schema/meta.unstable.json when present.
 // The returned boolean indicates whether the file was found.
 func ReadMetaUnstable(schemaDir string) (*Meta, bool, error) {
-	metaBytes, err := os.ReadFile(filepath.Join(schemaDir, "meta.unstable.json"))
+	metaBytes, err := os.ReadFile(filepath.Join(schemaDir, "meta.unstable.json")) //nolint:gosec // schemaDir is the generator's explicit input.
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil
@@ -127,7 +127,7 @@ func ReadMetaUnstable(schemaDir string) (*Meta, bool, error) {
 // ReadSchemaUnstable loads schema/schema.unstable.json when present.
 // The returned boolean indicates whether the file was found.
 func ReadSchemaUnstable(schemaDir string) (*Schema, bool, error) {
-	schemaBytes, err := os.ReadFile(filepath.Join(schemaDir, "schema.unstable.json"))
+	schemaBytes, err := os.ReadFile(filepath.Join(schemaDir, "schema.unstable.json")) //nolint:gosec // schemaDir is the generator's explicit input.
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil

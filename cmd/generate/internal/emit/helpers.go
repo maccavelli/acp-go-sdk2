@@ -12,6 +12,155 @@ import (
 	"github.com/coder/acp-go-sdk/cmd/generate/internal/util"
 )
 
+type helperVariant struct {
+	fieldName string
+	typeName  string
+	discKey   string
+	discValue string
+	required  []string
+	props     map[string]*load.Definition
+}
+
+func collectHelperVariants(name string, def *load.Definition, schema *load.Schema, usedTypeNames map[string]bool) []helperVariant {
+	if def == nil || def.DocsIgnore || len(def.OneOf) == 0 {
+		return nil
+	}
+	// Skip string-const unions
+	if isStringConstUnion(def) {
+		return nil
+	}
+	// Skip generating New... helpers for unions that have stable, static helpers
+	// implemented in go/helpers.go.
+	switch name {
+	case unionContentBlock, "ToolCallContent", nameSessionUpdate:
+		return nil
+	}
+	// Build variant info using the same logic as the types emitter (emitUnion)
+	// to ensure type names match exactly.
+	discKey := ""
+	// Use schema's explicit discriminator if available (matching types emitter)
+	if def.Discriminator != nil {
+		discKey = def.Discriminator.PropertyName
+	}
+	// Fallback: discover discriminator key by scanning for const properties
+	if discKey == "" {
+		for _, v := range def.OneOf {
+			if v == nil {
+				continue
+			}
+			expanded := expandAllOf(schema, v)
+			for k, pd := range expanded.Properties {
+				if pd != nil && pd.Const != nil {
+					discKey = k
+					break
+				}
+			}
+			if discKey != "" {
+				break
+			}
+		}
+	}
+	variants := []helperVariant{}
+	for idx, v := range def.OneOf {
+		if hv, ok := oneHelperVariant(name, schema, idx, v, discKey, usedTypeNames); ok {
+			variants = append(variants, hv)
+		}
+	}
+	return variants
+}
+
+func oneHelperVariant(name string, schema *load.Schema, idx int, v *load.Definition, discKey string, usedTypeNames map[string]bool) (helperVariant, bool) {
+	if v == nil {
+		return helperVariant{}, false
+	}
+	// Match the types emitter's allOf-to-ref shortcut.
+	ref := v.Ref
+	if ref == "" {
+		ref = singleRefVariant(v)
+	}
+	v = expandAllOf(schema, v)
+
+	// Compute type name matching the types emitter (emitUnion).
+	tname := ""
+	if ref != "" && strings.HasPrefix(ref, "#/$defs/") {
+		tname = ref[len("#/$defs/"):]
+	} else if v.Title != "" {
+		tname = generateNestedTypeName(name, v.Title, usedTypeNames)
+		usedTypeNames[tname] = true
+	} else {
+		if discKey != "" {
+			if pd := v.Properties[discKey]; pd != nil && pd.Const != nil {
+				s := fmt.Sprint(pd.Const)
+				tname = generateNestedTypeName(name, s, usedTypeNames)
+				usedTypeNames[tname] = true
+			}
+		}
+		if tname == "" {
+			tname = name + fmt.Sprintf("Variant%d", idx+1)
+			usedTypeNames[tname] = true
+		}
+	}
+	tname = util.ToExportedField(tname)
+
+	// Derive field name with same priority as types emitter.
+	fieldName := ""
+	dv := ""
+	if discKey != "" {
+		if pd := v.Properties[discKey]; pd != nil && pd.Const != nil {
+			s := fmt.Sprint(pd.Const)
+			fieldName = util.ToExportedField(s)
+			dv = s
+		}
+	}
+	if fieldName == "" && v.Title != "" {
+		fieldName = util.ToExportedField(v.Title)
+	}
+	if fieldName == "" {
+		fieldName = util.ToExportedField(tname)
+	}
+	req := make([]string, len(v.Required))
+	copy(req, v.Required)
+	return helperVariant{fieldName: fieldName, typeName: tname, discKey: discKey, discValue: dv, required: req, props: v.Properties}, true
+}
+
+func emitHelperConstructors(f *File, name string, variants []helperVariant) {
+	// Emit helper per variant: func New<Union><FieldName>(...) <Union>
+	for _, vi := range variants {
+		// params: all required props except const discriminator
+		params := []Code{}
+		assigns := Dict{}
+		for _, rk := range vi.required {
+			if rk == vi.discKey {
+				continue
+			}
+			pd := vi.props[rk]
+			if pd == nil {
+				continue
+			}
+			// build param using lower-cased name
+			pname := rk
+			// field id for struct literal
+			field := util.ToExportedField(rk)
+			params = append(params, ID(pname).Add(jenTypeFor(pd)))
+			assigns[ID(field)] = ID(pname)
+		}
+		// include const discriminant if present and field exists on struct
+		if vi.discKey != "" && vi.discValue != "" {
+			assigns[ID(util.ToExportedField(vi.discKey))] = Lit(vi.discValue)
+		}
+		// Construct variant literal and wrap
+		f.Comment(fmt.Sprintf("New%s%s constructs a %s using the '%s' variant.", name, vi.fieldName, name, vi.discValue))
+		f.Func().Id("New" + name + vi.fieldName).Params(params...).Id(name).Block(
+			Return(
+				ID(name).Values(Dict{
+					ID(vi.fieldName): Op("&").Id(vi.typeName).Values(assigns),
+				}),
+			),
+		)
+		f.Line()
+	}
+}
+
 // WriteHelpersJen emits go/helpers_gen.go with small constructor helpers
 // for common union variants and a Ptr generic helper.
 func WriteHelpersJen(outDir string, schema *load.Schema, _ *load.Meta) error {
@@ -32,158 +181,12 @@ func WriteHelpersJen(outDir string, schema *load.Schema, _ *load.Meta) error {
 	}
 	sort.Strings(keys)
 	for _, name := range keys {
-		def := schema.Defs[name]
-		if def == nil || def.DocsIgnore || len(def.OneOf) == 0 {
-			continue
-		}
-		// Skip string-const unions
-		if isStringConstUnion(def) {
-			continue
-		}
-		// Skip generating New... helpers for unions that have stable, static helpers
-		// implemented in go/helpers.go.
-		switch name {
-		case "ContentBlock", "ToolCallContent", "SessionUpdate":
-			continue
-		}
-		// Build variant info using the same logic as the types emitter (emitUnion)
-		// to ensure type names match exactly.
-		type vinfo struct {
-			fieldName string
-			typeName  string
-			discKey   string
-			discValue string
-			required  []string
-			props     map[string]*load.Definition
-		}
-		discKey := ""
-		// Use schema's explicit discriminator if available (matching types emitter)
-		if def.Discriminator != nil {
-			discKey = def.Discriminator.PropertyName
-		}
-		// Fallback: discover discriminator key by scanning for const properties
-		if discKey == "" {
-			for _, v := range def.OneOf {
-				if v == nil {
-					continue
-				}
-				expanded := expandAllOf(schema, v)
-				for k, pd := range expanded.Properties {
-					if pd != nil && pd.Const != nil {
-						discKey = k
-						break
-					}
-				}
-				if discKey != "" {
-					break
-				}
-			}
-		}
-		variants := []vinfo{}
-		for idx, v := range def.OneOf {
-			if v == nil {
-				continue
-			}
-			// Match the types emitter's allOf-to-ref shortcut
-			ref := v.Ref
-			if ref == "" &&
-				v.Type == nil &&
-				len(v.Properties) == 0 &&
-				len(v.Required) == 0 &&
-				len(v.Enum) == 0 &&
-				v.Items == nil &&
-				len(v.AnyOf) == 0 &&
-				len(v.OneOf) == 0 &&
-				len(v.AllOf) == 1 &&
-				v.AllOf[0] != nil &&
-				v.AllOf[0].Ref != "" {
-				ref = v.AllOf[0].Ref
-			}
-			v = expandAllOf(schema, v)
-
-			// Compute type name matching the types emitter (emitUnion)
-			tname := ""
-			if ref != "" && strings.HasPrefix(ref, "#/$defs/") {
-				tname = ref[len("#/$defs/"):]
-			} else if v.Title != "" {
-				tname = generateNestedTypeName(name, v.Title, usedTypeNames)
-				usedTypeNames[tname] = true
-			} else {
-				if discKey != "" {
-					if pd := v.Properties[discKey]; pd != nil && pd.Const != nil {
-						s := fmt.Sprint(pd.Const)
-						tname = generateNestedTypeName(name, s, usedTypeNames)
-						usedTypeNames[tname] = true
-					}
-				}
-				if tname == "" {
-					tname = name + fmt.Sprintf("Variant%d", idx+1)
-					usedTypeNames[tname] = true
-				}
-			}
-			tname = util.ToExportedField(tname)
-
-			// Derive field name with same priority as types emitter
-			fieldName := ""
-			dv := ""
-			if discKey != "" {
-				if pd := v.Properties[discKey]; pd != nil && pd.Const != nil {
-					s := fmt.Sprint(pd.Const)
-					fieldName = util.ToExportedField(s)
-					dv = s
-				}
-			}
-			if fieldName == "" && v.Title != "" {
-				fieldName = util.ToExportedField(v.Title)
-			}
-			if fieldName == "" {
-				fieldName = util.ToExportedField(tname)
-			}
-			// collect required
-			req := make([]string, len(v.Required))
-			copy(req, v.Required)
-			variants = append(variants, vinfo{fieldName: fieldName, typeName: tname, discKey: discKey, discValue: dv, required: req, props: v.Properties})
-		}
-		// Emit helper per variant: func New<Union><FieldName>(...) <Union>
-		for _, vi := range variants {
-			// params: all required props except const discriminator
-			params := []Code{}
-			assigns := Dict{}
-			for _, rk := range vi.required {
-				if rk == vi.discKey {
-					continue
-				}
-				pd := vi.props[rk]
-				if pd == nil {
-					continue
-				}
-				// build param using lower-cased name
-				pname := rk
-				// field id for struct literal
-				field := util.ToExportedField(rk)
-				params = append(params, Id(pname).Add(jenTypeFor(pd)))
-				assigns[Id(field)] = Id(pname)
-			}
-			// include const discriminant if present and field exists on struct
-			if vi.discKey != "" && vi.discValue != "" {
-				assigns[Id(util.ToExportedField(vi.discKey))] = Lit(vi.discValue)
-			}
-			// Construct variant literal and wrap
-			f.Comment(fmt.Sprintf("New%s%s constructs a %s using the '%s' variant.", name, vi.fieldName, name, vi.discValue))
-			f.Func().Id("New" + name + vi.fieldName).Params(params...).Id(name).Block(
-				Return(
-					Id(name).Values(Dict{
-						Id(vi.fieldName): Op("&").Id(vi.typeName).Values(assigns),
-					}),
-				),
-			)
-			f.Line()
-		}
+		emitHelperConstructors(f, name, collectHelperVariants(name, schema.Defs[name], schema, usedTypeNames))
 	}
 
 	var buf bytes.Buffer
 	if err := f.Render(&buf); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(outDir, "helpers_gen.go"), buf.Bytes(), 0o644)
+	return os.WriteFile(filepath.Join(outDir, "helpers_gen.go"), buf.Bytes(), generatedFileMode)
 }

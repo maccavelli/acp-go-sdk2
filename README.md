@@ -77,18 +77,18 @@ invoked for any incoming method starting with `_`.
 ```go
 // HandleExtensionMethod handles ACP extension methods (names starting with "_").
 func (a MyAgent) HandleExtensionMethod(ctx context.Context, method string, params json.RawMessage) (any, error) {
-	switch method {
-	case "_example.com/hello":
-		var p struct {
-			Name string `json:"name"`
-		}
-		if err := json.Unmarshal(params, &p); err != nil {
-			return nil, err
-		}
-		return map[string]any{"greeting": "hello " + p.Name}, nil
-	default:
-		return nil, acp.NewMethodNotFound(method)
-	}
+    switch method {
+    case "_example.com/hello":
+        var p struct {
+            Name string `json:"name"`
+        }
+        if err := json.Unmarshal(params, &p); err != nil {
+            return nil, err
+        }
+        return map[string]any{"greeting": "hello " + p.Name}, nil
+    default:
+        return nil, acp.NewMethodNotFound(method)
+    }
 }
 ```
 
@@ -103,18 +103,18 @@ From either side, use `CallExtension` / `NotifyExtension` on the connection.
 ```go
 raw, err := conn.CallExtension(ctx, "_example.com/hello", map[string]any{"name": "world"})
 if err != nil {
-	return err
+    return err
 }
 
 var resp struct {
-	Greeting string `json:"greeting"`
+    Greeting string `json:"greeting"`
 }
 if err := json.Unmarshal(raw, &resp); err != nil {
-	return err
+    return err
 }
 
 if err := conn.NotifyExtension(ctx, "_example.com/progress", map[string]any{"pct": 50}); err != nil {
-	return err
+    return err
 }
 ```
 
@@ -142,6 +142,7 @@ to it via stdio.
 - [Examples (Go)](https://github.com/coder/acp-go-sdk/tree/main/example)
 - [Protocol Documentation](https://agentclientprotocol.com)
 - [Agent Client Protocol GitHub Repository](https://github.com/agentclientprotocol/agent-client-protocol)
+- [Documentation index](docs/README.md)
 
 ## License
 

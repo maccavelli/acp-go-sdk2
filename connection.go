@@ -17,6 +17,9 @@ import (
 const (
 	notificationQueueDrainTimeout = 5 * time.Second
 	defaultMaxQueuedNotifications = 1024
+	jsonRPCVersion                = "2.0"
+	jsonNull                      = "null"
+	jsonErrorField                = "error"
 )
 
 var errNotificationQueueOverflow = errors.New("notification queue overflow")
@@ -48,6 +51,7 @@ type cancelRequestParams struct {
 	RequestID json.RawMessage `json:"requestId"`
 }
 
+// MethodHandler handles one inbound JSON-RPC request or notification.
 type MethodHandler func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError)
 
 // Connection is a simple JSON-RPC 2.0 connection over line-delimited JSON.
@@ -190,6 +194,8 @@ func WithLogger(l *slog.Logger) ConnectionOption {
 	}
 }
 
+// NewConnection starts a line-delimited JSON-RPC connection.
+// peerInput receives bytes written to the peer. peerOutput supplies bytes read from the peer.
 func NewConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *Connection {
 	cfg := connectionConfig{
 		maxQueuedNotifications: defaultMaxQueuedNotifications,
@@ -297,7 +303,7 @@ func canonicalJSONRPCIDKey(raw json.RawMessage) (string, error) {
 
 	switch v := id.(type) {
 	case nil:
-		return "null", nil
+		return jsonNull, nil
 	case string:
 		canon, err := json.Marshal(v)
 		if err != nil {
@@ -413,7 +419,7 @@ func parseJSONRPCNumericID(raw string) (negative bool, digits string, exp10 int,
 	return negative, digits, exp10, nil
 }
 
-func parseBoundedInt(raw string, max int) (int, error) {
+func parseBoundedInt(raw string, upper int) (int, error) {
 	if raw == "" {
 		return 0, errInvalidJSONRPCNumericID
 	}
@@ -424,7 +430,7 @@ func parseBoundedInt(raw string, max int) (int, error) {
 			return 0, errInvalidJSONRPCNumericID
 		}
 		digit := int(raw[i] - '0')
-		if value > (max-digit)/10 {
+		if value > (upper-digit)/10 {
 			return 0, errJSONRPCNumericIDTooLarge
 		}
 		value = value*10 + digit
@@ -437,7 +443,7 @@ func isASCIIDigit(ch byte) bool {
 }
 
 func formatCanonicalJSONRPCNumericID(negative bool, digits string, exp10 int) (string, error) {
-	for len(digits) > 0 && digits[len(digits)-1] == '0' {
+	for digits != "" && digits[len(digits)-1] == '0' {
 		digits = digits[:len(digits)-1]
 		exp10++
 	}
@@ -705,7 +711,7 @@ func (c *Connection) handleCancelRequest(msg *anyMessage) {
 }
 
 func (c *Connection) handleInbound(ctx context.Context, req *anyMessage) {
-	res := anyMessage{JSONRPC: "2.0"}
+	res := anyMessage{JSONRPC: jsonRPCVersion}
 
 	// copy ID if present
 	if req.ID != nil {
@@ -714,7 +720,9 @@ func (c *Connection) handleInbound(ctx context.Context, req *anyMessage) {
 	if c.handler == nil {
 		if req.ID != nil {
 			res.Error = NewMethodNotFound(req.Method)
-			_ = c.sendMessage(res)
+			if err := c.sendMessage(res); err != nil {
+				return
+			}
 		}
 		return
 	}
@@ -737,16 +745,18 @@ func (c *Connection) handleInbound(ctx context.Context, req *anyMessage) {
 		// marshal result
 		b, mErr := json.Marshal(result)
 		if mErr != nil {
-			res.Error = NewInternalError(map[string]any{"error": mErr.Error()})
+			res.Error = NewInternalError(map[string]any{jsonErrorField: mErr.Error()})
 		} else {
 			res.Result = b
 		}
 	}
-	_ = c.sendMessage(res)
+	if err := c.sendMessage(res); err != nil {
+		return
+	}
 }
 
 func (c *Connection) sendMessage(msg anyMessage) error {
-	msg.JSONRPC = "2.0"
+	msg.JSONRPC = jsonRPCVersion
 	b, err := json.Marshal(msg)
 	if err != nil {
 		return err
@@ -761,7 +771,7 @@ func (c *Connection) sendMessage(msg anyMessage) error {
 
 // SendRequest sends a JSON-RPC request and returns a typed result.
 // For methods that do not return a result, use SendRequestNoResult instead.
-func SendRequest[T any](c *Connection, ctx context.Context, method string, params any) (T, error) {
+func SendRequest[T any](c *Connection, ctx context.Context, method string, params any) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
 	var result T
 
 	msg, idKey, err := c.prepareRequest(method, params)
@@ -776,7 +786,7 @@ func SendRequest[T any](c *Connection, ctx context.Context, method string, param
 
 	if err := c.sendMessage(msg); err != nil {
 		c.cleanupPending(idKey)
-		return result, NewInternalError(map[string]any{"error": err.Error()})
+		return result, NewInternalError(map[string]any{jsonErrorField: err.Error()})
 	}
 
 	resp, err := c.waitForResponse(ctx, pr, idKey)
@@ -793,7 +803,7 @@ func SendRequest[T any](c *Connection, ctx context.Context, method string, param
 
 	if len(resp.msg.Result) > 0 {
 		if err := json.Unmarshal(resp.msg.Result, &result); err != nil {
-			return result, NewInternalError(map[string]any{"error": err.Error()})
+			return result, NewInternalError(map[string]any{jsonErrorField: err.Error()})
 		}
 	}
 	return result, nil
@@ -801,10 +811,13 @@ func SendRequest[T any](c *Connection, ctx context.Context, method string, param
 
 func (c *Connection) prepareRequest(method string, params any) (anyMessage, string, error) {
 	id := c.nextID.Add(1)
-	idRaw, _ := json.Marshal(id)
+	idRaw, err := json.Marshal(id)
+	if err != nil {
+		return anyMessage{}, "", NewInternalError(map[string]any{jsonErrorField: err.Error()})
+	}
 
 	msg := anyMessage{
-		JSONRPC: "2.0",
+		JSONRPC: jsonRPCVersion,
 		ID:      (*json.RawMessage)(&idRaw),
 		Method:  method,
 	}
@@ -812,7 +825,7 @@ func (c *Connection) prepareRequest(method string, params any) (anyMessage, stri
 	if params != nil {
 		b, err := json.Marshal(params)
 		if err != nil {
-			return msg, "", NewInvalidParams(map[string]any{"error": err.Error()})
+			return msg, "", NewInvalidParams(map[string]any{jsonErrorField: err.Error()})
 		}
 		msg.Params = b
 	}
@@ -877,7 +890,7 @@ func (c *Connection) sendCancelRequest(idKey string) {
 }
 
 func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, idKey string) (responseEnvelope, error) {
-	peerDisconnectedErr := NewInternalError(map[string]any{"error": "peer disconnected before response"})
+	peerDisconnectedErr := NewInternalError(map[string]any{jsonErrorField: "peer disconnected before response"})
 
 	select {
 	case resp := <-pr.ch:
@@ -902,7 +915,7 @@ func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, i
 		if cause != nil {
 			return responseEnvelope{}, toReqErr(cause)
 		}
-		return responseEnvelope{}, NewInternalError(map[string]any{"error": "request context ended without cause"})
+		return responseEnvelope{}, NewInternalError(map[string]any{jsonErrorField: "request context ended without cause"})
 	case <-c.Done():
 		c.cleanupPending(idKey)
 		return responseEnvelope{}, peerDisconnectedErr
@@ -914,7 +927,7 @@ func (c *Connection) waitNotificationsUpTo(ctx context.Context, target uint64) e
 		return nil
 	}
 
-	peerDisconnectedErr := NewInternalError(map[string]any{"error": "peer disconnected while waiting for pre-response notifications"})
+	peerDisconnectedErr := NewInternalError(map[string]any{jsonErrorField: "peer disconnected while waiting for pre-response notifications"})
 	stopWake := make(chan struct{})
 	defer close(stopWake)
 
@@ -959,7 +972,7 @@ func (c *Connection) waitNotificationsUpTo(ctx context.Context, target uint64) e
 			if cause != nil {
 				return toReqErr(cause)
 			}
-			return NewInternalError(map[string]any{"error": "request context ended without cause while waiting for notifications"})
+			return NewInternalError(map[string]any{jsonErrorField: "request context ended without cause while waiting for notifications"})
 		default:
 		}
 
@@ -1027,7 +1040,7 @@ func (c *Connection) SendRequestNoResult(ctx context.Context, method string, par
 
 	if err := c.sendMessage(msg); err != nil {
 		c.cleanupPending(idKey)
-		return NewInternalError(map[string]any{"error": err.Error()})
+		return NewInternalError(map[string]any{jsonErrorField: err.Error()})
 	}
 
 	resp, err := c.waitForResponse(ctx, pr, idKey)
@@ -1044,10 +1057,11 @@ func (c *Connection) SendRequestNoResult(ctx context.Context, method string, par
 	return nil
 }
 
+// SendNotification sends a JSON-RPC notification. It does not wait for a response.
 func (c *Connection) SendNotification(ctx context.Context, method string, params any) error {
 	select {
 	case <-ctx.Done():
-		return NewInternalError(map[string]any{"error": ctx.Err().Error()})
+		return NewInternalError(map[string]any{jsonErrorField: ctx.Err().Error()})
 	default:
 	}
 
@@ -1057,21 +1071,21 @@ func (c *Connection) SendNotification(ctx context.Context, method string, params
 	}
 
 	if err := c.sendMessage(msg); err != nil {
-		return NewInternalError(map[string]any{"error": err.Error()})
+		return NewInternalError(map[string]any{jsonErrorField: err.Error()})
 	}
 	return nil
 }
 
 func (c *Connection) prepareNotification(method string, params any) (anyMessage, error) {
 	msg := anyMessage{
-		JSONRPC: "2.0",
+		JSONRPC: jsonRPCVersion,
 		Method:  method,
 	}
 
 	if params != nil {
 		b, err := json.Marshal(params)
 		if err != nil {
-			return msg, NewInvalidParams(map[string]any{"error": err.Error()})
+			return msg, NewInvalidParams(map[string]any{jsonErrorField: err.Error()})
 		}
 		msg.Params = b
 	}

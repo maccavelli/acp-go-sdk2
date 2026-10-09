@@ -68,20 +68,20 @@ func (c *ClientSideConnection) handleWithExtensions(ctx context.Context, method 
 
 // CallExtension sends an ACP extension-method request (method names starting with "_")
 // from an agent to its client.
-func (c *AgentSideConnection) CallExtension(ctx context.Context, method string, params any) (json.RawMessage, error) {
+func (a *AgentSideConnection) CallExtension(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	if err := validateExtensionMethodName(method); err != nil {
 		return nil, err
 	}
-	return SendRequest[json.RawMessage](c.conn, ctx, method, params)
+	return SendRequest[json.RawMessage](a.conn, ctx, method, params)
 }
 
 // NotifyExtension sends an ACP extension-method notification (method names starting with "_")
 // from an agent to its client.
-func (c *AgentSideConnection) NotifyExtension(ctx context.Context, method string, params any) error {
+func (a *AgentSideConnection) NotifyExtension(ctx context.Context, method string, params any) error {
 	if err := validateExtensionMethodName(method); err != nil {
 		return err
 	}
-	return c.conn.SendNotification(ctx, method, params)
+	return a.conn.SendNotification(ctx, method, params)
 }
 
 // CallExtension sends an ACP extension-method request (method names starting with "_")

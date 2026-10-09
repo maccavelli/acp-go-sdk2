@@ -594,7 +594,7 @@ func TestConnectionHandlesMessageOrdering(t *testing.T) {
 			return LoadSessionResponse{}, nil
 		},
 		AuthenticateFunc: func(_ context.Context, p AuthenticateRequest) (AuthenticateResponse, error) {
-			push("authenticate called: " + string(p.MethodId))
+			push("authenticate called: " + p.MethodId)
 			return AuthenticateResponse{}, nil
 		},
 		PromptFunc: func(_ context.Context, p PromptRequest) (PromptResponse, error) {
@@ -620,8 +620,8 @@ func TestConnectionHandlesMessageOrdering(t *testing.T) {
 		SessionId: "test-session",
 		ToolCall: ToolCallUpdate{
 			Title:      Ptr("Execute command"),
-			Kind:       ptr(ToolKindExecute),
-			Status:     ptr(ToolCallStatusPending),
+			Kind:       ptrTo(ToolKindExecute),
+			Status:     ptrTo(ToolCallStatusPending),
 			ToolCallId: "tool-123",
 			Content:    []ToolCallContent{ToolContent(TextBlock("ls -la"))},
 		},
@@ -949,7 +949,7 @@ func TestConnectionHandlesInitialize(t *testing.T) {
 	}
 }
 
-func ptr[T any](t T) *T {
+func ptrTo[T any](t T) *T {
 	return &t
 }
 
@@ -1303,7 +1303,7 @@ func TestExtensionMethods_ClientToAgentRequest(t *testing.T) {
 			if err := json.Unmarshal(params, &p); err != nil {
 				return nil, err
 			}
-			return extEchoResult{Msg: p.Msg}, nil
+			return extEchoResult(p), nil
 		},
 	}, a2cW, c2aR)
 
@@ -1402,7 +1402,7 @@ func TestExtensionMethods_AgentToClientRequest(t *testing.T) {
 			if err := json.Unmarshal(params, &p); err != nil {
 				return nil, err
 			}
-			return extEchoResult{Msg: p.Msg}, nil
+			return extEchoResult(p), nil
 		},
 	}, c2aW, a2cR)
 

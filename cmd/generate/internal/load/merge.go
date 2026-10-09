@@ -46,13 +46,17 @@ func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta
 	}
 
 	unstableOnlyWires := map[string]struct{}{}
-	if err := mergeUnstableOnlyMethods(&combinedMeta.AgentMethods, unstableMeta.AgentMethods, stableWires, unstableOnlyWires); err != nil {
+	var err error
+	combinedMeta.AgentMethods, err = mergeUnstableOnlyMethods(combinedMeta.AgentMethods, unstableMeta.AgentMethods, stableWires, unstableOnlyWires)
+	if err != nil {
 		return nil, nil, err
 	}
-	if err := mergeUnstableOnlyMethods(&combinedMeta.ClientMethods, unstableMeta.ClientMethods, stableWires, unstableOnlyWires); err != nil {
+	combinedMeta.ClientMethods, err = mergeUnstableOnlyMethods(combinedMeta.ClientMethods, unstableMeta.ClientMethods, stableWires, unstableOnlyWires)
+	if err != nil {
 		return nil, nil, err
 	}
-	if err := mergeUnstableOnlyMethods(&combinedMeta.ProtocolMethods, unstableMeta.ProtocolMethods, stableWires, unstableOnlyWires); err != nil {
+	combinedMeta.ProtocolMethods, err = mergeUnstableOnlyMethods(combinedMeta.ProtocolMethods, unstableMeta.ProtocolMethods, stableWires, unstableOnlyWires)
+	if err != nil {
 		return nil, nil, err
 	}
 
@@ -117,12 +121,12 @@ func cloneStringMap(in map[string]string) map[string]string {
 	return out
 }
 
-func mergeUnstableOnlyMethods(dst *map[string]string, src map[string]string, stableWires map[string]struct{}, unstableOnlyWires map[string]struct{}) error {
+func mergeUnstableOnlyMethods(dst map[string]string, src map[string]string, stableWires map[string]struct{}, unstableOnlyWires map[string]struct{}) (map[string]string, error) {
 	if len(src) == 0 {
-		return nil
+		return dst, nil
 	}
-	if *dst == nil {
-		*dst = make(map[string]string)
+	if dst == nil {
+		dst = make(map[string]string)
 	}
 	for key, wire := range src {
 		if wire == "" {
@@ -132,13 +136,13 @@ func mergeUnstableOnlyMethods(dst *map[string]string, src map[string]string, sta
 			// Stable already contains this wire method; don't change stable mapping.
 			continue
 		}
-		if existing, ok := (*dst)[key]; ok && existing != wire {
-			return fmt.Errorf("cannot merge unstable meta: method key %q maps to both %q and %q", key, existing, wire)
+		if existing, ok := dst[key]; ok && existing != wire {
+			return dst, fmt.Errorf("cannot merge unstable meta: method key %q maps to both %q and %q", key, existing, wire)
 		}
-		(*dst)[key] = wire
+		dst[key] = wire
 		unstableOnlyWires[wire] = struct{}{}
 	}
-	return nil
+	return dst, nil
 }
 
 func buildUnstableDuplicateSet(stableSchema *Schema, unstableSchema *Schema, unstableOnlyWires map[string]struct{}) (map[string]struct{}, error) {

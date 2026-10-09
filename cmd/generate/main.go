@@ -1,3 +1,4 @@
+// Command generate reads the ACP JSON schemas and writes the Go bindings.
 package main
 
 import (
@@ -27,7 +28,7 @@ func main() {
 		outDir = repoRoot
 	}
 
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
+	if err := os.MkdirAll(outDir, 0o750); err != nil {
 		panic(err)
 	}
 

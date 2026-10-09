@@ -27,7 +27,7 @@ func WriteConstantsJen(outDir string, meta *load.Meta) error {
 	var agentDefs []Code
 	for _, k := range amKeys {
 		wire := meta.AgentMethods[k]
-		agentDefs = append(agentDefs, Id("AgentMethod"+toExportedConst(k)).Op("=").Lit(wire))
+		agentDefs = append(agentDefs, ID("AgentMethod"+toExportedConst(k)).Op("=").Lit(wire))
 	}
 	f.Comment("Agent method names")
 	f.Const().Defs(agentDefs...)
@@ -41,7 +41,7 @@ func WriteConstantsJen(outDir string, meta *load.Meta) error {
 	var clientDefs []Code
 	for _, k := range cmKeys {
 		wire := meta.ClientMethods[k]
-		clientDefs = append(clientDefs, Id("ClientMethod"+toExportedConst(k)).Op("=").Lit(wire))
+		clientDefs = append(clientDefs, ID("ClientMethod"+toExportedConst(k)).Op("=").Lit(wire))
 	}
 	f.Comment("Client method names")
 	f.Const().Defs(clientDefs...)
@@ -50,7 +50,7 @@ func WriteConstantsJen(outDir string, meta *load.Meta) error {
 	if err := f.Render(&buf); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(outDir, "constants_gen.go"), buf.Bytes(), 0o644)
+	return os.WriteFile(filepath.Join(outDir, "constants_gen.go"), buf.Bytes(), generatedFileMode)
 }
 
 // Helpers kept private to this package (copy from original main)

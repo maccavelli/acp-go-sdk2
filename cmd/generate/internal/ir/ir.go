@@ -15,14 +15,19 @@ import (
 type MethodBinding int
 
 const (
+	// BindUnknown means the method is not placed on a generated interface.
 	BindUnknown MethodBinding = iota
-	// Agent bindings
+	// BindAgent places the method on the Agent interface.
 	BindAgent
+	// BindAgentLoader places the method on the AgentLoader interface.
 	BindAgentLoader
+	// BindAgentExperimental places the method on the AgentExperimental interface.
 	BindAgentExperimental
-	// Client bindings
+	// BindClient places the method on the Client interface.
 	BindClient
+	// BindClientExperimental places the method on the ClientExperimental interface.
 	BindClientExperimental
+	// BindClientTerminal places the method on the ClientTerminal interface.
 	BindClientTerminal
 )
 
