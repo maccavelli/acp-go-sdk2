@@ -27,6 +27,11 @@ func (a *agentExample) ResumeSession(ctx context.Context, params ResumeSessionRe
 	return ResumeSessionResponse{}, nil
 }
 
+// DeleteSession implements Agent.
+func (a *agentExample) DeleteSession(ctx context.Context, params DeleteSessionRequest) (DeleteSessionResponse, error) {
+	return DeleteSessionResponse{}, nil
+}
+
 // CloseSession implements Agent.
 func (a *agentExample) CloseSession(ctx context.Context, params CloseSessionRequest) (CloseSessionResponse, error) {
 	return CloseSessionResponse{}, nil

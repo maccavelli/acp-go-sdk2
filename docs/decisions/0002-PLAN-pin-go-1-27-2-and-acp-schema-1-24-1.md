@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: superseded
 date: 2026-10-09
 associated-madr: "0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md"
 ---
@@ -7,6 +7,10 @@ associated-madr: "0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md"
 # Implement Pin Go 1.27.2 and ACP schema 1.24.1
 
 Associated MADR: [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md)
+
+## Superseded 2026-10-09
+
+Do not execute this plan. [0004-PLAN-pin-acp-schema-1-25-0.md](0004-PLAN-pin-acp-schema-1-25-0.md) replaces it. The schema stamp below is `1.24.1`. The latest stable schema on 2026-10-09 is `schema-v1.25.0`. The Go 1.27.2 floor is applied by that plan.
 
 ## Goal
 

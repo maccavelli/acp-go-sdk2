@@ -7,7 +7,7 @@ code, helper APIs, and library version remain in sync.
 
 ## Prerequisites
 
-- `make`, `curl`, and `git` in your `PATH`.
+- GNU make 4.2 or newer, `curl`, and `git` in your `PATH`. The Makefile reads `schema/version` with `$(file)`, which Make 3.81 does not implement. Homebrew installs this binary as `gmake`.
 - Go at the version in the `go` line of `go.mod`.
 - `gofmt`, `golangci-lint` v2.14.0, and `make pre-add-check`.
 
@@ -44,10 +44,12 @@ make pre-add-check
 cmp -s schema/version version
 ```
 
-`make version` downloads the schema files for the requested ACP tag, regenerates
-all Go code, and formats the repository with `gofmt`. The `cmp` command is a
+`make version` downloads the schema files for tag `schema-v` plus the bare number
+in `schema/version`, regenerates all Go code, and formats the repository with
+`gofmt`. A stamp of `1.25.0` downloads `schema-v1.25.0`. The `cmp` command is a
 lightweight guard that ensures both `schema/version` and the top-level `version`
-file agree before you publish.
+file agree before you publish. The `vX.Y.Z` commands below are the Go module tag,
+not the schema download tag.
 
 ## Review and Commit
 

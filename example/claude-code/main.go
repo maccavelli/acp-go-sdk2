@@ -155,6 +155,18 @@ func (c *replClient) WaitForTerminalExit(ctx context.Context, params acp.WaitFor
 	return acp.WaitForTerminalExitResponse{}, nil
 }
 
+// CompleteElicitation implements acp.Client.
+func (c *replClient) CompleteElicitation(ctx context.Context, params acp.CompleteElicitationNotification) error {
+	fmt.Printf("[Client] CompleteElicitation: %v\n", params)
+	return nil
+}
+
+// CreateElicitation implements acp.Client.
+func (c *replClient) CreateElicitation(ctx context.Context, params acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
+	fmt.Printf("[Client] CreateElicitation: %v\n", params)
+	return acp.CreateElicitationResponse{}, nil
+}
+
 // KillTerminal implements acp.Client.
 func (c *replClient) KillTerminal(ctx context.Context, params acp.KillTerminalRequest) (acp.KillTerminalResponse, error) {
 	fmt.Printf("[Client] KillTerminal: %v\n", params)

@@ -95,3 +95,7 @@ The owner directed that previous repository conventions yield to the standards i
 * Confirmation does not use `go version` under mise, and it does not use `make check`.
 
 `golangci-lint` v2.14.0 remains the linter version. CI installs it with `go install`, which 0003 records. The `go` line stays the switch CI reads through `go-version-file`.
+
+## Amendment 2026-10-09, schema stamp
+
+The releases API on 2026-10-09 listed stable `schema-v1.25.0`, published `2026-10-09T14:17:40Z`, with `meta.json`, `schema.json`, `meta.unstable.json`, and `schema.unstable.json`. `schema-v1.24.1` is no longer the latest stable schema. The owner asked for the latest schema. [0004-MADR-pin-acp-schema-1-25-0.md](0004-MADR-pin-acp-schema-1-25-0.md) supersedes the schema stamp in this decision. The Go 1.27.2 outcome stands. Do not execute the `1.24.1` stamp in this decision's plan.

@@ -54,6 +54,14 @@ func (geminiClient) TerminalOutput(ctx context.Context, p TerminalOutputRequest)
 	return TerminalOutputResponse{Output: "ok", Truncated: false}, nil
 }
 
+func (geminiClient) CompleteElicitation(ctx context.Context, p CompleteElicitationNotification) error {
+	return nil
+}
+
+func (geminiClient) CreateElicitation(ctx context.Context, p CreateElicitationRequest) (CreateElicitationResponse, error) {
+	return CreateElicitationResponse{}, nil
+}
+
 func (geminiClient) WaitForTerminalExit(ctx context.Context, p WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
 	return WaitForTerminalExitResponse{}, nil
 }

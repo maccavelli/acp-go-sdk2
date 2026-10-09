@@ -26,6 +26,8 @@ type clientFuncs struct {
 	ReleaseTerminalFunc     func(context.Context, ReleaseTerminalRequest) (ReleaseTerminalResponse, error)
 	TerminalOutputFunc      func(context.Context, TerminalOutputRequest) (TerminalOutputResponse, error)
 	WaitForTerminalExitFunc func(context.Context, WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error)
+	CompleteElicitationFunc func(context.Context, CompleteElicitationNotification) error
+	CreateElicitationFunc   func(context.Context, CreateElicitationRequest) (CreateElicitationResponse, error)
 
 	HandleExtensionMethodFunc func(context.Context, string, json.RawMessage) (any, error)
 }
@@ -94,6 +96,22 @@ func (c *clientFuncs) TerminalOutput(ctx context.Context, params TerminalOutputR
 	return TerminalOutputResponse{Output: "ok", Truncated: false}, nil
 }
 
+// CompleteElicitation implements Client.
+func (c clientFuncs) CompleteElicitation(ctx context.Context, params CompleteElicitationNotification) error {
+	if c.CompleteElicitationFunc != nil {
+		return c.CompleteElicitationFunc(ctx, params)
+	}
+	return nil
+}
+
+// CreateElicitation implements Client.
+func (c clientFuncs) CreateElicitation(ctx context.Context, params CreateElicitationRequest) (CreateElicitationResponse, error) {
+	if c.CreateElicitationFunc != nil {
+		return c.CreateElicitationFunc(ctx, params)
+	}
+	return CreateElicitationResponse{}, nil
+}
+
 // WaitForTerminalExit implements Client.
 func (c *clientFuncs) WaitForTerminalExit(ctx context.Context, params WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
 	if c.WaitForTerminalExitFunc != nil {
@@ -136,7 +154,8 @@ type agentFuncs struct {
 	UnstableDisableProviderFunc   func(context.Context, UnstableDisableProviderRequest) (UnstableDisableProviderResponse, error)
 	UnstableListProvidersFunc     func(context.Context, UnstableListProvidersRequest) (UnstableListProvidersResponse, error)
 	UnstableSetProviderFunc       func(context.Context, UnstableSetProviderRequest) (UnstableSetProviderResponse, error)
-	UnstableDeleteSessionFunc     func(context.Context, UnstableDeleteSessionRequest) (UnstableDeleteSessionResponse, error)
+	DeleteSessionFunc             func(context.Context, DeleteSessionRequest) (DeleteSessionResponse, error)
+	UnstableMessageMcpFunc        func(context.Context, UnstableMessageMcpNotification) error
 	UnstableForkSessionFunc       func(context.Context, UnstableForkSessionRequest) (UnstableForkSessionResponse, error)
 
 	HandleExtensionMethodFunc func(context.Context, string, json.RawMessage) (any, error)
@@ -337,11 +356,18 @@ func (a agentFuncs) UnstableSetProvider(ctx context.Context, params UnstableSetP
 	return UnstableSetProviderResponse{}, nil
 }
 
-func (a agentFuncs) UnstableDeleteSession(ctx context.Context, params UnstableDeleteSessionRequest) (UnstableDeleteSessionResponse, error) {
-	if a.UnstableDeleteSessionFunc != nil {
-		return a.UnstableDeleteSessionFunc(ctx, params)
+func (a agentFuncs) DeleteSession(ctx context.Context, params DeleteSessionRequest) (DeleteSessionResponse, error) {
+	if a.DeleteSessionFunc != nil {
+		return a.DeleteSessionFunc(ctx, params)
 	}
-	return UnstableDeleteSessionResponse{}, nil
+	return DeleteSessionResponse{}, nil
+}
+
+func (a agentFuncs) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpNotification) error {
+	if a.UnstableMessageMcpFunc != nil {
+		return a.UnstableMessageMcpFunc(ctx, params)
+	}
+	return nil
 }
 
 func (a agentFuncs) HandleExtensionMethod(ctx context.Context, method string, params json.RawMessage) (any, error) {
@@ -397,6 +423,10 @@ func (a *forkOnlyUnstableAgent) ResumeSession(context.Context, ResumeSessionRequ
 
 func (a *forkOnlyUnstableAgent) SetSessionConfigOption(context.Context, SetSessionConfigOptionRequest) (SetSessionConfigOptionResponse, error) {
 	return SetSessionConfigOptionResponse{}, nil
+}
+
+func (a *forkOnlyUnstableAgent) DeleteSession(context.Context, DeleteSessionRequest) (DeleteSessionResponse, error) {
+	return DeleteSessionResponse{}, nil
 }
 
 func (a *forkOnlyUnstableAgent) UnstableForkSession(context.Context, UnstableForkSessionRequest) (UnstableForkSessionResponse, error) {
@@ -594,7 +624,7 @@ func TestConnectionHandlesMessageOrdering(t *testing.T) {
 			return LoadSessionResponse{}, nil
 		},
 		AuthenticateFunc: func(_ context.Context, p AuthenticateRequest) (AuthenticateResponse, error) {
-			push("authenticate called: " + p.MethodId)
+			push("authenticate called: " + string(p.MethodId))
 			return AuthenticateResponse{}, nil
 		},
 		PromptFunc: func(_ context.Context, p PromptRequest) (PromptResponse, error) {
@@ -1258,6 +1288,10 @@ func (agentNoExtensions) Cancel(ctx context.Context, params CancelNotification) 
 
 func (agentNoExtensions) Logout(ctx context.Context, params LogoutRequest) (LogoutResponse, error) {
 	return LogoutResponse{}, nil
+}
+
+func (agentNoExtensions) DeleteSession(ctx context.Context, params DeleteSessionRequest) (DeleteSessionResponse, error) {
+	return DeleteSessionResponse{}, nil
 }
 
 func (agentNoExtensions) CloseSession(ctx context.Context, params CloseSessionRequest) (CloseSessionResponse, error) {

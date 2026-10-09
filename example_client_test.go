@@ -106,6 +106,14 @@ func (clientExample) TerminalOutput(ctx context.Context, p TerminalOutputRequest
 	return TerminalOutputResponse{Output: "ok", Truncated: false}, nil
 }
 
+func (clientExample) CompleteElicitation(ctx context.Context, p CompleteElicitationNotification) error {
+	return nil
+}
+
+func (clientExample) CreateElicitation(ctx context.Context, p CreateElicitationRequest) (CreateElicitationResponse, error) {
+	return CreateElicitationResponse{}, nil
+}
+
 func (clientExample) WaitForTerminalExit(ctx context.Context, p WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
 	return WaitForTerminalExitResponse{}, nil
 }

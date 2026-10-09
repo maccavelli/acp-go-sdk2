@@ -340,10 +340,10 @@ func emitSchemaDef(f *File, name string, def *load.Definition, schema *load.Sche
 	}
 
 	// validators for selected types
-	// Note: oneOf union wrappers get a generic Validate emitted in emitUnion,
-	// so skip emitValidateJen for types that already have a union Validate.
-	hasUnionValidate := len(def.OneOf) > 0 && !isStringConstUnion(def)
-	if !hasUnionValidate && (strings.HasSuffix(name, "Request") || strings.HasSuffix(name, "Response") || strings.HasSuffix(name, "Notification") || name == "ToolCallUpdate") {
+	// Union wrappers get Validate from emitUnion. emitValidateJen reads
+	// properties on the wrapper, which is the wrong shape for those types.
+	emittedUnion := (len(def.OneOf) > 0 && !isStringConstUnion(def)) || (len(def.AnyOf) > 0 && !isOpenStringEnum(def))
+	if !emittedUnion && (strings.HasSuffix(name, "Request") || strings.HasSuffix(name, "Response") || strings.HasSuffix(name, "Notification") || name == "ToolCallUpdate") {
 		emitValidateJen(f, name, def)
 	}
 }
@@ -817,6 +817,80 @@ func writeUnionMarshal(g *Group, name string, variants []variantInfo) {
 	g.Return(Index().Byte().Values(), Nil())
 }
 
+type sharedFieldCheck struct {
+	field string
+	prop  string
+	kind  string
+}
+
+func sharedFieldChecks(def *load.Definition) []sharedFieldCheck {
+	if def == nil {
+		return nil
+	}
+	names := append([]string(nil), def.Required...)
+	sort.Strings(names)
+	out := make([]sharedFieldCheck, 0, len(names))
+	for _, propName := range names {
+		pDef := def.Properties[propName]
+		if pDef == nil {
+			continue
+		}
+		kind := ""
+		switch ir.PrimaryType(pDef) {
+		case schemaTypeString:
+			kind = schemaTypeString
+		case schemaTypeArray:
+			kind = schemaTypeArray
+		default:
+			continue
+		}
+		out = append(out, sharedFieldCheck{
+			field: util.ToExportedField(propName),
+			prop:  propName,
+			kind:  kind,
+		})
+	}
+	return out
+}
+
+func writeSharedUnionValidate(g *Group, variants []variantInfo, checks []sharedFieldCheck) {
+	carriers := 0
+	for _, vi := range variants {
+		if vi.hasSharedFields {
+			carriers++
+		}
+	}
+	if len(checks) == 0 || carriers == 0 {
+		g.Return(Nil())
+		return
+	}
+	g.Var().Id("set").Bool()
+	for _, vi := range variants {
+		if !vi.hasSharedFields {
+			continue
+		}
+		g.If(ID("v").Dot(vi.fieldName).Op("!=").Nil()).BlockFunc(func(gg *Group) {
+			for _, c := range checks {
+				switch c.kind {
+				case schemaTypeString:
+					gg.If(ID("v").Dot(vi.fieldName).Dot(c.field).Op("==").Lit("")).Block(
+						Return(Qual("fmt", "Errorf").Call(Lit(c.prop + " is required"))),
+					)
+				case schemaTypeArray:
+					gg.If(ID("v").Dot(vi.fieldName).Dot(c.field).Op("==").Nil()).Block(
+						Return(Qual("fmt", "Errorf").Call(Lit(c.prop + " is required"))),
+					)
+				}
+			}
+			gg.Id("set").Op("=").Lit(true)
+		})
+	}
+	g.If(Op("!").Id("set")).Block(
+		Return(Qual("fmt", "Errorf").Call(Lit(checks[0].prop + " is required"))),
+	)
+	g.Return(Nil())
+}
+
 func writeUnionValidate(g *Group, name string, variants []variantInfo) {
 	g.Var().Id("count").Int()
 	for _, vi := range variants {
@@ -1216,6 +1290,7 @@ type variantInfo struct {
 	constPairs        [][2]string
 	isNull            bool
 	description       string
+	hasSharedFields   bool
 }
 
 // singleRefVariant returns the $ref when v is only an allOf wrapper around one $ref.
@@ -1354,6 +1429,7 @@ func oneUnionVariant(f *File, name string, schema *load.Schema, idx int, v *load
 		constPairs:        consts,
 		isNull:            isNull,
 		description:       v.Description,
+		hasSharedFields:   ref == "" && isObj && !isNull,
 	}, true
 }
 
@@ -1420,10 +1496,16 @@ func emitUnion(f *File, name string, schema *load.Schema, parentDef *load.Defini
 	})
 	f.Line()
 
-	// Generic validator for oneOf unions: exactly one variant must be set
+	// oneOf: exactly one variant. anyOf: shared required fields live on the variants.
 	if exactlyOne {
 		f.Func().Params(ID("u").Op("*").Id(name)).Id("Validate").Params().Params(Error()).BlockFunc(func(g *Group) {
 			writeUnionValidate(g, name, variants)
+		})
+		f.Line()
+	} else {
+		checks := sharedFieldChecks(parentDef)
+		f.Func().Params(ID("v").Op("*").Id(name)).Id("Validate").Params().Params(Error()).BlockFunc(func(g *Group) {
+			writeSharedUnionValidate(g, variants, checks)
 		})
 		f.Line()
 	}

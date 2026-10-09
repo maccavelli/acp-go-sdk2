@@ -12,9 +12,11 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | :--- | :--- | :--- | :--- |
 | 0001 | REPORT | [Go 1.27.1 floor and ACP spec parity](reports/0001-REPORT-go-127-acp-parity.md) | observed |
 | 0002 | MADR | [Pin Go 1.27.2 and ACP schema 1.24.1](decisions/0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md) | accepted |
-| 0002 | PLAN | [Implement the Go 1.27.2 and schema 1.24.1 pin](decisions/0002-PLAN-pin-go-1-27-2-and-acp-schema-1-24-1.md) | proposed |
+| 0002 | PLAN | [Implement the Go 1.27.2 and schema 1.24.1 pin](decisions/0002-PLAN-pin-go-1-27-2-and-acp-schema-1-24-1.md) | superseded |
 | 0003 | MADR | [Install the fleet workspace and library CI](decisions/0003-MADR-install-fleet-agent-workspace.md) | accepted |
-| 0003 | PLAN | [Implement the fleet workspace and library CI](decisions/0003-PLAN-install-fleet-agent-workspace.md) | proposed |
+| 0003 | PLAN | [Implement the fleet workspace and library CI](decisions/0003-PLAN-install-fleet-agent-workspace.md) | complete |
+| 0004 | MADR | [Pin ACP schema 1.25.0 on the Go 1.27.2 floor](decisions/0004-MADR-pin-acp-schema-1-25-0.md) | accepted |
+| 0004 | PLAN | [Implement the schema 1.25.0 pin](decisions/0004-PLAN-pin-acp-schema-1-25-0.md) | complete |
 
 ## I want to…
 
@@ -22,8 +24,9 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | :--- | :--- |
 | see whether a Go 1.27.1 floor fits this SDK | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |
 | see how the generated API lines up with the current ACP spec | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |
-| know why Go is pinned to 1.27.2 and the schema to 1.24.1 | [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](decisions/0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md) |
-| apply that pin | [0002-PLAN-pin-go-1-27-2-and-acp-schema-1-24-1.md](decisions/0002-PLAN-pin-go-1-27-2-and-acp-schema-1-24-1.md) |
+| know why Go was accepted at 1.27.2 with schema 1.24.1 | [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](decisions/0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md) |
+| know why the schema pin is 1.25.0 | [0004-MADR-pin-acp-schema-1-25-0.md](decisions/0004-MADR-pin-acp-schema-1-25-0.md) |
+| apply the Go 1.27.2 and schema 1.25.0 pin | [0004-PLAN-pin-acp-schema-1-25-0.md](decisions/0004-PLAN-pin-acp-schema-1-25-0.md) |
 | understand how this fits together | [architecture.md](architecture.md) |
 | know the rules agents follow in this repository | [AGENTS.md](../AGENTS.md) |
 | know why this repository has the fleet workspace and library CI | [0003-MADR-install-fleet-agent-workspace.md](decisions/0003-MADR-install-fleet-agent-workspace.md) |

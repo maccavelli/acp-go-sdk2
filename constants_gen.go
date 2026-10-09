@@ -43,8 +43,6 @@ const (
 	ClientMethodElicitationCreate        = "elicitation/create"
 	ClientMethodFsReadTextFile           = "fs/read_text_file"
 	ClientMethodFsWriteTextFile          = "fs/write_text_file"
-	ClientMethodMcpConnect               = "mcp/connect"
-	ClientMethodMcpDisconnect            = "mcp/disconnect"
 	ClientMethodMcpMessage               = "mcp/message"
 	ClientMethodSessionRequestPermission = "session/request_permission"
 	ClientMethodSessionUpdate            = "session/update"

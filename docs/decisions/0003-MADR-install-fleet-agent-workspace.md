@@ -92,4 +92,8 @@ Single-OS `golangci-lint` v2.14.0, after the fixes that do not change an API or 
 
 The question was left open. The resolution applied is that ignore. `.markdownlint-cli2.jsonc` keeps the fleet rules and adds that one key. That file is the named exception to the byte-copy. `.tools` stays on disk.
 
+### Amendment 2026-10-09, schema stamp
+
+The context paragraph that leaves the schema pin with 0002 names `schema-v1.24.1`. [0004-MADR-pin-acp-schema-1-25-0.md](0004-MADR-pin-acp-schema-1-25-0.md) supersedes that stamp. The G304 directives in the lint amendment stay until a later idiom record. The floor move does not replace them with `os.OpenRoot`.
+
 Implementation is [0003-PLAN-install-fleet-agent-workspace.md](0003-PLAN-install-fleet-agent-workspace.md).

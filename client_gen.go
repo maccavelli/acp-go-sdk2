@@ -10,38 +10,26 @@ import (
 func (c *ClientSideConnection) handle(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
 	switch method {
 	case ClientMethodElicitationComplete:
-		var p UnstableCompleteElicitationNotification
+		var p CompleteElicitationNotification
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := p.Validate(); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		exp, ok := c.client.(interface {
-			UnstableCompleteElicitation(context.Context, UnstableCompleteElicitationNotification) error
-		})
-		if !ok {
-			return nil, NewMethodNotFound(method)
-		}
-		if err := exp.UnstableCompleteElicitation(ctx, p); err != nil {
+		if err := c.client.CompleteElicitation(ctx, p); err != nil {
 			return nil, toReqErr(err)
 		}
 		return nil, nil
 	case ClientMethodElicitationCreate:
-		var p UnstableCreateElicitationRequest
+		var p CreateElicitationRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := p.Validate(); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		exp, ok := c.client.(interface {
-			UnstableCreateElicitation(context.Context, UnstableCreateElicitationRequest) (UnstableCreateElicitationResponse, error)
-		})
-		if !ok {
-			return nil, NewMethodNotFound(method)
-		}
-		resp, err := exp.UnstableCreateElicitation(ctx, p)
+		resp, err := c.client.CreateElicitation(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
@@ -72,8 +60,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 			return nil, toReqErr(err)
 		}
 		return resp, nil
-	case ClientMethodMcpConnect:
-		var p UnstableConnectMcpRequest
+	case ClientMethodMcpMessage:
+		var p UnstableMessageMcpRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
@@ -81,31 +69,12 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		exp, ok := c.client.(interface {
-			UnstableConnectMcp(context.Context, UnstableConnectMcpRequest) (UnstableConnectMcpResponse, error)
+			UnstableMessageMcp(context.Context, UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error)
 		})
 		if !ok {
 			return nil, NewMethodNotFound(method)
 		}
-		resp, err := exp.UnstableConnectMcp(ctx, p)
-		if err != nil {
-			return nil, toReqErr(err)
-		}
-		return resp, nil
-	case ClientMethodMcpDisconnect:
-		var p UnstableDisconnectMcpRequest
-		if err := json.Unmarshal(params, &p); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
-		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
-		}
-		exp, ok := c.client.(interface {
-			UnstableDisconnectMcp(context.Context, UnstableDisconnectMcpRequest) (UnstableDisconnectMcpResponse, error)
-		})
-		if !ok {
-			return nil, NewMethodNotFound(method)
-		}
-		resp, err := exp.UnstableDisconnectMcp(ctx, p)
+		resp, err := exp.UnstableMessageMcp(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
@@ -231,6 +200,9 @@ func (c *ClientSideConnection) Logout(ctx context.Context, params LogoutRequest)
 	resp, err := SendRequest[LogoutResponse](c.conn, ctx, AgentMethodLogout, params)
 	return resp, err
 }
+func (c *ClientSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpNotification) error {
+	return c.conn.SendNotification(ctx, AgentMethodMcpMessage, params)
+}
 func (c *ClientSideConnection) UnstableAcceptNes(ctx context.Context, params UnstableAcceptNesNotification) error {
 	return c.conn.SendNotification(ctx, AgentMethodNesAccept, params)
 }
@@ -268,8 +240,8 @@ func (c *ClientSideConnection) CloseSession(ctx context.Context, params CloseSes
 	resp, err := SendRequest[CloseSessionResponse](c.conn, ctx, AgentMethodSessionClose, params)
 	return resp, err
 }
-func (c *ClientSideConnection) UnstableDeleteSession(ctx context.Context, params UnstableDeleteSessionRequest) (UnstableDeleteSessionResponse, error) {
-	resp, err := SendRequest[UnstableDeleteSessionResponse](c.conn, ctx, AgentMethodSessionDelete, params)
+func (c *ClientSideConnection) DeleteSession(ctx context.Context, params DeleteSessionRequest) (DeleteSessionResponse, error) {
+	resp, err := SendRequest[DeleteSessionResponse](c.conn, ctx, AgentMethodSessionDelete, params)
 	return resp, err
 }
 func (c *ClientSideConnection) UnstableForkSession(ctx context.Context, params UnstableForkSessionRequest) (UnstableForkSessionResponse, error) {
