@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -54,8 +55,8 @@ func generateNestedTypeName(parentName, rawFieldName string, usedNames map[strin
 	// Heuristic 2: Try RPC suffix stripping for Request/Response/Notification parents
 	// This handles cases like RequestPermissionRequest + ToolCall → RequestPermissionToolCall
 	for _, suffix := range []string{"Request", "Response", "Notification"} {
-		if strings.HasSuffix(parentName, suffix) {
-			baseName := strings.TrimSuffix(parentName, suffix)
+		if before, ok := strings.CutSuffix(parentName, suffix); ok {
+			baseName := before
 			if baseName != "" {
 				candidate := baseName + fieldName
 				if !usedNames[candidate] {
@@ -563,12 +564,8 @@ func emitInlineUnionStruct(f *File, name, tname, ref string, v *load.Definition,
 				req[r] = struct{}{}
 			}
 			mergedProps := make(map[string]*load.Definition, len(sharedProps)+len(v.Properties))
-			for pk, pDef := range sharedProps {
-				mergedProps[pk] = pDef
-			}
-			for pk, pDef := range v.Properties {
-				mergedProps[pk] = pDef
-			}
+			maps.Copy(mergedProps, sharedProps)
+			maps.Copy(mergedProps, v.Properties)
 			pkeys := make([]string, 0, len(mergedProps))
 			for pk := range mergedProps {
 				pkeys = append(pkeys, pk)
@@ -1083,9 +1080,7 @@ func expandAllOf(schema *load.Schema, d *load.Definition) *load.Definition {
 
 	if d.Properties != nil {
 		merged.Properties = make(map[string]*load.Definition, len(d.Properties))
-		for k, v := range d.Properties {
-			merged.Properties[k] = v
-		}
+		maps.Copy(merged.Properties, d.Properties)
 	}
 	if d.Required != nil {
 		merged.Required = append([]string(nil), d.Required...)
@@ -1462,9 +1457,7 @@ func emitUnion(f *File, name string, schema *load.Schema, parentDef *load.Defini
 	sharedProps := map[string]*load.Definition{}
 	sharedRequired := map[string]struct{}{}
 	if parentDef != nil {
-		for k, p := range parentDef.Properties {
-			sharedProps[k] = p
-		}
+		maps.Copy(sharedProps, parentDef.Properties)
 		for _, r := range parentDef.Required {
 			sharedRequired[r] = struct{}{}
 		}

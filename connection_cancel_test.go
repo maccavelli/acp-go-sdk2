@@ -274,7 +274,6 @@ func TestCanonicalJSONRPCIDKey_RejectsOversizedExponent(t *testing.T) {
 	}
 
 	for _, raw := range tests {
-		raw := raw
 		t.Run(string(raw), func(t *testing.T) {
 			_, err := canonicalJSONRPCIDKey(raw)
 			if !errors.Is(err, errJSONRPCNumericIDTooLarge) {
@@ -598,7 +597,7 @@ func TestConnectionSendCancelRequest_BoundsPendingQueue(t *testing.T) {
 		cancel:              baseCancel,
 	}
 
-	for i := 0; i < maxPendingCancelRequests+128; i++ {
+	for i := range maxPendingCancelRequests + 128 {
 		c.sendCancelRequest(fmt.Sprintf("%d", i))
 	}
 
@@ -622,7 +621,7 @@ func TestConnectionSendCancelRequest_BoundsPendingQueue(t *testing.T) {
 func TestConnectionWaitForResponse_PeerDisconnectWinsOverDerivedContextCancel(t *testing.T) {
 	const iterations = 64
 
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		baseCtx, baseCancel := context.WithCancelCause(context.Background())
 		c := &Connection{
 			pending: make(map[string]*pendingResponse),

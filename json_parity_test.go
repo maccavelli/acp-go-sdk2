@@ -84,13 +84,13 @@ func TestJSONGolden_ContentBlocks(t *testing.T) {
 	))
 	t.Run("content_resource_text", runGolden(
 		func() ContentBlock {
-			res := EmbeddedResourceResource{TextResourceContents: &TextResourceContents{Uri: "file:///home/user/script.py", MimeType: Ptr("text/x-python"), Text: "def hello():\n    print('Hello, world!')"}}
+			res := EmbeddedResourceResource{TextResourceContents: &TextResourceContents{Uri: "file:///home/user/script.py", MimeType: new("text/x-python"), Text: "def hello():\n    print('Hello, world!')"}}
 			return ResourceBlock(res)
 		},
 	))
 	t.Run("content_resource_blob", runGolden(
 		func() ContentBlock {
-			res := EmbeddedResourceResource{BlobResourceContents: &BlobResourceContents{Uri: "file:///home/user/document.pdf", MimeType: Ptr("application/pdf"), Blob: "<b64>"}}
+			res := EmbeddedResourceResource{BlobResourceContents: &BlobResourceContents{Uri: "file:///home/user/document.pdf", MimeType: new("application/pdf"), Blob: "<b64>"}}
 			return ResourceBlock(res)
 		},
 	))
@@ -204,7 +204,7 @@ func TestJSONGolden_SessionUpdates(t *testing.T) {
 	))
 	t.Run("session_update_tool_call_update_content", runGolden(
 		func() SessionUpdate {
-			return SessionUpdate{ToolCallUpdate: &SessionToolCallUpdate{ToolCallId: "call_001", Status: Ptr(ToolCallStatusInProgress), Content: []ToolCallContent{ToolContent(TextBlock("Found 3 configuration files..."))}}}
+			return SessionUpdate{ToolCallUpdate: &SessionToolCallUpdate{ToolCallId: "call_001", Status: new(ToolCallStatusInProgress), Content: []ToolCallContent{ToolContent(TextBlock("Found 3 configuration files..."))}}}
 		},
 		func() SessionUpdate {
 			return UpdateToolCall("call_001", WithUpdateStatus(ToolCallStatusInProgress), WithUpdateContent([]ToolCallContent{ToolContent(TextBlock("Found 3 configuration files..."))}))
@@ -250,7 +250,7 @@ func TestJSONGolden_MethodPayloads(t *testing.T) {
 	}))
 	t.Run("new_session_response", runGolden(func() NewSessionResponse { return NewSessionResponse{SessionId: "sess_abc123def456"} }))
 	t.Run("prompt_request", runGolden(func() PromptRequest {
-		return PromptRequest{SessionId: "sess_abc123def456", Prompt: []ContentBlock{TextBlock("Can you analyze this code for potential issues?"), ResourceBlock(EmbeddedResourceResource{TextResourceContents: &TextResourceContents{Uri: "file:///home/user/project/main.py", MimeType: Ptr("text/x-python"), Text: "def process_data(items):\n    for item in items:\n        print(item)"}})}}
+		return PromptRequest{SessionId: "sess_abc123def456", Prompt: []ContentBlock{TextBlock("Can you analyze this code for potential issues?"), ResourceBlock(EmbeddedResourceResource{TextResourceContents: &TextResourceContents{Uri: "file:///home/user/project/main.py", MimeType: new("text/x-python"), Text: "def process_data(items):\n    for item in items:\n        print(item)"}})}}
 	}))
 	t.Run("fs_read_text_file_request", runGolden(func() ReadTextFileRequest {
 		line, limit := 10, 50

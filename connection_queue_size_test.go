@@ -132,7 +132,7 @@ func TestLargerQueue_SurvivesNotificationBurst(t *testing.T) {
 	clientConn := NewClientSideConnection(client, c2aW, a2cR, WithMaxQueuedNotifications(burstSize*2))
 	agentConn := NewAgentSideConnection(agentFuncs{}, a2cW, c2aR, WithMaxQueuedNotifications(burstSize*2))
 
-	for i := 0; i < burstSize; i++ {
+	for i := range burstSize {
 		if err := agentConn.SessionUpdate(context.Background(), testSessionUpdate("burst", i)); err != nil {
 			t.Fatalf("SessionUpdate %d failed: %v", i, err)
 		}

@@ -102,7 +102,7 @@ func ToExportedField(name string) string {
 
 	// Split on separators, then split camelCase chunks within each token.
 	var tokens []string
-	for _, part := range strings.Split(string(cleaned), "_") {
+	for part := range strings.SplitSeq(string(cleaned), "_") {
 		if part == "" {
 			continue
 		}

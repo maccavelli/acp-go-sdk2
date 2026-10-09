@@ -274,7 +274,7 @@ func TestSendRequest_ConcurrentRequestsDoNotPanic(t *testing.T) {
 	var agentConn *AgentSideConnection
 	agent := agentFuncs{
 		LoadSessionFunc: func(ctx context.Context, req LoadSessionRequest) (LoadSessionResponse, error) {
-			for i := 0; i < notificationsPerRequest; i++ {
+			for i := range notificationsPerRequest {
 				if err := agentConn.SessionUpdate(ctx, testSessionUpdate(req.SessionId, i)); err != nil {
 					return LoadSessionResponse{}, err
 				}
@@ -291,11 +291,8 @@ func TestSendRequest_ConcurrentRequestsDoNotPanic(t *testing.T) {
 	errCh := make(chan error, concurrentRequests)
 	var wg sync.WaitGroup
 
-	for i := 0; i < concurrentRequests; i++ {
-		i := i
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for i := range concurrentRequests {
+		wg.Go(func() {
 			<-start
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -303,7 +300,7 @@ func TestSendRequest_ConcurrentRequestsDoNotPanic(t *testing.T) {
 
 			_, err := clientConn.LoadSession(ctx, testLoadSessionRequest(fmt.Sprintf("concurrent-%d", i)))
 			errCh <- err
-		}()
+		})
 	}
 
 	close(start)
@@ -337,7 +334,7 @@ func TestLoadSession_NotificationReplayOrdering(t *testing.T) {
 	var agentConn *AgentSideConnection
 	agent := agentFuncs{
 		LoadSessionFunc: func(ctx context.Context, req LoadSessionRequest) (LoadSessionResponse, error) {
-			for i := 0; i < replayUpdates; i++ {
+			for i := range replayUpdates {
 				if err := agentConn.SessionUpdate(ctx, testSessionUpdate(req.SessionId, i)); err != nil {
 					return LoadSessionResponse{}, err
 				}

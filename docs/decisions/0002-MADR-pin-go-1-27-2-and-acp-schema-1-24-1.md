@@ -99,3 +99,7 @@ The owner directed that previous repository conventions yield to the standards i
 ## Amendment 2026-10-09, schema stamp
 
 The releases API on 2026-10-09 listed stable `schema-v1.25.0`, published `2026-10-09T14:17:40Z`, with `meta.json`, `schema.json`, `meta.unstable.json`, and `schema.unstable.json`. `schema-v1.24.1` is no longer the latest stable schema. The owner asked for the latest schema. [0004-MADR-pin-acp-schema-1-25-0.md](0004-MADR-pin-acp-schema-1-25-0.md) supersedes the schema stamp in this decision. The Go 1.27.2 outcome stands. Do not execute the `1.24.1` stamp in this decision's plan.
+
+## Amendment 2026-10-09, module path
+
+The sentence in this decision that the import path stays `github.com/coder/acp-go-sdk` for v1 no longer stands. [0005-MADR-separate-module-from-coder.md](0005-MADR-separate-module-from-coder.md) supersedes that sentence. The Go 1.27.2 outcome still stands.

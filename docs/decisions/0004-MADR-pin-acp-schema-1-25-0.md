@@ -84,3 +84,7 @@ Implementation is [0004-PLAN-pin-acp-schema-1-25-0.md](0004-PLAN-pin-acp-schema-
 ## Amendment 2026-10-09, GNU make
 
 `ACP_VERSION` is read with GNU make's `$(file)` function, which Make 3.81 does not implement. On this machine `/usr/bin/make` is 3.81, so the schema recipe expanded to `schema-v/meta.json` and the download returned HTTP 404. The owner chose to install GNU make 4.2 or newer and to keep the `$(file)` assignment. Confirmation of this pin uses that make.
+
+## Amendment 2026-10-09, module path
+
+This decision left the README `go get` line on `github.com/coder/acp-go-sdk@v0.13.5`. [0005-MADR-separate-module-from-coder.md](0005-MADR-separate-module-from-coder.md) replaces that module path. The schema stamp `1.25.0` stands. This amendment does not create a module tag.

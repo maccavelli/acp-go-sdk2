@@ -79,8 +79,7 @@ func toReqErr(err error) *RequestError {
 	if err == nil {
 		return nil
 	}
-	var re *RequestError
-	if errors.As(err, &re) {
+	if re, ok := errors.AsType[*RequestError](err); ok {
 		return re
 	}
 	if errors.Is(err, context.Canceled) {

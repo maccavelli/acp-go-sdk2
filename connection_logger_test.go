@@ -54,7 +54,7 @@ func TestWithLoggerReceivesEarlyDiagnostics(t *testing.T) {
 // with -race: the input ends at once, so the reader logs its close while
 // SetLogger stores.
 func TestSetLoggerWhileReading(t *testing.T) {
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		r, w := io.Pipe()
 		c := NewConnection(noopHandler, io.Discard, r)
 		_ = w.Close()

@@ -60,7 +60,7 @@ func TestSessionConfigOptionSelect_MetadataRoundTrip(t *testing.T) {
 			Type:         "select",
 			Id:           SessionConfigId("reasoning_effort"),
 			Name:         "Reasoning effort",
-			Description:  Ptr("Controls thought depth"),
+			Description:  new("Controls thought depth"),
 			CurrentValue: SessionConfigValueId("medium"),
 			Options: SessionConfigSelectOptions{Ungrouped: &SessionConfigSelectOptionsUngrouped{
 				{Name: "Low", Value: SessionConfigValueId("low")},

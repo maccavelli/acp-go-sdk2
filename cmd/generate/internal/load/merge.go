@@ -2,6 +2,7 @@ package load
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"strings"
 )
@@ -71,9 +72,7 @@ func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta
 	}
 
 	combinedSchema := &Schema{Defs: make(map[string]*Definition, len(stableSchema.Defs)+len(dupSet))}
-	for name, def := range stableSchema.Defs {
-		combinedSchema.Defs[name] = def
-	}
+	maps.Copy(combinedSchema.Defs, stableSchema.Defs)
 
 	promotedSharedDefs := promoteChangedSharedDefs(combinedSchema, stableSchema, unstableSchema, stableWires)
 	ensureRefsAvailable(combinedSchema, unstableSchema, promotedSharedDefs)
@@ -115,9 +114,7 @@ func cloneStringMap(in map[string]string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }
 
@@ -335,8 +332,8 @@ func collectDefinitionRefs(root *Definition) map[string]struct{} {
 		if d == nil {
 			return
 		}
-		if strings.HasPrefix(d.Ref, "#/$defs/") {
-			name := strings.TrimPrefix(d.Ref, "#/$defs/")
+		if after, ok := strings.CutPrefix(d.Ref, "#/$defs/"); ok {
+			name := after
 			if name != "" {
 				refs[name] = struct{}{}
 			}

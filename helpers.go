@@ -87,8 +87,10 @@ func ToolTerminalRef(terminalID string) ToolCallContent {
 }
 
 // Ptr returns a pointer to v.
+//
+//go:fix inline
 func Ptr[T any](v T) *T {
-	return &v
+	return new(v)
 }
 
 // UpdateUserMessage constructs a user_message_chunk update with the given content.
@@ -210,21 +212,21 @@ func UpdateToolCall(id ToolCallId, opts ...ToolCallUpdateOpt) SessionUpdate {
 // WithUpdateTitle sets the title for a tool_call_update.
 func WithUpdateTitle(t string) ToolCallUpdateOpt {
 	return func(tu *SessionToolCallUpdate) {
-		tu.Title = Ptr(t)
+		tu.Title = new(t)
 	}
 }
 
 // WithUpdateKind sets the kind for a tool_call_update.
 func WithUpdateKind(k ToolKind) ToolCallUpdateOpt {
 	return func(tu *SessionToolCallUpdate) {
-		tu.Kind = Ptr(k)
+		tu.Kind = new(k)
 	}
 }
 
 // WithUpdateStatus sets the status for a tool_call_update.
 func WithUpdateStatus(s ToolCallStatus) ToolCallUpdateOpt {
 	return func(tu *SessionToolCallUpdate) {
-		tu.Status = Ptr(s)
+		tu.Status = new(s)
 	}
 }
 

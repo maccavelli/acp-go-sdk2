@@ -278,8 +278,8 @@ func DispatchMethodNameForNotification(methodKey, typeName string) string {
 	case "session_cancel":
 		return "Cancel"
 	default:
-		if strings.HasSuffix(typeName, "Notification") {
-			return strings.TrimSuffix(typeName, "Notification")
+		if before, ok := strings.CutSuffix(typeName, "Notification"); ok {
+			return before
 		}
 		return typeName
 	}

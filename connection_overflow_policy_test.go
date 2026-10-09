@@ -142,7 +142,6 @@ func TestConnection_NotificationOverflowPolicyClosesByDefault(t *testing.T) {
 		{"undefined policy", []ConnectionOption{WithNotificationOverflowPolicy(NotificationOverflowPolicy(99))}},
 	}
 	for _, tc := range cases {
-		tc := tc // go.mod targets go 1.21: range variables are per-loop, not per-iteration
 		t.Run(tc.name, func(t *testing.T) {
 			var calls atomic.Int32
 			opts := append(slices.Clone(tc.opts), WithNotificationDropHandler(func(string, uint64) { calls.Add(1) }))

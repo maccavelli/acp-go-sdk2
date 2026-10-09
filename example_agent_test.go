@@ -89,9 +89,9 @@ func (a *agentExample) Prompt(ctx context.Context, p PromptRequest) (PromptRespo
 		SessionId: p.SessionId,
 		ToolCall: ToolCallUpdate{
 			ToolCallId: ToolCallId("call_1"),
-			Title:      Ptr("Modifying configuration"),
-			Kind:       Ptr(ToolKindEdit),
-			Status:     Ptr(ToolCallStatusPending),
+			Title:      new("Modifying configuration"),
+			Kind:       new(ToolKindEdit),
+			Status:     new(ToolCallStatusPending),
 			Locations:  []ToolCallLocation{{Path: "/project/config.json"}},
 			RawInput:   map[string]any{"path": "/project/config.json"},
 		},

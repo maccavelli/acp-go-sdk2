@@ -307,7 +307,7 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 		SessionId: acp.SessionId(sid),
 		ToolCall: acp.ToolCallUpdate{
 			ToolCallId: acp.ToolCallId("call_2"),
-			Title:      acp.Ptr("Modifying critical configuration file"),
+			Title:      new("Modifying critical configuration file"),
 			Kind:       acp.Ptr(acp.ToolKindEdit),
 			Status:     acp.Ptr(acp.ToolCallStatusPending),
 			Locations:  []acp.ToolCallLocation{{Path: "/home/user/project/config.json"}},

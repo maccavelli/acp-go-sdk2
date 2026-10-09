@@ -649,9 +649,9 @@ func TestConnectionHandlesMessageOrdering(t *testing.T) {
 	if _, err := as.RequestPermission(context.Background(), RequestPermissionRequest{
 		SessionId: "test-session",
 		ToolCall: ToolCallUpdate{
-			Title:      Ptr("Execute command"),
-			Kind:       ptrTo(ToolKindExecute),
-			Status:     ptrTo(ToolCallStatusPending),
+			Title:      new("Execute command"),
+			Kind:       new(ToolKindExecute),
+			Status:     new(ToolCallStatusPending),
 			ToolCallId: "tool-123",
 			Content:    []ToolCallContent{ToolContent(TextBlock("ls -la"))},
 		},
@@ -785,7 +785,7 @@ func TestConnectionDoesNotCancelInboundContextBeforeDrainingNotificationsOnDisco
 	}, io.Discard, incomingR)
 
 	// Write notifications quickly and then close the stream to simulate a peer disconnect.
-	for i := 0; i < n; i++ {
+	for range n {
 		if _, err := io.WriteString(incomingW, `{"jsonrpc":"2.0","method":"test/notify","params":{}}`+"\n"); err != nil {
 			t.Fatalf("write notification: %v", err)
 		}
@@ -838,7 +838,7 @@ func TestConnectionCancelsRequestHandlersOnDisconnectEvenWithNotificationBacklog
 		}
 	}, io.Discard, incomingR)
 
-	for i := 0; i < numNotifications; i++ {
+	for range numNotifications {
 		if _, err := io.WriteString(incomingW, `{"jsonrpc":"2.0","method":"test/notify","params":{}}`+"\n"); err != nil {
 			t.Fatalf("write notification: %v", err)
 		}
@@ -889,7 +889,7 @@ func TestConnectionFailsFastOnNotificationQueueOverflow(t *testing.T) {
 	}
 
 	// Fill the buffered queue, then send one extra notification to force overflow.
-	for i := 0; i < defaultMaxQueuedNotifications+1; i++ {
+	for i := range defaultMaxQueuedNotifications + 1 {
 		if _, err := io.WriteString(incomingW, `{"jsonrpc":"2.0","method":"test/notify","params":{}}`+"\n"); err != nil {
 			t.Fatalf("write overflow notification %d: %v", i, err)
 		}
@@ -940,7 +940,7 @@ func TestConnectionHandlesInitialize(t *testing.T) {
 						Agent: &AuthMethodAgent{
 							Id:          "oauth",
 							Name:        "OAuth",
-							Description: Ptr("Authenticate with OAuth"),
+							Description: new("Authenticate with OAuth"),
 						},
 					},
 				},
@@ -979,8 +979,9 @@ func TestConnectionHandlesInitialize(t *testing.T) {
 	}
 }
 
+//go:fix inline
 func ptrTo[T any](t T) *T {
-	return &t
+	return new(t)
 }
 
 // Test that canceling the client's Prompt context sends a session/cancel
@@ -1140,7 +1141,7 @@ func TestPromptWaitsForSessionUpdatesComplete(t *testing.T) {
 			defer wg.Done()
 
 			// Send multiple SessionUpdate notifications
-			for i := 0; i < numUpdates; i++ {
+			for range numUpdates {
 				_ = ag.SessionUpdate(ctx, SessionNotification{
 					SessionId: p.SessionId,
 					Update: SessionUpdate{
@@ -1233,7 +1234,7 @@ func TestRequestHandlerCanMakeNestedRequest(t *testing.T) {
 				SessionId: p.SessionId,
 				ToolCall: ToolCallUpdate{
 					ToolCallId: "call_1",
-					Title:      Ptr("Test permission"),
+					Title:      new("Test permission"),
 				},
 				Options: []PermissionOption{
 					{Kind: PermissionOptionKindAllowOnce, Name: "Allow", OptionId: "allow"},
