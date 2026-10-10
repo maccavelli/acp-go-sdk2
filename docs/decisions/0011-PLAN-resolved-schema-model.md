@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-10
 associated-madr: "0011-MADR-harden-code-generator-engine.md"
 ---
@@ -690,3 +690,47 @@ Gates: `make pre-add-check` with the five changed Go files named, `types_gen.go`
 go vet, go test, govulncheck).` Without names: `go-precheck: 59 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 8 on `main`.
+
+### Step 9, review and close, 2026-10-10
+
+The owner committed step 8 as `d216266`. Step 9 ran on `main` from that clean tree and changed one test file, this record, and `docs/README.md`. The agent
+did not commit.
+
+The phase's commits, `git log --oneline e109c7b..d216266`: `4faf728` (step 2), `ae0851e` (step 3), `84d850b` (step 4), `ee083a6` (step 5), `969b7cb`
+(step 6), `b2319ce` (step 7), `d216266` (step 8). `git diff --numstat e109c7b d216266 -- '*_gen.go'` lists only `types_gen.go`, 284 lines added and none
+removed, which is step 8. `cmd/generate` changed by 3,247 lines added and 1,600 removed in 24 files.
+
+Coverage: at `d216266`, `go test -cover ./internal/model` reported 82.8%, short of the 85% the plan sets. The functions furthest below were those only the
+full-schema test reached: `copyMissingAllOfFields` 0%, `expandAllOf` 7.4%, `enumValues` 38.5%, `generateNestedTypeName` 41.4%, `primaryType`
+65.0%, `singleRefVariant` 66.7%. `schema_test.go` adds `TestExpandAllOf`, `TestSingleRefVariant`, `TestPrimaryType`, `TestGenerateNestedTypeName`, and
+`TestEnumValueKinds`, which test them directly. Each was seen to fail, with one planted breakage per run of `go test ./...` in `cmd/generate` in a fresh
+scratch copy:
+
+```text
+allOf overwrites local properties: failing=['TestExpandAllOf']
+allOf drops items: failing=['TestExpandAllOf']
+no RPC suffix heuristic: failing=['TestGenerateNestedTypeName', 'TestGeneratedFilesUpToDate']
+no word deduplication: failing=['TestGenerateNestedTypeName', 'TestGeneratedFilesUpToDate']
+type list takes null first: failing=['TestPrimaryType']
+open enum values dropped: failing=['TestEnumValueKinds', 'TestGeneratedFilesUpToDate']
+single-ref ignores properties: failing=['TestSingleRefVariant']
+```
+
+Four of the seven did not change the output at `1.25.0`; until this step nothing guarded those paths.
+
+Verification, as printed:
+
+* Steps 2 to 7 left the generated files byte-identical, as each step's record shows; the phase diff above confirms it.
+* Step 8's diff holds only added comment lines: 61 type docs and 10 `AgentExperimental` method docs gained the notice, as its record shows.
+* `internal/ir` does not exist. `go list -f '{{.Imports}}' ./internal/emit` lists neither `internal/load` nor `internal/ir` (0 matches). In
+  `go doc -all ./internal/model` the only `load` types are the three fields of `Input`.
+* `go test -cover ./internal/model`: `coverage: 94.1% of statements`.
+* The six schemas of G12 behave as step 7 lists: `TestRunRefusesBeforeWriting` and `TestRunGeneratesRecasedUnion` pass, and each new test of the phase
+  was seen to fail first, as each step records.
+* `go test -race -count=1 ./...` exits 0 at the root and in `cmd/generate`; `go build ./example/...` exits 0; `TestGeneratedFilesUpToDate` passes.
+* `make pre-add-check` with `schema_test.go` named: `go-precheck: 1 file(s) clean (...)`; without names: `go-precheck: 60 file(s) clean (gofmt,
+  golangci-lint, go vet, go test, govulncheck).` `make check-records` and `make markdownlint` exit 0.
+* The generator's `panic` calls are the three layout guards: `emit/types.go` (`fieldList`) and `emit/file.go` (`printedSize`, `apply`).
+
+Every acceptance criterion in Verification holds, the `go list` item as amended. The status is `complete`, and `docs/README.md` shows it. Phase 2 of
+[0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md), the wire fixes, needs its own PLAN.
