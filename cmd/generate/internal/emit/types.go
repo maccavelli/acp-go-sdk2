@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"slices"
 	"strconv"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
@@ -81,39 +82,20 @@ func addRPCMethod(f *goFile, target *fieldSet, mi *model.Method) {
 	target.add(interfaceMethod(f, mi.GoName, mi.Req, resp))
 }
 
+// emitRPCInterfaces emits each interface of the model, in its order, with the
+// methods bound to it; an interface with no methods is still emitted.
 func emitRPCInterfaces(f *goFile, m *model.Model) {
-	var agent, agentLoader, agentExperimental fieldSet
-	for _, mi := range m.AgentMethods {
-		target := &agent
-		switch mi.Binding {
-		case model.BindAgentOptional:
-			target = &agentLoader
-		case model.BindAgentExperimental:
-			target = &agentExperimental
-		}
-		addRPCMethod(f, target, mi)
+	sets := map[model.Binding]*fieldSet{}
+	for _, in := range m.Interfaces {
+		sets[in.Binding] = &fieldSet{}
 	}
-	f.add(typeDecl("Agent", agent.interfaceType()))
-	if len(agentLoader.list) > 0 {
-		f.comment("AgentLoader defines optional support for loading sessions. Implement and advertise the capability to enable 'session/load'.")
-		f.add(typeDecl("AgentLoader", agentLoader.interfaceType()))
+	for _, mi := range slices.Concat(m.AgentMethods, m.ClientMethods) {
+		addRPCMethod(f, sets[mi.Binding], mi)
 	}
-	// Always emit AgentExperimental, even if empty.
-	f.comment("AgentExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice.")
-	f.add(typeDecl("AgentExperimental", agentExperimental.interfaceType()))
-
-	var client, clientExperimental fieldSet
-	for _, mi := range m.ClientMethods {
-		target := &client
-		if mi.Binding == model.BindClientExperimental {
-			target = &clientExperimental
-		}
-		addRPCMethod(f, target, mi)
+	for _, in := range m.Interfaces {
+		f.comment(in.Doc...)
+		f.add(typeDecl(in.Name, sets[in.Binding].interfaceType()))
 	}
-	f.add(typeDecl("Client", client.interfaceType()))
-	// Always emit ClientExperimental, even if empty.
-	f.comment("ClientExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice.")
-	f.add(typeDecl("ClientExperimental", clientExperimental.interfaceType()))
 }
 
 // enumConsts declares <Const> name = "value" for each value.

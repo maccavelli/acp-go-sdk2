@@ -15,11 +15,13 @@ func WriteDispatch(outDir string, m *model.Model) error {
 	return writeClientGen(outDir, m)
 }
 
-// sessionKey is string(p.SessionId).
-func sessionKey() ast.Expr { return call(id("string"), dot("p", "SessionId")) }
+// sessionKey is string(p.<field>), the session's key in sessionCancels.
+func sessionKey(field string) ast.Expr { return call(id("string"), dot("p", field)) }
 
-// sessionCancel is a.sessionCancels[string(p.SessionId)].
-func sessionCancel() ast.Expr { return index(dot("a", "sessionCancels"), sessionKey()) }
+// sessionCancel is a.sessionCancels[string(p.<field>)].
+func sessionCancel(field string) ast.Expr {
+	return index(dot("a", "sessionCancels"), sessionKey(field))
+}
 
 // lockCall is a.mu.Lock() or a.mu.Unlock().
 func lockCall(name string) ast.Stmt { return exprStmt(call(dot("a", "mu", name))) }
@@ -36,33 +38,33 @@ func handleFunc(f *goFile, recv, recvType string, cases []ast.Stmt) *ast.FuncDec
 	)
 }
 
-// promptCase derives a cancellable context per session prompt, calls Prompt,
-// then drops the cancel entry.
-func promptCase(f *goFile, recv ast.Expr, methodName string) []ast.Stmt {
+// promptCase derives a cancellable context per session for a prompt turn,
+// calls the method, then drops the cancel entry.
+func promptCase(f *goFile, recv ast.Expr, methodName, field string) []ast.Stmt {
 	return []ast.Stmt{
 		varStmt("reqCtx", f.qual(pkgContext, "Context")),
 		varStmt("cancel", f.qual(pkgContext, "CancelFunc")),
 		assign(exprs(id("reqCtx"), id("cancel")), call(f.qual(pkgContext, "WithCancel"), id("ctx"))),
 		lockCall("Lock"),
-		ifStmt(define(exprs(id("prev"), id("ok")), sessionCancel()), id("ok"), exprStmt(call(id("prev")))),
-		assign(exprs(sessionCancel()), id("cancel")),
+		ifStmt(define(exprs(id("prev"), id("ok")), sessionCancel(field)), id("ok"), exprStmt(call(id("prev")))),
+		assign(exprs(sessionCancel(field)), id("cancel")),
 		lockCall("Unlock"),
 		define(exprs(id("resp"), id("err")), call(sel(recv, methodName), id("reqCtx"), id("p"))),
 		lockCall("Lock"),
-		exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey())),
+		exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey(field))),
 		lockCall("Unlock"),
 		ifStmt(nil, errNotNil(), toRequestError()),
 		ret(id("resp"), nilExpr()),
 	}
 }
 
-// cancelActivePrompt cancels the in-flight prompt context of the session, if any.
-func cancelActivePrompt() []ast.Stmt {
+// cancelActivePrompt cancels the in-flight prompt-turn context of the session, if any.
+func cancelActivePrompt(field string) []ast.Stmt {
 	return []ast.Stmt{
 		lockCall("Lock"),
-		ifStmt(define(exprs(id("cn"), id("ok")), sessionCancel()), id("ok"),
+		ifStmt(define(exprs(id("cn"), id("ok")), sessionCancel(field)), id("ok"),
 			exprStmt(call(id("cn"))),
-			exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey())),
+			exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey(field))),
 		),
 		lockCall("Unlock"),
 	}
@@ -76,20 +78,20 @@ func writeAgentGen(outDir string, m *model.Model) error {
 		var body []ast.Stmt
 		if mi.Notif != "" {
 			body = append(body, unmarshalValidate(f, mi.Notif)...)
-			// session/cancel also cancels any in-flight prompt ctx for the session.
-			if mi.Wire == wireSessionCancel {
-				body = append(body, cancelActivePrompt()...)
+			// A prompt turn's cancel first cancels the session's in-flight prompt context.
+			if mi.CancelsPromptTurn {
+				body = append(body, cancelActivePrompt(mi.SessionField)...)
 			}
-			pre, recv := agentAssert(f, mi.Binding, mi.GoName, mi.Notif, "", false)
+			pre, recv := agentAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Notif, "", false)
 			body = append(body, pre...)
 			body = append(body, callNoResult(recv, mi.GoName)...)
 		} else {
 			body = append(body, unmarshalValidate(f, mi.Req)...)
-			pre, recv := agentAssert(f, mi.Binding, mi.GoName, mi.Req, mi.Resp, mi.HasResult)
+			pre, recv := agentAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Req, mi.Resp, mi.HasResult)
 			body = append(body, pre...)
 			switch {
-			case mi.Wire == "session/prompt":
-				body = append(body, promptCase(f, recv, mi.GoName)...)
+			case mi.PromptTurn:
+				body = append(body, promptCase(f, recv, mi.GoName, mi.SessionField)...)
 			case !mi.HasResult:
 				body = append(body, callNoResult(recv, mi.GoName)...)
 			default:
@@ -114,12 +116,12 @@ func writeClientGen(outDir string, m *model.Model) error {
 		var body []ast.Stmt
 		if mi.Notif != "" {
 			body = append(body, unmarshalValidate(f, mi.Notif)...)
-			pre, recv := clientAssert(f, mi.Binding, mi.GoName, mi.Notif, "", false)
+			pre, recv := clientAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Notif, "", false)
 			body = append(body, pre...)
 			body = append(body, callNoResult(recv, mi.GoName)...)
 		} else {
 			body = append(body, unmarshalValidate(f, mi.Req)...)
-			pre, recv := clientAssert(f, mi.Binding, mi.GoName, mi.Req, mi.Resp, mi.HasResult)
+			pre, recv := clientAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Req, mi.Resp, mi.HasResult)
 			body = append(body, pre...)
 			if mi.HasResult {
 				body = append(body, callWithResult(recv, mi.GoName)...)
@@ -164,13 +166,13 @@ func emitOutbound(f *goFile, recvType string, methods []*model.Method) {
 			define(exprs(id("resp"), id("err")),
 				call(index(id("SendRequest"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), id("params"))),
 		}
-		// session/prompt from the client: if ctx was canceled, send session/cancel best-effort.
-		if mi.Side == "agent" && mi.Wire == "session/prompt" {
+		// A prompt turn whose context ended sends its cancel, best effort.
+		if c := mi.Canceller; mi.PromptTurn && c != nil {
 			body = append(body, ifStmt(nil, errNotNil(),
 				ifStmt(nil, binary(call(dot("ctx", "Err")), token.NEQ, nilExpr()),
-					assign(exprs(id("_")), call(dot("c", "Cancel"),
+					assign(exprs(id("_")), call(dot("c", c.GoName),
 						call(f.qual(pkgContext, "Background")),
-						composite(id("CancelNotification"), kv(id("SessionId"), dot("params", "SessionId"))),
+						composite(id(c.Notif), kv(id(c.SessionField), dot("params", mi.SessionField))),
 					)),
 				),
 			))

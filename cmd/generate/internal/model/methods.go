@@ -126,7 +126,7 @@ func buildMethods(m *Model, prov *load.Provenance, r *rules) error {
 
 	seen := map[Binding]map[string]string{}
 	for _, mi := range slices.Concat(m.AgentMethods, m.ClientMethods) {
-		iface := m.interfaceOf(mi.Binding, r)
+		iface := m.interfaceName(mi.Binding, r)
 		if err := checkExported(mi.GoName); err != nil {
 			return fmt.Errorf("%s method %q: interface method name: %w", mi.Side, mi.Wire, err)
 		}

@@ -177,7 +177,8 @@ block when `m.Protocol` is not empty. The emitters name no wire method and no pr
 
 * After steps 2, 3, and 4 every generated file is byte-identical to `128a920`'s; after step 5 only `constants_gen.go` differs, by the new block.
 * No non-test source file of `cmd/generate` outside `acp.go` contains a wire name of the meta files or a type, interface, or Go name `ACP` holds,
-  except the default interface names in `model.go`; a script lists every match.
+  except the default interface names in `model.go` (annotated 2026-10-10: step 3 put them in `protocol.go`, `sdkInterfaces`); a script lists
+  every match.
 * `TestProtocolTableAppliesToCommittedSchema` passes; each refusal case and each new test failed first; each rule of the table, removed in a scratch copy
   one at a time, fails a test.
 * `go test -race ./...` passes at the root and in `cmd/generate`; `go build ./example/...` passes; `TestGeneratedFilesUpToDate` passes.
@@ -319,3 +320,64 @@ Gates: `make pre-add-check` with the twelve changed Go files named: `go-precheck
 govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 3 on `main`.
+
+### Step 4, the emitters read the model, 2026-10-10
+
+The owner committed step 3 as `40870bb`. Step 4 ran on `main` from that clean tree. The agent did not commit.
+
+`TestDispatchFollowsTheModel` in a new `cmd/generate/internal/emit/dispatch_test.go` builds a model from a synthetic schema and table whose prompt turn
+is `chat/send`, keyed by `conversationId`, whose cancel is `chat/stop`, and whose optional interface is `AgentStore` with variable `store`; it writes
+both dispatch files and renders the interfaces, requires the prompt-turn context, the cancel, the outbound `c.Stop(...)`, the `store` assertion, and the
+`AgentStore` doc in them, and requires none of `session/prompt`, `SessionId`, `CancelNotification`, `AgentLoader`, `loader`, `c.Cancel(`. Run before the
+change it failed 11 times:
+
+```text
+agent_gen.go lacks "reqCtx, cancel = context.WithCancel(ctx)"
+agent_gen.go lacks "a.sessionCancels[string(p.ConversationId)] = cancel"
+agent_gen.go lacks "resp, err := a.agent.Send(reqCtx, p)"
+agent_gen.go lacks "if cn, ok := a.sessionCancels[string(p.ConversationId)]; ok {"
+agent_gen.go lacks "store, ok := a.agent.(AgentStore)"
+agent_gen.go lacks "resp, err := store.Open(ctx, p)"
+client_gen.go lacks "_ = c.Stop(context.Background(), StopNotification{ConversationId: params.ConversationId})"
+interfaces lacks "// AgentStore stores.\ntype AgentStore interface {"
+interfaces contains "AgentLoader"
+agent_gen.go contains "AgentLoader"
+agent_gen.go contains "loader"
+```
+
+The change: `dispatch.go` selects the prompt-turn case by `mi.PromptTurn`, the cancel by `mi.CancelsPromptTurn`, and the outbound cancel by
+`mi.PromptTurn` and `mi.Canceller`, whose `GoName`, `Notif`, and `SessionField` it uses; the session key is `mi.SessionField`. `agentAssert` and
+`clientAssert` take the `model.Interface` (`m.InterfaceOf(mi.Binding)`) and use its `Name` and `Var`. `emitRPCInterfaces` emits `m.Interfaces` in
+order, each with its doc. `wireSessionCancel` is gone from `constants.go`. In the model, `InterfaceOf` is new and the internal `interfaceOf` is renamed
+`interfaceName`. `gofmt` split `sessionCancel` over three lines.
+
+The literal check (`s4_literals.py`, in the scratchpad) reads every Go string literal of the non-test files of `cmd/generate`, skipping `acp.go`, and
+reports any that is one of the 40 wire names of the meta files, one of the 36 strings of `acp.go`, or one of 8 derived names (`SessionId`, `Cancel`,
+`CancelNotification`, `Prompt`, `PromptRequest`, `LoadSession`, `loader`, `exp`), allowing `sdkInterfaces`' `exp` in `protocol.go`. On the tree:
+`no protocol literal outside acp.go`. On `git archive HEAD` (`40870bb`) it reports 17, all in `internal/emit`: `constants.go:18`, `dispatch.go:19`,
+`:91`, `:168`, `:171`, `:173` (three), `dispatch_helpers.go:42` (three), `:44` (two), `:55` (two), `types.go:98`, `:99`.
+
+Regenerated: each of the five generated files compares equal, by `cmp`, to its copy from `0566b33`.
+
+Each use of the model was broken, one per fresh scratch copy, then `go test ./...` in `cmd/generate`:
+
+```text
+prompt turn not selected: failing=['TestDispatchFollowsTheModel', 'TestGeneratedFilesUpToDate']
+cancel does not cancel the prompt: failing=['TestDispatchFollowsTheModel', 'TestGeneratedFilesUpToDate']
+outbound cancel dropped: failing=['TestDispatchFollowsTheModel', 'TestGeneratedFilesUpToDate']
+session key fixed: failing=['TestDispatchFollowsTheModel']
+optional interface variable fixed: failing=['TestDispatchFollowsTheModel']
+interface doc dropped: failing=['TestDispatchFollowsTheModel', 'TestGeneratedFilesUpToDate']
+ACP rule session/prompt removed: failing=['TestGeneratedFilesUpToDate', 'TestProtocolTableAppliesToCommittedSchema']
+```
+
+Two breakages only the new test catches: a session key fixed as `SessionId` and a variable fixed as `loader` produce ACP's own output. Removing the
+`session/prompt` rule now changes the output, where in step 3 it did not.
+
+After the change every test in the root and in `cmd/generate` passes; `go build ./example/...` passes. Coverage: `internal/model` 94.0%,
+`internal/emit` 52.1% (37.4% at step 3).
+
+Gates: `make pre-add-check` with the seven changed Go files named: `go-precheck: 7 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 66 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 4 on `main`.

@@ -333,6 +333,17 @@ func (m *Model) checkTypeRules(r *rules) error {
 	return nil
 }
 
+// InterfaceOf returns the interface a binding calls through, or the zero
+// Interface for BindUnknown.
+func (m *Model) InterfaceOf(b Binding) Interface {
+	for _, in := range m.Interfaces {
+		if in.Binding == b {
+			return in
+		}
+	}
+	return Interface{}
+}
+
 // buildInterfaces lists the SDK's interfaces and each table interface a
 // method binds to, in binding order, declaring the table's names.
 func (m *Model) buildInterfaces(n *namer, r *rules) error {
@@ -355,8 +366,9 @@ func (m *Model) buildInterfaces(n *namer, r *rules) error {
 	return nil
 }
 
-// interfaceOf returns the name of the interface a binding calls through.
-func (m *Model) interfaceOf(b Binding, r *rules) string {
+// interfaceName returns the name of the interface a binding calls through,
+// before Interfaces is built.
+func (m *Model) interfaceName(b Binding, r *rules) string {
 	if in, ok := r.interfaces[b]; ok {
 		return in.Name
 	}

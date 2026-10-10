@@ -34,25 +34,25 @@ func unmarshalValidate(f *goFile, typeName string) []ast.Stmt {
 	}
 }
 
-// agentAssert returns the interface assertion prelude for a binding and the
-// receiver the method is called on.
-func agentAssert(f *goFile, binding model.Binding, methodName, paramType, respType string, hasResponse bool) ([]ast.Stmt, ast.Expr) {
-	switch binding {
+// agentAssert returns the interface assertion prelude for the interface a
+// method is called through and the receiver the method is called on.
+func agentAssert(f *goFile, in model.Interface, methodName, paramType, respType string, hasResponse bool) ([]ast.Stmt, ast.Expr) {
+	switch in.Binding {
 	case model.BindAgentOptional:
-		return namedAssert(dot("a", "agent"), "loader", "AgentLoader"), id("loader")
+		return namedAssert(dot("a", "agent"), in.Var, in.Name), id(in.Var)
 	case model.BindAgentExperimental:
-		return singleMethodAssert(f, dot("a", "agent"), "exp", methodName, paramType, respType, hasResponse), id("exp")
+		return singleMethodAssert(f, dot("a", "agent"), in.Var, methodName, paramType, respType, hasResponse), id(in.Var)
 	default:
 		return nil, dot("a", "agent")
 	}
 }
 
-// clientAssert returns the interface assertion prelude for a binding and the
-// receiver the method is called on.
-func clientAssert(f *goFile, binding model.Binding, methodName, paramType, respType string, hasResponse bool) ([]ast.Stmt, ast.Expr) {
-	switch binding {
+// clientAssert returns the interface assertion prelude for the interface a
+// method is called through and the receiver the method is called on.
+func clientAssert(f *goFile, in model.Interface, methodName, paramType, respType string, hasResponse bool) ([]ast.Stmt, ast.Expr) {
+	switch in.Binding {
 	case model.BindClientExperimental:
-		return singleMethodAssert(f, dot("c", "client"), "exp", methodName, paramType, respType, hasResponse), id("exp")
+		return singleMethodAssert(f, dot("c", "client"), in.Var, methodName, paramType, respType, hasResponse), id(in.Var)
 	default:
 		return nil, dot("c", "client")
 	}
