@@ -267,3 +267,39 @@ Gates: `make pre-add-check` with the four changed Go files named: `go-precheck: 
 govulncheck).` Without names: `go-precheck: 62 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 3 on `main`.
+
+### Step 4, precision, 2026-10-10
+
+The owner committed step 3 as `858a7d4`. Step 4 ran on `main` from that clean tree. The agent did not commit.
+
+`TestUnionKeepsIntegerDigits` in `union_wire_test.go` encodes a `resource_link` with `size` 9007199254740993 as a `ContentBlock` and nested in a
+`SessionUpdate` agent chunk, and decodes the first back. Run before the generator change:
+
+```text
+--- FAIL: TestUnionKeepsIntegerDigits (0.00s)
+    SessionUpdate: {"content":{"name":"n","size":9007199254740992,"type":"resource_link","uri":"u"},"sessionUpdate":"agent_message_chunk"} does not carry size 9007199254740993
+    ContentBlock: {"name":"n","size":9007199254740992,"type":"resource_link","uri":"u"} does not carry size 9007199254740993
+    decoded {"name":"n","size":9007199254740992,"type":"resource_link","uri":"u"}, want size 9007199254740993
+```
+
+`unionMarshalBody` declares the reshape map as `map[string]json.RawMessage` and injects each constant as `json.RawMessage("\"<value>\"")`.
+
+Regenerated: `types_gen.go` changed by 159 lines in and 159 out, and no other file. A script classified every changed line, with none left over:
+
+```text
+- var m map[string]any                       92      + var m map[string]json.RawMessage           92
+- m[k] = "v"                                 67      + m[k] = json.RawMessage("\"v\"")            67
+unclassified: 0
+```
+
+After the change the test passes, as do `TestJSONGolden_*`, `TestJSONPinEscapesHTML`, `TestJSONPinSortsMapKeys`, and the step 2 and 3 tests; no golden
+changed; `go build ./example/...` passes.
+
+A correction to step 3's record, which said numbers inside `_meta` pass through `map[string]any` until this step: the union path no longer converts any
+value, but a `_meta` decoded into the Go field `Meta map[string]any` holds its numbers as `float64`, as `encoding/json` decodes them into `any`. That is
+the field's declared type, outside this plan.
+
+Gates: `make pre-add-check` with the three changed Go files named: `go-precheck: 3 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 62 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 4 on `main`.

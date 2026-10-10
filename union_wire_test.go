@@ -40,6 +40,38 @@ func TestUnionDecodeErrorsNameTheirPlace(t *testing.T) {
 	}
 }
 
+// TestUnionKeepsIntegerDigits requires an integer above 2^53 to keep every
+// digit through a union, alone and nested in another union.
+func TestUnionKeepsIntegerDigits(t *testing.T) {
+	t.Parallel()
+	const digits = "9007199254740993"
+	size := 9007199254740993
+	block := ContentBlock{ResourceLink: &ContentBlockResourceLink{Name: "n", Uri: "u", Size: &size}}
+	for name, v := range map[string]any{
+		"ContentBlock":  block,
+		"SessionUpdate": SessionUpdate{AgentMessageChunk: &SessionUpdateAgentMessageChunk{Content: block}},
+	} {
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(b), `"size":`+digits) {
+			t.Errorf("%s: %s does not carry size %s", name, b, digits)
+		}
+	}
+	b, err := json.Marshal(block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back ContentBlock
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.ResourceLink == nil || back.ResourceLink.Size == nil || *back.ResourceLink.Size != size {
+		t.Errorf("decoded %s, want size %d", b, size)
+	}
+}
+
 // TestContentBlockKeepsMetaAndAnnotations requires a content block to encode
 // its _meta and annotations, whether built in Go or decoded from the wire.
 func TestContentBlockKeepsMetaAndAnnotations(t *testing.T) {

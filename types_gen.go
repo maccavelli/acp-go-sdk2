@@ -258,7 +258,7 @@ func (u AgentResponse) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("AgentResponse: %w", err)
 		}
@@ -269,7 +269,7 @@ func (u AgentResponse) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("AgentResponse: %w", err)
 		}
@@ -488,11 +488,11 @@ func (u AuthMethod) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("AuthMethod: %w", err)
 		}
-		m["type"] = "terminal"
+		m["type"] = json.RawMessage("\"terminal\"")
 		return json.Marshal(m)
 	}
 	if u.Agent != nil {
@@ -500,7 +500,7 @@ func (u AuthMethod) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("AuthMethod: %w", err)
 		}
@@ -657,7 +657,7 @@ func (u AvailableCommandInput) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("AvailableCommandInput: %w", err)
 		}
@@ -1039,7 +1039,7 @@ func (u ClientResponse) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ClientResponse: %w", err)
 		}
@@ -1050,7 +1050,7 @@ func (u ClientResponse) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ClientResponse: %w", err)
 		}
@@ -1562,11 +1562,11 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ContentBlock: %w", err)
 		}
-		m["type"] = "text"
+		m["type"] = json.RawMessage("\"text\"")
 		return json.Marshal(m)
 	}
 	if u.Image != nil {
@@ -1574,11 +1574,11 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ContentBlock: %w", err)
 		}
-		m["type"] = "image"
+		m["type"] = json.RawMessage("\"image\"")
 		return json.Marshal(m)
 	}
 	if u.Audio != nil {
@@ -1586,11 +1586,11 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ContentBlock: %w", err)
 		}
-		m["type"] = "audio"
+		m["type"] = json.RawMessage("\"audio\"")
 		return json.Marshal(m)
 	}
 	if u.ResourceLink != nil {
@@ -1598,11 +1598,11 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ContentBlock: %w", err)
 		}
-		m["type"] = "resource_link"
+		m["type"] = json.RawMessage("\"resource_link\"")
 		return json.Marshal(m)
 	}
 	if u.Resource != nil {
@@ -1610,11 +1610,11 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ContentBlock: %w", err)
 		}
-		m["type"] = "resource"
+		m["type"] = json.RawMessage("\"resource\"")
 		return json.Marshal(m)
 	}
 	return nil, errors.New("ContentBlock: no variant set")
@@ -1876,11 +1876,11 @@ func (u CreateElicitationRequest) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("CreateElicitationRequest: %w", err)
 		}
-		m["mode"] = "form"
+		m["mode"] = json.RawMessage("\"form\"")
 		return json.Marshal(m)
 	}
 	if u.Url != nil {
@@ -1888,11 +1888,11 @@ func (u CreateElicitationRequest) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("CreateElicitationRequest: %w", err)
 		}
-		m["mode"] = "url"
+		m["mode"] = json.RawMessage("\"url\"")
 		return json.Marshal(m)
 	}
 	if u.Other != nil {
@@ -1900,7 +1900,7 @@ func (u CreateElicitationRequest) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("CreateElicitationRequest: %w", err)
 		}
@@ -2157,11 +2157,11 @@ func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("CreateElicitationResponse: %w", err)
 		}
-		m["action"] = "accept"
+		m["action"] = json.RawMessage("\"accept\"")
 		return json.Marshal(m)
 	}
 	if u.Decline != nil {
@@ -2169,11 +2169,11 @@ func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("CreateElicitationResponse: %w", err)
 		}
-		m["action"] = "decline"
+		m["action"] = json.RawMessage("\"decline\"")
 		return json.Marshal(m)
 	}
 	if u.Cancel != nil {
@@ -2181,11 +2181,11 @@ func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("CreateElicitationResponse: %w", err)
 		}
-		m["action"] = "cancel"
+		m["action"] = json.RawMessage("\"cancel\"")
 		return json.Marshal(m)
 	}
 	if u.Other != nil {
@@ -2193,7 +2193,7 @@ func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("CreateElicitationResponse: %w", err)
 		}
@@ -2558,7 +2558,7 @@ func (u ElicitationFormMode) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ElicitationFormMode: %w", err)
 		}
@@ -2569,7 +2569,7 @@ func (u ElicitationFormMode) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ElicitationFormMode: %w", err)
 		}
@@ -3000,11 +3000,11 @@ func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
 		}
-		m["type"] = "string"
+		m["type"] = json.RawMessage("\"string\"")
 		return json.Marshal(m)
 	}
 	if u.Number != nil {
@@ -3012,11 +3012,11 @@ func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
 		}
-		m["type"] = "number"
+		m["type"] = json.RawMessage("\"number\"")
 		return json.Marshal(m)
 	}
 	if u.Integer != nil {
@@ -3024,11 +3024,11 @@ func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
 		}
-		m["type"] = "integer"
+		m["type"] = json.RawMessage("\"integer\"")
 		return json.Marshal(m)
 	}
 	if u.Boolean != nil {
@@ -3036,11 +3036,11 @@ func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
 		}
-		m["type"] = "boolean"
+		m["type"] = json.RawMessage("\"boolean\"")
 		return json.Marshal(m)
 	}
 	if u.Array != nil {
@@ -3048,11 +3048,11 @@ func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
 		}
-		m["type"] = "array"
+		m["type"] = json.RawMessage("\"array\"")
 		return json.Marshal(m)
 	}
 	if u.Other != nil {
@@ -3060,7 +3060,7 @@ func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
 		}
@@ -3258,7 +3258,7 @@ func (u ElicitationUrlMode) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ElicitationUrlMode: %w", err)
 		}
@@ -3269,7 +3269,7 @@ func (u ElicitationUrlMode) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ElicitationUrlMode: %w", err)
 		}
@@ -3372,7 +3372,7 @@ func (u EmbeddedResourceResource) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("EmbeddedResourceResource: %w", err)
 		}
@@ -3383,7 +3383,7 @@ func (u EmbeddedResourceResource) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("EmbeddedResourceResource: %w", err)
 		}
@@ -4128,11 +4128,11 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
 		}
-		m["stopReason"] = "end_turn"
+		m["stopReason"] = json.RawMessage("\"end_turn\"")
 		return json.Marshal(m)
 	}
 	if u.MaxTokens != nil {
@@ -4140,11 +4140,11 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
 		}
-		m["stopReason"] = "max_tokens"
+		m["stopReason"] = json.RawMessage("\"max_tokens\"")
 		return json.Marshal(m)
 	}
 	if u.MaxTurnRequests != nil {
@@ -4152,11 +4152,11 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
 		}
-		m["stopReason"] = "max_turn_requests"
+		m["stopReason"] = json.RawMessage("\"max_turn_requests\"")
 		return json.Marshal(m)
 	}
 	if u.Refusal != nil {
@@ -4164,11 +4164,11 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
 		}
-		m["stopReason"] = "refusal"
+		m["stopReason"] = json.RawMessage("\"refusal\"")
 		return json.Marshal(m)
 	}
 	if u.Cancelled != nil {
@@ -4176,11 +4176,11 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
 		}
-		m["stopReason"] = "cancelled"
+		m["stopReason"] = json.RawMessage("\"cancelled\"")
 		return json.Marshal(m)
 	}
 	if u.Error != nil {
@@ -4188,11 +4188,11 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
 		}
-		m["stopReason"] = "error"
+		m["stopReason"] = json.RawMessage("\"error\"")
 		return json.Marshal(m)
 	}
 	if u.Other != nil {
@@ -4200,7 +4200,7 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
 		}
@@ -4211,7 +4211,7 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
 		}
@@ -4962,11 +4962,11 @@ func (u McpServer) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("McpServer: %w", err)
 		}
-		m["type"] = "http"
+		m["type"] = json.RawMessage("\"http\"")
 		return json.Marshal(m)
 	}
 	if u.Sse != nil {
@@ -4974,11 +4974,11 @@ func (u McpServer) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("McpServer: %w", err)
 		}
-		m["type"] = "sse"
+		m["type"] = json.RawMessage("\"sse\"")
 		return json.Marshal(m)
 	}
 	if u.Acp != nil {
@@ -4986,11 +4986,11 @@ func (u McpServer) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("McpServer: %w", err)
 		}
-		m["type"] = "acp"
+		m["type"] = json.RawMessage("\"acp\"")
 		return json.Marshal(m)
 	}
 	if u.Stdio != nil {
@@ -4998,7 +4998,7 @@ func (u McpServer) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("McpServer: %w", err)
 		}
@@ -5279,11 +5279,11 @@ func (u MultiSelectItems) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("MultiSelectItems: %w", err)
 		}
-		m["type"] = "string"
+		m["type"] = json.RawMessage("\"string\"")
 		return json.Marshal(m)
 	}
 	if u.Other != nil {
@@ -5291,7 +5291,7 @@ func (u MultiSelectItems) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("MultiSelectItems: %w", err)
 		}
@@ -5302,7 +5302,7 @@ func (u MultiSelectItems) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("MultiSelectItems: %w", err)
 		}
@@ -6205,11 +6205,11 @@ func (u PlanUpdateContent) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("PlanUpdateContent: %w", err)
 		}
-		m["type"] = "items"
+		m["type"] = json.RawMessage("\"items\"")
 		return json.Marshal(m)
 	}
 	if u.File != nil {
@@ -6217,11 +6217,11 @@ func (u PlanUpdateContent) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("PlanUpdateContent: %w", err)
 		}
-		m["type"] = "file"
+		m["type"] = json.RawMessage("\"file\"")
 		return json.Marshal(m)
 	}
 	if u.Markdown != nil {
@@ -6229,11 +6229,11 @@ func (u PlanUpdateContent) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("PlanUpdateContent: %w", err)
 		}
-		m["type"] = "markdown"
+		m["type"] = json.RawMessage("\"markdown\"")
 		return json.Marshal(m)
 	}
 	return nil, errors.New("PlanUpdateContent: no variant set")
@@ -6735,11 +6735,11 @@ func (u RequestPermissionOutcome) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("RequestPermissionOutcome: %w", err)
 		}
-		m["outcome"] = "cancelled"
+		m["outcome"] = json.RawMessage("\"cancelled\"")
 		return json.Marshal(m)
 	}
 	if u.Selected != nil {
@@ -6747,11 +6747,11 @@ func (u RequestPermissionOutcome) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("RequestPermissionOutcome: %w", err)
 		}
-		m["outcome"] = "selected"
+		m["outcome"] = json.RawMessage("\"selected\"")
 		return json.Marshal(m)
 	}
 	return nil, errors.New("RequestPermissionOutcome: no variant set")
@@ -7206,11 +7206,11 @@ func (u SessionConfigOption) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionConfigOption: %w", err)
 		}
-		m["type"] = "select"
+		m["type"] = json.RawMessage("\"select\"")
 		return json.Marshal(m)
 	}
 	if u.Boolean != nil {
@@ -7218,11 +7218,11 @@ func (u SessionConfigOption) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionConfigOption: %w", err)
 		}
-		m["type"] = "boolean"
+		m["type"] = json.RawMessage("\"boolean\"")
 		return json.Marshal(m)
 	}
 	return nil, errors.New("SessionConfigOption: no variant set")
@@ -8772,11 +8772,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "user_message_chunk"
+		m["sessionUpdate"] = json.RawMessage("\"user_message_chunk\"")
 		return json.Marshal(m)
 	}
 	if u.AgentMessageChunk != nil {
@@ -8784,11 +8784,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "agent_message_chunk"
+		m["sessionUpdate"] = json.RawMessage("\"agent_message_chunk\"")
 		return json.Marshal(m)
 	}
 	if u.AgentThoughtChunk != nil {
@@ -8796,11 +8796,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "agent_thought_chunk"
+		m["sessionUpdate"] = json.RawMessage("\"agent_thought_chunk\"")
 		return json.Marshal(m)
 	}
 	if u.ToolCall != nil {
@@ -8808,11 +8808,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "tool_call"
+		m["sessionUpdate"] = json.RawMessage("\"tool_call\"")
 		return json.Marshal(m)
 	}
 	if u.ToolCallUpdate != nil {
@@ -8820,11 +8820,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "tool_call_update"
+		m["sessionUpdate"] = json.RawMessage("\"tool_call_update\"")
 		return json.Marshal(m)
 	}
 	if u.Plan != nil {
@@ -8832,11 +8832,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "plan"
+		m["sessionUpdate"] = json.RawMessage("\"plan\"")
 		return json.Marshal(m)
 	}
 	if u.PlanUpdate != nil {
@@ -8844,11 +8844,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "plan_update"
+		m["sessionUpdate"] = json.RawMessage("\"plan_update\"")
 		return json.Marshal(m)
 	}
 	if u.PlanRemoved != nil {
@@ -8856,11 +8856,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "plan_removed"
+		m["sessionUpdate"] = json.RawMessage("\"plan_removed\"")
 		return json.Marshal(m)
 	}
 	if u.AvailableCommandsUpdate != nil {
@@ -8868,11 +8868,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "available_commands_update"
+		m["sessionUpdate"] = json.RawMessage("\"available_commands_update\"")
 		return json.Marshal(m)
 	}
 	if u.CurrentModeUpdate != nil {
@@ -8880,11 +8880,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "current_mode_update"
+		m["sessionUpdate"] = json.RawMessage("\"current_mode_update\"")
 		return json.Marshal(m)
 	}
 	if u.ConfigOptionUpdate != nil {
@@ -8892,11 +8892,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "config_option_update"
+		m["sessionUpdate"] = json.RawMessage("\"config_option_update\"")
 		return json.Marshal(m)
 	}
 	if u.SessionInfoUpdate != nil {
@@ -8904,11 +8904,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "session_info_update"
+		m["sessionUpdate"] = json.RawMessage("\"session_info_update\"")
 		return json.Marshal(m)
 	}
 	if u.UsageUpdate != nil {
@@ -8916,11 +8916,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "usage_update"
+		m["sessionUpdate"] = json.RawMessage("\"usage_update\"")
 		return json.Marshal(m)
 	}
 	if u.Notice != nil {
@@ -8928,11 +8928,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "notice"
+		m["sessionUpdate"] = json.RawMessage("\"notice\"")
 		return json.Marshal(m)
 	}
 	if u.CompactionUpdate != nil {
@@ -8940,11 +8940,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "compaction_update"
+		m["sessionUpdate"] = json.RawMessage("\"compaction_update\"")
 		return json.Marshal(m)
 	}
 	if u.CompactionSummaryChunk != nil {
@@ -8952,11 +8952,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "compaction_summary_chunk"
+		m["sessionUpdate"] = json.RawMessage("\"compaction_summary_chunk\"")
 		return json.Marshal(m)
 	}
 	if u.SubagentUpdate != nil {
@@ -8964,11 +8964,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "subagent_update"
+		m["sessionUpdate"] = json.RawMessage("\"subagent_update\"")
 		return json.Marshal(m)
 	}
 	if u.SessionMessage != nil {
@@ -8976,11 +8976,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "session_message"
+		m["sessionUpdate"] = json.RawMessage("\"session_message\"")
 		return json.Marshal(m)
 	}
 	if u.SessionMessageChunk != nil {
@@ -8988,11 +8988,11 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SessionUpdate: %w", err)
 		}
-		m["sessionUpdate"] = "session_message_chunk"
+		m["sessionUpdate"] = json.RawMessage("\"session_message_chunk\"")
 		return json.Marshal(m)
 	}
 	return nil, errors.New("SessionUpdate: no variant set")
@@ -9194,11 +9194,11 @@ func (u SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SetSessionConfigOptionRequest: %w", err)
 		}
-		m["type"] = "boolean"
+		m["type"] = json.RawMessage("\"boolean\"")
 		return json.Marshal(m)
 	}
 	if u.ValueId != nil {
@@ -9206,7 +9206,7 @@ func (u SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("SetSessionConfigOptionRequest: %w", err)
 		}
@@ -9527,11 +9527,11 @@ func (u StateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("StateUpdate: %w", err)
 		}
-		m["state"] = "running"
+		m["state"] = json.RawMessage("\"running\"")
 		return json.Marshal(m)
 	}
 	if u.Idle != nil {
@@ -9539,11 +9539,11 @@ func (u StateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("StateUpdate: %w", err)
 		}
-		m["state"] = "idle"
+		m["state"] = json.RawMessage("\"idle\"")
 		return json.Marshal(m)
 	}
 	if u.RequiresAction != nil {
@@ -9551,11 +9551,11 @@ func (u StateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("StateUpdate: %w", err)
 		}
-		m["state"] = "requires_action"
+		m["state"] = json.RawMessage("\"requires_action\"")
 		return json.Marshal(m)
 	}
 	if u.Unknown != nil {
@@ -9563,11 +9563,11 @@ func (u StateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("StateUpdate: %w", err)
 		}
-		m["state"] = "unknown"
+		m["state"] = json.RawMessage("\"unknown\"")
 		return json.Marshal(m)
 	}
 	if u.Other != nil {
@@ -9575,7 +9575,7 @@ func (u StateUpdate) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("StateUpdate: %w", err)
 		}
@@ -10152,11 +10152,11 @@ func (u ToolCallContent) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ToolCallContent: %w", err)
 		}
-		m["type"] = "content"
+		m["type"] = json.RawMessage("\"content\"")
 		return json.Marshal(m)
 	}
 	if u.Diff != nil {
@@ -10164,11 +10164,11 @@ func (u ToolCallContent) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ToolCallContent: %w", err)
 		}
-		m["type"] = "diff"
+		m["type"] = json.RawMessage("\"diff\"")
 		return json.Marshal(m)
 	}
 	if u.Terminal != nil {
@@ -10176,11 +10176,11 @@ func (u ToolCallContent) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("ToolCallContent: %w", err)
 		}
-		m["type"] = "terminal"
+		m["type"] = json.RawMessage("\"terminal\"")
 		return json.Marshal(m)
 	}
 	return nil, errors.New("ToolCallContent: no variant set")
@@ -11029,11 +11029,11 @@ func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("UnstableMcpServer: %w", err)
 		}
-		m["type"] = "http"
+		m["type"] = json.RawMessage("\"http\"")
 		return json.Marshal(m)
 	}
 	if u.Sse != nil {
@@ -11041,11 +11041,11 @@ func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("UnstableMcpServer: %w", err)
 		}
-		m["type"] = "sse"
+		m["type"] = json.RawMessage("\"sse\"")
 		return json.Marshal(m)
 	}
 	if u.Acp != nil {
@@ -11053,11 +11053,11 @@ func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("UnstableMcpServer: %w", err)
 		}
-		m["type"] = "acp"
+		m["type"] = json.RawMessage("\"acp\"")
 		return json.Marshal(m)
 	}
 	if u.Stdio != nil {
@@ -11065,7 +11065,7 @@ func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("UnstableMcpServer: %w", err)
 		}
@@ -11272,7 +11272,7 @@ func (u UnstableMessageMcpResponse) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("UnstableMessageMcpResponse: %w", err)
 		}
@@ -11283,7 +11283,7 @@ func (u UnstableMessageMcpResponse) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("UnstableMessageMcpResponse: %w", err)
 		}
@@ -11884,11 +11884,11 @@ func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("UnstableNesSuggestion: %w", err)
 		}
-		m["kind"] = "edit"
+		m["kind"] = json.RawMessage("\"edit\"")
 		return json.Marshal(m)
 	}
 	if u.Jump != nil {
@@ -11896,11 +11896,11 @@ func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("UnstableNesSuggestion: %w", err)
 		}
-		m["kind"] = "jump"
+		m["kind"] = json.RawMessage("\"jump\"")
 		return json.Marshal(m)
 	}
 	if u.Rename != nil {
@@ -11908,11 +11908,11 @@ func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("UnstableNesSuggestion: %w", err)
 		}
-		m["kind"] = "rename"
+		m["kind"] = json.RawMessage("\"rename\"")
 		return json.Marshal(m)
 	}
 	if u.SearchAndReplace != nil {
@@ -11920,11 +11920,11 @@ func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {
 		if _e != nil {
 			return []byte{}, _e
 		}
-		var m map[string]any
+		var m map[string]json.RawMessage
 		if err := json.Unmarshal(_b, &m); err != nil {
 			return nil, fmt.Errorf("UnstableNesSuggestion: %w", err)
 		}
-		m["kind"] = "searchAndReplace"
+		m["kind"] = json.RawMessage("\"searchAndReplace\"")
 		return json.Marshal(m)
 	}
 	return nil, errors.New("UnstableNesSuggestion: no variant set")

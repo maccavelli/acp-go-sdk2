@@ -454,14 +454,14 @@ func unionMarshalBody(f *goFile, name string, variants []*model.Variant) []ast.S
 			then = []ast.Stmt{
 				define(exprs(id("_b"), id("_e")), marshal(star(dot("u", vi.FieldName)))),
 				ifStmt(nil, binary(id("_e"), token.NEQ, nilExpr()), ret(emptyBytes(), id("_e"))),
-				// Marshal object variant to map for discriminant injection and shaping.
-				varStmt("m", rawMap(id("any"))),
+				// Reshape as raw values, so numbers keep every digit.
+				varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
 				ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("_b"), addr(id("m")))), errNotNil(),
 					ret(nilExpr(), call(f.qual(pkgFmt, "Errorf"), str(name+": %w"), id("err")))),
 			}
-			// Inject const discriminants.
+			// Inject const discriminants, as raw JSON strings.
 			for _, kv := range vi.ConstPairs {
-				then = append(then, assign(exprs(index(id("m"), str(kv[0]))), str(kv[1])))
+				then = append(then, assign(exprs(index(id("m"), str(kv[0]))), call(f.qual(pkgJSON, "RawMessage"), str(strconv.Quote(kv[1])))))
 			}
 			// Remarshal, with the injected discriminant.
 			then = append(then, ret(marshal(id("m"))))
