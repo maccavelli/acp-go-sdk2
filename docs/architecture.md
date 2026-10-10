@@ -23,6 +23,27 @@ protocol methods, `internal/emit` builds the files as `go/ast` and prints them
 through `go/format`, and `internal/util` holds naming helpers. `make version`
 downloads the schema for the stamp in `schema/version` and runs the generator.
 
+The protocol behaviour the schema does not express lives in one table, `ACP`
+in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
+`Input.Protocol`. It holds:
+
+- the optional `AgentLoader` interface, for `session/load`;
+- the prompt turn: `AgentSideConnection` runs `session/prompt` under a
+  per-session context that an inbound `session/cancel` cancels, and
+  `ClientSideConnection.Prompt` sends `session/cancel` when its context ends
+  with an error;
+- the name `SessionUpdate` for the client's `session/update` handler;
+- the unions whose constructors `helpers.go` writes, and `ToolCallUpdate`'s
+  `Validate`;
+- the capability that gates each method, recorded and checked against the
+  schema, not emitted.
+
+The model applies a rule only where the schema carries its subject, and refuses
+a subject whose shape the rule cannot use with an error that starts
+`protocol table:`. The emitters take every protocol name from the model.
+`constants_gen.go` has a constant for each method of the meta files, among them
+`ProtocolMethodCancelRequest`, which `connection.go` uses.
+
 The SDK uses `encoding/json` v1 only. The generated `MarshalJSON` methods send a
 union's `Unknown` payload back when no variant is set, fail on a union with
 neither, naming it, and send a nil required array or map as `[]` or `{}`. A
@@ -43,6 +64,8 @@ Checks that guard this:
 
 - `TestGeneratedFilesUpToDate` in `cmd/generate` fails when the committed
   `*_gen.go` files differ from the generator's output.
+- `TestProtocolTableAppliesToCommittedSchema` in `internal/model` fails when a
+  rule of the protocol table no longer applies to the committed schema.
 - `json_parity_test.go` compares encodings with the goldens in
   `testdata/json_golden/`. `json_v1_pin_test.go` pins HTML escaping and sorted map
   keys. `generated_output_test.go` covers the encoding rules above, and
@@ -66,7 +89,7 @@ go.mod                    the SDK module
 *.go                      package acp: hand-written and *_gen.go files
 cmd/generate/             the generator, its own module
   internal/load/          schema loading
-  internal/model/         the resolved schema: types, unions, methods
+  internal/model/         the resolved schema and the protocol table
   internal/emit/          go/ast emission
   internal/util/          naming helpers
 schema/                   schema files and the version stamp

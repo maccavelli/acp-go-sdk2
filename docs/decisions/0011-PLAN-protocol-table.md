@@ -434,3 +434,35 @@ Gates: `make pre-add-check` with the seven changed Go files named: `go-precheck:
 govulncheck).` Without names: `go-precheck: 67 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 5 on `main`.
+
+### Step 6, docs, 2026-10-10
+
+The owner committed step 5 as `a74a037`. Step 6 ran on `main` from that clean tree and changed `docs/architecture.md` and this record. The agent did
+not commit.
+
+`docs/architecture.md` gains a paragraph and a list after the generator paragraph: the table `ACP` in `cmd/generate/internal/model/acp.go`, passed as
+`Input.Protocol`; what it holds (the `AgentLoader` interface, the prompt turn as the generated connections run it, the name `SessionUpdate`, the
+hand-written helper unions and `ToolCallUpdate`'s `Validate`, the capability gates); that the model applies a rule only where the schema carries its
+subject and refuses a contradiction with an error starting `protocol table:`; and `ProtocolMethodCancelRequest`, which `connection.go` uses. "Checks
+that guard this" names `TestProtocolTableAppliesToCommittedSchema`; the tree line of `internal/model/` reads "the resolved schema and the protocol
+table".
+
+`README.md` is unchanged. It names `acp.AgentLoader` for `session/load`, which still holds, and lists no method constants; nothing else it names
+changed.
+
+The name check of phase 2 (`w9_names.py`) gained one kind, an error prefix (a lowercase phrase ending in `:`), which must open a string literal in Go
+source. Over both files: 110 names pass, none fails; not checked are the JSON and Go literals `[]`, `{}`, `null`, `_`, `acp`, `go` and the trace keys,
+as in phase 2. Every name the new text uses passes: `ACP`, `Input.Protocol`, `cmd/generate/internal/model/acp.go`, `main.go` (under
+`cmd/generate`), `AgentSideConnection`, `ClientSideConnection.Prompt`, `ProtocolMethodCancelRequest`, `TestProtocolTableAppliesToCommittedSchema`,
+`protocol table:`, and the wire names. One wrong name planted per kind in a scratch copy of the file:
+
+```text
+error prefix: exit=1 ['FAIL error prefix: protocol tables:']
+dotted identifier: exit=1 ['FAIL identifier: Input.Protocols']
+path: exit=1 ['FAIL path: cmd/generate/internal/model/acp2.go']
+test name: exit=1 ['FAIL identifier: TestProtocolTableApplyToCommittedSchema']
+```
+
+No Go file changed, so `make pre-add-check` was not run. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 6 on `main`.
