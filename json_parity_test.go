@@ -97,13 +97,13 @@ func TestJSONGolden_ContentBlocks(t *testing.T) {
 	t.Run("content_resource_link", runGolden(
 		func() ContentBlock {
 			mt := "application/pdf"
-			sz := 1024000
+			sz := int64(1024000)
 			return ContentBlock{ResourceLink: &ContentBlockResourceLink{Type: "resource_link", Uri: "file:///home/user/document.pdf", Name: "document.pdf", MimeType: &mt, Size: &sz}}
 		},
 		func() ContentBlock {
 			cb := ResourceLinkBlock("document.pdf", "file:///home/user/document.pdf")
 			mt := "application/pdf"
-			sz := 1024000
+			sz := int64(1024000)
 			cb.ResourceLink.MimeType = &mt
 			cb.ResourceLink.Size = &sz
 			return cb
@@ -253,7 +253,7 @@ func TestJSONGolden_MethodPayloads(t *testing.T) {
 		return PromptRequest{SessionId: "sess_abc123def456", Prompt: []ContentBlock{TextBlock("Can you analyze this code for potential issues?"), ResourceBlock(EmbeddedResourceResource{TextResourceContents: &TextResourceContents{Uri: "file:///home/user/project/main.py", MimeType: new("text/x-python"), Text: "def process_data(items):\n    for item in items:\n        print(item)"}})}}
 	}))
 	t.Run("fs_read_text_file_request", runGolden(func() ReadTextFileRequest {
-		line, limit := 10, 50
+		line, limit := uint32(10), uint32(50)
 		return ReadTextFileRequest{SessionId: "sess_abc123def456", Path: "/home/user/project/src/main.py", Line: &line, Limit: &limit}
 	}))
 	t.Run("fs_read_text_file_response", runGolden(func() ReadTextFileResponse {

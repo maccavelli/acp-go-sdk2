@@ -1293,7 +1293,7 @@ type ContentBlockResourceLink struct {
 	// Human-readable name shown for this protocol object.
 	Name string `json:"name"`
 	// Optional size of the linked resource in bytes, if known.
-	Size *int `json:"size,omitempty"`
+	Size *int64 `json:"size,omitempty"`
 	// Optional display title for end-user UI.
 	Title *string `json:"title,omitempty"`
 	Type  string  `json:"type"`
@@ -2211,7 +2211,7 @@ type CreateTerminalRequest struct {
 	// The Client MUST ensure truncation happens at a character boundary to maintain valid
 	// string output, even if this means the retained output is slightly less than the
 	// specified limit.
-	OutputByteLimit *int `json:"outputByteLimit,omitempty"`
+	OutputByteLimit *uint64 `json:"outputByteLimit,omitempty"`
 	// The session ID for this request.
 	SessionId SessionId `json:"sessionId"`
 }
@@ -2337,7 +2337,7 @@ type ElicitationCapabilities struct {
 type ElicitationContentValueString string
 
 // Integer value accepted in elicitation response content.
-type ElicitationContentValueInteger int
+type ElicitationContentValueInteger int64
 
 // Number value accepted in elicitation response content.
 type ElicitationContentValueNumber float64
@@ -2603,11 +2603,11 @@ type ElicitationPropertySchemaString struct {
 	// Maximum string length.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no maximum length constraint.
-	MaxLength *int `json:"maxLength,omitempty"`
+	MaxLength *uint32 `json:"maxLength,omitempty"`
 	// Minimum string length.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no minimum length constraint.
-	MinLength *int `json:"minLength,omitempty"`
+	MinLength *uint32 `json:"minLength,omitempty"`
 	// Titled enum options for titled single-select enums.
 	// Optional. Omitted and 'null' are equivalent and mean no titled single-select choices are
 	// declared by 'oneOf'.
@@ -2669,7 +2669,7 @@ type ElicitationPropertySchemaInteger struct {
 	// Default value.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean no default value is provided.
-	Default *int `json:"default,omitempty"`
+	Default *int64 `json:"default,omitempty"`
 	// Human-readable description.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean no description is provided.
@@ -2677,11 +2677,11 @@ type ElicitationPropertySchemaInteger struct {
 	// Maximum value (inclusive).
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no inclusive upper bound.
-	Maximum *int `json:"maximum,omitempty"`
+	Maximum *int64 `json:"maximum,omitempty"`
 	// Minimum value (inclusive).
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no inclusive lower bound.
-	Minimum *int `json:"minimum,omitempty"`
+	Minimum *int64 `json:"minimum,omitempty"`
 	// Optional title for the property.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean no title is provided.
@@ -2737,11 +2737,11 @@ type ElicitationPropertySchemaArray struct {
 	// Maximum number of items to select.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no maximum selection count.
-	MaxItems *int `json:"maxItems,omitempty"`
+	MaxItems *uint64 `json:"maxItems,omitempty"`
 	// Minimum number of items to select.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no minimum selection count.
-	MinItems *int `json:"minItems,omitempty"`
+	MinItems *uint64 `json:"minItems,omitempty"`
 	// Optional title for the property.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean no title is provided.
@@ -3418,33 +3418,33 @@ type Error struct {
 
 // **Parse error**: Invalid JSON was received by the server.
 // An error occurred on the server while parsing the JSON text.
-type ErrorCodeParseError int
+type ErrorCodeParseError int32
 
 // **Invalid request**: The JSON sent is not a valid Request object.
-type ErrorCodeInvalidRequest int
+type ErrorCodeInvalidRequest int32
 
 // **Method not found**: The method does not exist or is not available.
-type ErrorCodeMethodNotFound int
+type ErrorCodeMethodNotFound int32
 
 // **Invalid params**: Invalid method parameter(s).
-type ErrorCodeInvalidParams int
+type ErrorCodeInvalidParams int32
 
 // **Internal error**: Internal JSON-RPC error.
 // Reserved for implementation-defined server errors.
-type ErrorCodeInternalError int
+type ErrorCodeInternalError int32
 
 // **Request cancelled**: Execution of the method was aborted either due to a cancellation request from the caller or
 // because of resource constraints or shutdown.
-type ErrorCodeRequestCancelled int
+type ErrorCodeRequestCancelled int32
 
 // **Authentication required**: Authentication is required before this operation can be performed.
-type ErrorCodeAuthenticationRequired int
+type ErrorCodeAuthenticationRequired int32
 
 // **Resource not found**: A given resource, such as a file, was not found.
-type ErrorCodeResourceNotFound int
+type ErrorCodeResourceNotFound int32
 
 // Other undefined error code.
-type ErrorCodeOther int
+type ErrorCodeOther int32
 
 // Predefined error codes for common JSON-RPC and ACP-specific errors.
 //
@@ -4278,7 +4278,7 @@ type IntegerPropertySchema struct {
 	// Default value.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean no default value is provided.
-	Default *int `json:"default,omitempty"`
+	Default *int64 `json:"default,omitempty"`
 	// Human-readable description.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean no description is provided.
@@ -4286,11 +4286,11 @@ type IntegerPropertySchema struct {
 	// Maximum value (inclusive).
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no inclusive upper bound.
-	Maximum *int `json:"maximum,omitempty"`
+	Maximum *int64 `json:"maximum,omitempty"`
 	// Minimum value (inclusive).
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no inclusive lower bound.
-	Minimum *int `json:"minimum,omitempty"`
+	Minimum *int64 `json:"minimum,omitempty"`
 	// Optional title for the property.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean no title is provided.
@@ -5133,11 +5133,11 @@ type MultiSelectPropertySchema struct {
 	// Maximum number of items to select.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no maximum selection count.
-	MaxItems *int `json:"maxItems,omitempty"`
+	MaxItems *uint64 `json:"maxItems,omitempty"`
 	// Minimum number of items to select.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no minimum selection count.
-	MinItems *int `json:"minItems,omitempty"`
+	MinItems *uint64 `json:"minItems,omitempty"`
 	// Optional title for the property.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean no title is provided.
@@ -5311,7 +5311,7 @@ type NesEditHistoryCapabilities struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Maximum number of edit history entries the agent can use.
-	MaxCount *int `json:"maxCount,omitempty"`
+	MaxCount *uint32 `json:"maxCount,omitempty"`
 }
 
 // **UNSTABLE**
@@ -5371,7 +5371,7 @@ type NesRecentFilesCapabilities struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Maximum number of recent files the agent can use.
-	MaxCount *int `json:"maxCount,omitempty"`
+	MaxCount *uint32 `json:"maxCount,omitempty"`
 }
 
 // **UNSTABLE**
@@ -5429,7 +5429,7 @@ type NesUserActionsCapabilities struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Maximum number of user actions the agent can use.
-	MaxCount *int `json:"maxCount,omitempty"`
+	MaxCount *uint32 `json:"maxCount,omitempty"`
 }
 
 // Request parameters for creating a new session.
@@ -6207,7 +6207,7 @@ func (v *PromptResponse) Validate() error {
 //
 // This version is only bumped for breaking changes.
 // Non-breaking changes should be introduced via capabilities.
-type ProtocolVersion int
+type ProtocolVersion uint16
 
 // **UNSTABLE**
 //
@@ -6236,9 +6236,9 @@ type ReadTextFileRequest struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Maximum number of lines to read.
-	Limit *int `json:"limit,omitempty"`
+	Limit *uint32 `json:"limit,omitempty"`
 	// Line number to start reading from (1-based).
-	Line *int `json:"line,omitempty"`
+	Line *uint32 `json:"line,omitempty"`
 	// Absolute path to the file to read.
 	Path string `json:"path"`
 	// The session ID for this request.
@@ -6306,7 +6306,7 @@ func (v *ReleaseTerminalResponse) Validate() error {
 type RequestIdNull struct{}
 
 // A numeric JSON-RPC request id.
-type RequestIdNumber int
+type RequestIdNumber int64
 
 // A string JSON-RPC request id.
 type RequestIdStr string
@@ -6634,7 +6634,7 @@ type ResourceLink struct {
 	// Human-readable name shown for this protocol object.
 	Name string `json:"name"`
 	// Optional size of the linked resource in bytes, if known.
-	Size *int `json:"size,omitempty"`
+	Size *int64 `json:"size,omitempty"`
 	// Optional display title for end-user UI.
 	Title *string `json:"title,omitempty"`
 	// URI associated with this resource or media payload.
@@ -7697,9 +7697,9 @@ type SessionUsageUpdate struct {
 	Cost          *Cost  `json:"cost,omitempty"`
 	SessionUpdate string `json:"sessionUpdate"`
 	// Total context window size in tokens.
-	Size int `json:"size"`
+	Size uint64 `json:"size"`
 	// Tokens currently in context.
-	Used int `json:"used"`
+	Used uint64 `json:"used"`
 }
 
 // Information for the user that is not part of session history.
@@ -9270,11 +9270,11 @@ type StringPropertySchema struct {
 	// Maximum string length.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no maximum length constraint.
-	MaxLength *int `json:"maxLength,omitempty"`
+	MaxLength *uint32 `json:"maxLength,omitempty"`
 	// Minimum string length.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean there is no minimum length constraint.
-	MinLength *int `json:"minLength,omitempty"`
+	MinLength *uint32 `json:"minLength,omitempty"`
 	// Titled enum options for titled single-select enums.
 	// Optional. Omitted and 'null' are equivalent and mean no titled single-select choices are
 	// declared by 'oneOf'.
@@ -9410,7 +9410,7 @@ type TerminalExitStatus struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// The process exit code (may be null if terminated by signal).
-	ExitCode *int `json:"exitCode,omitempty"`
+	ExitCode *uint32 `json:"exitCode,omitempty"`
 	// The signal that terminated the process (may be null if exited normally).
 	Signal *string `json:"signal,omitempty"`
 }
@@ -9814,7 +9814,7 @@ type ToolCallLocation struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Optional line number within the file.
-	Line *int `json:"line,omitempty"`
+	Line *uint32 `json:"line,omitempty"`
 	// The absolute file path being accessed or modified.
 	Path string `json:"path"`
 }
@@ -9999,7 +9999,7 @@ type UnstableDidChangeDocumentNotification struct {
 	// The URI of the changed document.
 	Uri string `json:"uri"`
 	// The new version number of the document.
-	Version int `json:"version"`
+	Version int64 `json:"version"`
 }
 
 func (v UnstableDidChangeDocumentNotification) MarshalJSON() ([]byte, error) {
@@ -10066,7 +10066,7 @@ type UnstableDidFocusDocumentNotification struct {
 	// The URI of the focused document.
 	Uri string `json:"uri"`
 	// The version number of the document.
-	Version int `json:"version"`
+	Version int64 `json:"version"`
 	// The portion of the file currently visible in the editor viewport.
 	VisibleRange UnstableRange `json:"visibleRange"`
 }
@@ -10099,7 +10099,7 @@ type UnstableDidOpenDocumentNotification struct {
 	// The URI of the opened document.
 	Uri string `json:"uri"`
 	// The version number of the document.
-	Version int `json:"version"`
+	Version int64 `json:"version"`
 }
 
 func (v *UnstableDidOpenDocumentNotification) Validate() error {
@@ -10321,7 +10321,7 @@ const (
 // explicit 'null' is preserved separately from an omitted key.
 type UnstableMcpError struct {
 	// Inner MCP error code; never an ACP error code.
-	Code int `json:"code"`
+	Code int32 `json:"code"`
 	// Optional error data; explicit null is retained.
 	Data any `json:"data,omitempty"`
 	// Inner MCP error message.
@@ -10912,9 +10912,9 @@ type UnstableNesExcerpt struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// The end line of the excerpt (zero-based).
-	EndLine int `json:"endLine"`
+	EndLine uint32 `json:"endLine"`
 	// The start line of the excerpt (zero-based).
-	StartLine int `json:"startLine"`
+	StartLine uint32 `json:"startLine"`
 	// The text content of the excerpt.
 	Text string `json:"text"`
 }
@@ -10954,7 +10954,7 @@ type UnstableNesOpenFile struct {
 	// The language identifier.
 	LanguageId string `json:"languageId"`
 	// Timestamp in milliseconds since epoch of when the file was last focused.
-	LastFocusedMs *int `json:"lastFocusedMs,omitempty"`
+	LastFocusedMs *uint64 `json:"lastFocusedMs,omitempty"`
 	// The URI of the file.
 	Uri string `json:"uri"`
 	// The visible range in the editor, if any.
@@ -11505,7 +11505,7 @@ type UnstableNesUserAction struct {
 	// The position where the action occurred.
 	Position UnstablePosition `json:"position"`
 	// Timestamp in milliseconds since epoch.
-	TimestampMs int `json:"timestampMs"`
+	TimestampMs uint64 `json:"timestampMs"`
 	// The URI of the file where the action occurred.
 	Uri string `json:"uri"`
 }
@@ -11525,9 +11525,9 @@ type UnstablePosition struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Zero-based character offset (encoding-dependent).
-	Character int `json:"character"`
+	Character uint32 `json:"character"`
 	// Zero-based line number.
-	Line int `json:"line"`
+	Line uint32 `json:"line"`
 }
 
 // **UNSTABLE**
@@ -11750,7 +11750,7 @@ type UnstableSuggestNesRequest struct {
 	// The URI of the document to suggest for.
 	Uri string `json:"uri"`
 	// The version number of the document.
-	Version int `json:"version"`
+	Version int64 `json:"version"`
 }
 
 func (v *UnstableSuggestNesRequest) Validate() error {
@@ -11857,17 +11857,17 @@ type Usage struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Total cache read tokens.
-	CachedReadTokens *int `json:"cachedReadTokens,omitempty"`
+	CachedReadTokens *uint64 `json:"cachedReadTokens,omitempty"`
 	// Total cache write tokens.
-	CachedWriteTokens *int `json:"cachedWriteTokens,omitempty"`
+	CachedWriteTokens *uint64 `json:"cachedWriteTokens,omitempty"`
 	// Total input tokens across all turns.
-	InputTokens int `json:"inputTokens"`
+	InputTokens uint64 `json:"inputTokens"`
 	// Total output tokens across all turns.
-	OutputTokens int `json:"outputTokens"`
+	OutputTokens uint64 `json:"outputTokens"`
 	// Total thought/reasoning tokens
-	ThoughtTokens *int `json:"thoughtTokens,omitempty"`
+	ThoughtTokens *uint64 `json:"thoughtTokens,omitempty"`
 	// Sum of all token types across session.
-	TotalTokens int `json:"totalTokens"`
+	TotalTokens uint64 `json:"totalTokens"`
 }
 
 // Context window and cost update for a session.
@@ -11881,9 +11881,9 @@ type UsageUpdate struct {
 	// Cumulative session cost (optional).
 	Cost *Cost `json:"cost,omitempty"`
 	// Total context window size in tokens.
-	Size int `json:"size"`
+	Size uint64 `json:"size"`
 	// Tokens currently in context.
-	Used int `json:"used"`
+	Used uint64 `json:"used"`
 }
 
 // Request to wait for a terminal command to exit.
@@ -11913,7 +11913,7 @@ type WaitForTerminalExitResponse struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// The process exit code (may be null if terminated by signal).
-	ExitCode *int `json:"exitCode,omitempty"`
+	ExitCode *uint32 `json:"exitCode,omitempty"`
 	// The signal that terminated the process (may be null if exited normally).
 	Signal *string `json:"signal,omitempty"`
 }

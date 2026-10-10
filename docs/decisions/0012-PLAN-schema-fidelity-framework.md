@@ -246,3 +246,58 @@ Gates: `make pre-add-check` with the three changed Go files named: `go-precheck:
 govulncheck).` Without names: `go-precheck: 67 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 2 on `main`.
+
+### Step 3, numeric formats, 2026-10-10
+
+The owner committed step 2 as `13809b6`. Step 3 ran on `main` from that clean tree. The agent did not commit.
+
+Tests:
+
+* `TestNumericFormatTypes` (`model/keywords_test.go`): for each of the 14 format rows of the design, a synthetic schema gives the format to a named
+  primitive, a union variant, and five properties (required, optional, `["T","null"]`, `anyOf [T, null]`, array items), and requires the Go type
+  (`T`, `T`, `*T`, `*T`, `[]T`).
+* `TestIntegerFormatsBoundDecoding` (new root `fidelity_test.go`): `-1` into `CreateTerminalRequest.outputByteLimit`, `4294967296` into
+  `ReadTextFileRequest.line`, `65536` into `InitializeRequest.protocolVersion`, and `9223372036854775808` into `ResourceLink.size` fail with
+  `cannot unmarshal number`; `9007199254740993` in `size` decodes exactly.
+
+Run before the change, the model test reported 74 mismatches (`integer "": property r is int, want int64` and on), and the root test failed three of
+its four cases (`decoded {"sessionId":"s","command":"c","outputByteLimit":-1}: <nil>` and the `line` and `protocolVersion` cases); the `int64` case
+already failed to decode on this 64-bit host, where `int` is 64 bits, and stays as a guard.
+
+The change: `primitiveRef` and `pointerPrimitive` (`model/fields.go`) take the node's format and give an integer or number the Go type of
+`numericFormat`; their four callers pass it (`typeRef`, both branches of `optionalTypeRef`, and `buildType`'s named primitive in `model.go`).
+
+Corrections to tests, recorded: `TestTypeRefs` expected `int` and `*int` for an integer without a format, which the MADR now maps to `int64`;
+`TestObjectFields`' `count` fixture declares `uint64` and is now `*uint64`; and the first draft of `TestNumericFormatTypes` expected an optional,
+non-nullable integer to be a pointer, where the generator writes a value with `omitempty`, as for every optional non-nullable property.
+
+Regenerated: only `types_gen.go` changed. A script compared it line by line with `13809b6`'s: 46 fields (`int64` 12, `uint64` 17, `uint32` 16,
+`int32` 1) and 12 named types (`int32` 9, `int64` 2, `uint16` 1) changed from `int` to a sized type, and no other line changed. `helpers_gen.go` is
+unchanged: no constructor takes one of these fields. No golden changed.
+
+Hand-written code, to the new types:
+
+* `example/client`, `example/claude-code`, `example/gemini` (`main.go`) and `example_client_test.go`: the `ReadTextFile` line and limit arithmetic
+  compares in `uint64` and converts to `int` only once the value is known to fit the slice, so a large `uint32` cannot overflow `int` on a 32-bit
+  platform.
+* `json_parity_test.go` (two `size` fixtures `int64(1024000)`, and `line, limit` as `uint32`) and `union_wire_test.go` (`size` as `int64`).
+
+Each call site was broken in a fresh scratch copy, then the generator run and both modules tested:
+
+```text
+format ignored everywhere: cmd/generate ['TestNumericFormatTypes', 'TestObjectFields']; root: build failed
+nullable property ignores format: cmd/generate ['TestNumericFormatTypes', 'TestObjectFields']; root: build failed
+anyOf-null property ignores format: cmd/generate ['TestNumericFormatTypes']
+named primitive ignores format: cmd/generate ['TestNumericFormatTypes']; root ['TestIntegerFormatsBoundDecoding']
+```
+
+The `anyOf`-null plant first passed every test: no committed property has that shape, and the test covered only `["T","null"]`. The test gained the
+`anyOf [T, null]` property, and the plant then failed.
+
+After the change every test in the root (`go test -race`) and in `cmd/generate` passes; `go build ./example/...` passes. Coverage: `internal/model`
+94.0%, `internal/emit` 54.2%.
+
+Gates: `make pre-add-check` with the twelve changed Go files named: `go-precheck: 12 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 69 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 3 on `main`.

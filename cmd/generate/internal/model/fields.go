@@ -155,15 +155,15 @@ func docLines(desc string) []string {
 	return util.FormatDocComment(desc)
 }
 
-// primitiveRef maps a JSON Schema primitive type to its Go type, or any.
-func primitiveRef(t string) TypeRef {
+// primitiveRef maps a JSON Schema primitive type and its format to a Go type,
+// or any. An integer or number takes the Go type of its format (keywords.go);
+// checkRefs has refused a format without one.
+func primitiveRef(t, format string) TypeRef {
 	switch t {
 	case schemaTypeString:
 		return named("string")
-	case schemaTypeInteger:
-		return named("int")
-	case schemaTypeNumber:
-		return named("float64")
+	case schemaTypeInteger, schemaTypeNumber:
+		return named(numericFormat(t, format))
 	case schemaTypeBoolean:
 		return named("bool")
 	default:
@@ -171,11 +171,11 @@ func primitiveRef(t string) TypeRef {
 	}
 }
 
-// pointerPrimitive returns *T for a primitive schema type.
-func pointerPrimitive(t string) (TypeRef, bool) {
+// pointerPrimitive returns *T for a primitive schema type and its format.
+func pointerPrimitive(t, format string) (TypeRef, bool) {
 	switch t {
 	case schemaTypeString, schemaTypeInteger, schemaTypeNumber, schemaTypeBoolean:
-		return wrap(RefPointer, primitiveRef(t)), true
+		return wrap(RefPointer, primitiveRef(t, format)), true
 	default:
 		return TypeRef{}, false
 	}
@@ -214,7 +214,7 @@ func typeRef(d *load.Definition) TypeRef {
 	}
 	switch t := primaryType(d); t {
 	case schemaTypeString, schemaTypeInteger, schemaTypeNumber, schemaTypeBoolean:
-		return primitiveRef(t)
+		return primitiveRef(t, d.Format)
 	case schemaTypeArray:
 		return wrap(RefSlice, typeRef(d.Items))
 	case schemaTypeObject:
@@ -237,7 +237,7 @@ func optionalTypeRef(d *load.Definition) TypeRef {
 				other = s
 			}
 		}
-		if p, ok := pointerPrimitive(other); ok {
+		if p, ok := pointerPrimitive(other, d.Format); ok {
 			return p
 		}
 	}
@@ -266,7 +266,7 @@ func optionalTypeRef(d *load.Definition) TypeRef {
 			if name, ok := strings.CutPrefix(nonNull.Ref, refPrefix); ok {
 				return wrap(RefPointer, named(name))
 			}
-			if p, ok := pointerPrimitive(primaryType(nonNull)); ok {
+			if p, ok := pointerPrimitive(primaryType(nonNull), nonNull.Format); ok {
 				return p
 			}
 		}

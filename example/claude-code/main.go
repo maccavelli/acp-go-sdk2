@@ -120,13 +120,11 @@ func (c *replClient) ReadTextFile(ctx context.Context, params acp.ReadTextFileRe
 		lines := strings.Split(content, "\n")
 		start := 0
 		if params.Line != nil && *params.Line > 0 {
-			start = min(max(*params.Line-1, 0), len(lines))
+			start = int(min(uint64(*params.Line-1), uint64(len(lines))))
 		}
 		end := len(lines)
-		if params.Limit != nil && *params.Limit > 0 {
-			if start+*params.Limit < end {
-				end = start + *params.Limit
-			}
+		if params.Limit != nil && *params.Limit > 0 && uint64(*params.Limit) < uint64(end-start) {
+			end = start + int(*params.Limit)
 		}
 		content = strings.Join(lines[start:end], "\n")
 	}

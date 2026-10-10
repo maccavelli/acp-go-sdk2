@@ -46,7 +46,7 @@ func TestUnionDecodeErrorsNameTheirPlace(t *testing.T) {
 func TestUnionKeepsIntegerDigits(t *testing.T) {
 	t.Parallel()
 	const digits = "9007199254740993"
-	size := 9007199254740993
+	size := int64(9007199254740993)
 	block := ContentBlock{ResourceLink: &ContentBlockResourceLink{Name: "n", Uri: "u", Size: &size}}
 	for name, v := range map[string]any{
 		"ContentBlock":  block,

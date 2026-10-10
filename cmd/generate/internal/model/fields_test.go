@@ -24,10 +24,10 @@ func TestTypeRefs(t *testing.T) {
 		plain, nilable string
 	}{
 		{`{"type":"string"}`, "string", "string"},
-		{`{"type":"integer"}`, "int", "int"},
+		{`{"type":"integer"}`, "int64", "int64"},
 		{`{"type":"number"}`, "float64", "float64"},
 		{`{"type":"boolean"}`, "bool", "bool"},
-		{`{"type":["integer","null"]}`, "int", "*int"},
+		{`{"type":["integer","null"]}`, "int64", "*int64"},
 		{`{"$ref":"#/$defs/Foo"}`, "Foo", "Foo"},
 		{`{"anyOf":[{"$ref":"#/$defs/Foo"},{"type":"null"}]}`, "any", "*Foo"},
 		{`{"anyOf":[{"const":"x"},{"type":"null"}]}`, "any", "*string"},
@@ -94,7 +94,7 @@ func TestObjectFields(t *testing.T) {
 		fill                bool
 		doc                 string
 	}{
-		{"count", "Count", "*int", "count,omitempty", false, ""},
+		{"count", "Count", "*uint64", "count,omitempty", false, ""},
 		{"env", "Env", "map[string]any", "env,omitempty", false, ""},
 		{"inner", "Inner", "ObjInner", "inner", false, "Inner."},
 		{"list", "List", "[]string", "list", true, ""},

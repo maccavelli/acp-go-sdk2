@@ -369,7 +369,7 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition,
 			return nil, err
 		}
 	case KindPrimitive:
-		u := primitiveRef(primaryType(def))
+		u := primitiveRef(primaryType(def), def.Format)
 		t.Underlying = &u
 	}
 	return t, nil

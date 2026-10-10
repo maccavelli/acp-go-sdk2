@@ -144,3 +144,50 @@ func TestUnknownNumericFormat(t *testing.T) {
 		t.Errorf("string format refused: %v", err)
 	}
 }
+
+// TestNumericFormatTypes requires each numeric format to give its Go type, to
+// a required property, an optional one, an array item, a named primitive, and
+// a union variant.
+func TestNumericFormatTypes(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ typ, format, want string }{
+		{"integer", "", "int64"}, {"integer", "int", "int64"}, {"integer", "int8", "int8"}, {"integer", "int16", "int16"},
+		{"integer", "int32", "int32"}, {"integer", "int64", "int64"}, {"integer", "uint", "uint64"}, {"integer", "uint8", "uint8"},
+		{"integer", "uint16", "uint16"}, {"integer", "uint32", "uint32"}, {"integer", "uint64", "uint64"},
+		{"number", "", "float64"}, {"number", "float", "float32"}, {"number", "double", "float64"},
+	}
+	for _, c := range cases {
+		node := `{"type":"` + c.typ + `"`
+		if c.format != "" {
+			node += `,"format":"` + c.format + `"`
+		}
+		node += "}"
+		m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
+			"N":`+node+`,
+			"T":{"type":"object","required":["r"],"properties":{"r":`+node+`,"o":`+node+`,
+				"n":{"type":["`+c.typ+`","null"]`+strings.TrimPrefix(strings.TrimSuffix(node, "}"), `{"type":"`+c.typ+`"`)+`},
+				"m":{"anyOf":[`+node+`,{"type":"null"}]},
+				"a":{"type":"array","items":`+node+`}}},
+			"U":{"anyOf":[{"title":"num",`+strings.TrimPrefix(node, "{")+`,{"type":"string","title":"str"}]}}`)})
+		if err != nil {
+			t.Fatalf("%s %q: %v", c.typ, c.format, err)
+		}
+		got := map[string]string{}
+		for _, f := range m.Type("T").Fields {
+			got[f.Key] = f.Type.String()
+		}
+		// An optional property is a value with omitempty; only a nullable one is a pointer.
+		want := map[string]string{"r": c.want, "o": c.want, "n": "*" + c.want, "m": "*" + c.want, "a": "[]" + c.want}
+		for k, w := range want {
+			if got[k] != w {
+				t.Errorf("%s %q: property %s is %s, want %s", c.typ, c.format, k, got[k], w)
+			}
+		}
+		if u := m.Type("N").Underlying; u == nil || u.String() != c.want {
+			t.Errorf("%s %q: named primitive is %v, want %s", c.typ, c.format, u, c.want)
+		}
+		if in := m.Type("U").Variants[0].Inline; in == nil || in.Type.String() != c.want {
+			t.Errorf("%s %q: variant is %+v, want %s", c.typ, c.format, in, c.want)
+		}
+	}
+}
