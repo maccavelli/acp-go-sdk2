@@ -97,3 +97,5 @@ The owner said on 2026-10-09 that this repository is committed on `main` most of
 * Step 2 was committed by the owner as `c3883f0` and pushed.
 * Step 3, 2026-10-09: [0006-PLAN-emit-go-with-go-ast.md](0006-PLAN-emit-go-with-go-ast.md) in progress. Its steps 2 and 3 (the go/ast writer and the
   constants port) are done and checked; the agent stopped at that plan's first commit point. Its steps 4 to 7 follow.
+  The owner committed them as `53ae152`. Step 4 (dispatch, then types and helpers, and the 13-commit comparison) is done and checked; the agent
+  stopped at the second commit point.

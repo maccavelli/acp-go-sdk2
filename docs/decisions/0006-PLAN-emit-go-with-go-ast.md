@@ -117,3 +117,47 @@ Verification, as observed:
 * `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits steps 2 and 3 on `main`.
+
+### Step 4, 2026-10-09
+
+Steps 2 and 3 were committed by the owner as `53ae152`. Step 4 ran on `main` from that clean tree. The agent did not commit.
+
+Part 1, dispatch: `dispatch.go` and `dispatch_helpers.go` were replaced with the prototype files. `ast.go` regained the 26 constructors deferred in step 2,
+and `constants.go` gained `pkgContext`, `pkgErrors`, `pkgFmt`, and `pkgJSON`. The generator then wrote all five files byte-identical to the committed ones,
+before and after `gofmt`.
+
+Part 2, types and helpers together: `types.go` and `helpers.go` were replaced with the prototype files. `fieldSet` and `structField` moved back into
+`types.go`, so `ast.go` is the prototype file exactly. All five generated files were again byte-identical, before and after `gofmt`.
+
+The public writers keep their `Jen` names until step 5. With those names normalised, `ast.go`, `file.go`, `file_test.go`, `constants.go`, `dispatch.go`,
+`dispatch_helpers.go`, `helpers.go`, `types.go`, and `doc.go` match the verified prototype in Appendix A of
+[0008-REPORT-self-contained-sdk-review.md](../reports/0008-REPORT-self-contained-sdk-review.md). Only `jenwrap.go` still imports Jennifer, and nothing calls
+its aliases.
+
+Cross-commit comparison: the Jennifer generator was built from `c3883f0`, taken with `git archive` into a scratch directory, and the go/ast generator from
+this tree. Both ran from the repository root on schema files extracted with `git show`:
+
+```text
+HEAD schema=1.25.0 files=5 unstable=True IDENTICAL
+9fb9ae5 schema=0.13.5 files=5 unstable=True IDENTICAL
+0845a3b schema=0.13.5 files=5 unstable=True IDENTICAL
+d03a894 schema=0.13.4 files=5 unstable=True IDENTICAL
+192e108 schema=0.13.0 files=5 unstable=True IDENTICAL
+6595492 schema=0.12.2 files=5 unstable=True IDENTICAL
+72c8f1d schema=0.12.0 files=5 unstable=True IDENTICAL
+c180b9d schema=0.11.7 files=5 unstable=True IDENTICAL
+584abe6 schema=0.10.8 files=5 unstable=True IDENTICAL
+c225368 schema=0.10.7 files=5 unstable=False IDENTICAL
+cc23bb6 schema=0.6.3 files=5 unstable=False IDENTICAL
+2c1aef2 schema=0.4.9 files=5 unstable=False IDENTICAL
+da204ff schema=0.4.5 files=5 unstable=False IDENTICAL
+failures: 0
+```
+
+The comparison was seen to fail: a scratch copy with one emitted string changed (`"error"` to `"err"` in `invalidParams`) reported
+`DIFF ['agent_gen.go', 'client_gen.go']` for `HEAD` and `da204ff`, and exited 1.
+
+Gates: `make pre-add-check` with the six changed files named: `go-precheck: 6 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+Without names: `go-precheck: 47 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 4 on `main`. Steps 5 to 7 follow.

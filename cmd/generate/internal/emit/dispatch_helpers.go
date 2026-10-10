@@ -1,92 +1,107 @@
 package emit
 
 import (
+	"go/ast"
+	"go/token"
+
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
 )
 
-// invInvalid: return invalid params with compact json-like message
-func jInvInvalid() Code {
-	return Return(Nil(), ID("NewInvalidParams").Call(Map(String()).Any().Values(Dict{Lit("error"): ID("err").Dot("Error").Call()})))
+// invalidParams returns nil, NewInvalidParams(map[string]any{"error": err.Error()}).
+func invalidParams() ast.Stmt {
+	return ret(nilExpr(), call(id("NewInvalidParams"),
+		composite(rawMap(id("any")), kv(str("error"), call(dot("err", "Error")))),
+	))
 }
 
-// retToReqErr: wrap error to JSON-RPC request error
-func jRetToReqErr() Code { return Return(Nil(), ID("toReqErr").Call(ID("err"))) }
+// toRequestError returns nil, toReqErr(err).
+func toRequestError() ast.Stmt { return ret(nilExpr(), call(id("toReqErr"), id("err"))) }
 
-// jUnmarshalValidate emits var p T; json.Unmarshal; p.Validate
-func jUnmarshalValidate(typeName string) []Code {
-	return []Code{
-		Var().Id("p").Id(typeName),
-		If(List(ID("err")).Op(":=").Qual("encoding/json", "Unmarshal").Call(ID("params"), Op("&").Id("p")), ID("err").Op("!=").Nil()).
-			Block(jInvInvalid()),
-		If(List(ID("err")).Op(":=").Id("p").Dot("Validate").Call(), ID("err").Op("!=").Nil()).
-			Block(jInvInvalid()),
+// methodNotFound returns nil, NewMethodNotFound(method).
+func methodNotFound() ast.Stmt { return ret(nilExpr(), call(id("NewMethodNotFound"), id("method"))) }
+
+// errNotNil is err != nil.
+func errNotNil() ast.Expr { return binary(id("err"), token.NEQ, nilExpr()) }
+
+// unmarshalValidate decodes params into p and validates it.
+func unmarshalValidate(f *goFile, typeName string) []ast.Stmt {
+	return []ast.Stmt{
+		varStmt("p", id(typeName), nil),
+		ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("params"), addr(id("p")))), errNotNil(),
+			invalidParams()),
+		ifStmt(define(exprs(id("err")), call(dot("p", "Validate"))), errNotNil(),
+			invalidParams()),
 	}
 }
 
-// jAgentAssert returns prelude for interface assertions and the receiver name.
-func jAgentAssert(binding ir.MethodBinding, methodName, paramType, respType string, hasResponse bool) ([]Code, string) {
+// agentAssert returns the interface assertion prelude for a binding and the
+// receiver the method is called on.
+func agentAssert(f *goFile, binding ir.MethodBinding, methodName, paramType, respType string, hasResponse bool) ([]ast.Stmt, ast.Expr) {
 	switch binding {
 	case ir.BindAgentLoader:
-		return []Code{
-			List(ID("loader"), ID("ok")).Op(":=").Id("a").Dot("agent").Assert(ID("AgentLoader")),
-			If(Op("!").Id("ok")).Block(Return(Nil(), ID("NewMethodNotFound").Call(ID("method")))),
-		}, "loader"
+		return namedAssert(dot("a", "agent"), "loader", "AgentLoader"), id("loader")
 	case ir.BindAgentExperimental:
-		return jSingleMethodAssert(ID("a").Dot("agent"), "exp", methodName, paramType, respType, hasResponse)
+		return singleMethodAssert(f, dot("a", "agent"), "exp", methodName, paramType, respType, hasResponse), id("exp")
 	default:
-		return nil, "a.agent"
+		return nil, dot("a", "agent")
 	}
 }
 
-// jClientAssert returns prelude for interface assertions and the receiver name.
-func jClientAssert(binding ir.MethodBinding, methodName, paramType, respType string, hasResponse bool) ([]Code, string) {
+// clientAssert returns the interface assertion prelude for a binding and the
+// receiver the method is called on.
+func clientAssert(f *goFile, binding ir.MethodBinding, methodName, paramType, respType string, hasResponse bool) ([]ast.Stmt, ast.Expr) {
 	switch binding {
 	case ir.BindClientExperimental:
-		return jSingleMethodAssert(ID("c").Dot("client"), "exp", methodName, paramType, respType, hasResponse)
+		return singleMethodAssert(f, dot("c", "client"), "exp", methodName, paramType, respType, hasResponse), id("exp")
 	case ir.BindClientTerminal:
-		return []Code{
-			List(ID("t"), ID("ok")).Op(":=").Id("c").Dot("client").Assert(ID("ClientTerminal")),
-			If(Op("!").Id("ok")).Block(Return(Nil(), ID("NewMethodNotFound").Call(ID("method")))),
-		}, "t"
+		return namedAssert(dot("c", "client"), "t", "ClientTerminal"), id("t")
 	default:
-		return nil, "c.client"
+		return nil, dot("c", "client")
 	}
 }
 
-func jSingleMethodAssert(receiver Code, assertedName, methodName, paramType, respType string, hasResponse bool) ([]Code, string) {
-	ifaceType := InterfaceFunc(func(g *Group) {
-		method := g.Id(methodName).Params(Qual("context", "Context"), ID(paramType))
-		if hasResponse {
-			method.Params(ID(respType), Error())
-		} else {
-			method.Error()
-		}
-	})
-	return []Code{
-		List(ID(assertedName), ID("ok")).Op(":=").Add(receiver).Assert(ifaceType),
-		If(Op("!").Id("ok")).Block(Return(Nil(), ID("NewMethodNotFound").Call(ID("method")))),
-	}, assertedName
-}
-
-// Request call emitters for handlers
-func jCallRequestNoResp(recv, methodName string) []Code {
-	return []Code{
-		If(List(ID("err")).Op(":=").Id(recv).Dot(methodName).Call(ID("ctx"), ID("p")), ID("err").Op("!=").Nil()).Block(jRetToReqErr()),
-		Return(Nil(), Nil()),
+// namedAssert is name, ok := receiver.(iface); if !ok { return method not found }.
+func namedAssert(receiver ast.Expr, name, iface string) []ast.Stmt {
+	return []ast.Stmt{
+		define(exprs(id(name), id("ok")), typeAssert(receiver, id(iface))),
+		ifStmt(nil, not(id("ok")), methodNotFound()),
 	}
 }
 
-func jCallRequestWithResp(recv, methodName string) []Code {
-	return []Code{
-		List(ID("resp"), ID("err")).Op(":=").Id(recv).Dot(methodName).Call(ID("ctx"), ID("p")),
-		If(ID("err").Op("!=").Nil()).Block(jRetToReqErr()),
-		Return(ID("resp"), Nil()),
+// singleMethodAssert asserts receiver to an anonymous one-method interface.
+func singleMethodAssert(f *goFile, receiver ast.Expr, name, methodName, paramType, respType string, hasResponse bool) []ast.Stmt {
+	res := []*ast.Field{param("", id("error"))}
+	if hasResponse {
+		res = []*ast.Field{param("", id(respType)), param("", id("error"))}
+	}
+	iface := &ast.InterfaceType{Methods: fields(&ast.Field{
+		Names: []*ast.Ident{id(methodName)},
+		Type:  funcType([]*ast.Field{param("", f.qual(pkgContext, "Context")), param("", id(paramType))}, res...),
+	})}
+	return []ast.Stmt{
+		define(exprs(id(name), id("ok")), typeAssert(receiver, iface)),
+		ifStmt(nil, not(id("ok")), methodNotFound()),
 	}
 }
 
-func jCallNotification(recv, methodName string) []Code {
-	return []Code{
-		If(List(ID("err")).Op(":=").Id(recv).Dot(methodName).Call(ID("ctx"), ID("p")), ID("err").Op("!=").Nil()).Block(jRetToReqErr()),
-		Return(Nil(), Nil()),
+// recvCall is recv.method(ctx, p).
+func recvCall(recv ast.Expr, methodName string) *ast.CallExpr {
+	return call(sel(recv, methodName), id("ctx"), id("p"))
+}
+
+// callNoResult calls a method that returns only an error.
+func callNoResult(recv ast.Expr, methodName string) []ast.Stmt {
+	return []ast.Stmt{
+		ifStmt(define(exprs(id("err")), recvCall(recv, methodName)), errNotNil(), toRequestError()),
+		ret(nilExpr(), nilExpr()),
+	}
+}
+
+// callWithResult calls a method that returns a response and an error.
+func callWithResult(recv ast.Expr, methodName string) []ast.Stmt {
+	return []ast.Stmt{
+		define(exprs(id("resp"), id("err")), recvCall(recv, methodName)),
+		ifStmt(nil, errNotNil(), toRequestError()),
+		ret(id("resp"), nilExpr()),
 	}
 }

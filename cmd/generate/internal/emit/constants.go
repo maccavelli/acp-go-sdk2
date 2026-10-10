@@ -22,6 +22,11 @@ const (
 	wireSessionCancel = "session/cancel"
 	nameSessionUpdate = "SessionUpdate"
 	generatedFileMode = 0o600
+
+	pkgContext = "context"
+	pkgErrors  = "errors"
+	pkgFmt     = "fmt"
+	pkgJSON    = "encoding/json"
 )
 
 // WriteConstantsJen writes the version and method constants to constants_gen.go.

@@ -1,11 +1,10 @@
 package emit
 
 import (
-	"bytes"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
+	"go/ast"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
@@ -30,36 +29,14 @@ func collectHelperVariants(name string, def *load.Definition, schema *load.Schem
 		return nil
 	}
 	// Skip generating New... helpers for unions that have stable, static helpers
-	// implemented in go/helpers.go.
+	// implemented in helpers.go.
 	switch name {
 	case unionContentBlock, "ToolCallContent", nameSessionUpdate:
 		return nil
 	}
 	// Build variant info using the same logic as the types emitter (emitUnion)
 	// to ensure type names match exactly.
-	discKey := ""
-	// Use schema's explicit discriminator if available (matching types emitter)
-	if def.Discriminator != nil {
-		discKey = def.Discriminator.PropertyName
-	}
-	// Fallback: discover discriminator key by scanning for const properties
-	if discKey == "" {
-		for _, v := range def.OneOf {
-			if v == nil {
-				continue
-			}
-			expanded := expandAllOf(schema, v)
-			for k, pd := range expanded.Properties {
-				if pd != nil && pd.Const != nil {
-					discKey = k
-					break
-				}
-			}
-			if discKey != "" {
-				break
-			}
-		}
-	}
+	discKey := discriminatorKey(schema, def, def.OneOf)
 	variants := []helperVariant{}
 	for idx, v := range def.OneOf {
 		if hv, ok := oneHelperVariant(name, schema, idx, v, discKey, usedTypeNames); ok {
@@ -82,21 +59,20 @@ func oneHelperVariant(name string, schema *load.Schema, idx int, v *load.Definit
 
 	// Compute type name matching the types emitter (emitUnion).
 	tname := ""
-	if ref != "" && strings.HasPrefix(ref, "#/$defs/") {
-		tname = ref[len("#/$defs/"):]
+	if after, ok := strings.CutPrefix(ref, "#/$defs/"); ok {
+		tname = after
 	} else if v.Title != "" {
 		tname = generateNestedTypeName(name, v.Title, usedTypeNames)
 		usedTypeNames[tname] = true
 	} else {
 		if discKey != "" {
 			if pd := v.Properties[discKey]; pd != nil && pd.Const != nil {
-				s := fmt.Sprint(pd.Const)
-				tname = generateNestedTypeName(name, s, usedTypeNames)
+				tname = generateNestedTypeName(name, fmt.Sprint(pd.Const), usedTypeNames)
 				usedTypeNames[tname] = true
 			}
 		}
 		if tname == "" {
-			tname = name + fmt.Sprintf("Variant%d", idx+1)
+			tname = fmt.Sprintf("%sVariant%d", name, idx+1)
 			usedTypeNames[tname] = true
 		}
 	}
@@ -107,9 +83,8 @@ func oneHelperVariant(name string, schema *load.Schema, idx int, v *load.Definit
 	dv := ""
 	if discKey != "" {
 		if pd := v.Properties[discKey]; pd != nil && pd.Const != nil {
-			s := fmt.Sprint(pd.Const)
-			fieldName = util.ToExportedField(s)
-			dv = s
+			dv = fmt.Sprint(pd.Const)
+			fieldName = util.ToExportedField(dv)
 		}
 	}
 	if fieldName == "" && v.Title != "" {
@@ -118,17 +93,22 @@ func oneHelperVariant(name string, schema *load.Schema, idx int, v *load.Definit
 	if fieldName == "" {
 		fieldName = util.ToExportedField(tname)
 	}
-	req := make([]string, len(v.Required))
-	copy(req, v.Required)
-	return helperVariant{fieldName: fieldName, typeName: tname, discKey: discKey, discValue: dv, required: req, props: v.Properties}, true
+	return helperVariant{
+		fieldName: fieldName,
+		typeName:  tname,
+		discKey:   discKey,
+		discValue: dv,
+		required:  slices.Clone(v.Required),
+		props:     v.Properties,
+	}, true
 }
 
-func emitHelperConstructors(f *File, name string, variants []helperVariant) {
-	// Emit helper per variant: func New<Union><FieldName>(...) <Union>
+// emitHelperConstructors emits func New<Union><Field>(required...) <Union> per variant.
+func emitHelperConstructors(f *goFile, name string, variants []helperVariant) {
 	for _, vi := range variants {
-		// params: all required props except const discriminator
-		params := []Code{}
-		assigns := Dict{}
+		// Parameters: every required property except the const discriminator.
+		var params []*ast.Field
+		assigns := map[string]ast.Expr{}
 		for _, rk := range vi.required {
 			if rk == vi.discKey {
 				continue
@@ -137,56 +117,38 @@ func emitHelperConstructors(f *File, name string, variants []helperVariant) {
 			if pd == nil {
 				continue
 			}
-			// build param using lower-cased name
-			pname := rk
-			// field id for struct literal
-			field := util.ToExportedField(rk)
-			params = append(params, ID(pname).Add(jenTypeFor(pd)))
-			assigns[ID(field)] = ID(pname)
+			params = append(params, param(rk, typeExpr(pd)))
+			assigns[util.ToExportedField(rk)] = id(rk)
 		}
-		// include const discriminant if present and field exists on struct
 		if vi.discKey != "" && vi.discValue != "" {
-			assigns[ID(util.ToExportedField(vi.discKey))] = Lit(vi.discValue)
+			assigns[util.ToExportedField(vi.discKey)] = str(vi.discValue)
 		}
-		// Construct variant literal and wrap
-		f.Comment(fmt.Sprintf("New%s%s constructs a %s using the '%s' variant.", name, vi.fieldName, name, vi.discValue))
-		f.Func().Id("New" + name + vi.fieldName).Params(params...).Id(name).Block(
-			Return(
-				ID(name).Values(Dict{
-					ID(vi.fieldName): Op("&").Id(vi.typeName).Values(assigns),
-				}),
-			),
-		)
-		f.Line()
+		var elts []ast.Expr
+		for _, field := range slices.Sorted(maps.Keys(assigns)) {
+			elts = append(elts, kv(id(field), assigns[field]))
+		}
+		variant := addr(composite(id(vi.typeName), elts...))
+
+		f.comment(fmt.Sprintf("New%s%s constructs a %s using the '%s' variant.", name, vi.fieldName, name, vi.discValue))
+		f.add(function("New"+name+vi.fieldName, funcType(params, param("", id(name))),
+			ret(composite(id(name), kv(id(vi.fieldName), variant))),
+		))
+		f.line()
 	}
 }
 
-// WriteHelpersJen emits go/helpers_gen.go with small constructor helpers
-// for common union variants and a Ptr generic helper.
+// WriteHelpersJen emits helpers_gen.go with constructor helpers for union variants.
 func WriteHelpersJen(outDir string, schema *load.Schema, _ *load.Meta) error {
-	f := NewFile("acp")
-	f.HeaderComment("Code generated by acp-go-generator; DO NOT EDIT.")
+	f := newFile()
 
-	// Schema-driven generic helpers: New<Union><Variant>(required fields only)
+	// Schema-driven helpers: New<Union><Variant>(required fields only).
 	// Track used type names to match the types emitter's naming (generateNestedTypeName).
 	usedTypeNames := make(map[string]bool, len(schema.Defs))
 	for k := range schema.Defs {
 		usedTypeNames[k] = true
 	}
-
-	// Iterate definitions deterministically
-	keys := make([]string, 0, len(schema.Defs))
-	for k := range schema.Defs {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, name := range keys {
+	for _, name := range slices.Sorted(maps.Keys(schema.Defs)) {
 		emitHelperConstructors(f, name, collectHelperVariants(name, schema.Defs[name], schema, usedTypeNames))
 	}
-
-	var buf bytes.Buffer
-	if err := f.Render(&buf); err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(outDir, "helpers_gen.go"), buf.Bytes(), generatedFileMode)
+	return f.write(outDir, "helpers_gen.go")
 }

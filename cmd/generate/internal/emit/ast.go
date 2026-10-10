@@ -35,9 +35,41 @@ func str(s string) *ast.BasicLit { return &ast.BasicLit{Kind: token.STRING, Valu
 
 func intLit(n int) *ast.BasicLit { return &ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(n)} }
 
+func boolLit(b bool) *ast.Ident { return id(strconv.FormatBool(b)) }
+
+func nilExpr() *ast.Ident { return id("nil") }
+
 func star(x ast.Expr) *ast.StarExpr { return &ast.StarExpr{X: x} }
 
 func addr(x ast.Expr) *ast.UnaryExpr { return &ast.UnaryExpr{Op: token.AND, X: x} }
+
+func not(x ast.Expr) *ast.UnaryExpr { return &ast.UnaryExpr{Op: token.NOT, X: x} }
+
+func binary(x ast.Expr, op token.Token, y ast.Expr) *ast.BinaryExpr {
+	return &ast.BinaryExpr{X: x, Op: op, Y: y}
+}
+
+func paren(x ast.Expr) *ast.ParenExpr { return &ast.ParenExpr{X: x} }
+
+func index(x, i ast.Expr) *ast.IndexExpr { return &ast.IndexExpr{X: x, Index: i} }
+
+func typeAssert(x, typ ast.Expr) *ast.TypeAssertExpr { return &ast.TypeAssertExpr{X: x, Type: typ} }
+
+func sliceOf(elt ast.Expr) *ast.ArrayType { return &ast.ArrayType{Elt: elt} }
+
+func mapOf(key, value ast.Expr) *ast.MapType { return &ast.MapType{Key: key, Value: value} }
+
+// byteSlice is []byte.
+func byteSlice() *ast.ArrayType { return sliceOf(id("byte")) }
+
+// bytesOf is []byte("s").
+func bytesOf(s string) *ast.CallExpr { return call(byteSlice(), str(s)) }
+
+// emptyBytes is []byte{}.
+func emptyBytes() *ast.CompositeLit { return composite(byteSlice()) }
+
+// rawMap is map[string]<value>.
+func rawMap(value ast.Expr) *ast.MapType { return mapOf(id("string"), value) }
 
 func composite(typ ast.Expr, elts ...ast.Expr) *ast.CompositeLit {
 	return &ast.CompositeLit{Type: typ, Elts: elts}
@@ -45,11 +77,60 @@ func composite(typ ast.Expr, elts ...ast.Expr) *ast.CompositeLit {
 
 func kv(key, value ast.Expr) *ast.KeyValueExpr { return &ast.KeyValueExpr{Key: key, Value: value} }
 
+func exprs(xs ...ast.Expr) []ast.Expr { return xs }
+
+func define(lhs []ast.Expr, rhs ...ast.Expr) *ast.AssignStmt {
+	return &ast.AssignStmt{Lhs: lhs, Tok: token.DEFINE, Rhs: rhs}
+}
+
+func assign(lhs []ast.Expr, rhs ...ast.Expr) *ast.AssignStmt {
+	return &ast.AssignStmt{Lhs: lhs, Tok: token.ASSIGN, Rhs: rhs}
+}
+
 func exprStmt(x ast.Expr) *ast.ExprStmt { return &ast.ExprStmt{X: x} }
 
 func ret(results ...ast.Expr) *ast.ReturnStmt { return &ast.ReturnStmt{Results: results} }
 
 func block(stmts ...ast.Stmt) *ast.BlockStmt { return &ast.BlockStmt{List: stmts} }
+
+func ifStmt(init ast.Stmt, cond ast.Expr, body ...ast.Stmt) *ast.IfStmt {
+	return &ast.IfStmt{Init: init, Cond: cond, Body: block(body...)}
+}
+
+func ifElse(init ast.Stmt, cond ast.Expr, then, els []ast.Stmt) *ast.IfStmt {
+	s := ifStmt(init, cond, then...)
+	s.Else = block(els...)
+	return s
+}
+
+func incr(x ast.Expr) *ast.IncDecStmt { return &ast.IncDecStmt{X: x, Tok: token.INC} }
+
+func rangeStmt(key, value, x ast.Expr, body ...ast.Stmt) *ast.RangeStmt {
+	return &ast.RangeStmt{Key: key, Value: value, Tok: token.DEFINE, X: x, Body: block(body...)}
+}
+
+func switchStmt(tag ast.Expr, clauses ...ast.Stmt) *ast.SwitchStmt {
+	return &ast.SwitchStmt{Tag: tag, Body: block(clauses...)}
+}
+
+// caseOf is a case clause. A nil list is the default clause.
+func caseOf(list []ast.Expr, body ...ast.Stmt) *ast.CaseClause {
+	return &ast.CaseClause{List: list, Body: body}
+}
+
+// varStmt is var name typ [= value].
+func varStmt(name string, typ ast.Expr, value ast.Expr) *ast.DeclStmt {
+	spec := &ast.ValueSpec{Names: []*ast.Ident{id(name)}, Type: typ}
+	if value != nil {
+		spec.Values = []ast.Expr{value}
+	}
+	return &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{spec}}}
+}
+
+// typeStmt is a local type declaration, type name typ.
+func typeStmt(name string, typ ast.Expr) *ast.DeclStmt {
+	return &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: id(name), Type: typ}}}}
+}
 
 // param is one parameter or result. An empty name leaves it unnamed.
 func param(name string, typ ast.Expr) *ast.Field {
@@ -72,6 +153,11 @@ func results(list ...*ast.Field) *ast.FieldList {
 
 func funcType(params []*ast.Field, res ...*ast.Field) *ast.FuncType {
 	return &ast.FuncType{Params: fields(params...), Results: results(res...)}
+}
+
+// method is func (recv) name(params) results { body }.
+func method(recv *ast.Field, name string, typ *ast.FuncType, body ...ast.Stmt) *ast.FuncDecl {
+	return &ast.FuncDecl{Recv: fields(recv), Name: id(name), Type: typ, Body: block(body...)}
 }
 
 // function is func name(params) results { body }.
@@ -140,34 +226,4 @@ func commentText(line string) string {
 	default:
 		return "// " + line
 	}
-}
-
-// fieldSet collects struct fields or interface methods, each with the doc
-// comment lines added before it.
-type fieldSet struct {
-	list []*ast.Field
-	doc  []string
-}
-
-// comment adds the lines of desc as doc for the next field.
-func (s *fieldSet) comment(lines ...string) { s.doc = append(s.doc, lines...) }
-
-func (s *fieldSet) add(fld *ast.Field) {
-	fld.Doc = docLines(s.doc...)
-	s.doc = nil
-	s.list = append(s.list, fld)
-}
-
-func (s *fieldSet) fieldList() *ast.FieldList {
-	if len(s.doc) > 0 {
-		panic("emit: doc comment with no field after it")
-	}
-	return fields(s.list...)
-}
-
-func (s *fieldSet) structType() *ast.StructType { return &ast.StructType{Fields: s.fieldList()} }
-
-// structField is name typ `json:"tag"`.
-func structField(name string, typ ast.Expr, tag string) *ast.Field {
-	return &ast.Field{Names: []*ast.Ident{id(name)}, Type: typ, Tag: structTag(tag)}
 }
