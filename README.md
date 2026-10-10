@@ -161,8 +161,10 @@ surface for extensions.
 - Client -> Agent: `InitializeRequest.ClientCapabilities.Meta`
 - Agent -> Client: `InitializeResponse.AgentCapabilities.Meta`
 
-Keys `traceparent`, `tracestate`, and `baggage` are reserved in `_meta` for W3C trace
-context/OpenTelemetry compatibility.
+The ACP specification says the root-level `_meta` keys `traceparent`, `tracestate`,
+and `baggage` SHOULD be reserved, for interop with MCP implementations and
+OpenTelemetry tooling. W3C Trace Context defines the first two; W3C Baggage
+defines `baggage`.
 
 ### Study a Production Implementation
 

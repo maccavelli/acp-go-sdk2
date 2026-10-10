@@ -161,7 +161,8 @@ discriminated union with a non-object variant; a union field named `Unknown` bes
    absent-key rule. Expected: all 28 `UnmarshalJSON` change; goldens unchanged.
 9. **Docs.** `README.md` "Wire encoding" and `docs/architecture.md` state the unknown-value, absent-key, and null rules, `Unknown`, and `Extra`. A script
    checks every name they mention against the tree. Amended 2026-10-10, see the deviation below: `docs/architecture.md` also replaces the stale
-   `internal/ir` with `internal/model`.
+   `internal/ir` with `internal/model`. Amended again 2026-10-10, see "names the check could not reach" below: the README's `_meta` trace-key
+   sentence follows the specification, and an emit test covers the required-map fill.
 10. **Review and close.** Run the verification below, record each result and the list of exported API changes for the release notes, and set this plan
     to `complete`.
 
@@ -193,6 +194,24 @@ does not name `internal/model`. The fault predates this plan.
 Decision: the owner chose to correct both places in step 9, naming `internal/model` as the package that resolves the schema into types, unions, and
 protocol methods. Step 9 is annotated above. No file is added to the step's scope, and the MADR, which asserts nothing about `docs/architecture.md`, is
 unchanged.
+
+## Deviation 2026-10-10, names the check could not reach
+
+Found in step 9, when the owner asked for the names the check left unchecked to be verified against their specifications:
+
+* `README.md` says "Keys `traceparent`, `tracestate`, and `baggage` are reserved in `_meta` for W3C trace context/OpenTelemetry compatibility". The ACP
+  extensibility page says "The following root-level keys in `_meta` **SHOULD** be reserved for W3C trace context to guarantee interop with existing MCP
+  implementations and OpenTelemetry tooling". The README turns SHOULD into a fact and drops "root-level"; and W3C Trace Context (Recommendation,
+  2021-11-23) defines only `traceparent` and `tracestate`, while `baggage` is W3C Baggage (Candidate Recommendation Snapshot, 2024-05-30).
+* `README.md` and `docs/architecture.md` say a nil required map is sent as `{}`. The generator fills required maps as it fills arrays
+  (`TypeRef.IsCollection`), but schema 1.25.0 has no required map (a model probe counts 34 array fills and no map fill) and no test covers one.
+* An empty `Unknown` prints as `null` through `%v` or `%q`: `json.RawMessage` is `jsontext.Value` in Go 1.27, whose `String` formats an empty value so.
+  The field is nil; a test of the field must use `len` or `== nil`.
+
+Decision: the owner chose to rewrite the README sentence to the specification's wording and attribution; to add an emit test,
+`TestRequiredMapFilledOnEncode` in `cmd/generate/internal/emit/types_test.go`, which builds a schema with a required map and requires the generated
+`MarshalJSON` to fill a nil map, and which is seen to fail on a planted breakage; and to note the printing behaviour in the execution record only. Step 9's
+scope gains `README.md` outside "Wire encoding" and `cmd/generate/internal/emit/types_test.go`. The MADR is unchanged.
 
 ## Execution record
 
@@ -600,9 +619,51 @@ be in `go list std`; a method name must be a literal in `constants_gen.go`; a `m
 FAIL path: internal/ir
 ```
 
-After it, 93 names pass and none fails. Not checked: the JSON and Go literals `[]`, `{}`, `null`, `_`, `acp`, and `go`, and the trace keys
-`traceparent`, `tracestate`, and `baggage`, which the ACP specification reserves in `_meta` and which no file in this tree defines. The tree listing is
-in a code block; its four `internal/` entries were compared with `cmd/generate/internal/` (`emit`, `load`, `model`, `util`) and match.
+After it, 93 names pass and none fails. The script leaves nine names unchecked: the JSON and Go literals `[]`, `{}`, `null`, `_`, `acp`, and `go`, and
+the trace keys `traceparent`, `tracestate`, and `baggage`, which no file in this tree defines. The tree listing is in a code block; its four `internal/`
+entries were compared with `cmd/generate/internal/` (`emit`, `load`, `model`, `util`) and match.
+
+The owner committed the above as `74f4f80`, then asked for the nine to be verified against their specifications; what follows came after that commit. Each sentence that uses them was checked against the source it rests on and,
+where it describes the SDK, against the code:
+
+* `[]`, `{}` (`README.md`, `docs/architecture.md`: a nil required array or map is sent as `[]` or `{}`, not `null`). RFC 8259 allows both: an object
+  and an array hold "zero or more" members or values (sections 4 and 5), and the literal names "MUST be lowercase" (section 3). The `encoding/json`
+  documentation (go1.27.2) says "a nil slice encodes as the null JSON value" and "In v1, a nil Go slice or Go map is marshaled as a JSON null", which
+  the fill prevents. Arrays: a model probe counts 34 filled required arrays; `NewSessionRequest{Cwd: "/w"}` encodes as `{"cwd":"/w","mcpServers":[]}`;
+  `TestNilRequiredArrayEncodesEmpty` covers it. Maps: the generator fills them too, but schema 1.25.0 has no required map and no test covered one; the
+  deviation "names the check could not reach" added `TestRequiredMapFilledOnEncode`, below.
+* `null` (a union leaves itself unchanged on `null`, except `RequestId`). The `encoding/json` documentation: `UnmarshalJSON` is called "including when
+  the input is a JSON null", and "unmarshaling a JSON null into any other Go type has no effect on the value and produces no error". The go1.27.2
+  documentation no longer carries the older convention sentence about `UnmarshalJSON([]byte("null"))`, and no record of this plan cites it. JSON-RPC 2.0,
+  section 4: the `id` "MUST contain a String, Number, or NULL value if included". `TestUnionNull` covers both.
+* `null` as a discriminator (treated as absent). The schema types `IdleStateUpdate`'s `None` variant's `stopReason` as `null`. Probed in a scratch
+  copy: `ContentBlock` `{"type":null,"text":"hi"}` sets `Text`; `StateUpdate` `{"state":null}` fails with `StateUpdate: missing discriminator "state"`.
+* `_` (extension methods start with `_`). The ACP extensibility page: "The protocol reserves any method name starting with an underscore (`_`) for
+  custom extensions"; an unrecognized custom request gets "Method not found"; "implementations **SHOULD** ignore unrecognized notifications".
+  `extensions.go` and `connection.go` do so.
+* `acp`: every `.go` file at the root declares `package acp`. `go`: both `go.mod` files carry `go 1.27.2`; the local toolchain is go1.27.2.
+* `traceparent`, `tracestate`, `baggage`. The ACP extensibility page: "The following root-level keys in `_meta` **SHOULD** be reserved for W3C trace
+  context to guarantee interop with existing MCP implementations and OpenTelemetry tooling". The README said they "are reserved", dropped "root-level",
+  and credited all three to W3C trace context; W3C Trace Context (Recommendation, 2021-11-23) defines `traceparent` and `tracestate`, and W3C Baggage
+  (Candidate Recommendation Snapshot, 2024-05-30) defines `baggage`. Schema 1.25.0 does not mention the keys and the SDK has no code for them. By the
+  deviation, the README sentence now reads: "The ACP specification says the root-level `_meta` keys `traceparent`, `tracestate`, and `baggage` SHOULD
+  be reserved, for interop with MCP implementations and OpenTelemetry tooling. W3C Trace Context defines the first two; W3C Baggage defines `baggage`."
+  The specification page is the live one; whether it matches the text at schema 1.25.0 was not established.
+
+Noted, not changed: an empty `Unknown` prints as `null` through `%v` or `%q`, because `json.RawMessage` is `jsontext.Value` in Go 1.27 and its `String`
+formats an empty value so; the same probe showed `Unknown == nil` and `len(Unknown) == 0`. Test the field with `len` or `== nil`, not by printing it.
+
+`TestRequiredMapFilledOnEncode` in `cmd/generate/internal/emit/types_test.go` builds an object with a required, untyped map property, requires the
+generated `MarshalJSON` to contain `if a.Env == nil { a.Env = map[string]any{} }`, and type-checks the output. Its first draft gave the property typed
+`additionalProperties` and expected `map[string]string{}`; the generator emits `map[string]any` for it, since typed `additionalProperties` belongs to
+phase 4, so the test uses an untyped map and keeps the fill assertion. It was seen to fail, one planted breakage per fresh scratch copy:
+
+```text
+model marks only slices: exit=1
+    types_test.go:35: MarshalJSON does not fill the nil map; want
+emit skips the fill: exit=1
+    types_test.go:35: MarshalJSON does not fill the nil map; want
+```
 
 Each kind was seen to fail, with one wrong name planted in a scratch copy of a document:
 
@@ -614,6 +675,7 @@ path: exit=1 ['FAIL path: union_wires_test.go']
 absent path that exists: exit=1 ['FAIL absent path: docs/decisions/']
 ```
 
-No Go file changed, so `make pre-add-check` was not run. `make check-records` and `make markdownlint` exit 0.
+Gates: `make pre-add-check` with the one changed Go file named: `go-precheck: 1 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 9 on `main`.
