@@ -81,7 +81,9 @@ func loadSchema(schemaDir string) (*load.Meta, *load.Schema, error) {
 	if !unstableMetaFound {
 		return meta, schema, nil
 	}
-	return load.MergeStableAndUnstable(meta, schema, unstableMeta, unstableSchema)
+	// The provenance has no reader until the model is built from it.
+	merged, mergedSchema, _, err := load.MergeStableAndUnstable(meta, schema, unstableMeta, unstableSchema)
+	return merged, mergedSchema, err
 }
 
 // findRepoRoot walks up from the working directory to the first directory

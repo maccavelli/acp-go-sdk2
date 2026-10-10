@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-10
 associated-madr: "0011-MADR-harden-code-generator-engine.md"
 ---
@@ -70,8 +70,9 @@ described; the results are as printed.
   which nothing emits. Every meta method in both meta files has request, response, or notification definitions linked by `x-method` and `x-side`, so the
   meta fallback and `ir.inferTypeBaseFromMethodKey` never run (0% coverage). For every group with a request, `Resp` equals
   `TrimSuffix(Req, "Request") + "Response"`; no response definition is missing or typed `null`, and the generated files contain no
-  `SendRequestNoResult` call. On the merged schema the 70 (side, wire, role) slots each hold one definition, and 16 wires of the unstable meta are
-  not in the stable meta's agent, client, or protocol methods.
+  `SendRequestNoResult` call. On the merged schema the 70 (side, wire, role) slots each hold one definition, and ~~16 wires of the unstable meta are
+  not in the stable meta's agent, client, or protocol methods~~ 15 wires of the unstable meta are in none of them; `mcp/message` serves both an agent and a client method, so they carry
+  16 methods (corrected 2026-10-10, see the deviation below).
 * **G9. The merge's data gives the same bindings as the description text.** `ir.isUnstableMethod` marks 16 of the 40 meta methods unstable; "the wire is
   not in the stable meta's agent, client, or protocol methods" marks the same 16.
 * **G10. What the merge changes.** It replaces 8 stable definitions with their unstable versions: `AgentCapabilities`, `ClientCapabilities`,
@@ -180,8 +181,8 @@ The model refuses rather than renames: a rename would change the exported API wi
    * have `MergeStableAndUnstable` also return its provenance: the definitions not in the stable schema and the wires not in the stable meta; correct its
      doc comment, which says stable definitions stay unchanged (G10).
    Tests: a planted unknown keyword fails naming the definition; a reflection test fails when a pointer, slice, or map field of `Definition` is not
-   deep-copied (seen to fail by deleting one copy line in a scratch copy); provenance on the committed schema is 102 definitions and 16 wires, the 16 methods
-   G9 lists, with `$/cancel_request` counted as stable because it is in the stable meta's protocol methods. The five generated files are byte-identical.
+   deep-copied (seen to fail by deleting one copy line in a scratch copy); provenance on the committed schema is 102 definitions and ~~16 wires, the 16 methods
+   G9 lists~~ 15 wires carrying the 16 methods G9 lists (corrected 2026-10-10), with `$/cancel_request` counted as stable because it is in the stable meta's protocol methods. The five generated files are byte-identical.
 3. **Model names.** Create `internal/model` with the reference resolver and the namer. The namer allocates every name in the order the types emitter
    registers them today: sorted definitions; within an object, its inline nested types in sorted property order; within a union, its variants in schema
    order. It computes each name completely, including `util.ToExportedField`, before registering it (G5, G7). Move `generateNestedTypeName`,
@@ -243,6 +244,67 @@ and methods are now marked.
 Rollback is `git revert` of the step commits, newest first. Each step leaves the generator and the generated files in step, so any prefix of the steps is
 a consistent tree.
 
+## Deviation 2026-10-10, unstable wire count
+
+Found in step 2: G8 and step 2 said 16 wires of the unstable meta are new. The provenance, and an independent computation in its test, give 15. The
+unstable method `mcp/message` is listed under both `agentMethods` and `clientMethods`, so 16 unstable methods use 15 wires. The earlier scratch measurement
+counted meta entries rather than distinct wires. G9's 16 of 40 methods is right.
+
+Decision: the owner chose to correct the plan now. G8 and step 2 are struck through and corrected above. No code, test, or scope changes.
+
 ## Execution record
 
-Not started.
+### Step 2, loader, 2026-10-10
+
+The owner accepted [0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md) and approved this plan on 2026-10-10; the
+plan's status is `in-progress`. Step 2 ran on `main` from a clean tree at `e109c7b`. The agent did not commit.
+
+Changes in `cmd/generate/internal/load`:
+
+* `Definition` gained `Format`, `Minimum`, `Maximum`, `MinLength`, `AdditionalProperties`, `Not`, `UnevaluatedProperties`,
+  `XDeserializeDefaultOnError`, and `XDeserializeSkipInvalidItems`. `visitDefinition` walks the three schema-valued ones; `deepCopyDefinition` copies all
+  of them, through a new `clonePtr` for the pointers.
+* `Definition.UnmarshalJSON` decodes through `decodeStrict`, which sets `DisallowUnknownFields`. `parseSchema` decodes `$defs` entry by entry, in sorted
+  order, wrapping an error as `definition "<name>": ...`, and keeps a `null` definition as nil. `parseMeta` decodes the meta files strictly. The four
+  `Read*` functions use them.
+* `MergeStableAndUnstable` returns a fourth result, `*Provenance`: `UnstableDefs`, the merged definitions the stable schema lacks, and `UnstableWires`, the
+  unstable-only wires it already computed. Its doc comment now lists what the merge adds, including the stable definitions it replaces.
+
+Callers: `merge_test.go`'s `mustMerge` takes the extra result. `main.loadSchema` keeps its signature and drops the provenance: a first version that
+returned it failed `golangci-lint` for host and Windows with `loadSchema - result 2 (*...load.Provenance) is never used (unparam)`, because nothing reads
+it before step 6. Step 6 threads it through when the model reads it. `main_test.go` is unchanged.
+
+New tests in `cmd/generate/internal/load/load_test.go`:
+
+* `TestParseSchemaRejectsUnknownKeywords`: an unknown keyword at the top of a definition, and one nested in a property, fail naming the definition and the
+  keyword.
+* `TestParseSchemaKeepsModeledKeywords`: the nine keywords decode into their fields, and a `null` definition stays nil.
+* `TestParseMetaRejectsUnknownKeys`.
+* `TestDeepCopyDefinitionCoversEveryField`: fails when the fixture leaves a field of `Definition` zero, or when the copy shares a pointer, map, or slice
+  field with the original.
+* `TestMergeProvenanceMatchesInputs`: on the committed schema, the provenance equals an independent computation from the inputs, and `$/cancel_request` is
+  not unstable. It asserts the sets rather than fixed counts, so a schema update does not break it; it logs `unstable definitions: 102; unstable wires: 15`.
+
+Each was seen to fail, with one planted breakage per run in a fresh scratch copy:
+
+```text
+lenient decoding: exit=1 failing=['TestParseMetaRejectsUnknownKeys', 'TestParseSchemaRejectsUnknownKeywords']
+    load_test.go:73: got <nil>, want an unknown field error naming extra
+deep copy shares Not: exit=1 failing=['TestDeepCopyDefinitionCoversEveryField']
+    load_test.go:128: Not is shared between the original and the copy
+new field missing from the fixture: exit=1 failing=['TestDeepCopyDefinitionCoversEveryField']
+    load_test.go:116: the fixture leaves Future zero; set it so its copy is checked
+provenance skips prefixed copies: exit=1 failing=['TestMergeProvenanceMatchesInputs']
+    load_test.go:179: UnstableDefs: got 46, want 102; extra []
+format keyword renamed: exit=1 failing=['TestMergeProvenanceMatchesInputs', 'TestParseSchemaKeepsModeledKeywords']
+    load_test.go:51: definition "N": json: unknown field "format"
+```
+
+The last plant also failed the provenance test, because strict decoding rejected `format` in the committed schema.
+
+Output: `cd cmd/generate && go run .` regenerated the five files and none changed; `TestGeneratedFilesUpToDate` passes.
+
+Gates: `make pre-add-check` with the five changed Go files named: `go-precheck: 5 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+Without names: `go-precheck: 50 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 2 on `main`.

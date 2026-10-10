@@ -7,31 +7,44 @@ import (
 	"strings"
 )
 
+// Provenance records what a merge took from the unstable schema.
+type Provenance struct {
+	// UnstableDefs names the merged definitions that the stable schema does not have.
+	UnstableDefs map[string]bool
+	// UnstableWires names the wire methods of the unstable meta that the stable
+	// meta has in none of its agent, client, or protocol methods.
+	UnstableWires map[string]bool
+}
+
 // MergeStableAndUnstable combines stable and unstable schema inputs without mutating either.
 //
-// The merged output keeps all stable definitions and method maps unchanged, while adding:
-//   - Unstable-only methods (present only in unstable meta)
-//   - Unstable-only $defs copied from the unstable schema under an "Unstable" prefix
+// The stable method maps are kept, and the merged output adds:
+//   - unstable-only methods, present only in the unstable meta;
+//   - the request, response, and notification types of those methods, and the new or
+//     changed definitions they reach, copied under an "Unstable" prefix;
+//   - for each stable method type, and each definition it reaches, whose unstable version
+//     differs from the stable one: the unstable version, under the stable name, replacing it;
+//   - definitions those replacements reference that the stable schema lacks, unprefixed.
 //
-// Unstable-only RPC root types (Request/Response/Notification) are always copied with the
-// Unstable prefix to avoid changing the stable API surface.
-func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta *Meta, unstableSchema *Schema) (*Meta, *Schema, error) {
+// The Provenance result names the definitions and wire methods that did not come from
+// the stable inputs.
+func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta *Meta, unstableSchema *Schema) (*Meta, *Schema, *Provenance, error) {
 	if stableMeta == nil {
-		return nil, nil, fmt.Errorf("stable meta is nil")
+		return nil, nil, nil, fmt.Errorf("stable meta is nil")
 	}
 	if stableSchema == nil {
-		return nil, nil, fmt.Errorf("stable schema is nil")
+		return nil, nil, nil, fmt.Errorf("stable schema is nil")
 	}
 	if unstableMeta == nil {
-		return nil, nil, fmt.Errorf("unstable meta is nil")
+		return nil, nil, nil, fmt.Errorf("unstable meta is nil")
 	}
 	if unstableSchema == nil {
-		return nil, nil, fmt.Errorf("unstable schema is nil")
+		return nil, nil, nil, fmt.Errorf("unstable schema is nil")
 	}
 
 	// Defensive: schema versions should match.
 	if stableMeta.Version != 0 && unstableMeta.Version != 0 && stableMeta.Version != unstableMeta.Version {
-		return nil, nil, fmt.Errorf("stable meta version (%d) differs from unstable meta version (%d)", stableMeta.Version, unstableMeta.Version)
+		return nil, nil, nil, fmt.Errorf("stable meta version (%d) differs from unstable meta version (%d)", stableMeta.Version, unstableMeta.Version)
 	}
 
 	stableWires := map[string]struct{}{}
@@ -50,20 +63,20 @@ func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta
 	var err error
 	combinedMeta.AgentMethods, err = mergeUnstableOnlyMethods(combinedMeta.AgentMethods, unstableMeta.AgentMethods, stableWires, unstableOnlyWires)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	combinedMeta.ClientMethods, err = mergeUnstableOnlyMethods(combinedMeta.ClientMethods, unstableMeta.ClientMethods, stableWires, unstableOnlyWires)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	combinedMeta.ProtocolMethods, err = mergeUnstableOnlyMethods(combinedMeta.ProtocolMethods, unstableMeta.ProtocolMethods, stableWires, unstableOnlyWires)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	dupSet, err := buildUnstableDuplicateSet(stableSchema, unstableSchema, unstableOnlyWires)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	dupMap := make(map[string]string, len(dupSet))
@@ -79,11 +92,11 @@ func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta
 
 	for oldName, newName := range dupMap {
 		if _, exists := combinedSchema.Defs[newName]; exists {
-			return nil, nil, fmt.Errorf("cannot merge unstable schema: %q already exists in stable defs", newName)
+			return nil, nil, nil, fmt.Errorf("cannot merge unstable schema: %q already exists in stable defs", newName)
 		}
 		unstableDef := unstableSchema.Defs[oldName]
 		if unstableDef == nil {
-			return nil, nil, fmt.Errorf("cannot merge unstable schema: missing definition %q", oldName)
+			return nil, nil, nil, fmt.Errorf("cannot merge unstable schema: missing definition %q", oldName)
 		}
 		copyDef := deepCopyDefinition(unstableDef)
 		rewriteDefinitionRefs(copyDef, dupMap)
@@ -97,7 +110,16 @@ func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta
 		combinedSchema.Defs[newName] = copyDef
 	}
 
-	return combinedMeta, combinedSchema, nil
+	prov := &Provenance{UnstableDefs: map[string]bool{}, UnstableWires: map[string]bool{}}
+	for name := range combinedSchema.Defs {
+		if _, ok := stableSchema.Defs[name]; !ok {
+			prov.UnstableDefs[name] = true
+		}
+	}
+	for wire := range unstableOnlyWires {
+		prov.UnstableWires[wire] = true
+	}
+	return combinedMeta, combinedSchema, prov, nil
 }
 
 func addWireMethods(dst map[string]struct{}, methods map[string]string) {
@@ -375,6 +397,9 @@ func visitDefinition(root *Definition, fn func(*Definition)) {
 		if d.Items != nil {
 			walk(d.Items)
 		}
+		walk(d.AdditionalProperties)
+		walk(d.Not)
+		walk(d.UnevaluatedProperties)
 		for _, v := range d.Properties {
 			walk(v)
 		}
@@ -397,10 +422,7 @@ func deepCopyDefinition(d *Definition) *Definition {
 	}
 	copyDef := *d
 
-	if d.boolSchema != nil {
-		v := *d.boolSchema
-		copyDef.boolSchema = &v
-	}
+	copyDef.boolSchema = clonePtr(d.boolSchema)
 	if d.Discriminator != nil {
 		copyDef.Discriminator = &Discriminator{PropertyName: d.Discriminator.PropertyName}
 	}
@@ -417,6 +439,12 @@ func deepCopyDefinition(d *Definition) *Definition {
 		}
 	}
 	copyDef.Items = deepCopyDefinition(d.Items)
+	copyDef.AdditionalProperties = deepCopyDefinition(d.AdditionalProperties)
+	copyDef.Not = deepCopyDefinition(d.Not)
+	copyDef.UnevaluatedProperties = deepCopyDefinition(d.UnevaluatedProperties)
+	copyDef.Minimum = clonePtr(d.Minimum)
+	copyDef.Maximum = clonePtr(d.Maximum)
+	copyDef.MinLength = clonePtr(d.MinLength)
 	if d.AnyOf != nil {
 		copyDef.AnyOf = make([]*Definition, len(d.AnyOf))
 		for i, v := range d.AnyOf {
@@ -437,4 +465,13 @@ func deepCopyDefinition(d *Definition) *Definition {
 	}
 
 	return &copyDef
+}
+
+// clonePtr returns a pointer to a copy of *p, or nil.
+func clonePtr[T any](p *T) *T {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
 }

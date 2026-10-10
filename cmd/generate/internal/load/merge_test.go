@@ -4,7 +4,7 @@ import "testing"
 
 func mustMerge(t *testing.T, stableMeta *Meta, stableSchema *Schema, unstableMeta *Meta, unstableSchema *Schema) (*Meta, *Schema) {
 	t.Helper()
-	meta, schema, err := MergeStableAndUnstable(stableMeta, stableSchema, unstableMeta, unstableSchema)
+	meta, schema, _, err := MergeStableAndUnstable(stableMeta, stableSchema, unstableMeta, unstableSchema)
 	if err != nil {
 		t.Fatalf("MergeStableAndUnstable returned error: %v", err)
 	}
