@@ -268,7 +268,11 @@ func emitSchemaDef(f *goFile, name string, def *load.Definition, schema *load.Sc
 		}
 	}
 
-	if def.Description != "" {
+	// A union emits its variant types first, so emitUnion places its
+	// description; every other case starts with the type it documents.
+	isUnion := len(def.Enum) == 0 && !isStringConstUnion(def) &&
+		((len(def.AnyOf) > 0 && !isOpenStringEnum(def)) || (len(def.AnyOf) == 0 && len(def.OneOf) > 0))
+	if def.Description != "" && !isUnion {
 		f.comment(util.FormatDocComment(def.Description)...)
 	}
 
@@ -1411,6 +1415,10 @@ func emitUnion(f *goFile, name string, schema *load.Schema, parentDef *load.Defi
 			st.comment(util.FormatDocComment(vi.description)...)
 		}
 		st.add(structField(vi.fieldName, star(id(vi.typeName)), "-"))
+	}
+	// The union's description belongs on the wrapper, after the variant types.
+	if parentDef.Description != "" {
+		f.comment(util.FormatDocComment(parentDef.Description)...)
 	}
 	f.add(typeDecl(name, st.structType()))
 	f.line()

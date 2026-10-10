@@ -210,3 +210,47 @@ Gates: `make pre-add-check` with the three changed Go files named: `go-precheck:
 Without names: `go-precheck: 49 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point 3: the agent stopped here. The owner commits step 5 on `main`.
+
+### Step 6, union docs, 2026-10-10
+
+The owner committed step 5 as `a546dfc` and pushed it. Step 6 ran on `main` from that clean tree. The agent did not commit.
+
+Added `TestUnionDocAboveWrapper` to `generated_output_test.go`. It parses `types_gen.go` with `go/parser` and requires the doc comment of
+`type ContentBlock struct` to start with the union's schema description, and the doc comment of `ContentBlockText`, its first variant, not to contain
+it. Run before the generator change, both checks failed:
+
+```text
+--- FAIL: TestUnionDocAboveWrapper (0.01s)
+    generated_output_test.go:61: ContentBlock doc = "", want it to start with "Content blocks represent displayable information"
+    generated_output_test.go:64: ContentBlockText doc carries the union's description: "Content blocks represent displayable information in the Agent Client Protocol. ...
+```
+
+The union's description was not lost but misplaced: `emitSchemaDef` wrote it before `emitUnion` emitted the variant types, so it merged into the first
+variant's doc.
+
+Generator change, in `cmd/generate/internal/emit/types.go`: `emitSchemaDef` computes `isUnion` with the same case order as its switch and skips the
+description for a union; `emitUnion` writes `parentDef.Description` directly above `type <Union> struct`, after the variant types.
+
+Regenerated with `cd cmd/generate && go run .`. Only `types_gen.go` changed, by 135 lines in and 101 out, all comment lines. A script over the old and new
+file found:
+
+* every non-comment, non-blank line identical, and the comment lines identical as a multiset, so text moved and none was added or dropped;
+* 24 union types gained a doc: `AgentResponse`, `AuthMethod`, `ClientResponse`, `ContentBlock`, `CreateElicitationRequest`, `CreateElicitationResponse`,
+  `ElicitationContentValue`, `ElicitationPropertySchema`, `ErrorCode`, `IdleStateUpdate`, `McpServer`, `MultiSelectItems`, `PlanUpdateContent`, `RequestId`,
+  `RequestPermissionOutcome`, `SessionConfigOption`, `SessionConfigSelectOptions`, `SessionUpdate`, `SetSessionConfigOptionRequest`, `StateUpdate`,
+  `ToolCallContent`, `UnstableMcpServer`, `UnstableMessageMcpResponse`, `UnstableNesSuggestion`;
+* 23 first variants kept only their own text, the old doc with the union's text removed from its head;
+* `RequestIdNull` lost its doc, which was `RequestId`'s text and nothing else.
+
+Not done: `RequestIdNull` stays undocumented. The generator does not write a null variant's description on its type; the description ("The JSON-RPC
+`null` request id.") stays on the wrapper's `Null` field, as before. That is outside step 6, which moves the union's description only, and
+`golangci-lint` passes with it.
+
+After the change `TestUnionDocAboveWrapper`, `TestNilRequiredArrayEncodesEmpty`, `TestUnsetUnionFailsByName`, and both pin tests pass. `go test ./...`
+exits 0 at the root and in `cmd/generate`, including `TestGeneratedFilesUpToDate`. `go build ./example/...` exits 0. No file under
+`testdata/json_golden/` changed.
+
+Gates: `make pre-add-check` with the three changed Go files named: `go-precheck: 3 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+Without names: `go-precheck: 49 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point 4: the agent stopped here. The owner commits step 6 on `main`.

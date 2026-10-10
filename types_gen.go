@@ -166,7 +166,6 @@ func (v *AgentRequest) Validate() error {
 	return nil
 }
 
-// A JSON-RPC response object.
 // A successful JSON-RPC response.
 type AgentResult struct {
 	// The id of the request this response answers.
@@ -183,6 +182,7 @@ type AgentError struct {
 	Id RequestId `json:"id"`
 }
 
+// A JSON-RPC response object.
 type AgentResponse struct {
 	// A successful JSON-RPC response.
 	Result *AgentResult `json:"-"`
@@ -362,10 +362,6 @@ func (v *AuthCapabilities) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Describes an available authentication method.
-//
-// The 'type' field acts as the discriminator in the serialized JSON form.
-// When no 'type' is present, the method is treated as 'agent'.
 // Client runs the configured agent program as a separate interactive
 // process, without passing this method to 'authenticate'.
 type AuthMethodTerminalInline struct {
@@ -389,6 +385,10 @@ type AuthMethodTerminalInline struct {
 	Type string `json:"type"`
 }
 
+// Describes an available authentication method.
+//
+// The 'type' field acts as the discriminator in the serialized JSON form.
+// When no 'type' is present, the method is treated as 'agent'.
 type AuthMethod struct {
 	// Client runs the configured agent program as a separate interactive
 	// process, without passing this method to 'authenticate'.
@@ -938,7 +938,6 @@ func (v *ClientRequest) Validate() error {
 	return nil
 }
 
-// A JSON-RPC response object.
 // A successful JSON-RPC response.
 type ClientResult struct {
 	// The id of the request this response answers.
@@ -955,6 +954,7 @@ type ClientError struct {
 	Id RequestId `json:"id"`
 }
 
+// A JSON-RPC response object.
 type ClientResponse struct {
 	// A successful JSON-RPC response.
 	Result *ClientResult `json:"-"`
@@ -1214,20 +1214,6 @@ type Content struct {
 	Content ContentBlock `json:"content"`
 }
 
-// Content blocks represent displayable information in the Agent Client Protocol.
-//
-// They provide a structured way to handle various types of user-facing content—whether
-// it's text from language models, images for analysis, or embedded resources for context.
-//
-// Content blocks appear in:
-// - User prompts sent via 'session/prompt'
-// - Language model output streamed through 'session/update' notifications
-// - Progress updates and results from tool calls
-//
-// This structure is compatible with the Model Context Protocol (MCP), enabling
-// agents to seamlessly forward content from MCP tool outputs without transformation.
-//
-// See protocol docs: [Content](https://agentclientprotocol.com/protocol/content)
 // Text content. May be plain text or formatted with Markdown.
 //
 // All agents MUST support text content blocks in prompts.
@@ -1332,6 +1318,20 @@ type ContentBlockResource struct {
 	Type     string                   `json:"type"`
 }
 
+// Content blocks represent displayable information in the Agent Client Protocol.
+//
+// They provide a structured way to handle various types of user-facing content—whether
+// it's text from language models, images for analysis, or embedded resources for context.
+//
+// Content blocks appear in:
+// - User prompts sent via 'session/prompt'
+// - Language model output streamed through 'session/update' notifications
+// - Progress updates and results from tool calls
+//
+// This structure is compatible with the Model Context Protocol (MCP), enabling
+// agents to seamlessly forward content from MCP tool outputs without transformation.
+//
+// See protocol docs: [Content](https://agentclientprotocol.com/protocol/content)
 type ContentBlock struct {
 	// Text content. May be plain text or formatted with Markdown.
 	//
@@ -1709,11 +1709,6 @@ type Cost struct {
 	Currency string `json:"currency"`
 }
 
-// Request from the agent to elicit structured user input.
-//
-// The agent sends this to the client to request information from the user,
-// either via a form or by directing them to a URL.
-// Elicitations are tied to a session (optionally a tool call) or a request.
 // Form-based elicitation where the client renders a form from the provided schema.
 type CreateElicitationForm struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -1778,6 +1773,11 @@ type CreateElicitationOther struct {
 	Mode string `json:"mode"`
 }
 
+// Request from the agent to elicit structured user input.
+//
+// The agent sends this to the client to request information from the user,
+// either via a form or by directing them to a URL.
+// Elicitations are tied to a session (optionally a tool call) or a request.
 type CreateElicitationRequest struct {
 	// Form-based elicitation where the client renders a form from the provided schema.
 	Form *CreateElicitationForm `json:"-"`
@@ -1967,7 +1967,6 @@ func (v *CreateElicitationRequest) Validate() error {
 	return nil
 }
 
-// Response from the client to an elicitation request.
 // The user accepted and provided content.
 type CreateElicitationAccept struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -2035,6 +2034,7 @@ type CreateElicitationResponseOther struct {
 	Action string `json:"action"`
 }
 
+// Response from the client to an elicitation request.
 type CreateElicitationResponse struct {
 	// The user accepted and provided content.
 	Accept *CreateElicitationAccept `json:"-"`
@@ -2381,7 +2381,6 @@ type ElicitationCapabilities struct {
 	Url *ElicitationUrlCapabilities `json:"url,omitempty"`
 }
 
-// Allowed wire representations for ['ElicitationContentValue'].
 // String value accepted in elicitation response content.
 type ElicitationContentValueString string
 
@@ -2397,6 +2396,7 @@ type ElicitationContentValueBoolean bool
 // String array value accepted in elicitation response content.
 type ElicitationContentValueStringArray []string
 
+// Allowed wire representations for ['ElicitationContentValue'].
 type ElicitationContentValue struct {
 	// String value accepted in elicitation response content.
 	String *ElicitationContentValueString `json:"-"`
@@ -2612,11 +2612,6 @@ func (v *ElicitationFormMode) Validate() error {
 // Unique identifier for an elicitation.
 type ElicitationId string
 
-// Property schema for elicitation form fields.
-//
-// Each variant corresponds to a JSON Schema '"type"' value.
-// Single-select enums use the 'String' variant with 'enum' or 'oneOf' set.
-// Multi-select enums use the 'Array' variant.
 // String property (or single-select enum when 'enum'/'oneOf' is set).
 type ElicitationPropertySchemaString struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -2810,6 +2805,11 @@ type ElicitationPropertySchemaOther struct {
 	Type string `json:"type"`
 }
 
+// Property schema for elicitation form fields.
+//
+// Each variant corresponds to a JSON Schema '"type"' value.
+// Single-select enums use the 'String' variant with 'enum' or 'oneOf' set.
+// Multi-select enums use the 'Array' variant.
 type ElicitationPropertySchema struct {
 	// String property (or single-select enum when 'enum'/'oneOf' is set).
 	String *ElicitationPropertySchemaString `json:"-"`
@@ -3470,10 +3470,6 @@ type Error struct {
 	Message string `json:"message"`
 }
 
-// Predefined error codes for common JSON-RPC and ACP-specific errors.
-//
-// These codes follow the JSON-RPC 2.0 specification for standard errors
-// and use the reserved range (-32000 to -32099) for protocol-specific errors.
 // **Parse error**: Invalid JSON was received by the server.
 // An error occurred on the server while parsing the JSON text.
 type ErrorCodeParseError int
@@ -3504,6 +3500,10 @@ type ErrorCodeResourceNotFound int
 // Other undefined error code.
 type ErrorCodeOther int
 
+// Predefined error codes for common JSON-RPC and ACP-specific errors.
+//
+// These codes follow the JSON-RPC 2.0 specification for standard errors
+// and use the reserved range (-32000 to -32099) for protocol-specific errors.
 type ErrorCode struct {
 	// **Parse error**: Invalid JSON was received by the server.
 	// An error occurred on the server while parsing the JSON text.
@@ -3779,9 +3779,6 @@ type HttpHeader struct {
 	Value string `json:"value"`
 }
 
-// The child is ready to process another prompt.
-//
-// An omitted, 'null', or malformed 'stopReason' means not reported.
 // The work ended successfully.
 type IdleStateUpdateEndTurn struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -3896,6 +3893,9 @@ type IdleStateUpdateNone struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+// The child is ready to process another prompt.
+//
+// An omitted, 'null', or malformed 'stopReason' means not reported.
 type IdleStateUpdate struct {
 	// The work ended successfully.
 	EndTurn *IdleStateUpdateEndTurn `json:"-"`
@@ -4695,12 +4695,6 @@ func (v *McpCapabilities) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Configuration for connecting to an MCP (Model Context Protocol) server.
-//
-// MCP servers provide tools and context that the agent can use when
-// processing prompts.
-//
-// See protocol docs: [MCP Servers](https://agentclientprotocol.com/protocol/session-setup#mcp-servers)
 // HTTP transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.http' is 'true'.
@@ -4784,6 +4778,12 @@ type McpServerAcpInline struct {
 	Type     string         `json:"type"`
 }
 
+// Configuration for connecting to an MCP (Model Context Protocol) server.
+//
+// MCP servers provide tools and context that the agent can use when
+// processing prompts.
+//
+// See protocol docs: [MCP Servers](https://agentclientprotocol.com/protocol/session-setup#mcp-servers)
 type McpServer struct {
 	// HTTP transport configuration
 	//
@@ -5142,7 +5142,6 @@ func (v McpServerStdio) MarshalJSON() ([]byte, error) {
 // Unique identifier for a message within a session.
 type MessageId string
 
-// Items for a multi-select (array) property schema.
 // Multi-select string items with plain string values.
 type MultiSelectItemsString struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5178,6 +5177,7 @@ type MultiSelectItemsOther struct {
 	Type string `json:"type"`
 }
 
+// Items for a multi-select (array) property schema.
 type MultiSelectItems struct {
 	// Multi-select string items with plain string values.
 	String *MultiSelectItemsString `json:"-"`
@@ -5937,11 +5937,6 @@ type PlanUpdate struct {
 	Plan PlanUpdateContent `json:"plan"`
 }
 
-// **UNSTABLE**
-//
-// This capability is not part of the spec yet, and may be removed or changed at any point.
-//
-// Updated content for a plan.
 // Structured plan entries.
 type PlanUpdateContentItems struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -6000,6 +5995,11 @@ type PlanUpdateContentMarkdown struct {
 	Type   string `json:"type"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Updated content for a plan.
 type PlanUpdateContent struct {
 	// Structured plan entries.
 	Items *PlanUpdateContentItems `json:"-"`
@@ -6446,6 +6446,14 @@ func (v *ReleaseTerminalResponse) Validate() error {
 	return nil
 }
 
+type RequestIdNull struct{}
+
+// A numeric JSON-RPC request id.
+type RequestIdNumber int
+
+// A string JSON-RPC request id.
+type RequestIdStr string
+
 // JSON RPC Request Id
 //
 // An identifier established by the Client that MUST contain a String, Number, or NULL value if included. If it is not included it is assumed to be a notification. The value SHOULD normally not be Null \[1\] and Numbers SHOULD NOT contain fractional parts \[2\]
@@ -6455,14 +6463,6 @@ func (v *ReleaseTerminalResponse) Validate() error {
 // \[1\] The use of Null as a value for the id member in a Request object is discouraged, because this specification uses a value of Null for Responses with an unknown id. Also, because JSON-RPC 1.0 uses an id value of Null for Notifications this could cause confusion in handling.
 //
 // \[2\] Fractional parts may be problematic, since many decimal fractions cannot be represented exactly as binary fractions.
-type RequestIdNull struct{}
-
-// A numeric JSON-RPC request id.
-type RequestIdNumber int
-
-// A string JSON-RPC request id.
-type RequestIdStr string
-
 type RequestId struct {
 	// The JSON-RPC 'null' request id.
 	Null *RequestIdNull `json:"-"`
@@ -6536,7 +6536,6 @@ func (v *RequestId) Validate() error {
 	return nil
 }
 
-// The outcome of a permission request.
 // The prompt turn was cancelled before the user responded.
 //
 // When a client sends a 'session/cancel' notification to cancel an ongoing
@@ -6561,6 +6560,7 @@ type RequestPermissionOutcomeSelected struct {
 	Outcome  string             `json:"outcome"`
 }
 
+// The outcome of a permission request.
 type RequestPermissionOutcome struct {
 	// The prompt turn was cancelled before the user responded.
 	//
@@ -6976,7 +6976,6 @@ type SessionConfigGroupId string
 // Unique identifier for a session configuration option.
 type SessionConfigId string
 
-// A session configuration option selector and its current state.
 // Single-value selector (dropdown).
 type SessionConfigOptionSelect struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -7021,6 +7020,7 @@ type SessionConfigOptionBoolean struct {
 	Type string `json:"type"`
 }
 
+// A session configuration option selector and its current state.
 type SessionConfigOption struct {
 	// Single-value selector (dropdown).
 	Select *SessionConfigOptionSelect `json:"-"`
@@ -7241,13 +7241,13 @@ type SessionConfigSelectOption struct {
 	Value SessionConfigValueId `json:"value"`
 }
 
-// Possible values for a session configuration option.
 // A flat list of options with no grouping.
 type SessionConfigSelectOptionsUngrouped []SessionConfigSelectOption
 
 // A list of options grouped under headers.
 type SessionConfigSelectOptionsGrouped []SessionConfigSelectGroup
 
+// Possible values for a session configuration option.
 type SessionConfigSelectOptions struct {
 	// A flat list of options with no grouping.
 	Ungrouped *SessionConfigSelectOptionsUngrouped `json:"-"`
@@ -7557,11 +7557,6 @@ type SessionResumeCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
-// Different types of updates that can be sent during session processing.
-//
-// These updates provide real-time feedback about the agent's progress.
-//
-// See protocol docs: [Agent Reports Output](https://agentclientprotocol.com/protocol/prompt-turn#3-agent-reports-output)
 // A chunk of the user's message being streamed.
 type SessionUpdateUserMessageChunk struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -7976,6 +7971,11 @@ type SessionUpdateSessionMessageChunk struct {
 	SessionUpdate   string     `json:"sessionUpdate"`
 }
 
+// Different types of updates that can be sent during session processing.
+//
+// These updates provide real-time feedback about the agent's progress.
+//
+// See protocol docs: [Agent Reports Output](https://agentclientprotocol.com/protocol/prompt-turn#3-agent-reports-output)
 type SessionUpdate struct {
 	// A chunk of the user's message being streamed.
 	UserMessageChunk *SessionUpdateUserMessageChunk `json:"-"`
@@ -8973,7 +8973,6 @@ func (u *SessionUpdate) Validate() error {
 	return nil
 }
 
-// Request parameters for setting a session configuration option.
 // A boolean value ('type: "boolean"').
 type SetSessionConfigOptionBoolean struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -9011,6 +9010,7 @@ type SetSessionConfigOptionValueId struct {
 	Value SessionConfigValueId `json:"value"`
 }
 
+// Request parameters for setting a session configuration option.
 type SetSessionConfigOptionRequest struct {
 	// A boolean value ('type: "boolean"').
 	Boolean *SetSessionConfigOptionBoolean `json:"-"`
@@ -9187,15 +9187,6 @@ func (v *SetSessionModeResponse) Validate() error {
 	return nil
 }
 
-// **UNSTABLE**
-//
-// This capability is not part of the spec yet, and may be removed or changed at any point.
-//
-// Current foreground-work state of a reusable child session.
-//
-// Each update is a whole-object snapshot. Idle does not terminate the child;
-// the parent can message it again, transitioning it back to running.
-// Background activity may still emit other session updates while idle.
 // Foreground work is in progress.
 type StateUpdateRunning struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -9253,6 +9244,15 @@ type StateUpdateOther struct {
 	State string `json:"state"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Current foreground-work state of a reusable child session.
+//
+// Each update is a whole-object snapshot. Idle does not terminate the child;
+// the parent can message it again, transitioning it back to running.
+// Background activity may still emit other session updates while idle.
 type StateUpdate struct {
 	// Foreground work is in progress.
 	Running *StateUpdateRunning `json:"-"`
@@ -9860,12 +9860,6 @@ type ToolCall struct {
 	ToolCallId ToolCallId `json:"toolCallId"`
 }
 
-// Content produced by a tool call.
-//
-// Tool calls can produce different types of content including
-// standard content blocks (text, images) or file diffs.
-//
-// See protocol docs: [Content](https://agentclientprotocol.com/protocol/tool-calls#content)
 // Standard content block (text, images, resources).
 type ToolCallContentContent struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -9913,6 +9907,12 @@ type ToolCallContentTerminal struct {
 	Type       string     `json:"type"`
 }
 
+// Content produced by a tool call.
+//
+// Tool calls can produce different types of content including
+// standard content blocks (text, images) or file diffs.
+//
+// See protocol docs: [Content](https://agentclientprotocol.com/protocol/tool-calls#content)
 type ToolCallContent struct {
 	// Standard content block (text, images, resources).
 	Content *ToolCallContentContent `json:"-"`
@@ -10609,12 +10609,6 @@ type UnstableMcpError struct {
 // from the outer ACP JSON-RPC request ID.
 type UnstableMcpRequestId string
 
-// Configuration for connecting to an MCP (Model Context Protocol) server.
-//
-// MCP servers provide tools and context that the agent can use when
-// processing prompts.
-//
-// See protocol docs: [MCP Servers](https://agentclientprotocol.com/protocol/session-setup#mcp-servers)
 // HTTP transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.http' is 'true'.
@@ -10698,6 +10692,12 @@ type UnstableMcpServerAcpInline struct {
 	Type     string                 `json:"type"`
 }
 
+// Configuration for connecting to an MCP (Model Context Protocol) server.
+//
+// MCP servers provide tools and context that the agent can use when
+// processing prompts.
+//
+// See protocol docs: [MCP Servers](https://agentclientprotocol.com/protocol/session-setup#mcp-servers)
 type UnstableMcpServer struct {
 	// HTTP transport configuration
 	//
@@ -11035,16 +11035,6 @@ func (v *UnstableMessageMcpRequest) Validate() error {
 	return nil
 }
 
-// **UNSTABLE**
-//
-// The successful outer ACP 'mcp/message' response carries exactly one
-// inner MCP outcome: an opaque result (including JSON null), or an MCP error.
-// Outer ACP errors are reserved for binding and runtime failures.
-//
-// Both branches require their carrier key. An error must be a non-null object.
-// Unknown outer fields are ignored; inner result and error fields are preserved.
-// Carrier '_meta' is optional; null or invalid values are treated as absent.
-// Senders must include exactly one outcome; receivers prefer 'result' if both are present.
 // An opaque inner MCP result.
 type UnstableMessageMcpResult struct {
 	// Optional ACP carrier metadata.
@@ -11061,6 +11051,16 @@ type UnstableMessageMcpError struct {
 	Error UnstableMcpError `json:"error"`
 }
 
+// **UNSTABLE**
+//
+// The successful outer ACP 'mcp/message' response carries exactly one
+// inner MCP outcome: an opaque result (including JSON null), or an MCP error.
+// Outer ACP errors are reserved for binding and runtime failures.
+//
+// Both branches require their carrier key. An error must be a non-null object.
+// Unknown outer fields are ignored; inner result and error fields are preserved.
+// Carrier '_meta' is optional; null or invalid values are treated as absent.
+// Senders must include exactly one outcome; receivers prefer 'result' if both are present.
 type UnstableMessageMcpResponse struct {
 	// An opaque inner MCP result.
 	Result *UnstableMessageMcpResult `json:"-"`
@@ -11399,7 +11399,6 @@ type UnstableNesSuggestContext struct {
 	UserActions []UnstableNesUserAction `json:"userActions,omitempty"`
 }
 
-// A suggestion returned by the agent.
 // A text edit suggestion.
 type UnstableNesSuggestionEdit struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11486,6 +11485,7 @@ type UnstableNesSuggestionSearchAndReplace struct {
 	Uri string `json:"uri"`
 }
 
+// A suggestion returned by the agent.
 type UnstableNesSuggestion struct {
 	// A text edit suggestion.
 	Edit *UnstableNesSuggestionEdit `json:"-"`
