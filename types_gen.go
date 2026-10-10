@@ -192,6 +192,10 @@ type AgentResponse struct {
 }
 
 func (u *AgentResponse) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = AgentResponse{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
@@ -405,78 +409,47 @@ type AuthMethod struct {
 }
 
 func (u *AuthMethod) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = AuthMethod{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["type"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("AuthMethod: discriminator \"type\": %w", err)
-				}
-			}
-			switch disc {
-			case "terminal":
-				var v AuthMethodTerminalInline
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("AuthMethod: type \"terminal\": %w", err)
-				}
-				u.Terminal = &v
-				return nil
-			}
-			if v, ok := m["type"]; ok && string(v) != "null" {
-				u.Unknown = bytes.Clone(b)
-				return nil
-			}
-		}
-		{
-			var v AuthMethodTerminalInline
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["id"]; !ok {
-				match = false
-			}
-			if _, ok := m["name"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("AuthMethod: variant Terminal: %w", err)
-				}
-				u.Terminal = &v
-				return nil
-			}
-		}
-		{
-			var v AuthMethodAgent
-			match := true
-			if _, ok := m["id"]; !ok {
-				match = false
-			}
-			if _, ok := m["name"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("AuthMethod: variant Agent: %w", err)
-				}
-				u.Agent = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("AuthMethod: %w", err)
+	}
+	var disc string
+	if v, ok := m["type"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("AuthMethod: discriminator \"type\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
+	switch disc {
+	case "terminal":
+		var v AuthMethodTerminalInline
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("AuthMethod: type \"terminal\": %w", err)
+		}
+		u.Terminal = &v
+		return nil
+	}
+	if v, ok := m["type"]; ok && string(v) != "null" {
+		u.Unknown = bytes.Clone(b)
+		return nil
 	}
 	{
-		var v AuthMethodTerminalInline
-		if json.Unmarshal(b, &v) == nil {
-			u.Terminal = &v
+		var v AuthMethodAgent
+		match := true
+		if _, ok := m["id"]; !ok {
+			match = false
+		}
+		if _, ok := m["name"]; !ok {
+			match = false
+		}
+		if match {
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("AuthMethod: variant Agent: %w", err)
+			}
+			u.Agent = &v
 			return nil
 		}
 	}
@@ -487,7 +460,7 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 			return nil
 		}
 	}
-	return errors.New("AuthMethod: no variant matches")
+	return errors.New("AuthMethod: missing discriminator \"type\"")
 }
 
 func (u AuthMethod) MarshalJSON() ([]byte, error) {
@@ -628,6 +601,10 @@ type AvailableCommandInput struct {
 }
 
 func (u *AvailableCommandInput) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = AvailableCommandInput{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
@@ -983,6 +960,10 @@ type ClientResponse struct {
 }
 
 func (u *ClientResponse) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = ClientResponse{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
@@ -1383,195 +1364,157 @@ type ContentBlock struct {
 }
 
 func (u *ContentBlock) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = ContentBlock{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["type"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("ContentBlock: discriminator \"type\": %w", err)
-				}
-			}
-			switch disc {
-			case "text":
-				var v ContentBlockText
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ContentBlock: type \"text\": %w", err)
-				}
-				u.Text = &v
-				return nil
-			case "image":
-				var v ContentBlockImage
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ContentBlock: type \"image\": %w", err)
-				}
-				u.Image = &v
-				return nil
-			case "audio":
-				var v ContentBlockAudio
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ContentBlock: type \"audio\": %w", err)
-				}
-				u.Audio = &v
-				return nil
-			case "resource_link":
-				var v ContentBlockResourceLink
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ContentBlock: type \"resource_link\": %w", err)
-				}
-				u.ResourceLink = &v
-				return nil
-			case "resource":
-				var v ContentBlockResource
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ContentBlock: type \"resource\": %w", err)
-				}
-				u.Resource = &v
-				return nil
-			}
-			if v, ok := m["type"]; ok && string(v) != "null" {
-				u.Unknown = bytes.Clone(b)
-				return nil
-			}
-		}
-		{
-			var v ContentBlockText
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["text"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ContentBlock: variant Text: %w", err)
-				}
-				u.Text = &v
-				return nil
-			}
-		}
-		{
-			var v ContentBlockImage
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["data"]; !ok {
-				match = false
-			}
-			if _, ok := m["mimeType"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ContentBlock: variant Image: %w", err)
-				}
-				u.Image = &v
-				return nil
-			}
-		}
-		{
-			var v ContentBlockAudio
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["data"]; !ok {
-				match = false
-			}
-			if _, ok := m["mimeType"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ContentBlock: variant Audio: %w", err)
-				}
-				u.Audio = &v
-				return nil
-			}
-		}
-		{
-			var v ContentBlockResourceLink
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["name"]; !ok {
-				match = false
-			}
-			if _, ok := m["uri"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ContentBlock: variant ResourceLink: %w", err)
-				}
-				u.ResourceLink = &v
-				return nil
-			}
-		}
-		{
-			var v ContentBlockResource
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["resource"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ContentBlock: variant Resource: %w", err)
-				}
-				u.Resource = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("ContentBlock: %w", err)
+	}
+	var disc string
+	if v, ok := m["type"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("ContentBlock: discriminator \"type\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
+	switch disc {
+	case "text":
+		var v ContentBlockText
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ContentBlock: type \"text\": %w", err)
+		}
+		u.Text = &v
+		return nil
+	case "image":
+		var v ContentBlockImage
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ContentBlock: type \"image\": %w", err)
+		}
+		u.Image = &v
+		return nil
+	case "audio":
+		var v ContentBlockAudio
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ContentBlock: type \"audio\": %w", err)
+		}
+		u.Audio = &v
+		return nil
+	case "resource_link":
+		var v ContentBlockResourceLink
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ContentBlock: type \"resource_link\": %w", err)
+		}
+		u.ResourceLink = &v
+		return nil
+	case "resource":
+		var v ContentBlockResource
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ContentBlock: type \"resource\": %w", err)
+		}
+		u.Resource = &v
+		return nil
+	}
+	if v, ok := m["type"]; ok && string(v) != "null" {
+		u.Unknown = bytes.Clone(b)
+		return nil
+	}
+	var fit []string
+	{
+		match := true
+		if _, ok := m["text"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Text")
+		}
 	}
 	{
-		var v ContentBlockText
-		if json.Unmarshal(b, &v) == nil {
+		match := true
+		if _, ok := m["data"]; !ok {
+			match = false
+		}
+		if _, ok := m["mimeType"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Image")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["data"]; !ok {
+			match = false
+		}
+		if _, ok := m["mimeType"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Audio")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["name"]; !ok {
+			match = false
+		}
+		if _, ok := m["uri"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "ResourceLink")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["resource"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Resource")
+		}
+	}
+	if len(fit) == 1 {
+		switch fit[0] {
+		case "Text":
+			var v ContentBlockText
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ContentBlock: variant Text: %w", err)
+			}
 			u.Text = &v
 			return nil
-		}
-	}
-	{
-		var v ContentBlockImage
-		if json.Unmarshal(b, &v) == nil {
+		case "Image":
+			var v ContentBlockImage
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ContentBlock: variant Image: %w", err)
+			}
 			u.Image = &v
 			return nil
-		}
-	}
-	{
-		var v ContentBlockAudio
-		if json.Unmarshal(b, &v) == nil {
+		case "Audio":
+			var v ContentBlockAudio
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ContentBlock: variant Audio: %w", err)
+			}
 			u.Audio = &v
 			return nil
-		}
-	}
-	{
-		var v ContentBlockResourceLink
-		if json.Unmarshal(b, &v) == nil {
+		case "ResourceLink":
+			var v ContentBlockResourceLink
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ContentBlock: variant ResourceLink: %w", err)
+			}
 			u.ResourceLink = &v
 			return nil
-		}
-	}
-	{
-		var v ContentBlockResource
-		if json.Unmarshal(b, &v) == nil {
+		case "Resource":
+			var v ContentBlockResource
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ContentBlock: variant Resource: %w", err)
+			}
 			u.Resource = &v
 			return nil
 		}
 	}
-	return errors.New("ContentBlock: no variant matches")
+	u.Unknown = bytes.Clone(b)
+	return nil
 }
 
 func (u ContentBlock) MarshalJSON() ([]byte, error) {
@@ -1832,121 +1775,85 @@ type CreateElicitationRequest struct {
 }
 
 func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = CreateElicitationRequest{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["mode"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("CreateElicitationRequest: discriminator \"mode\": %w", err)
-				}
-			}
-			switch disc {
-			case "form":
-				var v CreateElicitationForm
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationRequest: mode \"form\": %w", err)
-				}
-				u.Form = &v
-				return nil
-			case "url":
-				var v CreateElicitationUrl
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationRequest: mode \"url\": %w", err)
-				}
-				u.Url = &v
-				return nil
-			}
-			if raw, ok := m["mode"]; ok && string(raw) != "null" {
-				var v CreateElicitationOther
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationRequest: mode %q: %w", disc, err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-		{
-			var v CreateElicitationForm
-			match := true
-			if _, ok := m["mode"]; !ok {
-				match = false
-			}
-			if _, ok := m["requestedSchema"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationRequest: variant Form: %w", err)
-				}
-				u.Form = &v
-				return nil
-			}
-		}
-		{
-			var v CreateElicitationUrl
-			match := true
-			if _, ok := m["mode"]; !ok {
-				match = false
-			}
-			if _, ok := m["elicitationId"]; !ok {
-				match = false
-			}
-			if _, ok := m["url"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationRequest: variant Url: %w", err)
-				}
-				u.Url = &v
-				return nil
-			}
-		}
-		{
-			var v CreateElicitationOther
-			match := true
-			if _, ok := m["mode"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationRequest: variant Other: %w", err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("CreateElicitationRequest: %w", err)
+	}
+	var disc string
+	if v, ok := m["mode"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("CreateElicitationRequest: discriminator \"mode\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
+	switch disc {
+	case "form":
+		var v CreateElicitationForm
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("CreateElicitationRequest: mode \"form\": %w", err)
+		}
+		u.Form = &v
+		return nil
+	case "url":
+		var v CreateElicitationUrl
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("CreateElicitationRequest: mode \"url\": %w", err)
+		}
+		u.Url = &v
+		return nil
+	}
+	if raw, ok := m["mode"]; ok && string(raw) != "null" {
+		var v CreateElicitationOther
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("CreateElicitationRequest: mode %q: %w", disc, err)
+		}
+		u.Other = &v
+		return nil
+	}
+	var fit []string
+	{
+		match := true
+		if _, ok := m["requestedSchema"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Form")
+		}
 	}
 	{
-		var v CreateElicitationForm
-		if json.Unmarshal(b, &v) == nil {
+		match := true
+		if _, ok := m["elicitationId"]; !ok {
+			match = false
+		}
+		if _, ok := m["url"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Url")
+		}
+	}
+	if len(fit) == 1 {
+		switch fit[0] {
+		case "Form":
+			var v CreateElicitationForm
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("CreateElicitationRequest: variant Form: %w", err)
+			}
 			u.Form = &v
 			return nil
-		}
-	}
-	{
-		var v CreateElicitationUrl
-		if json.Unmarshal(b, &v) == nil {
+		case "Url":
+			var v CreateElicitationUrl
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("CreateElicitationRequest: variant Url: %w", err)
+			}
 			u.Url = &v
 			return nil
 		}
 	}
-	{
-		var v CreateElicitationOther
-		if json.Unmarshal(b, &v) == nil {
-			u.Other = &v
-			return nil
-		}
-	}
-	return errors.New("CreateElicitationRequest: no variant matches")
+	return errors.New("CreateElicitationRequest: missing discriminator \"mode\"")
 }
 
 func (u CreateElicitationRequest) MarshalJSON() ([]byte, error) {
@@ -2148,140 +2055,81 @@ type CreateElicitationResponse struct {
 }
 
 func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = CreateElicitationResponse{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["action"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("CreateElicitationResponse: discriminator \"action\": %w", err)
-				}
-			}
-			switch disc {
-			case "accept":
-				var v CreateElicitationAccept
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationResponse: action \"accept\": %w", err)
-				}
-				u.Accept = &v
-				return nil
-			case "decline":
-				var v CreateElicitationDecline
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationResponse: action \"decline\": %w", err)
-				}
-				u.Decline = &v
-				return nil
-			case "cancel":
-				var v CreateElicitationCancel
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationResponse: action \"cancel\": %w", err)
-				}
-				u.Cancel = &v
-				return nil
-			}
-			if raw, ok := m["action"]; ok && string(raw) != "null" {
-				var v CreateElicitationResponseOther
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationResponse: action %q: %w", disc, err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-		{
-			var v CreateElicitationAccept
-			match := true
-			if _, ok := m["action"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationResponse: variant Accept: %w", err)
-				}
-				u.Accept = &v
-				return nil
-			}
-		}
-		{
-			var v CreateElicitationDecline
-			match := true
-			if _, ok := m["action"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationResponse: variant Decline: %w", err)
-				}
-				u.Decline = &v
-				return nil
-			}
-		}
-		{
-			var v CreateElicitationCancel
-			match := true
-			if _, ok := m["action"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationResponse: variant Cancel: %w", err)
-				}
-				u.Cancel = &v
-				return nil
-			}
-		}
-		{
-			var v CreateElicitationResponseOther
-			match := true
-			if _, ok := m["action"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("CreateElicitationResponse: variant Other: %w", err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("CreateElicitationResponse: %w", err)
+	}
+	var disc string
+	if v, ok := m["action"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("CreateElicitationResponse: discriminator \"action\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
-	{
+	switch disc {
+	case "accept":
 		var v CreateElicitationAccept
-		if json.Unmarshal(b, &v) == nil {
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("CreateElicitationResponse: action \"accept\": %w", err)
+		}
+		u.Accept = &v
+		return nil
+	case "decline":
+		var v CreateElicitationDecline
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("CreateElicitationResponse: action \"decline\": %w", err)
+		}
+		u.Decline = &v
+		return nil
+	case "cancel":
+		var v CreateElicitationCancel
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("CreateElicitationResponse: action \"cancel\": %w", err)
+		}
+		u.Cancel = &v
+		return nil
+	}
+	if raw, ok := m["action"]; ok && string(raw) != "null" {
+		var v CreateElicitationResponseOther
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("CreateElicitationResponse: action %q: %w", disc, err)
+		}
+		u.Other = &v
+		return nil
+	}
+	var fit []string
+	fit = append(fit, "Accept")
+	fit = append(fit, "Decline")
+	fit = append(fit, "Cancel")
+	if len(fit) == 1 {
+		switch fit[0] {
+		case "Accept":
+			var v CreateElicitationAccept
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("CreateElicitationResponse: variant Accept: %w", err)
+			}
 			u.Accept = &v
 			return nil
-		}
-	}
-	{
-		var v CreateElicitationDecline
-		if json.Unmarshal(b, &v) == nil {
+		case "Decline":
+			var v CreateElicitationDecline
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("CreateElicitationResponse: variant Decline: %w", err)
+			}
 			u.Decline = &v
 			return nil
-		}
-	}
-	{
-		var v CreateElicitationCancel
-		if json.Unmarshal(b, &v) == nil {
+		case "Cancel":
+			var v CreateElicitationCancel
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("CreateElicitationResponse: variant Cancel: %w", err)
+			}
 			u.Cancel = &v
 			return nil
 		}
 	}
-	{
-		var v CreateElicitationResponseOther
-		if json.Unmarshal(b, &v) == nil {
-			u.Other = &v
-			return nil
-		}
-	}
-	return errors.New("CreateElicitationResponse: no variant matches")
+	return errors.New("CreateElicitationResponse: missing discriminator \"action\"")
 }
 
 func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
@@ -2515,6 +2363,10 @@ type ElicitationContentValue struct {
 }
 
 func (u *ElicitationContentValue) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = ElicitationContentValue{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
 	} else {
@@ -2630,6 +2482,10 @@ type ElicitationFormMode struct {
 }
 
 func (u *ElicitationFormMode) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = ElicitationFormMode{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
@@ -2983,199 +2839,119 @@ type ElicitationPropertySchema struct {
 }
 
 func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = ElicitationPropertySchema{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["type"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: discriminator \"type\": %w", err)
-				}
-			}
-			switch disc {
-			case "string":
-				var v ElicitationPropertySchemaString
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: type \"string\": %w", err)
-				}
-				u.String = &v
-				return nil
-			case "number":
-				var v ElicitationPropertySchemaNumber
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: type \"number\": %w", err)
-				}
-				u.Number = &v
-				return nil
-			case "integer":
-				var v ElicitationPropertySchemaInteger
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: type \"integer\": %w", err)
-				}
-				u.Integer = &v
-				return nil
-			case "boolean":
-				var v ElicitationPropertySchemaBoolean
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: type \"boolean\": %w", err)
-				}
-				u.Boolean = &v
-				return nil
-			case "array":
-				var v ElicitationPropertySchemaArray
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: type \"array\": %w", err)
-				}
-				u.Array = &v
-				return nil
-			}
-			if raw, ok := m["type"]; ok && string(raw) != "null" {
-				var v ElicitationPropertySchemaOther
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: type %q: %w", disc, err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-		{
-			var v ElicitationPropertySchemaString
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: variant String: %w", err)
-				}
-				u.String = &v
-				return nil
-			}
-		}
-		{
-			var v ElicitationPropertySchemaNumber
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: variant Number: %w", err)
-				}
-				u.Number = &v
-				return nil
-			}
-		}
-		{
-			var v ElicitationPropertySchemaInteger
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: variant Integer: %w", err)
-				}
-				u.Integer = &v
-				return nil
-			}
-		}
-		{
-			var v ElicitationPropertySchemaBoolean
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: variant Boolean: %w", err)
-				}
-				u.Boolean = &v
-				return nil
-			}
-		}
-		{
-			var v ElicitationPropertySchemaArray
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["items"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: variant Array: %w", err)
-				}
-				u.Array = &v
-				return nil
-			}
-		}
-		{
-			var v ElicitationPropertySchemaOther
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationPropertySchema: variant Other: %w", err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("ElicitationPropertySchema: %w", err)
+	}
+	var disc string
+	if v, ok := m["type"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("ElicitationPropertySchema: discriminator \"type\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
-	{
+	switch disc {
+	case "string":
 		var v ElicitationPropertySchemaString
-		if json.Unmarshal(b, &v) == nil {
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ElicitationPropertySchema: type \"string\": %w", err)
+		}
+		u.String = &v
+		return nil
+	case "number":
+		var v ElicitationPropertySchemaNumber
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ElicitationPropertySchema: type \"number\": %w", err)
+		}
+		u.Number = &v
+		return nil
+	case "integer":
+		var v ElicitationPropertySchemaInteger
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ElicitationPropertySchema: type \"integer\": %w", err)
+		}
+		u.Integer = &v
+		return nil
+	case "boolean":
+		var v ElicitationPropertySchemaBoolean
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ElicitationPropertySchema: type \"boolean\": %w", err)
+		}
+		u.Boolean = &v
+		return nil
+	case "array":
+		var v ElicitationPropertySchemaArray
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ElicitationPropertySchema: type \"array\": %w", err)
+		}
+		u.Array = &v
+		return nil
+	}
+	if raw, ok := m["type"]; ok && string(raw) != "null" {
+		var v ElicitationPropertySchemaOther
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ElicitationPropertySchema: type %q: %w", disc, err)
+		}
+		u.Other = &v
+		return nil
+	}
+	var fit []string
+	fit = append(fit, "String")
+	fit = append(fit, "Number")
+	fit = append(fit, "Integer")
+	fit = append(fit, "Boolean")
+	{
+		match := true
+		if _, ok := m["items"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Array")
+		}
+	}
+	if len(fit) == 1 {
+		switch fit[0] {
+		case "String":
+			var v ElicitationPropertySchemaString
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ElicitationPropertySchema: variant String: %w", err)
+			}
 			u.String = &v
 			return nil
-		}
-	}
-	{
-		var v ElicitationPropertySchemaNumber
-		if json.Unmarshal(b, &v) == nil {
+		case "Number":
+			var v ElicitationPropertySchemaNumber
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ElicitationPropertySchema: variant Number: %w", err)
+			}
 			u.Number = &v
 			return nil
-		}
-	}
-	{
-		var v ElicitationPropertySchemaInteger
-		if json.Unmarshal(b, &v) == nil {
+		case "Integer":
+			var v ElicitationPropertySchemaInteger
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ElicitationPropertySchema: variant Integer: %w", err)
+			}
 			u.Integer = &v
 			return nil
-		}
-	}
-	{
-		var v ElicitationPropertySchemaBoolean
-		if json.Unmarshal(b, &v) == nil {
+		case "Boolean":
+			var v ElicitationPropertySchemaBoolean
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ElicitationPropertySchema: variant Boolean: %w", err)
+			}
 			u.Boolean = &v
 			return nil
-		}
-	}
-	{
-		var v ElicitationPropertySchemaArray
-		if json.Unmarshal(b, &v) == nil {
+		case "Array":
+			var v ElicitationPropertySchemaArray
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ElicitationPropertySchema: variant Array: %w", err)
+			}
 			u.Array = &v
 			return nil
 		}
 	}
-	{
-		var v ElicitationPropertySchemaOther
-		if json.Unmarshal(b, &v) == nil {
-			u.Other = &v
-			return nil
-		}
-	}
-	return errors.New("ElicitationPropertySchema: no variant matches")
+	return errors.New("ElicitationPropertySchema: missing discriminator \"type\"")
 }
 
 func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
@@ -3381,6 +3157,10 @@ type ElicitationUrlMode struct {
 }
 
 func (u *ElicitationUrlMode) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = ElicitationUrlMode{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
@@ -3489,6 +3269,10 @@ type EmbeddedResourceResource struct {
 }
 
 func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = EmbeddedResourceResource{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
@@ -3691,6 +3475,10 @@ type ErrorCode struct {
 }
 
 func (u *ErrorCode) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = ErrorCode{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
 	} else {
@@ -4134,231 +3922,78 @@ type IdleStateUpdate struct {
 }
 
 func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = IdleStateUpdate{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["stopReason"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("IdleStateUpdate: discriminator \"stopReason\": %w", err)
-				}
-			}
-			switch disc {
-			case "end_turn":
-				var v IdleStateUpdateEndTurn
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: stopReason \"end_turn\": %w", err)
-				}
-				u.EndTurn = &v
-				return nil
-			case "max_tokens":
-				var v IdleStateUpdateMaxTokens
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: stopReason \"max_tokens\": %w", err)
-				}
-				u.MaxTokens = &v
-				return nil
-			case "max_turn_requests":
-				var v IdleStateUpdateMaxTurnRequests
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: stopReason \"max_turn_requests\": %w", err)
-				}
-				u.MaxTurnRequests = &v
-				return nil
-			case "refusal":
-				var v IdleStateUpdateRefusal
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: stopReason \"refusal\": %w", err)
-				}
-				u.Refusal = &v
-				return nil
-			case "cancelled":
-				var v IdleStateUpdateCancelled
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: stopReason \"cancelled\": %w", err)
-				}
-				u.Cancelled = &v
-				return nil
-			case "error":
-				var v IdleStateUpdateError
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: stopReason \"error\": %w", err)
-				}
-				u.Error = &v
-				return nil
-			}
-			if raw, ok := m["stopReason"]; ok && string(raw) != "null" {
-				var v IdleStateUpdateOther
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: stopReason %q: %w", disc, err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-		{
-			var v IdleStateUpdateEndTurn
-			match := true
-			if _, ok := m["stopReason"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: variant EndTurn: %w", err)
-				}
-				u.EndTurn = &v
-				return nil
-			}
-		}
-		{
-			var v IdleStateUpdateMaxTokens
-			match := true
-			if _, ok := m["stopReason"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: variant MaxTokens: %w", err)
-				}
-				u.MaxTokens = &v
-				return nil
-			}
-		}
-		{
-			var v IdleStateUpdateMaxTurnRequests
-			match := true
-			if _, ok := m["stopReason"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: variant MaxTurnRequests: %w", err)
-				}
-				u.MaxTurnRequests = &v
-				return nil
-			}
-		}
-		{
-			var v IdleStateUpdateRefusal
-			match := true
-			if _, ok := m["stopReason"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: variant Refusal: %w", err)
-				}
-				u.Refusal = &v
-				return nil
-			}
-		}
-		{
-			var v IdleStateUpdateCancelled
-			match := true
-			if _, ok := m["stopReason"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: variant Cancelled: %w", err)
-				}
-				u.Cancelled = &v
-				return nil
-			}
-		}
-		{
-			var v IdleStateUpdateError
-			match := true
-			if _, ok := m["stopReason"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: variant Error: %w", err)
-				}
-				u.Error = &v
-				return nil
-			}
-		}
-		{
-			var v IdleStateUpdateOther
-			match := true
-			if _, ok := m["stopReason"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("IdleStateUpdate: variant Other: %w", err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("IdleStateUpdate: %w", err)
+	}
+	var disc string
+	if v, ok := m["stopReason"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("IdleStateUpdate: discriminator \"stopReason\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
-	{
+	switch disc {
+	case "end_turn":
 		var v IdleStateUpdateEndTurn
-		if json.Unmarshal(b, &v) == nil {
-			u.EndTurn = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("IdleStateUpdate: stopReason \"end_turn\": %w", err)
 		}
-	}
-	{
+		u.EndTurn = &v
+		return nil
+	case "max_tokens":
 		var v IdleStateUpdateMaxTokens
-		if json.Unmarshal(b, &v) == nil {
-			u.MaxTokens = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("IdleStateUpdate: stopReason \"max_tokens\": %w", err)
 		}
-	}
-	{
+		u.MaxTokens = &v
+		return nil
+	case "max_turn_requests":
 		var v IdleStateUpdateMaxTurnRequests
-		if json.Unmarshal(b, &v) == nil {
-			u.MaxTurnRequests = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("IdleStateUpdate: stopReason \"max_turn_requests\": %w", err)
 		}
-	}
-	{
+		u.MaxTurnRequests = &v
+		return nil
+	case "refusal":
 		var v IdleStateUpdateRefusal
-		if json.Unmarshal(b, &v) == nil {
-			u.Refusal = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("IdleStateUpdate: stopReason \"refusal\": %w", err)
 		}
-	}
-	{
+		u.Refusal = &v
+		return nil
+	case "cancelled":
 		var v IdleStateUpdateCancelled
-		if json.Unmarshal(b, &v) == nil {
-			u.Cancelled = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("IdleStateUpdate: stopReason \"cancelled\": %w", err)
 		}
-	}
-	{
+		u.Cancelled = &v
+		return nil
+	case "error":
 		var v IdleStateUpdateError
-		if json.Unmarshal(b, &v) == nil {
-			u.Error = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("IdleStateUpdate: stopReason \"error\": %w", err)
 		}
+		u.Error = &v
+		return nil
 	}
-	{
+	if raw, ok := m["stopReason"]; ok && string(raw) != "null" {
 		var v IdleStateUpdateOther
-		if json.Unmarshal(b, &v) == nil {
-			u.Other = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("IdleStateUpdate: stopReason %q: %w", disc, err)
 		}
+		u.Other = &v
+		return nil
 	}
-	{
-		var v IdleStateUpdateNone
-		if json.Unmarshal(b, &v) == nil {
-			u.None = &v
-			return nil
-		}
+	var v IdleStateUpdateNone
+	if err := json.Unmarshal(b, &v); err != nil {
+		return fmt.Errorf("IdleStateUpdate: variant None: %w", err)
 	}
-	return errors.New("IdleStateUpdate: no variant matches")
+	u.None = &v
+	return nil
 }
 
 func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
@@ -5037,158 +4672,67 @@ type McpServer struct {
 }
 
 func (u *McpServer) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = McpServer{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["type"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("McpServer: discriminator \"type\": %w", err)
-				}
-			}
-			switch disc {
-			case "http":
-				var v McpServerHttpInline
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("McpServer: type \"http\": %w", err)
-				}
-				u.Http = &v
-				return nil
-			case "sse":
-				var v McpServerSseInline
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("McpServer: type \"sse\": %w", err)
-				}
-				u.Sse = &v
-				return nil
-			case "acp":
-				var v McpServerAcpInline
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("McpServer: type \"acp\": %w", err)
-				}
-				u.Acp = &v
-				return nil
-			}
-			if v, ok := m["type"]; ok && string(v) != "null" {
-				u.Unknown = bytes.Clone(b)
-				return nil
-			}
-		}
-		{
-			var v McpServerHttpInline
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["name"]; !ok {
-				match = false
-			}
-			if _, ok := m["url"]; !ok {
-				match = false
-			}
-			if _, ok := m["headers"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("McpServer: variant Http: %w", err)
-				}
-				u.Http = &v
-				return nil
-			}
-		}
-		{
-			var v McpServerSseInline
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["name"]; !ok {
-				match = false
-			}
-			if _, ok := m["url"]; !ok {
-				match = false
-			}
-			if _, ok := m["headers"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("McpServer: variant Sse: %w", err)
-				}
-				u.Sse = &v
-				return nil
-			}
-		}
-		{
-			var v McpServerAcpInline
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["name"]; !ok {
-				match = false
-			}
-			if _, ok := m["serverId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("McpServer: variant Acp: %w", err)
-				}
-				u.Acp = &v
-				return nil
-			}
-		}
-		{
-			var v McpServerStdio
-			match := true
-			if _, ok := m["name"]; !ok {
-				match = false
-			}
-			if _, ok := m["command"]; !ok {
-				match = false
-			}
-			if _, ok := m["args"]; !ok {
-				match = false
-			}
-			if _, ok := m["env"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("McpServer: variant Stdio: %w", err)
-				}
-				u.Stdio = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("McpServer: %w", err)
+	}
+	var disc string
+	if v, ok := m["type"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("McpServer: discriminator \"type\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
-	{
+	switch disc {
+	case "http":
 		var v McpServerHttpInline
-		if json.Unmarshal(b, &v) == nil {
-			u.Http = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("McpServer: type \"http\": %w", err)
 		}
-	}
-	{
+		u.Http = &v
+		return nil
+	case "sse":
 		var v McpServerSseInline
-		if json.Unmarshal(b, &v) == nil {
-			u.Sse = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("McpServer: type \"sse\": %w", err)
 		}
+		u.Sse = &v
+		return nil
+	case "acp":
+		var v McpServerAcpInline
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("McpServer: type \"acp\": %w", err)
+		}
+		u.Acp = &v
+		return nil
+	}
+	if v, ok := m["type"]; ok && string(v) != "null" {
+		u.Unknown = bytes.Clone(b)
+		return nil
 	}
 	{
-		var v McpServerAcpInline
-		if json.Unmarshal(b, &v) == nil {
-			u.Acp = &v
+		var v McpServerStdio
+		match := true
+		if _, ok := m["name"]; !ok {
+			match = false
+		}
+		if _, ok := m["command"]; !ok {
+			match = false
+		}
+		if _, ok := m["args"]; !ok {
+			match = false
+		}
+		if _, ok := m["env"]; !ok {
+			match = false
+		}
+		if match {
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("McpServer: variant Stdio: %w", err)
+			}
+			u.Stdio = &v
 			return nil
 		}
 	}
@@ -5199,7 +4743,7 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 			return nil
 		}
 	}
-	return errors.New("McpServer: no variant matches")
+	return errors.New("McpServer: missing discriminator \"type\"")
 }
 
 func (u McpServer) MarshalJSON() ([]byte, error) {
@@ -5469,97 +5013,48 @@ type MultiSelectItems struct {
 }
 
 func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = MultiSelectItems{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["type"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("MultiSelectItems: discriminator \"type\": %w", err)
-				}
-			}
-			switch disc {
-			case "string":
-				var v MultiSelectItemsString
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("MultiSelectItems: type \"string\": %w", err)
-				}
-				u.String = &v
-				return nil
-			}
-			if raw, ok := m["type"]; ok && string(raw) != "null" {
-				var v MultiSelectItemsOther
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("MultiSelectItems: type %q: %w", disc, err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-		{
-			var v MultiSelectItemsString
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["enum"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("MultiSelectItems: variant String: %w", err)
-				}
-				u.String = &v
-				return nil
-			}
-		}
-		{
-			var v MultiSelectItemsOther
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("MultiSelectItems: variant Other: %w", err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-		{
-			var v TitledMultiSelectItems
-			match := true
-			if _, ok := m["anyOf"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("MultiSelectItems: variant Titled: %w", err)
-				}
-				u.Titled = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("MultiSelectItems: %w", err)
+	}
+	var disc string
+	if v, ok := m["type"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("MultiSelectItems: discriminator \"type\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
-	{
+	switch disc {
+	case "string":
 		var v MultiSelectItemsString
-		if json.Unmarshal(b, &v) == nil {
-			u.String = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("MultiSelectItems: type \"string\": %w", err)
 		}
+		u.String = &v
+		return nil
+	}
+	if raw, ok := m["type"]; ok && string(raw) != "null" {
+		var v MultiSelectItemsOther
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("MultiSelectItems: type %q: %w", disc, err)
+		}
+		u.Other = &v
+		return nil
 	}
 	{
-		var v MultiSelectItemsOther
-		if json.Unmarshal(b, &v) == nil {
-			u.Other = &v
+		var v TitledMultiSelectItems
+		match := true
+		if _, ok := m["anyOf"]; !ok {
+			match = false
+		}
+		if match {
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("MultiSelectItems: variant Titled: %w", err)
+			}
+			u.Titled = &v
 			return nil
 		}
 	}
@@ -5570,7 +5065,7 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 			return nil
 		}
 	}
-	return errors.New("MultiSelectItems: no variant matches")
+	return errors.New("MultiSelectItems: missing discriminator \"type\"")
 }
 
 func (u MultiSelectItems) MarshalJSON() ([]byte, error) {
@@ -6377,133 +5872,111 @@ type PlanUpdateContent struct {
 }
 
 func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = PlanUpdateContent{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["type"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("PlanUpdateContent: discriminator \"type\": %w", err)
-				}
-			}
-			switch disc {
-			case "items":
-				var v PlanUpdateContentItems
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("PlanUpdateContent: type \"items\": %w", err)
-				}
-				u.Items = &v
-				return nil
-			case "file":
-				var v PlanUpdateContentFile
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("PlanUpdateContent: type \"file\": %w", err)
-				}
-				u.File = &v
-				return nil
-			case "markdown":
-				var v PlanUpdateContentMarkdown
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("PlanUpdateContent: type \"markdown\": %w", err)
-				}
-				u.Markdown = &v
-				return nil
-			}
-			if v, ok := m["type"]; ok && string(v) != "null" {
-				u.Unknown = bytes.Clone(b)
-				return nil
-			}
-		}
-		{
-			var v PlanUpdateContentItems
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["planId"]; !ok {
-				match = false
-			}
-			if _, ok := m["entries"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("PlanUpdateContent: variant Items: %w", err)
-				}
-				u.Items = &v
-				return nil
-			}
-		}
-		{
-			var v PlanUpdateContentFile
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["planId"]; !ok {
-				match = false
-			}
-			if _, ok := m["uri"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("PlanUpdateContent: variant File: %w", err)
-				}
-				u.File = &v
-				return nil
-			}
-		}
-		{
-			var v PlanUpdateContentMarkdown
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["planId"]; !ok {
-				match = false
-			}
-			if _, ok := m["content"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("PlanUpdateContent: variant Markdown: %w", err)
-				}
-				u.Markdown = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("PlanUpdateContent: %w", err)
+	}
+	var disc string
+	if v, ok := m["type"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("PlanUpdateContent: discriminator \"type\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
+	switch disc {
+	case "items":
+		var v PlanUpdateContentItems
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("PlanUpdateContent: type \"items\": %w", err)
+		}
+		u.Items = &v
+		return nil
+	case "file":
+		var v PlanUpdateContentFile
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("PlanUpdateContent: type \"file\": %w", err)
+		}
+		u.File = &v
+		return nil
+	case "markdown":
+		var v PlanUpdateContentMarkdown
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("PlanUpdateContent: type \"markdown\": %w", err)
+		}
+		u.Markdown = &v
+		return nil
+	}
+	if v, ok := m["type"]; ok && string(v) != "null" {
+		u.Unknown = bytes.Clone(b)
+		return nil
+	}
+	var fit []string
+	{
+		match := true
+		if _, ok := m["planId"]; !ok {
+			match = false
+		}
+		if _, ok := m["entries"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Items")
+		}
 	}
 	{
-		var v PlanUpdateContentItems
-		if json.Unmarshal(b, &v) == nil {
+		match := true
+		if _, ok := m["planId"]; !ok {
+			match = false
+		}
+		if _, ok := m["uri"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "File")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["planId"]; !ok {
+			match = false
+		}
+		if _, ok := m["content"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Markdown")
+		}
+	}
+	if len(fit) == 1 {
+		switch fit[0] {
+		case "Items":
+			var v PlanUpdateContentItems
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("PlanUpdateContent: variant Items: %w", err)
+			}
 			u.Items = &v
 			return nil
-		}
-	}
-	{
-		var v PlanUpdateContentFile
-		if json.Unmarshal(b, &v) == nil {
+		case "File":
+			var v PlanUpdateContentFile
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("PlanUpdateContent: variant File: %w", err)
+			}
 			u.File = &v
 			return nil
-		}
-	}
-	{
-		var v PlanUpdateContentMarkdown
-		if json.Unmarshal(b, &v) == nil {
+		case "Markdown":
+			var v PlanUpdateContentMarkdown
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("PlanUpdateContent: variant Markdown: %w", err)
+			}
 			u.Markdown = &v
 			return nil
 		}
 	}
-	return errors.New("PlanUpdateContent: no variant matches")
+	u.Unknown = bytes.Clone(b)
+	return nil
 }
 
 func (u PlanUpdateContent) MarshalJSON() ([]byte, error) {
@@ -6857,6 +6330,7 @@ type RequestId struct {
 }
 
 func (u *RequestId) UnmarshalJSON(b []byte) error {
+	*u = RequestId{}
 	if string(b) == "null" {
 		var v RequestIdNull
 		u.Null = &v
@@ -6963,90 +6437,71 @@ type RequestPermissionOutcome struct {
 }
 
 func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = RequestPermissionOutcome{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["outcome"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("RequestPermissionOutcome: discriminator \"outcome\": %w", err)
-				}
-			}
-			switch disc {
-			case "cancelled":
-				var v RequestPermissionOutcomeCancelled
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("RequestPermissionOutcome: outcome \"cancelled\": %w", err)
-				}
-				u.Cancelled = &v
-				return nil
-			case "selected":
-				var v RequestPermissionOutcomeSelected
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("RequestPermissionOutcome: outcome \"selected\": %w", err)
-				}
-				u.Selected = &v
-				return nil
-			}
-			if v, ok := m["outcome"]; ok && string(v) != "null" {
-				u.Unknown = bytes.Clone(b)
-				return nil
-			}
-		}
-		{
-			var v RequestPermissionOutcomeCancelled
-			match := true
-			if _, ok := m["outcome"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("RequestPermissionOutcome: variant Cancelled: %w", err)
-				}
-				u.Cancelled = &v
-				return nil
-			}
-		}
-		{
-			var v RequestPermissionOutcomeSelected
-			match := true
-			if _, ok := m["outcome"]; !ok {
-				match = false
-			}
-			if _, ok := m["optionId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("RequestPermissionOutcome: variant Selected: %w", err)
-				}
-				u.Selected = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("RequestPermissionOutcome: %w", err)
+	}
+	var disc string
+	if v, ok := m["outcome"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("RequestPermissionOutcome: discriminator \"outcome\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
-	{
+	switch disc {
+	case "cancelled":
 		var v RequestPermissionOutcomeCancelled
-		if json.Unmarshal(b, &v) == nil {
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("RequestPermissionOutcome: outcome \"cancelled\": %w", err)
+		}
+		u.Cancelled = &v
+		return nil
+	case "selected":
+		var v RequestPermissionOutcomeSelected
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("RequestPermissionOutcome: outcome \"selected\": %w", err)
+		}
+		u.Selected = &v
+		return nil
+	}
+	if v, ok := m["outcome"]; ok && string(v) != "null" {
+		u.Unknown = bytes.Clone(b)
+		return nil
+	}
+	var fit []string
+	fit = append(fit, "Cancelled")
+	{
+		match := true
+		if _, ok := m["optionId"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Selected")
+		}
+	}
+	if len(fit) == 1 {
+		switch fit[0] {
+		case "Cancelled":
+			var v RequestPermissionOutcomeCancelled
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("RequestPermissionOutcome: variant Cancelled: %w", err)
+			}
 			u.Cancelled = &v
 			return nil
-		}
-	}
-	{
-		var v RequestPermissionOutcomeSelected
-		if json.Unmarshal(b, &v) == nil {
+		case "Selected":
+			var v RequestPermissionOutcomeSelected
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("RequestPermissionOutcome: variant Selected: %w", err)
+			}
 			u.Selected = &v
 			return nil
 		}
 	}
-	return errors.New("RequestPermissionOutcome: no variant matches")
+	u.Unknown = bytes.Clone(b)
+	return nil
 }
 
 func (u RequestPermissionOutcome) MarshalJSON() ([]byte, error) {
@@ -7441,96 +6896,82 @@ type SessionConfigOption struct {
 }
 
 func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = SessionConfigOption{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["type"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("SessionConfigOption: discriminator \"type\": %w", err)
-				}
-			}
-			switch disc {
-			case "select":
-				var v SessionConfigOptionSelect
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionConfigOption: type \"select\": %w", err)
-				}
-				u.Select = &v
-				return nil
-			case "boolean":
-				var v SessionConfigOptionBoolean
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionConfigOption: type \"boolean\": %w", err)
-				}
-				u.Boolean = &v
-				return nil
-			}
-			if v, ok := m["type"]; ok && string(v) != "null" {
-				u.Unknown = bytes.Clone(b)
-				return nil
-			}
-		}
-		{
-			var v SessionConfigOptionSelect
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["currentValue"]; !ok {
-				match = false
-			}
-			if _, ok := m["options"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionConfigOption: variant Select: %w", err)
-				}
-				u.Select = &v
-				return nil
-			}
-		}
-		{
-			var v SessionConfigOptionBoolean
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["currentValue"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionConfigOption: variant Boolean: %w", err)
-				}
-				u.Boolean = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("SessionConfigOption: %w", err)
+	}
+	var disc string
+	if v, ok := m["type"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("SessionConfigOption: discriminator \"type\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
+	switch disc {
+	case "select":
+		var v SessionConfigOptionSelect
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionConfigOption: type \"select\": %w", err)
+		}
+		u.Select = &v
+		return nil
+	case "boolean":
+		var v SessionConfigOptionBoolean
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionConfigOption: type \"boolean\": %w", err)
+		}
+		u.Boolean = &v
+		return nil
+	}
+	if v, ok := m["type"]; ok && string(v) != "null" {
+		u.Unknown = bytes.Clone(b)
+		return nil
+	}
+	var fit []string
+	{
+		match := true
+		if _, ok := m["currentValue"]; !ok {
+			match = false
+		}
+		if _, ok := m["options"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Select")
+		}
 	}
 	{
-		var v SessionConfigOptionSelect
-		if json.Unmarshal(b, &v) == nil {
+		match := true
+		if _, ok := m["currentValue"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Boolean")
+		}
+	}
+	if len(fit) == 1 {
+		switch fit[0] {
+		case "Select":
+			var v SessionConfigOptionSelect
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionConfigOption: variant Select: %w", err)
+			}
 			u.Select = &v
 			return nil
-		}
-	}
-	{
-		var v SessionConfigOptionBoolean
-		if json.Unmarshal(b, &v) == nil {
+		case "Boolean":
+			var v SessionConfigOptionBoolean
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionConfigOption: variant Boolean: %w", err)
+			}
 			u.Boolean = &v
 			return nil
 		}
 	}
-	return errors.New("SessionConfigOption: no variant matches")
+	u.Unknown = bytes.Clone(b)
+	return nil
 }
 
 func (u SessionConfigOption) MarshalJSON() ([]byte, error) {
@@ -7681,6 +7122,10 @@ type SessionConfigSelectOptions struct {
 }
 
 func (u *SessionConfigSelectOptions) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = SessionConfigSelectOptions{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
 	} else {
@@ -8481,635 +7926,480 @@ type SessionUpdate struct {
 }
 
 func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = SessionUpdate{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["sessionUpdate"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("SessionUpdate: discriminator \"sessionUpdate\": %w", err)
-				}
-			}
-			switch disc {
-			case "user_message_chunk":
-				var v SessionUpdateUserMessageChunk
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"user_message_chunk\": %w", err)
-				}
-				u.UserMessageChunk = &v
-				return nil
-			case "agent_message_chunk":
-				var v SessionUpdateAgentMessageChunk
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"agent_message_chunk\": %w", err)
-				}
-				u.AgentMessageChunk = &v
-				return nil
-			case "agent_thought_chunk":
-				var v SessionUpdateAgentThoughtChunk
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"agent_thought_chunk\": %w", err)
-				}
-				u.AgentThoughtChunk = &v
-				return nil
-			case "tool_call":
-				var v SessionUpdateToolCall
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"tool_call\": %w", err)
-				}
-				u.ToolCall = &v
-				return nil
-			case "tool_call_update":
-				var v SessionToolCallUpdate
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"tool_call_update\": %w", err)
-				}
-				u.ToolCallUpdate = &v
-				return nil
-			case "plan":
-				var v SessionUpdatePlan
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"plan\": %w", err)
-				}
-				u.Plan = &v
-				return nil
-			case "plan_update":
-				var v SessionPlanUpdate
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"plan_update\": %w", err)
-				}
-				u.PlanUpdate = &v
-				return nil
-			case "plan_removed":
-				var v SessionUpdatePlanRemoved
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"plan_removed\": %w", err)
-				}
-				u.PlanRemoved = &v
-				return nil
-			case "available_commands_update":
-				var v SessionAvailableCommandsUpdate
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"available_commands_update\": %w", err)
-				}
-				u.AvailableCommandsUpdate = &v
-				return nil
-			case "current_mode_update":
-				var v SessionCurrentModeUpdate
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"current_mode_update\": %w", err)
-				}
-				u.CurrentModeUpdate = &v
-				return nil
-			case "config_option_update":
-				var v SessionConfigOptionUpdate
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"config_option_update\": %w", err)
-				}
-				u.ConfigOptionUpdate = &v
-				return nil
-			case "session_info_update":
-				var v SessionSessionInfoUpdate
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"session_info_update\": %w", err)
-				}
-				u.SessionInfoUpdate = &v
-				return nil
-			case "usage_update":
-				var v SessionUsageUpdate
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"usage_update\": %w", err)
-				}
-				u.UsageUpdate = &v
-				return nil
-			case "notice":
-				var v SessionUpdateNotice
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"notice\": %w", err)
-				}
-				u.Notice = &v
-				return nil
-			case "compaction_update":
-				var v SessionCompactionUpdate
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"compaction_update\": %w", err)
-				}
-				u.CompactionUpdate = &v
-				return nil
-			case "compaction_summary_chunk":
-				var v SessionUpdateCompactionSummaryChunk
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"compaction_summary_chunk\": %w", err)
-				}
-				u.CompactionSummaryChunk = &v
-				return nil
-			case "subagent_update":
-				var v SessionSubagentUpdate
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"subagent_update\": %w", err)
-				}
-				u.SubagentUpdate = &v
-				return nil
-			case "session_message":
-				var v SessionUpdateSessionMessage
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"session_message\": %w", err)
-				}
-				u.SessionMessage = &v
-				return nil
-			case "session_message_chunk":
-				var v SessionUpdateSessionMessageChunk
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: sessionUpdate \"session_message_chunk\": %w", err)
-				}
-				u.SessionMessageChunk = &v
-				return nil
-			}
-			if v, ok := m["sessionUpdate"]; ok && string(v) != "null" {
-				u.Unknown = bytes.Clone(b)
-				return nil
-			}
-		}
-		{
-			var v SessionUpdateUserMessageChunk
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["content"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant UserMessageChunk: %w", err)
-				}
-				u.UserMessageChunk = &v
-				return nil
-			}
-		}
-		{
-			var v SessionUpdateAgentMessageChunk
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["content"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant AgentMessageChunk: %w", err)
-				}
-				u.AgentMessageChunk = &v
-				return nil
-			}
-		}
-		{
-			var v SessionUpdateAgentThoughtChunk
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["content"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant AgentThoughtChunk: %w", err)
-				}
-				u.AgentThoughtChunk = &v
-				return nil
-			}
-		}
-		{
-			var v SessionUpdateToolCall
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["toolCallId"]; !ok {
-				match = false
-			}
-			if _, ok := m["title"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant ToolCall: %w", err)
-				}
-				u.ToolCall = &v
-				return nil
-			}
-		}
-		{
-			var v SessionToolCallUpdate
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["toolCallId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant ToolCallUpdate: %w", err)
-				}
-				u.ToolCallUpdate = &v
-				return nil
-			}
-		}
-		{
-			var v SessionUpdatePlan
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["entries"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant Plan: %w", err)
-				}
-				u.Plan = &v
-				return nil
-			}
-		}
-		{
-			var v SessionPlanUpdate
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["plan"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant PlanUpdate: %w", err)
-				}
-				u.PlanUpdate = &v
-				return nil
-			}
-		}
-		{
-			var v SessionUpdatePlanRemoved
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["planId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant PlanRemoved: %w", err)
-				}
-				u.PlanRemoved = &v
-				return nil
-			}
-		}
-		{
-			var v SessionAvailableCommandsUpdate
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["availableCommands"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant AvailableCommandsUpdate: %w", err)
-				}
-				u.AvailableCommandsUpdate = &v
-				return nil
-			}
-		}
-		{
-			var v SessionCurrentModeUpdate
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["currentModeId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant CurrentModeUpdate: %w", err)
-				}
-				u.CurrentModeUpdate = &v
-				return nil
-			}
-		}
-		{
-			var v SessionConfigOptionUpdate
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["configOptions"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant ConfigOptionUpdate: %w", err)
-				}
-				u.ConfigOptionUpdate = &v
-				return nil
-			}
-		}
-		{
-			var v SessionSessionInfoUpdate
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant SessionInfoUpdate: %w", err)
-				}
-				u.SessionInfoUpdate = &v
-				return nil
-			}
-		}
-		{
-			var v SessionUsageUpdate
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["used"]; !ok {
-				match = false
-			}
-			if _, ok := m["size"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant UsageUpdate: %w", err)
-				}
-				u.UsageUpdate = &v
-				return nil
-			}
-		}
-		{
-			var v SessionUpdateNotice
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["severity"]; !ok {
-				match = false
-			}
-			if _, ok := m["title"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant Notice: %w", err)
-				}
-				u.Notice = &v
-				return nil
-			}
-		}
-		{
-			var v SessionCompactionUpdate
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["compactionId"]; !ok {
-				match = false
-			}
-			if _, ok := m["status"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant CompactionUpdate: %w", err)
-				}
-				u.CompactionUpdate = &v
-				return nil
-			}
-		}
-		{
-			var v SessionUpdateCompactionSummaryChunk
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["compactionId"]; !ok {
-				match = false
-			}
-			if _, ok := m["content"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant CompactionSummaryChunk: %w", err)
-				}
-				u.CompactionSummaryChunk = &v
-				return nil
-			}
-		}
-		{
-			var v SessionSubagentUpdate
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["sessionId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant SubagentUpdate: %w", err)
-				}
-				u.SubagentUpdate = &v
-				return nil
-			}
-		}
-		{
-			var v SessionUpdateSessionMessage
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["messageId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant SessionMessage: %w", err)
-				}
-				u.SessionMessage = &v
-				return nil
-			}
-		}
-		{
-			var v SessionUpdateSessionMessageChunk
-			match := true
-			if _, ok := m["sessionUpdate"]; !ok {
-				match = false
-			}
-			if _, ok := m["messageId"]; !ok {
-				match = false
-			}
-			if _, ok := m["content"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SessionUpdate: variant SessionMessageChunk: %w", err)
-				}
-				u.SessionMessageChunk = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("SessionUpdate: %w", err)
+	}
+	var disc string
+	if v, ok := m["sessionUpdate"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("SessionUpdate: discriminator \"sessionUpdate\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
+	switch disc {
+	case "user_message_chunk":
+		var v SessionUpdateUserMessageChunk
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"user_message_chunk\": %w", err)
+		}
+		u.UserMessageChunk = &v
+		return nil
+	case "agent_message_chunk":
+		var v SessionUpdateAgentMessageChunk
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"agent_message_chunk\": %w", err)
+		}
+		u.AgentMessageChunk = &v
+		return nil
+	case "agent_thought_chunk":
+		var v SessionUpdateAgentThoughtChunk
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"agent_thought_chunk\": %w", err)
+		}
+		u.AgentThoughtChunk = &v
+		return nil
+	case "tool_call":
+		var v SessionUpdateToolCall
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"tool_call\": %w", err)
+		}
+		u.ToolCall = &v
+		return nil
+	case "tool_call_update":
+		var v SessionToolCallUpdate
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"tool_call_update\": %w", err)
+		}
+		u.ToolCallUpdate = &v
+		return nil
+	case "plan":
+		var v SessionUpdatePlan
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"plan\": %w", err)
+		}
+		u.Plan = &v
+		return nil
+	case "plan_update":
+		var v SessionPlanUpdate
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"plan_update\": %w", err)
+		}
+		u.PlanUpdate = &v
+		return nil
+	case "plan_removed":
+		var v SessionUpdatePlanRemoved
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"plan_removed\": %w", err)
+		}
+		u.PlanRemoved = &v
+		return nil
+	case "available_commands_update":
+		var v SessionAvailableCommandsUpdate
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"available_commands_update\": %w", err)
+		}
+		u.AvailableCommandsUpdate = &v
+		return nil
+	case "current_mode_update":
+		var v SessionCurrentModeUpdate
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"current_mode_update\": %w", err)
+		}
+		u.CurrentModeUpdate = &v
+		return nil
+	case "config_option_update":
+		var v SessionConfigOptionUpdate
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"config_option_update\": %w", err)
+		}
+		u.ConfigOptionUpdate = &v
+		return nil
+	case "session_info_update":
+		var v SessionSessionInfoUpdate
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"session_info_update\": %w", err)
+		}
+		u.SessionInfoUpdate = &v
+		return nil
+	case "usage_update":
+		var v SessionUsageUpdate
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"usage_update\": %w", err)
+		}
+		u.UsageUpdate = &v
+		return nil
+	case "notice":
+		var v SessionUpdateNotice
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"notice\": %w", err)
+		}
+		u.Notice = &v
+		return nil
+	case "compaction_update":
+		var v SessionCompactionUpdate
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"compaction_update\": %w", err)
+		}
+		u.CompactionUpdate = &v
+		return nil
+	case "compaction_summary_chunk":
+		var v SessionUpdateCompactionSummaryChunk
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"compaction_summary_chunk\": %w", err)
+		}
+		u.CompactionSummaryChunk = &v
+		return nil
+	case "subagent_update":
+		var v SessionSubagentUpdate
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"subagent_update\": %w", err)
+		}
+		u.SubagentUpdate = &v
+		return nil
+	case "session_message":
+		var v SessionUpdateSessionMessage
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"session_message\": %w", err)
+		}
+		u.SessionMessage = &v
+		return nil
+	case "session_message_chunk":
+		var v SessionUpdateSessionMessageChunk
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SessionUpdate: sessionUpdate \"session_message_chunk\": %w", err)
+		}
+		u.SessionMessageChunk = &v
+		return nil
+	}
+	if v, ok := m["sessionUpdate"]; ok && string(v) != "null" {
+		u.Unknown = bytes.Clone(b)
+		return nil
+	}
+	var fit []string
+	{
+		match := true
+		if _, ok := m["content"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "UserMessageChunk")
+		}
 	}
 	{
-		var v SessionUpdateUserMessageChunk
-		if json.Unmarshal(b, &v) == nil {
+		match := true
+		if _, ok := m["content"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "AgentMessageChunk")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["content"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "AgentThoughtChunk")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["toolCallId"]; !ok {
+			match = false
+		}
+		if _, ok := m["title"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "ToolCall")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["toolCallId"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "ToolCallUpdate")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["entries"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Plan")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["plan"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "PlanUpdate")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["planId"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "PlanRemoved")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["availableCommands"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "AvailableCommandsUpdate")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["currentModeId"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "CurrentModeUpdate")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["configOptions"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "ConfigOptionUpdate")
+		}
+	}
+	fit = append(fit, "SessionInfoUpdate")
+	{
+		match := true
+		if _, ok := m["used"]; !ok {
+			match = false
+		}
+		if _, ok := m["size"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "UsageUpdate")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["severity"]; !ok {
+			match = false
+		}
+		if _, ok := m["title"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Notice")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["compactionId"]; !ok {
+			match = false
+		}
+		if _, ok := m["status"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "CompactionUpdate")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["compactionId"]; !ok {
+			match = false
+		}
+		if _, ok := m["content"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "CompactionSummaryChunk")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["sessionId"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "SubagentUpdate")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["messageId"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "SessionMessage")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["messageId"]; !ok {
+			match = false
+		}
+		if _, ok := m["content"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "SessionMessageChunk")
+		}
+	}
+	if len(fit) == 1 {
+		switch fit[0] {
+		case "UserMessageChunk":
+			var v SessionUpdateUserMessageChunk
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant UserMessageChunk: %w", err)
+			}
 			u.UserMessageChunk = &v
 			return nil
-		}
-	}
-	{
-		var v SessionUpdateAgentMessageChunk
-		if json.Unmarshal(b, &v) == nil {
+		case "AgentMessageChunk":
+			var v SessionUpdateAgentMessageChunk
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant AgentMessageChunk: %w", err)
+			}
 			u.AgentMessageChunk = &v
 			return nil
-		}
-	}
-	{
-		var v SessionUpdateAgentThoughtChunk
-		if json.Unmarshal(b, &v) == nil {
+		case "AgentThoughtChunk":
+			var v SessionUpdateAgentThoughtChunk
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant AgentThoughtChunk: %w", err)
+			}
 			u.AgentThoughtChunk = &v
 			return nil
-		}
-	}
-	{
-		var v SessionUpdateToolCall
-		if json.Unmarshal(b, &v) == nil {
+		case "ToolCall":
+			var v SessionUpdateToolCall
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant ToolCall: %w", err)
+			}
 			u.ToolCall = &v
 			return nil
-		}
-	}
-	{
-		var v SessionToolCallUpdate
-		if json.Unmarshal(b, &v) == nil {
+		case "ToolCallUpdate":
+			var v SessionToolCallUpdate
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant ToolCallUpdate: %w", err)
+			}
 			u.ToolCallUpdate = &v
 			return nil
-		}
-	}
-	{
-		var v SessionUpdatePlan
-		if json.Unmarshal(b, &v) == nil {
+		case "Plan":
+			var v SessionUpdatePlan
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant Plan: %w", err)
+			}
 			u.Plan = &v
 			return nil
-		}
-	}
-	{
-		var v SessionPlanUpdate
-		if json.Unmarshal(b, &v) == nil {
+		case "PlanUpdate":
+			var v SessionPlanUpdate
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant PlanUpdate: %w", err)
+			}
 			u.PlanUpdate = &v
 			return nil
-		}
-	}
-	{
-		var v SessionUpdatePlanRemoved
-		if json.Unmarshal(b, &v) == nil {
+		case "PlanRemoved":
+			var v SessionUpdatePlanRemoved
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant PlanRemoved: %w", err)
+			}
 			u.PlanRemoved = &v
 			return nil
-		}
-	}
-	{
-		var v SessionAvailableCommandsUpdate
-		if json.Unmarshal(b, &v) == nil {
+		case "AvailableCommandsUpdate":
+			var v SessionAvailableCommandsUpdate
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant AvailableCommandsUpdate: %w", err)
+			}
 			u.AvailableCommandsUpdate = &v
 			return nil
-		}
-	}
-	{
-		var v SessionCurrentModeUpdate
-		if json.Unmarshal(b, &v) == nil {
+		case "CurrentModeUpdate":
+			var v SessionCurrentModeUpdate
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant CurrentModeUpdate: %w", err)
+			}
 			u.CurrentModeUpdate = &v
 			return nil
-		}
-	}
-	{
-		var v SessionConfigOptionUpdate
-		if json.Unmarshal(b, &v) == nil {
+		case "ConfigOptionUpdate":
+			var v SessionConfigOptionUpdate
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant ConfigOptionUpdate: %w", err)
+			}
 			u.ConfigOptionUpdate = &v
 			return nil
-		}
-	}
-	{
-		var v SessionSessionInfoUpdate
-		if json.Unmarshal(b, &v) == nil {
+		case "SessionInfoUpdate":
+			var v SessionSessionInfoUpdate
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant SessionInfoUpdate: %w", err)
+			}
 			u.SessionInfoUpdate = &v
 			return nil
-		}
-	}
-	{
-		var v SessionUsageUpdate
-		if json.Unmarshal(b, &v) == nil {
+		case "UsageUpdate":
+			var v SessionUsageUpdate
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant UsageUpdate: %w", err)
+			}
 			u.UsageUpdate = &v
 			return nil
-		}
-	}
-	{
-		var v SessionUpdateNotice
-		if json.Unmarshal(b, &v) == nil {
+		case "Notice":
+			var v SessionUpdateNotice
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant Notice: %w", err)
+			}
 			u.Notice = &v
 			return nil
-		}
-	}
-	{
-		var v SessionCompactionUpdate
-		if json.Unmarshal(b, &v) == nil {
+		case "CompactionUpdate":
+			var v SessionCompactionUpdate
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant CompactionUpdate: %w", err)
+			}
 			u.CompactionUpdate = &v
 			return nil
-		}
-	}
-	{
-		var v SessionUpdateCompactionSummaryChunk
-		if json.Unmarshal(b, &v) == nil {
+		case "CompactionSummaryChunk":
+			var v SessionUpdateCompactionSummaryChunk
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant CompactionSummaryChunk: %w", err)
+			}
 			u.CompactionSummaryChunk = &v
 			return nil
-		}
-	}
-	{
-		var v SessionSubagentUpdate
-		if json.Unmarshal(b, &v) == nil {
+		case "SubagentUpdate":
+			var v SessionSubagentUpdate
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant SubagentUpdate: %w", err)
+			}
 			u.SubagentUpdate = &v
 			return nil
-		}
-	}
-	{
-		var v SessionUpdateSessionMessage
-		if json.Unmarshal(b, &v) == nil {
+		case "SessionMessage":
+			var v SessionUpdateSessionMessage
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant SessionMessage: %w", err)
+			}
 			u.SessionMessage = &v
 			return nil
-		}
-	}
-	{
-		var v SessionUpdateSessionMessageChunk
-		if json.Unmarshal(b, &v) == nil {
+		case "SessionMessageChunk":
+			var v SessionUpdateSessionMessageChunk
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SessionUpdate: variant SessionMessageChunk: %w", err)
+			}
 			u.SessionMessageChunk = &v
 			return nil
 		}
 	}
-	return errors.New("SessionUpdate: no variant matches")
+	u.Unknown = bytes.Clone(b)
+	return nil
 }
 
 func (u SessionUpdate) MarshalJSON() ([]byte, error) {
@@ -9468,72 +8758,44 @@ type SetSessionConfigOptionRequest struct {
 }
 
 func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = SetSessionConfigOptionRequest{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["type"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("SetSessionConfigOptionRequest: discriminator \"type\": %w", err)
-				}
-			}
-			switch disc {
-			case "boolean":
-				var v SetSessionConfigOptionBoolean
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SetSessionConfigOptionRequest: type \"boolean\": %w", err)
-				}
-				u.Boolean = &v
-				return nil
-			}
-			if v, ok := m["type"]; ok && string(v) != "null" {
-				u.Unknown = bytes.Clone(b)
-				return nil
-			}
-		}
-		{
-			var v SetSessionConfigOptionBoolean
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["value"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SetSessionConfigOptionRequest: variant Boolean: %w", err)
-				}
-				u.Boolean = &v
-				return nil
-			}
-		}
-		{
-			var v SetSessionConfigOptionValueId
-			match := true
-			if _, ok := m["value"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("SetSessionConfigOptionRequest: variant ValueId: %w", err)
-				}
-				u.ValueId = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("SetSessionConfigOptionRequest: %w", err)
+	}
+	var disc string
+	if v, ok := m["type"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("SetSessionConfigOptionRequest: discriminator \"type\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
+	switch disc {
+	case "boolean":
+		var v SetSessionConfigOptionBoolean
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("SetSessionConfigOptionRequest: type \"boolean\": %w", err)
+		}
+		u.Boolean = &v
+		return nil
+	}
+	if v, ok := m["type"]; ok && string(v) != "null" {
+		u.Unknown = bytes.Clone(b)
+		return nil
 	}
 	{
-		var v SetSessionConfigOptionBoolean
-		if json.Unmarshal(b, &v) == nil {
-			u.Boolean = &v
+		var v SetSessionConfigOptionValueId
+		match := true
+		if _, ok := m["value"]; !ok {
+			match = false
+		}
+		if match {
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("SetSessionConfigOptionRequest: variant ValueId: %w", err)
+			}
+			u.ValueId = &v
 			return nil
 		}
 	}
@@ -9544,7 +8806,7 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 			return nil
 		}
 	}
-	return errors.New("SetSessionConfigOptionRequest: no variant matches")
+	return errors.New("SetSessionConfigOptionRequest: missing discriminator \"type\"")
 }
 
 func (u SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
@@ -9770,168 +9032,96 @@ type StateUpdate struct {
 }
 
 func (u *StateUpdate) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = StateUpdate{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["state"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("StateUpdate: discriminator \"state\": %w", err)
-				}
-			}
-			switch disc {
-			case "running":
-				var v StateUpdateRunning
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("StateUpdate: state \"running\": %w", err)
-				}
-				u.Running = &v
-				return nil
-			case "idle":
-				var v StateUpdateIdle
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("StateUpdate: state \"idle\": %w", err)
-				}
-				u.Idle = &v
-				return nil
-			case "requires_action":
-				var v StateUpdateRequiresAction
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("StateUpdate: state \"requires_action\": %w", err)
-				}
-				u.RequiresAction = &v
-				return nil
-			case "unknown":
-				var v StateUpdateUnknown
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("StateUpdate: state \"unknown\": %w", err)
-				}
-				u.Unknown = &v
-				return nil
-			}
-			if raw, ok := m["state"]; ok && string(raw) != "null" {
-				var v StateUpdateOther
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("StateUpdate: state %q: %w", disc, err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-		{
-			var v StateUpdateRunning
-			match := true
-			if _, ok := m["state"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("StateUpdate: variant Running: %w", err)
-				}
-				u.Running = &v
-				return nil
-			}
-		}
-		{
-			var v StateUpdateIdle
-			match := true
-			if _, ok := m["state"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("StateUpdate: variant Idle: %w", err)
-				}
-				u.Idle = &v
-				return nil
-			}
-		}
-		{
-			var v StateUpdateRequiresAction
-			match := true
-			if _, ok := m["state"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("StateUpdate: variant RequiresAction: %w", err)
-				}
-				u.RequiresAction = &v
-				return nil
-			}
-		}
-		{
-			var v StateUpdateUnknown
-			match := true
-			if _, ok := m["state"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("StateUpdate: variant Unknown: %w", err)
-				}
-				u.Unknown = &v
-				return nil
-			}
-		}
-		{
-			var v StateUpdateOther
-			match := true
-			if _, ok := m["state"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("StateUpdate: variant Other: %w", err)
-				}
-				u.Other = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("StateUpdate: %w", err)
+	}
+	var disc string
+	if v, ok := m["state"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("StateUpdate: discriminator \"state\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
-	{
+	switch disc {
+	case "running":
 		var v StateUpdateRunning
-		if json.Unmarshal(b, &v) == nil {
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("StateUpdate: state \"running\": %w", err)
+		}
+		u.Running = &v
+		return nil
+	case "idle":
+		var v StateUpdateIdle
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("StateUpdate: state \"idle\": %w", err)
+		}
+		u.Idle = &v
+		return nil
+	case "requires_action":
+		var v StateUpdateRequiresAction
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("StateUpdate: state \"requires_action\": %w", err)
+		}
+		u.RequiresAction = &v
+		return nil
+	case "unknown":
+		var v StateUpdateUnknown
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("StateUpdate: state \"unknown\": %w", err)
+		}
+		u.Unknown = &v
+		return nil
+	}
+	if raw, ok := m["state"]; ok && string(raw) != "null" {
+		var v StateUpdateOther
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("StateUpdate: state %q: %w", disc, err)
+		}
+		u.Other = &v
+		return nil
+	}
+	var fit []string
+	fit = append(fit, "Running")
+	fit = append(fit, "Idle")
+	fit = append(fit, "RequiresAction")
+	fit = append(fit, "Unknown")
+	if len(fit) == 1 {
+		switch fit[0] {
+		case "Running":
+			var v StateUpdateRunning
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("StateUpdate: variant Running: %w", err)
+			}
 			u.Running = &v
 			return nil
-		}
-	}
-	{
-		var v StateUpdateIdle
-		if json.Unmarshal(b, &v) == nil {
+		case "Idle":
+			var v StateUpdateIdle
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("StateUpdate: variant Idle: %w", err)
+			}
 			u.Idle = &v
 			return nil
-		}
-	}
-	{
-		var v StateUpdateRequiresAction
-		if json.Unmarshal(b, &v) == nil {
+		case "RequiresAction":
+			var v StateUpdateRequiresAction
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("StateUpdate: variant RequiresAction: %w", err)
+			}
 			u.RequiresAction = &v
 			return nil
-		}
-	}
-	{
-		var v StateUpdateUnknown
-		if json.Unmarshal(b, &v) == nil {
+		case "Unknown":
+			var v StateUpdateUnknown
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("StateUpdate: variant Unknown: %w", err)
+			}
 			u.Unknown = &v
 			return nil
 		}
 	}
-	{
-		var v StateUpdateOther
-		if json.Unmarshal(b, &v) == nil {
-			u.Other = &v
-			return nil
-		}
-	}
-	return errors.New("StateUpdate: no variant matches")
+	return errors.New("StateUpdate: missing discriminator \"state\"")
 }
 
 func (u StateUpdate) MarshalJSON() ([]byte, error) {
@@ -10443,127 +9633,105 @@ type ToolCallContent struct {
 }
 
 func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = ToolCallContent{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["type"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("ToolCallContent: discriminator \"type\": %w", err)
-				}
-			}
-			switch disc {
-			case "content":
-				var v ToolCallContentContent
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ToolCallContent: type \"content\": %w", err)
-				}
-				u.Content = &v
-				return nil
-			case "diff":
-				var v ToolCallContentDiff
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ToolCallContent: type \"diff\": %w", err)
-				}
-				u.Diff = &v
-				return nil
-			case "terminal":
-				var v ToolCallContentTerminal
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ToolCallContent: type \"terminal\": %w", err)
-				}
-				u.Terminal = &v
-				return nil
-			}
-			if v, ok := m["type"]; ok && string(v) != "null" {
-				u.Unknown = bytes.Clone(b)
-				return nil
-			}
-		}
-		{
-			var v ToolCallContentContent
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["content"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ToolCallContent: variant Content: %w", err)
-				}
-				u.Content = &v
-				return nil
-			}
-		}
-		{
-			var v ToolCallContentDiff
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["path"]; !ok {
-				match = false
-			}
-			if _, ok := m["newText"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ToolCallContent: variant Diff: %w", err)
-				}
-				u.Diff = &v
-				return nil
-			}
-		}
-		{
-			var v ToolCallContentTerminal
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["terminalId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ToolCallContent: variant Terminal: %w", err)
-				}
-				u.Terminal = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("ToolCallContent: %w", err)
+	}
+	var disc string
+	if v, ok := m["type"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("ToolCallContent: discriminator \"type\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
+	switch disc {
+	case "content":
+		var v ToolCallContentContent
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ToolCallContent: type \"content\": %w", err)
+		}
+		u.Content = &v
+		return nil
+	case "diff":
+		var v ToolCallContentDiff
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ToolCallContent: type \"diff\": %w", err)
+		}
+		u.Diff = &v
+		return nil
+	case "terminal":
+		var v ToolCallContentTerminal
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("ToolCallContent: type \"terminal\": %w", err)
+		}
+		u.Terminal = &v
+		return nil
+	}
+	if v, ok := m["type"]; ok && string(v) != "null" {
+		u.Unknown = bytes.Clone(b)
+		return nil
+	}
+	var fit []string
+	{
+		match := true
+		if _, ok := m["content"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Content")
+		}
 	}
 	{
-		var v ToolCallContentContent
-		if json.Unmarshal(b, &v) == nil {
+		match := true
+		if _, ok := m["path"]; !ok {
+			match = false
+		}
+		if _, ok := m["newText"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Diff")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["terminalId"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Terminal")
+		}
+	}
+	if len(fit) == 1 {
+		switch fit[0] {
+		case "Content":
+			var v ToolCallContentContent
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ToolCallContent: variant Content: %w", err)
+			}
 			u.Content = &v
 			return nil
-		}
-	}
-	{
-		var v ToolCallContentDiff
-		if json.Unmarshal(b, &v) == nil {
+		case "Diff":
+			var v ToolCallContentDiff
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ToolCallContent: variant Diff: %w", err)
+			}
 			u.Diff = &v
 			return nil
-		}
-	}
-	{
-		var v ToolCallContentTerminal
-		if json.Unmarshal(b, &v) == nil {
+		case "Terminal":
+			var v ToolCallContentTerminal
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("ToolCallContent: variant Terminal: %w", err)
+			}
 			u.Terminal = &v
 			return nil
 		}
 	}
-	return errors.New("ToolCallContent: no variant matches")
+	u.Unknown = bytes.Clone(b)
+	return nil
 }
 
 func (u ToolCallContent) MarshalJSON() ([]byte, error) {
@@ -11291,158 +10459,67 @@ type UnstableMcpServer struct {
 }
 
 func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = UnstableMcpServer{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["type"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("UnstableMcpServer: discriminator \"type\": %w", err)
-				}
-			}
-			switch disc {
-			case "http":
-				var v UnstableMcpServerHttp
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableMcpServer: type \"http\": %w", err)
-				}
-				u.Http = &v
-				return nil
-			case "sse":
-				var v UnstableMcpServerSse
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableMcpServer: type \"sse\": %w", err)
-				}
-				u.Sse = &v
-				return nil
-			case "acp":
-				var v UnstableMcpServerAcpInline
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableMcpServer: type \"acp\": %w", err)
-				}
-				u.Acp = &v
-				return nil
-			}
-			if v, ok := m["type"]; ok && string(v) != "null" {
-				u.Unknown = bytes.Clone(b)
-				return nil
-			}
-		}
-		{
-			var v UnstableMcpServerHttp
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["name"]; !ok {
-				match = false
-			}
-			if _, ok := m["url"]; !ok {
-				match = false
-			}
-			if _, ok := m["headers"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableMcpServer: variant Http: %w", err)
-				}
-				u.Http = &v
-				return nil
-			}
-		}
-		{
-			var v UnstableMcpServerSse
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["name"]; !ok {
-				match = false
-			}
-			if _, ok := m["url"]; !ok {
-				match = false
-			}
-			if _, ok := m["headers"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableMcpServer: variant Sse: %w", err)
-				}
-				u.Sse = &v
-				return nil
-			}
-		}
-		{
-			var v UnstableMcpServerAcpInline
-			match := true
-			if _, ok := m["type"]; !ok {
-				match = false
-			}
-			if _, ok := m["name"]; !ok {
-				match = false
-			}
-			if _, ok := m["serverId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableMcpServer: variant Acp: %w", err)
-				}
-				u.Acp = &v
-				return nil
-			}
-		}
-		{
-			var v McpServerStdio
-			match := true
-			if _, ok := m["name"]; !ok {
-				match = false
-			}
-			if _, ok := m["command"]; !ok {
-				match = false
-			}
-			if _, ok := m["args"]; !ok {
-				match = false
-			}
-			if _, ok := m["env"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableMcpServer: variant Stdio: %w", err)
-				}
-				u.Stdio = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("UnstableMcpServer: %w", err)
+	}
+	var disc string
+	if v, ok := m["type"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("UnstableMcpServer: discriminator \"type\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
-	{
+	switch disc {
+	case "http":
 		var v UnstableMcpServerHttp
-		if json.Unmarshal(b, &v) == nil {
-			u.Http = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("UnstableMcpServer: type \"http\": %w", err)
 		}
-	}
-	{
+		u.Http = &v
+		return nil
+	case "sse":
 		var v UnstableMcpServerSse
-		if json.Unmarshal(b, &v) == nil {
-			u.Sse = &v
-			return nil
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("UnstableMcpServer: type \"sse\": %w", err)
 		}
+		u.Sse = &v
+		return nil
+	case "acp":
+		var v UnstableMcpServerAcpInline
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("UnstableMcpServer: type \"acp\": %w", err)
+		}
+		u.Acp = &v
+		return nil
+	}
+	if v, ok := m["type"]; ok && string(v) != "null" {
+		u.Unknown = bytes.Clone(b)
+		return nil
 	}
 	{
-		var v UnstableMcpServerAcpInline
-		if json.Unmarshal(b, &v) == nil {
-			u.Acp = &v
+		var v McpServerStdio
+		match := true
+		if _, ok := m["name"]; !ok {
+			match = false
+		}
+		if _, ok := m["command"]; !ok {
+			match = false
+		}
+		if _, ok := m["args"]; !ok {
+			match = false
+		}
+		if _, ok := m["env"]; !ok {
+			match = false
+		}
+		if match {
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("UnstableMcpServer: variant Stdio: %w", err)
+			}
+			u.Stdio = &v
 			return nil
 		}
 	}
@@ -11453,7 +10530,7 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 			return nil
 		}
 	}
-	return errors.New("UnstableMcpServer: no variant matches")
+	return errors.New("UnstableMcpServer: missing discriminator \"type\"")
 }
 
 func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
@@ -11647,6 +10724,10 @@ type UnstableMessageMcpResponse struct {
 }
 
 func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = UnstableMessageMcpResponse{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
@@ -12140,185 +11221,155 @@ type UnstableNesSuggestion struct {
 }
 
 func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	*u = UnstableNesSuggestion{}
 	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var disc string
-			if v, ok := m["kind"]; ok {
-				if err := json.Unmarshal(v, &disc); err != nil {
-					return fmt.Errorf("UnstableNesSuggestion: discriminator \"kind\": %w", err)
-				}
-			}
-			switch disc {
-			case "edit":
-				var v UnstableNesSuggestionEdit
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableNesSuggestion: kind \"edit\": %w", err)
-				}
-				u.Edit = &v
-				return nil
-			case "jump":
-				var v UnstableNesSuggestionJump
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableNesSuggestion: kind \"jump\": %w", err)
-				}
-				u.Jump = &v
-				return nil
-			case "rename":
-				var v UnstableNesSuggestionRename
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableNesSuggestion: kind \"rename\": %w", err)
-				}
-				u.Rename = &v
-				return nil
-			case "searchAndReplace":
-				var v UnstableNesSuggestionSearchAndReplace
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableNesSuggestion: kind \"searchAndReplace\": %w", err)
-				}
-				u.SearchAndReplace = &v
-				return nil
-			}
-			if v, ok := m["kind"]; ok && string(v) != "null" {
-				u.Unknown = bytes.Clone(b)
-				return nil
-			}
-		}
-		{
-			var v UnstableNesSuggestionEdit
-			match := true
-			if _, ok := m["kind"]; !ok {
-				match = false
-			}
-			if _, ok := m["id"]; !ok {
-				match = false
-			}
-			if _, ok := m["uri"]; !ok {
-				match = false
-			}
-			if _, ok := m["edits"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableNesSuggestion: variant Edit: %w", err)
-				}
-				u.Edit = &v
-				return nil
-			}
-		}
-		{
-			var v UnstableNesSuggestionJump
-			match := true
-			if _, ok := m["kind"]; !ok {
-				match = false
-			}
-			if _, ok := m["id"]; !ok {
-				match = false
-			}
-			if _, ok := m["uri"]; !ok {
-				match = false
-			}
-			if _, ok := m["position"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableNesSuggestion: variant Jump: %w", err)
-				}
-				u.Jump = &v
-				return nil
-			}
-		}
-		{
-			var v UnstableNesSuggestionRename
-			match := true
-			if _, ok := m["kind"]; !ok {
-				match = false
-			}
-			if _, ok := m["id"]; !ok {
-				match = false
-			}
-			if _, ok := m["uri"]; !ok {
-				match = false
-			}
-			if _, ok := m["position"]; !ok {
-				match = false
-			}
-			if _, ok := m["newName"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableNesSuggestion: variant Rename: %w", err)
-				}
-				u.Rename = &v
-				return nil
-			}
-		}
-		{
-			var v UnstableNesSuggestionSearchAndReplace
-			match := true
-			if _, ok := m["kind"]; !ok {
-				match = false
-			}
-			if _, ok := m["id"]; !ok {
-				match = false
-			}
-			if _, ok := m["uri"]; !ok {
-				match = false
-			}
-			if _, ok := m["search"]; !ok {
-				match = false
-			}
-			if _, ok := m["replace"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("UnstableNesSuggestion: variant SearchAndReplace: %w", err)
-				}
-				u.SearchAndReplace = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
+	if err := json.Unmarshal(b, &m); err != nil {
+		return fmt.Errorf("UnstableNesSuggestion: %w", err)
+	}
+	var disc string
+	if v, ok := m["kind"]; ok {
+		if err := json.Unmarshal(v, &disc); err != nil {
+			return fmt.Errorf("UnstableNesSuggestion: discriminator \"kind\": %w", err)
 		}
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
+	switch disc {
+	case "edit":
+		var v UnstableNesSuggestionEdit
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("UnstableNesSuggestion: kind \"edit\": %w", err)
+		}
+		u.Edit = &v
+		return nil
+	case "jump":
+		var v UnstableNesSuggestionJump
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("UnstableNesSuggestion: kind \"jump\": %w", err)
+		}
+		u.Jump = &v
+		return nil
+	case "rename":
+		var v UnstableNesSuggestionRename
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("UnstableNesSuggestion: kind \"rename\": %w", err)
+		}
+		u.Rename = &v
+		return nil
+	case "searchAndReplace":
+		var v UnstableNesSuggestionSearchAndReplace
+		if err := json.Unmarshal(b, &v); err != nil {
+			return fmt.Errorf("UnstableNesSuggestion: kind \"searchAndReplace\": %w", err)
+		}
+		u.SearchAndReplace = &v
+		return nil
+	}
+	if v, ok := m["kind"]; ok && string(v) != "null" {
+		u.Unknown = bytes.Clone(b)
+		return nil
+	}
+	var fit []string
+	{
+		match := true
+		if _, ok := m["id"]; !ok {
+			match = false
+		}
+		if _, ok := m["uri"]; !ok {
+			match = false
+		}
+		if _, ok := m["edits"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Edit")
+		}
 	}
 	{
-		var v UnstableNesSuggestionEdit
-		if json.Unmarshal(b, &v) == nil {
+		match := true
+		if _, ok := m["id"]; !ok {
+			match = false
+		}
+		if _, ok := m["uri"]; !ok {
+			match = false
+		}
+		if _, ok := m["position"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Jump")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["id"]; !ok {
+			match = false
+		}
+		if _, ok := m["uri"]; !ok {
+			match = false
+		}
+		if _, ok := m["position"]; !ok {
+			match = false
+		}
+		if _, ok := m["newName"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "Rename")
+		}
+	}
+	{
+		match := true
+		if _, ok := m["id"]; !ok {
+			match = false
+		}
+		if _, ok := m["uri"]; !ok {
+			match = false
+		}
+		if _, ok := m["search"]; !ok {
+			match = false
+		}
+		if _, ok := m["replace"]; !ok {
+			match = false
+		}
+		if match {
+			fit = append(fit, "SearchAndReplace")
+		}
+	}
+	if len(fit) == 1 {
+		switch fit[0] {
+		case "Edit":
+			var v UnstableNesSuggestionEdit
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("UnstableNesSuggestion: variant Edit: %w", err)
+			}
 			u.Edit = &v
 			return nil
-		}
-	}
-	{
-		var v UnstableNesSuggestionJump
-		if json.Unmarshal(b, &v) == nil {
+		case "Jump":
+			var v UnstableNesSuggestionJump
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("UnstableNesSuggestion: variant Jump: %w", err)
+			}
 			u.Jump = &v
 			return nil
-		}
-	}
-	{
-		var v UnstableNesSuggestionRename
-		if json.Unmarshal(b, &v) == nil {
+		case "Rename":
+			var v UnstableNesSuggestionRename
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("UnstableNesSuggestion: variant Rename: %w", err)
+			}
 			u.Rename = &v
 			return nil
-		}
-	}
-	{
-		var v UnstableNesSuggestionSearchAndReplace
-		if json.Unmarshal(b, &v) == nil {
+		case "SearchAndReplace":
+			var v UnstableNesSuggestionSearchAndReplace
+			if err := json.Unmarshal(b, &v); err != nil {
+				return fmt.Errorf("UnstableNesSuggestion: variant SearchAndReplace: %w", err)
+			}
 			u.SearchAndReplace = &v
 			return nil
 		}
 	}
-	return errors.New("UnstableNesSuggestion: no variant matches")
+	u.Unknown = bytes.Clone(b)
+	return nil
 }
 
 func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {

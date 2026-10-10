@@ -460,3 +460,107 @@ Gates: `make pre-add-check` with the four changed Go files named: `go-precheck: 
 govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 7 on `main`.
+
+### Step 8, null, reset, and the absent key, 2026-10-10
+
+The owner committed step 7 as `8d8d87a`. Step 8 ran on `main` from that clean tree. The agent did not commit.
+
+Three tests in `union_wire_test.go`:
+
+* `TestUnionDecodeReplaces` decodes two payloads into one union and requires only the second's variant: `ContentBlock` text then image, unknown then
+  text (`Unknown` must be empty), `RequestId` `5` then `"a"`.
+* `TestUnionNull` requires `null` to leave a set `ContentBlock` and a set `EmbeddedResourceResource` unchanged, `"update": null` in a
+  `SessionNotification` to set nothing, and `null` to set `RequestId`'s `Null` alone.
+* `TestAbsentDiscriminator` is a table of 22 payloads without their discriminator: the key-less variant of `IdleStateUpdate` (empty and with the key
+  `null`), `AuthMethod`, `McpServer`, `UnstableMcpServer`, `SetSessionConfigOptionRequest`, and `MultiSelectItems`; an `AuthMethod` payload no
+  variant decodes; every payload of W12 with its outcome; a unique fit with a bad payload (`ContentBlock` `{"text":5}`, `ContentBlock: variant Text`); and
+  `5` into `ContentBlock` (`ContentBlock: json: cannot unmarshal`).
+
+`TestFitKeysOfCommittedSchema` in `cmd/generate/internal/model/classes_test.go` requires each variant of a discriminated union to list its required keys
+other than the discriminator, in schema order, no variant of another union to list any, and 11 named variants to list what the schema gives them.
+
+Run before the change, the model test did not compile (`v.FitKeys undefined (type *Variant has no field or method FitKeys)`), and the root tests
+failed 14 table rows, 3 reset subtests, and 4 null checks:
+
+```text
+TestUnionNull: ContentBlock after null: <nil>, variants [Text]
+TestUnionNull: EmbeddedResourceResource after null: <nil>, variants [TextResourceContents BlobResourceContents]
+TestUnionNull: update null: <nil>, variants [UserMessageChunk]
+TestUnionNull: RequestId after null: <nil>, variants [Null Number]
+known then known: variants set: [Text Image], want [Image]
+unknown then known: Unknown = {"type":"zz_future"}, want empty
+without a discriminator: variants set: [Number Str], want [Str]
+IdleStateUpdate empty: variants set: [EndTurn], want [None]
+IdleStateUpdate null key: variants set: [EndTurn], want [None]
+AuthMethod bad agent: error AuthMethod: no variant matches, want one containing "AuthMethod: missing discriminator \"type\""
+RequestPermissionOutcome option only: variants set: [Cancelled]; want only Unknown = {"optionId":"allow-once"}
+CreateElicitationResponse empty: error <nil>, want one containing "CreateElicitationResponse: missing discriminator \"action\""; variants set: [Accept]
+StateUpdate empty: error <nil>, want one containing "StateUpdate: missing discriminator \"state\""; variants set: [Running]
+SessionUpdate content: variants set: [UserMessageChunk]; want only Unknown = {"content":{"type":"text","text":"hi"}}
+SessionUpdate tool call update: variants set: [UserMessageChunk]; want only Unknown = {"toolCallId":"t","status":"completed"}
+SessionUpdate empty: variants set: [UserMessageChunk], want [SessionInfoUpdate]
+ContentBlock bad text: error <nil>, want one containing "ContentBlock: variant Text"; variants set: [Image]
+ContentBlock audio: variants set: [Text]; want only Unknown = {"data":"AAAA","mimeType":"audio/wav"}
+ContentBlock empty: variants set: [Text]; want only Unknown = {}
+ContentBlock not an object: error ContentBlock: no variant matches, want one containing "ContentBlock: json: cannot unmarshal"
+ToolCallContent diff: variants set: [Content], want [Diff]
+```
+
+The row "`AuthMethod` agent without its keys" (`{"id":"a"}` sets `Agent` by trial decode) was added after the generator change, because no row reached
+the trial decode; its plant below shows it failing.
+
+`cmd/generate/internal/model`: `Variant.FitKeys`, set in `classifyUnion` for every variant of a discriminated union.
+
+`cmd/generate/internal/emit/types.go`:
+
+* `unionStart`, the head of all 28 `UnmarshalJSON`: `null` returns at once, then `*u = <Union>{}`; in a union with a null variant (`RequestId`) the reset
+  comes first and `null` then sets that variant.
+* `discUnmarshalBody`, for the 17 discriminated unions: a payload that is not an object fails as `<Union>: <cause>`; the discriminator switch and the
+  catch-all and `Unknown` branches are those of steps 6 and 7; the required-key match, array match, and trial decode no longer run for these unions.
+* `keyLessBody`, where the union has key-less variants: each by its `FitKeys`, then each by trial decode; a variant without `FitKeys` takes the payload
+  outright, so nothing is emitted after it; otherwise `<Union>: missing discriminator "<key>"`.
+* `fitBody`, otherwise: `fit` collects the field of each variant, the catch-all aside, whose `FitKeys` are all present; exactly one decodes strictly
+  (`<Union>: variant <Field>: <cause>`); else `Unknown`, or the missing-discriminator error in a union with a catch-all.
+* The 11 unions without a discriminator keep their order: required keys, array items, trial decode.
+
+Regenerated: `types_gen.go` gained 1555 lines and lost 2504; no other file changed and `testdata/` is unchanged. Compared by script, declaration by
+declaration: 604 declarations before and after, none added or removed, and exactly the 28 union `UnmarshalJSON` changed. `git diff` shows the
+`UnstableMcpServer` struct as removed and added; its text is unchanged, and the comparison shows it equal.
+
+Each rule was seen to fail, with one planted breakage per fresh scratch copy, regenerated, then the three root tests and the model test:
+
+```text
+null not a no-op: failing=1
+    ContentBlock after null: <nil>, variants []
+no reset: failing=5
+    RequestId after null: <nil>, variants [Null Number]
+null variant before the reset: failing=1
+    RequestId after null: <nil>, variants [Null Number]
+key-less variants not preferred: failing=7
+    variants set: [], want [Agent]
+no trial decode of key-less: failing=2
+    decode: AuthMethod: missing discriminator "type"
+first fit wins: failing=7
+    error <nil>, want one containing "CreateElicitationResponse: missing discriminator \"action\""; variants set: [Accept]
+fit ignores keys: failing=7
+    decode: CreateElicitationRequest: missing discriminator "mode"
+catch-all union accepts no fit: failing=3
+    error <nil>, want one containing "CreateElicitationResponse: missing discriminator \"action\""; variants set: []
+non-object error unnamed: failing=2
+    error json: cannot unmarshal number into Go value of type map[string]jsontext.Value, want one containing "ContentBlock: json: cannot unmarshal"
+FitKeys keep the discriminator: failing=7, model test failing
+    error <nil>, want one containing "ContentBlock: variant Text"; variants set: []
+    AuthMethod.Terminal: FitKeys [type id name], want [id name]
+```
+
+After the change every test in the root and in `cmd/generate` passes; no golden changed; `go build ./example/...` passes;
+`go test -cover ./internal/model`: `coverage: 95.0% of statements`.
+
+Found and not changed: `RequestId` decodes any JSON object as `Null`, because the trial decode into the empty struct `RequestIdNull` accepts it (`{}` and
+`{"x":1}` set `Null` with no error, probed in a scratch copy). HEAD has the same trial decode, so step 8 did not introduce it. It lies outside this
+plan's scope; fixing it needs an amendment of this pair.
+
+Gates: `make pre-add-check` with the five changed Go files named: `go-precheck: 5 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 8 on `main`.

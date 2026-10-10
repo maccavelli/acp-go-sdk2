@@ -375,60 +375,43 @@ func keyMatch(m, key string) ast.Stmt {
 		assign(exprs(id("match")), boolLit(false)))
 }
 
-func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKey string, hasUnknown bool, catchAll *model.Variant) []ast.Stmt {
-	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
-	var body []ast.Stmt
-
-	// Handle literal null with the first null-only variant.
+// unionStart is the head of every union UnmarshalJSON: JSON null leaves the
+// union as it was, unless a variant is null; then the union is reset.
+func unionStart(name string, variants []*model.Variant) []ast.Stmt {
+	isNull := binary(call(id("string"), id("b")), token.EQL, str(schemaTypeNull))
+	var null *model.Variant
 	for _, vi := range variants {
 		if vi.IsNull {
-			body = append(body, ifStmt(nil, binary(call(id("string"), id("b")), token.EQL, str(schemaTypeNull)),
-				append([]ast.Stmt{varStmt("v", id(vi.TypeName))}, setVariant(vi)...)...))
+			null = vi
 			break
 		}
 	}
-
-	var object []ast.Stmt
-	// Prefer discriminator-based dispatch when available (e.g. "type", "outcome").
-	if discKey != "" {
-		var cases []ast.Stmt
-		for _, vi := range variants {
-			if vi.DiscValue != "" {
-				cases = append(cases, caseOf(exprs(str(vi.DiscValue)),
-					append([]ast.Stmt{varStmt("v", id(vi.TypeName))},
-						decodeStrict(f, vi, name+": "+discKey+" "+strconv.Quote(vi.DiscValue))...)...))
-			}
-		}
-		// A discriminator that is present and not a string is an error.
-		disc := []ast.Stmt{
-			varStmt("disc", id("string")),
-			ifStmt(define(exprs(id("v"), id("ok")), index(id("m"), str(discKey))), id("ok"),
-				ifStmt(define(exprs(id("err")), unmarshal(id("v"), addr(id("disc")))), errNotNil(),
-					ret(call(f.qual(pkgFmt, "Errorf"), str(name+": discriminator "+strconv.Quote(discKey)+": %w"), id("err"))))),
-			switchStmt(id("disc"), cases...),
-		}
-		if catchAll != nil {
-			// A present value no case took belongs to the schema's catch-all.
-			disc = append(disc, ifStmt(define(exprs(id("raw"), id("ok")), index(id("m"), str(discKey))),
-				binary(id("ok"), token.LAND, binary(call(id("string"), id("raw")), token.NEQ, str(schemaTypeNull))),
-				append([]ast.Stmt{
-					varStmt("v", id(catchAll.TypeName)),
-					ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v")))), errNotNil(),
-						ret(call(f.qual(pkgFmt, "Errorf"), str(name+": "+discKey+" %q: %w"), id("disc"), id("err")))),
-				}, setVariant(catchAll)...)...,
-			))
-		}
-		if hasUnknown {
-			// A present value no case took is kept as received.
-			disc = append(disc, ifStmt(define(exprs(id("v"), id("ok")), index(id("m"), str(discKey))),
-				binary(id("ok"), token.LAND, binary(call(id("string"), id("v")), token.NEQ, str(schemaTypeNull))),
-				assign(exprs(dot("u", unknownField)), call(f.qual(pkgBytes, "Clone"), id("b"))),
-				ret(nilExpr()),
-			))
-		}
-		object = append(object, block(disc...))
+	var body []ast.Stmt
+	if null == nil {
+		body = append(body, ifStmt(nil, isNull, ret(nilExpr())))
 	}
+	body = append(body, assign(exprs(star(id("u"))), composite(id(name))))
+	if null != nil {
+		body = append(body, ifStmt(nil, isNull, append([]ast.Stmt{varStmt("v", id(null.TypeName))}, setVariant(null)...)...))
+	}
+	return body
+}
+
+// missingDisc is the error for a payload without its discriminator that the
+// union cannot place.
+func missingDisc(f *goFile, name, discKey string) ast.Stmt {
+	return ret(call(f.qual(pkgErrors, "New"), str(name+": missing discriminator "+strconv.Quote(discKey))))
+}
+
+func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKey string, hasUnknown bool, catchAll *model.Variant) []ast.Stmt {
+	body := unionStart(name, variants)
+	if discKey != "" {
+		return append(body, discUnmarshalBody(f, name, variants, discKey, hasUnknown, catchAll)...)
+	}
+	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
+
 	// Required-key match.
+	var object []ast.Stmt
 	for _, vi := range variants {
 		if !vi.IsObject || len(vi.Required) == 0 {
 			continue
@@ -483,6 +466,125 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 		))
 	}
 	return append(body, ret(call(f.qual(pkgErrors, "New"), str(name+": no variant matches"))))
+}
+
+// discUnmarshalBody decodes a discriminated union, whose variants are all
+// objects: by the discriminator's value when it is present, else by the rule
+// for a payload without it.
+func discUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKey string, hasUnknown bool, catchAll *model.Variant) []ast.Stmt {
+	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
+	var cases []ast.Stmt
+	for _, vi := range variants {
+		if vi.DiscValue != "" {
+			cases = append(cases, caseOf(exprs(str(vi.DiscValue)),
+				append([]ast.Stmt{varStmt("v", id(vi.TypeName))},
+					decodeStrict(f, vi, name+": "+discKey+" "+strconv.Quote(vi.DiscValue))...)...))
+		}
+	}
+	body := []ast.Stmt{
+		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
+		ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("m")))), errNotNil(),
+			ret(call(f.qual(pkgFmt, "Errorf"), str(name+": %w"), id("err")))),
+		// A discriminator that is present and not a string is an error.
+		varStmt("disc", id("string")),
+		ifStmt(define(exprs(id("v"), id("ok")), index(id("m"), str(discKey))), id("ok"),
+			ifStmt(define(exprs(id("err")), unmarshal(id("v"), addr(id("disc")))), errNotNil(),
+				ret(call(f.qual(pkgFmt, "Errorf"), str(name+": discriminator "+strconv.Quote(discKey)+": %w"), id("err"))))),
+		switchStmt(id("disc"), cases...),
+	}
+	present := func(v string) ast.Expr {
+		return binary(id("ok"), token.LAND, binary(call(id("string"), id(v)), token.NEQ, str(schemaTypeNull)))
+	}
+	if catchAll != nil {
+		// A present value no case took belongs to the schema's catch-all.
+		body = append(body, ifStmt(define(exprs(id("raw"), id("ok")), index(id("m"), str(discKey))), present("raw"),
+			append([]ast.Stmt{
+				varStmt("v", id(catchAll.TypeName)),
+				ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("v")))), errNotNil(),
+					ret(call(f.qual(pkgFmt, "Errorf"), str(name+": "+discKey+" %q: %w"), id("disc"), id("err")))),
+			}, setVariant(catchAll)...)...,
+		))
+	}
+	if hasUnknown {
+		// A present value no case took is kept as received.
+		body = append(body, ifStmt(define(exprs(id("v"), id("ok")), index(id("m"), str(discKey))), present("v"),
+			assign(exprs(dot("u", unknownField)), call(f.qual(pkgBytes, "Clone"), id("b"))),
+			ret(nilExpr()),
+		))
+	}
+
+	// The discriminator is absent or null.
+	var keyLess []*model.Variant
+	for _, vi := range variants {
+		if vi.KeyLess {
+			keyLess = append(keyLess, vi)
+		}
+	}
+	if len(keyLess) > 0 {
+		return append(body, keyLessBody(f, name, keyLess, discKey)...)
+	}
+	return append(body, fitBody(f, name, variants, discKey, hasUnknown, catchAll)...)
+}
+
+// keyLessBody decodes the variants the schema means when the discriminator is
+// absent: each by its required keys, then each by a trial decode, in schema
+// order. A variant without required keys takes every payload that reaches it.
+func keyLessBody(f *goFile, name string, keyLess []*model.Variant, discKey string) []ast.Stmt {
+	var body []ast.Stmt
+	for _, vi := range keyLess {
+		if len(vi.FitKeys) == 0 {
+			return append(append(body, varStmt("v", id(vi.TypeName))), decodeStrict(f, vi, variantPlace(name, vi))...)
+		}
+		stmts := []ast.Stmt{
+			varStmt("v", id(vi.TypeName)),
+			define(exprs(id("match")), boolLit(true)),
+		}
+		for _, k := range vi.FitKeys {
+			stmts = append(stmts, keyMatch("m", k))
+		}
+		body = append(body, block(append(stmts, ifStmt(nil, id("match"), decodeStrict(f, vi, variantPlace(name, vi))...))...))
+	}
+	for _, vi := range keyLess {
+		body = append(body, block(
+			varStmt("v", id(vi.TypeName)),
+			ifStmt(nil, binary(call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v"))), token.EQL, nilExpr()), setVariant(vi)...),
+		))
+	}
+	return append(body, missingDisc(f, name, discKey))
+}
+
+// fitBody decodes the one variant, the catch-all aside, whose required keys
+// other than the discriminator are all in the payload. When none or several
+// fit, the payload is kept in Unknown, or refused in a union with a catch-all.
+func fitBody(f *goFile, name string, variants []*model.Variant, discKey string, hasUnknown bool, catchAll *model.Variant) []ast.Stmt {
+	body := []ast.Stmt{varStmt("fit", sliceOf(id("string")))}
+	var cases []ast.Stmt
+	for _, vi := range variants {
+		if vi == catchAll {
+			continue
+		}
+		add := assign(exprs(id("fit")), call(id("append"), id("fit"), str(vi.FieldName)))
+		if len(vi.FitKeys) == 0 {
+			body = append(body, add)
+		} else {
+			stmts := []ast.Stmt{define(exprs(id("match")), boolLit(true))}
+			for _, k := range vi.FitKeys {
+				stmts = append(stmts, keyMatch("m", k))
+			}
+			body = append(body, block(append(stmts, ifStmt(nil, id("match"), add))...))
+		}
+		cases = append(cases, caseOf(exprs(str(vi.FieldName)),
+			append([]ast.Stmt{varStmt("v", id(vi.TypeName))}, decodeStrict(f, vi, variantPlace(name, vi))...)...))
+	}
+	body = append(body, ifStmt(nil, binary(call(id("len"), id("fit")), token.EQL, intLit(1)),
+		switchStmt(index(id("fit"), intLit(0)), cases...)))
+	if hasUnknown {
+		return append(body,
+			assign(exprs(dot("u", unknownField)), call(f.qual(pkgBytes, "Clone"), id("b"))),
+			ret(nilExpr()),
+		)
+	}
+	return append(body, missingDisc(f, name, discKey))
 }
 
 func unionMarshalBody(f *goFile, name string, variants []*model.Variant, hasUnknown bool) []ast.Stmt {

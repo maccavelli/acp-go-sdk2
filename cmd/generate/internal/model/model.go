@@ -158,6 +158,10 @@ type Variant struct {
 	// discriminator value and is not the catch-all: the schema means it when
 	// the discriminator is absent.
 	KeyLess bool
+	// FitKeys lists, in schema order, a variant's required keys other than
+	// its union's discriminator: a payload without the discriminator fits
+	// the variant when it carries them all. Nil outside a discriminated union.
+	FitKeys []string
 }
 
 // DiscSource is where a union's discriminator came from.
@@ -693,8 +697,9 @@ func primaryType(d *load.Definition) string {
 	}
 }
 
-// classifyUnion finds a discriminated union's catch-all and key-less variants
-// and decides whether it keeps payloads it cannot place in Unknown. Every
+// classifyUnion finds a discriminated union's catch-all and key-less variants,
+// lists each variant's keys for decoding without the discriminator, and
+// decides whether the union keeps payloads it cannot place in Unknown. Every
 // variant of a discriminated union must be an object.
 func classifyUnion(schema *load.Schema, t *Type, list []*load.Definition) error {
 	if t.DiscKey == "" {
@@ -708,6 +713,11 @@ func classifyUnion(schema *load.Schema, t *Type, list []*load.Definition) error 
 		owner := fmt.Sprintf("%s variant %d", t.Name, idx+1)
 		if !variantIsObject(schema, v, vi) {
 			return fmt.Errorf("%s: a variant of a union discriminated by %q must be an object", owner, t.DiscKey)
+		}
+		for _, k := range vi.Required {
+			if k != t.DiscKey {
+				vi.FitKeys = append(vi.FitKeys, k)
+			}
 		}
 		if vi.DiscValue != "" {
 			continue

@@ -102,6 +102,57 @@ func TestUnionClassesOfCommittedSchema(t *testing.T) {
 	}
 }
 
+// TestFitKeysOfCommittedSchema requires each variant of a discriminated union
+// to list its required keys other than the discriminator, in schema order,
+// and no variant of another union to list any.
+func TestFitKeysOfCommittedSchema(t *testing.T) {
+	t.Parallel()
+	m := committedModel(t)
+	want := map[string][]string{
+		"ContentBlock.Text":                     {"text"},
+		"ContentBlock.Image":                    {"data", "mimeType"},
+		"SessionUpdate.SessionInfoUpdate":       nil,
+		"SessionUpdate.ToolCallUpdate":          {"toolCallId"},
+		"RequestPermissionOutcome.Cancelled":    nil,
+		"RequestPermissionOutcome.Selected":     {"optionId"},
+		"AuthMethod.Agent":                      {"id", "name"},
+		"IdleStateUpdate.None":                  nil,
+		"IdleStateUpdate.Other":                 nil,
+		"CreateElicitationRequest.Url":          {"elicitationId", "url"},
+		"SetSessionConfigOptionRequest.ValueId": {"value"},
+	}
+	seen := 0
+	for _, ty := range m.Types {
+		if ty.Kind != KindUnion {
+			continue
+		}
+		for _, v := range ty.Variants {
+			if v.Skip {
+				continue
+			}
+			if ty.DiscKey == "" {
+				if v.FitKeys != nil {
+					t.Errorf("%s.%s: FitKeys %v in a union without a discriminator", ty.Name, v.FieldName, v.FitKeys)
+				}
+				continue
+			}
+			rest := slices.DeleteFunc(slices.Clone(v.Required), func(k string) bool { return k == ty.DiscKey })
+			if !slices.Equal(v.FitKeys, rest) {
+				t.Errorf("%s.%s: FitKeys %v, want %v", ty.Name, v.FieldName, v.FitKeys, rest)
+			}
+			if w, ok := want[ty.Name+"."+v.FieldName]; ok {
+				seen++
+				if !slices.Equal(v.FitKeys, w) {
+					t.Errorf("%s.%s: FitKeys %v, want %v", ty.Name, v.FieldName, v.FitKeys, w)
+				}
+			}
+		}
+	}
+	if seen != len(want) {
+		t.Errorf("found %d of the %d listed variants", seen, len(want))
+	}
+}
+
 // TestCatchAllNeedsNot requires the schema's not before a value-less variant
 // counts as the catch-all.
 func TestCatchAllNeedsNot(t *testing.T) {

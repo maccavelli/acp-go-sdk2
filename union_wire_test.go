@@ -224,6 +224,130 @@ func TestUnknownValueToCatchAll(t *testing.T) {
 	}
 }
 
+// TestUnionDecodeReplaces requires a union decoded twice to hold only what
+// the second payload carries.
+func TestUnionDecodeReplaces(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		first, second string
+		into          any
+		want          []string
+	}{
+		{"known then known", `{"type":"text","text":"hi"}`, `{"type":"image","data":"AAAA","mimeType":"image/png"}`, &ContentBlock{}, []string{"Image"}},
+		{"unknown then known", `{"type":"zz_future"}`, `{"type":"text","text":"hi"}`, &ContentBlock{}, []string{"Text"}},
+		{"without a discriminator", `5`, `"a"`, &RequestId{}, []string{"Str"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			for _, in := range []string{tt.first, tt.second} {
+				if err := json.Unmarshal([]byte(in), tt.into); err != nil {
+					t.Fatalf("decode %s: %v", in, err)
+				}
+			}
+			if got := setVariants(tt.into); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("variants set: %v, want %v", got, tt.want)
+			}
+			if u := reflect.ValueOf(tt.into).Elem().FieldByName("Unknown"); u.IsValid() && u.Len() != 0 {
+				t.Errorf("Unknown = %s, want empty", u.Bytes())
+			}
+		})
+	}
+}
+
+// TestUnionNull requires JSON null to leave a union as it was, except for a
+// union with a null variant, which it sets alone.
+func TestUnionNull(t *testing.T) {
+	t.Parallel()
+	block := ContentBlock{Text: &ContentBlockText{Text: "hi"}}
+	if err := json.Unmarshal([]byte(`null`), &block); err != nil || block.Text == nil || block.Text.Text != "hi" || len(setVariants(&block)) != 1 {
+		t.Errorf("ContentBlock after null: %v, variants %v", err, setVariants(&block))
+	}
+	res := EmbeddedResourceResource{BlobResourceContents: &BlobResourceContents{Blob: "AAAA", Uri: "u"}}
+	if err := json.Unmarshal([]byte(`null`), &res); err != nil || !reflect.DeepEqual(setVariants(&res), []string{"BlobResourceContents"}) {
+		t.Errorf("EmbeddedResourceResource after null: %v, variants %v", err, setVariants(&res))
+	}
+	var n SessionNotification
+	if err := json.Unmarshal([]byte(`{"sessionId":"s","update":null}`), &n); err != nil || len(setVariants(&n.Update)) != 0 || n.Update.Unknown != nil {
+		t.Errorf("update null: %v, variants %v", err, setVariants(&n.Update))
+	}
+	num := RequestIdNumber(1)
+	id := RequestId{Number: &num}
+	if err := json.Unmarshal([]byte(`null`), &id); err != nil || !reflect.DeepEqual(setVariants(&id), []string{"Null"}) {
+		t.Errorf("RequestId after null: %v, variants %v", err, setVariants(&id))
+	}
+}
+
+// TestAbsentDiscriminator requires a payload without its discriminator to
+// decode the key-less variant where the union has one, else the one variant
+// whose required keys it carries, else to be kept in Unknown or, in a union
+// with a catch-all, refused.
+func TestAbsentDiscriminator(t *testing.T) {
+	t.Parallel()
+	const unknown = "<Unknown>"
+	tests := []struct {
+		name   string
+		into   func() any
+		in     string
+		want   string // a variant field, unknown, or an error text
+		errors bool
+	}{
+		{"IdleStateUpdate empty", func() any { return &IdleStateUpdate{} }, `{}`, "None", false},
+		{"IdleStateUpdate null key", func() any { return &IdleStateUpdate{} }, `{"stopReason":null}`, "None", false},
+		{"AuthMethod agent", func() any { return &AuthMethod{} }, `{"id":"a","name":"n"}`, "Agent", false},
+		{"AuthMethod agent without its keys", func() any { return &AuthMethod{} }, `{"id":"a"}`, "Agent", false},
+		{"AuthMethod bad agent", func() any { return &AuthMethod{} }, `{"id":5}`, `AuthMethod: missing discriminator "type"`, true},
+		{"McpServer stdio", func() any { return &McpServer{} }, `{"name":"n","command":"c","args":[],"env":[]}`, "Stdio", false},
+		{"UnstableMcpServer stdio", func() any { return &UnstableMcpServer{} }, `{"name":"n","command":"c","args":[],"env":[]}`, "Stdio", false},
+		{"SetSessionConfigOptionRequest value id", func() any { return &SetSessionConfigOptionRequest{} },
+			`{"sessionId":"s","configId":"c","value":"v"}`, "ValueId", false},
+		{"MultiSelectItems titled", func() any { return &MultiSelectItems{} }, `{"anyOf":[]}`, "Titled", false},
+		{"RequestPermissionOutcome option only", func() any { return &RequestPermissionOutcome{} }, `{"optionId":"allow-once"}`, unknown, false},
+		{"RequestPermissionOutcome empty", func() any { return &RequestPermissionOutcome{} }, `{}`, "Cancelled", false},
+		{"CreateElicitationResponse empty", func() any { return &CreateElicitationResponse{} }, `{}`,
+			`CreateElicitationResponse: missing discriminator "action"`, true},
+		{"CreateElicitationRequest form", func() any { return &CreateElicitationRequest{} }, `{"requestedSchema":{},"message":"m"}`, "Form", false},
+		{"StateUpdate empty", func() any { return &StateUpdate{} }, `{}`, `StateUpdate: missing discriminator "state"`, true},
+		{"SessionUpdate content", func() any { return &SessionUpdate{} }, `{"content":{"type":"text","text":"hi"}}`, unknown, false},
+		{"SessionUpdate tool call update", func() any { return &SessionUpdate{} }, `{"toolCallId":"t","status":"completed"}`, unknown, false},
+		{"SessionUpdate empty", func() any { return &SessionUpdate{} }, `{}`, "SessionInfoUpdate", false},
+		{"ContentBlock text", func() any { return &ContentBlock{} }, `{"text":"hi"}`, "Text", false},
+		{"ContentBlock bad text", func() any { return &ContentBlock{} }, `{"text":5}`, "ContentBlock: variant Text", true},
+		{"ContentBlock audio", func() any { return &ContentBlock{} }, `{"data":"AAAA","mimeType":"audio/wav"}`, unknown, false},
+		{"ContentBlock empty", func() any { return &ContentBlock{} }, `{}`, unknown, false},
+		{"ContentBlock not an object", func() any { return &ContentBlock{} }, `5`, "ContentBlock: json: cannot unmarshal", true},
+		{"ToolCallContent diff", func() any { return &ToolCallContent{} }, `{"path":"p","newText":"n"}`, "Diff", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			u := tt.into()
+			err := json.Unmarshal([]byte(tt.in), u)
+			if tt.errors {
+				if err == nil || !strings.Contains(err.Error(), tt.want) {
+					t.Fatalf("error %v, want one containing %q; variants set: %v", err, tt.want, setVariants(u))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			got := setVariants(u)
+			kept := reflect.ValueOf(u).Elem().FieldByName("Unknown")
+			if tt.want == unknown {
+				if len(got) != 0 || !kept.IsValid() || string(kept.Bytes()) != tt.in {
+					t.Errorf("variants set: %v; want only Unknown = %s", got, tt.in)
+				}
+				return
+			}
+			if !reflect.DeepEqual(got, []string{tt.want}) || (kept.IsValid() && kept.Len() != 0) {
+				t.Errorf("variants set: %v, want [%s]", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestContentBlockKeepsMetaAndAnnotations requires a content block to encode
 // its _meta and annotations, whether built in Go or decoded from the wire.
 func TestContentBlockKeepsMetaAndAnnotations(t *testing.T) {
