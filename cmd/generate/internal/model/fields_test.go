@@ -95,7 +95,7 @@ func TestObjectFields(t *testing.T) {
 		doc                 string
 	}{
 		{"count", "Count", "*uint64", "count,omitempty", false, ""},
-		{"env", "Env", "map[string]any", "env,omitempty", false, ""},
+		{"env", "Env", "map[string]string", "env,omitempty", false, ""},
 		{"inner", "Inner", "ObjInner", "inner", false, "Inner."},
 		{"list", "List", "[]string", "list", true, ""},
 		{"mode", "Mode", "string", "mode,omitempty", false, `Defaults to "auto" if unset.`},

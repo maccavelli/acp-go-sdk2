@@ -301,3 +301,32 @@ Gates: `make pre-add-check` with the twelve changed Go files named: `go-precheck
 govulncheck).` Without names: `go-precheck: 69 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 3 on `main`.
+
+### Step 4, typed maps, 2026-10-10
+
+The owner committed step 3 as `b1ee848`. Step 4 ran on `main` from that clean tree. The agent did not commit.
+
+`TestTypedAdditionalProperties` (root `fidelity_test.go`) requires the six fields of S2 to have their map types, by reflection
+(`AuthMethodTerminalInline.Env` and `AuthMethodTerminal.Env` `map[string]string`, `CreateElicitationAccept.Content` and
+`ElicitationAcceptAction.Content` `map[string]ElicitationContentValue`, `ElicitationSchema.Properties` `map[string]ElicitationPropertySchema`,
+`UnstableSetProviderRequest.Headers` `map[string]string`), an `AuthMethodTerminal` with `"env":{"A":"1"}` to decode, and one with `"env":{"A":1}` to
+fail. Run before the change it failed seven times: each field was `map[string]interface {}`, and the number decoded.
+
+The change: `typeRef`'s object case (`model/fields.go`) types the map's values with `typeRef(additionalProperties)`; `additionalProperties: true`, or
+none, stays `any`.
+
+`TestObjectFields`' fixture `env` declares `"additionalProperties":{"type":"string"}`; its expected type is now `map[string]string`, as decided.
+
+Regenerated: `types_gen.go` changed in exactly six lines, the six field declarations above, and nothing else; the default fill of
+`ElicitationSchema.properties` (`{}`) did not change. No golden changed; no hand-written file needed a change.
+
+The rule was broken in a fresh scratch copy (the values left `any`): `cmd/generate` failed `TestObjectFields` and the root failed
+`TestTypedAdditionalProperties`.
+
+After the change every test in the root (`go test -race`) and in `cmd/generate` passes; `go build ./example/...` passes. Coverage: `internal/model`
+94.1%, `internal/emit` 54.2%.
+
+Gates: `make pre-add-check` with the four changed Go files named: `go-precheck: 4 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 70 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 4 on `main`.

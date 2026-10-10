@@ -383,7 +383,7 @@ type AuthMethodTerminalInline struct {
 	Description *string `json:"description,omitempty"`
 	// Additional environment variables to set on the configured agent invocation for terminal auth.
 	// These values override same-named variables in the base launch configuration.
-	Env map[string]any `json:"env,omitempty"`
+	Env map[string]string `json:"env,omitempty"`
 	// Unique identifier for this authentication method.
 	Id AuthMethodId `json:"id"`
 	// Human-readable name of the authentication method.
@@ -538,7 +538,7 @@ type AuthMethodTerminal struct {
 	Description *string `json:"description,omitempty"`
 	// Additional environment variables to set on the configured agent invocation for terminal auth.
 	// These values override same-named variables in the base launch configuration.
-	Env map[string]any `json:"env,omitempty"`
+	Env map[string]string `json:"env,omitempty"`
 	// Unique identifier for this authentication method.
 	Id AuthMethodId `json:"id"`
 	// Human-readable name of the authentication method.
@@ -1933,7 +1933,7 @@ type CreateElicitationAccept struct {
 	Meta   map[string]any `json:"_meta,omitempty"`
 	Action string         `json:"action"`
 	// The user-provided content, if any, as an object matching the requested schema.
-	Content map[string]any `json:"content,omitempty"`
+	Content map[string]ElicitationContentValue `json:"content,omitempty"`
 }
 
 // The user declined the elicitation.
@@ -2308,7 +2308,7 @@ type Diff struct {
 // The user accepted the elicitation and provided content.
 type ElicitationAcceptAction struct {
 	// The user-provided content, if any, as an object matching the requested schema.
-	Content map[string]any `json:"content,omitempty"`
+	Content map[string]ElicitationContentValue `json:"content,omitempty"`
 }
 
 // Elicitation capabilities supported by the client.
@@ -3060,7 +3060,7 @@ type ElicitationSchema struct {
 	// Property definitions (must be primitive types).
 	//
 	// Defaults to {} if unset.
-	Properties map[string]any `json:"properties"`
+	Properties map[string]ElicitationPropertySchema `json:"properties"`
 	// List of required property names.
 	//
 	// Optional. Omitted and 'null' are equivalent and mean no property names are required.
@@ -11651,7 +11651,7 @@ type UnstableSetProviderRequest struct {
 	BaseUrl string `json:"baseUrl"`
 	// Full headers map for this provider.
 	// May include authorization, routing, or other integration-specific headers.
-	Headers map[string]any `json:"headers,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 	// Provider ID to configure.
 	ProviderId UnstableProviderId `json:"providerId"`
 }

@@ -218,7 +218,12 @@ func typeRef(d *load.Definition) TypeRef {
 	case schemaTypeArray:
 		return wrap(RefSlice, typeRef(d.Items))
 	case schemaTypeObject:
-		return wrap(RefMap, named("any"))
+		// additionalProperties with a schema types the values; true, or none, is any.
+		values := named("any")
+		if d.AdditionalProperties != nil {
+			values = typeRef(d.AdditionalProperties)
+		}
+		return wrap(RefMap, values)
 	default:
 		return named("any")
 	}

@@ -2,6 +2,7 @@ package acp
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -34,5 +35,35 @@ func TestIntegerFormatsBoundDecoding(t *testing.T) {
 	var r ResourceLink
 	if err := json.Unmarshal([]byte(`{"name":"n","uri":"u","size":9007199254740993}`), &r); err != nil || r.Size == nil || *r.Size != 9007199254740993 {
 		t.Errorf("size 2^53+1: %v %v", err, r.Size)
+	}
+}
+
+// TestTypedAdditionalProperties requires an object whose additionalProperties
+// names a schema to be a map of that type.
+func TestTypedAdditionalProperties(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name  string
+		field any
+		want  string
+	}{
+		{"AuthMethodTerminalInline.Env", AuthMethodTerminalInline{}.Env, "map[string]string"},
+		{"AuthMethodTerminal.Env", AuthMethodTerminal{}.Env, "map[string]string"},
+		{"CreateElicitationAccept.Content", CreateElicitationAccept{}.Content, "map[string]acp.ElicitationContentValue"},
+		{"ElicitationAcceptAction.Content", ElicitationAcceptAction{}.Content, "map[string]acp.ElicitationContentValue"},
+		{"ElicitationSchema.Properties", ElicitationSchema{}.Properties, "map[string]acp.ElicitationPropertySchema"},
+		{"UnstableSetProviderRequest.Headers", UnstableSetProviderRequest{}.Headers, "map[string]string"},
+	} {
+		if got := reflect.TypeOf(tt.field).String(); got != tt.want {
+			t.Errorf("%s is %s, want %s", tt.name, got, tt.want)
+		}
+	}
+	var ok AuthMethodTerminal
+	if err := json.Unmarshal([]byte(`{"id":"i","name":"n","env":{"A":"1"}}`), &ok); err != nil {
+		t.Fatal(err)
+	}
+	var bad AuthMethodTerminal
+	if err := json.Unmarshal([]byte(`{"id":"i","name":"n","env":{"A":1}}`), &bad); err == nil {
+		t.Error("a number in env decoded")
 	}
 }
