@@ -29,14 +29,15 @@ func TestTypeRefs(t *testing.T) {
 		{`{"type":"boolean"}`, "bool", "bool"},
 		{`{"type":["integer","null"]}`, "int64", "*int64"},
 		{`{"$ref":"#/$defs/Foo"}`, "Foo", "Foo"},
-		{`{"anyOf":[{"$ref":"#/$defs/Foo"},{"type":"null"}]}`, "any", "*Foo"},
-		{`{"anyOf":[{"const":"x"},{"type":"null"}]}`, "any", "*string"},
+		{`{"anyOf":[{"$ref":"#/$defs/Foo"},{"type":"null"}]}`, "json.RawMessage", "*Foo"},
+		{`{"anyOf":[{"const":"x"},{"type":"null"}]}`, "json.RawMessage", "*string"},
 		{`{"allOf":[{"$ref":"#/$defs/Foo"}]}`, "Foo", "Foo"},
 		{`{"type":"array","items":{"$ref":"#/$defs/Foo"}}`, "[]Foo", "[]Foo"},
 		{`{"type":"array","items":{"type":"array","items":{"type":"string"}}}`, "[][]string", "[][]string"},
 		{`{"type":"object"}`, "map[string]any", "map[string]any"},
+		{`{"type":"object","additionalProperties":true}`, "map[string]any", "map[string]any"},
 		{`{"type":"string","enum":["a"]}`, "string", "string"},
-		{`{}`, "any", "any"},
+		{`{}`, "json.RawMessage", "json.RawMessage"},
 	}
 	for _, tt := range tests {
 		d := defOf(t, tt.def)

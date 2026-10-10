@@ -194,7 +194,7 @@ func TestJSONGolden_SessionUpdates(t *testing.T) {
 	))
 	t.Run("session_update_tool_call_edit", runGolden(
 		func() SessionUpdate {
-			return StartEditToolCall("call_003", "Apply edit", "/home/user/project/src/config.json", "print('hello')")
+			return StartEditToolCall("call_003", "Apply edit", "/home/user/project/src/config.json", json.RawMessage(`"print('hello')"`))
 		},
 	))
 	t.Run("session_update_tool_call_locations_rawinput", runGolden(
@@ -218,8 +218,8 @@ func TestJSONGolden_SessionUpdates(t *testing.T) {
 				WithUpdateKind(ToolKindEdit),
 				WithUpdateStatus(ToolCallStatusCompleted),
 				WithUpdateLocations([]ToolCallLocation{{Path: "/home/user/project/src/config.json"}}),
-				WithUpdateRawInput(map[string]any{"path": "/home/user/project/src/config.json"}),
-				WithUpdateRawOutput(map[string]any{"result": "ok"}),
+				WithUpdateRawInput(json.RawMessage(`{"path":"/home/user/project/src/config.json"}`)),
+				WithUpdateRawOutput(json.RawMessage(`{"result":"ok"}`)),
 				WithUpdateContent([]ToolCallContent{ToolContent(TextBlock("Edit completed."))}),
 			)
 		},

@@ -67,3 +67,69 @@ func TestTypedAdditionalProperties(t *testing.T) {
 		t.Error("a number in env decoded")
 	}
 }
+
+// TestRawJSONKeepsDigits requires a value the schema gives no Go type to be
+// carried byte for byte, so an integer above 2^53 keeps every digit.
+func TestRawJSONKeepsDigits(t *testing.T) {
+	t.Parallel()
+	const digits = "9007199254740993"
+	for _, tt := range []struct {
+		name, in string
+		into     any
+	}{
+		{"SessionUpdate rawInput", `{"sessionUpdate":"tool_call","toolCallId":"t","title":"x","rawInput":{"n":` + digits + `}}`, &SessionUpdate{}},
+		{"Error data", `{"code":-32000,"message":"m","data":{"n":` + digits + `}}`, &Error{}},
+		{"AgentRequest params", `{"id":1,"method":"x","params":{"n":` + digits + `}}`, &AgentRequest{}},
+	} {
+		if err := json.Unmarshal([]byte(tt.in), tt.into); err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		b, err := json.Marshal(reflect.ValueOf(tt.into).Elem().Interface())
+		if err != nil || !strings.Contains(string(b), `{"n":`+digits+`}`) {
+			t.Errorf("%s: encoded %s, %v", tt.name, b, err)
+		}
+	}
+}
+
+// TestStartLocationsMergesRawInput requires WithStartLocations to add path to
+// a raw object input without touching its other keys, and to leave a raw input
+// that is not an object alone.
+func TestStartLocationsMergesRawInput(t *testing.T) {
+	t.Parallel()
+	loc := WithStartLocations([]ToolCallLocation{{Path: "/p"}})
+	for _, tt := range []struct {
+		name string
+		opts []ToolCallStartOpt
+		want string
+	}{
+		{"no input", []ToolCallStartOpt{loc}, `{"path":"/p"}`},
+		{"object input", []ToolCallStartOpt{WithStartRawInput(json.RawMessage(`{"n":9007199254740993}`)), loc}, `{"n":9007199254740993,"path":"/p"}`},
+		{"object with a path", []ToolCallStartOpt{WithStartRawInput(json.RawMessage(`{"path":"/q"}`)), loc}, `{"path":"/q"}`},
+		{"array input", []ToolCallStartOpt{WithStartRawInput(json.RawMessage(`[1]`)), loc}, `[1]`},
+	} {
+		u := StartToolCall("t", "x", tt.opts...)
+		b, err := json.Marshal(u.ToolCall.RawInput)
+		if err != nil || string(b) != tt.want {
+			t.Errorf("%s: rawInput %s, %v; want %s", tt.name, b, err, tt.want)
+		}
+	}
+}
+
+// TestStartEditToolCallRawInput requires the edit tool call's raw input to be
+// {"content": content, "path": path} byte for byte, content as given.
+func TestStartEditToolCallRawInput(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		content json.RawMessage
+		want    string
+	}{
+		{json.RawMessage(`"x = 1"`), `{"content":"x = 1","path":"/a.py"}`},
+		{json.RawMessage(`{"n":9007199254740993}`), `{"content":{"n":9007199254740993},"path":"/a.py"}`},
+		{nil, `{"content":null,"path":"/a.py"}`},
+	} {
+		u := StartEditToolCall("t", "edit", "/a.py", tt.content)
+		if got := string(u.ToolCall.RawInput); got != tt.want {
+			t.Errorf("rawInput %s, want %s", got, tt.want)
+		}
+	}
+}

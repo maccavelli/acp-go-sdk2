@@ -21,7 +21,7 @@ func emitHelperConstructors(f *goFile, t *model.Type) {
 		var params []*ast.Field
 		assigns := map[string]ast.Expr{}
 		for _, p := range h.Params {
-			params = append(params, param(p.Key, typeAST(p.Type)))
+			params = append(params, param(p.Key, typeAST(f, p.Type)))
 			assigns[p.Field] = id(p.Key)
 		}
 		if t.DiscKey != "" && vi.DiscValue != "" {

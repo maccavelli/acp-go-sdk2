@@ -130,7 +130,7 @@ A `format` the registry does not know on an `integer` or `number` is refused, na
    `double` → `float64`. This applies to properties, named primitive types, and union variants alike.
 2. **Typed `additionalProperties`** (0011's decision, kept): `map[string]T`. `additionalProperties: true` stays `map[string]any`.
 3. **Arbitrary JSON** (decided 2026-10-10): a property or variant whose schema constrains no type becomes `json.RawMessage`, so it is carried byte for
-   byte. The hand-written options `WithStartRawInput`, `WithStartRawOutput`, `WithUpdateRawInput`, and `WithUpdateRawOutput` take `json.RawMessage`,
+   byte. (Amended 2026-10-10, see the amendment below: the rule is any property or variant the model gives no Go type.) The hand-written options `WithStartRawInput`, `WithStartRawOutput`, `WithUpdateRawInput`, and `WithUpdateRawOutput` take `json.RawMessage`,
    and `WithStartLocations` merges `path` into a raw input object through `map[string]json.RawMessage`. `_meta` stays `map[string]any`
    (`additionalProperties: true`), and so do the two `params` objects of `mcp/message`.
 4. **Required keys** (decided 2026-10-10): a generated `UnmarshalJSON` fails when a required key is absent, naming the type and the property; dispatch
@@ -159,7 +159,8 @@ A `format` the registry does not know on an `integer` or `number` is refused, na
 * Good, because integers carry their declared range and width on every platform, and arbitrary JSON keeps every digit (S1, S3).
 * Good, because `Validate` stops rejecting schema-valid messages and starts finding an invalid value inside a union or a slice (S5, S6).
 * Neutral, because a valid message encodes and decodes as today: no golden changes.
-* Bad, because the exported API changes: 58 integer declarations, 6 map fields, 18 `any` fields, 4 option signatures; code that reads `*params.Line`
+* Bad, because the exported API changes: 58 integer declarations, 6 map fields, 18 `any` fields, 4 option signatures and `StartEditToolCall`
+  (amended 2026-10-10); code that reads `*params.Line`
   as an `int`, or sets `RawInput` to a map, stops compiling. The release notes list each.
 * Bad, because messages the SDK accepts today now fail: one that omits a required key, or sends `null` for an object with required keys, gets
   `-32602`. A present empty string, which `Validate` rejects today, passes.
@@ -201,6 +202,28 @@ A `format` the registry does not know on an `integer` or `number` is refused, na
 * Good, because nothing breaks.
 * Bad, because S1 to S8 stay: wrong integer widths, untyped maps, lost digits, rejected tolerant payloads, and a `Validate` that is both too strict and
   too shallow.
+
+## Amendment 2026-10-10, the rule for raw JSON
+
+Found in step 5 of the plan: treatment 3's rule, a node that constrains no type ("no `type`, `$ref`, `enum`, `const`, or composition"), covers 12 of
+S3's 18 fields. The other six, the `params` and `result` of `AgentRequest`, `AgentResponse`, `AgentNotification`, `ClientRequest`,
+`ClientResponse`, and `ClientNotification`, are inline `anyOf` compositions of every request or response type, which the model does not name, so it
+gives them `any`; the decision named all 18.
+
+Decision: the owner chose the rule "whatever has no Go type": a property or variant the model would give `any`, because its schema constrains no
+type, is only `null`, or is an inline composition the model does not name, becomes `json.RawMessage`. All 18 fields of S3 change. A map value the
+model gives no Go type (`additionalProperties: true`) stays `any`, so `_meta` is unchanged. Not chosen: keeping the narrow rule and 12 fields, or
+naming the six envelope unions, which are `x-docs-ignore` routing types the SDK does not use.
+
+## Amendment 2026-10-10, StartEditToolCall's content
+
+Found in step 5: besides the four options of treatment 3, the hand-written `StartReadToolCall` and `StartEditToolCall` build a raw input from a map.
+`StartReadToolCall`'s input is its `path` string, which always encodes. `StartEditToolCall(id, title, path string, content any, opts...)` would have
+to encode `content` itself, with no error to return; today a value that cannot encode fails when the update is sent.
+
+Decision: the owner chose to change `content` to `json.RawMessage`, so the caller encodes it, as for the four options. The exported API changes in a
+fifth helper signature, listed in the release notes. Not chosen: keeping `content any` and leaving it out of the raw input when it cannot encode, or
+storing an invalid value so the send fails as today.
 
 ## More Information
 

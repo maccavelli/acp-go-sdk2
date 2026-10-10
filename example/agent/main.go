@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -251,7 +252,7 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 			acp.WithStartKind(acp.ToolKindRead),
 			acp.WithStartStatus(acp.ToolCallStatusPending),
 			acp.WithStartLocations([]acp.ToolCallLocation{{Path: "/project/README.md"}}),
-			acp.WithStartRawInput(map[string]any{"path": "/project/README.md"}),
+			acp.WithStartRawInput(json.RawMessage(`{"path":"/project/README.md"}`)),
 		),
 	}); err != nil {
 		return err
@@ -267,7 +268,7 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 			acp.ToolCallId("call_1"),
 			acp.WithUpdateStatus(acp.ToolCallStatusCompleted),
 			acp.WithUpdateContent([]acp.ToolCallContent{acp.ToolContent(acp.TextBlock("# My Project\n\nThis is a sample project..."))}),
-			acp.WithUpdateRawOutput(map[string]any{"content": "# My Project\n\nThis is a sample project..."}),
+			acp.WithUpdateRawOutput(json.RawMessage(`{"content":"# My Project\n\nThis is a sample project..."}`)),
 		),
 	}); err != nil {
 		return err
@@ -296,7 +297,7 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 			acp.WithStartKind(acp.ToolKindEdit),
 			acp.WithStartStatus(acp.ToolCallStatusPending),
 			acp.WithStartLocations([]acp.ToolCallLocation{{Path: "/project/config.json"}}),
-			acp.WithStartRawInput(map[string]any{"path": "/project/config.json", "content": "{\"database\": {\"host\": \"new-host\"}}"}),
+			acp.WithStartRawInput(json.RawMessage(`{"content":"{\"database\": {\"host\": \"new-host\"}}","path":"/project/config.json"}`)),
 		),
 	}); err != nil {
 		return err
@@ -311,7 +312,7 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 			Kind:       acp.Ptr(acp.ToolKindEdit),
 			Status:     acp.Ptr(acp.ToolCallStatusPending),
 			Locations:  []acp.ToolCallLocation{{Path: "/home/user/project/config.json"}},
-			RawInput:   map[string]any{"path": "/home/user/project/config.json", "content": "{\"database\": {\"host\": \"new-host\"}}"},
+			RawInput:   json.RawMessage(`{"content":"{\"database\": {\"host\": \"new-host\"}}","path":"/home/user/project/config.json"}`),
 		},
 		Options: []acp.PermissionOption{
 			{Kind: acp.PermissionOptionKindAllowOnce, Name: "Allow this change", OptionId: acp.PermissionOptionId("allow")},
@@ -336,7 +337,7 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 			Update: acp.UpdateToolCall(
 				acp.ToolCallId("call_2"),
 				acp.WithUpdateStatus(acp.ToolCallStatusCompleted),
-				acp.WithUpdateRawOutput(map[string]any{"success": true, "message": "Configuration updated"}),
+				acp.WithUpdateRawOutput(json.RawMessage(`{"message":"Configuration updated","success":true}`)),
 				acp.WithUpdateTitle("Modifying critical configuration file"),
 			),
 		}); err != nil {

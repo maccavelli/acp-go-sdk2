@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 )
 
@@ -80,7 +81,7 @@ func (a *agentExample) Prompt(ctx context.Context, p PromptRequest) (PromptRespo
 			WithStartKind(ToolKindEdit),
 			WithStartStatus(ToolCallStatusPending),
 			WithStartLocations([]ToolCallLocation{{Path: "/project/config.json"}}),
-			WithStartRawInput(map[string]any{"path": "/project/config.json"}),
+			WithStartRawInput(json.RawMessage(`{"path":"/project/config.json"}`)),
 		),
 	})
 
@@ -93,7 +94,7 @@ func (a *agentExample) Prompt(ctx context.Context, p PromptRequest) (PromptRespo
 			Kind:       new(ToolKindEdit),
 			Status:     new(ToolCallStatusPending),
 			Locations:  []ToolCallLocation{{Path: "/project/config.json"}},
-			RawInput:   map[string]any{"path": "/project/config.json"},
+			RawInput:   json.RawMessage(`{"path":"/project/config.json"}`),
 		},
 		Options: []PermissionOption{
 			{Kind: PermissionOptionKindAllowOnce, Name: "Allow", OptionId: PermissionOptionId("allow")},
@@ -108,7 +109,7 @@ func (a *agentExample) Prompt(ctx context.Context, p PromptRequest) (PromptRespo
 			Update: UpdateToolCall(
 				ToolCallId("call_1"),
 				WithUpdateStatus(ToolCallStatusCompleted),
-				WithUpdateRawOutput(map[string]any{"success": true}),
+				WithUpdateRawOutput(json.RawMessage(`{"success":true}`)),
 			),
 		})
 		_ = a.conn.SessionUpdate(ctx, SessionNotification{

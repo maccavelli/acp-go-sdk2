@@ -140,7 +140,7 @@ type AgentNotification struct {
 	// The notification method name.
 	Method string `json:"method"`
 	// Method-specific notification parameters.
-	Params any `json:"params,omitempty"`
+	Params json.RawMessage `json:"params,omitempty"`
 }
 
 func (v *AgentNotification) Validate() error {
@@ -157,7 +157,7 @@ type AgentRequest struct {
 	// The method name to invoke.
 	Method string `json:"method"`
 	// Method-specific request parameters.
-	Params any `json:"params,omitempty"`
+	Params json.RawMessage `json:"params,omitempty"`
 }
 
 func (v *AgentRequest) Validate() error {
@@ -172,7 +172,7 @@ type AgentResult struct {
 	// The id of the request this response answers.
 	Id RequestId `json:"id"`
 	// Method-specific response data.
-	Result any `json:"result"`
+	Result json.RawMessage `json:"result"`
 }
 
 // A failed JSON-RPC response.
@@ -908,7 +908,7 @@ type ClientNotification struct {
 	// The notification method name.
 	Method string `json:"method"`
 	// Method-specific notification parameters.
-	Params any `json:"params,omitempty"`
+	Params json.RawMessage `json:"params,omitempty"`
 }
 
 func (v *ClientNotification) Validate() error {
@@ -925,7 +925,7 @@ type ClientRequest struct {
 	// The method name to invoke.
 	Method string `json:"method"`
 	// Method-specific request parameters.
-	Params any `json:"params,omitempty"`
+	Params json.RawMessage `json:"params,omitempty"`
 }
 
 func (v *ClientRequest) Validate() error {
@@ -940,7 +940,7 @@ type ClientResult struct {
 	// The id of the request this response answers.
 	Id RequestId `json:"id"`
 	// Method-specific response data.
-	Result any `json:"result"`
+	Result json.RawMessage `json:"result"`
 }
 
 // A failed JSON-RPC response.
@@ -3410,7 +3410,7 @@ type Error struct {
 	Code ErrorCode `json:"code"`
 	// Optional primitive or structured value that contains additional information about the error.
 	// This may include debugging information or context-specific details.
-	Data any `json:"data,omitempty"`
+	Data json.RawMessage `json:"data,omitempty"`
 	// A string providing a short description of the error.
 	// The message should be limited to a concise single sentence.
 	Message string `json:"message"`
@@ -3883,8 +3883,8 @@ type IdleStateUpdateNone struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
 	// Optional; omitted and 'null' mean no metadata for this state snapshot.
-	Meta       map[string]any `json:"_meta,omitempty"`
-	StopReason any            `json:"stopReason,omitempty"`
+	Meta       map[string]any  `json:"_meta,omitempty"`
+	StopReason json.RawMessage `json:"stopReason,omitempty"`
 	// **UNSTABLE** Token usage for completed foreground work.
 	//
 	// Optional; omitted or 'null' means not reported.
@@ -7504,10 +7504,10 @@ type SessionUpdateToolCall struct {
 	// tool name is available.
 	Name *string `json:"name,omitempty"`
 	// Raw input parameters sent to the tool.
-	RawInput any `json:"rawInput,omitempty"`
+	RawInput json.RawMessage `json:"rawInput,omitempty"`
 	// Raw output returned by the tool.
-	RawOutput     any    `json:"rawOutput,omitempty"`
-	SessionUpdate string `json:"sessionUpdate"`
+	RawOutput     json.RawMessage `json:"rawOutput,omitempty"`
+	SessionUpdate string          `json:"sessionUpdate"`
 	// Current execution status of the tool call.
 	Status ToolCallStatus `json:"status,omitempty"`
 	// Human-readable title describing what the tool is doing.
@@ -7536,10 +7536,10 @@ type SessionToolCallUpdate struct {
 	// the existing name is left unchanged.
 	Name *string `json:"name,omitempty"`
 	// Update the raw input.
-	RawInput any `json:"rawInput,omitempty"`
+	RawInput json.RawMessage `json:"rawInput,omitempty"`
 	// Update the raw output.
-	RawOutput     any    `json:"rawOutput,omitempty"`
-	SessionUpdate string `json:"sessionUpdate"`
+	RawOutput     json.RawMessage `json:"rawOutput,omitempty"`
+	SessionUpdate string          `json:"sessionUpdate"`
 	// Update the execution status.
 	Status *ToolCallStatus `json:"status,omitempty"`
 	// Update the human-readable title.
@@ -9552,9 +9552,9 @@ type ToolCall struct {
 	// tool name is available.
 	Name *string `json:"name,omitempty"`
 	// Raw input parameters sent to the tool.
-	RawInput any `json:"rawInput,omitempty"`
+	RawInput json.RawMessage `json:"rawInput,omitempty"`
 	// Raw output returned by the tool.
-	RawOutput any `json:"rawOutput,omitempty"`
+	RawOutput json.RawMessage `json:"rawOutput,omitempty"`
 	// Current execution status of the tool call.
 	Status ToolCallStatus `json:"status,omitempty"`
 	// Human-readable title describing what the tool is doing.
@@ -9858,9 +9858,9 @@ type ToolCallUpdate struct {
 	// the existing name is left unchanged.
 	Name *string `json:"name,omitempty"`
 	// Update the raw input.
-	RawInput any `json:"rawInput,omitempty"`
+	RawInput json.RawMessage `json:"rawInput,omitempty"`
 	// Update the raw output.
-	RawOutput any `json:"rawOutput,omitempty"`
+	RawOutput json.RawMessage `json:"rawOutput,omitempty"`
 	// Update the execution status.
 	Status *ToolCallStatus `json:"status,omitempty"`
 	// Update the human-readable title.
@@ -10323,7 +10323,7 @@ type UnstableMcpError struct {
 	// Inner MCP error code; never an ACP error code.
 	Code int32 `json:"code"`
 	// Optional error data; explicit null is retained.
-	Data any `json:"data,omitempty"`
+	Data json.RawMessage `json:"data,omitempty"`
 	// Inner MCP error message.
 	Message string `json:"message"`
 }
@@ -10695,7 +10695,7 @@ type UnstableMessageMcpResult struct {
 	// Optional ACP carrier metadata.
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Required, even if JSON null.
-	Result any `json:"result"`
+	Result json.RawMessage `json:"result"`
 }
 
 // A structured inner MCP error.

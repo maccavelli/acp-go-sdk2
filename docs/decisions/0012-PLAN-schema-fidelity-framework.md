@@ -72,8 +72,9 @@ A `format` on a `string` is an annotation.
 ### Types
 
 * `primitiveRef` takes the node and reads `format`; named primitives, properties, pointers, slice items, and variants all go through it.
-* A node that constrains no type (no `type`, `$ref`, `enum`, `const`, or composition), or whose only type is `null`, is `RefRaw`, rendered
-  `json.RawMessage`; as the value type of an `additionalProperties: true` map it stays `any`.
+* ~~A node that constrains no type (no `type`, `$ref`, `enum`, `const`, or composition), or whose only type is `null`, is `RefRaw`, rendered
+  `json.RawMessage`; as the value type of an `additionalProperties: true` map it stays `any`.~~ (Amended 2026-10-10, see the deviation below.) A
+  property or variant the model would give `any` is `RefRaw`, rendered `json.RawMessage`; a map value it would give `any` stays `any`.
 * `additionalProperties` with a schema gives `map[string]T` where `T` is `typeRef` of that schema.
 * An optional struct-valued field (a named object type, not a pointer) gets no `omitempty`.
 
@@ -136,6 +137,19 @@ value, or pointer target has `Validate` (a fixed point over the model). The gene
 
 `ValidateKind`'s four kinds, `requiredCheck`, `RequiredCheck`, the table's `Validate` rule and `ValidateRule`, and `ValidateListed` are removed. A
 union's methods take the receiver `u`; every other type's take `v`.
+
+## Deviation 2026-10-10, the rule for raw JSON
+
+Found in step 5, before any change: the design's rule covered 12 of S3's 18 fields; the six envelope `params` and `result` are inline `anyOf`
+compositions the model does not name. Decision: the owner chose "whatever has no Go type" (the MADR's amendment of the same date). The step's
+expectation is unchanged: exactly the 18 fields of S3 become `json.RawMessage`. No file is added to the step.
+
+## Deviation 2026-10-10, StartEditToolCall's content
+
+Found in step 5, before changing it: `StartReadToolCall` and `StartEditToolCall` in `helpers.go` build their raw input from a map, and the step named
+only the four options and `WithStartLocations`. Decision: the owner chose `StartEditToolCall(id, title, path string, content json.RawMessage,
+opts...)` (the MADR's amendment of the same date). `StartReadToolCall` keeps its signature and builds `{"path":…}` the way `WithStartLocations` does.
+Both stay in `helpers.go`, already in scope; the release notes list the fifth signature.
 
 ## Implementation Steps
 
@@ -330,3 +344,70 @@ Gates: `make pre-add-check` with the four changed Go files named: `go-precheck: 
 govulncheck).` Without names: `go-precheck: 70 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 4 on `main`.
+
+### Step 5, arbitrary JSON, 2026-10-10
+
+The owner committed step 4 as `42fd612`. Step 5 ran on `main` from that clean tree. The agent did not commit.
+
+Two deviations were found and decided before the code changed; both are recorded above and in the MADR's amendments: the rule for raw JSON is "whatever
+has no Go type" (the six envelope fields included), and `StartEditToolCall`'s `content` is `json.RawMessage`.
+
+Tests (root `fidelity_test.go`), written first:
+
+* `TestRawJSONKeepsDigits`: `{"n":9007199254740993}` as a `tool_call`'s `rawInput`, an `Error`'s `data`, and an `AgentRequest`'s `params` encodes back
+  with every digit.
+* `TestStartLocationsMergesRawInput`: `WithStartLocations` gives no input `{"path":"/p"}`, adds `path` to an object input
+  (`{"n":9007199254740993,"path":"/p"}`), keeps an object's own `path`, and leaves an array input alone.
+
+Run before the change, four failures:
+
+```text
+object input: rawInput {"n":9007199254740993}, <nil>; want {"n":9007199254740993,"path":"/p"}
+SessionUpdate rawInput: encoded {"rawInput":{"n":9007199254740992},"sessionUpdate":"tool_call","title":"x","toolCallId":"t"}, <nil>
+Error data: encoded {"code":-32000,"data":{"n":9007199254740992},"message":"m"}, <nil>
+AgentRequest params: encoded {"id":1,"method":"x","params":{"n":9007199254740992}}, <nil>
+```
+
+The change:
+
+* `model/fields.go`: `RefRaw` and `rawJSON()`; `typeRef`'s fallback for a node with no Go type is `rawJSON()`; `mapValues` gives a map's values the
+  type of its `additionalProperties`, or `any` where that type would be raw, and `factsOf` uses it.
+* `emit`: `typeAST` takes the `goFile`, so `RefRaw` renders as `json.RawMessage` with its import; its five callers pass the file.
+* `helpers.go`: `WithStartRawInput`, `WithStartRawOutput`, `WithUpdateRawInput`, `WithUpdateRawOutput` take `json.RawMessage`; `WithStartLocations`
+  merges `path` through `withRawPath`, which decodes an object into `map[string]json.RawMessage` and leaves any other input unchanged;
+  `StartReadToolCall` uses `withRawPath(nil, path)`; `StartEditToolCall(..., content json.RawMessage, ...)` builds `{"content":…,"path":…}` in
+  `editRawInput`, writing `content` as given.
+* `example/agent/main.go`, `example_agent_test.go`, `json_parity_test.go`: the maps they passed are `json.RawMessage` literals with their keys in
+  the order `encoding/json` writes a map, so the goldens keep their bytes.
+
+Test corrections, recorded: `TestTypeRefs` expected `any` for `{}` and for the plain `typeRef` of two `anyOf`-with-`null` nodes; under the amended
+rule each is `json.RawMessage`.
+
+Regenerated: only `types_gen.go` changed, in 21 lines. A script classified them: 18 fields changed from `any` to `json.RawMessage` (`Data` 2,
+`Params` 4, `RawInput` 4, `RawOutput` 4, `Result` 3, `StopReason` 1), and 3 lines changed only in whitespace, realigned by `gofmt` in the same
+structs (`Meta` 1, `SessionUpdate` 2). No golden changed.
+
+Each rule was broken in a fresh scratch copy, then the generator run and both modules tested:
+
+```text
+no Go type stays any: cmd/generate ['TestTypeRefs']; root: build failed
+map values become raw: cmd/generate ['TestTypeRefs']; root: build failed
+path not merged into an object: root ['TestStartLocationsMergesRawInput']
+edit input keys reordered: root ['TestStartEditToolCallRawInput']
+```
+
+Two of these first passed and showed gaps: "map values become raw" failed only the root build, since no generator test held that an
+`additionalProperties: true` map keeps `any` values (`TestTypeRefs` gained that row); and "edit input keys reordered" passed everything, since the
+golden comparison is semantic (`TestStartEditToolCallRawInput` now requires the raw input byte for byte, for a string, an object with a large integer,
+and nil content).
+
+The first gate run found `errcheck` on `editRawInput`'s ignored error from encoding the path; it is checked, and returns nil on that branch, which a
+string cannot reach.
+
+After the change every test in the root (`go test -race`) and in `cmd/generate` passes; `go build ./example/...` passes. Coverage: `internal/model`
+94.1%, `internal/emit` 54.1%.
+
+Gates: `make pre-add-check` with the ten changed Go files named: `go-precheck: 10 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 70 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 5 on `main`.

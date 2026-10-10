@@ -30,6 +30,9 @@ const (
 	RefSlice
 	// RefMap is map[string]Elem.
 	RefMap
+	// RefRaw is json.RawMessage: a value the schema gives no Go type, carried
+	// as it was received (0012-MADR-schema-fidelity-framework.md).
+	RefRaw
 )
 
 // TypeRef is a Go type expression.
@@ -40,6 +43,9 @@ type TypeRef struct {
 }
 
 func named(name string) TypeRef { return TypeRef{Kind: RefNamed, Name: name} }
+
+// rawJSON is the TypeRef of json.RawMessage.
+func rawJSON() TypeRef { return TypeRef{Kind: RefRaw} }
 
 func wrap(kind RefKind, elem TypeRef) TypeRef { return TypeRef{Kind: kind, Elem: &elem} }
 
@@ -52,6 +58,8 @@ func (r TypeRef) String() string {
 		return "[]" + r.Elem.String()
 	case RefMap:
 		return "map[string]" + r.Elem.String()
+	case RefRaw:
+		return "json.RawMessage"
 	default:
 		return r.Name
 	}
@@ -218,15 +226,23 @@ func typeRef(d *load.Definition) TypeRef {
 	case schemaTypeArray:
 		return wrap(RefSlice, typeRef(d.Items))
 	case schemaTypeObject:
-		// additionalProperties with a schema types the values; true, or none, is any.
-		values := named("any")
-		if d.AdditionalProperties != nil {
-			values = typeRef(d.AdditionalProperties)
-		}
-		return wrap(RefMap, values)
+		return wrap(RefMap, mapValues(d.AdditionalProperties))
 	default:
+		// No Go type: carried as received.
+		return rawJSON()
+	}
+}
+
+// mapValues is the value type of a map from its additionalProperties schema:
+// that schema's type, or any when it has none (true, or no schema).
+func mapValues(ap *load.Definition) TypeRef {
+	if ap == nil {
 		return named("any")
 	}
+	if v := typeRef(ap); v.Kind != RefRaw {
+		return v
+	}
+	return named("any")
 }
 
 // optionalTypeRef maps unions that include null to pointer types where applicable.
@@ -313,7 +329,7 @@ func factsOf(prop *load.Definition) Facts {
 		SkipInvalidItems: prop.XDeserializeSkipInvalidItems,
 	}
 	if prop.AdditionalProperties != nil {
-		v := typeRef(prop.AdditionalProperties)
+		v := mapValues(prop.AdditionalProperties)
 		f.Values = &v
 	}
 	return f

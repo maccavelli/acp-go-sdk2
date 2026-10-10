@@ -134,7 +134,7 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 	case model.KindObject:
 		emitObjectSchema(f, t)
 	case model.KindPrimitive:
-		f.add(typeDecl(name, typeAST(*t.Underlying)))
+		f.add(typeDecl(name, typeAST(f, *t.Underlying)))
 		f.line()
 	case model.KindEmptyObject:
 		// Empty object shape: emit a concrete empty struct so methods can be defined
@@ -169,7 +169,7 @@ func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool) {
 	var st fieldSet
 	for _, fld := range fields {
 		st.comment(fld.Doc...)
-		st.add(structField(fld.Name, typeAST(fld.Type), fld.Tag))
+		st.add(structField(fld.Name, typeAST(f, fld.Type), fld.Tag))
 	}
 	if keepExtra {
 		st.comment("Extra holds the keys of the payload this struct does not declare, as received.",
@@ -181,16 +181,19 @@ func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool) {
 	emitObjectDefaults(f, name, fields, keepExtra)
 }
 
-// typeAST renders a model type as a Go type expression. Each call builds new
-// nodes, so no node is shared between two places in a file.
-func typeAST(r model.TypeRef) ast.Expr {
+// typeAST renders a model type as a Go type expression, adding to f the import
+// a qualified type needs. Each call builds new nodes, so no node is shared
+// between two places in a file.
+func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 	switch r.Kind {
 	case model.RefPointer:
-		return star(typeAST(*r.Elem))
+		return star(typeAST(f, *r.Elem))
 	case model.RefSlice:
-		return sliceOf(typeAST(*r.Elem))
+		return sliceOf(typeAST(f, *r.Elem))
 	case model.RefMap:
-		return rawMap(typeAST(*r.Elem))
+		return rawMap(typeAST(f, *r.Elem))
+	case model.RefRaw:
+		return f.qual(pkgJSON, "RawMessage")
 	default:
 		return id(r.Name)
 	}
@@ -233,7 +236,7 @@ func emitObjectDefaults(f *goFile, name string, fields []*model.Field, keepExtra
 	}
 	for _, fld := range fills {
 		body = append(body, ifStmt(nil, binary(dot("a", fld.Name), token.EQL, nilExpr()),
-			assign(exprs(dot("a", fld.Name)), composite(typeAST(fld.Type))),
+			assign(exprs(dot("a", fld.Name)), composite(typeAST(f, fld.Type))),
 		))
 	}
 	if keepExtra {
@@ -312,7 +315,7 @@ func emitInlineVariant(f *goFile, tname string, in *model.Inline) {
 		emitStruct(f, tname, in.Fields, in.KeepExtra)
 	case model.InlineNamed:
 		// Non-object title-only variants can still carry payloads (e.g. arrays).
-		f.add(typeDecl(tname, typeAST(in.Type)))
+		f.add(typeDecl(tname, typeAST(f, in.Type)))
 		f.line()
 	default:
 		f.add(typeDecl(tname, &ast.StructType{Fields: fields()}))

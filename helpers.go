@@ -1,5 +1,7 @@
 package acp
 
+import "encoding/json"
+
 const (
 	blockTypeText         = "text"
 	blockTypeImage        = "image"
@@ -169,29 +171,58 @@ func WithStartLocations(l []ToolCallLocation) ToolCallStartOpt {
 	return func(tc *SessionUpdateToolCall) {
 		tc.Locations = l
 		if len(l) == 1 && l[0].Path != "" {
-			if tc.RawInput == nil {
-				tc.RawInput = map[string]any{rawInputPathKey: l[0].Path}
-			} else {
-				m, ok := tc.RawInput.(map[string]any)
-				if ok {
-					if _, exists := m[rawInputPathKey]; !exists {
-						m[rawInputPathKey] = l[0].Path
-					}
-				}
-			}
+			tc.RawInput = withRawPath(tc.RawInput, l[0].Path)
 		}
 	}
 }
 
+// editRawInput is {"content": content, "path": path}, keys in the order
+// encoding/json writes a map; content is written as given.
+func editRawInput(path string, content json.RawMessage) json.RawMessage {
+	if len(content) == 0 {
+		content = json.RawMessage("null")
+	}
+	p, err := json.Marshal(path)
+	if err != nil { // a string always encodes; kept for errcheck
+		return nil
+	}
+	return json.RawMessage(`{"` + rawInputContentKey + `":` + string(content) + `,"` + rawInputPathKey + `":` + string(p) + `}`)
+}
+
+// withRawPath returns raw with a path key set to p when raw is empty or a JSON
+// object without one; any other raw input is returned unchanged. The other
+// keys keep their values byte for byte.
+func withRawPath(raw json.RawMessage, p string) json.RawMessage {
+	m := map[string]json.RawMessage{}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &m); err != nil || m == nil {
+			return raw
+		}
+	}
+	if _, ok := m[rawInputPathKey]; ok {
+		return raw
+	}
+	v, err := json.Marshal(p)
+	if err != nil {
+		return raw
+	}
+	m[rawInputPathKey] = v
+	out, err := json.Marshal(m)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
 // WithStartRawInput sets rawInput for a tool_call start update.
-func WithStartRawInput(v any) ToolCallStartOpt {
+func WithStartRawInput(v json.RawMessage) ToolCallStartOpt {
 	return func(tc *SessionUpdateToolCall) {
 		tc.RawInput = v
 	}
 }
 
 // WithStartRawOutput sets rawOutput for a tool_call start update.
-func WithStartRawOutput(v any) ToolCallStartOpt {
+func WithStartRawOutput(v json.RawMessage) ToolCallStartOpt {
 	return func(tc *SessionUpdateToolCall) {
 		tc.RawOutput = v
 	}
@@ -245,14 +276,14 @@ func WithUpdateLocations(l []ToolCallLocation) ToolCallUpdateOpt {
 }
 
 // WithUpdateRawInput sets rawInput for a tool_call_update.
-func WithUpdateRawInput(v any) ToolCallUpdateOpt {
+func WithUpdateRawInput(v json.RawMessage) ToolCallUpdateOpt {
 	return func(tu *SessionToolCallUpdate) {
 		tu.RawInput = v
 	}
 }
 
 // WithUpdateRawOutput sets rawOutput for a tool_call_update.
-func WithUpdateRawOutput(v any) ToolCallUpdateOpt {
+func WithUpdateRawOutput(v json.RawMessage) ToolCallUpdateOpt {
 	return func(tu *SessionToolCallUpdate) {
 		tu.RawOutput = v
 	}
@@ -260,17 +291,15 @@ func WithUpdateRawOutput(v any) ToolCallUpdateOpt {
 
 // StartReadToolCall constructs a 'tool_call' update for reading a file: kind=read, status=pending, locations=[{path}], rawInput={path}.
 func StartReadToolCall(id ToolCallId, title string, path string, opts ...ToolCallStartOpt) SessionUpdate {
-	base := []ToolCallStartOpt{WithStartKind(ToolKindRead), WithStartStatus(ToolCallStatusPending), WithStartLocations([]ToolCallLocation{{Path: path}}), WithStartRawInput(map[string]any{rawInputPathKey: path})}
+	base := []ToolCallStartOpt{WithStartKind(ToolKindRead), WithStartStatus(ToolCallStatusPending), WithStartLocations([]ToolCallLocation{{Path: path}}), WithStartRawInput(withRawPath(nil, path))}
 	base = append(base, opts...)
 	return StartToolCall(id, title, base...)
 }
 
 // StartEditToolCall constructs a 'tool_call' update for editing content: kind=edit, status=pending, locations=[{path}], rawInput={path, content}.
-func StartEditToolCall(id ToolCallId, title string, path string, content any, opts ...ToolCallStartOpt) SessionUpdate {
-	base := []ToolCallStartOpt{WithStartKind(ToolKindEdit), WithStartStatus(ToolCallStatusPending), WithStartLocations([]ToolCallLocation{{Path: path}}), WithStartRawInput(map[string]any{
-		rawInputContentKey: content,
-		rawInputPathKey:    path,
-	})}
+// content is the JSON of the new content, such as a quoted string; nil sends null.
+func StartEditToolCall(id ToolCallId, title string, path string, content json.RawMessage, opts ...ToolCallStartOpt) SessionUpdate {
+	base := []ToolCallStartOpt{WithStartKind(ToolKindEdit), WithStartStatus(ToolCallStatusPending), WithStartLocations([]ToolCallLocation{{Path: path}}), WithStartRawInput(editRawInput(path, content))}
 	base = append(base, opts...)
 	return StartToolCall(id, title, base...)
 }
