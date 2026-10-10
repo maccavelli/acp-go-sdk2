@@ -1,6 +1,6 @@
 ---
 status: accepted
-date: 2026-10-09
+date: 2026-10-10
 decision-makers: Repository owner
 ---
 
@@ -19,7 +19,7 @@ Two change what goes over the wire:
 * A union with no variant set encodes to zero bytes. All 28 generated union types end `MarshalJSON` with `return []byte{}, nil`, and `encoding/json` then fails with
   "json: error calling MarshalJSON for type *acp.ContentBlock: unexpected end of JSON input". 57 of the 322 generated struct types fail to encode their zero value this way,
   including `RequestPermissionResponse`, `SessionNotification`, and `ContentBlock`. The error does not name the field that was left unset.
-* A required array or map left nil is sent as `null`. 35 such fields in 34 structs carry no `omitempty`. A `NewSessionRequest` with `Cwd` set and `McpServers` nil sends `"mcpServers":null`, although the
+* A required array or map left nil is sent as `null`. ~~35 such fields in 34 structs carry no `omitempty`.~~ 34 such fields in 33 structs (corrected 2026-10-10, see the amendment below). A `NewSessionRequest` with `Cwd` set and `McpServers` nil sends `"mcpServers":null`, although the
   schema makes `mcpServers` a required array. The receiving side of this SDK rejects it, because the generated `Validate` reports "mcpServers is required" for a nil slice.
 
 Union-typed fields decide what an unset union means. 27 struct fields hold a union by value, and all 27 are required. The 3 optional union fields are pointers and are omitted when nil.
@@ -77,7 +77,8 @@ The proposed changes, all on `encoding/json` v1:
 * Neutral, because a populated message encodes to the same bytes as today. The existing goldens stay unchanged.
 * Neutral, because encoding an unset union still fails. Only the error text changes.
 * Bad, because a peer that sends a non-string discriminator, which decodes today by falling back to key matching, gets an error.
-* Bad, because 34 structs gain or extend a `MarshalJSON`, and each of them pays one extra encode through an alias type.
+* Bad, because ~~34 structs gain or extend~~ 33 structs gain a `MarshalJSON` (corrected 2026-10-10, see the amendment below), and each of them pays one
+  extra encode through an alias type.
 * Bad, because every generated file changes, and `types_gen.go` changes in many places. Review relies on the generator diff and the new tests.
 
 ### Confirmation
@@ -117,6 +118,16 @@ The proposed changes, all on `encoding/json` v1:
 * Good, because nothing changes for callers.
 * Bad, because the SDK keeps sending `null` where the schema requires an array, and keeps rejecting its own messages.
 * Bad, because 24 union types stay undocumented.
+
+## Amendment 2026-10-10, count of required arrays and maps
+
+Step 5 of [0009-PLAN-fix-generated-output-on-json-v1.md](0009-PLAN-fix-generated-output-on-json-v1.md) found the count above wrong by one. At stamp `1.25.0`,
+34 required slice or map fields in 33 structs encode a nil value as `null`. Each of the 33 structs gains a new `MarshalJSON`; none extends one emitted for
+schema defaults.
+
+Counting struct fields by tag, a slice or map type with no `omitempty`, gives 36 fields in 35 structs. Two of those are not required:
+`ElicitationSchema.Properties` and `InitializeResponse.AuthMethods` are optional, and their schema defaults already encode a nil value as `{}` and `[]`.
+The original count excluded only one of the two. The decision is unchanged.
 
 ## More Information
 

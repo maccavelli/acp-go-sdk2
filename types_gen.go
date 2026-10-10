@@ -677,6 +677,16 @@ type AvailableCommandsUpdate struct {
 	AvailableCommands []AvailableCommand `json:"availableCommands"`
 }
 
+func (v AvailableCommandsUpdate) MarshalJSON() ([]byte, error) {
+	type Alias AvailableCommandsUpdate
+	var a Alias
+	a = Alias(v)
+	if a.AvailableCommands == nil {
+		a.AvailableCommands = []AvailableCommand{}
+	}
+	return json.Marshal(a)
+}
+
 // Binary resource contents.
 type BlobResourceContents struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -1180,6 +1190,16 @@ type ConfigOptionUpdate struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 	// The full set of configuration options and their current values.
 	ConfigOptions []SessionConfigOption `json:"configOptions"`
+}
+
+func (v ConfigOptionUpdate) MarshalJSON() ([]byte, error) {
+	type Alias ConfigOptionUpdate
+	var a Alias
+	a = Alias(v)
+	if a.ConfigOptions == nil {
+		a.ConfigOptions = []SessionConfigOption{}
+	}
+	return json.Marshal(a)
 }
 
 // Standard content block (text, images, resources).
@@ -4484,6 +4504,16 @@ type ListSessionsResponse struct {
 	Sessions []SessionInfo `json:"sessions"`
 }
 
+func (v ListSessionsResponse) MarshalJSON() ([]byte, error) {
+	type Alias ListSessionsResponse
+	var a Alias
+	a = Alias(v)
+	if a.Sessions == nil {
+		a.Sessions = []SessionInfo{}
+	}
+	return json.Marshal(a)
+}
+
 func (v *ListSessionsResponse) Validate() error {
 	if v.Sessions == nil {
 		return fmt.Errorf("sessions is required")
@@ -4516,6 +4546,16 @@ type LoadSessionRequest struct {
 	McpServers []McpServer `json:"mcpServers"`
 	// The ID of the session to load.
 	SessionId SessionId `json:"sessionId"`
+}
+
+func (v LoadSessionRequest) MarshalJSON() ([]byte, error) {
+	type Alias LoadSessionRequest
+	var a Alias
+	a = Alias(v)
+	if a.McpServers == nil {
+		a.McpServers = []McpServer{}
+	}
+	return json.Marshal(a)
 }
 
 func (v *LoadSessionRequest) Validate() error {
@@ -4680,6 +4720,16 @@ type McpServerHttpInline struct {
 	Url string `json:"url"`
 }
 
+func (v McpServerHttpInline) MarshalJSON() ([]byte, error) {
+	type Alias McpServerHttpInline
+	var a Alias
+	a = Alias(v)
+	if a.Headers == nil {
+		a.Headers = []HttpHeader{}
+	}
+	return json.Marshal(a)
+}
+
 // SSE transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.sse' is 'true'.
@@ -4697,6 +4747,16 @@ type McpServerSseInline struct {
 	Type string `json:"type"`
 	// URL to the MCP server.
 	Url string `json:"url"`
+}
+
+func (v McpServerSseInline) MarshalJSON() ([]byte, error) {
+	type Alias McpServerSseInline
+	var a Alias
+	a = Alias(v)
+	if a.Headers == nil {
+		a.Headers = []HttpHeader{}
+	}
+	return json.Marshal(a)
 }
 
 // **UNSTABLE**
@@ -5012,6 +5072,16 @@ type McpServerHttp struct {
 	Url string `json:"url"`
 }
 
+func (v McpServerHttp) MarshalJSON() ([]byte, error) {
+	type Alias McpServerHttp
+	var a Alias
+	a = Alias(v)
+	if a.Headers == nil {
+		a.Headers = []HttpHeader{}
+	}
+	return json.Marshal(a)
+}
+
 // SSE transport configuration for MCP.
 type McpServerSse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5026,6 +5096,16 @@ type McpServerSse struct {
 	Name string `json:"name"`
 	// URL to the MCP server.
 	Url string `json:"url"`
+}
+
+func (v McpServerSse) MarshalJSON() ([]byte, error) {
+	type Alias McpServerSse
+	var a Alias
+	a = Alias(v)
+	if a.Headers == nil {
+		a.Headers = []HttpHeader{}
+	}
+	return json.Marshal(a)
 }
 
 // Stdio transport configuration for MCP.
@@ -5046,6 +5126,19 @@ type McpServerStdio struct {
 	Name string `json:"name"`
 }
 
+func (v McpServerStdio) MarshalJSON() ([]byte, error) {
+	type Alias McpServerStdio
+	var a Alias
+	a = Alias(v)
+	if a.Args == nil {
+		a.Args = []string{}
+	}
+	if a.Env == nil {
+		a.Env = []EnvVariable{}
+	}
+	return json.Marshal(a)
+}
+
 // Unique identifier for a message within a session.
 type MessageId string
 
@@ -5063,6 +5156,16 @@ type MultiSelectItemsString struct {
 	// Allowed enum values.
 	Enum []string `json:"enum"`
 	Type string   `json:"type"`
+}
+
+func (v MultiSelectItemsString) MarshalJSON() ([]byte, error) {
+	type Alias MultiSelectItemsString
+	var a Alias
+	a = Alias(v)
+	if a.Enum == nil {
+		a.Enum = []string{}
+	}
+	return json.Marshal(a)
 }
 
 // Custom or future typed multi-select items.
@@ -5492,6 +5595,16 @@ type NewSessionRequest struct {
 	McpServers []McpServer `json:"mcpServers"`
 }
 
+func (v NewSessionRequest) MarshalJSON() ([]byte, error) {
+	type Alias NewSessionRequest
+	var a Alias
+	a = Alias(v)
+	if a.McpServers == nil {
+		a.McpServers = []McpServer{}
+	}
+	return json.Marshal(a)
+}
+
 func (v *NewSessionRequest) Validate() error {
 	if v.Cwd == "" {
 		return fmt.Errorf("cwd is required")
@@ -5648,6 +5761,16 @@ type Plan struct {
 	Entries []PlanEntry `json:"entries"`
 }
 
+func (v Plan) MarshalJSON() ([]byte, error) {
+	type Alias Plan
+	var a Alias
+	a = Alias(v)
+	if a.Entries == nil {
+		a.Entries = []PlanEntry{}
+	}
+	return json.Marshal(a)
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -5754,6 +5877,16 @@ type PlanItems struct {
 	PlanId PlanId `json:"planId"`
 }
 
+func (v PlanItems) MarshalJSON() ([]byte, error) {
+	type Alias PlanItems
+	var a Alias
+	a = Alias(v)
+	if a.Entries == nil {
+		a.Entries = []PlanEntry{}
+	}
+	return json.Marshal(a)
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -5825,6 +5958,16 @@ type PlanUpdateContentItems struct {
 	// The plan ID to update.
 	PlanId PlanId `json:"planId"`
 	Type   string `json:"type"`
+}
+
+func (v PlanUpdateContentItems) MarshalJSON() ([]byte, error) {
+	type Alias PlanUpdateContentItems
+	var a Alias
+	a = Alias(v)
+	if a.Entries == nil {
+		a.Entries = []PlanEntry{}
+	}
+	return json.Marshal(a)
 }
 
 // A URI pointing to a file containing the plan.
@@ -6160,6 +6303,16 @@ type PromptRequest struct {
 	Prompt []ContentBlock `json:"prompt"`
 	// The ID of the session to send this user message to
 	SessionId SessionId `json:"sessionId"`
+}
+
+func (v PromptRequest) MarshalJSON() ([]byte, error) {
+	type Alias PromptRequest
+	var a Alias
+	a = Alias(v)
+	if a.Prompt == nil {
+		a.Prompt = []ContentBlock{}
+	}
+	return json.Marshal(a)
 }
 
 func (v *PromptRequest) Validate() error {
@@ -6561,6 +6714,16 @@ type RequestPermissionRequest struct {
 	SessionId SessionId `json:"sessionId"`
 	// Details about the tool call requiring permission.
 	ToolCall ToolCallUpdate `json:"toolCall"`
+}
+
+func (v RequestPermissionRequest) MarshalJSON() ([]byte, error) {
+	type Alias RequestPermissionRequest
+	var a Alias
+	a = Alias(v)
+	if a.Options == nil {
+		a.Options = []PermissionOption{}
+	}
+	return json.Marshal(a)
 }
 
 func (v *RequestPermissionRequest) Validate() error {
@@ -7052,6 +7215,16 @@ type SessionConfigSelectGroup struct {
 	Options []SessionConfigSelectOption `json:"options"`
 }
 
+func (v SessionConfigSelectGroup) MarshalJSON() ([]byte, error) {
+	type Alias SessionConfigSelectGroup
+	var a Alias
+	a = Alias(v)
+	if a.Options == nil {
+		a.Options = []SessionConfigSelectOption{}
+	}
+	return json.Marshal(a)
+}
+
 // A possible value for a session configuration option.
 type SessionConfigSelectOption struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -7340,6 +7513,16 @@ type SessionModeState struct {
 	CurrentModeId SessionModeId `json:"currentModeId"`
 }
 
+func (v SessionModeState) MarshalJSON() ([]byte, error) {
+	type Alias SessionModeState
+	var a Alias
+	a = Alias(v)
+	if a.AvailableModes == nil {
+		a.AvailableModes = []SessionMode{}
+	}
+	return json.Marshal(a)
+}
+
 // Notification containing a session update from the agent.
 //
 // Used to stream real-time progress and results during prompt processing.
@@ -7516,6 +7699,16 @@ type SessionUpdatePlan struct {
 	SessionUpdate string      `json:"sessionUpdate"`
 }
 
+func (v SessionUpdatePlan) MarshalJSON() ([]byte, error) {
+	type Alias SessionUpdatePlan
+	var a Alias
+	a = Alias(v)
+	if a.Entries == nil {
+		a.Entries = []PlanEntry{}
+	}
+	return json.Marshal(a)
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -7563,6 +7756,16 @@ type SessionAvailableCommandsUpdate struct {
 	SessionUpdate     string             `json:"sessionUpdate"`
 }
 
+func (v SessionAvailableCommandsUpdate) MarshalJSON() ([]byte, error) {
+	type Alias SessionAvailableCommandsUpdate
+	var a Alias
+	a = Alias(v)
+	if a.AvailableCommands == nil {
+		a.AvailableCommands = []AvailableCommand{}
+	}
+	return json.Marshal(a)
+}
+
 // The current mode of the session has changed
 //
 // See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/session-modes)
@@ -7589,6 +7792,16 @@ type SessionConfigOptionUpdate struct {
 	// The full set of configuration options and their current values.
 	ConfigOptions []SessionConfigOption `json:"configOptions"`
 	SessionUpdate string                `json:"sessionUpdate"`
+}
+
+func (v SessionConfigOptionUpdate) MarshalJSON() ([]byte, error) {
+	type Alias SessionConfigOptionUpdate
+	var a Alias
+	a = Alias(v)
+	if a.ConfigOptions == nil {
+		a.ConfigOptions = []SessionConfigOption{}
+	}
+	return json.Marshal(a)
 }
 
 // Session metadata has been updated (title, timestamps, custom metadata)
@@ -8925,6 +9138,16 @@ type SetSessionConfigOptionResponse struct {
 	ConfigOptions []SessionConfigOption `json:"configOptions"`
 }
 
+func (v SetSessionConfigOptionResponse) MarshalJSON() ([]byte, error) {
+	type Alias SetSessionConfigOptionResponse
+	var a Alias
+	a = Alias(v)
+	if a.ConfigOptions == nil {
+		a.ConfigOptions = []SessionConfigOption{}
+	}
+	return json.Marshal(a)
+}
+
 func (v *SetSessionConfigOptionResponse) Validate() error {
 	if v.ConfigOptions == nil {
 		return fmt.Errorf("configOptions is required")
@@ -9306,6 +9529,16 @@ type StringMultiSelectItems struct {
 	Enum []string `json:"enum"`
 }
 
+func (v StringMultiSelectItems) MarshalJSON() ([]byte, error) {
+	type Alias StringMultiSelectItems
+	var a Alias
+	a = Alias(v)
+	if a.Enum == nil {
+		a.Enum = []string{}
+	}
+	return json.Marshal(a)
+}
+
 // Schema for string properties in an elicitation form.
 //
 // When 'enum' or 'oneOf' is set, this represents a single-select enum
@@ -9577,6 +9810,16 @@ type TitledMultiSelectItems struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Titled enum options.
 	AnyOf []EnumOption `json:"anyOf"`
+}
+
+func (v TitledMultiSelectItems) MarshalJSON() ([]byte, error) {
+	type Alias TitledMultiSelectItems
+	var a Alias
+	a = Alias(v)
+	if a.AnyOf == nil {
+		a.AnyOf = []EnumOption{}
+	}
+	return json.Marshal(a)
 }
 
 // Represents a tool call that the language model has requested.
@@ -10046,6 +10289,16 @@ type UnstableDidChangeDocumentNotification struct {
 	Version int `json:"version"`
 }
 
+func (v UnstableDidChangeDocumentNotification) MarshalJSON() ([]byte, error) {
+	type Alias UnstableDidChangeDocumentNotification
+	var a Alias
+	a = Alias(v)
+	if a.ContentChanges == nil {
+		a.ContentChanges = []UnstableTextDocumentContentChangeEvent{}
+	}
+	return json.Marshal(a)
+}
+
 func (v *UnstableDidChangeDocumentNotification) Validate() error {
 	if v.ContentChanges == nil {
 		return fmt.Errorf("contentChanges is required")
@@ -10294,6 +10547,16 @@ type UnstableListProvidersResponse struct {
 	Providers []UnstableProviderInfo `json:"providers"`
 }
 
+func (v UnstableListProvidersResponse) MarshalJSON() ([]byte, error) {
+	type Alias UnstableListProvidersResponse
+	var a Alias
+	a = Alias(v)
+	if a.Providers == nil {
+		a.Providers = []UnstableProviderInfo{}
+	}
+	return json.Marshal(a)
+}
+
 func (v *UnstableListProvidersResponse) Validate() error {
 	if v.Providers == nil {
 		return fmt.Errorf("providers is required")
@@ -10371,6 +10634,16 @@ type UnstableMcpServerHttp struct {
 	Url string `json:"url"`
 }
 
+func (v UnstableMcpServerHttp) MarshalJSON() ([]byte, error) {
+	type Alias UnstableMcpServerHttp
+	var a Alias
+	a = Alias(v)
+	if a.Headers == nil {
+		a.Headers = []HttpHeader{}
+	}
+	return json.Marshal(a)
+}
+
 // SSE transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.sse' is 'true'.
@@ -10388,6 +10661,16 @@ type UnstableMcpServerSse struct {
 	Type string `json:"type"`
 	// URL to the MCP server.
 	Url string `json:"url"`
+}
+
+func (v UnstableMcpServerSse) MarshalJSON() ([]byte, error) {
+	type Alias UnstableMcpServerSse
+	var a Alias
+	a = Alias(v)
+	if a.Headers == nil {
+		a.Headers = []HttpHeader{}
+	}
+	return json.Marshal(a)
 }
 
 // **UNSTABLE**
@@ -10930,6 +11213,16 @@ type UnstableNesEditSuggestion struct {
 	Uri string `json:"uri"`
 }
 
+func (v UnstableNesEditSuggestion) MarshalJSON() ([]byte, error) {
+	type Alias UnstableNesEditSuggestion
+	var a Alias
+	a = Alias(v)
+	if a.Edits == nil {
+		a.Edits = []UnstableNesTextEdit{}
+	}
+	return json.Marshal(a)
+}
+
 // A code excerpt from a file.
 type UnstableNesExcerpt struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11018,6 +11311,16 @@ type UnstableNesRelatedSnippet struct {
 	Excerpts []UnstableNesExcerpt `json:"excerpts"`
 	// The URI of the file containing the snippets.
 	Uri string `json:"uri"`
+}
+
+func (v UnstableNesRelatedSnippet) MarshalJSON() ([]byte, error) {
+	type Alias UnstableNesRelatedSnippet
+	var a Alias
+	a = Alias(v)
+	if a.Excerpts == nil {
+		a.Excerpts = []UnstableNesExcerpt{}
+	}
+	return json.Marshal(a)
 }
 
 // A rename symbol suggestion.
@@ -11114,6 +11417,16 @@ type UnstableNesSuggestionEdit struct {
 	Kind string                  `json:"kind"`
 	// The URI of the file to edit.
 	Uri string `json:"uri"`
+}
+
+func (v UnstableNesSuggestionEdit) MarshalJSON() ([]byte, error) {
+	type Alias UnstableNesSuggestionEdit
+	var a Alias
+	a = Alias(v)
+	if a.Edits == nil {
+		a.Edits = []UnstableNesTextEdit{}
+	}
+	return json.Marshal(a)
 }
 
 // A jump-to-location suggestion.
@@ -11540,6 +11853,16 @@ type UnstableProviderInfo struct {
 	Supported []UnstableLlmProtocol `json:"supported"`
 }
 
+func (v UnstableProviderInfo) MarshalJSON() ([]byte, error) {
+	type Alias UnstableProviderInfo
+	var a Alias
+	a = Alias(v)
+	if a.Supported == nil {
+		a.Supported = []UnstableLlmProtocol{}
+	}
+	return json.Marshal(a)
+}
+
 // A range in a text document, expressed as start and end positions.
 type UnstableRange struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11701,6 +12024,16 @@ type UnstableSuggestNesResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 	// The list of suggestions.
 	Suggestions []UnstableNesSuggestion `json:"suggestions"`
+}
+
+func (v UnstableSuggestNesResponse) MarshalJSON() ([]byte, error) {
+	type Alias UnstableSuggestNesResponse
+	var a Alias
+	a = Alias(v)
+	if a.Suggestions == nil {
+		a.Suggestions = []UnstableNesSuggestion{}
+	}
+	return json.Marshal(a)
 }
 
 func (v *UnstableSuggestNesResponse) Validate() error {

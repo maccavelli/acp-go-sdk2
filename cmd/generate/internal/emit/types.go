@@ -361,6 +361,7 @@ func emitObjectSchema(f *goFile, name string, def *load.Definition, usedTypeName
 
 	// Track fields with schema defaults for generic (de)serialization
 	var defaults []defaultProp
+	var fills []requiredFill
 	var st fieldSet
 	for _, pk := range pkeys {
 		prop := def.Properties[pk]
@@ -409,13 +410,37 @@ func emitObjectSchema(f *goFile, name string, def *load.Definition, usedTypeName
 			fieldType = id(nestedTypeName)
 		} else {
 			fieldType = optionalTypeExpr(prop)
+			if req[pk] && dp == nil {
+				fills = appendRequiredFill(fills, field, prop)
+			}
 		}
 		st.add(structField(field, fieldType, tag))
 	}
 	f.add(typeDecl(name, st.structType()))
 	f.line()
 
-	emitObjectDefaults(f, name, defaults)
+	emitObjectDefaults(f, name, defaults, fills)
+}
+
+// requiredFill is a required slice or map field. Its MarshalJSON encodes nil
+// as an empty literal of typ, because the schema does not accept null there.
+type requiredFill struct {
+	fieldName string
+	typ       ast.Expr
+}
+
+// appendRequiredFill appends a fill for prop when its Go type is a slice or a
+// map. typ is built afresh so the struct field and the literal share no node.
+func appendRequiredFill(fills []requiredFill, field string, prop *load.Definition) []requiredFill {
+	switch t := optionalTypeExpr(prop).(type) {
+	case *ast.ArrayType:
+		if t.Len == nil {
+			return append(fills, requiredFill{fieldName: field, typ: t})
+		}
+	case *ast.MapType:
+		return append(fills, requiredFill{fieldName: field, typ: t})
+	}
+	return fills
 }
 
 func emitInlineNestedTypes(f *goFile, name string, pkeys []string, def *load.Definition, usedTypeNames map[string]bool) map[string]string {
@@ -439,6 +464,7 @@ func emitInlineNestedTypes(f *goFile, name string, pkeys []string, def *load.Def
 			f.comment(util.FormatDocComment(prop.Description)...)
 		}
 		nestedReq := requiredSet(prop.Required)
+		var fills []requiredFill
 		var st fieldSet
 		for _, npk := range slices.Sorted(maps.Keys(prop.Properties)) {
 			nprop := prop.Properties[npk]
@@ -448,11 +474,14 @@ func emitInlineNestedTypes(f *goFile, name string, pkeys []string, def *load.Def
 			ntag := npk
 			if !nestedReq[npk] {
 				ntag = npk + ",omitempty"
+			} else {
+				fills = appendRequiredFill(fills, util.ToExportedField(npk), nprop)
 			}
 			st.add(structField(util.ToExportedField(npk), optionalTypeExpr(nprop), ntag))
 		}
 		f.add(typeDecl(nestedTypeName, st.structType()))
 		f.line()
+		emitObjectDefaults(f, nestedTypeName, nil, fills)
 	}
 	return nestedTypes
 }
@@ -475,15 +504,17 @@ type defaultProp struct {
 	nilable     bool // whether zero-value is nil (slice/map)
 }
 
-// emitObjectDefaults synthesizes MarshalJSON and UnmarshalJSON for structs
-// with fields that carry schema defaults.
-func emitObjectDefaults(f *goFile, name string, defaults []defaultProp) {
-	if len(defaults) == 0 {
+// emitObjectDefaults synthesizes MarshalJSON for structs with fields that
+// carry schema defaults or are required slices or maps, and UnmarshalJSON for
+// structs with defaults.
+func emitObjectDefaults(f *goFile, name string, defaults []defaultProp, fills []requiredFill) {
+	if len(defaults) == 0 && len(fills) == 0 {
 		return
 	}
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 
-	// MarshalJSON: coerce nil slices and maps to their defaults before encoding.
+	// MarshalJSON: coerce nil slices and maps to their defaults, and nil
+	// required ones to empty, before encoding.
 	body := []ast.Stmt{
 		typeStmt("Alias", id(name)),
 		varStmt("a", id("Alias"), nil),
@@ -497,10 +528,18 @@ func emitObjectDefaults(f *goFile, name string, defaults []defaultProp) {
 			))
 		}
 	}
+	for _, rf := range fills {
+		body = append(body, ifStmt(nil, binary(dot("a", rf.fieldName), token.EQL, nilExpr()),
+			assign(exprs(dot("a", rf.fieldName)), composite(rf.typ)),
+		))
+	}
 	body = append(body, ret(call(f.qual(pkgJSON, "Marshal"), id("a"))))
 	f.add(method(param("v", id(name)), "MarshalJSON",
 		funcType(nil, param("", byteSlice()), param("", id("error"))), body...))
 	f.line()
+	if len(defaults) == 0 {
+		return
+	}
 
 	// UnmarshalJSON: apply defaults when a field is missing, or null when
 	// the schema does not allow null.
@@ -541,6 +580,7 @@ func emitInlineUnionStruct(f *goFile, name, tname, ref string, v *load.Definitio
 	}
 
 	var st fieldSet
+	var fills []requiredFill
 	switch {
 	case !isNull && isObj:
 		req := requiredSet(v.Required)
@@ -559,6 +599,8 @@ func emitInlineUnionStruct(f *goFile, name, tname, ref string, v *load.Definitio
 			tag := pk
 			if !req[pk] {
 				tag = pk + ",omitempty"
+			} else {
+				fills = appendRequiredFill(fills, util.ToExportedField(pk), pDef)
 			}
 			st.add(structField(util.ToExportedField(pk), optionalTypeExpr(pDef), tag))
 		}
@@ -586,6 +628,7 @@ func emitInlineUnionStruct(f *goFile, name, tname, ref string, v *load.Definitio
 	}
 	f.add(typeDecl(tname, st.structType()))
 	f.line()
+	emitObjectDefaults(f, tname, nil, fills)
 }
 
 // invalidPayload returns errors.New("invalid variant payload") with the given leading results.

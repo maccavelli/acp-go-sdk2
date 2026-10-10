@@ -20,3 +20,21 @@ func TestUnsetUnionFailsByName(t *testing.T) {
 		}
 	}
 }
+
+func TestNilRequiredArrayEncodesEmpty(t *testing.T) {
+	t.Parallel()
+	b, err := json.Marshal(NewSessionRequest{Cwd: "/home/<user>/project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"mcpServers":[]`) {
+		t.Errorf("got %s, want it to contain \"mcpServers\":[]", b)
+	}
+	var got NewSessionRequest
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if err := got.Validate(); err != nil {
+		t.Errorf("decoded %s fails Validate: %v", b, err)
+	}
+}

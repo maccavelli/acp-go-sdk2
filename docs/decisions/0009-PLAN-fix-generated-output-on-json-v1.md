@@ -53,7 +53,7 @@ Preconditions:
    Regenerate. The union test from step 2 passes.
 5. Nil required arrays and maps. In `emitObjectSchema` and in the inline union-variant structs, collect required fields whose Go type is a slice or a map.
    For each such struct emit a value-receiver `MarshalJSON` through an alias type that replaces nil with an empty literal, or add those assignments to the
-   `MarshalJSON` that `emitObjectDefaults` already emits. Expect 35 fields in 34 structs at stamp `1.25.0`. Regenerate. The `NewSessionRequest` test passes.
+   `MarshalJSON` that `emitObjectDefaults` already emits. ~~Expect 35 fields in 34 structs at stamp `1.25.0`.~~ Corrected 2026-10-10: 34 fields in 33 structs; see the deviation below. Regenerate. The `NewSessionRequest` test passes.
 6. Union docs. In `emitSchemaDef`, hold a union's description and emit it directly above the wrapper type, after the variant types.
    Regenerate. The doc test passes, and 24 union types gain a doc comment.
 7. Source cleanups, each regenerated:
@@ -97,6 +97,16 @@ Decision: the owner chose to write each step 2 test together with its fix. The o
 * Step 8, the diff review, closes the plan.
 
 Every step 2 test is still seen to fail before its fix. No test is weakened, skipped, or removed.
+
+## Deviation 2026-10-10, required-collection count
+
+Found in step 5: step 5 expected 35 fields in 34 structs, and the MADR's Context and Consequences said the same. The generator emits fills for 34 fields
+in 33 structs. The two fields a tag-only count adds, `ElicitationSchema.Properties` and `InitializeResponse.AuthMethods`, are optional and already
+encode their schema defaults. Running the counting script on the committed `types_gen.go` at `15549e0` reproduces the record's basis: 36 fields in 35
+structs by tag, two of them defaulted.
+
+Decision: the owner chose to correct both records in step 5. The MADR carries an amendment dated 2026-10-10, and step 5's expectation is struck through
+above. No file is added to the step's scope, and the implementation is unchanged.
 
 ## Execution record
 
@@ -159,3 +169,44 @@ Gates: `make pre-add-check` with the three changed Go files named: `go-precheck:
 Without names: `go-precheck: 48 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point 2: the agent stopped here. The owner commits step 4 on `main`.
+
+### Step 5, nil required arrays and maps, 2026-10-10
+
+The owner committed step 4 as `15549e0`. Step 5 ran on `main` from that clean tree. The agent did not commit.
+
+Added `TestNilRequiredArrayEncodesEmpty` to `generated_output_test.go`: `NewSessionRequest{Cwd: "/home/<user>/project"}` must encode
+`"mcpServers":[]`, and the decoded value must pass `Validate`. Run before the generator change, it failed on both counts:
+
+```text
+--- FAIL: TestNilRequiredArrayEncodesEmpty (0.00s)
+    generated_output_test.go:31: got {"cwd":"/home/\u003cuser\u003e/project","mcpServers":null}, want it to contain "mcpServers":[]
+    generated_output_test.go:38: decoded {"cwd":"/home/\u003cuser\u003e/project","mcpServers":null} fails Validate: mcpServers is required
+```
+
+Generator change, all in `cmd/generate/internal/emit/types.go`:
+
+* `appendRequiredFill` records a required property whose Go type is a slice or a map, with a fresh type node for the literal.
+* `emitObjectSchema` collects these for fields with no schema default, `emitInlineNestedTypes` for nested inline objects, and `emitInlineUnionStruct`
+  for object union variants, including the shared required fields copied into each variant.
+* `emitObjectDefaults` takes the fills. Its `MarshalJSON` sets each nil one to an empty literal, after the existing default fills, and is emitted when
+  there are defaults or fills. Its `UnmarshalJSON` is still emitted only for defaults.
+
+The schema check found 24 required collection properties in `schema/schema.unstable.json`, none nullable, none defaulted, and none reached through a
+`$ref`; shared required fields copied into union variants account for the larger generated count.
+
+Regenerated with `cd cmd/generate && go run .`. Only `types_gen.go` changed, by 333 added lines and no removed ones. A script over the diff found 33 new
+`MarshalJSON` methods with 34 fills of the form `if a.F == nil { a.F = T{} }`, and compared them with the fields the committed file tags as slice or map
+with no `omitempty`: every tagged field is filled except the two defaulted ones, and nothing else is filled. The count correction is recorded in the
+deviation above.
+
+In a scratch copy, `SessionUpdate{Plan: &SessionUpdatePlan{}}` encoded `{"entries":[],"sessionUpdate":"plan"}` and a `McpServer` with an `McpServerStdio`
+variant encoded `{"args":[],"command":"c","env":[],"name":"n"}`, so the fills hold through a union's own encoder.
+
+After the change `TestNilRequiredArrayEncodesEmpty`, `TestUnsetUnionFailsByName`, and both pin tests pass. `go test ./...` exits 0 at the root and in
+`cmd/generate`, including `TestGeneratedFilesUpToDate`. `go build ./example/...` exits 0. No file under `testdata/json_golden/` changed, so populated
+messages encode to the same bytes.
+
+Gates: `make pre-add-check` with the three changed Go files named: `go-precheck: 3 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+Without names: `go-precheck: 49 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point 3: the agent stopped here. The owner commits step 5 on `main`.
