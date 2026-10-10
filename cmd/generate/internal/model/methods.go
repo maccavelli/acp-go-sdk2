@@ -111,7 +111,7 @@ func buildMethods(m *Model, prov *load.Provenance, r *rules) error {
 	}{
 		{"agent", m.meta.AgentMethods, m.AgentMethodConsts, &m.AgentMethods},
 		{"client", m.meta.ClientMethods, m.ClientMethodConsts, &m.ClientMethods},
-		{"protocol", m.meta.ProtocolMethods, nil, &m.Protocol},
+		{"protocol", m.meta.ProtocolMethods, m.ProtocolMethodConsts, &m.Protocol},
 	} {
 		for _, key := range slices.Sorted(maps.Keys(side.methods)) {
 			mi, err := buildMethod(m.schema, linked, prov, side.name, key, side.methods[key])

@@ -40,6 +40,11 @@ func WriteConstants(outDir string, m *model.Model) error {
 	f.comment("Client method names")
 	f.add(methodConsts(m.ClientMethods))
 
+	if len(m.Protocol) > 0 {
+		f.comment("Protocol method names")
+		f.add(methodConsts(m.Protocol))
+	}
+
 	return f.write(outDir, "constants_gen.go")
 }
 

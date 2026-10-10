@@ -381,3 +381,56 @@ Gates: `make pre-add-check` with the seven changed Go files named: `go-precheck:
 govulncheck).` Without names: `go-precheck: 66 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 4 on `main`.
+
+### Step 5, the protocol method constant, 2026-10-10
+
+The owner committed step 4 as `8f87c4f`. Step 5 ran on `main` from that clean tree. The agent did not commit.
+
+Tests: `TestBuildMethods` now requires the protocol method's `Const` to be `ProtocolMethodCancelRequest` where it required it empty, the change this
+step makes; `TestProtocolMethodConstants` in `emit/dispatch_test.go` writes `constants_gen.go` for a meta with the protocol method and requires the
+block, and for one without and requires none. Run before the change:
+
+```text
+--- FAIL: TestProtocolMethodConstants
+    dispatch_test.go:126: one: contains "// Protocol method names\nconst (\n\tProtocolMethodCancelRequest = \"$/cancel_request\"\n)\n" = false, want true
+--- FAIL: TestBuildMethods
+    methods_test.go:88: protocol methods: [0x4ea08ef4c540]
+```
+
+The change: `Model.ProtocolMethodConsts`, filled with `ProtocolMethod` and the exported meta key, declared like the others; `buildMethods` sets the
+protocol methods' `Const` from it; `WriteConstants` adds the `Protocol method names` block when `m.Protocol` is not empty. `connection.go`: the seven
+literals of T6 became `ProtocolMethodCancelRequest`, the two in code directly and the five in log messages by concatenation; the comment at line 525
+keeps the wire name. `gofmt` realigned the `Model` literal in `resolve`.
+
+Regenerated: `constants_gen.go` gained five lines and nothing else, and the other four generated files compare equal, by `cmp`, to `0566b33`'s:
+
+```text
+>
+> // Protocol method names
+> const (
+> 	ProtocolMethodCancelRequest = "$/cancel_request"
+> )
+```
+
+`connection_cancel_test.go`, which spells the wire name itself, passes unchanged: its seven `CancelRequest` tests pass. `grep` finds `$/cancel_request`
+once in `connection.go`, in the comment. The literal check of step 4 still finds no protocol literal outside `acp.go`.
+
+Each part was seen to fail, one breakage per fresh scratch copy:
+
+```text
+block not emitted: failing=['TestGeneratedFilesUpToDate', 'TestProtocolMethodConstants']
+no constant name in the model: failing=['TestBuildMethods', 'TestGeneratedFilesUpToDate', 'TestProtocolMethodConstants']
+wrong wire value ("$/cancel_requests" in constants_gen.go), root tests: exit=1, panic: close of closed channel (connection_cancel_test.go:26)
+wrong wire value, TestConnectionOutboundCancelRequest_SendsNotification alone: connection_cancel_test.go:456: unexpected cancel method: "$/cancel_requests"
+```
+
+With the wrong value the inbound `$/cancel_request` is not recognized, reaches the test's handler as an ordinary notification, and the handler closes
+its `started` channel a second time; the panic is that test failing, not a fault of this step. The outbound test, run alone, fails on its assertion.
+
+After the change every test in the root (`go test -race`) and in `cmd/generate` passes; `go build ./example/...` passes. Coverage: `internal/model`
+94.0%, `internal/emit` 54.2%.
+
+Gates: `make pre-add-check` with the seven changed Go files named: `go-precheck: 7 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 67 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 5 on `main`.

@@ -84,7 +84,7 @@ func TestBuildMethods(t *testing.T) {
 	if !m.AgentMethods[0].Unstable || m.AgentMethods[3].Unstable {
 		t.Error("Unstable is wrong")
 	}
-	if len(m.Protocol) != 1 || m.Protocol[0].Wire != "$/cancel_request" || m.Protocol[0].Binding != BindUnknown || m.Protocol[0].Const != "" {
+	if len(m.Protocol) != 1 || m.Protocol[0].Wire != "$/cancel_request" || m.Protocol[0].Binding != BindUnknown || m.Protocol[0].Const != "ProtocolMethodCancelRequest" {
 		t.Errorf("protocol methods: %+v", m.Protocol)
 	}
 

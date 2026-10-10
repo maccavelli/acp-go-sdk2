@@ -51,13 +51,15 @@ type Model struct {
 	Types  []*Type
 	byName map[string]*Type
 
-	// AgentMethodConsts and ClientMethodConsts map a meta method key to the
-	// name of its constant.
-	AgentMethodConsts  map[string]string
-	ClientMethodConsts map[string]string
+	// AgentMethodConsts, ClientMethodConsts, and ProtocolMethodConsts map a
+	// meta method key to the name of its constant.
+	AgentMethodConsts    map[string]string
+	ClientMethodConsts   map[string]string
+	ProtocolMethodConsts map[string]string
 
 	// AgentMethods and ClientMethods hold the methods of each side, sorted by
-	// meta key. Protocol holds the protocol methods, which nothing emits yet.
+	// meta key. Protocol holds the protocol methods, which have constants
+	// and no interface.
 	AgentMethods  []*Method
 	ClientMethods []*Method
 	Protocol      []*Method
@@ -251,12 +253,13 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		return nil, fmt.Errorf(tablePrefix+"%w", err)
 	}
 	m := &Model{
-		Version:            meta.Version,
-		schema:             schema,
-		meta:               meta,
-		byName:             map[string]*Type{},
-		AgentMethodConsts:  map[string]string{},
-		ClientMethodConsts: map[string]string{},
+		Version:              meta.Version,
+		schema:               schema,
+		meta:                 meta,
+		byName:               map[string]*Type{},
+		AgentMethodConsts:    map[string]string{},
+		ClientMethodConsts:   map[string]string{},
+		ProtocolMethodConsts: map[string]string{},
 	}
 	n := newNamer()
 	names := slices.Sorted(maps.Keys(schema.Defs))
@@ -286,7 +289,11 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		prefix  string
 		methods map[string]string
 		consts  map[string]string
-	}{{"AgentMethod", meta.AgentMethods, m.AgentMethodConsts}, {"ClientMethod", meta.ClientMethods, m.ClientMethodConsts}} {
+	}{
+		{"AgentMethod", meta.AgentMethods, m.AgentMethodConsts},
+		{"ClientMethod", meta.ClientMethods, m.ClientMethodConsts},
+		{"ProtocolMethod", meta.ProtocolMethods, m.ProtocolMethodConsts},
+	} {
 		for _, key := range slices.Sorted(maps.Keys(side.methods)) {
 			c := side.prefix + util.ToExportedField(key)
 			if err := n.declare(c, fmt.Sprintf("method %q", side.methods[key])); err != nil {

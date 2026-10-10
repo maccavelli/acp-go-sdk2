@@ -524,7 +524,7 @@ func (c *Connection) receive() {
 
 		// Handle $/cancel_request notifications synchronously so cancellations take effect
 		// immediately and do not participate in notification ordering.
-		if msg.ID == nil && msg.Method == "$/cancel_request" {
+		if msg.ID == nil && msg.Method == ProtocolMethodCancelRequest {
 			c.handleCancelRequest(&msg)
 			continue
 		}
@@ -686,17 +686,17 @@ func (c *Connection) handleResponse(msg *anyMessage) {
 func (c *Connection) handleCancelRequest(msg *anyMessage) {
 	var p cancelRequestParams
 	if err := json.Unmarshal(msg.Params, &p); err != nil {
-		c.loggerOrDefault().Error("failed to parse $/cancel_request params", "err", err)
+		c.loggerOrDefault().Error("failed to parse "+ProtocolMethodCancelRequest+" params", "err", err)
 		return
 	}
 	if len(bytes.TrimSpace(p.RequestID)) == 0 {
-		c.loggerOrDefault().Error("received $/cancel_request without requestId")
+		c.loggerOrDefault().Error("received " + ProtocolMethodCancelRequest + " without requestId")
 		return
 	}
 
 	idKey, err := canonicalJSONRPCIDKey(p.RequestID)
 	if err != nil {
-		c.loggerOrDefault().Error("failed to canonicalize $/cancel_request requestId", "err", err, "requestId", string(p.RequestID))
+		c.loggerOrDefault().Error("failed to canonicalize "+ProtocolMethodCancelRequest+" requestId", "err", err, "requestId", string(p.RequestID))
 		idKey = string(p.RequestID)
 	}
 
@@ -850,8 +850,8 @@ func (c *Connection) sendCancelRequests() {
 				c.mu.Unlock()
 
 				requestID := json.RawMessage(append([]byte(nil), idKey...))
-				if err := c.SendNotification(context.Background(), "$/cancel_request", cancelRequestParams{RequestID: requestID}); err != nil {
-					c.loggerOrDefault().Debug("failed to send $/cancel_request", "err", err)
+				if err := c.SendNotification(context.Background(), ProtocolMethodCancelRequest, cancelRequestParams{RequestID: requestID}); err != nil {
+					c.loggerOrDefault().Debug("failed to send "+ProtocolMethodCancelRequest, "err", err)
 				}
 			}
 		}
@@ -879,7 +879,7 @@ func (c *Connection) sendCancelRequest(idKey string) {
 	c.mu.Unlock()
 
 	if queueFull {
-		c.loggerOrDefault().Debug("dropping $/cancel_request due to full queue", "queue_len", maxPendingCancelRequests)
+		c.loggerOrDefault().Debug("dropping "+ProtocolMethodCancelRequest+" due to full queue", "queue_len", maxPendingCancelRequests)
 		return
 	}
 

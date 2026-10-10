@@ -92,3 +92,38 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 		}
 	}
 }
+
+// TestProtocolMethodConstants requires a constant for each protocol method of
+// the meta files, and no block when there is none.
+func TestProtocolMethodConstants(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name     string
+		protocol map[string]string
+		want     string
+		present  bool
+	}{
+		{"one", map[string]string{"cancel_request": "$/cancel_request"}, "// Protocol method names\nconst (\n\tProtocolMethodCancelRequest = \"$/cancel_request\"\n)\n", true},
+		{"none", nil, "Protocol method names", false},
+	} {
+		var schema load.Schema
+		if err := json.Unmarshal([]byte(`{"$defs":{"CancelRequestNotification":{"type":"object","x-side":"protocol","x-method":"$/cancel_request"}}}`), &schema); err != nil {
+			t.Fatal(err)
+		}
+		m, err := model.Build(model.Input{Meta: &load.Meta{Version: 1, ProtocolMethods: tt.protocol}, Schema: &schema})
+		if err != nil {
+			t.Fatal(err)
+		}
+		dir := t.TempDir()
+		if err := WriteConstants(dir, m); err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(filepath.Join(dir, "constants_gen.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(string(b), tt.want); got != tt.present {
+			t.Errorf("%s: contains %q = %v, want %v:\n%s", tt.name, tt.want, got, tt.present, b)
+		}
+	}
+}
