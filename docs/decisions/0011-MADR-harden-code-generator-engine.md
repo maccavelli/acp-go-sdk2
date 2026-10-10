@@ -146,7 +146,9 @@ The phases, in order:
    (Refined 2026-10-10: see the phase 3 amendment below.)
 4. **Schema fidelity.** Generated decoders honour `x-deserialize-default-on-error` and `x-deserialize-skip-invalid-items`. Integer fields take the Go type
    of their declared format (`int32`, `int64`, `uint32`, `uint64`), and typed `additionalProperties` become typed maps. `Validate` descends into unions,
-   nested types, and slices, and checks the bounds the schema declares.
+   nested types, and slices, and checks the bounds the schema declares. (Refined 2026-10-10: the phase is decided by
+   [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md), which keeps the integer and map decisions above and adds
+   the keyword registry, required keys on decode, raw JSON for untyped values, and a `Validate` limited to the schema's constraints.)
 5. **Safe output.** All five files are rendered in memory, type-checked together with `go/types` against the hand-written package, and written only if
    every step passes, each through a temporary file and a rename. Panics become errors.
 6. **Tests of the engine.** Table tests run the generator on synthetic schemas for each construct and each refusal; a generated test round-trips every

@@ -1,0 +1,224 @@
+---
+status: proposed
+date: 2026-10-10
+decision-makers: Repository owner
+---
+
+# Generate the ACP schema faithfully through a keyword registry
+
+## Context and Problem Statement
+
+[0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md) restructured the generator around a resolved schema model and
+named phase 4, schema fidelity: honour `x-deserialize-default-on-error` and `x-deserialize-skip-invalid-items`, give integer fields the Go type of
+their declared format, type `additionalProperties`, and make `Validate` descend and check bounds. Phases 1 to 3 are complete. Phase 1 already records
+every fact phase 4 needs on each property (`model.Facts`: format, bounds, value type, the two keywords); nothing reads them yet.
+
+The owner asked for an assessment against the ACP specification and documentation, JSON Schema practice, and idiomatic Go, and for the result to be a
+framework: one rule for how every schema keyword reaches the generated code, rather than phase 4's list of point fixes. This record makes that
+decision. It refines phase 4 of `0011-MADR-harden-code-generator-engine.md` and replaces its one-line scope.
+
+The facts below were measured on `08821e9` against schema `1.25.0` (`schema/schema.json`, 178 definitions; `schema/schema.unstable.json`, 277), on
+the merged model the generator builds, and by probes of `encoding/json` in Go 1.27.2 in scratch copies. Nothing in the tree changed.
+
+### What the ACP sources say
+
+* **The schema is generated from Rust.** "The schema files in the `/schema` directory are generated from the Rust code in the `src` directory"
+  (agent-client-protocol `CONTRIBUTING.md`). No ACP page calls `schema.json` normative.
+* **`x-deserialize-default-on-error` is Rust's `DefaultOnError`.** Every occurrence sits on a field declared
+  `#[serde_as(deserialize_as = "DefaultOnError<...>")]`, and the schema generator's tests require the pairing. serde_with documents it: "Deserialize
+  value and return `Default` on error … Instead of erroring, it simply deserializes the `Default` variant of the type", and "Missing entries still cause
+  errors". On a malformed value the field takes its type's default; a missing key is a separate matter, governed by `#[serde(default)]`. The one field
+  with a custom default agrees with its type's default. The official Python SDK uses the field's declared default instead.
+* **`x-deserialize-skip-invalid-items` is `VecSkipError`.** "Deserialize a sequence into `Vec<T>`, skipping elements which fail to deserialize"; ACP
+  passes no inspector, so skipped items are dropped silently and nothing is logged.
+* **When to be lenient.** ACP's `AGENTS.md`: "Use `DefaultOnError`/`VecSkipError` only when the fallback means less … If the receiver acts on the
+  value …, keep it strict so a request fails with `-32602` instead of silently doing something else."
+* **Unknown values.** The v2 extensibility page: "When storing, replaying, proxying, or forwarding data, implementations SHOULD preserve unknown values
+  and any raw tagged-union payloads"; the v2 migration checklist: "Strict where it counts. Reject malformed payloads for known discriminator values".
+  The v1 extensibility page reserves `_`-prefixed method names and says custom root fields "MUST NOT" be added. No ACP page says "MUST ignore unknown
+  fields"; the Rust crate does not deny them, and the schemas carry `additionalProperties: true` about 125 times and `false` never.
+* **The keywords are recent.** The changelog entry for 0.13.5 (2026-06-01) reads "Experiment annotating lenient deserialize opportunities"; the
+  Rust-only tolerance dates from 0.12.0. ACP also publishes v2 schemas; this SDK pins v1 at `1.25.0`.
+
+### What JSON Schema and OpenAPI say
+
+* **`format` is an annotation by default.** JSON Schema 2020-12 validation §7.2.1: "The value of format MUST be collected as an annotation", and an
+  assertion mode "MUST be disabled by default". §7.2.3: "An implementation MUST NOT fail to collect unknown formats as annotations."
+* **The integer formats are not JSON Schema formats.** 2020-12 §7.3 defines none of `int32`, `int64`, `uint16`, `uint32`, `uint64`, `double`. OpenAPI
+  3.1 defines `int32`, `int64`, `float`, `double`; the OpenAPI format registry lists `uint8` to `uint64`. schemars, which writes ACP's schema, emits
+  them from the Rust types (`u64` → `"uint64"` with `"minimum": 0`; `u16` → `"uint16"` with `"minimum": 0, "maximum": 65535`).
+* **`default` is an annotation.** §9.2: "This keyword can be used to supply a default JSON value associated with a particular schema." Filling it in
+  is the generator's choice, made by phase 1 and kept here.
+* **Unknown keywords.** 2020-12 core §4.3.1: "Unknown keywords SHOULD be treated as annotations." The generator's loader goes further and refuses a
+  keyword it does not model, so a new keyword cannot be ignored silently.
+
+### What the generated code does today
+
+* **S1. Integers.** 46 generated fields with an integer format (`int32` 1, `int64` 12, `uint32` 16, `uint64` 17) and 12 named types
+  (`ProtocolVersion` `uint16`, `RequestIdNumber` and `ElicitationContentValueInteger` `int64`, the nine `ErrorCode…` variants `int32`) are `int` or
+  `*int`: signed, and 32 bits wide on 32-bit platforms. In Go 1.27.2 a sized type checks the range on decode: `-1` into `uint64`, `4294967296` into
+  `uint32`, and `65536` into `uint16` each fail with an `UnmarshalTypeError`. `double` is already `float64`.
+* **S2. Typed maps.** 6 generated fields whose `additionalProperties` names a type are `map[string]any`: `env` of `AuthMethod` and
+  `AuthMethodTerminal` and `headers` of `UnstableSetProviderRequest` (`string`), `content` of `CreateElicitationResponse` and
+  `ElicitationAcceptAction` (`ElicitationContentValue`), `properties` of `ElicitationSchema` (`ElicitationPropertySchema`).
+* **S3. Arbitrary JSON.** 18 fields are `any`: `rawInput` and `rawOutput` (on `ToolCall`, `ToolCallUpdate`, and two `SessionUpdate` variants), the
+  `params` and `result` of the six envelope types (`AgentRequest` … `ClientResponse`), `Error.data`, `UnstableMcpError.data`,
+  `UnstableMessageMcpResponse.result`, and the null-typed `stopReason` of `IdleStateUpdate`'s `None` variant. Decoding into `any` makes every number a
+  `float64`: `9007199254740993` comes back as `9.007199254740992e+15`.
+* **S4. The deserialization keywords.** 528 generated fields carry `x-deserialize-default-on-error` (13 of them required, 21 with a schema `default`)
+  and 35 carry `x-deserialize-skip-invalid-items`; none is honoured, so `InitializeResponse` with `"agentCapabilities":"garbage"` fails to decode
+  (0011's F4). Every required field with default-on-error is an array that also skips invalid items.
+* **S5. Required keys.** 438 required keys across 214 structs are not checked on decode: a missing key decodes to the Go zero value. `Validate` then
+  catches only required strings (`""`) and arrays (`nil`), 39 checks in all, which is stricter than the schema for a present empty string
+  (`{"sessionId":""}` is schema-valid and rejected with `-32602`) and blind to a missing number, boolean, or object.
+* **S6. Validation depth.** 99 types have `Validate`; it does not descend into fields, unions, or slices (0011's F7), and checks no `minLength` (the
+  schema's only one is `Notice.title`, 2 generated fields). No bound in `1.25.0` lies outside its Go type's range once S1 is applied.
+* **S7. Dead `omitempty`.** 8 struct-valued fields (the capability structs on `InitializeRequest`, `InitializeResponse`, `AgentCapabilities`,
+  `ClientCapabilities`) carry `omitempty`, which never omits a struct: a zero capability struct is sent as `{"c":{}}`, where `omitzero` would omit it.
+  Each has a schema `default` of `{}`.
+* **S8. Receiver names.** 21 generated types use two receiver names (`u` for the union codec, `v` for `Validate`). Go Code Review Comments: "Be
+  consistent, too: if you call the receiver "c" in one method, don't call it "cl" in another."
+* **S9. Decoding cost.** 290 of the 291 generated structs have a required key or a lenient field; 43 generated `UnmarshalJSON` methods exist today.
+  `types_gen.go` has 12,190 lines.
+
+## Decision Drivers
+
+* The SDK accepts what the schema accepts and rejects what it rejects, with the leniency ACP's Rust implementation applies and no more.
+* Every schema keyword has exactly one declared treatment; a keyword or format the generator cannot honour stops generation with a named error.
+* A peer's data is not changed in transit: arbitrary JSON keeps every digit, unknown values are preserved (0011 phase 2).
+* The generated code is idiomatic Go: sized integer types, typed maps, consistent receivers, no tag that does nothing.
+* The exported API changes only where this record says so, in a new minor version on `v0` with every change listed.
+* No new dependency ([0007-MADR-self-contained-acp-sdk.md](0007-MADR-self-contained-acp-sdk.md)); `encoding/json` v1 stays.
+
+## Considered Options
+
+* A keyword registry in the model, with one treatment per keyword, rendered by the emitters
+* Point fixes in the emitters, one per finding
+* Validation at run time against the embedded schema with a JSON Schema library
+* Leave the generated code as it is
+
+## Decision Outcome
+
+Chosen option: "A keyword registry in the model, with one treatment per keyword, rendered by the emitters", because it gives every keyword one
+reviewable place, carries 0011's model-first design through to the output, and makes the next schema's new keyword a named failure instead of a silent
+gap; the other options either repeat 0011's original problem or add a dependency 0007 rules out.
+
+### The framework
+
+The loader refuses any keyword `load.Definition` does not declare (it decodes strictly). The model adds a registry, `model/keywords.go`, that gives
+every declared keyword one treatment, and a test that requires the registry and `load.Definition` to list the same keywords:
+
+| Keyword | Treatment | Go result |
+| --- | --- | --- |
+| `$ref`, `allOf`, `anyOf`, `oneOf`, `discriminator`, `not`, `unevaluatedProperties`, `properties`, `items`, `title` | structure | types, unions, variants (phases 1–2) |
+| `type`, `format` (integer and number), `additionalProperties` with a schema, `enum`, `const` | type | the Go type; constants |
+| `required` | decode | presence checked on decode |
+| `default` | decode and encode | filled when absent; the fallback of a lenient field |
+| `x-deserialize-default-on-error`, `x-deserialize-skip-invalid-items` | decode | lenient field and item decoding |
+| `minimum`, `maximum` | type or validate | enforced by the Go type when it equals the type's range, else checked by `Validate` |
+| `minLength` | validate | `Validate` counts characters (Unicode code points) |
+| `format` (string), `description` | annotation | doc comments; no check |
+| `x-method`, `x-side`, `x-docs-ignore` | protocol | methods, bindings, docs (phases 1, 3) |
+
+A `format` the registry does not know on an `integer` or `number` is refused, naming the definition, property, and format; an unknown `format` on a
+`string` is an annotation, as 2020-12 §7.2.3 requires.
+
+### The treatments
+
+1. **Integer formats** (0011's decision, kept): `int8`, `int16`, `int32`, `int64` → `int8` … `int64`; `uint8`, `uint16`, `uint32`, `uint64` →
+   `uint8` … `uint64`; `int` → `int64`, `uint` → `uint64` (schemars' `isize` and `usize`); an integer without a format → `int64` (none at `1.25.0`). `float` → `float32`,
+   `double` → `float64`. This applies to properties, named primitive types, and union variants alike.
+2. **Typed `additionalProperties`** (0011's decision, kept): `map[string]T`. `additionalProperties: true` stays `map[string]any`.
+3. **Arbitrary JSON** (decided 2026-10-10): a property or variant whose schema constrains no type becomes `json.RawMessage`, so it is carried byte for
+   byte. The hand-written options `WithStartRawInput`, `WithStartRawOutput`, `WithUpdateRawInput`, and `WithUpdateRawOutput` take `json.RawMessage`,
+   and `WithStartLocations` merges `path` into a raw input object through `map[string]json.RawMessage`. `_meta` stays `map[string]any`
+   (`additionalProperties: true`), and so do the two `params` objects of `mcp/message`.
+4. **Required keys** (decided 2026-10-10): a generated `UnmarshalJSON` fails when a required key is absent, naming the type and the property; dispatch
+   turns it into `-32602`. In an inline variant of a discriminated union the discriminator is exempt, because the union already placed the payload
+   (0011 phase 2's absent-key rule). JSON `null` for a struct that is not nullable reads as an object with no keys, so it fails when the struct has
+   a required key.
+5. **`x-deserialize-default-on-error`**: a present value that fails to decode takes the property's schema `default` when it declares one, else the Go
+   zero value (`nil`, `0`, `false`, `""`, an empty slice), the value the field has when its key is absent. For an `Option` or a `Vec` this is
+   what Rust's `Default` gives; where a Rust type's default differs (an enum's `#[default]` variant), the schema does not state it, and the Go
+   field reads as absent. The key itself still has to be present when it is required, as in Rust.
+6. **`x-deserialize-skip-invalid-items`**: an array item that fails to decode is dropped, silently, as in Rust. A value that is not an array is an
+   error, unless the property also has default-on-error. An item that decodes to a union's `Unknown` or catch-all is kept.
+7. **Validation** (decided 2026-10-10): `Validate` checks what the schema states and nothing else: a union has exactly one variant or `Unknown` set,
+   and the set one validates; `minLength`; a bound outside the Go type's range; and every field whose type, slice element, map value, or pointer
+   target validates. The `""` and `nil` checks go; presence is a decoding matter (4). Every type that has `Validate` today keeps it. The protocol
+   table's validate rule for `ToolCallUpdate` (from `0011-PLAN-protocol-table.md`) is removed with them.
+8. **`omitempty` on struct values** (decided 2026-10-10): dropped from the tag, so the tag says what the encoder does; the wire does not change.
+9. **Receivers**: a union's methods use `u`, every other type's `v`.
+10. **String `format`** (`uri` at `1.25.0`): annotation only.
+
+### Consequences
+
+* Good, because each keyword has one treatment, listed in one table and enforced by a test, and the next unknown keyword or numeric format stops
+  generation with a named error.
+* Good, because the SDK tolerates exactly what ACP's Rust implementation tolerates (S4) and rejects a missing required key the way it does (S5).
+* Good, because integers carry their declared range and width on every platform, and arbitrary JSON keeps every digit (S1, S3).
+* Good, because `Validate` stops rejecting schema-valid messages and starts finding an invalid value inside a union or a slice (S5, S6).
+* Neutral, because a valid message encodes and decodes as today: no golden changes.
+* Bad, because the exported API changes: 58 integer declarations, 6 map fields, 18 `any` fields, 4 option signatures; code that reads `*params.Line`
+  as an `int`, or sets `RawInput` to a map, stops compiling. The release notes list each.
+* Bad, because messages the SDK accepts today now fail: one that omits a required key, or sends `null` for an object with required keys, gets
+  `-32602`. A present empty string, which `Validate` rejects today, passes.
+* Bad, because nearly every struct gains a generated `UnmarshalJSON` (S9) that reads the object twice, once for its keys and once for its fields;
+  `types_gen.go` grows by several thousand lines.
+* Bad, because `x-deserialize-*` are marked experimental upstream, so their meaning may change with a schema update.
+
+### Confirmation
+
+* A test requires the registry and `load.Definition` to list the same keywords, and every keyword the committed schema uses to be registered.
+* For each treatment, a test that failed before its step passes after, with a planted breakage shown failing.
+* The probes of S1, S3, S4, S5, S6 become tests: `-1` into a `uint64` field fails; `9007199254740993` in `rawInput` round-trips; `"agentCapabilities":
+  "garbage"` decodes with zero capabilities; a `Plan` missing `entries` fails and one with an invalid entry drops it; a `PromptRequest` with an empty
+  `ContentBlock` fails `Validate`; `{"sessionId":""}` passes it.
+* No golden in `testdata/json_golden/` changes, and `TestGeneratedFilesUpToDate` passes after every step.
+* The exported API difference from `08821e9` is exactly the list in the PLAN's release notes.
+
+## Pros and Cons of the Options
+
+### A keyword registry in the model, with one treatment per keyword, rendered by the emitters
+
+* Good, because the treatment of every keyword is decided once, in the model, and the emitters stay renderers (0011's driver).
+* Good, because the registry turns "did we handle this keyword?" into a test.
+* Bad, because it is the largest change to `types_gen.go` since the port, and it breaks the API in several places at once.
+
+### Point fixes in the emitters, one per finding
+
+* Good, because each fix is small.
+* Bad, because it rebuilds the scattered decisions 0011 removed, and gives no answer for the next keyword.
+
+### Validation at run time against the embedded schema with a JSON Schema library
+
+* Good, because a validator checks every keyword without generated code.
+* Bad, because it adds a dependency, which [0007-MADR-self-contained-acp-sdk.md](0007-MADR-self-contained-acp-sdk.md) rules out, validates JSON
+  rather than Go values, and does not implement `x-deserialize-*`.
+
+### Leave the generated code as it is
+
+* Good, because nothing breaks.
+* Bad, because S1 to S8 stay: wrong integer widths, untyped maps, lost digits, rejected tolerant payloads, and a `Validate` that is both too strict and
+  too shallow.
+
+## More Information
+
+Sources:
+
+* ACP: <https://agentclientprotocol.com/protocol/v1/extensibility>, <https://agentclientprotocol.com/protocol/v2/extensibility>,
+  <https://agentclientprotocol.com/protocol/v2/migration>; the repository `agentclientprotocol/agent-client-protocol` at
+  `382532e26eef2d779838448add825ac45a62914f`: `CONTRIBUTING.md`, `AGENTS.md`, `CHANGELOG.md`, `schema-generator/src/main.rs`,
+  `agent-client-protocol-schema/src/v1/plan.rs`.
+* serde_with 3.24.0: <https://docs.rs/serde_with/3.24.0/serde_with/struct.DefaultOnError.html>,
+  <https://docs.rs/serde_with/3.24.0/serde_with/struct.VecSkipError.html>. schemars 1.2.2, `schemars/src/json_schema_impls/primitives.rs`.
+* JSON Schema 2020-12: <https://json-schema.org/draft/2020-12/json-schema-validation>, <https://json-schema.org/draft/2020-12/json-schema-core>.
+  OpenAPI: <https://spec.openapis.org/oas/v3.1.0.html#data-types>, <https://spec.openapis.org/registry/format/>.
+* Go: <https://go.dev/doc/go1.24#encodingjsonpkgencodingjson> (`omitzero`), <https://go.dev/doc/go1.27> (`encoding/json` backed by v2, behaviour
+  preserved), <https://pkg.go.dev/encoding/json>, <https://go.dev/wiki/CodeReviewComments#receiver-names>.
+
+Out of scope, and why: `_meta` and the two `mcp/message` `params` maps keep `map[string]any`, so numbers inside them are still `float64` (the owner's
+decision covered the 18 `any` fields); `RequestId` decoding any object as `Null` and `connection.go`'s `cancelRequestParams` (recorded in 0011's
+plans); ACP's v2 schemas and their three-state fields; rendering in memory and type-checking the output (0011 phase 5).
+
+Implementation: [0012-PLAN-schema-fidelity-framework.md](0012-PLAN-schema-fidelity-framework.md).
