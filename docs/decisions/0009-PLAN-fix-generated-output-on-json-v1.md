@@ -1,6 +1,6 @@
 ---
 status: in-progress
-date: 2026-10-09
+date: 2026-10-10
 associated-madr: "0009-MADR-fix-generated-output-on-json-v1.md"
 ---
 
@@ -132,3 +132,30 @@ Gates: `make pre-add-check FILES=json_v1_pin_test.go`: `go-precheck: 1 file(s) c
 `go-precheck: 47 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point 1: the agent stopped here. The owner commits step 3 on `main`.
+
+### Step 4, unset unions, 2026-10-10
+
+The owner committed step 3 as `088d49d`. Step 4 ran on `main` from that clean tree. The agent did not commit.
+
+Added `generated_output_test.go` in the root package with `TestUnsetUnionFailsByName`: encoding the zero value of `RequestPermissionResponse` must fail
+with an error containing `RequestPermissionOutcome` and "no variant set". Run before the generator change, it failed:
+
+```text
+--- FAIL: TestUnsetUnionFailsByName (0.00s)
+    generated_output_test.go:19: error "json: error calling MarshalJSON for type *acp.RequestPermissionOutcome: unexpected end of JSON input" does not contain "no variant set"
+```
+
+The union's name was already in v1's wrapper text; the missing part was the reason.
+
+`unionMarshalBody` in `cmd/generate/internal/emit/types.go` now ends with `return nil, errors.New("<Union>: no variant set")`. Regenerated with
+`cd cmd/generate && go run .`. Only `types_gen.go` changed: 28 lines `return []byte{}, nil` became `return nil, errors.New("<Union>: no variant set")`,
+one per union, and no other line moved. No hand-written code and no generated code calls a `MarshalJSON` method directly, so the only callers are
+encoders, which already failed on the empty output.
+
+After the change `TestUnsetUnionFailsByName`, `TestJSONPinEscapesHTML`, and `TestJSONPinSortsMapKeys` pass. `go test ./...` exits 0 at the root and in
+`cmd/generate`, including `TestGeneratedFilesUpToDate`. `go build ./example/...` exits 0. No file under `testdata/json_golden/` changed.
+
+Gates: `make pre-add-check` with the three changed Go files named: `go-precheck: 3 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+Without names: `go-precheck: 48 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point 2: the agent stopped here. The owner commits step 4 on `main`.

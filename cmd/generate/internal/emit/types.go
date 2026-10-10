@@ -784,7 +784,7 @@ func unionMarshalBody(f *goFile, name string, variants []variantInfo) []ast.Stmt
 		}
 		body = append(body, ifStmt(nil, binary(dot("u", vi.fieldName), token.NEQ, nilExpr()), then...))
 	}
-	return append(body, ret(emptyBytes(), nilExpr()))
+	return append(body, ret(nilExpr(), call(f.qual(pkgErrors, "New"), str(name+": no variant set"))))
 }
 
 type sharedFieldCheck struct {
