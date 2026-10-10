@@ -39,6 +39,7 @@ Out of scope:
 1. ~~Stay on the current branch. Do not create a branch. Do not commit.~~ Amended 2026-10-09: work on the branch that [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md) names, and commit this plan's
    change as its own commit after the pre-add checks in `AGENTS.md`. `HEAD` was `main`, and no commit may land on `main`, so the original step left work that could
    never be committed.
+   Superseded 2026-10-09: commits land on `main`; see [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md#amendment-2026-10-09-commits-land-on-main).
 2. Replace `github.com/coder/acp-go-sdk` with `github.com/maccavelli/acp-go-sdk2` in both `go.mod` files, in Go imports, in `AGENTS.md`, and in `docs/architecture.md`.
    Amended 2026-10-09: name those files. Do not run a replace over all `*.md`; it rewrites the record titles in `docs/README.md`. The Go files are
    `cmd/generate/main.go`, five files in `cmd/generate/internal/emit`, `cmd/generate/internal/ir/ir.go`, and the four `example/*/main.go` programs.
@@ -66,6 +67,8 @@ Out of scope:
 
 Amended 2026-10-09: no tag and no push. The change is one commit on the branch named in [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md). That plan commits the records before any phase runs, so
 rollback is `git revert` of this commit, and it cannot reach the uncommitted record edits the original rollback could not tell apart from this plan's edits.
+
+Superseded 2026-10-09: commits land on `main`; see [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md#amendment-2026-10-09-commits-land-on-main).
 
 ## Execution record
 

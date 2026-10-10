@@ -97,3 +97,10 @@ The question was left open. The resolution applied is that ignore. `.markdownlin
 The context paragraph that leaves the schema pin with 0002 names `schema-v1.24.1`. [0004-MADR-pin-acp-schema-1-25-0.md](0004-MADR-pin-acp-schema-1-25-0.md) supersedes that stamp. The G304 directives in the lint amendment stay until a later idiom record. The floor move does not replace them with `os.OpenRoot`.
 
 Implementation is [0003-PLAN-install-fleet-agent-workspace.md](0003-PLAN-install-fleet-agent-workspace.md).
+
+### Amendment 2026-10-09, commits on main
+
+The owner said this repository is committed on `main` most of the time. `AGENTS.md` now carries one paragraph in its Commits section saying so,
+and saying that an agent does not commit, push, or merge on `main` because the organization's git rule forbids it. That paragraph is a named
+difference from the workspace-scaffolding `AGENTS.md` template, outside its three slots. A scaffold refresh keeps it.
+[0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md) applies the same policy to the plans that are open.

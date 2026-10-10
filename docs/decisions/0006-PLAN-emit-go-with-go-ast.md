@@ -36,6 +36,7 @@ Out of scope:
 
 1. ~~Stay on the current branch. Do not create a branch. Do not commit.~~ Amended 2026-10-09: work on the branch that [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md) names.
    Commit after each of steps 3, 4, and 5 once the pre-add checks in `AGENTS.md` pass.
+   Superseded 2026-10-09: commits land on `main`; see [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md#amendment-2026-10-09-commits-land-on-main).
 2. Add local constructors that return `go/ast` nodes, and a writer that prints an `*ast.File` with `go/format`. Do not import Jennifer from the new writer.
    Amended 2026-10-09: the writer follows the layout design in the 2026-10-09 amendment of [0006-MADR-emit-go-with-go-ast.md](0006-MADR-emit-go-with-go-ast.md): a synthetic `token.File`, 4 KiB lines,
    function bodies reserved on their lines, `go/format.Node` then `go/format.Source`. Appendix A of [0008-REPORT-self-contained-sdk-review.md](../reports/0008-REPORT-self-contained-sdk-review.md) is a verified reference implementation
@@ -84,6 +85,8 @@ A nonempty generated diff is not fixed by editing the generated file or by weake
 
 Amended 2026-10-09: no tag and no push. The plan lands as commits on the branch named in [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md). Rollback is `git revert` of those commits.
 The generated files do not change in this plan, so a revert never needs a regeneration.
+
+Superseded 2026-10-09: commits land on `main`; see [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md#amendment-2026-10-09-commits-land-on-main).
 
 ## Execution record
 

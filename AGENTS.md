@@ -132,3 +132,10 @@ real-machine absolute path. Use placeholders (`<user>`, `/home/<user>/...`).
 
 `git commit --no-edit`. Never pass `-m` / `--message` / `-F`. The global
 `prepare-commit-msg` hook writes the message from the staged diff.
+
+The owner commits on `main` most of the time. An agent does not commit,
+push, or merge on `main`: the organization's git rule forbids it, and an
+authorization given in a turn does not lift it. At a commit point the agent
+runs the pre-add checks and stops, and the owner commits. An agent commits
+only on a branch the owner names in that turn, `feature/<slug>` by default,
+and only after an explicit ask.

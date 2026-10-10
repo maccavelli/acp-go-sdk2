@@ -37,7 +37,9 @@ Preconditions:
 
 ## Implementation Steps
 
-1. Create `fix/generated-output-json-v1` from `main`. Commit at the end of each step below after `make pre-add-check`, `make check-records`, and `make markdownlint` pass.
+1. ~~Create `fix/generated-output-json-v1` from `main`.~~ Amended 2026-10-09: work on `main`. At the end of each step below, run `make pre-add-check`,
+   `make check-records`, and `make markdownlint`, record their output, and stop. The owner commits with `git commit --no-edit`.
+   An agent commits only on a branch the owner names in that turn, `feature/<slug>` by default, after an explicit ask.
 2. Write the failing tests first, in the root module:
    * The zero value of `RequestPermissionResponse` fails to encode with an error containing `RequestPermissionOutcome` and "no variant set".
    * `NewSessionRequest{Cwd: "/home/<user>/project"}` encodes `"mcpServers":[]`, and the decoded value passes `Validate`.
@@ -74,11 +76,11 @@ Preconditions:
 
 ## Rollout and Rollback
 
-All work is on `fix/generated-output-json-v1`. No tag. A push, and a merge to `main`, wait for the owner's explicit ask.
+~~All work is on `fix/generated-output-json-v1`.~~ Amended 2026-10-09: commits land on `main`, made by the owner. No tag. A push waits for the owner's explicit ask.
 
 The change alters what the SDK sends for nil required arrays and the error text for an unset union. The release notes for the next module version say so.
 
-Rollback is `git revert` of the step commits, newest first. Each step regenerates the files it changes, so a revert leaves the generator and the generated files in step.
+Rollback is `git revert` of the step commits on `main`, newest first, made by the owner. Each step regenerates the files it changes, so a revert leaves the generator and the generated files in step.
 
 ## Execution record
 
