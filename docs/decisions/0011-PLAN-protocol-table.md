@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-10
 associated-madr: "0011-MADR-harden-code-generator-engine.md"
 ---
@@ -466,3 +466,41 @@ test name: exit=1 ['FAIL identifier: TestProtocolTableApplyToCommittedSchema']
 No Go file changed, so `make pre-add-check` was not run. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 6 on `main`.
+
+### Step 7, review and close, 2026-10-10
+
+The owner committed step 6 as `3ab1b3f` and pushed. Step 7 ran on `main` from that clean tree and changed this record and `docs/README.md`. The agent
+did not commit.
+
+The phase's commits, `git log --oneline 128a920..3ab1b3f`: `0566b33` (this plan and the MADR amendment), `fe8bf85` (step 2), `40870bb` (step 3),
+`8f87c4f` (step 4), `a74a037` (step 5), `3ab1b3f` (step 6). `cmd/generate` changed by 1060 lines added and 190 removed in 17 files; `connection.go` by 7
+and 7.
+
+Verification, as printed:
+
+* `git diff --numstat 128a920 3ab1b3f -- '*_gen.go' testdata` lists only `constants_gen.go`, 5 lines added and none removed: the `Protocol method
+  names` block. Steps 2, 3, and 4 left every generated file equal, by `cmp`, as each step's record shows; no golden changed.
+* The literal check over the non-test files of `cmd/generate` (40 wire names, 36 strings of `acp.go`, 8 derived names): `no protocol literal outside
+  acp.go`. On `40870bb`, before step 4, it reported 17.
+* `TestProtocolTableAppliesToCommittedSchema` and `TestGeneratedFilesUpToDate` pass. Each new test failed first, and each refusal case is in
+  `TestProtocolTableRefuses`, which failed to compile before step 3. Every entry of `ACP`, removed one at a time, fails a test (step 3); the
+  `session/prompt` rule, which changed no output in step 3, changes it since step 4.
+* `go test -race -count=1 ./...` exits 0 at the root and in `cmd/generate`; `go build ./example/...` exits 0.
+* `go test -cover`: `internal/model` 94.0%, `internal/emit` 54.2% (37.4% at `128a920`).
+* `make pre-add-check`: `go-precheck: 67 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records` and
+  `make markdownlint` exit 0.
+
+**Exported API change, for the release notes.** The program of phase 2's step 10 listed every exported declaration of the root package on `128a920` and
+on `3ab1b3f` (1993 and 1994 lines). The diff holds one line: `const ProtocolMethodCancelRequest`. No wire behaviour changed.
+
+**Not done, and where it belongs:**
+
+* The five capability-gated agent methods (`session/list`, `session/delete`, `session/resume`, `session/close`, `logout`) stay on the required `Agent`
+  interface; the table records their gates. Moving them waits for its own decision, as the amendment says.
+* `providers/*`, `nes/*`, and `elicitation/create` have capabilities whose descriptions name no method, so the table records no gate for them.
+* The discriminator derived from the first `const` property (F12) stays in the model.
+* `RequestId` decoding any object as `Null` (phase 2), and `cancelRequestParams` in `connection.go`, are unchanged.
+
+Every acceptance criterion in Verification holds, the interface-name exception as annotated in step 4. The status is `complete`, and `docs/README.md`
+shows it. The MADR is unchanged; its amendment's statement that apart from the new constant the generated files do not change holds. Phase 4 of
+[0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md), schema fidelity, needs its own PLAN.
