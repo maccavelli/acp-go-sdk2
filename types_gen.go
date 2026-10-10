@@ -3,6 +3,7 @@
 package acp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -398,6 +399,9 @@ type AuthMethod struct {
 	//
 	// This is the default when no 'type' is specified.
 	Agent *AuthMethodAgent `json:"-"`
+	// Unknown holds a payload whose "type" names no variant this SDK knows, as it was received.
+	// MarshalJSON writes it back unchanged when no variant is set.
+	Unknown json.RawMessage `json:"-"`
 }
 
 func (u *AuthMethod) UnmarshalJSON(b []byte) error {
@@ -417,6 +421,10 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("AuthMethod: type \"terminal\": %w", err)
 				}
 				u.Terminal = &v
+				return nil
+			}
+			if v, ok := m["type"]; ok && string(v) != "null" {
+				u.Unknown = bytes.Clone(b)
 				return nil
 			}
 		}
@@ -505,6 +513,9 @@ func (u AuthMethod) MarshalJSON() ([]byte, error) {
 			return nil, fmt.Errorf("AuthMethod: %w", err)
 		}
 		return json.Marshal(m)
+	}
+	if u.Unknown != nil {
+		return u.Unknown, nil
 	}
 	return nil, errors.New("AuthMethod: no variant set")
 }
@@ -1366,6 +1377,9 @@ type ContentBlock struct {
 	//
 	// Requires the 'embeddedContext' prompt capability when included in prompts.
 	Resource *ContentBlockResource `json:"-"`
+	// Unknown holds a payload whose "type" names no variant this SDK knows, as it was received.
+	// MarshalJSON writes it back unchanged when no variant is set.
+	Unknown json.RawMessage `json:"-"`
 }
 
 func (u *ContentBlock) UnmarshalJSON(b []byte) error {
@@ -1413,6 +1427,10 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("ContentBlock: type \"resource\": %w", err)
 				}
 				u.Resource = &v
+				return nil
+			}
+			if v, ok := m["type"]; ok && string(v) != "null" {
+				u.Unknown = bytes.Clone(b)
 				return nil
 			}
 		}
@@ -1617,6 +1635,9 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 		m["type"] = json.RawMessage("\"resource\"")
 		return json.Marshal(m)
 	}
+	if u.Unknown != nil {
+		return u.Unknown, nil
+	}
 	return nil, errors.New("ContentBlock: no variant set")
 }
 
@@ -1635,6 +1656,9 @@ func (u *ContentBlock) Validate() error {
 		count++
 	}
 	if u.Resource != nil {
+		count++
+	}
+	if u.Unknown != nil {
 		count++
 	}
 	if count != 1 {
@@ -4792,6 +4816,9 @@ type McpServer struct {
 	//
 	// All Agents MUST support this transport.
 	Stdio *McpServerStdio `json:"-"`
+	// Unknown holds a payload whose "type" names no variant this SDK knows, as it was received.
+	// MarshalJSON writes it back unchanged when no variant is set.
+	Unknown json.RawMessage `json:"-"`
 }
 
 func (u *McpServer) UnmarshalJSON(b []byte) error {
@@ -4825,6 +4852,10 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("McpServer: type \"acp\": %w", err)
 				}
 				u.Acp = &v
+				return nil
+			}
+			if v, ok := m["type"]; ok && string(v) != "null" {
+				u.Unknown = bytes.Clone(b)
 				return nil
 			}
 		}
@@ -5003,6 +5034,9 @@ func (u McpServer) MarshalJSON() ([]byte, error) {
 			return nil, fmt.Errorf("McpServer: %w", err)
 		}
 		return json.Marshal(m)
+	}
+	if u.Unknown != nil {
+		return u.Unknown, nil
 	}
 	return nil, errors.New("McpServer: no variant set")
 }
@@ -6071,6 +6105,9 @@ type PlanUpdateContent struct {
 	File *PlanUpdateContentFile `json:"-"`
 	// Raw markdown content for the plan.
 	Markdown *PlanUpdateContentMarkdown `json:"-"`
+	// Unknown holds a payload whose "type" names no variant this SDK knows, as it was received.
+	// MarshalJSON writes it back unchanged when no variant is set.
+	Unknown json.RawMessage `json:"-"`
 }
 
 func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
@@ -6104,6 +6141,10 @@ func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("PlanUpdateContent: type \"markdown\": %w", err)
 				}
 				u.Markdown = &v
+				return nil
+			}
+			if v, ok := m["type"]; ok && string(v) != "null" {
+				u.Unknown = bytes.Clone(b)
 				return nil
 			}
 		}
@@ -6236,6 +6277,9 @@ func (u PlanUpdateContent) MarshalJSON() ([]byte, error) {
 		m["type"] = json.RawMessage("\"markdown\"")
 		return json.Marshal(m)
 	}
+	if u.Unknown != nil {
+		return u.Unknown, nil
+	}
 	return nil, errors.New("PlanUpdateContent: no variant set")
 }
 
@@ -6248,6 +6292,9 @@ func (u *PlanUpdateContent) Validate() error {
 		count++
 	}
 	if u.Markdown != nil {
+		count++
+	}
+	if u.Unknown != nil {
 		count++
 	}
 	if count != 1 {
@@ -6644,6 +6691,9 @@ type RequestPermissionOutcome struct {
 	Cancelled *RequestPermissionOutcomeCancelled `json:"-"`
 	// The user selected one of the provided options.
 	Selected *RequestPermissionOutcomeSelected `json:"-"`
+	// Unknown holds a payload whose "outcome" names no variant this SDK knows, as it was received.
+	// MarshalJSON writes it back unchanged when no variant is set.
+	Unknown json.RawMessage `json:"-"`
 }
 
 func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
@@ -6670,6 +6720,10 @@ func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("RequestPermissionOutcome: outcome \"selected\": %w", err)
 				}
 				u.Selected = &v
+				return nil
+			}
+			if v, ok := m["outcome"]; ok && string(v) != "null" {
+				u.Unknown = bytes.Clone(b)
 				return nil
 			}
 		}
@@ -6754,6 +6808,9 @@ func (u RequestPermissionOutcome) MarshalJSON() ([]byte, error) {
 		m["outcome"] = json.RawMessage("\"selected\"")
 		return json.Marshal(m)
 	}
+	if u.Unknown != nil {
+		return u.Unknown, nil
+	}
 	return nil, errors.New("RequestPermissionOutcome: no variant set")
 }
 
@@ -6763,6 +6820,9 @@ func (u *RequestPermissionOutcome) Validate() error {
 		count++
 	}
 	if u.Selected != nil {
+		count++
+	}
+	if u.Unknown != nil {
 		count++
 	}
 	if count != 1 {
@@ -7109,6 +7169,9 @@ type SessionConfigOption struct {
 	Select *SessionConfigOptionSelect `json:"-"`
 	// Boolean on/off toggle.
 	Boolean *SessionConfigOptionBoolean `json:"-"`
+	// Unknown holds a payload whose "type" names no variant this SDK knows, as it was received.
+	// MarshalJSON writes it back unchanged when no variant is set.
+	Unknown json.RawMessage `json:"-"`
 }
 
 func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
@@ -7135,6 +7198,10 @@ func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("SessionConfigOption: type \"boolean\": %w", err)
 				}
 				u.Boolean = &v
+				return nil
+			}
+			if v, ok := m["type"]; ok && string(v) != "null" {
+				u.Unknown = bytes.Clone(b)
 				return nil
 			}
 		}
@@ -7225,6 +7292,9 @@ func (u SessionConfigOption) MarshalJSON() ([]byte, error) {
 		m["type"] = json.RawMessage("\"boolean\"")
 		return json.Marshal(m)
 	}
+	if u.Unknown != nil {
+		return u.Unknown, nil
+	}
 	return nil, errors.New("SessionConfigOption: no variant set")
 }
 
@@ -7234,6 +7304,9 @@ func (u *SessionConfigOption) Validate() error {
 		count++
 	}
 	if u.Boolean != nil {
+		count++
+	}
+	if u.Unknown != nil {
 		count++
 	}
 	if count != 1 {
@@ -8136,6 +8209,9 @@ type SessionUpdate struct {
 	//
 	// One content block appended to a sent or received session message.
 	SessionMessageChunk *SessionUpdateSessionMessageChunk `json:"-"`
+	// Unknown holds a payload whose "sessionUpdate" names no variant this SDK knows, as it was received.
+	// MarshalJSON writes it back unchanged when no variant is set.
+	Unknown json.RawMessage `json:"-"`
 }
 
 func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
@@ -8281,6 +8357,10 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("SessionUpdate: sessionUpdate \"session_message_chunk\": %w", err)
 				}
 				u.SessionMessageChunk = &v
+				return nil
+			}
+			if v, ok := m["sessionUpdate"]; ok && string(v) != "null" {
+				u.Unknown = bytes.Clone(b)
 				return nil
 			}
 		}
@@ -8995,6 +9075,9 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 		m["sessionUpdate"] = json.RawMessage("\"session_message_chunk\"")
 		return json.Marshal(m)
 	}
+	if u.Unknown != nil {
+		return u.Unknown, nil
+	}
 	return nil, errors.New("SessionUpdate: no variant set")
 }
 
@@ -9057,6 +9140,9 @@ func (u *SessionUpdate) Validate() error {
 	if u.SessionMessageChunk != nil {
 		count++
 	}
+	if u.Unknown != nil {
+		count++
+	}
 	if count != 1 {
 		return errors.New("SessionUpdate must have exactly one variant set")
 	}
@@ -9110,6 +9196,9 @@ type SetSessionConfigOptionRequest struct {
 	// values with string payloads also gracefully deserialize into this
 	// variant.
 	ValueId *SetSessionConfigOptionValueId `json:"-"`
+	// Unknown holds a payload whose "type" names no variant this SDK knows, as it was received.
+	// MarshalJSON writes it back unchanged when no variant is set.
+	Unknown json.RawMessage `json:"-"`
 }
 
 func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
@@ -9129,6 +9218,10 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("SetSessionConfigOptionRequest: type \"boolean\": %w", err)
 				}
 				u.Boolean = &v
+				return nil
+			}
+			if v, ok := m["type"]; ok && string(v) != "null" {
+				u.Unknown = bytes.Clone(b)
 				return nil
 			}
 		}
@@ -9211,6 +9304,9 @@ func (u SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
 			return nil, fmt.Errorf("SetSessionConfigOptionRequest: %w", err)
 		}
 		return json.Marshal(m)
+	}
+	if u.Unknown != nil {
+		return u.Unknown, nil
 	}
 	return nil, errors.New("SetSessionConfigOptionRequest: no variant set")
 }
@@ -10024,6 +10120,9 @@ type ToolCallContent struct {
 	//
 	// See protocol docs: [Terminal](https://agentclientprotocol.com/protocol/terminals)
 	Terminal *ToolCallContentTerminal `json:"-"`
+	// Unknown holds a payload whose "type" names no variant this SDK knows, as it was received.
+	// MarshalJSON writes it back unchanged when no variant is set.
+	Unknown json.RawMessage `json:"-"`
 }
 
 func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
@@ -10057,6 +10156,10 @@ func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("ToolCallContent: type \"terminal\": %w", err)
 				}
 				u.Terminal = &v
+				return nil
+			}
+			if v, ok := m["type"]; ok && string(v) != "null" {
+				u.Unknown = bytes.Clone(b)
 				return nil
 			}
 		}
@@ -10183,6 +10286,9 @@ func (u ToolCallContent) MarshalJSON() ([]byte, error) {
 		m["type"] = json.RawMessage("\"terminal\"")
 		return json.Marshal(m)
 	}
+	if u.Unknown != nil {
+		return u.Unknown, nil
+	}
 	return nil, errors.New("ToolCallContent: no variant set")
 }
 
@@ -10195,6 +10301,9 @@ func (u *ToolCallContent) Validate() error {
 		count++
 	}
 	if u.Terminal != nil {
+		count++
+	}
+	if u.Unknown != nil {
 		count++
 	}
 	if count != 1 {
@@ -10859,6 +10968,9 @@ type UnstableMcpServer struct {
 	//
 	// All Agents MUST support this transport.
 	Stdio *McpServerStdio `json:"-"`
+	// Unknown holds a payload whose "type" names no variant this SDK knows, as it was received.
+	// MarshalJSON writes it back unchanged when no variant is set.
+	Unknown json.RawMessage `json:"-"`
 }
 
 func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
@@ -10892,6 +11004,10 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("UnstableMcpServer: type \"acp\": %w", err)
 				}
 				u.Acp = &v
+				return nil
+			}
+			if v, ok := m["type"]; ok && string(v) != "null" {
+				u.Unknown = bytes.Clone(b)
 				return nil
 			}
 		}
@@ -11070,6 +11186,9 @@ func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 			return nil, fmt.Errorf("UnstableMcpServer: %w", err)
 		}
 		return json.Marshal(m)
+	}
+	if u.Unknown != nil {
+		return u.Unknown, nil
 	}
 	return nil, errors.New("UnstableMcpServer: no variant set")
 }
@@ -11698,6 +11817,9 @@ type UnstableNesSuggestion struct {
 	Rename *UnstableNesSuggestionRename `json:"-"`
 	// A search-and-replace suggestion.
 	SearchAndReplace *UnstableNesSuggestionSearchAndReplace `json:"-"`
+	// Unknown holds a payload whose "kind" names no variant this SDK knows, as it was received.
+	// MarshalJSON writes it back unchanged when no variant is set.
+	Unknown json.RawMessage `json:"-"`
 }
 
 func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
@@ -11738,6 +11860,10 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("UnstableNesSuggestion: kind \"searchAndReplace\": %w", err)
 				}
 				u.SearchAndReplace = &v
+				return nil
+			}
+			if v, ok := m["kind"]; ok && string(v) != "null" {
+				u.Unknown = bytes.Clone(b)
 				return nil
 			}
 		}
@@ -11927,6 +12053,9 @@ func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {
 		m["kind"] = json.RawMessage("\"searchAndReplace\"")
 		return json.Marshal(m)
 	}
+	if u.Unknown != nil {
+		return u.Unknown, nil
+	}
 	return nil, errors.New("UnstableNesSuggestion: no variant set")
 }
 
@@ -11942,6 +12071,9 @@ func (u *UnstableNesSuggestion) Validate() error {
 		count++
 	}
 	if u.SearchAndReplace != nil {
+		count++
+	}
+	if u.Unknown != nil {
 		count++
 	}
 	if count != 1 {

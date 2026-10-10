@@ -2,6 +2,7 @@ package acp
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -69,6 +70,86 @@ func TestUnionKeepsIntegerDigits(t *testing.T) {
 	}
 	if back.ResourceLink == nil || back.ResourceLink.Size == nil || *back.ResourceLink.Size != size {
 		t.Errorf("decoded %s, want size %d", b, size)
+	}
+}
+
+// unknownUnions are the discriminated unions without a schema catch-all,
+// with their discriminator: 7 closed and 4 defaulted.
+var unknownUnions = []struct {
+	name   string
+	newPtr func() any
+	key    string
+	closed bool
+}{
+	{"ContentBlock", func() any { return &ContentBlock{} }, "type", true},
+	{"PlanUpdateContent", func() any { return &PlanUpdateContent{} }, "type", true},
+	{"RequestPermissionOutcome", func() any { return &RequestPermissionOutcome{} }, "outcome", true},
+	{"SessionConfigOption", func() any { return &SessionConfigOption{} }, "type", true},
+	{"SessionUpdate", func() any { return &SessionUpdate{} }, "sessionUpdate", true},
+	{"ToolCallContent", func() any { return &ToolCallContent{} }, "type", true},
+	{"UnstableNesSuggestion", func() any { return &UnstableNesSuggestion{} }, "kind", true},
+	{"AuthMethod", func() any { return &AuthMethod{} }, "type", false},
+	{"McpServer", func() any { return &McpServer{} }, "type", false},
+	{"SetSessionConfigOptionRequest", func() any { return &SetSessionConfigOptionRequest{} }, "type", false},
+	{"UnstableMcpServer", func() any { return &UnstableMcpServer{} }, "type", false},
+}
+
+// setVariants returns the names of a union's non-nil pointer fields.
+func setVariants(u any) []string {
+	rv := reflect.ValueOf(u).Elem()
+	var out []string
+	for i := range rv.NumField() {
+		if f := rv.Field(i); f.Kind() == reflect.Pointer && !f.IsNil() {
+			out = append(out, rv.Type().Field(i).Name)
+		}
+	}
+	return out
+}
+
+// TestUnknownValueKept requires a discriminator value no variant knows to be
+// kept in Unknown, without error, and encoded back unchanged.
+func TestUnknownValueKept(t *testing.T) {
+	t.Parallel()
+	for _, tt := range unknownUnions {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			in := `{"` + tt.key + `":"zz_future","extra":1}`
+			u := tt.newPtr()
+			buf := []byte(in)
+			if err := json.Unmarshal(buf, u); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			// Unknown must be a copy: overwriting the input must not change it.
+			for i := range buf {
+				buf[i] = 'X'
+			}
+			unknown := reflect.ValueOf(u).Elem().FieldByName("Unknown")
+			if !unknown.IsValid() {
+				t.Fatalf("%s has no Unknown field; variants set: %v", tt.name, setVariants(u))
+			}
+			if got := setVariants(u); len(got) != 0 {
+				t.Errorf("variants set: %v", got)
+			}
+			if got := string(unknown.Bytes()); got != in {
+				t.Errorf("Unknown = %s, want %s", got, in)
+			}
+			b, err := json.Marshal(reflect.ValueOf(u).Elem().Interface())
+			if err != nil || string(b) != in {
+				t.Errorf("encoded %s, %v; want %s", b, err, in)
+			}
+			if !tt.closed {
+				return
+			}
+			validate := func() error { return u.(interface{ Validate() error }).Validate() }
+			if err := validate(); err != nil {
+				t.Errorf("Validate with only Unknown: %v", err)
+			}
+			first := reflect.ValueOf(u).Elem().Field(0)
+			first.Set(reflect.New(first.Type().Elem()))
+			if err := validate(); err == nil {
+				t.Error("Validate passed with Unknown and a variant set")
+			}
+		})
 	}
 }
 

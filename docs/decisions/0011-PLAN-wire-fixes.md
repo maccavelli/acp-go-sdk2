@@ -355,3 +355,56 @@ Gates: `make pre-add-check` with the five changed Go files named: `go-precheck: 
 govulncheck).` Without names: `go-precheck: 62 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 5 on `main`.
+
+### Step 6, `Unknown`, 2026-10-10
+
+The owner committed step 5 as `99ace2a`. Step 6 ran on `main` from that clean tree. The agent did not commit.
+
+`TestUnknownValueKept` in `union_wire_test.go`, one subtest per union with `HasUnknown`, decodes `{"<key>":"zz_future","extra":1}`, overwrites the
+input buffer, and requires no variant set, `Unknown` equal to the input, and the same bytes on encoding; for the seven closed unions, `Validate` must
+pass with only `Unknown` and fail with `Unknown` and a variant. It reaches `Unknown` through reflection, so it compiled and failed before the field
+existed:
+
+```text
+McpServer has no Unknown field; variants set: [Http]
+SessionConfigOption has no Unknown field; variants set: [Select]
+ContentBlock has no Unknown field; variants set: [Text]
+UnstableNesSuggestion has no Unknown field; variants set: [Edit]
+ToolCallContent has no Unknown field; variants set: [Content]
+SessionUpdate has no Unknown field; variants set: [SessionInfoUpdate]
+RequestPermissionOutcome has no Unknown field; variants set: [Cancelled]
+UnstableMcpServer has no Unknown field; variants set: [Http]
+AuthMethod has no Unknown field; variants set: [Terminal]
+SetSessionConfigOptionRequest has no Unknown field; variants set: [Boolean]
+PlanUpdateContent has no Unknown field; variants set: [Items]
+```
+
+The buffer overwrite was added after the generator change, to cover the copy, and its plant below shows it failing.
+
+`cmd/generate/internal/emit`, for a union with `HasUnknown`: the wrapper gains `Unknown json.RawMessage` with a two-line doc comment; after the
+discriminator switch, a key that is present and not `null` stores `bytes.Clone(b)` in `Unknown` and returns; `MarshalJSON` returns `Unknown` when no
+variant is set; the exactly-one `Validate` counts it. `constants.go` gains `pkgBytes` and `unknownField`.
+
+Regenerated: `types_gen.go` gained 132 lines and lost none, and no other file changed. A script placed every added line in its declaration: 3 in each
+of the 11 wrapper types, 4 in each `UnmarshalJSON`, 3 in each `MarshalJSON`, 3 in the `Validate` of each of the 7 closed unions, and the `bytes`
+import; no union outside the 11 was touched.
+
+Each rule was seen to fail, with one planted breakage in the generator per fresh scratch copy, regenerated, then `TestUnknownValueKept`:
+
+```text
+Unknown aliases the input: failing=12 subtests
+    Unknown = XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX, want {"type":"zz_future","extra":1}
+Unknown not written back: failing=12 subtests
+    encoded , json: error calling MarshalJSON for type *acp.ToolCallContent: ToolCallContent: no variant set; want {"type":"zz_future","extra":1}
+Validate ignores Unknown: failing=8 subtests
+    Validate with only Unknown: ToolCallContent must have exactly one variant set
+unknown values not kept: failing=12 subtests
+    variants set: [SessionInfoUpdate]
+```
+
+After the change every test in the root and in `cmd/generate` passes; no golden changed; `go build ./example/...` passes.
+
+Gates: `make pre-add-check` with the four changed Go files named: `go-precheck: 4 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 6 on `main`.

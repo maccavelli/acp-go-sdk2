@@ -344,7 +344,7 @@ func keyMatch(m, key string) ast.Stmt {
 		assign(exprs(id("match")), boolLit(false)))
 }
 
-func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKey string) []ast.Stmt {
+func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKey string, hasUnknown bool) []ast.Stmt {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	var body []ast.Stmt
 
@@ -369,13 +369,22 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 			}
 		}
 		// A discriminator that is present and not a string is an error.
-		object = append(object, block(
+		disc := []ast.Stmt{
 			varStmt("disc", id("string")),
 			ifStmt(define(exprs(id("v"), id("ok")), index(id("m"), str(discKey))), id("ok"),
 				ifStmt(define(exprs(id("err")), unmarshal(id("v"), addr(id("disc")))), errNotNil(),
 					ret(call(f.qual(pkgFmt, "Errorf"), str(name+": discriminator "+strconv.Quote(discKey)+": %w"), id("err"))))),
 			switchStmt(id("disc"), cases...),
-		))
+		}
+		if hasUnknown {
+			// A present value no case took is kept as received.
+			disc = append(disc, ifStmt(define(exprs(id("v"), id("ok")), index(id("m"), str(discKey))),
+				binary(id("ok"), token.LAND, binary(call(id("string"), id("v")), token.NEQ, str(schemaTypeNull))),
+				assign(exprs(dot("u", unknownField)), call(f.qual(pkgBytes, "Clone"), id("b"))),
+				ret(nilExpr()),
+			))
+		}
+		object = append(object, block(disc...))
 	}
 	// Required-key match.
 	for _, vi := range variants {
@@ -434,7 +443,7 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 	return append(body, ret(call(f.qual(pkgErrors, "New"), str(name+": no variant matches"))))
 }
 
-func unionMarshalBody(f *goFile, name string, variants []*model.Variant) []ast.Stmt {
+func unionMarshalBody(f *goFile, name string, variants []*model.Variant, hasUnknown bool) []ast.Stmt {
 	marshal := func(x ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Marshal"), x) }
 	var body []ast.Stmt
 	for _, vi := range variants {
@@ -467,6 +476,9 @@ func unionMarshalBody(f *goFile, name string, variants []*model.Variant) []ast.S
 			then = append(then, ret(marshal(id("m"))))
 		}
 		body = append(body, ifStmt(nil, binary(dot("u", vi.FieldName), token.NEQ, nilExpr()), then...))
+	}
+	if hasUnknown {
+		body = append(body, ifStmt(nil, binary(dot("u", unknownField), token.NEQ, nilExpr()), ret(dot("u", unknownField), nilExpr())))
 	}
 	return append(body, ret(nilExpr(), call(f.qual(pkgErrors, "New"), str(name+": no variant set"))))
 }
@@ -509,10 +521,13 @@ func sharedUnionValidateBody(f *goFile, variants []*model.Variant, checks []mode
 	)
 }
 
-func unionValidateBody(f *goFile, name string, variants []*model.Variant) []ast.Stmt {
+func unionValidateBody(f *goFile, name string, variants []*model.Variant, hasUnknown bool) []ast.Stmt {
 	body := []ast.Stmt{varStmt("count", id("int"))}
 	for _, vi := range variants {
 		body = append(body, ifStmt(nil, binary(dot("u", vi.FieldName), token.NEQ, nilExpr()), incr(id("count"))))
+	}
+	if hasUnknown {
+		body = append(body, ifStmt(nil, binary(dot("u", unknownField), token.NEQ, nilExpr()), incr(id("count"))))
 	}
 	return append(body,
 		ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
@@ -557,22 +572,29 @@ func emitUnion(f *goFile, t *model.Type) {
 		st.comment(vi.Doc...)
 		st.add(structField(vi.FieldName, star(id(vi.TypeName)), "-"))
 	}
+	if t.HasUnknown {
+		st.comment(
+			fmt.Sprintf("Unknown holds a payload whose %q names no variant this SDK knows, as it was received.", t.DiscKey),
+			"MarshalJSON writes it back unchanged when no variant is set.",
+		)
+		st.add(structField(unknownField, f.qual(pkgJSON, "RawMessage"), "-"))
+	}
 	// The union's description belongs on the wrapper, after the variant types.
 	f.comment(t.Doc...)
 	f.add(typeDecl(name, st.structType()))
 	f.line()
 	f.add(method(param("u", star(id(name))), "UnmarshalJSON",
 		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))),
-		unionUnmarshalBody(f, name, variants, t.DiscKey)...))
+		unionUnmarshalBody(f, name, variants, t.DiscKey, t.HasUnknown)...))
 	f.line()
 	f.add(method(param("u", id(name)), "MarshalJSON",
 		funcType(nil, param("", byteSlice()), param("", id("error"))),
-		unionMarshalBody(f, name, variants)...))
+		unionMarshalBody(f, name, variants, t.HasUnknown)...))
 	f.line()
 
 	// oneOf: exactly one variant. anyOf: shared required fields live on the variants.
 	if t.Validate == model.ValidateExactlyOne {
-		f.add(validateMethod("u", name, unionValidateBody(f, name, variants)...))
+		f.add(validateMethod("u", name, unionValidateBody(f, name, variants, t.HasUnknown)...))
 	} else {
 		f.add(validateMethod("v", name, sharedUnionValidateBody(f, variants, t.Checks)...))
 	}
