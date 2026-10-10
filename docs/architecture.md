@@ -7,7 +7,7 @@ and [README.md](README.md) points at the ones people ask for most.
 
 ## What it is
 
-This repository is the Go module `github.com/coder/acp-go-sdk`. Hand-written
+This repository is the Go module `github.com/maccavelli/acp-go-sdk2`. Hand-written
 session and transport code sits at the repository root. `cmd/generate` reads
 `schema/` and writes the `*_gen.go` files. `example/` holds agent and client
 programs. `testdata/` holds fixtures. GitHub Actions runs

@@ -6,7 +6,7 @@ this file. A repository-local `CLAUDE.md` / `.claude/rules/` / `.grok/rules/` /
 more specific than this file.
 
 This repository is the Go SDK for the Agent Client Protocol, module
-`github.com/coder/acp-go-sdk`. How the tree is put together now is documented
+`github.com/maccavelli/acp-go-sdk2`. How the tree is put together now is documented
 in `docs/architecture.md`. The documentation index is `docs/README.md`. The
 language floor is the `go` line in `go.mod` and `cmd/generate/go.mod`.
 

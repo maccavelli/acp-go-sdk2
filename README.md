@@ -11,10 +11,10 @@ Learn more about the protocol itself at <https://agentclientprotocol.com>.
 
 ## Installation
 
-<!-- `$ printf 'go get github.com/coder/acp-go-sdk@v%s\n' "$(cat schema/version)"` as bash -->
+<!-- `$ printf 'go get github.com/maccavelli/acp-go-sdk2\n'` as bash -->
 
 ```bash
-go get github.com/coder/acp-go-sdk@v0.13.5
+go get github.com/maccavelli/acp-go-sdk2
 ```
 
 ## Get Started
@@ -26,7 +26,7 @@ to understand the core concepts and protocol specification.
 
 ### Try the Examples
 
-The [examples directory](https://github.com/coder/acp-go-sdk/tree/main/example)
+The [examples directory](https://github.com/maccavelli/acp-go-sdk2/tree/main/example)
 contains simple implementations of both Agents and Clients in Go.
 You can run them from your terminal or connect to external ACP agents.
 
@@ -41,7 +41,7 @@ You can watch the interaction by running `go run ./example/client` locally.
 
 Browse the Go package docs on pkg.go.dev for detailed API documentation:
 
-- <https://pkg.go.dev/github.com/coder/acp-go-sdk>
+- <https://pkg.go.dev/github.com/maccavelli/acp-go-sdk2>
 
 If you're building an [Agent](https://agentclientprotocol.com/protocol/overview#agent):
 
@@ -138,8 +138,8 @@ to it via stdio.
 
 ## Resources
 
-- [Go package docs](https://pkg.go.dev/github.com/coder/acp-go-sdk)
-- [Examples (Go)](https://github.com/coder/acp-go-sdk/tree/main/example)
+- [Go package docs](https://pkg.go.dev/github.com/maccavelli/acp-go-sdk2)
+- [Examples (Go)](https://github.com/maccavelli/acp-go-sdk2/tree/main/example)
 - [Protocol Documentation](https://agentclientprotocol.com)
 - [Agent Client Protocol GitHub Repository](https://github.com/agentclientprotocol/agent-client-protocol)
 - [Documentation index](docs/README.md)

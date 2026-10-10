@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coder/acp-go-sdk"
+	"github.com/maccavelli/acp-go-sdk2"
 )
 
 type agentSession struct {

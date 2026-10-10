@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: complete
 date: 2026-10-09
 associated-madr: "0005-MADR-separate-module-from-coder.md"
 ---
@@ -70,6 +70,61 @@ rollback is `git revert` of this commit, and it cannot reach the uncommitted rec
 
 Superseded 2026-10-09: commits land on `main`; see [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md#amendment-2026-10-09-commits-land-on-main).
 
+## Deviation 2026-10-09, unused `ptrTo` in `acp_test.go`
+
+Found during execution: after the rename, `make pre-add-check` failed only on `golangci-lint`, host and `GOOS=windows`:
+`acp_test.go:983:6: func ptrTo is unused (unused)`. A clean clone of `50e1b4a`, before the rename, fails the same way. `aeee903` replaced the last two
+`ptrTo(x)` calls with `new(x)` and left the `//go:fix inline` helper with no callers. Every other pre-add check passed.
+
+Decision: the owner chose to delete the helper in this phase. `acp_test.go` is added to this plan's scope for that deletion only. No other line of the file
+changes. Behavior does not change, because nothing calls the helper.
+
 ## Execution record
 
-Not started.
+Executed 2026-10-09 on `main`, from a clean tree at `50e1b4a`, as step 2 of [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md).
+The agent did not commit. The owner commits this phase on `main`.
+
+What was done:
+
+* Step 2: the old path was replaced in exactly these files, with the counts asserted before writing: `go.mod` 1, `cmd/generate/go.mod` 1,
+  `cmd/generate/main.go` 2, `cmd/generate/internal/emit/constants.go` 2, `dispatch.go` 2, `dispatch_helpers.go` 1, `helpers.go` 2, `types.go` 3,
+  `cmd/generate/internal/ir/ir.go` 2, each `example/*/main.go` 1, `AGENTS.md` 1, `docs/architecture.md` 1.
+* Step 3: `README.md` line 14 now reads ``<!-- `$ printf 'go get github.com/maccavelli/acp-go-sdk2\n'` as bash -->``. Line 17 is
+  `go get github.com/maccavelli/acp-go-sdk2`. The two example links and the two pkg.go.dev links use the new path.
+* The deviation above: the unused `ptrTo` helper was deleted from `acp_test.go` (5 lines with its blank line).
+
+Not done, by design: no `go mod tidy` (no sum went stale); `github.com/dave/jennifer` left for 0006; 0002, 0004, `LICENSE`, `docs/README.md` record titles,
+and every other record untouched by the rename; no remote change; no tag; no push.
+
+Verification, as printed:
+
+```text
+PASS  git remote prints origin only (origin)
+PASS  root module line
+PASS  root go.mod has no require/replace
+PASS  generator module line
+PASS  jennifer requirement unchanged (0006 owns its removal)
+PASS  old path absent from *.go *.mod README AGENTS architecture (0 hits)
+PASS  README line 14 has no @v%s and no schema/version
+PASS  directive printf output equals README line 17 (go get github.com/maccavelli/acp-go-sdk2)
+FAIL  diff touches no docs/ file but architecture.md, and not LICENSE (1 others)
+PASS  gofmt -l on edited Go files is empty
+PASS  go test ./... at root
+PASS  go test ./... in cmd/generate
+PASS  go build ./example/...
+PASS  go mod tidy -diff at root
+PASS  go mod tidy -diff in cmd/generate
+```
+
+The one `FAIL` is this record: `git diff --name-only -- docs LICENSE` lists `docs/architecture.md` and
+`docs/decisions/0005-PLAN-separate-module-from-coder.md`, which carries the deviation and this execution record. The rename itself touched no other file
+under `docs/` and did not touch `LICENSE`. Before the deviation entry was written, the same check passed with 0 others.
+
+`make pre-add-check` before the deviation exited 1 on the `ptrTo` finding only. After it:
+`go-precheck: 44 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records` and `make markdownlint` exit 0.
+
+The checks were seen to fail. On a scratch copy with the old path put back in `README.md` line 17 and `example/agent/main.go`, and a line appended to
+`LICENSE`, six checks failed: the old-path search (2 hits), the line 17 comparison, the docs/LICENSE check, `go test`, `go build ./example/...`, and
+`go mod tidy -diff` at the root.
+
+The generator, run after the rename into a scratch directory, wrote all five `*_gen.go` files byte-identical to the committed ones.

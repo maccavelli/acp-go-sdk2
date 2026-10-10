@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-09
 associated-madr: "0007-MADR-self-contained-acp-sdk.md"
 ---
@@ -90,4 +90,8 @@ The owner said on 2026-10-09 that this repository is committed on `main` most of
 
 ## Execution record
 
-Not started.
+* Step 1, 2026-10-09: done by the owner. The records were committed on `main` in `cf2e730`. The commit policy amendment followed in `50e1b4a`.
+* Step 2, 2026-10-09: [0005-PLAN-separate-module-from-coder.md](0005-PLAN-separate-module-from-coder.md) executed on `main` from `50e1b4a`, with one
+  deviation recorded there (the unused `ptrTo` test helper deleted). All its checks passed and `make pre-add-check` is clean. The agent stopped at the
+  commit point. The owner commits it.
+* Step 3: not started. It runs [0006-PLAN-emit-go-with-go-ast.md](0006-PLAN-emit-go-with-go-ast.md) after the owner commits step 2.

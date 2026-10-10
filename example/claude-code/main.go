@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/coder/acp-go-sdk"
+	"github.com/maccavelli/acp-go-sdk2"
 )
 
 // ClaudeCodeREPL demonstrates connecting to the Claude Code CLI running in ACP mode

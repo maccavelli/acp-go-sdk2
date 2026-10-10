@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/coder/acp-go-sdk/cmd/generate/internal/ir"
-	"github.com/coder/acp-go-sdk/cmd/generate/internal/load"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 )
 
 // WriteDispatchJen emits agent_gen.go and client_gen.go with handlers and wrappers.

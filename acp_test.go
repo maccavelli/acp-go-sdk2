@@ -979,11 +979,6 @@ func TestConnectionHandlesInitialize(t *testing.T) {
 	}
 }
 
-//go:fix inline
-func ptrTo[T any](t T) *T {
-	return new(t)
-}
-
 // Test that canceling the client's Prompt context sends a session/cancel
 // to the agent, and that the connection remains usable afterwards.
 func TestPromptCancellationSendsCancelAndAllowsNewSession(t *testing.T) {

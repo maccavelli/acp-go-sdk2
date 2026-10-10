@@ -12,7 +12,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/coder/acp-go-sdk"
+	"github.com/maccavelli/acp-go-sdk2"
 )
 
 type exampleClient struct{}

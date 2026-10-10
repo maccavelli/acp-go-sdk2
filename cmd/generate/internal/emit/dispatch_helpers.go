@@ -1,7 +1,7 @@
 package emit
 
 import (
-	"github.com/coder/acp-go-sdk/cmd/generate/internal/ir"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
 )
 
 // invInvalid: return invalid params with compact json-like message
