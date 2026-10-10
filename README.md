@@ -74,9 +74,30 @@ follow the schema:
 - A required array or map left nil is sent as `[]` or `{}`, not `null`.
 - Decoding a union whose discriminator is present but not a string fails with an
   error that names the union and the key.
+- A discriminator value this SDK does not know is not an error. Where the schema
+  gives the union a catch-all variant, the payload decodes into it (`Other`),
+  which keeps the keys it does not declare in its `Extra` field. Otherwise the
+  payload is kept as received in the union's `Unknown` field. Either way,
+  encoding sends the payload back unchanged.
+- A payload without its discriminator, or with it `null`, decodes into the
+  variant the schema means for that case where the union has one, such as
+  `IdleStateUpdateNone`. Otherwise it decodes into the one variant whose
+  required keys it carries. When none or several fit, it is kept in `Unknown`;
+  a union with a catch-all instead fails with an error such as
+  `StateUpdate: missing discriminator "state"`.
+- Decoding JSON `null` into a union leaves it unchanged, except `RequestId`, which
+  takes it as its `Null` variant. Any other payload replaces what the union
+  held, so a reused value holds only the last one decoded.
+- `Validate` on a union that must have exactly one variant counts `Unknown` as
+  that variant.
+- Integers keep every digit through a union.
+- A decode error names the union and, for a variant, the discriminator value or
+  the variant, then the cause, such as `ContentBlock: type "text": ...`.
 
-The decision behind these rules is
-[0009-MADR-fix-generated-output-on-json-v1.md](docs/decisions/0009-MADR-fix-generated-output-on-json-v1.md).
+The decisions behind these rules are
+[0009-MADR-fix-generated-output-on-json-v1.md](docs/decisions/0009-MADR-fix-generated-output-on-json-v1.md)
+and
+[0011-MADR-harden-code-generator-engine.md](docs/decisions/0011-MADR-harden-code-generator-engine.md).
 
 ### Extension methods
 

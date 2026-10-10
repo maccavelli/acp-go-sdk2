@@ -18,16 +18,26 @@ This repository is the Go module `github.com/maccavelli/acp-go-sdk2`, package
   `client_gen.go`, and `helpers_gen.go`. They are never edited by hand.
 
 `cmd/generate` is its own Go module with no requirements. `internal/load` reads
-the schema files, `internal/ir` groups the protocol methods, `internal/emit`
-builds the files as `go/ast` and prints them through `go/format`, and
-`internal/util` holds naming helpers. `make version` downloads the schema for the
-stamp in `schema/version` and runs the generator.
+the schema files, `internal/model` resolves them into types, unions, and
+protocol methods, `internal/emit` builds the files as `go/ast` and prints them
+through `go/format`, and `internal/util` holds naming helpers. `make version`
+downloads the schema for the stamp in `schema/version` and runs the generator.
 
-The SDK uses `encoding/json` v1 only. The generated `MarshalJSON` methods fail on
-a union with no variant set, naming it, and send a nil required array or map as
-`[]` or `{}`. A union's generated `UnmarshalJSON` fails on a discriminator that
-is present and not a string, naming the union and the key. A struct with schema
-defaults gets an `UnmarshalJSON` that fills them.
+The SDK uses `encoding/json` v1 only. The generated `MarshalJSON` methods send a
+union's `Unknown` payload back when no variant is set, fail on a union with
+neither, naming it, and send a nil required array or map as `[]` or `{}`. A
+union's generated `UnmarshalJSON` leaves the union unchanged on `null`
+(`RequestId` sets its `Null` variant) and otherwise clears it first. A union
+with a discriminator fails on one that is present and not a string, naming the
+union and the key; decodes the variant a known value names; sends an unknown
+value to the schema's catch-all variant (`Other`, which keeps undeclared keys
+in `Extra`) or keeps it in `Unknown`; and decodes a payload without the
+discriminator into the schema's key-less variant, else into the one variant
+whose required keys it carries, else into `Unknown`, or fails in a union with
+a catch-all. A union without a discriminator tries required keys, array items,
+and then each variant in turn. Decode errors name the union and, for a
+variant, the discriminator value or the variant. A struct with schema defaults
+gets an `UnmarshalJSON` that fills them.
 
 Checks that guard this:
 
@@ -35,7 +45,8 @@ Checks that guard this:
   `*_gen.go` files differ from the generator's output.
 - `json_parity_test.go` compares encodings with the goldens in
   `testdata/json_golden/`. `json_v1_pin_test.go` pins HTML escaping and sorted map
-  keys. `generated_output_test.go` covers the encoding rules above.
+  keys. `generated_output_test.go` covers the encoding rules above, and
+  `union_wire_test.go` the union decoding rules.
 - `make pre-add-check` runs `scripts/go-precheck.sh`: gofmt, golangci-lint for the
   host and for `GOOS=windows`, vet, tests with `-race`, `go mod tidy -diff`, and
   govulncheck, for both modules. `make check-records` and `make markdownlint`
@@ -55,7 +66,7 @@ go.mod                    the SDK module
 *.go                      package acp: hand-written and *_gen.go files
 cmd/generate/             the generator, its own module
   internal/load/          schema loading
-  internal/ir/            method groups
+  internal/model/         the resolved schema: types, unions, methods
   internal/emit/          go/ast emission
   internal/util/          naming helpers
 schema/                   schema files and the version stamp

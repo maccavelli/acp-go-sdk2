@@ -160,7 +160,8 @@ discriminated union with a non-object variant; a union field named `Unknown` bes
    W12 has the outcome W12 lists. The model gains, per variant, its required keys other than the discriminator. Emit the null check, the reset, and the
    absent-key rule. Expected: all 28 `UnmarshalJSON` change; goldens unchanged.
 9. **Docs.** `README.md` "Wire encoding" and `docs/architecture.md` state the unknown-value, absent-key, and null rules, `Unknown`, and `Extra`. A script
-   checks every name they mention against the tree.
+   checks every name they mention against the tree. Amended 2026-10-10, see the deviation below: `docs/architecture.md` also replaces the stale
+   `internal/ir` with `internal/model`.
 10. **Review and close.** Run the verification below, record each result and the list of exported API changes for the release notes, and set this plan
     to `complete`.
 
@@ -182,6 +183,16 @@ integers through unions, a payload without its discriminator kept in `Unknown` r
 catch-all unions when no single variant fits.
 
 Rollback is `git revert` of the step commits, newest first; each step leaves the generator and the generated files in step.
+
+## Deviation 2026-10-10, stale generator package in the architecture
+
+Found in step 9: the name check fails on `internal/ir`, which `docs/architecture.md` names twice, in the generator paragraph ("groups the protocol
+methods") and in the tree. Phase 1 deleted that package in `969b7cb`; `cmd/generate/internal/` holds `emit`, `load`, `model`, and `util`, and the document
+does not name `internal/model`. The fault predates this plan.
+
+Decision: the owner chose to correct both places in step 9, naming `internal/model` as the package that resolves the schema into types, unions, and
+protocol methods. Step 9 is annotated above. No file is added to the step's scope, and the MADR, which asserts nothing about `docs/architecture.md`, is
+unchanged.
 
 ## Execution record
 
@@ -564,3 +575,45 @@ Gates: `make pre-add-check` with the five changed Go files named: `go-precheck: 
 govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 8 on `main`.
+
+### Step 9, docs, 2026-10-10
+
+The owner committed step 8 as `1dbf2b2`. Step 9 ran on `main` from that clean tree. The agent did not commit.
+
+`README.md`, "Wire encoding", gains six rules: an unknown discriminator value goes to the catch-all (`Other`, with `Extra`) or to `Unknown` and is sent
+back unchanged; a payload without its discriminator goes to the key-less variant, else the one variant that fits, else `Unknown` or, in a union with a
+catch-all, the error `StateUpdate: missing discriminator "state"`; `null` leaves a union unchanged except `RequestId`, and any other payload replaces
+what it held; `Validate` counts `Unknown`; integers keep every digit; decode errors name the union, the value or variant, and the cause. It now cites
+`0011-MADR-harden-code-generator-engine.md` beside `0009-MADR-fix-generated-output-on-json-v1.md`.
+
+`docs/architecture.md`: the paragraph on the wire states the same rules for the generated `MarshalJSON` and `UnmarshalJSON`, including the order a
+union without a discriminator keeps; "Checks that guard this" names `union_wire_test.go`; and, by the deviation above, the generator paragraph and the
+tree name `internal/model` where they named the deleted `internal/ir`.
+
+The name check is a script in the scratchpad. It takes every backticked name in the prose of both files (code blocks and HTML comments excluded) and
+checks it by kind: an error text must occur in a generated Go string literal; a path must exist at the root, beside the file, or under `cmd/generate`;
+a path the file says does not exist must not; a Go identifier must be declared, each dotted part, in a `.go` file of the tree; a standard package must
+be in `go list std`; a method name must be a literal in `constants_gen.go`; a `make` target must be in `Makefile`; a gate flag must be in
+`scripts/go-precheck.sh`; a wire key must be a quoted string in Go source. Its first run, before the correction:
+
+```text
+FAIL path: internal/ir
+```
+
+After it, 93 names pass and none fails. Not checked: the JSON and Go literals `[]`, `{}`, `null`, `_`, `acp`, and `go`, and the trace keys
+`traceparent`, `tracestate`, and `baggage`, which the ACP specification reserves in `_meta` and which no file in this tree defines. The tree listing is
+in a code block; its four `internal/` entries were compared with `cmd/generate/internal/` (`emit`, `load`, `model`, `util`) and match.
+
+Each kind was seen to fail, with one wrong name planted in a scratch copy of a document:
+
+```text
+identifier: exit=1 ['FAIL identifier: IdleStateUpdateNothing']
+error text: exit=1 ['FAIL error text: StateUpdate: missing discriminator "status"']
+make target: exit=1 ['FAIL make target: make check-recordz']
+path: exit=1 ['FAIL path: union_wires_test.go']
+absent path that exists: exit=1 ['FAIL absent path: docs/decisions/']
+```
+
+No Go file changed, so `make pre-add-check` was not run. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 9 on `main`.
