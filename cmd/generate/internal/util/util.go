@@ -61,22 +61,26 @@ func TitleWord(s string) string {
 	return string(r)
 }
 
-// SplitCamel splits a camelCase string into tokens.
+// SplitCamel splits s before every uppercase rune after the first, so
+// "RequestPermission" is ["Request", "Permission"] and "UX" is ["U", "X"].
+// Splitting each capital keeps an acronym's case through TitleWord.
 func SplitCamel(s string) []string {
-	var parts []string
-	last := 0
-	for i := 1; i < len(s); i++ {
-		if isBoundary(s[i-1], s[i]) {
-			parts = append(parts, s[last:i])
-			last = i
-		}
+	if s == "" {
+		return nil
 	}
-	parts = append(parts, s[last:])
-	return parts
-}
-
-func isBoundary(prev, curr byte) bool {
-	return (prev >= 'a' && prev <= 'z' && curr >= 'A' && curr <= 'Z') || curr == '_'
+	var words []string
+	var current strings.Builder
+	for i, r := range s {
+		if i > 0 && unicode.IsUpper(r) && current.Len() > 0 {
+			words = append(words, current.String())
+			current.Reset()
+		}
+		current.WriteRune(r)
+	}
+	if current.Len() > 0 {
+		words = append(words, current.String())
+	}
+	return words
 }
 
 // ToExportedField converts a schema identifier into a Go-exported PascalCase identifier.

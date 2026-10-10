@@ -7,16 +7,17 @@ import (
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
 // WriteDispatch emits agent_gen.go and client_gen.go with handlers and wrappers.
-func WriteDispatch(outDir string, schema *load.Schema, meta *load.Meta) error {
-	groups := ir.BuildMethodGroups(schema, meta)
+func WriteDispatch(outDir string, m *model.Model) error {
+	groups := ir.BuildMethodGroups(m.Schema, m.Meta)
 
-	if err := writeAgentGen(outDir, groups, schema, meta); err != nil {
+	if err := writeAgentGen(outDir, groups, m); err != nil {
 		return err
 	}
-	return writeClientGen(outDir, groups, schema, meta)
+	return writeClientGen(outDir, groups, m)
 }
 
 // sessionKey is string(p.SessionId).
@@ -72,7 +73,8 @@ func cancelActivePrompt() []ast.Stmt {
 	}
 }
 
-func writeAgentGen(outDir string, groups ir.Groups, schema *load.Schema, meta *load.Meta) error {
+func writeAgentGen(outDir string, groups ir.Groups, m *model.Model) error {
+	schema, meta := m.Schema, m.Meta
 	f := newFile()
 
 	var cases []ast.Stmt
@@ -109,18 +111,19 @@ func writeAgentGen(outDir string, groups ir.Groups, schema *load.Schema, meta *l
 			}
 		}
 		if len(body) > 0 {
-			cases = append(cases, caseOf(exprs(id("AgentMethod"+toExportedConst(k))), body...))
+			cases = append(cases, caseOf(exprs(id(m.AgentMethodConsts[k])), body...))
 		}
 	}
 	f.add(handleFunc(f, "a", "AgentSideConnection", cases))
 
 	// Agent outbound wrappers (agent -> client).
-	emitOutbound(f, "AgentSideConnection", "client", "ClientMethod", groups, schema, meta.ClientMethods)
+	emitOutbound(f, "AgentSideConnection", "client", groups, schema, meta.ClientMethods, m.ClientMethodConsts)
 
 	return f.write(outDir, "agent_gen.go")
 }
 
-func writeClientGen(outDir string, groups ir.Groups, schema *load.Schema, meta *load.Meta) error {
+func writeClientGen(outDir string, groups ir.Groups, m *model.Model) error {
+	schema, meta := m.Schema, m.Meta
 	f := newFile()
 
 	var cases []ast.Stmt
@@ -150,23 +153,24 @@ func writeClientGen(outDir string, groups ir.Groups, schema *load.Schema, meta *
 			}
 		}
 		if len(body) > 0 {
-			cases = append(cases, caseOf(exprs(id("ClientMethod"+toExportedConst(k))), body...))
+			cases = append(cases, caseOf(exprs(id(m.ClientMethodConsts[k])), body...))
 		}
 	}
 	f.add(handleFunc(f, "c", "ClientSideConnection", cases))
 
 	// Client outbound wrappers (client -> agent).
-	emitOutbound(f, "ClientSideConnection", "agent", "AgentMethod", groups, schema, meta.AgentMethods)
+	emitOutbound(f, "ClientSideConnection", "agent", groups, schema, meta.AgentMethods, m.AgentMethodConsts)
 
 	return f.write(outDir, "client_gen.go")
 }
 
 // emitOutbound emits one method per peer method on recvType that sends the
-// request or notification over c.conn.
-func emitOutbound(f *goFile, recvType, side, constPrefix string, groups ir.Groups, schema *load.Schema, methods map[string]string) {
+// request or notification over c.conn. consts holds the constant name of
+// each method key.
+func emitOutbound(f *goFile, recvType, side string, groups ir.Groups, schema *load.Schema, methods, consts map[string]string) {
 	constByWire := map[string]string{}
 	for k, wire := range methods {
-		constByWire[wire] = constPrefix + toExportedConst(k)
+		constByWire[wire] = consts[k]
 	}
 	recv := func() *ast.Field { return param("c", star(id(recvType))) }
 	params := func(typeName string) []*ast.Field {

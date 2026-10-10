@@ -2,11 +2,9 @@ package emit
 
 import (
 	"go/ast"
-	"strings"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/util"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
 const (
@@ -30,35 +28,26 @@ const (
 )
 
 // WriteConstants writes the version and method constants to constants_gen.go.
-func WriteConstants(outDir string, meta *load.Meta) error {
+func WriteConstants(outDir string, m *model.Model) error {
 	f := newFile()
 	f.comment("ProtocolVersionNumber is the ACP protocol version supported by this SDK.")
-	f.add(constDecl(false, constSpec("ProtocolVersionNumber", nil, intLit(meta.Version))))
+	f.add(constDecl(false, constSpec("ProtocolVersionNumber", nil, intLit(m.Meta.Version))))
 
 	f.comment("Agent method names")
-	f.add(methodConsts("AgentMethod", meta.AgentMethods))
+	f.add(methodConsts(m.Meta.AgentMethods, m.AgentMethodConsts))
 
 	f.comment("Client method names")
-	f.add(methodConsts("ClientMethod", meta.ClientMethods))
+	f.add(methodConsts(m.Meta.ClientMethods, m.ClientMethodConsts))
 
 	return f.write(outDir, "constants_gen.go")
 }
 
-// methodConsts declares prefix+Name = "wire" for each method, sorted by key.
-func methodConsts(prefix string, methods map[string]string) *ast.GenDecl {
+// methodConsts declares <const> = "wire" for each method, sorted by key, with
+// the constant names the model gave them.
+func methodConsts(methods, consts map[string]string) *ast.GenDecl {
 	var specs []*ast.ValueSpec
 	for _, k := range ir.SortedKeys(methods) {
-		specs = append(specs, constSpec(prefix+toExportedConst(k), nil, str(methods[k])))
+		specs = append(specs, constSpec(consts[k], nil, str(methods[k])))
 	}
 	return constDecl(true, specs...)
-}
-
-// toExportedConst turns a meta method key such as session_set_mode into
-// SessionSetMode.
-func toExportedConst(s string) string {
-	parts := strings.Split(s, "_")
-	for i := range parts {
-		parts[i] = util.TitleWord(parts[i])
-	}
-	return strings.Join(parts, "")
 }

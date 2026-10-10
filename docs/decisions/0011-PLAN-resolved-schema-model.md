@@ -308,3 +308,93 @@ Gates: `make pre-add-check` with the five changed Go files named: `go-precheck: 
 Without names: `go-precheck: 50 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 2 on `main`.
+
+### Step 3, model names, 2026-10-10
+
+The owner committed step 2 as `4faf728` and pushed it. Step 3 ran on `main` from that clean tree. The agent did not commit.
+
+Before the change, the schema files were checked for what the namer relies on: no definition has both `anyOf` and `oneOf`, none has `enum` with a
+union, no oneOf is `x-docs-ignore`, and every definition name is an exported Go identifier.
+
+New package `cmd/generate/internal/model` (`model.go`, `names.go`, `schema.go`, 818 lines, and `model_test.go`):
+
+* `Build(meta, schema)` checks every `$ref` (local and resolvable), declares every definition name, then the generator's fixed names
+  (`ProtocolVersionNumber`, `Agent`, `AgentExperimental`, `Client`, `ClientExperimental`), then walks the definitions in sorted order. Per definition it
+  classifies (`Kind`, the types emitter's switch in its order), declares enum constants, names inline nested object types, names union variants and their
+  wrapper fields, and lists oneOf constructors with their parameters. Then it declares the method constants. Every error reads
+  `model: <place>: <problem>`.
+* The namer keeps two sets: the type names the nested-type heuristics avoid, as before, and every package-level name with the place that declared it. A
+  second declaration, a name that is not an exported identifier, two properties that become one field, two variants that take one wrapper field, and a
+  constructor parameter that is not an identifier (keywords included) are errors.
+* A generated variant type name is computed in full, `util.ToExportedField` included, before it is declared (G5, G7). A `$ref` variant takes the
+  definition name as is; at `1.25.0` that equals what `util.ToExportedField` gave (G5).
+* `util.SplitCamel` is now the rune-based splitter, the only one (G6).
+
+`emit` reads the names: `WriteTypes`, `WriteHelpers`, `WriteConstants`, and `WriteDispatch` take the `*model.Model`; `emitSchemaDef` switches on
+`Type.Kind`; enum constants, nested type names, variant type and field names, constructor names and parameters, and method constant names come from
+the model. Deleted from `emit`: `splitCamelCase`, `generateNestedTypeName`, `registerName`, `oneHelperVariant`'s naming, `toExportedConst`, and the
+naming checks in `emitSchemaDef`, `emitInlineNestedTypes`, and `emitInlineUnionStruct`. `main.run` builds the model before calling any writer.
+`TestGeneratedFilesUpToDate` builds it too; `TestDefaultedNullablePropertyCompiles` builds its input through `model.Build`. The generator's `panic`
+calls went from 8 to 3, the layout guards of G13.
+
+Notes on sequence and placement, none changing scope:
+
+* Naming depends on classification and on union shape, so these moved in this step rather than steps 4 and 5: `expandAllOf`,
+  `copyMissingAllOfFields`, `singleRefVariant`, `discriminatorKey`, `isStringConstUnion`, `isOpenStringEnum`, and the classification switch. The model
+  exports the first six while `emit` still calls them; steps 4 and 5 unexport them.
+* The single splitter lives in `util`, not in the model as step 3 says, because `util.ToExportedField` needs it and the model imports `util`.
+* The interface-method scope is not checked yet. Methods move into the model in step 6, which adds that scope and `AgentLoader`.
+* Constructors are listed only for variants the wrapper has a field for. Before, a phantom variant of a oneOf would have had a constructor naming a missing
+  field; none exists at `1.25.0` (G5).
+* `emitInlineUnionStruct` lost its `name` parameter, used only by the removed check.
+
+Tests in `model_test.go`: `TestBuildRefuses` (11 cases: enum constants colliding with each other and with a type, struct fields colliding, a field name
+that is not an identifier, dangling and non-local references, a null property schema, a keyword as a constructor parameter, wrapper fields colliding, a
+definition named `Agent`, method constants colliding), `TestBuildNames` (the oneOf `U` gets `UX` and `UY`, property `URLValue` gets nested type
+`ParentURLValue`, enum and method constants, constructor parameters), `TestClassifyOrder` (each kind, a boolean schema, nil), and `FuzzExportedName`. A
+20-second fuzz run, 3,402,998 executions, found no failure and wrote nothing to the tree.
+
+Each check was seen to fail, with one planted breakage per run in a fresh scratch copy:
+
+```text
+old byte splitter: exit=1
+    failing=['FuzzExportedName', 'FuzzExportedName/seed#3', 'FuzzExportedName/seed#5', 'TestBuildNames']
+    model_test.go:134: U variant 1: got {TypeName:Ux FieldName:X DiscValue:x Skip:false}, want {TypeName:UX FieldName:X DiscValue:x Skip:false}
+no duplicate check: exit=1
+    failing=['TestBuildRefuses', ...definition_takes_a_name_the_generator_declares, ...enum_constant_collides_with_a_type,
+    ...enum_constants_collide, ...method_constants_collide]
+no field checks: exit=1
+    failing=['TestBuildRefuses', ...field_name_is_not_an_identifier, ...struct_fields_collide]
+no parameter check: exit=1
+    failing=['TestBuildRefuses', ...keyword_as_a_constructor_parameter]
+no reference check: exit=1
+    failing=['TestBuildRefuses', ...dangling_reference, ...non-local_reference]
+no wrapper-field check: exit=1
+    failing=['TestBuildRefuses', ...union_wrapper_fields_collide]
+oneOf not classified as a union: exit=1
+    failing=['TestBuildNames', 'TestBuildRefuses', ...keyword_as_a_constructor_parameter, 'TestClassifyOrder']
+```
+
+With the old splitter, the fuzz seeds `aBC` and `a-b` failed: their names changed on a second pass.
+
+The F8 schemas of G12, run through a build of this step's generator into empty directories, now stop in the model and write no file:
+
+```text
+enum_collision: exit=1 files=0 :: generate: model: Kind enum value "a_b": KindAB is already declared by Kind enum value "a-b"
+bad_identifier: exit=1 files=0 :: generate: model: Thing.properties.2fa: field name: "2fa" is not an exported Go identifier
+keyword_param: exit=1 files=0 :: generate: model: Union variant 1: required property "range" cannot be a Go parameter name
+missing_ref: exit=1 files=0 :: generate: model: R.properties.m: $ref "#/$defs/Missing" names no definition
+field_collision: exit=1 files=0 :: generate: model: F: properties "fooBar" and "foo_bar" both become field FooBar
+```
+
+Step 7 turns these into tests of `run`.
+
+`go test -cover ./internal/model` reports 70.7%; the step 9 target is 85%.
+
+Output: `cd cmd/generate && go run .` regenerated the five files and none changed; `TestGeneratedFilesUpToDate` passes.
+
+Gates: `make pre-add-check` with the twelve changed Go files named: `go-precheck: 12 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+A first run failed `revive` (`confusing-naming`: an unexported `build` beside `Build`); the inner function is now `resolve`. Without names:
+`go-precheck: 51 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 3 on `main`.

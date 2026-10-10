@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/emit"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
 // repoRoot is the SDK module root, two directories above cmd/generate.
@@ -27,17 +28,21 @@ func TestGeneratedFilesUpToDate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	m, err := model.Build(meta, schema)
+	if err != nil {
+		t.Fatal(err)
+	}
 	out := t.TempDir()
-	if err := emit.WriteConstants(out, meta); err != nil {
+	if err := emit.WriteConstants(out, m); err != nil {
 		t.Fatal(err)
 	}
-	if err := emit.WriteTypes(out, schema, meta); err != nil {
+	if err := emit.WriteTypes(out, m); err != nil {
 		t.Fatal(err)
 	}
-	if err := emit.WriteDispatch(out, schema, meta); err != nil {
+	if err := emit.WriteDispatch(out, m); err != nil {
 		t.Fatal(err)
 	}
-	if err := emit.WriteHelpers(out, schema, meta); err != nil {
+	if err := emit.WriteHelpers(out, m); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range generatedFiles {

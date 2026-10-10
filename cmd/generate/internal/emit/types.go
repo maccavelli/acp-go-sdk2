@@ -9,104 +9,12 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/util"
 )
-
-// splitCamelCase splits a CamelCase string into words.
-// Example: "RequestPermissionRequest" -> ["Request", "Permission", "Request"]
-func splitCamelCase(s string) []string {
-	if s == "" {
-		return nil
-	}
-	var words []string
-	var current strings.Builder
-
-	for i, r := range s {
-		if i > 0 && unicode.IsUpper(r) {
-			// Start new word on uppercase letter
-			if current.Len() > 0 {
-				words = append(words, current.String())
-				current.Reset()
-			}
-		}
-		current.WriteRune(r)
-	}
-	if current.Len() > 0 {
-		words = append(words, current.String())
-	}
-	return words
-}
-
-// generateNestedTypeName applies multiple heuristics to create idiomatic nested type names
-// while guaranteeing stability (name depends only on parent, field, and collision check).
-//
-// If a collision is detected (e.g. the schema already defines a type with the same name we
-// would otherwise generate), fall back to a deterministic suffixed name. Panics only if it
-// cannot find a unique name (which would indicate a codegen bug).
-func generateNestedTypeName(parentName, rawFieldName string, usedNames map[string]bool) string {
-	// Heuristic 1: Ensure field name is properly capitalized first
-	fieldName := util.ToExportedField(rawFieldName)
-
-	// Heuristic 2: Try RPC suffix stripping for Request/Response/Notification parents
-	// This handles cases like RequestPermissionRequest + ToolCall → RequestPermissionToolCall
-	for _, suffix := range []string{"Request", "Response", "Notification"} {
-		if baseName, ok := strings.CutSuffix(parentName, suffix); ok && baseName != "" {
-			candidate := baseName + fieldName
-			if !usedNames[candidate] {
-				return candidate
-			}
-		}
-	}
-
-	// Heuristic 3: Try word-boundary deduplication
-	// This handles cases like AgentNotification + ExtNotification → AgentExtNotification
-	parentWords := splitCamelCase(parentName)
-	fieldWords := splitCamelCase(fieldName)
-
-	// Need at least 2 words in parent to consider deduplication
-	if len(parentWords) >= 2 && len(fieldWords) > 0 {
-		lastParentWord := parentWords[len(parentWords)-1]
-		firstFieldWord := fieldWords[0]
-		lastFieldWord := fieldWords[len(fieldWords)-1]
-
-		if strings.EqualFold(lastParentWord, firstFieldWord) || strings.EqualFold(lastParentWord, lastFieldWord) {
-			// Remove last word from parent, then concatenate
-			parentWithoutLast := strings.Join(parentWords[:len(parentWords)-1], "")
-			if parentWithoutLast != "" {
-				candidate := parentWithoutLast + fieldName
-				if !usedNames[candidate] {
-					return candidate
-				}
-			}
-		}
-	}
-
-	// Heuristic 4: Fall back to full concatenation
-	fullName := parentName + fieldName
-	if !usedNames[fullName] {
-		return fullName
-	}
-
-	// Collision: this can happen when the schema already defines a top-level type with the
-	// same name as an inline property we'd otherwise generate.
-	base := fullName + "Inline"
-	if !usedNames[base] {
-		return base
-	}
-	for i := 2; i < 1000; i++ {
-		candidate := fmt.Sprintf("%s%d", base, i)
-		if !usedNames[candidate] {
-			return candidate
-		}
-	}
-
-	// DEFENSIVE PROGRAMMING: If we get here, something is deeply wrong with name tracking.
-	panic(fmt.Sprintf("unable to generate unique nested type name (parent: %q, field: %q)", parentName, rawFieldName))
-}
 
 // fieldSet collects struct fields or interface methods, each with the doc
 // comment lines added before it.
@@ -143,18 +51,12 @@ func structField(name string, typ ast.Expr, tag string) *ast.Field {
 }
 
 // WriteTypes emits types_gen.go with all types and the Agent/Client interfaces.
-func WriteTypes(outDir string, schema *load.Schema, meta *load.Meta) error {
+func WriteTypes(outDir string, m *model.Model) error {
 	f := newFile()
-
-	// Track all type names to avoid collisions when generating nested types
-	usedTypeNames := make(map[string]bool, len(schema.Defs))
-	for k := range schema.Defs {
-		usedTypeNames[k] = true
+	for _, t := range m.Types {
+		emitSchemaDef(f, m, t)
 	}
-	for _, name := range slices.Sorted(maps.Keys(schema.Defs)) {
-		emitSchemaDef(f, name, schema.Defs[name], schema, usedTypeNames)
-	}
-	emitRPCInterfaces(f, schema, meta)
+	emitRPCInterfaces(f, m.Schema, m.Meta)
 
 	return f.write(outDir, "types_gen.go")
 }
@@ -243,88 +145,45 @@ func emitRPCInterfaces(f *goFile, schema *load.Schema, meta *load.Meta) {
 	f.add(typeDecl("ClientExperimental", clientExperimental.interfaceType()))
 }
 
-// enumConsts declares <name><Value> name = "value" for each value.
-func enumConsts(f *goFile, name string, values []string) {
+// enumConsts declares <Const> name = "value" for each value.
+func enumConsts(f *goFile, name string, values []model.EnumValue) {
 	if len(values) == 0 {
 		return
 	}
 	var specs []*ast.ValueSpec
-	for _, s := range values {
-		specs = append(specs, constSpec(util.ToEnumConst(name, s), id(name), str(s)))
+	for _, v := range values {
+		specs = append(specs, constSpec(v.Const, id(name), str(v.Value)))
 	}
 	f.add(constDecl(true, specs...))
 }
 
-func emitSchemaDef(f *goFile, name string, def *load.Definition, schema *load.Schema, usedTypeNames map[string]bool) {
-	if def == nil {
+func emitSchemaDef(f *goFile, m *model.Model, t *model.Type) {
+	name, def := t.Name, t.Def
+	if t.Kind == model.KindNone {
 		return
-	}
-
-	// DEFENSIVE PROGRAMMING: Ensure we're not about to emit a type that conflicts
-	// with a previously generated nested type. This should never happen since we
-	// pre-populate usedTypeNames with all schema definitions.
-	if usedTypeNames[name] && name != "" {
-		if _, inSchema := schema.Defs[name]; !inSchema {
-			panic(fmt.Sprintf("BUG: attempting to emit type %q that was already generated as a nested type", name))
-		}
 	}
 
 	// A union emits its variant types first, so emitUnion places its
 	// description; every other case starts with the type it documents.
-	isUnion := len(def.Enum) == 0 && !isStringConstUnion(def) &&
-		((len(def.AnyOf) > 0 && !isOpenStringEnum(def)) || (len(def.AnyOf) == 0 && len(def.OneOf) > 0))
-	if def.Description != "" && !isUnion {
+	if def.Description != "" && t.Kind != model.KindUnion {
 		f.comment(util.FormatDocComment(def.Description)...)
 	}
 
-	switch {
-	case len(def.Enum) > 0:
+	switch t.Kind {
+	case model.KindEnum, model.KindStringConstUnion, model.KindOpenEnum:
+		// An open enum's unknown values are still representable as strings,
+		// matching the schema's extensibility.
 		f.add(typeDecl(name, id("string")))
-		var values []string
-		for _, v := range def.Enum {
-			values = append(values, fmt.Sprint(v))
-		}
-		enumConsts(f, name, values)
+		enumConsts(f, name, t.Enum)
 		f.line()
-	case isStringConstUnion(def):
-		f.add(typeDecl(name, id("string")))
-		var values []string
-		for _, v := range def.OneOf {
-			if v != nil && v.Const != nil {
-				values = append(values, fmt.Sprint(v.Const))
-			}
-		}
-		enumConsts(f, name, values)
-		f.line()
-	case len(def.AnyOf) > 0 && isOpenStringEnum(def):
-		// "Open" string enum: `anyOf` of string consts plus (typically) a
-		// free-form string catch-all. Emit as a named string type with
-		// constants for the known values. Unknown values are still
-		// representable as strings, matching the schema's extensibility.
-		f.add(typeDecl(name, id("string")))
-		var values []string
-		for _, v := range def.AnyOf {
-			if v == nil || v.Const == nil {
-				continue
-			}
-			if s, ok := v.Const.(string); ok {
-				values = append(values, s)
-			}
-		}
-		enumConsts(f, name, values)
-		f.line()
-	case len(def.AnyOf) > 0:
-		emitUnion(f, name, schema, def, def.AnyOf, false, usedTypeNames)
-	case len(def.OneOf) > 0 && !isStringConstUnion(def):
-		// Generic union generation for non-enum oneOf
-		// Use the same implementation, but require exactly one variant
-		emitUnion(f, name, schema, def, def.OneOf, true, usedTypeNames)
-	case ir.PrimaryType(def) == schemaTypeObject && len(def.Properties) > 0:
-		emitObjectSchema(f, name, def, usedTypeNames)
-	case slices.Contains([]string{schemaTypeString, schemaTypeInteger, schemaTypeNumber, schemaTypeBoolean}, ir.PrimaryType(def)):
+	case model.KindUnion:
+		emitUnion(f, m, t)
+	case model.KindObject:
+		emitObjectSchema(f, t)
+	case model.KindPrimitive:
 		f.add(typeDecl(name, primitiveType(ir.PrimaryType(def))))
 		f.line()
-	case ir.PrimaryType(def) == schemaTypeObject && len(def.Properties) == 0:
+	case model.KindEmptyObject:
 		// Empty object shape: emit a concrete empty struct so methods can be defined
 		// and the wire encoding is consistently {} rather than null.
 		f.add(typeDecl(name, &ast.StructType{Fields: fields()}))
@@ -338,8 +197,7 @@ func emitSchemaDef(f *goFile, name string, def *load.Definition, schema *load.Sc
 	// Validators for selected types. Union wrappers get Validate from
 	// emitUnion; emitValidate reads properties on the wrapper, which is the
 	// wrong shape for those types.
-	emittedUnion := (len(def.OneOf) > 0 && !isStringConstUnion(def)) || (len(def.AnyOf) > 0 && !isOpenStringEnum(def))
-	if !emittedUnion && (isRPCTypeName(name) || name == "ToolCallUpdate") {
+	if t.Kind != model.KindUnion && (isRPCTypeName(name) || name == "ToolCallUpdate") {
 		emitValidate(f, name, def)
 	}
 }
@@ -357,12 +215,13 @@ func requiredSet(required []string) map[string]bool {
 	return set
 }
 
-func emitObjectSchema(f *goFile, name string, def *load.Definition, usedTypeNames map[string]bool) {
+func emitObjectSchema(f *goFile, t *model.Type) {
+	name, def := t.Name, t.Def
 	req := requiredSet(def.Required)
 	pkeys := slices.Sorted(maps.Keys(def.Properties))
 
 	// Pre-generate nested struct types for inline object properties
-	nestedTypes := emitInlineNestedTypes(f, name, pkeys, def, usedTypeNames)
+	nestedTypes := emitInlineNestedTypes(f, t, pkeys)
 
 	// Track fields with schema defaults for generic (de)serialization
 	var defaults []defaultProp
@@ -448,23 +307,15 @@ func appendRequiredFill(fills []requiredFill, field string, prop *load.Definitio
 	return fills
 }
 
-func emitInlineNestedTypes(f *goFile, name string, pkeys []string, def *load.Definition, usedTypeNames map[string]bool) map[string]string {
-	nestedTypes := map[string]string{}
+// emitInlineNestedTypes emits the struct the model named for each inline
+// object property of t and returns those names by property key.
+func emitInlineNestedTypes(f *goFile, t *model.Type, pkeys []string) map[string]string {
 	for _, pk := range pkeys {
-		prop := def.Properties[pk]
-		// Detect inline objects: no $ref, type is object, has properties
-		if prop.Ref != "" || ir.PrimaryType(prop) != schemaTypeObject || len(prop.Properties) == 0 {
+		nestedTypeName, ok := t.Nested[pk]
+		if !ok {
 			continue
 		}
-		nestedTypeName := generateNestedTypeName(name, pk, usedTypeNames)
-		nestedTypes[pk] = nestedTypeName
-
-		// DEFENSIVE PROGRAMMING: Assert no collision before registering
-		if usedTypeNames[nestedTypeName] {
-			panic(fmt.Sprintf("BUG: nested type name collision: %q already registered", nestedTypeName))
-		}
-		usedTypeNames[nestedTypeName] = true
-
+		prop := t.Def.Properties[pk]
 		if prop.Description != "" {
 			f.comment(util.FormatDocComment(prop.Description)...)
 		}
@@ -488,7 +339,7 @@ func emitInlineNestedTypes(f *goFile, name string, pkeys []string, def *load.Def
 		f.line()
 		emitObjectDefaults(f, nestedTypeName, nil, fills)
 	}
-	return nestedTypes
+	return t.Nested
 }
 
 type defaultKind int
@@ -578,13 +429,9 @@ func emitObjectDefaults(f *goFile, name string, defaults []defaultProp, fills []
 }
 
 // emitInlineUnionStruct emits the type for an inline (non-$ref) union variant.
-func emitInlineUnionStruct(f *goFile, name, tname, ref string, v *load.Definition, isObj, isNull bool, sharedProps map[string]*load.Definition, sharedRequired map[string]bool, usedTypeNames map[string]bool) {
+func emitInlineUnionStruct(f *goFile, tname, ref string, v *load.Definition, isObj, isNull bool, sharedProps map[string]*load.Definition, sharedRequired map[string]bool) {
 	if ref != "" || (!isObj && !isNull && v.Title == "") {
 		return
-	}
-	// DEFENSIVE PROGRAMMING: Verify tname is registered before emitting
-	if !usedTypeNames[tname] {
-		panic(fmt.Sprintf("BUG: attempting to emit unregistered type: %q (parent union: %q)", tname, name))
 	}
 
 	var st fieldSet
@@ -914,58 +761,6 @@ func unionValidateBody(f *goFile, name string, variants []variantInfo) []ast.Stm
 	)
 }
 
-func isStringConstUnion(def *load.Definition) bool {
-	if def == nil || len(def.OneOf) == 0 {
-		return false
-	}
-	for _, v := range def.OneOf {
-		if v == nil || v.Const == nil {
-			return false
-		}
-		if _, ok := v.Const.(string); !ok {
-			return false
-		}
-	}
-	return true
-}
-
-// isOpenStringEnum reports whether def is an "open" string enum: an `anyOf`
-// where every variant is a plain string schema (type: "string") and at least
-// one variant has a string `const`. Such schemas describe a string value with
-// a recommended set of known values while still permitting arbitrary strings
-// for extensibility (see e.g. SessionConfigOptionCategory).
-//
-// These are emitted as a Go string-derived type with named constants for each
-// known value, rather than as a discriminated union wrapper.
-func isOpenStringEnum(def *load.Definition) bool {
-	if def == nil || len(def.AnyOf) == 0 {
-		return false
-	}
-	sawConst := false
-	for _, v := range def.AnyOf {
-		if v == nil {
-			return false
-		}
-		// Each variant must be a plain string schema: type "string", no nested
-		// structure (properties, items, refs, nested unions, allOf, etc.).
-		if ir.PrimaryType(v) != schemaTypeString {
-			return false
-		}
-		if v.Ref != "" || len(v.Properties) > 0 || v.Items != nil ||
-			len(v.AnyOf) > 0 || len(v.OneOf) > 0 || len(v.AllOf) > 0 ||
-			len(v.Enum) > 0 {
-			return false
-		}
-		if v.Const != nil {
-			if _, ok := v.Const.(string); !ok {
-				return false
-			}
-			sawConst = true
-		}
-	}
-	return sawConst
-}
-
 // validateMethod is func (recv *name) Validate() error { body }.
 func validateMethod(recv, name string, body ...ast.Stmt) *ast.FuncDecl {
 	return method(param(recv, star(id(name))), "Validate", funcType(nil, param("", id("error"))), body...)
@@ -1059,82 +854,6 @@ func includesNull(d *load.Definition) bool {
 	}
 	arr, ok := d.Type.([]any)
 	return ok && slices.Contains(arr, any(schemaTypeNull))
-}
-
-// expandAllOf merges JSON Schema allOf nodes into a shallow composite definition.
-//
-// ACP's schema frequently uses `allOf: [{"$ref": "#/$defs/Type"}]` so a property or union
-// variant can attach local metadata (description/default/const constraints) while reusing
-// a referenced shape.
-//
-// For codegen purposes we approximate allOf by merging object properties + required lists.
-// We intentionally do not attempt to resolve semantic constraints beyond that.
-func expandAllOf(schema *load.Schema, d *load.Definition) *load.Definition {
-	if d == nil || len(d.AllOf) == 0 {
-		return d
-	}
-
-	merged := *d
-	// Avoid re-processing in recursive calls.
-	merged.AllOf = nil
-	merged.Properties = maps.Clone(d.Properties)
-	merged.Required = slices.Clone(d.Required)
-	reqSet := requiredSet(merged.Required)
-
-	for _, part := range d.AllOf {
-		if part == nil {
-			continue
-		}
-		resolved := part
-		if name, ok := strings.CutPrefix(part.Ref, "#/$defs/"); ok && schema != nil {
-			if def := schema.Defs[name]; def != nil {
-				resolved = def
-			}
-		}
-		resolved = expandAllOf(schema, resolved)
-
-		copyMissingAllOfFields(&merged, resolved)
-
-		if len(resolved.Properties) > 0 {
-			if merged.Properties == nil {
-				merged.Properties = make(map[string]*load.Definition)
-			}
-			for k, v := range resolved.Properties {
-				if _, ok := merged.Properties[k]; !ok {
-					merged.Properties[k] = v
-				}
-			}
-		}
-		for _, r := range resolved.Required {
-			if !reqSet[r] {
-				merged.Required = append(merged.Required, r)
-				reqSet[r] = true
-			}
-		}
-	}
-
-	return &merged
-}
-
-func copyMissingAllOfFields(merged *load.Definition, resolved *load.Definition) {
-	if merged.Type == nil && resolved.Type != nil {
-		merged.Type = resolved.Type
-	}
-	if merged.Items == nil && resolved.Items != nil {
-		merged.Items = resolved.Items
-	}
-	if merged.Ref == "" && resolved.Ref != "" {
-		merged.Ref = resolved.Ref
-	}
-	if len(merged.Enum) == 0 && len(resolved.Enum) > 0 {
-		merged.Enum = resolved.Enum
-	}
-	if len(merged.AnyOf) == 0 && len(resolved.AnyOf) > 0 {
-		merged.AnyOf = resolved.AnyOf
-	}
-	if len(merged.OneOf) == 0 && len(resolved.OneOf) > 0 {
-		merged.OneOf = resolved.OneOf
-	}
 }
 
 // typeExpr maps a schema node to a Go type expression.
@@ -1254,105 +973,26 @@ type variantInfo struct {
 	hasSharedFields   bool
 }
 
-// singleRefVariant returns the $ref when v is only an allOf wrapper around one $ref.
-func singleRefVariant(v *load.Definition) string {
-	if v.Type == nil &&
-		len(v.Properties) == 0 &&
-		len(v.Required) == 0 &&
-		len(v.Enum) == 0 &&
-		v.Items == nil &&
-		len(v.AnyOf) == 0 &&
-		len(v.OneOf) == 0 &&
-		len(v.AllOf) == 1 &&
-		v.AllOf[0] != nil &&
-		v.AllOf[0].Ref != "" {
-		return v.AllOf[0].Ref
-	}
-	return ""
-}
-
-// discriminatorKey returns the schema's discriminator property, or the first
-// const property found on a variant, in sorted property order.
-func discriminatorKey(schema *load.Schema, parent *load.Definition, variants []*load.Definition) string {
-	if parent != nil && parent.Discriminator != nil && parent.Discriminator.PropertyName != "" {
-		return parent.Discriminator.PropertyName
-	}
-	for _, v := range variants {
-		if v == nil {
-			continue
-		}
-		v = expandAllOf(schema, v)
-		for _, k := range slices.Sorted(maps.Keys(v.Properties)) {
-			if pd := v.Properties[k]; pd != nil && pd.Const != nil {
-				return k
-			}
-		}
-	}
-	return ""
-}
-
-// registerName records tname as used and panics on a collision.
-func registerName(usedTypeNames map[string]bool, tname, context string) {
-	if usedTypeNames[tname] {
-		panic(fmt.Sprintf("BUG: variant type name collision: %q already registered (%s)", tname, context))
-	}
-	usedTypeNames[tname] = true
-}
-
-func oneUnionVariant(f *goFile, name string, schema *load.Schema, idx int, v *load.Definition, discKey string, sharedProps map[string]*load.Definition, sharedRequired map[string]bool, usedTypeNames map[string]bool) (variantInfo, bool) {
-	if v == nil {
+// oneUnionVariant emits the inline type of variant idx of t, if it has one,
+// and returns the facts the union's methods need. The variant's names come
+// from the model.
+func oneUnionVariant(f *goFile, schema *load.Schema, t *model.Type, idx int, v *load.Definition, sharedProps map[string]*load.Definition, sharedRequired map[string]bool) (variantInfo, bool) {
+	mv := t.Variants[idx]
+	if v == nil || mv.Skip {
 		return variantInfo{}, false
 	}
 	ref := v.Ref
 	// If this is an allOf wrapper around a single $ref with no additional structure, treat it
 	// as a $ref variant (keeps types stable and avoids duplicate structs).
 	if ref == "" {
-		ref = singleRefVariant(v)
+		ref = model.SingleRefVariant(v)
 	}
-	v = expandAllOf(schema, v)
+	v = model.ExpandAllOf(schema, v)
 	// Detect null-only variant
 	s, ok := v.Type.(string)
 	isNull := ok && s == schemaTypeNull
+	tname := mv.TypeName
 
-	// Determine type name: prefer $ref target name when present; do not treat Title as a rename for $ref.
-	tname := ""
-	if after, ok := strings.CutPrefix(ref, "#/$defs/"); ok {
-		tname = after
-	} else if v.Title != "" {
-		// Scope inline variant titles to parent union name with smart naming
-		tname = generateNestedTypeName(name, v.Title, usedTypeNames)
-		registerName(usedTypeNames, tname, fmt.Sprintf("parent: %q, title: %q", name, v.Title))
-	} else {
-		if discKey != "" {
-			if pd := v.Properties[discKey]; pd != nil && pd.Const != nil {
-				c := fmt.Sprint(pd.Const)
-				tname = generateNestedTypeName(name, c, usedTypeNames)
-				registerName(usedTypeNames, tname, fmt.Sprintf("parent: %q, discriminator: %q", name, c))
-			}
-		}
-		if tname == "" {
-			tname = fmt.Sprintf("%sVariant%d", name, idx+1)
-			registerName(usedTypeNames, tname, fmt.Sprintf("parent: %q", name))
-		}
-	}
-	// Ensure Title-derived names are exported (e.g., "stdio" -> "Stdio").
-	tname = util.ToExportedField(tname)
-
-	// Derive field name with priority: discriminator value > title > type name
-	fieldName := ""
-	dv := ""
-	if discKey != "" {
-		if pd := v.Properties[discKey]; pd != nil && pd.Const != nil {
-			dv = fmt.Sprint(pd.Const)
-			fieldName = util.ToExportedField(dv)
-		}
-	}
-	if fieldName == "" && v.Title != "" {
-		fieldName = util.ToExportedField(v.Title)
-	}
-	if fieldName == "" {
-		fieldName = util.ToExportedField(tname)
-	}
 	isObj := len(v.Properties) > 0
 	isArray := ir.PrimaryType(v) == schemaTypeArray
 	arrayItemRequired := []string{}
@@ -1363,15 +1003,10 @@ func oneUnionVariant(f *goFile, name string, schema *load.Schema, idx int, v *lo
 				item = d
 			}
 		}
-		item = expandAllOf(schema, item)
+		item = model.ExpandAllOf(schema, item)
 		if ir.PrimaryType(item) == schemaTypeObject && len(item.Required) > 0 {
 			arrayItemRequired = slices.Sorted(slices.Values(item.Required))
 		}
-	}
-	// Skip phantom variants that have neither $ref nor object shape nor null nor title
-	// (but allow title-only variants like ExtMethodRequest to generate as empty structs)
-	if !isObj && ref == "" && !isNull && v.Title == "" {
-		return variantInfo{}, false
 	}
 	// Collect const properties (e.g., type, outcome).
 	var consts [][2]string
@@ -1382,15 +1017,15 @@ func oneUnionVariant(f *goFile, name string, schema *load.Schema, idx int, v *lo
 			}
 		}
 	}
-	emitInlineUnionStruct(f, name, tname, ref, v, isObj, isNull, sharedProps, sharedRequired, usedTypeNames)
+	emitInlineUnionStruct(f, tname, ref, v, isObj, isNull, sharedProps, sharedRequired)
 	return variantInfo{
-		fieldName:         fieldName,
+		fieldName:         mv.FieldName,
 		typeName:          tname,
 		required:          v.Required,
 		isObject:          isObj,
 		isArray:           isArray,
 		arrayItemRequired: arrayItemRequired,
-		discValue:         dv,
+		discValue:         mv.DiscValue,
 		constPairs:        consts,
 		isNull:            isNull,
 		description:       v.Description,
@@ -1398,8 +1033,9 @@ func oneUnionVariant(f *goFile, name string, schema *load.Schema, idx int, v *lo
 	}, true
 }
 
-func emitUnion(f *goFile, name string, schema *load.Schema, parentDef *load.Definition, defs []*load.Definition, exactlyOne bool, usedTypeNames map[string]bool) {
-	discKey := discriminatorKey(schema, parentDef, defs)
+func emitUnion(f *goFile, m *model.Model, t *model.Type) {
+	name, parentDef, defs, exactlyOne := t.Name, t.Def, t.UnionList(), t.ExactlyOne
+	discKey := model.DiscriminatorKey(m.Schema, parentDef, defs)
 	sharedProps := map[string]*load.Definition{}
 	sharedRequired := map[string]bool{}
 	if parentDef != nil {
@@ -1409,7 +1045,7 @@ func emitUnion(f *goFile, name string, schema *load.Schema, parentDef *load.Defi
 
 	var variants []variantInfo
 	for idx, v := range defs {
-		if vi, ok := oneUnionVariant(f, name, schema, idx, v, discKey, sharedProps, sharedRequired, usedTypeNames); ok {
+		if vi, ok := oneUnionVariant(f, m.Schema, t, idx, v, sharedProps, sharedRequired); ok {
 			variants = append(variants, vi)
 		}
 	}

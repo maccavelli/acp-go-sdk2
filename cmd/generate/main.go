@@ -9,6 +9,7 @@ import (
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/emit"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
 func main() {
@@ -43,18 +44,23 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// The model refuses a schema it cannot represent before any file is written.
+	m, err := model.Build(meta, schema)
+	if err != nil {
+		return err
+	}
 
-	if err := emit.WriteConstants(*outDir, meta); err != nil {
+	if err := emit.WriteConstants(*outDir, m); err != nil {
 		return err
 	}
-	if err := emit.WriteTypes(*outDir, schema, meta); err != nil {
+	if err := emit.WriteTypes(*outDir, m); err != nil {
 		return err
 	}
-	if err := emit.WriteDispatch(*outDir, schema, meta); err != nil {
+	if err := emit.WriteDispatch(*outDir, m); err != nil {
 		return err
 	}
 	// Emit helpers after types so they can reference generated structs.
-	return emit.WriteHelpers(*outDir, schema, meta)
+	return emit.WriteHelpers(*outDir, m)
 }
 
 // loadSchema reads the stable schema and, when present, merges the unstable one.

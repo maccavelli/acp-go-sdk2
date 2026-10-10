@@ -9,20 +9,25 @@ import (
 	"testing"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
 // TestDefaultedNullablePropertyCompiles type-checks the output for a property
 // that has a default and allows null, a shape schema 1.25.0 does not contain.
 func TestDefaultedNullablePropertyCompiles(t *testing.T) {
 	t.Parallel()
-	def := &load.Definition{
+	schema := &load.Schema{Defs: map[string]*load.Definition{"Options": {
 		Type: "object",
 		Properties: map[string]*load.Definition{
 			"mode": {Type: []any{"string", "null"}, Default: "auto"},
 		},
+	}}}
+	m, err := model.Build(&load.Meta{}, schema)
+	if err != nil {
+		t.Fatal(err)
 	}
 	f := newFile()
-	emitObjectSchema(f, "Options", def, map[string]bool{"Options": true})
+	emitObjectSchema(f, m.Type("Options"))
 	src := render(t, f)
 
 	fset := token.NewFileSet()
