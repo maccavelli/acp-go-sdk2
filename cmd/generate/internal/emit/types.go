@@ -4,13 +4,10 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"maps"
-	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/util"
 )
@@ -53,9 +50,9 @@ func structField(name string, typ ast.Expr, tag string) *ast.Field {
 func WriteTypes(outDir string, m *model.Model) error {
 	f := newFile()
 	for _, t := range m.Types {
-		emitSchemaDef(f, m, t)
+		emitSchemaDef(f, t)
 	}
-	emitRPCInterfaces(f, m.Schema, m.Meta)
+	emitRPCInterfaces(f, m)
 
 	return f.write(outDir, "types_gen.go")
 }
@@ -74,8 +71,8 @@ func interfaceMethod(f *goFile, name, paramType, respType string) *ast.Field {
 }
 
 // addRPCMethod adds the interface method for mi to target.
-func addRPCMethod(f *goFile, target *fieldSet, schema *load.Schema, methodKey string, mi *ir.MethodInfo) {
-	if desc := methodDescription(schema, mi); desc != "" {
+func addRPCMethod(f *goFile, target *fieldSet, m *model.Model, methodKey string, mi *ir.MethodInfo) {
+	if desc := methodDescription(m, mi); desc != "" {
 		target.comment(util.FormatDocComment(desc)...)
 	}
 	switch {
@@ -84,16 +81,17 @@ func addRPCMethod(f *goFile, target *fieldSet, schema *load.Schema, methodKey st
 	case mi.Req != "":
 		methodName := strings.TrimSuffix(mi.Req, "Request")
 		respName := methodName + "Response"
-		if ir.IsNullResponse(schema.Defs[respName]) {
+		if ir.IsNullResponse(m.Schema.Defs[respName]) {
 			respName = ""
 		}
 		target.add(interfaceMethod(f, methodName, mi.Req, respName))
 	}
 }
 
-func emitRPCInterfaces(f *goFile, schema *load.Schema, meta *load.Meta) {
+func emitRPCInterfaces(f *goFile, m *model.Model) {
+	meta := m.Meta
 	// Append Agent & Client interfaces from method groups
-	groups := ir.BuildMethodGroups(schema, meta)
+	groups := ir.BuildMethodGroups(m.Schema, meta)
 
 	var agent, agentLoader, agentExperimental fieldSet
 	for _, k := range ir.SortedKeys(meta.AgentMethods) {
@@ -108,7 +106,7 @@ func emitRPCInterfaces(f *goFile, schema *load.Schema, meta *load.Meta) {
 		case ir.BindAgentExperimental:
 			target = &agentExperimental
 		}
-		addRPCMethod(f, target, schema, k, mi)
+		addRPCMethod(f, target, m, k, mi)
 	}
 	f.add(typeDecl("Agent", agent.interfaceType()))
 	if len(agentLoader.list) > 0 {
@@ -132,7 +130,7 @@ func emitRPCInterfaces(f *goFile, schema *load.Schema, meta *load.Meta) {
 		case ir.BindClientTerminal:
 			target = &clientTerminal
 		}
-		addRPCMethod(f, target, schema, k, mi)
+		addRPCMethod(f, target, m, k, mi)
 	}
 	f.add(typeDecl("Client", client.interfaceType()))
 	if len(clientTerminal.list) > 0 {
@@ -156,16 +154,16 @@ func enumConsts(f *goFile, name string, values []model.EnumValue) {
 	f.add(constDecl(true, specs...))
 }
 
-func emitSchemaDef(f *goFile, m *model.Model, t *model.Type) {
-	name, def := t.Name, t.Def
+func emitSchemaDef(f *goFile, t *model.Type) {
+	name := t.Name
 	if t.Kind == model.KindNone {
 		return
 	}
 
 	// A union emits its variant types first, so emitUnion places its
 	// description; every other case starts with the type it documents.
-	if def.Description != "" && t.Kind != model.KindUnion {
-		f.comment(util.FormatDocComment(def.Description)...)
+	if t.Kind != model.KindUnion {
+		f.comment(t.Doc...)
 	}
 
 	switch t.Kind {
@@ -176,7 +174,7 @@ func emitSchemaDef(f *goFile, m *model.Model, t *model.Type) {
 		enumConsts(f, name, t.Enum)
 		f.line()
 	case model.KindUnion:
-		emitUnion(f, m, t)
+		emitUnion(f, t)
 	case model.KindObject:
 		emitObjectSchema(f, t)
 	case model.KindPrimitive:
@@ -193,16 +191,11 @@ func emitSchemaDef(f *goFile, m *model.Model, t *model.Type) {
 		f.line()
 	}
 
-	// Validators for selected types. Union wrappers get Validate from
-	// emitUnion; emitValidate reads properties on the wrapper, which is the
-	// wrong shape for those types.
-	if t.Kind != model.KindUnion && (isRPCTypeName(name) || name == "ToolCallUpdate") {
-		emitValidate(f, name, def)
+	// Union wrappers get Validate from emitUnion.
+	switch t.Validate {
+	case model.ValidateFields, model.ValidateToolCall:
+		emitFieldValidate(f, t)
 	}
-}
-
-func isRPCTypeName(name string) bool {
-	return strings.HasSuffix(name, "Request") || strings.HasSuffix(name, "Response") || strings.HasSuffix(name, "Notification")
 }
 
 func emitObjectSchema(f *goFile, t *model.Type) {
@@ -350,15 +343,15 @@ func invalidPayload(f *goFile, lead ...ast.Expr) ast.Stmt {
 }
 
 // setVariant is u.<field> = &v; return nil.
-func setVariant(vi variantInfo) []ast.Stmt {
+func setVariant(vi *model.Variant) []ast.Stmt {
 	return []ast.Stmt{
-		assign(exprs(dot("u", vi.fieldName)), addr(id("v"))),
+		assign(exprs(dot("u", vi.FieldName)), addr(id("v"))),
 		ret(nilExpr()),
 	}
 }
 
 // decodeStrict decodes b into v, fails on error, and sets the variant.
-func decodeStrict(f *goFile, vi variantInfo) []ast.Stmt {
+func decodeStrict(f *goFile, vi *model.Variant) []ast.Stmt {
 	return append([]ast.Stmt{
 		ifStmt(nil, binary(call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v"))), token.NEQ, nilExpr()),
 			invalidPayload(f)),
@@ -371,15 +364,15 @@ func keyMatch(m, key string) ast.Stmt {
 		assign(exprs(id("match")), boolLit(false)))
 }
 
-func unionUnmarshalBody(f *goFile, name string, variants []variantInfo, discKey string) []ast.Stmt {
+func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKey string) []ast.Stmt {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	var body []ast.Stmt
 
 	// Handle literal null with the first null-only variant.
 	for _, vi := range variants {
-		if vi.isNull {
+		if vi.IsNull {
 			body = append(body, ifStmt(nil, binary(call(id("string"), id("b")), token.EQL, str(schemaTypeNull)),
-				append([]ast.Stmt{varStmt("v", id(vi.typeName))}, setVariant(vi)...)...))
+				append([]ast.Stmt{varStmt("v", id(vi.TypeName))}, setVariant(vi)...)...))
 			break
 		}
 	}
@@ -389,9 +382,9 @@ func unionUnmarshalBody(f *goFile, name string, variants []variantInfo, discKey 
 	if discKey != "" {
 		var cases []ast.Stmt
 		for _, vi := range variants {
-			if vi.discValue != "" {
-				cases = append(cases, caseOf(exprs(str(vi.discValue)),
-					append([]ast.Stmt{varStmt("v", id(vi.typeName))}, decodeStrict(f, vi)...)...))
+			if vi.DiscValue != "" {
+				cases = append(cases, caseOf(exprs(str(vi.DiscValue)),
+					append([]ast.Stmt{varStmt("v", id(vi.TypeName))}, decodeStrict(f, vi)...)...))
 			}
 		}
 		// A discriminator that is present and not a string is an error.
@@ -405,14 +398,14 @@ func unionUnmarshalBody(f *goFile, name string, variants []variantInfo, discKey 
 	}
 	// Required-key match.
 	for _, vi := range variants {
-		if !vi.isObject || len(vi.required) == 0 {
+		if !vi.IsObject || len(vi.Required) == 0 {
 			continue
 		}
 		stmts := []ast.Stmt{
-			varStmt("v", id(vi.typeName)),
+			varStmt("v", id(vi.TypeName)),
 			define(exprs(id("match")), boolLit(true)),
 		}
-		for _, rk := range vi.required {
+		for _, rk := range vi.Required {
 			stmts = append(stmts, keyMatch("m", rk))
 		}
 		stmts = append(stmts, ifStmt(nil, id("match"), decodeStrict(f, vi)...))
@@ -431,15 +424,15 @@ func unionUnmarshalBody(f *goFile, name string, variants []variantInfo, discKey 
 	// For array variants with required keys on object items, try key-based matching first.
 	var array []ast.Stmt
 	for _, vi := range variants {
-		if !vi.isArray || len(vi.arrayItemRequired) == 0 {
+		if !vi.IsArray || len(vi.ArrayItemRequired) == 0 {
 			continue
 		}
 		var loop []ast.Stmt
-		for _, rk := range vi.arrayItemRequired {
+		for _, rk := range vi.ArrayItemRequired {
 			loop = append(loop, keyMatch("elem", rk))
 		}
 		array = append(array, block(
-			varStmt("v", id(vi.typeName)),
+			varStmt("v", id(vi.TypeName)),
 			define(exprs(id("match")), boolLit(true)),
 			rangeStmt(id("_"), id("elem"), id("arr"), loop...),
 			ifStmt(nil, id("match"), decodeStrict(f, vi)...),
@@ -453,7 +446,7 @@ func unionUnmarshalBody(f *goFile, name string, variants []variantInfo, discKey 
 	// Fallback: try each variant in turn.
 	for _, vi := range variants {
 		body = append(body, block(
-			varStmt("v", id(vi.typeName)),
+			varStmt("v", id(vi.TypeName)),
 			ifStmt(nil, binary(unmarshal(id("b"), addr(id("v"))), token.EQL, nilExpr()), setVariant(vi)...),
 		))
 	}
@@ -501,25 +494,25 @@ func contentBlockMarshal(f *goFile, disc string) ast.Stmt {
 	return block(stmts...)
 }
 
-func unionMarshalBody(f *goFile, name string, variants []variantInfo) []ast.Stmt {
+func unionMarshalBody(f *goFile, name string, variants []*model.Variant) []ast.Stmt {
 	marshal := func(x ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Marshal"), x) }
 	var body []ast.Stmt
 	for _, vi := range variants {
 		var then []ast.Stmt
 		switch {
-		case vi.isNull:
+		case vi.IsNull:
 			// Null-only variant encodes to JSON null.
 			then = []ast.Stmt{ret(marshal(nilExpr()))}
-		case !vi.isObject:
+		case !vi.IsObject:
 			// Non-object variants (e.g., arrays/primitives) are already in final wire shape.
 			then = []ast.Stmt{
-				define(exprs(id("_b"), id("_e")), marshal(star(dot("u", vi.fieldName)))),
+				define(exprs(id("_b"), id("_e")), marshal(star(dot("u", vi.FieldName)))),
 				ifStmt(nil, binary(id("_e"), token.NEQ, nilExpr()), ret(emptyBytes(), id("_e"))),
 				ret(id("_b"), nilExpr()),
 			}
 		default:
 			then = []ast.Stmt{
-				define(exprs(id("_b"), id("_e")), marshal(star(dot("u", vi.fieldName)))),
+				define(exprs(id("_b"), id("_e")), marshal(star(dot("u", vi.FieldName)))),
 				ifStmt(nil, binary(id("_e"), token.NEQ, nilExpr()), ret(emptyBytes(), id("_e"))),
 				// Marshal object variant to map for discriminant injection and shaping.
 				varStmt("m", rawMap(id("any"))),
@@ -527,12 +520,12 @@ func unionMarshalBody(f *goFile, name string, variants []variantInfo) []ast.Stmt
 					invalidPayload(f, emptyBytes())),
 			}
 			// Inject const discriminants.
-			for _, kv := range vi.constPairs {
+			for _, kv := range vi.ConstPairs {
 				then = append(then, assign(exprs(index(id("m"), str(kv[0]))), str(kv[1])))
 			}
 			if name == unionContentBlock {
 				// Special shaping for ContentBlock variants to preserve exact wire JSON.
-				if s := contentBlockMarshal(f, vi.discValue); s != nil {
+				if s := contentBlockMarshal(f, vi.DiscValue); s != nil {
 					then = append(then, s)
 				}
 			} else {
@@ -540,33 +533,9 @@ func unionMarshalBody(f *goFile, name string, variants []variantInfo) []ast.Stmt
 				then = append(then, ret(marshal(id("m"))))
 			}
 		}
-		body = append(body, ifStmt(nil, binary(dot("u", vi.fieldName), token.NEQ, nilExpr()), then...))
+		body = append(body, ifStmt(nil, binary(dot("u", vi.FieldName), token.NEQ, nilExpr()), then...))
 	}
 	return append(body, ret(nilExpr(), call(f.qual(pkgErrors, "New"), str(name+": no variant set"))))
-}
-
-type sharedFieldCheck struct {
-	field string
-	prop  string
-	kind  string
-}
-
-func sharedFieldChecks(def *load.Definition) []sharedFieldCheck {
-	if def == nil {
-		return nil
-	}
-	var out []sharedFieldCheck
-	for _, propName := range slices.Sorted(slices.Values(def.Required)) {
-		pDef := def.Properties[propName]
-		if pDef == nil {
-			continue
-		}
-		switch kind := ir.PrimaryType(pDef); kind {
-		case schemaTypeString, schemaTypeArray:
-			out = append(out, sharedFieldCheck{field: util.ToExportedField(propName), prop: propName, kind: kind})
-		}
-	}
-	return out
 }
 
 // requiredCheck returns fmt.Errorf("<prop> is required") when x is the zero
@@ -579,10 +548,10 @@ func requiredCheck(f *goFile, x ast.Expr, kind, prop string) ast.Stmt {
 	return ifStmt(nil, binary(x, token.EQL, zero), ret(call(f.qual(pkgFmt, "Errorf"), str(prop+" is required"))))
 }
 
-func sharedUnionValidateBody(f *goFile, variants []variantInfo, checks []sharedFieldCheck) []ast.Stmt {
+func sharedUnionValidateBody(f *goFile, variants []*model.Variant, checks []model.RequiredCheck) []ast.Stmt {
 	carriers := 0
 	for _, vi := range variants {
-		if vi.hasSharedFields {
+		if vi.HasSharedFields {
 			carriers++
 		}
 	}
@@ -591,26 +560,26 @@ func sharedUnionValidateBody(f *goFile, variants []variantInfo, checks []sharedF
 	}
 	body := []ast.Stmt{varStmt("set", id("bool"))}
 	for _, vi := range variants {
-		if !vi.hasSharedFields {
+		if !vi.HasSharedFields {
 			continue
 		}
 		var then []ast.Stmt
 		for _, c := range checks {
-			then = append(then, requiredCheck(f, dot("v", vi.fieldName, c.field), c.kind, c.prop))
+			then = append(then, requiredCheck(f, dot("v", vi.FieldName, c.Field), c.Kind, c.Prop))
 		}
 		then = append(then, assign(exprs(id("set")), boolLit(true)))
-		body = append(body, ifStmt(nil, binary(dot("v", vi.fieldName), token.NEQ, nilExpr()), then...))
+		body = append(body, ifStmt(nil, binary(dot("v", vi.FieldName), token.NEQ, nilExpr()), then...))
 	}
 	return append(body,
-		ifStmt(nil, not(id("set")), ret(call(f.qual(pkgFmt, "Errorf"), str(checks[0].prop+" is required")))),
+		ifStmt(nil, not(id("set")), ret(call(f.qual(pkgFmt, "Errorf"), str(checks[0].Prop+" is required")))),
 		ret(nilExpr()),
 	)
 }
 
-func unionValidateBody(f *goFile, name string, variants []variantInfo) []ast.Stmt {
+func unionValidateBody(f *goFile, name string, variants []*model.Variant) []ast.Stmt {
 	body := []ast.Stmt{varStmt("count", id("int"))}
 	for _, vi := range variants {
-		body = append(body, ifStmt(nil, binary(dot("u", vi.fieldName), token.NEQ, nilExpr()), incr(id("count"))))
+		body = append(body, ifStmt(nil, binary(dot("u", vi.FieldName), token.NEQ, nilExpr()), incr(id("count"))))
 	}
 	return append(body,
 		ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
@@ -624,32 +593,21 @@ func validateMethod(recv, name string, body ...ast.Stmt) *ast.FuncDecl {
 	return method(param(recv, star(id(name))), "Validate", funcType(nil, param("", id("error"))), body...)
 }
 
-// emitValidate generates Validate for RPC object types and ToolCallUpdate.
-func emitValidate(f *goFile, name string, def *load.Definition) {
-	if name == "ToolCallUpdate" {
-		f.add(validateMethod("t", name,
-			requiredCheck(f, dot("t", "ToolCallId"), schemaTypeString, "toolCallId"),
-			ret(nilExpr()),
-		))
-		return
-	}
-	if def == nil || ir.PrimaryType(def) != schemaTypeObject || !isRPCTypeName(name) {
-		return
+// emitFieldValidate generates Validate for an RPC object type or
+// ToolCallUpdate from the checks the model lists.
+func emitFieldValidate(f *goFile, t *model.Type) {
+	recv := "v"
+	if t.Validate == model.ValidateToolCall {
+		recv = "t"
 	}
 	var body []ast.Stmt
-	for _, propName := range slices.Sorted(maps.Keys(def.Properties)) {
-		if !slices.Contains(def.Required, propName) {
-			continue
-		}
-		switch kind := ir.PrimaryType(def.Properties[propName]); kind {
-		case schemaTypeString, schemaTypeArray:
-			body = append(body, requiredCheck(f, dot("v", util.ToExportedField(propName)), kind, propName))
-		}
+	for _, c := range t.Checks {
+		body = append(body, requiredCheck(f, dot(recv, c.Field), c.Kind, c.Prop))
 	}
-	f.add(validateMethod("v", name, append(body, ret(nilExpr()))...))
+	f.add(validateMethod(recv, t.Name, append(body, ret(nilExpr()))...))
 }
 
-func methodDescription(schema *load.Schema, mi *ir.MethodInfo) string {
+func methodDescription(m *model.Model, mi *ir.MethodInfo) string {
 	if mi == nil || mi.DocsIgnored {
 		return ""
 	}
@@ -658,115 +616,37 @@ func methodDescription(schema *load.Schema, mi *ir.MethodInfo) string {
 		if name == "" {
 			continue
 		}
-		if def := schema.Defs[name]; def != nil && def.Description != "" {
+		if def := m.Schema.Defs[name]; def != nil && def.Description != "" {
 			return def.Description
 		}
 	}
 	return ""
 }
 
-type variantInfo struct {
-	fieldName         string
-	typeName          string
-	required          []string
-	isObject          bool
-	isArray           bool
-	arrayItemRequired []string
-	discValue         string
-	constPairs        [][2]string
-	isNull            bool
-	description       string
-	hasSharedFields   bool
-}
-
-// oneUnionVariant emits the inline type of variant idx of t, if it has one,
-// and returns the facts the union's methods need. The variant's names come
-// from the model.
-func oneUnionVariant(f *goFile, schema *load.Schema, t *model.Type, idx int, v *load.Definition) (variantInfo, bool) {
-	mv := t.Variants[idx]
-	if v == nil || mv.Skip {
-		return variantInfo{}, false
-	}
-	ref := v.Ref
-	// If this is an allOf wrapper around a single $ref with no additional structure, treat it
-	// as a $ref variant (keeps types stable and avoids duplicate structs).
-	if ref == "" {
-		ref = model.SingleRefVariant(v)
-	}
-	v = model.ExpandAllOf(schema, v)
-	// Detect null-only variant
-	s, ok := v.Type.(string)
-	isNull := ok && s == schemaTypeNull
-	tname := mv.TypeName
-
-	isObj := len(v.Properties) > 0
-	isArray := ir.PrimaryType(v) == schemaTypeArray
-	arrayItemRequired := []string{}
-	if isArray && v.Items != nil {
-		item := v.Items
-		if itemName, ok := strings.CutPrefix(item.Ref, "#/$defs/"); ok {
-			if d := schema.Defs[itemName]; d != nil {
-				item = d
-			}
+func emitUnion(f *goFile, t *model.Type) {
+	name := t.Name
+	var variants []*model.Variant
+	for _, vi := range t.Variants {
+		if vi.Skip {
+			continue
 		}
-		item = model.ExpandAllOf(schema, item)
-		if ir.PrimaryType(item) == schemaTypeObject && len(item.Required) > 0 {
-			arrayItemRequired = slices.Sorted(slices.Values(item.Required))
-		}
-	}
-	// Collect const properties (e.g., type, outcome).
-	var consts [][2]string
-	for _, pk := range slices.Sorted(maps.Keys(v.Properties)) {
-		if pd := v.Properties[pk]; pd != nil && pd.Const != nil {
-			if c, ok := pd.Const.(string); ok {
-				consts = append(consts, [2]string{pk, c})
-			}
-		}
-	}
-	emitInlineVariant(f, tname, mv.Inline)
-	return variantInfo{
-		fieldName:         mv.FieldName,
-		typeName:          tname,
-		required:          v.Required,
-		isObject:          isObj,
-		isArray:           isArray,
-		arrayItemRequired: arrayItemRequired,
-		discValue:         mv.DiscValue,
-		constPairs:        consts,
-		isNull:            isNull,
-		description:       v.Description,
-		hasSharedFields:   ref == "" && isObj && !isNull,
-	}, true
-}
-
-func emitUnion(f *goFile, m *model.Model, t *model.Type) {
-	name, parentDef, defs, exactlyOne := t.Name, t.Def, t.UnionList(), t.ExactlyOne
-	discKey := model.DiscriminatorKey(m.Schema, parentDef, defs)
-
-	var variants []variantInfo
-	for idx, v := range defs {
-		if vi, ok := oneUnionVariant(f, m.Schema, t, idx, v); ok {
-			variants = append(variants, vi)
-		}
+		emitInlineVariant(f, vi.TypeName, vi.Inline)
+		variants = append(variants, vi)
 	}
 
 	// Wrapper: one pointer field per variant, set by UnmarshalJSON.
 	var st fieldSet
 	for _, vi := range variants {
-		if vi.description != "" {
-			st.comment(util.FormatDocComment(vi.description)...)
-		}
-		st.add(structField(vi.fieldName, star(id(vi.typeName)), "-"))
+		st.comment(vi.Doc...)
+		st.add(structField(vi.FieldName, star(id(vi.TypeName)), "-"))
 	}
 	// The union's description belongs on the wrapper, after the variant types.
-	if parentDef.Description != "" {
-		f.comment(util.FormatDocComment(parentDef.Description)...)
-	}
+	f.comment(t.Doc...)
 	f.add(typeDecl(name, st.structType()))
 	f.line()
 	f.add(method(param("u", star(id(name))), "UnmarshalJSON",
 		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))),
-		unionUnmarshalBody(f, name, variants, discKey)...))
+		unionUnmarshalBody(f, name, variants, t.DiscKey)...))
 	f.line()
 	f.add(method(param("u", id(name)), "MarshalJSON",
 		funcType(nil, param("", byteSlice()), param("", id("error"))),
@@ -774,10 +654,10 @@ func emitUnion(f *goFile, m *model.Model, t *model.Type) {
 	f.line()
 
 	// oneOf: exactly one variant. anyOf: shared required fields live on the variants.
-	if exactlyOne {
+	if t.Validate == model.ValidateExactlyOne {
 		f.add(validateMethod("u", name, unionValidateBody(f, name, variants)...))
 	} else {
-		f.add(validateMethod("v", name, sharedUnionValidateBody(f, variants, sharedFieldChecks(parentDef))...))
+		f.add(validateMethod("v", name, sharedUnionValidateBody(f, variants, t.Checks)...))
 	}
 	f.line()
 }

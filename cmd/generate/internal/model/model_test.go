@@ -129,15 +129,14 @@ func TestBuildNames(t *testing.T) {
 	if u.Kind != KindUnion || !u.ExactlyOne {
 		t.Fatalf("U: kind %v exactly-one %v", u.Kind, u.ExactlyOne)
 	}
-	for i, want := range []Variant{{TypeName: "UX", FieldName: "X", DiscValue: "x"}, {TypeName: "UY", FieldName: "Y", DiscValue: "y"}} {
-		got := *u.Variants[i]
-		got.Inline = nil
-		if got != want {
-			t.Errorf("U variant %d: got %+v, want %+v", i+1, got, want)
+	for i, want := range [][3]string{{"UX", "X", "x"}, {"UY", "Y", "y"}} {
+		v := u.Variants[i]
+		if got := [3]string{v.TypeName, v.FieldName, v.DiscValue}; got != want {
+			t.Errorf("U variant %d: got type, field, value %q, want %q", i+1, got, want)
 		}
 	}
 	if len(u.Helpers) != 2 || u.Helpers[0].Name != "NewUX" || len(u.Helpers[0].Params) != 1 || len(u.Helpers[1].Params) != 0 ||
-		u.Helpers[0].Params[0] != (Param{Key: "n", Type: named("string")}) {
+		u.Helpers[0].Params[0] != (Param{Key: "n", Field: "N", Type: named("string")}) {
 		t.Errorf("U helpers: %+v %+v", u.Helpers[0], u.Helpers[1])
 	}
 	if got := m.Type("Parent").Nested["URLValue"]; got != "ParentURLValue" {

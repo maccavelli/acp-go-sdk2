@@ -451,3 +451,53 @@ Gates: `make pre-add-check` with the six changed Go files named: `go-precheck: 6
 Without names: `go-precheck: 55 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 4 on `main`.
+
+### Step 5, model classification and unions, 2026-10-10
+
+The owner committed step 4 as `84d850b`. Step 5 ran on `main` from that clean tree. The agent did not commit.
+
+The model now carries, per type, its doc lines, the union discriminator (`DiscKey`, its Go field `DiscField`, and `DiscSource`: declared by the schema,
+derived from the first const property, or none), and its `Validate` method (`ValidateFields` for an RPC object, `ValidateToolCall`, `ValidateExactlyOne`
+for a oneOf, `ValidateShared` for an anyOf, or none) with the `RequiredCheck`s it runs. Each variant carries what `emit`'s `variantInfo` held: doc
+lines, required keys, object, array, and null flags, the sorted required keys of array items, sorted const pairs, and whether it carries the union's
+shared fields. Constructor parameters carry their field names. `isRPCTypeName`, `sharedFieldChecks`, the rest of `oneUnionVariant`, and the
+`Validate` eligibility of `emitSchemaDef` and `emitValidate` moved into the model. `expandAllOf`, `singleRefVariant`, `isStringConstUnion`, and
+`isOpenStringEnum` are unexported again, and `discriminatorKey` returns its source.
+
+`emit`: `emitUnion` walks the model's variants; the union bodies take `*model.Variant` and `variantInfo` is gone; `emitFieldValidate` renders
+`ValidateFields` and `ValidateToolCall` from the checks; the helpers take field names from the model; the method code reaches the schema through the model.
+`emit` no longer calls `util.ToExportedField` or `ir.PrimaryType`.
+
+`go list -f '{{.Imports}}' ./internal/emit` lists `internal/ir`, `internal/model`, and `internal/util`, and not `internal/load`. The one test in
+`emit`, `TestDefaultedNullablePropertyCompiles`, still imports `load` to build its schema; `go list` without `-test` does not count it.
+
+Notes, none changing scope:
+
+* The union facts sit on `Type` and `Variant` rather than on a separate `Union` struct as the design sketch showed.
+* A `$ref` variant is not expanded, so it has no properties of its own and `IsObject` is false: it is matched by discriminator or trial decode, never by
+  required keys. That is how the generator behaved before; `TestVariantFacts` states it. Its first draft expected the opposite and failed.
+* `emitSchemaDef` lost its `*model.Model` parameter, which `unparam` reported unused once `emitUnion` stopped needing it.
+
+Tests in `unions_test.go`: `TestUnionDiscriminator` (declared, derived from the first const key in sorted order, none), `TestVariantFacts` (an inline
+object, an array whose `$ref` items have required keys, a null variant, a `$ref` variant), and `TestValidateKinds` (seven types, one per decision). Each
+rule was seen to fail, with one planted breakage per run of `go test ./...` in `cmd/generate` in a fresh scratch copy:
+
+```text
+declared discriminator reported as derived: failing=['TestUnionDiscriminator']
+array item $ref not resolved: failing=['TestGeneratedFilesUpToDate', 'TestVariantFacts']
+anyOf union validated as exactly one: failing=['TestGeneratedFilesUpToDate', 'TestValidateKinds']
+Validate on any object: failing=['TestGeneratedFilesUpToDate', 'TestValidateKinds']
+$ref variant carries shared fields: failing=['TestGeneratedFilesUpToDate', 'TestVariantFacts']
+integers checked as required: failing=['TestGeneratedFilesUpToDate', 'TestValidateKinds']
+```
+
+The discriminator source fails only the model test, because no emitter reads it yet.
+
+`go test -cover ./internal/model` reports 80.9%.
+
+Output: `cd cmd/generate && go run .` regenerated the five files and none changed; `TestGeneratedFilesUpToDate` passes.
+
+Gates: `make pre-add-check` with the eight changed Go files named: `go-precheck: 8 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+Without names: `go-precheck: 57 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 5 on `main`.

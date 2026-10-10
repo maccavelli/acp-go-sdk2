@@ -7,16 +7,14 @@ import (
 	"slices"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/util"
 )
 
 // emitHelperConstructors emits func New<Union><Field>(required...) <Union>
 // for each constructor the model lists for t.
-func emitHelperConstructors(f *goFile, m *model.Model, t *model.Type) {
+func emitHelperConstructors(f *goFile, t *model.Type) {
 	if len(t.Helpers) == 0 {
 		return
 	}
-	discKey := model.DiscriminatorKey(m.Schema, t.Def, t.Def.OneOf)
 	for _, h := range t.Helpers {
 		vi := t.Variants[h.Variant]
 		// Parameters: every required property except the const discriminator.
@@ -24,10 +22,10 @@ func emitHelperConstructors(f *goFile, m *model.Model, t *model.Type) {
 		assigns := map[string]ast.Expr{}
 		for _, p := range h.Params {
 			params = append(params, param(p.Key, typeAST(p.Type)))
-			assigns[util.ToExportedField(p.Key)] = id(p.Key)
+			assigns[p.Field] = id(p.Key)
 		}
-		if discKey != "" && vi.DiscValue != "" {
-			assigns[util.ToExportedField(discKey)] = str(vi.DiscValue)
+		if t.DiscKey != "" && vi.DiscValue != "" {
+			assigns[t.DiscField] = str(vi.DiscValue)
 		}
 		var elts []ast.Expr
 		for _, field := range slices.Sorted(maps.Keys(assigns)) {
@@ -47,7 +45,7 @@ func emitHelperConstructors(f *goFile, m *model.Model, t *model.Type) {
 func WriteHelpers(outDir string, m *model.Model) error {
 	f := newFile()
 	for _, t := range m.Types {
-		emitHelperConstructors(f, m, t)
+		emitHelperConstructors(f, t)
 	}
 	return f.write(outDir, "helpers_gen.go")
 }

@@ -17,7 +17,7 @@ const (
 	schemaTypeNull   = "null"
 )
 
-// ExpandAllOf merges JSON Schema allOf nodes into a shallow composite definition.
+// expandAllOf merges JSON Schema allOf nodes into a shallow composite definition.
 //
 // ACP's schema frequently uses `allOf: [{"$ref": "#/$defs/Type"}]` so a property or union
 // variant can attach local metadata (description/default/const constraints) while reusing
@@ -25,7 +25,7 @@ const (
 //
 // For codegen purposes we approximate allOf by merging object properties + required lists.
 // We intentionally do not attempt to resolve semantic constraints beyond that.
-func ExpandAllOf(schema *load.Schema, d *load.Definition) *load.Definition {
+func expandAllOf(schema *load.Schema, d *load.Definition) *load.Definition {
 	if d == nil || len(d.AllOf) == 0 {
 		return d
 	}
@@ -47,7 +47,7 @@ func ExpandAllOf(schema *load.Schema, d *load.Definition) *load.Definition {
 				resolved = def
 			}
 		}
-		resolved = ExpandAllOf(schema, resolved)
+		resolved = expandAllOf(schema, resolved)
 
 		copyMissingAllOfFields(&merged, resolved)
 
@@ -102,8 +102,8 @@ func requiredSet(required []string) map[string]bool {
 	return set
 }
 
-// SingleRefVariant returns the $ref when v is only an allOf wrapper around one $ref.
-func SingleRefVariant(v *load.Definition) string {
+// singleRefVariant returns the $ref when v is only an allOf wrapper around one $ref.
+func singleRefVariant(v *load.Definition) string {
 	if v.Type == nil &&
 		len(v.Properties) == 0 &&
 		len(v.Required) == 0 &&
@@ -119,28 +119,29 @@ func SingleRefVariant(v *load.Definition) string {
 	return ""
 }
 
-// DiscriminatorKey returns the schema's discriminator property, or the first
-// const property found on a variant, in sorted property order.
-func DiscriminatorKey(schema *load.Schema, parent *load.Definition, variants []*load.Definition) string {
+// discriminatorKey returns the schema's discriminator property, or the first
+// const property found on a variant, in sorted property order, and which of
+// the two it is.
+func discriminatorKey(schema *load.Schema, parent *load.Definition, variants []*load.Definition) (string, DiscSource) {
 	if parent != nil && parent.Discriminator != nil && parent.Discriminator.PropertyName != "" {
-		return parent.Discriminator.PropertyName
+		return parent.Discriminator.PropertyName, DiscDeclared
 	}
 	for _, v := range variants {
 		if v == nil {
 			continue
 		}
-		v = ExpandAllOf(schema, v)
+		v = expandAllOf(schema, v)
 		for _, k := range slices.Sorted(maps.Keys(v.Properties)) {
 			if pd := v.Properties[k]; pd != nil && pd.Const != nil {
-				return k
+				return k, DiscDerived
 			}
 		}
 	}
-	return ""
+	return "", DiscNone
 }
 
-// IsStringConstUnion reports whether def is a oneOf whose variants are all string consts.
-func IsStringConstUnion(def *load.Definition) bool {
+// isStringConstUnion reports whether def is a oneOf whose variants are all string consts.
+func isStringConstUnion(def *load.Definition) bool {
 	if def == nil || len(def.OneOf) == 0 {
 		return false
 	}
@@ -155,7 +156,7 @@ func IsStringConstUnion(def *load.Definition) bool {
 	return true
 }
 
-// IsOpenStringEnum reports whether def is an "open" string enum: an `anyOf`
+// isOpenStringEnum reports whether def is an "open" string enum: an `anyOf`
 // where every variant is a plain string schema (type: "string") and at least
 // one variant has a string `const`. Such schemas describe a string value with
 // a recommended set of known values while still permitting arbitrary strings
@@ -163,7 +164,7 @@ func IsStringConstUnion(def *load.Definition) bool {
 //
 // These are emitted as a Go string-derived type with named constants for each
 // known value, rather than as a discriminated union wrapper.
-func IsOpenStringEnum(def *load.Definition) bool {
+func isOpenStringEnum(def *load.Definition) bool {
 	if def == nil || len(def.AnyOf) == 0 {
 		return false
 	}

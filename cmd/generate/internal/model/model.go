@@ -64,6 +64,8 @@ type Type struct {
 	Name string
 	Def  *load.Definition
 	Kind Kind
+	// Doc is the definition's doc comment, one entry per line.
+	Doc []string
 
 	// Nested maps a property key of a KindObject to the name of the struct
 	// emitted for its inline object; NestedStructs holds those structs, in
@@ -78,6 +80,15 @@ type Type struct {
 	Variants []*Variant
 	// ExactlyOne is true for a oneOf union.
 	ExactlyOne bool
+	// DiscKey is a union's discriminator property, DiscField its Go field
+	// name, and DiscSource whether the schema declared it.
+	DiscKey    string
+	DiscField  string
+	DiscSource DiscSource
+	// Validate is the Validate method the type gets, and Checks the
+	// required fields it checks.
+	Validate ValidateKind
+	Checks   []RequiredCheck
 	// Enum holds the values and constant names of the enum kinds.
 	Enum []EnumValue
 	// Helpers holds the generated constructors of a oneOf union.
@@ -105,6 +116,56 @@ type Variant struct {
 	Skip bool
 	// Inline is the type emitted for a variant without a $ref, or nil.
 	Inline *Inline
+	// Doc is the variant's description, for its wrapper field.
+	Doc []string
+	// Required lists the variant's required keys, for decoding by key match.
+	Required []string
+	// IsObject, IsArray, and IsNull describe the variant's JSON shape.
+	IsObject, IsArray, IsNull bool
+	// ArrayItemRequired lists, sorted, the required keys of an array
+	// variant's object items.
+	ArrayItemRequired []string
+	// ConstPairs holds the variant's string const properties, sorted by key.
+	ConstPairs [][2]string
+	// HasSharedFields is true for an inline object variant, which carries
+	// the union's own properties.
+	HasSharedFields bool
+}
+
+// DiscSource is where a union's discriminator came from.
+type DiscSource int
+
+const (
+	// DiscNone is no discriminator.
+	DiscNone DiscSource = iota
+	// DiscDeclared is the schema's discriminator.propertyName.
+	DiscDeclared
+	// DiscDerived is the first const property of a variant, in sorted order.
+	DiscDerived
+)
+
+// ValidateKind is the Validate method a type gets.
+type ValidateKind int
+
+const (
+	// ValidateNone is no Validate method.
+	ValidateNone ValidateKind = iota
+	// ValidateFields checks the required string and array fields of an RPC type.
+	ValidateFields
+	// ValidateToolCall checks ToolCallUpdate's toolCallId.
+	ValidateToolCall
+	// ValidateExactlyOne checks that a oneOf union has exactly one variant set.
+	ValidateExactlyOne
+	// ValidateShared checks the union's required properties on the variant set.
+	ValidateShared
+)
+
+// RequiredCheck is one required string or array field Validate checks.
+type RequiredCheck struct {
+	Field string
+	Prop  string
+	// Kind is "string" or "array".
+	Kind string
 }
 
 // EnumValue is one constant of an enum kind.
@@ -124,8 +185,9 @@ type Helper struct {
 
 // Param is one constructor parameter, named after its property key.
 type Param struct {
-	Key  string
-	Type TypeRef
+	Key   string
+	Field string
+	Type  TypeRef
 }
 
 // helperSkip lists unions whose constructors are hand-written in helpers.go.
@@ -200,9 +262,9 @@ func classify(def *load.Definition) Kind {
 	switch t := ir.PrimaryType(def); {
 	case len(def.Enum) > 0:
 		return KindEnum
-	case IsStringConstUnion(def):
+	case isStringConstUnion(def):
 		return KindStringConstUnion
-	case len(def.AnyOf) > 0 && IsOpenStringEnum(def):
+	case len(def.AnyOf) > 0 && isOpenStringEnum(def):
 		return KindOpenEnum
 	case len(def.AnyOf) > 0, len(def.OneOf) > 0:
 		return KindUnion
@@ -219,6 +281,10 @@ func classify(def *load.Definition) Kind {
 
 func buildType(schema *load.Schema, n *namer, name string, def *load.Definition) (*Type, error) {
 	t := &Type{Name: name, Def: def, Kind: classify(def)}
+	if def != nil {
+		t.Doc = docLines(def.Description)
+	}
+	defer validateOf(t)
 	switch t.Kind {
 	case KindEnum, KindStringConstUnion, KindOpenEnum:
 		for _, v := range enumValues(t) {
@@ -317,7 +383,11 @@ func buildObject(n *namer, t *Type) error {
 // buildUnion names every variant of t, in schema order, and its helpers.
 func buildUnion(schema *load.Schema, n *namer, t *Type) error {
 	list := t.UnionList()
-	discKey := DiscriminatorKey(schema, t.Def, list)
+	discKey, src := discriminatorKey(schema, t.Def, list)
+	t.DiscKey, t.DiscSource = discKey, src
+	if discKey != "" {
+		t.DiscField = util.ToExportedField(discKey)
+	}
 	fields := map[string]int{}
 	for idx, v := range list {
 		owner := fmt.Sprintf("%s variant %d", t.Name, idx+1)
@@ -351,7 +421,7 @@ func buildUnion(schema *load.Schema, n *namer, t *Type) error {
 		if err := n.declare(h.Name, owner+" constructor"); err != nil {
 			return err
 		}
-		ev := ExpandAllOf(schema, v)
+		ev := expandAllOf(schema, v)
 		for _, key := range ev.Required {
 			if key == discKey || ev.Properties[key] == nil {
 				continue
@@ -359,7 +429,7 @@ func buildUnion(schema *load.Schema, n *namer, t *Type) error {
 			if err := checkParam(owner, key); err != nil {
 				return err
 			}
-			h.Params = append(h.Params, Param{Key: key, Type: typeRef(ev.Properties[key])})
+			h.Params = append(h.Params, Param{Key: key, Field: util.ToExportedField(key), Type: typeRef(ev.Properties[key])})
 		}
 		t.Helpers = append(t.Helpers, h)
 	}
@@ -373,9 +443,9 @@ func buildUnion(schema *load.Schema, n *namer, t *Type) error {
 func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int, v *load.Definition, discKey string) (*Variant, error) {
 	ref := v.Ref
 	if ref == "" {
-		ref = SingleRefVariant(v)
+		ref = singleRefVariant(v)
 	}
-	ev := ExpandAllOf(schema, v)
+	ev := expandAllOf(schema, v)
 	s, ok := ev.Type.(string)
 	isNull := ok && s == schemaTypeNull
 
@@ -420,7 +490,21 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 	}
 
 	isObj := len(ev.Properties) > 0
-	vi := &Variant{TypeName: typeName, FieldName: field, DiscValue: dv}
+	vi := &Variant{
+		TypeName:        typeName,
+		FieldName:       field,
+		DiscValue:       dv,
+		Doc:             docLines(ev.Description),
+		Required:        ev.Required,
+		IsObject:        isObj,
+		IsArray:         ir.PrimaryType(ev) == schemaTypeArray,
+		IsNull:          isNull,
+		ConstPairs:      constPairs(ev),
+		HasSharedFields: ref == "" && isObj && !isNull,
+	}
+	if vi.IsArray {
+		vi.ArrayItemRequired = arrayItemRequired(schema, ev)
+	}
 	// Phantom variants have no $ref, object shape, null type, or title.
 	vi.Skip = !isObj && ref == "" && !isNull && ev.Title == ""
 	if vi.Skip {
@@ -447,4 +531,85 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 		vi.Inline = in
 	}
 	return vi, nil
+}
+
+// constPairs returns the string const properties of v, sorted by key.
+func constPairs(v *load.Definition) [][2]string {
+	var out [][2]string
+	for _, k := range slices.Sorted(maps.Keys(v.Properties)) {
+		if pd := v.Properties[k]; pd != nil && pd.Const != nil {
+			if c, ok := pd.Const.(string); ok {
+				out = append(out, [2]string{k, c})
+			}
+		}
+	}
+	return out
+}
+
+// arrayItemRequired returns the sorted required keys of an array variant's
+// object items, resolving a $ref item.
+func arrayItemRequired(schema *load.Schema, v *load.Definition) []string {
+	if v.Items == nil {
+		return nil
+	}
+	item := v.Items
+	if name, ok := strings.CutPrefix(item.Ref, refPrefix); ok {
+		if d := schema.Defs[name]; d != nil {
+			item = d
+		}
+	}
+	item = expandAllOf(schema, item)
+	if ir.PrimaryType(item) != schemaTypeObject || len(item.Required) == 0 {
+		return nil
+	}
+	return slices.Sorted(slices.Values(item.Required))
+}
+
+// isRPCTypeName reports whether name is a request, response, or notification type.
+func isRPCTypeName(name string) bool {
+	return strings.HasSuffix(name, "Request") || strings.HasSuffix(name, "Response") || strings.HasSuffix(name, "Notification")
+}
+
+// validateOf decides t's Validate method. A union checks its variants; an RPC
+// object checks its required string and array fields; ToolCallUpdate checks
+// toolCallId.
+func validateOf(t *Type) {
+	switch {
+	case t.Kind == KindNone:
+	case t.Kind == KindUnion && t.ExactlyOne:
+		t.Validate = ValidateExactlyOne
+	case t.Kind == KindUnion:
+		t.Validate = ValidateShared
+		for _, prop := range slices.Sorted(slices.Values(t.Def.Required)) {
+			if c, ok := requiredCheck(t.Def, prop); ok {
+				t.Checks = append(t.Checks, c)
+			}
+		}
+	case t.Name == "ToolCallUpdate":
+		t.Validate = ValidateToolCall
+		t.Checks = []RequiredCheck{{Field: "ToolCallId", Prop: "toolCallId", Kind: schemaTypeString}}
+	case ir.PrimaryType(t.Def) == schemaTypeObject && isRPCTypeName(t.Name):
+		t.Validate = ValidateFields
+		for _, prop := range slices.Sorted(maps.Keys(t.Def.Properties)) {
+			if !slices.Contains(t.Def.Required, prop) {
+				continue
+			}
+			if c, ok := requiredCheck(t.Def, prop); ok {
+				t.Checks = append(t.Checks, c)
+			}
+		}
+	}
+}
+
+// requiredCheck returns the check for a required string or array property.
+func requiredCheck(def *load.Definition, prop string) (RequiredCheck, bool) {
+	pd := def.Properties[prop]
+	if pd == nil {
+		return RequiredCheck{}, false
+	}
+	switch kind := ir.PrimaryType(pd); kind {
+	case schemaTypeString, schemaTypeArray:
+		return RequiredCheck{Field: util.ToExportedField(prop), Prop: prop, Kind: kind}, true
+	}
+	return RequiredCheck{}, false
 }

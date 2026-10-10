@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
@@ -117,7 +116,7 @@ func writeAgentGen(outDir string, groups ir.Groups, m *model.Model) error {
 	f.add(handleFunc(f, "a", "AgentSideConnection", cases))
 
 	// Agent outbound wrappers (agent -> client).
-	emitOutbound(f, "AgentSideConnection", "client", groups, schema, meta.ClientMethods, m.ClientMethodConsts)
+	emitOutbound(f, "AgentSideConnection", "client", groups, m, meta.ClientMethods, m.ClientMethodConsts)
 
 	return f.write(outDir, "agent_gen.go")
 }
@@ -159,7 +158,7 @@ func writeClientGen(outDir string, groups ir.Groups, m *model.Model) error {
 	f.add(handleFunc(f, "c", "ClientSideConnection", cases))
 
 	// Client outbound wrappers (client -> agent).
-	emitOutbound(f, "ClientSideConnection", "agent", groups, schema, meta.AgentMethods, m.AgentMethodConsts)
+	emitOutbound(f, "ClientSideConnection", "agent", groups, m, meta.AgentMethods, m.AgentMethodConsts)
 
 	return f.write(outDir, "client_gen.go")
 }
@@ -167,7 +166,7 @@ func writeClientGen(outDir string, groups ir.Groups, m *model.Model) error {
 // emitOutbound emits one method per peer method on recvType that sends the
 // request or notification over c.conn. consts holds the constant name of
 // each method key.
-func emitOutbound(f *goFile, recvType, side string, groups ir.Groups, schema *load.Schema, methods, consts map[string]string) {
+func emitOutbound(f *goFile, recvType, side string, groups ir.Groups, m *model.Model, methods, consts map[string]string) {
 	constByWire := map[string]string{}
 	for k, wire := range methods {
 		constByWire[wire] = consts[k]
@@ -206,7 +205,7 @@ func emitOutbound(f *goFile, recvType, side string, groups ir.Groups, schema *lo
 		}
 		name := strings.TrimSuffix(mi.Req, "Request")
 		respName := name + "Response"
-		if ir.IsNullResponse(schema.Defs[respName]) {
+		if ir.IsNullResponse(m.Schema.Defs[respName]) {
 			f.add(method(recv(), name, funcType(params(mi.Req), param("", id("error"))),
 				ret(call(dot("c", "conn", "SendRequestNoResult"), id("ctx"), id(constName), id("params"))),
 			))
