@@ -39,3 +39,26 @@ func TestUnionDecodeErrorsNameTheirPlace(t *testing.T) {
 		})
 	}
 }
+
+// TestContentBlockKeepsMetaAndAnnotations requires a content block to encode
+// its _meta and annotations, whether built in Go or decoded from the wire.
+func TestContentBlockKeepsMetaAndAnnotations(t *testing.T) {
+	t.Parallel()
+	prio := 0.5
+	built := ContentBlock{Text: &ContentBlockText{Text: "hi", Meta: map[string]any{"k": "v"}, Annotations: &Annotations{Priority: &prio}}}
+	var decoded ContentBlock
+	if err := json.Unmarshal([]byte(`{"type":"image","data":"AAAA","mimeType":"image/png","_meta":{"k":"v"},"annotations":{"priority":0.5}}`), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	for name, v := range map[string]ContentBlock{"built text block": built, "decoded image block": decoded} {
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{`"_meta":{"k":"v"}`, `"annotations":{"priority":0.5}`} {
+			if !strings.Contains(string(b), want) {
+				t.Errorf("%s: %s lacks %s", name, b, want)
+			}
+		}
+	}
+}

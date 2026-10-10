@@ -15,7 +15,6 @@ const (
 	schemaTypeBoolean = "boolean"
 	schemaTypeNull    = "null"
 	jsonStructTag     = "json"
-	unionContentBlock = "ContentBlock"
 	wireSessionCancel = "session/cancel"
 	nameSessionUpdate = "SessionUpdate"
 	generatedFileMode = 0o600

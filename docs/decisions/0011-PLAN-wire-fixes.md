@@ -231,3 +231,39 @@ Gates: `make pre-add-check` with the three changed Go files named: `go-precheck:
 govulncheck).` Without names: `go-precheck: 61 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 2 on `main`.
+
+### Step 3, `ContentBlock`, 2026-10-10
+
+The owner committed step 2 as `c7a212f`. Step 3 ran on `main` from that clean tree. The agent did not commit.
+
+`TestContentBlockKeepsMetaAndAnnotations` in `union_wire_test.go` encodes a text block built with `_meta` and `annotations` and an image block decoded
+with both, and requires both keys in each encoding. Run before the generator change:
+
+```text
+--- FAIL: TestContentBlockKeepsMetaAndAnnotations (0.00s)
+    built text block: {"text":"hi","type":"text"} lacks "_meta":{"k":"v"}
+    built text block: {"text":"hi","type":"text"} lacks "annotations":{"priority":0.5}
+    decoded image block: {"data":"AAAA","mimeType":"image/png","type":"image"} lacks "_meta":{"k":"v"}
+    decoded image block: {"data":"AAAA","mimeType":"image/png","type":"image"} lacks "annotations":{"priority":0.5}
+```
+
+Deleted: `keyMimeType`, `contentBlockShape`, and `contentBlockMarshal` from `emit/types.go` (40 lines) and `unionContentBlock` from
+`emit/constants.go`. `unionMarshalBody` now ends every object variant with `return json.Marshal(m)`, `ContentBlock` included.
+
+Regenerated: `types_gen.go` changed by 5 lines in and 53 out, and no other file. A script compared the committed and regenerated file:
+
+```text
+identical outside ContentBlock.MarshalJSON: True
+ContentBlock.MarshalJSON: 111 lines -> 63 lines
+old shaping blocks (var nm): 5 | new: 0
+returns of json.Marshal(m) in new: 5
+discriminator injections kept in new: 5
+```
+
+After the change the test passes; every golden and pin passes and no golden changed; `go test ./...` passes in `cmd/generate`; `go build
+./example/...` passes. Numbers inside `_meta` still pass through `map[string]any` until step 4.
+
+Gates: `make pre-add-check` with the four changed Go files named: `go-precheck: 4 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 62 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 3 on `main`.

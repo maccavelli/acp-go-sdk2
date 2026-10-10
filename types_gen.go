@@ -1567,13 +1567,7 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 			return nil, fmt.Errorf("ContentBlock: %w", err)
 		}
 		m["type"] = "text"
-		{
-			var nm map[string]any
-			nm = make(map[string]any)
-			nm["type"] = "text"
-			nm["text"] = m["text"]
-			return json.Marshal(nm)
-		}
+		return json.Marshal(m)
 	}
 	if u.Image != nil {
 		_b, _e := json.Marshal(*u.Image)
@@ -1585,17 +1579,7 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 			return nil, fmt.Errorf("ContentBlock: %w", err)
 		}
 		m["type"] = "image"
-		{
-			var nm map[string]any
-			nm = make(map[string]any)
-			nm["type"] = "image"
-			nm["data"] = m["data"]
-			nm["mimeType"] = m["mimeType"]
-			if _v, _ok := m["uri"]; _ok {
-				nm["uri"] = _v
-			}
-			return json.Marshal(nm)
-		}
+		return json.Marshal(m)
 	}
 	if u.Audio != nil {
 		_b, _e := json.Marshal(*u.Audio)
@@ -1607,14 +1591,7 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 			return nil, fmt.Errorf("ContentBlock: %w", err)
 		}
 		m["type"] = "audio"
-		{
-			var nm map[string]any
-			nm = make(map[string]any)
-			nm["type"] = "audio"
-			nm["data"] = m["data"]
-			nm["mimeType"] = m["mimeType"]
-			return json.Marshal(nm)
-		}
+		return json.Marshal(m)
 	}
 	if u.ResourceLink != nil {
 		_b, _e := json.Marshal(*u.ResourceLink)
@@ -1626,26 +1603,7 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 			return nil, fmt.Errorf("ContentBlock: %w", err)
 		}
 		m["type"] = "resource_link"
-		{
-			var nm map[string]any
-			nm = make(map[string]any)
-			nm["type"] = "resource_link"
-			nm["name"] = m["name"]
-			nm["uri"] = m["uri"]
-			if v1, ok1 := m["description"]; ok1 {
-				nm["description"] = v1
-			}
-			if v2, ok2 := m["mimeType"]; ok2 {
-				nm["mimeType"] = v2
-			}
-			if v3, ok3 := m["size"]; ok3 {
-				nm["size"] = v3
-			}
-			if v4, ok4 := m["title"]; ok4 {
-				nm["title"] = v4
-			}
-			return json.Marshal(nm)
-		}
+		return json.Marshal(m)
 	}
 	if u.Resource != nil {
 		_b, _e := json.Marshal(*u.Resource)
@@ -1657,13 +1615,7 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 			return nil, fmt.Errorf("ContentBlock: %w", err)
 		}
 		m["type"] = "resource"
-		{
-			var nm map[string]any
-			nm = make(map[string]any)
-			nm["type"] = "resource"
-			nm["resource"] = m["resource"]
-			return json.Marshal(nm)
-		}
+		return json.Marshal(m)
 	}
 	return nil, errors.New("ContentBlock: no variant set")
 }

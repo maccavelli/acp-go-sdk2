@@ -434,47 +434,6 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 	return append(body, ret(call(f.qual(pkgErrors, "New"), str(name+": no variant matches"))))
 }
 
-const keyMimeType = "mimeType"
-
-// contentBlockShape lists the keys a ContentBlock variant keeps on the wire:
-// required keys always, optional keys only when present.
-var contentBlockShape = map[string]struct{ required, optional []string }{
-	"text":          {required: []string{"text"}},
-	"image":         {required: []string{"data", keyMimeType}, optional: []string{"uri"}},
-	"audio":         {required: []string{"data", keyMimeType}},
-	"resource_link": {required: []string{"name", "uri"}, optional: []string{"description", keyMimeType, "size", "title"}},
-	"resource":      {required: []string{"resource"}},
-}
-
-// contentBlockMarshal rebuilds the variant map with only the keys of its
-// wire shape, to preserve exact ContentBlock JSON.
-func contentBlockMarshal(f *goFile, disc string) ast.Stmt {
-	shape, ok := contentBlockShape[disc]
-	if !ok {
-		return nil
-	}
-	nm := func(key string) ast.Expr { return index(id("nm"), str(key)) }
-	stmts := []ast.Stmt{
-		varStmt("nm", rawMap(id("any"))),
-		assign(exprs(id("nm")), call(id("make"), rawMap(id("any")))),
-		assign(exprs(nm("type")), str(disc)),
-	}
-	for _, k := range shape.required {
-		stmts = append(stmts, assign(exprs(nm(k)), index(id("m"), str(k))))
-	}
-	for i, k := range shape.optional {
-		// The single optional key of image uses _v/_ok; resource_link numbers them.
-		v, okName := "_v", "_ok"
-		if disc == "resource_link" {
-			v, okName = fmt.Sprintf("v%d", i+1), fmt.Sprintf("ok%d", i+1)
-		}
-		stmts = append(stmts, ifStmt(define(exprs(id(v), id(okName)), index(id("m"), str(k))), id(okName),
-			assign(exprs(nm(k)), id(v))))
-	}
-	stmts = append(stmts, ret(call(f.qual(pkgJSON, "Marshal"), id("nm"))))
-	return block(stmts...)
-}
-
 func unionMarshalBody(f *goFile, name string, variants []*model.Variant) []ast.Stmt {
 	marshal := func(x ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Marshal"), x) }
 	var body []ast.Stmt
@@ -504,15 +463,8 @@ func unionMarshalBody(f *goFile, name string, variants []*model.Variant) []ast.S
 			for _, kv := range vi.ConstPairs {
 				then = append(then, assign(exprs(index(id("m"), str(kv[0]))), str(kv[1])))
 			}
-			if name == unionContentBlock {
-				// Special shaping for ContentBlock variants to preserve exact wire JSON.
-				if s := contentBlockMarshal(f, vi.DiscValue); s != nil {
-					then = append(then, s)
-				}
-			} else {
-				// Default: remarshal, possibly with an injected discriminant.
-				then = append(then, ret(marshal(id("m"))))
-			}
+			// Remarshal, with the injected discriminant.
+			then = append(then, ret(marshal(id("m"))))
 		}
 		body = append(body, ifStmt(nil, binary(dot("u", vi.FieldName), token.NEQ, nilExpr()), then...))
 	}
