@@ -16,7 +16,8 @@ Change the go/ast generator so the SDK sends what schema `1.25.0` requires, repo
 
 In scope:
 
-* `cmd/generate/internal/emit/types.go` and `cmd/generate/internal/emit/dispatch.go`
+* `cmd/generate/internal/emit/types.go` and `cmd/generate/internal/emit/dispatch.go`; added 2026-10-10 in step 7, `ast.go` and
+  `dispatch_helpers.go` in the same directory
 * The five regenerated files: `constants_gen.go`, `types_gen.go`, `agent_gen.go`, `client_gen.go`, `helpers_gen.go`
 * New tests in the root module and in `cmd/generate/internal/emit`
 * New golden files under `testdata/json_golden/`
@@ -60,6 +61,8 @@ Preconditions:
    * a blank line after every function `emitOutbound` emits, and between a union's `UnmarshalJSON` and `MarshalJSON`;
    * `match := true` instead of `var match bool = true`;
    * check the discriminator decode error and return an error naming the union and the key;
+   * (added 2026-10-10, see the deviation below) drop the `value` parameter of `varStmt` in `cmd/generate/internal/emit/ast.go`, now always nil, and
+     the trailing `nil` at its callers;
    * use `_, _ok :=` in the defaulted, nullable branch of `emitObjectDefaults`, and add an emit test with a defaulted nullable property that compiles.
    The discriminator test from step 2 passes.
 8. Review the regenerated diff. Every changed hunk must belong to one of steps 4 to 7. Record the line counts per file in the execution record.
@@ -107,6 +110,20 @@ structs by tag, two of them defaulted.
 
 Decision: the owner chose to correct both records in step 5. The MADR carries an amendment dated 2026-10-10, and step 5's expectation is struck through
 above. No file is added to the step's scope, and the implementation is unchanged.
+
+## Deviation 2026-10-10, step 7 lint and the discriminator consequence
+
+Found in step 7, with the code changes made and every test passing:
+
+* `make pre-add-check` failed at `golangci-lint` for the host and for `GOOS=windows`:
+  `cmd/generate/internal/emit/ast.go:122:41: varStmt - value always receives nil (unparam)`. The two `var match bool = true` statements were the only
+  callers that passed a value; the 18 left pass `nil`. The failure is new, caused by step 7.
+* The MADR said a non-string discriminator "decodes today by falling back to key matching". A field scan and probes in scratch copies showed it can hold
+  for at most 6 of the 17 discriminated unions.
+
+Decision: the owner chose to drop the `value` parameter from `varStmt` and the trailing `nil` from its callers, which adds `ast.go` and
+`dispatch_helpers.go` to step 7's scope with no change to the generated output, and to amend the MADR now. The MADR carries an amendment dated
+2026-10-10, and its consequence line is annotated.
 
 ## Execution record
 
@@ -254,3 +271,70 @@ Gates: `make pre-add-check` with the three changed Go files named: `go-precheck:
 Without names: `go-precheck: 49 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point 4: the agent stopped here. The owner commits step 6 on `main`.
+
+### Step 7, source cleanups and the discriminator, 2026-10-10
+
+The owner committed step 6 as `7444fea`. Step 7 ran on `main` from that clean tree. The agent did not commit.
+
+Two tests were written and run before the generator changed:
+
+* `TestNonStringDiscriminatorFailsByName` in `generated_output_test.go` decodes `{"type":1,"text":"x"}` into a `ContentBlock` and requires an error
+  containing `ContentBlock` and `"type"`. It failed:
+
+  ```text
+  --- FAIL: TestNonStringDiscriminatorFailsByName (0.00s)
+      generated_output_test.go:54: error "invalid variant payload" does not contain "ContentBlock"
+      generated_output_test.go:54: error "invalid variant payload" does not contain "\"type\""
+  ```
+
+* `TestDefaultedNullablePropertyCompiles` in the new `cmd/generate/internal/emit/types_test.go` emits a struct whose `mode` property has type
+  `["string","null"]` and default `"auto"`, and type-checks the output with `go/types` and the source importer. Schema `1.25.0` has no such property.
+  It failed with the defect the MADR named: `options.go:30:3: declared and not used: _rm`.
+
+Generator changes:
+
+* `unionUnmarshalBody` takes the union's name. When the discriminator key is present, its decode error returns
+  `fmt.Errorf("<Union>: discriminator \"<key>\": %w", err)`.
+* Both `var match bool = true` statements are `match := true`.
+* `emitUnion` puts a blank line between `UnmarshalJSON` and `MarshalJSON`. `emitOutbound` puts a blank line before each wrapper it emits, which also
+  separates the first wrapper from `handleFunc`; at the end of the file a blank line after the last wrapper would print nothing.
+* `emitObjectDefaults` binds the raw value to `_` when the property allows null, and to `_rm` only when the condition reads it.
+* Per the deviation above, `varStmt` in `ast.go` lost its always-nil `value` parameter, and its 18 callers in `types.go`, `dispatch.go`, and
+  `dispatch_helpers.go` lost the trailing `nil`. Regenerating after that change left all three changed files byte-identical.
+
+Regenerated with `cd cmd/generate && go run .`. `agent_gen.go` (12 lines added), `client_gen.go` (28 added), and `types_gen.go` (172 added, 110 removed)
+changed. A script classified every changed line, with none left over:
+
+```text
+agent_gen.go     + blank line                         12
+client_gen.go    + blank line                         28
+types_gen.go     + blank line                         28
+types_gen.go     + closing brace                      17
+types_gen.go     + discriminator decode, checked      17
+types_gen.go     + discriminator error                17
+types_gen.go     + match := true                      93
+types_gen.go     - discriminator decode, unchecked    17
+types_gen.go     - var match bool = true              93
+unclassified: 0
+```
+
+No `_rm` line changed, because no property in the schema is both defaulted and nullable. Before the change 12, 28, and 29 places in `agent_gen.go`,
+`client_gen.go`, and `types_gen.go` had a declaration directly after a closing brace; after it no two functions abut in any generated file.
+
+Probes in scratch copies, at `7444fea` and on the changed tree: `ContentBlock` with `"type":1` failed before with "invalid variant payload" and now fails with
+`ContentBlock: discriminator "type": json: cannot unmarshal number into Go value of type string`; a stdio-shaped `McpServer` with `"type":1` decoded before
+with no error and now fails with `McpServer: discriminator "type": ...`. The MADR amendment dated 2026-10-10 names the 6 unions where a payload could newly be rejected.
+
+Not done: the RPC interfaces `emitRPCInterfaces` writes (`Agent`, `AgentLoader`, `AgentExperimental`, `Client`, `ClientTerminal`, `ClientExperimental`)
+still follow one another with no blank line. They are type declarations, outside step 7's list and the MADR's "a blank line separates generated
+functions".
+
+After the change every test in `generated_output_test.go` and `json_v1_pin_test.go` passes, and so does `TestDefaultedNullablePropertyCompiles`.
+`go test ./...` exits 0 at the root and in `cmd/generate`, including `TestGeneratedFilesUpToDate`. `go build ./example/...` exits 0. No file under
+`testdata/json_golden/` changed.
+
+Gates: before the `varStmt` change, `make pre-add-check` failed as the deviation records. After it, with the nine changed Go files named:
+`go-precheck: 9 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` Without names: `go-precheck: 49 file(s) clean (...)`.
+`make check-records` and `make markdownlint` exit 0.
+
+Commit point 5: the agent stopped here. The owner commits step 7 on `main`. Step 8, the diff review, closes the plan.

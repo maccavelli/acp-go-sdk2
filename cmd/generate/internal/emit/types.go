@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -521,7 +522,7 @@ func emitObjectDefaults(f *goFile, name string, defaults []defaultProp, fills []
 	// required ones to empty, before encoding.
 	body := []ast.Stmt{
 		typeStmt("Alias", id(name)),
-		varStmt("a", id("Alias"), nil),
+		varStmt("a", id("Alias")),
 		assign(exprs(id("a")), call(id("Alias"), id("v"))),
 	}
 	for _, dp := range defaults {
@@ -548,19 +549,22 @@ func emitObjectDefaults(f *goFile, name string, defaults []defaultProp, fills []
 	// UnmarshalJSON: apply defaults when a field is missing, or null when
 	// the schema does not allow null.
 	body = []ast.Stmt{
-		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage")), nil),
+		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
 		ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("m")))), errNotNil(), ret(id("err"))),
 		typeStmt("Alias", id(name)),
-		varStmt("a", id("Alias"), nil),
+		varStmt("a", id("Alias")),
 		ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("a")))), errNotNil(), ret(id("err"))),
 	}
 	for _, dp := range defaults {
+		// Only a property that rejects null reads the raw value.
+		raw := "_"
 		var cond ast.Expr = not(id("_ok"))
 		if !dp.allowNull {
+			raw = "_rm"
 			cond = binary(not(id("_ok")), token.LOR, paren(binary(call(id("string"), id("_rm")), token.EQL, str(schemaTypeNull))))
 		}
 		body = append(body, block(
-			define(exprs(id("_rm"), id("_ok")), index(id("m"), str(dp.propName))),
+			define(exprs(id(raw), id("_ok")), index(id("m"), str(dp.propName))),
 			ifStmt(nil, cond, exprStmt(unmarshal(bytesOf(dp.defaultJSON), addr(dot("a", dp.fieldName))))),
 		))
 	}
@@ -662,7 +666,7 @@ func keyMatch(m, key string) ast.Stmt {
 		assign(exprs(id("match")), boolLit(false)))
 }
 
-func unionUnmarshalBody(f *goFile, variants []variantInfo, discKey string) []ast.Stmt {
+func unionUnmarshalBody(f *goFile, name string, variants []variantInfo, discKey string) []ast.Stmt {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	var body []ast.Stmt
 
@@ -670,7 +674,7 @@ func unionUnmarshalBody(f *goFile, variants []variantInfo, discKey string) []ast
 	for _, vi := range variants {
 		if vi.isNull {
 			body = append(body, ifStmt(nil, binary(call(id("string"), id("b")), token.EQL, str(schemaTypeNull)),
-				append([]ast.Stmt{varStmt("v", id(vi.typeName), nil)}, setVariant(vi)...)...))
+				append([]ast.Stmt{varStmt("v", id(vi.typeName))}, setVariant(vi)...)...))
 			break
 		}
 	}
@@ -682,13 +686,15 @@ func unionUnmarshalBody(f *goFile, variants []variantInfo, discKey string) []ast
 		for _, vi := range variants {
 			if vi.discValue != "" {
 				cases = append(cases, caseOf(exprs(str(vi.discValue)),
-					append([]ast.Stmt{varStmt("v", id(vi.typeName), nil)}, decodeStrict(f, vi)...)...))
+					append([]ast.Stmt{varStmt("v", id(vi.typeName))}, decodeStrict(f, vi)...)...))
 			}
 		}
+		// A discriminator that is present and not a string is an error.
 		object = append(object, block(
-			varStmt("disc", id("string"), nil),
+			varStmt("disc", id("string")),
 			ifStmt(define(exprs(id("v"), id("ok")), index(id("m"), str(discKey))), id("ok"),
-				exprStmt(unmarshal(id("v"), addr(id("disc"))))),
+				ifStmt(define(exprs(id("err")), unmarshal(id("v"), addr(id("disc")))), errNotNil(),
+					ret(call(f.qual(pkgFmt, "Errorf"), str(name+": discriminator "+strconv.Quote(discKey)+": %w"), id("err"))))),
 			switchStmt(id("disc"), cases...),
 		))
 	}
@@ -698,8 +704,8 @@ func unionUnmarshalBody(f *goFile, variants []variantInfo, discKey string) []ast
 			continue
 		}
 		stmts := []ast.Stmt{
-			varStmt("v", id(vi.typeName), nil),
-			varStmt("match", id("bool"), boolLit(true)),
+			varStmt("v", id(vi.typeName)),
+			define(exprs(id("match")), boolLit(true)),
 		}
 		for _, rk := range vi.required {
 			stmts = append(stmts, keyMatch("m", rk))
@@ -708,7 +714,7 @@ func unionUnmarshalBody(f *goFile, variants []variantInfo, discKey string) []ast
 		object = append(object, block(stmts...))
 	}
 	body = append(body,
-		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage")), nil),
+		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
 		ifElse(define(exprs(id("err")), unmarshal(id("b"), addr(id("m")))), binary(id("err"), token.EQL, nilExpr()),
 			object,
 			// Not an object (e.g., primitive union variant) or invalid JSON.
@@ -728,21 +734,21 @@ func unionUnmarshalBody(f *goFile, variants []variantInfo, discKey string) []ast
 			loop = append(loop, keyMatch("elem", rk))
 		}
 		array = append(array, block(
-			varStmt("v", id(vi.typeName), nil),
-			varStmt("match", id("bool"), boolLit(true)),
+			varStmt("v", id(vi.typeName)),
+			define(exprs(id("match")), boolLit(true)),
 			rangeStmt(id("_"), id("elem"), id("arr"), loop...),
 			ifStmt(nil, id("match"), decodeStrict(f, vi)...),
 		))
 	}
 	body = append(body,
-		varStmt("arr", sliceOf(rawMap(f.qual(pkgJSON, "RawMessage"))), nil),
+		varStmt("arr", sliceOf(rawMap(f.qual(pkgJSON, "RawMessage")))),
 		ifStmt(nil, binary(unmarshal(id("b"), addr(id("arr"))), token.EQL, nilExpr()), array...),
 	)
 
 	// Fallback: try each variant in turn.
 	for _, vi := range variants {
 		body = append(body, block(
-			varStmt("v", id(vi.typeName), nil),
+			varStmt("v", id(vi.typeName)),
 			ifStmt(nil, binary(unmarshal(id("b"), addr(id("v"))), token.EQL, nilExpr()), setVariant(vi)...),
 		))
 	}
@@ -770,7 +776,7 @@ func contentBlockMarshal(f *goFile, disc string) ast.Stmt {
 	}
 	nm := func(key string) ast.Expr { return index(id("nm"), str(key)) }
 	stmts := []ast.Stmt{
-		varStmt("nm", rawMap(id("any")), nil),
+		varStmt("nm", rawMap(id("any"))),
 		assign(exprs(id("nm")), call(id("make"), rawMap(id("any")))),
 		assign(exprs(nm("type")), str(disc)),
 	}
@@ -811,7 +817,7 @@ func unionMarshalBody(f *goFile, name string, variants []variantInfo) []ast.Stmt
 				define(exprs(id("_b"), id("_e")), marshal(star(dot("u", vi.fieldName)))),
 				ifStmt(nil, binary(id("_e"), token.NEQ, nilExpr()), ret(emptyBytes(), id("_e"))),
 				// Marshal object variant to map for discriminant injection and shaping.
-				varStmt("m", rawMap(id("any")), nil),
+				varStmt("m", rawMap(id("any"))),
 				ifStmt(nil, binary(call(f.qual(pkgJSON, "Unmarshal"), id("_b"), addr(id("m"))), token.NEQ, nilExpr()),
 					invalidPayload(f, emptyBytes())),
 			}
@@ -878,7 +884,7 @@ func sharedUnionValidateBody(f *goFile, variants []variantInfo, checks []sharedF
 	if len(checks) == 0 || carriers == 0 {
 		return []ast.Stmt{ret(nilExpr())}
 	}
-	body := []ast.Stmt{varStmt("set", id("bool"), nil)}
+	body := []ast.Stmt{varStmt("set", id("bool"))}
 	for _, vi := range variants {
 		if !vi.hasSharedFields {
 			continue
@@ -897,7 +903,7 @@ func sharedUnionValidateBody(f *goFile, variants []variantInfo, checks []sharedF
 }
 
 func unionValidateBody(f *goFile, name string, variants []variantInfo) []ast.Stmt {
-	body := []ast.Stmt{varStmt("count", id("int"), nil)}
+	body := []ast.Stmt{varStmt("count", id("int"))}
 	for _, vi := range variants {
 		body = append(body, ifStmt(nil, binary(dot("u", vi.fieldName), token.NEQ, nilExpr()), incr(id("count"))))
 	}
@@ -1424,7 +1430,8 @@ func emitUnion(f *goFile, name string, schema *load.Schema, parentDef *load.Defi
 	f.line()
 	f.add(method(param("u", star(id(name))), "UnmarshalJSON",
 		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))),
-		unionUnmarshalBody(f, variants, discKey)...))
+		unionUnmarshalBody(f, name, variants, discKey)...))
+	f.line()
 	f.add(method(param("u", id(name)), "MarshalJSON",
 		funcType(nil, param("", byteSlice()), param("", id("error"))),
 		unionMarshalBody(f, name, variants)...))

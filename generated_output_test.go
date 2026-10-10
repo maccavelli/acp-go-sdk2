@@ -42,6 +42,20 @@ func TestNilRequiredArrayEncodesEmpty(t *testing.T) {
 	}
 }
 
+func TestNonStringDiscriminatorFailsByName(t *testing.T) {
+	t.Parallel()
+	var cb ContentBlock
+	err := json.Unmarshal([]byte(`{"type":1,"text":"x"}`), &cb)
+	if err == nil {
+		t.Fatalf("decoded a ContentBlock whose type is a number: %+v", cb)
+	}
+	for _, want := range []string{"ContentBlock", `"type"`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
+	}
+}
+
 // TestUnionDocAboveWrapper requires a union's description on the wrapper
 // type, not on its first variant.
 func TestUnionDocAboveWrapper(t *testing.T) {

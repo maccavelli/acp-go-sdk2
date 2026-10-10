@@ -195,7 +195,7 @@ func (u *AgentResponse) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
 			var v AgentResult
-			var match bool = true
+			match := true
 			if _, ok := m["id"]; !ok {
 				match = false
 			}
@@ -212,7 +212,7 @@ func (u *AgentResponse) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v AgentError
-			var match bool = true
+			match := true
 			if _, ok := m["id"]; !ok {
 				match = false
 			}
@@ -251,6 +251,7 @@ func (u *AgentResponse) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u AgentResponse) MarshalJSON() ([]byte, error) {
 	if u.Result != nil {
 		_b, _e := json.Marshal(*u.Result)
@@ -405,7 +406,9 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["type"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("AuthMethod: discriminator \"type\": %w", err)
+				}
 			}
 			switch disc {
 			case "terminal":
@@ -419,7 +422,7 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v AuthMethodTerminalInline
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -439,7 +442,7 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v AuthMethodAgent
-			var match bool = true
+			match := true
 			if _, ok := m["id"]; !ok {
 				match = false
 			}
@@ -478,6 +481,7 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u AuthMethod) MarshalJSON() ([]byte, error) {
 	if u.Terminal != nil {
 		_b, _e := json.Marshal(*u.Terminal)
@@ -617,7 +621,7 @@ func (u *AvailableCommandInput) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
 			var v UnstructuredCommandInput
-			var match bool = true
+			match := true
 			if _, ok := m["hint"]; !ok {
 				match = false
 			}
@@ -646,6 +650,7 @@ func (u *AvailableCommandInput) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u AvailableCommandInput) MarshalJSON() ([]byte, error) {
 	if u.Unstructured != nil {
 		_b, _e := json.Marshal(*u.Unstructured)
@@ -967,7 +972,7 @@ func (u *ClientResponse) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
 			var v ClientResult
-			var match bool = true
+			match := true
 			if _, ok := m["id"]; !ok {
 				match = false
 			}
@@ -984,7 +989,7 @@ func (u *ClientResponse) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ClientError
-			var match bool = true
+			match := true
 			if _, ok := m["id"]; !ok {
 				match = false
 			}
@@ -1023,6 +1028,7 @@ func (u *ClientResponse) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u ClientResponse) MarshalJSON() ([]byte, error) {
 	if u.Result != nil {
 		_b, _e := json.Marshal(*u.Result)
@@ -1364,7 +1370,9 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["type"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("ContentBlock: discriminator \"type\": %w", err)
+				}
 			}
 			switch disc {
 			case "text":
@@ -1406,7 +1414,7 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ContentBlockText
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -1423,7 +1431,7 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ContentBlockImage
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -1443,7 +1451,7 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ContentBlockAudio
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -1463,7 +1471,7 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ContentBlockResourceLink
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -1483,7 +1491,7 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ContentBlockResource
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -1543,6 +1551,7 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u ContentBlock) MarshalJSON() ([]byte, error) {
 	if u.Text != nil {
 		_b, _e := json.Marshal(*u.Text)
@@ -1801,7 +1810,9 @@ func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["mode"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("CreateElicitationRequest: discriminator \"mode\": %w", err)
+				}
 			}
 			switch disc {
 			case "form":
@@ -1822,7 +1833,7 @@ func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v CreateElicitationForm
-			var match bool = true
+			match := true
 			if _, ok := m["mode"]; !ok {
 				match = false
 			}
@@ -1839,7 +1850,7 @@ func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v CreateElicitationUrl
-			var match bool = true
+			match := true
 			if _, ok := m["mode"]; !ok {
 				match = false
 			}
@@ -1859,7 +1870,7 @@ func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v CreateElicitationOther
-			var match bool = true
+			match := true
 			if _, ok := m["mode"]; !ok {
 				match = false
 			}
@@ -1902,6 +1913,7 @@ func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u CreateElicitationRequest) MarshalJSON() ([]byte, error) {
 	if u.Form != nil {
 		_b, _e := json.Marshal(*u.Form)
@@ -2060,7 +2072,9 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["action"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("CreateElicitationResponse: discriminator \"action\": %w", err)
+				}
 			}
 			switch disc {
 			case "accept":
@@ -2088,7 +2102,7 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v CreateElicitationAccept
-			var match bool = true
+			match := true
 			if _, ok := m["action"]; !ok {
 				match = false
 			}
@@ -2102,7 +2116,7 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v CreateElicitationDecline
-			var match bool = true
+			match := true
 			if _, ok := m["action"]; !ok {
 				match = false
 			}
@@ -2116,7 +2130,7 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v CreateElicitationCancel
-			var match bool = true
+			match := true
 			if _, ok := m["action"]; !ok {
 				match = false
 			}
@@ -2130,7 +2144,7 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v CreateElicitationResponseOther
-			var match bool = true
+			match := true
 			if _, ok := m["action"]; !ok {
 				match = false
 			}
@@ -2180,6 +2194,7 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
 	if u.Accept != nil {
 		_b, _e := json.Marshal(*u.Accept)
@@ -2458,6 +2473,7 @@ func (u *ElicitationContentValue) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u ElicitationContentValue) MarshalJSON() ([]byte, error) {
 	if u.String != nil {
 		_b, _e := json.Marshal(*u.String)
@@ -2529,7 +2545,7 @@ func (u *ElicitationFormMode) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
 			var v ElicitationSessionScope
-			var match bool = true
+			match := true
 			if _, ok := m["sessionId"]; !ok {
 				match = false
 			}
@@ -2543,7 +2559,7 @@ func (u *ElicitationFormMode) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ElicitationRequestScope
-			var match bool = true
+			match := true
 			if _, ok := m["requestId"]; !ok {
 				match = false
 			}
@@ -2579,6 +2595,7 @@ func (u *ElicitationFormMode) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u ElicitationFormMode) MarshalJSON() ([]byte, error) {
 	if u.Session != nil {
 		_b, _e := json.Marshal(*u.Session)
@@ -2839,7 +2856,9 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["type"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("ElicitationPropertySchema: discriminator \"type\": %w", err)
+				}
 			}
 			switch disc {
 			case "string":
@@ -2881,7 +2900,7 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ElicitationPropertySchemaString
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -2895,7 +2914,7 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ElicitationPropertySchemaNumber
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -2909,7 +2928,7 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ElicitationPropertySchemaInteger
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -2923,7 +2942,7 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ElicitationPropertySchemaBoolean
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -2937,7 +2956,7 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ElicitationPropertySchemaArray
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -2954,7 +2973,7 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ElicitationPropertySchemaOther
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -3018,6 +3037,7 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 	if u.String != nil {
 		_b, _e := json.Marshal(*u.String)
@@ -3225,7 +3245,7 @@ func (u *ElicitationUrlMode) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
 			var v ElicitationSessionScope
-			var match bool = true
+			match := true
 			if _, ok := m["sessionId"]; !ok {
 				match = false
 			}
@@ -3239,7 +3259,7 @@ func (u *ElicitationUrlMode) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ElicitationRequestScope
-			var match bool = true
+			match := true
 			if _, ok := m["requestId"]; !ok {
 				match = false
 			}
@@ -3275,6 +3295,7 @@ func (u *ElicitationUrlMode) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u ElicitationUrlMode) MarshalJSON() ([]byte, error) {
 	if u.Session != nil {
 		_b, _e := json.Marshal(*u.Session)
@@ -3332,7 +3353,7 @@ func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
 			var v TextResourceContents
-			var match bool = true
+			match := true
 			if _, ok := m["text"]; !ok {
 				match = false
 			}
@@ -3349,7 +3370,7 @@ func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v BlobResourceContents
-			var match bool = true
+			match := true
 			if _, ok := m["blob"]; !ok {
 				match = false
 			}
@@ -3388,6 +3409,7 @@ func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u EmbeddedResourceResource) MarshalJSON() ([]byte, error) {
 	if u.TextResourceContents != nil {
 		_b, _e := json.Marshal(*u.TextResourceContents)
@@ -3604,6 +3626,7 @@ func (u *ErrorCode) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u ErrorCode) MarshalJSON() ([]byte, error) {
 	if u.ParseError != nil {
 		_b, _e := json.Marshal(*u.ParseError)
@@ -3925,7 +3948,9 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["stopReason"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("IdleStateUpdate: discriminator \"stopReason\": %w", err)
+				}
 			}
 			switch disc {
 			case "end_turn":
@@ -3974,7 +3999,7 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v IdleStateUpdateEndTurn
-			var match bool = true
+			match := true
 			if _, ok := m["stopReason"]; !ok {
 				match = false
 			}
@@ -3988,7 +4013,7 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v IdleStateUpdateMaxTokens
-			var match bool = true
+			match := true
 			if _, ok := m["stopReason"]; !ok {
 				match = false
 			}
@@ -4002,7 +4027,7 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v IdleStateUpdateMaxTurnRequests
-			var match bool = true
+			match := true
 			if _, ok := m["stopReason"]; !ok {
 				match = false
 			}
@@ -4016,7 +4041,7 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v IdleStateUpdateRefusal
-			var match bool = true
+			match := true
 			if _, ok := m["stopReason"]; !ok {
 				match = false
 			}
@@ -4030,7 +4055,7 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v IdleStateUpdateCancelled
-			var match bool = true
+			match := true
 			if _, ok := m["stopReason"]; !ok {
 				match = false
 			}
@@ -4044,7 +4069,7 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v IdleStateUpdateError
-			var match bool = true
+			match := true
 			if _, ok := m["stopReason"]; !ok {
 				match = false
 			}
@@ -4058,7 +4083,7 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v IdleStateUpdateOther
-			var match bool = true
+			match := true
 			if _, ok := m["stopReason"]; !ok {
 				match = false
 			}
@@ -4136,6 +4161,7 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 	if u.EndTurn != nil {
 		_b, _e := json.Marshal(*u.EndTurn)
@@ -4814,7 +4840,9 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["type"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("McpServer: discriminator \"type\": %w", err)
+				}
 			}
 			switch disc {
 			case "http":
@@ -4842,7 +4870,7 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v McpServerHttpInline
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -4865,7 +4893,7 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v McpServerSseInline
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -4888,7 +4916,7 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v McpServerAcpInline
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -4908,7 +4936,7 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v McpServerStdio
-			var match bool = true
+			match := true
 			if _, ok := m["name"]; !ok {
 				match = false
 			}
@@ -4967,6 +4995,7 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u McpServer) MarshalJSON() ([]byte, error) {
 	if u.Http != nil {
 		_b, _e := json.Marshal(*u.Http)
@@ -5193,7 +5222,9 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["type"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("MultiSelectItems: discriminator \"type\": %w", err)
+				}
 			}
 			switch disc {
 			case "string":
@@ -5207,7 +5238,7 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v MultiSelectItemsString
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -5224,7 +5255,7 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v MultiSelectItemsOther
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -5238,7 +5269,7 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v TitledMultiSelectItems
-			var match bool = true
+			match := true
 			if _, ok := m["anyOf"]; !ok {
 				match = false
 			}
@@ -5281,6 +5312,7 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u MultiSelectItems) MarshalJSON() ([]byte, error) {
 	if u.String != nil {
 		_b, _e := json.Marshal(*u.String)
@@ -6015,7 +6047,9 @@ func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["type"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("PlanUpdateContent: discriminator \"type\": %w", err)
+				}
 			}
 			switch disc {
 			case "items":
@@ -6043,7 +6077,7 @@ func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v PlanUpdateContentItems
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -6063,7 +6097,7 @@ func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v PlanUpdateContentFile
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -6083,7 +6117,7 @@ func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v PlanUpdateContentMarkdown
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -6132,6 +6166,7 @@ func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u PlanUpdateContent) MarshalJSON() ([]byte, error) {
 	if u.Items != nil {
 		_b, _e := json.Marshal(*u.Items)
@@ -6511,6 +6546,7 @@ func (u *RequestId) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u RequestId) MarshalJSON() ([]byte, error) {
 	if u.Null != nil {
 		return json.Marshal(nil)
@@ -6580,7 +6616,9 @@ func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["outcome"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("RequestPermissionOutcome: discriminator \"outcome\": %w", err)
+				}
 			}
 			switch disc {
 			case "cancelled":
@@ -6601,7 +6639,7 @@ func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v RequestPermissionOutcomeCancelled
-			var match bool = true
+			match := true
 			if _, ok := m["outcome"]; !ok {
 				match = false
 			}
@@ -6615,7 +6653,7 @@ func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v RequestPermissionOutcomeSelected
-			var match bool = true
+			match := true
 			if _, ok := m["outcome"]; !ok {
 				match = false
 			}
@@ -6654,6 +6692,7 @@ func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u RequestPermissionOutcome) MarshalJSON() ([]byte, error) {
 	if u.Cancelled != nil {
 		_b, _e := json.Marshal(*u.Cancelled)
@@ -7034,7 +7073,9 @@ func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["type"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("SessionConfigOption: discriminator \"type\": %w", err)
+				}
 			}
 			switch disc {
 			case "select":
@@ -7055,7 +7096,7 @@ func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionConfigOptionSelect
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -7075,7 +7116,7 @@ func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionConfigOptionBoolean
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -7114,6 +7155,7 @@ func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u SessionConfigOption) MarshalJSON() ([]byte, error) {
 	if u.Select != nil {
 		_b, _e := json.Marshal(*u.Select)
@@ -7267,7 +7309,7 @@ func (u *SessionConfigSelectOptions) UnmarshalJSON(b []byte) error {
 	if json.Unmarshal(b, &arr) == nil {
 		{
 			var v SessionConfigSelectOptionsUngrouped
-			var match bool = true
+			match := true
 			for _, elem := range arr {
 				if _, ok := elem["name"]; !ok {
 					match = false
@@ -7286,7 +7328,7 @@ func (u *SessionConfigSelectOptions) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionConfigSelectOptionsGrouped
-			var match bool = true
+			match := true
 			for _, elem := range arr {
 				if _, ok := elem["group"]; !ok {
 					match = false
@@ -7323,6 +7365,7 @@ func (u *SessionConfigSelectOptions) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u SessionConfigSelectOptions) MarshalJSON() ([]byte, error) {
 	if u.Ungrouped != nil {
 		_b, _e := json.Marshal(*u.Ungrouped)
@@ -8057,7 +8100,9 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["sessionUpdate"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("SessionUpdate: discriminator \"sessionUpdate\": %w", err)
+				}
 			}
 			switch disc {
 			case "user_message_chunk":
@@ -8197,7 +8242,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionUpdateUserMessageChunk
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8214,7 +8259,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionUpdateAgentMessageChunk
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8231,7 +8276,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionUpdateAgentThoughtChunk
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8248,7 +8293,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionUpdateToolCall
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8268,7 +8313,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionToolCallUpdate
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8285,7 +8330,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionUpdatePlan
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8302,7 +8347,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionPlanUpdate
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8319,7 +8364,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionUpdatePlanRemoved
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8336,7 +8381,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionAvailableCommandsUpdate
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8353,7 +8398,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionCurrentModeUpdate
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8370,7 +8415,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionConfigOptionUpdate
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8387,7 +8432,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionSessionInfoUpdate
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8401,7 +8446,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionUsageUpdate
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8421,7 +8466,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionUpdateNotice
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8441,7 +8486,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionCompactionUpdate
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8461,7 +8506,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionUpdateCompactionSummaryChunk
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8481,7 +8526,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionSubagentUpdate
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8498,7 +8543,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionUpdateSessionMessage
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8515,7 +8560,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SessionUpdateSessionMessageChunk
-			var match bool = true
+			match := true
 			if _, ok := m["sessionUpdate"]; !ok {
 				match = false
 			}
@@ -8676,6 +8721,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 	if u.UserMessageChunk != nil {
 		_b, _e := json.Marshal(*u.UserMessageChunk)
@@ -9028,7 +9074,9 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["type"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("SetSessionConfigOptionRequest: discriminator \"type\": %w", err)
+				}
 			}
 			switch disc {
 			case "boolean":
@@ -9042,7 +9090,7 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SetSessionConfigOptionBoolean
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -9059,7 +9107,7 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v SetSessionConfigOptionValueId
-			var match bool = true
+			match := true
 			if _, ok := m["value"]; !ok {
 				match = false
 			}
@@ -9095,6 +9143,7 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
 	if u.Boolean != nil {
 		_b, _e := json.Marshal(*u.Boolean)
@@ -9277,7 +9326,9 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["state"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("StateUpdate: discriminator \"state\": %w", err)
+				}
 			}
 			switch disc {
 			case "running":
@@ -9312,7 +9363,7 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v StateUpdateRunning
-			var match bool = true
+			match := true
 			if _, ok := m["state"]; !ok {
 				match = false
 			}
@@ -9326,7 +9377,7 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v StateUpdateIdle
-			var match bool = true
+			match := true
 			if _, ok := m["state"]; !ok {
 				match = false
 			}
@@ -9340,7 +9391,7 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v StateUpdateRequiresAction
-			var match bool = true
+			match := true
 			if _, ok := m["state"]; !ok {
 				match = false
 			}
@@ -9354,7 +9405,7 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v StateUpdateUnknown
-			var match bool = true
+			match := true
 			if _, ok := m["state"]; !ok {
 				match = false
 			}
@@ -9368,7 +9419,7 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v StateUpdateOther
-			var match bool = true
+			match := true
 			if _, ok := m["state"]; !ok {
 				match = false
 			}
@@ -9425,6 +9476,7 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u StateUpdate) MarshalJSON() ([]byte, error) {
 	if u.Running != nil {
 		_b, _e := json.Marshal(*u.Running)
@@ -9932,7 +9984,9 @@ func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["type"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("ToolCallContent: discriminator \"type\": %w", err)
+				}
 			}
 			switch disc {
 			case "content":
@@ -9960,7 +10014,7 @@ func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ToolCallContentContent
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -9977,7 +10031,7 @@ func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ToolCallContentDiff
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -9997,7 +10051,7 @@ func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v ToolCallContentTerminal
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -10043,6 +10097,7 @@ func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u ToolCallContent) MarshalJSON() ([]byte, error) {
 	if u.Content != nil {
 		_b, _e := json.Marshal(*u.Content)
@@ -10728,7 +10783,9 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["type"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("UnstableMcpServer: discriminator \"type\": %w", err)
+				}
 			}
 			switch disc {
 			case "http":
@@ -10756,7 +10813,7 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v UnstableMcpServerHttp
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -10779,7 +10836,7 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v UnstableMcpServerSse
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -10802,7 +10859,7 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v UnstableMcpServerAcpInline
-			var match bool = true
+			match := true
 			if _, ok := m["type"]; !ok {
 				match = false
 			}
@@ -10822,7 +10879,7 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v McpServerStdio
-			var match bool = true
+			match := true
 			if _, ok := m["name"]; !ok {
 				match = false
 			}
@@ -10881,6 +10938,7 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 	if u.Http != nil {
 		_b, _e := json.Marshal(*u.Http)
@@ -11073,7 +11131,7 @@ func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err == nil {
 		{
 			var v UnstableMessageMcpResult
-			var match bool = true
+			match := true
 			if _, ok := m["result"]; !ok {
 				match = false
 			}
@@ -11087,7 +11145,7 @@ func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v UnstableMessageMcpError
-			var match bool = true
+			match := true
 			if _, ok := m["error"]; !ok {
 				match = false
 			}
@@ -11123,6 +11181,7 @@ func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u UnstableMessageMcpResponse) MarshalJSON() ([]byte, error) {
 	if u.Result != nil {
 		_b, _e := json.Marshal(*u.Result)
@@ -11503,7 +11562,9 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 		{
 			var disc string
 			if v, ok := m["kind"]; ok {
-				json.Unmarshal(v, &disc)
+				if err := json.Unmarshal(v, &disc); err != nil {
+					return fmt.Errorf("UnstableNesSuggestion: discriminator \"kind\": %w", err)
+				}
 			}
 			switch disc {
 			case "edit":
@@ -11538,7 +11599,7 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v UnstableNesSuggestionEdit
-			var match bool = true
+			match := true
 			if _, ok := m["kind"]; !ok {
 				match = false
 			}
@@ -11561,7 +11622,7 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v UnstableNesSuggestionJump
-			var match bool = true
+			match := true
 			if _, ok := m["kind"]; !ok {
 				match = false
 			}
@@ -11584,7 +11645,7 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v UnstableNesSuggestionRename
-			var match bool = true
+			match := true
 			if _, ok := m["kind"]; !ok {
 				match = false
 			}
@@ -11610,7 +11671,7 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 		}
 		{
 			var v UnstableNesSuggestionSearchAndReplace
-			var match bool = true
+			match := true
 			if _, ok := m["kind"]; !ok {
 				match = false
 			}
@@ -11672,6 +11733,7 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 	}
 	return errors.New("no matching variant for union")
 }
+
 func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {
 	if u.Edit != nil {
 		_b, _e := json.Marshal(*u.Edit)

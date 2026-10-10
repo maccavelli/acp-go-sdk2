@@ -173,93 +173,118 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		return nil, NewMethodNotFound(method)
 	}
 }
+
 func (c *ClientSideConnection) Authenticate(ctx context.Context, params AuthenticateRequest) (AuthenticateResponse, error) {
 	resp, err := SendRequest[AuthenticateResponse](c.conn, ctx, AgentMethodAuthenticate, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) UnstableDidChangeDocument(ctx context.Context, params UnstableDidChangeDocumentNotification) error {
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidChange, params)
 }
+
 func (c *ClientSideConnection) UnstableDidCloseDocument(ctx context.Context, params UnstableDidCloseDocumentNotification) error {
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidClose, params)
 }
+
 func (c *ClientSideConnection) UnstableDidFocusDocument(ctx context.Context, params UnstableDidFocusDocumentNotification) error {
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidFocus, params)
 }
+
 func (c *ClientSideConnection) UnstableDidOpenDocument(ctx context.Context, params UnstableDidOpenDocumentNotification) error {
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidOpen, params)
 }
+
 func (c *ClientSideConnection) UnstableDidSaveDocument(ctx context.Context, params UnstableDidSaveDocumentNotification) error {
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidSave, params)
 }
+
 func (c *ClientSideConnection) Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error) {
 	resp, err := SendRequest[InitializeResponse](c.conn, ctx, AgentMethodInitialize, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) Logout(ctx context.Context, params LogoutRequest) (LogoutResponse, error) {
 	resp, err := SendRequest[LogoutResponse](c.conn, ctx, AgentMethodLogout, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpNotification) error {
 	return c.conn.SendNotification(ctx, AgentMethodMcpMessage, params)
 }
+
 func (c *ClientSideConnection) UnstableAcceptNes(ctx context.Context, params UnstableAcceptNesNotification) error {
 	return c.conn.SendNotification(ctx, AgentMethodNesAccept, params)
 }
+
 func (c *ClientSideConnection) UnstableCloseNes(ctx context.Context, params UnstableCloseNesRequest) (UnstableCloseNesResponse, error) {
 	resp, err := SendRequest[UnstableCloseNesResponse](c.conn, ctx, AgentMethodNesClose, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) UnstableRejectNes(ctx context.Context, params UnstableRejectNesNotification) error {
 	return c.conn.SendNotification(ctx, AgentMethodNesReject, params)
 }
+
 func (c *ClientSideConnection) UnstableStartNes(ctx context.Context, params UnstableStartNesRequest) (UnstableStartNesResponse, error) {
 	resp, err := SendRequest[UnstableStartNesResponse](c.conn, ctx, AgentMethodNesStart, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) UnstableSuggestNes(ctx context.Context, params UnstableSuggestNesRequest) (UnstableSuggestNesResponse, error) {
 	resp, err := SendRequest[UnstableSuggestNesResponse](c.conn, ctx, AgentMethodNesSuggest, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) UnstableDisableProvider(ctx context.Context, params UnstableDisableProviderRequest) (UnstableDisableProviderResponse, error) {
 	resp, err := SendRequest[UnstableDisableProviderResponse](c.conn, ctx, AgentMethodProvidersDisable, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) UnstableListProviders(ctx context.Context, params UnstableListProvidersRequest) (UnstableListProvidersResponse, error) {
 	resp, err := SendRequest[UnstableListProvidersResponse](c.conn, ctx, AgentMethodProvidersList, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) UnstableSetProvider(ctx context.Context, params UnstableSetProviderRequest) (UnstableSetProviderResponse, error) {
 	resp, err := SendRequest[UnstableSetProviderResponse](c.conn, ctx, AgentMethodProvidersSet, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) Cancel(ctx context.Context, params CancelNotification) error {
 	return c.conn.SendNotification(ctx, AgentMethodSessionCancel, params)
 }
+
 func (c *ClientSideConnection) CloseSession(ctx context.Context, params CloseSessionRequest) (CloseSessionResponse, error) {
 	resp, err := SendRequest[CloseSessionResponse](c.conn, ctx, AgentMethodSessionClose, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) DeleteSession(ctx context.Context, params DeleteSessionRequest) (DeleteSessionResponse, error) {
 	resp, err := SendRequest[DeleteSessionResponse](c.conn, ctx, AgentMethodSessionDelete, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) UnstableForkSession(ctx context.Context, params UnstableForkSessionRequest) (UnstableForkSessionResponse, error) {
 	resp, err := SendRequest[UnstableForkSessionResponse](c.conn, ctx, AgentMethodSessionFork, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) ListSessions(ctx context.Context, params ListSessionsRequest) (ListSessionsResponse, error) {
 	resp, err := SendRequest[ListSessionsResponse](c.conn, ctx, AgentMethodSessionList, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) LoadSession(ctx context.Context, params LoadSessionRequest) (LoadSessionResponse, error) {
 	resp, err := SendRequest[LoadSessionResponse](c.conn, ctx, AgentMethodSessionLoad, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) NewSession(ctx context.Context, params NewSessionRequest) (NewSessionResponse, error) {
 	resp, err := SendRequest[NewSessionResponse](c.conn, ctx, AgentMethodSessionNew, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error) {
 	resp, err := SendRequest[PromptResponse](c.conn, ctx, AgentMethodSessionPrompt, params)
 	if err != nil {
@@ -269,14 +294,17 @@ func (c *ClientSideConnection) Prompt(ctx context.Context, params PromptRequest)
 	}
 	return resp, err
 }
+
 func (c *ClientSideConnection) ResumeSession(ctx context.Context, params ResumeSessionRequest) (ResumeSessionResponse, error) {
 	resp, err := SendRequest[ResumeSessionResponse](c.conn, ctx, AgentMethodSessionResume, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) SetSessionConfigOption(ctx context.Context, params SetSessionConfigOptionRequest) (SetSessionConfigOptionResponse, error) {
 	resp, err := SendRequest[SetSessionConfigOptionResponse](c.conn, ctx, AgentMethodSessionSetConfigOption, params)
 	return resp, err
 }
+
 func (c *ClientSideConnection) SetSessionMode(ctx context.Context, params SetSessionModeRequest) (SetSessionModeResponse, error) {
 	resp, err := SendRequest[SetSessionModeResponse](c.conn, ctx, AgentMethodSessionSetMode, params)
 	return resp, err

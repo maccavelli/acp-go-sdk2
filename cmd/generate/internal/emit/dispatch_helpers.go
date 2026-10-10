@@ -26,7 +26,7 @@ func errNotNil() ast.Expr { return binary(id("err"), token.NEQ, nilExpr()) }
 // unmarshalValidate decodes params into p and validates it.
 func unmarshalValidate(f *goFile, typeName string) []ast.Stmt {
 	return []ast.Stmt{
-		varStmt("p", id(typeName), nil),
+		varStmt("p", id(typeName)),
 		ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("params"), addr(id("p")))), errNotNil(),
 			invalidParams()),
 		ifStmt(define(exprs(id("err")), call(dot("p", "Validate"))), errNotNil(),

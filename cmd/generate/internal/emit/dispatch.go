@@ -44,8 +44,8 @@ func handleFunc(f *goFile, recv, recvType string, cases []ast.Stmt) *ast.FuncDec
 // then drops the cancel entry.
 func promptCase(f *goFile, recv ast.Expr, methodName string) []ast.Stmt {
 	return []ast.Stmt{
-		varStmt("reqCtx", f.qual(pkgContext, "Context"), nil),
-		varStmt("cancel", f.qual(pkgContext, "CancelFunc"), nil),
+		varStmt("reqCtx", f.qual(pkgContext, "Context")),
+		varStmt("cancel", f.qual(pkgContext, "CancelFunc")),
 		assign(exprs(id("reqCtx"), id("cancel")), call(f.qual(pkgContext, "WithCancel"), id("ctx"))),
 		lockCall("Lock"),
 		ifStmt(define(exprs(id("prev"), id("ok")), sessionCancel()), id("ok"), exprStmt(call(id("prev")))),
@@ -182,6 +182,8 @@ func emitOutbound(f *goFile, recvType, side, constPrefix string, groups ir.Group
 		if constName == "" {
 			continue
 		}
+		// A blank line separates each wrapper from the declaration before it.
+		f.line()
 		if mi.Notif != "" {
 			name := strings.TrimSuffix(mi.Notif, "Notification")
 			switch mi.Method {

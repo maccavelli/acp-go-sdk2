@@ -76,7 +76,8 @@ The proposed changes, all on `encoding/json` v1:
 * Good, because pkg.go.dev shows the schema description on 24 union types that have none today.
 * Neutral, because a populated message encodes to the same bytes as today. The existing goldens stay unchanged.
 * Neutral, because encoding an unset union still fails. Only the error text changes.
-* Bad, because a peer that sends a non-string discriminator, which decodes today by falling back to key matching, gets an error.
+* Bad, because a peer that sends a non-string discriminator, which decodes today by falling back to key matching, gets an error. (Narrowed 2026-10-10,
+  see the amendment below: this can hold for at most 6 of the 17 discriminated unions; the other 11 already fail.)
 * Bad, because ~~34 structs gain or extend~~ 33 structs gain a `MarshalJSON` (corrected 2026-10-10, see the amendment below), and each of them pays one
   extra encode through an alias type.
 * Bad, because every generated file changes, and `types_gen.go` changes in many places. Review relies on the generator diff and the new tests.
@@ -128,6 +129,18 @@ schema defaults.
 Counting struct fields by tag, a slice or map type with no `omitempty`, gives 36 fields in 35 structs. Two of those are not required:
 `ElicitationSchema.Properties` and `InitializeResponse.AuthMethods` are optional, and their schema defaults already encode a nil value as `{}` and `[]`.
 The original count excluded only one of the two. The decision is unchanged.
+
+## Amendment 2026-10-10, unions that accepted a non-string discriminator
+
+Step 7 of [0009-PLAN-fix-generated-output-on-json-v1.md](0009-PLAN-fix-generated-output-on-json-v1.md) found the consequence about non-string discriminators
+too broad. 17 unions decode by a discriminator. In 11 of them every variant struct carries the key as a typed string field, so a non-string value already
+failed: `ContentBlock` with `"type":1` returned "invalid variant payload", an error that names neither the union nor the key. In the other 6, `AuthMethod`,
+`IdleStateUpdate`, `McpServer`, `MultiSelectItems`, `SetSessionConfigOptionRequest`, and `UnstableMcpServer`, at least one variant has no such field or,
+in `IdleStateUpdate`, holds it as `any`, so such a payload could decode. One was probed: a stdio-shaped `McpServer` with `"type":1` decoded with no
+error before the change.
+
+After the change all 17 return an error that names the union and the key. A new failure is possible only in those 6 unions; for the other 11 only the error
+text changes. The decision is unchanged.
 
 ## More Information
 

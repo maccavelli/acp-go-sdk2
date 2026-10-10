@@ -118,12 +118,9 @@ func caseOf(list []ast.Expr, body ...ast.Stmt) *ast.CaseClause {
 	return &ast.CaseClause{List: list, Body: body}
 }
 
-// varStmt is var name typ [= value].
-func varStmt(name string, typ ast.Expr, value ast.Expr) *ast.DeclStmt {
+// varStmt is var name typ.
+func varStmt(name string, typ ast.Expr) *ast.DeclStmt {
 	spec := &ast.ValueSpec{Names: []*ast.Ident{id(name)}, Type: typ}
-	if value != nil {
-		spec.Values = []ast.Expr{value}
-	}
 	return &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{spec}}}
 }
 
