@@ -102,22 +102,15 @@ func emitRPCInterfaces(f *goFile, m *model.Model) {
 	f.comment("AgentExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice.")
 	f.add(typeDecl("AgentExperimental", agentExperimental.interfaceType()))
 
-	var client, clientExperimental, clientTerminal fieldSet
+	var client, clientExperimental fieldSet
 	for _, mi := range m.ClientMethods {
 		target := &client
-		switch mi.Binding {
-		case model.BindClientExperimental:
+		if mi.Binding == model.BindClientExperimental {
 			target = &clientExperimental
-		case model.BindClientTerminal:
-			target = &clientTerminal
 		}
 		addRPCMethod(f, target, mi)
 	}
 	f.add(typeDecl("Client", client.interfaceType()))
-	if len(clientTerminal.list) > 0 {
-		f.comment("ClientTerminal defines terminal-related experimental methods (x-docs-ignore). Implement and advertise 'terminal: true' to enable 'terminal/*'.")
-		f.add(typeDecl("ClientTerminal", clientTerminal.interfaceType()))
-	}
 	// Always emit ClientExperimental, even if empty.
 	f.comment("ClientExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice.")
 	f.add(typeDecl("ClientExperimental", clientExperimental.interfaceType()))
@@ -335,10 +328,6 @@ func emitInlineVariant(f *goFile, tname string, in *model.Inline) {
 	switch in.Kind {
 	case model.InlineStruct:
 		emitStruct(f, tname, in.Fields, in.KeepExtra)
-	case model.InlineRaw:
-		// An alias keeps json.RawMessage's methods, unlike a defined type.
-		f.add(aliasDecl(tname, f.qual(pkgJSON, "RawMessage")))
-		f.line()
 	case model.InlineNamed:
 		// Non-object title-only variants can still carry payloads (e.g. arrays).
 		f.add(typeDecl(tname, typeAST(in.Type)))

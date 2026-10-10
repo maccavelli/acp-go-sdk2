@@ -108,3 +108,19 @@ func TestValidateKinds(t *testing.T) {
 		}
 	}
 }
+
+// TestTitleOnlyVariantTakesSchemaType requires a title-only variant to take
+// the type its schema declares, whatever its title and description say.
+func TestTitleOnlyVariantTakesSchemaType(t *testing.T) {
+	t.Parallel()
+	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{"U":{"anyOf":[
+		{"title":"FooExt","description":"An extension payload.","type":"string"},
+		{"type":"object","properties":{"a":{"type":"string"}}}]}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := m.Type("U").Variants[0].Inline
+	if in == nil || in.Kind != InlineNamed || in.Type.String() != "string" {
+		t.Errorf("variant FooExt: %+v, want InlineNamed string", in)
+	}
+}

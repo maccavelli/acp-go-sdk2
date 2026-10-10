@@ -184,7 +184,7 @@ func TestInlineVariants(t *testing.T) {
 	if got := strings.Join(tags, " "); got != "kind opt,omitempty shared" {
 		t.Errorf("object variant tags: %s", got)
 	}
-	for i, want := range []InlineKind{InlineRaw, InlineNamed, InlineEmpty, InlineEmpty} {
+	for i, want := range []InlineKind{InlineEmpty, InlineNamed, InlineEmpty, InlineEmpty} {
 		if in := vs[i+1].Inline; in == nil || in.Kind != want {
 			t.Errorf("variant %d: got %+v, want kind %v", i+2, in, want)
 		}

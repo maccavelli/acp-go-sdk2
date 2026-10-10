@@ -53,8 +53,6 @@ func clientAssert(f *goFile, binding model.Binding, methodName, paramType, respT
 	switch binding {
 	case model.BindClientExperimental:
 		return singleMethodAssert(f, dot("c", "client"), "exp", methodName, paramType, respType, hasResponse), id("exp")
-	case model.BindClientTerminal:
-		return namedAssert(dot("c", "client"), "t", "ClientTerminal"), id("t")
 	default:
 		return nil, dot("c", "client")
 	}

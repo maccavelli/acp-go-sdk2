@@ -130,8 +130,6 @@ type InlineKind int
 const (
 	// InlineStruct is a struct of the variant's properties and the union's.
 	InlineStruct InlineKind = iota
-	// InlineRaw is an alias of json.RawMessage, for extension variants.
-	InlineRaw
 	// InlineNamed is a defined type of Type.
 	InlineNamed
 	// InlineEmpty is an empty struct.
@@ -387,12 +385,6 @@ func plainFields(owner string, props map[string]*load.Definition, req map[string
 	return out, nil
 }
 
-// isExtensionVariant reports whether a title-only variant carries an
-// extension payload, kept raw instead of dropped.
-func isExtensionVariant(v *load.Definition) bool {
-	return strings.Contains(strings.ToLower(v.Description), "extension") || strings.Contains(v.Title, "Ext")
-}
-
 // inlineOf returns the type emitted for a union variant without a $ref, or
 // nil when there is none.
 func inlineOf(t *Type, tname string, ev *load.Definition, isObj, isNull bool) (*Inline, error) {
@@ -414,10 +406,7 @@ func inlineOf(t *Type, tname string, ev *load.Definition, isObj, isNull bool) (*
 		return &Inline{Kind: InlineStruct, Doc: docLines(ev.Description), Fields: fields}, nil
 	case ev.Title != "":
 		in := &Inline{Kind: InlineEmpty, Doc: docLines(ev.Description)}
-		switch {
-		case isExtensionVariant(ev):
-			in.Kind = InlineRaw
-		case primaryType(ev) != "":
+		if primaryType(ev) != "" {
 			in.Kind, in.Type = InlineNamed, typeRef(ev)
 		}
 		return in, nil

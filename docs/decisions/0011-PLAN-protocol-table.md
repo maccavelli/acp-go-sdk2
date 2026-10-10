@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-10
 associated-madr: "0011-MADR-harden-code-generator-engine.md"
 ---
@@ -194,4 +194,38 @@ Rollback is `git revert` of the step commits, newest first; each step leaves the
 
 ## Execution record
 
-Not started.
+### Step 2, dead code, 2026-10-10
+
+The owner committed this plan as `0566b33` and said "proceed". Step 2 ran on `main` from that clean tree. The agent did not commit.
+
+`TestTitleOnlyVariantTakesSchemaType` in `cmd/generate/internal/model/unions_test.go` builds a union whose first variant is titled `FooExt`, described
+"An extension payload.", and typed `string`, and requires that variant to be `InlineNamed` with type `string`. Run before the change:
+
+```text
+unions_test.go:124: variant FooExt: &{Kind:1 Doc:[An extension payload.] Fields:[] Type: KeepExtra:false}, want InlineNamed string
+```
+
+Kind 1 was `InlineRaw`.
+
+Deleted: `BindClientTerminal` and its `interfaceName` entry (`model/methods.go`); the `ClientTerminal` branches of `emitRPCInterfaces`
+(`emit/types.go`) and `clientAssert` (`emit/dispatch_helpers.go`); `isExtensionVariant` and `InlineRaw` (`model/fields.go`) and the `InlineRaw` case of
+`emitInlineVariant`; `nameSessionUpdate` (`emit/constants.go`). A title-only variant is now `InlineNamed` when its schema has a type and `InlineEmpty`
+otherwise. `TestInlineVariants` expected `InlineRaw` for its untyped variant titled `ExtPayload`; by the amendment's decision that variant is now
+`InlineEmpty`, like its untyped neighbour `bare`, and its expected kind says so. `grep -rn` over `cmd/generate` finds none of the four deleted names.
+
+Regenerated: each of the five generated files compares equal, by `cmp`, to its copy from `0566b33`.
+
+Each rule was seen to fail, with one planted breakage in `model/fields.go` per fresh scratch copy, then `go test ./...` in `cmd/generate`:
+
+```text
+a name heuristic comes back: exit=1 failing=['TestTitleOnlyVariantTakesSchemaType']
+title-only variants lose their type: exit=1 failing=['TestGeneratedFilesUpToDate', 'TestInlineVariants', 'TestTitleOnlyVariantTakesSchemaType']
+```
+
+After the change every test in the root and in `cmd/generate` passes; `go build ./example/...` passes. Coverage: `internal/model` 94.9%,
+`internal/emit` 37.4%.
+
+Gates: `make pre-add-check` with the seven changed files named: `go-precheck: 7 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 2 on `main`.

@@ -31,7 +31,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0011 | MADR | [Harden the code generator into a validated, schema-driven engine](decisions/0011-MADR-harden-code-generator-engine.md) | accepted |
 | 0011 | PLAN | [Implement phase 1: the resolved schema model](decisions/0011-PLAN-resolved-schema-model.md) | complete |
 | 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md) | complete |
-| 0011 | PLAN | [Implement phase 3: the protocol table](decisions/0011-PLAN-protocol-table.md) | proposed |
+| 0011 | PLAN | [Implement phase 3: the protocol table](decisions/0011-PLAN-protocol-table.md) | in-progress |
 
 ## I want to…
 

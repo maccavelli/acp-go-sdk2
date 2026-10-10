@@ -25,8 +25,6 @@ const (
 	BindClient
 	// BindClientExperimental places the method on the ClientExperimental interface.
 	BindClientExperimental
-	// BindClientTerminal places the method on the ClientTerminal interface.
-	BindClientTerminal
 )
 
 // interfaceName is the Go interface of each binding.
@@ -36,7 +34,6 @@ var interfaceName = map[Binding]string{
 	BindAgentExperimental:  "AgentExperimental",
 	BindClient:             "Client",
 	BindClientExperimental: "ClientExperimental",
-	BindClientTerminal:     "ClientTerminal",
 }
 
 // Method is one wire method of the meta files and its Go types.

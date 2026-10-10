@@ -16,7 +16,6 @@ const (
 	schemaTypeNull    = "null"
 	jsonStructTag     = "json"
 	wireSessionCancel = "session/cancel"
-	nameSessionUpdate = "SessionUpdate"
 	generatedFileMode = 0o600
 	// unknownField holds a discriminated union's unrecognized payload.
 	unknownField = "Unknown"
