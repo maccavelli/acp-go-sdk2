@@ -141,8 +141,8 @@ func structField(name string, typ ast.Expr, tag string) *ast.Field {
 	return &ast.Field{Names: []*ast.Ident{id(name)}, Type: typ, Tag: structTag(tag)}
 }
 
-// WriteTypesJen emits types_gen.go with all types and the Agent/Client interfaces.
-func WriteTypesJen(outDir string, schema *load.Schema, meta *load.Meta) error {
+// WriteTypes emits types_gen.go with all types and the Agent/Client interfaces.
+func WriteTypes(outDir string, schema *load.Schema, meta *load.Meta) error {
 	f := newFile()
 
 	// Track all type names to avoid collisions when generating nested types

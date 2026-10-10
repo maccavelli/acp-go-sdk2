@@ -137,8 +137,8 @@ func emitHelperConstructors(f *goFile, name string, variants []helperVariant) {
 	}
 }
 
-// WriteHelpersJen emits helpers_gen.go with constructor helpers for union variants.
-func WriteHelpersJen(outDir string, schema *load.Schema, _ *load.Meta) error {
+// WriteHelpers emits helpers_gen.go with constructor helpers for union variants.
+func WriteHelpers(outDir string, schema *load.Schema, _ *load.Meta) error {
 	f := newFile()
 
 	// Schema-driven helpers: New<Union><Variant>(required fields only).

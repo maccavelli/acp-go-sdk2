@@ -29,8 +29,8 @@ const (
 	pkgJSON    = "encoding/json"
 )
 
-// WriteConstantsJen writes the version and method constants to constants_gen.go.
-func WriteConstantsJen(outDir string, meta *load.Meta) error {
+// WriteConstants writes the version and method constants to constants_gen.go.
+func WriteConstants(outDir string, meta *load.Meta) error {
 	f := newFile()
 	f.comment("ProtocolVersionNumber is the ACP protocol version supported by this SDK.")
 	f.add(constDecl(false, constSpec("ProtocolVersionNumber", nil, intLit(meta.Version))))

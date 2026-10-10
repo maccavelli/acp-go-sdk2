@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-09
 associated-madr: "0007-MADR-self-contained-acp-sdk.md"
 ---
@@ -99,3 +99,12 @@ The owner said on 2026-10-09 that this repository is committed on `main` most of
   constants port) are done and checked; the agent stopped at that plan's first commit point. Its steps 4 to 7 follow.
   The owner committed them as `53ae152`. Step 4 (dispatch, then types and helpers, and the 13-commit comparison) is done and checked; the agent
   stopped at the second commit point.
+  The owner committed step 4 as `b568d1c`. Steps 5 to 7 (Jennifer removed, writers renamed, `main.go` and the standing test, the breakage
+  experiments) are done and checked; the agent stopped at the last commit point. That plan is complete.
+* Step 4, 2026-10-09: `schema/version` reads `1.25.0`, and both `go` lines read `go 1.27.2`.
+* Step 5, 2026-10-09: the execution records of 0005 and 0006 hold each phase's output and the one deviation. The statuses of 0005, 0006, and this plan
+  are `complete`, and `docs/README.md` shows them.
+* Verification: the 0005 and 0006 lists hold, as recorded in those plans. `*.go`, `*.mod`, and `*.sum` contain neither `github.com/coder/acp-go-sdk`
+  nor `github.com/dave/jennifer`. No file imports `encoding/json/v2` or `encoding/json/jsontext`. `LICENSE` is unchanged since `cf2e730`.
+  `git log --reverse cf2e730..main` lists `50e1b4a` (the commit policy), `c3883f0` (0005), then `53ae152` and `b568d1c` (0006); the owner's step 5
+  commit follows. `make check-records` and `make markdownlint` exit 0.

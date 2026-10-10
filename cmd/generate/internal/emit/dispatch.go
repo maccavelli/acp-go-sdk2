@@ -9,8 +9,8 @@ import (
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 )
 
-// WriteDispatchJen emits agent_gen.go and client_gen.go with handlers and wrappers.
-func WriteDispatchJen(outDir string, schema *load.Schema, meta *load.Meta) error {
+// WriteDispatch emits agent_gen.go and client_gen.go with handlers and wrappers.
+func WriteDispatch(outDir string, schema *load.Schema, meta *load.Meta) error {
 	groups := ir.BuildMethodGroups(schema, meta)
 
 	if err := writeAgentGen(outDir, groups, schema, meta); err != nil {

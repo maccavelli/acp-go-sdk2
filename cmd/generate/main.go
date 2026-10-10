@@ -12,106 +12,102 @@ import (
 )
 
 func main() {
-	var schemaDirFlag string
-	var outDirFlag string
-	flag.StringVar(&schemaDirFlag, "schema", "", "path to schema directory (defaults to <repo>/schema)")
-	flag.StringVar(&outDirFlag, "out", "", "output directory for generated go files (defaults to <repo>)")
-	flag.Parse()
-
-	repoRoot := findRepoRoot()
-	schemaDir := schemaDirFlag
-	outDir := outDirFlag
-	if schemaDir == "" {
-		schemaDir = filepath.Join(repoRoot, "schema")
-	}
-	if outDir == "" {
-		outDir = repoRoot
-	}
-
-	if err := os.MkdirAll(outDir, 0o750); err != nil {
-		panic(err)
-	}
-
-	meta, err := load.ReadMeta(schemaDir)
-	if err != nil {
-		panic(err)
-	}
-
-	schema, err := load.ReadSchema(schemaDir)
-	if err != nil {
-		panic(err)
-	}
-
-	unstableMeta, unstableMetaFound, err := load.ReadMetaUnstable(schemaDir)
-	if err != nil {
-		panic(err)
-	}
-	unstableSchema, unstableSchemaFound, err := load.ReadSchemaUnstable(schemaDir)
-	if err != nil {
-		panic(err)
-	}
-	if unstableMetaFound != unstableSchemaFound {
-		panic(fmt.Sprintf("unstable schema/meta mismatch: meta found=%v schema found=%v", unstableMetaFound, unstableSchemaFound))
-	}
-	if unstableMetaFound {
-		mergedMeta, mergedSchema, err := load.MergeStableAndUnstable(meta, schema, unstableMeta, unstableSchema)
-		if err != nil {
-			panic(err)
-		}
-		meta = mergedMeta
-		schema = mergedSchema
-	}
-
-	if err := emit.WriteConstantsJen(outDir, meta); err != nil {
-		panic(err)
-	}
-
-	if err := emit.WriteTypesJen(outDir, schema, meta); err != nil {
-		panic(err)
-	}
-	if err := emit.WriteDispatchJen(outDir, schema, meta); err != nil {
-		panic(err)
-	}
-
-	// Emit helpers after types so they can reference generated structs.
-	if err := emit.WriteHelpersJen(outDir, schema, meta); err != nil {
-		panic(err)
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "generate:", err)
+		os.Exit(1)
 	}
 }
 
-func findRepoRoot() string {
+func run() error {
+	schemaDir := flag.String("schema", "", "path to schema directory (defaults to <repo>/schema)")
+	outDir := flag.String("out", "", "output directory for generated go files (defaults to <repo>)")
+	flag.Parse()
+
+	if *schemaDir == "" || *outDir == "" {
+		repoRoot, err := findRepoRoot()
+		if err != nil {
+			return err
+		}
+		if *schemaDir == "" {
+			*schemaDir = filepath.Join(repoRoot, "schema")
+		}
+		if *outDir == "" {
+			*outDir = repoRoot
+		}
+	}
+	if err := os.MkdirAll(*outDir, 0o750); err != nil {
+		return err
+	}
+
+	meta, schema, err := loadSchema(*schemaDir)
+	if err != nil {
+		return err
+	}
+
+	if err := emit.WriteConstants(*outDir, meta); err != nil {
+		return err
+	}
+	if err := emit.WriteTypes(*outDir, schema, meta); err != nil {
+		return err
+	}
+	if err := emit.WriteDispatch(*outDir, schema, meta); err != nil {
+		return err
+	}
+	// Emit helpers after types so they can reference generated structs.
+	return emit.WriteHelpers(*outDir, schema, meta)
+}
+
+// loadSchema reads the stable schema and, when present, merges the unstable one.
+func loadSchema(schemaDir string) (*load.Meta, *load.Schema, error) {
+	meta, err := load.ReadMeta(schemaDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	schema, err := load.ReadSchema(schemaDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	unstableMeta, unstableMetaFound, err := load.ReadMetaUnstable(schemaDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	unstableSchema, unstableSchemaFound, err := load.ReadSchemaUnstable(schemaDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	if unstableMetaFound != unstableSchemaFound {
+		return nil, nil, fmt.Errorf("unstable schema/meta mismatch: meta found=%v schema found=%v", unstableMetaFound, unstableSchemaFound)
+	}
+	if !unstableMetaFound {
+		return meta, schema, nil
+	}
+	return load.MergeStableAndUnstable(meta, schema, unstableMeta, unstableSchema)
+}
+
+// findRepoRoot walks up from the working directory to the first directory
+// with schema/meta.json and schema/schema.json.
+func findRepoRoot() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		panic(err)
+		return "", err
 	}
-	dir := cwd
-	for {
+	for dir := cwd; ; {
 		if hasSchema(dir) {
-			return dir
+			return dir, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			panic(fmt.Sprintf("could not locate repository root from %q; ensure schema files exist", cwd))
+			return "", fmt.Errorf("could not locate repository root from %q; ensure schema files exist", cwd)
 		}
 		dir = parent
 	}
 }
 
 func hasSchema(dir string) bool {
-	if dir == "" {
-		return false
+	for _, name := range []string{"meta.json", "schema.json"} {
+		if _, err := os.Stat(filepath.Join(dir, "schema", name)); err != nil {
+			return false
+		}
 	}
-	metaPath := filepath.Join(dir, "schema", "meta.json")
-	schemaPath := filepath.Join(dir, "schema", "schema.json")
-	return fileExists(metaPath) && fileExists(schemaPath)
-}
-
-func fileExists(path string) bool {
-	if path == "" {
-		return false
-	}
-	if _, err := os.Stat(path); err == nil {
-		return true
-	}
-	return false
+	return true
 }

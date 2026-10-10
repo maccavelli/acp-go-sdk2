@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-09
 associated-madr: "0006-MADR-emit-go-with-go-ast.md"
 ---
@@ -161,3 +161,64 @@ Gates: `make pre-add-check` with the six changed files named: `go-precheck: 6 fi
 Without names: `go-precheck: 47 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 4 on `main`. Steps 5 to 7 follow.
+
+### Steps 5 to 7, 2026-10-09
+
+Step 4 was committed by the owner as `b568d1c`. Steps 5 to 7 ran on `main` from that clean tree. The agent did not commit.
+
+Step 5: `jenwrap.go` was deleted. `require github.com/dave/jennifer v1.7.1` was removed from `cmd/generate/go.mod`. `go mod tidy` left `go.sum` at 0 bytes,
+and it was deleted; `go mod tidy -diff` is then clean. `WriteConstantsJen`, `WriteTypesJen`, `WriteDispatchJen`, and `WriteHelpersJen` lost the `Jen`
+suffix. `main.go` was replaced with the prototype: `run() error`, exit status 1 on error, and `findRepoRoot` only when `-schema` or `-out` is empty.
+`main_test.go` adds `TestGeneratedFilesUpToDate`. After this step every file under `cmd/generate` that the port touched is byte-identical to the verified
+prototype in Appendix A of [0008-REPORT-self-contained-sdk-review.md](../reports/0008-REPORT-self-contained-sdk-review.md).
+
+Step 6: `go test ./...` exits 0 at the root and in `cmd/generate`. `TestGeneratedFilesUpToDate`, `TestRenderLayout`, `TestStructTagQuoting`, and
+`TestLayoutStaysBelowPrinterSentinel` pass.
+
+Step 7: each breakage ran on its own scratch copy outside the tree. Results, as printed:
+
+```text
+[FAILS as expected] stale generated file -> TestGeneratedFilesUpToDate
+    main_test.go:53: types_gen.go is out of date with schema/; run make version (first difference at line 2)
+[FAILS as expected] emitter text change -> TestGeneratedFilesUpToDate
+    main_test.go:53: types_gen.go is out of date with schema/; run make version (first difference at line 1656)
+[FAILS as expected] empty struct braces split -> TestRenderLayout
+    file_test.go:148: render mismatch
+[FAILS as expected] function braces on one line -> TestRenderLayout
+    file_test.go:148: render mismatch
+[FAILS as expected] line length past printer sentinel -> TestLayoutStaysBelowPrinterSentinel
+    file_test.go:177: layout spans 12588178880 bytes
+```
+
+Closing verification, as printed:
+
+```text
+PASS  no .go file imports Jennifer (0)
+PASS  neither go.mod names jennifer (require/replace/exclude)
+PASS  cmd/generate/go.sum absent
+PASS  go list -m all in cmd/generate: github.com/maccavelli/acp-go-sdk2/cmd/generate
+PASS  jenwrap.go deleted
+PASS  no Write*Jen names remain
+PASS  generated files unchanged since c3883f0 (pre-port)
+PASS  gofmt -l on edited Go files empty
+PASS  go test ./... at root
+PASS  go test -race ./... in cmd/generate
+PASS  go build ./example/...
+PASS  generator run from / with -schema and -out exits 0
+PASS  that run wrote all five files byte-identical
+PASS  *.go *.mod *.sum free of old path and Jennifer (0)
+PASS  schema/version is 1.25.0
+PASS  both go lines are 1.27.2
+PASS  no encoding/json/v2 or jsontext import
+PASS  LICENSE unchanged since cf2e730
+```
+
+The checks were seen to fail: a scratch clone with the Jennifer requirement put back in `cmd/generate/go.mod`, an empty `go.sum`, and `WriteTypes`
+renamed back to `WriteTypesJen` failed eight of them.
+
+The 13-commit comparison was repeated with the final generator binary against the Jennifer binary from `c3883f0`: 13 of 13 identical, `failures: 0`.
+
+Gates: `make pre-add-check` with the changed files named: `go-precheck: 6 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+Without names: `go-precheck: 47 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Every acceptance criterion in Verification holds. Commit point: the agent stopped here. The owner commits step 5 on `main`.
