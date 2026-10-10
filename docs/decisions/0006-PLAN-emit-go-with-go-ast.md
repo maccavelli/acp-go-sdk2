@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-09
 associated-madr: "0006-MADR-emit-go-with-go-ast.md"
 ---
@@ -90,4 +90,30 @@ Superseded 2026-10-09: commits land on `main`; see [0007-PLAN-self-contained-acp
 
 ## Execution record
 
-Not started.
+### Steps 2 and 3, 2026-10-09
+
+Executed on `main` from a clean tree at `c3883f0`, as step 3 of [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md). The agent did not commit.
+
+Step 2 added `cmd/generate/internal/emit/ast.go`, `file.go`, and `file_test.go`, copied from the verified prototype that Appendix A of [0008-REPORT-self-contained-sdk-review.md](../reports/0008-REPORT-self-contained-sdk-review.md) reproduces,
+and checked with `cmp` when copied. Two differences from that appendix, both organizational:
+
+* `fieldSet` and `structField` sit in `ast.go`. The appendix keeps them in `types.go`, which is still the Jennifer emitter until step 4, and the layout tests
+  need them now.
+* `ast.go` holds only the functions that step 3 and the tests use (30 top-level functions and methods). The first `make pre-add-check` failed with `unused: 26` from `golangci-lint`, for
+  `assign`, `binary`, `boolLit`, `byteSlice`, `bytesOf`, `caseOf`, `define`, `emptyBytes`, `exprs`, `ifElse`, `ifStmt`, `incr`, `index`, `mapOf`, `method`,
+  `nilExpr`, `not`, `paren`, `rangeStmt`, `rawMap`, `sliceOf`, `switchStmt`, `typeAssert`, `typeStmt`, `varStmt`, and `(*fieldSet).interfaceType`. They were
+  removed and come back from the appendix in the step that first uses them. A lint suppression was not used.
+
+Step 3 replaced the body of `WriteConstantsJen` with the go/ast writer. The shared `const` block moved from `jenwrap.go` to `constants.go` unchanged. The
+function keeps its `Jen` name until step 5. `jenwrap.go` now holds only the Jennifer aliases.
+
+Verification, as observed:
+
+* The generator, run into a scratch directory, wrote `constants_gen.go` byte-identical to the committed file, before and after `gofmt`. The other four files,
+  still from Jennifer, were byte-identical as well.
+* `go test ./internal/emit`: `TestRenderLayout`, `TestStructTagQuoting`, and `TestLayoutStaysBelowPrinterSentinel` pass. Step 7 records their failures.
+* `make pre-add-check`: `go-precheck: 44 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` That run checks tracked files only, so it was
+  repeated with the five changed and new files named: `go-precheck: 5 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+* `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits steps 2 and 3 on `main`.

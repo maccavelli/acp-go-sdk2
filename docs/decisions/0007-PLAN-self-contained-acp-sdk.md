@@ -94,4 +94,6 @@ The owner said on 2026-10-09 that this repository is committed on `main` most of
 * Step 2, 2026-10-09: [0005-PLAN-separate-module-from-coder.md](0005-PLAN-separate-module-from-coder.md) executed on `main` from `50e1b4a`, with one
   deviation recorded there (the unused `ptrTo` test helper deleted). All its checks passed and `make pre-add-check` is clean. The agent stopped at the
   commit point. The owner commits it.
-* Step 3: not started. It runs [0006-PLAN-emit-go-with-go-ast.md](0006-PLAN-emit-go-with-go-ast.md) after the owner commits step 2.
+* Step 2 was committed by the owner as `c3883f0` and pushed.
+* Step 3, 2026-10-09: [0006-PLAN-emit-go-with-go-ast.md](0006-PLAN-emit-go-with-go-ast.md) in progress. Its steps 2 and 3 (the go/ast writer and the
+  constants port) are done and checked; the agent stopped at that plan's first commit point. Its steps 4 to 7 follow.

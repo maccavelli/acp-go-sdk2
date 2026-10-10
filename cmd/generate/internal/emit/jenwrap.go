@@ -3,21 +3,6 @@ package emit
 
 import jen "github.com/dave/jennifer/jen"
 
-const (
-	schemaTypeObject  = "object"
-	schemaTypeArray   = "array"
-	schemaTypeString  = "string"
-	schemaTypeInteger = "integer"
-	schemaTypeNumber  = "number"
-	schemaTypeBoolean = "boolean"
-	schemaTypeNull    = "null"
-	jsonStructTag     = "json"
-	unionContentBlock = "ContentBlock"
-	wireSessionCancel = "session/cancel"
-	nameSessionUpdate = "SessionUpdate"
-	generatedFileMode = 0o600
-)
-
 // Code is an alias for a jennifer code fragment.
 type Code = jen.Code
 

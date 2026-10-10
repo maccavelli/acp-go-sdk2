@@ -1,0 +1,173 @@
+package emit
+
+import (
+	"go/ast"
+	"go/token"
+	"strconv"
+	"strings"
+)
+
+// Small constructors for go/ast nodes. They keep the emitters readable and
+// return fresh nodes on every call, so no node is shared between two places
+// in a tree.
+
+// placeholderPos marks a position whose only job is to be valid, such as the
+// '=' of a type alias or the '(' of a grouped declaration. The file layout
+// replaces it with a real position.
+const placeholderPos token.Pos = 1
+
+func id(name string) *ast.Ident { return ast.NewIdent(name) }
+
+// sel builds x.name1.name2...
+func sel(x ast.Expr, names ...string) ast.Expr {
+	for _, n := range names {
+		x = &ast.SelectorExpr{X: x, Sel: id(n)}
+	}
+	return x
+}
+
+// dot builds name.names[0].names[1]...
+func dot(name string, names ...string) ast.Expr { return sel(id(name), names...) }
+
+func call(fun ast.Expr, args ...ast.Expr) *ast.CallExpr { return &ast.CallExpr{Fun: fun, Args: args} }
+
+func str(s string) *ast.BasicLit { return &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(s)} }
+
+func intLit(n int) *ast.BasicLit { return &ast.BasicLit{Kind: token.INT, Value: strconv.Itoa(n)} }
+
+func star(x ast.Expr) *ast.StarExpr { return &ast.StarExpr{X: x} }
+
+func addr(x ast.Expr) *ast.UnaryExpr { return &ast.UnaryExpr{Op: token.AND, X: x} }
+
+func composite(typ ast.Expr, elts ...ast.Expr) *ast.CompositeLit {
+	return &ast.CompositeLit{Type: typ, Elts: elts}
+}
+
+func kv(key, value ast.Expr) *ast.KeyValueExpr { return &ast.KeyValueExpr{Key: key, Value: value} }
+
+func exprStmt(x ast.Expr) *ast.ExprStmt { return &ast.ExprStmt{X: x} }
+
+func ret(results ...ast.Expr) *ast.ReturnStmt { return &ast.ReturnStmt{Results: results} }
+
+func block(stmts ...ast.Stmt) *ast.BlockStmt { return &ast.BlockStmt{List: stmts} }
+
+// param is one parameter or result. An empty name leaves it unnamed.
+func param(name string, typ ast.Expr) *ast.Field {
+	f := &ast.Field{Type: typ}
+	if name != "" {
+		f.Names = []*ast.Ident{id(name)}
+	}
+	return f
+}
+
+func fields(list ...*ast.Field) *ast.FieldList { return &ast.FieldList{List: list} }
+
+// results is nil for no results, so the printer omits the list.
+func results(list ...*ast.Field) *ast.FieldList {
+	if len(list) == 0 {
+		return nil
+	}
+	return fields(list...)
+}
+
+func funcType(params []*ast.Field, res ...*ast.Field) *ast.FuncType {
+	return &ast.FuncType{Params: fields(params...), Results: results(res...)}
+}
+
+// function is func name(params) results { body }.
+func function(name string, typ *ast.FuncType, body ...ast.Stmt) *ast.FuncDecl {
+	return &ast.FuncDecl{Name: id(name), Type: typ, Body: block(body...)}
+}
+
+// typeDecl is type name typ.
+func typeDecl(name string, typ ast.Expr) *ast.GenDecl {
+	return &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: id(name), Type: typ}}}
+}
+
+// aliasDecl is type name = typ.
+func aliasDecl(name string, typ ast.Expr) *ast.GenDecl {
+	return &ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: id(name), Assign: placeholderPos, Type: typ}}}
+}
+
+// constSpec is name [typ] = value.
+func constSpec(name string, typ ast.Expr, value ast.Expr) *ast.ValueSpec {
+	return &ast.ValueSpec{Names: []*ast.Ident{id(name)}, Type: typ, Values: []ast.Expr{value}}
+}
+
+// constDecl is a const declaration. A grouped declaration prints in
+// parentheses even when it holds one spec.
+func constDecl(grouped bool, specs ...*ast.ValueSpec) *ast.GenDecl {
+	d := &ast.GenDecl{Tok: token.CONST}
+	for _, s := range specs {
+		d.Specs = append(d.Specs, s)
+	}
+	if grouped {
+		d.Lparen = placeholderPos
+	}
+	return d
+}
+
+// structTag is a json struct tag literal, `json:"name"`.
+func structTag(name string) *ast.BasicLit {
+	s := jsonStructTag + ":" + strconv.Quote(name)
+	if strconv.CanBackquote(s) {
+		s = "`" + s + "`"
+	} else {
+		s = strconv.Quote(s)
+	}
+	return &ast.BasicLit{Kind: token.STRING, Value: s}
+}
+
+// docLines turns comment text into // lines. Text that already starts with
+// a comment marker is kept as written.
+func docLines(lines ...string) *ast.CommentGroup {
+	if len(lines) == 0 {
+		return nil
+	}
+	g := &ast.CommentGroup{}
+	for _, line := range lines {
+		g.List = append(g.List, &ast.Comment{Text: commentText(line)})
+	}
+	return g
+}
+
+func commentText(line string) string {
+	switch {
+	case strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*"):
+		return line
+	case line == "":
+		return "//"
+	default:
+		return "// " + line
+	}
+}
+
+// fieldSet collects struct fields or interface methods, each with the doc
+// comment lines added before it.
+type fieldSet struct {
+	list []*ast.Field
+	doc  []string
+}
+
+// comment adds the lines of desc as doc for the next field.
+func (s *fieldSet) comment(lines ...string) { s.doc = append(s.doc, lines...) }
+
+func (s *fieldSet) add(fld *ast.Field) {
+	fld.Doc = docLines(s.doc...)
+	s.doc = nil
+	s.list = append(s.list, fld)
+}
+
+func (s *fieldSet) fieldList() *ast.FieldList {
+	if len(s.doc) > 0 {
+		panic("emit: doc comment with no field after it")
+	}
+	return fields(s.list...)
+}
+
+func (s *fieldSet) structType() *ast.StructType { return &ast.StructType{Fields: s.fieldList()} }
+
+// structField is name typ `json:"tag"`.
+func structField(name string, typ ast.Expr, tag string) *ast.Field {
+	return &ast.Field{Names: []*ast.Ident{id(name)}, Type: typ, Tag: structTag(tag)}
+}
