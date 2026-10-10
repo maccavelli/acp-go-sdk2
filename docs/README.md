@@ -28,6 +28,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0009 | PLAN | [Implement the generated-output fixes](decisions/0009-PLAN-fix-generated-output-on-json-v1.md) | complete |
 | 0010 | MADR | [Bring the user-facing docs in line with the current tree](decisions/0010-MADR-align-docs-with-current-tree.md) | accepted |
 | 0010 | PLAN | [Implement the docs update](decisions/0010-PLAN-align-docs-with-current-tree.md) | complete |
+| 0011 | MADR | [Harden the code generator into a validated, schema-driven engine](decisions/0011-MADR-harden-code-generator-engine.md) | accepted |
 
 ## I want to…
 
@@ -53,6 +54,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | understand how this fits together | [architecture.md](architecture.md) |
 | know what the SDK sends on the wire | [architecture.md](architecture.md) |
 | know why the user-facing docs were brought up to date | [0010-MADR-align-docs-with-current-tree.md](decisions/0010-MADR-align-docs-with-current-tree.md) |
+| see what is wrong with the code generator and how it would be hardened | [0011-MADR-harden-code-generator-engine.md](decisions/0011-MADR-harden-code-generator-engine.md) |
 | know the rules agents follow in this repository | [AGENTS.md](../AGENTS.md) |
 | know why this repository has the fleet workspace and library CI | [0003-MADR-install-fleet-agent-workspace.md](decisions/0003-MADR-install-fleet-agent-workspace.md) |
 | install the fleet workspace and library CI | [0003-PLAN-install-fleet-agent-workspace.md](decisions/0003-PLAN-install-fleet-agent-workspace.md) |
