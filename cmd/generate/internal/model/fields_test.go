@@ -163,7 +163,7 @@ func TestInlineVariants(t *testing.T) {
 	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
 		"Ref":{"type":"object","properties":{"a":{"type":"string"}}},
 		"V":{"required":["shared"],"properties":{"shared":{"type":"string"}},"anyOf":[
-			{"type":"object","description":"Object.","required":["kind"],"properties":{"kind":{"const":"obj","type":"string"},"opt":{"type":"array","items":{"type":"string"}}}},
+			{"type":"object","description":"Object.","required":["kind"],"properties":{"kind":{"type":"string"},"opt":{"type":"array","items":{"type":"string"}}}},
 			{"title":"ExtPayload","description":"An extension payload."},
 			{"title":"list","type":"array","items":{"type":"string"}},
 			{"title":"bare"},

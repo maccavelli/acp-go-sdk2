@@ -103,6 +103,12 @@ type Type struct {
 	DiscKey    string
 	DiscField  string
 	DiscSource DiscSource
+	// CatchAll is the index of a discriminated union's catch-all variant, the
+	// one the schema meant for values it does not list, or -1.
+	CatchAll int
+	// HasUnknown is true for a discriminated union without a catch-all: it
+	// keeps a payload it cannot place in an Unknown field.
+	HasUnknown bool
 	// Validate is the Validate method the type gets, and Checks the
 	// required fields it checks.
 	Validate ValidateKind
@@ -148,6 +154,10 @@ type Variant struct {
 	// HasSharedFields is true for an inline object variant, which carries
 	// the union's own properties.
 	HasSharedFields bool
+	// KeyLess is true for a variant of a discriminated union that has no
+	// discriminator value and is not the catch-all: the schema means it when
+	// the discriminator is absent.
+	KeyLess bool
 }
 
 // DiscSource is where a union's discriminator came from.
@@ -306,7 +316,7 @@ func classify(def *load.Definition) Kind {
 }
 
 func buildType(schema *load.Schema, n *namer, name string, def *load.Definition) (*Type, error) {
-	t := &Type{Name: name, def: def, Kind: classify(def)}
+	t := &Type{Name: name, def: def, Kind: classify(def), CatchAll: -1}
 	if def != nil {
 		t.Doc = docLines(def.Description)
 	}
@@ -433,6 +443,9 @@ func buildUnion(schema *load.Schema, n *namer, t *Type) error {
 			return fmt.Errorf("%s: field %s is already used by variant %d", owner, vi.FieldName, prev)
 		}
 		fields[vi.FieldName] = idx + 1
+	}
+	if err := classifyUnion(schema, t, list); err != nil {
+		return err
 	}
 	if !t.ExactlyOne || t.def.DocsIgnore || helperSkip[t.Name] {
 		return nil
@@ -678,4 +691,80 @@ func primaryType(d *load.Definition) string {
 	default:
 		return ""
 	}
+}
+
+// classifyUnion finds a discriminated union's catch-all and key-less variants
+// and decides whether it keeps payloads it cannot place in Unknown. Every
+// variant of a discriminated union must be an object.
+func classifyUnion(schema *load.Schema, t *Type, list []*load.Definition) error {
+	if t.DiscKey == "" {
+		return nil
+	}
+	for idx, v := range list {
+		vi := t.Variants[idx]
+		if vi.Skip {
+			continue
+		}
+		owner := fmt.Sprintf("%s variant %d", t.Name, idx+1)
+		if !variantIsObject(schema, v, vi) {
+			return fmt.Errorf("%s: a variant of a union discriminated by %q must be an object", owner, t.DiscKey)
+		}
+		if vi.DiscValue != "" {
+			continue
+		}
+		if !isCatchAll(schema, v, t.DiscKey) {
+			vi.KeyLess = true
+			continue
+		}
+		if t.CatchAll >= 0 {
+			return fmt.Errorf("%s: variant %d is already the catch-all", owner, t.CatchAll+1)
+		}
+		t.CatchAll = idx
+		if vi.Inline != nil {
+			for _, f := range vi.Inline.Fields {
+				if f.Name == "Extra" {
+					return fmt.Errorf("%s: property %q becomes field Extra, which the catch-all needs", owner, f.Key)
+				}
+			}
+			vi.Inline.KeepExtra = true
+		}
+	}
+	t.HasUnknown = t.CatchAll < 0
+	if t.HasUnknown {
+		for _, vi := range t.Variants {
+			if !vi.Skip && vi.FieldName == "Unknown" {
+				return fmt.Errorf("%s: variant %s takes the field Unknown, which the union needs", t.Name, vi.TypeName)
+			}
+		}
+	}
+	return nil
+}
+
+// isCatchAll reports whether v is the schema's catch-all for a union
+// discriminated by key: an inline variant whose key is a required string
+// without a constant, and which excludes the listed values with not.
+func isCatchAll(schema *load.Schema, v *load.Definition, key string) bool {
+	if v.Ref != "" || singleRefVariant(v) != "" {
+		return false
+	}
+	ev := expandAllOf(schema, v)
+	p := ev.Properties[key]
+	return p != nil && p.Const == nil && primaryType(p) == schemaTypeString && slices.Contains(ev.Required, key) && ev.Not != nil
+}
+
+// variantIsObject reports whether a union variant decodes from a JSON object.
+func variantIsObject(schema *load.Schema, v *load.Definition, vi *Variant) bool {
+	if vi.IsArray || vi.IsNull {
+		return false
+	}
+	ref := v.Ref
+	if ref == "" {
+		ref = singleRefVariant(v)
+	}
+	d := v
+	if name, ok := strings.CutPrefix(ref, refPrefix); ok {
+		d = schema.Defs[name]
+	}
+	d = expandAllOf(schema, d)
+	return d != nil && (primaryType(d) == schemaTypeObject || len(d.Properties) > 0)
 }

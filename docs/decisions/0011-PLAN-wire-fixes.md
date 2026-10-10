@@ -303,3 +303,55 @@ Gates: `make pre-add-check` with the three changed Go files named: `go-precheck:
 govulncheck).` Without names: `go-precheck: 62 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 4 on `main`.
+
+### Step 5, model: union classes, 2026-10-10
+
+The owner committed step 4 as `d86730d`. Step 5 ran on `main` from that clean tree. The agent did not commit.
+
+`cmd/generate/internal/model`: `Type.CatchAll` (index or -1, the default for every type) and `Type.HasUnknown`; `Variant.KeyLess`;
+`Inline.KeepExtra`. `classifyUnion`, called by `buildUnion` after the variants are named, does nothing for a union without a discriminator. For a
+discriminated one it requires every variant to be an object (`variantIsObject`: not an array or null variant, and the variant or the definition its
+`$ref` names is an object type or has properties), marks a value-less variant as the catch-all when `isCatchAll` holds (inline, the discriminator a
+required string without a constant, and `not` present) and as key-less otherwise, sets `KeepExtra` on the catch-all's inline type, and sets
+`HasUnknown` when there is no catch-all. It refuses two catch-alls, a non-object variant, a variant field named `Unknown` in a union that gets
+`Unknown`, and a catch-all property whose field is `Extra`.
+
+Fixtures changed: the new refusal of a non-object variant in a discriminated union rejected two earlier fixtures, which gave a const to one object
+variant of a union that also has array, null, and title-only variants, so the generator derived a discriminator. `TestInlineVariants` dropped that
+const; `TestVariantFacts` moved its const-pair check to a second, all-object union `W`, and its mixed union `V` lost the consts. Both keep their
+assertions.
+
+New `classes_test.go`:
+
+* `TestUnionClassesOfCommittedSchema` builds the model of the committed schema and requires W1: closed `ContentBlock`, `PlanUpdateContent`,
+  `RequestPermissionOutcome`, `SessionConfigOption`, `SessionUpdate`, `ToolCallContent`, `UnstableNesSuggestion`; with a catch-all
+  `CreateElicitationRequest`, `CreateElicitationResponse`, `ElicitationPropertySchema`, `IdleStateUpdate`, `MultiSelectItems`, `StateUpdate`, each
+  catch-all an `...Other` type with `KeepExtra`; defaulted `AuthMethod`, `McpServer`, `SetSessionConfigOptionRequest`, `UnstableMcpServer`; key-less
+  `AuthMethodAgent`, `IdleStateUpdateNone`, `McpServerStdio` (twice), `TitledMultiSelectItems`, `SetSessionConfigOptionValueId`; `HasUnknown` on the
+  11 closed and defaulted unions; neither on the 11 unions without a discriminator.
+* `TestCatchAllNeedsNot`: a value-less variant with a required string discriminator but no `not` is key-less, not the catch-all. At `1.25.0` no
+  variant tells the two apart, so the committed-schema test alone could not catch a missing `not` check.
+* `TestUnionClassRefusals`: the four refusals. The first draft of the two-catch-alls case titled both `other`, and the wrapper-field check fired first;
+  the second is titled `other2`.
+
+Each rule was seen to fail, with one planted breakage per run of `go test ./...` in `cmd/generate` in a fresh scratch copy:
+
+```text
+unions not classified: failing=['TestCatchAllNeedsNot', 'TestUnionClassRefusals', 'TestUnionClassesOfCommittedSchema']
+catch-all without not: failing=['TestCatchAllNeedsNot']
+catch-all keeps no extra: failing=['TestUnionClassesOfCommittedSchema']
+two catch-alls accepted: failing=['TestUnionClassRefusals']
+non-object variant accepted: failing=['TestUnionClassRefusals']
+Unknown collision accepted: failing=['TestUnionClassRefusals']
+Extra collision accepted: failing=['TestUnionClassRefusals']
+```
+
+None changes a generated file, as no emitter reads the new facts yet.
+
+Output: `cd cmd/generate && go run .` regenerated the five files and none changed; `TestGeneratedFilesUpToDate` passes. `go test -cover
+./internal/model`: 94.9%.
+
+Gates: `make pre-add-check` with the five changed Go files named: `go-precheck: 5 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 62 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 5 on `main`.

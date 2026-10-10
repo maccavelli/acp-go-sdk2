@@ -41,21 +41,26 @@ func TestVariantFacts(t *testing.T) {
 		"Item":{"type":"object","required":["z","id"],"properties":{"id":{"type":"string"},"z":{"type":"string"}}},
 		"Ref":{"type":"object","properties":{"a":{"type":"string"}}},
 		"V":{"anyOf":[
-			{"type":"object","description":"Obj.","required":["type","b"],"properties":{"type":{"const":"obj","type":"string"},"b":{"type":"string"},"a":{"const":"k","type":"string"}}},
+			{"type":"object","description":"Obj.","required":["b"],"properties":{"b":{"type":"string"}}},
 			{"title":"items","type":"array","items":{"$ref":"#/$defs/Item"}},
 			{"type":"null"},
-			{"$ref":"#/$defs/Ref"}]}}`)})
+			{"$ref":"#/$defs/Ref"}]},
+		"W":{"anyOf":[
+			{"type":"object","required":["type","b"],"properties":{"type":{"const":"obj","type":"string"},"b":{"type":"string"},"a":{"const":"k","type":"string"}}},
+			{"type":"object","required":["type"],"properties":{"type":{"const":"other","type":"string"}}}]}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// V mixes shapes, so it has no discriminator; W's variants carry constants.
 	vs := m.Type("V").Variants
 	obj, arr, null, ref := vs[0], vs[1], vs[2], vs[3]
-	if !obj.IsObject || obj.IsArray || obj.IsNull || !obj.HasSharedFields || !slices.Equal(obj.Required, []string{"type", "b"}) ||
+	if !obj.IsObject || obj.IsArray || obj.IsNull || !obj.HasSharedFields || !slices.Equal(obj.Required, []string{"b"}) ||
 		len(obj.Doc) != 1 || obj.Doc[0] != "Obj." {
 		t.Errorf("object variant: %+v", obj)
 	}
-	if want := [][2]string{{"a", "k"}, {"type", "obj"}}; !slices.Equal(obj.ConstPairs, want) {
-		t.Errorf("object variant consts: got %v, want %v", obj.ConstPairs, want)
+	w := m.Type("W").Variants[0]
+	if want := [][2]string{{"a", "k"}, {"type", "obj"}}; !slices.Equal(w.ConstPairs, want) || !slices.Equal(w.Required, []string{"type", "b"}) {
+		t.Errorf("object variant consts: got %v required %v, want %v", w.ConstPairs, w.Required, want)
 	}
 	if !arr.IsArray || arr.IsObject || !slices.Equal(arr.ArrayItemRequired, []string{"id", "z"}) {
 		t.Errorf("array variant: %+v", arr)

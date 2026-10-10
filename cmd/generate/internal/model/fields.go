@@ -144,6 +144,9 @@ type Inline struct {
 	Doc    []string
 	Fields []*Field
 	Type   TypeRef
+	// KeepExtra is true for a union's catch-all: the struct keeps the keys it
+	// does not declare, so the payload encodes back unchanged.
+	KeepExtra bool
 }
 
 // docLines formats a description as doc comment lines, or nil.
