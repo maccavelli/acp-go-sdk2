@@ -19,13 +19,12 @@ func emitHelperConstructors(f *goFile, m *model.Model, t *model.Type) {
 	discKey := model.DiscriminatorKey(m.Schema, t.Def, t.Def.OneOf)
 	for _, h := range t.Helpers {
 		vi := t.Variants[h.Variant]
-		props := model.ExpandAllOf(m.Schema, t.Def.OneOf[h.Variant]).Properties
 		// Parameters: every required property except the const discriminator.
 		var params []*ast.Field
 		assigns := map[string]ast.Expr{}
-		for _, rk := range h.Params {
-			params = append(params, param(rk, typeExpr(props[rk])))
-			assigns[util.ToExportedField(rk)] = id(rk)
+		for _, p := range h.Params {
+			params = append(params, param(p.Key, typeAST(p.Type)))
+			assigns[util.ToExportedField(p.Key)] = id(p.Key)
 		}
 		if discKey != "" && vi.DiscValue != "" {
 			assigns[util.ToExportedField(discKey)] = str(vi.DiscValue)

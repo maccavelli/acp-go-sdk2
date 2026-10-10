@@ -66,8 +66,14 @@ type Type struct {
 	Kind Kind
 
 	// Nested maps a property key of a KindObject to the name of the struct
-	// emitted for its inline object.
-	Nested map[string]string
+	// emitted for its inline object; NestedStructs holds those structs, in
+	// property order.
+	Nested        map[string]string
+	NestedStructs []*Struct
+	// Fields holds a KindObject's fields, in property order.
+	Fields []*Field
+	// Underlying is the Go type of a KindPrimitive.
+	Underlying *TypeRef
 	// Variants holds one entry per entry of a KindUnion's anyOf or oneOf.
 	Variants []*Variant
 	// ExactlyOne is true for a oneOf union.
@@ -97,6 +103,8 @@ type Variant struct {
 	// Skip is true for a null entry, or a variant with no $ref, object shape,
 	// null type, or title; the wrapper has no field for it.
 	Skip bool
+	// Inline is the type emitted for a variant without a $ref, or nil.
+	Inline *Inline
 }
 
 // EnumValue is one constant of an enum kind.
@@ -109,9 +117,15 @@ type EnumValue struct {
 type Helper struct {
 	Name    string
 	Variant int
-	// Params are the variant's required property keys, in schema order,
-	// without the discriminator; each is also the parameter's name.
-	Params []string
+	// Params are the variant's required properties, in schema order, without
+	// the discriminator.
+	Params []Param
+}
+
+// Param is one constructor parameter, named after its property key.
+type Param struct {
+	Key  string
+	Type TypeRef
 }
 
 // helperSkip lists unions whose constructors are hand-written in helpers.go.
@@ -223,6 +237,9 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition)
 		if err := buildObject(n, t); err != nil {
 			return nil, err
 		}
+	case KindPrimitive:
+		u := primitiveRef(ir.PrimaryType(def))
+		t.Underlying = &u
 	}
 	return t, nil
 }
@@ -282,8 +299,18 @@ func buildObject(n *namer, t *Type) error {
 		if err := checkFields(nested, prop.Properties); err != nil {
 			return err
 		}
+		fields, err := plainFields(nested, prop.Properties, requiredSet(prop.Required))
+		if err != nil {
+			return err
+		}
 		t.Nested[key] = nested
+		t.NestedStructs = append(t.NestedStructs, &Struct{Name: nested, Doc: docLines(prop.Description), Fields: fields})
 	}
+	fields, err := objectFields(t)
+	if err != nil {
+		return err
+	}
+	t.Fields = fields
 	return nil
 }
 
@@ -332,7 +359,7 @@ func buildUnion(schema *load.Schema, n *namer, t *Type) error {
 			if err := checkParam(owner, key); err != nil {
 				return err
 			}
-			h.Params = append(h.Params, key)
+			h.Params = append(h.Params, Param{Key: key, Type: typeRef(ev.Properties[key])})
 		}
 		t.Helpers = append(t.Helpers, h)
 	}
@@ -411,6 +438,13 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 		if err := checkFields(typeName, merged); err != nil {
 			return nil, err
 		}
+	}
+	if ref == "" {
+		in, err := inlineOf(t, typeName, ev, isObj, isNull)
+		if err != nil {
+			return nil, err
+		}
+		vi.Inline = in
 	}
 	return vi, nil
 }

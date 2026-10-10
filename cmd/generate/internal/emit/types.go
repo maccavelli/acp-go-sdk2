@@ -1,7 +1,6 @@
 package emit
 
 import (
-	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -181,7 +180,7 @@ func emitSchemaDef(f *goFile, m *model.Model, t *model.Type) {
 	case model.KindObject:
 		emitObjectSchema(f, t)
 	case model.KindPrimitive:
-		f.add(typeDecl(name, primitiveType(ir.PrimaryType(def))))
+		f.add(typeDecl(name, typeAST(*t.Underlying)))
 		f.line()
 	case model.KindEmptyObject:
 		// Empty object shape: emit a concrete empty struct so methods can be defined
@@ -206,164 +205,56 @@ func isRPCTypeName(name string) bool {
 	return strings.HasSuffix(name, "Request") || strings.HasSuffix(name, "Response") || strings.HasSuffix(name, "Notification")
 }
 
-// requiredSet returns the names in required as a set.
-func requiredSet(required []string) map[string]bool {
-	set := make(map[string]bool, len(required))
-	for _, r := range required {
-		set[r] = true
+func emitObjectSchema(f *goFile, t *model.Type) {
+	// Nested struct types for inline object properties come first.
+	for _, ns := range t.NestedStructs {
+		f.comment(ns.Doc...)
+		emitStruct(f, ns.Name, ns.Fields)
 	}
-	return set
+	emitStruct(f, t.Name, t.Fields)
 }
 
-func emitObjectSchema(f *goFile, t *model.Type) {
-	name, def := t.Name, t.Def
-	req := requiredSet(def.Required)
-	pkeys := slices.Sorted(maps.Keys(def.Properties))
-
-	// Pre-generate nested struct types for inline object properties
-	nestedTypes := emitInlineNestedTypes(f, t, pkeys)
-
-	// Track fields with schema defaults for generic (de)serialization
-	var defaults []defaultProp
-	var fills []requiredFill
+// emitStruct emits type name struct { fields } and the methods its defaults
+// and fills need.
+func emitStruct(f *goFile, name string, fields []*model.Field) {
 	var st fieldSet
-	for _, pk := range pkeys {
-		prop := def.Properties[pk]
-		field := util.ToExportedField(pk)
-		if prop.Description != "" {
-			st.comment(util.FormatDocComment(prop.Description)...)
-		}
-		tag := pk
-		var dp *defaultProp
-		if prop.Default != nil {
-			// Whether field zero is nil (slice/map) for Marshal fill-in
-			nilable := ir.PrimaryType(prop) == schemaTypeArray || (ir.PrimaryType(prop) == schemaTypeObject && len(prop.Properties) == 0 && prop.Ref == "")
-			// Capture canonical JSON of default
-			defJSON := schemaTypeNull
-			if b, err := json.Marshal(prop.Default); err == nil {
-				defJSON = string(b)
-			}
-			dp = &defaultProp{
-				fieldName:   field,
-				propName:    pk,
-				defaultJSON: defJSON,
-				kind:        defaultKindOf(prop.Default),
-				allowNull:   includesNull(prop),
-				nilable:     nilable,
-			}
-			defaults = append(defaults, *dp)
-		}
-		if !req[pk] {
-			// Default: omit if empty for optional fields.
-			// Keep always-present behavior only for defaults where the zero value is nil (slice/map).
-			// For typed object defaults (non-nilable), still allow omission on the wire.
-			if dp == nil || (dp.kind != kindArray && dp.kind != kindObject) || !dp.nilable {
-				tag = pk + ",omitempty"
-			}
-		}
-		// Emit an additional comment line indicating the default, if any.
-		if dp != nil && dp.defaultJSON != schemaTypeNull {
-			// An empty comment line separates the default from the description.
-			if prop.Description != "" {
-				st.comment("")
-			}
-			st.comment(fmt.Sprintf("Defaults to %s if unset.", dp.defaultJSON))
-		}
-		var fieldType ast.Expr
-		if nestedTypeName, ok := nestedTypes[pk]; ok {
-			fieldType = id(nestedTypeName)
-		} else {
-			fieldType = optionalTypeExpr(prop)
-			if req[pk] && dp == nil {
-				fills = appendRequiredFill(fills, field, prop)
-			}
-		}
-		st.add(structField(field, fieldType, tag))
+	for _, fld := range fields {
+		st.comment(fld.Doc...)
+		st.add(structField(fld.Name, typeAST(fld.Type), fld.Tag))
 	}
 	f.add(typeDecl(name, st.structType()))
 	f.line()
-
-	emitObjectDefaults(f, name, defaults, fills)
+	emitObjectDefaults(f, name, fields)
 }
 
-// requiredFill is a required slice or map field. Its MarshalJSON encodes nil
-// as an empty literal of typ, because the schema does not accept null there.
-type requiredFill struct {
-	fieldName string
-	typ       ast.Expr
-}
-
-// appendRequiredFill appends a fill for prop when its Go type is a slice or a
-// map. typ is built afresh so the struct field and the literal share no node.
-func appendRequiredFill(fills []requiredFill, field string, prop *load.Definition) []requiredFill {
-	switch t := optionalTypeExpr(prop).(type) {
-	case *ast.ArrayType:
-		if t.Len == nil {
-			return append(fills, requiredFill{fieldName: field, typ: t})
-		}
-	case *ast.MapType:
-		return append(fills, requiredFill{fieldName: field, typ: t})
+// typeAST renders a model type as a Go type expression. Each call builds new
+// nodes, so no node is shared between two places in a file.
+func typeAST(r model.TypeRef) ast.Expr {
+	switch r.Kind {
+	case model.RefPointer:
+		return star(typeAST(*r.Elem))
+	case model.RefSlice:
+		return sliceOf(typeAST(*r.Elem))
+	case model.RefMap:
+		return rawMap(typeAST(*r.Elem))
+	default:
+		return id(r.Name)
 	}
-	return fills
-}
-
-// emitInlineNestedTypes emits the struct the model named for each inline
-// object property of t and returns those names by property key.
-func emitInlineNestedTypes(f *goFile, t *model.Type, pkeys []string) map[string]string {
-	for _, pk := range pkeys {
-		nestedTypeName, ok := t.Nested[pk]
-		if !ok {
-			continue
-		}
-		prop := t.Def.Properties[pk]
-		if prop.Description != "" {
-			f.comment(util.FormatDocComment(prop.Description)...)
-		}
-		nestedReq := requiredSet(prop.Required)
-		var fills []requiredFill
-		var st fieldSet
-		for _, npk := range slices.Sorted(maps.Keys(prop.Properties)) {
-			nprop := prop.Properties[npk]
-			if nprop.Description != "" {
-				st.comment(util.FormatDocComment(nprop.Description)...)
-			}
-			ntag := npk
-			if !nestedReq[npk] {
-				ntag = npk + ",omitempty"
-			} else {
-				fills = appendRequiredFill(fills, util.ToExportedField(npk), nprop)
-			}
-			st.add(structField(util.ToExportedField(npk), optionalTypeExpr(nprop), ntag))
-		}
-		f.add(typeDecl(nestedTypeName, st.structType()))
-		f.line()
-		emitObjectDefaults(f, nestedTypeName, nil, fills)
-	}
-	return t.Nested
-}
-
-type defaultKind int
-
-const (
-	kindNone defaultKind = iota
-	kindScalar
-	kindArray
-	kindObject
-)
-
-type defaultProp struct {
-	fieldName   string
-	propName    string
-	defaultJSON string
-	kind        defaultKind
-	allowNull   bool
-	nilable     bool // whether zero-value is nil (slice/map)
 }
 
 // emitObjectDefaults synthesizes MarshalJSON for structs with fields that
 // carry schema defaults or are required slices or maps, and UnmarshalJSON for
 // structs with defaults.
-func emitObjectDefaults(f *goFile, name string, defaults []defaultProp, fills []requiredFill) {
+func emitObjectDefaults(f *goFile, name string, fields []*model.Field) {
+	var defaults, fills []*model.Field
+	for _, fld := range fields {
+		if fld.Default != nil {
+			defaults = append(defaults, fld)
+		}
+		if fld.Fill {
+			fills = append(fills, fld)
+		}
+	}
 	if len(defaults) == 0 && len(fills) == 0 {
 		return
 	}
@@ -376,17 +267,18 @@ func emitObjectDefaults(f *goFile, name string, defaults []defaultProp, fills []
 		varStmt("a", id("Alias")),
 		assign(exprs(id("a")), call(id("Alias"), id("v"))),
 	}
-	for _, dp := range defaults {
+	for _, fld := range defaults {
 		// Typed object defaults (non-nilable) are not injected on encode.
-		if (dp.kind == kindArray || dp.kind == kindObject) && dp.nilable {
-			body = append(body, ifStmt(nil, binary(dot("a", dp.fieldName), token.EQL, nilExpr()),
-				exprStmt(unmarshal(bytesOf(dp.defaultJSON), addr(dot("a", dp.fieldName)))),
+		dp := fld.Default
+		if (dp.Kind == model.DefaultArray || dp.Kind == model.DefaultObject) && dp.Nilable {
+			body = append(body, ifStmt(nil, binary(dot("a", fld.Name), token.EQL, nilExpr()),
+				exprStmt(unmarshal(bytesOf(dp.JSON), addr(dot("a", fld.Name)))),
 			))
 		}
 	}
-	for _, rf := range fills {
-		body = append(body, ifStmt(nil, binary(dot("a", rf.fieldName), token.EQL, nilExpr()),
-			assign(exprs(dot("a", rf.fieldName)), composite(rf.typ)),
+	for _, fld := range fills {
+		body = append(body, ifStmt(nil, binary(dot("a", fld.Name), token.EQL, nilExpr()),
+			assign(exprs(dot("a", fld.Name)), composite(typeAST(fld.Type))),
 		))
 	}
 	body = append(body, ret(call(f.qual(pkgJSON, "Marshal"), id("a"))))
@@ -406,17 +298,17 @@ func emitObjectDefaults(f *goFile, name string, defaults []defaultProp, fills []
 		varStmt("a", id("Alias")),
 		ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("a")))), errNotNil(), ret(id("err"))),
 	}
-	for _, dp := range defaults {
+	for _, fld := range defaults {
 		// Only a property that rejects null reads the raw value.
 		raw := "_"
 		var cond ast.Expr = not(id("_ok"))
-		if !dp.allowNull {
+		if !fld.Default.AllowNull {
 			raw = "_rm"
 			cond = binary(not(id("_ok")), token.LOR, paren(binary(call(id("string"), id("_rm")), token.EQL, str(schemaTypeNull))))
 		}
 		body = append(body, block(
-			define(exprs(id(raw), id("_ok")), index(id("m"), str(dp.propName))),
-			ifStmt(nil, cond, exprStmt(unmarshal(bytesOf(dp.defaultJSON), addr(dot("a", dp.fieldName))))),
+			define(exprs(id(raw), id("_ok")), index(id("m"), str(fld.Key))),
+			ifStmt(nil, cond, exprStmt(unmarshal(bytesOf(fld.Default.JSON), addr(dot("a", fld.Name))))),
 		))
 	}
 	body = append(body,
@@ -428,62 +320,28 @@ func emitObjectDefaults(f *goFile, name string, defaults []defaultProp, fills []
 	f.line()
 }
 
-// emitInlineUnionStruct emits the type for an inline (non-$ref) union variant.
-func emitInlineUnionStruct(f *goFile, tname, ref string, v *load.Definition, isObj, isNull bool, sharedProps map[string]*load.Definition, sharedRequired map[string]bool) {
-	if ref != "" || (!isObj && !isNull && v.Title == "") {
+// emitInlineVariant emits the type the model gives a union variant without a
+// $ref, if any.
+func emitInlineVariant(f *goFile, tname string, in *model.Inline) {
+	if in == nil {
 		return
 	}
-
-	var st fieldSet
-	var fills []requiredFill
-	switch {
-	case !isNull && isObj:
-		req := requiredSet(v.Required)
-		maps.Copy(req, sharedRequired)
-		mergedProps := make(map[string]*load.Definition, len(sharedProps)+len(v.Properties))
-		maps.Copy(mergedProps, sharedProps)
-		maps.Copy(mergedProps, v.Properties)
-		if v.Description != "" {
-			f.comment(util.FormatDocComment(v.Description)...)
-		}
-		for _, pk := range slices.Sorted(maps.Keys(mergedProps)) {
-			pDef := mergedProps[pk]
-			if pDef.Description != "" {
-				st.comment(util.FormatDocComment(pDef.Description)...)
-			}
-			tag := pk
-			if !req[pk] {
-				tag = pk + ",omitempty"
-			} else {
-				fills = appendRequiredFill(fills, util.ToExportedField(pk), pDef)
-			}
-			st.add(structField(util.ToExportedField(pk), optionalTypeExpr(pDef), tag))
-		}
-	case !isNull && !isObj && v.Title != "":
-		// Title-only variants. Extension types keep the raw payload instead
-		// of dropping it.
-		isExtension := strings.Contains(strings.ToLower(v.Description), "extension") || strings.Contains(v.Title, "Ext")
-		if v.Description != "" {
-			f.comment(util.FormatDocComment(v.Description)...)
-		}
-		switch {
-		case isExtension:
-			// An alias keeps json.RawMessage's methods, unlike a defined type.
-			f.add(aliasDecl(tname, f.qual(pkgJSON, "RawMessage")))
-		case ir.PrimaryType(v) != "":
-			// Non-object title-only variants can still carry payloads (e.g. arrays).
-			// Emit a concrete type so sequential decode can succeed for valid payloads.
-			f.add(typeDecl(tname, typeExpr(v)))
-		default:
-			// Emit as empty struct only for truly empty variants.
-			f.add(typeDecl(tname, st.structType()))
-		}
+	f.comment(in.Doc...)
+	switch in.Kind {
+	case model.InlineStruct:
+		emitStruct(f, tname, in.Fields)
+	case model.InlineRaw:
+		// An alias keeps json.RawMessage's methods, unlike a defined type.
+		f.add(aliasDecl(tname, f.qual(pkgJSON, "RawMessage")))
 		f.line()
-		return
+	case model.InlineNamed:
+		// Non-object title-only variants can still carry payloads (e.g. arrays).
+		f.add(typeDecl(tname, typeAST(in.Type)))
+		f.line()
+	default:
+		f.add(typeDecl(tname, &ast.StructType{Fields: fields()}))
+		f.line()
 	}
-	f.add(typeDecl(tname, st.structType()))
-	f.line()
-	emitObjectDefaults(f, tname, nil, fills)
 }
 
 // invalidPayload returns errors.New("invalid variant payload") with the given leading results.
@@ -807,158 +665,6 @@ func methodDescription(schema *load.Schema, mi *ir.MethodInfo) string {
 	return ""
 }
 
-// primitiveType maps a JSON Schema primitive type to its Go type.
-func primitiveType(t string) ast.Expr {
-	switch t {
-	case schemaTypeString:
-		return id("string")
-	case schemaTypeInteger:
-		return id("int")
-	case schemaTypeNumber:
-		return id("float64")
-	case schemaTypeBoolean:
-		return id("bool")
-	default:
-		return id("any")
-	}
-}
-
-// defaultKindOf classifies the JSON Schema default value into a coarse kind.
-func defaultKindOf(val any) defaultKind {
-	switch val.(type) {
-	case nil:
-		return kindNone
-	case []any:
-		return kindArray
-	case map[string]any:
-		return kindObject
-	case string, float64, bool:
-		return kindScalar
-	default:
-		// Fallback: classify by fmt string
-		s := fmt.Sprint(val)
-		if strings.HasPrefix(s, "[") {
-			return kindArray
-		}
-		if strings.HasPrefix(s, "map[") || strings.HasPrefix(s, "{") {
-			return kindObject
-		}
-		return kindScalar
-	}
-}
-
-// includesNull reports whether the property's type union contains null.
-func includesNull(d *load.Definition) bool {
-	if d == nil {
-		return false
-	}
-	arr, ok := d.Type.([]any)
-	return ok && slices.Contains(arr, any(schemaTypeNull))
-}
-
-// typeExpr maps a schema node to a Go type expression.
-func typeExpr(d *load.Definition) ast.Expr {
-	if d == nil {
-		return id("any")
-	}
-
-	// JSON Schema 2020-12 commonly uses allOf wrappers around a single $ref so a property can
-	// attach local metadata like descriptions and defaults.
-	if len(d.AllOf) > 0 && d.Ref == "" {
-		// Prefer a $ref element when present, otherwise the first non-nil schema.
-		for _, e := range d.AllOf {
-			if e != nil && e.Ref != "" {
-				return typeExpr(e)
-			}
-		}
-		for _, e := range d.AllOf {
-			if e != nil {
-				return typeExpr(e)
-			}
-		}
-	}
-
-	if d.Ref != "" {
-		if name, ok := strings.CutPrefix(d.Ref, "#/$defs/"); ok {
-			return id(name)
-		}
-		return id("any")
-	}
-	if len(d.Enum) > 0 {
-		return id("string")
-	}
-	switch t := ir.PrimaryType(d); t {
-	case schemaTypeString, schemaTypeInteger, schemaTypeNumber, schemaTypeBoolean:
-		return primitiveType(t)
-	case schemaTypeArray:
-		return sliceOf(typeExpr(d.Items))
-	case schemaTypeObject:
-		return rawMap(id("any"))
-	default:
-		return id("any")
-	}
-}
-
-// pointerPrimitive returns *T for a primitive schema type, or nil.
-func pointerPrimitive(t string) ast.Expr {
-	switch t {
-	case schemaTypeString, schemaTypeInteger, schemaTypeNumber, schemaTypeBoolean:
-		return star(primitiveType(t))
-	default:
-		return nil
-	}
-}
-
-// optionalTypeExpr maps unions that include null to pointer types where applicable.
-func optionalTypeExpr(d *load.Definition) ast.Expr {
-	if d == nil {
-		return id("any")
-	}
-	// Case: property type is a union like ["string","null"]
-	if arr, ok := d.Type.([]any); ok && len(arr) == 2 {
-		var other string
-		for _, v := range arr {
-			if s, ok := v.(string); ok && s != schemaTypeNull {
-				other = s
-			}
-		}
-		if p := pointerPrimitive(other); p != nil {
-			return p
-		}
-	}
-	list := d.AnyOf
-	if len(list) == 0 {
-		list = d.OneOf
-	}
-	if len(list) == 2 {
-		var nonNull *load.Definition
-		for _, e := range list {
-			if e == nil {
-				continue
-			}
-			if s, ok := e.Type.(string); ok && s == schemaTypeNull {
-				continue
-			}
-			if e.Const != nil {
-				nn := *e
-				nn.Type = schemaTypeString
-				nonNull = &nn
-			} else {
-				nonNull = e
-			}
-		}
-		if nonNull != nil {
-			if name, ok := strings.CutPrefix(nonNull.Ref, "#/$defs/"); ok {
-				return star(id(name))
-			}
-			if p := pointerPrimitive(ir.PrimaryType(nonNull)); p != nil {
-				return p
-			}
-		}
-	}
-	return typeExpr(d)
-}
-
 type variantInfo struct {
 	fieldName         string
 	typeName          string
@@ -976,7 +682,7 @@ type variantInfo struct {
 // oneUnionVariant emits the inline type of variant idx of t, if it has one,
 // and returns the facts the union's methods need. The variant's names come
 // from the model.
-func oneUnionVariant(f *goFile, schema *load.Schema, t *model.Type, idx int, v *load.Definition, sharedProps map[string]*load.Definition, sharedRequired map[string]bool) (variantInfo, bool) {
+func oneUnionVariant(f *goFile, schema *load.Schema, t *model.Type, idx int, v *load.Definition) (variantInfo, bool) {
 	mv := t.Variants[idx]
 	if v == nil || mv.Skip {
 		return variantInfo{}, false
@@ -1017,7 +723,7 @@ func oneUnionVariant(f *goFile, schema *load.Schema, t *model.Type, idx int, v *
 			}
 		}
 	}
-	emitInlineUnionStruct(f, tname, ref, v, isObj, isNull, sharedProps, sharedRequired)
+	emitInlineVariant(f, tname, mv.Inline)
 	return variantInfo{
 		fieldName:         mv.FieldName,
 		typeName:          tname,
@@ -1036,16 +742,10 @@ func oneUnionVariant(f *goFile, schema *load.Schema, t *model.Type, idx int, v *
 func emitUnion(f *goFile, m *model.Model, t *model.Type) {
 	name, parentDef, defs, exactlyOne := t.Name, t.Def, t.UnionList(), t.ExactlyOne
 	discKey := model.DiscriminatorKey(m.Schema, parentDef, defs)
-	sharedProps := map[string]*load.Definition{}
-	sharedRequired := map[string]bool{}
-	if parentDef != nil {
-		maps.Copy(sharedProps, parentDef.Properties)
-		sharedRequired = requiredSet(parentDef.Required)
-	}
 
 	var variants []variantInfo
 	for idx, v := range defs {
-		if vi, ok := oneUnionVariant(f, m.Schema, t, idx, v, sharedProps, sharedRequired); ok {
+		if vi, ok := oneUnionVariant(f, m.Schema, t, idx, v); ok {
 			variants = append(variants, vi)
 		}
 	}

@@ -130,11 +130,14 @@ func TestBuildNames(t *testing.T) {
 		t.Fatalf("U: kind %v exactly-one %v", u.Kind, u.ExactlyOne)
 	}
 	for i, want := range []Variant{{TypeName: "UX", FieldName: "X", DiscValue: "x"}, {TypeName: "UY", FieldName: "Y", DiscValue: "y"}} {
-		if got := *u.Variants[i]; got != want {
+		got := *u.Variants[i]
+		got.Inline = nil
+		if got != want {
 			t.Errorf("U variant %d: got %+v, want %+v", i+1, got, want)
 		}
 	}
-	if len(u.Helpers) != 2 || u.Helpers[0].Name != "NewUX" || strings.Join(u.Helpers[0].Params, ",") != "n" || len(u.Helpers[1].Params) != 0 {
+	if len(u.Helpers) != 2 || u.Helpers[0].Name != "NewUX" || len(u.Helpers[0].Params) != 1 || len(u.Helpers[1].Params) != 0 ||
+		u.Helpers[0].Params[0] != (Param{Key: "n", Type: named("string")}) {
 		t.Errorf("U helpers: %+v %+v", u.Helpers[0], u.Helpers[1])
 	}
 	if got := m.Type("Parent").Nested["URLValue"]; got != "ParentURLValue" {

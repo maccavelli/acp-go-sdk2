@@ -398,3 +398,56 @@ A first run failed `revive` (`confusing-naming`: an unexported `build` beside `B
 `go-precheck: 51 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 3 on `main`.
+
+### Step 4, model types and fields, 2026-10-10
+
+The owner committed step 3 as `ae0851e`. Step 4 ran on `main` from that clean tree. The agent did not commit.
+
+New `cmd/generate/internal/model/fields.go`:
+
+* `TypeRef` (named, pointer, slice, map) replaces `ast.Expr` as the model's type; `typeRef`, `optionalTypeRef`, `primitiveRef`, and `pointerPrimitive`
+  are `typeExpr`, `optionalTypeExpr`, `primitiveType`, and `pointerPrimitive` returning it.
+* `Field` carries the JSON key, Go name, type, tag, required flag, doc lines (with the "Defaults to ..." line), `Default` (canonical JSON, kind, allow-null,
+  nilable), `Fill`, and `Facts`: `format`, `minimum`, `maximum`, `minLength`, the type of `additionalProperties` values, and the two `x-deserialize-*`
+  keywords. `objectFields` holds the top-level object rules of `emitObjectSchema`; `plainFields` holds those of nested objects and inline variants, which
+  apply no defaults, as before.
+* `Inline` gives each variant without a `$ref` its emitted shape: a struct of its and the union's properties, a `json.RawMessage` alias for an extension
+  variant (`isExtensionVariant`, the description and title test), a defined type, or an empty struct.
+* `includesNull` and `defaultKindOf` moved; `defaultKindOf` lost its `fmt.Sprint` fallback, which no JSON-decoded value reaches (F13).
+
+`model.go`: a `KindObject` carries `Fields` and `NestedStructs`, a `KindPrimitive` its `Underlying` type, a variant its `Inline`, and a constructor typed
+`Param`s.
+
+`emit` renders: `typeAST` turns a `TypeRef` into a fresh `ast.Expr`; `emitStruct` prints a struct from fields and calls `emitObjectDefaults`, which now
+reads `Field.Default` and `Field.Fill`; `emitInlineVariant` prints an `Inline`. `emitObjectSchema` prints the nested structs and then the struct.
+Deleted from `emit`: `typeExpr`, `optionalTypeExpr`, `primitiveType`, `pointerPrimitive`, `includesNull`, `defaultKindOf`, `defaultProp`,
+`defaultKind`, `requiredFill`, `appendRequiredFill`, `emitInlineNestedTypes`, `emitInlineUnionStruct`, `requiredSet`, and the shared-property maps of
+`emitUnion`. The step 4 items `expandAllOf`, `copyMissingAllOfFields`, and the rebuilt `TestDefaultedNullablePropertyCompiles` landed in step 3.
+
+Tests in `fields_test.go`: `TestTypeRefs` (14 schema shapes, plain and nullable), `TestObjectFields` (key, name, type, tag, fill, and doc of eight fields),
+`TestObjectFieldDefaultsAndFacts`, `TestNestedStructs`, and `TestInlineVariants` (each inline kind, the merged union properties, no doc on a null
+variant, none for a `$ref` variant). `TestObjectFields` was first one function; `gocyclo` rejected it (complexity 41 of 40), and it was split into the
+three over a shared fixture before the plants below.
+
+Each rule was seen to fail, with one planted breakage per run of `go test ./...` in `cmd/generate` in a fresh scratch copy:
+
+```text
+optional fields always omitempty: failing=['TestGeneratedFilesUpToDate', 'TestObjectFields']
+nullable primitive not a pointer: failing=['TestGeneratedFilesUpToDate', 'TestObjectFields', 'TestTypeRefs']
+format fact dropped: failing=['TestObjectFieldDefaultsAndFacts']
+extension test inverted: failing=['TestGeneratedFilesUpToDate', 'TestInlineVariants']
+nested fills dropped: failing=['TestGeneratedFilesUpToDate', 'TestNestedStructs']
+default doc line dropped: failing=['TestGeneratedFilesUpToDate', 'TestObjectFields']
+```
+
+The first version of the `omitempty` plant did not compile and was replaced with one that did; the dropped fact fails only the model test, as no emitter
+reads facts yet.
+
+`go test -cover ./internal/model` reports 78.7%.
+
+Output: `cd cmd/generate && go run .` regenerated the five files and none changed; `TestGeneratedFilesUpToDate` passes.
+
+Gates: `make pre-add-check` with the six changed Go files named: `go-precheck: 6 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+Without names: `go-precheck: 55 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 4 on `main`.
