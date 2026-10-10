@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-10
 associated-madr: "0012-MADR-schema-fidelity-framework.md"
 ---
@@ -199,4 +199,50 @@ Rollback is `git revert` of the step commits, newest first; each step leaves the
 
 ## Execution record
 
-Not started.
+### Step 2, the registry, 2026-10-10
+
+The owner committed the MADR and this plan as `bc33916`, accepted the MADR, and approved the plan. The MADR's status is `accepted` and this plan's
+`in-progress`, here and in `docs/README.md`. Step 2 ran on `main` from that clean tree. The agent did not commit.
+
+Tests, in a new `cmd/generate/internal/model/keywords_test.go`:
+
+* `TestKeywordRegistryMatchesLoader`: the registry's keys equal the `json` tag names of `load.Definition`, read by reflection, and each has a treatment.
+* `TestCommittedSchemaKeywordsRegistered`: every key of every schema node of `schema.json` and `schema.unstable.json` is registered, and every
+  `format` on an integer or number node has a Go type.
+* `TestUnknownNumericFormat`: `int128` on an integer, `decimal` on a nullable number, and `u64` on an array's integer items are refused, naming the
+  node; `email` on a string is accepted.
+
+Run before the change, the package did not compile:
+
+```text
+internal/model/keywords_test.go:29:36: undefined: keywords
+internal/model/keywords_test.go:32:21: undefined: keywords
+internal/model/keywords_test.go:88:17: undefined: keywords
+internal/model/keywords_test.go:92:47: undefined: numericFormat
+```
+
+The change: `model/keywords.go` (new) holds `Treatment`, the 26-keyword registry `keywords` with the treatments of the MADR's table, `integerFormats`,
+`numberFormats`, and `numericFormat`. `checkRefs`' walk, which visits every node with its path, now also refuses an integer or number whose format
+`numericFormat` does not know: `<path>: format "<f>" on <type> has no Go type`. The maps are not yet used for types; step 3 uses them.
+
+Regenerated: each of the five generated files compares equal, by `cmp`, to its copy from `bc33916`.
+
+Each part was seen to fail, one breakage per fresh scratch copy, then `go test ./...` in `cmd/generate`:
+
+```text
+keyword missing from the registry: failing=['TestCommittedSchemaKeywordsRegistered', 'TestKeywordRegistryMatchesLoader']
+keyword the loader does not declare: failing=['TestKeywordRegistryMatchesLoader']
+keyword without a treatment: failing=['TestKeywordRegistryMatchesLoader']
+format check off: failing=['TestUnknownNumericFormat']
+uint16 unknown: failing=['TestCommittedSchemaKeywordsRegistered', 'TestFitKeysOfCommittedSchema', 'TestGeneratedFilesUpToDate', 'TestProtocolTableAppliesToCommittedSchema', 'TestUnionClassesOfCommittedSchema']
+```
+
+The first gate run found `goconst` on the repeated `"int64"` and `"uint64"`; they are the constants `goInt64` and `goUint64`. The plants ran before
+that change, which does not change behaviour; the tests and the comparison were rerun after it.
+
+After the change every test in the root and in `cmd/generate` passes. Coverage: `internal/model` 94.1%, `internal/emit` 54.2%.
+
+Gates: `make pre-add-check` with the three changed Go files named: `go-precheck: 3 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 67 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 2 on `main`.

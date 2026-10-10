@@ -192,7 +192,8 @@ func isOpenStringEnum(def *load.Definition) bool {
 	return sawConst
 }
 
-// checkRefs fails on a $ref that is not local or names no definition.
+// checkRefs fails on a $ref that is not local or names no definition, and on
+// an integer or number whose format has no Go type (keywords.go).
 func checkRefs(schema *load.Schema) error {
 	for _, name := range slices.Sorted(maps.Keys(schema.Defs)) {
 		if err := walkRefs(schema, name, schema.Defs[name]); err != nil {
@@ -214,6 +215,9 @@ func walkRefs(schema *load.Schema, path string, d *load.Definition) error {
 		if schema.Defs[target] == nil {
 			return fmt.Errorf("%s: $ref %q names no definition", path, d.Ref)
 		}
+	}
+	if typ := primaryType(d); (typ == schemaTypeInteger || typ == schemaTypeNumber) && numericFormat(typ, d.Format) == "" {
+		return fmt.Errorf("%s: format %q on %s has no Go type", path, d.Format, typ)
 	}
 	children := []schemaNode{
 		{path + ".items", d.Items},
