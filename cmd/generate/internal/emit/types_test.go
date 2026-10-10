@@ -22,7 +22,7 @@ func TestDefaultedNullablePropertyCompiles(t *testing.T) {
 			"mode": {Type: []any{"string", "null"}, Default: "auto"},
 		},
 	}}}
-	m, err := model.Build(&load.Meta{}, schema)
+	m, err := model.Build(model.Input{Meta: &load.Meta{}, Schema: schema})
 	if err != nil {
 		t.Fatal(err)
 	}

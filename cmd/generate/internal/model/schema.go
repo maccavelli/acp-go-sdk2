@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 )
 
@@ -175,7 +174,7 @@ func isOpenStringEnum(def *load.Definition) bool {
 		}
 		// Each variant must be a plain string schema: type "string", no nested
 		// structure (properties, items, refs, nested unions, allOf, etc.).
-		if ir.PrimaryType(v) != schemaTypeString {
+		if primaryType(v) != schemaTypeString {
 			return false
 		}
 		if v.Ref != "" || len(v.Properties) > 0 || v.Items != nil ||

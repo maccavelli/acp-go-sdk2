@@ -24,11 +24,11 @@ var generatedFiles = []string{
 // TestGeneratedFilesUpToDate regenerates the bindings from schema/ and
 // requires the committed *_gen.go files to match byte for byte.
 func TestGeneratedFilesUpToDate(t *testing.T) {
-	meta, schema, err := loadSchema(filepath.Join(repoRoot, "schema"))
+	meta, schema, prov, err := loadSchema(filepath.Join(repoRoot, "schema"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := model.Build(meta, schema)
+	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov})
 	if err != nil {
 		t.Fatal(err)
 	}

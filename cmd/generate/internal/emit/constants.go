@@ -3,7 +3,6 @@ package emit
 import (
 	"go/ast"
 
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
@@ -31,23 +30,23 @@ const (
 func WriteConstants(outDir string, m *model.Model) error {
 	f := newFile()
 	f.comment("ProtocolVersionNumber is the ACP protocol version supported by this SDK.")
-	f.add(constDecl(false, constSpec("ProtocolVersionNumber", nil, intLit(m.Meta.Version))))
+	f.add(constDecl(false, constSpec("ProtocolVersionNumber", nil, intLit(m.Version))))
 
 	f.comment("Agent method names")
-	f.add(methodConsts(m.Meta.AgentMethods, m.AgentMethodConsts))
+	f.add(methodConsts(m.AgentMethods))
 
 	f.comment("Client method names")
-	f.add(methodConsts(m.Meta.ClientMethods, m.ClientMethodConsts))
+	f.add(methodConsts(m.ClientMethods))
 
 	return f.write(outDir, "constants_gen.go")
 }
 
-// methodConsts declares <const> = "wire" for each method, sorted by key, with
-// the constant names the model gave them.
-func methodConsts(methods, consts map[string]string) *ast.GenDecl {
+// methodConsts declares <const> = "wire" for each method, in the model's
+// order, sorted by meta key.
+func methodConsts(methods []*model.Method) *ast.GenDecl {
 	var specs []*ast.ValueSpec
-	for _, k := range ir.SortedKeys(methods) {
-		specs = append(specs, constSpec(consts[k], nil, str(methods[k])))
+	for _, mi := range methods {
+		specs = append(specs, constSpec(mi.Const, nil, str(mi.Wire)))
 	}
 	return constDecl(true, specs...)
 }

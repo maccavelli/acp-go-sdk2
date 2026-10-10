@@ -4,7 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
 // invalidParams returns nil, NewInvalidParams(map[string]any{"error": err.Error()}).
@@ -36,11 +36,11 @@ func unmarshalValidate(f *goFile, typeName string) []ast.Stmt {
 
 // agentAssert returns the interface assertion prelude for a binding and the
 // receiver the method is called on.
-func agentAssert(f *goFile, binding ir.MethodBinding, methodName, paramType, respType string, hasResponse bool) ([]ast.Stmt, ast.Expr) {
+func agentAssert(f *goFile, binding model.Binding, methodName, paramType, respType string, hasResponse bool) ([]ast.Stmt, ast.Expr) {
 	switch binding {
-	case ir.BindAgentLoader:
+	case model.BindAgentLoader:
 		return namedAssert(dot("a", "agent"), "loader", "AgentLoader"), id("loader")
-	case ir.BindAgentExperimental:
+	case model.BindAgentExperimental:
 		return singleMethodAssert(f, dot("a", "agent"), "exp", methodName, paramType, respType, hasResponse), id("exp")
 	default:
 		return nil, dot("a", "agent")
@@ -49,11 +49,11 @@ func agentAssert(f *goFile, binding ir.MethodBinding, methodName, paramType, res
 
 // clientAssert returns the interface assertion prelude for a binding and the
 // receiver the method is called on.
-func clientAssert(f *goFile, binding ir.MethodBinding, methodName, paramType, respType string, hasResponse bool) ([]ast.Stmt, ast.Expr) {
+func clientAssert(f *goFile, binding model.Binding, methodName, paramType, respType string, hasResponse bool) ([]ast.Stmt, ast.Expr) {
 	switch binding {
-	case ir.BindClientExperimental:
+	case model.BindClientExperimental:
 		return singleMethodAssert(f, dot("c", "client"), "exp", methodName, paramType, respType, hasResponse), id("exp")
-	case ir.BindClientTerminal:
+	case model.BindClientTerminal:
 		return namedAssert(dot("c", "client"), "t", "ClientTerminal"), id("t")
 	default:
 		return nil, dot("c", "client")

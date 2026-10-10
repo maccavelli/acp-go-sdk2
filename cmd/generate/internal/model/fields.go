@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/util"
 )
@@ -212,7 +211,7 @@ func typeRef(d *load.Definition) TypeRef {
 	if len(d.Enum) > 0 {
 		return named("string")
 	}
-	switch t := ir.PrimaryType(d); t {
+	switch t := primaryType(d); t {
 	case schemaTypeString, schemaTypeInteger, schemaTypeNumber, schemaTypeBoolean:
 		return primitiveRef(t)
 	case schemaTypeArray:
@@ -266,7 +265,7 @@ func optionalTypeRef(d *load.Definition) TypeRef {
 			if name, ok := strings.CutPrefix(nonNull.Ref, refPrefix); ok {
 				return wrap(RefPointer, named(name))
 			}
-			if p, ok := pointerPrimitive(ir.PrimaryType(nonNull)); ok {
+			if p, ok := pointerPrimitive(primaryType(nonNull)); ok {
 				return p
 			}
 		}
@@ -317,10 +316,10 @@ func factsOf(prop *load.Definition) Facts {
 // objectFields builds the fields of a definition's own struct. A property
 // with an inline object takes the nested type the namer gave it.
 func objectFields(t *Type) ([]*Field, error) {
-	req := requiredSet(t.Def.Required)
+	req := requiredSet(t.def.Required)
 	var out []*Field
-	for _, key := range slices.Sorted(maps.Keys(t.Def.Properties)) {
-		prop := t.Def.Properties[key]
+	for _, key := range slices.Sorted(maps.Keys(t.def.Properties)) {
+		prop := t.def.Properties[key]
 		name, err := fieldName(t.Name, key)
 		if err != nil {
 			return nil, err
@@ -328,7 +327,7 @@ func objectFields(t *Type) ([]*Field, error) {
 		fld := &Field{Key: key, Name: name, Tag: key, Required: req[key], Doc: docLines(prop.Description), Facts: factsOf(prop)}
 		if prop.Default != nil {
 			// Whether the field's zero value is nil (slice or map), for the encode fill-in.
-			pt := ir.PrimaryType(prop)
+			pt := primaryType(prop)
 			nilable := pt == schemaTypeArray || (pt == schemaTypeObject && len(prop.Properties) == 0 && prop.Ref == "")
 			defJSON := schemaTypeNull
 			if b, err := json.Marshal(prop.Default); err == nil {
@@ -399,8 +398,8 @@ func inlineOf(t *Type, tname string, ev *load.Definition, isObj, isNull bool) (*
 		return &Inline{Kind: InlineEmpty}, nil
 	case isObj:
 		req := requiredSet(ev.Required)
-		maps.Copy(req, requiredSet(t.Def.Required))
-		props := maps.Clone(t.Def.Properties)
+		maps.Copy(req, requiredSet(t.def.Required))
+		props := maps.Clone(t.def.Properties)
 		if props == nil {
 			props = map[string]*load.Definition{}
 		}
@@ -415,7 +414,7 @@ func inlineOf(t *Type, tname string, ev *load.Definition, isObj, isNull bool) (*
 		switch {
 		case isExtensionVariant(ev):
 			in.Kind = InlineRaw
-		case ir.PrimaryType(ev) != "":
+		case primaryType(ev) != "":
 			in.Kind, in.Type = InlineNamed, typeRef(ev)
 		}
 		return in, nil

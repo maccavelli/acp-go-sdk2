@@ -55,7 +55,7 @@ func TestTypeRefs(t *testing.T) {
 // objectModel builds a model whose Obj covers each field rule.
 func objectModel(t *testing.T) *Model {
 	t.Helper()
-	m, err := Build(&load.Meta{}, schemaOf(t, `{
+	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
 		"Foo":{"type":"string"},
 		"Obj":{"type":"object","required":["name","list","ref","inner"],"properties":{
 			"name":{"type":"string","description":"The name."},
@@ -67,7 +67,7 @@ func objectModel(t *testing.T) *Model {
 			"ref":{"$ref":"#/$defs/Foo"},
 			"inner":{"type":"object","description":"Inner.","required":["ids"],"properties":{
 				"ids":{"type":"array","items":{"type":"string"}},
-				"note":{"type":"string"}}}}}}`))
+				"note":{"type":"string"}}}}}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestNestedStructs(t *testing.T) {
 
 func TestInlineVariants(t *testing.T) {
 	t.Parallel()
-	m, err := Build(&load.Meta{}, schemaOf(t, `{
+	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
 		"Ref":{"type":"object","properties":{"a":{"type":"string"}}},
 		"V":{"required":["shared"],"properties":{"shared":{"type":"string"}},"anyOf":[
 			{"type":"object","description":"Object.","required":["kind"],"properties":{"kind":{"const":"obj","type":"string"},"opt":{"type":"array","items":{"type":"string"}}}},
@@ -168,7 +168,7 @@ func TestInlineVariants(t *testing.T) {
 			{"title":"list","type":"array","items":{"type":"string"}},
 			{"title":"bare"},
 			{"type":"null"},
-			{"$ref":"#/$defs/Ref"}]}}`))
+			{"$ref":"#/$defs/Ref"}]}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

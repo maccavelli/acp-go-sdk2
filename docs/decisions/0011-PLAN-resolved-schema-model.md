@@ -227,7 +227,9 @@ The model refuses rather than renames: a rename would change the exported API wi
 * After each of steps 2 to 7, `TestGeneratedFilesUpToDate` passes and `git diff --stat` lists no generated file.
 * After step 8, the diff of `types_gen.go` contains only added comment lines: 61 type docs and 10 interface-method docs gain the marker, and no other
   line changes. `constants_gen.go`, `agent_gen.go`, `client_gen.go`, and `helpers_gen.go` are unchanged.
-* `internal/ir` does not exist. `go list -deps ./internal/emit` lists neither `internal/load` nor `internal/ir`.
+* `internal/ir` does not exist. ~~`go list -deps ./internal/emit` lists neither `internal/load` nor `internal/ir`.~~ Amended 2026-10-10, see the
+  deviation below: `go list -f '{{.Imports}}' ./internal/emit` lists neither, and no exported field or method of the model has a `load` type except
+  `Input`.
 * `go test -cover ./internal/model` reports at least 85% of statements, from the model's own tests, without the full-schema test.
 * The six hostile schemas behave as step 7 lists, and each new test was seen to fail first, as recorded.
 * `go test -race ./...` passes at the root and in `cmd/generate`; `go build ./example/...` passes; `make pre-add-check`, `make check-records`, and
@@ -251,6 +253,16 @@ unstable method `mcp/message` is listed under both `agentMethods` and `clientMet
 counted meta entries rather than distinct wires. G9's 16 of 40 methods is right.
 
 Decision: the owner chose to correct the plan now. G8 and step 2 are struck through and corrected above. No code, test, or scope changes.
+
+## Deviation 2026-10-10, emit's dependencies
+
+Found in step 6: the Verification item `go list -deps ./internal/emit` lists neither `internal/load` nor `internal/ir` cannot hold. `-deps` is
+transitive; `emit` imports `model`, and `model` imports `load` because it is built from the loader's output, so `internal/load` is always listed. The
+Design line said "imports", which is what the item meant.
+
+Decision: the owner chose to state the criterion as direct imports: `go list -f '{{.Imports}}' ./internal/emit` lists neither package, and no exported
+field or method of the model has a `load` type except `Input`. The Verification item is struck through and restated above. Decoupling the model from
+`load` entirely, with its own copy of the schema types, was the alternative and was not chosen.
 
 ## Execution record
 
@@ -501,3 +513,63 @@ Gates: `make pre-add-check` with the eight changed Go files named: `go-precheck:
 Without names: `go-precheck: 57 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 5 on `main`.
+
+### Step 6, model methods, 2026-10-10
+
+The owner committed step 5 as `ee083a6`. Step 6 ran on `main` from that clean tree. The agent did not commit.
+
+Before the change, the meta files were checked: `session_cancel` maps only to `session/cancel` and `session_update` only to `session/update`, in both,
+so naming a notification by meta key (the handler) and by wire (the outbound wrapper) give the same names.
+
+New `cmd/generate/internal/model/methods.go`:
+
+* `linkRoles` groups the definitions carrying `x-method` and `x-side` by side and wire, the role taken from the name's suffix. A second definition in one
+  role, or a linked definition whose name ends in none of `Request`, `Response`, `Notification`, is an error; the second check is new hardening, not in
+  step 6's list, and passes at `1.25.0`.
+* `buildMethods` resolves every method of the meta files, agent, client, and protocol, sorted by key. A method with no linked request or notification,
+  one with both, and a request with no linked response are errors (G8). `GoName` is the handler's and the wrappers' name; the response comes from the
+  link, not from `TrimSuffix`; `HasResult` is false for a `null` response; `Unstable` is the wire's membership in the merge provenance (G9);
+  `Binding` follows from side, wire, and `Unstable`; `DocsIgnored` and `Doc` are `isDocsIgnoredMethod` and `methodDescription`.
+* The interface-method scope deferred from step 3: two methods of one interface with one `GoName`, or a `GoName` that is not an exported identifier, is
+  an error. `AgentLoader` is declared in package scope when a method binds to it.
+
+The meta fallback and `inferTypeBaseFromMethodKey` are gone with `internal/ir`, which was deleted. `primaryType` moved into the model. `ir`'s
+`BindClientTerminal` lives on as `model.BindClientTerminal`; the `ClientTerminal` branches are phase 3's.
+
+`model.Build` takes `Input{Meta, Schema, Provenance}`, as the design shows; `main.loadSchema` returns the provenance (nil without an unstable schema),
+`main.run` and `TestGeneratedFilesUpToDate` pass it, and the tests build through `Input`. The model's `load`-typed fields (`schema`, `meta`, `Type.def`)
+and `unionList` are unexported; `Model.Version` is new; `constants.go` declares the method constants from the method lists.
+
+`emit`: the handlers, wrappers, and interfaces walk `m.AgentMethods` and `m.ClientMethods`; `emitOutbound` takes the peer's method list;
+`methodDescription` is gone; `dispatch_helpers.go` uses `model.Binding`. `go list -f '{{.Imports}}' ./internal/emit` lists, of the generator's packages,
+only `internal/model`.
+
+Tests in `methods_test.go`: `TestBuildMethods` (four agent methods, two client methods, and the protocol method: names, constants, roles, results,
+bindings, docs, docs-ignored, unstable, and the same input without provenance binding `foo` to `Agent`) and `TestBuildMethodsRefuses` (seven cases).
+`TestBuildNames` gained the `session/new` definitions, since a meta method without them is now an error.
+
+Each rule was seen to fail, with one planted breakage per run of `go test ./...` in `cmd/generate` in a fresh scratch copy:
+
+```text
+binding ignores the provenance: failing=['TestBuildMethods', 'TestGeneratedFilesUpToDate']
+request without response accepted: failing=['TestBuildMethodsRefuses']
+interface collisions accepted: failing=['TestBuildMethodsRefuses']
+AgentLoader not declared: failing=['TestBuildMethodsRefuses']
+session_update named by its type: failing=['TestBuildMethods', 'TestGeneratedFilesUpToDate']
+null response treated as a result: failing=['TestBuildMethods']
+unsuffixed linked definition ignored: failing=['TestBuildMethodsRefuses']
+```
+
+`staticcheck` (QF1001) asked for De Morgan's law on the first form of the `HasResult` line; it reads `resp == nil || resp.Type != schemaTypeNull`, and
+its plant was rerun against that line with the same result.
+
+`go test -cover ./internal/model` reports 82.5%.
+
+Output: `cd cmd/generate && go run .` regenerated the five files and none changed; `TestGeneratedFilesUpToDate` passes.
+
+Gates: `make pre-add-check` with the fifteen changed Go files named: `go-precheck: 15 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` The script's no-argument run lists files with `git ls-files`, which still holds the deleted `internal/ir/ir.go` until the deletion is
+committed, and stopped at `lstat cmd/generate/internal/ir/ir.go: no such file or directory`; naming the 59 Go files that exist instead:
+`go-precheck: 59 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 6 on `main`, including the deletion of `internal/ir`.

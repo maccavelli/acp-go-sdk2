@@ -96,7 +96,7 @@ func TestBuildRefuses(t *testing.T) {
 			if meta == nil {
 				meta = &load.Meta{}
 			}
-			_, err := Build(meta, schemaOf(t, tt.defs))
+			_, err := Build(Input{Meta: meta, Schema: schemaOf(t, tt.defs)})
 			if err == nil {
 				t.Fatal("Build accepted the schema")
 			}
@@ -119,8 +119,10 @@ func TestBuildNames(t *testing.T) {
 			{"type":"object","properties":{"type":{"const":"x","type":"string"},"n":{"type":"string"}},"required":["type","n"]},
 			{"type":"object","properties":{"type":{"const":"y","type":"string"}},"required":["type"]}]},
 		"Parent":{"type":"object","properties":{"URLValue":{"type":"object","properties":{"a":{"type":"string"}}}}},
-		"Kind":{"type":"string","enum":["one_two"]}}`)
-	m, err := Build(&load.Meta{AgentMethods: map[string]string{"session_new": "session/new"}}, schema)
+		"Kind":{"type":"string","enum":["one_two"]},
+		"NewSessionRequest":{"type":"object","x-side":"agent","x-method":"session/new"},
+		"NewSessionResponse":{"type":"object","x-side":"agent","x-method":"session/new"}}`)
+	m, err := Build(Input{Meta: &load.Meta{AgentMethods: map[string]string{"session_new": "session/new"}}, Schema: schema})
 	if err != nil {
 		t.Fatal(err)
 	}

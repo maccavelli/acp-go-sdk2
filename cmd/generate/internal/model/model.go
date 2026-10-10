@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/util"
 )
@@ -40,10 +39,12 @@ const (
 
 // Model is the resolved schema.
 type Model struct {
-	// Schema and Meta are the merged inputs. The emitters still read
-	// definitions from them for what the model does not carry yet.
-	Schema *load.Schema
-	Meta   *load.Meta
+	// Version is the protocol version of the meta files.
+	Version int
+
+	// schema and meta are the merged inputs.
+	schema *load.Schema
+	meta   *load.Meta
 
 	// Types holds one entry per definition, in sorted name order, the order
 	// types_gen.go prints them.
@@ -54,6 +55,20 @@ type Model struct {
 	// name of its constant.
 	AgentMethodConsts  map[string]string
 	ClientMethodConsts map[string]string
+
+	// AgentMethods and ClientMethods hold the methods of each side, sorted by
+	// meta key. Protocol holds the protocol methods, which nothing emits yet.
+	AgentMethods  []*Method
+	ClientMethods []*Method
+	Protocol      []*Method
+}
+
+// Input is what Build resolves: the merged meta and schema, and the merge's
+// provenance, which may be nil when there is no unstable schema.
+type Input struct {
+	Meta       *load.Meta
+	Schema     *load.Schema
+	Provenance *load.Provenance
 }
 
 // Type returns the type of the named definition, or nil.
@@ -62,8 +77,9 @@ func (m *Model) Type(name string) *Type { return m.byName[name] }
 // Type is one schema definition and the names derived from it.
 type Type struct {
 	Name string
-	Def  *load.Definition
 	Kind Kind
+	// def is the schema definition the type comes from.
+	def *load.Definition
 	// Doc is the definition's doc comment, one entry per line.
 	Doc []string
 
@@ -95,12 +111,12 @@ type Type struct {
 	Helpers []*Helper
 }
 
-// UnionList returns the anyOf or oneOf entries of a KindUnion.
-func (t *Type) UnionList() []*load.Definition {
+// unionList returns the anyOf or oneOf entries of a KindUnion.
+func (t *Type) unionList() []*load.Definition {
 	if t.ExactlyOne {
-		return t.Def.OneOf
+		return t.def.OneOf
 	}
-	return t.Def.AnyOf
+	return t.def.AnyOf
 }
 
 // Variant is one entry of a union.
@@ -196,9 +212,9 @@ var helperSkip = map[string]bool{"ContentBlock": true, "ToolCallContent": true, 
 // fixedNames are package-level names the generator declares whatever the schema holds.
 var fixedNames = []string{"ProtocolVersionNumber", "Agent", "AgentExperimental", "Client", "ClientExperimental"}
 
-// Build resolves schema and meta.
-func Build(meta *load.Meta, schema *load.Schema) (*Model, error) {
-	m, err := resolve(meta, schema)
+// Build resolves in.
+func Build(in Input) (*Model, error) {
+	m, err := resolve(in.Meta, in.Schema, in.Provenance)
 	if err != nil {
 		return nil, fmt.Errorf("model: %w", err)
 	}
@@ -206,13 +222,14 @@ func Build(meta *load.Meta, schema *load.Schema) (*Model, error) {
 }
 
 // resolve builds the model; Build adds the error prefix.
-func resolve(meta *load.Meta, schema *load.Schema) (*Model, error) {
+func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance) (*Model, error) {
 	if err := checkRefs(schema); err != nil {
 		return nil, err
 	}
 	m := &Model{
-		Schema:             schema,
-		Meta:               meta,
+		Version:            meta.Version,
+		schema:             schema,
+		meta:               meta,
 		byName:             map[string]*Type{},
 		AgentMethodConsts:  map[string]string{},
 		ClientMethodConsts: map[string]string{},
@@ -250,6 +267,9 @@ func resolve(meta *load.Meta, schema *load.Schema) (*Model, error) {
 			side.consts[key] = c
 		}
 	}
+	if err := buildMethods(m, n, prov); err != nil {
+		return nil, err
+	}
 	return m, nil
 }
 
@@ -259,7 +279,7 @@ func classify(def *load.Definition) Kind {
 	if def == nil {
 		return KindNone
 	}
-	switch t := ir.PrimaryType(def); {
+	switch t := primaryType(def); {
 	case len(def.Enum) > 0:
 		return KindEnum
 	case isStringConstUnion(def):
@@ -280,7 +300,7 @@ func classify(def *load.Definition) Kind {
 }
 
 func buildType(schema *load.Schema, n *namer, name string, def *load.Definition) (*Type, error) {
-	t := &Type{Name: name, Def: def, Kind: classify(def)}
+	t := &Type{Name: name, def: def, Kind: classify(def)}
 	if def != nil {
 		t.Doc = docLines(def.Description)
 	}
@@ -304,7 +324,7 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition)
 			return nil, err
 		}
 	case KindPrimitive:
-		u := primitiveRef(ir.PrimaryType(def))
+		u := primitiveRef(primaryType(def))
 		t.Underlying = &u
 	}
 	return t, nil
@@ -316,17 +336,17 @@ func enumValues(t *Type) []string {
 	var values []string
 	switch t.Kind {
 	case KindEnum:
-		for _, v := range t.Def.Enum {
+		for _, v := range t.def.Enum {
 			values = append(values, fmt.Sprint(v))
 		}
 	case KindStringConstUnion:
-		for _, v := range t.Def.OneOf {
+		for _, v := range t.def.OneOf {
 			if v != nil && v.Const != nil {
 				values = append(values, fmt.Sprint(v.Const))
 			}
 		}
 	case KindOpenEnum:
-		for _, v := range t.Def.AnyOf {
+		for _, v := range t.def.AnyOf {
 			if v == nil || v.Const == nil {
 				continue
 			}
@@ -341,18 +361,18 @@ func enumValues(t *Type) []string {
 // buildObject names the inline object properties of t and checks its fields
 // and theirs.
 func buildObject(n *namer, t *Type) error {
-	if err := checkFields(t.Name, t.Def.Properties); err != nil {
+	if err := checkFields(t.Name, t.def.Properties); err != nil {
 		return err
 	}
 	t.Nested = map[string]string{}
-	for _, key := range slices.Sorted(maps.Keys(t.Def.Properties)) {
-		prop := t.Def.Properties[key]
+	for _, key := range slices.Sorted(maps.Keys(t.def.Properties)) {
+		prop := t.def.Properties[key]
 		owner := t.Name + ".properties." + key
 		if prop == nil {
 			return fmt.Errorf("%s: property schema is null", owner)
 		}
 		// Inline objects: no $ref, type object, with properties.
-		if prop.Ref != "" || ir.PrimaryType(prop) != schemaTypeObject || len(prop.Properties) == 0 {
+		if prop.Ref != "" || primaryType(prop) != schemaTypeObject || len(prop.Properties) == 0 {
 			continue
 		}
 		nested, err := generateNestedTypeName(t.Name, key, n.typeNames)
@@ -382,8 +402,8 @@ func buildObject(n *namer, t *Type) error {
 
 // buildUnion names every variant of t, in schema order, and its helpers.
 func buildUnion(schema *load.Schema, n *namer, t *Type) error {
-	list := t.UnionList()
-	discKey, src := discriminatorKey(schema, t.Def, list)
+	list := t.unionList()
+	discKey, src := discriminatorKey(schema, t.def, list)
 	t.DiscKey, t.DiscSource = discKey, src
 	if discKey != "" {
 		t.DiscField = util.ToExportedField(discKey)
@@ -408,7 +428,7 @@ func buildUnion(schema *load.Schema, n *namer, t *Type) error {
 		}
 		fields[vi.FieldName] = idx + 1
 	}
-	if !t.ExactlyOne || t.Def.DocsIgnore || helperSkip[t.Name] {
+	if !t.ExactlyOne || t.def.DocsIgnore || helperSkip[t.Name] {
 		return nil
 	}
 	for idx, v := range list {
@@ -497,7 +517,7 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 		Doc:             docLines(ev.Description),
 		Required:        ev.Required,
 		IsObject:        isObj,
-		IsArray:         ir.PrimaryType(ev) == schemaTypeArray,
+		IsArray:         primaryType(ev) == schemaTypeArray,
 		IsNull:          isNull,
 		ConstPairs:      constPairs(ev),
 		HasSharedFields: ref == "" && isObj && !isNull,
@@ -514,7 +534,7 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 		return nil, fmt.Errorf("%s: wrapper field: %w", owner, err)
 	}
 	if ref == "" && isObj && !isNull {
-		merged := maps.Clone(t.Def.Properties)
+		merged := maps.Clone(t.def.Properties)
 		if merged == nil {
 			merged = map[string]*load.Definition{}
 		}
@@ -559,7 +579,7 @@ func arrayItemRequired(schema *load.Schema, v *load.Definition) []string {
 		}
 	}
 	item = expandAllOf(schema, item)
-	if ir.PrimaryType(item) != schemaTypeObject || len(item.Required) == 0 {
+	if primaryType(item) != schemaTypeObject || len(item.Required) == 0 {
 		return nil
 	}
 	return slices.Sorted(slices.Values(item.Required))
@@ -580,21 +600,21 @@ func validateOf(t *Type) {
 		t.Validate = ValidateExactlyOne
 	case t.Kind == KindUnion:
 		t.Validate = ValidateShared
-		for _, prop := range slices.Sorted(slices.Values(t.Def.Required)) {
-			if c, ok := requiredCheck(t.Def, prop); ok {
+		for _, prop := range slices.Sorted(slices.Values(t.def.Required)) {
+			if c, ok := requiredCheck(t.def, prop); ok {
 				t.Checks = append(t.Checks, c)
 			}
 		}
 	case t.Name == "ToolCallUpdate":
 		t.Validate = ValidateToolCall
 		t.Checks = []RequiredCheck{{Field: "ToolCallId", Prop: "toolCallId", Kind: schemaTypeString}}
-	case ir.PrimaryType(t.Def) == schemaTypeObject && isRPCTypeName(t.Name):
+	case primaryType(t.def) == schemaTypeObject && isRPCTypeName(t.Name):
 		t.Validate = ValidateFields
-		for _, prop := range slices.Sorted(maps.Keys(t.Def.Properties)) {
-			if !slices.Contains(t.Def.Required, prop) {
+		for _, prop := range slices.Sorted(maps.Keys(t.def.Properties)) {
+			if !slices.Contains(t.def.Required, prop) {
 				continue
 			}
-			if c, ok := requiredCheck(t.Def, prop); ok {
+			if c, ok := requiredCheck(t.def, prop); ok {
 				t.Checks = append(t.Checks, c)
 			}
 		}
@@ -607,9 +627,49 @@ func requiredCheck(def *load.Definition, prop string) (RequiredCheck, bool) {
 	if pd == nil {
 		return RequiredCheck{}, false
 	}
-	switch kind := ir.PrimaryType(pd); kind {
+	switch kind := primaryType(pd); kind {
 	case schemaTypeString, schemaTypeArray:
 		return RequiredCheck{Field: util.ToExportedField(prop), Prop: prop, Kind: kind}, true
 	}
 	return RequiredCheck{}, false
+}
+
+// primaryType returns the first non-null JSON Schema type of d, looking
+// through allOf when d has no type of its own.
+func primaryType(d *load.Definition) string {
+	if d == nil {
+		return ""
+	}
+	if d.Type == nil {
+		// Properties are sometimes wrapped in allOf (commonly around a single
+		// $ref); an inline type there still counts.
+		for _, e := range d.AllOf {
+			if e == nil {
+				continue
+			}
+			if t := primaryType(e); t != "" {
+				return t
+			}
+		}
+		return ""
+	}
+	switch v := d.Type.(type) {
+	case string:
+		return v
+	case []any:
+		var first string
+		for _, e := range v {
+			if s, ok := e.(string); ok {
+				if first == "" {
+					first = s
+				}
+				if s != schemaTypeNull {
+					return s
+				}
+			}
+		}
+		return first
+	default:
+		return ""
+	}
 }

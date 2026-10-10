@@ -40,12 +40,12 @@ func run() error {
 		return err
 	}
 
-	meta, schema, err := loadSchema(*schemaDir)
+	meta, schema, prov, err := loadSchema(*schemaDir)
 	if err != nil {
 		return err
 	}
 	// The model refuses a schema it cannot represent before any file is written.
-	m, err := model.Build(meta, schema)
+	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov})
 	if err != nil {
 		return err
 	}
@@ -63,33 +63,32 @@ func run() error {
 	return emit.WriteHelpers(*outDir, m)
 }
 
-// loadSchema reads the stable schema and, when present, merges the unstable one.
-func loadSchema(schemaDir string) (*load.Meta, *load.Schema, error) {
+// loadSchema reads the stable schema and, when present, merges the unstable
+// one. The provenance is nil when there is no unstable schema.
+func loadSchema(schemaDir string) (*load.Meta, *load.Schema, *load.Provenance, error) {
 	meta, err := load.ReadMeta(schemaDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	schema, err := load.ReadSchema(schemaDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	unstableMeta, unstableMetaFound, err := load.ReadMetaUnstable(schemaDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	unstableSchema, unstableSchemaFound, err := load.ReadSchemaUnstable(schemaDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if unstableMetaFound != unstableSchemaFound {
-		return nil, nil, fmt.Errorf("unstable schema/meta mismatch: meta found=%v schema found=%v", unstableMetaFound, unstableSchemaFound)
+		return nil, nil, nil, fmt.Errorf("unstable schema/meta mismatch: meta found=%v schema found=%v", unstableMetaFound, unstableSchemaFound)
 	}
 	if !unstableMetaFound {
-		return meta, schema, nil
+		return meta, schema, nil, nil
 	}
-	// The provenance has no reader until the model is built from it.
-	merged, mergedSchema, _, err := load.MergeStableAndUnstable(meta, schema, unstableMeta, unstableSchema)
-	return merged, mergedSchema, err
+	return load.MergeStableAndUnstable(meta, schema, unstableMeta, unstableSchema)
 }
 
 // findRepoRoot walks up from the working directory to the first directory

@@ -5,11 +5,8 @@ import (
 	"go/ast"
 	"go/token"
 	"strconv"
-	"strings"
 
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/ir"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
-	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/util"
 )
 
 // fieldSet collects struct fields or interface methods, each with the doc
@@ -71,42 +68,30 @@ func interfaceMethod(f *goFile, name, paramType, respType string) *ast.Field {
 }
 
 // addRPCMethod adds the interface method for mi to target.
-func addRPCMethod(f *goFile, target *fieldSet, m *model.Model, methodKey string, mi *ir.MethodInfo) {
-	if desc := methodDescription(m, mi); desc != "" {
-		target.comment(util.FormatDocComment(desc)...)
+func addRPCMethod(f *goFile, target *fieldSet, mi *model.Method) {
+	target.comment(mi.Doc...)
+	if mi.Notif != "" {
+		target.add(interfaceMethod(f, mi.GoName, mi.Notif, ""))
+		return
 	}
-	switch {
-	case mi.Notif != "":
-		target.add(interfaceMethod(f, ir.DispatchMethodNameForNotification(methodKey, mi.Notif), mi.Notif, ""))
-	case mi.Req != "":
-		methodName := strings.TrimSuffix(mi.Req, "Request")
-		respName := methodName + "Response"
-		if ir.IsNullResponse(m.Schema.Defs[respName]) {
-			respName = ""
-		}
-		target.add(interfaceMethod(f, methodName, mi.Req, respName))
+	resp := ""
+	if mi.HasResult {
+		resp = mi.Resp
 	}
+	target.add(interfaceMethod(f, mi.GoName, mi.Req, resp))
 }
 
 func emitRPCInterfaces(f *goFile, m *model.Model) {
-	meta := m.Meta
-	// Append Agent & Client interfaces from method groups
-	groups := ir.BuildMethodGroups(m.Schema, meta)
-
 	var agent, agentLoader, agentExperimental fieldSet
-	for _, k := range ir.SortedKeys(meta.AgentMethods) {
-		mi := groups["agent|"+meta.AgentMethods[k]]
-		if mi == nil {
-			continue
-		}
+	for _, mi := range m.AgentMethods {
 		target := &agent
 		switch mi.Binding {
-		case ir.BindAgentLoader:
+		case model.BindAgentLoader:
 			target = &agentLoader
-		case ir.BindAgentExperimental:
+		case model.BindAgentExperimental:
 			target = &agentExperimental
 		}
-		addRPCMethod(f, target, m, k, mi)
+		addRPCMethod(f, target, mi)
 	}
 	f.add(typeDecl("Agent", agent.interfaceType()))
 	if len(agentLoader.list) > 0 {
@@ -118,19 +103,15 @@ func emitRPCInterfaces(f *goFile, m *model.Model) {
 	f.add(typeDecl("AgentExperimental", agentExperimental.interfaceType()))
 
 	var client, clientExperimental, clientTerminal fieldSet
-	for _, k := range ir.SortedKeys(meta.ClientMethods) {
-		mi := groups["client|"+meta.ClientMethods[k]]
-		if mi == nil {
-			continue
-		}
+	for _, mi := range m.ClientMethods {
 		target := &client
 		switch mi.Binding {
-		case ir.BindClientExperimental:
+		case model.BindClientExperimental:
 			target = &clientExperimental
-		case ir.BindClientTerminal:
+		case model.BindClientTerminal:
 			target = &clientTerminal
 		}
-		addRPCMethod(f, target, m, k, mi)
+		addRPCMethod(f, target, mi)
 	}
 	f.add(typeDecl("Client", client.interfaceType()))
 	if len(clientTerminal.list) > 0 {
@@ -605,22 +586,6 @@ func emitFieldValidate(f *goFile, t *model.Type) {
 		body = append(body, requiredCheck(f, dot(recv, c.Field), c.Kind, c.Prop))
 	}
 	f.add(validateMethod(recv, t.Name, append(body, ret(nilExpr()))...))
-}
-
-func methodDescription(m *model.Model, mi *ir.MethodInfo) string {
-	if mi == nil || mi.DocsIgnored {
-		return ""
-	}
-	// Prefer notification descriptions when present, otherwise fall back to request/response types.
-	for _, name := range []string{mi.Notif, mi.Req, mi.Resp} {
-		if name == "" {
-			continue
-		}
-		if def := m.Schema.Defs[name]; def != nil && def.Description != "" {
-			return def.Description
-		}
-	}
-	return ""
 }
 
 func emitUnion(f *goFile, t *model.Type) {

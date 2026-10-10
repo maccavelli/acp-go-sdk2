@@ -9,11 +9,11 @@ import (
 
 func TestUnionDiscriminator(t *testing.T) {
 	t.Parallel()
-	m, err := Build(&load.Meta{}, schemaOf(t, `{
+	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
 		"Declared":{"discriminator":{"propertyName":"kind"},"oneOf":[
 			{"type":"object","properties":{"kind":{"const":"a","type":"string"},"other":{"const":"z","type":"string"}}}]},
 		"Derived":{"oneOf":[{"type":"object","properties":{"zeta":{"const":"a","type":"string"},"alpha":{"const":"b","type":"string"}}}]},
-		"Plain":{"anyOf":[{"type":"string"},{"type":"integer"}]}}`))
+		"Plain":{"anyOf":[{"type":"string"},{"type":"integer"}]}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,14 +37,14 @@ func TestUnionDiscriminator(t *testing.T) {
 
 func TestVariantFacts(t *testing.T) {
 	t.Parallel()
-	m, err := Build(&load.Meta{}, schemaOf(t, `{
+	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
 		"Item":{"type":"object","required":["z","id"],"properties":{"id":{"type":"string"},"z":{"type":"string"}}},
 		"Ref":{"type":"object","properties":{"a":{"type":"string"}}},
 		"V":{"anyOf":[
 			{"type":"object","description":"Obj.","required":["type","b"],"properties":{"type":{"const":"obj","type":"string"},"b":{"type":"string"},"a":{"const":"k","type":"string"}}},
 			{"title":"items","type":"array","items":{"$ref":"#/$defs/Item"}},
 			{"type":"null"},
-			{"$ref":"#/$defs/Ref"}]}}`))
+			{"$ref":"#/$defs/Ref"}]}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestVariantFacts(t *testing.T) {
 
 func TestValidateKinds(t *testing.T) {
 	t.Parallel()
-	m, err := Build(&load.Meta{}, schemaOf(t, `{
+	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
 		"One":{"oneOf":[{"type":"string"},{"type":"integer"}]},
 		"Shared":{"required":["s","n","list"],"properties":{"s":{"type":"string"},"n":{"type":"integer"},"list":{"type":"array"}},
 			"anyOf":[{"type":"object","properties":{"x":{"type":"string"}}}]},
@@ -80,7 +80,7 @@ func TestValidateKinds(t *testing.T) {
 		"FooRequest":{"type":"object","required":["name","n","ids"],"properties":{"name":{"type":"string"},"n":{"type":"integer"},"ids":{"type":"array"},"opt":{"type":"string"}}},
 		"BarResponse":{"type":"object"},
 		"Plain":{"type":"object","required":["a"],"properties":{"a":{"type":"string"}}},
-		"KindNotification":{"type":"string","enum":["a"]}}`))
+		"KindNotification":{"type":"string","enum":["a"]}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
