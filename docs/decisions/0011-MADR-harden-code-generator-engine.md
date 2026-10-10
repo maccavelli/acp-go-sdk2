@@ -143,6 +143,7 @@ The phases, in order:
    2026-10-10: see the phase 2 amendment below.)
 3. **A protocol table.** The behaviour the schema does not express, prompt cancellation on `session/prompt`, `session/cancel`, the `session/load` binding,
    the hand-written helpers that replace generated ones, and the protocol methods, lives in one Go table in the generator, read by the model.
+   (Refined 2026-10-10: see the phase 3 amendment below.)
 4. **Schema fidelity.** Generated decoders honour `x-deserialize-default-on-error` and `x-deserialize-skip-invalid-items`. Integer fields take the Go type
    of their declared format (`int32`, `int64`, `uint32`, `uint64`), and typed `additionalProperties` become typed maps. `Validate` descends into unions,
    nested types, and slices, and checks the bounds the schema declares.
@@ -280,6 +281,58 @@ variant unchanged and without error, as `encoding/json` does for other types.
   `{}` among them, which decoded as `Accept` before.
 * Bad, because there are two mechanisms, `other` with `Extra` and `Unknown`, and the exported API gains `Unknown` on eleven unions and `Extra` on six
   variant types.
+
+## Amendment 2026-10-10, phase 3 facts and decisions
+
+Before planning phase 3, the protocol table, the generator was read again on `128a920`, after phase 2. The facts come from the source, from a probe of
+the resolved model in a scratch copy, from scripts over the schema files, and from the ACP specification; nothing in the tree changed.
+
+### Facts
+
+* **What phases 1 and 2 already removed.** The `ContentBlock` shape table is gone (phase 2). Response types come from `x-method` and `x-side`, a meta
+  method without linked types is an error, and `terminal_wait_for_exit` and the description test for unstable methods are gone (phase 1).
+* **What is left, by file.** In `internal/model`: `session/load` binds to `AgentLoader` (`methods.go`); `session/update` is renamed `SessionUpdate`,
+  and `session_cancel` is renamed `Cancel`, which the default rule gives anyway (`notificationMethodName`); the helper skip list (`ContentBlock`,
+  `ToolCallContent`, `SessionUpdate`); `ToolCallUpdate`'s `Validate`; `AgentLoader` declared as a fixed name. In `internal/emit`: `session/prompt`
+  twice and `session/cancel` once in `dispatch.go`, which select the prompt-turn context, the cancel that cancels it, and the outbound
+  `session/cancel` sent when a prompt's context ends; the literals `Cancel`, `CancelNotification`, and `SessionId` there; `AgentLoader`,
+  `ClientTerminal`, and their doc comments in `types.go` and `dispatch_helpers.go`; the unused constant `nameSessionUpdate`.
+* **Dead branches.** `BindClientTerminal` is never assigned; the `ClientTerminal` branches in `emit/types.go` and `emit/dispatch_helpers.go` never
+  run. `isExtensionVariant` (a title-only variant whose description contains "extension" or whose title contains "Ext" becomes `json.RawMessage`)
+  matches no variant at `1.25.0`.
+* **The protocol method.** `meta.json` lists `$/cancel_request` under `protocolMethods`; the model resolves it with `CancelRequestNotification`, and
+  nothing emits it. `connection.go` spells `"$/cancel_request"` 7 times and decodes it into its own `cancelRequestParams`, whose `json.RawMessage`
+  keeps the id's exact JSON for `canonicalJSONRPCIDKey`; the generated `RequestId` union would not.
+* **Capabilities gate methods the bindings do not show.** The schema describes capabilities that name methods: `AgentCapabilities.loadSession`
+  (`session/load`), `sessionCapabilities.list`, `.delete`, `.resume`, `.close` (and, unstable, `.fork`), `auth.logout` ("the logout method");
+  `ClientCapabilities.fs.readTextFile`, `fs.writeTextFile`, and `terminal` ("all `terminal/*` methods"). The specification's session-setup page says
+  Clients "MUST NOT attempt to call" `session/load`, `session/resume`, or `session/close` unless the capability is advertised. Only `session/load` is on
+  an optional interface; the other gated agent methods are on the required `Agent`.
+* **What the specification says the hard-coded behaviour serves.** Prompt turn: "When the Agent receives this notification, it SHOULD stop all
+  language model requests and all tool call invocations", and must answer the `session/prompt` with the cancelled stop reason. `$/cancel_request`:
+  the receiver "MAY cancel the corresponding request activity" and "MUST send one of these responses", a result or `-32800`. The generated
+  `AgentSideConnection` runs `Prompt` under a per-session context that an inbound `session/cancel` cancels; `ClientSideConnection.Prompt` sends
+  `session/cancel` when its context ends with an error.
+
+### Decisions
+
+Asked on 2026-10-10, the owner decided:
+
+* **The protocol method becomes an exported constant.** `constants_gen.go` gains `ProtocolMethodCancelRequest = "$/cancel_request"`, beside the agent
+  and client method constants, and `connection.go` uses it in place of its literals. `connection.go` keeps `cancelRequestParams`. The exported API
+  gains one constant.
+* **`isExtensionVariant` is deleted.** A title-only variant takes the type its schema declares, like every other; the output at `1.25.0` does not change.
+* **Capability gates are recorded, not acted on.** The table records the capability that gates each method whose capability names it; the model checks
+  that the capability exists. No binding changes, and moving the gated agent methods off `Agent` waits for its own decision.
+
+### Consequences of these decisions
+
+* Good, because every piece of protocol behaviour the generator adds is listed in one table a reviewer can read, and a schema whose shape contradicts
+  it is refused with an error naming the entry.
+* Good, because `connection.go` and the generated constants share one spelling of `$/cancel_request`.
+* Neutral, because apart from the new constant the generated files do not change.
+* Bad, because five gated agent methods stay on the required `Agent` interface, so an agent must implement them to compile even when it does not
+  advertise them.
 
 ## More Information
 
