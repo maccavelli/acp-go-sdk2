@@ -229,3 +229,93 @@ Gates: `make pre-add-check` with the seven changed files named: `go-precheck: 7 
 govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 2 on `main`.
+
+### Step 3, the table in the model, 2026-10-10
+
+The owner committed step 2 as `fe8bf85`. Step 3 ran on `main` from that clean tree. The agent did not commit.
+
+Tests, in a new `cmd/generate/internal/model/protocol_test.go`:
+
+* `TestProtocolTableApplies`: a synthetic schema and table with one rule of each kind; the binding, the Go name, the prompt turn's session field and
+  cancel, the interfaces in binding order with the table's variable and doc, the skipped helpers, the listed `Validate`, and the capabilities; then the
+  same schema with a nil table, where none of them applies.
+* `TestProtocolTableSkipsAbsentSubjects`: `ACP` on a schema with none of its subjects builds and applies nothing.
+* `TestProtocolTableRefuses`: 20 cases, one per refusal of the design, each requiring an error that starts `protocol table: ` and names the rule.
+* `TestProtocolTableAppliesToCommittedSchema`: every rule of `ACP` applies to the committed schema; 14 capability gates, each naming its method;
+  `session/prompt`'s session field `SessionId` and cancel `session/cancel`; the five interfaces; the three helper unions without generated helpers;
+  `ToolCallUpdate` with `ValidateListed`.
+
+Existing tests, fixtures only, assertions kept: `TestBuildMethods` and `TestBuildMethodsRefuses` pass `methodProtocol()`, a two-rule table, because
+the `AgentLoader` binding and the name `SessionUpdate` now come from a table; `TestValidateKinds` passes a validate rule for `ToolCallUpdate` and gives
+its fixture `"required":["toolCallId"]`, as the committed schema has, because the rule now refuses a property that is not required; `committedModel`
+passes `&ACP`, as `main.go` does. Run before the change, the model package did not compile:
+
+```text
+undefined: ACP
+undefined: BindAgentOptional (2)
+undefined: Interface
+undefined: MethodRule
+undefined: Protocol (3)
+unknown field Protocol in struct literal (2)
+```
+
+Two corrections to the new tests, made before they passed: a refusal case expected the non-string session key to be reported on `s/prompt`, but the
+model checks methods in meta-key order and reports `s/cancel` first, so the case names `s/cancel`; and the committed-schema test matched the method in
+backticks, but the model's doc comments render the schema's backticks as single quotes (`Whether the agent supports 'session/load'.`), so it matches
+the single-quoted form.
+
+The change:
+
+* `model/protocol.go` (new): the types `Protocol`, `Interface`, `MethodRule`, `ValidateRule`; the SDK's four interfaces; `newRules`, which checks the
+  table on its own; `applyMethodRule`; `linkPromptTurns`, `sessionField`, `checkCapabilities`, `checkTypeRules`, `buildInterfaces`; each error is
+  prefixed `protocol table: `.
+* `model/acp.go` (new): `ACP`, with the interface `AgentLoader`, 17 method rules (`session/load`, with its binding and its capability; the prompt turn
+  and its cancel; `session/update`'s name; 13 more capability gates), three hand-written-helper unions, and the `ToolCallUpdate` validate rule.
+* `model.go`, `methods.go`: `Input.Protocol`, `Model.Interfaces`; `BindAgentLoader` became `BindAgentOptional` and `ValidateToolCall` became
+  `ValidateListed`; `helperSkip`, `interfaceName`, `notificationMethodName`, the `session/load` case of `bindingOf`, the `ToolCallUpdate` case of
+  `validateOf`, and the declaration of `AgentLoader` are gone; `Method` gained `PromptTurn`, `CancelsPromptTurn`, `SessionField`, `Canceller`, and
+  `Capability`.
+* `emit/types.go`, `emit/dispatch_helpers.go`: the two renamed constants. `main.go`, `main_test.go`: `Protocol: &model.ACP`.
+
+`grep` over the non-test files of `internal/model` other than `acp.go` finds no wire method of the meta files, no `AgentLoader`, no `sessionId`, and
+none of the four type names the table holds.
+
+Regenerated: each of the five generated files compares equal, by `cmp`, to its copy from `0566b33`.
+
+Each entry of `ACP` was removed, one per fresh scratch copy, and `go test ./...` run in `cmd/generate`; every removal fails a test:
+
+```text
+rule session/load: failing=['TestGeneratedFilesUpToDate', 'TestProtocolTableAppliesToCommittedSchema']
+rule session/prompt: failing=['TestProtocolTableAppliesToCommittedSchema']
+rule session/cancel: failing=['TestFitKeysOfCommittedSchema', 'TestGeneratedFilesUpToDate', 'TestProtocolTableAppliesToCommittedSchema', 'TestUnionClassesOfCommittedSchema']
+rule session/update: failing=['TestGeneratedFilesUpToDate']
+rule session/list (and each of the other 13 capability gates): failing=['TestProtocolTableAppliesToCommittedSchema']
+helpers ContentBlock / SessionUpdate / ToolCallContent: failing=['TestGeneratedFilesUpToDate']
+validate ToolCallUpdate: failing=['TestGeneratedFilesUpToDate']
+interface AgentLoader not optional: failing=[... 'TestGeneratedFilesUpToDate', 'TestProtocolTableAppliesToCommittedSchema', 'TestProtocolTableSkipsAbsentSubjects', ...] (7 tests)
+```
+
+Removing the `session/prompt` rule leaves the output unchanged at this step, because the emitters still select the prompt turn by its wire name; step 4
+moves that choice to the model. Each check of `protocol.go` was broken the same way:
+
+```text
+GoName ignored: failing=['TestBuildMethods', 'TestGeneratedFilesUpToDate', 'TestProtocolTableApplies', 'TestProtocolTableAppliesToCommittedSchema']
+session types not compared: failing=['TestProtocolTableRefuses']
+cancel count not checked: failing=['TestProtocolTableRefuses']
+capabilities not checked: failing=['TestProtocolTableRefuses']
+duplicate rules allowed: failing=['TestProtocolTableRefuses']
+helpers type kind not checked: failing=['TestProtocolTableRefuses']
+absent subjects refused: failing=['TestProtocolTableSkipsAbsentSubjects', 'TestRunGeneratesRecasedUnion']
+```
+
+The first gate run found two lint issues, fixed after the plants ran: `goconst` asked for the five `"terminal"` capability strings to be a constant
+(`capTerminal` in `acp.go`), and `unparam` found `buildMethods`' namer unused, since the table's interface is now declared by `buildInterfaces`; the
+parameter is gone. Neither changes behaviour; the tests and the comparison above were rerun after them.
+
+After the change every test in the root and in `cmd/generate` passes; `go build ./example/...` passes. Coverage: `internal/model` 94.5%,
+`internal/emit` 37.4%.
+
+Gates: `make pre-add-check` with the twelve changed Go files named: `go-precheck: 12 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 3 on `main`.

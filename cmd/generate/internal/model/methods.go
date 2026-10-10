@@ -17,8 +17,9 @@ const (
 	BindUnknown Binding = iota
 	// BindAgent places the method on the Agent interface.
 	BindAgent
-	// BindAgentLoader places the method on the AgentLoader interface.
-	BindAgentLoader
+	// BindAgentOptional places the method on the optional agent interface
+	// the protocol table declares.
+	BindAgentOptional
 	// BindAgentExperimental places the method on the AgentExperimental interface.
 	BindAgentExperimental
 	// BindClient places the method on the Client interface.
@@ -26,15 +27,6 @@ const (
 	// BindClientExperimental places the method on the ClientExperimental interface.
 	BindClientExperimental
 )
-
-// interfaceName is the Go interface of each binding.
-var interfaceName = map[Binding]string{
-	BindAgent:              "Agent",
-	BindAgentLoader:        "AgentLoader",
-	BindAgentExperimental:  "AgentExperimental",
-	BindClient:             "Client",
-	BindClientExperimental: "ClientExperimental",
-}
 
 // Method is one wire method of the meta files and its Go types.
 type Method struct {
@@ -56,6 +48,15 @@ type Method struct {
 	DocsIgnored bool
 	// Doc is the interface method's doc comment.
 	Doc []string
+	// PromptTurn and CancelsPromptTurn are the method's prompt-turn role
+	// from the protocol table; SessionField is the Go field of its session
+	// key; Canceller is a prompt turn's cancel.
+	PromptTurn, CancelsPromptTurn bool
+	SessionField                  string
+	Canceller                     *Method
+	// Capability is the capability path that gates the method, from the
+	// protocol table.
+	Capability string
 }
 
 // roles holds the definitions x-method and x-side link to one method.
@@ -97,7 +98,7 @@ func linkRoles(schema *load.Schema) (map[string]*roles, error) {
 
 // buildMethods resolves every method of the meta files and checks the
 // methods of each interface for collisions.
-func buildMethods(m *Model, n *namer, prov *load.Provenance) error {
+func buildMethods(m *Model, prov *load.Provenance, r *rules) error {
 	linked, err := linkRoles(m.schema)
 	if err != nil {
 		return err
@@ -118,13 +119,14 @@ func buildMethods(m *Model, n *namer, prov *load.Provenance) error {
 				return err
 			}
 			mi.Const = side.consts[key]
+			applyMethodRule(mi, r.methods[ruleKey(mi.Side, mi.Wire)])
 			*side.out = append(*side.out, mi)
 		}
 	}
 
 	seen := map[Binding]map[string]string{}
 	for _, mi := range slices.Concat(m.AgentMethods, m.ClientMethods) {
-		iface := interfaceName[mi.Binding]
+		iface := m.interfaceOf(mi.Binding, r)
 		if err := checkExported(mi.GoName); err != nil {
 			return fmt.Errorf("%s method %q: interface method name: %w", mi.Side, mi.Wire, err)
 		}
@@ -135,9 +137,6 @@ func buildMethods(m *Model, n *namer, prov *load.Provenance) error {
 			return fmt.Errorf("interface %s: methods %q and %q both become %s", iface, prev, mi.Wire, mi.GoName)
 		}
 		seen[mi.Binding][mi.GoName] = mi.Wire
-	}
-	if len(seen[BindAgentLoader]) > 0 {
-		return n.declare("AgentLoader", "the generator")
 	}
 	return nil
 }
@@ -155,14 +154,14 @@ func buildMethod(schema *load.Schema, linked map[string]*roles, prov *load.Prove
 	}
 	mi := &Method{Side: side, Wire: wire, Key: key, Req: r.req, Resp: r.resp, Notif: r.notif}
 	if r.notif != "" {
-		mi.GoName = notificationMethodName(key, r.notif)
+		mi.GoName = strings.TrimSuffix(r.notif, "Notification")
 	} else {
 		mi.GoName = strings.TrimSuffix(r.req, "Request")
 		resp := schema.Defs[r.resp]
 		mi.HasResult = resp == nil || resp.Type != schemaTypeNull
 	}
 	mi.Unstable = prov != nil && prov.UnstableWires[wire]
-	mi.Binding = bindingOf(side, wire, mi.Unstable)
+	mi.Binding = bindingOf(side, mi.Unstable)
 	for _, name := range []string{r.req, r.resp, r.notif} {
 		if d := schema.Defs[name]; name != "" && d != nil && d.DocsIgnore {
 			mi.DocsIgnored = true
@@ -201,32 +200,16 @@ func markUnstable(doc []string) []string {
 	return out
 }
 
-// notificationMethodName is the interface method of a notification.
-func notificationMethodName(key, notif string) string {
-	switch key {
-	case "session_update":
-		return "SessionUpdate"
-	case "session_cancel":
-		return "Cancel"
-	default:
-		return strings.TrimSuffix(notif, "Notification")
-	}
-}
-
-// bindingOf places a method on an interface: session/load on AgentLoader, an
-// unstable method on the experimental interface of its side.
-func bindingOf(side, wire string, unstable bool) Binding {
+// bindingOf places a method on its side's required interface, or, when
+// unstable, on its experimental one. The protocol table may bind it elsewhere.
+func bindingOf(side string, unstable bool) Binding {
 	switch side {
-	case "agent":
-		switch {
-		case wire == "session/load":
-			return BindAgentLoader
-		case unstable:
+	case sideAgent:
+		if unstable {
 			return BindAgentExperimental
-		default:
-			return BindAgent
 		}
-	case "client":
+		return BindAgent
+	case sideClient:
 		if unstable {
 			return BindClientExperimental
 		}

@@ -81,11 +81,12 @@ func TestValidateKinds(t *testing.T) {
 		"One":{"oneOf":[{"type":"string"},{"type":"integer"}]},
 		"Shared":{"required":["s","n","list"],"properties":{"s":{"type":"string"},"n":{"type":"integer"},"list":{"type":"array"}},
 			"anyOf":[{"type":"object","properties":{"x":{"type":"string"}}}]},
-		"ToolCallUpdate":{"type":"object","properties":{"toolCallId":{"type":"string"}}},
+		"ToolCallUpdate":{"type":"object","required":["toolCallId"],"properties":{"toolCallId":{"type":"string"}}},
 		"FooRequest":{"type":"object","required":["name","n","ids"],"properties":{"name":{"type":"string"},"n":{"type":"integer"},"ids":{"type":"array"},"opt":{"type":"string"}}},
 		"BarResponse":{"type":"object"},
 		"Plain":{"type":"object","required":["a"],"properties":{"a":{"type":"string"}}},
-		"KindNotification":{"type":"string","enum":["a"]}}`)})
+		"KindNotification":{"type":"string","enum":["a"]}}`),
+		Protocol: &Protocol{Validate: []ValidateRule{{Type: "ToolCallUpdate", Prop: "toolCallId"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +97,7 @@ func TestValidateKinds(t *testing.T) {
 	}{
 		{"One", ValidateExactlyOne, nil},
 		{"Shared", ValidateShared, []RequiredCheck{{"List", "list", "array"}, {"S", "s", "string"}}},
-		{"ToolCallUpdate", ValidateToolCall, []RequiredCheck{{"ToolCallId", "toolCallId", "string"}}},
+		{"ToolCallUpdate", ValidateListed, []RequiredCheck{{"ToolCallId", "toolCallId", "string"}}},
 		{"FooRequest", ValidateFields, []RequiredCheck{{"Ids", "ids", "array"}, {"Name", "name", "string"}}},
 		{"BarResponse", ValidateFields, nil},
 		{"Plain", ValidateNone, nil},

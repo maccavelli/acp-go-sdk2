@@ -34,7 +34,7 @@ func TestGeneratedFilesUpToDate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov})
+	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov, Protocol: &model.ACP})
 	if err != nil {
 		t.Fatal(err)
 	}

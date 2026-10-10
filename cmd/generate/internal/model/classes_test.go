@@ -33,7 +33,7 @@ func committedModel(t *testing.T) *Model {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := Build(Input{Meta: meta, Schema: schema, Provenance: prov})
+	m, err := Build(Input{Meta: meta, Schema: schema, Provenance: prov, Protocol: &ACP})
 	if err != nil {
 		t.Fatal(err)
 	}

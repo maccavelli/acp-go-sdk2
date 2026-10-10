@@ -20,6 +20,18 @@ const methodDefs = `{
 	"WriteResponse":{"type":"null","x-side":"client","x-method":"fs/write","x-docs-ignore":true},
 	"CancelRequestNotification":{"type":"object","x-side":"protocol","x-method":"$/cancel_request"}}`
 
+// methodProtocol is the part of ACP that methodDefs exercises: session/load on
+// AgentLoader, and session/update named SessionUpdate.
+func methodProtocol() *Protocol {
+	return &Protocol{
+		Interfaces: []Interface{{Binding: BindAgentOptional, Name: "AgentLoader", Var: "loader"}},
+		Methods: []MethodRule{
+			{Side: "agent", Wire: "session/load", Binding: BindAgentOptional},
+			{Side: "client", Wire: "session/update", GoName: "SessionUpdate"},
+		},
+	}
+}
+
 func methodMeta() *load.Meta {
 	return &load.Meta{
 		AgentMethods: map[string]string{"session_new": "session/new", "session_load": "session/load",
@@ -32,7 +44,7 @@ func methodMeta() *load.Meta {
 func TestBuildMethods(t *testing.T) {
 	t.Parallel()
 	prov := &load.Provenance{UnstableWires: map[string]bool{"unstable/foo": true}}
-	m, err := Build(Input{Meta: methodMeta(), Schema: schemaOf(t, methodDefs), Provenance: prov})
+	m, err := Build(Input{Meta: methodMeta(), Schema: schemaOf(t, methodDefs), Provenance: prov, Protocol: methodProtocol()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +71,7 @@ func TestBuildMethods(t *testing.T) {
 		{"foo", "Foo", "AgentMethodFoo", "FooRequest", "FooResponse", "", true, BindAgentExperimental,
 			"**UNSTABLE**||This capability is not part of the spec yet, and may be removed or changed at any point.||Foo result."},
 		{"session_cancel", "Cancel", "AgentMethodSessionCancel", "", "", "CancelNotification", false, BindAgent, "Cancel."},
-		{"session_load", "LoadSession", "AgentMethodSessionLoad", "LoadSessionRequest", "LoadSessionResponse", "", true, BindAgentLoader, ""},
+		{"session_load", "LoadSession", "AgentMethodSessionLoad", "LoadSessionRequest", "LoadSessionResponse", "", true, BindAgentOptional, ""},
 		{"session_new", "NewSession", "AgentMethodSessionNew", "NewSessionRequest", "NewSessionResponse", "", true, BindAgent, "Creates a session."},
 	})
 	check("client", m.ClientMethods, []row{
@@ -77,7 +89,7 @@ func TestBuildMethods(t *testing.T) {
 	}
 
 	// Without provenance nothing is unstable, so foo binds to Agent.
-	plain, err := Build(Input{Meta: methodMeta(), Schema: schemaOf(t, methodDefs)})
+	plain, err := Build(Input{Meta: methodMeta(), Schema: schemaOf(t, methodDefs), Protocol: methodProtocol()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +156,7 @@ func TestBuildMethodsRefuses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := Build(Input{Meta: tt.meta, Schema: schemaOf(t, tt.defs)})
+			_, err := Build(Input{Meta: tt.meta, Schema: schemaOf(t, tt.defs), Protocol: methodProtocol()})
 			if err == nil {
 				t.Fatal("Build accepted the schema")
 			}

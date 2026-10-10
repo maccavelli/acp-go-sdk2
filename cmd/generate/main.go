@@ -47,7 +47,7 @@ func run(args []string) error {
 		return err
 	}
 	// The model refuses a schema it cannot represent before any file is written.
-	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov})
+	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov, Protocol: &model.ACP})
 	if err != nil {
 		return err
 	}

@@ -86,7 +86,7 @@ func emitRPCInterfaces(f *goFile, m *model.Model) {
 	for _, mi := range m.AgentMethods {
 		target := &agent
 		switch mi.Binding {
-		case model.BindAgentLoader:
+		case model.BindAgentOptional:
 			target = &agentLoader
 		case model.BindAgentExperimental:
 			target = &agentExperimental
@@ -167,7 +167,7 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 
 	// Union wrappers get Validate from emitUnion.
 	switch t.Validate {
-	case model.ValidateFields, model.ValidateToolCall:
+	case model.ValidateFields, model.ValidateListed:
 		emitFieldValidate(f, t)
 	}
 }
@@ -678,7 +678,7 @@ func validateMethod(recv, name string, body ...ast.Stmt) *ast.FuncDecl {
 // ToolCallUpdate from the checks the model lists.
 func emitFieldValidate(f *goFile, t *model.Type) {
 	recv := "v"
-	if t.Validate == model.ValidateToolCall {
+	if t.Validate == model.ValidateListed {
 		recv = "t"
 	}
 	var body []ast.Stmt

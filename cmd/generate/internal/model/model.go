@@ -61,14 +61,20 @@ type Model struct {
 	AgentMethods  []*Method
 	ClientMethods []*Method
 	Protocol      []*Method
+	// Interfaces are the Go interfaces the methods are called through, in
+	// binding order: the SDK's four and each protocol-table interface a
+	// method binds to.
+	Interfaces []Interface
 }
 
-// Input is what Build resolves: the merged meta and schema, and the merge's
-// provenance, which may be nil when there is no unstable schema.
+// Input is what Build resolves: the merged meta and schema, the merge's
+// provenance, which may be nil when there is no unstable schema, and the
+// protocol table, which may be nil for none.
 type Input struct {
 	Meta       *load.Meta
 	Schema     *load.Schema
 	Provenance *load.Provenance
+	Protocol   *Protocol
 }
 
 // Type returns the type of the named definition, or nil.
@@ -184,8 +190,9 @@ const (
 	ValidateNone ValidateKind = iota
 	// ValidateFields checks the required string and array fields of an RPC type.
 	ValidateFields
-	// ValidateToolCall checks ToolCallUpdate's toolCallId.
-	ValidateToolCall
+	// ValidateListed checks the one required string the protocol table's
+	// validate rule names.
+	ValidateListed
 	// ValidateExactlyOne checks that a oneOf union has exactly one variant set.
 	ValidateExactlyOne
 	// ValidateShared checks the union's required properties on the variant set.
@@ -222,15 +229,12 @@ type Param struct {
 	Type  TypeRef
 }
 
-// helperSkip lists unions whose constructors are hand-written in helpers.go.
-var helperSkip = map[string]bool{"ContentBlock": true, "ToolCallContent": true, "SessionUpdate": true}
-
 // fixedNames are package-level names the generator declares whatever the schema holds.
 var fixedNames = []string{"ProtocolVersionNumber", "Agent", "AgentExperimental", "Client", "ClientExperimental"}
 
 // Build resolves in.
 func Build(in Input) (*Model, error) {
-	m, err := resolve(in.Meta, in.Schema, in.Provenance)
+	m, err := resolve(in.Meta, in.Schema, in.Provenance, in.Protocol)
 	if err != nil {
 		return nil, fmt.Errorf("model: %w", err)
 	}
@@ -238,9 +242,13 @@ func Build(in Input) (*Model, error) {
 }
 
 // resolve builds the model; Build adds the error prefix.
-func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance) (*Model, error) {
+func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto *Protocol) (*Model, error) {
 	if err := checkRefs(schema); err != nil {
 		return nil, err
+	}
+	r, err := newRules(proto)
+	if err != nil {
+		return nil, fmt.Errorf(tablePrefix+"%w", err)
 	}
 	m := &Model{
 		Version:            meta.Version,
@@ -263,7 +271,7 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance) (*Mode
 		}
 	}
 	for _, name := range names {
-		t, err := buildType(schema, n, name, schema.Defs[name])
+		t, err := buildType(schema, n, name, schema.Defs[name], r)
 		if err != nil {
 			return nil, err
 		}
@@ -287,8 +295,18 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance) (*Mode
 			side.consts[key] = c
 		}
 	}
-	if err := buildMethods(m, n, prov); err != nil {
+	if err := buildMethods(m, prov, r); err != nil {
 		return nil, err
+	}
+	for _, step := range []func() error{
+		func() error { return m.linkPromptTurns(r) },
+		func() error { return m.checkCapabilities(r) },
+		func() error { return m.checkTypeRules(r) },
+		func() error { return m.buildInterfaces(n, r) },
+	} {
+		if err := step(); err != nil {
+			return nil, fmt.Errorf(tablePrefix+"%w", err)
+		}
 	}
 	return m, nil
 }
@@ -319,12 +337,12 @@ func classify(def *load.Definition) Kind {
 	}
 }
 
-func buildType(schema *load.Schema, n *namer, name string, def *load.Definition) (*Type, error) {
+func buildType(schema *load.Schema, n *namer, name string, def *load.Definition, r *rules) (*Type, error) {
 	t := &Type{Name: name, def: def, Kind: classify(def), CatchAll: -1}
 	if def != nil {
 		t.Doc = docLines(def.Description)
 	}
-	defer validateOf(t)
+	defer validateOf(t, r)
 	switch t.Kind {
 	case KindEnum, KindStringConstUnion, KindOpenEnum:
 		for _, v := range enumValues(t) {
@@ -336,7 +354,7 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition)
 		}
 	case KindUnion:
 		t.ExactlyOne = len(def.AnyOf) == 0
-		if err := buildUnion(schema, n, t); err != nil {
+		if err := buildUnion(schema, n, t, r); err != nil {
 			return nil, err
 		}
 	case KindObject:
@@ -421,7 +439,7 @@ func buildObject(n *namer, t *Type) error {
 }
 
 // buildUnion names every variant of t, in schema order, and its helpers.
-func buildUnion(schema *load.Schema, n *namer, t *Type) error {
+func buildUnion(schema *load.Schema, n *namer, t *Type, r *rules) error {
 	list := t.unionList()
 	discKey, src := discriminatorKey(schema, t.def, list)
 	t.DiscKey, t.DiscSource = discKey, src
@@ -451,7 +469,7 @@ func buildUnion(schema *load.Schema, n *namer, t *Type) error {
 	if err := classifyUnion(schema, t, list); err != nil {
 		return err
 	}
-	if !t.ExactlyOne || t.def.DocsIgnore || helperSkip[t.Name] {
+	if !t.ExactlyOne || t.def.DocsIgnore || r.helpers[t.Name] {
 		return nil
 	}
 	for idx, v := range list {
@@ -613,10 +631,10 @@ func isRPCTypeName(name string) bool {
 	return strings.HasSuffix(name, "Request") || strings.HasSuffix(name, "Response") || strings.HasSuffix(name, "Notification")
 }
 
-// validateOf decides t's Validate method. A union checks its variants; an RPC
-// object checks its required string and array fields; ToolCallUpdate checks
-// toolCallId.
-func validateOf(t *Type) {
+// validateOf decides t's Validate method. A union checks its variants; a type
+// the protocol table lists checks the property it names; an RPC object checks
+// its required string and array fields.
+func validateOf(t *Type, r *rules) {
 	switch {
 	case t.Kind == KindNone:
 	case t.Kind == KindUnion && t.ExactlyOne:
@@ -628,9 +646,10 @@ func validateOf(t *Type) {
 				t.Checks = append(t.Checks, c)
 			}
 		}
-	case t.Name == "ToolCallUpdate":
-		t.Validate = ValidateToolCall
-		t.Checks = []RequiredCheck{{Field: "ToolCallId", Prop: "toolCallId", Kind: schemaTypeString}}
+	case r.validate[t.Name] != "":
+		prop := r.validate[t.Name]
+		t.Validate = ValidateListed
+		t.Checks = []RequiredCheck{{Field: util.ToExportedField(prop), Prop: prop, Kind: schemaTypeString}}
 	case primaryType(t.def) == schemaTypeObject && isRPCTypeName(t.Name):
 		t.Validate = ValidateFields
 		for _, prop := range slices.Sorted(maps.Keys(t.def.Properties)) {

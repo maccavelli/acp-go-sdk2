@@ -38,7 +38,7 @@ func unmarshalValidate(f *goFile, typeName string) []ast.Stmt {
 // receiver the method is called on.
 func agentAssert(f *goFile, binding model.Binding, methodName, paramType, respType string, hasResponse bool) ([]ast.Stmt, ast.Expr) {
 	switch binding {
-	case model.BindAgentLoader:
+	case model.BindAgentOptional:
 		return namedAssert(dot("a", "agent"), "loader", "AgentLoader"), id("loader")
 	case model.BindAgentExperimental:
 		return singleMethodAssert(f, dot("a", "agent"), "exp", methodName, paramType, respType, hasResponse), id("exp")
