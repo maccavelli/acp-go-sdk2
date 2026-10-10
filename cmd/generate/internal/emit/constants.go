@@ -20,6 +20,8 @@ const (
 	generatedFileMode = 0o600
 	// unknownField holds a discriminated union's unrecognized payload.
 	unknownField = "Unknown"
+	// extraField holds the keys a union's catch-all variant does not declare.
+	extraField = "Extra"
 
 	pkgBytes   = "bytes"
 	pkgContext = "context"

@@ -153,6 +153,77 @@ func TestUnknownValueKept(t *testing.T) {
 	}
 }
 
+// catchAllUnions are the unions with a schema catch-all, with their
+// discriminator, its Go field, and the other keys the catch-all requires.
+var catchAllUnions = []struct {
+	name   string
+	newPtr func() any
+	key    string
+	field  string
+	more   string
+}{
+	{"CreateElicitationRequest", func() any { return &CreateElicitationRequest{} }, "mode", "Mode", `,"message":"m"`},
+	{"CreateElicitationResponse", func() any { return &CreateElicitationResponse{} }, "action", "Action", ""},
+	{"ElicitationPropertySchema", func() any { return &ElicitationPropertySchema{} }, "type", "Type", ""},
+	{"IdleStateUpdate", func() any { return &IdleStateUpdate{} }, "stopReason", "StopReason", ""},
+	{"MultiSelectItems", func() any { return &MultiSelectItems{} }, "type", "Type", ""},
+	{"StateUpdate", func() any { return &StateUpdate{} }, "state", "State", ""},
+}
+
+// sameJSON reports whether a and b encode the same JSON value.
+func sameJSON(t *testing.T, a, b []byte) bool {
+	t.Helper()
+	var x, y any
+	if err := json.Unmarshal(a, &x); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &y); err != nil {
+		t.Fatal(err)
+	}
+	return reflect.DeepEqual(x, y)
+}
+
+// TestUnknownValueToCatchAll requires a value no listed variant takes to land
+// in the schema's catch-all, which keeps the keys it does not declare and
+// encodes the payload back unchanged.
+func TestUnknownValueToCatchAll(t *testing.T) {
+	t.Parallel()
+	for _, tt := range catchAllUnions {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			in := `{"` + tt.key + `":"zz_future","extra":{"n":9007199254740993}` + tt.more + `}`
+			u := tt.newPtr()
+			if err := json.Unmarshal([]byte(in), u); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if got := setVariants(u); len(got) != 1 || got[0] != "Other" {
+				t.Fatalf("variants set: %v, want [Other]", got)
+			}
+			other := reflect.ValueOf(u).Elem().FieldByName("Other").Elem()
+			if got := other.FieldByName(tt.field).String(); got != "zz_future" {
+				t.Errorf("Other.%s = %q", tt.field, got)
+			}
+			extra := other.FieldByName("Extra")
+			if !extra.IsValid() {
+				t.Fatalf("%s has no Extra field", other.Type())
+			}
+			kept := extra.Interface().(map[string]json.RawMessage)
+			if len(kept) != 1 || string(kept["extra"]) != `{"n":9007199254740993}` {
+				t.Errorf("Extra = %v, want only extra", kept)
+			}
+			b, err := json.Marshal(reflect.ValueOf(u).Elem().Interface())
+			if err != nil || !sameJSON(t, b, []byte(in)) || !strings.Contains(string(b), "9007199254740993") {
+				t.Errorf("encoded %s, %v; want %s", b, err, in)
+			}
+		})
+	}
+	var r CreateElicitationResponse
+	err := json.Unmarshal([]byte(`{"action":"accept","content":5}`), &r)
+	if err == nil || !strings.Contains(err.Error(), `CreateElicitationResponse: action "accept"`) {
+		t.Errorf("known value with a bad payload: %v", err)
+	}
+}
+
 // TestContentBlockKeepsMetaAndAnnotations requires a content block to encode
 // its _meta and annotations, whether built in Go or decoded from the wire.
 func TestContentBlockKeepsMetaAndAnnotations(t *testing.T) {

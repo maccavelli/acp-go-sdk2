@@ -408,3 +408,55 @@ Gates: `make pre-add-check` with the four changed Go files named: `go-precheck: 
 govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 6 on `main`.
+
+### Step 7, catch-alls, 2026-10-10
+
+The owner committed step 6 as `d9c048f`. Step 7 ran on `main` from that clean tree. The agent did not commit.
+
+`TestUnknownValueToCatchAll` in `union_wire_test.go`, one subtest per catch-all union, decodes `{"<key>":"zz_future","extra":{"n":9007199254740993}}`
+(with `"message":"m"` for `CreateElicitationRequest`, whose catch-all requires it) and requires: only `Other` set; its discriminator field
+`zz_future`; `Extra` holding exactly `extra`, digits intact; and an encoding equal, as JSON, to the input. It also requires
+`CreateElicitationResponse` `{"action":"accept","content":5}` to fail naming `action "accept"`. Run before the generator change:
+
+```text
+CreateElicitationRequest: acp.CreateElicitationOther has no Extra field
+IdleStateUpdate: variants set: [EndTurn], want [Other]
+ElicitationPropertySchema: variants set: [String], want [Other]
+CreateElicitationResponse: variants set: [Accept], want [Other]
+StateUpdate: variants set: [Running], want [Other]
+MultiSelectItems: acp.MultiSelectItemsOther has no Extra field
+```
+
+`cmd/generate/internal/emit`: `unionUnmarshalBody` takes the catch-all (`catchAllOf`); after the discriminator switch, a present, non-null value
+decodes into it, failing as `<Union>: <key> "<value>": <cause>`. `emitStruct` and `emitObjectDefaults` take `keepExtra`: the struct gains
+`Extra map[string]json.RawMessage` with a doc comment; `MarshalJSON` encodes the declared fields and adds each `Extra` key they did not write;
+`UnmarshalJSON` decodes the fields, deletes the declared keys from the raw map, and keeps the rest in `Extra`, after any defaults. `constants.go` gains
+`extraField`.
+
+Regenerated: `types_gen.go` gained 317 lines and lost none, and no other file changed. A script placed every added line: 8 in the `UnmarshalJSON` of
+each of the 6 catch-all unions, and in each of the 6 catch-all types 5 in the struct, 20 in `MarshalJSON`, and 18 to 22 in `UnmarshalJSON` (the list
+of declared keys fits one line for a single key and takes a line per key otherwise); nothing else was touched.
+
+Each rule was seen to fail, with one planted breakage in the generator per fresh scratch copy, regenerated, then the test:
+
+```text
+catch-all not routed: failing=5
+    variants set: [EndTurn], want [Other]
+Extra not kept on decode: failing=7
+    Extra = map[], want only extra
+Extra not written back: failing=7
+    encoded {"message":"m","mode":"zz_future"}, <nil>; want {"mode":"zz_future","extra":{"n":9007199254740993},"message":"m"}
+declared keys left in Extra: failing=7
+    Extra = map[extra:{"n":9007199254740993} state:"zz_future"], want only extra
+```
+
+The last plant passed against the first draft of the test, which checked only the `extra` key: the encoder adds an `Extra` key only where the struct
+wrote none, so a declared key left in `Extra` did not show in the output. The test now requires `Extra` to hold `extra` alone. The routing plant fails
+four unions, not six: `CreateElicitationRequest` and `MultiSelectItems` reached `Other` by key match before this step (W2).
+
+After the change every test in the root and in `cmd/generate` passes; no golden changed; `go build ./example/...` passes.
+
+Gates: `make pre-add-check` with the four changed Go files named: `go-precheck: 4 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 7 on `main`.

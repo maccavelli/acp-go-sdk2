@@ -183,22 +183,27 @@ func emitObjectSchema(f *goFile, t *model.Type) {
 	// Nested struct types for inline object properties come first.
 	for _, ns := range t.NestedStructs {
 		f.comment(ns.Doc...)
-		emitStruct(f, ns.Name, ns.Fields)
+		emitStruct(f, ns.Name, ns.Fields, false)
 	}
-	emitStruct(f, t.Name, t.Fields)
+	emitStruct(f, t.Name, t.Fields, false)
 }
 
 // emitStruct emits type name struct { fields } and the methods its defaults
 // and fills need.
-func emitStruct(f *goFile, name string, fields []*model.Field) {
+func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool) {
 	var st fieldSet
 	for _, fld := range fields {
 		st.comment(fld.Doc...)
 		st.add(structField(fld.Name, typeAST(fld.Type), fld.Tag))
 	}
+	if keepExtra {
+		st.comment("Extra holds the keys of the payload this struct does not declare, as received.",
+			"MarshalJSON writes them back.")
+		st.add(structField(extraField, rawMap(f.qual(pkgJSON, "RawMessage")), "-"))
+	}
 	f.add(typeDecl(name, st.structType()))
 	f.line()
-	emitObjectDefaults(f, name, fields)
+	emitObjectDefaults(f, name, fields, keepExtra)
 }
 
 // typeAST renders a model type as a Go type expression. Each call builds new
@@ -219,7 +224,7 @@ func typeAST(r model.TypeRef) ast.Expr {
 // emitObjectDefaults synthesizes MarshalJSON for structs with fields that
 // carry schema defaults or are required slices or maps, and UnmarshalJSON for
 // structs with defaults.
-func emitObjectDefaults(f *goFile, name string, fields []*model.Field) {
+func emitObjectDefaults(f *goFile, name string, fields []*model.Field, keepExtra bool) {
 	var defaults, fills []*model.Field
 	for _, fld := range fields {
 		if fld.Default != nil {
@@ -229,10 +234,11 @@ func emitObjectDefaults(f *goFile, name string, fields []*model.Field) {
 			fills = append(fills, fld)
 		}
 	}
-	if len(defaults) == 0 && len(fills) == 0 {
+	if len(defaults) == 0 && len(fills) == 0 && !keepExtra {
 		return
 	}
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
+	marshal := func(x ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Marshal"), x) }
 
 	// MarshalJSON: coerce nil slices and maps to their defaults, and nil
 	// required ones to empty, before encoding.
@@ -255,11 +261,25 @@ func emitObjectDefaults(f *goFile, name string, fields []*model.Field) {
 			assign(exprs(dot("a", fld.Name)), composite(typeAST(fld.Type))),
 		))
 	}
-	body = append(body, ret(call(f.qual(pkgJSON, "Marshal"), id("a"))))
+	if keepExtra {
+		// Add each Extra key the declared fields did not write.
+		body = append(body,
+			define(exprs(id("b"), id("err")), marshal(id("a"))),
+			ifStmt(nil, binary(errNotNil(), token.LOR, binary(call(id("len"), dot("v", extraField)), token.EQL, intLit(0))), ret(id("b"), id("err"))),
+			varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
+			ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("m")))), errNotNil(), ret(nilExpr(), id("err"))),
+			rangeStmt(id("k"), id("x"), dot("v", extraField),
+				ifStmt(define(exprs(id("_"), id("ok")), index(id("m"), id("k"))), not(id("ok")),
+					assign(exprs(index(id("m"), id("k"))), id("x")))),
+			ret(marshal(id("m"))),
+		)
+	} else {
+		body = append(body, ret(marshal(id("a"))))
+	}
 	f.add(method(param("v", id(name)), "MarshalJSON",
 		funcType(nil, param("", byteSlice()), param("", id("error"))), body...))
 	f.line()
-	if len(defaults) == 0 {
+	if len(defaults) == 0 && !keepExtra {
 		return
 	}
 
@@ -285,6 +305,17 @@ func emitObjectDefaults(f *goFile, name string, fields []*model.Field) {
 			ifStmt(nil, cond, exprStmt(unmarshal(bytesOf(fld.Default.JSON), addr(dot("a", fld.Name))))),
 		))
 	}
+	if keepExtra {
+		// Keep the keys no field declares.
+		var declared []ast.Expr
+		for _, fld := range fields {
+			declared = append(declared, str(fld.Key))
+		}
+		body = append(body,
+			rangeStmt(id("_"), id("k"), composite(sliceOf(id("string")), declared...), exprStmt(call(id("delete"), id("m"), id("k")))),
+			ifStmt(nil, binary(call(id("len"), id("m")), token.GTR, intLit(0)), assign(exprs(dot("a", extraField)), id("m"))),
+		)
+	}
 	body = append(body,
 		assign(exprs(star(id("v"))), call(id(name), id("a"))),
 		ret(nilExpr()),
@@ -303,7 +334,7 @@ func emitInlineVariant(f *goFile, tname string, in *model.Inline) {
 	f.comment(in.Doc...)
 	switch in.Kind {
 	case model.InlineStruct:
-		emitStruct(f, tname, in.Fields)
+		emitStruct(f, tname, in.Fields, in.KeepExtra)
 	case model.InlineRaw:
 		// An alias keeps json.RawMessage's methods, unlike a defined type.
 		f.add(aliasDecl(tname, f.qual(pkgJSON, "RawMessage")))
@@ -344,7 +375,7 @@ func keyMatch(m, key string) ast.Stmt {
 		assign(exprs(id("match")), boolLit(false)))
 }
 
-func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKey string, hasUnknown bool) []ast.Stmt {
+func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKey string, hasUnknown bool, catchAll *model.Variant) []ast.Stmt {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	var body []ast.Stmt
 
@@ -375,6 +406,17 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 				ifStmt(define(exprs(id("err")), unmarshal(id("v"), addr(id("disc")))), errNotNil(),
 					ret(call(f.qual(pkgFmt, "Errorf"), str(name+": discriminator "+strconv.Quote(discKey)+": %w"), id("err"))))),
 			switchStmt(id("disc"), cases...),
+		}
+		if catchAll != nil {
+			// A present value no case took belongs to the schema's catch-all.
+			disc = append(disc, ifStmt(define(exprs(id("raw"), id("ok")), index(id("m"), str(discKey))),
+				binary(id("ok"), token.LAND, binary(call(id("string"), id("raw")), token.NEQ, str(schemaTypeNull))),
+				append([]ast.Stmt{
+					varStmt("v", id(catchAll.TypeName)),
+					ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v")))), errNotNil(),
+						ret(call(f.qual(pkgFmt, "Errorf"), str(name+": "+discKey+" %q: %w"), id("disc"), id("err")))),
+				}, setVariant(catchAll)...)...,
+			))
 		}
 		if hasUnknown {
 			// A present value no case took is kept as received.
@@ -555,6 +597,14 @@ func emitFieldValidate(f *goFile, t *model.Type) {
 	f.add(validateMethod(recv, t.Name, append(body, ret(nilExpr()))...))
 }
 
+// catchAllOf returns a union's catch-all variant, or nil.
+func catchAllOf(t *model.Type) *model.Variant {
+	if t.CatchAll < 0 {
+		return nil
+	}
+	return t.Variants[t.CatchAll]
+}
+
 func emitUnion(f *goFile, t *model.Type) {
 	name := t.Name
 	var variants []*model.Variant
@@ -585,7 +635,7 @@ func emitUnion(f *goFile, t *model.Type) {
 	f.line()
 	f.add(method(param("u", star(id(name))), "UnmarshalJSON",
 		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))),
-		unionUnmarshalBody(f, name, variants, t.DiscKey, t.HasUnknown)...))
+		unionUnmarshalBody(f, name, variants, t.DiscKey, t.HasUnknown, catchAllOf(t))...))
 	f.line()
 	f.add(method(param("u", id(name)), "MarshalJSON",
 		funcType(nil, param("", byteSlice()), param("", id("error"))),

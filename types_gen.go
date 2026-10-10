@@ -1760,6 +1760,53 @@ type CreateElicitationOther struct {
 	// extensions. Unknown values that do not begin with '_' are reserved for
 	// future ACP variants.
 	Mode string `json:"mode"`
+	// Extra holds the keys of the payload this struct does not declare, as received.
+	// MarshalJSON writes them back.
+	Extra map[string]json.RawMessage `json:"-"`
+}
+
+func (v CreateElicitationOther) MarshalJSON() ([]byte, error) {
+	type Alias CreateElicitationOther
+	var a Alias
+	a = Alias(v)
+	b, err := json.Marshal(a)
+	if err != nil || len(v.Extra) == 0 {
+		return b, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	for k, x := range v.Extra {
+		if _, ok := m[k]; !ok {
+			m[k] = x
+		}
+	}
+	return json.Marshal(m)
+}
+
+func (v *CreateElicitationOther) UnmarshalJSON(b []byte) error {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return err
+	}
+	type Alias CreateElicitationOther
+	var a Alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return err
+	}
+	for _, k := range []string{
+		"_meta",
+		"message",
+		"mode",
+	} {
+		delete(m, k)
+	}
+	if len(m) > 0 {
+		a.Extra = m
+	}
+	*v = CreateElicitationOther(a)
+	return nil
 }
 
 // Request from the agent to elicit structured user input.
@@ -1808,6 +1855,14 @@ func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("CreateElicitationRequest: mode \"url\": %w", err)
 				}
 				u.Url = &v
+				return nil
+			}
+			if raw, ok := m["mode"]; ok && string(raw) != "null" {
+				var v CreateElicitationOther
+				if err := json.Unmarshal(b, &v); err != nil {
+					return fmt.Errorf("CreateElicitationRequest: mode %q: %w", disc, err)
+				}
+				u.Other = &v
 				return nil
 			}
 		}
@@ -2024,6 +2079,52 @@ type CreateElicitationResponseOther struct {
 	// extensions. Unknown values that do not begin with '_' are reserved for
 	// future ACP variants.
 	Action string `json:"action"`
+	// Extra holds the keys of the payload this struct does not declare, as received.
+	// MarshalJSON writes them back.
+	Extra map[string]json.RawMessage `json:"-"`
+}
+
+func (v CreateElicitationResponseOther) MarshalJSON() ([]byte, error) {
+	type Alias CreateElicitationResponseOther
+	var a Alias
+	a = Alias(v)
+	b, err := json.Marshal(a)
+	if err != nil || len(v.Extra) == 0 {
+		return b, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	for k, x := range v.Extra {
+		if _, ok := m[k]; !ok {
+			m[k] = x
+		}
+	}
+	return json.Marshal(m)
+}
+
+func (v *CreateElicitationResponseOther) UnmarshalJSON(b []byte) error {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return err
+	}
+	type Alias CreateElicitationResponseOther
+	var a Alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return err
+	}
+	for _, k := range []string{
+		"_meta",
+		"action",
+	} {
+		delete(m, k)
+	}
+	if len(m) > 0 {
+		a.Extra = m
+	}
+	*v = CreateElicitationResponseOther(a)
+	return nil
 }
 
 // Response from the client to an elicitation request.
@@ -2077,6 +2178,14 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("CreateElicitationResponse: action \"cancel\": %w", err)
 				}
 				u.Cancel = &v
+				return nil
+			}
+			if raw, ok := m["action"]; ok && string(raw) != "null" {
+				var v CreateElicitationResponseOther
+				if err := json.Unmarshal(b, &v); err != nil {
+					return fmt.Errorf("CreateElicitationResponse: action %q: %w", disc, err)
+				}
+				u.Other = &v
 				return nil
 			}
 		}
@@ -2800,6 +2909,49 @@ type ElicitationPropertySchemaOther struct {
 	// extensions. Unknown values that do not begin with '_' are reserved for
 	// future ACP variants.
 	Type string `json:"type"`
+	// Extra holds the keys of the payload this struct does not declare, as received.
+	// MarshalJSON writes them back.
+	Extra map[string]json.RawMessage `json:"-"`
+}
+
+func (v ElicitationPropertySchemaOther) MarshalJSON() ([]byte, error) {
+	type Alias ElicitationPropertySchemaOther
+	var a Alias
+	a = Alias(v)
+	b, err := json.Marshal(a)
+	if err != nil || len(v.Extra) == 0 {
+		return b, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	for k, x := range v.Extra {
+		if _, ok := m[k]; !ok {
+			m[k] = x
+		}
+	}
+	return json.Marshal(m)
+}
+
+func (v *ElicitationPropertySchemaOther) UnmarshalJSON(b []byte) error {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return err
+	}
+	type Alias ElicitationPropertySchemaOther
+	var a Alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return err
+	}
+	for _, k := range []string{"type"} {
+		delete(m, k)
+	}
+	if len(m) > 0 {
+		a.Extra = m
+	}
+	*v = ElicitationPropertySchemaOther(a)
+	return nil
 }
 
 // Property schema for elicitation form fields.
@@ -2875,6 +3027,14 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("ElicitationPropertySchema: type \"array\": %w", err)
 				}
 				u.Array = &v
+				return nil
+			}
+			if raw, ok := m["type"]; ok && string(raw) != "null" {
+				var v ElicitationPropertySchemaOther
+				if err := json.Unmarshal(b, &v); err != nil {
+					return fmt.Errorf("ElicitationPropertySchema: type %q: %w", disc, err)
+				}
+				u.Other = &v
 				return nil
 			}
 		}
@@ -3881,6 +4041,53 @@ type IdleStateUpdateOther struct {
 	//
 	// Optional; omitted or 'null' means not reported.
 	Usage *Usage `json:"usage,omitempty"`
+	// Extra holds the keys of the payload this struct does not declare, as received.
+	// MarshalJSON writes them back.
+	Extra map[string]json.RawMessage `json:"-"`
+}
+
+func (v IdleStateUpdateOther) MarshalJSON() ([]byte, error) {
+	type Alias IdleStateUpdateOther
+	var a Alias
+	a = Alias(v)
+	b, err := json.Marshal(a)
+	if err != nil || len(v.Extra) == 0 {
+		return b, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	for k, x := range v.Extra {
+		if _, ok := m[k]; !ok {
+			m[k] = x
+		}
+	}
+	return json.Marshal(m)
+}
+
+func (v *IdleStateUpdateOther) UnmarshalJSON(b []byte) error {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return err
+	}
+	type Alias IdleStateUpdateOther
+	var a Alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return err
+	}
+	for _, k := range []string{
+		"_meta",
+		"stopReason",
+		"usage",
+	} {
+		delete(m, k)
+	}
+	if len(m) > 0 {
+		a.Extra = m
+	}
+	*v = IdleStateUpdateOther(a)
+	return nil
 }
 
 // No stop reason: 'stopReason' is omitted or 'null'.
@@ -3978,6 +4185,14 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("IdleStateUpdate: stopReason \"error\": %w", err)
 				}
 				u.Error = &v
+				return nil
+			}
+			if raw, ok := m["stopReason"]; ok && string(raw) != "null" {
+				var v IdleStateUpdateOther
+				if err := json.Unmarshal(b, &v); err != nil {
+					return fmt.Errorf("IdleStateUpdate: stopReason %q: %w", disc, err)
+				}
+				u.Other = &v
 				return nil
 			}
 		}
@@ -5198,6 +5413,49 @@ type MultiSelectItemsOther struct {
 	// extensions. Unknown values that do not begin with '_' are reserved for
 	// future ACP variants.
 	Type string `json:"type"`
+	// Extra holds the keys of the payload this struct does not declare, as received.
+	// MarshalJSON writes them back.
+	Extra map[string]json.RawMessage `json:"-"`
+}
+
+func (v MultiSelectItemsOther) MarshalJSON() ([]byte, error) {
+	type Alias MultiSelectItemsOther
+	var a Alias
+	a = Alias(v)
+	b, err := json.Marshal(a)
+	if err != nil || len(v.Extra) == 0 {
+		return b, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	for k, x := range v.Extra {
+		if _, ok := m[k]; !ok {
+			m[k] = x
+		}
+	}
+	return json.Marshal(m)
+}
+
+func (v *MultiSelectItemsOther) UnmarshalJSON(b []byte) error {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return err
+	}
+	type Alias MultiSelectItemsOther
+	var a Alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return err
+	}
+	for _, k := range []string{"type"} {
+		delete(m, k)
+	}
+	if len(m) > 0 {
+		a.Extra = m
+	}
+	*v = MultiSelectItemsOther(a)
+	return nil
 }
 
 // Items for a multi-select (array) property schema.
@@ -5227,6 +5485,14 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("MultiSelectItems: type \"string\": %w", err)
 				}
 				u.String = &v
+				return nil
+			}
+			if raw, ok := m["type"]; ok && string(raw) != "null" {
+				var v MultiSelectItemsOther
+				if err := json.Unmarshal(b, &v); err != nil {
+					return fmt.Errorf("MultiSelectItems: type %q: %w", disc, err)
+				}
+				u.Other = &v
 				return nil
 			}
 		}
@@ -9431,6 +9697,49 @@ type StateUpdateUnknown struct {
 type StateUpdateOther struct {
 	// Unrecognized state discriminator.
 	State string `json:"state"`
+	// Extra holds the keys of the payload this struct does not declare, as received.
+	// MarshalJSON writes them back.
+	Extra map[string]json.RawMessage `json:"-"`
+}
+
+func (v StateUpdateOther) MarshalJSON() ([]byte, error) {
+	type Alias StateUpdateOther
+	var a Alias
+	a = Alias(v)
+	b, err := json.Marshal(a)
+	if err != nil || len(v.Extra) == 0 {
+		return b, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	for k, x := range v.Extra {
+		if _, ok := m[k]; !ok {
+			m[k] = x
+		}
+	}
+	return json.Marshal(m)
+}
+
+func (v *StateUpdateOther) UnmarshalJSON(b []byte) error {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return err
+	}
+	type Alias StateUpdateOther
+	var a Alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return err
+	}
+	for _, k := range []string{"state"} {
+		delete(m, k)
+	}
+	if len(m) > 0 {
+		a.Extra = m
+	}
+	*v = StateUpdateOther(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -9498,6 +9807,14 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 					return fmt.Errorf("StateUpdate: state \"unknown\": %w", err)
 				}
 				u.Unknown = &v
+				return nil
+			}
+			if raw, ok := m["state"]; ok && string(raw) != "null" {
+				var v StateUpdateOther
+				if err := json.Unmarshal(b, &v); err != nil {
+					return fmt.Errorf("StateUpdate: state %q: %w", disc, err)
+				}
+				u.Other = &v
 				return nil
 			}
 		}
