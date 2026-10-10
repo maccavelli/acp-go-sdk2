@@ -30,7 +30,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0010 | PLAN | [Implement the docs update](decisions/0010-PLAN-align-docs-with-current-tree.md) | complete |
 | 0011 | MADR | [Harden the code generator into a validated, schema-driven engine](decisions/0011-MADR-harden-code-generator-engine.md) | accepted |
 | 0011 | PLAN | [Implement phase 1: the resolved schema model](decisions/0011-PLAN-resolved-schema-model.md) | complete |
-| 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md) | in-progress |
+| 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md) | complete |
 
 ## I want to…
 

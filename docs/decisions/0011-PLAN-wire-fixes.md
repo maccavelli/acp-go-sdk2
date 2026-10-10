@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-10
 associated-madr: "0011-MADR-harden-code-generator-engine.md"
 ---
@@ -679,3 +679,72 @@ Gates: `make pre-add-check` with the one changed Go file named: `go-precheck: 1 
 govulncheck).` Without names: `go-precheck: 63 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 9 on `main`.
+
+### Step 10, review and close, 2026-10-10
+
+The owner committed step 9 as `74f4f80` and its follow-up as `b737749`. Step 10 ran on `main` from that clean tree and changed this record and
+`docs/README.md`. The agent did not commit.
+
+The phase's commits, `git log --oneline e420cb6..b737749`: `2e56ec2` (this plan), `cbb773f` (the absent-key decision), `c7a212f` (step 2), `858a7d4`
+(step 3), `d86730d` (step 4), `99ace2a` (step 5), `d9c048f` (step 6), `8d8d87a` (step 7), `1dbf2b2` (step 8), `74f4f80` and `b737749` (step 9).
+`git diff --numstat e420cb6 b737749 -- '*_gen.go' testdata` lists only `types_gen.go`, 2332 lines added and 2880 removed; no golden changed.
+`cmd/generate` changed by 578 lines added and 106 removed in 8 files; `*_test.go` files in both modules, counted in that figure where they sit in
+`cmd/generate`, by 618 added and 6 removed in 5 files.
+
+**The probes on the baseline.** `git archive e420cb6` was extracted to a scratch directory with the current `union_wire_test.go`. It did not compile
+there, because `TestUnionNull` reads `n.Update.Unknown`, which `e420cb6` lacks; in that copy only, the condition `|| n.Update.Unknown != nil` became
+`|| false`, which is what it means without the field. Then every test of the file ran: 45 tests and subtests failed and 9 passed.
+
+* W2: all 17 unknown-value subtests failed (`TestUnknownValueKept` 11, `TestUnknownValueToCatchAll` 6).
+* W3: every case W3 calls wrong failed: `IdleStateUpdate` `{}`, `RequestPermissionOutcome` `{"optionId":..}`, `CreateElicitationResponse` `{}`,
+  `StateUpdate` `{}`, the `SessionUpdate` chunk and tool-call update, the audio `ContentBlock`. The cases W3 calls right passed, as W3 says:
+  `AuthMethod`, `McpServer`, `UnstableMcpServer`, `SetSessionConfigOptionRequest`, `MultiSelectItems` `titled`, `ContentBlock` `{"text":"hi"}`.
+  Two W12 rows passed by the old trial order: `RequestPermissionOutcome` `{}` (`Cancelled`) and `CreateElicitationRequest` `form`.
+* W7: `TestContentBlockKeepsMetaAndAnnotations` and `TestUnionKeepsIntegerDigits` failed; the latter printed `"size":9007199254740992` where
+  9007199254740993 was encoded. The HTML-escaping and sorted-key pins pass on both trees.
+* W9: `TestUnionDecodeReplaces` "known then known" failed (`[Text Image]`), and so did `RequestId` `5` then `"a"` (`[Number Str]`). Its "unknown then
+  known" subtest passed, because on `e420cb6` an unknown value decoded as `Text`.
+* W10: `TestUnionNull` failed.
+* `TestUnionDecodeErrorsNameTheirPlace` (F5) failed, all three subtests.
+
+**The table over the 17 unions.** The criterion is met by three table tests in the root module rather than one. A script compared their tables with the
+classes `TestUnionClassesOfCommittedSchema` asserts on the model: `unknownUnions` holds the 7 closed and 4 defaulted unions, `catchAllUnions` the 6
+catch-all unions, 17 distinct; the 6 unions with a key-less variant (`AuthMethod`, `IdleStateUpdate`, `McpServer`, `MultiSelectItems`,
+`SetSessionConfigOptionRequest`, `UnstableMcpServer`) each have a row in `TestAbsentDiscriminator`, which also holds every W12 payload (step 8). The
+script's first run reported the key-less list empty and passed: its pattern skipped dotted names. Corrected, it lists the six; with a seventh, missing
+union planted in a copy, it fails.
+
+**Verification, as printed:**
+
+* Each step's change to `types_gen.go` matched its expectation, as each step's record shows; no golden in `testdata/json_golden/` changed.
+* `go test -race -count=1 ./...` exits 0 at the root and in `cmd/generate`; `go build ./example/...` exits 0; `TestGeneratedFilesUpToDate` passes.
+* `go test -cover ./internal/model`: `coverage: 95.0% of statements`.
+* `make pre-add-check`: `go-precheck: 63 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records` and
+  `make markdownlint` exit 0.
+
+**Exported API changes, for the release notes.** A scratch program listed every exported type, field, method, function, constant, and variable of the
+root package, test files aside, on `e420cb6` and on `b737749` (1964 and 1993 lines). The diff holds 29 additions and nothing removed or changed:
+
+* `Unknown json.RawMessage` on `AuthMethod`, `ContentBlock`, `McpServer`, `PlanUpdateContent`, `RequestPermissionOutcome`, `SessionConfigOption`,
+  `SessionUpdate`, `SetSessionConfigOptionRequest`, `ToolCallContent`, `UnstableMcpServer`, `UnstableNesSuggestion`.
+* `Extra map[string]json.RawMessage` on `CreateElicitationOther`, `CreateElicitationResponseOther`, `ElicitationPropertySchemaOther`,
+  `IdleStateUpdateOther`, `MultiSelectItemsOther`, `StateUpdateOther`.
+* `MarshalJSON` and `UnmarshalJSON` on the same six types, which carry `Extra`. The Rollout list above does not name these methods; a type that embeds one
+  of the six now promotes them.
+
+Behaviour changes for the same notes, beyond Rollout's list: decoding JSON `null` into a union no longer sets a variant (`RequestId` still sets `Null`);
+every other decode clears the union first; a non-object payload for a discriminated union fails as `<Union>: <cause>` where it read
+`<Union>: no variant matches`; a payload without its discriminator decodes into the key-less variant where the union has one (`IdleStateUpdate` `{}` is
+`None`, no longer `EndTurn`).
+
+**Not done, and where it belongs:**
+
+* `RequestId` decodes any JSON object as `Null`, because the trial decode into the empty struct `RequestIdNull` accepts it (step 8). It predates this plan
+  and lies outside it.
+* Typed `additionalProperties` still gives `map[string]any` (step 9's map test); phase 4 owns it.
+* The tests for the 17 unions name them in hand-written tables. Nothing in the root module fails when the schema adds a discriminated union the tables
+  do not list; the model test lists the classes, and a schema bump changes that test first.
+
+Every acceptance criterion in Verification holds, the table test as three table tests. The status is `complete`, and `docs/README.md` shows it. The MADR
+is unchanged; its consequence that the exported API "gains `Unknown` on eleven unions and `Extra` on six variant types" holds, with the methods above in
+addition. Phase 3 of [0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md), the protocol table, needs its own PLAN.
