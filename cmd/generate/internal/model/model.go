@@ -285,6 +285,7 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		m.Types = append(m.Types, t)
 		m.byName[name] = t
 	}
+	m.dropStructOmitempty()
 	for _, side := range []struct {
 		prefix  string
 		methods map[string]string

@@ -411,3 +411,51 @@ Gates: `make pre-add-check` with the ten changed Go files named: `go-precheck: 1
 govulncheck).` Without names: `go-precheck: 70 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 5 on `main`.
+
+### Step 6, struct-valued `omitempty`, 2026-10-10
+
+The owner committed step 5 as `633281b`. Step 6 ran on `main` from that clean tree. The agent did not commit.
+
+The plan's 8 fields came from a probe of named object types only. A union wrapper and a nested struct are struct values too, so a scratch probe listed
+every field tagged `omitempty` whose Go type is any of the three: the same 8 fields, all named objects with a schema `default`; no union or nested
+struct. The rule covers all three kinds.
+
+Tests:
+
+* `TestNoOmitemptyOnStructValues` (`model/keywords_test.go`): no struct-valued field of the committed model carries `omitempty`; in a synthetic
+  schema, optional properties of an object, a union, and an inline nested object carry none, and an optional string keeps it.
+* `TestStructValuesHaveNoOmitempty` (root `fidelity_test.go`): the 8 fields' `json` tags, read by reflection, carry no `omitempty`, and
+  `InitializeResponse{}` still encodes `"agentCapabilities":{`.
+
+Run before the change:
+
+```text
+keywords_test.go:234: struct-valued fields with omitempty: [AgentCapabilities.auth AgentCapabilities.mcpCapabilities AgentCapabilities.promptCapabilities AgentCapabilities.sessionCapabilities ClientCapabilities.auth ClientCapabilities.fs InitializeRequest.clientCapabilities InitializeResponse.agentCapabilities]
+keywords_test.go:248: synthetic struct-valued fields with omitempty: [T.inner T.obj T.uni]
+fidelity_test.go:154: acp.AgentCapabilities.Auth tag "auth,omitempty" (and the other 7)
+```
+
+The change: `Model.dropStructOmitempty` (`model/fields.go`), run in `resolve` once every type is built, trims `,omitempty` from each field whose
+type is a named object, a union, or a nested struct.
+
+Regenerated: `types_gen.go` changed in exactly 8 lines, each one of the 8 fields losing `,omitempty` from its tag. No golden changed; no hand-written
+file needed a change.
+
+Each part was broken in a fresh scratch copy:
+
+```text
+pass not run: cmd/generate ['TestNoOmitemptyOnStructValues']; root ['TestStructValuesHaveNoOmitempty']
+unions left out: cmd/generate ['TestNoOmitemptyOnStructValues']
+nested structs left out: cmd/generate ['TestNoOmitemptyOnStructValues']
+```
+
+The last two pass the root tests, as expected: the committed schema has no optional union or nested struct value; the synthetic model case catches
+them.
+
+After the change every test in the root (`go test -race`) and in `cmd/generate` passes; `go build ./example/...` passes. Coverage: `internal/model`
+94.2%, `internal/emit` 54.1%.
+
+Gates: `make pre-add-check` with the five changed Go files named: `go-precheck: 5 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 70 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 6 on `main`.

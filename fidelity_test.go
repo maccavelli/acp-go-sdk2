@@ -133,3 +133,29 @@ func TestStartEditToolCallRawInput(t *testing.T) {
 		}
 	}
 }
+
+// TestStructValuesHaveNoOmitempty requires the struct-valued capability fields
+// to say in their tags what the encoder does: always written.
+func TestStructValuesHaveNoOmitempty(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		v     any
+		field string
+	}{
+		{AgentCapabilities{}, "Auth"}, {AgentCapabilities{}, "McpCapabilities"}, {AgentCapabilities{}, "PromptCapabilities"},
+		{AgentCapabilities{}, "SessionCapabilities"}, {ClientCapabilities{}, "Auth"}, {ClientCapabilities{}, "Fs"},
+		{InitializeRequest{}, "ClientCapabilities"}, {InitializeResponse{}, "AgentCapabilities"},
+	} {
+		f, ok := reflect.TypeOf(tt.v).FieldByName(tt.field)
+		if !ok {
+			t.Fatalf("%T has no %s", tt.v, tt.field)
+		}
+		if tag := f.Tag.Get("json"); strings.Contains(tag, "omitempty") {
+			t.Errorf("%T.%s tag %q", tt.v, tt.field, tag)
+		}
+	}
+	b, err := json.Marshal(InitializeResponse{})
+	if err != nil || !strings.Contains(string(b), `"agentCapabilities":{`) {
+		t.Errorf("InitializeResponse{} encodes %s, %v", b, err)
+	}
+}

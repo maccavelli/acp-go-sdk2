@@ -191,3 +191,65 @@ func TestNumericFormatTypes(t *testing.T) {
 		}
 	}
 }
+
+// structValueFields lists, as owner.key, every field of m tagged omitempty
+// whose Go type is a struct value: a named object, a union, or a nested struct.
+func structValueFields(m *Model) []string {
+	nested := map[string]bool{}
+	for _, ty := range m.Types {
+		for _, ns := range ty.NestedStructs {
+			nested[ns.Name] = true
+		}
+	}
+	var out []string
+	visit := func(owner string, fields []*Field) {
+		for _, f := range fields {
+			if f.Type.Kind != RefNamed || !strings.HasSuffix(f.Tag, ",omitempty") {
+				continue
+			}
+			if ty := m.Type(f.Type.Name); (ty != nil && (ty.Kind == KindObject || ty.Kind == KindUnion)) || nested[f.Type.Name] {
+				out = append(out, owner+"."+f.Key)
+			}
+		}
+	}
+	for _, ty := range m.Types {
+		visit(ty.Name, ty.Fields)
+		for _, ns := range ty.NestedStructs {
+			visit(ns.Name, ns.Fields)
+		}
+		for _, v := range ty.Variants {
+			if v.Inline != nil {
+				visit(v.TypeName, v.Inline.Fields)
+			}
+		}
+	}
+	return out
+}
+
+// TestNoOmitemptyOnStructValues requires no struct-valued field to carry
+// omitempty, which encoding/json never applies to a struct.
+func TestNoOmitemptyOnStructValues(t *testing.T) {
+	t.Parallel()
+	if got := structValueFields(committedModel(t)); len(got) != 0 {
+		t.Errorf("struct-valued fields with omitempty: %v", got)
+	}
+	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
+		"Obj":{"type":"object","properties":{"a":{"type":"string"}}},
+		"Uni":{"oneOf":[{"type":"string"},{"type":"integer"}]},
+		"T":{"type":"object","properties":{
+			"obj":{"allOf":[{"$ref":"#/$defs/Obj"}]},
+			"uni":{"allOf":[{"$ref":"#/$defs/Uni"}]},
+			"inner":{"type":"object","properties":{"b":{"type":"string"}}},
+			"s":{"type":"string"}}}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := structValueFields(m); len(got) != 0 {
+		t.Errorf("synthetic struct-valued fields with omitempty: %v", got)
+	}
+	for _, f := range m.Type("T").Fields {
+		if f.Key == "s" && f.Tag != "s,omitempty" {
+			t.Errorf("optional string tag %q", f.Tag)
+		}
+	}
+}

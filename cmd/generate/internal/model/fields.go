@@ -435,3 +435,43 @@ func inlineOf(t *Type, tname string, ev *load.Definition, isObj, isNull bool) (*
 		return nil, nil
 	}
 }
+
+// dropStructOmitempty removes omitempty from every field whose Go type is a
+// struct value: a named object, a union wrapper, or a nested struct.
+// encoding/json never omits a struct, so the tag then says what the encoder
+// does (0012-MADR-schema-fidelity-framework.md).
+func (m *Model) dropStructOmitempty() {
+	nested := map[string]bool{}
+	for _, t := range m.Types {
+		for _, ns := range t.NestedStructs {
+			nested[ns.Name] = true
+		}
+	}
+	isStruct := func(r TypeRef) bool {
+		if r.Kind != RefNamed {
+			return false
+		}
+		if t := m.Type(r.Name); t != nil {
+			return t.Kind == KindObject || t.Kind == KindUnion
+		}
+		return nested[r.Name]
+	}
+	fix := func(fields []*Field) {
+		for _, f := range fields {
+			if isStruct(f.Type) {
+				f.Tag = strings.TrimSuffix(f.Tag, ",omitempty")
+			}
+		}
+	}
+	for _, t := range m.Types {
+		fix(t.Fields)
+		for _, ns := range t.NestedStructs {
+			fix(ns.Fields)
+		}
+		for _, v := range t.Variants {
+			if v.Inline != nil {
+				fix(v.Inline.Fields)
+			}
+		}
+	}
+}

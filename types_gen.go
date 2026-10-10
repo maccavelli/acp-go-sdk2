@@ -41,7 +41,7 @@ type AgentCapabilities struct {
 	// Authentication-related capabilities supported by the agent.
 	//
 	// Defaults to {} if unset.
-	Auth AgentAuthCapabilities `json:"auth,omitempty"`
+	Auth AgentAuthCapabilities `json:"auth"`
 	// Whether the agent supports 'session/load'.
 	//
 	// Defaults to false if unset.
@@ -49,7 +49,7 @@ type AgentCapabilities struct {
 	// MCP capabilities supported by the agent.
 	//
 	// Defaults to {"acp":false,"http":false,"sse":false} if unset.
-	McpCapabilities McpCapabilities `json:"mcpCapabilities,omitempty"`
+	McpCapabilities McpCapabilities `json:"mcpCapabilities"`
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -68,7 +68,7 @@ type AgentCapabilities struct {
 	// Prompt capabilities supported by the agent.
 	//
 	// Defaults to {"audio":false,"embeddedContext":false,"image":false} if unset.
-	PromptCapabilities PromptCapabilities `json:"promptCapabilities,omitempty"`
+	PromptCapabilities PromptCapabilities `json:"promptCapabilities"`
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -81,7 +81,7 @@ type AgentCapabilities struct {
 	// Session lifecycle and prompt capabilities advertised by the agent.
 	//
 	// Defaults to {} if unset.
-	SessionCapabilities SessionCapabilities `json:"sessionCapabilities,omitempty"`
+	SessionCapabilities SessionCapabilities `json:"sessionCapabilities"`
 }
 
 func (v AgentCapabilities) MarshalJSON() ([]byte, error) {
@@ -786,7 +786,7 @@ type ClientCapabilities struct {
 	// in its 'InitializeResponse'.
 	//
 	// Defaults to {"terminal":false} if unset.
-	Auth AuthCapabilities `json:"auth,omitempty"`
+	Auth AuthCapabilities `json:"auth"`
 	// Elicitation capabilities supported by the client.
 	// Determines which elicitation modes the agent may use.
 	//
@@ -797,7 +797,7 @@ type ClientCapabilities struct {
 	// Determines which file operations the agent can request.
 	//
 	// Defaults to {"readTextFile":false,"writeTextFile":false} if unset.
-	Fs FileSystemCapabilities `json:"fs,omitempty"`
+	Fs FileSystemCapabilities `json:"fs"`
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -4154,7 +4154,7 @@ type InitializeRequest struct {
 	// Capabilities supported by the client.
 	//
 	// Defaults to {"auth":{"terminal":false},"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false} if unset.
-	ClientCapabilities ClientCapabilities `json:"clientCapabilities,omitempty"`
+	ClientCapabilities ClientCapabilities `json:"clientCapabilities"`
 	// Information about the Client name and version sent to the Agent.
 	//
 	// Note: in future versions of the protocol, this will be required.
@@ -4209,7 +4209,7 @@ type InitializeResponse struct {
 	// Capabilities supported by the agent.
 	//
 	// Defaults to {"auth":{},"loadSession":false,"mcpCapabilities":{"acp":false,"http":false,"sse":false},"promptCapabilities":{"audio":false,"embeddedContext":false,"image":false},"sessionCapabilities":{}} if unset.
-	AgentCapabilities AgentCapabilities `json:"agentCapabilities,omitempty"`
+	AgentCapabilities AgentCapabilities `json:"agentCapabilities"`
 	// Information about the Agent name and version sent to the Client.
 	//
 	// Note: in future versions of the protocol, this will be required.
