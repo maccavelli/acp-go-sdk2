@@ -13,16 +13,22 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
+	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "generate:", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	schemaDir := flag.String("schema", "", "path to schema directory (defaults to <repo>/schema)")
-	outDir := flag.String("out", "", "output directory for generated go files (defaults to <repo>)")
-	flag.Parse()
+// run generates the bindings. It loads the schema and builds the model before
+// it creates or writes anything, so a schema the model refuses leaves the
+// output directory as it was.
+func run(args []string) error {
+	fs := flag.NewFlagSet("generate", flag.ContinueOnError)
+	schemaDir := fs.String("schema", "", "path to schema directory (defaults to <repo>/schema)")
+	outDir := fs.String("out", "", "output directory for generated go files (defaults to <repo>)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	if *schemaDir == "" || *outDir == "" {
 		repoRoot, err := findRepoRoot()
@@ -36,10 +42,6 @@ func run() error {
 			*outDir = repoRoot
 		}
 	}
-	if err := os.MkdirAll(*outDir, 0o750); err != nil {
-		return err
-	}
-
 	meta, schema, prov, err := loadSchema(*schemaDir)
 	if err != nil {
 		return err
@@ -47,6 +49,9 @@ func run() error {
 	// The model refuses a schema it cannot represent before any file is written.
 	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov})
 	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(*outDir, 0o750); err != nil {
 		return err
 	}
 

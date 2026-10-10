@@ -573,3 +573,71 @@ committed, and stopped at `lstat cmd/generate/internal/ir/ir.go: no such file or
 `go-precheck: 59 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 6 on `main`, including the deletion of `internal/ir`.
+
+### Step 7, refuse before writing, 2026-10-10
+
+The owner committed step 6 as `969b7cb`. Step 7 ran on `main` from that clean tree. The agent did not commit.
+
+The six schemas of G12 were first run through a build of `ccc6e1c`'s generator, each with an output directory holding a sentinel file `keep.txt`:
+
+```text
+enum_collision: exit=0 out=['agent_gen.go', 'client_gen.go', 'constants_gen.go', 'helpers_gen.go', 'keep.txt', 'types_gen.go']
+field_collision: exit=0 out=['agent_gen.go', 'client_gen.go', 'constants_gen.go', 'helpers_gen.go', 'keep.txt', 'types_gen.go']
+dangling_ref: exit=0 out=['agent_gen.go', 'client_gen.go', 'constants_gen.go', 'helpers_gen.go', 'keep.txt', 'types_gen.go']
+bad_identifier: exit=1 out=['constants_gen.go', 'keep.txt']
+    generate: types_gen.go: format: 6:2: expected '}', found 2
+keyword_param: exit=1 out=['agent_gen.go', 'client_gen.go', 'constants_gen.go', 'keep.txt', 'types_gen.go']
+    generate: helpers_gen.go: format: 6:16: expected ')', found 'range' (and 3 more errors)
+recased_union: exit=2 out=['constants_gen.go', 'keep.txt']
+    panic: BUG: attempting to emit unregistered type: "Ux" (parent union: "U")
+```
+
+`main.go`: `run(args []string) error` parses its own `flag.FlagSet` with `ContinueOnError`; `main` passes `os.Args[1:]`. `run` loads the schema and
+builds the model, and only then creates the output directory and calls the writers; before, `os.MkdirAll` ran first. With `-h` the flag set prints its
+usage and `run` returns `flag.ErrHelp`, so the process exits 1 with `generate: flag: help requested` where it exited 2 before.
+
+The same six schemas through this step's generator:
+
+```text
+enum_collision: exit=1 out=['keep.txt']
+    generate: model: Kind enum value "a_b": KindAB is already declared by Kind enum value "a-b"
+field_collision: exit=1 out=['keep.txt']
+    generate: model: F: properties "fooBar" and "foo_bar" both become field FooBar
+dangling_ref: exit=1 out=['keep.txt']
+    generate: model: R.properties.m: $ref "#/$defs/Missing" names no definition
+bad_identifier: exit=1 out=['keep.txt']
+    generate: model: Thing.properties.2fa: field name: "2fa" is not an exported Go identifier
+keyword_param: exit=1 out=['keep.txt']
+    generate: model: Union variant 1: required property "range" cannot be a Go parameter name
+recased_union: exit=0 out=['agent_gen.go', 'client_gen.go', 'constants_gen.go', 'helpers_gen.go', 'keep.txt', 'types_gen.go']
+```
+
+Tests added to `main_test.go`:
+
+* `TestRunRefusesBeforeWriting` runs `run` on the five refused schemas, each with a sentinel in its output directory, and requires an error naming the
+  definition and the problem, an output directory holding only `keep.txt`, and the sentinel unchanged.
+* `TestRunGeneratesRecasedUnion` runs `run` on the oneOf `U`, parses the five files, and type-checks them with `go/types` and the source importer
+  together with a stub declaring the four hand-written names they use (`RequestError`, `NewMethodNotFound`, `AgentSideConnection`,
+  `ClientSideConnection`); `U`, `UX`, `UY`, `NewUX`, and `NewUY` must exist.
+
+Each was seen to fail, with one planted breakage per run in a fresh scratch copy:
+
+```text
+a file written before the model: failing=['TestRunRefusesBeforeWriting' and all five subtests]
+    main_test.go:139: output directory holds [constants_gen.go keep.txt], want only keep.txt
+no reference check: failing=['TestRunRefusesBeforeWriting', 'TestRunRefusesBeforeWriting/dangling_reference']
+    main_test.go:123: run accepted the schema
+old byte splitter: failing=['TestRunGeneratesRecasedUnion']
+    main_test.go:192: generated package has no UX
+wrapper names a missing type: failing=['TestRunGeneratesRecasedUnion']
+    main_test.go:188: generated code does not type-check: <tmp>/types_gen.go:21:5: undefined: UXZ
+```
+
+`go test -cover` in `cmd/generate`: the `cmd/generate` package 43.5% (19.3% at `ccc6e1c`), `internal/model` 82.5%.
+
+Output: `cd cmd/generate && go run .` regenerated the five files and none changed; `TestGeneratedFilesUpToDate` passes.
+
+Gates: `make pre-add-check` with the two changed Go files named: `go-precheck: 2 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+Without names: `go-precheck: 59 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 7 on `main`.
