@@ -51,8 +51,15 @@ Measured on `e420cb6` in scratch copies; the tree was not changed. The MADR amen
   The model already has the discriminator, its source, and each variant's value (`DiscValue`), object, array, and null flags, and `$ref` or inline origin.
 * **W2. Unknown value today.** `{"<key>":"zz_future","extra":1}` decodes without error in all 17: 15 into a known variant (two of which then fail to
   encode), `CreateElicitationRequest` and `MultiSelectItems` into `Other`, which drops `extra`.
-* **W3. Absent key today.** Correct for `AuthMethod` (`Agent`), `McpServer` (`Stdio`), `SetSessionConfigOptionRequest` (`ValueId`); wrong for
-  `IdleStateUpdate` `{}` (`EndTurn`, should be `None`) and `SessionUpdate` (`UserMessageChunk`); `ContentBlock` `{"text":"hi"}` gives `Text`.
+* **W3. Absent key today.** Correct for `AuthMethod` (`Agent`), `McpServer` (`Stdio`), `SetSessionConfigOptionRequest` (`ValueId`), and for
+  `ContentBlock` `{"text":"hi"}` (`Text`). Wrong: `IdleStateUpdate` `{}` (`EndTurn`, should be `None`); `RequestPermissionOutcome`
+  `{"optionId":"allow-once"}` (`Cancelled`); `CreateElicitationResponse` `{}` and `{"content":{"name":"x"}}` (`Accept`); `StateUpdate` `{}` (`Running`);
+  `SessionUpdate` agent chunk and tool-call update (`UserMessageChunk`); `ContentBlock` audio `{"data":..,"mimeType":"audio/wav"}` (`Text`).
+* **W12. The absent-key rule, applied by script to schema facts.** `RequestPermissionOutcome` `{"optionId":..}` → `Unknown` (2 fit), `{}` →
+  `cancelled`; `CreateElicitationResponse` `{}` → error (3 fit); `CreateElicitationRequest` `{"requestedSchema":{},"message":"m"}` → `form`;
+  `StateUpdate` `{}` → error (4 fit); `SessionUpdate` `{"content":{}}` → `Unknown` (4 fit), tool-call update → `Unknown` (2 fit), `{}` →
+  `session_info_update`; `ContentBlock` `{"text":"hi"}` → `text`, audio → `Unknown` (2 fit), `{}` → `Unknown` (0 fit); `ToolCallContent`
+  `{"path":"p","newText":"n"}` → `diff`.
 * **W4. Names.** `StateUpdate`'s wrapper has `Unknown *StateUpdateUnknown`. The six catch-all structs: `IdleStateUpdateOther` (`_meta`,
   `stopReason`, `usage`), `CreateElicitationOther` (`_meta`, `message`, `mode`), `CreateElicitationResponseOther` (`_meta`, `action`),
   `StateUpdateOther`, `ElicitationPropertySchemaOther`, `MultiSelectItemsOther` (the discriminator only). None has a field or key named `extra`.
@@ -88,8 +95,12 @@ Measured on `e420cb6` in scratch copies; the tree was not changed. The MADR amen
    * a known value decodes only its variant; a failure is `<Union>: <key> "<value>": <cause>`;
    * an unknown value: in a catch-all union, decodes the catch-all variant (failure: `<Union>: <key> "<value>": <cause>`); otherwise it is kept,
      copied, in `Unknown`.
-5. Key absent or `null`: only the key-less variants are tried, first by required keys, then by trial decode, in schema order. With none, or none that
-   decodes, the error is `<Union>: missing discriminator "<key>"`.
+5. Key absent or `null`:
+   * a union with key-less variants tries only those, first by required keys, then by trial decode, in schema order; when none decodes, the error is
+     `<Union>: missing discriminator "<key>"`;
+   * otherwise, the variants other than the catch-all whose required keys, the discriminator aside, are all present in the payload are counted. Exactly
+     one decodes strictly (failure: `<Union>: variant <Field>: <cause>`). None or several: a union with `Unknown` keeps the payload there; a catch-all
+     union fails with `<Union>: missing discriminator "<key>"`.
 
 ### Decoding the other eleven unions
 
@@ -145,9 +156,9 @@ discriminated union with a non-object variant; a union field named `Unknown` bes
    the same JSON; a known value with a bad payload names the union, key, and value. Emit the catch-all branch and the `Extra` field and methods. Expected:
    changes in those 6 unions and 6 variant types only.
 8. **F18, F19, absent key.** Tests: a reused `ContentBlock` holds only the image; `null` leaves a union unchanged and sets `RequestId`'s `Null`;
-   `IdleStateUpdate` `{}` sets `None`; `AuthMethod`, `McpServer`, and `SetSessionConfigOptionRequest` without the key set their default; `SessionUpdate`
-   and `ContentBlock` without the key fail with `missing discriminator`. Emit the null check, the reset, and the absent-key rule. Expected: all 28
-   `UnmarshalJSON` change; goldens unchanged.
+   `IdleStateUpdate` `{}` sets `None`; `AuthMethod`, `McpServer`, and `SetSessionConfigOptionRequest` without the key set their default; each payload of
+   W12 has the outcome W12 lists. The model gains, per variant, its required keys other than the discriminator. Emit the null check, the reset, and the
+   absent-key rule. Expected: all 28 `UnmarshalJSON` change; goldens unchanged.
 9. **Docs.** `README.md` "Wire encoding" and `docs/architecture.md` state the unknown-value, absent-key, and null rules, `Unknown`, and `Extra`. A script
    checks every name they mention against the tree.
 10. **Review and close.** Run the verification below, record each result and the list of exported API changes for the release notes, and set this plan
@@ -156,7 +167,7 @@ discriminated union with a non-object variant; a union field named `Unknown` bes
 ## Verification
 
 * A table test in the root module covers all 17 discriminated unions: an unknown value per class (W1) lands as the design says and encodes to the same
-  JSON; an absent key sets the key-less variant in 6 unions and fails, naming the union and the key, in 11.
+  JSON; an absent key sets the key-less variant in the 6 unions that have one; the payloads of W12 have the outcomes W12 lists.
 * Every probe of W2, W3, W7, W9, and W10 is a test that failed on `e420cb6` and passes.
 * Each step's change to `types_gen.go` matches its expectation, by script; no golden in `testdata/json_golden/` changed; the pins pass.
 * `go test -race ./...` passes at the root and in `cmd/generate`; `go build ./example/...` passes; `TestGeneratedFilesUpToDate` passes.
@@ -167,7 +178,8 @@ discriminated union with a non-object variant; a union field named `Unknown` bes
 
 Commits land on `main`, made by the owner, one per step. No tag; a push waits for the owner's ask. The module is at `v0`; the next minor version's
 release notes list: `Unknown` on 11 unions, `Extra` on 6 variant types, the new error texts, `ContentBlock` sending `_meta` and `annotations`, exact
-integers through unions, and the rejection of an absent discriminator in 11 unions.
+integers through unions, a payload without its discriminator kept in `Unknown` rather than guessed when several variants fit, and its rejection in four
+catch-all unions when no single variant fits.
 
 Rollback is `git revert` of the step commits, newest first; each step leaves the generator and the generated files in step.
 

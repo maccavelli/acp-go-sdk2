@@ -231,8 +231,13 @@ files, and probes of the generated SDK in scratch copies; nothing in the tree ch
   (for example `SessionUpdate` into `SessionInfoUpdate`, `IdleStateUpdate` into `EndTurn`, `AuthMethod` into `Terminal`, `McpServer` into `Http`),
   and two of those then failed to encode; `CreateElicitationRequest` and `MultiSelectItems` reached their `other` variant, which dropped `extra`.
 * **What an absent key does today.** `AuthMethod`, `McpServer`, and `SetSessionConfigOptionRequest` pick their key-less variant, as the schema means.
-  `IdleStateUpdate` given `{}` decodes as `EndTurn`, not `none`; `SessionUpdate` without `sessionUpdate` decodes as `UserMessageChunk`; `ContentBlock`
-  `{"text":"hi"}` decodes as `Text` though every `ContentBlock` variant requires `type`.
+  `IdleStateUpdate` given `{}` decodes as `EndTurn`, not `none`; `ContentBlock` `{"text":"hi"}` decodes as `Text` though every `ContentBlock` variant
+  requires `type`. The other guesses are wrong: `RequestPermissionOutcome` `{"optionId":"allow-once"}` decodes as `Cancelled`,
+  `CreateElicitationResponse` `{}` as `Accept`, `StateUpdate` `{}` as `Running`, a `SessionUpdate` agent chunk or tool-call update without
+  `sessionUpdate` as `UserMessageChunk`, and an audio `ContentBlock` without `type` as an empty `Text`.
+* **Without the key, few variants can be told apart.** Counting, per union, the variants whose required keys other than the discriminator include no
+  other variant's: `ContentBlock` 3 of 5 (`image` and `audio` both need `data` and `mimeType`), `SessionUpdate` 1 of 19, `RequestPermissionOutcome` 1
+  of 2, `CreateElicitationResponse`, `ElicitationPropertySchema`, and `StateUpdate` none.
 * **The name `Unknown` is taken.** `StateUpdate` has a variant whose value is `unknown`, so its wrapper already has the field `Unknown
   *StateUpdateUnknown`. A union field named `Unknown` there would collide.
 * **The catch-all structs keep only declared keys.** `IdleStateUpdateOther` has `_meta`, `stopReason`, `usage`; `StateUpdateOther`,
@@ -256,9 +261,12 @@ Asked on 2026-10-10, the owner decided:
   into the `other` variant, which gains `Extra map[string]json.RawMessage` holding the keys its struct does not declare, so it encodes back unchanged.
   The eleven unions without one, closed and defaulted, gain `Unknown json.RawMessage`; such a value decodes into it and encodes back unchanged. No
   collision arises, since `StateUpdate` has a catch-all. This refines the earlier decision that every discriminated union gets `Unknown`.
-* **Absent or null discriminator: key-less variants only.** Only variants with no discriminator value, other than the catch-all, are candidates: the
-  four defaulted unions' default, `IdleStateUpdate`'s `none`, and `MultiSelectItems`' `titled`. In the other eleven unions an absent key is an error
-  naming the union and the key.
+* **Absent or null discriminator.** In a union with key-less variants (the four defaulted unions' default, `IdleStateUpdate`'s `none`,
+  `MultiSelectItems`' `titled`), only those are candidates. In the other eleven, the payload decodes as the one variant, the catch-all aside, whose
+  required keys other than the discriminator are all present; when none or several fit, a closed union keeps the payload in `Unknown`, and the four
+  catch-all unions without a key-less variant (`CreateElicitationRequest`, `CreateElicitationResponse`, `ElicitationPropertySchema`, `StateUpdate`)
+  return an error naming the union and the key. The owner first chose an error in all eleven, and changed to this rule after the measurements above
+  showed what each would reject.
 
 Phase 2 also takes F18 and F19: every union's `UnmarshalJSON` starts from the zero value, except that JSON `null` leaves a union without a null
 variant unchanged and without error, as `encoding/json` does for other types.
@@ -266,8 +274,10 @@ variant unchanged and without error, as `encoding/json` does for other types.
 ### Consequences of these decisions
 
 * Good, because a newer peer's value lands where the schema says, `other` or `Unknown`, and is sent on unchanged.
-* Good, because `IdleStateUpdate` `{}` decodes as `none` and `SessionUpdate` stops guessing a variant.
-* Bad, because eleven unions now reject a payload without its discriminator, `ContentBlock` `{"text":"hi"}` among them, which decoded before.
+* Good, because `IdleStateUpdate` `{}` decodes as `none`, and a payload without its discriminator is never read as a variant two variants could be.
+* Good, because the one unambiguous case seen in use, `ContentBlock` `{"text":"hi"}`, still decodes as `Text`.
+* Bad, because the four catch-all unions without a key-less variant reject such a payload when it fits no single variant, `CreateElicitationResponse`
+  `{}` among them, which decoded as `Accept` before.
 * Bad, because there are two mechanisms, `other` with `Extra` and `Unknown`, and the exported API gains `Unknown` on eleven unions and `Extra` on six
   variant types.
 
