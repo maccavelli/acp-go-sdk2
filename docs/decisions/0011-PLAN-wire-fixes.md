@@ -1,0 +1,176 @@
+---
+status: proposed
+date: 2026-10-10
+associated-madr: "0011-MADR-harden-code-generator-engine.md"
+---
+
+# Implement phase 2 of the generator hardening: the wire fixes
+
+Associated MADR: [0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md)
+
+## Goal
+
+Make the generated unions read and write what peers send without changing it: a value the SDK does not know lands where the schema says and is sent
+on unchanged, `ContentBlock` keeps `_meta` and `annotations`, integers keep every digit, errors name the union and keep their cause, a reused union holds
+only what was decoded last, and JSON `null` does what `encoding/json` does. This is phase 2 of the MADR, as refined by its amendment "phase 2 facts and
+decisions" (F1, F2, F3, F5, F18, F19).
+
+## Scope
+
+In scope:
+
+* `cmd/generate/internal/model` (union classes, catch-all and key-less variants, the `Unknown` and `Extra` fields)
+* `cmd/generate/internal/emit/types.go` (union `UnmarshalJSON`, `MarshalJSON`, `Validate`; catch-all variant methods), and the `ContentBlock` shape code
+  in `types.go` and `constants.go`
+* the regenerated `types_gen.go`
+* new tests in the root module and in `cmd/generate`
+* `README.md` and `docs/architecture.md`, which state the wire behaviour
+
+Out of scope, each owned by another phase of the MADR:
+
+* the protocol table, including the hand-written helper skip list (phase 3);
+* the `x-deserialize-*` keywords, integer formats, typed `additionalProperties`, deeper `Validate`, and unknown keys on variants other than the six
+  catch-alls (phase 4);
+* rendering in memory, type-checking the output, atomic writes (phase 5);
+* engine tests beyond the ones this plan adds (phase 6);
+* the hand-written SDK files, the goldens, `encoding/json/v2`; a tag, a push, or an agent commit on `main`.
+
+## Grounding
+
+Measured on `e420cb6` in scratch copies; the tree was not changed. The MADR amendment of 2026-10-10 holds the same facts in prose.
+
+* **W1. The unions.** 28 unions; 17 discriminated (7 declared, 10 derived). By the schema:
+  * closed (7): `ContentBlock`, `PlanUpdateContent`, `RequestPermissionOutcome`, `SessionConfigOption`, `SessionUpdate`, `ToolCallContent`,
+    `UnstableNesSuggestion`; every variant has a constant value and requires the key; all are oneOf;
+  * with a catch-all (6): `CreateElicitationRequest` (`mode`), `CreateElicitationResponse` (`action`), `ElicitationPropertySchema` (`type`),
+    `IdleStateUpdate` (`stopReason`), `MultiSelectItems` (`type`), `StateUpdate` (`state`); the catch-all is an inline variant titled `other` whose
+    discriminator is a required string without a constant and which has `not`; these are the schema's 6 uses of `not`; all six unions are anyOf;
+  * defaulted (4): `AuthMethod` (`agent` has no `type`), `McpServer` and `UnstableMcpServer` (`stdio`), `SetSessionConfigOptionRequest` (`value_id`);
+    all anyOf;
+  * key-less variants inside catch-all unions: `IdleStateUpdate` `none` (`stopReason` typed `null`, not required) and `MultiSelectItems` `titled`.
+  The model already has the discriminator, its source, and each variant's value (`DiscValue`), object, array, and null flags, and `$ref` or inline origin.
+* **W2. Unknown value today.** `{"<key>":"zz_future","extra":1}` decodes without error in all 17: 15 into a known variant (two of which then fail to
+  encode), `CreateElicitationRequest` and `MultiSelectItems` into `Other`, which drops `extra`.
+* **W3. Absent key today.** Correct for `AuthMethod` (`Agent`), `McpServer` (`Stdio`), `SetSessionConfigOptionRequest` (`ValueId`); wrong for
+  `IdleStateUpdate` `{}` (`EndTurn`, should be `None`) and `SessionUpdate` (`UserMessageChunk`); `ContentBlock` `{"text":"hi"}` gives `Text`.
+* **W4. Names.** `StateUpdate`'s wrapper has `Unknown *StateUpdateUnknown`. The six catch-all structs: `IdleStateUpdateOther` (`_meta`,
+  `stopReason`, `usage`), `CreateElicitationOther` (`_meta`, `message`, `mode`), `CreateElicitationResponseOther` (`_meta`, `action`),
+  `StateUpdateOther`, `ElicitationPropertySchemaOther`, `MultiSelectItemsOther` (the discriminator only). None has a field or key named `extra`.
+* **W5. Validate.** The 7 closed unions get the exactly-one `Validate`. The four defaulted unions' `Validate` returns nil whatever is set (their shared
+  required properties are `$ref`s, F7). The six catch-all unions get the shared-field `Validate`.
+* **W6. F2.** The shape table drops exactly `_meta` and `annotations` from each `ContentBlock` variant.
+* **W7. F2 with F3.** Encoding object variants through `map[string]json.RawMessage` with constants injected as raw JSON strings, and no shape table:
+  the root suite passed, every golden and pin included; `size` 9007199254740993 survived; `_meta` and `annotations` were kept; `"<a & b>"` encoded as
+  `<a & b>`.
+* **W8. Counts in `types_gen.go`.** 28 union `UnmarshalJSON`; `errors.New("invalid variant payload")` 160 times in them and 92 in union `MarshalJSON`;
+  `no matching variant for union` 28 times; `var m map[string]any` 92 times; 67 injected constants (`m["key"] = "value"`); 5 `ContentBlock` shaping
+  blocks (`var nm map[string]any`); 17 discriminator decode checks; 1 union with a null variant (`RequestId`); 33 goldens in `testdata/json_golden/`.
+* **W9. F18.** A `ContentBlock` decoded from a text block, then an image block, has `Text` and `Image` set; `Validate` fails; encoding sends the text.
+* **W10. F19.** `"update": null` in a `SessionNotification` sets `UserMessageChunk`; `null` into `ContentBlock` sets `Text`; `RequestId` sets `Null`.
+  The `json.Unmarshal` documentation: an Unmarshaler is called "including when the input is a JSON null"; null "has no effect on the value and produces
+  no error" for types other than interfaces, maps, pointers, and slices. The `Unmarshaler` documentation: "UnmarshalJSON must copy the JSON data if it
+  wishes to retain the data after returning."
+* **W11. Who reads the texts that change.** Outside the generator, only `generated_output_test.go` matches an error text (`no variant set`), which this
+  plan keeps. Hand-written code reads union variants only after nil checks (`acp_test.go`, `example_gemini_test.go`); no composite literal of a union
+  type is unkeyed.
+
+## Design
+
+### Decoding a discriminated union
+
+`UnmarshalJSON` of each of the 17, in this order:
+
+1. JSON `null`: no change, no error (F19).
+2. Reset: `*u = <Union>{}` (F18).
+3. Decode into `map[string]json.RawMessage`; a payload that is not an object fails with `<Union>: <cause>`. All variants of the 17 are objects; the
+   model refuses a discriminated union with an array, primitive, or null-typed variant.
+4. Key present and not `null`: decode it as a string; a non-string fails with `<Union>: discriminator "<key>": <cause>` (unchanged from 0009).
+   * a known value decodes only its variant; a failure is `<Union>: <key> "<value>": <cause>`;
+   * an unknown value: in a catch-all union, decodes the catch-all variant (failure: `<Union>: <key> "<value>": <cause>`); otherwise it is kept,
+     copied, in `Unknown`.
+5. Key absent or `null`: only the key-less variants are tried, first by required keys, then by trial decode, in schema order. With none, or none that
+   decodes, the error is `<Union>: missing discriminator "<key>"`.
+
+### Decoding the other eleven unions
+
+Steps 1 and 2 as above (`RequestId`'s null variant still takes `null`), then today's order, required keys, array items, trial decode, with a variant
+failure reported as `<Union>: variant <Field>: <cause>` and no match as `<Union>: no variant matches`.
+
+### Encoding
+
+A set variant encodes as today, except that an object variant goes through `map[string]json.RawMessage` and its constants are injected as raw JSON
+strings (F3), and `ContentBlock` takes the same path (F2). With no variant set, a union with `Unknown` writes `Unknown`; otherwise the error stays
+`<Union>: no variant set`. A failure to reshape a variant reads `<Union>: <cause>`.
+
+### Validate
+
+The exactly-one `Validate` of the 7 closed unions counts `Unknown` as a variant. The defaulted unions' `Validate` is unchanged (W5).
+
+### The catch-all variants
+
+Each of the six catch-all variant structs gains `Extra map[string]json.RawMessage` (`json:"-"`). Its `UnmarshalJSON` decodes the declared fields and
+keeps every other key in `Extra` (nil when there is none); its `MarshalJSON` writes the declared fields and adds each `Extra` key the declared fields
+did not write. A struct that also needs default or fill methods gets one `MarshalJSON` doing both; none of the six does at `1.25.0`.
+
+### The model
+
+`Type` gains `HasUnknown` (discriminated, no catch-all) and `CatchAll` (the catch-all variant's index, or -1); `Variant` gains `KeyLess` (no
+discriminator value, not the catch-all); `Inline` gains `KeepExtra`. A catch-all is an inline object variant of a discriminated union with no
+discriminator value, whose discriminator property is a required string and which has `not`. The model refuses: two catch-alls in one union; a
+discriminated union with a non-object variant; a union field named `Unknown` beside a variant field of that name; a catch-all property whose field is
+`Extra`.
+
+## Implementation Steps
+
+1. Work on `main`. Each step ends with `make pre-add-check`, `make check-records`, and `make markdownlint`, their output recorded in this plan's execution
+   record, and a stop for the owner's commit. Each step writes its test first, records its failure on the current tree, then changes the generator,
+   regenerates, and classifies every changed line of `types_gen.go` with a script; the goldens must not change unless the step says so.
+2. **F5, error texts.** Test: `ContentBlock` `{"type":"text","text":5}` fails with an error containing `ContentBlock`, `type "text"`, and
+   `cannot unmarshal number`; `RequestId` given `true` fails with `RequestId: no variant matches`. Change `decodeStrict`, the final return of
+   `unionUnmarshalBody`, and the reshape failure of `unionMarshalBody` to the texts of the design. Expected: the 160 decode sites, the 92 encode sites,
+   and the 28 final returns change, and nothing else.
+3. **F2, `ContentBlock`.** Test: a text block built with `_meta` and `annotations`, and one decoded with them, encode with both keys. Delete
+   `contentBlockShape`, `contentBlockMarshal`, `keyMimeType`, and `unionContentBlock`; `ContentBlock` uses the generic path. Expected: the 5 shaping
+   blocks become `return json.Marshal(m)`; goldens unchanged.
+4. **F3, precision.** Test: a `resource_link` with `size` 9007199254740993 round-trips with every digit, through `ContentBlock` and through a
+   `SessionUpdate` whose content holds it. `var m map[string]any` becomes `map[string]json.RawMessage`; each constant is injected as
+   `json.RawMessage("\"value\"")`. Expected: the 92 declarations and 67 injections change; goldens unchanged; the HTML and sorted-key pins pass.
+5. **Model: union classes.** Add `HasUnknown`, `CatchAll`, `KeyLess`, `KeepExtra`, and the four refusals of the design, each with a test that fails first.
+   A test on the committed schema lists the classes: 7 closed, 6 catch-all, 4 defaulted, and the key-less variants of W1. Expected: no generated file
+   changes.
+6. **F1, `Unknown`.** Test: for each of the 11 unions with `HasUnknown`, `{"<key>":"zz_future","extra":1}` decodes without error, sets no variant and
+   `Unknown`, and encodes to the same JSON; the 7 closed unions' `Validate` passes with only `Unknown` and fails with `Unknown` and a variant. Emit the
+   field (with a doc comment), the unknown branch, the encoding branch, and the `Validate` count. Expected: changes in those 11 unions only.
+7. **F1, catch-alls.** Test: for each of the 6 catch-all unions, the same payload sets `Other` with the value and `Extra` holding `extra`, and encodes to
+   the same JSON; a known value with a bad payload names the union, key, and value. Emit the catch-all branch and the `Extra` field and methods. Expected:
+   changes in those 6 unions and 6 variant types only.
+8. **F18, F19, absent key.** Tests: a reused `ContentBlock` holds only the image; `null` leaves a union unchanged and sets `RequestId`'s `Null`;
+   `IdleStateUpdate` `{}` sets `None`; `AuthMethod`, `McpServer`, and `SetSessionConfigOptionRequest` without the key set their default; `SessionUpdate`
+   and `ContentBlock` without the key fail with `missing discriminator`. Emit the null check, the reset, and the absent-key rule. Expected: all 28
+   `UnmarshalJSON` change; goldens unchanged.
+9. **Docs.** `README.md` "Wire encoding" and `docs/architecture.md` state the unknown-value, absent-key, and null rules, `Unknown`, and `Extra`. A script
+   checks every name they mention against the tree.
+10. **Review and close.** Run the verification below, record each result and the list of exported API changes for the release notes, and set this plan
+    to `complete`.
+
+## Verification
+
+* A table test in the root module covers all 17 discriminated unions: an unknown value per class (W1) lands as the design says and encodes to the same
+  JSON; an absent key sets the key-less variant in 6 unions and fails, naming the union and the key, in 11.
+* Every probe of W2, W3, W7, W9, and W10 is a test that failed on `e420cb6` and passes.
+* Each step's change to `types_gen.go` matches its expectation, by script; no golden in `testdata/json_golden/` changed; the pins pass.
+* `go test -race ./...` passes at the root and in `cmd/generate`; `go build ./example/...` passes; `TestGeneratedFilesUpToDate` passes.
+* `make pre-add-check`, `make check-records`, and `make markdownlint` pass.
+* `go test -cover ./internal/model` stays at or above 85%.
+
+## Rollout and Rollback
+
+Commits land on `main`, made by the owner, one per step. No tag; a push waits for the owner's ask. The module is at `v0`; the next minor version's
+release notes list: `Unknown` on 11 unions, `Extra` on 6 variant types, the new error texts, `ContentBlock` sending `_meta` and `annotations`, exact
+integers through unions, and the rejection of an absent discriminator in 11 unions.
+
+Rollback is `git revert` of the step commits, newest first; each step leaves the generator and the generated files in step.
+
+## Execution record
+
+Not started.

@@ -125,7 +125,8 @@ The owner accepted this option on 2026-10-10. Asked before acceptance, the owner
 
 * **Order:** the resolved model first, then the wire fixes built on it. The proposal had put the wire fixes first, on the current engine.
 * **Unknown variants:** each discriminated union gets an exported `Unknown json.RawMessage` field. A discriminator value that names no variant decodes
-  into it without error and encodes back unchanged.
+  into it without error and encodes back unchanged. (Refined 2026-10-10 by the owner, see the phase 2 amendment below: the six unions with a schema
+  catch-all use it instead, and the field is on the other eleven.)
 * **Types:** generate the declared integer formats and typed `additionalProperties` now. The proposal had been to keep `int` and `map[string]any`.
 * **Unstable types:** keep the current names and mark every unstable type and method in its doc comment. The 46 unprefixed types are not renamed.
 
@@ -138,7 +139,8 @@ The phases, in order:
    generated doc comments mark them.
 2. **Wire fixes on the model.** F1: a discriminator value that names no variant is never matched by key or by trial; it goes to `Unknown`, and a union
    with no discriminator returns an error naming the union. F2: `ContentBlock` keeps every key its variant struct encodes, and the shape table goes.
-   F3: object variants are reshaped through `map[string]json.RawMessage`. F5: errors name the union and wrap the cause.
+   F3: object variants are reshaped through `map[string]json.RawMessage`. F5: errors name the union and wrap the cause. (F1 refined, and F18 added,
+   2026-10-10: see the phase 2 amendment below.)
 3. **A protocol table.** The behaviour the schema does not express, prompt cancellation on `session/prompt`, `session/cancel`, the `session/load` binding,
    the hand-written helpers that replace generated ones, and the protocol methods, lives in one Go table in the generator, read by the model.
 4. **Schema fidelity.** Generated decoders honour `x-deserialize-default-on-error` and `x-deserialize-skip-invalid-items`. Integer fields take the Go type
@@ -163,7 +165,8 @@ field.
 * Neutral, because populated messages that use only known variants and carry no `_meta` or `annotations` on content blocks encode as today.
 * Bad, because the restructure is large, touches every emitter, and changes much of `types_gen.go`; each phase needs its own diff review.
 * Bad, because the unknown-variant field is a new exported field on each discriminated union, and honouring `x-deserialize-default-on-error` makes the
-  SDK accept messages it rejects today.
+  SDK accept messages it rejects today. (Refined 2026-10-10: `Unknown` on eleven unions and `Extra` on six catch-all variant types; see the phase 2
+  amendment below.)
 * Bad, because a full type-check of the output adds to the generator's run time.
 * Bad, because F1 to F3 stay in the SDK until phase 2 lands, after the model; until then a newer peer's unknown variants are misread, and
   `ContentBlock` drops `_meta` and `annotations`.
@@ -203,6 +206,70 @@ field.
 
 * Good, because it costs nothing now.
 * Bad, because F1 to F3 corrupt or drop data in normal use, and F8 lets a schema update produce a broken tree.
+
+## Amendment 2026-10-10, phase 2 facts and decisions
+
+Before planning phase 2, the wire fixes, the analysis was repeated on `e420cb6`, after phase 1. Measurements came from the resolved model, the schema
+files, and probes of the generated SDK in scratch copies; nothing in the tree changed.
+
+### Facts
+
+* **Three kinds of discriminated union.** 17 of the 28 unions have a discriminator, 7 declared by the schema and 10 derived. They differ in what the
+  schema says about an unrecognized value:
+  * **Closed (7):** every variant has a constant discriminator value and requires the key. `ContentBlock`, `PlanUpdateContent`,
+    `RequestPermissionOutcome`, `SessionConfigOption`, `SessionUpdate`, `ToolCallContent`, `UnstableNesSuggestion`.
+  * **With a catch-all (6):** the schema defines an `other` variant whose discriminator is a plain string, with a `not` that excludes every known value,
+    and, on five of them, `additionalProperties: true`. `CreateElicitationResponse`'s says agents "should preserve the raw payload when storing,
+    replaying, proxying, or forwarding" and "MUST NOT treat it as a known elicitation action". `CreateElicitationRequest`,
+    `CreateElicitationResponse`, `ElicitationPropertySchema`, `IdleStateUpdate`, `MultiSelectItems`, `StateUpdate`. These are the 6 uses of `not`
+    in the schema.
+  * **Defaulted (4):** one variant has no discriminator and is the one meant when the key is absent, and there is no catch-all. `AuthMethod`
+    (`agent`), `McpServer` and `UnstableMcpServer` (`stdio`), `SetSessionConfigOptionRequest` (`value_id`).
+  Two catch-all unions also have a variant for an absent key: `IdleStateUpdate` (`none`, `stopReason` omitted or null) and `MultiSelectItems`
+  (`titled`).
+* **What an unknown value does today.** Each union was given `{"<key>":"zz_future","extra":1}`. All 17 decoded without error: 15 into a known variant
+  (for example `SessionUpdate` into `SessionInfoUpdate`, `IdleStateUpdate` into `EndTurn`, `AuthMethod` into `Terminal`, `McpServer` into `Http`),
+  and two of those then failed to encode; `CreateElicitationRequest` and `MultiSelectItems` reached their `other` variant, which dropped `extra`.
+* **What an absent key does today.** `AuthMethod`, `McpServer`, and `SetSessionConfigOptionRequest` pick their key-less variant, as the schema means.
+  `IdleStateUpdate` given `{}` decodes as `EndTurn`, not `none`; `SessionUpdate` without `sessionUpdate` decodes as `UserMessageChunk`; `ContentBlock`
+  `{"text":"hi"}` decodes as `Text` though every `ContentBlock` variant requires `type`.
+* **The name `Unknown` is taken.** `StateUpdate` has a variant whose value is `unknown`, so its wrapper already has the field `Unknown
+  *StateUpdateUnknown`. A union field named `Unknown` there would collide.
+* **The catch-all structs keep only declared keys.** `IdleStateUpdateOther` has `_meta`, `stopReason`, `usage`; `StateUpdateOther`,
+  `ElicitationPropertySchemaOther`, and `MultiSelectItemsOther` have only the discriminator. Any other key is lost.
+* **F2.** The `ContentBlock` shape table drops exactly `_meta` and `annotations` from each of the five variants; every other field of the variant
+  structs is in it.
+* **F2 and F3 together.** In a scratch copy, encoding object variants through `map[string]json.RawMessage` (constants injected as raw strings) and
+  removing the shape table: the root suite, with every golden and the HTML-escaping and sorted-key pins, passed. A `resource_link` `size` of
+  9007199254740993 kept every digit, and a text block kept `_meta` and `annotations`, where `e420cb6` gave 9007199254740992 and dropped both.
+* **F18, new: decoding into a reused union keeps the old variant.** A `ContentBlock` decoded from a text block and then from an image block has both
+  `Text` and `Image` set: `Validate` fails, and encoding sends the old text. No union's `UnmarshalJSON` clears the value first.
+* **F19, new: JSON `null` decodes as a variant.** `SessionNotification` with `"update": null` decodes with `Update.UserMessageChunk` set, and `null` into a
+  `ContentBlock` sets `Text`; only `RequestId`, which has a null variant, is right. `encoding/json` calls `UnmarshalJSON` "including when the input is
+  a JSON null", and states that null "has no effect on the value and produces no error" for types other than interfaces, maps, pointers, and slices.
+
+### Decisions
+
+Asked on 2026-10-10, the owner decided:
+
+* **Unrecognized values: the schema's catch-all, else `Unknown`.** In the six unions with a catch-all, a value that names no known variant decodes
+  into the `other` variant, which gains `Extra map[string]json.RawMessage` holding the keys its struct does not declare, so it encodes back unchanged.
+  The eleven unions without one, closed and defaulted, gain `Unknown json.RawMessage`; such a value decodes into it and encodes back unchanged. No
+  collision arises, since `StateUpdate` has a catch-all. This refines the earlier decision that every discriminated union gets `Unknown`.
+* **Absent or null discriminator: key-less variants only.** Only variants with no discriminator value, other than the catch-all, are candidates: the
+  four defaulted unions' default, `IdleStateUpdate`'s `none`, and `MultiSelectItems`' `titled`. In the other eleven unions an absent key is an error
+  naming the union and the key.
+
+Phase 2 also takes F18 and F19: every union's `UnmarshalJSON` starts from the zero value, except that JSON `null` leaves a union without a null
+variant unchanged and without error, as `encoding/json` does for other types.
+
+### Consequences of these decisions
+
+* Good, because a newer peer's value lands where the schema says, `other` or `Unknown`, and is sent on unchanged.
+* Good, because `IdleStateUpdate` `{}` decodes as `none` and `SessionUpdate` stops guessing a variant.
+* Bad, because eleven unions now reject a payload without its discriminator, `ContentBlock` `{"text":"hi"}` among them, which decoded before.
+* Bad, because there are two mechanisms, `other` with `Extra` and `Unknown`, and the exported API gains `Unknown` on eleven unions and `Extra` on six
+  variant types.
 
 ## More Information
 
