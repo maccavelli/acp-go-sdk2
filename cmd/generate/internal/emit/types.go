@@ -318,11 +318,6 @@ func emitInlineVariant(f *goFile, tname string, in *model.Inline) {
 	}
 }
 
-// invalidPayload returns errors.New("invalid variant payload") with the given leading results.
-func invalidPayload(f *goFile, lead ...ast.Expr) ast.Stmt {
-	return ret(append(lead, call(f.qual(pkgErrors, "New"), str("invalid variant payload")))...)
-}
-
 // setVariant is u.<field> = &v; return nil.
 func setVariant(vi *model.Variant) []ast.Stmt {
 	return []ast.Stmt{
@@ -331,13 +326,17 @@ func setVariant(vi *model.Variant) []ast.Stmt {
 	}
 }
 
-// decodeStrict decodes b into v, fails on error, and sets the variant.
-func decodeStrict(f *goFile, vi *model.Variant) []ast.Stmt {
+// decodeStrict decodes b into v and sets the variant. A failure returns
+// "<where>: <cause>".
+func decodeStrict(f *goFile, vi *model.Variant, where string) []ast.Stmt {
 	return append([]ast.Stmt{
-		ifStmt(nil, binary(call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v"))), token.NEQ, nilExpr()),
-			invalidPayload(f)),
+		ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v")))), errNotNil(),
+			ret(call(f.qual(pkgFmt, "Errorf"), str(where+": %w"), id("err")))),
 	}, setVariant(vi)...)
 }
+
+// variantPlace names a variant in an error: "<Union>: variant <Field>".
+func variantPlace(union string, vi *model.Variant) string { return union + ": variant " + vi.FieldName }
 
 // keyMatch sets match = false when key is missing from m.
 func keyMatch(m, key string) ast.Stmt {
@@ -365,7 +364,8 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 		for _, vi := range variants {
 			if vi.DiscValue != "" {
 				cases = append(cases, caseOf(exprs(str(vi.DiscValue)),
-					append([]ast.Stmt{varStmt("v", id(vi.TypeName))}, decodeStrict(f, vi)...)...))
+					append([]ast.Stmt{varStmt("v", id(vi.TypeName))},
+						decodeStrict(f, vi, name+": "+discKey+" "+strconv.Quote(vi.DiscValue))...)...))
 			}
 		}
 		// A discriminator that is present and not a string is an error.
@@ -389,7 +389,7 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 		for _, rk := range vi.Required {
 			stmts = append(stmts, keyMatch("m", rk))
 		}
-		stmts = append(stmts, ifStmt(nil, id("match"), decodeStrict(f, vi)...))
+		stmts = append(stmts, ifStmt(nil, id("match"), decodeStrict(f, vi, variantPlace(name, vi))...))
 		object = append(object, block(stmts...))
 	}
 	body = append(body,
@@ -416,7 +416,7 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 			varStmt("v", id(vi.TypeName)),
 			define(exprs(id("match")), boolLit(true)),
 			rangeStmt(id("_"), id("elem"), id("arr"), loop...),
-			ifStmt(nil, id("match"), decodeStrict(f, vi)...),
+			ifStmt(nil, id("match"), decodeStrict(f, vi, variantPlace(name, vi))...),
 		))
 	}
 	body = append(body,
@@ -431,7 +431,7 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 			ifStmt(nil, binary(unmarshal(id("b"), addr(id("v"))), token.EQL, nilExpr()), setVariant(vi)...),
 		))
 	}
-	return append(body, ret(call(f.qual(pkgErrors, "New"), str("no matching variant for union"))))
+	return append(body, ret(call(f.qual(pkgErrors, "New"), str(name+": no variant matches"))))
 }
 
 const keyMimeType = "mimeType"
@@ -497,8 +497,8 @@ func unionMarshalBody(f *goFile, name string, variants []*model.Variant) []ast.S
 				ifStmt(nil, binary(id("_e"), token.NEQ, nilExpr()), ret(emptyBytes(), id("_e"))),
 				// Marshal object variant to map for discriminant injection and shaping.
 				varStmt("m", rawMap(id("any"))),
-				ifStmt(nil, binary(call(f.qual(pkgJSON, "Unmarshal"), id("_b"), addr(id("m"))), token.NEQ, nilExpr()),
-					invalidPayload(f, emptyBytes())),
+				ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("_b"), addr(id("m")))), errNotNil(),
+					ret(nilExpr(), call(f.qual(pkgFmt, "Errorf"), str(name+": %w"), id("err")))),
 			}
 			// Inject const discriminants.
 			for _, kv := range vi.ConstPairs {

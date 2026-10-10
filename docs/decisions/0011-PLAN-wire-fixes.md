@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-10
 associated-madr: "0011-MADR-harden-code-generator-engine.md"
 ---
@@ -185,4 +185,49 @@ Rollback is `git revert` of the step commits, newest first; each step leaves the
 
 ## Execution record
 
-Not started.
+### Step 2, error texts, 2026-10-10
+
+The owner approved this plan and committed the records as `cbb773f`; the plan's status is `in-progress`. Step 2 ran on `main` from that clean tree. The
+agent did not commit.
+
+New `union_wire_test.go` in the root package, `TestUnionDecodeErrorsNameTheirPlace`, three cases. Run before the generator change:
+
+```text
+--- FAIL: TestUnionDecodeErrorsNameTheirPlace/no_variant_matches
+    error "no matching variant for union" does not contain "RequestId: no variant matches"
+--- FAIL: TestUnionDecodeErrorsNameTheirPlace/variant_found_by_its_keys,_with_a_bad_payload
+    error "invalid variant payload" does not contain "EmbeddedResourceResource: variant TextResourceContents"
+    error "invalid variant payload" does not contain "cannot unmarshal number"
+--- FAIL: TestUnionDecodeErrorsNameTheirPlace/known_variant_with_a_bad_payload
+    error "invalid variant payload" does not contain "ContentBlock"
+    error "invalid variant payload" does not contain "type \"text\""
+```
+
+The second case was added after the generator change, to cover the key-match form, and was then run against a copy of the SDK at `e420cb6`, where it
+failed as shown.
+
+`cmd/generate/internal/emit/types.go`: `decodeStrict` takes the place it reports and returns `fmt.Errorf("<place>: %w", err)`; a discriminator case
+reports `<Union>: <key> "<value>"`, a key-match or array-match case `<Union>: variant <Field>` (`variantPlace`); the final return of
+`unionUnmarshalBody` is `errors.New("<Union>: no variant matches")`; the reshape failure of `unionMarshalBody` returns `nil, fmt.Errorf("<Union>: %w",
+err)`. `invalidPayload` is gone.
+
+Regenerated: `types_gen.go` changed by 532 lines in and 532 out, and no other file. A script classified every changed line, with none left over:
+
+```text
+- decode check                     160      + decode check                     160
+- anonymous decode error           160      + decode error, discriminator      67
+- reshape check                    92       + decode error, variant            93
+- anonymous reshape error          92       + reshape check                    92
+- anonymous no-match               28       + reshape error                    92
+                                            + named no-match                   28
+unclassified: 0
+union error messages not starting with their union's name: 0
+```
+
+The 67 discriminator cases are the variants with a discriminator value: 38 in the closed unions, 21 in the catch-all unions, 8 in the defaulted ones.
+No golden changed; `go build ./example/...` passes.
+
+Gates: `make pre-add-check` with the three changed Go files named: `go-precheck: 3 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 61 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 2 on `main`.
