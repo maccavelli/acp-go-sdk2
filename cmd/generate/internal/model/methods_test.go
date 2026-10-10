@@ -56,7 +56,8 @@ func TestBuildMethods(t *testing.T) {
 		}
 	}
 	check("agent", m.AgentMethods, []row{
-		{"foo", "Foo", "AgentMethodFoo", "FooRequest", "FooResponse", "", true, BindAgentExperimental, "Foo result."},
+		{"foo", "Foo", "AgentMethodFoo", "FooRequest", "FooResponse", "", true, BindAgentExperimental,
+			"**UNSTABLE**||This capability is not part of the spec yet, and may be removed or changed at any point.||Foo result."},
 		{"session_cancel", "Cancel", "AgentMethodSessionCancel", "", "", "CancelNotification", false, BindAgent, "Cancel."},
 		{"session_load", "LoadSession", "AgentMethodSessionLoad", "LoadSessionRequest", "LoadSessionResponse", "", true, BindAgentLoader, ""},
 		{"session_new", "NewSession", "AgentMethodSessionNew", "NewSessionRequest", "NewSessionResponse", "", true, BindAgent, "Creates a session."},

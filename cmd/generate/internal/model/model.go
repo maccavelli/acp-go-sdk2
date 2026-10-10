@@ -78,6 +78,8 @@ func (m *Model) Type(name string) *Type { return m.byName[name] }
 type Type struct {
 	Name string
 	Kind Kind
+	// Unstable is true for a definition the stable schema does not have.
+	Unstable bool
 	// def is the schema definition the type comes from.
 	def *load.Definition
 	// Doc is the definition's doc comment, one entry per line.
@@ -250,6 +252,10 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance) (*Mode
 		t, err := buildType(schema, n, name, schema.Defs[name])
 		if err != nil {
 			return nil, err
+		}
+		t.Unstable = prov != nil && prov.UnstableDefs[name]
+		if t.Unstable && t.Kind != KindNone {
+			t.Doc = markUnstable(t.Doc)
 		}
 		m.Types = append(m.Types, t)
 		m.byName[name] = t

@@ -641,3 +641,52 @@ Gates: `make pre-add-check` with the two changed Go files named: `go-precheck: 2
 Without names: `go-precheck: 59 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 7 on `main`.
+
+### Step 8, unstable marking, 2026-10-10
+
+The owner committed step 7 as `b2319ce`. Step 8 ran on `main` from that clean tree. The agent did not commit.
+
+The model: `Type.Unstable` is the definition's membership in the provenance's `UnstableDefs`; `markUnstable` puts the schema's notice (G11: the line
+`**UNSTABLE**`, a blank line, and `This capability is not part of the spec yet, and may be removed or changed at any point.`) at the head of an
+unstable type's or method's doc, separated from an existing doc by a blank line, unless a line of the doc already carries `**UNSTABLE**`. The emitters
+print `Type.Doc` and `Method.Doc` as before and did not change. Variant and nested types of an unstable definition are not marked; they are reached through
+it, as the plan's "unstable top-level type" says.
+
+Regenerated with `cd cmd/generate && go run .`: `types_gen.go` gained 284 lines and lost none; the other four files did not change. A script compared the
+committed and regenerated `types_gen.go`:
+
+```text
+removed lines: 0; added lines: 284; added lines that are not notice or blank comment lines: 0
+type docs changed: 61; not exactly notice + old doc: []; stable definitions touched: []
+AgentExperimental: methods 15; docs changed 10; wrongly []; still unmarked []
+ClientExperimental: methods 1; docs changed 0; wrongly []; still unmarked []
+Agent: methods 12; docs changed 0
+AgentLoader: methods 1; docs changed 0
+Client: methods 11; docs changed 0
+experimental method docs changed: 10
+```
+
+The 284 lines are 71 notices of three lines and 71 blank separators: every marked type and method already had a doc. The script's estimate of the
+unstable definitions, `"Unstable"` plus any unstable schema name, also listed `UnstableMcpServerHttp` and `UnstableMcpServerSse` as unmarked. A probe
+of the model showed both are inline variant types of the union `UnstableMcpServer`, not merged definitions; the union is marked, and the model marks
+exactly the 102 provenance definitions.
+
+Tests: `TestUnstableMarking` (a type without a doc, one with a doc, one already marked, a stable type, an unstable and a stable method). The `foo`
+row of `TestBuildMethods` now expects the notice on its doc.
+
+Each rule was seen to fail, with one planted breakage per run of `go test ./...` in `cmd/generate` in a fresh scratch copy:
+
+```text
+types not marked: failing=['TestGeneratedFilesUpToDate', 'TestUnstableMarking']
+stable types marked too: failing=['TestGeneratedFilesUpToDate', 'TestUnstableMarking']
+marked docs marked again: failing=['TestGeneratedFilesUpToDate', 'TestUnstableMarking']
+no blank line before the doc: failing=['TestBuildMethods', 'TestGeneratedFilesUpToDate', 'TestUnstableMarking']
+methods not marked: failing=['TestBuildMethods', 'TestGeneratedFilesUpToDate', 'TestUnstableMarking']
+```
+
+`go test -cover ./internal/model` reports 82.8%. `go build ./example/...` passes.
+
+Gates: `make pre-add-check` with the five changed Go files named, `types_gen.go` among them: `go-precheck: 5 file(s) clean (gofmt, golangci-lint,
+go vet, go test, govulncheck).` Without names: `go-precheck: 59 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 8 on `main`.

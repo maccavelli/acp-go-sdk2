@@ -180,7 +180,28 @@ func buildMethod(schema *load.Schema, linked map[string]*roles, prov *load.Prove
 			}
 		}
 	}
+	if mi.Unstable {
+		mi.Doc = markUnstable(mi.Doc)
+	}
 	return mi, nil
+}
+
+// unstableNotice is the schema's own notice on unstable capabilities.
+var unstableNotice = []string{"**UNSTABLE**", "", "This capability is not part of the spec yet, and may be removed or changed at any point."}
+
+// markUnstable puts the unstable notice at the head of doc, separated from it
+// by a blank line, unless doc already carries the notice.
+func markUnstable(doc []string) []string {
+	for _, line := range doc {
+		if strings.Contains(line, unstableNotice[0]) {
+			return doc
+		}
+	}
+	out := slices.Clone(unstableNotice)
+	if len(doc) > 0 {
+		out = append(append(out, ""), doc...)
+	}
+	return out
 }
 
 // notificationMethodName is the interface method of a notification.

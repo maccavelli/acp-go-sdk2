@@ -895,6 +895,10 @@ func (v *ClientCapabilities) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // NES capabilities advertised by the client during initialization.
 type ClientNesCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3916,6 +3920,10 @@ type IdleStateUpdateNone struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // The child is ready to process another prompt.
 //
 // An omitted, 'null', or malformed 'stopReason' means not reported.
@@ -5389,6 +5397,10 @@ type MultiSelectPropertySchema struct {
 	Title *string `json:"title,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // NES capabilities advertised by the agent during initialization.
 type NesCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5403,6 +5415,10 @@ type NesCapabilities struct {
 	Events *NesEventCapabilities `json:"events,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Context capabilities the agent wants attached to each suggestion request.
 type NesContextCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5425,6 +5441,10 @@ type NesContextCapabilities struct {
 	UserActions *NesUserActionsCapabilities `json:"userActions,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Capabilities for diagnostics context.
 type NesDiagnosticsCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5435,6 +5455,10 @@ type NesDiagnosticsCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Capabilities for 'document/didChange' events.
 type NesDocumentDidChangeCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5447,6 +5471,10 @@ type NesDocumentDidChangeCapabilities struct {
 	SyncKind TextDocumentSyncKind `json:"syncKind"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Marker for 'document/didClose' capability support.
 type NesDocumentDidCloseCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5457,6 +5485,10 @@ type NesDocumentDidCloseCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Marker for 'document/didFocus' capability support.
 type NesDocumentDidFocusCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5467,6 +5499,10 @@ type NesDocumentDidFocusCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Marker for 'document/didOpen' capability support.
 type NesDocumentDidOpenCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5477,6 +5513,10 @@ type NesDocumentDidOpenCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Marker for 'document/didSave' capability support.
 type NesDocumentDidSaveCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5487,6 +5527,10 @@ type NesDocumentDidSaveCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Document event capabilities the agent wants to receive.
 type NesDocumentEventCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5507,6 +5551,10 @@ type NesDocumentEventCapabilities struct {
 	DidSave *NesDocumentDidSaveCapabilities `json:"didSave,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Capabilities for edit history context.
 type NesEditHistoryCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5519,6 +5567,10 @@ type NesEditHistoryCapabilities struct {
 	MaxCount *int `json:"maxCount,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Event capabilities the agent can consume.
 type NesEventCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5531,6 +5583,10 @@ type NesEventCapabilities struct {
 	Document *NesDocumentEventCapabilities `json:"document,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Marker for jump suggestion support.
 type NesJumpCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5541,6 +5597,10 @@ type NesJumpCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Capabilities for open files context.
 type NesOpenFilesCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5551,6 +5611,10 @@ type NesOpenFilesCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Capabilities for recent files context.
 type NesRecentFilesCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5563,6 +5627,10 @@ type NesRecentFilesCapabilities struct {
 	MaxCount *int `json:"maxCount,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Capabilities for related snippets context.
 type NesRelatedSnippetsCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5573,6 +5641,10 @@ type NesRelatedSnippetsCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Marker for rename suggestion support.
 type NesRenameCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5583,6 +5655,10 @@ type NesRenameCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Marker for search and replace suggestion support.
 type NesSearchAndReplaceCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5593,6 +5669,10 @@ type NesSearchAndReplaceCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Capabilities for user actions context.
 type NesUserActionsCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -6224,6 +6304,10 @@ func (u *PlanUpdateContent) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // The encoding used for character offsets in positions.
 //
 // Follows the same conventions as LSP 3.17. The default is UTF-16.
@@ -6788,6 +6872,10 @@ func (v *RequestPermissionResponse) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Foreground work is blocked on user action.
 type RequiresActionStateUpdate struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -6883,6 +6971,10 @@ const (
 	RoleUser      Role = "user"
 )
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Foreground work is in progress.
 type RunningStateUpdate struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -9826,6 +9918,10 @@ type TextContent struct {
 	Text string `json:"text"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // How the agent wants document changes delivered.
 type TextDocumentSyncKind string
 
@@ -10275,6 +10371,10 @@ type UnknownStateUpdate struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Notification sent when a suggestion is accepted.
 type UnstableAcceptNesNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10293,6 +10393,10 @@ func (v *UnstableAcceptNesNotification) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Request to close an NES session.
 //
 // The agent **must** cancel any ongoing work related to the NES session
@@ -10312,6 +10416,10 @@ func (v *UnstableCloseNesRequest) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Response from closing an NES session.
 type UnstableCloseNesResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10326,6 +10434,10 @@ func (v *UnstableCloseNesResponse) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Notification sent when a file is edited.
 type UnstableDidChangeDocumentNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10364,6 +10476,10 @@ func (v *UnstableDidChangeDocumentNotification) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Notification sent when a file is closed.
 type UnstableDidCloseDocumentNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10385,6 +10501,10 @@ func (v *UnstableDidCloseDocumentNotification) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Notification sent when a file becomes the active editor tab.
 type UnstableDidFocusDocumentNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10412,6 +10532,10 @@ func (v *UnstableDidFocusDocumentNotification) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Notification sent when a file is opened in the editor.
 type UnstableDidOpenDocumentNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10445,6 +10569,10 @@ func (v *UnstableDidOpenDocumentNotification) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Notification sent when a file is saved.
 type UnstableDidSaveDocumentNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10747,6 +10875,10 @@ type UnstableMcpServerAcpInline struct {
 	Type     string                 `json:"type"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Configuration for connecting to an MCP (Model Context Protocol) server.
 //
 // MCP servers provide tools and context that the agent can use when
@@ -11212,6 +11344,10 @@ func (v *UnstableMessageMcpResponse) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A diagnostic (error, warning, etc.).
 type UnstableNesDiagnostic struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11230,6 +11366,10 @@ type UnstableNesDiagnostic struct {
 	Uri string `json:"uri"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Severity of a diagnostic.
 type UnstableNesDiagnosticSeverity string
 
@@ -11240,6 +11380,10 @@ const (
 	UnstableNesDiagnosticSeverityHint        UnstableNesDiagnosticSeverity = "hint"
 )
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // An entry in the edit history.
 type UnstableNesEditHistoryEntry struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11254,6 +11398,10 @@ type UnstableNesEditHistoryEntry struct {
 	Uri string `json:"uri"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A text edit suggestion.
 type UnstableNesEditSuggestion struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11282,6 +11430,10 @@ func (v UnstableNesEditSuggestion) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A code excerpt from a file.
 type UnstableNesExcerpt struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11298,6 +11450,10 @@ type UnstableNesExcerpt struct {
 	Text string `json:"text"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A jump-to-location suggestion.
 type UnstableNesJumpSuggestion struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11314,6 +11470,10 @@ type UnstableNesJumpSuggestion struct {
 	Uri string `json:"uri"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // An open file in the editor.
 type UnstableNesOpenFile struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11332,6 +11492,10 @@ type UnstableNesOpenFile struct {
 	VisibleRange *UnstableRange `json:"visibleRange,omitempty"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A recently accessed file.
 type UnstableNesRecentFile struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11348,6 +11512,10 @@ type UnstableNesRecentFile struct {
 	Uri string `json:"uri"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // The reason a suggestion was rejected.
 type UnstableNesRejectReason string
 
@@ -11358,6 +11526,10 @@ const (
 	UnstableNesRejectReasonCancelled UnstableNesRejectReason = "cancelled"
 )
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A related code snippet from a file.
 type UnstableNesRelatedSnippet struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11382,6 +11554,10 @@ func (v UnstableNesRelatedSnippet) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A rename symbol suggestion.
 type UnstableNesRenameSuggestion struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11400,6 +11576,10 @@ type UnstableNesRenameSuggestion struct {
 	Uri string `json:"uri"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Repository metadata for an NES session.
 type UnstableNesRepository struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11416,6 +11596,10 @@ type UnstableNesRepository struct {
 	RemoteUrl string `json:"remoteUrl"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A search-and-replace suggestion.
 type UnstableNesSearchAndReplaceSuggestion struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11436,6 +11620,10 @@ type UnstableNesSearchAndReplaceSuggestion struct {
 	Uri string `json:"uri"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Context attached to a suggestion request.
 type UnstableNesSuggestContext struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11544,6 +11732,10 @@ type UnstableNesSuggestionSearchAndReplace struct {
 	Uri string `json:"uri"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A suggestion returned by the agent.
 type UnstableNesSuggestion struct {
 	// A text edit suggestion.
@@ -11806,9 +11998,17 @@ func (u *UnstableNesSuggestion) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Unique identifier for a next edit suggestion.
 type UnstableNesSuggestionId string
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A text edit within a suggestion.
 type UnstableNesTextEdit struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11823,6 +12023,10 @@ type UnstableNesTextEdit struct {
 	Range UnstableRange `json:"range"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // What triggered the suggestion request.
 type UnstableNesTriggerKind string
 
@@ -11832,6 +12036,10 @@ const (
 	UnstableNesTriggerKindManual     UnstableNesTriggerKind = "manual"
 )
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A user action (typing, cursor movement, etc.).
 type UnstableNesUserAction struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11850,6 +12058,10 @@ type UnstableNesUserAction struct {
 	Uri string `json:"uri"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A zero-based position in a text document.
 //
 // The meaning of 'character' depends on the negotiated position encoding.
@@ -11925,6 +12137,10 @@ func (v UnstableProviderInfo) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A range in a text document, expressed as start and end positions.
 type UnstableRange struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11939,6 +12155,10 @@ type UnstableRange struct {
 	Start UnstablePosition `json:"start"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Notification sent when a suggestion is rejected.
 type UnstableRejectNesNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12009,6 +12229,10 @@ func (v *UnstableSetProviderResponse) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Request to start an NES session.
 type UnstableStartNesRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12029,6 +12253,10 @@ func (v *UnstableStartNesRequest) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Response to 'nes/start'.
 type UnstableStartNesResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12045,6 +12273,10 @@ func (v *UnstableStartNesResponse) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Request for a code suggestion.
 type UnstableSuggestNesRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12076,6 +12308,10 @@ func (v *UnstableSuggestNesRequest) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // Response to 'nes/suggest'.
 type UnstableSuggestNesResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12105,6 +12341,10 @@ func (v *UnstableSuggestNesResponse) Validate() error {
 	return nil
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A content change event for a document.
 //
 // When 'range' is 'None', 'text' is the full content of the document.
@@ -12122,6 +12362,10 @@ type UnstableTextDocumentContentChangeEvent struct {
 	Text string `json:"text"`
 }
 
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
 // A workspace folder.
 type UnstableWorkspaceFolder struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12338,14 +12582,34 @@ type AgentLoader interface {
 
 // AgentExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice.
 type AgentExperimental interface {
+	// **UNSTABLE**
+	//
+	// This capability is not part of the spec yet, and may be removed or changed at any point.
+	//
 	// Notification sent when a file is edited.
 	UnstableDidChangeDocument(ctx context.Context, params UnstableDidChangeDocumentNotification) error
+	// **UNSTABLE**
+	//
+	// This capability is not part of the spec yet, and may be removed or changed at any point.
+	//
 	// Notification sent when a file is closed.
 	UnstableDidCloseDocument(ctx context.Context, params UnstableDidCloseDocumentNotification) error
+	// **UNSTABLE**
+	//
+	// This capability is not part of the spec yet, and may be removed or changed at any point.
+	//
 	// Notification sent when a file becomes the active editor tab.
 	UnstableDidFocusDocument(ctx context.Context, params UnstableDidFocusDocumentNotification) error
+	// **UNSTABLE**
+	//
+	// This capability is not part of the spec yet, and may be removed or changed at any point.
+	//
 	// Notification sent when a file is opened in the editor.
 	UnstableDidOpenDocument(ctx context.Context, params UnstableDidOpenDocumentNotification) error
+	// **UNSTABLE**
+	//
+	// This capability is not part of the spec yet, and may be removed or changed at any point.
+	//
 	// Notification sent when a file is saved.
 	UnstableDidSaveDocument(ctx context.Context, params UnstableDidSaveDocumentNotification) error
 	// **UNSTABLE**
@@ -12357,17 +12621,37 @@ type AgentExperimental interface {
 	// Sent by the provider to the consumer for an active request (including
 	// subscription acknowledgements and updates); the outer envelope has no 'id'.
 	UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpNotification) error
+	// **UNSTABLE**
+	//
+	// This capability is not part of the spec yet, and may be removed or changed at any point.
+	//
 	// Notification sent when a suggestion is accepted.
 	UnstableAcceptNes(ctx context.Context, params UnstableAcceptNesNotification) error
+	// **UNSTABLE**
+	//
+	// This capability is not part of the spec yet, and may be removed or changed at any point.
+	//
 	// Request to close an NES session.
 	//
 	// The agent **must** cancel any ongoing work related to the NES session
 	// and then free up any resources associated with the session.
 	UnstableCloseNes(ctx context.Context, params UnstableCloseNesRequest) (UnstableCloseNesResponse, error)
+	// **UNSTABLE**
+	//
+	// This capability is not part of the spec yet, and may be removed or changed at any point.
+	//
 	// Notification sent when a suggestion is rejected.
 	UnstableRejectNes(ctx context.Context, params UnstableRejectNesNotification) error
+	// **UNSTABLE**
+	//
+	// This capability is not part of the spec yet, and may be removed or changed at any point.
+	//
 	// Request to start an NES session.
 	UnstableStartNes(ctx context.Context, params UnstableStartNesRequest) (UnstableStartNesResponse, error)
+	// **UNSTABLE**
+	//
+	// This capability is not part of the spec yet, and may be removed or changed at any point.
+	//
 	// Request for a code suggestion.
 	UnstableSuggestNes(ctx context.Context, params UnstableSuggestNesRequest) (UnstableSuggestNesResponse, error)
 	// **UNSTABLE**
