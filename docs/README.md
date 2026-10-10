@@ -26,6 +26,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0008 | REPORT | [Review of the self-contained SDK records, a go/ast generator, and encoding/json/v2](reports/0008-REPORT-self-contained-sdk-review.md) | observed |
 | 0009 | MADR | [Fix the generated output on encoding/json v1](decisions/0009-MADR-fix-generated-output-on-json-v1.md) | accepted |
 | 0009 | PLAN | [Implement the generated-output fixes](decisions/0009-PLAN-fix-generated-output-on-json-v1.md) | complete |
+| 0010 | MADR | [Bring the user-facing docs in line with the current tree](decisions/0010-MADR-align-docs-with-current-tree.md) | accepted |
+| 0010 | PLAN | [Implement the docs update](decisions/0010-PLAN-align-docs-with-current-tree.md) | complete |
 
 ## I want to…
 
@@ -37,7 +39,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | know why the schema pin is 1.25.0 | [0004-MADR-pin-acp-schema-1-25-0.md](decisions/0004-MADR-pin-acp-schema-1-25-0.md) |
 | know why this tree is not the Coder Go SDK | [0005-MADR-separate-module-from-coder.md](decisions/0005-MADR-separate-module-from-coder.md) |
 | rename the module off github.com/coder/acp-go-sdk | [0005-PLAN-separate-module-from-coder.md](decisions/0005-PLAN-separate-module-from-coder.md) |
-| know why the generator would stop using Jennifer | [0006-MADR-emit-go-with-go-ast.md](decisions/0006-MADR-emit-go-with-go-ast.md) |
+| know why the generator uses go/ast instead of Jennifer | [0006-MADR-emit-go-with-go-ast.md](decisions/0006-MADR-emit-go-with-go-ast.md) |
 | emit the schema bindings with go/ast | [0006-PLAN-emit-go-with-go-ast.md](decisions/0006-PLAN-emit-go-with-go-ast.md) |
 | keep this SDK self-contained, off the previous module and off Jennifer | [0007-MADR-self-contained-acp-sdk.md](decisions/0007-MADR-self-contained-acp-sdk.md) |
 | apply the separation from the previous project | [0007-PLAN-self-contained-acp-sdk.md](decisions/0007-PLAN-self-contained-acp-sdk.md) |
@@ -45,10 +47,12 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | read a go/ast generator that reproduces the Jennifer output | [0008-REPORT-self-contained-sdk-review.md](reports/0008-REPORT-self-contained-sdk-review.md) |
 | know why the SDK stays on encoding/json v1 | [0007-MADR-self-contained-acp-sdk.md](decisions/0007-MADR-self-contained-acp-sdk.md) |
 | see the v1 and v2 measurements behind that | [0008-REPORT-self-contained-sdk-review.md](reports/0008-REPORT-self-contained-sdk-review.md) |
-| know why the generated output would change after the go/ast port | [0009-MADR-fix-generated-output-on-json-v1.md](decisions/0009-MADR-fix-generated-output-on-json-v1.md) |
-| fix unset unions, nil required arrays, and union docs in the generated code | [0009-PLAN-fix-generated-output-on-json-v1.md](decisions/0009-PLAN-fix-generated-output-on-json-v1.md) |
+| know why the generated output changed after the go/ast port | [0009-MADR-fix-generated-output-on-json-v1.md](decisions/0009-MADR-fix-generated-output-on-json-v1.md) |
+| see how unset unions, nil required arrays, and union docs were fixed | [0009-PLAN-fix-generated-output-on-json-v1.md](decisions/0009-PLAN-fix-generated-output-on-json-v1.md) |
 | apply the Go 1.27.2 and schema 1.25.0 pin | [0004-PLAN-pin-acp-schema-1-25-0.md](decisions/0004-PLAN-pin-acp-schema-1-25-0.md) |
 | understand how this fits together | [architecture.md](architecture.md) |
+| know what the SDK sends on the wire | [architecture.md](architecture.md) |
+| know why the user-facing docs were brought up to date | [0010-MADR-align-docs-with-current-tree.md](decisions/0010-MADR-align-docs-with-current-tree.md) |
 | know the rules agents follow in this repository | [AGENTS.md](../AGENTS.md) |
 | know why this repository has the fleet workspace and library CI | [0003-MADR-install-fleet-agent-workspace.md](decisions/0003-MADR-install-fleet-agent-workspace.md) |
 | install the fleet workspace and library CI | [0003-PLAN-install-fleet-agent-workspace.md](decisions/0003-PLAN-install-fleet-agent-workspace.md) |

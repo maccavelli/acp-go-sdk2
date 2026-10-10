@@ -33,7 +33,7 @@ You can run them from your terminal or connect to external ACP agents.
 - `go run ./example/agent` starts a minimal ACP agent over stdio.
 - `go run ./example/claude-code` demonstrates bridging to Claude Code.
 - `go run ./example/client` connects to a running agent and streams a sample turn.
-- `go run ./example/gemini` bridges to the Gemini CLI in ACP mode (flags: -model, -sandbox, -debug, -gemini /path/to/gemini).
+- `go run ./example/gemini` bridges to the Gemini CLI in ACP mode (flags: -model, -sandbox, -yolo, -debug, -gemini /path/to/gemini).
 
 You can watch the interaction by running `go run ./example/client` locally.
 
@@ -51,8 +51,8 @@ If you're building an [Agent](https://agentclientprotocol.com/protocol/overview#
 
 If you're building a [Client](https://agentclientprotocol.com/protocol/overview#client):
 
-- Implement the `acp.Client` interface (and optionally `acp.ClientTerminal` for
-  terminal features).
+- Implement the `acp.Client` interface. It includes the file-system and terminal
+  methods, such as `ReadTextFile` and `CreateTerminal`.
 - Launch or connect to your Agent process (stdio), then create a connection with
   `acp.NewClientSideConnection(client, stdin, stdout)`.
 - Call `Initialize`, `NewSession`, and `Prompt` to run a turn and stream updates.
@@ -63,6 +63,20 @@ Helper constructors are provided to reduce boilerplate when working with union t
   `acp.ResourceLinkBlock`, `acp.ResourceBlock`.
 - Tool content: `acp.ToolContent`, `acp.ToolDiffContent`, `acp.ToolTerminalRef`.
 - Utility: `acp.Ptr[T]` for pointer fields in request/update structs.
+
+### Wire encoding
+
+The SDK encodes and decodes messages with `encoding/json` (v1). The generated types
+follow the schema:
+
+- Encoding a message whose required union has no variant set fails with an error
+  that names the union, such as `RequestPermissionOutcome: no variant set`.
+- A required array or map left nil is sent as `[]` or `{}`, not `null`.
+- Decoding a union whose discriminator is present but not a string fails with an
+  error that names the union and the key.
+
+The decision behind these rules is
+[0009-MADR-fix-generated-output-on-json-v1.md](docs/decisions/0009-MADR-fix-generated-output-on-json-v1.md).
 
 ### Extension methods
 

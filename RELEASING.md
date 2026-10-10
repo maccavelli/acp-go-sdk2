@@ -13,14 +13,14 @@ code, helper APIs, and library version remain in sync.
 
 ## Bump the Schema Version
 
-1. Decide which upstream ACP schema tag to adopt (for example `v0.4.3`).
+1. Decide which upstream ACP schema version to adopt (for example `1.25.0`).
 2. Update `schema/version` and regenerate code. There are two supported ways to
    do this:
 
 ### Option A: Use the release helper
 
 ```bash
-make release VERSION=0.4.3
+make release VERSION=1.25.0
 ```
 
 The helper performs the following steps:
@@ -36,7 +36,7 @@ create commits or tags; it just prepares the tree.
 ### Option B: Run the steps manually
 
 ```bash
-printf '0.4.3\n' > schema/version
+printf '1.25.0\n' > schema/version
 make version
 make fmt
 GOCACHE=$(pwd)/.gocache make test
@@ -63,12 +63,14 @@ not the schema download tag.
 1. Tag the release commit with a Go-compatible tag:
 
    ```bash
-   git tag v0.4.3
-   git push origin v0.4.3
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
    ```
 
 2. Create a GitHub release for the tag. Include a summary of notable changes and
-   reference the upstream ACP schema version.
+   reference the upstream ACP schema version. Call out any change to what the SDK
+   sends or accepts on the wire, as the decision records under `docs/decisions/`
+   describe it.
 
 Consumers rely on the `vX.Y.Z` semver tag for `go get`, so ensure the tag is
 pushed before announcing the release.
