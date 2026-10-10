@@ -31,6 +31,9 @@ type goFile struct {
 	pkg     string
 	imports map[string]bool
 	items   []fileItem
+	// uses records the unexported helpers the file's code calls, so the
+	// file emits each once.
+	uses map[string]bool
 }
 
 // fileItem is one comment line, one blank line, or one declaration.
@@ -41,7 +44,7 @@ type fileItem struct {
 }
 
 func newFile() *goFile {
-	return &goFile{pkg: sdkPackage, imports: map[string]bool{}}
+	return &goFile{pkg: sdkPackage, imports: map[string]bool{}, uses: map[string]bool{}}
 }
 
 // comment adds one comment line per argument. Comment lines directly above a

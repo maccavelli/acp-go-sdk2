@@ -51,6 +51,7 @@ func WriteTypes(outDir string, m *model.Model) error {
 		emitSchemaDef(f, t)
 	}
 	emitRPCInterfaces(f, m)
+	emitDecodeHelpers(f)
 
 	return f.write(outDir, "types_gen.go")
 }
@@ -158,14 +159,15 @@ func emitObjectSchema(f *goFile, t *model.Type) {
 	// Nested struct types for inline object properties come first.
 	for _, ns := range t.NestedStructs {
 		f.comment(ns.Doc...)
-		emitStruct(f, ns.Name, ns.Fields, false)
+		emitStruct(f, ns.Name, ns.Fields, false, "")
 	}
-	emitStruct(f, t.Name, t.Fields, false)
+	emitStruct(f, t.Name, t.Fields, false, "")
 }
 
-// emitStruct emits type name struct { fields } and the methods its defaults
-// and fills need.
-func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool) {
+// emitStruct emits type name struct { fields } and the methods its required
+// keys, defaults, and fills need; exempt is a required key decoding does not
+// check.
+func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool, exempt string) {
 	var st fieldSet
 	for _, fld := range fields {
 		st.comment(fld.Doc...)
@@ -178,7 +180,7 @@ func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool) {
 	}
 	f.add(typeDecl(name, st.structType()))
 	f.line()
-	emitObjectDefaults(f, name, fields, keepExtra)
+	emitObjectCodec(f, name, fields, keepExtra, exempt)
 }
 
 // typeAST renders a model type as a Go type expression, adding to f the import
@@ -199,11 +201,12 @@ func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 	}
 }
 
-// emitObjectDefaults synthesizes MarshalJSON for structs with fields that
-// carry schema defaults or are required slices or maps, and UnmarshalJSON for
-// structs with defaults.
-func emitObjectDefaults(f *goFile, name string, fields []*model.Field, keepExtra bool) {
+// emitObjectCodec synthesizes MarshalJSON for structs with fields that carry
+// schema defaults or are required slices or maps, and UnmarshalJSON for
+// structs with required keys, defaults, or a catch-all's Extra.
+func emitObjectCodec(f *goFile, name string, fields []*model.Field, keepExtra bool, exempt string) {
 	var defaults, fills []*model.Field
+	var required []string
 	for _, fld := range fields {
 		if fld.Default != nil {
 			defaults = append(defaults, fld)
@@ -211,10 +214,23 @@ func emitObjectDefaults(f *goFile, name string, fields []*model.Field, keepExtra
 		if fld.Fill {
 			fills = append(fills, fld)
 		}
+		if fld.Required && fld.Key != exempt {
+			required = append(required, fld.Key)
+		}
 	}
-	if len(defaults) == 0 && len(fills) == 0 && !keepExtra {
-		return
+	slices.Sort(required)
+	if len(defaults) > 0 || len(fills) > 0 || keepExtra {
+		emitObjectMarshal(f, name, defaults, fills, keepExtra)
 	}
+	if len(defaults) > 0 || keepExtra || len(required) > 0 {
+		emitObjectUnmarshal(f, name, fields, defaults, required, keepExtra)
+	}
+}
+
+// emitObjectMarshal emits MarshalJSON: it fills nil slices and maps with
+// their defaults, and nil required ones with empty values, before encoding,
+// and writes back a catch-all's Extra.
+func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, keepExtra bool) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	marshal := func(x ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Marshal"), x) }
 
@@ -257,18 +273,29 @@ func emitObjectDefaults(f *goFile, name string, fields []*model.Field, keepExtra
 	f.add(method(param("v", id(name)), "MarshalJSON",
 		funcType(nil, param("", byteSlice()), param("", id("error"))), body...))
 	f.line()
-	if len(defaults) == 0 && !keepExtra {
-		return
-	}
+}
 
-	// UnmarshalJSON: apply defaults when a field is missing, or null when
-	// the schema does not allow null.
-	body = []ast.Stmt{
-		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
-		ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("m")))), errNotNil(), ret(id("err"))),
+// emitObjectUnmarshal emits UnmarshalJSON: it requires the required keys,
+// decodes the fields, applies defaults when a field is missing, or null when
+// the schema does not allow null, and keeps a catch-all's undeclared keys.
+func emitObjectUnmarshal(f *goFile, name string, fields, defaults []*model.Field, required []string, keepExtra bool) {
+	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
+	f.uses[helperObjectKeys] = true
+	keys := []ast.Expr{id("b"), str(name)}
+	for _, k := range required {
+		keys = append(keys, str(k))
+	}
+	m := id("m")
+	if len(defaults) == 0 && !keepExtra {
+		m = id("_")
+	}
+	body := []ast.Stmt{
+		define(exprs(m, id("err")), call(id(helperObjectKeys), keys...)),
+		ifStmt(nil, errNotNil(), ret(id("err"))),
 		typeStmt("Alias", id(name)),
 		varStmt("a", id("Alias")),
-		ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("a")))), errNotNil(), ret(id("err"))),
+		ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("a")))), errNotNil(),
+			ret(call(f.qual(pkgFmt, "Errorf"), str(name+": %w"), id("err")))),
 	}
 	for _, fld := range defaults {
 		// Only a property that rejects null reads the raw value.
@@ -312,7 +339,7 @@ func emitInlineVariant(f *goFile, tname string, in *model.Inline) {
 	f.comment(in.Doc...)
 	switch in.Kind {
 	case model.InlineStruct:
-		emitStruct(f, tname, in.Fields, in.KeepExtra)
+		emitStruct(f, tname, in.Fields, in.KeepExtra, in.Exempt)
 	case model.InlineNamed:
 		// Non-object title-only variants can still carry payloads (e.g. arrays).
 		f.add(typeDecl(tname, typeAST(f, in.Type)))

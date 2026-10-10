@@ -30,6 +30,7 @@ func TestRequiredMapFilledOnEncode(t *testing.T) {
 	}
 	f := newFile()
 	emitObjectSchema(f, m.Type("Options"))
+	emitDecodeHelpers(f)
 	src := render(t, f)
 	if want := "\tif a.Env == nil {\n\t\ta.Env = map[string]any{}\n\t}\n"; !strings.Contains(src, want) {
 		t.Errorf("MarshalJSON does not fill the nil map; want\n%s\nin\n%s", want, src)
@@ -61,6 +62,7 @@ func TestDefaultedNullablePropertyCompiles(t *testing.T) {
 	}
 	f := newFile()
 	emitObjectSchema(f, m.Type("Options"))
+	emitDecodeHelpers(f)
 	src := render(t, f)
 
 	fset := token.NewFileSet()

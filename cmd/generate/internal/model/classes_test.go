@@ -200,3 +200,40 @@ func TestUnionClassRefusals(t *testing.T) {
 		})
 	}
 }
+
+// TestDiscriminatorExemptOnDecode requires every inline variant of a
+// discriminated union to exempt the discriminator from its required keys, and
+// no $ref variant's own type to require it, since a payload placed without
+// the discriminator decodes through the variant's type.
+func TestDiscriminatorExemptOnDecode(t *testing.T) {
+	t.Parallel()
+	m := committedModel(t)
+	inline, named := 0, 0
+	for _, ty := range m.Types {
+		if ty.Kind != KindUnion {
+			continue
+		}
+		for _, v := range ty.Variants {
+			if v.Skip {
+				continue
+			}
+			switch {
+			case v.Inline != nil:
+				inline++
+				if v.Inline.Exempt != ty.DiscKey {
+					t.Errorf("%s.%s: Exempt %q, want %q", ty.Name, v.FieldName, v.Inline.Exempt, ty.DiscKey)
+				}
+			case ty.DiscKey != "":
+				named++
+				for _, f := range m.Type(v.TypeName).Fields {
+					if f.Key == ty.DiscKey && f.Required {
+						t.Errorf("%s: variant type %s requires the discriminator %q", ty.Name, v.TypeName, ty.DiscKey)
+					}
+				}
+			}
+		}
+	}
+	if inline == 0 || named == 0 {
+		t.Errorf("checked %d inline and %d named variants", inline, named)
+	}
+}

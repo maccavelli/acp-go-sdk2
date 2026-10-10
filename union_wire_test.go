@@ -296,7 +296,7 @@ func TestAbsentDiscriminator(t *testing.T) {
 		{"IdleStateUpdate empty", func() any { return &IdleStateUpdate{} }, `{}`, "None", false},
 		{"IdleStateUpdate null key", func() any { return &IdleStateUpdate{} }, `{"stopReason":null}`, "None", false},
 		{"AuthMethod agent", func() any { return &AuthMethod{} }, `{"id":"a","name":"n"}`, "Agent", false},
-		{"AuthMethod agent without its keys", func() any { return &AuthMethod{} }, `{"id":"a"}`, "Agent", false},
+		{"AuthMethod agent missing a required key", func() any { return &AuthMethod{} }, `{"id":"a"}`, `AuthMethod: missing discriminator "type"`, true},
 		{"AuthMethod bad agent", func() any { return &AuthMethod{} }, `{"id":5}`, `AuthMethod: missing discriminator "type"`, true},
 		{"McpServer stdio", func() any { return &McpServer{} }, `{"name":"n","command":"c","args":[],"env":[]}`, "Stdio", false},
 		{"UnstableMcpServer stdio", func() any { return &UnstableMcpServer{} }, `{"name":"n","command":"c","args":[],"env":[]}`, "Stdio", false},

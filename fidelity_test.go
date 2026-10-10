@@ -1,7 +1,9 @@
 package acp
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -158,4 +160,49 @@ func TestStructValuesHaveNoOmitempty(t *testing.T) {
 	if err != nil || !strings.Contains(string(b), `"agentCapabilities":{`) {
 		t.Errorf("InitializeResponse{} encodes %s, %v", b, err)
 	}
+}
+
+// TestRequiredKeysOnDecode requires decoding to fail, naming the type and the
+// property, when a required key is absent, and dispatch to answer -32602.
+func TestRequiredKeysOnDecode(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name, in string
+		into     any
+		want     string
+	}{
+		{"PromptRequest without sessionId", `{"prompt":[]}`, &PromptRequest{}, `PromptRequest: missing required property "sessionId"`},
+		{"InitializeRequest without protocolVersion", `{}`, &InitializeRequest{}, `InitializeRequest: missing required property "protocolVersion"`},
+		{"image block without data", `{"type":"image","mimeType":"image/png"}`, &ContentBlock{}, `missing required property "data"`},
+		{"null for a struct with a required key", `null`, &PromptRequest{}, `PromptRequest: missing required property "prompt"`},
+	} {
+		err := json.Unmarshal([]byte(tt.in), tt.into)
+		if err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: %v, want an error containing %q", tt.name, err, tt.want)
+		}
+	}
+	var c ContentBlock
+	if err := json.Unmarshal([]byte(`{"text":"hi"}`), &c); err != nil || c.Text == nil {
+		t.Errorf("text block without its discriminator: %v", err)
+	}
+	// Dispatch must refuse the request before it reaches the (absent) agent.
+	reqErr, panicked := func() (e *RequestError, p any) {
+		defer func() { p = recover() }()
+		a := &AgentSideConnection{sessionCancels: map[string]context.CancelFunc{}}
+		_, e = a.handle(context.Background(), AgentMethodSessionPrompt, json.RawMessage(`{"prompt":[]}`))
+		return e, nil
+	}()
+	data, _ := reqErr.dataMap()
+	if panicked != nil || reqErr == nil || reqErr.Code != -32602 || !strings.Contains(fmt.Sprint(data["error"]), `missing required property "sessionId"`) {
+		t.Errorf("dispatch: %+v, panic %v", reqErr, panicked)
+	}
+}
+
+// dataMap returns e.Data as a map, or nil.
+func (e *RequestError) dataMap() (map[string]any, bool) {
+	if e == nil {
+		return nil, false
+	}
+	m, ok := e.Data.(map[string]any)
+	return m, ok
 }

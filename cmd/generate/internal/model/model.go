@@ -738,6 +738,9 @@ func classifyUnion(schema *load.Schema, t *Type, list []*load.Definition) error 
 			continue
 		}
 		owner := fmt.Sprintf("%s variant %d", t.Name, idx+1)
+		if vi.Inline != nil {
+			vi.Inline.Exempt = t.DiscKey
+		}
 		if !variantIsObject(schema, v, vi) {
 			return fmt.Errorf("%s: a variant of a union discriminated by %q must be an object", owner, t.DiscKey)
 		}

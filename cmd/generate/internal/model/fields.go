@@ -153,6 +153,9 @@ type Inline struct {
 	// KeepExtra is true for a union's catch-all: the struct keeps the keys it
 	// does not declare, so the payload encodes back unchanged.
 	KeepExtra bool
+	// Exempt is the discriminator of a discriminated union's inline variant:
+	// the union placed the payload, so decoding does not require the key.
+	Exempt string
 }
 
 // docLines formats a description as doc comment lines, or nil.
