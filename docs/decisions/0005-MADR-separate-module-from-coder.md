@@ -69,8 +69,20 @@ The root module path becomes `github.com/maccavelli/acp-go-sdk2`. The generator 
 
 [0004-MADR-pin-acp-schema-1-25-0.md](0004-MADR-pin-acp-schema-1-25-0.md) left the README `go get` line on the Coder path at `@v0.13.5`. This decision replaces that path. It does not invent a module tag. The schema stamp stays `1.25.0`.
 
-Implementation is [0005-PLAN-separate-module-from-coder.md](0005-PLAN-separate-module-from-coder.md).
+Implementation is [0005-PLAN-separate-module-from-coder.md](0005-PLAN-separate-module-from-coder.md). [0007-MADR-self-contained-acp-sdk.md](0007-MADR-self-contained-acp-sdk.md) runs that plan together with the Jennifer removal.
 
 ## Amendment 2026-10-09, Jennifer
 
 The owner said Jennifer must no longer be a dependency at all. [0006-MADR-emit-go-with-go-ast.md](0006-MADR-emit-go-with-go-ast.md) accepts that removal. The sentences in this decision that leave Jennifer required no longer stand. This decision still does not perform the generator rewrite.
+
+## Amendment 2026-10-09, review findings
+
+[0008-REPORT-self-contained-sdk-review.md](../reports/0008-REPORT-self-contained-sdk-review.md) checked this decision against the tree on 2026-10-09. Every fact in the Context still holds. The review adds three facts. None of them changes the chosen option.
+
+The old module path also appears in an `mdsh` directive on `README.md` line 14: `printf 'go get github.com/coder/acp-go-sdk@v%s\n' "$(cat schema/version)"`. The `Makefile` rebuilds `README.md` from `schema/version` whenever `make version` runs. Changing only the install line therefore does not last. The next `make version` writes `go get github.com/maccavelli/acp-go-sdk2@v1.25.0`, which is the tag this decision says it does not invent. The rename includes that directive, and the directive stops appending the schema stamp.
+
+`LICENSE` line 189 reads "Copyright 2025 Coder Technologies, Inc.". Section 4(c) of the Apache License 2.0 requires a derivative work to retain the copyright notices of the work it derives from. "Not the Coder module" means the import path, the remotes, and the requirements. It does not mean the license notice. `LICENSE` and that line stay as they are.
+
+`docs/README.md` names the old path in three record titles. Those titles are historical, like the records they name. The rename does not touch `docs/README.md` or any file under `docs/decisions/` or `docs/reports/`.
+
+[0005-PLAN-separate-module-from-coder.md](0005-PLAN-separate-module-from-coder.md) carries the matching amendment.

@@ -21,6 +21,11 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0005 | PLAN | [Implement the separation from github.com/coder/acp-go-sdk](decisions/0005-PLAN-separate-module-from-coder.md) | proposed |
 | 0006 | MADR | [Emit generated Go with go/ast instead of Jennifer](decisions/0006-MADR-emit-go-with-go-ast.md) | accepted |
 | 0006 | PLAN | [Implement go/ast emission](decisions/0006-PLAN-emit-go-with-go-ast.md) | proposed |
+| 0007 | MADR | [Keep this SDK self-contained on the current ACP schema](decisions/0007-MADR-self-contained-acp-sdk.md) | accepted |
+| 0007 | PLAN | [Implement the self-contained SDK](decisions/0007-PLAN-self-contained-acp-sdk.md) | proposed |
+| 0008 | REPORT | [Review of the self-contained SDK records, a go/ast generator, and encoding/json/v2](reports/0008-REPORT-self-contained-sdk-review.md) | observed |
+| 0009 | MADR | [Fix the generated output on encoding/json v1](decisions/0009-MADR-fix-generated-output-on-json-v1.md) | proposed |
+| 0009 | PLAN | [Implement the generated-output fixes](decisions/0009-PLAN-fix-generated-output-on-json-v1.md) | proposed |
 
 ## I want to…
 
@@ -34,6 +39,14 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | rename the module off github.com/coder/acp-go-sdk | [0005-PLAN-separate-module-from-coder.md](decisions/0005-PLAN-separate-module-from-coder.md) |
 | know why the generator would stop using Jennifer | [0006-MADR-emit-go-with-go-ast.md](decisions/0006-MADR-emit-go-with-go-ast.md) |
 | emit the schema bindings with go/ast | [0006-PLAN-emit-go-with-go-ast.md](decisions/0006-PLAN-emit-go-with-go-ast.md) |
+| keep this SDK self-contained, off the previous module and off Jennifer | [0007-MADR-self-contained-acp-sdk.md](decisions/0007-MADR-self-contained-acp-sdk.md) |
+| apply the separation from the previous project | [0007-PLAN-self-contained-acp-sdk.md](decisions/0007-PLAN-self-contained-acp-sdk.md) |
+| see whether 0005, 0006, and 0007 hold against the tree | [0008-REPORT-self-contained-sdk-review.md](reports/0008-REPORT-self-contained-sdk-review.md) |
+| read a go/ast generator that reproduces the Jennifer output | [0008-REPORT-self-contained-sdk-review.md](reports/0008-REPORT-self-contained-sdk-review.md) |
+| know why the SDK stays on encoding/json v1 | [0007-MADR-self-contained-acp-sdk.md](decisions/0007-MADR-self-contained-acp-sdk.md) |
+| see the v1 and v2 measurements behind that | [0008-REPORT-self-contained-sdk-review.md](reports/0008-REPORT-self-contained-sdk-review.md) |
+| know why the generated output would change after the go/ast port | [0009-MADR-fix-generated-output-on-json-v1.md](decisions/0009-MADR-fix-generated-output-on-json-v1.md) |
+| fix unset unions, nil required arrays, and union docs in the generated code | [0009-PLAN-fix-generated-output-on-json-v1.md](decisions/0009-PLAN-fix-generated-output-on-json-v1.md) |
 | apply the Go 1.27.2 and schema 1.25.0 pin | [0004-PLAN-pin-acp-schema-1-25-0.md](decisions/0004-PLAN-pin-acp-schema-1-25-0.md) |
 | understand how this fits together | [architecture.md](architecture.md) |
 | know the rules agents follow in this repository | [AGENTS.md](../AGENTS.md) |
