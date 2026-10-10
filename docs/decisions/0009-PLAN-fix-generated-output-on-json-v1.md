@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-09
 associated-madr: "0009-MADR-fix-generated-output-on-json-v1.md"
 ---
@@ -40,7 +40,7 @@ Preconditions:
 1. ~~Create `fix/generated-output-json-v1` from `main`.~~ Amended 2026-10-09: work on `main`. At the end of each step below, run `make pre-add-check`,
    `make check-records`, and `make markdownlint`, record their output, and stop. The owner commits with `git commit --no-edit`.
    An agent commits only on a branch the owner names in that turn, `feature/<slug>` by default, after an explicit ask.
-2. Write the failing tests first, in the root module:
+2. Write the failing tests first, in the root module (amended 2026-10-09: each test moves into the step that fixes it; see the deviation below):
    * The zero value of `RequestPermissionResponse` fails to encode with an error containing `RequestPermissionOutcome` and "no variant set".
    * `NewSessionRequest{Cwd: "/home/<user>/project"}` encodes `"mcpServers":[]`, and the decoded value passes `Validate`.
    * A `ContentBlock` whose `type` is the number `1` fails to decode with an error naming `ContentBlock` and `type`.
@@ -82,6 +82,53 @@ The change alters what the SDK sends for nil required arrays and the error text 
 
 Rollback is `git revert` of the step commits on `main`, newest first, made by the owner. Each step regenerates the files it changes, so a revert leaves the generator and the generated files in step.
 
+## Deviation 2026-10-09, failing tests and commit points
+
+Found before execution: step 1 puts a commit point after every step, gated by `make pre-add-check`, which runs `go test`. Step 2's tests must fail on
+the current output, so step 2 could never reach its commit point. Its four tests are fixed by four different steps, so steps 3 to 6 would also have
+carried failing tests.
+
+Decision: the owner chose to write each step 2 test together with its fix. The order becomes:
+
+* Step 3, the pinning tests, which pass before and after. Commit point 1.
+* Step 4 with the unset-union test, step 5 with the `NewSessionRequest` test, step 6 with the union-doc test, step 7 with the discriminator test.
+  In each, the test is written and run first and its failure message is recorded, then the generator changes, the files are regenerated, and the
+  test passes. Commit points 2 to 5.
+* Step 8, the diff review, closes the plan.
+
+Every step 2 test is still seen to fail before its fix. No test is weakened, skipped, or removed.
+
 ## Execution record
 
-Not started.
+### Step 3, pinning tests, 2026-10-09
+
+The owner accepted [0009-MADR-fix-generated-output-on-json-v1.md](0009-MADR-fix-generated-output-on-json-v1.md) on 2026-10-09. Step 3 ran on `main` from a
+clean tree at `ac9516f`. The agent did not commit.
+
+Added `json_v1_pin_test.go` in the root package:
+
+* `TestJSONPinEscapesHTML` encodes `"<a & b>"` through a generated union (`TextBlock`) and through a struct with no `MarshalJSON` (`CancelNotification`)
+  and requires `\u003ca \u0026 b\u003e` in both.
+* `TestJSONPinSortsMapKeys` encodes a `CancelNotification` whose `_meta` has eight keys and requires the exact bytes with the keys sorted.
+
+Both pass on the current tree. The existing golden suite passes, and no file under `testdata/json_golden/` changed.
+
+Two findings while writing them:
+
+* The first draft's expected string lost its `\u003c` escapes when the file was written, and the test failed against correct output. The expectation was
+  corrected; the output was right throughout.
+* Escaping happens at two levels. A generated `MarshalJSON` escapes, and v1's outer `json.Marshal` re-escapes whatever a `MarshalJSON` returns. Switching
+  only the generated `ContentBlock` method to v2 left the bytes escaped, so the first draft, which used only the union, could not fail on that change. The
+  struct case was added so the caller's codec alone decides one of the two checks.
+
+The tests were seen to fail on scratch copies:
+
+* A, the test's codec switched to `encoding/json/v2`: both tests failed. `TestJSONPinSortsMapKeys` got the keys in random order;
+  `TestJSONPinEscapesHTML` reported `plain struct: got {"sessionId":"<a & b>"}` and `union: got {"text":"<a & b>","type":"text"}`. v2 at the outer call
+  also rewrites the output of a v1 `MarshalJSON`.
+* B, A plus `ContentBlock`'s generated `MarshalJSON` switched to v2: the same failures.
+
+Gates: `make pre-add-check FILES=json_v1_pin_test.go`: `go-precheck: 1 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` Without names:
+`go-precheck: 47 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point 1: the agent stopped here. The owner commits step 3 on `main`.

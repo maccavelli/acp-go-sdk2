@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-09
 decision-makers: Repository owner
 ---
@@ -58,7 +58,7 @@ The golden suite in `json_parity_test.go` covers populated values only. None of 
 Chosen option: "Fix in the generator: an unset union fails with an error naming it, nil required arrays and maps encode as empty, and the source defects are corrected",
 because it makes the SDK send what the schema asks for without adding a new failure to any outbound call that succeeds today, and it keeps every change in the generator.
 
-This is a proposal. The status is `proposed` until the owner decides.
+The owner accepted this option on 2026-10-09.
 
 The proposed changes, all on `encoding/json` v1:
 
