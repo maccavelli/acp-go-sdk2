@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-10
 associated-madr: "0009-MADR-fix-generated-output-on-json-v1.md"
 ---
@@ -75,7 +75,9 @@ Preconditions:
 * `go test -race ./...` passes at the root and in `cmd/generate`. `go build ./example/...` passes.
 * `make pre-add-check` passes, including `golangci-lint` for the host and for `GOOS=windows`.
 * `git grep -nE '"encoding/json/(v2|jsontext)"'` finds nothing.
-* `go doc -all` of the root package, compared with `main`, differs only by `MarshalJSON` methods on the structs step 5 names.
+* ~~`go doc -all` of the root package, compared with `main`, differs only by `MarshalJSON` methods on the structs step 5 names.~~ Amended 2026-10-10,
+  see the deviation below: `go doc -all` of the root package, compared with `ac9516f`, adds a `MarshalJSON` declaration on each struct step 5 names and
+  changes no other declaration; its text differs only by blank lines around those methods and by step 6's moved descriptions, with the same words.
 
 ## Rollout and Rollback
 
@@ -124,6 +126,15 @@ Found in step 7, with the code changes made and every test passing:
 Decision: the owner chose to drop the `value` parameter from `varStmt` and the trailing `nil` from its callers, which adds `ast.go` and
 `dispatch_helpers.go` to step 7's scope with no change to the generated output, and to amend the MADR now. The MADR carries an amendment dated
 2026-10-10, and its consequence line is annotated.
+
+## Deviation 2026-10-10, the go doc criterion
+
+Found in step 8: the last Verification item compared `go doc -all` with `main` and allowed only `MarshalJSON` methods to differ. Two parts of it could not
+hold. The work landed on `main`, so `main` is no longer the base; the 0009 base is `ac9516f`. And step 6 moves 24 union descriptions by design, so the
+`go doc` text changes too. The declarations alone meet the criterion.
+
+Decision: the owner chose to amend the criterion and close the plan. The item above is struck through and restated: compared with `ac9516f`, the
+declarations add only the step 5 `MarshalJSON` methods, and the text differs only by blank lines and moved descriptions with the same words.
 
 ## Execution record
 
@@ -248,7 +259,8 @@ variant's doc.
 Generator change, in `cmd/generate/internal/emit/types.go`: `emitSchemaDef` computes `isUnion` with the same case order as its switch and skips the
 description for a union; `emitUnion` writes `parentDef.Description` directly above `type <Union> struct`, after the variant types.
 
-Regenerated with `cd cmd/generate && go run .`. Only `types_gen.go` changed, by 135 lines in and 101 out, all comment lines. A script over the old and new
+Regenerated with `cd cmd/generate && go run .`. Only `types_gen.go` changed, by ~~135 lines in and 101 out~~ 100 lines in and 100 out (corrected 2026-10-10 in step 8: 135 and 101 were the
+totals of all three changed files), all comment lines. A script over the old and new
 file found:
 
 * every non-comment, non-blank line identical, and the comment lines identical as a multiset, so text moved and none was added or dropped;
@@ -338,3 +350,59 @@ Gates: before the `varStmt` change, `make pre-add-check` failed as the deviation
 `make check-records` and `make markdownlint` exit 0.
 
 Commit point 5: the agent stopped here. The owner commits step 7 on `main`. Step 8, the diff review, closes the plan.
+
+### Step 8, diff review and verification, 2026-10-10
+
+The owner committed step 7 as `0d56a64`. Step 8 ran on `main` from that clean tree and changed only this record and `docs/README.md`. The agent did not
+commit.
+
+Commits of this plan, `git log --oneline ac9516f..0d56a64`: `088d49d` (step 3), `15549e0` (step 4), `a546dfc` (step 5), `7444fea` (step 6), `0d56a64`
+(step 7). Lines added and removed per file, `git diff --numstat ac9516f 0d56a64`:
+
+```text
+12   0    agent_gen.go
+28   0    client_gen.go
+2    5    cmd/generate/internal/emit/ast.go
+4    2    cmd/generate/internal/emit/dispatch.go
+1    1    cmd/generate/internal/emit/dispatch_helpers.go
+87   29   cmd/generate/internal/emit/types.go
+37   0    cmd/generate/internal/emit/types_test.go
+2    2    docs/README.md
+30   6    docs/decisions/0009-MADR-fix-generated-output-on-json-v1.md
+259  6    docs/decisions/0009-PLAN-fix-generated-output-on-json-v1.md
+80   0    generated_output_test.go
+45   0    json_v1_pin_test.go
+633  238  types_gen.go
+```
+
+`types_gen.go` changed in four commits, by 28/28, 333/0, 100/100, and 172/110 lines; the net count is smaller because some lines changed in more than
+one step. `constants_gen.go`, `helpers_gen.go`, and `testdata/` did not change.
+
+Every changed hunk in the generated files belongs to one of steps 4 to 7. Each step's classification was run again on the committed objects, with the
+same results as recorded in its step:
+
+* `15549e0`: 28 lines `return []byte{}, nil` became `return nil, errors.New("<Union>: no variant set")`, and nothing else.
+* `a546dfc`: additions only; 33 new `MarshalJSON` methods with 34 fills, every one a required slice or map field, and no other field.
+* `7444fea`: every non-comment, non-blank line identical, and the comment lines identical as a multiset; 24 unions gained a doc.
+* `0d56a64`: every changed line in `agent_gen.go`, `client_gen.go`, and `types_gen.go` classified, `unclassified: 0`.
+
+The step 6 record gave `types_gen.go` as 135 lines in and 101 out; the commit shows 100 and 100. The step 6 line is corrected in place, struck through.
+
+Verification:
+
+* The step 2 tests failed before their fixes, with the messages recorded in steps 4 to 7: `TestUnsetUnionFailsByName`,
+  `TestNilRequiredArrayEncodesEmpty`, `TestUnionDocAboveWrapper`, `TestNonStringDiscriminatorFailsByName`, and `TestDefaultedNullablePropertyCompiles`.
+  All five pass.
+* `TestJSONPinEscapesHTML` and `TestJSONPinSortsMapKeys` passed in step 3 at `ac9516f` and pass now.
+* `TestGeneratedFilesUpToDate` passes.
+* `go test -race -count=1 ./...` exits 0 at the root and in `cmd/generate`. `go build ./example/...` exits 0.
+* `make pre-add-check`: `go-precheck: 50 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+* `git grep -nE '"encoding/json/(v2|jsontext)"'` finds nothing, exit status 1.
+* `go doc -all` of the root package at `ac9516f` and now, as amended by the deviation above: 707 and 740 declaration lines; 33 added, all
+  `func (v T) MarshalJSON() ([]byte, error)`, whose receivers are exactly the step 5 structs; none removed. Outside declarations, 33 blank lines were added,
+  34 text lines added and 28 removed, and the words in the added and removed text are the same multiset, as are the words of the whole document
+  outside declarations. A line diff also showed `RequestId`'s three methods as removed and re-added; compared as sets, they are unchanged.
+
+Every acceptance criterion in Verification holds, the go doc item as amended. The status is `complete`, and `docs/README.md` shows it.
+
+Gates: `make check-records` and `make markdownlint` exit 0.

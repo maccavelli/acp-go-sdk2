@@ -25,7 +25,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0007 | PLAN | [Implement the self-contained SDK](decisions/0007-PLAN-self-contained-acp-sdk.md) | complete |
 | 0008 | REPORT | [Review of the self-contained SDK records, a go/ast generator, and encoding/json/v2](reports/0008-REPORT-self-contained-sdk-review.md) | observed |
 | 0009 | MADR | [Fix the generated output on encoding/json v1](decisions/0009-MADR-fix-generated-output-on-json-v1.md) | accepted |
-| 0009 | PLAN | [Implement the generated-output fixes](decisions/0009-PLAN-fix-generated-output-on-json-v1.md) | in-progress |
+| 0009 | PLAN | [Implement the generated-output fixes](decisions/0009-PLAN-fix-generated-output-on-json-v1.md) | complete |
 
 ## I want to…
 
