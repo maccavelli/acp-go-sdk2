@@ -58,6 +58,18 @@ generated file. Change the hand-written code to the new names first, then rerun
 `make version`. Generated files are written with mode `0644`, and a file whose
 content did not change is not rewritten.
 
+### After regenerating
+
+The conformance test at the root builds instances of every definition from the
+new schema files. It can fail on a construct the new schema introduces that
+its instance builder (`instances_test.go`) does not know, or on a generated type
+that does not behave as the schema says. Extend the builder for a new
+construct; put a behaviour the decision records do not decide to the owner
+before changing the generator.
+
+`make fuzz` and `make mutation-engine` / `make mutation-generated` are
+optional before a release. They report; neither gates.
+
 ## Review and Commit
 
 1. Inspect the changes: `git status` and `git diff` should show updated schema

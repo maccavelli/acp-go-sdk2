@@ -1410,3 +1410,23 @@ GOEXPERIMENT=nojsonv2`, which runs `go test -shuffle=on ./...` at the root with 
 Open: the plan's "the next CI run shows the step on Linux" waits for the owner's push of this step.
 
 Commit point: the agent stopped here. The owner commits step 10 on `main`.
+
+### Step 11, docs, 2026-10-11
+
+Ran on `main` from `f94f253`, which the owner committed and pushed. The agent did not commit.
+
+* `docs/architecture.md`:
+  * "What it is" names `schema_gen_test.go` among the generated files;
+  * the decoding paragraphs state the absent-discriminator rule by a variant's own keys, a `$ref` variant read through its definition,
+    keys read under case folding, flattened members, the integer enum, and untyped definitions as `json.RawMessage`;
+  * "Checks that guard this" names `TestEngineCases` and `TestEngineBehaviour`, the conformance test, the fuzz targets and `make fuzz`,
+    the mutation targets, and the CI step with `GOEXPERIMENT=nojsonv2`;
+  * the tree lists `schema_gen_test.go`, `internal/enginetest/`, `internal/mutate/`, `cmd/generate/testdata/engine/`, and both
+    `testdata/fuzz/` directories.
+* `RELEASING.md`, a section "After regenerating": the conformance test can fail on a construct the new schema introduces; extend the
+  instance builder, or put a behaviour no record decides to the owner; `make fuzz` and the mutation targets are optional and do not gate.
+* Each statement was checked against the code; one, the integer enum's rule, was corrected before this record (it needs integers with at
+  least one constant, not a plain integer).
+* `make check-records` and `make markdownlint` exit 0. No Go file changed.
+
+Commit point: the agent stopped here. The owner commits step 11 on `main`.

@@ -15,7 +15,9 @@ This repository is the Go module `github.com/maccavelli/acp-go-sdk2`, package
   `extensions.go` (`_`-prefixed methods), `helpers.go` (union constructors and
   `Ptr`), and `doc.go`.
 - Generated from `schema/`: `constants_gen.go`, `types_gen.go`, `agent_gen.go`,
-  `client_gen.go`, and `helpers_gen.go`. They are never edited by hand.
+  `client_gen.go`, and `helpers_gen.go`, and the test file `schema_gen_test.go`,
+  which lists every generated type, union, and method for the conformance
+  test. They are never edited by hand.
 
 `cmd/generate` is its own Go module with no requirements. `internal/load` reads
 the schema files, `internal/model` resolves them into types, unions, and
@@ -62,12 +64,26 @@ union and the key; decodes the variant a known value names; sends an unknown
 value to the schema's catch-all variant (`Other`, which keeps undeclared keys
 in `Extra`) or keeps it in `Unknown`; and decodes a payload without the
 discriminator into the schema's key-less variant, else into the one variant
-whose required keys it carries, else into `Unknown`, or fails in a union with
-a catch-all. A union without a discriminator tries required keys, array items,
-and then each variant in turn. Decode errors name the union and, for a
-variant, the discriminator value or the variant. A struct with a required key,
-a default, a lenient field, or a catch-all's `Extra` gets a generated
-`UnmarshalJSON`.
+whose own required keys it carries (not those the union requires of every
+variant), else into `Unknown`, or fails in a union with a catch-all. A union
+without a discriminator tries required keys, array items, and then each
+variant in turn. A variant that is a `$ref` takes its keys, discriminator
+value, and shape from the definition it names. Decode errors name the union
+and, for a variant, the discriminator value or the variant. A struct with a
+required key, a default, a lenient field, flattened members, or a catch-all's
+`Extra` gets a generated `UnmarshalJSON`.
+
+Generated decoders read a key as `encoding/json` reads a struct field's name:
+under Unicode case folding, the last matching key winning (`foldKeys` in
+`types_gen.go`), and the model refuses a schema in which two keys one decoder
+reads differ only in case. An object with properties of its own and an `anyOf`
+or `oneOf` of references is a struct with one pointer field per member, whose
+keys share its JSON object: decoding takes the first member whose required
+keys are present, and `Validate` requires exactly one. An `anyOf` or `oneOf`
+whose members are all integers, at least one a constant, is a named integer
+type with a constant per value, named by the member's title; any integer
+decodes. A definition the model gives no Go type is an alias of
+`json.RawMessage`.
 
 Every keyword the schema loader accepts has one treatment, listed in
 `cmd/generate/internal/model/keywords.go`; the loader refuses any other
@@ -99,6 +115,23 @@ Checks that guard this:
   `fidelity_test.go` covers the types, decoding, and validation it describes.
 - `raw_value_test.go` guards raw values: an absent or `null` optional one
   decodes to empty and is not sent, under both builds of `encoding/json`.
+- `TestEngineCases` in `cmd/generate` runs the generator on each synthetic case
+  in `testdata/engine/`: a case with `want.err` must be refused with those
+  lines, one with `want.api` must give that exported API. `TestEngineBehaviour`
+  compiles each case's output with its `behaviour_test.go` and runs it.
+  `internal/enginetest` reads the cases and lists an API.
+- The conformance test at the root, `conformance_test.go` over
+  `schema_gen_test.go`, builds instances of every definition from the schema
+  files (`instances_test.go`) and requires each generated type to decode,
+  validate, and send them back, to refuse what the schema refuses, and each
+  method to reach its peer and bring back its result or error.
+- `FuzzRoundTrip` at the root and `FuzzBuild` in `cmd/generate` run their seeds
+  in every `go test`; `make fuzz` fuzzes them and `FuzzExportedName` for
+  `FUZZTIME`. A crasher is kept under the package's `testdata/fuzz/` as a seed.
+- `make mutation-engine` and `make mutation-generated` run
+  `cmd/generate/internal/mutate`: one operator changed at a time, compiled
+  through `go test -overlay`, reported and never gating. The engine run skips
+  `TestGeneratedFilesUpToDate`.
 - `json_parity_test.go` compares encodings with the goldens in
   `testdata/json_golden/`. `json_v1_pin_test.go` pins HTML escaping and sorted map
   keys. `generated_output_test.go` covers the encoding rules above, and
@@ -106,7 +139,8 @@ Checks that guard this:
 - `make pre-add-check` runs `scripts/go-precheck.sh`: gofmt, golangci-lint for the
   host and for `GOOS=windows`, vet, tests with `-race`, `go mod tidy -diff`, and
   govulncheck, for both modules. `make check-records` and `make markdownlint`
-  check the docs. GitHub Actions runs `.github/workflows/ci.yml`.
+  check the docs. GitHub Actions runs `.github/workflows/ci.yml`, which also runs
+  the root tests with `GOEXPERIMENT=nojsonv2` on Linux.
 
 The schema stamp lives in `schema/version`. The `go` line lives in `go.mod` and
 `cmd/generate/go.mod`.
@@ -117,18 +151,24 @@ The schema stamp lives in `schema/version`. The `go` line lives in `go.mod` and
 README.md                 repository entry; links here
 RELEASING.md              schema bump and release steps
 AGENTS.md                 agent instructions
-Makefile                  version, test, lint, pre-add-check, docs gates
+Makefile                  version, test, lint, pre-add-check, fuzz, mutation, docs gates
 go.mod                    the SDK module
 *.go                      package acp: hand-written and *_gen.go files
+schema_gen_test.go        generated list of types, unions, and methods for tests
 cmd/generate/             the generator, its own module
   internal/load/          schema loading
   internal/model/         the resolved schema and the protocol table
   internal/emit/          go/ast emission, rendered in memory
   internal/output/        type-check and staged write of the output
   internal/util/          naming helpers
+  internal/enginetest/    engine case reader and API listing, for tests
+  internal/mutate/        the mutation tool
+  testdata/engine/        synthetic engine cases, one txtar each
+  testdata/fuzz/          FuzzBuild seeds kept from crashers
 schema/                   schema files and the version stamp
 example/                  agent, client, claude-code, gemini programs
 testdata/json_golden/     JSON goldens
+testdata/fuzz/            FuzzRoundTrip seeds kept from crashers
 scripts/go-precheck.sh    the pre-add gate
 scripts/check_records.py  record numbering and link check
 .github/workflows/ci.yml  CI
