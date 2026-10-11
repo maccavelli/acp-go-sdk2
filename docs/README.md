@@ -36,6 +36,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0011 | PLAN | [Implement phase 6: tests of the engine](decisions/0011-PLAN-engine-tests.md) | complete |
 | 0012 | MADR | [Generate the ACP schema faithfully through a keyword registry](decisions/0012-MADR-schema-fidelity-framework.md) | accepted |
 | 0012 | PLAN | [Implement the schema fidelity framework](decisions/0012-PLAN-schema-fidelity-framework.md) | complete |
+| 0013 | MADR | [Close the follow-ups phase 6 left](decisions/0013-MADR-close-phase-6-follow-ups.md) | accepted |
+| 0013 | PLAN | [Implement the phase 6 follow-ups](decisions/0013-PLAN-close-phase-6-follow-ups.md) | in-progress |
 
 ## I want to…
 
