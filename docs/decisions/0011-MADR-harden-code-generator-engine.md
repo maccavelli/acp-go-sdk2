@@ -150,7 +150,7 @@ The phases, in order:
    [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md), which keeps the integer and map decisions above and adds
    the keyword registry, required keys on decode, raw JSON for untyped values, and a `Validate` limited to the schema's constraints.)
 5. **Safe output.** All five files are rendered in memory, type-checked together with `go/types` against the hand-written package, and written only if
-   every step passes, each through a temporary file and a rename. Panics become errors.
+   every step passes, each through a temporary file and a rename. Panics become errors. (Refined 2026-10-10: see the phase 5 amendment below.)
 6. **Tests of the engine.** Table tests run the generator on synthetic schemas for each construct and each refusal; a generated test round-trips every
    union variant; tests cover unknown variants, the deserialization keywords, and precision.
 
@@ -335,6 +335,106 @@ Asked on 2026-10-10, the owner decided:
 * Neutral, because apart from the new constant the generated files do not change.
 * Bad, because five gated agent methods stay on the required `Agent` interface, so an agent must implement them to compile even when it does not
   advertise them.
+
+## Amendment 2026-10-10, phase 5 facts and decisions
+
+Before planning phase 5, safe output, the generator was read again on `d534f27`, after phase 4. The facts come from the source, from probes in scratch
+copies and scratch modules, from the Go documentation and the Go source at `go1.27.2`, and from the POSIX, Linux, and Windows documentation; nothing in
+the tree changed.
+
+### Facts
+
+* **How the generator writes today.** `run` in `cmd/generate/main.go` builds the model, creates the output directory, and calls `WriteConstants`,
+  `WriteTypes`, `WriteDispatch` (`agent_gen.go`, then `client_gen.go`), and `WriteHelpers` in turn. Each renders one file (`format.Node`, then
+  `format.Source`) and writes it with `os.WriteFile` at `generatedFileMode`, `0o600`. Nothing checks the output before the first write.
+* **What that does with a defect in the engine.** In scratch copies: a declaration `go/format` cannot print, planted in the types emitter, stops the run
+  with exit 1 and `types_gen.go: print: format.Node internal error (401:6: expected 'IDENT', found 1 (and 10 more errors))` after `constants_gen.go`
+  was rewritten, so the tree is half-written; dispatch that calls a function no file declares (`toReqErrMissing`) exits 0 with all five files
+  rewritten, and `go build` then fails with `./agent_gen.go:174:16: too many errors`. Since phase 1 the model refuses the hostile schemas of F8 before
+  anything is written (`TestRunRefusesBeforeWriting`); these two are engine defects, which only a check of the output catches.
+* **Three panics remain**, in `internal/emit`, the only ones in `cmd/generate`: `fieldSet.fieldList` (a doc comment with no field after it),
+  `printedSize` (a function body `go/format` cannot print), and `layout.apply` (a line table `token.File.SetLines` rejects). Only an engine defect
+  reaches them.
+* **`os.WriteFile` is not atomic.** Its documentation: "Since WriteFile requires multiple system calls to complete, a failure mid-operation can leave
+  the file in a partially written state." It keeps an existing file's mode ("otherwise WriteFile truncates it before writing, without changing
+  permissions"), so the committed `*_gen.go` are `0644` on disk, as git records them (`100644`), and a fresh output directory gets `0600` files.
+* **Rename is the atomic replacement on POSIX, and only there.** POSIX.1-2024 `rename`: a directory entry named new "shall remain visible to other
+  threads throughout the renaming operation and refer either to the file referred to by new or old before the operation began", and its rationale
+  "requires that the action of the function be atomic". `os.Rename`: "Even within the same directory, on non-Unix platforms Rename is not an atomic
+  operation." On Windows Go calls `MoveFileEx` with `MOVEFILE_REPLACE_EXISTING` alone, which replaces an existing file but cannot move across
+  volumes, so a temporary file belongs in the destination directory.
+* **Durability needs a sync.** Linux `fsync(2)`: "Calling fsync() does not necessarily ensure that the entry in the directory containing the file has
+  also reached disk. For that an explicit fsync() on a file descriptor for the directory is also needed." The go command's `renameio` (removed after Go
+  1.16) synced the file before renaming it, "otherwise, after a crash the reader may observe a 0-length file instead of the actual contents", and did not
+  sync the directory; neither does `github.com/google/renameio`, whose README adds that a temporary file must not be removed once its rename
+  succeeded, and which exports nothing on Windows: "It is not possible to reliably write files atomically on Windows". `x/tools` writes source with
+  plain `os.WriteFile(..., 0o644)` (`stringer`, the analysis checker's `-fix`). Go issue 22397, a standard package for atomic writes, is open.
+* **Temporary files and their mode.** `os.CreateTemp` creates the file "with mode 0o600 (before umask)", and "Multiple programs or goroutines calling
+  CreateTemp simultaneously will not choose the same file". A file renamed into place keeps that mode unless it is changed. In a scratch directory,
+  staging the five committed files with `CreateTemp`, `Write`, `Sync`, `Chmod(0o644)`, and `Close`, then renaming each, took 24 to 34 ms on this macOS
+  host and left five byte-identical `-rw-r--r--` files.
+* **gosec and the mode.** gosec arrived in `9fb9ae5`, the commit that changed the generator's `0o644` to `generatedFileMode = 0o600`. With the
+  repository's `.golangci.yml` and golangci-lint 2.14.0, on a scratch module: `os.WriteFile` with the literal `0o644` is reported as G306, `os.Chmod`
+  with `0o777` as G302, and `os.ReadFile` of a joined path as G304; `(*os.File).Chmod(0o644)`, `os.CreateTemp`, and `os.Rename` are not reported.
+* **Type-checking the output.** The root package imports only the standard library. `go/types` over the five generated files and the seven
+  hand-written ones (`agent.go`, `client.go`, `connection.go`, `doc.go`, `errors.go`, `extensions.go`, `helpers.go`), with
+  `importer.ForCompiler(fset, "source", nil)`, reported 0 errors in 0.47 to 0.85 s across runs; the generator itself runs in about 0.12 s. The `gc`
+  importer took 0.91 s cold and 0.03 s warm, and finds the standard library's export data by running `go list -export` (`internal/exportdata`), so it
+  needs the go command and writes the build cache; the source importer reads `GOROOT`. The `go/importer` documentation calls its functions "mostly
+  deprecated" and recommends `golang.org/x/tools/go/packages`, a dependency [0007-MADR-self-contained-acp-sdk.md](0007-MADR-self-contained-acp-sdk.md)
+  rules out. With a nil lookup, the source importer resolves an import outside the standard library through `go/build`, which runs `go list` for it.
+* **Selecting the hand-written files.** `build.Default.ImportDir(dir, 0)` applies the go command's rules (build constraints, `GOOS` and `GOARCH` file
+  suffixes, names starting with `_` or `.` ignored, test files listed apart) and, for a local directory, does not run the go command. In a scratch copy
+  it selected the seven files and skipped a `//go:build ignore` file, a `_test.go` file, a `.types_gen.go.123.tmp` file, and a `_plan9.go` file, each
+  using an undefined name. It returned `*build.MultiplePackageError` for a stray `package other` file, and an error for a missing directory. Checked
+  alone, as in an empty directory, the generated files give 212 errors, the first `undefined: AgentSideConnection`.
+* **The language version.** `types.Config.GoVersion` "describes the accepted Go language version"; empty disables the check. Checked as `go1.21`, the
+  package gives 4 errors, the first `helpers.go:95:9: new(v) requires go1.26 or later`; as `go1.27.2`, the `go` line of `go.mod`, none.
+* **Leaving an unchanged file alone.** No Go convention found requires it. `gofmt -w` writes only when the bytes differ and keeps the file's mode;
+  `stringer` always writes. The go command's build cache keys on content, so rewriting the same bytes rebuilds nothing, but it moves the file's
+  modification time, which editors and file watchers see.
+
+### Decisions
+
+Asked on 2026-10-10, the owner chose the recommended option of each question: the check always runs, with no flag to turn it off; unchanged files
+are left alone; files are written `0644`; each file is synced before its rename, with no directory sync, no retry on Windows, and no rollback. The
+other options asked were a `-check=false` flag; rewriting every file; each existing file's mode and `0600` for a new one; syncing the directory; and
+restoring backups when a rename fails partway. The decisions, each with the alternative it was weighed against:
+
+* **Render everything first.** `emit.Render` returns the five files in memory, or an error naming the file; the four `Write*` functions go. The three
+  panics become errors that name the file.
+* **Type-check before writing, always.** The generated files are checked in memory with `go/types`, together with the hand-written files of the output
+  directory: those `build.Default.ImportDir` selects, less the five generated names. The importer is `importer.ForCompiler(fset, "source", nil)`;
+  `GoVersion` is the `go` line of the output directory's `go.mod` when there is one. Every error is collected; the first 10 in position order are
+  reported, with a count of the rest. Output that does not type-check is refused and nothing is written, and so is a directory without the hand-written
+  package. No flag turns the check off. The alternative, a `-check=false` flag for a schema change that breaks hand-written code, was not chosen: the
+  hand-written code can be changed first and the generator then checks the result, and unchecked output is what F8 forbids.
+* **Stage every file, then replace.** A file whose bytes equal the existing file's is left alone, mode and modification time included. Every other file
+  is staged in the output directory as `.<name>.*.tmp`: written, synced, set to mode `0644`, and closed. If any staging step fails, every temporary file
+  is removed and no file is replaced. Then each is renamed into place in output order; a temporary file is removed only when its rename failed. If a
+  rename fails, the remaining temporary files are removed, and the error names the file, the files already replaced, and those left as they were.
+  Nothing is rolled back: version control holds the previous files. The directory is not synced, and nothing retries on Windows. The alternative,
+  writing unchanged files as today, keeps the generator simpler and moves every file's modification time on every run.
+* **Mode `0644`.** Every file the generator writes is `0644`, as git records it and as `stringer` writes it, set with `(*os.File).Chmod`, so the umask
+  does not narrow it. This settles the mode item of F14. The alternative, each existing file's mode and `0600` for a new one, is what the generator does
+  today.
+
+### Consequences of these decisions
+
+* Good, because an engine defect, or a schema change that breaks hand-written code, is refused with the type checker's errors before any file
+  changes, and a render failure no longer leaves a half-written tree.
+* Good, because on POSIX a reader of the output directory sees each file whole, old or new, and a crash after a rename leaves a complete file.
+* Good, because a run that changes nothing writes nothing.
+* Neutral, because the generated files and the exported API do not change.
+* Bad, because a run takes about 0.5 to 0.9 s longer.
+* Bad, because the five files are replaced one rename at a time: a failure midway, or two runs at once, can leave a mix of old and new files, each
+  whole; and on Windows a replacement is not atomic.
+* Bad, because the source importer is deprecated for module-aware loading. It suffices while the root imports only the standard library; a module
+  dependency of the root would make it run `go list`.
+* Bad, because the check covers the host's `GOOS` and `GOARCH` only. The root has no platform-specific file today, and the precheck lints `GOOS=windows`.
+* Bad, because generating into an empty directory, to look at the output, needs the hand-written files copied there first.
+* Bad, because an interrupted run can leave `.<name>.*.tmp` files behind. The go command and gofmt ignore names that start with `.`, and `git status`
+  shows them.
 
 ## More Information
 

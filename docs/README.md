@@ -32,6 +32,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0011 | PLAN | [Implement phase 1: the resolved schema model](decisions/0011-PLAN-resolved-schema-model.md) | complete |
 | 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md) | complete |
 | 0011 | PLAN | [Implement phase 3: the protocol table](decisions/0011-PLAN-protocol-table.md) | complete |
+| 0011 | PLAN | [Implement phase 5: safe output](decisions/0011-PLAN-safe-output.md) | proposed |
 | 0012 | MADR | [Generate the ACP schema faithfully through a keyword registry](decisions/0012-MADR-schema-fidelity-framework.md) | accepted |
 | 0012 | PLAN | [Implement the schema fidelity framework](decisions/0012-PLAN-schema-fidelity-framework.md) | complete |
 
@@ -63,6 +64,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | build the generator's resolved schema model | [0011-PLAN-resolved-schema-model.md](decisions/0011-PLAN-resolved-schema-model.md) |
 | fix how the generated unions read and write unknown, absent, and null values | [0011-PLAN-wire-fixes.md](decisions/0011-PLAN-wire-fixes.md) |
 | see where the generator keeps the protocol behaviour the schema does not express | [0011-PLAN-protocol-table.md](decisions/0011-PLAN-protocol-table.md) |
+| see how the generator checks its output before writing it | [0011-PLAN-safe-output.md](decisions/0011-PLAN-safe-output.md) |
 | see how each schema keyword reaches the generated Go code | [0012-MADR-schema-fidelity-framework.md](decisions/0012-MADR-schema-fidelity-framework.md) |
 | know the rules agents follow in this repository | [AGENTS.md](../AGENTS.md) |
 | know why this repository has the fleet workspace and library CI | [0003-MADR-install-fleet-agent-workspace.md](decisions/0003-MADR-install-fleet-agent-workspace.md) |

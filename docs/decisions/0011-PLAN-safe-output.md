@@ -1,0 +1,203 @@
+---
+status: proposed
+date: 2026-10-10
+associated-madr: "0011-MADR-harden-code-generator-engine.md"
+---
+
+# Implement phase 5 of the generator hardening: safe output
+
+Associated MADR: [0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md)
+
+## Goal
+
+The generator renders all five files in memory, type-checks them with the hand-written package of the output directory, and only then writes them.
+It stages every changed file beside its destination and renames it into place, so the tree is never half-written by a failure before the first rename.
+It leaves unchanged files alone and writes mode `0644`. No step of the engine panics. The generated files and the SDK's exported API do not change.
+This is phase 5 of the MADR, as refined by its amendment "phase 5 facts and decisions", whose decisions the owner made on 2026-10-10.
+
+## Scope
+
+In scope:
+
+* `cmd/generate/internal/emit`: `file.go`, `types.go`, `constants.go`, `dispatch.go`, `helpers.go`, and their tests (`file_test.go`,
+  `dispatch_test.go`)
+* a new package `cmd/generate/internal/output`, with `check.go`, `write.go`, and their tests
+* `cmd/generate/main.go` and `main_test.go`
+* `docs/architecture.md` and `RELEASING.md` (step 6)
+
+Out of scope:
+
+* phase 6 of the MADR, engine tests beyond the ones this plan adds;
+* what [0012-PLAN-schema-fidelity-framework.md](0012-PLAN-schema-fidelity-framework.md) left undone: the dead trial decode in five unions, `_meta`
+  numbers as `float64`, `RequestId`'s `Null`, `cancelRequestParams`, ACP's v2 schemas;
+* syncing the output directory, retrying a rename on Windows, a lock against two runs at once, a flag that turns the check off, and
+  `golang.org/x/tools/go/packages` (the amendment's decisions);
+* a `.gitignore` entry for leftover temporary files, and any `Makefile` change;
+* the goldens, `encoding/json/v2`, a tag, a push, an agent commit on `main`.
+
+## Grounding
+
+Read on `d534f27`; the probes ran in scratch copies and scratch modules, and nothing in the tree changed. The amendment holds the measurements and
+the quotations; this section names where the code stands.
+
+* **G1. The write path.** `run` (`main.go:25`) loads the schema and builds the model, then `os.MkdirAll(*outDir, 0o750)` (`main.go:54`), then
+  `emit.WriteConstants`, `WriteTypes`, `WriteDispatch`, `WriteHelpers` (`main.go:58`–`68`). `WriteDispatch` (`dispatch.go:11`) calls `writeAgentGen`
+  and `writeClientGen`. Each ends in `goFile.write` (`file.go:72`): `render`, then `os.WriteFile(filepath.Join(outDir, name), src, generatedFileMode)`.
+  `generatedFileMode` is `0o600` (`constants.go:18`).
+* **G2. The panics.** `fieldSet.fieldList` (`types.go:29`–`34`), reached through `structType` and `interfaceType`, from `types.go:98`, `:178`,
+  `:824` and `file_test.go:65`. `printedSize` (`file.go:188`–`194`), called by `layout.decl` (`file.go:242`). `layout.apply` (`file.go:223`–`235`),
+  called by `goFile.layout` (`file.go:145`), which `render` and `TestLayoutStaysBelowPrinterSentinel` (`file_test.go:165`) call.
+* **G3. Tests that write.** `TestGeneratedFilesUpToDate` (`main_test.go:32`) calls the four `Write*` into `t.TempDir()` and compares bytes;
+  `TestDispatchFollowsTheModel` (`dispatch_test.go:54`) calls `WriteDispatch`, and the protocol-constant test (`dispatch_test.go:118`)
+  `WriteConstants`. `TestRunRefusesBeforeWriting` (`main_test.go:96`) runs five hostile schemas through `run` and requires only `keep.txt` to remain.
+  `TestRunGeneratesRecasedUnion` (`main_test.go:163`) runs `run` into an empty directory, then type-checks the output with a stub of the hand-written
+  names (`handWritten`, `main_test.go:150`).
+* **G4. The two failures to fix.** The amendment's scenarios, kept as `p5_failmodes.py` in the session scratchpad and rerun in steps 3 and 5: a
+  declaration that cannot be printed leaves `constants_gen.go` rewritten and exits 1; a call to `toReqErrMissing` rewrites all five files and exits 0.
+* **G5. Lint.** gosec reports `os.WriteFile` with `0o644` (G306) and `os.ReadFile` of a joined path (G304); `load.go` carries
+  `//nolint:gosec // schemaDir is the generator's explicit input.` for the latter. `(*os.File).Chmod(0o644)`, `os.CreateTemp`, and `os.Rename` pass.
+* **G6. The output directory.** The repository root holds seven hand-written non-test files, none with a build constraint or a platform suffix, and
+  `go.mod` with `go 1.27.2`. The root imports only the standard library.
+* **G7. Coverage on `d534f27`.** `internal/model` 93.9%, `internal/emit` 81.2%.
+
+## Design
+
+### The flow
+
+`run` becomes: load the schema; build the model; `files, err := emit.Render(m)`; `output.Check(outDir, files)`; `os.MkdirAll(outDir, 0o750)`;
+`output.Write(outDir, files)`. Any error returns before the next step, so nothing is created or written unless every step before it passed. `run`'s
+doc comment says so.
+
+### Rendering
+
+```go
+// File is one generated file: its name in the output directory and its formatted source.
+type File struct {
+	Name string
+	Src  []byte
+}
+
+// Render builds and formats every generated file, in the order the generator writes them.
+func Render(m *model.Model) ([]File, error)
+```
+
+`Render` returns `constants_gen.go`, `types_gen.go`, `agent_gen.go`, `client_gen.go`, `helpers_gen.go`, in that order, or the first error, as
+`<name>: <cause>`. The bodies of `WriteConstants`, `WriteTypes`, `writeAgentGen`, `writeClientGen`, and `WriteHelpers` become unexported functions that
+return the `*goFile`; the four exported `Write*` functions, `goFile.write`, and `generatedFileMode` go.
+
+### Errors instead of panics
+
+* `goFile` gains `err error`, the first failure recorded while the file is built, and `render` returns it before printing.
+* `fieldSet.fieldList`, `structType`, and `interfaceType` take the `*goFile`. A doc comment with no field after it records
+  `doc comment "<first line>" has no field after it` on the file and is dropped.
+* `printedSize` returns `(int, error)`: `print <type>: <cause>`. `layout` records the first error; `layout.apply` returns `line table rejected` when
+  `SetLines` fails. `goFile.layout` returns `(*ast.File, error)`.
+
+### The check
+
+```go
+// Check type-checks files together with the hand-written Go files of dir, and returns an error listing what does not check.
+func Check(dir string, files []emit.File) error
+```
+
+* **Hand-written files.** `build.Default.ImportDir(dir, 0)`, less the generated names. A missing directory, or `*build.NoGoError`, means none. Any
+  other error is returned as `output directory: <cause>` (a `*build.MultiplePackageError` among them). A cgo file is refused as
+  `cgo file <name> is not supported`.
+* **Parsing.** Every file is parsed with `parser.SkipObjectResolution` under its path `filepath.Join(dir, name)`; a generated file is parsed from
+  memory. A parse error is returned as it is.
+* **Version.** When `dir/go.mod` exists, the first line of the form `go <version>` sets `GoVersion` to `go<version>`; otherwise it stays empty. A
+  `go.mod` that cannot be read is an error.
+* **Types.** `types.Config{GoVersion: ..., Importer: importer.ForCompiler(fset, "source", nil), Error: collect}`; `Check` is called with the
+  package name of the generated files. The errors are sorted by file, line, and column, a secondary error (text starting with a tab) kept after its
+  primary, and reported as `generated code does not type-check with <dir>:` followed by one line per error, at most 10, then `and <n> more`.
+
+### The write
+
+```go
+// Write replaces the files of dir that differ from files, staging all of them before replacing any.
+func Write(dir string, files []emit.File) error
+```
+
+1. **Compare.** Read `dir/<name>` (with `//nolint:gosec` naming G304 and the reason, as `load.go` does). Equal bytes: leave the file alone. Not found:
+   stage it. Any other read error: return it, nothing staged.
+2. **Stage.** For each file to replace: `os.CreateTemp(dir, "."+name+".*.tmp")`, `Write`, `Sync`, `Chmod(0o644)`, `Close`. On any error, close and
+   remove every temporary file created so far and return `stage <name>: <cause>`; no file is replaced.
+3. **Replace.** Rename each temporary file to `dir/<name>`, in `Render`'s order. On an error, remove the temporary files not yet renamed and return
+   `replace <name>: <cause>; replaced: <names>; left as they were: <names>`. A renamed temporary file is never removed.
+
+The mode is a constant `fileMode = 0o644` in `output`.
+
+## Implementation Steps
+
+1. Work on `main`. Each step writes its tests first and records their failure on the current tree, then changes the generator. It regenerates with
+   `cd cmd/generate && env -u GOPATH -u GOMODCACHE go run .` and compares every generated file with the previous commit's by script. It shows each new
+   check failing on a planted breakage in a scratch copy, never in the tree. It runs `make pre-add-check`, `make check-records`, and
+   `make markdownlint`, records the output in this plan's execution record, and stops for the owner's commit. In every step the generated files must
+   be byte-identical to `d534f27`'s, and `git status` after regenerating must show no generated file.
+2. **Errors instead of panics.** Tests in `internal/emit`, `TestRenderErrors`: a file holding `typeDecl("1bad", id("int"))` fails to render with an
+   error containing `print`; a struct `fieldSet` with a trailing doc comment fails with `has no field after it` and the comment's text;
+   `printedSize(&ast.Field{})` returns an error and does not panic; a layout with a negative reservation fails with `line table rejected`. Change
+   `file.go` and `types.go` to the design; update `file_test.go` for the new signatures. Plants, in a scratch copy, one at a time: each of the three
+   `panic` calls restored makes its case fail.
+3. **Render in memory.** Tests: `TestGeneratedFilesUpToDate` calls `emit.Render` and compares in memory, and requires the five names in order;
+   `TestDispatchFollowsTheModel` and the protocol-constant test read `Render`'s output. Add `File` and `Render`; remove the `Write*` functions,
+   `goFile.write`, and `generatedFileMode`. `run` writes `Render`'s files in order with `os.WriteFile` at `0o600`, as today, until step 4. Plants:
+   `Render` returning `helpers_gen.go` before `client_gen.go` fails the order check; dropping a file fails the comparison. Rerun `p5_failmodes.py`:
+   expected, the render failure exits 1 with no file rewritten; the `toReqErrMissing` scenario is unchanged until step 5.
+4. **Stage, then replace.** Tests in `internal/output`:
+   * `TestWriteReplacesChangedFiles`: into a directory holding a stale `types_gen.go` at `0o600` and a sentinel, all five are written, each `0644`
+     (Unix only; on Windows the test checks the bytes), the sentinel unchanged.
+   * `TestWriteLeavesUnchangedFiles`: with modification times set an hour back by `os.Chtimes`, a second `Write` of the same files changes none,
+     and a `Write` with one file changed moves only that file's time.
+   * `TestWriteStagingFailureReplacesNothing`: in a directory made read-only (skipped on Windows and as root), `Write` fails with `stage` and every
+     existing file keeps its bytes.
+   * `TestWriteRenameFailureReports`: with a directory named `helpers_gen.go` in the way, `Write` fails naming it, lists the four replaced files,
+     and the four hold the new bytes.
+   * every test requires that no `.*.tmp` file remains.
+   Add `write.go`; `run` calls `output.Write`. Plants: writing each file as it is staged fails the staging test; `0o600` fails the mode test; no
+   comparison fails the modification-time test; no cleanup after a failed rename fails the temporary-file check. The `Sync` call has no test that can
+   observe it; review shows it. After the step, running the generator in the tree leaves `git status` clean and the five files' modification times as
+   they were.
+5. **Type-check before writing.** Tests in `internal/output`:
+   * `TestCheckAcceptsRepository`: `emit.Render` of the committed schema, checked against the repository root, returns nil.
+   * `TestCheckRefuses`, one case each: an empty directory (`undefined: AgentSideConnection`); a hand-written file that redeclares a generated type
+     (`redeclared`); a `go.mod` at `go 1.21` with a hand-written `for range 3` (`requires go1.22`); a stray `package other` file (`output directory`);
+     a cgo file (`cgo file`).
+   * `TestCheckSelectsLikeTheGoCommand`: the stub of the hand-written names plus a `//go:build ignore` file, a `_test.go` file, a `.x.tmp` file, and
+     an `_plan9.go` file, each with an undefined name, returns nil.
+   * `TestCheckReportsAtMostTen`: output with 12 errors reports 10 lines and `and 2 more`.
+   In `cmd/generate`: `TestRunRefusesOutputThatDoesNotTypeCheck` runs the recased-union schema into a directory holding only `keep.txt` and requires
+   the error to contain `undefined: AgentSideConnection` and the directory to hold only `keep.txt`; `TestRunGeneratesRecasedUnion` writes
+   `handWritten` into its directory first. Add `check.go`; `run` calls `output.Check` before `os.MkdirAll`. Plants: `run` without the check fails
+   `TestRunRefusesOutputThatDoesNotTypeCheck`; `UseAllFiles` set fails the selection test; `GoVersion` left empty fails the version case; no cap fails
+   the cap test. Rerun `p5_failmodes.py`: expected, both scenarios exit 1 with no file rewritten, the second naming `agent_gen.go` and
+   `toReqErrMissing`. Time the generator binary before and after, three runs each.
+6. **Docs.** `docs/architecture.md`: the generator paragraph names `internal/output` and the order render, check, write; it states the mode, the
+   temporary-file names, and that unchanged files are left alone; "Checks that guard this" names `TestCheckAcceptsRepository`. `RELEASING.md`: when
+   `make version` refuses output that does not type-check, change the hand-written code to the new names first. The name check of phase 4
+   (`w10_names.py`) runs over both files.
+7. **Review and close.** Run the verification below, record each result, set this plan to `complete`, and record in the MADR that its phase 5
+   amendment's decisions were carried out, or how they changed.
+
+## Verification
+
+* After every step, the five generated files are byte-identical to `d534f27`'s, and `TestGeneratedFilesUpToDate` passes.
+* No `panic` call remains in a non-test file of `cmd/generate` (a script lists them).
+* Each new test failed first, and each planted breakage of steps 2 to 5 failed a test, as the execution record shows.
+* `p5_failmodes.py` after step 5: both scenarios exit 1 and leave all five files as they were.
+* `go test -race -count=1 ./...` passes at the root and in `cmd/generate`; `go build ./example/...` passes.
+* `go test -cover`: `internal/output` at or above 85%; `internal/emit` and `internal/model` reported, not below `d534f27`'s.
+* The SDK's exported API is unchanged (the API listing program of the earlier phases, `d534f27` against the last step).
+* The generator's run time is recorded before and after.
+* `make pre-add-check`, `make check-records`, and `make markdownlint` pass; the identifier scan finds nothing.
+
+## Rollout and Rollback
+
+Commits land on `main`, made by the owner, one per step. No tag; a push waits for the owner's ask. The SDK's API and wire behaviour do not change, so
+the release notes need no entry. The developer-visible changes are in `RELEASING.md`: `make version` can refuse output, and files are written `0644`.
+
+Rollback is `git revert` of the step commits, newest first. Each step leaves the generator working and the generated files unchanged.
+
+## Execution record
+
+Not started. The owner decided the MADR's phase 5 amendment on 2026-10-10; nothing runs until the owner approves this plan.
