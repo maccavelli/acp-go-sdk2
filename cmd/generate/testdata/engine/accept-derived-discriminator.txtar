@@ -28,3 +28,60 @@ func (Event).MarshalJSON() ([]byte, error)
 func (*Event).UnmarshalJSON(b []byte) error
 func (*Event).Validate() error
 func (*EventStart).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"bytes"
+	"encoding/json"
+	"reflect"
+	"testing"
+)
+
+func jsonEqual(t *testing.T, got []byte, want string) {
+	t.Helper()
+	decode := func(b []byte) any {
+		d := json.NewDecoder(bytes.NewReader(b))
+		d.UseNumber()
+		var v any
+		if err := d.Decode(&v); err != nil {
+			t.Fatalf("%s: %v", b, err)
+		}
+		return v
+	}
+	if !reflect.DeepEqual(decode(got), decode([]byte(want))) {
+		t.Errorf("got %s, want %s", got, want)
+	}
+}
+
+// The derived discriminator, event, picks the variant; an unknown event is
+// kept and sent back unchanged.
+func TestEventRoundTrip(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"event":"start","at":"t"}`:  "Start",
+		`{"event":"stop"}`:            "Stop",
+		`{"event":"pause","for":"1s"}`: "Unknown",
+	} {
+		var e Event
+		if err := json.Unmarshal([]byte(in), &e); err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		got := map[bool]string{e.Start != nil: "Start", e.Stop != nil: "Stop", e.Unknown != nil: "Unknown"}[true]
+		if got != want {
+			t.Errorf("%s decoded as %s, want %s", in, got, want)
+		}
+		b, err := json.Marshal(e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		jsonEqual(t, b, in)
+	}
+	if err := json.Unmarshal([]byte(`{"event":"start"}`), new(Event)); err == nil {
+		t.Error("a start event without its required at decoded")
+	}
+	b, err := json.Marshal(NewEventStart("t"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonEqual(t, b, `{"event":"start","at":"t"}`)
+}

@@ -25,3 +25,35 @@ func (*CancelRequestNotification).Validate() error
 func (Id).MarshalJSON() ([]byte, error)
 func (*Id).UnmarshalJSON(b []byte) error
 func (*Id).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Each primitive variant decodes and encodes back, a large integer with every
+// digit; a value no variant takes is refused.
+func TestPrimitiveUnion(t *testing.T) {
+	for in, want := range map[string]string{"null": "Null", "9007199254740993": "Number", `"s"`: "Str", "-9223372036854775808": "Number"} {
+		var id Id
+		if err := json.Unmarshal([]byte(in), &id); err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		got := map[bool]string{id.Null != nil: "Null", id.Number != nil: "Number", id.Str != nil: "Str"}[true]
+		if got != want {
+			t.Errorf("%s decoded as %s, want %s", in, got, want)
+		}
+		b, err := json.Marshal(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(b) != in {
+			t.Errorf("%s encoded back as %s", in, b)
+		}
+	}
+	if err := json.Unmarshal([]byte("true"), new(Id)); err == nil {
+		t.Error("a boolean decoded into Id")
+	}
+}

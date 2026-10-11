@@ -38,3 +38,27 @@ func (*U).UnmarshalJSON(b []byte) error
 func (*U).Validate() error
 func (*ULeaf).UnmarshalJSON(b []byte) error
 func (*ULeaf).Validate() error
+-- behaviour_test.go --
+package acp
+
+import "testing"
+
+// Validate reaches a check inside a union variant and inside each element of a
+// slice, and fails on a union with no variant set.
+func TestValidateThroughUnion(t *testing.T) {
+	tests := []struct {
+		name string
+		v    Root
+		fail bool
+	}{
+		{"all good", Root{U: NewULeaf(Leaf{Name: "a"}), Leaves: []Leaf{{Name: "b"}}}, false},
+		{"empty name in the union", Root{U: NewULeaf(Leaf{}), Leaves: []Leaf{}}, true},
+		{"empty name in the slice", Root{U: NewUNone(), Leaves: []Leaf{{Name: "b"}, {}}}, true},
+		{"no variant set", Root{Leaves: []Leaf{}}, true},
+	}
+	for _, tt := range tests {
+		if err := tt.v.Validate(); (err != nil) != tt.fail {
+			t.Errorf("%s: Validate = %v, want failure %v", tt.name, err, tt.fail)
+		}
+	}
+}

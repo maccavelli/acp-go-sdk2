@@ -21,3 +21,38 @@ const ProtocolVersionNumber untyped int = 1
 func (*CancelRequestNotification).Validate() error
 func (Opts).MarshalJSON() ([]byte, error)
 func (*Opts).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"slices"
+	"testing"
+)
+
+// Absent arrays take their defaults on decode, and a nil array whose default
+// is an array is still sent on encode.
+func TestDefaultArray(t *testing.T) {
+	var o Opts
+	if err := json.Unmarshal([]byte(`{}`), &o); err != nil {
+		t.Fatal(err)
+	}
+	if o.List == nil || len(o.List) != 0 || !slices.Equal(o.Names, []string{"a"}) {
+		t.Errorf("defaults decoded as %#v", o)
+	}
+	b, err := json.Marshal(Opts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Opts
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := keys["list"]; !ok {
+		t.Errorf("Opts{} encoded as %s, without list", b)
+	}
+}

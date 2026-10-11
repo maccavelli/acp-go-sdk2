@@ -26,3 +26,35 @@ func (Caps).MarshalJSON() ([]byte, error)
 func (*Caps).UnmarshalJSON(b []byte) error
 func (Fs).MarshalJSON() ([]byte, error)
 func (*Fs).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// A property marked x-deserialize-default-on-error that fails to decode takes
+// its default instead of failing the message; a good value is kept.
+func TestDefaultOnError(t *testing.T) {
+	var c Caps
+	if err := json.Unmarshal([]byte(`{"fs":"garbage","n":"x","names":5}`), &c); err != nil {
+		t.Fatalf("bad values failed the message: %v", err)
+	}
+	if c.Fs.Read || c.N != nil || c.Names != nil {
+		t.Errorf("bad values decoded as %+v", c)
+	}
+	c = Caps{}
+	if err := json.Unmarshal([]byte(`{"fs":{"read":true},"n":4294967295,"names":["a"]}`), &c); err != nil {
+		t.Fatal(err)
+	}
+	if !c.Fs.Read || c.N == nil || *c.N != 4294967295 || len(c.Names) != 1 {
+		t.Errorf("good values decoded as %+v", c)
+	}
+	// A value out of the range of uint32 is a decode error too, so it takes
+	// the default.
+	c = Caps{}
+	if err := json.Unmarshal([]byte(`{"n":4294967296}`), &c); err != nil || c.N != nil {
+		t.Errorf("n beyond uint32: %+v, %v", c, err)
+	}
+}

@@ -32,3 +32,45 @@ func (*ClientSideConnection).LoadSession(ctx context.Context, params LoadSession
 func (*LoadSessionRequest).UnmarshalJSON(b []byte) error
 func (*LoadSessionRequest).Validate() error
 func (*LoadSessionResponse).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"errors"
+	"io"
+	"testing"
+)
+
+type plainAgent struct{}
+
+type loaderAgent struct{ plainAgent }
+
+func (loaderAgent) LoadSession(_ context.Context, p LoadSessionRequest) (LoadSessionResponse, error) {
+	if p.SessionId != "s" {
+		return LoadSessionResponse{}, errors.New("unknown session")
+	}
+	return LoadSessionResponse{}, nil
+}
+
+func connect(t *testing.T, agent Agent) *ClientSideConnection {
+	t.Helper()
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	NewAgentSideConnection(agent, aw, ar)
+	return NewClientSideConnection(nil, cw, cr)
+}
+
+// session/load reaches an agent that implements AgentLoader, and is method
+// not found for one that does not.
+func TestLoadSession(t *testing.T) {
+	if _, err := connect(t, loaderAgent{}).LoadSession(t.Context(), LoadSessionRequest{SessionId: "s"}); err != nil {
+		t.Errorf("an AgentLoader refused session/load: %v", err)
+	}
+	_, err := connect(t, plainAgent{}).LoadSession(t.Context(), LoadSessionRequest{SessionId: "s"})
+	var re *RequestError
+	if !errors.As(err, &re) || re.Code != -32601 {
+		t.Errorf("an agent without AgentLoader answered %v, want method not found (-32601)", err)
+	}
+}

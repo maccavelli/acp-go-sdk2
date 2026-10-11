@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/emit"
 )
@@ -28,7 +29,7 @@ const maxReported = 10
 // The hand-written files are those the go command would build in dir for the
 // host, less the generated names; a missing directory has none. The language
 // version is the go line of dir/go.mod, when there is one. Imports are read
-// from source.
+// from source, by one importer that every call in the process shares.
 func Check(dir string, files []emit.File) error {
 	hand, err := handWritten(dir, files)
 	if err != nil {
@@ -38,7 +39,8 @@ func Check(dir string, files []emit.File) error {
 	if err != nil {
 		return err
 	}
-	fset := token.NewFileSet()
+	imp := sharedImporter()
+	fset := imp.fset
 	parsed := make([]*ast.File, 0, len(hand)+len(files))
 	for _, name := range hand {
 		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)
@@ -60,7 +62,7 @@ func Check(dir string, files []emit.File) error {
 	var errs []types.Error
 	conf := types.Config{
 		GoVersion: version,
-		Importer:  importer.ForCompiler(fset, "source", nil),
+		Importer:  imp,
 		Error: func(err error) {
 			var te types.Error
 			if !errors.As(err, &te) {
@@ -74,6 +76,36 @@ func Check(dir string, files []emit.File) error {
 		return nil
 	}
 	return report(dir, fset, errs)
+}
+
+// sharedImporter is the source importer every Check uses. It keeps what it
+// has imported, the standard library above all, so a process that checks
+// many outputs, as the engine tests do, imports it once
+// (0011-MADR-harden-code-generator-engine.md, phase 6 amendment). It is not
+// safe for concurrent use, so every import holds mu; the files of every
+// check are parsed into its file set.
+var sharedImporter = sync.OnceValue(func() *lockedImporter {
+	fset := token.NewFileSet()
+	return &lockedImporter{fset: fset, imp: importer.ForCompiler(fset, "source", nil)}
+})
+
+type lockedImporter struct {
+	mu   sync.Mutex
+	fset *token.FileSet
+	imp  types.Importer
+}
+
+func (l *lockedImporter) Import(path string) (*types.Package, error) {
+	return l.ImportFrom(path, "", 0)
+}
+
+func (l *lockedImporter) ImportFrom(path, dir string, mode types.ImportMode) (*types.Package, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if from, ok := l.imp.(types.ImporterFrom); ok {
+		return from.ImportFrom(path, dir, mode)
+	}
+	return l.imp.Import(path)
 }
 
 // handWritten returns the names of the Go files the go command would build in

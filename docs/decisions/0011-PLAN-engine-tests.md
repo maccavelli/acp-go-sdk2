@@ -31,6 +31,7 @@ In scope:
 * `cmd/generate/internal/model/schema.go` and `model.go`: the refusals of two lossy shapes (added 2026-10-11, see step 3's deviation)
 * at the root: the new generated file `schema_gen_test.go`, and new hand-written `conformance_test.go`, `instances_test.go`, and `fuzz_test.go`
 * `Makefile` (`fuzz`, `mutation-engine`, `mutation-generated`), `.github/workflows/ci.yml` (D7)
+* `cmd/generate/internal/output/check.go`: one shared source importer (added 2026-10-11, see step 5's deviation)
 * `docs/architecture.md`, `RELEASING.md`, and this plan's records
 
 Out of scope:
@@ -565,3 +566,85 @@ clean (gofmt, golangci-lint, go vet, go test, govulncheck).` The untracked `erro
 check-records` and `make markdownlint` exit 0, and the identifier scan found nothing.
 
 Commit point: the agent stopped here. The owner commits step 4 on `main`.
+
+### Step 5 deviation, 2026-10-11: test time, and a shared importer in output.Check
+
+The owner committed step 4 as `5ab7e27`. Step 5's runner and 30 behaviour files passed, but `go test ./...` in `cmd/generate` took 34.7, 39.8,
+and 42.9 s, 19.6 s with `-short`, and 92.1 s with `-race`, against the MADR's estimate of 1 to 3 s more than 2.2 s. A CPU profile of
+`TestEngineBehaviour` gave 10.5 s of 24.2 to `writeBehaviourCase`, 10.4 of it `output.Check`, and the rest to the `go test` subprocess; the
+generation was then made parallel, and the runner took 12.3 to 13.4 s. The remaining cost is `output.Check` importing the standard library from
+source on every call, which the generator makes once and the tests 74 times.
+
+Resolutions put to the owner: share one importer in `output.Check` (recommended); the same and skip `TestEngineCases` under `-short`; accept the
+cost. A scratch copy with the shared importer (`s5_sharedcheck.py`) passed every test in 16.3 and 14.8 s, 5.7 s with `-short`, and 38.3 s with
+`-race`. The owner chose the shared importer. The MADR's consequence is corrected and the choice recorded under its phase 6 amendment ("Test time,
+decided in step 5"). File added to the step's scope: `cmd/generate/internal/output/check.go`.
+
+### Step 5, behaviour of generated code, 2026-10-11
+
+Ran on `main` from `5ab7e27`. The agent did not commit.
+
+**The runner.** `cmd/generate/behaviour_test.go` (new) holds `TestEngineBehaviour`, as designed, with three additions:
+
+* The cases are generated in parallel subtests (`generate/<case>`) before the one `go test -json -count=1 ./...`.
+* A package that passes but ran no top-level test fails its subtest.
+* The module's `go` line is read from the root's `go.mod` (`goLine`).
+
+The subprocess runs with `GOWORK=off GOFLAGS=-mod=mod GOTOOLCHAIN=local GOPROXY=off` under `t.Context()`, through `exec.CommandContext` and no
+shell. gosec reported nothing on the test file, so it carries no `//nolint`.
+
+**Behaviour files.** 30 cases gained a `behaviour_test.go`, 38 test functions in all, written in the session scratchpad (`s5beh/`) and appended
+by `s5_add.py`:
+
+* the unions `declared-discriminator`, `derived-discriminator`, `catch-all-variant`, `key-less-variant`, `key-less-variant-without-keys`,
+  `primitive-union`, `inline-variants`, `union-in-array`, `array-variants`, `title-only-variant`, and `recased-union`;
+* integer ranges: `int64` at both ends through a union variant and through a nullable field, `uint32` and `uint16` at their maximum and one
+  beyond;
+* `required-and-optional` and `nullable`; `default-on-error`, `skip-invalid-items`, `default-scalar`, `default-array`, `default-object`,
+  `typed-map`, and `raw-value`;
+* the four `Validate` cases;
+* the methods, over `io.Pipe` with a hand-written peer: `agent-request`, `agent-notification`, `agent-optional` (with and without `AgentLoader`),
+  `client-request`, `prompt-cancellation` (session/cancel cancelling the turn's context, the agent's `Cancel`, session/update, and a client whose
+  prompt context ends sending session/cancel), and `unstable-merge` (both experimental interfaces, with and without an implementation).
+
+On the first run of three files, one expectation failed: `{"side":"s"}`, a `Shape` without its discriminator, decoded as `Square`. That is the
+behaviour [0011-PLAN-wire-fixes.md](0011-PLAN-wire-fixes.md) decided, and `TestAbsentDiscriminator` at the root pins it: a payload without its
+discriminator decodes as the one variant whose required keys it carries, else it is kept in `Unknown`. The expectation was wrong, and the file now
+tests that rule (`TestShapeAbsentDiscriminator`). The 30 packages then passed, each with its tests run. No behaviour contradicted a decision.
+`key-less-variant` pins the trial decode as it is today: a type no variant names goes to `Unknown`, and without a type the key-less variant is
+tried by its keys.
+
+**Test time and the shared importer.** See the deviation above. `output.Check` keeps one source importer per process, behind a mutex
+(`sharedImporter`), and parses into its file set; the generator's output, its refusals, and its messages do not change.
+`TestCheckConcurrently` runs eight checks at once and requires the calls to share one importer.
+
+Plants, each in a fresh scratch copy (`s5_plants.json`, `s5_plants2.json`, `s5_plant_art.json`); all failed as planted:
+
+* The discriminator compared with a wrong value in `discUnmarshalBody`: seven behaviour packages failed, `accept-declared-discriminator` among them.
+* The `Unknown` assignment of a discriminated union removed: `--- FAIL: TestEngineBehaviour/accept-declared-discriminator`. The first try did
+  not apply: the assignment occurs twice in `types.go`, and `plant.py` refused text that is not unique; anchored on its comment, it applied.
+* `skipInvalid` keeping the items that fail: `--- FAIL: TestEngineBehaviour/accept-skip-invalid-items`.
+* The `minimum` check inverted: `--- FAIL: TestEngineBehaviour/accept-validate-minimum`.
+* Dispatch decoding into a throwaway value instead of `p`: `--- FAIL: TestEngineBehaviour/accept-agent-request`.
+* A behaviour expectation broken in `accept-recased-union`: the subtest printed the package's output (`behaviour_test.go:11: NewUX encoded as
+  {"n":"n","type":"x"}, <nil>` and `--- FAIL: TestRecasedConstructors`) and `module kept in .../module`. With `-artifacts -outputdir <scratch>`,
+  the module, 30 packages, was still there after the run.
+* `sharedImporter` without its lock: `WARNING: DATA RACE` under `-race`.
+* A new importer for each check: `Check calls do not share one importer`.
+
+**Times**, `go test -count=1` in `cmd/generate` on this host:
+
+| run | `f2a6a3a` | after step 3 | step 5, before the shared importer | step 5, final |
+| --- | --- | --- | --- | --- |
+| `./...` | 2.2 to 2.5 s | 11.6 to 12.5 s | 34.7 to 42.9 s | 14.4 to 19.8 s |
+| `-short ./...` | | | 19.6 s | 7.7 s |
+| `-race ./...` | | 45.8 s | 92.1 s | 28.4 s |
+| `-run TestEngineBehaviour .` | | | 12.3 to 13.4 s | 17.3 s (the full run's cache was cold) |
+
+**Results.** Regenerating exited 0, and `git diff --quiet f2a6a3a -- '*_gen.go' testdata` exited 0. `make pre-add-check`: `go-precheck: 82 file(s)
+clean (gofmt, golangci-lint, go vet, go test, govulncheck).` One run before that failed on staticcheck SA4000: `sharedImporter() !=
+sharedImporter()`, which is meant to compare two calls, now compares two variables; the plant was rerun and still fails. The untracked
+`behaviour_test.go` passed by name: `go-precheck: 1 file(s) clean`. `make check-records` and `make markdownlint` exit 0, and the identifier scan
+found nothing.
+
+Commit point: the agent stopped here. The owner commits step 5 on `main`.

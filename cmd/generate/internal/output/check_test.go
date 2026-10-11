@@ -116,3 +116,24 @@ func TestCheckReportsAtMostTen(t *testing.T) {
 		t.Errorf("error does not start with the first error in position order:\n%v", err)
 	}
 }
+
+// TestCheckConcurrently runs checks at once, as the engine tests do. Every call
+// shares one importer (sharedImporter), so a missing lock shows under -race.
+func TestCheckConcurrently(t *testing.T) {
+	t.Parallel()
+	if first, second := sharedImporter(), sharedImporter(); first != second {
+		t.Fatal("Check calls do not share one importer")
+	}
+	importing := []emit.File{{Name: "types_gen.go", Src: []byte("package acp\n\nimport (\n\t\"encoding/json\"\n\t\"strings\"\n)\n\n" +
+		"var _ = json.Marshal\n\nvar _ = strings.Cut\n\nfunc F() *RequestError { return nil }\n")}}
+	errs := make(chan error, 8)
+	for range 8 {
+		dir := dirWith(t, map[string]string{"hand.go": stub})
+		go func() { errs <- Check(dir, importing) }()
+	}
+	for range 8 {
+		if err := <-errs; err != nil {
+			t.Error(err)
+		}
+	}
+}

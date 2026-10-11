@@ -41,3 +41,101 @@ func (*PromptResponse).UnmarshalJSON(b []byte) error
 func (*PromptResponse).Validate() error
 func (*SessionNotification).UnmarshalJSON(b []byte) error
 func (*SessionNotification).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"io"
+	"testing"
+	"time"
+)
+
+type promptAgent struct {
+	started   chan PromptRequest
+	cancelled chan CancelNotification
+}
+
+// Prompt waits until its context is cancelled, as a long turn would.
+func (a promptAgent) Prompt(ctx context.Context, p PromptRequest) (PromptResponse, error) {
+	a.started <- p
+	<-ctx.Done()
+	return PromptResponse{Stop: "cancelled"}, nil
+}
+
+func (a promptAgent) Cancel(_ context.Context, p CancelNotification) error {
+	a.cancelled <- p
+	return nil
+}
+
+type updateClient struct{ got chan SessionNotification }
+
+func (c updateClient) SessionUpdate(_ context.Context, p SessionNotification) error {
+	c.got <- p
+	return nil
+}
+
+func wait[T any](t *testing.T, ch chan T, what string) T {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(10 * time.Second):
+		t.Fatalf("%s did not happen", what)
+		panic("unreachable")
+	}
+}
+
+// session/cancel cancels the context of the session's prompt turn, and the
+// agent's Cancel is called; session/update reaches the client.
+func TestPromptCancellation(t *testing.T) {
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	a := promptAgent{started: make(chan PromptRequest, 1), cancelled: make(chan CancelNotification, 1)}
+	asc := NewAgentSideConnection(a, aw, ar)
+	u := updateClient{got: make(chan SessionNotification, 1)}
+	c := NewClientSideConnection(u, cw, cr)
+
+	done := make(chan PromptResponse, 1)
+	go func() {
+		resp, err := c.Prompt(context.Background(), PromptRequest{SessionId: "s"})
+		if err != nil {
+			t.Errorf("prompt: %v", err)
+		}
+		done <- resp
+	}()
+	wait(t, a.started, "the prompt turn")
+	if err := asc.SessionUpdate(t.Context(), SessionNotification{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := wait(t, u.got, "the session update"); got.SessionId != "s" {
+		t.Errorf("client got %+v", got)
+	}
+	if err := c.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := wait(t, a.cancelled, "the agent's Cancel"); got.SessionId != "s" {
+		t.Errorf("agent's Cancel got %+v", got)
+	}
+	if resp := wait(t, done, "the prompt turn's end"); resp.Stop != "cancelled" {
+		t.Errorf("prompt returned %+v", resp)
+	}
+}
+
+// A client whose prompt context ends sends session/cancel itself.
+func TestPromptContextCancelSendsCancel(t *testing.T) {
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	a := promptAgent{started: make(chan PromptRequest, 1), cancelled: make(chan CancelNotification, 1)}
+	NewAgentSideConnection(a, aw, ar)
+	c := NewClientSideConnection(updateClient{got: make(chan SessionNotification, 1)}, cw, cr)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { _, _ = c.Prompt(ctx, PromptRequest{SessionId: "s"}) }()
+	wait(t, a.started, "the prompt turn")
+	cancel()
+	if got := wait(t, a.cancelled, "session/cancel"); got.SessionId != "s" {
+		t.Errorf("agent's Cancel got %+v", got)
+	}
+}

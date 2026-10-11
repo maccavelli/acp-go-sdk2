@@ -61,3 +61,64 @@ func (*UnstableNewResponse).Validate() error
 func (*UnstableWatchRequest).UnmarshalJSON(b []byte) error
 func (*UnstableWatchRequest).Validate() error
 func (*UnstableWatchResponse).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"errors"
+	"io"
+	"testing"
+)
+
+type stableAgent struct{}
+
+func (stableAgent) Old(context.Context, OldRequest) (OldResponse, error) { return OldResponse{}, nil }
+
+type experimentalAgent struct{ stableAgent }
+
+func (experimentalAgent) UnstableNew(_ context.Context, p UnstableNewRequest) (UnstableNewResponse, error) {
+	if p.Extra.Z != "z" {
+		return UnstableNewResponse{}, errors.New("no z")
+	}
+	return UnstableNewResponse{}, nil
+}
+
+type watchClient struct{}
+
+func (watchClient) UnstableWatch(context.Context, UnstableWatchRequest) (UnstableWatchResponse, error) {
+	return UnstableWatchResponse{}, nil
+}
+
+func pair(t *testing.T, agent Agent, client Client) (*AgentSideConnection, *ClientSideConnection) {
+	t.Helper()
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	return NewAgentSideConnection(agent, aw, ar), NewClientSideConnection(client, cw, cr)
+}
+
+// An unstable method reaches a peer that implements its experimental
+// interface, and is method not found for one that does not; the stable method
+// takes the promoted Shared.
+func TestExperimentalMethods(t *testing.T) {
+	asc, c := pair(t, experimentalAgent{}, watchClient{})
+	if _, err := c.UnstableNew(t.Context(), UnstableNewRequest{Extra: UnstableExtra{Z: "z"}}); err != nil {
+		t.Errorf("x/new: %v", err)
+	}
+	if _, err := asc.UnstableWatch(t.Context(), UnstableWatchRequest{Path: "p"}); err != nil {
+		t.Errorf("x/watch: %v", err)
+	}
+	if _, err := c.Old(t.Context(), OldRequest{S: Shared{A: "a", B: "b"}}); err != nil {
+		t.Errorf("x/old: %v", err)
+	}
+
+	asc, c = pair(t, stableAgent{}, struct{}{})
+	var re *RequestError
+	if _, err := c.UnstableNew(t.Context(), UnstableNewRequest{}); !errors.As(err, &re) || re.Code != -32601 {
+		t.Errorf("x/new to a stable agent: %v, want method not found", err)
+	}
+	if _, err := asc.UnstableWatch(t.Context(), UnstableWatchRequest{Path: "p"}); !errors.As(err, &re) || re.Code != -32601 {
+		t.Errorf("x/watch to a client without it: %v, want method not found", err)
+	}
+}

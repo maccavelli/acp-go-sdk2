@@ -24,3 +24,31 @@ func (*CancelRequestNotification).Validate() error
 func (U).MarshalJSON() ([]byte, error)
 func (*U).UnmarshalJSON(b []byte) error
 func (*U).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// The title-only variant takes a string; the object variant an object.
+func TestTitleOnlyVariant(t *testing.T) {
+	var u U
+	if err := json.Unmarshal([]byte(`"text"`), &u); err != nil {
+		t.Fatal(err)
+	}
+	if u.FooExt == nil || *u.FooExt != "text" || u.UVariant2 != nil {
+		t.Errorf(`"text" decoded as %+v`, u)
+	}
+	u = U{}
+	if err := json.Unmarshal([]byte(`{"a":"x"}`), &u); err != nil {
+		t.Fatal(err)
+	}
+	if u.UVariant2 == nil || u.UVariant2.A != "x" || u.FooExt != nil {
+		t.Errorf(`{"a":"x"} decoded as %+v`, u)
+	}
+	if b, err := json.Marshal(u); err != nil || string(b) != `{"a":"x"}` {
+		t.Errorf("encoded as %s, %v", b, err)
+	}
+}

@@ -33,3 +33,32 @@ func (*Option).UnmarshalJSON(b []byte) error
 func (Options).MarshalJSON() ([]byte, error)
 func (*Options).UnmarshalJSON(b []byte) error
 func (*Options).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Each array variant is chosen by the required keys of its items.
+func TestArrayVariants(t *testing.T) {
+	var o Options
+	if err := json.Unmarshal([]byte(`[{"value":"v","name":"n"}]`), &o); err != nil {
+		t.Fatal(err)
+	}
+	if o.Ungrouped == nil || o.Grouped != nil || (*o.Ungrouped)[0].Value != "v" {
+		t.Errorf("options decoded as %+v", o)
+	}
+	o = Options{}
+	if err := json.Unmarshal([]byte(`[{"group":"g","options":[{"value":"v","name":"n"}]}]`), &o); err != nil {
+		t.Fatal(err)
+	}
+	if o.Grouped == nil || o.Ungrouped != nil || (*o.Grouped)[0].Group != "g" {
+		t.Errorf("groups decoded as %+v", o)
+	}
+	b, err := json.Marshal(o)
+	if err != nil || string(b) != `[{"group":"g","options":[{"name":"n","value":"v"}]}]` {
+		t.Errorf("groups encoded as %s, %v", b, err)
+	}
+}

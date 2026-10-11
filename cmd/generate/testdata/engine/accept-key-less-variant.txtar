@@ -26,3 +26,47 @@ func (U).MarshalJSON() ([]byte, error)
 func (*U).UnmarshalJSON(b []byte) error
 func (*U).Validate() error
 func (*ULoose).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func which(u U) string {
+	switch {
+	case u.A != nil:
+		return "A"
+	case u.Loose != nil:
+		return "Loose"
+	case u.Unknown != nil:
+		return "Unknown"
+	}
+	return "none"
+}
+
+// A known type picks its variant. A type no variant names is kept in Unknown,
+// never matched to the key-less variant (F1). Without a type, the key-less
+// variant is tried by its required keys (0011-PLAN-wire-fixes.md).
+func TestKeyLess(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"type":"a"}`:          "A",
+		`{"type":"q","x":"v"}`:  "Unknown",
+		`{"x":"v"}`:             "Loose",
+	} {
+		var u U
+		if err := json.Unmarshal([]byte(in), &u); err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		if got := which(u); got != want {
+			t.Errorf("%s decoded as %s, want %s", in, got, want)
+		}
+	}
+	// Without a type and without the key-less variant's key, nothing fits.
+	var u U
+	err := json.Unmarshal([]byte(`{"y":1}`), &u)
+	if err == nil && u.Unknown == nil {
+		t.Errorf(`{"y":1} decoded as %s with no error`, which(u))
+	}
+}

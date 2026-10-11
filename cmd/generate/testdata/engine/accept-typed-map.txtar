@@ -23,3 +23,29 @@ const ProtocolVersionNumber untyped int = 1
 func (*CancelRequestNotification).Validate() error
 func (Env).MarshalJSON() ([]byte, error)
 func (*Env).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Typed map values are checked on decode; a nil required map encodes as {}.
+func TestTypedMap(t *testing.T) {
+	var e Env
+	if err := json.Unmarshal([]byte(`{"vars":{"a":"b"},"children":{"c":{"x":"y"}}}`), &e); err != nil {
+		t.Fatal(err)
+	}
+	if e.Vars["a"] != "b" || e.Children["c"].X != "y" {
+		t.Errorf("decoded as %+v", e)
+	}
+	for _, in := range []string{`{"vars":{"a":1}}`, `{"vars":{},"children":{"c":{"x":5}}}`, `{}`} {
+		if err := json.Unmarshal([]byte(in), new(Env)); err == nil {
+			t.Errorf("%s decoded", in)
+		}
+	}
+	if b, err := json.Marshal(Env{}); err != nil || string(b) != `{"vars":{}}` {
+		t.Errorf("Env{} encoded as %s, %v", b, err)
+	}
+}

@@ -22,3 +22,40 @@ const ProtocolVersionNumber untyped int = 1
 func (*CancelRequestNotification).Validate() error
 func (*ClientSideConnection).Ping(ctx context.Context, params PingNotification) error
 func (*PingNotification).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"io"
+	"testing"
+	"time"
+)
+
+type pingAgent struct{ got chan PingNotification }
+
+func (a pingAgent) Ping(_ context.Context, p PingNotification) error {
+	a.got <- p
+	return nil
+}
+
+// A notification reaches the agent with its parameters.
+func TestPingOverPipes(t *testing.T) {
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	a := pingAgent{got: make(chan PingNotification, 1)}
+	NewAgentSideConnection(a, aw, ar)
+	c := NewClientSideConnection(nil, cw, cr)
+	if err := c.Ping(t.Context(), PingNotification{N: -9223372036854775808}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-a.got:
+		if got.N != -9223372036854775808 {
+			t.Errorf("agent got %+v", got)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the notification did not arrive")
+	}
+}

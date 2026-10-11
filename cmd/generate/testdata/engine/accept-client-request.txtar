@@ -25,3 +25,35 @@ func (*AgentSideConnection).Write(ctx context.Context, params WriteRequest) erro
 func (*CancelRequestNotification).Validate() error
 func (*WriteRequest).UnmarshalJSON(b []byte) error
 func (*WriteRequest).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"io"
+	"testing"
+)
+
+type writeClient struct{ got chan WriteRequest }
+
+func (c writeClient) Write(_ context.Context, p WriteRequest) error {
+	c.got <- p
+	return nil
+}
+
+// A client request without a result reaches the client from the agent's side,
+// and its completion comes back.
+func TestWriteOverPipes(t *testing.T) {
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	asc := NewAgentSideConnection(struct{}{}, aw, ar)
+	c := writeClient{got: make(chan WriteRequest, 1)}
+	NewClientSideConnection(c, cw, cr)
+	if err := asc.Write(t.Context(), WriteRequest{Path: "/p"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-c.got; got.Path != "/p" {
+		t.Errorf("client got %+v", got)
+	}
+}

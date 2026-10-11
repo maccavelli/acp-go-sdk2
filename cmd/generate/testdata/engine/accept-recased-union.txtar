@@ -31,3 +31,24 @@ func (U).MarshalJSON() ([]byte, error)
 func (*U).UnmarshalJSON(b []byte) error
 func (*U).Validate() error
 func (*UX).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// The constructors set the discriminator.
+func TestRecasedConstructors(t *testing.T) {
+	if b, err := json.Marshal(NewUX("n")); err != nil || string(b) != `{"n":"n","type":"x"}` {
+		t.Errorf("NewUX encoded as %s, %v", b, err)
+	}
+	if b, err := json.Marshal(NewUY()); err != nil || string(b) != `{"type":"y"}` {
+		t.Errorf("NewUY encoded as %s, %v", b, err)
+	}
+	var u U
+	if err := json.Unmarshal([]byte(`{"type":"x","n":"m"}`), &u); err != nil || u.X == nil || u.X.N != "m" {
+		t.Errorf("x decoded as %+v, %v", u, err)
+	}
+}

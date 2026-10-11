@@ -23,3 +23,35 @@ const ProtocolVersionNumber untyped int = 1
 type Thing struct{A *string "json:\"a,omitempty\""; B *Child "json:\"b,omitempty\""; C *int64 "json:\"c\""}
 func (*CancelRequestNotification).Validate() error
 func (*Thing).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// A required nullable key must be present and may be null; int64 keeps its
+// minimum; optional nullable properties take null as absent.
+func TestNullable(t *testing.T) {
+	var th Thing
+	if err := json.Unmarshal([]byte(`{"c":null,"a":null,"b":null}`), &th); err != nil {
+		t.Fatal(err)
+	}
+	if th.C != nil || th.A != nil || th.B != nil {
+		t.Errorf("nulls decoded as %+v", th)
+	}
+	if err := json.Unmarshal([]byte(`{}`), new(Thing)); err == nil {
+		t.Error("an object without its required c decoded")
+	}
+	th = Thing{}
+	if err := json.Unmarshal([]byte(`{"c":-9223372036854775808,"a":"x","b":{"x":"y"}}`), &th); err != nil {
+		t.Fatal(err)
+	}
+	if th.C == nil || *th.C != -9223372036854775808 || th.A == nil || *th.A != "x" || th.B == nil || th.B.X != "y" {
+		t.Errorf("values decoded as %+v", th)
+	}
+	if b, err := json.Marshal(Thing{}); err != nil || string(b) != `{"c":null}` {
+		t.Errorf("an empty Thing encoded as %s, %v", b, err)
+	}
+}

@@ -28,3 +28,68 @@ func (*InitRequest).UnmarshalJSON(b []byte) error
 func (*InitRequest).Validate() error
 func (*InitResponse).UnmarshalJSON(b []byte) error
 func (*InitResponse).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"testing"
+)
+
+type initAgent struct{ got chan InitRequest }
+
+func (a initAgent) Init(_ context.Context, p InitRequest) (InitResponse, error) {
+	a.got <- p
+	if p.V == 0 {
+		return InitResponse{}, errors.New("version 0")
+	}
+	return InitResponse{Ok: true}, nil
+}
+
+func connect(t *testing.T, agent Agent) *ClientSideConnection {
+	t.Helper()
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	NewAgentSideConnection(agent, aw, ar)
+	return NewClientSideConnection(nil, cw, cr)
+}
+
+// A request reaches the agent with its parameters, and the result comes back.
+func TestInitOverPipes(t *testing.T) {
+	a := initAgent{got: make(chan InitRequest, 1)}
+	c := connect(t, a)
+	resp, err := c.Init(t.Context(), InitRequest{V: 65535})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := <-a.got; got.V != 65535 || !resp.Ok {
+		t.Errorf("agent got %+v, client got %+v", got, resp)
+	}
+}
+
+// An error from the agent reaches the client as an error.
+func TestInitErrorOverPipes(t *testing.T) {
+	a := initAgent{got: make(chan InitRequest, 1)}
+	c := connect(t, a)
+	if _, err := c.Init(t.Context(), InitRequest{}); err == nil {
+		t.Error("the agent's error did not reach the client")
+	}
+}
+
+// uint16 holds 65535 and refuses 65536.
+func TestInitRequestRange(t *testing.T) {
+	var r InitRequest
+	if err := json.Unmarshal([]byte(`{"v":65535}`), &r); err != nil || r.V != 65535 {
+		t.Errorf("65535: %+v, %v", r, err)
+	}
+	if err := json.Unmarshal([]byte(`{"v":65536}`), &r); err == nil {
+		t.Error("65536 decoded into a uint16")
+	}
+	if err := json.Unmarshal([]byte(`{}`), &r); err == nil {
+		t.Error("a request without its required v decoded")
+	}
+}

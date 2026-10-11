@@ -30,3 +30,42 @@ func (V).MarshalJSON() ([]byte, error)
 func (*V).UnmarshalJSON(b []byte) error
 func (*V).Validate() error
 func (*VVariant1).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"slices"
+	"testing"
+)
+
+// The struct variant takes an object with its required keys and the union's
+// shared property; the array variant takes an array.
+func TestInlineVariants(t *testing.T) {
+	var v V
+	if err := json.Unmarshal([]byte(`{"kind":"k","shared":"s","opt":["o"]}`), &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.VVariant1 == nil || v.VVariant1.Kind != "k" || v.VVariant1.Shared != "s" || !slices.Equal(v.VVariant1.Opt, []string{"o"}) {
+		t.Fatalf("object decoded as %+v", v)
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back V
+	if err := json.Unmarshal(b, &back); err != nil || back.VVariant1 == nil || back.VVariant1.Kind != "k" {
+		t.Errorf("object encoded as %s, decoded back as %+v, %v", b, back, err)
+	}
+
+	v = V{}
+	if err := json.Unmarshal([]byte(`["a","b"]`), &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.List == nil || !slices.Equal([]string(*v.List), []string{"a", "b"}) {
+		t.Errorf("array decoded as %+v", v)
+	}
+	if b, err := json.Marshal(v); err != nil || string(b) != `["a","b"]` {
+		t.Errorf("array encoded as %s, %v", b, err)
+	}
+}

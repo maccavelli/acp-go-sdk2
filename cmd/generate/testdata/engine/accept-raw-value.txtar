@@ -21,3 +21,34 @@ const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 func (*CancelRequestNotification).Validate() error
 func (*Holder).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+// A value without a Go type is kept as received, every digit included, and
+// sent back as it came.
+func TestRawValue(t *testing.T) {
+	in := `{"input":{"n":123456789012345678901234567890,"f":1.0000000000000000001}}`
+	var h Holder
+	if err := json.Unmarshal([]byte(in), &h); err != nil {
+		t.Fatal(err)
+	}
+	if string(h.Input) != `{"n":123456789012345678901234567890,"f":1.0000000000000000001}` {
+		t.Errorf("input kept as %s", h.Input)
+	}
+	b, err := json.Marshal(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "123456789012345678901234567890") || !strings.Contains(string(b), "1.0000000000000000001") {
+		t.Errorf("encoded as %s", b)
+	}
+	if err := json.Unmarshal([]byte(`{"meta":{}}`), new(Holder)); err == nil {
+		t.Error("a holder without its required input decoded")
+	}
+}

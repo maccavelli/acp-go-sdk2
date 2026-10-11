@@ -25,3 +25,26 @@ func (*CancelRequestNotification).Validate() error
 func (U).MarshalJSON() ([]byte, error)
 func (*U).UnmarshalJSON(b []byte) error
 func (*U).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Without a type, a key-less variant that needs no key of its own takes the
+// payload directly.
+func TestKeyLessWithoutKeys(t *testing.T) {
+	var u U
+	if err := json.Unmarshal([]byte(`{"x":"v"}`), &u); err != nil {
+		t.Fatal(err)
+	}
+	if u.Loose == nil || u.Loose.X != "v" {
+		t.Errorf(`{"x":"v"} decoded as %+v, want Loose`, u)
+	}
+	u = U{}
+	if err := json.Unmarshal([]byte(`{"type":"a"}`), &u); err != nil || u.A == nil {
+		t.Errorf(`{"type":"a"}: %+v, %v`, u, err)
+	}
+}

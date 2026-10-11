@@ -23,3 +23,34 @@ const ProtocolVersionNumber untyped int = 1
 func (*CancelRequestNotification).Validate() error
 func (*Item).UnmarshalJSON(b []byte) error
 func (*List).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// An item that fails to decode, by type or by a missing required key, is
+// dropped; the others are kept in order.
+func TestSkipInvalidItems(t *testing.T) {
+	var l List
+	if err := json.Unmarshal([]byte(`{"items":[{"x":1},{"x":"bad"},{"y":2},{"x":3}]}`), &l); err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Items) != 2 || l.Items[0].X != 1 || l.Items[1].X != 3 {
+		t.Errorf("items = %+v, want x 1 and x 3", l.Items)
+	}
+}
+
+// The array is also default-on-error: a value that is not an array becomes
+// the zero value.
+func TestSkipInvalidItemsNotAnArray(t *testing.T) {
+	var l List
+	if err := json.Unmarshal([]byte(`{"items":"nope"}`), &l); err != nil {
+		t.Fatal(err)
+	}
+	if l.Items != nil {
+		t.Errorf("items = %+v, want nil", l.Items)
+	}
+}

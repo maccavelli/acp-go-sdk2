@@ -21,3 +21,29 @@ const ProtocolVersionNumber untyped int = 1
 func (*CancelRequestNotification).Validate() error
 func (Opts).MarshalJSON() ([]byte, error)
 func (*Opts).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Absent properties take their defaults on decode; present ones keep their
+// value, even the zero value.
+func TestDefaultScalar(t *testing.T) {
+	var o Opts
+	if err := json.Unmarshal([]byte(`{}`), &o); err != nil {
+		t.Fatal(err)
+	}
+	if o.Mode != "auto" || o.N != 3 || !o.On {
+		t.Errorf("defaults decoded as %+v", o)
+	}
+	o = Opts{}
+	if err := json.Unmarshal([]byte(`{"mode":"m","n":0,"on":false}`), &o); err != nil {
+		t.Fatal(err)
+	}
+	if o.Mode != "m" || o.N != 0 || o.On {
+		t.Errorf("explicit values decoded as %+v", o)
+	}
+}

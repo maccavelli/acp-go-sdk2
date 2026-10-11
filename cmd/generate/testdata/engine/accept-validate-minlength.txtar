@@ -21,3 +21,29 @@ const ProtocolVersionNumber untyped int = 1
 func (*CancelRequestNotification).Validate() error
 func (*Named).UnmarshalJSON(b []byte) error
 func (*Named).Validate() error
+-- behaviour_test.go --
+package acp
+
+import "testing"
+
+// minLength counts code points, as JSON Schema does, on a required string and
+// on a nullable one.
+func TestValidateMinLength(t *testing.T) {
+	short, ok2, emoji := "a", "ab", "😀"
+	tests := []struct {
+		v    Named
+		fail bool
+	}{
+		{Named{Title: ""}, true},
+		{Named{Title: "x"}, false},
+		{Named{Title: "é"}, false},
+		{Named{Title: "x", Alt: &short}, true},
+		{Named{Title: "x", Alt: &emoji}, true},
+		{Named{Title: "x", Alt: &ok2}, false},
+	}
+	for _, tt := range tests {
+		if err := tt.v.Validate(); (err != nil) != tt.fail {
+			t.Errorf("%+v: Validate = %v, want failure %v", tt.v, err, tt.fail)
+		}
+	}
+}

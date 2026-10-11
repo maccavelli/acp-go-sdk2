@@ -22,3 +22,25 @@ type Range struct{Lo int64 "json:\"lo\""; R float64 "json:\"r\""; U uint32 "json
 func (*CancelRequestNotification).Validate() error
 func (*Range).UnmarshalJSON(b []byte) error
 func (*Range).Validate() error
+-- behaviour_test.go --
+package acp
+
+import "testing"
+
+// minimum is checked on an int64 and on a float64, at the bound and below it.
+func TestValidateMinimum(t *testing.T) {
+	tests := []struct {
+		v    Range
+		fail bool
+	}{
+		{Range{Lo: 1, R: 0.5}, false},
+		{Range{Lo: 0, R: 0.5}, true},
+		{Range{Lo: 1, R: 0.4}, true},
+		{Range{Lo: 9223372036854775807, R: 1e300, U: 4294967295}, false},
+	}
+	for _, tt := range tests {
+		if err := tt.v.Validate(); (err != nil) != tt.fail {
+			t.Errorf("%+v: Validate = %v, want failure %v", tt.v, err, tt.fail)
+		}
+	}
+}

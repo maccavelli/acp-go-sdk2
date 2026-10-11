@@ -34,3 +34,119 @@ func (*Shape).Validate() error
 func (*ShapeCircle).UnmarshalJSON(b []byte) error
 func (*ShapeSquare).UnmarshalJSON(b []byte) error
 func (*Square).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"bytes"
+	"encoding/json"
+	"reflect"
+	"testing"
+)
+
+func jsonEqual(t *testing.T, got []byte, want string) {
+	t.Helper()
+	decode := func(b []byte) any {
+		d := json.NewDecoder(bytes.NewReader(b))
+		d.UseNumber()
+		var v any
+		if err := d.Decode(&v); err != nil {
+			t.Fatalf("%s: %v", b, err)
+		}
+		return v
+	}
+	if !reflect.DeepEqual(decode(got), decode([]byte(want))) {
+		t.Errorf("got %s, want %s", got, want)
+	}
+}
+
+// Each variant, and an unknown kind, round-trips; integers keep every digit at
+// both ends of int64.
+func TestShapeRoundTrip(t *testing.T) {
+	for _, in := range []string{
+		`{"kind":"circle","r":9223372036854775807}`,
+		`{"kind":"circle","r":-9223372036854775808}`,
+		`{"kind":"circle","r":9007199254740993}`,
+		`{"kind":"square","side":"s"}`,
+		`{"kind":"hexagon","n":6,"deep":{"a":[1,2]}}`,
+	} {
+		var s Shape
+		if err := json.Unmarshal([]byte(in), &s); err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		b, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		jsonEqual(t, b, in)
+	}
+}
+
+func TestShapeVariants(t *testing.T) {
+	var s Shape
+	if err := json.Unmarshal([]byte(`{"kind":"circle","r":9007199254740993}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Circle == nil || s.Circle.R != 9007199254740993 || s.Square != nil || s.Unknown != nil {
+		t.Errorf("circle decoded as %+v", s)
+	}
+	if err := json.Unmarshal([]byte(`{"kind":"hexagon"}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Circle != nil || s.Square != nil || string(s.Unknown) != `{"kind":"hexagon"}` {
+		t.Errorf("unknown kind decoded as %+v", s)
+	}
+}
+
+// Without its discriminator, a payload decodes as the one variant whose
+// required keys it carries, else it is kept in Unknown
+// (0011-PLAN-wire-fixes.md; TestAbsentDiscriminator at the root).
+func TestShapeAbsentDiscriminator(t *testing.T) {
+	var s Shape
+	if err := json.Unmarshal([]byte(`{"side":"s"}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Square == nil || s.Square.Side != "s" {
+		t.Errorf(`{"side":"s"} decoded as %+v, want Square`, s)
+	}
+	s = Shape{}
+	if err := json.Unmarshal([]byte(`{"other":1}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Circle != nil || s.Square != nil || string(s.Unknown) != `{"other":1}` {
+		t.Errorf(`{"other":1} decoded as %+v, want Unknown`, s)
+	}
+}
+
+func TestShapeRefuses(t *testing.T) {
+	for _, in := range []string{
+		`{"kind":"circle"}`,                       // r is required
+		`{"kind":"circle","r":9223372036854775808}`, // beyond int64
+		`{"kind":"square","side":5}`,              // side is a string
+		`"circle"`,                                // not an object
+	} {
+		var s Shape
+		if err := json.Unmarshal([]byte(in), &s); err == nil {
+			t.Errorf("%s decoded as %+v", in, s)
+		}
+	}
+	if _, err := json.Marshal(Shape{}); err == nil {
+		t.Error("an empty Shape encoded")
+	}
+	if err := (&Shape{}).Validate(); err == nil {
+		t.Error("an empty Shape validated")
+	}
+}
+
+func TestShapeConstructors(t *testing.T) {
+	b, err := json.Marshal(NewShapeCircle(5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonEqual(t, b, `{"kind":"circle","r":5}`)
+	b, err = json.Marshal(NewShapeSquare("s"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonEqual(t, b, `{"kind":"square","side":"s"}`)
+}

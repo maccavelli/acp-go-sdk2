@@ -24,3 +24,43 @@ type Thing struct{Child Child "json:\"child\""; Count uint32 "json:\"count,omite
 func (*CancelRequestNotification).Validate() error
 func (Thing).MarshalJSON() ([]byte, error)
 func (*Thing).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Required keys are refused when absent; uint32 holds its maximum and refuses
+// one more; a required slice encodes nil as [].
+func TestRequiredAndOptional(t *testing.T) {
+	var th Thing
+	if err := json.Unmarshal([]byte(`{"name":"n","tags":[],"count":4294967295}`), &th); err != nil || th.Count != 4294967295 {
+		t.Errorf("count at its maximum: %+v, %v", th, err)
+	}
+	for _, in := range []string{
+		`{"tags":[]}`,                         // no name
+		`{"name":"n"}`,                        // no tags
+		`{"name":"n","tags":[],"count":4294967296}`, // beyond uint32
+		`{"name":"n","tags":[],"count":-1}`,   // below uint32
+	} {
+		if err := json.Unmarshal([]byte(in), new(Thing)); err == nil {
+			t.Errorf("%s decoded", in)
+		}
+	}
+	b, err := json.Marshal(Thing{Name: "n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back map[string]json.RawMessage
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if string(back["tags"]) != "[]" {
+		t.Errorf("a nil required slice encoded as %s, want []", back["tags"])
+	}
+	if _, ok := back["note"]; ok {
+		t.Errorf("an empty optional string was sent: %s", b)
+	}
+}

@@ -573,7 +573,8 @@ and a CI step with `GOEXPERIMENT=nojsonv2` (D7). The alternatives named in each 
 * Good, because mutation reports show which planted faults the tests miss, without a dependency.
 * Neutral, because the five generated SDK files and the exported API do not change; `schema_gen_test.go` is a test file.
 * Bad, because the generator gains a sixth file and `output.Check` a test file to check, which changes what phase 5 built.
-* Bad, because the compile-and-run test needs the go command and adds about 1 to 3 s to `go test` in `cmd/generate`.
+* Bad, because the compile-and-run test needs the go command and adds about 1 to 3 s to `go test` in `cmd/generate`. (Corrected
+  2026-10-11: it adds about 10 s; see "Test time, decided in step 5" below.)
 * Bad, because the instance builder is a second reading of the schema to maintain when the schema uses a construct it does not know.
 * Bad, because the six runtime files are listed in the generator's test code; when a hand-written file starts to use ACP types, a test fails and
   names it, and the list changes.
@@ -598,6 +599,18 @@ inline object with properties outside the three places above, each with an error
 subschemas of `not` and `unevaluatedProperties` are not checked. Representing either
 later adds API and breaks none; a representation chosen now would fix type names and merge rules with no schema to test them against. This puts
 `internal/model` in phase 6's scope for these checks; the generated files do not change.
+
+### Test time, decided in step 5, 2026-10-11
+
+The estimate above counted one `go test` of a few packages. Measured with the cases of steps 2 to 5 (44 accepted, 30 with a behaviour file): `go test
+./...` in `cmd/generate` took 34 to 43 s, 19 s with `-short`, and 92 s with `-race`, against 2.2 to 2.5 s on `f2a6a3a`. `TestEngineBehaviour`
+alone took 12 to 13 s, of which the `go test` of the 30 packages was about 10 s. Most of the rest was `output.Check` type-checking the standard
+library from source again for every generated case, in `TestEngineCases` and in the behaviour runner; the generator itself calls it once.
+
+Asked with the alternatives of also skipping `TestEngineCases` under `-short` and of accepting the cost, the owner chose to have `output.Check` keep
+one source importer for the process, behind a mutex, as the test helper `enginetest.LoadPackage` already did. The check, its importer, its version,
+and its refusals are as phase 5 decided; only repeated calls in one process share what they imported. In a scratch copy this gave 15 s, 6 s with
+`-short`, and 38 s with `-race`.
 
 The plan for these decisions is [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md).
 

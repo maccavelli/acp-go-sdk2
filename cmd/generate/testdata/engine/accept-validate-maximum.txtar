@@ -21,3 +21,26 @@ type Range struct{Hi int64 "json:\"hi\""; R *float64 "json:\"r,omitempty\""}
 func (*CancelRequestNotification).Validate() error
 func (*Range).UnmarshalJSON(b []byte) error
 func (*Range).Validate() error
+-- behaviour_test.go --
+package acp
+
+import "testing"
+
+// maximum is checked on an int64 and on a nullable number.
+func TestValidateMaximum(t *testing.T) {
+	at, over := 1.5, 1.6
+	tests := []struct {
+		v    Range
+		fail bool
+	}{
+		{Range{Hi: 10}, false},
+		{Range{Hi: 11}, true},
+		{Range{Hi: -9223372036854775808, R: &at}, false},
+		{Range{Hi: 0, R: &over}, true},
+	}
+	for _, tt := range tests {
+		if err := tt.v.Validate(); (err != nil) != tt.fail {
+			t.Errorf("%+v: Validate = %v, want failure %v", tt.v, err, tt.fail)
+		}
+	}
+}
