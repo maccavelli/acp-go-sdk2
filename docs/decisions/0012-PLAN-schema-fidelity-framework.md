@@ -525,3 +525,73 @@ Gates: `make pre-add-check` on `3588f8a`'s files passed before the owner's commi
 `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits the rest of step 7 (`emit/types_test.go` and this record) on `main`.
+
+### Step 8, `x-deserialize-*`, 2026-10-10
+
+The owner committed the rest of step 7 as `1ae3f08`. Step 8 ran on `main` from that clean tree. The agent did not commit.
+
+Tests, written first:
+
+* `TestLenientFields` (root `fidelity_test.go`): `InitializeResponse` with `"agentCapabilities":"garbage"` and `"authMethods":"x"` decodes equal to one
+  without either key (their schema defaults); `ElicitationSchema` `{"type":5,...}` falls back to its default `"object"`; `Plan` keeps the one valid entry
+  of `[valid, 5, {"content":"y"}]`; `{"entries":"x"}` gives no entries; `{}` fails as missing `entries`; a `ToolCall`'s `content` holding an unknown
+  variant keeps it in `Unknown`.
+* `TestSkipInvalidItemsNeedsAnArray` (`model/keywords_test.go`): the keyword on a string is refused, naming the node; on `["array","null"]` it is
+  accepted.
+
+Run before the change:
+
+```text
+malformed lenient fields: InitializeResponse: AgentCapabilities: json: cannot unmarshal string into Go value of type map[string]jsontext.Value
+malformed fields decode as {...}, want the defaults {...}
+ElicitationSchema type 5: ElicitationSchema: json: cannot unmarshal number into Go struct field Alias.type of type acp.ElicitationSchemaType, Type "", want the default object
+Plan with invalid entries: Plan: PlanEntry: json: cannot unmarshal number into Go value of type map[string]jsontext.Value, 0 entries, want 1
+Plan entries not an array: Plan: json: cannot unmarshal string into Go struct field Alias.entries of type []acp.PlanEntry, []
+keywords_test.go:264: error <nil>, want one containing "T.properties.n: x-deserialize-skip-invalid-items on string, not an array"
+```
+
+The `Plan {}` and unknown-variant cases passed before, as guards. The first draft stopped at the first failure (`Fatalf`); it reports each case.
+
+The change:
+
+* `model/schema.go`: `checkRefs`' walk refuses `x-deserialize-skip-invalid-items` on a node that is not an array.
+* `emit/types.go`: a struct with a lenient field decodes into `var s struct { Alias; <Field> json.RawMessage ... }`, each lenient field shadowed by its
+  raw value under the same JSON name, then `a := s.Alias` and, per field: default-on-error alone, `a.F = orDefault[T](s.F, "<default JSON or empty>")`;
+  both keywords, `if items, err := skipInvalid[E](s.F); err == nil { a.F = items }`, with an `else` that applies the schema default when there is
+  one; skip alone, an error `<Type>: "<key>": <cause>` when the value is not an array.
+* `emit/decode.go`: the generic helpers `orDefault[T any](raw json.RawMessage, def string) T` and `skipInvalid[T any](raw json.RawMessage) ([]T,
+  error)`, emitted once each.
+
+Correction, recorded: step 3's `TestIntegerFormatsBoundDecoding` expected `ResourceLink.size` `9223372036854775808` to fail; `size` carries
+`x-deserialize-default-on-error`, so it now decodes with no size, as in Rust, and the case says so.
+
+Regenerated: only `types_gen.go` changed, from 14,823 to 18,029 lines. By declaration: 809 to 898, none removed; 89 added, 87 `UnmarshalJSON` and the
+two helpers; 187 changed, all `UnmarshalJSON`. `UnmarshalJSON` methods: 230 before, 317 after; 274 decode through a shadow struct (the count of structs
+with a lenient field); `objectKeys` is called 289 times, `orDefault` 494 (493 lenient fields and one fallback, `InitializeResponse.authMethods`'s `[]`),
+`skipInvalid` 35. No golden changed.
+
+`TestLenientDecoder` (`emit/types_test.go`), added for the shapes the committed schema lacks or only the root saw: a string with a default, an array
+with both keywords and a default, and an array with skip alone; it requires the shadow field, each call, the fallback, the skip-only error, no shadow for
+a plain field, and compiling output.
+
+Each part was broken in a fresh scratch copy:
+
+```text
+orDefault ignores the schema default: root ['TestLenientFields']
+skipInvalid keeps invalid items: root ['TestLenientFields']
+no lenient decoding: cmd/generate ['TestLenientDecoder']; root ['TestIntegerFormatsBoundDecoding', 'TestLenientFields']
+no fallback after a non-array: cmd/generate ['TestLenientDecoder']; root ['TestLenientFields']
+skip-only ignores a non-array: cmd/generate ['TestLenientDecoder']
+skip on a non-array allowed: cmd/generate ['TestSkipInvalidItemsNeedsAnArray']
+```
+
+The first form of "keeps invalid items" compared two separately created errors, which never match, so it changed nothing and passed; the plant now
+appends every item. The helpers' behaviour is checked at the root; the generator's tests check the text and that it compiles.
+
+After the change every test in the root (`go test -race`) and in `cmd/generate` passes; `go build ./example/...` passes. Coverage: `internal/model`
+94.3%, `internal/emit` 73.8%.
+
+Gates: `make pre-add-check` with the seven changed Go files named: `go-precheck: 7 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 71 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 8 on `main`.

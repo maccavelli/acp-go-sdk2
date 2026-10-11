@@ -253,3 +253,18 @@ func TestNoOmitemptyOnStructValues(t *testing.T) {
 		}
 	}
 }
+
+// TestSkipInvalidItemsNeedsAnArray requires x-deserialize-skip-invalid-items
+// on a node that is not an array to be refused.
+func TestSkipInvalidItemsNeedsAnArray(t *testing.T) {
+	t.Parallel()
+	_, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{"T":{"type":"object","properties":{
+		"n":{"type":"string","x-deserialize-skip-invalid-items":true}}}}`)})
+	if want := `T.properties.n: x-deserialize-skip-invalid-items on string, not an array`; err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("error %v, want one containing %q", err, want)
+	}
+	if _, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{"T":{"type":"object","properties":{
+		"n":{"type":["array","null"],"items":{"type":"string"},"x-deserialize-skip-invalid-items":true}}}}`)}); err != nil {
+		t.Errorf("nullable array refused: %v", err)
+	}
+}

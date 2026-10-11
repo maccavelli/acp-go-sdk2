@@ -205,11 +205,14 @@ func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 // schema defaults or are required slices or maps, and UnmarshalJSON for
 // structs with required keys, defaults, or a catch-all's Extra.
 func emitObjectCodec(f *goFile, name string, fields []*model.Field, keepExtra bool, exempt string) {
-	var defaults, fills []*model.Field
+	var defaults, fills, lenient []*model.Field
 	var required []string
 	for _, fld := range fields {
 		if fld.Default != nil {
 			defaults = append(defaults, fld)
+		}
+		if fld.Facts.DefaultOnError || fld.Facts.SkipInvalidItems {
+			lenient = append(lenient, fld)
 		}
 		if fld.Fill {
 			fills = append(fills, fld)
@@ -222,8 +225,8 @@ func emitObjectCodec(f *goFile, name string, fields []*model.Field, keepExtra bo
 	if len(defaults) > 0 || len(fills) > 0 || keepExtra {
 		emitObjectMarshal(f, name, defaults, fills, keepExtra)
 	}
-	if len(defaults) > 0 || keepExtra || len(required) > 0 {
-		emitObjectUnmarshal(f, name, fields, defaults, required, keepExtra)
+	if len(defaults) > 0 || keepExtra || len(required) > 0 || len(lenient) > 0 {
+		emitObjectUnmarshal(f, name, fields, defaults, lenient, required, keepExtra)
 	}
 }
 
@@ -276,9 +279,10 @@ func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, k
 }
 
 // emitObjectUnmarshal emits UnmarshalJSON: it requires the required keys,
-// decodes the fields, applies defaults when a field is missing, or null when
-// the schema does not allow null, and keeps a catch-all's undeclared keys.
-func emitObjectUnmarshal(f *goFile, name string, fields, defaults []*model.Field, required []string, keepExtra bool) {
+// decodes the fields, decodes each lenient field from its own raw value,
+// applies defaults when a field is missing, or null when the schema does not
+// allow null, and keeps a catch-all's undeclared keys.
+func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient []*model.Field, required []string, keepExtra bool) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	f.uses[helperObjectKeys] = true
 	keys := []ast.Expr{id("b"), str(name)}
@@ -293,9 +297,15 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults []*model.Field
 		define(exprs(m, id("err")), call(id(helperObjectKeys), keys...)),
 		ifStmt(nil, errNotNil(), ret(id("err"))),
 		typeStmt("Alias", id(name)),
-		varStmt("a", id("Alias")),
-		ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("a")))), errNotNil(),
-			ret(call(f.qual(pkgFmt, "Errorf"), str(name+": %w"), id("err")))),
+	}
+	wrap := func() ast.Stmt { return ret(call(f.qual(pkgFmt, "Errorf"), str(name+": %w"), id("err"))) }
+	if len(lenient) == 0 {
+		body = append(body,
+			varStmt("a", id("Alias")),
+			ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("a")))), errNotNil(), wrap()),
+		)
+	} else {
+		body = append(body, lenientDecode(f, name, lenient, wrap)...)
 	}
 	for _, fld := range defaults {
 		// Only a property that rejects null reads the raw value.
@@ -328,6 +338,59 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults []*model.Field
 	f.add(method(param("v", star(id(name))), "UnmarshalJSON",
 		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))), body...))
 	f.line()
+}
+
+// lenientDecode decodes b into an anonymous struct that embeds Alias and
+// shadows each lenient field with its raw value, so a malformed value cannot
+// fail the struct, then decodes each lenient field from its raw value:
+// x-deserialize-default-on-error falls back to the schema default or the zero
+// value, x-deserialize-skip-invalid-items drops the items that fail. It leaves
+// the decoded fields in a.
+func lenientDecode(f *goFile, name string, lenient []*model.Field, wrap func() ast.Stmt) []ast.Stmt {
+	shadow := []*ast.Field{{Type: id("Alias")}}
+	for _, fld := range lenient {
+		shadow = append(shadow, structField(fld.Name, f.qual(pkgJSON, "RawMessage"), fld.Key))
+	}
+	body := []ast.Stmt{
+		varStmt("s", &ast.StructType{Fields: fields(shadow...)}),
+		ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("s")))), errNotNil(), wrap()),
+		define(exprs(id("a")), dot("s", "Alias")),
+	}
+	for _, fld := range lenient {
+		def := ""
+		if fld.Default != nil {
+			def = fld.Default.JSON
+		}
+		raw := dot("s", fld.Name)
+		field := dot("a", fld.Name)
+		if !fld.Facts.SkipInvalidItems {
+			f.uses[helperOrDefault] = true
+			body = append(body, assign(exprs(field), call(index(id(helperOrDefault), typeAST(f, fld.Type)), raw, str(def))))
+			continue
+		}
+		f.uses[helperSkipInvalid] = true
+		items := call(index(id(helperSkipInvalid), typeAST(f, *fld.Type.Elem)), raw)
+		if !fld.Facts.DefaultOnError {
+			body = append(body, block(
+				define(exprs(id("items"), id("err")), items),
+				ifStmt(nil, errNotNil(), ret(call(f.qual(pkgFmt, "Errorf"), str(name+": %q: %w"), str(fld.Key), id("err")))),
+				assign(exprs(field), id("items")),
+			))
+			continue
+		}
+		var fallback []ast.Stmt
+		if def != "" {
+			f.uses[helperOrDefault] = true
+			fallback = []ast.Stmt{assign(exprs(field), call(index(id(helperOrDefault), typeAST(f, fld.Type)), nilExpr(), str(def)))}
+		}
+		then := []ast.Stmt{assign(exprs(field), id("items"))}
+		if fallback == nil {
+			body = append(body, ifStmt(define(exprs(id("items"), id("err")), items), binary(id("err"), token.EQL, nilExpr()), then...))
+		} else {
+			body = append(body, ifElse(define(exprs(id("items"), id("err")), items), binary(id("err"), token.EQL, nilExpr()), then, fallback))
+		}
+	}
+	return body
 }
 
 // emitInlineVariant emits the type the model gives a union variant without a

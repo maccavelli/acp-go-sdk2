@@ -23,7 +23,6 @@ func TestIntegerFormatsBoundDecoding(t *testing.T) {
 		{"uint64 outputByteLimit, negative", `{"sessionId":"s","command":"c","outputByteLimit":-1}`, &CreateTerminalRequest{}},
 		{"uint32 line, 2^32", `{"sessionId":"s","path":"p","line":4294967296}`, &ReadTextFileRequest{}},
 		{"uint16 protocolVersion, 65536", `{"protocolVersion":65536}`, &InitializeRequest{}},
-		{"int64 size, 2^63", `{"name":"n","uri":"u","size":9223372036854775808}`, &ResourceLink{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -37,6 +36,12 @@ func TestIntegerFormatsBoundDecoding(t *testing.T) {
 	var r ResourceLink
 	if err := json.Unmarshal([]byte(`{"name":"n","uri":"u","size":9007199254740993}`), &r); err != nil || r.Size == nil || *r.Size != 9007199254740993 {
 		t.Errorf("size 2^53+1: %v %v", err, r.Size)
+	}
+	// size carries x-deserialize-default-on-error: a value outside int64 falls
+	// back to its zero value instead of failing the link.
+	var over ResourceLink
+	if err := json.Unmarshal([]byte(`{"name":"n","uri":"u","size":9223372036854775808}`), &over); err != nil || over.Size != nil {
+		t.Errorf("size 2^63: %v %v, want no size", err, over.Size)
 	}
 }
 
@@ -205,4 +210,41 @@ func (e *RequestError) dataMap() (map[string]any, bool) {
 	}
 	m, ok := e.Data.(map[string]any)
 	return m, ok
+}
+
+// TestLenientFields requires x-deserialize-default-on-error to replace a
+// malformed value with its schema default, or the zero value, and
+// x-deserialize-skip-invalid-items to drop the array items that fail.
+func TestLenientFields(t *testing.T) {
+	t.Parallel()
+	var garbage, absent InitializeResponse
+	if err := json.Unmarshal([]byte(`{"protocolVersion":1,"agentCapabilities":"garbage","authMethods":"x"}`), &garbage); err != nil {
+		t.Errorf("malformed lenient fields: %v", err)
+	}
+	if err := json.Unmarshal([]byte(`{"protocolVersion":1}`), &absent); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(garbage, absent) {
+		t.Errorf("malformed fields decode as %+v, want the defaults %+v", garbage, absent)
+	}
+	var schema ElicitationSchema
+	if err := json.Unmarshal([]byte(`{"type":5,"properties":{}}`), &schema); err != nil || schema.Type != "object" {
+		t.Errorf("ElicitationSchema type 5: %v, Type %q, want the default object", err, schema.Type)
+	}
+	var plan Plan
+	if err := json.Unmarshal([]byte(`{"entries":[{"content":"x","priority":"high","status":"pending"},5,{"content":"y"}]}`), &plan); err != nil || len(plan.Entries) != 1 {
+		t.Errorf("Plan with invalid entries: %v, %d entries, want 1", err, len(plan.Entries))
+	}
+	var notArray Plan
+	if err := json.Unmarshal([]byte(`{"entries":"x"}`), &notArray); err != nil || notArray.Entries != nil {
+		t.Errorf("Plan entries not an array: %v, %v", err, notArray.Entries)
+	}
+	if err := json.Unmarshal([]byte(`{}`), &Plan{}); err == nil || !strings.Contains(err.Error(), `Plan: missing required property "entries"`) {
+		t.Errorf("Plan without entries: %v", err)
+	}
+	var tc ToolCall
+	if err := json.Unmarshal([]byte(`{"toolCallId":"t","title":"x","content":[{"type":"zz_future"}]}`), &tc); err != nil ||
+		len(tc.Content) != 1 || tc.Content[0].Unknown == nil {
+		t.Errorf("ToolCall content with an unknown variant: %v, %+v", err, tc.Content)
+	}
 }

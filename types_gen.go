@@ -25,6 +25,27 @@ type AgentAuthCapabilities struct {
 	Logout *LogoutCapabilities `json:"logout,omitempty"`
 }
 
+func (v *AgentAuthCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "AgentAuthCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias AgentAuthCapabilities
+	var s struct {
+		Alias
+		Meta   json.RawMessage `json:"_meta"`
+		Logout json.RawMessage `json:"logout"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("AgentAuthCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Logout = orDefault[*LogoutCapabilities](s.Logout, "")
+	*v = AgentAuthCapabilities(a)
+	return nil
+}
+
 // Capabilities supported by the agent.
 //
 // Advertised during initialization to inform the client about
@@ -97,10 +118,31 @@ func (v *AgentCapabilities) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias AgentCapabilities
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta                json.RawMessage `json:"_meta"`
+		Auth                json.RawMessage `json:"auth"`
+		LoadSession         json.RawMessage `json:"loadSession"`
+		McpCapabilities     json.RawMessage `json:"mcpCapabilities"`
+		Nes                 json.RawMessage `json:"nes"`
+		PositionEncoding    json.RawMessage `json:"positionEncoding"`
+		PromptCapabilities  json.RawMessage `json:"promptCapabilities"`
+		Providers           json.RawMessage `json:"providers"`
+		SessionCapabilities json.RawMessage `json:"sessionCapabilities"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("AgentCapabilities: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Auth = orDefault[AgentAuthCapabilities](s.Auth, "{}")
+	a.LoadSession = orDefault[bool](s.LoadSession, "false")
+	a.McpCapabilities = orDefault[McpCapabilities](s.McpCapabilities, "{\"acp\":false,\"http\":false,\"sse\":false}")
+	a.Nes = orDefault[*NesCapabilities](s.Nes, "")
+	a.PositionEncoding = orDefault[*PositionEncodingKind](s.PositionEncoding, "")
+	a.PromptCapabilities = orDefault[PromptCapabilities](s.PromptCapabilities, "{\"audio\":false,\"embeddedContext\":false,\"image\":false}")
+	a.Providers = orDefault[*ProvidersCapabilities](s.Providers, "")
+	a.SessionCapabilities = orDefault[SessionCapabilities](s.SessionCapabilities, "{}")
 	{
 		_rm, _ok := m["auth"]
 		if !_ok || (string(_rm) == "null") {
@@ -359,6 +401,33 @@ type Annotations struct {
 	Priority *float64 `json:"priority,omitempty"`
 }
 
+func (v *Annotations) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "Annotations")
+	if err != nil {
+		return err
+	}
+	type Alias Annotations
+	var s struct {
+		Alias
+		Meta         json.RawMessage `json:"_meta"`
+		Audience     json.RawMessage `json:"audience"`
+		LastModified json.RawMessage `json:"lastModified"`
+		Priority     json.RawMessage `json:"priority"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("Annotations: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[Role](s.Audience); err == nil {
+		a.Audience = items
+	}
+	a.LastModified = orDefault[*string](s.LastModified, "")
+	a.Priority = orDefault[*float64](s.Priority, "")
+	*v = Annotations(a)
+	return nil
+}
+
 // Audio provided to or from an LLM.
 type AudioContent struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -381,10 +450,17 @@ func (v *AudioContent) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias AudioContent
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Annotations json.RawMessage `json:"annotations"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("AudioContent: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Annotations = orDefault[*Annotations](s.Annotations, "")
 	*v = AudioContent(a)
 	return nil
 }
@@ -424,10 +500,17 @@ func (v *AuthCapabilities) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias AuthCapabilities
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta     json.RawMessage `json:"_meta"`
+		Terminal json.RawMessage `json:"terminal"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("AuthCapabilities: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Terminal = orDefault[bool](s.Terminal, "false")
 	{
 		_rm, _ok := m["terminal"]
 		if !_ok || (string(_rm) == "null") {
@@ -467,10 +550,17 @@ func (v *AuthMethodTerminalInline) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias AuthMethodTerminalInline
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Description json.RawMessage `json:"description"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("AuthMethodTerminalInline: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Description = orDefault[*string](s.Description, "")
 	*v = AuthMethodTerminalInline(a)
 	return nil
 }
@@ -605,10 +695,17 @@ func (v *AuthMethodAgent) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias AuthMethodAgent
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Description json.RawMessage `json:"description"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("AuthMethodAgent: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Description = orDefault[*string](s.Description, "")
 	*v = AuthMethodAgent(a)
 	return nil
 }
@@ -649,10 +746,17 @@ func (v *AuthMethodTerminal) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias AuthMethodTerminal
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Description json.RawMessage `json:"description"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("AuthMethodTerminal: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Description = orDefault[*string](s.Description, "")
 	*v = AuthMethodTerminal(a)
 	return nil
 }
@@ -678,10 +782,15 @@ func (v *AuthenticateRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias AuthenticateRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("AuthenticateRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = AuthenticateRequest(a)
 	return nil
 }
@@ -698,6 +807,25 @@ type AuthenticateResponse struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *AuthenticateResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "AuthenticateResponse")
+	if err != nil {
+		return err
+	}
+	type Alias AuthenticateResponse
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("AuthenticateResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = AuthenticateResponse(a)
+	return nil
 }
 
 func (v *AuthenticateResponse) Validate() error {
@@ -726,10 +854,17 @@ func (v *AvailableCommand) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias AvailableCommand
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta  json.RawMessage `json:"_meta"`
+		Input json.RawMessage `json:"input"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("AvailableCommand: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Input = orDefault[*AvailableCommandInput](s.Input, "")
 	*v = AvailableCommand(a)
 	return nil
 }
@@ -826,9 +961,18 @@ func (v *AvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias AvailableCommandsUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta              json.RawMessage `json:"_meta"`
+		AvailableCommands json.RawMessage `json:"availableCommands"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("AvailableCommandsUpdate: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[AvailableCommand](s.AvailableCommands); err == nil {
+		a.AvailableCommands = items
 	}
 	*v = AvailableCommandsUpdate(a)
 	return nil
@@ -856,10 +1000,17 @@ func (v *BlobResourceContents) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias BlobResourceContents
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta     json.RawMessage `json:"_meta"`
+		MimeType json.RawMessage `json:"mimeType"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("BlobResourceContents: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.MimeType = orDefault[*string](s.MimeType, "")
 	*v = BlobResourceContents(a)
 	return nil
 }
@@ -874,6 +1025,25 @@ type BooleanConfigOptionCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *BooleanConfigOptionCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "BooleanConfigOptionCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias BooleanConfigOptionCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("BooleanConfigOptionCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = BooleanConfigOptionCapabilities(a)
+	return nil
 }
 
 // Schema for boolean properties in an elicitation form.
@@ -900,6 +1070,31 @@ type BooleanPropertySchema struct {
 	Title *string `json:"title,omitempty"`
 }
 
+func (v *BooleanPropertySchema) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "BooleanPropertySchema")
+	if err != nil {
+		return err
+	}
+	type Alias BooleanPropertySchema
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Default     json.RawMessage `json:"default"`
+		Description json.RawMessage `json:"description"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("BooleanPropertySchema: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Default = orDefault[*bool](s.Default, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.Title = orDefault[*string](s.Title, "")
+	*v = BooleanPropertySchema(a)
+	return nil
+}
+
 // Notification to cancel ongoing operations for a session.
 //
 // See protocol docs: [Cancellation](https://agentclientprotocol.com/protocol/prompt-turn#cancellation)
@@ -920,10 +1115,15 @@ func (v *CancelNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CancelNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CancelNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CancelNotification(a)
 	return nil
 }
@@ -952,10 +1152,15 @@ func (v *CancelRequestNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CancelRequestNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CancelRequestNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CancelRequestNotification(a)
 	return nil
 }
@@ -1053,10 +1258,35 @@ func (v *ClientCapabilities) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ClientCapabilities
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta              json.RawMessage `json:"_meta"`
+		Auth              json.RawMessage `json:"auth"`
+		Elicitation       json.RawMessage `json:"elicitation"`
+		Fs                json.RawMessage `json:"fs"`
+		Nes               json.RawMessage `json:"nes"`
+		Plan              json.RawMessage `json:"plan"`
+		PositionEncodings json.RawMessage `json:"positionEncodings"`
+		Session           json.RawMessage `json:"session"`
+		Subagents         json.RawMessage `json:"subagents"`
+		Terminal          json.RawMessage `json:"terminal"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ClientCapabilities: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Auth = orDefault[AuthCapabilities](s.Auth, "{\"terminal\":false}")
+	a.Elicitation = orDefault[*ElicitationCapabilities](s.Elicitation, "")
+	a.Fs = orDefault[FileSystemCapabilities](s.Fs, "{\"readTextFile\":false,\"writeTextFile\":false}")
+	a.Nes = orDefault[*ClientNesCapabilities](s.Nes, "")
+	a.Plan = orDefault[*PlanCapabilities](s.Plan, "")
+	if items, err := skipInvalid[PositionEncodingKind](s.PositionEncodings); err == nil {
+		a.PositionEncodings = items
+	}
+	a.Session = orDefault[*ClientSessionCapabilities](s.Session, "")
+	a.Subagents = orDefault[*SubagentCapabilities](s.Subagents, "")
+	a.Terminal = orDefault[bool](s.Terminal, "false")
 	{
 		_rm, _ok := m["auth"]
 		if !_ok || (string(_rm) == "null") {
@@ -1097,6 +1327,31 @@ type ClientNesCapabilities struct {
 	Rename *NesRenameCapabilities `json:"rename,omitempty"`
 	// Whether the client supports the 'searchAndReplace' suggestion kind.
 	SearchAndReplace *NesSearchAndReplaceCapabilities `json:"searchAndReplace,omitempty"`
+}
+
+func (v *ClientNesCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ClientNesCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias ClientNesCapabilities
+	var s struct {
+		Alias
+		Meta             json.RawMessage `json:"_meta"`
+		Jump             json.RawMessage `json:"jump"`
+		Rename           json.RawMessage `json:"rename"`
+		SearchAndReplace json.RawMessage `json:"searchAndReplace"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ClientNesCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Jump = orDefault[*NesJumpCapabilities](s.Jump, "")
+	a.Rename = orDefault[*NesRenameCapabilities](s.Rename, "")
+	a.SearchAndReplace = orDefault[*NesSearchAndReplaceCapabilities](s.SearchAndReplace, "")
+	*v = ClientNesCapabilities(a)
+	return nil
 }
 
 // A JSON-RPC notification object.
@@ -1330,6 +1585,31 @@ type ClientSessionCapabilities struct {
 	Notices *NoticeCapabilities `json:"notices,omitempty"`
 }
 
+func (v *ClientSessionCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ClientSessionCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias ClientSessionCapabilities
+	var s struct {
+		Alias
+		Meta          json.RawMessage `json:"_meta"`
+		Compaction    json.RawMessage `json:"compaction"`
+		ConfigOptions json.RawMessage `json:"configOptions"`
+		Notices       json.RawMessage `json:"notices"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ClientSessionCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Compaction = orDefault[*CompactionCapabilities](s.Compaction, "")
+	a.ConfigOptions = orDefault[*SessionConfigOptionsCapabilities](s.ConfigOptions, "")
+	a.Notices = orDefault[*NoticeCapabilities](s.Notices, "")
+	*v = ClientSessionCapabilities(a)
+	return nil
+}
+
 // Request parameters for closing an active session.
 //
 // If supported, the agent **must** cancel any ongoing work related to the session
@@ -1354,10 +1634,15 @@ func (v *CloseSessionRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CloseSessionRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CloseSessionRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CloseSessionRequest(a)
 	return nil
 }
@@ -1374,6 +1659,25 @@ type CloseSessionResponse struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *CloseSessionResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "CloseSessionResponse")
+	if err != nil {
+		return err
+	}
+	type Alias CloseSessionResponse
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("CloseSessionResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = CloseSessionResponse(a)
+	return nil
 }
 
 func (v *CloseSessionResponse) Validate() error {
@@ -1415,10 +1719,15 @@ func (v *CompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CompactionSummaryChunk
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CompactionSummaryChunk: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CompactionSummaryChunk(a)
 	return nil
 }
@@ -1450,9 +1759,20 @@ func (v *CompactionUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CompactionUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta    json.RawMessage `json:"_meta"`
+		Error   json.RawMessage `json:"error"`
+		Summary json.RawMessage `json:"summary"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CompactionUpdate: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Error = orDefault[*string](s.Error, "")
+	if items, err := skipInvalid[ContentBlock](s.Summary); err == nil {
+		a.Summary = items
 	}
 	*v = CompactionUpdate(a)
 	return nil
@@ -1478,10 +1798,15 @@ func (v *CompleteElicitationNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CompleteElicitationNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CompleteElicitationNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CompleteElicitationNotification(a)
 	return nil
 }
@@ -1518,9 +1843,18 @@ func (v *ConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ConfigOptionUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta          json.RawMessage `json:"_meta"`
+		ConfigOptions json.RawMessage `json:"configOptions"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ConfigOptionUpdate: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
+		a.ConfigOptions = items
 	}
 	*v = ConfigOptionUpdate(a)
 	return nil
@@ -1544,10 +1878,15 @@ func (v *Content) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias Content
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("Content: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = Content(a)
 	return nil
 }
@@ -1576,10 +1915,17 @@ func (v *ContentBlockText) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ContentBlockText
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Annotations json.RawMessage `json:"annotations"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ContentBlockText: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Annotations = orDefault[*Annotations](s.Annotations, "")
 	*v = ContentBlockText(a)
 	return nil
 }
@@ -1611,10 +1957,19 @@ func (v *ContentBlockImage) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ContentBlockImage
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Annotations json.RawMessage `json:"annotations"`
+		Uri         json.RawMessage `json:"uri"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ContentBlockImage: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Annotations = orDefault[*Annotations](s.Annotations, "")
+	a.Uri = orDefault[*string](s.Uri, "")
 	*v = ContentBlockImage(a)
 	return nil
 }
@@ -1644,10 +1999,17 @@ func (v *ContentBlockAudio) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ContentBlockAudio
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Annotations json.RawMessage `json:"annotations"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ContentBlockAudio: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Annotations = orDefault[*Annotations](s.Annotations, "")
 	*v = ContentBlockAudio(a)
 	return nil
 }
@@ -1685,10 +2047,25 @@ func (v *ContentBlockResourceLink) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ContentBlockResourceLink
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Annotations json.RawMessage `json:"annotations"`
+		Description json.RawMessage `json:"description"`
+		MimeType    json.RawMessage `json:"mimeType"`
+		Size        json.RawMessage `json:"size"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ContentBlockResourceLink: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Annotations = orDefault[*Annotations](s.Annotations, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.MimeType = orDefault[*string](s.MimeType, "")
+	a.Size = orDefault[*int64](s.Size, "")
+	a.Title = orDefault[*string](s.Title, "")
 	*v = ContentBlockResourceLink(a)
 	return nil
 }
@@ -1718,10 +2095,17 @@ func (v *ContentBlockResource) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ContentBlockResource
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Annotations json.RawMessage `json:"annotations"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ContentBlockResource: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Annotations = orDefault[*Annotations](s.Annotations, "")
 	*v = ContentBlockResource(a)
 	return nil
 }
@@ -2039,10 +2423,17 @@ func (v *ContentChunk) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ContentChunk
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		MessageId json.RawMessage `json:"messageId"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ContentChunk: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.MessageId = orDefault[*MessageId](s.MessageId, "")
 	*v = ContentChunk(a)
 	return nil
 }
@@ -2067,10 +2458,15 @@ func (v *Cost) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias Cost
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("Cost: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = Cost(a)
 	return nil
 }
@@ -2098,10 +2494,15 @@ func (v *CreateElicitationForm) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CreateElicitationForm
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CreateElicitationForm: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CreateElicitationForm(a)
 	return nil
 }
@@ -2131,10 +2532,15 @@ func (v *CreateElicitationUrl) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CreateElicitationUrl
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CreateElicitationUrl: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CreateElicitationUrl(a)
 	return nil
 }
@@ -2196,10 +2602,15 @@ func (v *CreateElicitationOther) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CreateElicitationOther
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CreateElicitationOther: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	for _, k := range []string{
 		"_meta",
 		"message",
@@ -2398,6 +2809,25 @@ type CreateElicitationAccept struct {
 	Content map[string]ElicitationContentValue `json:"content,omitempty"`
 }
 
+func (v *CreateElicitationAccept) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "CreateElicitationAccept")
+	if err != nil {
+		return err
+	}
+	type Alias CreateElicitationAccept
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("CreateElicitationAccept: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = CreateElicitationAccept(a)
+	return nil
+}
+
 // The user declined the elicitation.
 type CreateElicitationDecline struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -2411,6 +2841,25 @@ type CreateElicitationDecline struct {
 	Action string         `json:"action"`
 }
 
+func (v *CreateElicitationDecline) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "CreateElicitationDecline")
+	if err != nil {
+		return err
+	}
+	type Alias CreateElicitationDecline
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("CreateElicitationDecline: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = CreateElicitationDecline(a)
+	return nil
+}
+
 // The elicitation was cancelled.
 type CreateElicitationCancel struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -2422,6 +2871,25 @@ type CreateElicitationCancel struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta   map[string]any `json:"_meta,omitempty"`
 	Action string         `json:"action"`
+}
+
+func (v *CreateElicitationCancel) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "CreateElicitationCancel")
+	if err != nil {
+		return err
+	}
+	type Alias CreateElicitationCancel
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("CreateElicitationCancel: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = CreateElicitationCancel(a)
+	return nil
 }
 
 // Custom or future elicitation action.
@@ -2479,10 +2947,15 @@ func (v *CreateElicitationResponseOther) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CreateElicitationResponseOther
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CreateElicitationResponseOther: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	for _, k := range []string{
 		"_meta",
 		"action",
@@ -2684,10 +3157,15 @@ func (v *CreateTerminalRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CreateTerminalRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CreateTerminalRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CreateTerminalRequest(a)
 	return nil
 }
@@ -2717,10 +3195,15 @@ func (v *CreateTerminalResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CreateTerminalResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CreateTerminalResponse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CreateTerminalResponse(a)
 	return nil
 }
@@ -2749,10 +3232,15 @@ func (v *CurrentModeUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias CurrentModeUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("CurrentModeUpdate: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CurrentModeUpdate(a)
 	return nil
 }
@@ -2777,10 +3265,15 @@ func (v *DeleteSessionRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias DeleteSessionRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("DeleteSessionRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = DeleteSessionRequest(a)
 	return nil
 }
@@ -2797,6 +3290,25 @@ type DeleteSessionResponse struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *DeleteSessionResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "DeleteSessionResponse")
+	if err != nil {
+		return err
+	}
+	type Alias DeleteSessionResponse
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("DeleteSessionResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = DeleteSessionResponse(a)
+	return nil
 }
 
 func (v *DeleteSessionResponse) Validate() error {
@@ -2829,10 +3341,17 @@ func (v *Diff) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias Diff
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta    json.RawMessage `json:"_meta"`
+		OldText json.RawMessage `json:"oldText"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("Diff: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.OldText = orDefault[*string](s.OldText, "")
 	*v = Diff(a)
 	return nil
 }
@@ -2863,6 +3382,29 @@ type ElicitationCapabilities struct {
 	// Optional. Omitted or 'null' both mean the client does not advertise support.
 	// Supplying '{}' means the client supports URL-based elicitation.
 	Url *ElicitationUrlCapabilities `json:"url,omitempty"`
+}
+
+func (v *ElicitationCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ElicitationCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias ElicitationCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+		Form json.RawMessage `json:"form"`
+		Url  json.RawMessage `json:"url"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ElicitationCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Form = orDefault[*ElicitationFormCapabilities](s.Form, "")
+	a.Url = orDefault[*ElicitationUrlCapabilities](s.Url, "")
+	*v = ElicitationCapabilities(a)
+	return nil
 }
 
 // String value accepted in elicitation response content.
@@ -3002,6 +3544,25 @@ type ElicitationFormCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *ElicitationFormCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ElicitationFormCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias ElicitationFormCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ElicitationFormCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = ElicitationFormCapabilities(a)
+	return nil
 }
 
 // Form-based elicitation mode where the client renders a form from the provided schema.
@@ -3155,6 +3716,31 @@ type ElicitationPropertySchemaString struct {
 	Type  string  `json:"type"`
 }
 
+func (v *ElicitationPropertySchemaString) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ElicitationPropertySchemaString")
+	if err != nil {
+		return err
+	}
+	type Alias ElicitationPropertySchemaString
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Default     json.RawMessage `json:"default"`
+		Description json.RawMessage `json:"description"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ElicitationPropertySchemaString: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Default = orDefault[*string](s.Default, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.Title = orDefault[*string](s.Title, "")
+	*v = ElicitationPropertySchemaString(a)
+	return nil
+}
+
 // Number (floating-point) property.
 type ElicitationPropertySchemaNumber struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3186,6 +3772,31 @@ type ElicitationPropertySchemaNumber struct {
 	// Optional. Omitted and 'null' are equivalent and mean no title is provided.
 	Title *string `json:"title,omitempty"`
 	Type  string  `json:"type"`
+}
+
+func (v *ElicitationPropertySchemaNumber) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ElicitationPropertySchemaNumber")
+	if err != nil {
+		return err
+	}
+	type Alias ElicitationPropertySchemaNumber
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Default     json.RawMessage `json:"default"`
+		Description json.RawMessage `json:"description"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ElicitationPropertySchemaNumber: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Default = orDefault[*float64](s.Default, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.Title = orDefault[*string](s.Title, "")
+	*v = ElicitationPropertySchemaNumber(a)
+	return nil
 }
 
 // Integer property.
@@ -3221,6 +3832,31 @@ type ElicitationPropertySchemaInteger struct {
 	Type  string  `json:"type"`
 }
 
+func (v *ElicitationPropertySchemaInteger) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ElicitationPropertySchemaInteger")
+	if err != nil {
+		return err
+	}
+	type Alias ElicitationPropertySchemaInteger
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Default     json.RawMessage `json:"default"`
+		Description json.RawMessage `json:"description"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ElicitationPropertySchemaInteger: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Default = orDefault[*int64](s.Default, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.Title = orDefault[*string](s.Title, "")
+	*v = ElicitationPropertySchemaInteger(a)
+	return nil
+}
+
 // Boolean property.
 type ElicitationPropertySchemaBoolean struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3244,6 +3880,31 @@ type ElicitationPropertySchemaBoolean struct {
 	// Optional. Omitted and 'null' are equivalent and mean no title is provided.
 	Title *string `json:"title,omitempty"`
 	Type  string  `json:"type"`
+}
+
+func (v *ElicitationPropertySchemaBoolean) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ElicitationPropertySchemaBoolean")
+	if err != nil {
+		return err
+	}
+	type Alias ElicitationPropertySchemaBoolean
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Default     json.RawMessage `json:"default"`
+		Description json.RawMessage `json:"description"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ElicitationPropertySchemaBoolean: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Default = orDefault[*bool](s.Default, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.Title = orDefault[*string](s.Title, "")
+	*v = ElicitationPropertySchemaBoolean(a)
+	return nil
 }
 
 // Multi-select array property.
@@ -3287,10 +3948,23 @@ func (v *ElicitationPropertySchemaArray) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ElicitationPropertySchemaArray
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Default     json.RawMessage `json:"default"`
+		Description json.RawMessage `json:"description"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ElicitationPropertySchemaArray: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[string](s.Default); err == nil {
+		a.Default = items
+	}
+	a.Description = orDefault[*string](s.Description, "")
+	a.Title = orDefault[*string](s.Title, "")
 	*v = ElicitationPropertySchemaArray(a)
 	return nil
 }
@@ -3651,10 +4325,21 @@ func (v *ElicitationSchema) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ElicitationSchema
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Description json.RawMessage `json:"description"`
+		Title       json.RawMessage `json:"title"`
+		Type        json.RawMessage `json:"type"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ElicitationSchema: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.Title = orDefault[*string](s.Title, "")
+	a.Type = orDefault[ElicitationSchemaType](s.Type, "\"object\"")
 	{
 		_rm, _ok := m["properties"]
 		if !_ok || (string(_rm) == "null") {
@@ -3699,10 +4384,15 @@ func (v *ElicitationSessionScope) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ElicitationSessionScope
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		ToolCallId json.RawMessage `json:"toolCallId"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ElicitationSessionScope: %w", err)
 	}
+	a := s.Alias
+	a.ToolCallId = orDefault[*ToolCallId](s.ToolCallId, "")
 	*v = ElicitationSessionScope(a)
 	return nil
 }
@@ -3719,6 +4409,25 @@ type ElicitationUrlCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *ElicitationUrlCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ElicitationUrlCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias ElicitationUrlCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ElicitationUrlCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = ElicitationUrlCapabilities(a)
+	return nil
 }
 
 // URL-based elicitation mode where the client directs the user to a URL.
@@ -3840,10 +4549,17 @@ func (v *EmbeddedResource) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias EmbeddedResource
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Annotations json.RawMessage `json:"annotations"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("EmbeddedResource: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Annotations = orDefault[*Annotations](s.Annotations, "")
 	*v = EmbeddedResource(a)
 	return nil
 }
@@ -3978,10 +4694,17 @@ func (v *EnumOption) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias EnumOption
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Description json.RawMessage `json:"description"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("EnumOption: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Description = orDefault[*string](s.Description, "")
 	*v = EnumOption(a)
 	return nil
 }
@@ -4006,10 +4729,15 @@ func (v *EnvVariable) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias EnvVariable
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("EnvVariable: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = EnvVariable(a)
 	return nil
 }
@@ -4038,10 +4766,15 @@ func (v *Error) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias Error
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("Error: %w", err)
 	}
+	a := s.Alias
+	a.Data = orDefault[json.RawMessage](s.Data, "")
 	*v = Error(a)
 	return nil
 }
@@ -4269,6 +5002,25 @@ type ErrorStopReason struct {
 	Error *Error `json:"error,omitempty"`
 }
 
+func (v *ErrorStopReason) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ErrorStopReason")
+	if err != nil {
+		return err
+	}
+	type Alias ErrorStopReason
+	var s struct {
+		Alias
+		Error json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ErrorStopReason: %w", err)
+	}
+	a := s.Alias
+	a.Error = orDefault[*Error](s.Error, "")
+	*v = ErrorStopReason(a)
+	return nil
+}
+
 // Allows the Agent to send an arbitrary notification that is not part of the ACP spec.
 // Extension notifications provide a way to send one-way messages for custom functionality
 // while maintaining protocol compatibility.
@@ -4326,10 +5078,19 @@ func (v *FileSystemCapabilities) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias FileSystemCapabilities
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta          json.RawMessage `json:"_meta"`
+		ReadTextFile  json.RawMessage `json:"readTextFile"`
+		WriteTextFile json.RawMessage `json:"writeTextFile"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("FileSystemCapabilities: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.ReadTextFile = orDefault[bool](s.ReadTextFile, "false")
+	a.WriteTextFile = orDefault[bool](s.WriteTextFile, "false")
 	{
 		_rm, _ok := m["readTextFile"]
 		if !_ok || (string(_rm) == "null") {
@@ -4366,10 +5127,15 @@ func (v *HttpHeader) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias HttpHeader
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("HttpHeader: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = HttpHeader(a)
 	return nil
 }
@@ -4387,6 +5153,27 @@ type IdleStateUpdateEndTurn struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+func (v *IdleStateUpdateEndTurn) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "IdleStateUpdateEndTurn")
+	if err != nil {
+		return err
+	}
+	type Alias IdleStateUpdateEndTurn
+	var s struct {
+		Alias
+		Meta  json.RawMessage `json:"_meta"`
+		Usage json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("IdleStateUpdateEndTurn: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Usage = orDefault[*Usage](s.Usage, "")
+	*v = IdleStateUpdateEndTurn(a)
+	return nil
+}
+
 // The work ended because the agent reached the maximum number of tokens.
 type IdleStateUpdateMaxTokens struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -4398,6 +5185,27 @@ type IdleStateUpdateMaxTokens struct {
 	//
 	// Optional; omitted or 'null' means not reported.
 	Usage *Usage `json:"usage,omitempty"`
+}
+
+func (v *IdleStateUpdateMaxTokens) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "IdleStateUpdateMaxTokens")
+	if err != nil {
+		return err
+	}
+	type Alias IdleStateUpdateMaxTokens
+	var s struct {
+		Alias
+		Meta  json.RawMessage `json:"_meta"`
+		Usage json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("IdleStateUpdateMaxTokens: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Usage = orDefault[*Usage](s.Usage, "")
+	*v = IdleStateUpdateMaxTokens(a)
+	return nil
 }
 
 // The work ended because the agent reached the maximum number of allowed
@@ -4414,6 +5222,27 @@ type IdleStateUpdateMaxTurnRequests struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+func (v *IdleStateUpdateMaxTurnRequests) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "IdleStateUpdateMaxTurnRequests")
+	if err != nil {
+		return err
+	}
+	type Alias IdleStateUpdateMaxTurnRequests
+	var s struct {
+		Alias
+		Meta  json.RawMessage `json:"_meta"`
+		Usage json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("IdleStateUpdateMaxTurnRequests: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Usage = orDefault[*Usage](s.Usage, "")
+	*v = IdleStateUpdateMaxTurnRequests(a)
+	return nil
+}
+
 // The work ended because the agent refused to continue.
 type IdleStateUpdateRefusal struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -4427,6 +5256,27 @@ type IdleStateUpdateRefusal struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+func (v *IdleStateUpdateRefusal) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "IdleStateUpdateRefusal")
+	if err != nil {
+		return err
+	}
+	type Alias IdleStateUpdateRefusal
+	var s struct {
+		Alias
+		Meta  json.RawMessage `json:"_meta"`
+		Usage json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("IdleStateUpdateRefusal: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Usage = orDefault[*Usage](s.Usage, "")
+	*v = IdleStateUpdateRefusal(a)
+	return nil
+}
+
 // The work was cancelled.
 type IdleStateUpdateCancelled struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -4438,6 +5288,27 @@ type IdleStateUpdateCancelled struct {
 	//
 	// Optional; omitted or 'null' means not reported.
 	Usage *Usage `json:"usage,omitempty"`
+}
+
+func (v *IdleStateUpdateCancelled) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "IdleStateUpdateCancelled")
+	if err != nil {
+		return err
+	}
+	type Alias IdleStateUpdateCancelled
+	var s struct {
+		Alias
+		Meta  json.RawMessage `json:"_meta"`
+		Usage json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("IdleStateUpdateCancelled: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Usage = orDefault[*Usage](s.Usage, "")
+	*v = IdleStateUpdateCancelled(a)
+	return nil
 }
 
 // The work ended because something failed.
@@ -4456,6 +5327,29 @@ type IdleStateUpdateError struct {
 	//
 	// Optional; omitted or 'null' means not reported.
 	Usage *Usage `json:"usage,omitempty"`
+}
+
+func (v *IdleStateUpdateError) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "IdleStateUpdateError")
+	if err != nil {
+		return err
+	}
+	type Alias IdleStateUpdateError
+	var s struct {
+		Alias
+		Meta  json.RawMessage `json:"_meta"`
+		Error json.RawMessage `json:"error"`
+		Usage json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("IdleStateUpdateError: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Error = orDefault[*Error](s.Error, "")
+	a.Usage = orDefault[*Usage](s.Usage, "")
+	*v = IdleStateUpdateError(a)
+	return nil
 }
 
 // Custom or future stop reason.
@@ -4504,10 +5398,17 @@ func (v *IdleStateUpdateOther) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias IdleStateUpdateOther
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta  json.RawMessage `json:"_meta"`
+		Usage json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("IdleStateUpdateOther: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Usage = orDefault[*Usage](s.Usage, "")
 	for _, k := range []string{
 		"_meta",
 		"stopReason",
@@ -4533,6 +5434,27 @@ type IdleStateUpdateNone struct {
 	//
 	// Optional; omitted or 'null' means not reported.
 	Usage *Usage `json:"usage,omitempty"`
+}
+
+func (v *IdleStateUpdateNone) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "IdleStateUpdateNone")
+	if err != nil {
+		return err
+	}
+	type Alias IdleStateUpdateNone
+	var s struct {
+		Alias
+		Meta  json.RawMessage `json:"_meta"`
+		Usage json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("IdleStateUpdateNone: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Usage = orDefault[*Usage](s.Usage, "")
+	*v = IdleStateUpdateNone(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -4766,10 +5688,19 @@ func (v *ImageContent) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ImageContent
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Annotations json.RawMessage `json:"annotations"`
+		Uri         json.RawMessage `json:"uri"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ImageContent: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Annotations = orDefault[*Annotations](s.Annotations, "")
+	a.Uri = orDefault[*string](s.Uri, "")
 	*v = ImageContent(a)
 	return nil
 }
@@ -4803,10 +5734,17 @@ func (v *Implementation) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias Implementation
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta  json.RawMessage `json:"_meta"`
+		Title json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("Implementation: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Title = orDefault[*string](s.Title, "")
 	*v = Implementation(a)
 	return nil
 }
@@ -4848,10 +5786,19 @@ func (v *InitializeRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias InitializeRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta               json.RawMessage `json:"_meta"`
+		ClientCapabilities json.RawMessage `json:"clientCapabilities"`
+		ClientInfo         json.RawMessage `json:"clientInfo"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("InitializeRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.ClientCapabilities = orDefault[ClientCapabilities](s.ClientCapabilities, "{\"auth\":{\"terminal\":false},\"fs\":{\"readTextFile\":false,\"writeTextFile\":false},\"terminal\":false}")
+	a.ClientInfo = orDefault[*Implementation](s.ClientInfo, "")
 	{
 		_rm, _ok := m["clientCapabilities"]
 		if !_ok || (string(_rm) == "null") {
@@ -4913,9 +5860,24 @@ func (v *InitializeResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias InitializeResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta              json.RawMessage `json:"_meta"`
+		AgentCapabilities json.RawMessage `json:"agentCapabilities"`
+		AgentInfo         json.RawMessage `json:"agentInfo"`
+		AuthMethods       json.RawMessage `json:"authMethods"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("InitializeResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.AgentCapabilities = orDefault[AgentCapabilities](s.AgentCapabilities, "{\"auth\":{},\"loadSession\":false,\"mcpCapabilities\":{\"acp\":false,\"http\":false,\"sse\":false},\"promptCapabilities\":{\"audio\":false,\"embeddedContext\":false,\"image\":false},\"sessionCapabilities\":{}}")
+	a.AgentInfo = orDefault[*Implementation](s.AgentInfo, "")
+	if items, err := skipInvalid[AuthMethod](s.AuthMethods); err == nil {
+		a.AuthMethods = items
+	} else {
+		a.AuthMethods = orDefault[[]AuthMethod](nil, "[]")
 	}
 	{
 		_rm, _ok := m["agentCapabilities"]
@@ -4969,6 +5931,31 @@ type IntegerPropertySchema struct {
 	Title *string `json:"title,omitempty"`
 }
 
+func (v *IntegerPropertySchema) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "IntegerPropertySchema")
+	if err != nil {
+		return err
+	}
+	type Alias IntegerPropertySchema
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Default     json.RawMessage `json:"default"`
+		Description json.RawMessage `json:"description"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("IntegerPropertySchema: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Default = orDefault[*int64](s.Default, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.Title = orDefault[*string](s.Title, "")
+	*v = IntegerPropertySchema(a)
+	return nil
+}
+
 // Request to kill a terminal without releasing it.
 type KillTerminalRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -4989,10 +5976,15 @@ func (v *KillTerminalRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias KillTerminalRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("KillTerminalRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = KillTerminalRequest(a)
 	return nil
 }
@@ -5009,6 +6001,25 @@ type KillTerminalResponse struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *KillTerminalResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "KillTerminalResponse")
+	if err != nil {
+		return err
+	}
+	type Alias KillTerminalResponse
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("KillTerminalResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = KillTerminalResponse(a)
+	return nil
 }
 
 func (v *KillTerminalResponse) Validate() error {
@@ -5029,6 +6040,25 @@ type ListSessionsRequest struct {
 	Cursor *string `json:"cursor,omitempty"`
 	// Filter sessions by working directory. Must be an absolute path.
 	Cwd *string `json:"cwd,omitempty"`
+}
+
+func (v *ListSessionsRequest) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ListSessionsRequest")
+	if err != nil {
+		return err
+	}
+	type Alias ListSessionsRequest
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ListSessionsRequest: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = ListSessionsRequest(a)
+	return nil
 }
 
 func (v *ListSessionsRequest) Validate() error {
@@ -5066,9 +6096,20 @@ func (v *ListSessionsResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ListSessionsResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta       json.RawMessage `json:"_meta"`
+		NextCursor json.RawMessage `json:"nextCursor"`
+		Sessions   json.RawMessage `json:"sessions"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ListSessionsResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.NextCursor = orDefault[*string](s.NextCursor, "")
+	if items, err := skipInvalid[SessionInfo](s.Sessions); err == nil {
+		a.Sessions = items
 	}
 	*v = ListSessionsResponse(a)
 	return nil
@@ -5124,10 +6165,15 @@ func (v *LoadSessionRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias LoadSessionRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("LoadSessionRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = LoadSessionRequest(a)
 	return nil
 }
@@ -5158,6 +6204,31 @@ type LoadSessionResponse struct {
 	Modes *SessionModeState `json:"modes,omitempty"`
 }
 
+func (v *LoadSessionResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "LoadSessionResponse")
+	if err != nil {
+		return err
+	}
+	type Alias LoadSessionResponse
+	var s struct {
+		Alias
+		Meta          json.RawMessage `json:"_meta"`
+		ConfigOptions json.RawMessage `json:"configOptions"`
+		Modes         json.RawMessage `json:"modes"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("LoadSessionResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
+		a.ConfigOptions = items
+	}
+	a.Modes = orDefault[*SessionModeState](s.Modes, "")
+	*v = LoadSessionResponse(a)
+	return nil
+}
+
 func (v *LoadSessionResponse) Validate() error {
 	return nil
 }
@@ -5174,6 +6245,25 @@ type LogoutCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *LogoutCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "LogoutCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias LogoutCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("LogoutCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = LogoutCapabilities(a)
+	return nil
+}
+
 // Request parameters for the logout method.
 //
 // Terminates the current authenticated session.
@@ -5184,6 +6274,25 @@ type LogoutRequest struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *LogoutRequest) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "LogoutRequest")
+	if err != nil {
+		return err
+	}
+	type Alias LogoutRequest
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("LogoutRequest: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = LogoutRequest(a)
+	return nil
 }
 
 func (v *LogoutRequest) Validate() error {
@@ -5198,6 +6307,25 @@ type LogoutResponse struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *LogoutResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "LogoutResponse")
+	if err != nil {
+		return err
+	}
+	type Alias LogoutResponse
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("LogoutResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = LogoutResponse(a)
+	return nil
 }
 
 func (v *LogoutResponse) Validate() error {
@@ -5243,10 +6371,21 @@ func (v *McpCapabilities) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias McpCapabilities
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+		Acp  json.RawMessage `json:"acp"`
+		Http json.RawMessage `json:"http"`
+		Sse  json.RawMessage `json:"sse"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("McpCapabilities: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Acp = orDefault[bool](s.Acp, "false")
+	a.Http = orDefault[bool](s.Http, "false")
+	a.Sse = orDefault[bool](s.Sse, "false")
 	{
 		_rm, _ok := m["acp"]
 		if !_ok || (string(_rm) == "null") {
@@ -5304,10 +6443,15 @@ func (v *McpServerHttpInline) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias McpServerHttpInline
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("McpServerHttpInline: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = McpServerHttpInline(a)
 	return nil
 }
@@ -5347,10 +6491,15 @@ func (v *McpServerSseInline) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias McpServerSseInline
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("McpServerSseInline: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = McpServerSseInline(a)
 	return nil
 }
@@ -5386,10 +6535,15 @@ func (v *McpServerAcpInline) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias McpServerAcpInline
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("McpServerAcpInline: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = McpServerAcpInline(a)
 	return nil
 }
@@ -5590,10 +6744,15 @@ func (v *McpServerAcp) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias McpServerAcp
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("McpServerAcp: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = McpServerAcp(a)
 	return nil
 }
@@ -5640,10 +6799,15 @@ func (v *McpServerHttp) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias McpServerHttp
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("McpServerHttp: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = McpServerHttp(a)
 	return nil
 }
@@ -5680,10 +6844,15 @@ func (v *McpServerSse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias McpServerSse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("McpServerSse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = McpServerSse(a)
 	return nil
 }
@@ -5725,10 +6894,15 @@ func (v *McpServerStdio) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias McpServerStdio
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("McpServerStdio: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = McpServerStdio(a)
 	return nil
 }
@@ -5767,10 +6941,15 @@ func (v *MultiSelectItemsString) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias MultiSelectItemsString
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("MultiSelectItemsString: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = MultiSelectItemsString(a)
 	return nil
 }
@@ -5976,10 +7155,23 @@ func (v *MultiSelectPropertySchema) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias MultiSelectPropertySchema
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Default     json.RawMessage `json:"default"`
+		Description json.RawMessage `json:"description"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("MultiSelectPropertySchema: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[string](s.Default); err == nil {
+		a.Default = items
+	}
+	a.Description = orDefault[*string](s.Description, "")
+	a.Title = orDefault[*string](s.Title, "")
 	*v = MultiSelectPropertySchema(a)
 	return nil
 }
@@ -6000,6 +7192,29 @@ type NesCapabilities struct {
 	Context *NesContextCapabilities `json:"context,omitempty"`
 	// Events the agent wants to receive.
 	Events *NesEventCapabilities `json:"events,omitempty"`
+}
+
+func (v *NesCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesCapabilities
+	var s struct {
+		Alias
+		Meta    json.RawMessage `json:"_meta"`
+		Context json.RawMessage `json:"context"`
+		Events  json.RawMessage `json:"events"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Context = orDefault[*NesContextCapabilities](s.Context, "")
+	a.Events = orDefault[*NesEventCapabilities](s.Events, "")
+	*v = NesCapabilities(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -6028,6 +7243,37 @@ type NesContextCapabilities struct {
 	UserActions *NesUserActionsCapabilities `json:"userActions,omitempty"`
 }
 
+func (v *NesContextCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesContextCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesContextCapabilities
+	var s struct {
+		Alias
+		Meta            json.RawMessage `json:"_meta"`
+		Diagnostics     json.RawMessage `json:"diagnostics"`
+		EditHistory     json.RawMessage `json:"editHistory"`
+		OpenFiles       json.RawMessage `json:"openFiles"`
+		RecentFiles     json.RawMessage `json:"recentFiles"`
+		RelatedSnippets json.RawMessage `json:"relatedSnippets"`
+		UserActions     json.RawMessage `json:"userActions"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesContextCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Diagnostics = orDefault[*NesDiagnosticsCapabilities](s.Diagnostics, "")
+	a.EditHistory = orDefault[*NesEditHistoryCapabilities](s.EditHistory, "")
+	a.OpenFiles = orDefault[*NesOpenFilesCapabilities](s.OpenFiles, "")
+	a.RecentFiles = orDefault[*NesRecentFilesCapabilities](s.RecentFiles, "")
+	a.RelatedSnippets = orDefault[*NesRelatedSnippetsCapabilities](s.RelatedSnippets, "")
+	a.UserActions = orDefault[*NesUserActionsCapabilities](s.UserActions, "")
+	*v = NesContextCapabilities(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -6040,6 +7286,25 @@ type NesDiagnosticsCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *NesDiagnosticsCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesDiagnosticsCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesDiagnosticsCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesDiagnosticsCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = NesDiagnosticsCapabilities(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -6064,10 +7329,15 @@ func (v *NesDocumentDidChangeCapabilities) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias NesDocumentDidChangeCapabilities
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("NesDocumentDidChangeCapabilities: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = NesDocumentDidChangeCapabilities(a)
 	return nil
 }
@@ -6086,6 +7356,25 @@ type NesDocumentDidCloseCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *NesDocumentDidCloseCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesDocumentDidCloseCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesDocumentDidCloseCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesDocumentDidCloseCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = NesDocumentDidCloseCapabilities(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -6098,6 +7387,25 @@ type NesDocumentDidFocusCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *NesDocumentDidFocusCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesDocumentDidFocusCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesDocumentDidFocusCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesDocumentDidFocusCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = NesDocumentDidFocusCapabilities(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -6114,6 +7422,25 @@ type NesDocumentDidOpenCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *NesDocumentDidOpenCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesDocumentDidOpenCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesDocumentDidOpenCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesDocumentDidOpenCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = NesDocumentDidOpenCapabilities(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -6126,6 +7453,25 @@ type NesDocumentDidSaveCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *NesDocumentDidSaveCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesDocumentDidSaveCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesDocumentDidSaveCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesDocumentDidSaveCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = NesDocumentDidSaveCapabilities(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -6152,6 +7498,35 @@ type NesDocumentEventCapabilities struct {
 	DidSave *NesDocumentDidSaveCapabilities `json:"didSave,omitempty"`
 }
 
+func (v *NesDocumentEventCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesDocumentEventCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesDocumentEventCapabilities
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		DidChange json.RawMessage `json:"didChange"`
+		DidClose  json.RawMessage `json:"didClose"`
+		DidFocus  json.RawMessage `json:"didFocus"`
+		DidOpen   json.RawMessage `json:"didOpen"`
+		DidSave   json.RawMessage `json:"didSave"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesDocumentEventCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.DidChange = orDefault[*NesDocumentDidChangeCapabilities](s.DidChange, "")
+	a.DidClose = orDefault[*NesDocumentDidCloseCapabilities](s.DidClose, "")
+	a.DidFocus = orDefault[*NesDocumentDidFocusCapabilities](s.DidFocus, "")
+	a.DidOpen = orDefault[*NesDocumentDidOpenCapabilities](s.DidOpen, "")
+	a.DidSave = orDefault[*NesDocumentDidSaveCapabilities](s.DidSave, "")
+	*v = NesDocumentEventCapabilities(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -6166,6 +7541,27 @@ type NesEditHistoryCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Maximum number of edit history entries the agent can use.
 	MaxCount *uint32 `json:"maxCount,omitempty"`
+}
+
+func (v *NesEditHistoryCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesEditHistoryCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesEditHistoryCapabilities
+	var s struct {
+		Alias
+		Meta     json.RawMessage `json:"_meta"`
+		MaxCount json.RawMessage `json:"maxCount"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesEditHistoryCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.MaxCount = orDefault[*uint32](s.MaxCount, "")
+	*v = NesEditHistoryCapabilities(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -6184,6 +7580,27 @@ type NesEventCapabilities struct {
 	Document *NesDocumentEventCapabilities `json:"document,omitempty"`
 }
 
+func (v *NesEventCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesEventCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesEventCapabilities
+	var s struct {
+		Alias
+		Meta     json.RawMessage `json:"_meta"`
+		Document json.RawMessage `json:"document"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesEventCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Document = orDefault[*NesDocumentEventCapabilities](s.Document, "")
+	*v = NesEventCapabilities(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -6198,6 +7615,25 @@ type NesJumpCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *NesJumpCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesJumpCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesJumpCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesJumpCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = NesJumpCapabilities(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -6210,6 +7646,25 @@ type NesOpenFilesCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *NesOpenFilesCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesOpenFilesCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesOpenFilesCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesOpenFilesCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = NesOpenFilesCapabilities(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -6228,6 +7683,27 @@ type NesRecentFilesCapabilities struct {
 	MaxCount *uint32 `json:"maxCount,omitempty"`
 }
 
+func (v *NesRecentFilesCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesRecentFilesCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesRecentFilesCapabilities
+	var s struct {
+		Alias
+		Meta     json.RawMessage `json:"_meta"`
+		MaxCount json.RawMessage `json:"maxCount"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesRecentFilesCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.MaxCount = orDefault[*uint32](s.MaxCount, "")
+	*v = NesRecentFilesCapabilities(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -6240,6 +7716,25 @@ type NesRelatedSnippetsCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *NesRelatedSnippetsCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesRelatedSnippetsCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesRelatedSnippetsCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesRelatedSnippetsCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = NesRelatedSnippetsCapabilities(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -6256,6 +7751,25 @@ type NesRenameCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *NesRenameCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesRenameCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesRenameCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesRenameCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = NesRenameCapabilities(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -6268,6 +7782,25 @@ type NesSearchAndReplaceCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *NesSearchAndReplaceCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesSearchAndReplaceCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesSearchAndReplaceCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesSearchAndReplaceCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = NesSearchAndReplaceCapabilities(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -6284,6 +7817,27 @@ type NesUserActionsCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Maximum number of user actions the agent can use.
 	MaxCount *uint32 `json:"maxCount,omitempty"`
+}
+
+func (v *NesUserActionsCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NesUserActionsCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias NesUserActionsCapabilities
+	var s struct {
+		Alias
+		Meta     json.RawMessage `json:"_meta"`
+		MaxCount json.RawMessage `json:"maxCount"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NesUserActionsCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.MaxCount = orDefault[*uint32](s.MaxCount, "")
+	*v = NesUserActionsCapabilities(a)
+	return nil
 }
 
 // Request parameters for creating a new session.
@@ -6324,10 +7878,15 @@ func (v *NewSessionRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias NewSessionRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("NewSessionRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = NewSessionRequest(a)
 	return nil
 }
@@ -6370,10 +7929,21 @@ func (v *NewSessionResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias NewSessionResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta          json.RawMessage `json:"_meta"`
+		ConfigOptions json.RawMessage `json:"configOptions"`
+		Modes         json.RawMessage `json:"modes"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("NewSessionResponse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
+		a.ConfigOptions = items
+	}
+	a.Modes = orDefault[*SessionModeState](s.Modes, "")
 	*v = NewSessionResponse(a)
 	return nil
 }
@@ -6412,10 +7982,17 @@ func (v *Notice) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias Notice
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Description json.RawMessage `json:"description"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("Notice: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Description = orDefault[*string](s.Description, "")
 	*v = Notice(a)
 	return nil
 }
@@ -6464,6 +8041,31 @@ type NumberPropertySchema struct {
 	Title *string `json:"title,omitempty"`
 }
 
+func (v *NumberPropertySchema) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "NumberPropertySchema")
+	if err != nil {
+		return err
+	}
+	type Alias NumberPropertySchema
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Default     json.RawMessage `json:"default"`
+		Description json.RawMessage `json:"description"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("NumberPropertySchema: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Default = orDefault[*float64](s.Default, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.Title = orDefault[*string](s.Title, "")
+	*v = NumberPropertySchema(a)
+	return nil
+}
+
 // An option presented to the user when requesting permission.
 type PermissionOption struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -6486,10 +8088,15 @@ func (v *PermissionOption) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PermissionOption
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PermissionOption: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = PermissionOption(a)
 	return nil
 }
@@ -6546,9 +8153,18 @@ func (v *Plan) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias Plan
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta    json.RawMessage `json:"_meta"`
+		Entries json.RawMessage `json:"entries"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("Plan: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[PlanEntry](s.Entries); err == nil {
+		a.Entries = items
 	}
 	*v = Plan(a)
 	return nil
@@ -6566,6 +8182,25 @@ type PlanCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *PlanCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "PlanCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias PlanCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("PlanCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = PlanCapabilities(a)
+	return nil
 }
 
 // A single entry in the execution plan.
@@ -6595,10 +8230,15 @@ func (v *PlanEntry) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PlanEntry
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PlanEntry: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = PlanEntry(a)
 	return nil
 }
@@ -6652,10 +8292,15 @@ func (v *PlanFile) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PlanFile
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PlanFile: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = PlanFile(a)
 	return nil
 }
@@ -6704,9 +8349,18 @@ func (v *PlanItems) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PlanItems
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta    json.RawMessage `json:"_meta"`
+		Entries json.RawMessage `json:"entries"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PlanItems: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[PlanEntry](s.Entries); err == nil {
+		a.Entries = items
 	}
 	*v = PlanItems(a)
 	return nil
@@ -6736,10 +8390,15 @@ func (v *PlanMarkdown) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PlanMarkdown
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PlanMarkdown: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = PlanMarkdown(a)
 	return nil
 }
@@ -6766,10 +8425,15 @@ func (v *PlanRemoved) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PlanRemoved
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PlanRemoved: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = PlanRemoved(a)
 	return nil
 }
@@ -6796,10 +8460,15 @@ func (v *PlanUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PlanUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PlanUpdate: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = PlanUpdate(a)
 	return nil
 }
@@ -6838,9 +8507,18 @@ func (v *PlanUpdateContentItems) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PlanUpdateContentItems
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta    json.RawMessage `json:"_meta"`
+		Entries json.RawMessage `json:"entries"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PlanUpdateContentItems: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[PlanEntry](s.Entries); err == nil {
+		a.Entries = items
 	}
 	*v = PlanUpdateContentItems(a)
 	return nil
@@ -6867,10 +8545,15 @@ func (v *PlanUpdateContentFile) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PlanUpdateContentFile
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PlanUpdateContentFile: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = PlanUpdateContentFile(a)
 	return nil
 }
@@ -6896,10 +8579,15 @@ func (v *PlanUpdateContentMarkdown) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PlanUpdateContentMarkdown
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PlanUpdateContentMarkdown: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = PlanUpdateContentMarkdown(a)
 	return nil
 }
@@ -7156,10 +8844,21 @@ func (v *PromptCapabilities) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PromptCapabilities
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta            json.RawMessage `json:"_meta"`
+		Audio           json.RawMessage `json:"audio"`
+		EmbeddedContext json.RawMessage `json:"embeddedContext"`
+		Image           json.RawMessage `json:"image"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PromptCapabilities: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Audio = orDefault[bool](s.Audio, "false")
+	a.EmbeddedContext = orDefault[bool](s.EmbeddedContext, "false")
+	a.Image = orDefault[bool](s.Image, "false")
 	{
 		_rm, _ok := m["audio"]
 		if !_ok || (string(_rm) == "null") {
@@ -7228,10 +8927,15 @@ func (v *PromptRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PromptRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PromptRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = PromptRequest(a)
 	return nil
 }
@@ -7269,10 +8973,17 @@ func (v *PromptResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias PromptResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta  json.RawMessage `json:"_meta"`
+		Usage json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("PromptResponse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Usage = orDefault[*Usage](s.Usage, "")
 	*v = PromptResponse(a)
 	return nil
 }
@@ -7303,6 +9014,25 @@ type ProvidersCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *ProvidersCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ProvidersCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias ProvidersCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ProvidersCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = ProvidersCapabilities(a)
+	return nil
+}
+
 // Request to read content from a text file.
 //
 // Only available if the client supports the 'fs.readTextFile' capability.
@@ -7329,10 +9059,15 @@ func (v *ReadTextFileRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ReadTextFileRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ReadTextFileRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = ReadTextFileRequest(a)
 	return nil
 }
@@ -7362,10 +9097,15 @@ func (v *ReadTextFileResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ReadTextFileResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ReadTextFileResponse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = ReadTextFileResponse(a)
 	return nil
 }
@@ -7397,10 +9137,15 @@ func (v *ReleaseTerminalRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ReleaseTerminalRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ReleaseTerminalRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = ReleaseTerminalRequest(a)
 	return nil
 }
@@ -7417,6 +9162,25 @@ type ReleaseTerminalResponse struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *ReleaseTerminalResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ReleaseTerminalResponse")
+	if err != nil {
+		return err
+	}
+	type Alias ReleaseTerminalResponse
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ReleaseTerminalResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = ReleaseTerminalResponse(a)
+	return nil
 }
 
 func (v *ReleaseTerminalResponse) Validate() error {
@@ -7545,10 +9309,15 @@ func (v *RequestPermissionOutcomeSelected) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias RequestPermissionOutcomeSelected
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("RequestPermissionOutcomeSelected: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = RequestPermissionOutcomeSelected(a)
 	return nil
 }
@@ -7722,10 +9491,15 @@ func (v *RequestPermissionRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias RequestPermissionRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("RequestPermissionRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = RequestPermissionRequest(a)
 	return nil
 }
@@ -7755,10 +9529,15 @@ func (v *RequestPermissionResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias RequestPermissionResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("RequestPermissionResponse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = RequestPermissionResponse(a)
 	return nil
 }
@@ -7777,6 +9556,25 @@ type RequiresActionStateUpdate struct {
 	// Implementations MUST NOT make assumptions about values at these keys.
 	// Optional; omitted and 'null' mean no metadata for this state snapshot.
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *RequiresActionStateUpdate) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "RequiresActionStateUpdate")
+	if err != nil {
+		return err
+	}
+	type Alias RequiresActionStateUpdate
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("RequiresActionStateUpdate: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = RequiresActionStateUpdate(a)
+	return nil
 }
 
 // A resource that the server is capable of reading, included in a prompt or tool call result.
@@ -7809,10 +9607,25 @@ func (v *ResourceLink) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ResourceLink
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Annotations json.RawMessage `json:"annotations"`
+		Description json.RawMessage `json:"description"`
+		MimeType    json.RawMessage `json:"mimeType"`
+		Size        json.RawMessage `json:"size"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ResourceLink: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Annotations = orDefault[*Annotations](s.Annotations, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.MimeType = orDefault[*string](s.MimeType, "")
+	a.Size = orDefault[*int64](s.Size, "")
+	a.Title = orDefault[*string](s.Title, "")
 	*v = ResourceLink(a)
 	return nil
 }
@@ -7851,10 +9664,15 @@ func (v *ResumeSessionRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ResumeSessionRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ResumeSessionRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = ResumeSessionRequest(a)
 	return nil
 }
@@ -7882,6 +9700,31 @@ type ResumeSessionResponse struct {
 	Modes *SessionModeState `json:"modes,omitempty"`
 }
 
+func (v *ResumeSessionResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "ResumeSessionResponse")
+	if err != nil {
+		return err
+	}
+	type Alias ResumeSessionResponse
+	var s struct {
+		Alias
+		Meta          json.RawMessage `json:"_meta"`
+		ConfigOptions json.RawMessage `json:"configOptions"`
+		Modes         json.RawMessage `json:"modes"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("ResumeSessionResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
+		a.ConfigOptions = items
+	}
+	a.Modes = orDefault[*SessionModeState](s.Modes, "")
+	*v = ResumeSessionResponse(a)
+	return nil
+}
+
 func (v *ResumeSessionResponse) Validate() error {
 	return nil
 }
@@ -7906,6 +9749,25 @@ type RunningStateUpdate struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *RunningStateUpdate) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "RunningStateUpdate")
+	if err != nil {
+		return err
+	}
+	type Alias RunningStateUpdate
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("RunningStateUpdate: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = RunningStateUpdate(a)
+	return nil
+}
+
 // The user selected one of the provided options.
 type SelectedPermissionOutcome struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -7924,10 +9786,15 @@ func (v *SelectedPermissionOutcome) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SelectedPermissionOutcome
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SelectedPermissionOutcome: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = SelectedPermissionOutcome(a)
 	return nil
 }
@@ -7947,6 +9814,25 @@ type SessionAdditionalDirectoriesCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *SessionAdditionalDirectoriesCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SessionAdditionalDirectoriesCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias SessionAdditionalDirectoriesCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SessionAdditionalDirectoriesCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = SessionAdditionalDirectoriesCapabilities(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -7961,6 +9847,25 @@ type SessionCancelCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *SessionCancelCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SessionCancelCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias SessionCancelCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SessionCancelCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = SessionCancelCapabilities(a)
+	return nil
 }
 
 // Session capabilities supported by the agent.
@@ -8020,6 +9925,37 @@ type SessionCapabilities struct {
 	Resume *SessionResumeCapabilities `json:"resume,omitempty"`
 }
 
+func (v *SessionCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SessionCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias SessionCapabilities
+	var s struct {
+		Alias
+		Meta                  json.RawMessage `json:"_meta"`
+		AdditionalDirectories json.RawMessage `json:"additionalDirectories"`
+		Close                 json.RawMessage `json:"close"`
+		Delete                json.RawMessage `json:"delete"`
+		Fork                  json.RawMessage `json:"fork"`
+		List                  json.RawMessage `json:"list"`
+		Resume                json.RawMessage `json:"resume"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SessionCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.AdditionalDirectories = orDefault[*SessionAdditionalDirectoriesCapabilities](s.AdditionalDirectories, "")
+	a.Close = orDefault[*SessionCloseCapabilities](s.Close, "")
+	a.Delete = orDefault[*SessionDeleteCapabilities](s.Delete, "")
+	a.Fork = orDefault[*SessionForkCapabilities](s.Fork, "")
+	a.List = orDefault[*SessionListCapabilities](s.List, "")
+	a.Resume = orDefault[*SessionResumeCapabilities](s.Resume, "")
+	*v = SessionCapabilities(a)
+	return nil
+}
+
 // Capabilities for the 'session/close' method.
 //
 // Supplying '{}' means the agent supports closing sessions.
@@ -8030,6 +9966,25 @@ type SessionCloseCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *SessionCloseCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SessionCloseCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias SessionCloseCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SessionCloseCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = SessionCloseCapabilities(a)
+	return nil
 }
 
 // A boolean on/off toggle session configuration option payload.
@@ -8087,10 +10042,19 @@ func (v *SessionConfigOptionSelect) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionConfigOptionSelect
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Category    json.RawMessage `json:"category"`
+		Description json.RawMessage `json:"description"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionConfigOptionSelect: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Category = orDefault[*SessionConfigOptionCategory](s.Category, "")
+	a.Description = orDefault[*string](s.Description, "")
 	*v = SessionConfigOptionSelect(a)
 	return nil
 }
@@ -8122,10 +10086,19 @@ func (v *SessionConfigOptionBoolean) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionConfigOptionBoolean
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Category    json.RawMessage `json:"category"`
+		Description json.RawMessage `json:"description"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionConfigOptionBoolean: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Category = orDefault[*SessionConfigOptionCategory](s.Category, "")
+	a.Description = orDefault[*string](s.Description, "")
 	*v = SessionConfigOptionBoolean(a)
 	return nil
 }
@@ -8303,6 +10276,27 @@ type SessionConfigOptionsCapabilities struct {
 	Boolean *BooleanConfigOptionCapabilities `json:"boolean,omitempty"`
 }
 
+func (v *SessionConfigOptionsCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SessionConfigOptionsCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias SessionConfigOptionsCapabilities
+	var s struct {
+		Alias
+		Meta    json.RawMessage `json:"_meta"`
+		Boolean json.RawMessage `json:"boolean"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SessionConfigOptionsCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Boolean = orDefault[*BooleanConfigOptionCapabilities](s.Boolean, "")
+	*v = SessionConfigOptionsCapabilities(a)
+	return nil
+}
+
 // A single-value selector (dropdown) session configuration option payload.
 type SessionConfigSelect struct {
 	// The currently selected value.
@@ -8357,9 +10351,18 @@ func (v *SessionConfigSelectGroup) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionConfigSelectGroup
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta    json.RawMessage `json:"_meta"`
+		Options json.RawMessage `json:"options"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionConfigSelectGroup: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[SessionConfigSelectOption](s.Options); err == nil {
+		a.Options = items
 	}
 	*v = SessionConfigSelectGroup(a)
 	return nil
@@ -8387,10 +10390,17 @@ func (v *SessionConfigSelectOption) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionConfigSelectOption
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Description json.RawMessage `json:"description"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionConfigSelectOption: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Description = orDefault[*string](s.Description, "")
 	*v = SessionConfigSelectOption(a)
 	return nil
 }
@@ -8519,6 +10529,25 @@ type SessionDeleteCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *SessionDeleteCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SessionDeleteCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias SessionDeleteCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SessionDeleteCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = SessionDeleteCapabilities(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8533,6 +10562,25 @@ type SessionForkCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *SessionForkCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SessionForkCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias SessionForkCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SessionForkCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = SessionForkCapabilities(a)
+	return nil
 }
 
 // A unique identifier for a conversation session between a client and agent.
@@ -8573,10 +10621,23 @@ func (v *SessionInfo) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionInfo
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta                  json.RawMessage `json:"_meta"`
+		AdditionalDirectories json.RawMessage `json:"additionalDirectories"`
+		Title                 json.RawMessage `json:"title"`
+		UpdatedAt             json.RawMessage `json:"updatedAt"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionInfo: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[string](s.AdditionalDirectories); err == nil {
+		a.AdditionalDirectories = items
+	}
+	a.Title = orDefault[*string](s.Title, "")
+	a.UpdatedAt = orDefault[*string](s.UpdatedAt, "")
 	*v = SessionInfo(a)
 	return nil
 }
@@ -8598,6 +10659,29 @@ type SessionInfoUpdate struct {
 	UpdatedAt *string `json:"updatedAt,omitempty"`
 }
 
+func (v *SessionInfoUpdate) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SessionInfoUpdate")
+	if err != nil {
+		return err
+	}
+	type Alias SessionInfoUpdate
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		Title     json.RawMessage `json:"title"`
+		UpdatedAt json.RawMessage `json:"updatedAt"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SessionInfoUpdate: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Title = orDefault[*string](s.Title, "")
+	a.UpdatedAt = orDefault[*string](s.UpdatedAt, "")
+	*v = SessionInfoUpdate(a)
+	return nil
+}
+
 // Capabilities for the 'session/list' method.
 //
 // Supplying '{}' means the agent supports listing sessions.
@@ -8608,6 +10692,25 @@ type SessionListCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *SessionListCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SessionListCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias SessionListCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SessionListCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = SessionListCapabilities(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -8637,10 +10740,23 @@ func (v *SessionMessage) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionMessage
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta               json.RawMessage `json:"_meta"`
+		Content            json.RawMessage `json:"content"`
+		RecipientSessionId json.RawMessage `json:"recipientSessionId"`
+		SenderSessionId    json.RawMessage `json:"senderSessionId"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionMessage: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[ContentBlock](s.Content); err == nil {
+		a.Content = items
+	}
+	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
+	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
 	*v = SessionMessage(a)
 	return nil
 }
@@ -8671,10 +10787,19 @@ func (v *SessionMessageChunk) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionMessageChunk
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta               json.RawMessage `json:"_meta"`
+		RecipientSessionId json.RawMessage `json:"recipientSessionId"`
+		SenderSessionId    json.RawMessage `json:"senderSessionId"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionMessageChunk: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
+	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
 	*v = SessionMessageChunk(a)
 	return nil
 }
@@ -8703,10 +10828,17 @@ func (v *SessionMode) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionMode
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Description json.RawMessage `json:"description"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionMode: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Description = orDefault[*string](s.Description, "")
 	*v = SessionMode(a)
 	return nil
 }
@@ -8744,9 +10876,18 @@ func (v *SessionModeState) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionModeState
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta           json.RawMessage `json:"_meta"`
+		AvailableModes json.RawMessage `json:"availableModes"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionModeState: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[SessionMode](s.AvailableModes); err == nil {
+		a.AvailableModes = items
 	}
 	*v = SessionModeState(a)
 	return nil
@@ -8776,10 +10917,15 @@ func (v *SessionNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = SessionNotification(a)
 	return nil
 }
@@ -8798,6 +10944,25 @@ type SessionResumeCapabilities struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *SessionResumeCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SessionResumeCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias SessionResumeCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SessionResumeCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = SessionResumeCapabilities(a)
+	return nil
 }
 
 // A chunk of the user's message being streamed.
@@ -8824,10 +10989,17 @@ func (v *SessionUpdateUserMessageChunk) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionUpdateUserMessageChunk
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		MessageId json.RawMessage `json:"messageId"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionUpdateUserMessageChunk: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.MessageId = orDefault[*MessageId](s.MessageId, "")
 	*v = SessionUpdateUserMessageChunk(a)
 	return nil
 }
@@ -8856,10 +11028,17 @@ func (v *SessionUpdateAgentMessageChunk) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionUpdateAgentMessageChunk
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		MessageId json.RawMessage `json:"messageId"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionUpdateAgentMessageChunk: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.MessageId = orDefault[*MessageId](s.MessageId, "")
 	*v = SessionUpdateAgentMessageChunk(a)
 	return nil
 }
@@ -8888,10 +11067,17 @@ func (v *SessionUpdateAgentThoughtChunk) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionUpdateAgentThoughtChunk
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		MessageId json.RawMessage `json:"messageId"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionUpdateAgentThoughtChunk: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.MessageId = orDefault[*MessageId](s.MessageId, "")
 	*v = SessionUpdateAgentThoughtChunk(a)
 	return nil
 }
@@ -8936,10 +11122,33 @@ func (v *SessionUpdateToolCall) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionUpdateToolCall
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		Content   json.RawMessage `json:"content"`
+		Kind      json.RawMessage `json:"kind"`
+		Locations json.RawMessage `json:"locations"`
+		Name      json.RawMessage `json:"name"`
+		RawInput  json.RawMessage `json:"rawInput"`
+		RawOutput json.RawMessage `json:"rawOutput"`
+		Status    json.RawMessage `json:"status"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionUpdateToolCall: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[ToolCallContent](s.Content); err == nil {
+		a.Content = items
+	}
+	a.Kind = orDefault[ToolKind](s.Kind, "")
+	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
+		a.Locations = items
+	}
+	a.Name = orDefault[*string](s.Name, "")
+	a.RawInput = orDefault[json.RawMessage](s.RawInput, "")
+	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
+	a.Status = orDefault[ToolCallStatus](s.Status, "")
 	*v = SessionUpdateToolCall(a)
 	return nil
 }
@@ -8982,10 +11191,35 @@ func (v *SessionToolCallUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionToolCallUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		Content   json.RawMessage `json:"content"`
+		Kind      json.RawMessage `json:"kind"`
+		Locations json.RawMessage `json:"locations"`
+		Name      json.RawMessage `json:"name"`
+		RawInput  json.RawMessage `json:"rawInput"`
+		RawOutput json.RawMessage `json:"rawOutput"`
+		Status    json.RawMessage `json:"status"`
+		Title     json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionToolCallUpdate: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[ToolCallContent](s.Content); err == nil {
+		a.Content = items
+	}
+	a.Kind = orDefault[*ToolKind](s.Kind, "")
+	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
+		a.Locations = items
+	}
+	a.Name = orDefault[*string](s.Name, "")
+	a.RawInput = orDefault[json.RawMessage](s.RawInput, "")
+	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
+	a.Status = orDefault[*ToolCallStatus](s.Status, "")
+	a.Title = orDefault[*string](s.Title, "")
 	*v = SessionToolCallUpdate(a)
 	return nil
 }
@@ -9023,9 +11257,18 @@ func (v *SessionUpdatePlan) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionUpdatePlan
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta    json.RawMessage `json:"_meta"`
+		Entries json.RawMessage `json:"entries"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionUpdatePlan: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[PlanEntry](s.Entries); err == nil {
+		a.Entries = items
 	}
 	*v = SessionUpdatePlan(a)
 	return nil
@@ -9054,10 +11297,15 @@ func (v *SessionPlanUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionPlanUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionPlanUpdate: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = SessionPlanUpdate(a)
 	return nil
 }
@@ -9085,10 +11333,15 @@ func (v *SessionUpdatePlanRemoved) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionUpdatePlanRemoved
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionUpdatePlanRemoved: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = SessionUpdatePlanRemoved(a)
 	return nil
 }
@@ -9122,9 +11375,18 @@ func (v *SessionAvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionAvailableCommandsUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta              json.RawMessage `json:"_meta"`
+		AvailableCommands json.RawMessage `json:"availableCommands"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionAvailableCommandsUpdate: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[AvailableCommand](s.AvailableCommands); err == nil {
+		a.AvailableCommands = items
 	}
 	*v = SessionAvailableCommandsUpdate(a)
 	return nil
@@ -9151,10 +11413,15 @@ func (v *SessionCurrentModeUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionCurrentModeUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionCurrentModeUpdate: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = SessionCurrentModeUpdate(a)
 	return nil
 }
@@ -9188,9 +11455,18 @@ func (v *SessionConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionConfigOptionUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta          json.RawMessage `json:"_meta"`
+		ConfigOptions json.RawMessage `json:"configOptions"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionConfigOptionUpdate: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
+		a.ConfigOptions = items
 	}
 	*v = SessionConfigOptionUpdate(a)
 	return nil
@@ -9209,6 +11485,29 @@ type SessionSessionInfoUpdate struct {
 	Title *string `json:"title,omitempty"`
 	// ISO 8601 timestamp of last activity. Set to null to clear.
 	UpdatedAt *string `json:"updatedAt,omitempty"`
+}
+
+func (v *SessionSessionInfoUpdate) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SessionSessionInfoUpdate")
+	if err != nil {
+		return err
+	}
+	type Alias SessionSessionInfoUpdate
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		Title     json.RawMessage `json:"title"`
+		UpdatedAt json.RawMessage `json:"updatedAt"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SessionSessionInfoUpdate: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Title = orDefault[*string](s.Title, "")
+	a.UpdatedAt = orDefault[*string](s.UpdatedAt, "")
+	*v = SessionSessionInfoUpdate(a)
+	return nil
 }
 
 // Context window and cost update for the session.
@@ -9234,10 +11533,17 @@ func (v *SessionUsageUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionUsageUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+		Cost json.RawMessage `json:"cost"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionUsageUpdate: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Cost = orDefault[*Cost](s.Cost, "")
 	*v = SessionUsageUpdate(a)
 	return nil
 }
@@ -9268,10 +11574,17 @@ func (v *SessionUpdateNotice) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionUpdateNotice
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Description json.RawMessage `json:"description"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionUpdateNotice: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Description = orDefault[*string](s.Description, "")
 	*v = SessionUpdateNotice(a)
 	return nil
 }
@@ -9300,9 +11613,20 @@ func (v *SessionCompactionUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionCompactionUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta    json.RawMessage `json:"_meta"`
+		Error   json.RawMessage `json:"error"`
+		Summary json.RawMessage `json:"summary"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionCompactionUpdate: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Error = orDefault[*string](s.Error, "")
+	if items, err := skipInvalid[ContentBlock](s.Summary); err == nil {
+		a.Summary = items
 	}
 	*v = SessionCompactionUpdate(a)
 	return nil
@@ -9328,10 +11652,15 @@ func (v *SessionUpdateCompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionUpdateCompactionSummaryChunk
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionUpdateCompactionSummaryChunk: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = SessionUpdateCompactionSummaryChunk(a)
 	return nil
 }
@@ -9386,10 +11715,23 @@ func (v *SessionSubagentUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionSubagentUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta         json.RawMessage `json:"_meta"`
+		Capabilities json.RawMessage `json:"capabilities"`
+		Description  json.RawMessage `json:"description"`
+		State        json.RawMessage `json:"state"`
+		Title        json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionSubagentUpdate: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Capabilities = orDefault[*SubagentSessionCapabilities](s.Capabilities, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.State = orDefault[*StateUpdate](s.State, "")
+	a.Title = orDefault[*string](s.Title, "")
 	*v = SessionSubagentUpdate(a)
 	return nil
 }
@@ -9423,10 +11765,23 @@ func (v *SessionUpdateSessionMessage) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionUpdateSessionMessage
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta               json.RawMessage `json:"_meta"`
+		Content            json.RawMessage `json:"content"`
+		RecipientSessionId json.RawMessage `json:"recipientSessionId"`
+		SenderSessionId    json.RawMessage `json:"senderSessionId"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionUpdateSessionMessage: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[ContentBlock](s.Content); err == nil {
+		a.Content = items
+	}
+	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
+	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
 	*v = SessionUpdateSessionMessage(a)
 	return nil
 }
@@ -9458,10 +11813,19 @@ func (v *SessionUpdateSessionMessageChunk) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SessionUpdateSessionMessageChunk
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta               json.RawMessage `json:"_meta"`
+		RecipientSessionId json.RawMessage `json:"recipientSessionId"`
+		SenderSessionId    json.RawMessage `json:"senderSessionId"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SessionUpdateSessionMessageChunk: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
+	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
 	*v = SessionUpdateSessionMessageChunk(a)
 	return nil
 }
@@ -10352,10 +12716,15 @@ func (v *SetSessionConfigOptionBoolean) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SetSessionConfigOptionBoolean
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SetSessionConfigOptionBoolean: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = SetSessionConfigOptionBoolean(a)
 	return nil
 }
@@ -10386,10 +12755,15 @@ func (v *SetSessionConfigOptionValueId) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SetSessionConfigOptionValueId
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SetSessionConfigOptionValueId: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = SetSessionConfigOptionValueId(a)
 	return nil
 }
@@ -10523,9 +12897,18 @@ func (v *SetSessionConfigOptionResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SetSessionConfigOptionResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta          json.RawMessage `json:"_meta"`
+		ConfigOptions json.RawMessage `json:"configOptions"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SetSessionConfigOptionResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
+		a.ConfigOptions = items
 	}
 	*v = SetSessionConfigOptionResponse(a)
 	return nil
@@ -10558,10 +12941,15 @@ func (v *SetSessionModeRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SetSessionModeRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SetSessionModeRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = SetSessionModeRequest(a)
 	return nil
 }
@@ -10580,6 +12968,25 @@ type SetSessionModeResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *SetSessionModeResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SetSessionModeResponse")
+	if err != nil {
+		return err
+	}
+	type Alias SetSessionModeResponse
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SetSessionModeResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = SetSessionModeResponse(a)
+	return nil
+}
+
 func (v *SetSessionModeResponse) Validate() error {
 	return nil
 }
@@ -10591,6 +12998,25 @@ type StateUpdateRunning struct {
 	// Optional; omitted and 'null' mean no metadata for this state snapshot.
 	Meta  map[string]any `json:"_meta,omitempty"`
 	State string         `json:"state"`
+}
+
+func (v *StateUpdateRunning) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "StateUpdateRunning")
+	if err != nil {
+		return err
+	}
+	type Alias StateUpdateRunning
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("StateUpdateRunning: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = StateUpdateRunning(a)
+	return nil
 }
 
 // The child is ready to process another prompt.
@@ -10612,6 +13038,29 @@ type StateUpdateIdle struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+func (v *StateUpdateIdle) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "StateUpdateIdle")
+	if err != nil {
+		return err
+	}
+	type Alias StateUpdateIdle
+	var s struct {
+		Alias
+		Meta       json.RawMessage `json:"_meta"`
+		StopReason json.RawMessage `json:"stopReason"`
+		Usage      json.RawMessage `json:"usage"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("StateUpdateIdle: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.StopReason = orDefault[*string](s.StopReason, "")
+	a.Usage = orDefault[*Usage](s.Usage, "")
+	*v = StateUpdateIdle(a)
+	return nil
+}
+
 // Foreground work is blocked on user action.
 type StateUpdateRequiresAction struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -10619,6 +13068,25 @@ type StateUpdateRequiresAction struct {
 	// Optional; omitted and 'null' mean no metadata for this state snapshot.
 	Meta  map[string]any `json:"_meta,omitempty"`
 	State string         `json:"state"`
+}
+
+func (v *StateUpdateRequiresAction) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "StateUpdateRequiresAction")
+	if err != nil {
+		return err
+	}
+	type Alias StateUpdateRequiresAction
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("StateUpdateRequiresAction: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = StateUpdateRequiresAction(a)
+	return nil
 }
 
 // The Agent cannot currently determine foreground activity.
@@ -10630,6 +13098,25 @@ type StateUpdateUnknown struct {
 	// Optional; omitted and 'null' mean no metadata for this state snapshot.
 	Meta  map[string]any `json:"_meta,omitempty"`
 	State string         `json:"state"`
+}
+
+func (v *StateUpdateUnknown) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "StateUpdateUnknown")
+	if err != nil {
+		return err
+	}
+	type Alias StateUpdateUnknown
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("StateUpdateUnknown: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = StateUpdateUnknown(a)
+	return nil
 }
 
 // Custom or future state.
@@ -10924,10 +13411,15 @@ func (v *StringMultiSelectItems) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias StringMultiSelectItems
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("StringMultiSelectItems: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = StringMultiSelectItems(a)
 	return nil
 }
@@ -10983,6 +13475,31 @@ type StringPropertySchema struct {
 	Title *string `json:"title,omitempty"`
 }
 
+func (v *StringPropertySchema) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "StringPropertySchema")
+	if err != nil {
+		return err
+	}
+	type Alias StringPropertySchema
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Default     json.RawMessage `json:"default"`
+		Description json.RawMessage `json:"description"`
+		Title       json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("StringPropertySchema: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Default = orDefault[*string](s.Default, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.Title = orDefault[*string](s.Title, "")
+	*v = StringPropertySchema(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -10998,6 +13515,25 @@ type SubagentCapabilities struct {
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
 	// these keys.
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *SubagentCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SubagentCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias SubagentCapabilities
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SubagentCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = SubagentCapabilities(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -11017,6 +13553,27 @@ type SubagentSessionCapabilities struct {
 	// the session. Omitted or 'null' means unsupported; an object (including
 	// '{}') means supported.
 	Cancel *SessionCancelCapabilities `json:"cancel,omitempty"`
+}
+
+func (v *SubagentSessionCapabilities) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "SubagentSessionCapabilities")
+	if err != nil {
+		return err
+	}
+	type Alias SubagentSessionCapabilities
+	var s struct {
+		Alias
+		Meta   json.RawMessage `json:"_meta"`
+		Cancel json.RawMessage `json:"cancel"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("SubagentSessionCapabilities: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Cancel = orDefault[*SessionCancelCapabilities](s.Cancel, "")
+	*v = SubagentSessionCapabilities(a)
+	return nil
 }
 
 // **UNSTABLE**
@@ -11085,10 +13642,23 @@ func (v *SubagentUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias SubagentUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta         json.RawMessage `json:"_meta"`
+		Capabilities json.RawMessage `json:"capabilities"`
+		Description  json.RawMessage `json:"description"`
+		State        json.RawMessage `json:"state"`
+		Title        json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("SubagentUpdate: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Capabilities = orDefault[*SubagentSessionCapabilities](s.Capabilities, "")
+	a.Description = orDefault[*string](s.Description, "")
+	a.State = orDefault[*StateUpdate](s.State, "")
+	a.Title = orDefault[*string](s.Title, "")
 	*v = SubagentUpdate(a)
 	return nil
 }
@@ -11115,10 +13685,15 @@ func (v *Terminal) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias Terminal
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("Terminal: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = Terminal(a)
 	return nil
 }
@@ -11135,6 +13710,29 @@ type TerminalExitStatus struct {
 	ExitCode *uint32 `json:"exitCode,omitempty"`
 	// The signal that terminated the process (may be null if exited normally).
 	Signal *string `json:"signal,omitempty"`
+}
+
+func (v *TerminalExitStatus) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "TerminalExitStatus")
+	if err != nil {
+		return err
+	}
+	type Alias TerminalExitStatus
+	var s struct {
+		Alias
+		Meta     json.RawMessage `json:"_meta"`
+		ExitCode json.RawMessage `json:"exitCode"`
+		Signal   json.RawMessage `json:"signal"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("TerminalExitStatus: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.ExitCode = orDefault[*uint32](s.ExitCode, "")
+	a.Signal = orDefault[*string](s.Signal, "")
+	*v = TerminalExitStatus(a)
+	return nil
 }
 
 // Typed identifier used for terminal values on the wire.
@@ -11160,10 +13758,15 @@ func (v *TerminalOutputRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias TerminalOutputRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("TerminalOutputRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = TerminalOutputRequest(a)
 	return nil
 }
@@ -11194,10 +13797,17 @@ func (v *TerminalOutputResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias TerminalOutputResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta       json.RawMessage `json:"_meta"`
+		ExitStatus json.RawMessage `json:"exitStatus"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("TerminalOutputResponse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.ExitStatus = orDefault[*TerminalExitStatus](s.ExitStatus, "")
 	*v = TerminalOutputResponse(a)
 	return nil
 }
@@ -11229,10 +13839,17 @@ func (v *TextContent) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias TextContent
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta        json.RawMessage `json:"_meta"`
+		Annotations json.RawMessage `json:"annotations"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("TextContent: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Annotations = orDefault[*Annotations](s.Annotations, "")
 	*v = TextContent(a)
 	return nil
 }
@@ -11271,10 +13888,17 @@ func (v *TextResourceContents) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias TextResourceContents
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta     json.RawMessage `json:"_meta"`
+		MimeType json.RawMessage `json:"mimeType"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("TextResourceContents: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.MimeType = orDefault[*string](s.MimeType, "")
 	*v = TextResourceContents(a)
 	return nil
 }
@@ -11309,10 +13933,15 @@ func (v *TitledMultiSelectItems) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias TitledMultiSelectItems
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("TitledMultiSelectItems: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = TitledMultiSelectItems(a)
 	return nil
 }
@@ -11361,10 +13990,33 @@ func (v *ToolCall) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ToolCall
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		Content   json.RawMessage `json:"content"`
+		Kind      json.RawMessage `json:"kind"`
+		Locations json.RawMessage `json:"locations"`
+		Name      json.RawMessage `json:"name"`
+		RawInput  json.RawMessage `json:"rawInput"`
+		RawOutput json.RawMessage `json:"rawOutput"`
+		Status    json.RawMessage `json:"status"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ToolCall: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[ToolCallContent](s.Content); err == nil {
+		a.Content = items
+	}
+	a.Kind = orDefault[ToolKind](s.Kind, "")
+	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
+		a.Locations = items
+	}
+	a.Name = orDefault[*string](s.Name, "")
+	a.RawInput = orDefault[json.RawMessage](s.RawInput, "")
+	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
+	a.Status = orDefault[ToolCallStatus](s.Status, "")
 	*v = ToolCall(a)
 	return nil
 }
@@ -11388,10 +14040,15 @@ func (v *ToolCallContentContent) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ToolCallContentContent
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ToolCallContentContent: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = ToolCallContentContent(a)
 	return nil
 }
@@ -11419,10 +14076,17 @@ func (v *ToolCallContentDiff) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ToolCallContentDiff
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta    json.RawMessage `json:"_meta"`
+		OldText json.RawMessage `json:"oldText"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ToolCallContentDiff: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.OldText = orDefault[*string](s.OldText, "")
 	*v = ToolCallContentDiff(a)
 	return nil
 }
@@ -11450,10 +14114,15 @@ func (v *ToolCallContentTerminal) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ToolCallContentTerminal
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ToolCallContentTerminal: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = ToolCallContentTerminal(a)
 	return nil
 }
@@ -11673,10 +14342,17 @@ func (v *ToolCallLocation) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ToolCallLocation
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+		Line json.RawMessage `json:"line"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ToolCallLocation: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Line = orDefault[*uint32](s.Line, "")
 	*v = ToolCallLocation(a)
 	return nil
 }
@@ -11737,10 +14413,35 @@ func (v *ToolCallUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias ToolCallUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		Content   json.RawMessage `json:"content"`
+		Kind      json.RawMessage `json:"kind"`
+		Locations json.RawMessage `json:"locations"`
+		Name      json.RawMessage `json:"name"`
+		RawInput  json.RawMessage `json:"rawInput"`
+		RawOutput json.RawMessage `json:"rawOutput"`
+		Status    json.RawMessage `json:"status"`
+		Title     json.RawMessage `json:"title"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("ToolCallUpdate: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[ToolCallContent](s.Content); err == nil {
+		a.Content = items
+	}
+	a.Kind = orDefault[*ToolKind](s.Kind, "")
+	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
+		a.Locations = items
+	}
+	a.Name = orDefault[*string](s.Name, "")
+	a.RawInput = orDefault[json.RawMessage](s.RawInput, "")
+	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
+	a.Status = orDefault[*ToolCallStatus](s.Status, "")
+	a.Title = orDefault[*string](s.Title, "")
 	*v = ToolCallUpdate(a)
 	return nil
 }
@@ -11793,6 +14494,25 @@ type UnknownStateUpdate struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *UnknownStateUpdate) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "UnknownStateUpdate")
+	if err != nil {
+		return err
+	}
+	type Alias UnknownStateUpdate
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("UnknownStateUpdate: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = UnknownStateUpdate(a)
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -11817,10 +14537,15 @@ func (v *UnstableAcceptNesNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableAcceptNesNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableAcceptNesNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableAcceptNesNotification(a)
 	return nil
 }
@@ -11854,10 +14579,15 @@ func (v *UnstableCloseNesRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableCloseNesRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableCloseNesRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableCloseNesRequest(a)
 	return nil
 }
@@ -11878,6 +14608,25 @@ type UnstableCloseNesResponse struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *UnstableCloseNesResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "UnstableCloseNesResponse")
+	if err != nil {
+		return err
+	}
+	type Alias UnstableCloseNesResponse
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("UnstableCloseNesResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = UnstableCloseNesResponse(a)
+	return nil
 }
 
 func (v *UnstableCloseNesResponse) Validate() error {
@@ -11922,10 +14671,15 @@ func (v *UnstableDidChangeDocumentNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableDidChangeDocumentNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableDidChangeDocumentNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableDidChangeDocumentNotification(a)
 	return nil
 }
@@ -11964,10 +14718,15 @@ func (v *UnstableDidCloseDocumentNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableDidCloseDocumentNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableDidCloseDocumentNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableDidCloseDocumentNotification(a)
 	return nil
 }
@@ -12009,10 +14768,15 @@ func (v *UnstableDidFocusDocumentNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableDidFocusDocumentNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableDidFocusDocumentNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableDidFocusDocumentNotification(a)
 	return nil
 }
@@ -12054,10 +14818,15 @@ func (v *UnstableDidOpenDocumentNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableDidOpenDocumentNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableDidOpenDocumentNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableDidOpenDocumentNotification(a)
 	return nil
 }
@@ -12099,10 +14868,15 @@ func (v *UnstableDidSaveDocumentNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableDidSaveDocumentNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableDidSaveDocumentNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableDidSaveDocumentNotification(a)
 	return nil
 }
@@ -12136,10 +14910,15 @@ func (v *UnstableDisableProviderRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableDisableProviderRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableDisableProviderRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableDisableProviderRequest(a)
 	return nil
 }
@@ -12160,6 +14939,25 @@ type UnstableDisableProviderResponse struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *UnstableDisableProviderResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "UnstableDisableProviderResponse")
+	if err != nil {
+		return err
+	}
+	type Alias UnstableDisableProviderResponse
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("UnstableDisableProviderResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = UnstableDisableProviderResponse(a)
+	return nil
 }
 
 func (v *UnstableDisableProviderResponse) Validate() error {
@@ -12203,10 +15001,15 @@ func (v *UnstableForkSessionRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableForkSessionRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableForkSessionRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableForkSessionRequest(a)
 	return nil
 }
@@ -12246,10 +15049,21 @@ func (v *UnstableForkSessionResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableForkSessionResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta          json.RawMessage `json:"_meta"`
+		ConfigOptions json.RawMessage `json:"configOptions"`
+		Modes         json.RawMessage `json:"modes"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableForkSessionResponse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
+		a.ConfigOptions = items
+	}
+	a.Modes = orDefault[*SessionModeState](s.Modes, "")
 	*v = UnstableForkSessionResponse(a)
 	return nil
 }
@@ -12270,6 +15084,25 @@ type UnstableListProvidersRequest struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *UnstableListProvidersRequest) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "UnstableListProvidersRequest")
+	if err != nil {
+		return err
+	}
+	type Alias UnstableListProvidersRequest
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("UnstableListProvidersRequest: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = UnstableListProvidersRequest(a)
+	return nil
 }
 
 func (v *UnstableListProvidersRequest) Validate() error {
@@ -12308,10 +15141,15 @@ func (v *UnstableListProvidersResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableListProvidersResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableListProvidersResponse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableListProvidersResponse(a)
 	return nil
 }
@@ -12417,10 +15255,15 @@ func (v *UnstableMcpServerHttp) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableMcpServerHttp
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableMcpServerHttp: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableMcpServerHttp(a)
 	return nil
 }
@@ -12460,10 +15303,15 @@ func (v *UnstableMcpServerSse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableMcpServerSse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableMcpServerSse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableMcpServerSse(a)
 	return nil
 }
@@ -12499,10 +15347,15 @@ func (v *UnstableMcpServerAcpInline) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableMcpServerAcpInline
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableMcpServerAcpInline: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableMcpServerAcpInline(a)
 	return nil
 }
@@ -12707,10 +15560,15 @@ func (v *UnstableMcpServerAcp) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableMcpServerAcp
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableMcpServerAcp: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableMcpServerAcp(a)
 	return nil
 }
@@ -12758,10 +15616,15 @@ func (v *UnstableMessageMcpNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableMessageMcpNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableMessageMcpNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableMessageMcpNotification(a)
 	return nil
 }
@@ -12803,10 +15666,15 @@ func (v *UnstableMessageMcpRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableMessageMcpRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableMessageMcpRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableMessageMcpRequest(a)
 	return nil
 }
@@ -12832,10 +15700,15 @@ func (v *UnstableMessageMcpResult) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableMessageMcpResult
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableMessageMcpResult: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableMessageMcpResult(a)
 	return nil
 }
@@ -12854,10 +15727,15 @@ func (v *UnstableMessageMcpError) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableMessageMcpError
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableMessageMcpError: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableMessageMcpError(a)
 	return nil
 }
@@ -12997,10 +15875,15 @@ func (v *UnstableNesDiagnostic) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesDiagnostic
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesDiagnostic: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesDiagnostic(a)
 	return nil
 }
@@ -13043,10 +15926,15 @@ func (v *UnstableNesEditHistoryEntry) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesEditHistoryEntry
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesEditHistoryEntry: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesEditHistoryEntry(a)
 	return nil
 }
@@ -13089,10 +15977,17 @@ func (v *UnstableNesEditSuggestion) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesEditSuggestion
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta           json.RawMessage `json:"_meta"`
+		CursorPosition json.RawMessage `json:"cursorPosition"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesEditSuggestion: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.CursorPosition = orDefault[*UnstablePosition](s.CursorPosition, "")
 	*v = UnstableNesEditSuggestion(a)
 	return nil
 }
@@ -13123,10 +16018,15 @@ func (v *UnstableNesExcerpt) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesExcerpt
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesExcerpt: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesExcerpt(a)
 	return nil
 }
@@ -13157,10 +16057,15 @@ func (v *UnstableNesJumpSuggestion) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesJumpSuggestion
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesJumpSuggestion: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesJumpSuggestion(a)
 	return nil
 }
@@ -13193,10 +16098,19 @@ func (v *UnstableNesOpenFile) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesOpenFile
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta          json.RawMessage `json:"_meta"`
+		LastFocusedMs json.RawMessage `json:"lastFocusedMs"`
+		VisibleRange  json.RawMessage `json:"visibleRange"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesOpenFile: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.LastFocusedMs = orDefault[*uint64](s.LastFocusedMs, "")
+	a.VisibleRange = orDefault[*UnstableRange](s.VisibleRange, "")
 	*v = UnstableNesOpenFile(a)
 	return nil
 }
@@ -13227,10 +16141,15 @@ func (v *UnstableNesRecentFile) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesRecentFile
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesRecentFile: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesRecentFile(a)
 	return nil
 }
@@ -13283,10 +16202,15 @@ func (v *UnstableNesRelatedSnippet) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesRelatedSnippet
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesRelatedSnippet: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesRelatedSnippet(a)
 	return nil
 }
@@ -13319,10 +16243,15 @@ func (v *UnstableNesRenameSuggestion) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesRenameSuggestion
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesRenameSuggestion: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesRenameSuggestion(a)
 	return nil
 }
@@ -13353,10 +16282,15 @@ func (v *UnstableNesRepository) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesRepository
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesRepository: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesRepository(a)
 	return nil
 }
@@ -13391,10 +16325,15 @@ func (v *UnstableNesSearchAndReplaceSuggestion) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesSearchAndReplaceSuggestion
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesSearchAndReplaceSuggestion: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesSearchAndReplaceSuggestion(a)
 	return nil
 }
@@ -13423,6 +16362,25 @@ type UnstableNesSuggestContext struct {
 	RelatedSnippets []UnstableNesRelatedSnippet `json:"relatedSnippets,omitempty"`
 	// Recent user actions (typing, navigation, etc.).
 	UserActions []UnstableNesUserAction `json:"userActions,omitempty"`
+}
+
+func (v *UnstableNesSuggestContext) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "UnstableNesSuggestContext")
+	if err != nil {
+		return err
+	}
+	type Alias UnstableNesSuggestContext
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("UnstableNesSuggestContext: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = UnstableNesSuggestContext(a)
+	return nil
 }
 
 // A text edit suggestion.
@@ -13460,10 +16418,17 @@ func (v *UnstableNesSuggestionEdit) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesSuggestionEdit
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta           json.RawMessage `json:"_meta"`
+		CursorPosition json.RawMessage `json:"cursorPosition"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesSuggestionEdit: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.CursorPosition = orDefault[*UnstablePosition](s.CursorPosition, "")
 	*v = UnstableNesSuggestionEdit(a)
 	return nil
 }
@@ -13491,10 +16456,15 @@ func (v *UnstableNesSuggestionJump) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesSuggestionJump
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesSuggestionJump: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesSuggestionJump(a)
 	return nil
 }
@@ -13524,10 +16494,15 @@ func (v *UnstableNesSuggestionRename) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesSuggestionRename
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesSuggestionRename: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesSuggestionRename(a)
 	return nil
 }
@@ -13559,10 +16534,15 @@ func (v *UnstableNesSuggestionSearchAndReplace) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesSuggestionSearchAndReplace
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesSuggestionSearchAndReplace: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesSuggestionSearchAndReplace(a)
 	return nil
 }
@@ -13847,10 +16827,15 @@ func (v *UnstableNesTextEdit) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesTextEdit
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesTextEdit: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesTextEdit(a)
 	return nil
 }
@@ -13896,10 +16881,15 @@ func (v *UnstableNesUserAction) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableNesUserAction
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableNesUserAction: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableNesUserAction(a)
 	return nil
 }
@@ -13930,10 +16920,15 @@ func (v *UnstablePosition) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstablePosition
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstablePosition: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstablePosition(a)
 	return nil
 }
@@ -13962,10 +16957,15 @@ func (v *UnstableProviderCurrentConfig) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableProviderCurrentConfig
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableProviderCurrentConfig: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableProviderCurrentConfig(a)
 	return nil
 }
@@ -14017,9 +17017,18 @@ func (v *UnstableProviderInfo) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableProviderInfo
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta      json.RawMessage `json:"_meta"`
+		Supported json.RawMessage `json:"supported"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableProviderInfo: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	if items, err := skipInvalid[UnstableLlmProtocol](s.Supported); err == nil {
+		a.Supported = items
 	}
 	*v = UnstableProviderInfo(a)
 	return nil
@@ -14049,10 +17058,15 @@ func (v *UnstableRange) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableRange
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableRange: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableRange(a)
 	return nil
 }
@@ -14083,10 +17097,17 @@ func (v *UnstableRejectNesNotification) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableRejectNesNotification
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta   json.RawMessage `json:"_meta"`
+		Reason json.RawMessage `json:"reason"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableRejectNesNotification: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Reason = orDefault[*UnstableNesRejectReason](s.Reason, "")
 	*v = UnstableRejectNesNotification(a)
 	return nil
 }
@@ -14126,10 +17147,15 @@ func (v *UnstableSetProviderRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableSetProviderRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableSetProviderRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableSetProviderRequest(a)
 	return nil
 }
@@ -14155,6 +17181,25 @@ type UnstableSetProviderResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+func (v *UnstableSetProviderResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "UnstableSetProviderResponse")
+	if err != nil {
+		return err
+	}
+	type Alias UnstableSetProviderResponse
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("UnstableSetProviderResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = UnstableSetProviderResponse(a)
+	return nil
+}
+
 func (v *UnstableSetProviderResponse) Validate() error {
 	return nil
 }
@@ -14177,6 +17222,29 @@ type UnstableStartNesRequest struct {
 	WorkspaceFolders []UnstableWorkspaceFolder `json:"workspaceFolders,omitempty"`
 	// The root URI of the workspace.
 	WorkspaceUri *string `json:"workspaceUri,omitempty"`
+}
+
+func (v *UnstableStartNesRequest) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "UnstableStartNesRequest")
+	if err != nil {
+		return err
+	}
+	type Alias UnstableStartNesRequest
+	var s struct {
+		Alias
+		Meta         json.RawMessage `json:"_meta"`
+		Repository   json.RawMessage `json:"repository"`
+		WorkspaceUri json.RawMessage `json:"workspaceUri"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("UnstableStartNesRequest: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Repository = orDefault[*UnstableNesRepository](s.Repository, "")
+	a.WorkspaceUri = orDefault[*string](s.WorkspaceUri, "")
+	*v = UnstableStartNesRequest(a)
+	return nil
 }
 
 func (v *UnstableStartNesRequest) Validate() error {
@@ -14205,10 +17273,15 @@ func (v *UnstableStartNesResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableStartNesResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableStartNesResponse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableStartNesResponse(a)
 	return nil
 }
@@ -14251,10 +17324,15 @@ func (v *UnstableSuggestNesRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableSuggestNesRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableSuggestNesRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableSuggestNesRequest(a)
 	return nil
 }
@@ -14298,10 +17376,15 @@ func (v *UnstableSuggestNesResponse) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableSuggestNesResponse
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableSuggestNesResponse: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableSuggestNesResponse(a)
 	return nil
 }
@@ -14340,10 +17423,15 @@ func (v *UnstableTextDocumentContentChangeEvent) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableTextDocumentContentChangeEvent
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableTextDocumentContentChangeEvent: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableTextDocumentContentChangeEvent(a)
 	return nil
 }
@@ -14372,10 +17460,15 @@ func (v *UnstableWorkspaceFolder) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstableWorkspaceFolder
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstableWorkspaceFolder: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstableWorkspaceFolder(a)
 	return nil
 }
@@ -14398,10 +17491,15 @@ func (v *UnstructuredCommandInput) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UnstructuredCommandInput
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UnstructuredCommandInput: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = UnstructuredCommandInput(a)
 	return nil
 }
@@ -14438,10 +17536,21 @@ func (v *Usage) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias Usage
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta              json.RawMessage `json:"_meta"`
+		CachedReadTokens  json.RawMessage `json:"cachedReadTokens"`
+		CachedWriteTokens json.RawMessage `json:"cachedWriteTokens"`
+		ThoughtTokens     json.RawMessage `json:"thoughtTokens"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("Usage: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.CachedReadTokens = orDefault[*uint64](s.CachedReadTokens, "")
+	a.CachedWriteTokens = orDefault[*uint64](s.CachedWriteTokens, "")
+	a.ThoughtTokens = orDefault[*uint64](s.ThoughtTokens, "")
 	*v = Usage(a)
 	return nil
 }
@@ -14468,10 +17577,17 @@ func (v *UsageUpdate) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias UsageUpdate
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+		Cost json.RawMessage `json:"cost"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("UsageUpdate: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Cost = orDefault[*Cost](s.Cost, "")
 	*v = UsageUpdate(a)
 	return nil
 }
@@ -14496,10 +17612,15 @@ func (v *WaitForTerminalExitRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias WaitForTerminalExitRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("WaitForTerminalExitRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = WaitForTerminalExitRequest(a)
 	return nil
 }
@@ -14520,6 +17641,29 @@ type WaitForTerminalExitResponse struct {
 	ExitCode *uint32 `json:"exitCode,omitempty"`
 	// The signal that terminated the process (may be null if exited normally).
 	Signal *string `json:"signal,omitempty"`
+}
+
+func (v *WaitForTerminalExitResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "WaitForTerminalExitResponse")
+	if err != nil {
+		return err
+	}
+	type Alias WaitForTerminalExitResponse
+	var s struct {
+		Alias
+		Meta     json.RawMessage `json:"_meta"`
+		ExitCode json.RawMessage `json:"exitCode"`
+		Signal   json.RawMessage `json:"signal"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("WaitForTerminalExitResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.ExitCode = orDefault[*uint32](s.ExitCode, "")
+	a.Signal = orDefault[*string](s.Signal, "")
+	*v = WaitForTerminalExitResponse(a)
+	return nil
 }
 
 func (v *WaitForTerminalExitResponse) Validate() error {
@@ -14550,10 +17694,15 @@ func (v *WriteTextFileRequest) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	type Alias WriteTextFileRequest
-	var a Alias
-	if err := json.Unmarshal(b, &a); err != nil {
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("WriteTextFileRequest: %w", err)
 	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = WriteTextFileRequest(a)
 	return nil
 }
@@ -14576,6 +17725,25 @@ type WriteTextFileResponse struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
+}
+
+func (v *WriteTextFileResponse) UnmarshalJSON(b []byte) error {
+	_, err := objectKeys(b, "WriteTextFileResponse")
+	if err != nil {
+		return err
+	}
+	type Alias WriteTextFileResponse
+	var s struct {
+		Alias
+		Meta json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("WriteTextFileResponse: %w", err)
+	}
+	a := s.Alias
+	a.Meta = orDefault[map[string]any](s.Meta, "")
+	*v = WriteTextFileResponse(a)
+	return nil
 }
 
 func (v *WriteTextFileResponse) Validate() error {
@@ -14820,4 +17988,42 @@ func objectKeys(b []byte, typ string, required ...string) (map[string]json.RawMe
 		}
 	}
 	return m, nil
+}
+
+// orDefault decodes raw into a T, or, when raw is empty or does not decode, def,
+// the schema default, or the zero value when def is empty.
+func orDefault[T any](raw json.RawMessage, def string) T {
+	var v T
+	if len(raw) > 0 && json.Unmarshal(raw, &v) == nil {
+		return v
+	}
+	var d T
+	if def != "" && json.Unmarshal([]byte(def), &d) != nil {
+		var zero T
+		return zero
+	}
+	return d
+}
+
+// skipInvalid decodes raw as a JSON array, dropping the items that do not decode
+// into a T. An empty raw value or null is no items.
+func skipInvalid[T any](raw json.RawMessage) ([]T, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, err
+	}
+	if items == nil {
+		return nil, nil
+	}
+	out := make([]T, 0, len(items))
+	for _, it := range items {
+		var v T
+		if json.Unmarshal(it, &v) == nil {
+			out = append(out, v)
+		}
+	}
+	return out, nil
 }

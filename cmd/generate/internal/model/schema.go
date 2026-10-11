@@ -192,8 +192,9 @@ func isOpenStringEnum(def *load.Definition) bool {
 	return sawConst
 }
 
-// checkRefs fails on a $ref that is not local or names no definition, and on
-// an integer or number whose format has no Go type (keywords.go).
+// checkRefs fails on a $ref that is not local or names no definition, on an
+// integer or number whose format has no Go type (keywords.go), and on
+// x-deserialize-skip-invalid-items on a node that is not an array.
 func checkRefs(schema *load.Schema) error {
 	for _, name := range slices.Sorted(maps.Keys(schema.Defs)) {
 		if err := walkRefs(schema, name, schema.Defs[name]); err != nil {
@@ -218,6 +219,9 @@ func walkRefs(schema *load.Schema, path string, d *load.Definition) error {
 	}
 	if typ := primaryType(d); (typ == schemaTypeInteger || typ == schemaTypeNumber) && numericFormat(typ, d.Format) == "" {
 		return fmt.Errorf("%s: format %q on %s has no Go type", path, d.Format, typ)
+	}
+	if typ := primaryType(d); d.XDeserializeSkipInvalidItems && typ != schemaTypeArray {
+		return fmt.Errorf("%s: x-deserialize-skip-invalid-items on %s, not an array", path, typ)
 	}
 	children := []schemaNode{
 		{path + ".items", d.Items},

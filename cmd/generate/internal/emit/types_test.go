@@ -129,3 +129,55 @@ func TestRequiredKeysDecoder(t *testing.T) {
 		t.Fatalf("generated code does not compile: %v\n%s", err, src)
 	}
 }
+
+// TestLenientDecoder requires each lenient shape to decode from its own raw
+// value: default-on-error through orDefault with the schema default,
+// skip-invalid-items with default-on-error through skipInvalid with a
+// fallback, and skip-invalid-items alone failing on a value that is not an
+// array; and the output, with its helpers, to compile.
+func TestLenientDecoder(t *testing.T) {
+	t.Parallel()
+	schema := &load.Schema{Defs: map[string]*load.Definition{"Options": {
+		Type: "object",
+		Properties: map[string]*load.Definition{
+			"mode":  {Type: "string", Default: "auto", XDeserializeDefaultOnError: true},
+			"tags":  {Type: "array", Items: &load.Definition{Type: "string"}, Default: []any{}, XDeserializeDefaultOnError: true, XDeserializeSkipInvalidItems: true},
+			"ids":   {Type: "array", Items: &load.Definition{Type: "integer", Format: "uint32"}, XDeserializeSkipInvalidItems: true},
+			"plain": {Type: "string"},
+		},
+	}}}
+	m, err := model.Build(model.Input{Meta: &load.Meta{}, Schema: schema})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newFile()
+	emitObjectSchema(f, m.Type("Options"))
+	emitDecodeHelpers(f)
+	src := render(t, f)
+	for _, want := range []string{
+		"\t\tMode json.RawMessage `json:\"mode\"`",
+		`a.Mode = orDefault[string](s.Mode, "\"auto\"")`,
+		`if items, err := skipInvalid[string](s.Tags); err == nil {`,
+		`a.Tags = orDefault[[]string](nil, "[]")`,
+		`items, err := skipInvalid[uint32](s.Ids)`,
+		`return fmt.Errorf("Options: %q: %w", "ids", err)`,
+		"func orDefault[T any](raw json.RawMessage, def string) T {",
+		"func skipInvalid[T any](raw json.RawMessage) ([]T, error) {",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("output lacks %q:\n%s", want, src)
+		}
+	}
+	if strings.Contains(src, "Plain json.RawMessage") {
+		t.Error("a field without a lenient keyword is shadowed")
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "options.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
+	if _, err := conf.Check("acp", fset, []*ast.File{file}, nil); err != nil {
+		t.Fatalf("generated code does not compile: %v\n%s", err, src)
+	}
+}
