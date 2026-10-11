@@ -198,6 +198,7 @@ func (v *AgentNotification) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &a); err != nil {
 		return fmt.Errorf("AgentNotification: %w", err)
 	}
+	a.Params = absentIfNull(a.Params)
 	*v = AgentNotification(a)
 	return nil
 }
@@ -226,6 +227,7 @@ func (v *AgentRequest) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &a); err != nil {
 		return fmt.Errorf("AgentRequest: %w", err)
 	}
+	a.Params = absentIfNull(a.Params)
 	*v = AgentRequest(a)
 	return nil
 }
@@ -1450,6 +1452,7 @@ func (v *ClientNotification) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &a); err != nil {
 		return fmt.Errorf("ClientNotification: %w", err)
 	}
+	a.Params = absentIfNull(a.Params)
 	*v = ClientNotification(a)
 	return nil
 }
@@ -1478,6 +1481,7 @@ func (v *ClientRequest) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &a); err != nil {
 		return fmt.Errorf("ClientRequest: %w", err)
 	}
+	a.Params = absentIfNull(a.Params)
 	*v = ClientRequest(a)
 	return nil
 }
@@ -5096,6 +5100,7 @@ func (v *Error) UnmarshalJSON(b []byte) error {
 	}
 	a := s.Alias
 	a.Data = orDefault[json.RawMessage](s.Data, "")
+	a.Data = absentIfNull(a.Data)
 	*v = Error(a)
 	return nil
 }
@@ -5830,6 +5835,7 @@ func (v *IdleStateUpdateNone) UnmarshalJSON(b []byte) error {
 	a := s.Alias
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	a.Usage = orDefault[*Usage](s.Usage, "")
+	a.StopReason = absentIfNull(a.StopReason)
 	*v = IdleStateUpdateNone(a)
 	return nil
 }
@@ -11710,6 +11716,8 @@ func (v *SessionUpdateToolCall) UnmarshalJSON(b []byte) error {
 	a.RawInput = orDefault[json.RawMessage](s.RawInput, "")
 	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
 	a.Status = orDefault[ToolCallStatus](s.Status, "")
+	a.RawInput = absentIfNull(a.RawInput)
+	a.RawOutput = absentIfNull(a.RawOutput)
 	*v = SessionUpdateToolCall(a)
 	return nil
 }
@@ -11790,6 +11798,8 @@ func (v *SessionToolCallUpdate) UnmarshalJSON(b []byte) error {
 	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
 	a.Status = orDefault[*ToolCallStatus](s.Status, "")
 	a.Title = orDefault[*string](s.Title, "")
+	a.RawInput = absentIfNull(a.RawInput)
+	a.RawOutput = absentIfNull(a.RawOutput)
 	*v = SessionToolCallUpdate(a)
 	return nil
 }
@@ -14779,6 +14789,8 @@ func (v *ToolCall) UnmarshalJSON(b []byte) error {
 	a.RawInput = orDefault[json.RawMessage](s.RawInput, "")
 	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
 	a.Status = orDefault[ToolCallStatus](s.Status, "")
+	a.RawInput = absentIfNull(a.RawInput)
+	a.RawOutput = absentIfNull(a.RawOutput)
 	*v = ToolCall(a)
 	return nil
 }
@@ -15225,6 +15237,8 @@ func (v *ToolCallUpdate) UnmarshalJSON(b []byte) error {
 	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
 	a.Status = orDefault[*ToolCallStatus](s.Status, "")
 	a.Title = orDefault[*string](s.Title, "")
+	a.RawInput = absentIfNull(a.RawInput)
+	a.RawOutput = absentIfNull(a.RawOutput)
 	*v = ToolCallUpdate(a)
 	return nil
 }
@@ -15971,6 +15985,7 @@ func (v *UnstableMcpError) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &a); err != nil {
 		return fmt.Errorf("UnstableMcpError: %w", err)
 	}
+	a.Data = absentIfNull(a.Data)
 	*v = UnstableMcpError(a)
 	return nil
 }
@@ -18804,4 +18819,13 @@ func skipInvalid[T any](raw json.RawMessage) ([]T, error) {
 		}
 	}
 	return out, nil
+}
+
+// absentIfNull returns raw, or nil when raw is the JSON null: a null raw value
+// is an absent one, as ACP v1 defines it for rawInput and rawOutput.
+func absentIfNull(raw json.RawMessage) json.RawMessage {
+	if string(raw) == "null" {
+		return nil
+	}
+	return raw
 }

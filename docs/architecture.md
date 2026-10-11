@@ -75,10 +75,13 @@ keyword, and the model refuses an integer or number `format` without a Go type.
 A number takes the Go type of its `format`; a typed `additionalProperties`
 gives a typed map; a value the model gives no Go type is `json.RawMessage`; and
 an optional struct value carries no `omitempty`. A generated `UnmarshalJSON`
-requires the required keys through `objectKeys`, and decodes each
+requires the required keys through `objectKeys`, decodes each
 `x-deserialize-default-on-error` field through `orDefault` and each
-`x-deserialize-skip-invalid-items` array through `skipInvalid`, three helpers
-`types_gen.go` emits once. `Validate` checks only what the schema states: a
+`x-deserialize-skip-invalid-items` array through `skipInvalid`, and empties
+an optional raw value that is `null` through `absentIfNull`, so it is not
+sent on; `types_gen.go` emits each helper once. A null raw value is an absent
+one, as ACP v1 defines it for `rawInput` and `rawOutput`; a required one, such
+as `result`, keeps `null`. `Validate` checks only what the schema states: a
 union has exactly one variant set, a string meets its `minLength`, a number
 meets a bound its Go type does not enforce, and every nested value validates.
 
@@ -94,6 +97,8 @@ Checks that guard this:
 - `TestKeywordRegistryMatchesLoader` and `TestCommittedSchemaKeywordsRegistered`
   in `internal/model` fail when a keyword has no treatment.
   `fidelity_test.go` covers the types, decoding, and validation it describes.
+- `raw_value_test.go` guards raw values: an absent or `null` optional one
+  decodes to empty and is not sent, under both builds of `encoding/json`.
 - `json_parity_test.go` compares encodings with the goldens in
   `testdata/json_golden/`. `json_v1_pin_test.go` pins HTML escaping and sorted map
   keys. `generated_output_test.go` covers the encoding rules above, and

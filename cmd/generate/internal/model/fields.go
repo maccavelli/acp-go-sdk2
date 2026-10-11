@@ -121,8 +121,13 @@ type Field struct {
 	// Default is set on a top-level object's field with a schema default.
 	Default *Default
 	// Fill is true for a required slice or map that encodes nil as empty.
-	Fill  bool
-	Facts Facts
+	Fill bool
+	// NullIsAbsent is true for a raw field that is not required: a JSON null
+	// in it decodes to an empty value, as ACP v1 defines a null raw value to
+	// be an absent one (0012-MADR-schema-fidelity-framework.md, amendment of
+	// 2026-10-11).
+	NullIsAbsent bool
+	Facts        Facts
 }
 
 // Struct is a generated struct other than a definition's own type.
@@ -385,6 +390,7 @@ func objectFields(t *Type) ([]*Field, error) {
 			fld.Type = optionalTypeRef(prop)
 			fld.Fill = fld.Required && fld.Default == nil && fld.Type.IsCollection()
 		}
+		fld.NullIsAbsent = !fld.Required && fld.Type.Kind == RefRaw
 		out = append(out, fld)
 	}
 	return out, nil
@@ -403,6 +409,7 @@ func plainFields(owner string, props map[string]*load.Definition, req map[string
 		}
 		fld := &Field{Key: key, Name: name, Tag: key, Required: req[key], Doc: docLines(prop.Description), Facts: factsOf(prop)}
 		fld.Type = optionalTypeRef(prop)
+		fld.NullIsAbsent = !fld.Required && fld.Type.Kind == RefRaw
 		if fld.Required {
 			fld.Fill = fld.Type.IsCollection()
 		} else {

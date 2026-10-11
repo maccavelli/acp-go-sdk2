@@ -1,5 +1,7 @@
 A property the schema gives no type is kept as raw JSON; additionalProperties
-true is an untyped map.
+true is an untyped map. A null in an optional raw property is an absent one,
+and a required one keeps null (0012-MADR-schema-fidelity-framework.md,
+amendment of 2026-10-11); Loose has no other reason to have a decoder.
 The meta declares $/cancel_request and the schema its smallest definition, which
 the runtime needs.
 
@@ -7,7 +9,8 @@ the runtime needs.
 {"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
 -- schema.json --
 {"$defs": {
-  "Holder": {"type": "object", "properties": {"input": {"description": "Anything."}, "meta": {"type": ["object", "null"], "additionalProperties": true}}, "required": ["input"]},
+  "Holder": {"type": "object", "properties": {"input": {"description": "Anything."}, "extra": {"description": "Anything else."}, "meta": {"type": ["object", "null"], "additionalProperties": true}}, "required": ["input"]},
+  "Loose": {"type": "object", "properties": {"any": {}}},
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
 }}
 -- want.api --
@@ -16,11 +19,13 @@ type AgentExperimental interface{}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
-type Holder struct{Input json.RawMessage "json:\"input\""; Meta map[string]any "json:\"meta,omitempty\""}
+type Holder struct{Extra json.RawMessage "json:\"extra,omitempty\""; Input json.RawMessage "json:\"input\""; Meta map[string]any "json:\"meta,omitempty\""}
+type Loose struct{Any json.RawMessage "json:\"any,omitempty\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 func (*CancelRequestNotification).Validate() error
 func (*Holder).UnmarshalJSON(b []byte) error
+func (*Loose).UnmarshalJSON(b []byte) error
 -- behaviour_test.go --
 package acp
 
@@ -50,5 +55,30 @@ func TestRawValue(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(`{"meta":{}}`), new(Holder)); err == nil {
 		t.Error("a holder without its required input decoded")
+	}
+}
+
+// A null in an optional raw property is an absent one: empty, and not sent. A
+// required one keeps null, the value it carries.
+func TestRawNullIsAbsent(t *testing.T) {
+	var h Holder
+	if err := json.Unmarshal([]byte(`{"input":null,"extra":null}`), &h); err != nil {
+		t.Fatal(err)
+	}
+	if string(h.Input) != "null" || len(h.Extra) != 0 {
+		t.Errorf("decoded input %q and extra %q, want null and empty", string(h.Input), string(h.Extra))
+	}
+	if b, err := json.Marshal(h); err != nil || string(b) != `{"input":null}` {
+		t.Errorf("encoded as %s, %v", b, err)
+	}
+	var l Loose
+	if err := json.Unmarshal([]byte(`{"any":null}`), &l); err != nil || len(l.Any) != 0 {
+		t.Errorf("Loose decoded as %q, %v; want empty", string(l.Any), err)
+	}
+	if b, err := json.Marshal(l); err != nil || string(b) != `{}` {
+		t.Errorf("Loose encoded as %s, %v", b, err)
+	}
+	if err := json.Unmarshal([]byte(`{"any":[1,2]}`), &l); err != nil || string(l.Any) != `[1,2]` {
+		t.Errorf("Loose kept %q, %v", string(l.Any), err)
 	}
 }

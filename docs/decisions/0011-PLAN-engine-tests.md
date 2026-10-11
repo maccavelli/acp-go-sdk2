@@ -774,3 +774,76 @@ SDKs, Kubernetes, protobuf, the Anthropic and OpenAI SDKs, oapi-codegen, and gol
 the owner: `any` with `json.Number`; `json.RawMessage` with `null` read as absent and the printing documented (recommended); the SDK type. The owner
 chose the second. Step 6a is added before step 7; scope, verification, and rollout are amended above. The plan awaits the owner's approval of
 step 6a.
+
+### Step 6a, a null raw value is an absent one, 2026-10-11
+
+The owner committed the records as `09118e3` and approved step 6a ("committed, proceed"). It ran on `main` from that clean tree. The agent did not
+commit.
+
+**Where null was kept.** Of the 15 optional raw fields, 9 decode through `orDefault[json.RawMessage]` (`Error.data` and `rawInput` and `rawOutput`
+on `ToolCall`, `ToolCallUpdate`, `SessionUpdateToolCall`, and `SessionToolCallUpdate`). The other 6 decode straight into the alias:
+`AgentNotification`, `AgentRequest`, `ClientNotification`, `ClientRequest` `params`, `IdleStateUpdateNone.stopReason`, and
+`UnstableMcpError.data`. All 15 types already had a generated `UnmarshalJSON`. A struct whose only special field is an optional raw one would not,
+because `emitObjectCodec` emitted a decoder only for required keys, defaults, lenient fields, or a catch-all.
+
+**Tests first, on the tree as it was:**
+
+* `raw_value_test.go` (new, at the root):
+  * `TestRawToolInputNullIsAbsent`: `ToolCall`, `ToolCallUpdate`, `tool_call`, and `tool_call_update` with `rawInput` and `rawOutput` absent,
+    `null`, `{}`, and `{"n":9007199254740993}`, 16 cases.
+  * `TestOptionalRawFieldsNullIsAbsent`: the 7 other optional raw fields.
+  * `TestRequiredRawResultKeepsNull`: `AgentResult.result`.
+  * `TestStartLocationsAfterNullInput`: an input decoded from `null`, and `WithStartRawInput(json.RawMessage("null"))`.
+
+  The file's comment cites golang/go issue 81050 and says why `fmt` is not tested. It failed on every `null` case:
+  * `rawInput decoded as "null" (len 4)` and `rawInput sent as null, want it omitted`, in 4 of the 16;
+  * `null decoded as "null", want empty` for all 7 fields;
+  * `rawInput = "null", want {"path":"/p"}` twice.
+
+  The absent, `{}`, and integer cases and the required `result` passed: those were right before.
+* `accept-raw-value` gained an optional raw `extra` on `Holder`, and a type `Loose` whose only property is an optional raw one.
+  `TestRawNullIsAbsent` in its behaviour file failed: `decoded input "null" and extra "null"`, `encoded as {"extra":null,"input":null}`, and
+  `Loose decoded as "null"`.
+* `TestNullIsAbsent` in `internal/model` failed to build: `f.NullIsAbsent undefined`.
+
+**The change:**
+
+* `internal/model/fields.go`: `Field.NullIsAbsent`, set by `objectFields` and `plainFields` for a raw field that is not required. Objects, nested
+  structs, and inline variants are all covered.
+* `internal/emit`: `emitObjectCodec` collects those fields and emits a decoder when there is one. `emitObjectUnmarshal` assigns
+  `a.F = absentIfNull(a.F)` after the decode and before defaults. `decode.go` emits `absentIfNull`, a fourth helper written once, which returns
+  nil for the bytes `null`.
+* `helpers.go`: `withRawPath` treats `null` as empty. It uses the existing `jsonNull` constant, which goconst asked for on the first gate run.
+* `README.md` ("Wire encoding") and `docs/architecture.md`:
+  * an absent or `null` optional raw value is empty, tested with `len(v) == 0`, read with `string(v)`, and not sent;
+  * a required one keeps `null`;
+  * `fmt` prints an empty `json.RawMessage` as `null` under Go 1.27's default build, with a link to golang/go issue 81050;
+  * `absentIfNull` among the helpers, and `raw_value_test.go` among the checks.
+
+**The generated diff**, against `09118e3`: `types_gen.go` only, 24 lines added, none removed. That is one `a.F = absentIfNull(a.F)` for each of
+the 15 fields and the helper with its comment. `constants_gen.go`, `agent_gen.go`, `client_gen.go`, `helpers_gen.go`, and `schema_gen_test.go`
+did not change. The root's exported API, by the API listing program, is identical to `f2a6a3a`'s (2314 lines, `cmp`). The only engine listing that
+changed is `accept-raw-value`'s, read after `-update`: `Holder` gained `Extra`, and `Loose` gained an `UnmarshalJSON`.
+
+**Results.**
+
+* `go test -count=1 .` at the root passed by default and with `GOEXPERIMENT=nojsonv2`; the four regression tests passed, 27 `PASS` lines with
+  their subtests.
+* `go build ./example/...` passed, and `go test ./...` in `cmd/generate` passed.
+
+Plants, each in a fresh scratch copy (`s6a_plants.json`):
+
+* `absentIfNull` in `types_gen.go` keeping `null`: `--- FAIL: TestRawToolInputNullIsAbsent`.
+* The model applying the rule to required fields: `TestEngineBehaviour/accept-raw-value` failed with `decoded input "" and extra ""`, the
+  required `input` emptied. `TestNullIsAbsent` failed too.
+* The emitter dropping the assignments: `TestEngineBehaviour/accept-raw-value` failed with `Loose decoded as "null"`. Its first version did not
+  compile (`declared and not used: fld`), which is the plant's fault and not a test result; rewritten to compile, it failed as planted.
+* `withRawPath` leaving a `null` input unchanged: `--- FAIL: TestStartLocationsAfterNullInput`, also after the `jsonNull` change.
+
+**For the next minor version's release notes:** a `null` in an optional raw field (`rawInput`, `rawOutput`, `data`, `params`, `stopReason`) now
+decodes to an empty `json.RawMessage` and is not sent on, as ACP v1 defines it; a required `result` keeps `null`. The exported API does not change.
+
+`make pre-add-check`: `go-precheck: 87 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` The untracked `raw_value_test.go`
+passed by name: `go-precheck: 1 file(s) clean`. `make check-records` and `make markdownlint` exit 0, and the identifier scan found nothing.
+
+Commit point: the agent stopped here. The owner commits step 6a on `main`.

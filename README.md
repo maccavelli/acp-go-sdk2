@@ -100,6 +100,13 @@ follow the schema:
   error's `data`, is a `json.RawMessage`, carried byte for byte. Integers keep
   every digit there, through a union, and in sized integer fields; inside
   `_meta`, a `map[string]any`, numbers decode as `float64`.
+- An optional raw value that is absent or `null` is empty, as ACP defines
+  omission and `null` to be equivalent for `rawInput` and `rawOutput`: test
+  it with `len(v) == 0`, read it with `string(v)`, which gives `""`, and it is
+  not sent. Formatted with `fmt` (`%v`, `%s`, `fmt.Sprint`), an empty
+  `json.RawMessage` prints as `null` under Go 1.27's default build, where it is
+  `jsontext.Value` ([golang/go#81050](https://github.com/golang/go/issues/81050)).
+  A required raw value, such as a response's `result`, keeps `null`.
 - Decoding a struct fails when a required key is absent, naming the type and
   the property, such as `PromptRequest: missing required property "sessionId"`;
   the connection answers such a request with `-32602`.

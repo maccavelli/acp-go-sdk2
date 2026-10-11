@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"maps"
 	"strings"
 	"testing"
 
@@ -198,5 +199,36 @@ func TestInlineVariants(t *testing.T) {
 	}
 	if vs[5].Inline != nil {
 		t.Errorf("$ref variant has an inline type: %+v", vs[5].Inline)
+	}
+}
+
+// TestNullIsAbsent marks every raw field that is not required, in an object,
+// a nested struct, and an inline variant: a null in it decodes to nothing
+// (0012-MADR-schema-fidelity-framework.md, amendment of 2026-10-11).
+func TestNullIsAbsent(t *testing.T) {
+	t.Parallel()
+	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
+		"Obj":{"type":"object","required":["req"],"properties":{"req":{},"opt":{},"s":{"type":"string"},
+			"nested":{"type":"object","properties":{"deep":{}}}}},
+		"U":{"anyOf":[{"type":"object","required":["kind"],"properties":{"kind":{"type":"string"},"raw":{}}}]}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, f := range m.Type("Obj").Fields {
+		got["Obj."+f.Key] = f.NullIsAbsent
+	}
+	for _, s := range m.Type("Obj").NestedStructs {
+		for _, f := range s.Fields {
+			got[s.Name+"."+f.Key] = f.NullIsAbsent
+		}
+	}
+	for _, f := range m.Type("U").Variants[0].Inline.Fields {
+		got["U."+f.Key] = f.NullIsAbsent
+	}
+	want := map[string]bool{"Obj.req": false, "Obj.opt": true, "Obj.s": false, "Obj.nested": false,
+		"ObjNested.deep": true, "U.kind": false, "U.raw": true}
+	if !maps.Equal(got, want) {
+		t.Errorf("NullIsAbsent:\n got %v\nwant %v", got, want)
 	}
 }

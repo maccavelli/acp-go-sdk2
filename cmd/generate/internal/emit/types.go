@@ -208,9 +208,10 @@ func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 
 // emitObjectCodec synthesizes MarshalJSON for structs with fields that carry
 // schema defaults or are required slices or maps, and UnmarshalJSON for
-// structs with required keys, defaults, or a catch-all's Extra.
+// structs with required keys, defaults, lenient fields, optional raw fields,
+// or a catch-all's Extra.
 func emitObjectCodec(f *goFile, name string, fields []*model.Field, keepExtra bool, exempt string) {
-	var defaults, fills, lenient []*model.Field
+	var defaults, fills, lenient, absent []*model.Field
 	var required []string
 	for _, fld := range fields {
 		if fld.Default != nil {
@@ -222,6 +223,9 @@ func emitObjectCodec(f *goFile, name string, fields []*model.Field, keepExtra bo
 		if fld.Fill {
 			fills = append(fills, fld)
 		}
+		if fld.NullIsAbsent {
+			absent = append(absent, fld)
+		}
 		if fld.Required && fld.Key != exempt {
 			required = append(required, fld.Key)
 		}
@@ -230,8 +234,8 @@ func emitObjectCodec(f *goFile, name string, fields []*model.Field, keepExtra bo
 	if len(defaults) > 0 || len(fills) > 0 || keepExtra {
 		emitObjectMarshal(f, name, defaults, fills, keepExtra)
 	}
-	if len(defaults) > 0 || keepExtra || len(required) > 0 || len(lenient) > 0 {
-		emitObjectUnmarshal(f, name, fields, defaults, lenient, required, keepExtra)
+	if len(defaults) > 0 || keepExtra || len(required) > 0 || len(lenient) > 0 || len(absent) > 0 {
+		emitObjectUnmarshal(f, name, fields, defaults, lenient, absent, required, keepExtra)
 	}
 }
 
@@ -285,9 +289,10 @@ func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, k
 
 // emitObjectUnmarshal emits UnmarshalJSON: it requires the required keys,
 // decodes the fields, decodes each lenient field from its own raw value,
-// applies defaults when a field is missing, or null when the schema does not
-// allow null, and keeps a catch-all's undeclared keys.
-func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient []*model.Field, required []string, keepExtra bool) {
+// empties each optional raw field that holds null, applies defaults when a
+// field is missing, or null when the schema does not allow null, and keeps a
+// catch-all's undeclared keys.
+func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, absent []*model.Field, required []string, keepExtra bool) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	f.uses[helperObjectKeys] = true
 	keys := []ast.Expr{id("b"), str(name)}
@@ -311,6 +316,10 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient []*mo
 		)
 	} else {
 		body = append(body, lenientDecode(f, name, lenient, wrap)...)
+	}
+	for _, fld := range absent {
+		f.uses[helperAbsentIfNull] = true
+		body = append(body, assign(exprs(dot("a", fld.Name)), call(id(helperAbsentIfNull), dot("a", fld.Name))))
 	}
 	for _, fld := range defaults {
 		// Only a property that rejects null reads the raw value.

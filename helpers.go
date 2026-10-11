@@ -189,12 +189,13 @@ func editRawInput(path string, content json.RawMessage) json.RawMessage {
 	return json.RawMessage(`{"` + rawInputContentKey + `":` + string(content) + `,"` + rawInputPathKey + `":` + string(p) + `}`)
 }
 
-// withRawPath returns raw with a path key set to p when raw is empty or a JSON
-// object without one; any other raw input is returned unchanged. The other
-// keys keep their values byte for byte.
+// withRawPath returns raw with a path key set to p when raw is empty, null, or
+// a JSON object without one; any other raw input is returned unchanged. The
+// other keys keep their values byte for byte. A null raw input is an absent
+// one, as ACP v1 defines it.
 func withRawPath(raw json.RawMessage, p string) json.RawMessage {
 	m := map[string]json.RawMessage{}
-	if len(raw) > 0 {
+	if len(raw) > 0 && string(raw) != jsonNull {
 		if err := json.Unmarshal(raw, &m); err != nil || m == nil {
 			return raw
 		}

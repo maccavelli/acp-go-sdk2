@@ -8,9 +8,10 @@ import (
 // The unexported decoding helpers types_gen.go carries, each emitted once when
 // the file's code calls it (0012-MADR-schema-fidelity-framework.md).
 const (
-	helperObjectKeys  = "objectKeys"
-	helperOrDefault   = "orDefault"
-	helperSkipInvalid = "skipInvalid"
+	helperObjectKeys   = "objectKeys"
+	helperOrDefault    = "orDefault"
+	helperSkipInvalid  = "skipInvalid"
+	helperAbsentIfNull = "absentIfNull"
 )
 
 // emitDecodeHelpers appends the helpers f uses.
@@ -24,6 +25,29 @@ func emitDecodeHelpers(f *goFile) {
 	if f.uses[helperSkipInvalid] {
 		emitSkipInvalid(f)
 	}
+	if f.uses[helperAbsentIfNull] {
+		emitAbsentIfNull(f)
+	}
+}
+
+// emitAbsentIfNull emits
+//
+//	func absentIfNull(raw json.RawMessage) json.RawMessage
+//
+// which returns raw, or nil when raw is the JSON null: ACP v1 defines a null raw
+// value to be an absent one (0012-MADR-schema-fidelity-framework.md, amendment
+// of 2026-10-11).
+func emitAbsentIfNull(f *goFile) {
+	raw := func() ast.Expr { return f.qual(pkgJSON, "RawMessage") }
+	fn := function(helperAbsentIfNull,
+		funcType([]*ast.Field{param("raw", raw())}, param("", raw())),
+		ifStmt(nil, binary(call(id("string"), id("raw")), token.EQL, str("null")), ret(nilExpr())),
+		ret(id("raw")),
+	)
+	f.line()
+	f.comment("absentIfNull returns raw, or nil when raw is the JSON null: a null raw value",
+		"is an absent one, as ACP v1 defines it for rawInput and rawOutput.")
+	f.add(fn)
 }
 
 // typeParamT is the type parameter list [T any].
