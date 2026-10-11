@@ -1065,6 +1065,73 @@ func exchange(t *testing.T, m schemaMethod, params any, reply func(any) error) (
 	return SendRequest[json.RawMessage](sender, t.Context(), m.Wire, params)
 }
 
+// TestConformanceConstructors calls each union constructor of helpers_gen.go
+// with zero arguments and requires the value to set exactly its variant, with
+// the discriminator value the schema gives that variant; a value that encodes
+// must decode back to the same variant (0013-PLAN-close-phase-6-follow-ups.md).
+func TestConformanceConstructors(t *testing.T) {
+	t.Parallel()
+	unions := map[string]schemaUnion{}
+	for _, u := range schemaUnions() {
+		unions[u.Type] = u
+	}
+	helpers := schemaHelpers()
+	if len(helpers) == 0 {
+		t.Fatal("schemaHelpers lists no constructor")
+	}
+	for _, h := range helpers {
+		t.Run(h.Union+" "+h.Field, func(t *testing.T) {
+			t.Parallel()
+			u, ok := unions[h.Union]
+			if !ok {
+				t.Fatalf("%s is not in schemaUnions", h.Union)
+			}
+			v := h.New()
+			if set := setFields(v); !slices.Equal(set, []string{h.Field}) {
+				t.Fatalf("the constructor set %v, want %s", set, h.Field)
+			}
+			if u.Key != "" {
+				want := ""
+				for _, vr := range u.Variants {
+					if vr.Field == h.Field {
+						want = vr.Value
+					}
+				}
+				if got := discValue(v, h.Field, u.Key); got != want {
+					t.Errorf("the discriminator %s is %q, want %q", u.Key, got, want)
+				}
+			}
+			b, err := json.Marshal(v)
+			if err != nil {
+				t.Skipf("the zero-argument value does not encode: %v", err)
+			}
+			back := typeByName[h.Union].New()
+			if err := json.Unmarshal(b, back); err != nil {
+				t.Fatalf("%s does not decode: %v", b, err)
+			}
+			if set := setFields(back); !slices.Equal(set, []string{h.Field}) {
+				t.Errorf("%s decoded into %v, want %s", b, set, h.Field)
+			}
+		})
+	}
+}
+
+// discValue returns the string field of the variant field of the union *v
+// whose JSON key is key, or "".
+func discValue(v any, field, key string) string {
+	variant := reflect.ValueOf(v).Elem().FieldByName(field)
+	if variant.Kind() != reflect.Pointer || variant.IsNil() {
+		return ""
+	}
+	s := variant.Elem()
+	for i := range s.NumField() {
+		if strings.Split(s.Type().Field(i).Tag.Get("json"), ",")[0] == key && s.Field(i).Kind() == reflect.String {
+			return s.Field(i).String()
+		}
+	}
+	return ""
+}
+
 // setFields returns the names of the union fields of v that are set.
 func setFields(v any) []string {
 	rv := reflect.ValueOf(v).Elem()

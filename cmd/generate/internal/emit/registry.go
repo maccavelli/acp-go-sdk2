@@ -46,6 +46,10 @@ func registryFile(m *model.Model) *goFile {
 		"result, nil for a notification or a request without one.",
 	}, field("Side", id("string")), field("Wire", id("string")), field("Params", newFunc), field("Result", newFunc),
 		field("Notification", id("bool")))
+	structDecl("schemaHelper", []string{
+		"schemaHelper is a union constructor of helpers_gen.go: the union, the variant field",
+		"it sets, and New, which calls it with each argument's zero value.",
+	}, field("Union", id("string")), field("Field", id("string")), field("New", newFunc))
 
 	f.comment("newOf returns a new zero T.")
 	newOf := function("newOf", funcType(nil, param("", id("any"))), ret(call(id("new"), id("T"))))
@@ -87,6 +91,8 @@ func registryFile(m *model.Model) *goFile {
 	}
 	listFunc(f, "schemaMethods", "schemaMethod", methods,
 		"schemaMethods returns every wire method: the agent's, the client's, then the protocol's.")
+	listFunc(f, "schemaHelpers", "schemaHelper", helperEntries(f, m, newFunc),
+		"schemaHelpers returns every union constructor, in the order of helpers_gen.go.")
 
 	recorder(f, "recordingAgent", "a", m.AgentMethods, "agent")
 	recorder(f, "recordingClient", "c", m.ClientMethods, "client")
@@ -106,6 +112,25 @@ func registryFile(m *model.Model) *goFile {
 		f.add(&ast.GenDecl{Tok: token.VAR, Lparen: 1, Specs: specs})
 	}
 	return f
+}
+
+// helperEntries are the schemaHelper elements of m's constructors: New calls
+// each with *new(T) for every argument and returns a pointer to the union.
+func helperEntries(f *goFile, m *model.Model, newFunc *ast.FuncType) []ast.Expr {
+	var out []ast.Expr
+	for _, t := range m.Types {
+		for _, h := range t.Helpers {
+			var args []ast.Expr
+			for _, p := range h.Params {
+				args = append(args, star(call(id("new"), typeAST(f, p.Type))))
+			}
+			body := block(define(exprs(id("v")), call(id(h.Name), args...)), ret(addr(id("v"))))
+			out = append(out, composite(nil,
+				kv(id("Union"), str(t.Name)), kv(id("Field"), str(t.Variants[h.Variant].FieldName)),
+				kv(id("New"), &ast.FuncLit{Type: newFunc, Body: body})))
+		}
+	}
+	return out
 }
 
 // unionEntry is the schemaUnion element of t.

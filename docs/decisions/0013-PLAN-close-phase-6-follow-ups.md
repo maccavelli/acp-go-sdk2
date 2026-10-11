@@ -44,8 +44,10 @@ Out of scope:
    * `internal/emit`: the registry emits `schemaHelpers()`, a `schemaHelper{Union, Field string; New func() any}` per constructor, `New`
      calling it with each argument's zero value. `TestRegistry` (on its synthetic model) requires one entry per helper of the model, in its
      order, with the union and variant field.
-   * At the root, `TestConformanceConstructors`: for each entry, the value it builds has exactly that variant set; encoded, it carries the
-     discriminator value `schemaUnions()` gives the variant, when the union has one; and decoded again, it sets the same variant.
+   * At the root, `TestConformanceConstructors`: for each entry, the value it builds has exactly that variant set; ~~encoded, it carries the
+     discriminator value `schemaUnions()` gives the variant, when the union has one; and decoded again, it sets the same variant~~ its
+     discriminator field holds the value `schemaUnions()` gives the variant, when the union has one; and a value that encodes decodes back to
+     the same variant (amended 2026-10-11, see step 3's deviation).
    * Plants in scratch copies: a constructor in `helpers_gen.go` setting another variant; one writing a wrong discriminator; the registry
      leaving out a helper.
    * Root coverage of `helpers_gen.go`: 100%.
@@ -94,3 +96,38 @@ Ran on `main` from `85ef7a8`, after the owner approved the pair. The agent did n
 
 Commit point: the agent stopped here. The owner commits the pair (the two records and `docs/README.md`) first, as the bootstrap exception
 requires, then step 2 (`util.go` and this record) on `main`.
+
+### Step 3 deviation, 2026-10-11: a constructor whose zero-argument value does not encode
+
+The owner committed the pair as `f12c010` and step 2 as `735c524`. Called with zero arguments, `NewSessionConfigOptionSelect` builds a value
+holding an empty `SessionConfigSelectOptions` union, which refuses to encode (`SessionConfigSelectOptions: no variant set`), so the step's
+"encoded, it carries the discriminator" cannot hold for it. Resolutions put to the owner: check the discriminator in the Go value for every
+constructor and round-trip those whose value encodes (recommended), or build schema instances as arguments by reflection. The owner chose the
+first. Step 3 is annotated; the MADR's decision does not change.
+
+### Step 3, the constructor list and its test, 2026-10-11
+
+Ran on `main` from `735c524`. The agent did not commit.
+
+* `internal/emit/registry.go`: `schema_gen_test.go` gains the type `schemaHelper{Union, Field string; New func() any}` and
+  `schemaHelpers()`, one entry per constructor of the model in the order of `helpers_gen.go`; `New` calls it with `*new(T)` for each argument
+  and returns a pointer to the union.
+* `TestRegistry`: its synthetic `Closed` union gained a required key on one variant, and the test requires `schemaHelpers` to list
+  `Closed.X` and `Closed.Y` and to call `NewClosedX()` and `NewClosedY(*new(string))`. Before the emitter change it failed:
+  `schema_gen_test.go has no func schemaHelpers`.
+* `TestConformanceConstructors` (`conformance_test.go`): before, `undefined: schemaHelpers`. Now 11 subtests: 10 pass, and
+  `SessionConfigOption_Select` passes its variant and discriminator checks and skips the round trip, as the deviation records.
+* Root coverage of `helpers_gen.go`: 11 of 11 statements, 100% (18.2% before); each of its 11 functions at 100%.
+* Plants in scratch copies (`s13_plants.json`), each failing as planted:
+  * `NewRequestPermissionOutcomeCancelled` setting `Selected`: `the constructor set [Selected], want Cancelled`;
+  * `NewPlanUpdateContentFile` writing `fil`: `the discriminator type is "fil", want "file"`;
+  * `NewSessionConfigOptionSelect` writing `selec`: `the discriminator type is "selec", want "select"`, so the skipped round trip does not hide
+    its checks;
+  * the registry skipping each union's first constructor: `schemaHelpers [Closed.Y], want Closed.X and Closed.Y`. Its first version,
+    `t.Helpers[1:]`, panicked on a type without constructors; rewritten, it failed as planted.
+* The five SDK files are unchanged; `schema_gen_test.go` gains 102 lines; the exported API listing is unchanged from `85ef7a8`.
+* The root tests pass by default, with `-race`, and with `GOEXPERIMENT=nojsonv2`.
+* `make pre-add-check`: `go-precheck: 101 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records` and
+  `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.
+
+Commit point: the agent stopped here. The owner commits step 3 on `main`.

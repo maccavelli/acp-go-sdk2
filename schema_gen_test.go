@@ -40,6 +40,14 @@ type schemaMethod struct {
 	Notification bool
 }
 
+// schemaHelper is a union constructor of helpers_gen.go: the union, the variant field
+// it sets, and New, which calls it with each argument's zero value.
+type schemaHelper struct {
+	Union string
+	Field string
+	New   func() any
+}
+
 // newOf returns a new zero T.
 func newOf[T any]() any {
 	return new(T)
@@ -2604,6 +2612,100 @@ func schemaMethods() []schemaMethod {
 			Wire:         "$/cancel_request",
 			Params:       newOf[CancelRequestNotification],
 			Notification: true,
+		},
+	}
+}
+
+// schemaHelpers returns every union constructor, in the order of helpers_gen.go.
+func schemaHelpers() []schemaHelper {
+	return []schemaHelper{
+		{
+			Union: "PlanUpdateContent",
+			Field: "Items",
+			New: func() any {
+				v := NewPlanUpdateContentItems(*new(PlanId), *new([]PlanEntry))
+				return &v
+			},
+		},
+		{
+			Union: "PlanUpdateContent",
+			Field: "File",
+			New: func() any {
+				v := NewPlanUpdateContentFile(*new(PlanId), *new(string))
+				return &v
+			},
+		},
+		{
+			Union: "PlanUpdateContent",
+			Field: "Markdown",
+			New: func() any {
+				v := NewPlanUpdateContentMarkdown(*new(PlanId), *new(string))
+				return &v
+			},
+		},
+		{
+			Union: "RequestPermissionOutcome",
+			Field: "Cancelled",
+			New: func() any {
+				v := NewRequestPermissionOutcomeCancelled()
+				return &v
+			},
+		},
+		{
+			Union: "RequestPermissionOutcome",
+			Field: "Selected",
+			New: func() any {
+				v := NewRequestPermissionOutcomeSelected(*new(PermissionOptionId))
+				return &v
+			},
+		},
+		{
+			Union: "SessionConfigOption",
+			Field: "Select",
+			New: func() any {
+				v := NewSessionConfigOptionSelect(*new(SessionConfigValueId), *new(SessionConfigSelectOptions))
+				return &v
+			},
+		},
+		{
+			Union: "SessionConfigOption",
+			Field: "Boolean",
+			New: func() any {
+				v := NewSessionConfigOptionBoolean(*new(bool))
+				return &v
+			},
+		},
+		{
+			Union: "UnstableNesSuggestion",
+			Field: "Edit",
+			New: func() any {
+				v := NewUnstableNesSuggestionEdit(*new(UnstableNesSuggestionId), *new(string), *new([]UnstableNesTextEdit))
+				return &v
+			},
+		},
+		{
+			Union: "UnstableNesSuggestion",
+			Field: "Jump",
+			New: func() any {
+				v := NewUnstableNesSuggestionJump(*new(UnstableNesSuggestionId), *new(string), *new(UnstablePosition))
+				return &v
+			},
+		},
+		{
+			Union: "UnstableNesSuggestion",
+			Field: "Rename",
+			New: func() any {
+				v := NewUnstableNesSuggestionRename(*new(UnstableNesSuggestionId), *new(string), *new(UnstablePosition), *new(string))
+				return &v
+			},
+		},
+		{
+			Union: "UnstableNesSuggestion",
+			Field: "SearchAndReplace",
+			New: func() any {
+				v := NewUnstableNesSuggestionSearchAndReplace(*new(UnstableNesSuggestionId), *new(string), *new(string), *new(string))
+				return &v
+			},
 		},
 	}
 }

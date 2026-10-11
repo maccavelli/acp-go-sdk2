@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
@@ -33,7 +34,7 @@ func registryModel(t *testing.T) *model.Model {
 		"Open":{"anyOf":[{"type":"object","required":["type"],"properties":{"type":{"type":"string","const":"a"}}},
 			{"title":"other","type":"object","required":["type"],"properties":{"type":{"type":"string"}},"not":{"required":["type"]}}]},
 		"Closed":{"oneOf":[{"type":"object","required":["kind"],"properties":{"kind":{"type":"string","const":"x"}}},
-			{"type":"object","required":["kind"],"properties":{"kind":{"type":"string","const":"y"}}}]},
+			{"type":"object","required":["kind","n"],"properties":{"kind":{"type":"string","const":"y"},"n":{"type":"string"}}}]},
 		"InitRequest":{"type":"object","x-side":"agent","x-method":"init"},
 		"InitResponse":{"type":"object","x-side":"agent","x-method":"init"},
 		"PingNotification":{"type":"object","x-side":"agent","x-method":"ping"},
@@ -148,6 +149,19 @@ func TestRegistry(t *testing.T) {
 	}
 	if len(unions) != 2 {
 		t.Errorf("schemaUnions holds %d unions, want Open and Closed", len(unions))
+	}
+
+	var helpers []string
+	for _, e := range registryEntries(t, src, "schemaHelpers") {
+		helpers = append(helpers, e["Union"]+"."+e["Field"])
+	}
+	if !slices.Equal(helpers, []string{"Closed.X", "Closed.Y"}) {
+		t.Errorf("schemaHelpers %v, want Closed.X and Closed.Y", helpers)
+	}
+	for _, call := range []string{"NewClosedX()", "NewClosedY(*new(string))"} {
+		if !strings.Contains(src, call) {
+			t.Errorf("schemaHelpers does not call %s", call)
+		}
 	}
 
 	var methods []string
