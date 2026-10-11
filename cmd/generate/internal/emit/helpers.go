@@ -41,11 +41,11 @@ func emitHelperConstructors(f *goFile, t *model.Type) {
 	}
 }
 
-// WriteHelpers emits helpers_gen.go with constructor helpers for union variants.
-func WriteHelpers(outDir string, m *model.Model) error {
+// helpersFile builds helpers_gen.go: constructor helpers for union variants.
+func helpersFile(m *model.Model) *goFile {
 	f := newFile()
 	for _, t := range m.Types {
 		emitHelperConstructors(f, t)
 	}
-	return f.write(outDir, "helpers_gen.go")
+	return f
 }

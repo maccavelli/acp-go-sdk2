@@ -32,7 +32,7 @@ func TestRequiredMapFilledOnEncode(t *testing.T) {
 	f := newFile()
 	emitObjectSchema(f, m.Type("Options"))
 	emitDecodeHelpers(f)
-	src := render(t, f)
+	src := mustRender(t, f)
 	if want := "\tif a.Env == nil {\n\t\ta.Env = map[string]any{}\n\t}\n"; !strings.Contains(src, want) {
 		t.Errorf("MarshalJSON does not fill the nil map; want\n%s\nin\n%s", want, src)
 	}
@@ -64,7 +64,7 @@ func TestDefaultedNullablePropertyCompiles(t *testing.T) {
 	f := newFile()
 	emitObjectSchema(f, m.Type("Options"))
 	emitDecodeHelpers(f)
-	src := render(t, f)
+	src := mustRender(t, f)
 
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "options.go", src, 0)
@@ -109,7 +109,7 @@ func TestRequiredKeysDecoder(t *testing.T) {
 	emitUnion(f, u.Type("U"))
 	variant := u.Type("U").Variants[0].TypeName
 	emitDecodeHelpers(f)
-	src := render(t, f)
+	src := mustRender(t, f)
 	for _, want := range []string{
 		"func (v *Options) UnmarshalJSON(b []byte) error {",
 		`_, err := objectKeys(b, "` + variant + `", "text")`,
@@ -154,7 +154,7 @@ func TestLenientDecoder(t *testing.T) {
 	f := newFile()
 	emitObjectSchema(f, m.Type("Options"))
 	emitDecodeHelpers(f)
-	src := render(t, f)
+	src := mustRender(t, f)
 	for _, want := range []string{
 		"\t\tMode json.RawMessage `json:\"mode\"`",
 		`a.Mode = orDefault[string](s.Mode, "\"auto\"")`,
@@ -207,7 +207,7 @@ func TestValidateMethods(t *testing.T) {
 		emitSchemaDef(f, m.Type(name))
 	}
 	emitDecodeHelpers(f)
-	src := render(t, f)
+	src := mustRender(t, f)
 	for _, want := range []string{
 		"if utf8.RuneCountInString(string(v.T)) < 2 {",
 		`return errors.New("Leaf: t: shorter than minLength 2")`,

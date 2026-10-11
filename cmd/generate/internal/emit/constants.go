@@ -15,7 +15,6 @@ const (
 	schemaTypeBoolean = "boolean"
 	schemaTypeNull    = "null"
 	jsonStructTag     = "json"
-	generatedFileMode = 0o600
 	// unknownField holds a discriminated union's unrecognized payload.
 	unknownField = "Unknown"
 	// extraField holds the keys a union's catch-all variant does not declare.
@@ -28,8 +27,8 @@ const (
 	pkgJSON    = "encoding/json"
 )
 
-// WriteConstants writes the version and method constants to constants_gen.go.
-func WriteConstants(outDir string, m *model.Model) error {
+// constantsFile builds constants_gen.go: the version and method constants.
+func constantsFile(m *model.Model) *goFile {
 	f := newFile()
 	f.comment("ProtocolVersionNumber is the ACP protocol version supported by this SDK.")
 	f.add(constDecl(false, constSpec("ProtocolVersionNumber", nil, intLit(m.Version))))
@@ -45,7 +44,7 @@ func WriteConstants(outDir string, m *model.Model) error {
 		f.add(methodConsts(m.Protocol))
 	}
 
-	return f.write(outDir, "constants_gen.go")
+	return f
 }
 
 // methodConsts declares <const> = "wire" for each method, in the model's

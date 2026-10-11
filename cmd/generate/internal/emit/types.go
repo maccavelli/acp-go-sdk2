@@ -49,8 +49,8 @@ func structField(name string, typ ast.Expr, tag string) *ast.Field {
 	return &ast.Field{Names: []*ast.Ident{id(name)}, Type: typ, Tag: structTag(tag)}
 }
 
-// WriteTypes emits types_gen.go with all types and the Agent/Client interfaces.
-func WriteTypes(outDir string, m *model.Model) error {
+// typesFile builds types_gen.go: all types and the Agent/Client interfaces.
+func typesFile(m *model.Model) *goFile {
 	f := newFile()
 	for _, t := range m.Types {
 		emitSchemaDef(f, t)
@@ -58,7 +58,7 @@ func WriteTypes(outDir string, m *model.Model) error {
 	emitRPCInterfaces(f, m)
 	emitDecodeHelpers(f)
 
-	return f.write(outDir, "types_gen.go")
+	return f
 }
 
 // interfaceMethod is name(ctx context.Context, params paramType) error, or

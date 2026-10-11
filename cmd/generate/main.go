@@ -19,9 +19,10 @@ func main() {
 	}
 }
 
-// run generates the bindings. It loads the schema and builds the model before
-// it creates or writes anything, so a schema the model refuses leaves the
-// output directory as it was.
+// run generates the bindings. It loads the schema, builds the model, and
+// renders every file before it creates or writes anything, so a schema the
+// model refuses, or a file that fails to render, leaves the output directory
+// as it was.
 func run(args []string) error {
 	fs := flag.NewFlagSet("generate", flag.ContinueOnError)
 	schemaDir := fs.String("schema", "", "path to schema directory (defaults to <repo>/schema)")
@@ -51,21 +52,19 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	files, err := emit.Render(m)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(*outDir, 0o750); err != nil {
 		return err
 	}
-
-	if err := emit.WriteConstants(*outDir, m); err != nil {
-		return err
+	for _, f := range files {
+		if err := os.WriteFile(filepath.Join(*outDir, f.Name), f.Src, 0o600); err != nil {
+			return err
+		}
 	}
-	if err := emit.WriteTypes(*outDir, m); err != nil {
-		return err
-	}
-	if err := emit.WriteDispatch(*outDir, m); err != nil {
-		return err
-	}
-	// Emit helpers after types so they can reference generated structs.
-	return emit.WriteHelpers(*outDir, m)
+	return nil
 }
 
 // loadSchema reads the stable schema and, when present, merges the unstable

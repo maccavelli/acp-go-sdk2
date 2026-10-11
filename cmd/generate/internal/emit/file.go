@@ -8,11 +8,11 @@ import (
 	"go/format"
 	"go/token"
 	"maps"
-	"os"
 	"path"
-	"path/filepath"
 	"slices"
 	"strconv"
+
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
 const (
@@ -78,13 +78,35 @@ func (f *goFile) qual(importPath, name string) ast.Expr {
 	return dot(path.Base(importPath), name)
 }
 
-// write renders the file and writes it to outDir/name.
-func (f *goFile) write(outDir, name string) error {
-	src, err := f.render()
-	if err != nil {
-		return fmt.Errorf("%s: %w", name, err)
+// File is one generated file: its name in the output directory and its
+// formatted source.
+type File struct {
+	Name string
+	Src  []byte
+}
+
+// Render builds and formats every generated file, in the order the generator
+// writes them. It returns the first failure, prefixed with the file's name.
+func Render(m *model.Model) ([]File, error) {
+	builds := []struct {
+		name  string
+		build func(*model.Model) *goFile
+	}{
+		{"constants_gen.go", constantsFile},
+		{"types_gen.go", typesFile},
+		{"agent_gen.go", agentFile},
+		{"client_gen.go", clientFile},
+		{"helpers_gen.go", helpersFile},
 	}
-	return os.WriteFile(filepath.Join(outDir, name), src, generatedFileMode)
+	files := make([]File, 0, len(builds))
+	for _, b := range builds {
+		src, err := b.build(m).render()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", b.name, err)
+		}
+		files = append(files, File{Name: b.name, Src: src})
+	}
+	return files, nil
 }
 
 // render prints the file and formats it. It returns the first failure

@@ -7,14 +7,6 @@ import (
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
-// WriteDispatch emits agent_gen.go and client_gen.go with handlers and wrappers.
-func WriteDispatch(outDir string, m *model.Model) error {
-	if err := writeAgentGen(outDir, m); err != nil {
-		return err
-	}
-	return writeClientGen(outDir, m)
-}
-
 // sessionKey is string(p.<field>), the session's key in sessionCancels.
 func sessionKey(field string) ast.Expr { return call(id("string"), dot("p", field)) }
 
@@ -70,7 +62,8 @@ func cancelActivePrompt(field string) []ast.Stmt {
 	}
 }
 
-func writeAgentGen(outDir string, m *model.Model) error {
+// agentFile builds agent_gen.go: the agent's handler and its outbound wrappers.
+func agentFile(m *model.Model) *goFile {
 	f := newFile()
 
 	var cases []ast.Stmt
@@ -105,10 +98,11 @@ func writeAgentGen(outDir string, m *model.Model) error {
 	// Agent outbound wrappers (agent -> client).
 	emitOutbound(f, "AgentSideConnection", m.ClientMethods)
 
-	return f.write(outDir, "agent_gen.go")
+	return f
 }
 
-func writeClientGen(outDir string, m *model.Model) error {
+// clientFile builds client_gen.go: the client's handler and its outbound wrappers.
+func clientFile(m *model.Model) *goFile {
 	f := newFile()
 
 	var cases []ast.Stmt
@@ -136,7 +130,7 @@ func writeClientGen(outDir string, m *model.Model) error {
 	// Client outbound wrappers (client -> agent).
 	emitOutbound(f, "ClientSideConnection", m.AgentMethods)
 
-	return f.write(outDir, "client_gen.go")
+	return f
 }
 
 // emitOutbound emits one method per peer method on recvType that sends the

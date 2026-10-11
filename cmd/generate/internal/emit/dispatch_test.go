@@ -2,14 +2,26 @@ package emit
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
+
+// rendered returns the files Render builds from m, by name.
+func rendered(t *testing.T, m *model.Model) map[string]string {
+	t.Helper()
+	files, err := Render(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]string{}
+	for _, f := range files {
+		out[f.Name] = string(f.Src)
+	}
+	return out
+}
 
 // renamedProtocol is a protocol whose prompt turn, cancel, session key, and
 // optional interface are named unlike ACP's.
@@ -50,20 +62,10 @@ func renamedProtocol(t *testing.T) *model.Model {
 func TestDispatchFollowsTheModel(t *testing.T) {
 	t.Parallel()
 	m := renamedProtocol(t)
-	dir := t.TempDir()
-	if err := WriteDispatch(dir, m); err != nil {
-		t.Fatal(err)
-	}
-	read := func(name string) string {
-		b, err := os.ReadFile(filepath.Join(dir, name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return string(b)
-	}
+	out := rendered(t, m)
 	f := newFile()
 	emitRPCInterfaces(f, m)
-	files := map[string]string{"agent_gen.go": read("agent_gen.go"), "client_gen.go": read("client_gen.go"), "interfaces": render(t, f)}
+	files := map[string]string{"agent_gen.go": out["agent_gen.go"], "client_gen.go": out["client_gen.go"], "interfaces": mustRender(t, f)}
 
 	want := map[string][]string{
 		"agent_gen.go": {
@@ -114,16 +116,9 @@ func TestProtocolMethodConstants(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		dir := t.TempDir()
-		if err := WriteConstants(dir, m); err != nil {
-			t.Fatal(err)
-		}
-		b, err := os.ReadFile(filepath.Join(dir, "constants_gen.go"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := strings.Contains(string(b), tt.want); got != tt.present {
-			t.Errorf("%s: contains %q = %v, want %v:\n%s", tt.name, tt.want, got, tt.present, b)
+		src := rendered(t, m)["constants_gen.go"]
+		if got := strings.Contains(src, tt.want); got != tt.present {
+			t.Errorf("%s: contains %q = %v, want %v:\n%s", tt.name, tt.want, got, tt.present, src)
 		}
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -27,8 +28,9 @@ var generatedFiles = []string{
 	"helpers_gen.go",
 }
 
-// TestGeneratedFilesUpToDate regenerates the bindings from schema/ and
-// requires the committed *_gen.go files to match byte for byte.
+// TestGeneratedFilesUpToDate renders the bindings from schema/ in memory and
+// requires the generated files, in order, to match the committed *_gen.go
+// files byte for byte.
 func TestGeneratedFilesUpToDate(t *testing.T) {
 	meta, schema, prov, err := loadSchema(filepath.Join(repoRoot, "schema"))
 	if err != nil {
@@ -38,30 +40,24 @@ func TestGeneratedFilesUpToDate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := t.TempDir()
-	if err := emit.WriteConstants(out, m); err != nil {
+	files, err := emit.Render(m)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := emit.WriteTypes(out, m); err != nil {
-		t.Fatal(err)
+	var names []string
+	for _, f := range files {
+		names = append(names, f.Name)
 	}
-	if err := emit.WriteDispatch(out, m); err != nil {
-		t.Fatal(err)
+	if !slices.Equal(names, generatedFiles) {
+		t.Fatalf("Render returned %v, want %v", names, generatedFiles)
 	}
-	if err := emit.WriteHelpers(out, m); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range generatedFiles {
-		got, err := os.ReadFile(filepath.Join(out, name))
+	for _, f := range files {
+		want, err := os.ReadFile(filepath.Join(repoRoot, f.Name))
 		if err != nil {
 			t.Fatal(err)
 		}
-		want, err := os.ReadFile(filepath.Join(repoRoot, name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("%s is out of date with schema/; run make version (first difference at line %d)", name, firstDiffLine(got, want))
+		if !bytes.Equal(f.Src, want) {
+			t.Errorf("%s is out of date with schema/; run make version (first difference at line %d)", f.Name, firstDiffLine(f.Src, want))
 		}
 	}
 }

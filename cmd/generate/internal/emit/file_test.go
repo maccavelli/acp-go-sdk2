@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func render(t *testing.T, f *goFile) string {
+func mustRender(t *testing.T, f *goFile) string {
 	t.Helper()
 	out, err := f.render()
 	if err != nil {
@@ -144,7 +144,7 @@ func TestRenderLayout(t *testing.T) {
 			t.Parallel()
 			f := newFile()
 			tt.build(f)
-			if got := render(t, f); got != tt.want {
+			if got := mustRender(t, f); got != tt.want {
 				t.Errorf("render mismatch\n--- got ---\n%s\n--- want ---\n%s", got, tt.want)
 			}
 		})

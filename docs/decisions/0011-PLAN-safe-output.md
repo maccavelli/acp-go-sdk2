@@ -251,3 +251,48 @@ Regenerated with `cd cmd/generate && env -u GOPATH -u GOMODCACHE go run .`: exit
 `go-precheck: 72 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 2 on `main`.
+
+### Step 3, render in memory, 2026-10-10
+
+The owner committed step 2 as `838a4c4`. Step 3 ran on `main` from that clean tree and changed `cmd/generate/main.go`, `main_test.go`, and, in
+`internal/emit`, `file.go`, `constants.go`, `types.go`, `dispatch.go`, `helpers.go`, `dispatch_test.go`, `file_test.go`, `types_test.go`; and this
+record. The agent did not commit.
+
+Tests first. `TestGeneratedFilesUpToDate` calls `emit.Render`, requires the names `constants_gen.go`, `types_gen.go`, `agent_gen.go`, `client_gen.go`,
+`helpers_gen.go` in that order, and compares each file's bytes in memory. `TestDispatchFollowsTheModel` and `TestProtocolMethodConstants` read
+`Render`'s output through a helper, `rendered`. On `838a4c4` neither package's tests compile: `undefined: emit.Render` and `undefined: Render`.
+
+Change, as the design says: `File` and `Render` in `file.go`; `WriteConstants`, `WriteTypes`, `WriteHelpers`, `writeAgentGen`, and `writeClientGen`
+became `constantsFile`, `typesFile`, `helpersFile`, `agentFile`, and `clientFile`, each returning the `*goFile`; `WriteDispatch`, `goFile.write`, and
+`generatedFileMode` are gone. `run` renders, then creates the directory, then writes each file with `os.WriteFile` at `0o600`, until step 4.
+
+The first `make pre-add-check` failed on two findings in this step's own code: revive's `confusing-naming` (`Render` against the test helper
+`render`) and unconvert (`string(b)` where `b` had become a string). The test helper is now `mustRender`, which is why `types_test.go` changed (its
+five calls), and the conversion is gone. The exported name `Render` is the design's and stays.
+
+Plants, in scratch copies of the repository (`s3_plants.py`), against `TestGeneratedFilesUpToDate`:
+
+```text
+helpers before client: exit=1
+    --- FAIL: TestGeneratedFilesUpToDate (0.11s)
+    main_test.go:52: Render returned [constants_gen.go types_gen.go agent_gen.go helpers_gen.go client_gen.go], want [constants_gen.go types_gen.go agent_gen.go client_gen.go helpers_gen.go]
+helpers dropped: exit=1
+    --- FAIL: TestGeneratedFilesUpToDate (0.12s)
+    main_test.go:52: Render returned [constants_gen.go types_gen.go agent_gen.go client_gen.go], want [constants_gen.go types_gen.go agent_gen.go client_gen.go helpers_gen.go]
+```
+
+`p5_failmodes.py`, rerun: the render failure now exits 1 with nothing rewritten; the second scenario is unchanged, as expected until step 5.
+
+```text
+render failure in types_gen.go: generator exit=1 generate: types_gen.go: print: format.Node internal error (401:6: expected 'IDENT', found 1 (and 10 more errors))
+    rewritten: []; untouched: ['constants_gen.go', 'types_gen.go', 'agent_gen.go', 'client_gen.go', 'helpers_gen.go']
+output that does not type-check: generator exit=0
+    rewritten: ['constants_gen.go', 'types_gen.go', 'agent_gen.go', 'client_gen.go', 'helpers_gen.go']; untouched: []
+    go build after generation: exit=1 ./agent_gen.go:174:16: too many errors
+```
+
+Regenerated: exit 0, `git diff --quiet d534f27 -- '*_gen.go'` exits 0, and `git status` shows no generated file. `go test -cover`:
+`internal/emit` 84.0%, `internal/model` 93.9%. `make pre-add-check`: `go-precheck: 72 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 3 on `main`.
