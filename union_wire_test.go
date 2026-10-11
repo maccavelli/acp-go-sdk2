@@ -307,7 +307,7 @@ func TestAbsentDiscriminator(t *testing.T) {
 		{"RequestPermissionOutcome empty", func() any { return &RequestPermissionOutcome{} }, `{}`, "Cancelled", false},
 		{"CreateElicitationResponse empty", func() any { return &CreateElicitationResponse{} }, `{}`,
 			`CreateElicitationResponse: missing discriminator "action"`, true},
-		{"CreateElicitationRequest form", func() any { return &CreateElicitationRequest{} }, `{"requestedSchema":{},"message":"m"}`, "Form", false},
+		{"CreateElicitationRequest form", func() any { return &CreateElicitationRequest{} }, `{"requestedSchema":{},"message":"m","sessionId":"s"}`, "Form", false},
 		{"StateUpdate empty", func() any { return &StateUpdate{} }, `{}`, `StateUpdate: missing discriminator "state"`, true},
 		{"SessionUpdate content", func() any { return &SessionUpdate{} }, `{"content":{"type":"text","text":"hi"}}`, unknown, false},
 		{"SessionUpdate tool call update", func() any { return &SessionUpdate{} }, `{"toolCallId":"t","status":"completed"}`, unknown, false},

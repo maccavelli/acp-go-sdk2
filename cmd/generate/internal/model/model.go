@@ -33,8 +33,12 @@ const (
 	KindPrimitive
 	// KindEmptyObject is an empty struct.
 	KindEmptyObject
-	// KindAny is a named any.
+	// KindAny is a definition the model gives no Go type, emitted as an alias
+	// of json.RawMessage.
 	KindAny
+	// KindIntegerEnum is an anyOf or oneOf of titled integer consts and plain
+	// integers: a named integer type with a constant per const.
+	KindIntegerEnum
 )
 
 // Model is the resolved schema.
@@ -106,6 +110,11 @@ type Type struct {
 	NestedStructs []*Struct
 	// Fields holds a KindObject's fields, in property order.
 	Fields []*Field
+	// Members are a KindObject's flattened members: a definition with
+	// properties of its own and an anyOf or oneOf whose members are all
+	// references (0011-MADR-harden-code-generator-engine.md, "Found in step 7
+	// and decided").
+	Members []*Member
 	// Underlying is the Go type of a KindPrimitive.
 	Underlying *TypeRef
 	// Variants holds one entry per entry of a KindUnion's anyOf or oneOf.
@@ -323,6 +332,8 @@ func classify(def *load.Definition) Kind {
 		return KindStringConstUnion
 	case len(def.AnyOf) > 0 && isOpenStringEnum(def):
 		return KindOpenEnum
+	case isIntegerEnum(def):
+		return KindIntegerEnum
 	case len(def.AnyOf) > 0, len(def.OneOf) > 0:
 		return KindUnion
 	case t == schemaTypeObject && len(def.Properties) > 0:
@@ -351,6 +362,16 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition,
 			t.Enum = append(t.Enum, EnumValue{Value: v, Const: c})
 		}
 	case KindUnion:
+		if members, ok := flatMembers(schema, def); ok {
+			t.Kind, t.Members = KindObject, members
+			if err := buildObject(n, t); err != nil {
+				return nil, err
+			}
+			if err := checkMembers(name, t.Fields, members); err != nil {
+				return nil, err
+			}
+			break
+		}
 		t.ExactlyOne = len(def.AnyOf) == 0
 		if err := buildUnion(schema, n, t, r); err != nil {
 			return nil, err
@@ -362,8 +383,62 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition,
 	case KindPrimitive:
 		u := primitiveRef(primaryType(def), def.Format)
 		t.Underlying = &u
+	case KindIntegerEnum:
+		if err := buildIntegerEnum(n, t); err != nil {
+			return nil, err
+		}
 	}
 	return t, nil
+}
+
+// isIntegerEnum reports whether def is an anyOf or oneOf whose members are
+// all integers, at least one of them a const.
+func isIntegerEnum(def *load.Definition) bool {
+	list := def.AnyOf
+	if len(list) == 0 {
+		list = def.OneOf
+	}
+	consts := 0
+	for _, v := range list {
+		if v == nil || primaryType(v) != schemaTypeInteger || v.Ref != "" || len(v.Properties) > 0 || len(v.AllOf) > 0 {
+			return false
+		}
+		if v.Const != nil {
+			consts++
+		}
+	}
+	return consts > 0
+}
+
+// buildIntegerEnum gives an integer enum the Go type of its members' format
+// and a constant per const, named by the member's title. Members of different
+// formats, and a const without a title, are refused.
+func buildIntegerEnum(n *namer, t *Type) error {
+	list := t.def.AnyOf
+	if len(list) == 0 {
+		list = t.def.OneOf
+	}
+	format := list[0].Format
+	for i, v := range list {
+		if v.Format != format {
+			return fmt.Errorf("%s: members of formats %s and %s have no one Go type", t.Name, numericFormat(schemaTypeInteger, format), numericFormat(schemaTypeInteger, v.Format))
+		}
+		if v.Const == nil {
+			continue
+		}
+		value := fmt.Sprint(v.Const)
+		if v.Title == "" {
+			return fmt.Errorf("%s variant %d: integer const %s has no title to name its constant", t.Name, i+1, value)
+		}
+		c := util.ToEnumConst(t.Name, v.Title)
+		if err := n.declare(c, fmt.Sprintf("%s value %s", t.Name, value)); err != nil {
+			return err
+		}
+		t.Enum = append(t.Enum, EnumValue{Value: value, Const: c})
+	}
+	u := primitiveRef(schemaTypeInteger, format)
+	t.Underlying = &u
+	return nil
 }
 
 // enumValues returns the constant values of an enum kind, as the types
@@ -588,8 +663,77 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 			return nil, err
 		}
 		vi.Inline = in
+		if len(v.AllOf) == 1 && v.AllOf[0] != nil && in.Kind == InlineStruct {
+			if base, ok := strings.CutPrefix(v.AllOf[0].Ref, refPrefix); ok {
+				if members, ok := flatMembers(schema, schema.Defs[base]); ok {
+					if in.KeepExtra {
+						return nil, fmt.Errorf("%s: a catch-all cannot hold the members of %s", owner, base)
+					}
+					if err := checkMembers(typeName, in.Fields, members); err != nil {
+						return nil, err
+					}
+					in.Members = members
+				}
+			}
+		}
 	}
 	return vi, nil
+}
+
+// flatMembers returns the members of def when it has properties of its own
+// and an anyOf or oneOf whose members are all references, a $ref or an allOf
+// of one $ref: one per member, named by its title, or by the referenced
+// definition without one.
+func flatMembers(schema *load.Schema, def *load.Definition) ([]*Member, bool) {
+	if def == nil || len(def.Properties) == 0 {
+		return nil, false
+	}
+	list := def.AnyOf
+	if len(list) == 0 {
+		list = def.OneOf
+	}
+	if len(list) == 0 {
+		return nil, false
+	}
+	var out []*Member
+	for _, v := range list {
+		if v == nil {
+			return nil, false
+		}
+		ref := v.Ref
+		if ref == "" {
+			ref = singleRefVariant(v)
+		}
+		name, ok := strings.CutPrefix(ref, refPrefix)
+		if !ok || schema.Defs[name] == nil {
+			return nil, false
+		}
+		field := util.ToExportedField(name)
+		if v.Title != "" {
+			field = util.ToExportedField(v.Title)
+		}
+		out = append(out, &Member{Field: field, Type: name, Doc: docLines(v.Description), Required: expandAllOf(schema, schema.Defs[name]).Required})
+	}
+	return out, true
+}
+
+// checkMembers fails when a member's field is not an exported identifier, or
+// is the name of a field or of another member of the struct.
+func checkMembers(owner string, fields []*Field, members []*Member) error {
+	seen := map[string]string{}
+	for _, f := range fields {
+		seen[f.Name] = "property " + f.Key
+	}
+	for _, mb := range members {
+		if err := checkExported(mb.Field); err != nil {
+			return fmt.Errorf("%s: member %s: %w", owner, mb.Type, err)
+		}
+		if prev, ok := seen[mb.Field]; ok {
+			return fmt.Errorf("%s: member %s and %s both become field %s", owner, mb.Type, prev, mb.Field)
+		}
+		seen[mb.Field] = "member " + mb.Type
+	}
+	return nil
 }
 
 // constPairs returns the string const properties of v, sorted by key.

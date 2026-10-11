@@ -1,0 +1,13 @@
+Refused: an integer const member without a title has no constant name (0011-MADR-harden-code-generator-engine.md, "Found in step 7 and decided").
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Code": {"description": "A code.", "anyOf": [{"type": "integer", "format": "int32", "const": -32700}, {"title": "Other", "type": "integer", "format": "int32"}]},
+  "Err": {"type": "object", "properties": {"code": {"$ref": "#/$defs/Code"}}, "required": ["code"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Code variant 1:
+integer const -32700 has no title

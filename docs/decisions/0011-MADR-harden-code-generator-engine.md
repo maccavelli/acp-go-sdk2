@@ -619,6 +619,46 @@ The owner added to phase 6 a regression the type checks did not catch: since
 as `null`, and a `null` one is sent on as `null`. The fix, decided in that record's amendment of 2026-10-11, keeps `json.RawMessage` and reads a
 `null` raw value as an absent one, as ACP v1 defines them; its regression tests, the generator's change, and the docs are step 6a of the plan.
 
+### Found in step 7 and decided, 2026-10-11
+
+The conformance test of step 7 runs every generated type, union, and method against instances built from the schema files. On the committed
+schema it found:
+
+* **An object with properties and a union of references loses half of itself.** `ElicitationFormMode` has a required `requestedSchema` and an
+  `anyOf` of two members, each an `allOf` of one `$ref` (`ElicitationSessionScope`, `ElicitationRequestScope`); `ElicitationUrlMode` has the
+  required `elicitationId` and `url` and the same members. The model classifies both as unions: the members become the fields `Session` and
+  `Request`, and the definition's own properties are dropped, since only inline variants carry a union's properties. `CreateElicitationRequest`'s
+  `form` and `url` variants are an `allOf` of those definitions plus properties: their structs merge the definitions' properties and drop the
+  union, so `sessionId`, `toolCallId`, and `requestId` are lost. A client decoding `elicitation/create` cannot tell which session or request it
+  belongs to, and an agent cannot send it. The shape has been in the committed schema since `1.25.0` (`17adda9`); no other definition has it.
+* **An empty optional map is not sent.** An optional map field arrives as `{}` and is sent as nothing, since `omitempty` drops an empty map:
+  277 fields, 270 of them `_meta`, as the original SDK did.
+
+Asked, the owner decided:
+
+* **Such an object is a struct with its members flattened.** A definition with properties of its own and an `anyOf` or `oneOf` whose members are
+  all references (a `$ref`, or an `allOf` of one `$ref` with no properties) is an object: its own fields, and one pointer field per member, named
+  by the member's title and typed by the referenced definition, written into the same JSON object. A union variant that is an `allOf` of such a
+  definition keeps its fields and gets the same member fields. Decoding takes the first member, in schema order, whose required keys the payload
+  carries, and refuses a payload no member fits; encoding writes the struct's keys and the set member's; `Validate` requires exactly one member
+  set. Fields are added; none is removed. Not chosen: one field naming a generated union for the members, a Go field the schema does not name;
+  and recording the loss for a later decision.
+* **An empty optional map is the same as an absent one.** Neither holds a key, and ACP leaves `_meta`'s keys to the peers. Nothing changes on the
+  wire; the conformance test accepts it, and this record states it. Not chosen: `omitzero` on the 277 fields, which would send `{}` back.
+
+A fourth finding came from extending the test to every union, discriminated or not: `ErrorCode`, an `anyOf` of eight integer `const` members
+(`-32700` "Parse error", `-32601` "Method not found", and others) and an `Other` integer, decodes every value into its first variant: `-32601`,
+`-32000`, and `7` all set `ParseError`. The trial decode takes the first `int32` variant that accepts the number and never compares the `const`.
+The wire value survives, so a round trip passes, but Go code that checks a variant reads the wrong one. The type has been a union of nine pointer
+fields to named `int32` types since schema `0.10.7` (`c225368`); it is the only integer union in either schema file.
+
+Asked, the owner decided: **an `anyOf` or `oneOf` whose members are all integers, each a `const` with a title or a plain integer, is an open
+integer enum**, generated as string const unions are: a named integer type of the members' format and a constant per `const`, named by its title
+(`type ErrorCode int32`, `ErrorCodeMethodNotFound ErrorCode = -32601`). Any value of the type decodes; a known one equals its constant. The
+exported API changes: `ErrorCode` stops being a struct and the nine `ErrorCode*` variant types go; the release notes list it. A `const` member
+without a title, or members of different formats, is refused. Not chosen: decoding a variant only by its `const`, which keeps the nine-field
+union; and recording the finding for later.
+
 The plan for these decisions is [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md).
 
 ## More Information

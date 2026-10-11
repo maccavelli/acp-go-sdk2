@@ -1,4 +1,5 @@
-A definition without a type is a named any.
+A definition without a type is raw JSON, an alias of json.RawMessage, so it keeps
+every digit (0012-MADR-schema-fidelity-framework.md, amendment of 2026-10-11).
 The meta declares $/cancel_request and the schema its smallest definition, which
 the runtime needs.
 
@@ -12,10 +13,30 @@ the runtime needs.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
-type Anything interface{}
+type Anything = json.RawMessage
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 func (*CancelRequestNotification).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// An untyped definition keeps a number beyond 2^53 byte for byte.
+func TestUntypedDefinitionKeepsDigits(t *testing.T) {
+	in := `{"n":9007199254740993,"f":1.0000000000000000001}`
+	var v Anything
+	if err := json.Unmarshal([]byte(in), &v); err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(v)
+	if err != nil || string(b) != in {
+		t.Errorf("sent as %s, %v; want %s", b, err, in)
+	}
+}

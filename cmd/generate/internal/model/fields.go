@@ -165,6 +165,23 @@ type Inline struct {
 	Exempt string
 	// Validation is what the struct's Validate checks; nil is no Validate.
 	Validation *Validation
+	// Members are the flattened members of the definition the variant is an
+	// allOf of, when it has them (see Type.Members).
+	Members []*Member
+}
+
+// Member is one flattened member of an object: a pointer field of the
+// referenced type, whose keys share the object's JSON object.
+type Member struct {
+	// Field is the Go field, named by the member's title; Type is the
+	// referenced definition.
+	Field, Type string
+	Doc         []string
+	// Required are the member type's required keys: a payload that carries
+	// them all fits the member.
+	Required []string
+	// Validates is true when the member's type has a Validate method.
+	Validates bool
 }
 
 // docLines formats a description as doc comment lines, or nil.

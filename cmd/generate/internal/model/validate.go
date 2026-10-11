@@ -12,6 +12,9 @@ import (
 // outside its Go type's range; and every field whose type validates does.
 type Validation struct {
 	Checks []Check
+	// Members are the struct's flattened members: exactly one must be set,
+	// and the set one validates when its type does.
+	Members []*Member
 }
 
 // CheckKind is what one Check verifies.
@@ -53,10 +56,11 @@ func (m *Model) Validates(name string) bool { return m.validates[name] }
 
 // shape is one generated struct the validation pass visits.
 type shape struct {
-	name   string
-	fields []*Field
-	rpc    bool
-	set    func(*Validation)
+	name    string
+	fields  []*Field
+	rpc     bool
+	set     func(*Validation)
+	members []*Member
 }
 
 // buildValidations decides which types have Validate and what each checks:
@@ -86,7 +90,10 @@ func (m *Model) buildValidations() error {
 		if !m.validates[s.name] {
 			continue
 		}
-		v := &Validation{}
+		v := &Validation{Members: s.members}
+		for _, mb := range s.members {
+			mb.Validates = m.validates[mb.Type]
+		}
 		for _, f := range s.fields {
 			for _, c := range own[s.name] {
 				if c.Key == f.Key {
@@ -119,15 +126,21 @@ func (m *Model) validationShapes() ([]shape, error) {
 				return nil, fmt.Errorf("%s: a bound on a named primitive type is not checked", t.Name)
 			}
 		case t.Kind != KindNone && primaryType(t.def) == schemaTypeObject:
-			structs = append(structs, shape{t.Name, t.Fields, isRPCTypeName(t.Name), func(v *Validation) { t.Validation = v }})
+			structs = append(structs, shape{t.Name, t.Fields, isRPCTypeName(t.Name), func(v *Validation) { t.Validation = v }, t.Members})
 		}
 		for _, ns := range t.NestedStructs {
-			structs = append(structs, shape{ns.Name, ns.Fields, false, func(v *Validation) { ns.Validation = v }})
+			structs = append(structs, shape{ns.Name, ns.Fields, false, func(v *Validation) { ns.Validation = v }, nil})
 		}
 		for _, vi := range t.Variants {
 			if in := vi.Inline; in != nil && in.Kind == InlineStruct {
-				structs = append(structs, shape{vi.TypeName, in.Fields, false, func(v *Validation) { in.Validation = v }})
+				structs = append(structs, shape{vi.TypeName, in.Fields, false, func(v *Validation) { in.Validation = v }, in.Members})
 			}
+		}
+	}
+	// A struct with flattened members validates: exactly one must be set.
+	for _, s := range structs {
+		if len(s.members) > 0 {
+			m.validates[s.name] = true
 		}
 	}
 	return structs, nil

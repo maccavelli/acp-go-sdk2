@@ -12,6 +12,7 @@ const (
 	helperOrDefault    = "orDefault"
 	helperSkipInvalid  = "skipInvalid"
 	helperAbsentIfNull = "absentIfNull"
+	helperMergeObject  = "mergeObject"
 )
 
 // emitDecodeHelpers appends the helpers f uses.
@@ -28,6 +29,39 @@ func emitDecodeHelpers(f *goFile) {
 	if f.uses[helperAbsentIfNull] {
 		emitAbsentIfNull(f)
 	}
+	if f.uses[helperMergeObject] {
+		emitMergeObject(f)
+	}
+}
+
+// emitMergeObject emits
+//
+//	func mergeObject(b []byte, x any) ([]byte, error)
+//
+// which adds the keys of x's JSON object that b's object lacks, for a struct
+// with flattened members (0011-MADR-harden-code-generator-engine.md, "Found in
+// step 7 and decided"). Values are carried as raw JSON, so numbers keep their
+// digits.
+func emitMergeObject(f *goFile) {
+	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
+	raw := func() ast.Expr { return rawMap(f.qual(pkgJSON, "RawMessage")) }
+	fn := function(helperMergeObject,
+		funcType([]*ast.Field{param("b", byteSlice()), param("x", id("any"))}, param("", byteSlice()), param("", id("error"))),
+		varStmt("m", raw()),
+		ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("m")))), errNotNil(), ret(nilExpr(), id("err"))),
+		define(exprs(id("xb"), id("err")), call(f.qual(pkgJSON, "Marshal"), id("x"))),
+		ifStmt(nil, errNotNil(), ret(nilExpr(), id("err"))),
+		varStmt("xm", raw()),
+		ifStmt(define(exprs(id("err")), unmarshal(id("xb"), addr(id("xm")))), errNotNil(), ret(nilExpr(), id("err"))),
+		rangeStmt(id("k"), id("v"), id("xm"),
+			ifStmt(define(exprs(id("_"), id("ok")), index(id("m"), id("k"))), not(id("ok")),
+				assign(exprs(index(id("m"), id("k"))), id("v")))),
+		ret(call(f.qual(pkgJSON, "Marshal"), id("m"))),
+	)
+	f.line()
+	f.comment("mergeObject adds the keys of x's JSON object that b's object lacks: the keys of",
+		"a flattened member. Values stay raw JSON, so numbers keep every digit.")
+	f.add(fn)
 }
 
 // emitAbsentIfNull emits

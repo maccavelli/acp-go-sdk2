@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
@@ -104,6 +105,15 @@ func emitRPCInterfaces(f *goFile, m *model.Model) {
 	}
 }
 
+// integerLit is the literal of a decimal integer, a negative one as a unary
+// minus.
+func integerLit(v string) ast.Expr {
+	if digits, ok := strings.CutPrefix(v, "-"); ok {
+		return &ast.UnaryExpr{Op: token.SUB, X: &ast.BasicLit{Kind: token.INT, Value: digits}}
+	}
+	return &ast.BasicLit{Kind: token.INT, Value: v}
+}
+
 // enumConsts declares <Const> name = "value" for each value.
 func enumConsts(f *goFile, name string, values []model.EnumValue) {
 	if len(values) == 0 {
@@ -142,6 +152,14 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 	case model.KindPrimitive:
 		f.add(typeDecl(name, typeAST(f, *t.Underlying)))
 		f.line()
+	case model.KindIntegerEnum:
+		f.add(typeDecl(name, typeAST(f, *t.Underlying)))
+		var specs []*ast.ValueSpec
+		for _, v := range t.Enum {
+			specs = append(specs, constSpec(v.Const, id(name), integerLit(v.Value)))
+		}
+		f.add(constDecl(true, specs...))
+		f.line()
 	case model.KindEmptyObject:
 		// Empty object shape: emit a concrete empty struct so methods can be defined
 		// and the wire encoding is consistently {} rather than null.
@@ -151,8 +169,10 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 			emitValidate(f, name, t.Validation)
 		}
 	default:
-		f.comment(fmt.Sprintf("%s is a union or complex schema; represented generically.", name))
-		f.add(typeDecl(name, id("any")))
+		// A definition the model gives no Go type is raw JSON, kept byte for
+		// byte. An alias keeps json.RawMessage's methods; a defined type would
+		// encode as base64.
+		f.add(aliasDecl(name, f.qual(pkgJSON, "RawMessage")))
 		f.line()
 	}
 }
@@ -161,19 +181,27 @@ func emitObjectSchema(f *goFile, t *model.Type) {
 	// Nested struct types for inline object properties come first.
 	for _, ns := range t.NestedStructs {
 		f.comment(ns.Doc...)
-		emitStruct(f, ns.Name, ns.Fields, false, "", ns.Validation)
+		emitStruct(f, ns.Name, ns.Fields, nil, false, "", ns.Validation)
 	}
-	emitStruct(f, t.Name, t.Fields, false, "", t.Validation)
+	emitStruct(f, t.Name, t.Fields, t.Members, false, "", t.Validation)
 }
 
 // emitStruct emits type name struct { fields } and the methods its required
-// keys, defaults, fills, and validation need; exempt is a required key
-// decoding does not check.
-func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool, exempt string, val *model.Validation) {
+// keys, defaults, fills, flattened members, and validation need; exempt is a
+// required key decoding does not check.
+func emitStruct(f *goFile, name string, fields []*model.Field, members []*model.Member, keepExtra bool, exempt string, val *model.Validation) {
 	var st fieldSet
 	for _, fld := range fields {
 		st.comment(fld.Doc...)
 		st.add(structField(fld.Name, typeAST(f, fld.Type), fld.Tag))
+	}
+	for _, mb := range members {
+		st.comment(mb.Doc...)
+		if len(mb.Doc) > 0 {
+			st.comment("")
+		}
+		st.comment("Its keys share this struct's JSON object; exactly one member is set.")
+		st.add(structField(mb.Field, star(id(mb.Type)), "-"))
 	}
 	if keepExtra {
 		st.comment("Extra holds the keys of the payload this struct does not declare, as received.",
@@ -182,7 +210,7 @@ func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool, e
 	}
 	f.add(typeDecl(name, st.structType(f)))
 	f.line()
-	emitObjectCodec(f, name, fields, keepExtra, exempt)
+	emitObjectCodec(f, name, fields, members, keepExtra, exempt)
 	if val != nil {
 		emitValidate(f, name, val)
 	}
@@ -209,8 +237,8 @@ func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 // emitObjectCodec synthesizes MarshalJSON for structs with fields that carry
 // schema defaults or are required slices or maps, and UnmarshalJSON for
 // structs with required keys, defaults, lenient fields, optional raw fields,
-// or a catch-all's Extra.
-func emitObjectCodec(f *goFile, name string, fields []*model.Field, keepExtra bool, exempt string) {
+// flattened members, or a catch-all's Extra.
+func emitObjectCodec(f *goFile, name string, fields []*model.Field, members []*model.Member, keepExtra bool, exempt string) {
 	var defaults, fills, lenient, absent []*model.Field
 	var required []string
 	for _, fld := range fields {
@@ -231,18 +259,18 @@ func emitObjectCodec(f *goFile, name string, fields []*model.Field, keepExtra bo
 		}
 	}
 	slices.Sort(required)
-	if len(defaults) > 0 || len(fills) > 0 || keepExtra {
-		emitObjectMarshal(f, name, defaults, fills, keepExtra)
+	if len(defaults) > 0 || len(fills) > 0 || keepExtra || len(members) > 0 {
+		emitObjectMarshal(f, name, defaults, fills, members, keepExtra)
 	}
-	if len(defaults) > 0 || keepExtra || len(required) > 0 || len(lenient) > 0 || len(absent) > 0 {
-		emitObjectUnmarshal(f, name, fields, defaults, lenient, absent, required, keepExtra)
+	if len(defaults) > 0 || keepExtra || len(required) > 0 || len(lenient) > 0 || len(absent) > 0 || len(members) > 0 {
+		emitObjectUnmarshal(f, name, fields, defaults, lenient, absent, members, required, keepExtra)
 	}
 }
 
 // emitObjectMarshal emits MarshalJSON: it fills nil slices and maps with
 // their defaults, and nil required ones with empty values, before encoding,
-// and writes back a catch-all's Extra.
-func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, keepExtra bool) {
+// writes back a catch-all's Extra, and writes the set member's keys.
+func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, members []*model.Member, keepExtra bool) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	marshal := func(x ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Marshal"), x) }
 
@@ -279,6 +307,20 @@ func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, k
 					assign(exprs(index(id("m"), id("k"))), id("x")))),
 			ret(marshal(id("m"))),
 		)
+	} else if len(members) > 0 {
+		// Write the set member's keys into the struct's object.
+		f.uses[helperMergeObject] = true
+		var cases []ast.Stmt
+		for _, mb := range members {
+			cases = append(cases, caseOf(exprs(binary(dot("v", mb.Field), token.NEQ, nilExpr())),
+				ret(call(id(helperMergeObject), id("b"), dot("v", mb.Field)))))
+		}
+		body = append(body,
+			define(exprs(id("b"), id("err")), marshal(id("a"))),
+			ifStmt(nil, errNotNil(), ret(nilExpr(), id("err"))),
+			switchStmt(nil, cases...),
+			ret(nilExpr(), call(f.qual(pkgErrors, "New"), str(name+": no member set"))),
+		)
 	} else {
 		body = append(body, ret(marshal(id("a"))))
 	}
@@ -292,7 +334,7 @@ func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, k
 // empties each optional raw field that holds null, applies defaults when a
 // field is missing, or null when the schema does not allow null, and keeps a
 // catch-all's undeclared keys.
-func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, absent []*model.Field, required []string, keepExtra bool) {
+func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, absent []*model.Field, members []*model.Member, required []string, keepExtra bool) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	f.uses[helperObjectKeys] = true
 	keys := []ast.Expr{id("b"), str(name)}
@@ -300,7 +342,7 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, abse
 		keys = append(keys, str(k))
 	}
 	m := id("m")
-	if len(defaults) == 0 && !keepExtra {
+	if len(defaults) == 0 && !keepExtra && len(members) == 0 {
 		m = id("_")
 	}
 	body := []ast.Stmt{
@@ -320,6 +362,9 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, abse
 	for _, fld := range absent {
 		f.uses[helperAbsentIfNull] = true
 		body = append(body, assign(exprs(dot("a", fld.Name)), call(id(helperAbsentIfNull), dot("a", fld.Name))))
+	}
+	if len(members) > 0 {
+		body = append(body, memberDecode(f, name, members))
 	}
 	for _, fld := range defaults {
 		// Only a property that rejects null reads the raw value.
@@ -352,6 +397,31 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, abse
 	f.add(method(param("v", star(id(name))), "UnmarshalJSON",
 		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))), body...))
 	f.line()
+}
+
+// memberDecode decodes b into the first member, in schema order, whose
+// required keys m holds, and refuses a payload no member fits.
+func memberDecode(f *goFile, name string, members []*model.Member) ast.Stmt {
+	var cases []ast.Stmt
+	for _, mb := range members {
+		var cond ast.Expr = boolLit(true)
+		for i, k := range mb.Required {
+			has := binary(index(id("m"), str(k)), token.NEQ, nilExpr())
+			if i == 0 {
+				cond = has
+			} else {
+				cond = binary(cond, token.LAND, has)
+			}
+		}
+		cases = append(cases, caseOf(exprs(cond),
+			varStmt("x", id(mb.Type)),
+			ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("x")))), errNotNil(),
+				ret(call(f.qual(pkgFmt, "Errorf"), str(name+": "+mb.Field+": %w"), id("err")))),
+			assign(exprs(dot("a", mb.Field)), addr(id("x"))),
+		))
+	}
+	cases = append(cases, caseOf(nil, ret(call(f.qual(pkgErrors, "New"), str(name+": the payload fits no member")))))
+	return switchStmt(nil, cases...)
 }
 
 // lenientDecode decodes b into an anonymous struct that embeds Alias and
@@ -416,7 +486,7 @@ func emitInlineVariant(f *goFile, tname string, in *model.Inline) {
 	f.comment(in.Doc...)
 	switch in.Kind {
 	case model.InlineStruct:
-		emitStruct(f, tname, in.Fields, in.KeepExtra, in.Exempt, in.Validation)
+		emitStruct(f, tname, in.Fields, in.Members, in.KeepExtra, in.Exempt, in.Validation)
 	case model.InlineNamed:
 		// Non-object title-only variants can still carry payloads (e.g. arrays).
 		f.add(typeDecl(tname, typeAST(f, in.Type)))
@@ -744,6 +814,20 @@ func emitValidate(f *goFile, name string, val *model.Validation) {
 	var body []ast.Stmt
 	for _, c := range val.Checks {
 		body = append(body, checkStmt(f, name, c))
+	}
+	if len(val.Members) > 0 {
+		body = append(body, varStmt("count", id("int")))
+		for _, mb := range val.Members {
+			body = append(body, ifStmt(nil, binary(dot("v", mb.Field), token.NEQ, nilExpr()), incr(id("count"))))
+		}
+		body = append(body, ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
+			ret(call(f.qual(pkgErrors, "New"), str(name+" must have exactly one member set")))))
+		for _, mb := range val.Members {
+			if mb.Validates {
+				body = append(body, ifStmt(nil, binary(dot("v", mb.Field), token.NEQ, nilExpr()),
+					validateCall(f, dot("v", mb.Field), name+": member "+mb.Field+": %w")))
+			}
+		}
 	}
 	f.add(validateMethod("v", name, append(body, ret(nilExpr()))...))
 	f.line()

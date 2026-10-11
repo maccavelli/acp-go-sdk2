@@ -164,3 +164,57 @@ func TestTitleOnlyVariantTakesSchemaType(t *testing.T) {
 		t.Errorf("variant FooExt: %+v, want InlineNamed string", in)
 	}
 }
+
+// flattenDefs has an object with a property of its own and an anyOf of two
+// references, and a union whose variant is an allOf of it.
+const flattenDefs = `{
+	"SessionScope":{"type":"object","required":["sessionId"],"properties":{"sessionId":{"type":"string"}}},
+	"RequestScope":{"type":"object","required":["requestId"],"properties":{"requestId":{"type":"integer"}}},
+	"Mode":{"type":"object","required":["schema"],"properties":{"schema":{"type":"string"}},
+		"anyOf":[{"title":"Session","allOf":[{"$ref":"#/$defs/SessionScope"}]},{"$ref":"#/$defs/RequestScope"}]},
+	"Ask":{"oneOf":[{"type":"object","required":["mode"],"properties":{"mode":{"type":"string","const":"form"}},
+		"allOf":[{"$ref":"#/$defs/Mode"}]},{"type":"object","required":["mode"],"properties":{"mode":{"type":"string","const":"x"}}}]}}`
+
+// TestFlattenedMembers requires such an object to be a struct with its members
+// flattened, and a variant that is an allOf of it to get the same members
+// (0011-MADR-harden-code-generator-engine.md, "Found in step 7 and decided").
+func TestFlattenedMembers(t *testing.T) {
+	t.Parallel()
+	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, flattenDefs)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	describe := func(ms []*Member) string {
+		var out []string
+		for _, mb := range ms {
+			out = append(out, mb.Field+":"+mb.Type+strings.Join(mb.Required, ","))
+		}
+		return strings.Join(out, " ")
+	}
+	mode := m.Type("Mode")
+	if mode.Kind != KindObject || len(mode.Fields) != 1 || mode.Fields[0].Key != "schema" {
+		t.Fatalf("Mode: kind %v, fields %d", mode.Kind, len(mode.Fields))
+	}
+	if got := describe(mode.Members); got != "Session:SessionScopesessionId RequestScope:RequestScoperequestId" {
+		t.Errorf("Mode members: %s", got)
+	}
+	if mode.Validation == nil || len(mode.Validation.Members) != 2 {
+		t.Errorf("Mode Validation: %+v, want one requiring exactly one of two members", mode.Validation)
+	}
+	form := m.Type("Ask").Variants[0].Inline
+	if form == nil || describe(form.Members) != describe(mode.Members) {
+		t.Errorf("Ask's form variant: %+v, want Mode's members", form)
+	}
+	if form != nil && form.Validation == nil {
+		t.Error("Ask's form variant has no Validate")
+	}
+	if m.Type("Ask").Variants[1].Inline.Members != nil {
+		t.Error("Ask's other variant got members")
+	}
+
+	clash := strings.Replace(flattenDefs, `"properties":{"schema":{"type":"string"}}`, `"properties":{"session":{"type":"string"}}`, 1)
+	clash = strings.Replace(clash, `"required":["schema"]`, `"required":["session"]`, 1)
+	if _, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, clash)}); err == nil || !strings.Contains(err.Error(), "both become field Session") {
+		t.Errorf("a member named as a property: %v", err)
+	}
+}

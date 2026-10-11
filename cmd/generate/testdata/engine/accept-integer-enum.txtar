@@ -1,0 +1,56 @@
+An anyOf of titled integer consts and a plain integer is an open integer enum:
+a named integer type and a constant per const, as string const unions are
+(0011-MADR-harden-code-generator-engine.md, "Found in step 7 and decided").
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Code": {"description": "A code.", "anyOf": [{"title": "Parse error", "type": "integer", "format": "int32", "const": -32700}, {"title": "Method not found", "type": "integer", "format": "int32", "const": -32601}, {"title": "Other", "type": "integer", "format": "int32"}]},
+  "Err": {"type": "object", "properties": {"code": {"$ref": "#/$defs/Code"}}, "required": ["code"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Code int32
+const CodeMethodNotFound Code = -32601
+const CodeParseError Code = -32700
+type Err struct{Code Code "json:\"code\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (*Err).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// A known value equals its constant; any other value of the type decodes
+// too; each is sent back as received.
+func TestIntegerEnum(t *testing.T) {
+	for in, want := range map[string]Code{"-32601": CodeMethodNotFound, "-32700": CodeParseError, "7": Code(7)} {
+		var c Code
+		if err := json.Unmarshal([]byte(in), &c); err != nil || c != want {
+			t.Errorf("%s decoded as %d, %v; want %d", in, c, err, want)
+		}
+		if b, err := json.Marshal(c); err != nil || string(b) != in {
+			t.Errorf("%s sent as %s, %v", in, b, err)
+		}
+	}
+	var e Err
+	if err := json.Unmarshal([]byte(`{"code":-32601}`), &e); err != nil || e.Code != CodeMethodNotFound {
+		t.Errorf("Err decoded as %+v, %v", e, err)
+	}
+	if err := json.Unmarshal([]byte(`{"code":2147483648}`), &e); err == nil {
+		t.Error("a code beyond int32 decoded")
+	}
+}

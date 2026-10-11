@@ -1893,22 +1893,6 @@ func schemaUnions() []schemaUnion {
 			CatchAll: "",
 		},
 		{
-			Type: "ElicitationFormMode",
-			Key:  "",
-			Variants: []schemaVariant{
-				{
-					Field: "Session",
-					Value: "",
-				},
-				{
-					Field: "Request",
-					Value: "",
-				},
-			},
-			Unknown:  false,
-			CatchAll: "",
-		},
-		{
 			Type: "ElicitationPropertySchema",
 			Key:  "type",
 			Variants: []schemaVariant{
@@ -1941,22 +1925,6 @@ func schemaUnions() []schemaUnion {
 			CatchAll: "Other",
 		},
 		{
-			Type: "ElicitationUrlMode",
-			Key:  "",
-			Variants: []schemaVariant{
-				{
-					Field: "Session",
-					Value: "",
-				},
-				{
-					Field: "Request",
-					Value: "",
-				},
-			},
-			Unknown:  false,
-			CatchAll: "",
-		},
-		{
 			Type: "EmbeddedResourceResource",
 			Key:  "",
 			Variants: []schemaVariant{
@@ -1966,50 +1934,6 @@ func schemaUnions() []schemaUnion {
 				},
 				{
 					Field: "BlobResourceContents",
-					Value: "",
-				},
-			},
-			Unknown:  false,
-			CatchAll: "",
-		},
-		{
-			Type: "ErrorCode",
-			Key:  "",
-			Variants: []schemaVariant{
-				{
-					Field: "ParseError",
-					Value: "",
-				},
-				{
-					Field: "InvalidRequest",
-					Value: "",
-				},
-				{
-					Field: "MethodNotFound",
-					Value: "",
-				},
-				{
-					Field: "InvalidParams",
-					Value: "",
-				},
-				{
-					Field: "InternalError",
-					Value: "",
-				},
-				{
-					Field: "RequestCancelled",
-					Value: "",
-				},
-				{
-					Field: "AuthenticationRequired",
-					Value: "",
-				},
-				{
-					Field: "ResourceNotFound",
-					Value: "",
-				},
-				{
-					Field: "Other",
 					Value: "",
 				},
 			},

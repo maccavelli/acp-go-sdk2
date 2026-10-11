@@ -15,7 +15,7 @@ type AgentExperimental interface{}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
-type Nothing interface{}
+type Nothing = json.RawMessage
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 func (*CancelRequestNotification).Validate() error

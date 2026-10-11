@@ -1,0 +1,125 @@
+An object with a property of its own and an anyOf of references is a struct with
+its members flattened: a field per member, written into the same object, chosen
+by its required keys; a variant that is an allOf of it gets them too
+(0011-MADR-harden-code-generator-engine.md, "Found in step 7 and decided").
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "SessionScope": {"type": "object", "properties": {"sessionId": {"type": "string"}, "toolCallId": {"type": ["string", "null"]}}, "required": ["sessionId"]},
+  "RequestScope": {"type": "object", "properties": {"requestId": {"type": "integer", "format": "int64"}}, "required": ["requestId"]},
+  "Mode": {"type": "object", "properties": {"schema": {"type": "object", "additionalProperties": {"type": "string"}}}, "required": ["schema"], "anyOf": [{"title": "Session", "allOf": [{"$ref": "#/$defs/SessionScope"}]}, {"title": "Request", "allOf": [{"$ref": "#/$defs/RequestScope"}]}]},
+  "Ask": {"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"], "anyOf": [{"type": "object", "properties": {"mode": {"type": "string", "const": "form"}}, "required": ["mode"], "allOf": [{"$ref": "#/$defs/Mode"}]}, {"title": "other", "type": "object", "properties": {"mode": {"type": "string"}}, "required": ["mode"], "not": {"anyOf": [{"type": "object", "properties": {"mode": {"const": "form"}}, "required": ["mode"]}]}}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type Ask struct{Form *AskForm "json:\"-\""; Other *AskOther "json:\"-\""}
+type AskForm struct{Message string "json:\"message\""; Mode string "json:\"mode\""; Schema map[string]string "json:\"schema\""; Session *SessionScope "json:\"-\""; Request *RequestScope "json:\"-\""}
+type AskOther struct{Message string "json:\"message\""; Mode string "json:\"mode\""; Extra map[string]json.RawMessage "json:\"-\""}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Mode struct{Schema map[string]string "json:\"schema\""; Session *SessionScope "json:\"-\""; Request *RequestScope "json:\"-\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type RequestScope struct{RequestId int64 "json:\"requestId\""}
+type SessionScope struct{SessionId string "json:\"sessionId\""; ToolCallId *string "json:\"toolCallId,omitempty\""}
+func (Ask).MarshalJSON() ([]byte, error)
+func (*Ask).UnmarshalJSON(b []byte) error
+func (*Ask).Validate() error
+func (AskForm).MarshalJSON() ([]byte, error)
+func (*AskForm).UnmarshalJSON(b []byte) error
+func (*AskForm).Validate() error
+func (AskOther).MarshalJSON() ([]byte, error)
+func (*AskOther).UnmarshalJSON(b []byte) error
+func (*CancelRequestNotification).Validate() error
+func (Mode).MarshalJSON() ([]byte, error)
+func (*Mode).UnmarshalJSON(b []byte) error
+func (*Mode).Validate() error
+func (*RequestScope).UnmarshalJSON(b []byte) error
+func (*SessionScope).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"bytes"
+	"encoding/json"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func jsonEqual(t *testing.T, got []byte, want string) {
+	t.Helper()
+	decode := func(b []byte) any {
+		d := json.NewDecoder(bytes.NewReader(b))
+		d.UseNumber()
+		var v any
+		if err := d.Decode(&v); err != nil {
+			t.Fatalf("%s: %v", b, err)
+		}
+		return v
+	}
+	if !reflect.DeepEqual(decode(got), decode([]byte(want))) {
+		t.Errorf("got %s, want %s", got, want)
+	}
+}
+
+// The object keeps its own property and the member whose required keys the
+// payload carries, and sends both back in one object.
+func TestFlattenedMembers(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"schema":{"a":"b"},"sessionId":"s","toolCallId":"t"}`: "Session",
+		`{"schema":{},"requestId":9223372036854775807}`:           "Request",
+	} {
+		var m Mode
+		if err := json.Unmarshal([]byte(in), &m); err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		got := map[bool]string{m.Session != nil && m.Request == nil: "Session", m.Request != nil && m.Session == nil: "Request"}[true]
+		if got != want || m.Schema == nil {
+			t.Errorf("%s decoded as %+v, want %s and the schema", in, m, want)
+		}
+		if err := m.Validate(); err != nil {
+			t.Errorf("%s: Validate: %v", in, err)
+		}
+		b, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		jsonEqual(t, b, in)
+	}
+	for _, in := range []string{`{"schema":{}}`, `{"sessionId":"s"}`} {
+		if err := json.Unmarshal([]byte(in), new(Mode)); err == nil {
+			t.Errorf("%s decoded", in)
+		}
+	}
+	if _, err := json.Marshal(Mode{Schema: map[string]string{}}); err == nil || !strings.Contains(err.Error(), "Mode") {
+		t.Errorf("a Mode with no member set encoded: %v", err)
+	}
+	if err := (&Mode{Session: &SessionScope{}, Request: &RequestScope{}}).Validate(); err == nil {
+		t.Error("a Mode with two members set validated")
+	}
+}
+
+// A union variant that is an allOf of such an object keeps the members too.
+func TestFlattenedMembersInAVariant(t *testing.T) {
+	in := `{"mode":"form","message":"m","schema":{},"requestId":-9223372036854775808}`
+	var a Ask
+	if err := json.Unmarshal([]byte(in), &a); err != nil {
+		t.Fatal(err)
+	}
+	if a.Form == nil || a.Form.Request == nil || a.Form.Request.RequestId != -9223372036854775808 || a.Form.Message != "m" {
+		t.Fatalf("decoded as %+v", a.Form)
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonEqual(t, b, in)
+}

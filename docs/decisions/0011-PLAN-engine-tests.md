@@ -33,6 +33,8 @@ In scope:
 * `Makefile` (`fuzz`, `mutation-engine`, `mutation-generated`), `.github/workflows/ci.yml` (D7)
 * `cmd/generate/internal/output/check.go`: one shared source importer (added 2026-10-11, see step 5's deviation)
 * `cmd/generate/internal/load/merge.go` and `internal/model`: where each merged definition came from (added 2026-10-11, see step 6's deviation)
+* step 7's findings (added 2026-10-11, see step 7's deviation): `internal/model` (flattened members, untyped definitions), `internal/emit`
+  (their codecs and `Validate`), and the engine cases that pin them
 * step 6a (added by the owner on 2026-10-11): the decoding of optional raw fields in `internal/model` and `internal/emit`, `withRawPath` in
   `helpers.go`, a regression test at the root, the engine case `accept-raw-value`, `README.md`, and `docs/architecture.md`
 * `docs/architecture.md`, `RELEASING.md`, and this plan's records
@@ -345,7 +347,8 @@ In the `validate` job, on Linux, a step after the race detector: `GOEXPERIMENT=n
 ## Verification
 
 * The five SDK files are byte-identical to `f2a6a3a`'s after every step, `TestGeneratedFilesUpToDate` passes, and the root's exported API is unchanged,
-  except for step 6a, whose diff of the generated files changes only how optional raw fields decode.
+  except for step 6a, whose diff of the generated files changes only how optional raw fields decode, and step 7, whose diff changes only the
+  types of its deviation, and whose API changes are listed for the release notes.
 * An absent or `null` optional raw value decodes to empty and is not sent, under the default build and with `GOEXPERIMENT=nojsonv2` (step 6a).
 * Each new test failed first or was shown failing on a plant, as the execution record shows.
 * Without the nine committed-schema tests, `go test -coverpkg=./... ./...` in `cmd/generate` covers at least 95% of statements; every site of G5 runs,
@@ -847,3 +850,196 @@ decodes to an empty `json.RawMessage` and is not sent on, as ACP v1 defines it; 
 passed by name: `go-precheck: 1 file(s) clean`. `make check-records` and `make markdownlint` exit 0, and the identifier scan found nothing.
 
 Commit point: the agent stopped here. The owner commits step 6a on `main`.
+
+### Step 7 deviation, 2026-10-11: what the conformance test found
+
+The owner committed step 6a as `6786efe`. Step 7's `instances_test.go` and `conformance_test.go` were written and run on the committed schema.
+Their first runs failed on gaps in the test itself, each corrected in the test and recorded below with step 7's record, and on three behaviours of
+the SDK that no record decides, which step 1's rule sends to the owner:
+
+* `ElicitationFormMode` and `ElicitationUrlMode` drop their own properties, and `CreateElicitationRequest`'s `form` and `url` variants drop the
+  scope members (`sessionId`, `toolCallId`, `requestId`): 6 `TestConformanceRoundTrip` subtests and the 2 `TestConformanceRequired` subtests.
+* `ExtRequest`, `ExtResponse`, and `ExtNotification`, `type X any`, send `9007199254740993` as `9007199254740992`.
+* An optional map that arrives as `{}` is not sent: 129 subtests failed on that alone.
+
+The owner chose the recommended resolution of each, recorded in the MADRs: the members of such an object are flattened into its struct, and a
+variant that is an `allOf` of it gets them too (0011-MADR, "Found in step 7 and decided"); an untyped definition is an alias of
+`json.RawMessage` (0012-MADR, amendment "an untyped definition is raw JSON"); an empty optional map is the same as an absent one (0011-MADR).
+
+Added to step 7, before its conformance test can pass:
+
+* `internal/model`: a definition with properties of its own and members that are all references becomes an object with flattened members, and
+  an inline variant whose `allOf` base is one gets them; a definition the model gives no Go type becomes an alias of `json.RawMessage`.
+* `internal/emit`: the struct's members as pointer fields, `json:"-"`; `UnmarshalJSON` choosing the member by its required keys; `MarshalJSON`
+  writing the member's keys into the struct's object; `Validate` requiring exactly one member; and the alias.
+* engine cases for both shapes, with behaviour tests; the comparer of the conformance test accepts an empty map left out.
+
+The exported API gains fields (`RequestedSchema` on `ElicitationFormMode`, `ElicitationId` and `Url` on `ElicitationUrlMode`, `Session` and
+`Request` on `CreateElicitationForm` and `CreateElicitationUrl`), and `ElicitationFormMode` and `ElicitationUrlMode` stop being listed as unions;
+the three `Ext` types become aliases. The release notes list each. Verification is amended accordingly: the generated diff of step 7 may change
+in these types only.
+
+A fourth finding, 2026-10-11: with the first three fixed, the union test was extended to every union, discriminated or not
+(`TestConformanceVariants`). It failed on `ErrorCode` alone: each of its nine members' instances decoded into `ParseError`
+(`member MethodNotFound: -32601 decoded into [ParseError]`, and so for each). A scratch probe confirmed `-32700`, `-32601`, `-32000`, and `7` all
+set `ParseError`. Resolutions put to the owner: an open integer enum (recommended), a decoder that matches a variant only by its `const`, and
+recording it for later. The owner chose the integer enum, recorded in the 0011-MADR's step 7 findings. Added to step 7: `internal/model` (the
+kind, its classification, its refusals), `internal/emit` (the type and its constants), and an accepted and a refused engine case; the exported API
+changes for `ErrorCode` and its nine variant types, listed for the release notes.
+
+### Step 7, the conformance test, 2026-10-11
+
+Ran on `main` from `6786efe`. The agent did not commit.
+
+**The instance builder.** `instances_test.go` (new) reads `schema/schema.json` and `schema/schema.unstable.json` with `UseNumber` and builds
+instances of a definition from its file and key alone. It follows `$ref`, merges an `allOf` of one schema, takes a union's members with the
+union's own properties merged in (the member's own win), and gives `const`, the first or last `enum` value, objects with required or all
+properties to depth 3, one item and one map entry, integers at both ends of their format and bounds, strings at `minLength`, and raw JSON with an
+integer beyond 2^53. Three shapes per node, or per member of a union. `TestInstanceBuilder` checks it on a schema of its own.
+
+**The conformance test.** `conformance_test.go` (new), over `schema_gen_test.go`:
+
+* `TestConformanceRoundTrip`: every instance decodes, validates, and encodes equal.
+* `TestConformanceRequired`: each required key removed fails decoding; a discriminator is exempt.
+* `TestConformanceLenient`: a value of the wrong kind in an `x-deserialize-default-on-error` property decodes as absent; an invalid item in an
+  `x-deserialize-skip-invalid-items` array is dropped.
+* `TestConformanceBounds`: a value just outside `minimum`, `maximum`, or `minLength`, that the Go type holds, fails `Validate` naming its key.
+* `TestConformanceUnions`: in a discriminated union, each member decodes into its variant, and an unknown value is kept in `Unknown` or the
+  catch-all and sent back unchanged.
+* `TestConformanceVariants`: added during the step. Every union, discriminated or not, decodes each member's instance into that member's variant.
+* `TestConformanceWrongKinds`: added during the step. A value of a kind the schema does not accept is refused, as a whole value or as a property
+  that is neither lenient nor raw, and the error names the type.
+* `TestConformanceMethods`: each agent and client method over `io.Pipe` reaches the recording peer with equal parameters.
+
+The comparer is schema-aware. The output must hold every key of the input with an equal value. It may leave out a key whose input is `null`, the
+schema's default, or an empty map. It may add a key only when that key carries the schema's default, or is a struct value of such keys.
+
+On the committed schema the final run checks:
+
+* 280 types, 1248 instances, 464 required-key removals, 540 lenient properties, and 39 out-of-bounds values;
+* 17 discriminated unions, and all 26 unions member by member;
+* 40 methods.
+
+`go test -v` listed 280 `PASS` subtests for each per-type test, 17 for unions, and 40 for methods.
+
+**Gaps in the test, found by its own failures and corrected, none an SDK change:**
+
+* `setFields` called `Len` on a pointer and panicked, which stopped the test binary.
+* A lenient unsigned field holds no `-1`: it falls back to absent, so decoding "succeeded". A bound case now counts only when the value is
+  held.
+* A discriminator is not lenient: one that is not a string is an error (`TestNonStringDiscriminatorFailsByName`). It is now exempt from the
+  lenient check.
+* The recording peer returns the zero result, and for `CreateElicitationResponse`, `RequestPermissionOutcome`, and
+  `UnstableMessageMcpResponse` that zero value is a union with no variant set, which does not encode. A request now passes when it succeeds, or,
+  when its zero result does not encode, when it fails with that error. The plan had said "a request returns the zero result", which cannot hold
+  for these three.
+* The union's own properties were merged over a member's, so `IdleStateUpdate`'s `stopReason` lost each member's `const`. The member's own now
+  wins, pinned by a case in `TestInstanceBuilder`.
+* The comparer looked up a property in the first member that declared it; it now picks the member whose `const` values the input carries. For a
+  union of arrays, it tries each member's item schema.
+* A key whose input is `null` or the schema's default may be left out, as the schema defines it: 31 default `false` booleans, and
+  `IdleStateUpdate`'s `none` member with `"stopReason": null`.
+* A raw field (`json.RawMessage`, treatment 3) takes any kind: the envelopes' `params` and `result`, and `stopReason`. The wrong-kind check skips
+  them by reflection on the decoded value.
+
+**Findings and decisions**, as the deviation entries above record:
+
+* The elicitation shapes were flattened: `internal/model` gained `Member`, `Type.Members`, `Inline.Members`, `flatMembers`, `checkMembers`, and
+  `Validation.Members`. `internal/emit` writes the member fields, `memberDecode`, the member write in `MarshalJSON` through a new helper,
+  `mergeObject`, and the member count in `Validate`.
+* Untyped definitions became aliases of `json.RawMessage` (`emitSchemaDef`'s default case). The null-typed definitions of the engine cases
+  (`accept-null-definition`, `accept-client-request`'s `WriteResponse`) follow, as the rule "constrains no type, or is only null" says.
+* Empty optional maps are accepted as absent, in the comparer (`omitOK`).
+* `ErrorCode` became an open integer enum: `KindIntegerEnum`, `isIntegerEnum`, and `buildIntegerEnum` in `internal/model`, and the type and
+  constants with `integerLit` in `internal/emit`.
+
+Engine cases added:
+
+* `accept-flattened-members`, whose behaviour file covers decoding by required keys, the merged encoding, a payload no member fits, a struct with
+  no member set, and two members set;
+* `accept-integer-enum`, with a behaviour file;
+* `refuse-integer-enum-untitled` and `refuse-integer-enum-formats`;
+* a behaviour file for `accept-any`, for digits.
+
+Each failed first: `Mode has no field or method Schema`, `AskForm has no field or method Request`,
+`sent as {"f":1,"n":9007199254740992}`, `cannot convert 7 (untyped int constant) to type Code`, and `run accepted the schema` twice.
+`TestFlattenedMembers` in `internal/model` covers the members, their validation, an `allOf` variant, and a field collision.
+
+**Root fixtures corrected.** Three root tests built or decoded a form elicitation with no scope, which the type could not hold before. The schema
+requires one, through the `anyOf` of two scopes that each require a key:
+
+* `TestCreateElicitationRequest_MessageIsRequired`, which now also requires a form with no scope to fail `Validate`;
+* `TestValidateSchemaConstraints`' "form with an empty message";
+* `TestAbsentDiscriminator`'s "CreateElicitationRequest form".
+
+Each now carries a session scope.
+
+**Coverage of the generated code by the root tests**, against `f2a6a3a`:
+
+| file | `f2a6a3a` | now |
+| --- | --- | --- |
+| `types_gen.go` | 28.9% | 86.7% |
+| `agent_gen.go` | 19.3% | 64.7% |
+| `client_gen.go` | 23.0% | 53.4% |
+| `helpers_gen.go` | 18.2% | 18.2% |
+
+No generated `UnmarshalJSON`, `MarshalJSON`, or `Validate` is left at 0%; before, 224, 34, and 117 were. Every union variant and flattened member
+decodes in a test: `TestConformanceVariants` for the 26 unions, and the 8 member assignments of the four flattened types run (`unioncov.py` counts
+only `u.<Field> =` assignments, so it shows those four as missing). `helpers_gen.go`'s constructors are not covered by this step.
+
+**The generated diff**, against `6786efe`: `types_gen.go` +267 and −521 lines, and `schema_gen_test.go` −76 lines (`ErrorCode`,
+`ElicitationFormMode`, and `ElicitationUrlMode` leave `schemaUnions`). By hunk, the changes are in:
+
+* `ElicitationFormMode`, `ElicitationUrlMode`, `CreateElicitationForm`, `CreateElicitationUrl`, and `CreateElicitationRequest`'s `Validate`;
+* `ErrorCode` and its variant types;
+* the `Validate` of `Error`, `ErrorStopReason`, `IdleStateUpdateError`, `AgentError`, and `ClientError`;
+* the three `Ext` types;
+* the new `mergeObject`.
+
+`constants_gen.go`, `agent_gen.go`, `client_gen.go`, and `helpers_gen.go` did not change.
+
+**Exported API changes, for the release notes** (the API listing program, `f2a6a3a` against the tree: 2314 and 2308 lines, 50 lines differ):
+
+* Added:
+  * the fields `CreateElicitationForm.Session` and `.Request`, `CreateElicitationUrl.Session` and `.Request`,
+    `ElicitationFormMode.RequestedSchema`, `ElicitationUrlMode.ElicitationId`, and `ElicitationUrlMode.Url`;
+  * `MarshalJSON` on `CreateElicitationForm` and `CreateElicitationUrl`, and `Validate` on `CreateElicitationUrl`;
+  * the constants `ErrorCodeParseError`, `ErrorCodeInvalidRequest`, `ErrorCodeMethodNotFound`, `ErrorCodeInvalidParams`, `ErrorCodeInternalError`,
+    `ErrorCodeRequestCancelled`, `ErrorCodeAuthenticationRequired`, and `ErrorCodeResourceNotFound`.
+* Changed:
+  * `ErrorCode` from a struct of nine pointer fields to `int32`;
+  * `ExtRequest`, `ExtResponse`, and `ExtNotification` from `any` to aliases of `json.RawMessage`.
+* Removed:
+  * the nine `ErrorCode*` variant types, and `ErrorCode`'s `MarshalJSON`, `UnmarshalJSON`, and `Validate`;
+  * `Validate` on `Error`, `ErrorStopReason`, and `IdleStateUpdateError`, which checked only the code's variant.
+
+**Results.**
+
+* `go test -count=1 .` at the root passed, also with `GOEXPERIMENT=nojsonv2` and with `-race`; it takes 2.0 s.
+* `go build ./example/...` and `go test ./...` in `cmd/generate` passed.
+
+Plants, each in a fresh scratch copy (`s7_plants.json`):
+
+* A required-key check removed from `ToolCall`'s decoder fails `TestConformanceRequired/ToolCall`.
+* `ContentBlock`'s `"text"` case changed fails `TestConformanceVariants` and `TestConformanceUnions`.
+* `Notice`'s `minLength` check disabled fails `TestConformanceBounds/Notice`.
+* `session/new`'s dispatch case removed fails `TestConformanceMethods/agent_session/new`.
+* `outputByteLimit` tagged `json:"-"` fails the round trip with `outputByteLimit: not sent`.
+* `ElicitationFormMode`'s first member chosen without its keys fails `TestConformanceRoundTrip/ElicitationFormMode`.
+* `mergeObject` dropping the member fails the round trips of the flattened types.
+* `ExtRequest` back to `any` fails `TestConformanceRoundTrip/ExtRequest`.
+* The builder merging the union's properties over the member's fails `TestInstanceBuilder`.
+* No flattened members in the model fails `TestEngineBehaviour`.
+* No integer enum fails `TestEngineCases/accept-integer-enum`.
+* An untitled integer `const` accepted fails `TestEngineCases/refuse-integer-enum-untitled`: the constant then collides with the type's name, a
+  different refusal. The plant's first version did not compile (`declared and not used: i`); rewritten, it failed as planted.
+* The emitter writing `any` for an untyped definition fails `TestEngineBehaviour/accept-any`.
+
+Lint: gocognit reported `comparer.diff` at 53 (above 50). It was split into `diffObject`, `diffArray`, and `itemSchemas`, and two plants were
+rerun after the split and still failed.
+
+`make pre-add-check`: `go-precheck: 88 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` The untracked `instances_test.go`
+and `conformance_test.go` passed by name: `go-precheck: 2 file(s) clean`. `make check-records` and `make markdownlint` exit 0, and the identifier
+scan found nothing.
+
+Commit point: the agent stopped here. The owner commits step 7 on `main`.

@@ -291,9 +291,6 @@ func (v *AgentError) UnmarshalJSON(b []byte) error {
 }
 
 func (v *AgentError) Validate() error {
-	if err := v.Error.Validate(); err != nil {
-		return fmt.Errorf("AgentError: error: %w", err)
-	}
 	if err := v.Id.Validate(); err != nil {
 		return fmt.Errorf("AgentError: id: %w", err)
 	}
@@ -1545,9 +1542,6 @@ func (v *ClientError) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ClientError) Validate() error {
-	if err := v.Error.Validate(); err != nil {
-		return fmt.Errorf("ClientError: error: %w", err)
-	}
 	if err := v.Id.Validate(); err != nil {
 		return fmt.Errorf("ClientError: id: %w", err)
 	}
@@ -2653,10 +2647,36 @@ type CreateElicitationForm struct {
 	Mode    string `json:"mode"`
 	// A JSON Schema describing the form fields to present to the user.
 	RequestedSchema ElicitationSchema `json:"requestedSchema"`
+	// Tied to a session, optionally to a specific tool call within that session.
+	//
+	// Its keys share this struct's JSON object; exactly one member is set.
+	Session *ElicitationSessionScope `json:"-"`
+	// Tied to a specific JSON-RPC request outside of a session
+	// (e.g., during auth/configuration phases before any session is started).
+	//
+	// Its keys share this struct's JSON object; exactly one member is set.
+	Request *ElicitationRequestScope `json:"-"`
+}
+
+func (v CreateElicitationForm) MarshalJSON() ([]byte, error) {
+	type Alias CreateElicitationForm
+	var a Alias
+	a = Alias(v)
+	b, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case v.Session != nil:
+		return mergeObject(b, v.Session)
+	case v.Request != nil:
+		return mergeObject(b, v.Request)
+	}
+	return nil, errors.New("CreateElicitationForm: no member set")
 }
 
 func (v *CreateElicitationForm) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CreateElicitationForm", "message", "requestedSchema")
+	m, err := objectKeys(b, "CreateElicitationForm", "message", "requestedSchema")
 	if err != nil {
 		return err
 	}
@@ -2670,6 +2690,22 @@ func (v *CreateElicitationForm) UnmarshalJSON(b []byte) error {
 	}
 	a := s.Alias
 	a.Meta = orDefault[map[string]any](s.Meta, "")
+	switch {
+	case m["sessionId"] != nil:
+		var x ElicitationSessionScope
+		if err := json.Unmarshal(b, &x); err != nil {
+			return fmt.Errorf("CreateElicitationForm: Session: %w", err)
+		}
+		a.Session = &x
+	case m["requestId"] != nil:
+		var x ElicitationRequestScope
+		if err := json.Unmarshal(b, &x); err != nil {
+			return fmt.Errorf("CreateElicitationForm: Request: %w", err)
+		}
+		a.Request = &x
+	default:
+		return errors.New("CreateElicitationForm: the payload fits no member")
+	}
 	*v = CreateElicitationForm(a)
 	return nil
 }
@@ -2677,6 +2713,21 @@ func (v *CreateElicitationForm) UnmarshalJSON(b []byte) error {
 func (v *CreateElicitationForm) Validate() error {
 	if err := v.RequestedSchema.Validate(); err != nil {
 		return fmt.Errorf("CreateElicitationForm: requestedSchema: %w", err)
+	}
+	var count int
+	if v.Session != nil {
+		count++
+	}
+	if v.Request != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("CreateElicitationForm must have exactly one member set")
+	}
+	if v.Request != nil {
+		if err := v.Request.Validate(); err != nil {
+			return fmt.Errorf("CreateElicitationForm: member Request: %w", err)
+		}
 	}
 	return nil
 }
@@ -2698,10 +2749,36 @@ type CreateElicitationUrl struct {
 	Mode    string `json:"mode"`
 	// The URL to direct the user to.
 	Url string `json:"url"`
+	// Tied to a session, optionally to a specific tool call within that session.
+	//
+	// Its keys share this struct's JSON object; exactly one member is set.
+	Session *ElicitationSessionScope `json:"-"`
+	// Tied to a specific JSON-RPC request outside of a session
+	// (e.g., during auth/configuration phases before any session is started).
+	//
+	// Its keys share this struct's JSON object; exactly one member is set.
+	Request *ElicitationRequestScope `json:"-"`
+}
+
+func (v CreateElicitationUrl) MarshalJSON() ([]byte, error) {
+	type Alias CreateElicitationUrl
+	var a Alias
+	a = Alias(v)
+	b, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case v.Session != nil:
+		return mergeObject(b, v.Session)
+	case v.Request != nil:
+		return mergeObject(b, v.Request)
+	}
+	return nil, errors.New("CreateElicitationUrl: no member set")
 }
 
 func (v *CreateElicitationUrl) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CreateElicitationUrl", "elicitationId", "message", "url")
+	m, err := objectKeys(b, "CreateElicitationUrl", "elicitationId", "message", "url")
 	if err != nil {
 		return err
 	}
@@ -2715,7 +2792,42 @@ func (v *CreateElicitationUrl) UnmarshalJSON(b []byte) error {
 	}
 	a := s.Alias
 	a.Meta = orDefault[map[string]any](s.Meta, "")
+	switch {
+	case m["sessionId"] != nil:
+		var x ElicitationSessionScope
+		if err := json.Unmarshal(b, &x); err != nil {
+			return fmt.Errorf("CreateElicitationUrl: Session: %w", err)
+		}
+		a.Session = &x
+	case m["requestId"] != nil:
+		var x ElicitationRequestScope
+		if err := json.Unmarshal(b, &x); err != nil {
+			return fmt.Errorf("CreateElicitationUrl: Request: %w", err)
+		}
+		a.Request = &x
+	default:
+		return errors.New("CreateElicitationUrl: the payload fits no member")
+	}
 	*v = CreateElicitationUrl(a)
+	return nil
+}
+
+func (v *CreateElicitationUrl) Validate() error {
+	var count int
+	if v.Session != nil {
+		count++
+	}
+	if v.Request != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("CreateElicitationUrl must have exactly one member set")
+	}
+	if v.Request != nil {
+		if err := v.Request.Validate(); err != nil {
+			return fmt.Errorf("CreateElicitationUrl: member Request: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -2959,6 +3071,11 @@ func (u *CreateElicitationRequest) Validate() error {
 	if u.Form != nil {
 		if err := u.Form.Validate(); err != nil {
 			return fmt.Errorf("CreateElicitationRequest: variant Form: %w", err)
+		}
+	}
+	if u.Url != nil {
+		if err := u.Url.Validate(); err != nil {
+			return fmt.Errorf("CreateElicitationRequest: variant Url: %w", err)
 		}
 	}
 	return nil
@@ -3794,113 +3911,83 @@ func (v *ElicitationFormCapabilities) UnmarshalJSON(b []byte) error {
 
 // Form-based elicitation mode where the client renders a form from the provided schema.
 type ElicitationFormMode struct {
+	// A JSON Schema describing the form fields to present to the user.
+	RequestedSchema ElicitationSchema `json:"requestedSchema"`
 	// Tied to a session, optionally to a specific tool call within that session.
+	//
+	// Its keys share this struct's JSON object; exactly one member is set.
 	Session *ElicitationSessionScope `json:"-"`
 	// Tied to a specific JSON-RPC request outside of a session
 	// (e.g., during auth/configuration phases before any session is started).
+	//
+	// Its keys share this struct's JSON object; exactly one member is set.
 	Request *ElicitationRequestScope `json:"-"`
 }
 
-func (u *ElicitationFormMode) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
-		return nil
+func (v ElicitationFormMode) MarshalJSON() ([]byte, error) {
+	type Alias ElicitationFormMode
+	var a Alias
+	a = Alias(v)
+	b, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
 	}
-	*u = ElicitationFormMode{}
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var v ElicitationSessionScope
-			match := true
-			if _, ok := m["sessionId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationFormMode: variant Session: %w", err)
-				}
-				u.Session = &v
-				return nil
-			}
-		}
-		{
-			var v ElicitationRequestScope
-			match := true
-			if _, ok := m["requestId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationFormMode: variant Request: %w", err)
-				}
-				u.Request = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
-		}
+	switch {
+	case v.Session != nil:
+		return mergeObject(b, v.Session)
+	case v.Request != nil:
+		return mergeObject(b, v.Request)
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
-	{
-		var v ElicitationSessionScope
-		if json.Unmarshal(b, &v) == nil {
-			u.Session = &v
-			return nil
-		}
-	}
-	{
-		var v ElicitationRequestScope
-		if json.Unmarshal(b, &v) == nil {
-			u.Request = &v
-			return nil
-		}
-	}
-	return errors.New("ElicitationFormMode: no variant matches")
+	return nil, errors.New("ElicitationFormMode: no member set")
 }
 
-func (u ElicitationFormMode) MarshalJSON() ([]byte, error) {
-	if u.Session != nil {
-		_b, _e := json.Marshal(*u.Session)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ElicitationFormMode: %w", err)
-		}
-		return json.Marshal(m)
+func (v *ElicitationFormMode) UnmarshalJSON(b []byte) error {
+	m, err := objectKeys(b, "ElicitationFormMode", "requestedSchema")
+	if err != nil {
+		return err
 	}
-	if u.Request != nil {
-		_b, _e := json.Marshal(*u.Request)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ElicitationFormMode: %w", err)
-		}
-		return json.Marshal(m)
+	type Alias ElicitationFormMode
+	var a Alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return fmt.Errorf("ElicitationFormMode: %w", err)
 	}
-	return nil, errors.New("ElicitationFormMode: no variant set")
+	switch {
+	case m["sessionId"] != nil:
+		var x ElicitationSessionScope
+		if err := json.Unmarshal(b, &x); err != nil {
+			return fmt.Errorf("ElicitationFormMode: Session: %w", err)
+		}
+		a.Session = &x
+	case m["requestId"] != nil:
+		var x ElicitationRequestScope
+		if err := json.Unmarshal(b, &x); err != nil {
+			return fmt.Errorf("ElicitationFormMode: Request: %w", err)
+		}
+		a.Request = &x
+	default:
+		return errors.New("ElicitationFormMode: the payload fits no member")
+	}
+	*v = ElicitationFormMode(a)
+	return nil
 }
 
-func (u *ElicitationFormMode) Validate() error {
+func (v *ElicitationFormMode) Validate() error {
+	if err := v.RequestedSchema.Validate(); err != nil {
+		return fmt.Errorf("ElicitationFormMode: requestedSchema: %w", err)
+	}
 	var count int
-	if u.Session != nil {
+	if v.Session != nil {
 		count++
 	}
-	if u.Request != nil {
+	if v.Request != nil {
 		count++
 	}
 	if count != 1 {
-		return errors.New("ElicitationFormMode must have exactly one variant set")
+		return errors.New("ElicitationFormMode must have exactly one member set")
 	}
-	if u.Request != nil {
-		if err := u.Request.Validate(); err != nil {
-			return fmt.Errorf("ElicitationFormMode: variant Request: %w", err)
+	if v.Request != nil {
+		if err := v.Request.Validate(); err != nil {
+			return fmt.Errorf("ElicitationFormMode: member Request: %w", err)
 		}
 	}
 	return nil
@@ -4725,113 +4812,82 @@ func (v *ElicitationUrlCapabilities) UnmarshalJSON(b []byte) error {
 
 // URL-based elicitation mode where the client directs the user to a URL.
 type ElicitationUrlMode struct {
+	// The unique identifier for this elicitation.
+	ElicitationId ElicitationId `json:"elicitationId"`
+	// The URL to direct the user to.
+	Url string `json:"url"`
 	// Tied to a session, optionally to a specific tool call within that session.
+	//
+	// Its keys share this struct's JSON object; exactly one member is set.
 	Session *ElicitationSessionScope `json:"-"`
 	// Tied to a specific JSON-RPC request outside of a session
 	// (e.g., during auth/configuration phases before any session is started).
+	//
+	// Its keys share this struct's JSON object; exactly one member is set.
 	Request *ElicitationRequestScope `json:"-"`
 }
 
-func (u *ElicitationUrlMode) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
-		return nil
+func (v ElicitationUrlMode) MarshalJSON() ([]byte, error) {
+	type Alias ElicitationUrlMode
+	var a Alias
+	a = Alias(v)
+	b, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
 	}
-	*u = ElicitationUrlMode{}
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		{
-			var v ElicitationSessionScope
-			match := true
-			if _, ok := m["sessionId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationUrlMode: variant Session: %w", err)
-				}
-				u.Session = &v
-				return nil
-			}
-		}
-		{
-			var v ElicitationRequestScope
-			match := true
-			if _, ok := m["requestId"]; !ok {
-				match = false
-			}
-			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
-					return fmt.Errorf("ElicitationUrlMode: variant Request: %w", err)
-				}
-				u.Request = &v
-				return nil
-			}
-		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
-		}
+	switch {
+	case v.Session != nil:
+		return mergeObject(b, v.Session)
+	case v.Request != nil:
+		return mergeObject(b, v.Request)
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
-	{
-		var v ElicitationSessionScope
-		if json.Unmarshal(b, &v) == nil {
-			u.Session = &v
-			return nil
-		}
-	}
-	{
-		var v ElicitationRequestScope
-		if json.Unmarshal(b, &v) == nil {
-			u.Request = &v
-			return nil
-		}
-	}
-	return errors.New("ElicitationUrlMode: no variant matches")
+	return nil, errors.New("ElicitationUrlMode: no member set")
 }
 
-func (u ElicitationUrlMode) MarshalJSON() ([]byte, error) {
-	if u.Session != nil {
-		_b, _e := json.Marshal(*u.Session)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ElicitationUrlMode: %w", err)
-		}
-		return json.Marshal(m)
+func (v *ElicitationUrlMode) UnmarshalJSON(b []byte) error {
+	m, err := objectKeys(b, "ElicitationUrlMode", "elicitationId", "url")
+	if err != nil {
+		return err
 	}
-	if u.Request != nil {
-		_b, _e := json.Marshal(*u.Request)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ElicitationUrlMode: %w", err)
-		}
-		return json.Marshal(m)
+	type Alias ElicitationUrlMode
+	var a Alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return fmt.Errorf("ElicitationUrlMode: %w", err)
 	}
-	return nil, errors.New("ElicitationUrlMode: no variant set")
+	switch {
+	case m["sessionId"] != nil:
+		var x ElicitationSessionScope
+		if err := json.Unmarshal(b, &x); err != nil {
+			return fmt.Errorf("ElicitationUrlMode: Session: %w", err)
+		}
+		a.Session = &x
+	case m["requestId"] != nil:
+		var x ElicitationRequestScope
+		if err := json.Unmarshal(b, &x); err != nil {
+			return fmt.Errorf("ElicitationUrlMode: Request: %w", err)
+		}
+		a.Request = &x
+	default:
+		return errors.New("ElicitationUrlMode: the payload fits no member")
+	}
+	*v = ElicitationUrlMode(a)
+	return nil
 }
 
-func (u *ElicitationUrlMode) Validate() error {
+func (v *ElicitationUrlMode) Validate() error {
 	var count int
-	if u.Session != nil {
+	if v.Session != nil {
 		count++
 	}
-	if u.Request != nil {
+	if v.Request != nil {
 		count++
 	}
 	if count != 1 {
-		return errors.New("ElicitationUrlMode must have exactly one variant set")
+		return errors.New("ElicitationUrlMode must have exactly one member set")
 	}
-	if u.Request != nil {
-		if err := u.Request.Validate(); err != nil {
-			return fmt.Errorf("ElicitationUrlMode: variant Request: %w", err)
+	if v.Request != nil {
+		if err := v.Request.Validate(); err != nil {
+			return fmt.Errorf("ElicitationUrlMode: member Request: %w", err)
 		}
 	}
 	return nil
@@ -5105,253 +5161,22 @@ func (v *Error) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (v *Error) Validate() error {
-	if err := v.Code.Validate(); err != nil {
-		return fmt.Errorf("Error: code: %w", err)
-	}
-	return nil
-}
-
-// **Parse error**: Invalid JSON was received by the server.
-// An error occurred on the server while parsing the JSON text.
-type ErrorCodeParseError int32
-
-// **Invalid request**: The JSON sent is not a valid Request object.
-type ErrorCodeInvalidRequest int32
-
-// **Method not found**: The method does not exist or is not available.
-type ErrorCodeMethodNotFound int32
-
-// **Invalid params**: Invalid method parameter(s).
-type ErrorCodeInvalidParams int32
-
-// **Internal error**: Internal JSON-RPC error.
-// Reserved for implementation-defined server errors.
-type ErrorCodeInternalError int32
-
-// **Request cancelled**: Execution of the method was aborted either due to a cancellation request from the caller or
-// because of resource constraints or shutdown.
-type ErrorCodeRequestCancelled int32
-
-// **Authentication required**: Authentication is required before this operation can be performed.
-type ErrorCodeAuthenticationRequired int32
-
-// **Resource not found**: A given resource, such as a file, was not found.
-type ErrorCodeResourceNotFound int32
-
-// Other undefined error code.
-type ErrorCodeOther int32
-
 // Predefined error codes for common JSON-RPC and ACP-specific errors.
 //
 // These codes follow the JSON-RPC 2.0 specification for standard errors
 // and use the reserved range (-32000 to -32099) for protocol-specific errors.
-type ErrorCode struct {
-	// **Parse error**: Invalid JSON was received by the server.
-	// An error occurred on the server while parsing the JSON text.
-	ParseError *ErrorCodeParseError `json:"-"`
-	// **Invalid request**: The JSON sent is not a valid Request object.
-	InvalidRequest *ErrorCodeInvalidRequest `json:"-"`
-	// **Method not found**: The method does not exist or is not available.
-	MethodNotFound *ErrorCodeMethodNotFound `json:"-"`
-	// **Invalid params**: Invalid method parameter(s).
-	InvalidParams *ErrorCodeInvalidParams `json:"-"`
-	// **Internal error**: Internal JSON-RPC error.
-	// Reserved for implementation-defined server errors.
-	InternalError *ErrorCodeInternalError `json:"-"`
-	// **Request cancelled**: Execution of the method was aborted either due to a cancellation request from the caller or
-	// because of resource constraints or shutdown.
-	RequestCancelled *ErrorCodeRequestCancelled `json:"-"`
-	// **Authentication required**: Authentication is required before this operation can be performed.
-	AuthenticationRequired *ErrorCodeAuthenticationRequired `json:"-"`
-	// **Resource not found**: A given resource, such as a file, was not found.
-	ResourceNotFound *ErrorCodeResourceNotFound `json:"-"`
-	// Other undefined error code.
-	Other *ErrorCodeOther `json:"-"`
-}
+type ErrorCode int32
 
-func (u *ErrorCode) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
-		return nil
-	}
-	*u = ErrorCode{}
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
-		}
-	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
-	{
-		var v ErrorCodeParseError
-		if json.Unmarshal(b, &v) == nil {
-			u.ParseError = &v
-			return nil
-		}
-	}
-	{
-		var v ErrorCodeInvalidRequest
-		if json.Unmarshal(b, &v) == nil {
-			u.InvalidRequest = &v
-			return nil
-		}
-	}
-	{
-		var v ErrorCodeMethodNotFound
-		if json.Unmarshal(b, &v) == nil {
-			u.MethodNotFound = &v
-			return nil
-		}
-	}
-	{
-		var v ErrorCodeInvalidParams
-		if json.Unmarshal(b, &v) == nil {
-			u.InvalidParams = &v
-			return nil
-		}
-	}
-	{
-		var v ErrorCodeInternalError
-		if json.Unmarshal(b, &v) == nil {
-			u.InternalError = &v
-			return nil
-		}
-	}
-	{
-		var v ErrorCodeRequestCancelled
-		if json.Unmarshal(b, &v) == nil {
-			u.RequestCancelled = &v
-			return nil
-		}
-	}
-	{
-		var v ErrorCodeAuthenticationRequired
-		if json.Unmarshal(b, &v) == nil {
-			u.AuthenticationRequired = &v
-			return nil
-		}
-	}
-	{
-		var v ErrorCodeResourceNotFound
-		if json.Unmarshal(b, &v) == nil {
-			u.ResourceNotFound = &v
-			return nil
-		}
-	}
-	{
-		var v ErrorCodeOther
-		if json.Unmarshal(b, &v) == nil {
-			u.Other = &v
-			return nil
-		}
-	}
-	return errors.New("ErrorCode: no variant matches")
-}
-
-func (u ErrorCode) MarshalJSON() ([]byte, error) {
-	if u.ParseError != nil {
-		_b, _e := json.Marshal(*u.ParseError)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
-	}
-	if u.InvalidRequest != nil {
-		_b, _e := json.Marshal(*u.InvalidRequest)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
-	}
-	if u.MethodNotFound != nil {
-		_b, _e := json.Marshal(*u.MethodNotFound)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
-	}
-	if u.InvalidParams != nil {
-		_b, _e := json.Marshal(*u.InvalidParams)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
-	}
-	if u.InternalError != nil {
-		_b, _e := json.Marshal(*u.InternalError)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
-	}
-	if u.RequestCancelled != nil {
-		_b, _e := json.Marshal(*u.RequestCancelled)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
-	}
-	if u.AuthenticationRequired != nil {
-		_b, _e := json.Marshal(*u.AuthenticationRequired)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
-	}
-	if u.ResourceNotFound != nil {
-		_b, _e := json.Marshal(*u.ResourceNotFound)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
-	}
-	if u.Other != nil {
-		_b, _e := json.Marshal(*u.Other)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
-	}
-	return nil, errors.New("ErrorCode: no variant set")
-}
-
-func (u *ErrorCode) Validate() error {
-	var count int
-	if u.ParseError != nil {
-		count++
-	}
-	if u.InvalidRequest != nil {
-		count++
-	}
-	if u.MethodNotFound != nil {
-		count++
-	}
-	if u.InvalidParams != nil {
-		count++
-	}
-	if u.InternalError != nil {
-		count++
-	}
-	if u.RequestCancelled != nil {
-		count++
-	}
-	if u.AuthenticationRequired != nil {
-		count++
-	}
-	if u.ResourceNotFound != nil {
-		count++
-	}
-	if u.Other != nil {
-		count++
-	}
-	if count != 1 {
-		return errors.New("ErrorCode must have exactly one variant set")
-	}
-	return nil
-}
+const (
+	ErrorCodeParseError             ErrorCode = -32700
+	ErrorCodeInvalidRequest         ErrorCode = -32600
+	ErrorCodeMethodNotFound         ErrorCode = -32601
+	ErrorCodeInvalidParams          ErrorCode = -32602
+	ErrorCodeInternalError          ErrorCode = -32603
+	ErrorCodeRequestCancelled       ErrorCode = -32800
+	ErrorCodeAuthenticationRequired ErrorCode = -32000
+	ErrorCodeResourceNotFound       ErrorCode = -32002
+)
 
 // **UNSTABLE**
 //
@@ -5385,38 +5210,26 @@ func (v *ErrorStopReason) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (v *ErrorStopReason) Validate() error {
-	if v.Error != nil {
-		if err := v.Error.Validate(); err != nil {
-			return fmt.Errorf("ErrorStopReason: error: %w", err)
-		}
-	}
-	return nil
-}
-
 // Allows the Agent to send an arbitrary notification that is not part of the ACP spec.
 // Extension notifications provide a way to send one-way messages for custom functionality
 // while maintaining protocol compatibility.
 //
 // See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
-// ExtNotification is a union or complex schema; represented generically.
-type ExtNotification any
+type ExtNotification = json.RawMessage
 
 // Allows for sending an arbitrary request that is not part of the ACP spec.
 // Extension methods provide a way to add custom functionality while maintaining
 // protocol compatibility.
 //
 // See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
-// ExtRequest is a union or complex schema; represented generically.
-type ExtRequest any
+type ExtRequest = json.RawMessage
 
 // Allows for sending an arbitrary response to an ['ExtRequest'] that is not part of the ACP spec.
 // Extension methods provide a way to add custom functionality while maintaining
 // protocol compatibility.
 //
 // See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
-// ExtResponse is a union or complex schema; represented generically.
-type ExtResponse any
+type ExtResponse = json.RawMessage
 
 // File system capabilities that a client may support.
 //
@@ -5722,15 +5535,6 @@ func (v *IdleStateUpdateError) UnmarshalJSON(b []byte) error {
 	a.Error = orDefault[*Error](s.Error, "")
 	a.Usage = orDefault[*Usage](s.Usage, "")
 	*v = IdleStateUpdateError(a)
-	return nil
-}
-
-func (v *IdleStateUpdateError) Validate() error {
-	if v.Error != nil {
-		if err := v.Error.Validate(); err != nil {
-			return fmt.Errorf("IdleStateUpdateError: error: %w", err)
-		}
-	}
 	return nil
 }
 
@@ -6071,11 +5875,6 @@ func (u *IdleStateUpdate) Validate() error {
 	}
 	if count != 1 {
 		return errors.New("IdleStateUpdate must have exactly one variant set")
-	}
-	if u.Error != nil {
-		if err := u.Error.Validate(); err != nil {
-			return fmt.Errorf("IdleStateUpdate: variant Error: %w", err)
-		}
 	}
 	return nil
 }
@@ -18828,4 +18627,27 @@ func absentIfNull(raw json.RawMessage) json.RawMessage {
 		return nil
 	}
 	return raw
+}
+
+// mergeObject adds the keys of x's JSON object that b's object lacks: the keys of
+// a flattened member. Values stay raw JSON, so numbers keep every digit.
+func mergeObject(b []byte, x any) ([]byte, error) {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	xb, err := json.Marshal(x)
+	if err != nil {
+		return nil, err
+	}
+	var xm map[string]json.RawMessage
+	if err := json.Unmarshal(xb, &xm); err != nil {
+		return nil, err
+	}
+	for k, v := range xm {
+		if _, ok := m[k]; !ok {
+			m[k] = v
+		}
+	}
+	return json.Marshal(m)
 }

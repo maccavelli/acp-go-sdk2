@@ -294,6 +294,17 @@ Consequences:
 
 Implementation: step 6a of [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md), added to that plan's scope by the owner on 2026-10-11.
 
+## Amendment 2026-10-11, an untyped definition is raw JSON
+
+Found by the conformance test of step 7 of [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md): treatment 3 covers a property or variant the
+model gives no Go type, not a definition. `ExtRequest`, `ExtResponse`, and `ExtNotification` are definitions that constrain no type, generated as
+`type X any`, so a number decodes as `float64` and `9007199254740993` is sent as `9007199254740992`. They are the only such definitions; no
+hand-written code uses them.
+
+Decision: asked, the owner chose to extend treatment 3 to definitions. A definition the model gives no Go type is an alias of `json.RawMessage`,
+`type ExtRequest = json.RawMessage`. An alias keeps `json.RawMessage`'s methods; a defined type over it would not, and would encode as a base64
+string. The exported API changes in the type of these three names; the release notes list it. Not chosen: keeping `any` and recording the loss.
+
 ## More Information
 
 Sources:

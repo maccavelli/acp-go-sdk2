@@ -20,7 +20,7 @@ const ClientMethodFsWrite untyped string = "fs/write"
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type WriteRequest struct{Path string "json:\"path\""}
-type WriteResponse interface{}
+type WriteResponse = json.RawMessage
 func (*AgentSideConnection).Write(ctx context.Context, params WriteRequest) error
 func (*CancelRequestNotification).Validate() error
 func (*WriteRequest).UnmarshalJSON(b []byte) error
