@@ -1,0 +1,12 @@
+A $ref to a definition the schema does not hold is refused before anything is
+written, naming the property and the missing name (F8; TestRunRefusesBeforeWriting).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}}
+-- schema.json --
+{"$defs": {
+  "R": {"type": "object", "properties": {"m": {"$ref": "#/$defs/Missing"}}, "required": ["m"]}
+}}
+-- want.err --
+R.properties.m
+Missing

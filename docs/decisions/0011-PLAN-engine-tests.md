@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-11
 associated-madr: "0011-MADR-harden-code-generator-engine.md"
 ---
@@ -17,7 +17,7 @@ panic or do not round-trip, and a mutation tool reports the planted faults the t
 change.
 
 This is phase 6 of the MADR, as refined by its amendment "phase 6 facts and decisions", whose decisions D1 to D7 the owner made on 2026-10-11, each
-the recommended option. The plan stays `proposed` until the owner approves it.
+the recommended option. The owner approved the plan on 2026-10-11.
 
 ## Scope
 
@@ -343,4 +343,52 @@ registry; every other step leaves the generator and the SDK working alone.
 
 ## Execution record
 
-Not started. The owner decided D1 to D7 on 2026-10-11; the plan awaits approval.
+The owner decided D1 to D7 on 2026-10-11 and committed the records as `3b30641`, then approved the plan ("committed, proceed").
+
+### Step 2, the case runner, 2026-10-11
+
+Ran on `main` from `3b30641`, a clean tree. The agent did not commit.
+
+Added `cmd/generate/internal/enginetest` (`archive.go`: `File`, `Archive`, `ParseArchive`, `Format`, `Archive.File`, `Archive.Set`; `api.go`:
+`RuntimeFiles`, `CopyRuntime`, `LoadPackage`, `API`) with `archive_test.go` and `api_test.go`, and `cmd/generate/engine_test.go` (`TestEngineCases`,
+the `-update` flag, `TestRuntimeFilesCoverHandWritten`) with three cases in `cmd/generate/testdata/engine/`: `refuse-dangling-ref.txtar`,
+`accept-recased-union.txtar`, and `refuse-unchecked-output.txtar`.
+
+The tests failed first: `go test -run 'TestEngine|TestRuntimeFiles' . ./internal/enginetest` exited 1 with `no non-test Go files in
+.../internal/enginetest` and `undefined: ParseArchive`, `LoadPackage`, `API`, `RuntimeFiles`, `CopyRuntime`. After the package was written,
+`TestAPI` failed once on the test's own expectation (it had `const KindA` before `type Kind`; the listing is in name order, as designed), which was
+corrected. The first run of `accept-recased-union` printed the listing with an empty `want.api`; `-update` wrote it, and it was read in full before
+being kept: the union `U` with `X`, `Y`, and `Unknown`, `UX` and `UY`, `NewUX(n string)` and `NewUY()`, the empty agent and client interfaces, and
+`ProtocolMethodCancelRequest`.
+
+Corrections to the design as written, none changing a decision:
+
+* **`API` lists what the generated files declare.** The design said "one line per exported object of the package scope", with each named type's
+  method set under it. The package also holds the six runtime files, so that listing would put the whole runtime API into every `want.api`, and it
+  would miss the generated methods on runtime types (`ClientSideConnection`'s request methods are declared in `client_gen.go`). `API` takes a filter
+  of file names and lists the objects declared in the generated files, a constant with its value, then the exported methods declared there, one per
+  line, by receiver and name.
+* **A third case.** The plant "`run` writes before refusing" needs a case refused by the type check; `refuse-dangling-ref` is refused earlier, by the
+  model. `refuse-unchecked-output.txtar` restates `TestRunRefusesOutputThatDoesNotTypeCheck`: without `protocolMethods`, `connection.go`'s
+  `ProtocolMethodCancelRequest` is undefined.
+* **The protocol definition of an accepted case.** Every accepted case declares `$/cancel_request` in its meta and the smallest definition for it,
+  `{"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}`, which the model accepts as an empty object; the case comment says why.
+* **Lint.** gosec reported G703 on `CopyRuntime`'s `os.WriteFile`; it carries `//nolint:gosec` with the reason, as `load.go` does for G304. A
+  `//nolint:gosec` first put on `engine_test.go`'s `os.ReadFile` was reported unused by nolintlint and removed.
+
+Plants, each in a fresh scratch copy of the working tree (`plant.py` with `s2_plants.json` in the session scratchpad); all five failed as planted:
+
+* `ParseArchive` dropping the last file: `--- FAIL: TestParseArchive`.
+* `API` without its method lines: `--- FAIL: TestAPI`.
+* `func NewUY() U` changed to `func NewUY(n string) U` in `accept-recased-union.txtar`: `--- FAIL: TestEngineCases/accept-recased-union`.
+* a `stray.go` at the root: `--- FAIL: TestRuntimeFilesCoverHandWritten`.
+* `run` writing before `output.Check`: `--- FAIL: TestEngineCases/refuse-unchecked-output` with `output directory changed: holds [agent.go agent_gen.go
+  client.go client_gen.go connection.go constants_gen.go doc.go errors.go extensions.go helpers_gen.go types_gen.go]`.
+
+Results: `go test -count=1 -cover ./internal/enginetest`: 95.9%. Regenerating with `env -u GOPATH -u GOMODCACHE go run .` in `cmd/generate` exited
+0, `git diff --quiet f2a6a3a -- '*_gen.go' testdata` exited 0, and `git status` showed only the new files. `make pre-add-check`: `go-precheck: 76
+file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` Its per-file checks cover tracked files, so the five new Go files were also
+checked by name, `GO_PRECHECK_SKIP_VULN=1 scripts/go-precheck.sh <files>`: `go-precheck: 5 file(s) clean`. `make check-records` and
+`make markdownlint` exit 0; the identifier scan found nothing.
+
+Commit point: the agent stopped here. The owner commits step 2 on `main`.

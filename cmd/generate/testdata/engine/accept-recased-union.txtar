@@ -1,0 +1,33 @@
+A oneOf named U with const-discriminated variants: the variant types are
+named UX and UY once, with constructors NewUX and NewUY (F8, F9;
+TestRunGeneratesRecasedUnion). The runtime needs ProtocolMethodCancelRequest,
+so the meta declares $/cancel_request and the schema its smallest definition.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"},
+  "U": {"oneOf": [
+    {"type": "object", "properties": {"type": {"const": "x", "type": "string"}, "n": {"type": "string"}}, "required": ["type", "n"]},
+    {"type": "object", "properties": {"type": {"const": "y", "type": "string"}}, "required": ["type"]}
+  ]}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+func NewUX(n string) U
+func NewUY() U
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type U struct{X *UX "json:\"-\""; Y *UY "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type UX struct{N string "json:\"n\""; Type string "json:\"type\""}
+type UY struct{Type string "json:\"type\""}
+func (*CancelRequestNotification).Validate() error
+func (U).MarshalJSON() ([]byte, error)
+func (*U).UnmarshalJSON(b []byte) error
+func (*U).Validate() error
+func (*UX).UnmarshalJSON(b []byte) error

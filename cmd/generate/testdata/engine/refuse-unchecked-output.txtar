@@ -1,0 +1,17 @@
+Output that does not type-check with the hand-written runtime is refused and
+nothing is written (phase 5; TestRunRefusesOutputThatDoesNotTypeCheck). Without
+a protocolMethods entry no ProtocolMethodCancelRequest is generated, and
+connection.go uses it.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}}
+-- schema.json --
+{"$defs": {
+  "U": {"oneOf": [
+    {"type": "object", "properties": {"type": {"const": "x", "type": "string"}, "n": {"type": "string"}}, "required": ["type", "n"]},
+    {"type": "object", "properties": {"type": {"const": "y", "type": "string"}}, "required": ["type"]}
+  ]}
+}}
+-- want.err --
+generated code does not type-check
+undefined: ProtocolMethodCancelRequest
