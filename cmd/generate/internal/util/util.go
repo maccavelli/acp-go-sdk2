@@ -7,18 +7,6 @@ import (
 	"unicode"
 )
 
-// SanitizeComment removes backticks and normalizes whitespace for Go comments.
-//
-// Deprecated: Use FormatDocComment for proper multi-line comment formatting.
-func SanitizeComment(s string) string {
-	s = strings.ReplaceAll(s, "`", "'")
-	lines := strings.Split(s, "\n")
-	for i := range lines {
-		lines[i] = strings.TrimSpace(lines[i])
-	}
-	return strings.Join(lines, " ")
-}
-
 // FormatDocComment formats a description as properly structured Go doc comment lines.
 // Preserves paragraph breaks (double newlines) and handles line breaks within paragraphs.
 // Returns slice of comment text without "//" prefix (caller should emit each as a comment line).
