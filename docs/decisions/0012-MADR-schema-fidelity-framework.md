@@ -305,6 +305,17 @@ Decision: asked, the owner chose to extend treatment 3 to definitions. A definit
 `type ExtRequest = json.RawMessage`. An alias keeps `json.RawMessage`'s methods; a defined type over it would not, and would encode as a base64
 string. The exported API changes in the type of these three names; the release notes list it. Not chosen: keeping `any` and recording the loss.
 
+## Amendment 2026-10-11, key names, and invalid UTF-8 in raw values
+
+Found by `FuzzRoundTrip` in step 8 of [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md), and decided by the owner
+([0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md), "Found in step 8 and decided").
+
+* The decoders this record defines read a key as `encoding/json` reads a struct field's name: under Unicode case folding, the last matching key
+  winning. That covers the required keys, the discriminator, the keys that pick a variant or member, the keys whose absence applies a default,
+  and the keys a catch-all keeps. Before, they read exact names only, while the structs they decode did not.
+* Treatment 3 carries a raw value byte for byte, invalid UTF-8 included: a string field replaces invalid UTF-8 with U+FFFD, and a raw value does
+  not, as Go's `json.RawMessage` does not.
+
 ## More Information
 
 Sources:

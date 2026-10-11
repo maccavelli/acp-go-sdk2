@@ -1,0 +1,14 @@
+Refused: two keys a decoder reads that differ only in case would be merged when
+the decoder folds keys as encoding/json does
+(0011-MADR-harden-code-generator-engine.md, "Found in step 8 and decided").
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Link": {"type": "object", "properties": {"url": {"type": "string"}, "URL": {"type": "string"}}, "required": ["url", "URL"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Link:
+differ only in case

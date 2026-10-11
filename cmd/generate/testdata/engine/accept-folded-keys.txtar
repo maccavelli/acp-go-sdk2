@@ -1,0 +1,129 @@
+The generated decoders read a key as encoding/json reads a struct field's name:
+under Unicode case folding, the last matching key winning, for required keys,
+defaults, members, discriminators, a catch-all's extra keys, and array items
+(0011-MADR-harden-code-generator-engine.md, "Found in step 8 and decided").
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Item": {"type": "object", "properties": {"id": {"type": "string"}, "count": {"type": "integer", "format": "int64", "default": 3}}, "required": ["id"]},
+  "State": {"type": "object", "properties": {"stopReason": {"type": ["string", "null"]}}, "anyOf": [{"title": "end", "type": "object", "properties": {"stopReason": {"type": "string", "const": "end_turn"}}, "required": ["stopReason"]}, {"title": "other", "type": "object", "properties": {"stopReason": {"type": "string"}}, "required": ["stopReason"], "not": {"anyOf": [{"type": "object", "properties": {"stopReason": {"type": "string", "const": "end_turn"}}, "required": ["stopReason"]}]}}, {"title": "none", "type": "object", "properties": {"stopReason": {"type": "null"}}}]},
+  "SessionScope": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"]},
+  "RequestScope": {"type": "object", "properties": {"requestId": {"type": "integer", "format": "int64"}}, "required": ["requestId"]},
+  "Mode": {"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"], "anyOf": [{"title": "Session", "allOf": [{"$ref": "#/$defs/SessionScope"}]}, {"title": "Request", "allOf": [{"$ref": "#/$defs/RequestScope"}]}]},
+  "Option": {"type": "object", "properties": {"value": {"type": "string"}, "name": {"type": "string"}}, "required": ["value", "name"]},
+  "Group": {"type": "object", "properties": {"group": {"type": "string"}, "options": {"type": "array", "items": {"$ref": "#/$defs/Option"}}}, "required": ["group", "options"]},
+  "Options": {"anyOf": [{"title": "Ungrouped", "type": "array", "items": {"$ref": "#/$defs/Option"}}, {"title": "Grouped", "type": "array", "items": {"$ref": "#/$defs/Group"}}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Group struct{Group string "json:\"group\""; Options []Option "json:\"options\""}
+type Item struct{Count int64 "json:\"count,omitempty\""; Id string "json:\"id\""}
+type Mode struct{Message string "json:\"message\""; Session *SessionScope "json:\"-\""; Request *RequestScope "json:\"-\""}
+type Option struct{Name string "json:\"name\""; Value string "json:\"value\""}
+type Options struct{Ungrouped *OptionsUngrouped "json:\"-\""; Grouped *OptionsGrouped "json:\"-\""}
+type OptionsGrouped []Group
+type OptionsUngrouped []Option
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type RequestScope struct{RequestId int64 "json:\"requestId\""}
+type SessionScope struct{SessionId string "json:\"sessionId\""}
+type State struct{EndTurn *StateEnd "json:\"-\""; Other *StateOther "json:\"-\""; None *StateNone "json:\"-\""}
+type StateEnd struct{StopReason string "json:\"stopReason\""}
+type StateNone struct{StopReason json.RawMessage "json:\"stopReason,omitempty\""}
+type StateOther struct{StopReason string "json:\"stopReason\""; Extra map[string]json.RawMessage "json:\"-\""}
+func (*CancelRequestNotification).Validate() error
+func (Group).MarshalJSON() ([]byte, error)
+func (*Group).UnmarshalJSON(b []byte) error
+func (Item).MarshalJSON() ([]byte, error)
+func (*Item).UnmarshalJSON(b []byte) error
+func (Mode).MarshalJSON() ([]byte, error)
+func (*Mode).UnmarshalJSON(b []byte) error
+func (*Mode).Validate() error
+func (*Option).UnmarshalJSON(b []byte) error
+func (Options).MarshalJSON() ([]byte, error)
+func (*Options).UnmarshalJSON(b []byte) error
+func (*Options).Validate() error
+func (*RequestScope).UnmarshalJSON(b []byte) error
+func (*SessionScope).UnmarshalJSON(b []byte) error
+func (State).MarshalJSON() ([]byte, error)
+func (*State).UnmarshalJSON(b []byte) error
+func (*State).Validate() error
+func (*StateNone).UnmarshalJSON(b []byte) error
+func (StateOther).MarshalJSON() ([]byte, error)
+func (*StateOther).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// A required key or a key with a default, in another case, is read as
+// encoding/json reads its field; of several matching keys, the last wins.
+func TestFoldedObjectKeys(t *testing.T) {
+	for in, want := range map[string]Item{
+		`{"ID":"a"}`:                  {Id: "a", Count: 3},
+		`{"id":"a","Count":5}`:        {Id: "a", Count: 5},
+		`{"id":"a","ID":"b"}`:         {Id: "b", Count: 3},
+		`{"ID":"b","id":"a"}`:         {Id: "a", Count: 3},
+	} {
+		var v Item
+		if err := json.Unmarshal([]byte(in), &v); err != nil || v != want {
+			t.Errorf("%s decoded as %+v, %v; want %+v", in, v, err, want)
+		}
+	}
+	var v Item
+	if err := json.Unmarshal([]byte(`{"i_d":"a"}`), &v); err == nil {
+		t.Errorf(`{"i_d":"a"} decoded as %+v; a key is not matched with "_" removed`, v)
+	}
+}
+
+// A discriminator in another case selects its variant, and the catch-all
+// keeps only the keys no field takes.
+func TestFoldedDiscriminator(t *testing.T) {
+	var s State
+	if err := json.Unmarshal([]byte(`{"StopReason":"end_turn"}`), &s); err != nil || s.EndTurn == nil {
+		t.Errorf(`{"StopReason":"end_turn"} decoded as %+v, %v; want EndTurn`, s, err)
+	}
+	if err := json.Unmarshal([]byte(`{"STOPREASON":"custom","x":1}`), &s); err != nil || s.Other == nil {
+		t.Fatalf(`{"STOPREASON":"custom","x":1} decoded as %+v, %v; want Other`, s, err)
+	}
+	if s.Other.StopReason != "custom" || len(s.Other.Extra) != 1 || string(s.Other.Extra["x"]) != "1" {
+		t.Errorf("Other = %+v; want stopReason custom and the one extra key x", s.Other)
+	}
+	if b, err := json.Marshal(s); err != nil || string(b) != `{"stopReason":"custom","x":1}` {
+		t.Errorf("Other sent as %s, %v", b, err)
+	}
+	if err := json.Unmarshal([]byte(`{"stopreason":null}`), &s); err != nil || s.None == nil {
+		t.Errorf(`{"stopreason":null} decoded as %+v, %v; want None`, s, err)
+	}
+}
+
+// A member's key in another case picks the member.
+func TestFoldedMemberKeys(t *testing.T) {
+	var m Mode
+	if err := json.Unmarshal([]byte(`{"Message":"m","SessionId":"s"}`), &m); err != nil || m.Session == nil || m.Session.SessionId != "s" || m.Message != "m" {
+		t.Errorf("Mode decoded as %+v, %v; want the Session member", m, err)
+	}
+}
+
+// An array item's keys in another case pick the array variant.
+func TestFoldedArrayItems(t *testing.T) {
+	var o Options
+	if err := json.Unmarshal([]byte(`[{"Group":"g","OPTIONS":[{"value":"v","Name":"n"}]}]`), &o); err != nil || o.Grouped == nil {
+		t.Fatalf("Options decoded as %+v, %v; want Grouped", o, err)
+	}
+	if got := *o.Grouped; len(got) != 1 || got[0].Group != "g" || len(got[0].Options) != 1 || got[0].Options[0].Name != "n" {
+		t.Errorf("Grouped = %+v", got)
+	}
+}

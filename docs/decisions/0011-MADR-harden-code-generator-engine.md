@@ -661,6 +661,48 @@ union; and recording the finding for later.
 
 The plan for these decisions is [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md).
 
+### Found in step 8 and decided, 2026-10-11
+
+`FuzzRoundTrip` failed within three seconds of `make fuzz` on `{"stopReAson":"\x820000"}` for `IdleStateUpdate`: decoded and encoded, it gives
+bytes that decode into another variant and encode differently. Scratch probes, under the default build and with `GOEXPERIMENT=nojsonv2`, found
+two behaviours behind it.
+
+* **A key in another case is absent to the generated code and present to `encoding/json`.** The generated decoders look keys up in a
+  `map[string]json.RawMessage` by their exact names: the discriminator of the 17 discriminated unions, the required keys (`objectKeys`), the keys
+  that pick a variant or a member, defaults, and the keys a catch-all struct keeps. The structs themselves are decoded by `encoding/json`, which
+  matches a name under Unicode case folding, the last matching key winning, as
+  [0007-MADR-self-contained-acp-sdk.md](0007-MADR-self-contained-acp-sdk.md) records ("Object names | case-insensitive"). So
+  `{"StopReason":"end_turn"}` decodes as `IdleStateUpdateNone`, no stop reason, whose raw `stopReason` field takes the value, and is sent on as
+  `{"stopReason":"end_turn"}`, which every peer reads as `end_turn`. `{"ToolCallId":"1","title":"t"}` fails as missing `toolCallId`, while
+  `{"toolCallId":"1","Title":"t"}` fails as missing `title`, and an optional key in another case is accepted.
+* **A raw value keeps invalid UTF-8.** `encoding/json` replaces invalid UTF-8 in a string with U+FFFD, but a `json.RawMessage` is carried byte
+  for byte, so the SDK sends on invalid UTF-8 a peer sent it. This is how Go's `json.RawMessage` behaves, and it made the first finding visible
+  to a byte comparison.
+
+Asked, the owner decided:
+
+* **Generated code matches a key as `encoding/json` does.** After decoding an object into a map, the generated code folds its keys: each name it
+  reads takes the value of the last key that matches it under Unicode case folding, and the other matching keys are removed. A wrong-case
+  discriminator, required key, or member key is then read as `encoding/json` reads the field, and a catch-all keeps only the keys no field
+  takes. The generator refuses a schema in which two names that one decoder reads differ only in case, since folding would merge them; the
+  committed schema has none. Not chosen: exact names everywhere, which matches the schema and Rust but contradicts the v1 behaviour 0007
+  records and costs a filtering pass in every decoder; and a change to the discriminator alone, which leaves exact required keys beside folded
+  optional ones.
+* **Invalid UTF-8 in a raw value is recorded, not changed.** It follows 0012's byte-for-byte rule for raw values
+  ([0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md), amendment "key names, and invalid UTF-8 in raw values").
+  Not chosen: replacing it on decode.
+
+The wire changes: a payload whose keys differ from the schema's only in case is decoded as its names say, where it was refused or decoded into
+another variant. The exported API does not change. The release notes list it.
+
+`FuzzBuild` then found that the integer enum decided in step 7 accepted a member typed `integer` whose `const` is not an integer of its
+format: `{"type": "integer", "format": "int32", "const": ""}` rendered a constant with no value, which failed to format. The loader reads a
+`const` as `float64`, and the model wrote it with `fmt.Sprint`, so `1.5`, `3000000000` for `int32`, and an integer beyond 2^53 also passed the
+model; `-2147483648` was written `-2.147483648e+09`. Asked, the owner decided: **an integer enum's `const` must be an integer, below 2^53 in
+magnitude, within its format's Go type; any other is refused**, naming the type, the variant, and the value. A loaded `float64` of 2^53 or more
+may have been rounded from another integer, so it is refused rather than read. Not chosen: classifying such a definition as something other
+than an integer enum. The committed schema's `ErrorCode` values are small `int32` constants; the generated SDK does not change.
+
 ## More Information
 
 Implementation follows in one PLAN per phase, each written and approved before its work starts. The first is the resolved model.

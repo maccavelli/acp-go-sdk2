@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"$defs\":{\"A000\":{\"AnYOf\":[{\"title\":\"00000000\",\"tYpe\":\"integer\",\"formAt\":\"int32\",\"Const\":\"\"}]}}}")

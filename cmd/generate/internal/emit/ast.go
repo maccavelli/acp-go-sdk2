@@ -109,6 +109,15 @@ func rangeStmt(key, value, x ast.Expr, body ...ast.Stmt) *ast.RangeStmt {
 	return &ast.RangeStmt{Key: key, Value: value, Tok: token.DEFINE, X: x, Body: block(body...)}
 }
 
+// forCond is for cond { body }.
+func forCond(cond ast.Expr, body ...ast.Stmt) *ast.ForStmt {
+	return &ast.ForStmt{Cond: cond, Body: block(body...)}
+}
+
+func continueStmt() *ast.BranchStmt { return &ast.BranchStmt{Tok: token.CONTINUE} }
+
+func breakStmt() *ast.BranchStmt { return &ast.BranchStmt{Tok: token.BREAK} }
+
 func switchStmt(tag ast.Expr, clauses ...ast.Stmt) *ast.SwitchStmt {
 	return &ast.SwitchStmt{Tag: tag, Body: block(clauses...)}
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -120,6 +121,7 @@ func (v *AgentCapabilities) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "auth", "loadSession", "mcpCapabilities", "promptCapabilities", "sessionCapabilities")
 	type Alias AgentCapabilities
 	var s struct {
 		Alias
@@ -312,6 +314,7 @@ func (u *AgentResponse) UnmarshalJSON(b []byte) error {
 	*u = AgentResponse{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
+		foldKeys(b, m, "id", "result", "error")
 		{
 			var v AgentResult
 			match := true
@@ -535,6 +538,7 @@ func (v *AuthCapabilities) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "terminal")
 	type Alias AuthCapabilities
 	var s struct {
 		Alias
@@ -627,6 +631,7 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("AuthMethod: %w", err)
 	}
+	foldKeys(b, m, "type", "id", "name")
 	var disc string
 	if v, ok := m["type"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -940,6 +945,7 @@ func (u *AvailableCommandInput) UnmarshalJSON(b []byte) error {
 	*u = AvailableCommandInput{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
+		foldKeys(b, m, "hint")
 		{
 			var v UnstructuredCommandInput
 			match := true
@@ -1334,6 +1340,7 @@ func (v *ClientCapabilities) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "auth", "fs", "terminal")
 	type Alias ClientCapabilities
 	var s struct {
 		Alias
@@ -1563,6 +1570,7 @@ func (u *ClientResponse) UnmarshalJSON(b []byte) error {
 	*u = ClientResponse{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
+		foldKeys(b, m, "id", "result", "error")
 		{
 			var v ClientResult
 			match := true
@@ -2311,6 +2319,7 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("ContentBlock: %w", err)
 	}
+	foldKeys(b, m, "type", "text", "data", "mimeType", "name", "uri", "resource")
 	var disc string
 	if v, ok := m["type"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -2680,6 +2689,7 @@ func (v *CreateElicitationForm) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "sessionId", "requestId")
 	type Alias CreateElicitationForm
 	var s struct {
 		Alias
@@ -2782,6 +2792,7 @@ func (v *CreateElicitationUrl) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "sessionId", "requestId")
 	type Alias CreateElicitationUrl
 	var s struct {
 		Alias
@@ -2887,6 +2898,7 @@ func (v *CreateElicitationOther) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "_meta", "mode")
 	type Alias CreateElicitationOther
 	var s struct {
 		Alias
@@ -2942,6 +2954,7 @@ func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("CreateElicitationRequest: %w", err)
 	}
+	foldKeys(b, m, "mode", "requestedSchema", "elicitationId", "url")
 	var disc string
 	if v, ok := m["mode"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -3243,6 +3256,7 @@ func (v *CreateElicitationResponseOther) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "_meta", "action")
 	type Alias CreateElicitationResponseOther
 	var s struct {
 		Alias
@@ -3295,6 +3309,7 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("CreateElicitationResponse: %w", err)
 	}
+	foldKeys(b, m, "action")
 	var disc string
 	if v, ok := m["action"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -3946,6 +3961,7 @@ func (v *ElicitationFormMode) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "sessionId", "requestId")
 	type Alias ElicitationFormMode
 	var a Alias
 	if err := json.Unmarshal(b, &a); err != nil {
@@ -4351,6 +4367,7 @@ func (v *ElicitationPropertySchemaOther) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "type")
 	type Alias ElicitationPropertySchemaOther
 	var a Alias
 	if err := json.Unmarshal(b, &a); err != nil {
@@ -4403,6 +4420,7 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("ElicitationPropertySchema: %w", err)
 	}
+	foldKeys(b, m, "type", "items")
 	var disc string
 	if v, ok := m["type"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -4694,6 +4712,7 @@ func (v *ElicitationSchema) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "properties", "type")
 	type Alias ElicitationSchema
 	var s struct {
 		Alias
@@ -4849,6 +4868,7 @@ func (v *ElicitationUrlMode) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "sessionId", "requestId")
 	type Alias ElicitationUrlMode
 	var a Alias
 	if err := json.Unmarshal(b, &a); err != nil {
@@ -4950,6 +4970,7 @@ func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
 	*u = EmbeddedResourceResource{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
+		foldKeys(b, m, "text", "uri", "blob")
 		{
 			var v TextResourceContents
 			match := true
@@ -5263,6 +5284,7 @@ func (v *FileSystemCapabilities) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "readTextFile", "writeTextFile")
 	type Alias FileSystemCapabilities
 	var s struct {
 		Alias
@@ -5583,6 +5605,7 @@ func (v *IdleStateUpdateOther) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "_meta", "stopReason", "usage")
 	type Alias IdleStateUpdateOther
 	var s struct {
 		Alias
@@ -5683,6 +5706,7 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("IdleStateUpdate: %w", err)
 	}
+	foldKeys(b, m, "stopReason")
 	var disc string
 	if v, ok := m["stopReason"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -6000,6 +6024,7 @@ func (v *InitializeRequest) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "clientCapabilities")
 	type Alias InitializeRequest
 	var s struct {
 		Alias
@@ -6074,6 +6099,7 @@ func (v *InitializeResponse) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "agentCapabilities", "authMethods")
 	type Alias InitializeResponse
 	var s struct {
 		Alias
@@ -6591,6 +6617,7 @@ func (v *McpCapabilities) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "acp", "http", "sse")
 	type Alias McpCapabilities
 	var s struct {
 		Alias
@@ -6811,6 +6838,7 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("McpServer: %w", err)
 	}
+	foldKeys(b, m, "type", "name", "url", "headers", "serverId", "command", "args", "env")
 	var disc string
 	if v, ok := m["type"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -7232,6 +7260,7 @@ func (v *MultiSelectItemsOther) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "type")
 	type Alias MultiSelectItemsOther
 	var a Alias
 	if err := json.Unmarshal(b, &a); err != nil {
@@ -7266,6 +7295,7 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("MultiSelectItems: %w", err)
 	}
+	foldKeys(b, m, "type", "enum", "anyOf")
 	var disc string
 	if v, ok := m["type"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -8896,6 +8926,7 @@ func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("PlanUpdateContent: %w", err)
 	}
+	foldKeys(b, m, "type", "planId", "entries", "uri", "content")
 	var disc string
 	if v, ok := m["type"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -9121,6 +9152,7 @@ func (v *PromptCapabilities) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "audio", "embeddedContext", "image")
 	type Alias PromptCapabilities
 	var s struct {
 		Alias
@@ -9635,6 +9667,7 @@ func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("RequestPermissionOutcome: %w", err)
 	}
+	foldKeys(b, m, "outcome", "optionId")
 	var disc string
 	if v, ok := m["outcome"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -10427,6 +10460,7 @@ func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("SessionConfigOption: %w", err)
 	}
+	foldKeys(b, m, "type", "currentValue", "options")
 	var disc string
 	if v, ok := m["type"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -10747,12 +10781,18 @@ func (u *SessionConfigSelectOptions) UnmarshalJSON(b []byte) error {
 			return err
 		}
 	}
-	var arr []map[string]json.RawMessage
+	var arr []json.RawMessage
 	if json.Unmarshal(b, &arr) == nil {
 		{
 			var v SessionConfigSelectOptionsUngrouped
 			match := true
-			for _, elem := range arr {
+			for _, item := range arr {
+				var elem map[string]json.RawMessage
+				if json.Unmarshal(item, &elem) != nil {
+					match = false
+					break
+				}
+				foldKeys(item, elem, "name", "value")
 				if _, ok := elem["name"]; !ok {
 					match = false
 				}
@@ -10771,7 +10811,13 @@ func (u *SessionConfigSelectOptions) UnmarshalJSON(b []byte) error {
 		{
 			var v SessionConfigSelectOptionsGrouped
 			match := true
-			for _, elem := range arr {
+			for _, item := range arr {
+				var elem map[string]json.RawMessage
+				if json.Unmarshal(item, &elem) != nil {
+					match = false
+					break
+				}
+				foldKeys(item, elem, "group", "name", "options")
 				if _, ok := elem["group"]; !ok {
 					match = false
 				}
@@ -12383,6 +12429,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("SessionUpdate: %w", err)
 	}
+	foldKeys(b, m, "sessionUpdate", "content", "toolCallId", "title", "entries", "plan", "planId", "availableCommands", "currentModeId", "configOptions", "used", "size", "severity", "compactionId", "status", "sessionId", "messageId")
 	var disc string
 	if v, ok := m["sessionUpdate"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -13323,6 +13370,7 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("SetSessionConfigOptionRequest: %w", err)
 	}
+	foldKeys(b, m, "type", "value")
 	var disc string
 	if v, ok := m["type"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -13702,6 +13750,7 @@ func (v *StateUpdateOther) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "state")
 	type Alias StateUpdateOther
 	var a Alias
 	if err := json.Unmarshal(b, &a); err != nil {
@@ -13753,6 +13802,7 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("StateUpdate: %w", err)
 	}
+	foldKeys(b, m, "state")
 	var disc string
 	if v, ok := m["state"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -14747,6 +14797,7 @@ func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("ToolCallContent: %w", err)
 	}
+	foldKeys(b, m, "type", "content", "path", "newText", "terminalId")
 	var disc string
 	if v, ok := m["type"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -15985,6 +16036,7 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("UnstableMcpServer: %w", err)
 	}
+	foldKeys(b, m, "type", "name", "url", "headers", "serverId", "command", "args", "env")
 	var disc string
 	if v, ok := m["type"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -16356,6 +16408,7 @@ func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
 	*u = UnstableMessageMcpResponse{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
+		foldKeys(b, m, "result", "error")
 		{
 			var v UnstableMessageMcpResult
 			match := true
@@ -17177,6 +17230,7 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return fmt.Errorf("UnstableNesSuggestion: %w", err)
 	}
+	foldKeys(b, m, "kind", "id", "uri", "edits", "position", "newName", "search", "replace")
 	var disc string
 	if v, ok := m["kind"]; ok {
 		if err := json.Unmarshal(v, &disc); err != nil {
@@ -18567,19 +18621,73 @@ type ClientExperimental interface {
 	UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error)
 }
 
-// objectKeys decodes b as a JSON object and fails, naming typ and the key,
-// when a required key is absent. JSON null is an object without keys.
+// objectKeys decodes b as a JSON object, folds the required keys as foldKeys
+// does, and fails, naming typ and the key, when a required key is absent. JSON
+// null is an object without keys.
 func objectKeys(b []byte, typ string, required ...string) (map[string]json.RawMessage, error) {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, fmt.Errorf("%s: %w", typ, err)
 	}
+	foldKeys(b, m, required...)
 	for _, k := range required {
 		if _, ok := m[k]; !ok {
 			return nil, fmt.Errorf("%s: missing required property %q", typ, k)
 		}
 	}
 	return m, nil
+
+}
+
+// foldKeys makes m, the keys of the JSON object b, hold for each of names the
+// value encoding/json gives a struct field of that name: the value of the last key
+// of b that matches it under Unicode case folding. It removes the other matching
+// keys and keeps every key no name matches.
+func foldKeys(b []byte, m map[string]json.RawMessage, names ...string) {
+	for _, name := range names {
+		var keys []string
+		for k := range m {
+			if strings.EqualFold(k, name) {
+				keys = append(keys, k)
+			}
+		}
+		if len(keys) == 0 || len(keys) == 1 && keys[0] == name {
+			continue
+		}
+		last := keys[0]
+		if len(keys) > 1 {
+			last = lastKey(b, name)
+		}
+		v := m[last]
+		for _, k := range keys {
+			delete(m, k)
+		}
+		m[name] = v
+	}
+}
+
+// lastKey returns the last key of the JSON object b that matches name under
+// Unicode case folding. b has decoded as an object already.
+func lastKey(b []byte, name string) string {
+	d := json.NewDecoder(bytes.NewReader(b))
+	var last string
+	if _, err := d.Token(); err != nil {
+		return last
+	}
+	for d.More() {
+		t, err := d.Token()
+		if err != nil {
+			return last
+		}
+		if k, ok := t.(string); ok && strings.EqualFold(k, name) {
+			last = k
+		}
+		var v json.RawMessage
+		if err := d.Decode(&v); err != nil {
+			return last
+		}
+	}
+	return last
 }
 
 // orDefault decodes raw into a T, or, when raw is empty or does not decode, def,

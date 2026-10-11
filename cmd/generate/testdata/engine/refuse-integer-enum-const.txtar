@@ -1,0 +1,14 @@
+Refused: an integer enum's const must be an integer of its format; a string
+const has no Go integer constant (0011-MADR-harden-code-generator-engine.md,
+"Found in step 8 and decided"). Found by FuzzBuild.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Code": {"description": "A code.", "anyOf": [{"title": "Parse error", "type": "integer", "format": "int32", "const": ""}, {"title": "Other", "type": "integer", "format": "int32"}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Code variant 1:
+const "" is not an integer

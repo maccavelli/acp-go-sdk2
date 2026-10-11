@@ -218,3 +218,41 @@ func TestFlattenedMembers(t *testing.T) {
 		t.Errorf("a member named as a property: %v", err)
 	}
 }
+
+// TestIntegerEnumConsts requires an integer enum's const to be an integer
+// within its format's Go type and below 2^53 in magnitude, where the loader's
+// float64 cannot have rounded it; any other is refused naming the value
+// (0011-MADR-harden-code-generator-engine.md, "Found in step 8 and decided").
+func TestIntegerEnumConsts(t *testing.T) {
+	t.Parallel()
+	enum := func(format, value string) string {
+		return `{"Code":{"anyOf":[{"title":"A","type":"integer","format":"` + format + `","const":` + value + `},{"title":"Other","type":"integer","format":"` + format + `"}]}}`
+	}
+	for _, c := range []struct{ format, value, want string }{
+		{"int32", `""`, `const "" is not an integer`},
+		{"int32", `1.5`, `const 1.5 is not an integer`},
+		{"int64", `9007199254740993`, `2^53 or more`},
+		{"uint64", `9007199254740992`, `2^53 or more`},
+		{"int32", `3000000000`, `const 3000000000 is outside int32`},
+		{"uint32", `-1`, `const -1 is outside uint32`},
+	} {
+		_, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, enum(c.format, c.value))})
+		if err == nil || !strings.Contains(err.Error(), c.want) || !strings.Contains(err.Error(), "Code variant 1") {
+			t.Errorf("%s const %s: %v, want an error naming Code variant 1 and %q", c.format, c.value, err, c.want)
+		}
+	}
+	for _, c := range []struct{ format, value, want string }{
+		{"int32", `-2147483648`, "-2147483648"},
+		{"int64", `-9007199254740991`, "-9007199254740991"},
+		{"int64", `-0`, "0"},
+	} {
+		m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, enum(c.format, c.value))})
+		if err != nil {
+			t.Errorf("%s const %s: %v", c.format, c.value, err)
+			continue
+		}
+		if got := m.Type("Code").Enum; len(got) != 1 || got[0].Value != c.want {
+			t.Errorf("%s const %s: enum %+v, want the value %s", c.format, c.value, got, c.want)
+		}
+	}
+}

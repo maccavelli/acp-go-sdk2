@@ -76,6 +76,13 @@ follow the schema:
 - Encoding a message whose required union has no variant set fails with an error
   that names the union, such as `RequestPermissionOutcome: no variant set`.
 - A required array or map left nil is sent as `[]` or `{}`, not `null`.
+- A key is read as `encoding/json` reads a struct field's name: a key that
+  differs from the schema's name only in case, under Unicode case folding, is
+  that name, and of several such keys the last wins. That holds for required
+  keys, discriminators, and the keys that pick a variant or member, so
+  `{"StopReason":"end_turn"}` decodes as `IdleStateUpdateEndTurn`; a catch-all's
+  `Extra` keeps only the keys no field takes. Keys are sent under the schema's
+  names.
 - Decoding a union whose discriminator is present but not a string fails with an
   error that names the union and the key.
 - A discriminator value this SDK does not know is not an error. Where the schema
@@ -99,7 +106,9 @@ follow the schema:
 - A value the schema gives no Go type, such as `rawInput`, `rawOutput`, or an
   error's `data`, is a `json.RawMessage`, carried byte for byte. Integers keep
   every digit there, through a union, and in sized integer fields; inside
-  `_meta`, a `map[string]any`, numbers decode as `float64`.
+  `_meta`, a `map[string]any`, numbers decode as `float64`. Invalid UTF-8 a peer
+  sends in a raw value is carried too, where a string field replaces it with
+  U+FFFD.
 - An optional raw value that is absent or `null` is empty, as ACP defines
   omission and `null` to be equivalent for `rawInput` and `rawOutput`: test
   it with `len(v) == 0`, read it with `string(v)`, which gives `""`, and it is

@@ -4,9 +4,12 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
@@ -286,6 +289,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 	if err := m.buildValidations(); err != nil {
 		return nil, err
 	}
+	if err := m.checkFoldedKeys(); err != nil {
+		return nil, err
+	}
 	for _, side := range []struct {
 		prefix  string
 		methods map[string]string
@@ -412,7 +418,8 @@ func isIntegerEnum(def *load.Definition) bool {
 
 // buildIntegerEnum gives an integer enum the Go type of its members' format
 // and a constant per const, named by the member's title. Members of different
-// formats, and a const without a title, are refused.
+// formats, a const without a title, and a const that is not an integer of the
+// format (integerConst) are refused.
 func buildIntegerEnum(n *namer, t *Type) error {
 	list := t.def.AnyOf
 	if len(list) == 0 {
@@ -426,7 +433,10 @@ func buildIntegerEnum(n *namer, t *Type) error {
 		if v.Const == nil {
 			continue
 		}
-		value := fmt.Sprint(v.Const)
+		value, err := integerConst(v.Const, format)
+		if err != nil {
+			return fmt.Errorf("%s variant %d: %w", t.Name, i+1, err)
+		}
 		if v.Title == "" {
 			return fmt.Errorf("%s variant %d: integer const %s has no title to name its constant", t.Name, i+1, value)
 		}
@@ -439,6 +449,30 @@ func buildIntegerEnum(n *namer, t *Type) error {
 	u := primitiveRef(schemaTypeInteger, format)
 	t.Underlying = &u
 	return nil
+}
+
+// integerConst returns an integer enum member's const as a Go integer literal.
+// The loader reads a JSON number as float64, so the const must be integral,
+// below 2^53 in magnitude, where a float64 cannot have rounded it, and
+// within the range of the format's Go type
+// (0011-MADR-harden-code-generator-engine.md, "Found in step 8 and decided").
+func integerConst(c any, format string) (string, error) {
+	shown, err := json.Marshal(c)
+	if err != nil {
+		shown = []byte(fmt.Sprint(c))
+	}
+	f, ok := c.(float64)
+	if !ok || f != math.Trunc(f) {
+		return "", fmt.Errorf("const %s is not an integer", shown)
+	}
+	if math.Abs(f) >= 1<<53 {
+		return "", fmt.Errorf("const %s is 2^53 or more in magnitude, which the schema loader does not read exactly", shown)
+	}
+	goType := numericFormat(schemaTypeInteger, format)
+	if r, ok := goRange[goType]; ok && (f < r[0] || f > r[1]) {
+		return "", fmt.Errorf("const %s is outside %s", shown, goType)
+	}
+	return strconv.FormatFloat(f+0, 'f', -1, 64), nil
 }
 
 // enumValues returns the constant values of an enum kind, as the types

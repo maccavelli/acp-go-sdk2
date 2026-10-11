@@ -1043,3 +1043,138 @@ and `conformance_test.go` passed by name: `go-precheck: 2 file(s) clean`. `make 
 scan found nothing.
 
 Commit point: the agent stopped here. The owner commits step 7 on `main`.
+
+### Step 8 deviation, 2026-10-11: key names match as encoding/json matches them
+
+The owner committed step 7 as `0e32255`. `fuzz_test.go` at the root and in `cmd/generate`, and `make fuzz`, were written; their seeds passed
+(1281 and 74). The first `make fuzz` failed in `FuzzRoundTrip` after 3 s (the invalid byte and U+FFFD are shown escaped):
+
+```text
+fuzz_test.go:91: IdleStateUpdate: {"stopReAson":"\x820000"} encodes as {"stopReason":"\x820000"}, and that as {"stopReason":"\ufffd0000"}
+Failing input written to testdata/fuzz/FuzzRoundTrip/6abafd94758f7256
+```
+
+Scratch probes traced it to two behaviours, both pre-existing, recorded in the 0011-MADR's "Found in step 8 and decided": the generated
+decoders look keys up by exact name while `encoding/json` matches the struct fields under case folding, so a wrong-case `stopReason` decodes as
+`IdleStateUpdateNone` and is sent on as a stop reason; and a raw value keeps invalid UTF-8 where a string replaces it.
+
+Resolutions put to the owner: match every key as `encoding/json` does (recommended), exact names everywhere, or the discriminator alone; and
+for invalid UTF-8, record it (recommended) or replace it on decode. The owner chose the recommended two.
+
+Added to step 8, before its fuzz run can pass:
+
+* `internal/emit`: a generated helper, `foldKeys`, called on each map of keys the generated decoders read, with the names that decoder reads;
+  the array-item match of a union decodes each item through it; and a refusal when two of those names differ only in case. ~~The refusal
+  lives in `internal/emit`.~~ Amended 2026-10-11: `FuzzBuild` failed on the seed of `refuse-folded-names`, since the model accepted a schema
+  the renderer then refused, so the refusal is `checkFoldedKeys` in `internal/model`; the emitter keeps its check as a backstop, which
+  `FuzzBuild` would report if the two ever disagree.
+* `types_gen.go`, regenerated: the helper and its calls.
+* an accepted engine case, `accept-folded-keys`, with a behaviour test, and a refused one, `refuse-folded-names`.
+* a root test, `TestFoldKeysMatchesEncodingJSON`, that compares the helper's choice with `encoding/json`'s on keys in other cases, Unicode
+  folds, and duplicates.
+* the crasher, `testdata/fuzz/FuzzRoundTrip/6abafd94758f7256`, committed as a seed (D4).
+* `README.md`: both behaviours. The 0012-MADR is amended.
+
+The wire changes for payloads whose keys differ from the schema's only in case; the release notes list it. Verification is amended: the
+generated diff of step 8 changes only the decoders' key lookups.
+
+A second finding, 2026-10-11: with the first fixed, `make fuzz` ran `FuzzRoundTrip` for its 60 s and `FuzzBuild` failed after 7 s:
+
+```text
+fuzz_test.go:41: the model accepted {"$defs":{"A000":{"AnYOf":[{"title":"00000000","tYpe":"integer","formAt":"int32","Const":""}]}}},
+but rendering failed: types_gen.go: format: 9:1: expected operand, found ')' (and 4 more errors)
+Failing input written to testdata/fuzz/FuzzBuild/2e4f0f4e77985ba7
+```
+
+The integer enum of step 7 took any `const` of an integer member (the loader matches the schema's keys in any case, as `encoding/json`
+does). Resolutions put to the owner: refuse a `const` that is not an integer of the format (recommended), or classify such a definition as no
+integer enum. The owner chose the refusal, recorded in the 0011-MADR's step 8 findings. Added to step 8: `integerConst` in `internal/model`,
+which also writes the value as a plain integer; the engine case `refuse-integer-enum-const`; `TestIntegerEnumConsts`; and the crasher as a seed.
+
+### Step 8, fuzz targets, 2026-10-11
+
+Ran on `main` from `0e32255`. The agent did not commit.
+
+**The targets.**
+
+* `fuzz_test.go` (new, root): `FuzzRoundTrip(which uint16, data []byte)`, as D4 states, over `schemaTypes()`. Its seeds are the 33 files of
+  `testdata/json_golden`, each with its type through a table of file prefixes (a file the table does not name stops the target), and the 1248
+  instances of `instances_test.go`: 1281 seeds.
+* `cmd/generate/fuzz_test.go` (new): `FuzzBuild(schema []byte)`, as D4 states, with an empty meta. Its seeds are the `schema.json` of every
+  engine case: 74 of 75 at first, since `refuse-schema-missing` has none, and 77 of 78 at the end. `engineCases` now takes a `testing.TB`, so
+  a fuzz target can list the cases.
+* `Makefile`: `make fuzz` runs `FuzzRoundTrip`, `FuzzBuild`, and `FuzzExportedName` for `FUZZTIME`, `60s` by default.
+
+**A gap in the plan's property, corrected in the test, not an SDK change.** The second run of `FuzzRoundTrip` failed on the input `null` for
+`IdleStateUpdate`: `null decoded but does not encode: ... IdleStateUpdate: no variant set`. Decoding JSON `null` into a union leaves it as it
+was (README), and a union with no variant set does not encode
+([0009-MADR-fix-generated-output-on-json-v1.md](0009-MADR-fix-generated-output-on-json-v1.md)). JSON `null` decodes to no value, so D4's
+"decoded, it must encode" does not apply to it; the target now skips `null`, and the input is kept as a seed,
+`testdata/fuzz/FuzzRoundTrip/0b27a31d61b773cb`.
+
+**Findings and decisions**, as the deviation above records:
+
+* The generated decoders read keys under folding as `encoding/json` does: `foldKeys` and `lastKey`, emitted into `types_gen.go`; a call after
+  every map of keys a decoder reads (`objectKeys` folds the required keys; a struct with defaults, members, or extra keys folds those; a
+  discriminated union folds its discriminator and the keys that fit a variant; a union matched by keys folds them; each array item is folded);
+  and `checkFoldedKeys` in `internal/model`, with the emitter's `foldNames` as a backstop.
+* An integer enum's `const` must be an integer of its format, below 2^53 in magnitude: `integerConst` in `internal/model`.
+* Invalid UTF-8 in a raw value is recorded in the README and the 0012-MADR, not changed.
+
+New tests, each run first on the tree without its fix:
+
+* `accept-folded-keys`, with a behaviour test of required keys, a default, a discriminator with its key-less and catch-all variants, a
+  catch-all's extra keys, a flattened member, array items, and two matching keys in either order. Before the fix, all four tests failed,
+  among them `{"ID":"a"} ... missing required property "id"`, `{"id":"a","Count":5} decoded as {Count:3 Id:a}` (a default overwrote a value
+  given in another case, a third effect of the same cause), `{"StopReason":"end_turn"} decoded as ... None`, and `Options: no variant
+  matches`. A test bug was corrected: a case with the Kelvin sign in `count`, which has no `k`, expected a match that neither
+  `encoding/json` nor `foldKeys` makes.
+* `refuse-folded-names`: before, `run accepted the schema`.
+* `TestFoldKeysMatchesEncodingJSON` (new, `fold_keys_test.go`) compares `foldKeys` with `encoding/json`'s struct decode on 14 objects:
+  keys in other cases, the Kelvin sign and the long s, an escaped key, `_` and `-` (not matched), several matches in either order, and
+  `null`. Before: `undefined: foldKeys`. It passes under the default build and with `GOEXPERIMENT=nojsonv2`.
+* `refuse-integer-enum-const` and `TestIntegerEnumConsts` (5 refused, 3 accepted values): before, the case failed with the format error, and
+  the test with `<nil>` for each refusal and `-2.147483648e+09` for `-2147483648`. A first version refused only magnitudes above 2^53, and
+  `9007199254740993` passed as 2^53; the bound is now 2^53 or more.
+
+**The generated diff**, against `0e32255`: `types_gen.go` +113 and −5 lines: the two helpers, `objectKeys`' doc and its call, 43
+`foldKeys` calls in the decoders (2 of them on array items), and the array-item loop of the one union matched by array items.
+`schema_gen_test.go` and the other generated files did not change. The exported API is unchanged: the API listing program gives 2308 identical lines for `0e32255` and the tree.
+
+**`make fuzz`**, the run after the last fix, each target for 60 s on 10 workers:
+
+| target | baseline corpus | executions | new interesting |
+| --- | --- | --- | --- |
+| `FuzzRoundTrip` | 1580 | 5263815 | 133 |
+| `FuzzBuild` | 146 | 1697625 | 94 |
+| `FuzzExportedName` | 55 | 6644214 | 1 |
+
+No crasher. The three crashers of the earlier runs are committed as seeds, and `go test` runs them: `testdata/fuzz/FuzzRoundTrip/6abafd94758f7256`
+(the wrong-case discriminator), `testdata/fuzz/FuzzRoundTrip/0b27a31d61b773cb` (`null`), and `cmd/generate/testdata/fuzz/FuzzBuild/2e4f0f4e77985ba7`
+(the string `const`). The go command's own corpus stays in its cache, outside the tree.
+
+Plants, each in a fresh scratch copy (`s8_plants.json`):
+
+* `AvailableCommandsUpdate`'s `MarshalJSON` dropping `availableCommands` fails `FuzzRoundTrip` on its seeds: `decoded, but its encoding {} does
+  not: AvailableCommandsUpdate: missing required property "availableCommands"`.
+* The model accepting keys that differ only in case fails `FuzzBuild` on the seed of `refuse-folded-names`: `the model accepted ...`.
+* `foldKeys` doing nothing fails `TestFoldKeysMatchesEncodingJSON` and the seed `FuzzRoundTrip/6abafd94758f7256`.
+* `lastKey` taking the first match fails `TestFoldKeysMatchesEncodingJSON`.
+* The emitter folding no names fails `TestEngineBehaviour/accept-folded-keys` (`TestFoldedDiscriminator`).
+* `objectKeys` not folding fails it with `{"ID":"a"} decoded as {Count:0 Id:}`.
+* An integer `const` not checked fails the seed `FuzzBuild/2e4f0f4e77985ba7`.
+* The target decoding `null` as a value fails the seed `FuzzRoundTrip/0b27a31d61b773cb`.
+
+The plant helper stopped once on the invalid UTF-8 of a test's output; it now decodes output with replacement, and the plants were rerun.
+
+**Results.**
+
+* `go test -count=1 .` at the root passed, also with `-race` and with `GOEXPERIMENT=nojsonv2`; it takes 3.8 s, from 2.0 s, the 1283 seeds of
+  `FuzzRoundTrip` included.
+* `go test -count=1 ./...` in `cmd/generate` passed in 14.4 s, and passed with `-short`. `go build ./example/...` passed.
+* `make pre-add-check`: `go-precheck: 90 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` The untracked `fuzz_test.go`,
+  `fold_keys_test.go`, and `cmd/generate/fuzz_test.go` passed by name: `go-precheck: 3 file(s) clean`. `make check-records` and
+  `make markdownlint` exit 0, and the identifier scan of the 23 changed and new files found nothing.
+
+Commit point: the agent stopped here. The owner commits step 8 on `main`, with the three seed files under `testdata/fuzz/` and
+`cmd/generate/testdata/fuzz/`.

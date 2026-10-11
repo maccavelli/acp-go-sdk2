@@ -25,6 +25,7 @@ const (
 	pkgErrors  = "errors"
 	pkgFmt     = "fmt"
 	pkgJSON    = "encoding/json"
+	pkgStrings = "strings"
 )
 
 // constantsFile builds constants_gen.go: the version and method constants.

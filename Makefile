@@ -72,6 +72,15 @@ vuln: ## Runs govulncheck at the version pinned in CI
 	go run $(GOVULNCHECK_PIN) ./...
 	cd cmd/generate && go run $(GOVULNCHECK_PIN) ./...
 
+# A crasher is written under the package's testdata/fuzz/, and is committed
+# with its fix (0011-PLAN-engine-tests.md, D4).
+FUZZTIME ?= 60s
+.PHONY: fuzz
+fuzz: ## Runs each fuzz target for FUZZTIME (default 60s)
+	go test -run '^$$' -fuzz '^FuzzRoundTrip$$' -fuzztime $(FUZZTIME) .
+	cd cmd/generate && go test -run '^$$' -fuzz '^FuzzBuild$$' -fuzztime $(FUZZTIME) .
+	cd cmd/generate && go test -run '^$$' -fuzz '^FuzzExportedName$$' -fuzztime $(FUZZTIME) ./internal/model
+
 FILES ?=
 pre-add-check: ## Runs the pre-add checks
 	@./scripts/go-precheck.sh $(FILES)

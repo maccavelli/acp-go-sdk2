@@ -467,6 +467,62 @@ func inlineOf(t *Type, tname string, ev *load.Definition, isObj, isNull bool) (*
 	}
 }
 
+// checkFoldedKeys refuses a schema in which two keys that one generated decoder
+// reads differ only in case: the decoder reads a key as encoding/json reads a
+// field's name, under Unicode case folding, so it would read the two as one
+// (0011-MADR-harden-code-generator-engine.md, "Found in step 8 and decided").
+// The keys are an object's properties with its members' required keys, and a
+// union's discriminator with the keys that pick its variants.
+func (m *Model) checkFoldedKeys() error {
+	object := func(fields []*Field, members []*Member) []string {
+		var keys []string
+		for _, f := range fields {
+			keys = append(keys, f.Key)
+		}
+		for _, mb := range members {
+			keys = append(keys, mb.Required...)
+		}
+		return keys
+	}
+	for _, t := range m.Types {
+		sets := map[string][]string{t.Name: object(t.Fields, t.Members)}
+		for _, ns := range t.NestedStructs {
+			sets[ns.Name] = object(ns.Fields, nil)
+		}
+		union := []string{}
+		if t.DiscKey != "" {
+			union = append(union, t.DiscKey)
+		}
+		for _, v := range t.Variants {
+			if v.Inline != nil {
+				sets[v.TypeName] = object(v.Inline.Fields, v.Inline.Members)
+			}
+			union = append(union, v.Required...)
+			union = append(union, v.FitKeys...)
+			sets[v.TypeName+" items"] = v.ArrayItemRequired
+		}
+		sets[t.Name+" variants"] = union
+		for _, owner := range slices.Sorted(maps.Keys(sets)) {
+			if a, b, ok := foldedPair(sets[owner]); ok {
+				return fmt.Errorf("%s: the keys %q and %q differ only in case, and would be read as one", owner, a, b)
+			}
+		}
+	}
+	return nil
+}
+
+// foldedPair returns the first two distinct keys that differ only in case.
+func foldedPair(keys []string) (string, string, bool) {
+	for i, a := range keys {
+		for _, b := range keys[i+1:] {
+			if a != b && strings.EqualFold(a, b) {
+				return a, b, true
+			}
+		}
+	}
+	return "", "", false
+}
+
 // dropStructOmitempty removes omitempty from every field whose Go type is a
 // struct value: a named object, a union wrapper, or a nested struct.
 // encoding/json never omits a struct, so the tag then says what the encoder

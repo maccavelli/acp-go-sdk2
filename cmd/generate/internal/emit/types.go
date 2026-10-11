@@ -345,11 +345,28 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, abse
 	if len(defaults) == 0 && !keepExtra && len(members) == 0 {
 		m = id("_")
 	}
+	// The keys read beyond the required ones, which objectKeys folds.
+	var more []string
+	for _, fld := range defaults {
+		more = append(more, fld.Key)
+	}
+	for _, mb := range members {
+		more = append(more, mb.Required...)
+	}
+	if keepExtra {
+		for _, fld := range fields {
+			more = append(more, fld.Key)
+		}
+	}
+	reads := foldNames(f, name, append(slices.Clone(required), more...))
 	body := []ast.Stmt{
 		define(exprs(m, id("err")), call(id(helperObjectKeys), keys...)),
 		ifStmt(nil, errNotNil(), ret(id("err"))),
-		typeStmt("Alias", id(name)),
 	}
+	if fold := foldCall(f, "b", "m", slices.DeleteFunc(reads, func(k string) bool { return slices.Contains(required, k) })); fold != nil {
+		body = append(body, fold)
+	}
+	body = append(body, typeStmt("Alias", id(name)))
 	wrap := func() ast.Stmt { return ret(call(f.qual(pkgFmt, "Errorf"), str(name+": %w"), id("err"))) }
 	if len(lenient) == 0 {
 		body = append(body,
@@ -558,8 +575,17 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 	}
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 
-	// Required-key match.
+	// Required-key match, on keys folded as encoding/json matches names.
+	var reads []string
+	for _, vi := range variants {
+		if vi.IsObject {
+			reads = append(reads, vi.Required...)
+		}
+	}
 	var object []ast.Stmt
+	if fold := foldCall(f, "b", "m", foldNames(f, name, reads)); fold != nil {
+		object = append(object, fold)
+	}
 	for _, vi := range variants {
 		if !vi.IsObject || len(vi.Required) == 0 {
 			continue
@@ -583,26 +609,42 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 				ret(id("err")))},
 		),
 	)
+	return append(body, arrayMatch(f, name, variants)...)
+}
 
-	// For array variants with required keys on object items, try key-based matching first.
-	var array []ast.Stmt
+// arrayMatch decodes an array variant whose items carry its required keys,
+// each item's keys folded as encoding/json matches names, then tries each
+// variant in turn.
+func arrayMatch(f *goFile, name string, variants []*model.Variant) []ast.Stmt {
+	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
+	var body, array []ast.Stmt
 	for _, vi := range variants {
 		if !vi.IsArray || len(vi.ArrayItemRequired) == 0 {
 			continue
 		}
-		var loop []ast.Stmt
+		loop := []ast.Stmt{
+			varStmt("elem", rawMap(f.qual(pkgJSON, "RawMessage"))),
+			ifStmt(nil, binary(unmarshal(id("item"), addr(id("elem"))), token.NEQ, nilExpr()),
+				assign(exprs(id("match")), boolLit(false)), breakStmt()),
+			foldCall(f, "item", "elem", foldNames(f, name, vi.ArrayItemRequired)),
+		}
 		for _, rk := range vi.ArrayItemRequired {
 			loop = append(loop, keyMatch("elem", rk))
 		}
 		array = append(array, block(
 			varStmt("v", id(vi.TypeName)),
 			define(exprs(id("match")), boolLit(true)),
-			rangeStmt(id("_"), id("elem"), id("arr"), loop...),
+			rangeStmt(id("_"), id("item"), id("arr"), loop...),
 			ifStmt(nil, id("match"), decodeStrict(f, vi, variantPlace(name, vi))...),
 		))
 	}
+	// Without array variants to match, the items stay maps, as before folding.
+	items := ast.Expr(rawMap(f.qual(pkgJSON, "RawMessage")))
+	if len(array) > 0 {
+		items = f.qual(pkgJSON, "RawMessage")
+	}
 	body = append(body,
-		varStmt("arr", sliceOf(rawMap(f.qual(pkgJSON, "RawMessage")))),
+		varStmt("arr", sliceOf(items)),
 		ifStmt(nil, binary(unmarshal(id("b"), addr(id("arr"))), token.EQL, nilExpr()), array...),
 	)
 
@@ -629,10 +671,15 @@ func discUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKe
 					decodeStrict(f, vi, name+": "+discKey+" "+strconv.Quote(vi.DiscValue))...)...))
 		}
 	}
+	reads := []string{discKey}
+	for _, vi := range variants {
+		reads = append(reads, vi.FitKeys...)
+	}
 	body := []ast.Stmt{
 		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
 		ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("m")))), errNotNil(),
 			ret(call(f.qual(pkgFmt, "Errorf"), str(name+": %w"), id("err")))),
+		foldCall(f, "b", "m", foldNames(f, name, reads)),
 		// A discriminator that is present and not a string is an error.
 		varStmt("disc", id("string")),
 		ifStmt(define(exprs(id("v"), id("ok")), index(id("m"), str(discKey))), id("ok"),
