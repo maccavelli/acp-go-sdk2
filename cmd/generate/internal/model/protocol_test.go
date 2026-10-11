@@ -42,7 +42,6 @@ func testProtocol() *Protocol {
 			{Side: "client", Wire: "s/update", GoName: "SessionUpdate"},
 		},
 		HandWrittenHelpers: []string{"Block"},
-		Validate:           []ValidateRule{{Type: "Update", Prop: "id"}},
 	}
 }
 
@@ -94,9 +93,6 @@ func TestProtocolTableApplies(t *testing.T) {
 	if h := m.Type("Block").Helpers; len(h) != 0 {
 		t.Errorf("Block has %d generated helpers", len(h))
 	}
-	if u := m.Type("Update"); u.Validate != ValidateListed || !slices.Equal(u.Checks, []RequiredCheck{{"Id", "id", "string"}}) {
-		t.Errorf("Update: %v %v", u.Validate, u.Checks)
-	}
 
 	plain, err := Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, protocolDefs)})
 	if err != nil {
@@ -114,8 +110,8 @@ func TestProtocolTableApplies(t *testing.T) {
 	if got := interfaceNames(plain); !slices.Equal(got, []string{"Agent", "AgentExperimental", "Client", "ClientExperimental"}) {
 		t.Errorf("without a table, interfaces %v", got)
 	}
-	if len(plain.Type("Block").Helpers) != 1 || plain.Type("Update").Validate != ValidateNone {
-		t.Error("without a table, Block or Update changed")
+	if len(plain.Type("Block").Helpers) != 1 {
+		t.Error("without a table, Block lost its helper")
 	}
 }
 
@@ -194,8 +190,6 @@ func TestProtocolTableRefuses(t *testing.T) {
 			wanted: []string{`agent method "s/cancel"`, `capability "session.missing"`, `SessionCaps has no property "missing"`}},
 		{name: "hand-written helpers on a non-union", table: func(p *Protocol) { p.HandWrittenHelpers = []string{"Update"} },
 			wanted: []string{"hand-written helpers for Update", "not a union"}},
-		{name: "validate rule on a property that is not a required string", table: func(p *Protocol) { p.Validate[0].Prop = "missing" },
-			wanted: []string{"validate rule Update.missing", "not a required string property"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -305,11 +299,6 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 		ty := m.Type(name)
 		if ty == nil || ty.Kind != KindUnion || len(ty.Helpers) != 0 {
 			t.Errorf("hand-written helpers for %s: %+v", name, ty)
-		}
-	}
-	for _, v := range ACP.Validate {
-		if ty := m.Type(v.Type); ty == nil || ty.Validate != ValidateListed {
-			t.Errorf("validate rule %s.%s does not apply", v.Type, v.Prop)
 		}
 	}
 }

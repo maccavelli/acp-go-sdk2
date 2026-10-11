@@ -2,6 +2,7 @@ package model
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
@@ -75,38 +76,76 @@ func TestVariantFacts(t *testing.T) {
 	}
 }
 
-func TestValidateKinds(t *testing.T) {
+// TestValidations requires Validate where the schema states something to
+// check, and only the checks it states: every union and RPC object; a
+// minLength; a bound outside the Go type's range, and none at its edge; a
+// nested value in each shape; and, to a fixed point, every struct that holds
+// one. A validated type deeper than one level is refused.
+func TestValidations(t *testing.T) {
 	t.Parallel()
 	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
-		"One":{"oneOf":[{"type":"string"},{"type":"integer"}]},
-		"Shared":{"required":["s","n","list"],"properties":{"s":{"type":"string"},"n":{"type":"integer"},"list":{"type":"array"}},
-			"anyOf":[{"type":"object","properties":{"x":{"type":"string"}}}]},
-		"ToolCallUpdate":{"type":"object","required":["toolCallId"],"properties":{"toolCallId":{"type":"string"}}},
-		"FooRequest":{"type":"object","required":["name","n","ids"],"properties":{"name":{"type":"string"},"n":{"type":"integer"},"ids":{"type":"array"},"opt":{"type":"string"}}},
+		"U":{"oneOf":[{"type":"string"},{"type":"integer"}]},
 		"BarResponse":{"type":"object"},
 		"Plain":{"type":"object","required":["a"],"properties":{"a":{"type":"string"}}},
-		"KindNotification":{"type":"string","enum":["a"]}}`),
-		Protocol: &Protocol{Validate: []ValidateRule{{Type: "ToolCallUpdate", Prop: "toolCallId"}}}})
+		"Str":{"type":"object","properties":{"t":{"type":"string","minLength":2}}},
+		"Num":{"type":"object","properties":{
+			"i":{"type":"integer","format":"int32","minimum":5},
+			"j":{"type":"integer","format":"uint32","minimum":0},
+			"d":{"type":["number","null"],"format":"double","maximum":1}}},
+		"Mid":{"type":"object","properties":{"s":{"allOf":[{"$ref":"#/$defs/Str"}]}}},
+		"Chain":{"type":"object","properties":{"c":{"allOf":[{"$ref":"#/$defs/Mid"}]}}},
+		"Shapes":{"type":"object","properties":{
+			"v":{"allOf":[{"$ref":"#/$defs/U"}]},
+			"p":{"anyOf":[{"$ref":"#/$defs/U"},{"type":"null"}]},
+			"s":{"type":"array","items":{"$ref":"#/$defs/U"}},
+			"m":{"type":"object","additionalProperties":{"$ref":"#/$defs/U"}}}}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tt := range []struct {
-		name   string
-		kind   ValidateKind
-		checks []RequiredCheck
-	}{
-		{"One", ValidateExactlyOne, nil},
-		{"Shared", ValidateShared, []RequiredCheck{{"List", "list", "array"}, {"S", "s", "string"}}},
-		{"ToolCallUpdate", ValidateListed, []RequiredCheck{{"ToolCallId", "toolCallId", "string"}}},
-		{"FooRequest", ValidateFields, []RequiredCheck{{"Ids", "ids", "array"}, {"Name", "name", "string"}}},
-		{"BarResponse", ValidateFields, nil},
-		{"Plain", ValidateNone, nil},
-		{"KindNotification", ValidateNone, nil},
-	} {
-		got := m.Type(tt.name)
-		if got.Validate != tt.kind || !slices.Equal(got.Checks, tt.checks) {
-			t.Errorf("%s: got %v %v, want %v %v", tt.name, got.Validate, got.Checks, tt.kind, tt.checks)
+	type row struct {
+		kind    CheckKind
+		key     string
+		shape   RefKind
+		bound   float64
+		integer bool
+	}
+	got := func(name string) []row {
+		v := m.Type(name).Validation
+		if v == nil {
+			return nil
 		}
+		out := []row{}
+		for _, c := range v.Checks {
+			out = append(out, row{c.Kind, c.Key, c.Shape, c.Bound, c.Integer})
+		}
+		return out
+	}
+	for _, tt := range []struct {
+		name string
+		want []row // nil: no Validate
+	}{
+		{"U", []row{}},
+		{"BarResponse", []row{}},
+		{"Plain", nil},
+		{"Str", []row{{CheckMinLength, "t", RefNamed, 2, true}}},
+		{"Num", []row{{CheckMaximum, "d", RefPointer, 1, false}, {CheckMinimum, "i", RefNamed, 5, true}}},
+		{"Mid", []row{{CheckNested, "s", RefNamed, 0, false}}},
+		{"Chain", []row{{CheckNested, "c", RefNamed, 0, false}}},
+		{"Shapes", []row{{CheckNested, "m", RefMap, 0, false}, {CheckNested, "p", RefPointer, 0, false},
+			{CheckNested, "s", RefSlice, 0, false}, {CheckNested, "v", RefNamed, 0, false}}},
+	} {
+		if g := got(tt.name); !slices.Equal(g, tt.want) {
+			t.Errorf("%s: checks %v, want %v", tt.name, g, tt.want)
+		}
+	}
+	if !m.Validates("U") || m.Validates("Plain") {
+		t.Error("Validates disagrees with Validation")
+	}
+	_, err = Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
+		"U":{"oneOf":[{"type":"string"},{"type":"integer"}]},
+		"Bad":{"type":"object","properties":{"x":{"type":"array","items":{"type":"array","items":{"$ref":"#/$defs/U"}}}}}}`)})
+	if want := "Bad.x: [][]U holds a validated type in a shape Validate does not descend into"; err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("error %v, want one containing %q", err, want)
 	}
 }
 

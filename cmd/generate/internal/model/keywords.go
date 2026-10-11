@@ -61,10 +61,18 @@ var keywords = map[string]Treatment{
 	"x-docs-ignore": TreatProtocol,
 }
 
-// goInt64 and goUint64 are the widest Go integer types.
+// The Go number types a format maps to.
 const (
-	goInt64  = "int64"
-	goUint64 = "uint64"
+	goInt8    = "int8"
+	goInt16   = "int16"
+	goInt32   = "int32"
+	goInt64   = "int64"
+	goUint8   = "uint8"
+	goUint16  = "uint16"
+	goUint32  = "uint32"
+	goUint64  = "uint64"
+	goFloat32 = "float32"
+	goFloat64 = "float64"
 )
 
 // integerFormats and numberFormats map a format to its Go type; "" is a node
@@ -72,10 +80,10 @@ const (
 // format registry lists them); JSON Schema defines none of them.
 var (
 	integerFormats = map[string]string{
-		"": goInt64, "int": goInt64, "int8": "int8", "int16": "int16", "int32": "int32", goInt64: goInt64,
-		"uint": goUint64, "uint8": "uint8", "uint16": "uint16", "uint32": "uint32", goUint64: goUint64,
+		"": goInt64, "int": goInt64, goInt8: goInt8, goInt16: goInt16, goInt32: goInt32, goInt64: goInt64,
+		"uint": goUint64, goUint8: goUint8, goUint16: goUint16, goUint32: goUint32, goUint64: goUint64,
 	}
-	numberFormats = map[string]string{"": "float64", "float": "float32", "double": "float64"}
+	numberFormats = map[string]string{"": goFloat64, "float": goFloat32, "double": goFloat64}
 )
 
 // numericFormat returns the Go type of an integer or number with the given

@@ -248,3 +248,43 @@ func TestLenientFields(t *testing.T) {
 		t.Errorf("ToolCall content with an unknown variant: %v, %+v", err, tc.Content)
 	}
 }
+
+// TestValidateSchemaConstraints requires Validate to check what the schema
+// states, at every depth, and nothing else: a union has exactly one variant
+// set, a string meets its minLength, and a nested value, slice element, map
+// value, or pointer target validates; a present empty string passes.
+func TestValidateSchemaConstraints(t *testing.T) {
+	t.Parallel()
+	type validator interface{ Validate() error }
+	for _, tt := range []struct {
+		name string
+		v    any
+		want string // empty: Validate passes
+	}{
+		{"empty block in a prompt", &PromptRequest{SessionId: "s", Prompt: []ContentBlock{{}}}, "PromptRequest: prompt[0]: ContentBlock must have exactly one variant set"},
+		{"empty required string", &ReadTextFileRequest{SessionId: "s"}, ""},
+		{"title below minLength", &Notice{}, "Notice: title: shorter than minLength 1"},
+		{"map value", &ElicitationSchema{Properties: map[string]ElicitationPropertySchema{"a": {}}},
+			`ElicitationSchema: properties["a"]: ElicitationPropertySchema must have exactly one variant set`},
+		{"pointer target", &AvailableCommand{Name: "n", Description: "d", Input: &AvailableCommandInput{}},
+			"AvailableCommand: input: AvailableCommandInput must have exactly one variant set"},
+		{"no variant", &CreateElicitationRequest{}, "CreateElicitationRequest must have exactly one variant set"},
+		{"form with an empty message", &CreateElicitationRequest{Form: &CreateElicitationForm{Mode: "form"}}, ""},
+		{"valid prompt", &PromptRequest{SessionId: "s", Prompt: []ContentBlock{TextBlock("x")}}, ""},
+		{"set variant validates", &SessionUpdate{UserMessageChunk: &SessionUpdateUserMessageChunk{}},
+			"SessionUpdate: variant UserMessageChunk: SessionUpdateUserMessageChunk: content: ContentBlock must have exactly one variant set"},
+	} {
+		v, ok := tt.v.(validator)
+		if !ok {
+			t.Errorf("%s: %T has no Validate", tt.name, tt.v)
+			continue
+		}
+		err := v.Validate()
+		switch {
+		case tt.want == "" && err != nil:
+			t.Errorf("%s: %v, want it to pass", tt.name, err)
+		case tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)):
+			t.Errorf("%s: %v, want %q", tt.name, err, tt.want)
+		}
+	}
+}

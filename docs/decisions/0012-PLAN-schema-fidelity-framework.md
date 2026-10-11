@@ -595,3 +595,80 @@ Gates: `make pre-add-check` with the seven changed Go files named: `go-precheck:
 govulncheck).` Without names: `go-precheck: 71 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 8 on `main`.
+
+### Step 9, Validate, 2026-10-10
+
+The owner committed step 8 as `7eedeba`. Step 9 ran on `main` from that clean tree. The agent did not commit.
+
+Tests, written first:
+
+* `TestValidateSchemaConstraints` (root `fidelity_test.go`), through a `Validate() error` interface so that it compiled before the methods existed: a
+  `PromptRequest` with an empty `ContentBlock` fails naming `prompt[0]`; a `ReadTextFileRequest` with an empty `path` passes; a `Notice` with an empty
+  title fails its `minLength`; an empty union as a map value of `ElicitationSchema.properties` and as the pointer target `AvailableCommand.input` fails;
+  `CreateElicitationRequest{}` fails and a form with an empty message passes; a valid prompt passes.
+* `elicitation_validate_test.go`, as the plan says: its message test is now `TestCreateElicitationRequest_MessageIsRequired`, which requires decoding
+  a form without `message` to fail, the empty request to fail `Validate`, and a valid form to pass.
+
+Run before the change, seven failures:
+
+```text
+empty block in a prompt: <nil>, want "PromptRequest: prompt[0]: ContentBlock must have exactly one variant set"
+empty required string: path is required, want it to pass
+title below minLength: *acp.Notice has no Validate
+map value: *acp.ElicitationSchema has no Validate
+pointer target: *acp.AvailableCommand has no Validate
+no variant: message is required, want "CreateElicitationRequest must have exactly one variant set"
+form with an empty message: message is required, want it to pass
+```
+
+The elicitation test passed before: decoding has required `message` since step 7. A case added after the change, "set variant validates"
+(`SessionUpdate{UserMessageChunk: &SessionUpdateUserMessageChunk{}}` fails through the variant's `content`), covers a union calling its variant.
+
+The change:
+
+* `model/validate.go` (new): `Validation`, `Check`, `CheckKind`; `buildValidations`, run in `resolve` after the types are built: every union and RPC
+  object validates; a struct's own checks are `minLength` and any bound outside its Go type's range (`goRange`); a struct with a field whose type
+  validates, as a value, pointer, slice element, or map value, validates, to a fixed point; `Variant.Validates` records which variants the union
+  calls; a validated type deeper than one level, a bound on a type it cannot apply to, and a bound a named primitive type does not enforce are refused.
+* `model`: `Type.Validation`, `Struct.Validation`, `Inline.Validation`, and `Model.Validates` replace `ValidateKind`, `RequiredCheck`, `validateOf`,
+  and `requiredCheck`; the protocol table's `Validate` field, `ValidateRule`, its check, and `ACP`'s `ToolCallUpdate` rule are removed.
+* `emit/types.go`: `emitValidate` and `checkStmt` render a struct's checks; `unionValidateBody` requires exactly one variant or `Unknown` and calls
+  the set variant's `Validate`; `requiredCheck`, `sharedUnionValidateBody`, and `emitFieldValidate` are gone; a union's methods take `u`, every other
+  type's `v`.
+* `model/keywords.go`: the Go number types are constants (`goInt8` … `goFloat64`), shared with `validate.go`.
+
+Tests rewritten with the removed API, as decided: `TestValidateKinds` is now `TestValidations` (a union and an RPC object with no checks, a plain
+object without `Validate`, `minLength`, an `int32` minimum and a `double` maximum checked and a `uint32` minimum of 0 not, a two-level fixed point, the
+four nested shapes, and the refusal of `[][]U`); `protocol_test.go` loses the validate rule's test case, refusal case, and committed-schema loop.
+`TestValidateMethods` (`emit/types_test.go`) requires the rendered checks, a union calling only its validating variant, and compiling output.
+
+Regenerated: only `types_gen.go` changed, from 18,029 to 18,807 lines. By declaration: 898 to 944, none removed; 46 added and 62 changed, all
+`Validate`; the imports gained `maps`, `slices`, and `unicode/utf8`. `Validate` methods: 99 before, 145 after, and each of the 99 is still there.
+No `... is required` check remains; the schema's one `minLength` gives two checks (`Notice`, `SessionUpdateNotice`). Types whose methods use two
+receiver names: 21 before, 0 after. No golden changed.
+
+Each part was broken in a fresh scratch copy:
+
+```text
+union does not validate its variant: cmd/generate ['TestValidateMethods']; root ['TestValidateSchemaConstraints']
+slices not descended: cmd/generate ['TestValidateMethods']; root ['TestValidateSchemaConstraints']
+maps not descended: cmd/generate ['TestValidateMethods']; root ['TestValidateSchemaConstraints']
+pointers not descended: cmd/generate ['TestValidateMethods']; root ['TestValidateSchemaConstraints']
+minLength not checked: cmd/generate ['TestValidateMethods', 'TestValidations']; root ['TestValidateSchemaConstraints']
+no fixed point: cmd/generate ['TestValidations']
+bound at the type's edge checked: the generator refuses (ProtocolVersion: a bound on a named primitive type is not checked); cmd/generate fails 7 tests
+```
+
+"No fixed point" passes the root: one pass in sorted order happens to reach every committed case; the model test's two-level chain catches it.
+
+The first gate run found `gocognit` on `buildValidations` (66, above 50), `goconst` on the Go type names, `revive` on an uncommented constant, an
+unnecessary conversion, and a trailing blank line; `buildValidations` is split into `validationShapes`, `ownChecks`, and `spreadValidates`, the type
+names are constants, and the plants above were rerun on the final code with the same results.
+
+After the change every test in the root (`go test -race`) and in `cmd/generate` passes; `go build ./example/...` passes. Coverage: `internal/model`
+93.9%, `internal/emit` 81.2%.
+
+Gates: `make pre-add-check` with the thirteen changed Go files named: `go-precheck: 13 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck).` Without names: `go-precheck: 71 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 9 on `main`.

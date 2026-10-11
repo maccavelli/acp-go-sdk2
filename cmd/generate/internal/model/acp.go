@@ -43,5 +43,4 @@ var ACP = Protocol{
 	},
 	// helpers.go builds these with TextBlock, ToolContent, and the like.
 	HandWrittenHelpers: []string{"ContentBlock", "SessionUpdate", "ToolCallContent"},
-	Validate:           []ValidateRule{{Type: "ToolCallUpdate", Prop: "toolCallId"}},
 }

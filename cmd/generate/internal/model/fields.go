@@ -130,6 +130,8 @@ type Struct struct {
 	Name   string
 	Doc    []string
 	Fields []*Field
+	// Validation is what the struct's Validate checks; nil is no Validate.
+	Validation *Validation
 }
 
 // InlineKind is how an inline union variant's type is emitted.
@@ -156,6 +158,8 @@ type Inline struct {
 	// Exempt is the discriminator of a discriminated union's inline variant:
 	// the union placed the payload, so decoding does not require the key.
 	Exempt string
+	// Validation is what the struct's Validate checks; nil is no Validate.
+	Validation *Validation
 }
 
 // docLines formats a description as doc comment lines, or nil.

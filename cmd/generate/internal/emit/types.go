@@ -142,16 +142,13 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 		// and the wire encoding is consistently {} rather than null.
 		f.add(typeDecl(name, &ast.StructType{Fields: fields()}))
 		f.line()
+		if t.Validation != nil {
+			emitValidate(f, name, t.Validation)
+		}
 	default:
 		f.comment(fmt.Sprintf("%s is a union or complex schema; represented generically.", name))
 		f.add(typeDecl(name, id("any")))
 		f.line()
-	}
-
-	// Union wrappers get Validate from emitUnion.
-	switch t.Validate {
-	case model.ValidateFields, model.ValidateListed:
-		emitFieldValidate(f, t)
 	}
 }
 
@@ -159,15 +156,15 @@ func emitObjectSchema(f *goFile, t *model.Type) {
 	// Nested struct types for inline object properties come first.
 	for _, ns := range t.NestedStructs {
 		f.comment(ns.Doc...)
-		emitStruct(f, ns.Name, ns.Fields, false, "")
+		emitStruct(f, ns.Name, ns.Fields, false, "", ns.Validation)
 	}
-	emitStruct(f, t.Name, t.Fields, false, "")
+	emitStruct(f, t.Name, t.Fields, false, "", t.Validation)
 }
 
 // emitStruct emits type name struct { fields } and the methods its required
-// keys, defaults, and fills need; exempt is a required key decoding does not
-// check.
-func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool, exempt string) {
+// keys, defaults, fills, and validation need; exempt is a required key
+// decoding does not check.
+func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool, exempt string, val *model.Validation) {
 	var st fieldSet
 	for _, fld := range fields {
 		st.comment(fld.Doc...)
@@ -181,6 +178,9 @@ func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool, e
 	f.add(typeDecl(name, st.structType()))
 	f.line()
 	emitObjectCodec(f, name, fields, keepExtra, exempt)
+	if val != nil {
+		emitValidate(f, name, val)
+	}
 }
 
 // typeAST renders a model type as a Go type expression, adding to f the import
@@ -402,7 +402,7 @@ func emitInlineVariant(f *goFile, tname string, in *model.Inline) {
 	f.comment(in.Doc...)
 	switch in.Kind {
 	case model.InlineStruct:
-		emitStruct(f, tname, in.Fields, in.KeepExtra, in.Exempt)
+		emitStruct(f, tname, in.Fields, in.KeepExtra, in.Exempt, in.Validation)
 	case model.InlineNamed:
 		// Non-object title-only variants can still carry payloads (e.g. arrays).
 		f.add(typeDecl(tname, typeAST(f, in.Type)))
@@ -691,44 +691,8 @@ func unionMarshalBody(f *goFile, name string, variants []*model.Variant, hasUnkn
 	return append(body, ret(nilExpr(), call(f.qual(pkgErrors, "New"), str(name+": no variant set"))))
 }
 
-// requiredCheck returns fmt.Errorf("<prop> is required") when x is the zero
-// value for a required string or array property.
-func requiredCheck(f *goFile, x ast.Expr, kind, prop string) ast.Stmt {
-	var zero ast.Expr = nilExpr()
-	if kind == schemaTypeString {
-		zero = str("")
-	}
-	return ifStmt(nil, binary(x, token.EQL, zero), ret(call(f.qual(pkgFmt, "Errorf"), str(prop+" is required"))))
-}
-
-func sharedUnionValidateBody(f *goFile, variants []*model.Variant, checks []model.RequiredCheck) []ast.Stmt {
-	carriers := 0
-	for _, vi := range variants {
-		if vi.HasSharedFields {
-			carriers++
-		}
-	}
-	if len(checks) == 0 || carriers == 0 {
-		return []ast.Stmt{ret(nilExpr())}
-	}
-	body := []ast.Stmt{varStmt("set", id("bool"))}
-	for _, vi := range variants {
-		if !vi.HasSharedFields {
-			continue
-		}
-		var then []ast.Stmt
-		for _, c := range checks {
-			then = append(then, requiredCheck(f, dot("v", vi.FieldName, c.Field), c.Kind, c.Prop))
-		}
-		then = append(then, assign(exprs(id("set")), boolLit(true)))
-		body = append(body, ifStmt(nil, binary(dot("v", vi.FieldName), token.NEQ, nilExpr()), then...))
-	}
-	return append(body,
-		ifStmt(nil, not(id("set")), ret(call(f.qual(pkgFmt, "Errorf"), str(checks[0].Prop+" is required")))),
-		ret(nilExpr()),
-	)
-}
-
+// unionValidateBody counts the variants set, Unknown included, requires
+// exactly one, and validates the set variant when its type has Validate.
 func unionValidateBody(f *goFile, name string, variants []*model.Variant, hasUnknown bool) []ast.Stmt {
 	body := []ast.Stmt{varStmt("count", id("int"))}
 	for _, vi := range variants {
@@ -737,11 +701,16 @@ func unionValidateBody(f *goFile, name string, variants []*model.Variant, hasUnk
 	if hasUnknown {
 		body = append(body, ifStmt(nil, binary(dot("u", unknownField), token.NEQ, nilExpr()), incr(id("count"))))
 	}
-	return append(body,
-		ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
-			ret(call(f.qual(pkgErrors, "New"), str(name+" must have exactly one variant set")))),
-		ret(nilExpr()),
-	)
+	body = append(body, ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
+		ret(call(f.qual(pkgErrors, "New"), str(name+" must have exactly one variant set")))))
+	for _, vi := range variants {
+		if !vi.Validates {
+			continue
+		}
+		body = append(body, ifStmt(nil, binary(dot("u", vi.FieldName), token.NEQ, nilExpr()),
+			validateCall(f, dot("u", vi.FieldName), name+": variant "+vi.FieldName+": %w")))
+	}
+	return append(body, ret(nilExpr()))
 }
 
 // validateMethod is func (recv *name) Validate() error { body }.
@@ -749,18 +718,73 @@ func validateMethod(recv, name string, body ...ast.Stmt) *ast.FuncDecl {
 	return method(param(recv, star(id(name))), "Validate", funcType(nil, param("", id("error"))), body...)
 }
 
-// emitFieldValidate generates Validate for an RPC object type or
-// ToolCallUpdate from the checks the model lists.
-func emitFieldValidate(f *goFile, t *model.Type) {
-	recv := "v"
-	if t.Validate == model.ValidateListed {
-		recv = "t"
-	}
+// validateCall is if err := x.Validate(); err != nil { return fmt.Errorf(format, args..., err) }.
+func validateCall(f *goFile, x ast.Expr, format string, args ...ast.Expr) ast.Stmt {
+	return ifStmt(define(exprs(id("err")), call(sel(x, "Validate"))), errNotNil(),
+		ret(call(f.qual(pkgFmt, "Errorf"), append(append([]ast.Expr{str(format)}, args...), id("err"))...)))
+}
+
+// emitValidate emits Validate for a struct from the checks of val, in field
+// order (0012-MADR-schema-fidelity-framework.md).
+func emitValidate(f *goFile, name string, val *model.Validation) {
 	var body []ast.Stmt
-	for _, c := range t.Checks {
-		body = append(body, requiredCheck(f, dot(recv, c.Field), c.Kind, c.Prop))
+	for _, c := range val.Checks {
+		body = append(body, checkStmt(f, name, c))
 	}
-	f.add(validateMethod(recv, t.Name, append(body, ret(nilExpr()))...))
+	f.add(validateMethod("v", name, append(body, ret(nilExpr()))...))
+	f.line()
+}
+
+// checkStmt renders one check of a struct's Validate.
+func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
+	field := dot("v", c.Field)
+	where := name + ": " + c.Key
+	if c.Kind == model.CheckNested {
+		switch c.Shape {
+		case model.RefPointer:
+			return ifStmt(nil, binary(field, token.NEQ, nilExpr()), validateCall(f, field, where+": %w"))
+		case model.RefSlice:
+			return rangeStmt(id("i"), nil, field, validateCall(f, index(dot("v", c.Field), id("i")), where+"[%d]: %w", id("i")))
+		case model.RefMap:
+			keys := call(f.qual("slices", "Sorted"), call(f.qual("maps", "Keys"), field))
+			return rangeStmt(id("_"), id("k"), keys,
+				define(exprs(id("x")), index(dot("v", c.Field), id("k"))),
+				validateCall(f, id("x"), where+"[%q]: %w", id("k")))
+		default:
+			return validateCall(f, field, where+": %w")
+		}
+	}
+	value := field
+	if c.Shape == model.RefPointer {
+		value = star(dot("v", c.Field))
+	}
+	bound := boundLit(c)
+	var cond ast.Expr
+	var msg string
+	switch c.Kind {
+	case model.CheckMinLength:
+		cond = binary(call(f.qual("unicode/utf8", "RuneCountInString"), call(id("string"), value)), token.LSS, bound)
+		msg = where + ": shorter than minLength " + bound.Value
+	case model.CheckMinimum:
+		cond = binary(value, token.LSS, bound)
+		msg = where + ": less than minimum " + bound.Value
+	default:
+		cond = binary(value, token.GTR, bound)
+		msg = where + ": greater than maximum " + bound.Value
+	}
+	if c.Shape == model.RefPointer {
+		cond = binary(binary(dot("v", c.Field), token.NEQ, nilExpr()), token.LAND, cond)
+	}
+	return ifStmt(nil, cond, ret(call(f.qual(pkgErrors, "New"), str(msg))))
+}
+
+// boundLit is a check's bound as a literal: an integer, or a float written
+// without a needless fraction.
+func boundLit(c model.Check) *ast.BasicLit {
+	if c.Integer {
+		return &ast.BasicLit{Kind: token.INT, Value: strconv.FormatInt(int64(c.Bound), 10)}
+	}
+	return &ast.BasicLit{Kind: token.FLOAT, Value: strconv.FormatFloat(c.Bound, 'g', -1, 64)}
 }
 
 // catchAllOf returns a union's catch-all variant, or nil.
@@ -808,11 +832,7 @@ func emitUnion(f *goFile, t *model.Type) {
 		unionMarshalBody(f, name, variants, t.HasUnknown)...))
 	f.line()
 
-	// oneOf: exactly one variant. anyOf: shared required fields live on the variants.
-	if t.Validate == model.ValidateExactlyOne {
-		f.add(validateMethod("u", name, unionValidateBody(f, name, variants, t.HasUnknown)...))
-	} else {
-		f.add(validateMethod("v", name, sharedUnionValidateBody(f, variants, t.Checks)...))
-	}
+	// Every union has exactly one variant set, which validates when it can.
+	f.add(validateMethod("u", name, unionValidateBody(f, name, variants, t.HasUnknown)...))
 	f.line()
 }

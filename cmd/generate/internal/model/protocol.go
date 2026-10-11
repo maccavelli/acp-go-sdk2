@@ -19,9 +19,6 @@ type Protocol struct {
 	// HandWrittenHelpers lists the unions whose constructors helpers.go
 	// writes; the generator emits none for them.
 	HandWrittenHelpers []string
-	// Validate lists the types, other than RPC types and unions, that get a
-	// Validate of one required string property.
-	Validate []ValidateRule
 }
 
 // Interface is a Go interface the dispatch code calls methods through.
@@ -57,9 +54,6 @@ type MethodRule struct {
 	Capability string
 }
 
-// ValidateRule gives Type a Validate that requires the string Prop.
-type ValidateRule struct{ Type, Prop string }
-
 // sdkInterfaces are the interfaces every generated SDK has.
 var sdkInterfaces = []Interface{
 	{Binding: BindAgent, Name: "Agent"},
@@ -94,7 +88,6 @@ type rules struct {
 	methods    map[string]*MethodRule
 	interfaces map[Binding]Interface
 	helpers    map[string]bool
-	validate   map[string]string
 	table      *Protocol
 }
 
@@ -105,7 +98,7 @@ func (r *MethodRule) owner() string { return fmt.Sprintf("%s method %q", r.Side,
 // newRules checks what a table says without the schema. A nil table has no
 // rules.
 func newRules(p *Protocol) (*rules, error) {
-	r := &rules{methods: map[string]*MethodRule{}, interfaces: map[Binding]Interface{}, helpers: map[string]bool{}, validate: map[string]string{}, table: p}
+	r := &rules{methods: map[string]*MethodRule{}, interfaces: map[Binding]Interface{}, helpers: map[string]bool{}, table: p}
 	if p == nil {
 		return r, nil
 	}
@@ -137,9 +130,6 @@ func newRules(p *Protocol) (*rules, error) {
 	}
 	for _, name := range p.HandWrittenHelpers {
 		r.helpers[name] = true
-	}
-	for _, v := range p.Validate {
-		r.validate[v.Type] = v.Prop
 	}
 	return r, nil
 }
@@ -310,9 +300,8 @@ func (m *Model) checkCapabilities(r *rules) error {
 	return nil
 }
 
-// checkTypeRules refuses a hand-written-helpers type that is not a union and
-// a validate rule whose property is not a required string; a type the
-// schema lacks is skipped.
+// checkTypeRules refuses a hand-written-helpers type that is not a union; a
+// type the schema lacks is skipped.
 func (m *Model) checkTypeRules(r *rules) error {
 	if r.table == nil {
 		return nil
@@ -320,14 +309,6 @@ func (m *Model) checkTypeRules(r *rules) error {
 	for _, name := range r.table.HandWrittenHelpers {
 		if t := m.Type(name); t != nil && t.Kind != KindUnion {
 			return fmt.Errorf("hand-written helpers for %s: it is not a union", name)
-		}
-	}
-	for _, v := range r.table.Validate {
-		if m.Type(v.Type) == nil {
-			continue
-		}
-		if f := m.objectField(v.Type, v.Prop); f == nil || !f.Required || !m.isString(f.Type) {
-			return fmt.Errorf("validate rule %s.%s: it is not a required string property", v.Type, v.Prop)
 		}
 	}
 	return nil

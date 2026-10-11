@@ -1,6 +1,7 @@
 package emit
 
 import (
+	"encoding/json"
 	"go/ast"
 	"go/importer"
 	"go/parser"
@@ -173,6 +174,60 @@ func TestLenientDecoder(t *testing.T) {
 	}
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "options.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
+	if _, err := conf.Check("acp", fset, []*ast.File{file}, nil); err != nil {
+		t.Fatalf("generated code does not compile: %v\n%s", err, src)
+	}
+}
+
+// TestValidateMethods requires each check of a Validation to render, a union
+// to require exactly one variant and validate the set one, and the output to
+// compile.
+func TestValidateMethods(t *testing.T) {
+	t.Parallel()
+	var schema load.Schema
+	if err := json.Unmarshal([]byte(`{"$defs":{
+		"Leaf":{"type":"object","properties":{"t":{"type":"string","minLength":2},"d":{"type":["number","null"],"format":"double","maximum":1}}},
+		"U":{"oneOf":[{"$ref":"#/$defs/Leaf"},{"type":"string","title":"str"}]},
+		"Holder":{"type":"object","properties":{
+			"p":{"anyOf":[{"$ref":"#/$defs/U"},{"type":"null"}]},
+			"s":{"type":"array","items":{"$ref":"#/$defs/U"}},
+			"m":{"type":"object","additionalProperties":{"$ref":"#/$defs/U"}}}}}}`), &schema); err != nil {
+		t.Fatal(err)
+	}
+	m, err := model.Build(model.Input{Meta: &load.Meta{}, Schema: &schema})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newFile()
+	for _, name := range []string{"Leaf", "U", "Holder"} {
+		emitSchemaDef(f, m.Type(name))
+	}
+	emitDecodeHelpers(f)
+	src := render(t, f)
+	for _, want := range []string{
+		"if utf8.RuneCountInString(string(v.T)) < 2 {",
+		`return errors.New("Leaf: t: shorter than minLength 2")`,
+		"if v.D != nil && *v.D > 1 {",
+		"if count != 1 {",
+		"if u.Leaf != nil {",
+		`return fmt.Errorf("U: variant Leaf: %w", err)`,
+		"for i := range v.S {",
+		"for _, k := range slices.Sorted(maps.Keys(v.M)) {",
+		`return fmt.Errorf("Holder: p: %w", err)`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("output lacks %q:\n%s", want, src)
+		}
+	}
+	if strings.Contains(src, "u.Str.Validate()") {
+		t.Error("a variant without Validate is validated")
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "v.go", src, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

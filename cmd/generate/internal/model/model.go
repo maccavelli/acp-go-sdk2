@@ -67,6 +67,9 @@ type Model struct {
 	// binding order: the SDK's four and each protocol-table interface a
 	// method binds to.
 	Interfaces []Interface
+
+	// validates holds the Go types that have a Validate method.
+	validates map[string]bool
 }
 
 // Input is what Build resolves: the merged meta and schema, the merge's
@@ -117,10 +120,8 @@ type Type struct {
 	// HasUnknown is true for a discriminated union without a catch-all: it
 	// keeps a payload it cannot place in an Unknown field.
 	HasUnknown bool
-	// Validate is the Validate method the type gets, and Checks the
-	// required fields it checks.
-	Validate ValidateKind
-	Checks   []RequiredCheck
+	// Validation is what the type's Validate checks; nil is no Validate.
+	Validation *Validation
 	// Enum holds the values and constant names of the enum kinds.
 	Enum []EnumValue
 	// Helpers holds the generated constructors of a oneOf union.
@@ -162,6 +163,9 @@ type Variant struct {
 	// HasSharedFields is true for an inline object variant, which carries
 	// the union's own properties.
 	HasSharedFields bool
+	// Validates is true when the variant's type has a Validate method, which
+	// the union's Validate calls.
+	Validates bool
 	// KeyLess is true for a variant of a discriminated union that has no
 	// discriminator value and is not the catch-all: the schema means it when
 	// the discriminator is absent.
@@ -183,31 +187,6 @@ const (
 	// DiscDerived is the first const property of a variant, in sorted order.
 	DiscDerived
 )
-
-// ValidateKind is the Validate method a type gets.
-type ValidateKind int
-
-const (
-	// ValidateNone is no Validate method.
-	ValidateNone ValidateKind = iota
-	// ValidateFields checks the required string and array fields of an RPC type.
-	ValidateFields
-	// ValidateListed checks the one required string the protocol table's
-	// validate rule names.
-	ValidateListed
-	// ValidateExactlyOne checks that a oneOf union has exactly one variant set.
-	ValidateExactlyOne
-	// ValidateShared checks the union's required properties on the variant set.
-	ValidateShared
-)
-
-// RequiredCheck is one required string or array field Validate checks.
-type RequiredCheck struct {
-	Field string
-	Prop  string
-	// Kind is "string" or "array".
-	Kind string
-}
 
 // EnumValue is one constant of an enum kind.
 type EnumValue struct {
@@ -286,6 +265,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		m.byName[name] = t
 	}
 	m.dropStructOmitempty()
+	if err := m.buildValidations(); err != nil {
+		return nil, err
+	}
 	for _, side := range []struct {
 		prefix  string
 		methods map[string]string
@@ -350,7 +332,6 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition,
 	if def != nil {
 		t.Doc = docLines(def.Description)
 	}
-	defer validateOf(t, r)
 	switch t.Kind {
 	case KindEnum, KindStringConstUnion, KindOpenEnum:
 		for _, v := range enumValues(t) {
@@ -637,51 +618,6 @@ func arrayItemRequired(schema *load.Schema, v *load.Definition) []string {
 // isRPCTypeName reports whether name is a request, response, or notification type.
 func isRPCTypeName(name string) bool {
 	return strings.HasSuffix(name, "Request") || strings.HasSuffix(name, "Response") || strings.HasSuffix(name, "Notification")
-}
-
-// validateOf decides t's Validate method. A union checks its variants; a type
-// the protocol table lists checks the property it names; an RPC object checks
-// its required string and array fields.
-func validateOf(t *Type, r *rules) {
-	switch {
-	case t.Kind == KindNone:
-	case t.Kind == KindUnion && t.ExactlyOne:
-		t.Validate = ValidateExactlyOne
-	case t.Kind == KindUnion:
-		t.Validate = ValidateShared
-		for _, prop := range slices.Sorted(slices.Values(t.def.Required)) {
-			if c, ok := requiredCheck(t.def, prop); ok {
-				t.Checks = append(t.Checks, c)
-			}
-		}
-	case r.validate[t.Name] != "":
-		prop := r.validate[t.Name]
-		t.Validate = ValidateListed
-		t.Checks = []RequiredCheck{{Field: util.ToExportedField(prop), Prop: prop, Kind: schemaTypeString}}
-	case primaryType(t.def) == schemaTypeObject && isRPCTypeName(t.Name):
-		t.Validate = ValidateFields
-		for _, prop := range slices.Sorted(maps.Keys(t.def.Properties)) {
-			if !slices.Contains(t.def.Required, prop) {
-				continue
-			}
-			if c, ok := requiredCheck(t.def, prop); ok {
-				t.Checks = append(t.Checks, c)
-			}
-		}
-	}
-}
-
-// requiredCheck returns the check for a required string or array property.
-func requiredCheck(def *load.Definition, prop string) (RequiredCheck, bool) {
-	pd := def.Properties[prop]
-	if pd == nil {
-		return RequiredCheck{}, false
-	}
-	switch kind := primaryType(pd); kind {
-	case schemaTypeString, schemaTypeArray:
-		return RequiredCheck{Field: util.ToExportedField(prop), Prop: prop, Kind: kind}, true
-	}
-	return RequiredCheck{}, false
 }
 
 // primaryType returns the first non-null JSON Schema type of d, looking

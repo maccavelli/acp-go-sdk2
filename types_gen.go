@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
+	"unicode/utf8"
 )
 
 // Authentication-related capabilities supported by the agent.
@@ -200,9 +203,6 @@ func (v *AgentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *AgentNotification) Validate() error {
-	if v.Method == "" {
-		return fmt.Errorf("method is required")
-	}
 	return nil
 }
 
@@ -231,8 +231,8 @@ func (v *AgentRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *AgentRequest) Validate() error {
-	if v.Method == "" {
-		return fmt.Errorf("method is required")
+	if err := v.Id.Validate(); err != nil {
+		return fmt.Errorf("AgentRequest: id: %w", err)
 	}
 	return nil
 }
@@ -259,6 +259,13 @@ func (v *AgentResult) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *AgentResult) Validate() error {
+	if err := v.Id.Validate(); err != nil {
+		return fmt.Errorf("AgentResult: id: %w", err)
+	}
+	return nil
+}
+
 // A failed JSON-RPC response.
 type AgentError struct {
 	// Method-specific error data.
@@ -278,6 +285,16 @@ func (v *AgentError) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AgentError: %w", err)
 	}
 	*v = AgentError(a)
+	return nil
+}
+
+func (v *AgentError) Validate() error {
+	if err := v.Error.Validate(); err != nil {
+		return fmt.Errorf("AgentError: error: %w", err)
+	}
+	if err := v.Id.Validate(); err != nil {
+		return fmt.Errorf("AgentError: id: %w", err)
+	}
 	return nil
 }
 
@@ -381,7 +398,27 @@ func (u AgentResponse) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("AgentResponse: no variant set")
 }
 
-func (v *AgentResponse) Validate() error {
+func (u *AgentResponse) Validate() error {
+	var count int
+	if u.Result != nil {
+		count++
+	}
+	if u.Error != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("AgentResponse must have exactly one variant set")
+	}
+	if u.Result != nil {
+		if err := u.Result.Validate(); err != nil {
+			return fmt.Errorf("AgentResponse: variant Result: %w", err)
+		}
+	}
+	if u.Error != nil {
+		if err := u.Error.Validate(); err != nil {
+			return fmt.Errorf("AgentResponse: variant Error: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -667,7 +704,20 @@ func (u AuthMethod) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("AuthMethod: no variant set")
 }
 
-func (v *AuthMethod) Validate() error {
+func (u *AuthMethod) Validate() error {
+	var count int
+	if u.Terminal != nil {
+		count++
+	}
+	if u.Agent != nil {
+		count++
+	}
+	if u.Unknown != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("AuthMethod must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -869,6 +919,15 @@ func (v *AvailableCommand) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *AvailableCommand) Validate() error {
+	if v.Input != nil {
+		if err := v.Input.Validate(); err != nil {
+			return fmt.Errorf("AvailableCommand: input: %w", err)
+		}
+	}
+	return nil
+}
+
 // The input specification for a command.
 type AvailableCommandInput struct {
 	// All text that was typed after the command name is provided as input.
@@ -929,7 +988,14 @@ func (u AvailableCommandInput) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("AvailableCommandInput: no variant set")
 }
 
-func (v *AvailableCommandInput) Validate() error {
+func (u *AvailableCommandInput) Validate() error {
+	var count int
+	if u.Unstructured != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("AvailableCommandInput must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -975,6 +1041,15 @@ func (v *AvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 		a.AvailableCommands = items
 	}
 	*v = AvailableCommandsUpdate(a)
+	return nil
+}
+
+func (v *AvailableCommandsUpdate) Validate() error {
+	for i := range v.AvailableCommands {
+		if err := v.AvailableCommands[i].Validate(); err != nil {
+			return fmt.Errorf("AvailableCommandsUpdate: availableCommands[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -1166,6 +1241,9 @@ func (v *CancelRequestNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CancelRequestNotification) Validate() error {
+	if err := v.RequestId.Validate(); err != nil {
+		return fmt.Errorf("CancelRequestNotification: requestId: %w", err)
+	}
 	return nil
 }
 
@@ -1377,9 +1455,6 @@ func (v *ClientNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ClientNotification) Validate() error {
-	if v.Method == "" {
-		return fmt.Errorf("method is required")
-	}
 	return nil
 }
 
@@ -1408,8 +1483,8 @@ func (v *ClientRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ClientRequest) Validate() error {
-	if v.Method == "" {
-		return fmt.Errorf("method is required")
+	if err := v.Id.Validate(); err != nil {
+		return fmt.Errorf("ClientRequest: id: %w", err)
 	}
 	return nil
 }
@@ -1436,6 +1511,13 @@ func (v *ClientResult) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *ClientResult) Validate() error {
+	if err := v.Id.Validate(); err != nil {
+		return fmt.Errorf("ClientResult: id: %w", err)
+	}
+	return nil
+}
+
 // A failed JSON-RPC response.
 type ClientError struct {
 	// Method-specific error data.
@@ -1455,6 +1537,16 @@ func (v *ClientError) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ClientError: %w", err)
 	}
 	*v = ClientError(a)
+	return nil
+}
+
+func (v *ClientError) Validate() error {
+	if err := v.Error.Validate(); err != nil {
+		return fmt.Errorf("ClientError: error: %w", err)
+	}
+	if err := v.Id.Validate(); err != nil {
+		return fmt.Errorf("ClientError: id: %w", err)
+	}
 	return nil
 }
 
@@ -1558,7 +1650,27 @@ func (u ClientResponse) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ClientResponse: no variant set")
 }
 
-func (v *ClientResponse) Validate() error {
+func (u *ClientResponse) Validate() error {
+	var count int
+	if u.Result != nil {
+		count++
+	}
+	if u.Error != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("ClientResponse must have exactly one variant set")
+	}
+	if u.Result != nil {
+		if err := u.Result.Validate(); err != nil {
+			return fmt.Errorf("ClientResponse: variant Result: %w", err)
+		}
+	}
+	if u.Error != nil {
+		if err := u.Error.Validate(); err != nil {
+			return fmt.Errorf("ClientResponse: variant Error: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -1732,6 +1844,13 @@ func (v *CompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *CompactionSummaryChunk) Validate() error {
+	if err := v.Content.Validate(); err != nil {
+		return fmt.Errorf("CompactionSummaryChunk: content: %w", err)
+	}
+	return nil
+}
+
 // A context compaction upsert. The first notification fixes the compaction's
 // timeline position. Later updates with the same ID patch that entity in place.
 // Agents MUST only send this update when the Client advertised
@@ -1775,6 +1894,15 @@ func (v *CompactionUpdate) UnmarshalJSON(b []byte) error {
 		a.Summary = items
 	}
 	*v = CompactionUpdate(a)
+	return nil
+}
+
+func (v *CompactionUpdate) Validate() error {
+	for i := range v.Summary {
+		if err := v.Summary[i].Validate(); err != nil {
+			return fmt.Errorf("CompactionUpdate: summary[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -1860,6 +1988,15 @@ func (v *ConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *ConfigOptionUpdate) Validate() error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].Validate(); err != nil {
+			return fmt.Errorf("ConfigOptionUpdate: configOptions[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
 // Standard content block (text, images, resources).
 type Content struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -1888,6 +2025,13 @@ func (v *Content) UnmarshalJSON(b []byte) error {
 	a := s.Alias
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = Content(a)
+	return nil
+}
+
+func (v *Content) Validate() error {
+	if err := v.Content.Validate(); err != nil {
+		return fmt.Errorf("Content: content: %w", err)
+	}
 	return nil
 }
 
@@ -2107,6 +2251,13 @@ func (v *ContentBlockResource) UnmarshalJSON(b []byte) error {
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	a.Annotations = orDefault[*Annotations](s.Annotations, "")
 	*v = ContentBlockResource(a)
+	return nil
+}
+
+func (v *ContentBlockResource) Validate() error {
+	if err := v.Resource.Validate(); err != nil {
+		return fmt.Errorf("ContentBlockResource: resource: %w", err)
+	}
 	return nil
 }
 
@@ -2397,6 +2548,11 @@ func (u *ContentBlock) Validate() error {
 	if count != 1 {
 		return errors.New("ContentBlock must have exactly one variant set")
 	}
+	if u.Resource != nil {
+		if err := u.Resource.Validate(); err != nil {
+			return fmt.Errorf("ContentBlock: variant Resource: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -2435,6 +2591,13 @@ func (v *ContentChunk) UnmarshalJSON(b []byte) error {
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	a.MessageId = orDefault[*MessageId](s.MessageId, "")
 	*v = ContentChunk(a)
+	return nil
+}
+
+func (v *ContentChunk) Validate() error {
+	if err := v.Content.Validate(); err != nil {
+		return fmt.Errorf("ContentChunk: content: %w", err)
+	}
 	return nil
 }
 
@@ -2504,6 +2667,13 @@ func (v *CreateElicitationForm) UnmarshalJSON(b []byte) error {
 	a := s.Alias
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CreateElicitationForm(a)
+	return nil
+}
+
+func (v *CreateElicitationForm) Validate() error {
+	if err := v.RequestedSchema.Validate(); err != nil {
+		return fmt.Errorf("CreateElicitationForm: requestedSchema: %w", err)
+	}
 	return nil
 }
 
@@ -2768,28 +2938,24 @@ func (u CreateElicitationRequest) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("CreateElicitationRequest: no variant set")
 }
 
-func (v *CreateElicitationRequest) Validate() error {
-	var set bool
-	if v.Form != nil {
-		if v.Form.Message == "" {
-			return fmt.Errorf("message is required")
-		}
-		set = true
+func (u *CreateElicitationRequest) Validate() error {
+	var count int
+	if u.Form != nil {
+		count++
 	}
-	if v.Url != nil {
-		if v.Url.Message == "" {
-			return fmt.Errorf("message is required")
-		}
-		set = true
+	if u.Url != nil {
+		count++
 	}
-	if v.Other != nil {
-		if v.Other.Message == "" {
-			return fmt.Errorf("message is required")
-		}
-		set = true
+	if u.Other != nil {
+		count++
 	}
-	if !set {
-		return fmt.Errorf("message is required")
+	if count != 1 {
+		return errors.New("CreateElicitationRequest must have exactly one variant set")
+	}
+	if u.Form != nil {
+		if err := u.Form.Validate(); err != nil {
+			return fmt.Errorf("CreateElicitationRequest: variant Form: %w", err)
+		}
 	}
 	return nil
 }
@@ -2825,6 +2991,16 @@ func (v *CreateElicitationAccept) UnmarshalJSON(b []byte) error {
 	a := s.Alias
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = CreateElicitationAccept(a)
+	return nil
+}
+
+func (v *CreateElicitationAccept) Validate() error {
+	for _, k := range slices.Sorted(maps.Keys(v.Content)) {
+		x := v.Content[k]
+		if err := x.Validate(); err != nil {
+			return fmt.Errorf("CreateElicitationAccept: content[%q]: %w", k, err)
+		}
+	}
 	return nil
 }
 
@@ -3118,7 +3294,28 @@ func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("CreateElicitationResponse: no variant set")
 }
 
-func (v *CreateElicitationResponse) Validate() error {
+func (u *CreateElicitationResponse) Validate() error {
+	var count int
+	if u.Accept != nil {
+		count++
+	}
+	if u.Decline != nil {
+		count++
+	}
+	if u.Cancel != nil {
+		count++
+	}
+	if u.Other != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("CreateElicitationResponse must have exactly one variant set")
+	}
+	if u.Accept != nil {
+		if err := u.Accept.Validate(); err != nil {
+			return fmt.Errorf("CreateElicitationResponse: variant Accept: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -3171,9 +3368,6 @@ func (v *CreateTerminalRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CreateTerminalRequest) Validate() error {
-	if v.Command == "" {
-		return fmt.Errorf("command is required")
-	}
 	return nil
 }
 
@@ -3362,6 +3556,16 @@ type ElicitationAcceptAction struct {
 	Content map[string]ElicitationContentValue `json:"content,omitempty"`
 }
 
+func (v *ElicitationAcceptAction) Validate() error {
+	for _, k := range slices.Sorted(maps.Keys(v.Content)) {
+		x := v.Content[k]
+		if err := x.Validate(); err != nil {
+			return fmt.Errorf("ElicitationAcceptAction: content[%q]: %w", k, err)
+		}
+	}
+	return nil
+}
+
 // Elicitation capabilities supported by the client.
 type ElicitationCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3528,7 +3732,26 @@ func (u ElicitationContentValue) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ElicitationContentValue: no variant set")
 }
 
-func (v *ElicitationContentValue) Validate() error {
+func (u *ElicitationContentValue) Validate() error {
+	var count int
+	if u.String != nil {
+		count++
+	}
+	if u.Integer != nil {
+		count++
+	}
+	if u.Number != nil {
+		count++
+	}
+	if u.Boolean != nil {
+		count++
+	}
+	if u.StringArray != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("ElicitationContentValue must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -3660,7 +3883,22 @@ func (u ElicitationFormMode) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ElicitationFormMode: no variant set")
 }
 
-func (v *ElicitationFormMode) Validate() error {
+func (u *ElicitationFormMode) Validate() error {
+	var count int
+	if u.Session != nil {
+		count++
+	}
+	if u.Request != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("ElicitationFormMode must have exactly one variant set")
+	}
+	if u.Request != nil {
+		if err := u.Request.Validate(); err != nil {
+			return fmt.Errorf("ElicitationFormMode: variant Request: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -3969,6 +4207,13 @@ func (v *ElicitationPropertySchemaArray) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *ElicitationPropertySchemaArray) Validate() error {
+	if err := v.Items.Validate(); err != nil {
+		return fmt.Errorf("ElicitationPropertySchemaArray: items: %w", err)
+	}
+	return nil
+}
+
 // Custom or future elicitation property schema.
 //
 // Values beginning with '_' are reserved for implementation-specific
@@ -4249,7 +4494,34 @@ func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ElicitationPropertySchema: no variant set")
 }
 
-func (v *ElicitationPropertySchema) Validate() error {
+func (u *ElicitationPropertySchema) Validate() error {
+	var count int
+	if u.String != nil {
+		count++
+	}
+	if u.Number != nil {
+		count++
+	}
+	if u.Integer != nil {
+		count++
+	}
+	if u.Boolean != nil {
+		count++
+	}
+	if u.Array != nil {
+		count++
+	}
+	if u.Other != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("ElicitationPropertySchema must have exactly one variant set")
+	}
+	if u.Array != nil {
+		if err := u.Array.Validate(); err != nil {
+			return fmt.Errorf("ElicitationPropertySchema: variant Array: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -4271,6 +4543,13 @@ func (v *ElicitationRequestScope) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ElicitationRequestScope: %w", err)
 	}
 	*v = ElicitationRequestScope(a)
+	return nil
+}
+
+func (v *ElicitationRequestScope) Validate() error {
+	if err := v.RequestId.Validate(); err != nil {
+		return fmt.Errorf("ElicitationRequestScope: requestId: %w", err)
+	}
 	return nil
 }
 
@@ -4353,6 +4632,16 @@ func (v *ElicitationSchema) UnmarshalJSON(b []byte) error {
 		}
 	}
 	*v = ElicitationSchema(a)
+	return nil
+}
+
+func (v *ElicitationSchema) Validate() error {
+	for _, k := range slices.Sorted(maps.Keys(v.Properties)) {
+		x := v.Properties[k]
+		if err := x.Validate(); err != nil {
+			return fmt.Errorf("ElicitationSchema: properties[%q]: %w", k, err)
+		}
+	}
 	return nil
 }
 
@@ -4525,7 +4814,22 @@ func (u ElicitationUrlMode) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ElicitationUrlMode: no variant set")
 }
 
-func (v *ElicitationUrlMode) Validate() error {
+func (u *ElicitationUrlMode) Validate() error {
+	var count int
+	if u.Session != nil {
+		count++
+	}
+	if u.Request != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("ElicitationUrlMode must have exactly one variant set")
+	}
+	if u.Request != nil {
+		if err := u.Request.Validate(); err != nil {
+			return fmt.Errorf("ElicitationUrlMode: variant Request: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -4561,6 +4865,13 @@ func (v *EmbeddedResource) UnmarshalJSON(b []byte) error {
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	a.Annotations = orDefault[*Annotations](s.Annotations, "")
 	*v = EmbeddedResource(a)
+	return nil
+}
+
+func (v *EmbeddedResource) Validate() error {
+	if err := v.Resource.Validate(); err != nil {
+		return fmt.Errorf("EmbeddedResource: resource: %w", err)
+	}
 	return nil
 }
 
@@ -4664,7 +4975,17 @@ func (u EmbeddedResourceResource) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("EmbeddedResourceResource: no variant set")
 }
 
-func (v *EmbeddedResourceResource) Validate() error {
+func (u *EmbeddedResourceResource) Validate() error {
+	var count int
+	if u.TextResourceContents != nil {
+		count++
+	}
+	if u.BlobResourceContents != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("EmbeddedResourceResource must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -4776,6 +5097,13 @@ func (v *Error) UnmarshalJSON(b []byte) error {
 	a := s.Alias
 	a.Data = orDefault[json.RawMessage](s.Data, "")
 	*v = Error(a)
+	return nil
+}
+
+func (v *Error) Validate() error {
+	if err := v.Code.Validate(); err != nil {
+		return fmt.Errorf("Error: code: %w", err)
+	}
 	return nil
 }
 
@@ -4985,7 +5313,38 @@ func (u ErrorCode) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ErrorCode: no variant set")
 }
 
-func (v *ErrorCode) Validate() error {
+func (u *ErrorCode) Validate() error {
+	var count int
+	if u.ParseError != nil {
+		count++
+	}
+	if u.InvalidRequest != nil {
+		count++
+	}
+	if u.MethodNotFound != nil {
+		count++
+	}
+	if u.InvalidParams != nil {
+		count++
+	}
+	if u.InternalError != nil {
+		count++
+	}
+	if u.RequestCancelled != nil {
+		count++
+	}
+	if u.AuthenticationRequired != nil {
+		count++
+	}
+	if u.ResourceNotFound != nil {
+		count++
+	}
+	if u.Other != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("ErrorCode must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -5018,6 +5377,15 @@ func (v *ErrorStopReason) UnmarshalJSON(b []byte) error {
 	a := s.Alias
 	a.Error = orDefault[*Error](s.Error, "")
 	*v = ErrorStopReason(a)
+	return nil
+}
+
+func (v *ErrorStopReason) Validate() error {
+	if v.Error != nil {
+		if err := v.Error.Validate(); err != nil {
+			return fmt.Errorf("ErrorStopReason: error: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -5352,6 +5720,15 @@ func (v *IdleStateUpdateError) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *IdleStateUpdateError) Validate() error {
+	if v.Error != nil {
+		if err := v.Error.Validate(); err != nil {
+			return fmt.Errorf("IdleStateUpdateError: error: %w", err)
+		}
+	}
+	return nil
+}
+
 // Custom or future stop reason.
 //
 // Values beginning with '_' are reserved for implementation-specific
@@ -5660,7 +6037,40 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("IdleStateUpdate: no variant set")
 }
 
-func (v *IdleStateUpdate) Validate() error {
+func (u *IdleStateUpdate) Validate() error {
+	var count int
+	if u.EndTurn != nil {
+		count++
+	}
+	if u.MaxTokens != nil {
+		count++
+	}
+	if u.MaxTurnRequests != nil {
+		count++
+	}
+	if u.Refusal != nil {
+		count++
+	}
+	if u.Cancelled != nil {
+		count++
+	}
+	if u.Error != nil {
+		count++
+	}
+	if u.Other != nil {
+		count++
+	}
+	if u.None != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("IdleStateUpdate must have exactly one variant set")
+	}
+	if u.Error != nil {
+		if err := u.Error.Validate(); err != nil {
+			return fmt.Errorf("IdleStateUpdate: variant Error: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -5896,6 +6306,11 @@ func (v *InitializeResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *InitializeResponse) Validate() error {
+	for i := range v.AuthMethods {
+		if err := v.AuthMethods[i].Validate(); err != nil {
+			return fmt.Errorf("InitializeResponse: authMethods[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -6116,9 +6531,6 @@ func (v *ListSessionsResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ListSessionsResponse) Validate() error {
-	if v.Sessions == nil {
-		return fmt.Errorf("sessions is required")
-	}
 	return nil
 }
 
@@ -6179,11 +6591,10 @@ func (v *LoadSessionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *LoadSessionRequest) Validate() error {
-	if v.Cwd == "" {
-		return fmt.Errorf("cwd is required")
-	}
-	if v.McpServers == nil {
-		return fmt.Errorf("mcpServers is required")
+	for i := range v.McpServers {
+		if err := v.McpServers[i].Validate(); err != nil {
+			return fmt.Errorf("LoadSessionRequest: mcpServers[%d]: %w", i, err)
+		}
 	}
 	return nil
 }
@@ -6230,6 +6641,11 @@ func (v *LoadSessionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *LoadSessionResponse) Validate() error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].Validate(); err != nil {
+			return fmt.Errorf("LoadSessionResponse: configOptions[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -6710,7 +7126,26 @@ func (u McpServer) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("McpServer: no variant set")
 }
 
-func (v *McpServer) Validate() error {
+func (u *McpServer) Validate() error {
+	var count int
+	if u.Http != nil {
+		count++
+	}
+	if u.Sse != nil {
+		count++
+	}
+	if u.Acp != nil {
+		count++
+	}
+	if u.Stdio != nil {
+		count++
+	}
+	if u.Unknown != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("McpServer must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -7111,7 +7546,20 @@ func (u MultiSelectItems) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("MultiSelectItems: no variant set")
 }
 
-func (v *MultiSelectItems) Validate() error {
+func (u *MultiSelectItems) Validate() error {
+	var count int
+	if u.String != nil {
+		count++
+	}
+	if u.Other != nil {
+		count++
+	}
+	if u.Titled != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("MultiSelectItems must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -7173,6 +7621,13 @@ func (v *MultiSelectPropertySchema) UnmarshalJSON(b []byte) error {
 	a.Description = orDefault[*string](s.Description, "")
 	a.Title = orDefault[*string](s.Title, "")
 	*v = MultiSelectPropertySchema(a)
+	return nil
+}
+
+func (v *MultiSelectPropertySchema) Validate() error {
+	if err := v.Items.Validate(); err != nil {
+		return fmt.Errorf("MultiSelectPropertySchema: items: %w", err)
+	}
 	return nil
 }
 
@@ -7892,11 +8347,10 @@ func (v *NewSessionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *NewSessionRequest) Validate() error {
-	if v.Cwd == "" {
-		return fmt.Errorf("cwd is required")
-	}
-	if v.McpServers == nil {
-		return fmt.Errorf("mcpServers is required")
+	for i := range v.McpServers {
+		if err := v.McpServers[i].Validate(); err != nil {
+			return fmt.Errorf("NewSessionRequest: mcpServers[%d]: %w", i, err)
+		}
 	}
 	return nil
 }
@@ -7949,6 +8403,11 @@ func (v *NewSessionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *NewSessionResponse) Validate() error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].Validate(); err != nil {
+			return fmt.Errorf("NewSessionResponse: configOptions[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -7994,6 +8453,13 @@ func (v *Notice) UnmarshalJSON(b []byte) error {
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	a.Description = orDefault[*string](s.Description, "")
 	*v = Notice(a)
+	return nil
+}
+
+func (v *Notice) Validate() error {
+	if utf8.RuneCountInString(string(v.Title)) < 1 {
+		return errors.New("Notice: title: shorter than minLength 1")
+	}
 	return nil
 }
 
@@ -8473,6 +8939,13 @@ func (v *PlanUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *PlanUpdate) Validate() error {
+	if err := v.Plan.Validate(); err != nil {
+		return fmt.Errorf("PlanUpdate: plan: %w", err)
+	}
+	return nil
+}
+
 // Structured plan entries.
 type PlanUpdateContentItems struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -8941,8 +9414,10 @@ func (v *PromptRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *PromptRequest) Validate() error {
-	if v.Prompt == nil {
-		return fmt.Errorf("prompt is required")
+	for i := range v.Prompt {
+		if err := v.Prompt[i].Validate(); err != nil {
+			return fmt.Errorf("PromptRequest: prompt[%d]: %w", i, err)
+		}
 	}
 	return nil
 }
@@ -9073,9 +9548,6 @@ func (v *ReadTextFileRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ReadTextFileRequest) Validate() error {
-	if v.Path == "" {
-		return fmt.Errorf("path is required")
-	}
 	return nil
 }
 
@@ -9111,9 +9583,6 @@ func (v *ReadTextFileResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ReadTextFileResponse) Validate() error {
-	if v.Content == "" {
-		return fmt.Errorf("content is required")
-	}
 	return nil
 }
 
@@ -9275,7 +9744,20 @@ func (u RequestId) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("RequestId: no variant set")
 }
 
-func (v *RequestId) Validate() error {
+func (u *RequestId) Validate() error {
+	var count int
+	if u.Null != nil {
+		count++
+	}
+	if u.Number != nil {
+		count++
+	}
+	if u.Str != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("RequestId must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -9505,8 +9987,8 @@ func (v *RequestPermissionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *RequestPermissionRequest) Validate() error {
-	if v.Options == nil {
-		return fmt.Errorf("options is required")
+	if err := v.ToolCall.Validate(); err != nil {
+		return fmt.Errorf("RequestPermissionRequest: toolCall: %w", err)
 	}
 	return nil
 }
@@ -9543,6 +10025,9 @@ func (v *RequestPermissionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *RequestPermissionResponse) Validate() error {
+	if err := v.Outcome.Validate(); err != nil {
+		return fmt.Errorf("RequestPermissionResponse: outcome: %w", err)
+	}
 	return nil
 }
 
@@ -9678,8 +10163,10 @@ func (v *ResumeSessionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ResumeSessionRequest) Validate() error {
-	if v.Cwd == "" {
-		return fmt.Errorf("cwd is required")
+	for i := range v.McpServers {
+		if err := v.McpServers[i].Validate(); err != nil {
+			return fmt.Errorf("ResumeSessionRequest: mcpServers[%d]: %w", i, err)
+		}
 	}
 	return nil
 }
@@ -9726,6 +10213,11 @@ func (v *ResumeSessionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ResumeSessionResponse) Validate() error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].Validate(); err != nil {
+			return fmt.Errorf("ResumeSessionResponse: configOptions[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -10059,6 +10551,13 @@ func (v *SessionConfigOptionSelect) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionConfigOptionSelect) Validate() error {
+	if err := v.Options.Validate(); err != nil {
+		return fmt.Errorf("SessionConfigOptionSelect: options: %w", err)
+	}
+	return nil
+}
+
 // Boolean on/off toggle.
 type SessionConfigOptionBoolean struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10238,6 +10737,11 @@ func (u *SessionConfigOption) Validate() error {
 	if count != 1 {
 		return errors.New("SessionConfigOption must have exactly one variant set")
 	}
+	if u.Select != nil {
+		if err := u.Select.Validate(); err != nil {
+			return fmt.Errorf("SessionConfigOption: variant Select: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -10316,6 +10820,13 @@ func (v *SessionConfigSelect) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionConfigSelect: %w", err)
 	}
 	*v = SessionConfigSelect(a)
+	return nil
+}
+
+func (v *SessionConfigSelect) Validate() error {
+	if err := v.Options.Validate(); err != nil {
+		return fmt.Errorf("SessionConfigSelect: options: %w", err)
+	}
 	return nil
 }
 
@@ -10510,7 +11021,17 @@ func (u SessionConfigSelectOptions) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("SessionConfigSelectOptions: no variant set")
 }
 
-func (v *SessionConfigSelectOptions) Validate() error {
+func (u *SessionConfigSelectOptions) Validate() error {
+	var count int
+	if u.Ungrouped != nil {
+		count++
+	}
+	if u.Grouped != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("SessionConfigSelectOptions must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -10761,6 +11282,15 @@ func (v *SessionMessage) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionMessage) Validate() error {
+	for i := range v.Content {
+		if err := v.Content[i].Validate(); err != nil {
+			return fmt.Errorf("SessionMessage: content[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -10801,6 +11331,13 @@ func (v *SessionMessageChunk) UnmarshalJSON(b []byte) error {
 	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
 	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
 	*v = SessionMessageChunk(a)
+	return nil
+}
+
+func (v *SessionMessageChunk) Validate() error {
+	if err := v.Content.Validate(); err != nil {
+		return fmt.Errorf("SessionMessageChunk: content: %w", err)
+	}
 	return nil
 }
 
@@ -10931,6 +11468,9 @@ func (v *SessionNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionNotification) Validate() error {
+	if err := v.Update.Validate(); err != nil {
+		return fmt.Errorf("SessionNotification: update: %w", err)
+	}
 	return nil
 }
 
@@ -11004,6 +11544,13 @@ func (v *SessionUpdateUserMessageChunk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionUpdateUserMessageChunk) Validate() error {
+	if err := v.Content.Validate(); err != nil {
+		return fmt.Errorf("SessionUpdateUserMessageChunk: content: %w", err)
+	}
+	return nil
+}
+
 // A chunk of the agent's response being streamed.
 type SessionUpdateAgentMessageChunk struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11043,6 +11590,13 @@ func (v *SessionUpdateAgentMessageChunk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionUpdateAgentMessageChunk) Validate() error {
+	if err := v.Content.Validate(); err != nil {
+		return fmt.Errorf("SessionUpdateAgentMessageChunk: content: %w", err)
+	}
+	return nil
+}
+
 // A chunk of the agent's internal reasoning being streamed.
 type SessionUpdateAgentThoughtChunk struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11079,6 +11633,13 @@ func (v *SessionUpdateAgentThoughtChunk) UnmarshalJSON(b []byte) error {
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	a.MessageId = orDefault[*MessageId](s.MessageId, "")
 	*v = SessionUpdateAgentThoughtChunk(a)
+	return nil
+}
+
+func (v *SessionUpdateAgentThoughtChunk) Validate() error {
+	if err := v.Content.Validate(); err != nil {
+		return fmt.Errorf("SessionUpdateAgentThoughtChunk: content: %w", err)
+	}
 	return nil
 }
 
@@ -11153,6 +11714,15 @@ func (v *SessionUpdateToolCall) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionUpdateToolCall) Validate() error {
+	for i := range v.Content {
+		if err := v.Content[i].Validate(); err != nil {
+			return fmt.Errorf("SessionUpdateToolCall: content[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
 // Update on the status or results of a tool call.
 type SessionToolCallUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11221,6 +11791,15 @@ func (v *SessionToolCallUpdate) UnmarshalJSON(b []byte) error {
 	a.Status = orDefault[*ToolCallStatus](s.Status, "")
 	a.Title = orDefault[*string](s.Title, "")
 	*v = SessionToolCallUpdate(a)
+	return nil
+}
+
+func (v *SessionToolCallUpdate) Validate() error {
+	for i := range v.Content {
+		if err := v.Content[i].Validate(); err != nil {
+			return fmt.Errorf("SessionToolCallUpdate: content[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -11310,6 +11889,13 @@ func (v *SessionPlanUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionPlanUpdate) Validate() error {
+	if err := v.Plan.Validate(); err != nil {
+		return fmt.Errorf("SessionPlanUpdate: plan: %w", err)
+	}
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -11392,6 +11978,15 @@ func (v *SessionAvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionAvailableCommandsUpdate) Validate() error {
+	for i := range v.AvailableCommands {
+		if err := v.AvailableCommands[i].Validate(); err != nil {
+			return fmt.Errorf("SessionAvailableCommandsUpdate: availableCommands[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
 // The current mode of the session has changed
 //
 // See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/session-modes)
@@ -11469,6 +12064,15 @@ func (v *SessionConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 		a.ConfigOptions = items
 	}
 	*v = SessionConfigOptionUpdate(a)
+	return nil
+}
+
+func (v *SessionConfigOptionUpdate) Validate() error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].Validate(); err != nil {
+			return fmt.Errorf("SessionConfigOptionUpdate: configOptions[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -11589,6 +12193,13 @@ func (v *SessionUpdateNotice) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionUpdateNotice) Validate() error {
+	if utf8.RuneCountInString(string(v.Title)) < 1 {
+		return errors.New("SessionUpdateNotice: title: shorter than minLength 1")
+	}
+	return nil
+}
+
 // A context compaction has been created or updated.
 //
 // Agents MUST only send this update when the Client advertised
@@ -11632,6 +12243,15 @@ func (v *SessionCompactionUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionCompactionUpdate) Validate() error {
+	for i := range v.Summary {
+		if err := v.Summary[i].Validate(); err != nil {
+			return fmt.Errorf("SessionCompactionUpdate: summary[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
 // A content block appended to a context compaction's retained summary.
 //
 // Agents MUST only send this update when the Client advertised
@@ -11662,6 +12282,13 @@ func (v *SessionUpdateCompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 	a := s.Alias
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = SessionUpdateCompactionSummaryChunk(a)
+	return nil
+}
+
+func (v *SessionUpdateCompactionSummaryChunk) Validate() error {
+	if err := v.Content.Validate(); err != nil {
+		return fmt.Errorf("SessionUpdateCompactionSummaryChunk: content: %w", err)
+	}
 	return nil
 }
 
@@ -11736,6 +12363,15 @@ func (v *SessionSubagentUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionSubagentUpdate) Validate() error {
+	if v.State != nil {
+		if err := v.State.Validate(); err != nil {
+			return fmt.Errorf("SessionSubagentUpdate: state: %w", err)
+		}
+	}
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -11786,6 +12422,15 @@ func (v *SessionUpdateSessionMessage) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionUpdateSessionMessage) Validate() error {
+	for i := range v.Content {
+		if err := v.Content[i].Validate(); err != nil {
+			return fmt.Errorf("SessionUpdateSessionMessage: content[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -11827,6 +12472,13 @@ func (v *SessionUpdateSessionMessageChunk) UnmarshalJSON(b []byte) error {
 	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
 	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
 	*v = SessionUpdateSessionMessageChunk(a)
+	return nil
+}
+
+func (v *SessionUpdateSessionMessageChunk) Validate() error {
+	if err := v.Content.Validate(); err != nil {
+		return fmt.Errorf("SessionUpdateSessionMessageChunk: content: %w", err)
+	}
 	return nil
 }
 
@@ -12690,6 +13342,76 @@ func (u *SessionUpdate) Validate() error {
 	if count != 1 {
 		return errors.New("SessionUpdate must have exactly one variant set")
 	}
+	if u.UserMessageChunk != nil {
+		if err := u.UserMessageChunk.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant UserMessageChunk: %w", err)
+		}
+	}
+	if u.AgentMessageChunk != nil {
+		if err := u.AgentMessageChunk.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant AgentMessageChunk: %w", err)
+		}
+	}
+	if u.AgentThoughtChunk != nil {
+		if err := u.AgentThoughtChunk.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant AgentThoughtChunk: %w", err)
+		}
+	}
+	if u.ToolCall != nil {
+		if err := u.ToolCall.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant ToolCall: %w", err)
+		}
+	}
+	if u.ToolCallUpdate != nil {
+		if err := u.ToolCallUpdate.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant ToolCallUpdate: %w", err)
+		}
+	}
+	if u.PlanUpdate != nil {
+		if err := u.PlanUpdate.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant PlanUpdate: %w", err)
+		}
+	}
+	if u.AvailableCommandsUpdate != nil {
+		if err := u.AvailableCommandsUpdate.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant AvailableCommandsUpdate: %w", err)
+		}
+	}
+	if u.ConfigOptionUpdate != nil {
+		if err := u.ConfigOptionUpdate.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant ConfigOptionUpdate: %w", err)
+		}
+	}
+	if u.Notice != nil {
+		if err := u.Notice.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant Notice: %w", err)
+		}
+	}
+	if u.CompactionUpdate != nil {
+		if err := u.CompactionUpdate.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant CompactionUpdate: %w", err)
+		}
+	}
+	if u.CompactionSummaryChunk != nil {
+		if err := u.CompactionSummaryChunk.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant CompactionSummaryChunk: %w", err)
+		}
+	}
+	if u.SubagentUpdate != nil {
+		if err := u.SubagentUpdate.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant SubagentUpdate: %w", err)
+		}
+	}
+	if u.SessionMessage != nil {
+		if err := u.SessionMessage.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant SessionMessage: %w", err)
+		}
+	}
+	if u.SessionMessageChunk != nil {
+		if err := u.SessionMessageChunk.Validate(); err != nil {
+			return fmt.Errorf("SessionUpdate: variant SessionMessageChunk: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -12865,7 +13587,20 @@ func (u SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("SetSessionConfigOptionRequest: no variant set")
 }
 
-func (v *SetSessionConfigOptionRequest) Validate() error {
+func (u *SetSessionConfigOptionRequest) Validate() error {
+	var count int
+	if u.Boolean != nil {
+		count++
+	}
+	if u.ValueId != nil {
+		count++
+	}
+	if u.Unknown != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("SetSessionConfigOptionRequest must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -12915,8 +13650,10 @@ func (v *SetSessionConfigOptionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SetSessionConfigOptionResponse) Validate() error {
-	if v.ConfigOptions == nil {
-		return fmt.Errorf("configOptions is required")
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].Validate(); err != nil {
+			return fmt.Errorf("SetSessionConfigOptionResponse: configOptions[%d]: %w", i, err)
+		}
 	}
 	return nil
 }
@@ -13354,7 +14091,26 @@ func (u StateUpdate) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("StateUpdate: no variant set")
 }
 
-func (v *StateUpdate) Validate() error {
+func (u *StateUpdate) Validate() error {
+	var count int
+	if u.Running != nil {
+		count++
+	}
+	if u.Idle != nil {
+		count++
+	}
+	if u.RequiresAction != nil {
+		count++
+	}
+	if u.Unknown != nil {
+		count++
+	}
+	if u.Other != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("StateUpdate must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -13663,6 +14419,15 @@ func (v *SubagentUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SubagentUpdate) Validate() error {
+	if v.State != nil {
+		if err := v.State.Validate(); err != nil {
+			return fmt.Errorf("SubagentUpdate: state: %w", err)
+		}
+	}
+	return nil
+}
+
 // Embed a terminal created with 'terminal/create' by its id.
 //
 // The terminal must be added before calling 'terminal/release'.
@@ -13813,9 +14578,6 @@ func (v *TerminalOutputResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *TerminalOutputResponse) Validate() error {
-	if v.Output == "" {
-		return fmt.Errorf("output is required")
-	}
 	return nil
 }
 
@@ -14021,6 +14783,15 @@ func (v *ToolCall) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *ToolCall) Validate() error {
+	for i := range v.Content {
+		if err := v.Content[i].Validate(); err != nil {
+			return fmt.Errorf("ToolCall: content[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
 // Standard content block (text, images, resources).
 type ToolCallContentContent struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -14050,6 +14821,13 @@ func (v *ToolCallContentContent) UnmarshalJSON(b []byte) error {
 	a := s.Alias
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = ToolCallContentContent(a)
+	return nil
+}
+
+func (v *ToolCallContentContent) Validate() error {
+	if err := v.Content.Validate(); err != nil {
+		return fmt.Errorf("ToolCallContentContent: content: %w", err)
+	}
 	return nil
 }
 
@@ -14311,6 +15089,11 @@ func (u *ToolCallContent) Validate() error {
 	if count != 1 {
 		return errors.New("ToolCallContent must have exactly one variant set")
 	}
+	if u.Content != nil {
+		if err := u.Content.Validate(); err != nil {
+			return fmt.Errorf("ToolCallContent: variant Content: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -14446,9 +15229,11 @@ func (v *ToolCallUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (t *ToolCallUpdate) Validate() error {
-	if t.ToolCallId == "" {
-		return fmt.Errorf("toolCallId is required")
+func (v *ToolCallUpdate) Validate() error {
+	for i := range v.Content {
+		if err := v.Content[i].Validate(); err != nil {
+			return fmt.Errorf("ToolCallUpdate: content[%d]: %w", i, err)
+		}
 	}
 	return nil
 }
@@ -14685,12 +15470,6 @@ func (v *UnstableDidChangeDocumentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDidChangeDocumentNotification) Validate() error {
-	if v.ContentChanges == nil {
-		return fmt.Errorf("contentChanges is required")
-	}
-	if v.Uri == "" {
-		return fmt.Errorf("uri is required")
-	}
 	return nil
 }
 
@@ -14732,9 +15511,6 @@ func (v *UnstableDidCloseDocumentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDidCloseDocumentNotification) Validate() error {
-	if v.Uri == "" {
-		return fmt.Errorf("uri is required")
-	}
 	return nil
 }
 
@@ -14782,9 +15558,6 @@ func (v *UnstableDidFocusDocumentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDidFocusDocumentNotification) Validate() error {
-	if v.Uri == "" {
-		return fmt.Errorf("uri is required")
-	}
 	return nil
 }
 
@@ -14832,15 +15605,6 @@ func (v *UnstableDidOpenDocumentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDidOpenDocumentNotification) Validate() error {
-	if v.LanguageId == "" {
-		return fmt.Errorf("languageId is required")
-	}
-	if v.Text == "" {
-		return fmt.Errorf("text is required")
-	}
-	if v.Uri == "" {
-		return fmt.Errorf("uri is required")
-	}
 	return nil
 }
 
@@ -14882,9 +15646,6 @@ func (v *UnstableDidSaveDocumentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDidSaveDocumentNotification) Validate() error {
-	if v.Uri == "" {
-		return fmt.Errorf("uri is required")
-	}
 	return nil
 }
 
@@ -15015,8 +15776,10 @@ func (v *UnstableForkSessionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableForkSessionRequest) Validate() error {
-	if v.Cwd == "" {
-		return fmt.Errorf("cwd is required")
+	for i := range v.McpServers {
+		if err := v.McpServers[i].Validate(); err != nil {
+			return fmt.Errorf("UnstableForkSessionRequest: mcpServers[%d]: %w", i, err)
+		}
 	}
 	return nil
 }
@@ -15069,6 +15832,11 @@ func (v *UnstableForkSessionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableForkSessionResponse) Validate() error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].Validate(); err != nil {
+			return fmt.Errorf("UnstableForkSessionResponse: configOptions[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -15155,9 +15923,6 @@ func (v *UnstableListProvidersResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableListProvidersResponse) Validate() error {
-	if v.Providers == nil {
-		return fmt.Errorf("providers is required")
-	}
 	return nil
 }
 
@@ -15526,7 +16291,26 @@ func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("UnstableMcpServer: no variant set")
 }
 
-func (v *UnstableMcpServer) Validate() error {
+func (u *UnstableMcpServer) Validate() error {
+	var count int
+	if u.Http != nil {
+		count++
+	}
+	if u.Sse != nil {
+		count++
+	}
+	if u.Acp != nil {
+		count++
+	}
+	if u.Stdio != nil {
+		count++
+	}
+	if u.Unknown != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("UnstableMcpServer must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -15630,9 +16414,6 @@ func (v *UnstableMessageMcpNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableMessageMcpNotification) Validate() error {
-	if v.Method == "" {
-		return fmt.Errorf("method is required")
-	}
 	return nil
 }
 
@@ -15680,9 +16461,6 @@ func (v *UnstableMessageMcpRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableMessageMcpRequest) Validate() error {
-	if v.Method == "" {
-		return fmt.Errorf("method is required")
-	}
 	return nil
 }
 
@@ -15843,7 +16621,17 @@ func (u UnstableMessageMcpResponse) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("UnstableMessageMcpResponse: no variant set")
 }
 
-func (v *UnstableMessageMcpResponse) Validate() error {
+func (u *UnstableMessageMcpResponse) Validate() error {
+	var count int
+	if u.Result != nil {
+		count++
+	}
+	if u.Error != nil {
+		count++
+	}
+	if count != 1 {
+		return errors.New("UnstableMessageMcpResponse must have exactly one variant set")
+	}
 	return nil
 }
 
@@ -17161,9 +17949,6 @@ func (v *UnstableSetProviderRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableSetProviderRequest) Validate() error {
-	if v.BaseUrl == "" {
-		return fmt.Errorf("baseUrl is required")
-	}
 	return nil
 }
 
@@ -17338,9 +18123,6 @@ func (v *UnstableSuggestNesRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableSuggestNesRequest) Validate() error {
-	if v.Uri == "" {
-		return fmt.Errorf("uri is required")
-	}
 	return nil
 }
 
@@ -17390,8 +18172,10 @@ func (v *UnstableSuggestNesResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableSuggestNesResponse) Validate() error {
-	if v.Suggestions == nil {
-		return fmt.Errorf("suggestions is required")
+	for i := range v.Suggestions {
+		if err := v.Suggestions[i].Validate(); err != nil {
+			return fmt.Errorf("UnstableSuggestNesResponse: suggestions[%d]: %w", i, err)
+		}
 	}
 	return nil
 }
@@ -17708,12 +18492,6 @@ func (v *WriteTextFileRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *WriteTextFileRequest) Validate() error {
-	if v.Content == "" {
-		return fmt.Errorf("content is required")
-	}
-	if v.Path == "" {
-		return fmt.Errorf("path is required")
-	}
 	return nil
 }
 
