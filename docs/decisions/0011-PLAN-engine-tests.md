@@ -1407,7 +1407,9 @@ GOEXPERIMENT=nojsonv2`, which runs `go test -shuffle=on ./...` at the root with 
     a git repository, which a scratch copy is not; given the workflow file by path, it failed as planted.
 * `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found nothing. No Go file changed.
 
-Open: the plan's "the next CI run shows the step on Linux" waits for the owner's push of this step.
+~~Open: the plan's "the next CI run shows the step on Linux" waits for the owner's push of this step.~~ Closed 2026-10-11: CI run
+38174222955, for `f94f253`, succeeded; `root tests with GOEXPERIMENT=nojsonv2` ran and succeeded on `ubuntu-24.04` and was skipped on
+`macos-15` and `windows-2025`.
 
 Commit point: the agent stopped here. The owner commits step 10 on `main`.
 
