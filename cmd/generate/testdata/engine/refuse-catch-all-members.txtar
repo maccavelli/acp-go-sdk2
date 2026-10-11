@@ -1,0 +1,20 @@
+Refused: a union's catch-all variant cannot hold flattened members, since the
+catch-all keeps every key no field declares, the members' keys among them
+(0011-MADR-harden-code-generator-engine.md, "Found in step 12 and decided").
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "SessionScope": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"]},
+  "RequestScope": {"type": "object", "properties": {"requestId": {"type": "integer", "format": "int64"}}, "required": ["requestId"]},
+  "Mode": {"type": "object", "properties": {"schema": {"type": "string"}}, "required": ["schema"], "anyOf": [{"title": "Session", "allOf": [{"$ref": "#/$defs/SessionScope"}]}, {"title": "Request", "allOf": [{"$ref": "#/$defs/RequestScope"}]}]},
+  "Ask": {"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"], "anyOf": [
+    {"type": "object", "properties": {"mode": {"type": "string", "const": "form"}}, "required": ["mode"]},
+    {"title": "other", "type": "object", "properties": {"mode": {"type": "string"}}, "required": ["mode"], "allOf": [{"$ref": "#/$defs/Mode"}], "not": {"anyOf": [{"type": "object", "properties": {"mode": {"type": "string", "const": "form"}}, "required": ["mode"]}]}}
+  ]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Ask variant 2:
+a catch-all cannot hold the members of Mode

@@ -730,6 +730,38 @@ discriminator, the trial decode's order decided, so a variant without required k
 Asked, the owner decided: **a variant that is a direct `$ref` takes those facts from the definition it names**; its own title and
 description still name and document it. The committed output does not change. Not chosen: refusing a direct `$ref` member.
 
+### Found in step 12 and decided, 2026-10-11
+
+The review of error sites found that step 7's refusal of a catch-all variant that holds flattened members never ran: it tested whether the
+variant keeps its undeclared keys, which `classifyUnion` decides after the variant is built. Such a schema was accepted, and the members'
+keys were kept twice, in `Extra` and in the member, `Extra`'s copy winning on encode. No committed union has the shape. Asked, the owner
+decided: **the refusal runs where the catch-all is chosen**; the engine case `refuse-catch-all-members` pins it. Not chosen: accepting the
+shape and keeping the members' keys out of `Extra`.
+
+### Phase 6 carried out, 2026-10-11
+
+[0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md) carried out D1 to D7; its execution record holds each step's evidence.
+
+* **D1.** Synthetic cases in `cmd/generate/testdata/engine/`, read by `internal/enginetest`, as planned.
+* **D2.** `TestEngineBehaviour` runs `go test` once over every case with a behaviour test. `output.Check` gained one shared importer
+  (step 5).
+* **D3.** The registry `schema_gen_test.go` and the conformance test at the root, as planned. The registry records where each definition came
+  from (step 6), and its recording peers gained a `reply` hook (step 9), so the test also checks results, errors, and logged notification
+  errors.
+* **D4.** `FuzzRoundTrip` and `FuzzBuild` with `make fuzz`, as planned, not in CI. Their first runs found the case-folding defect and the
+  integer `const` defect, both fixed (step 8). The round-trip property skips JSON `null`, which decodes to no value.
+* **D5.** `cmd/generate/internal/mutate`, reporting and never gating, as planned, with three flags added by the owner in step 9: `-skip`,
+  `-j`, and `-only`.
+* **D6.** Amended in step 9: the engine's mutation run is a sample of 300, and a survivor that changes only layout is classified as such. At
+  the close: the engine at 96.2% without the committed-schema tests, every error site run or recorded with its reason, `types_gen.go` at
+  89.4% from the root tests, every union variant decoded, and every survivor of both samples killed or classified.
+* **D7.** The CI step with `GOEXPERIMENT=nojsonv2`, as planned; it ran and passed on Linux in run 38174222955.
+
+Findings along the way changed the SDK, each decided by the owner and recorded above and in
+[0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md): flattened members, the open integer enum, untyped
+definitions as `json.RawMessage`, an optional raw `null` as absent, keys read under case folding, the variant facts of a direct `$ref`, and the
+refusals of lossy shapes, keys that differ only in case, integer `const` values outside their format, and a catch-all with members.
+
 ## More Information
 
 Implementation follows in one PLAN per phase, each written and approved before its work starts. The first is the resolved model.

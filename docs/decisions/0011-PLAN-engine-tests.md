@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-11
 associated-madr: "0011-MADR-harden-code-generator-engine.md"
 ---
@@ -1432,3 +1432,55 @@ Ran on `main` from `f94f253`, which the owner committed and pushed. The agent di
 * `make check-records` and `make markdownlint` exit 0. No Go file changed.
 
 Commit point: the agent stopped here. The owner commits step 11 on `main`.
+
+### Step 12 deviation, 2026-10-11: a refusal that never ran
+
+The owner committed step 11 as `ebc7e48`, and the closed step 10 item as `670f2fe`. The error-site review below found two engine sites from
+step 7 that no test ran. `model.go:771`, a member whose title is not a Go identifier, is reachable; `TestFlattenedMembers` now covers it
+(a member titled `2nd`). `model.go:712`, the refusal of a catch-all holding flattened members, could not run: it tested `KeepExtra`, which
+`classifyUnion` sets later. Resolutions put to the owner: make the refusal run (recommended), or accept the shape and keep the members' keys
+out of `Extra`. The owner chose the first, recorded in the 0011-MADR's "Found in step 12 and decided". Added to step 12: the check moved into
+`classifyUnion` in `internal/model`, and the engine case `refuse-catch-all-members`, which failed before the move with `run accepted the
+schema`. The generated output does not change.
+
+### Step 12, review and close, 2026-10-11
+
+Ran on `main` from `670f2fe`. The agent did not commit. Each item of Verification, as amended:
+
+* **Generated files and API.** Regenerating changes nothing against `HEAD`. Against `f2a6a3a`, only `types_gen.go` differs (+404 and −450),
+  in the commits of step 6a (`6786efe`), step 7 (`0e32255`), and step 8 (`77d053b`), as the amendments allow; `schema_gen_test.go` is new.
+  `TestGeneratedFilesUpToDate` passes. The API listing gives 2308 lines, 50 differing from `f2a6a3a`'s, the same as after step 7: steps 8 to
+  12 changed no exported name.
+* **Raw values.** `raw_value_test.go` passes under the default build and with `GOEXPERIMENT=nojsonv2`.
+* **Each new test failed first or on a plant:** the execution records of steps 2 to 11, and step 12's case above.
+* **Coverage without the nine committed-schema tests**, `go test -coverpkg=./... -skip '<the nine>' ./...` in `cmd/generate`, each block at
+  its highest count:
+  * the engine, `internal/enginetest` and `internal/mutate` left out: 96.2% (2594 of 2696 statements), against 95.4% after step 4 and 88.0% on
+    `f2a6a3a`;
+  * with `internal/mutate`, test tooling at 75.5% (its `main` and its errors for flags and the go command): 94.1%.
+* **Error sites** (`refusals.py`): every engine site runs except four, each recorded: `emit/decode.go:259`, the emitter's backstop for keys
+  that differ only in case, which the model refuses first (step 8); `emit/file.go:301`, and `load/merge.go:118` and `:285` (step 4's
+  `merge.go:99` and `:254`, moved by step 6), unreachable for the reasons step 4 gives.
+* **Mutation.** The engine sample's survivors are classified, and none is killed only by `TestGeneratedFilesUpToDate` without being
+  classified (step 9).
+* **Root.** `types_gen.go` 89.4% (6425 of 7184), `agent_gen.go` 73.4%, `client_gen.go` 60.2%, `helpers_gen.go` 18.2%. No generated
+  `MarshalJSON`, `UnmarshalJSON`, or `Validate` is at 0%. Every union variant is decoded: `unioncov.py` counts 97 of 105, and the other 8
+  are the flattened members' assignments `a.Session = &x` and `a.Request = &x`, which it does not count; the profile shows each run once. Every
+  method is dispatched: the method, reply, and notification-error tests pass 80 subtests. Every survivor of the generated-code sample is
+  classified (step 9).
+* **Fuzzing.** `make fuzz` ran each target for 60 s with no crasher, and the three crashers are committed as seeds (step 8).
+* **Tests.** `go test -race -count=1 ./...` passes at the root and in `cmd/generate`, with and without `-short`; `GOEXPERIMENT=nojsonv2 go
+  test ./...` passes at the root; `go build ./example/...` passes. CI passed on Linux, macOS, and Windows for `f94f253` (run 38174222955),
+  the last pushed commit; this step's change waits for the owner's push.
+* **Time.** The `cmd/generate` package's own tests took 14.3 and 14.5 s with `-count=1`, against 2.2 to 2.5 s on `f2a6a3a`; the whole module,
+  17.8 and 18.2 s.
+* **Gates.** `make pre-add-check`: `go-precheck: 101 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make
+  check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.
+
+Not done: `helpers_gen.go`'s constructors stay at 18.2% from the root tests; the engine cases test the constructor emitter, and no step of
+this plan targeted the root's use of them. `util.SanitizeComment` is still dead (out of scope). The release notes of the next minor version
+must list the exported API changes of step 7, the wire changes of steps 6a, 7, and 8, and the README's rules.
+
+This plan is complete; its status is `complete`, and the 0011-MADR records that phase 6 was carried out.
+
+Commit point: the agent stopped here. The owner commits step 12 on `main`.

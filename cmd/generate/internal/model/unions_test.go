@@ -219,6 +219,14 @@ func TestFlattenedMembers(t *testing.T) {
 	if _, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, clash)}); err == nil || !strings.Contains(err.Error(), "both become field Session") {
 		t.Errorf("a member named as a property: %v", err)
 	}
+	// A member is named by its title, which need not be a Go identifier.
+	odd := strings.Replace(flattenDefs, `"title":"Session"`, `"title":"2nd"`, 1)
+	if odd == flattenDefs {
+		t.Fatal("flattenDefs has no title Session")
+	}
+	if _, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, odd)}); err == nil || !strings.Contains(err.Error(), "is not an exported Go identifier") {
+		t.Errorf("a member titled 2nd: %v", err)
+	}
 }
 
 // TestIntegerEnumConsts requires an integer enum's const to be an integer

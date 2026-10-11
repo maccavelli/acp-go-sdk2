@@ -708,9 +708,6 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 		if len(v.AllOf) == 1 && v.AllOf[0] != nil && in.Kind == InlineStruct {
 			if base, ok := strings.CutPrefix(v.AllOf[0].Ref, refPrefix); ok {
 				if members, ok := flatMembers(schema, schema.Defs[base]); ok {
-					if in.KeepExtra {
-						return nil, fmt.Errorf("%s: a catch-all cannot hold the members of %s", owner, base)
-					}
 					if err := checkMembers(typeName, in.Fields, members); err != nil {
 						return nil, err
 					}
@@ -892,6 +889,12 @@ func classifyUnion(schema *load.Schema, t *Type, list []*load.Definition) error 
 		}
 		t.CatchAll = idx
 		if vi.Inline != nil {
+			// The catch-all keeps every key no field declares, which would hold
+			// the members' keys a second time.
+			if len(vi.Inline.Members) > 0 {
+				base := strings.TrimPrefix(v.AllOf[0].Ref, refPrefix)
+				return fmt.Errorf("%s: a catch-all cannot hold the members of %s", owner, base)
+			}
 			for _, f := range vi.Inline.Fields {
 				if f.Name == "Extra" {
 					return fmt.Errorf("%s: property %q becomes field Extra, which the catch-all needs", owner, f.Key)
