@@ -20,8 +20,17 @@ This repository is the Go module `github.com/maccavelli/acp-go-sdk2`, package
 `cmd/generate` is its own Go module with no requirements. `internal/load` reads
 the schema files, `internal/model` resolves them into types, unions, and
 protocol methods, `internal/emit` builds the files as `go/ast` and prints them
-through `go/format`, and `internal/util` holds naming helpers. `make version`
-downloads the schema for the stamp in `schema/version` and runs the generator.
+through `go/format` into memory, `internal/output` type-checks and writes them,
+and `internal/util` holds naming helpers. `make version` downloads the schema
+for the stamp in `schema/version` and runs the generator.
+
+The generator writes nothing until every file has rendered and the five files
+type-check with `go/types` together with the hand-written files of the output
+directory: those the go command would build there, at the language version of
+its `go.mod`. Output that does not type-check is refused with the first 10
+errors. A file whose bytes have not changed is left alone. Every other file is
+staged in the output directory as `.<name>.*.tmp`, synced, and set to mode
+`0644`; once all are staged, each is renamed into place.
 
 The protocol behaviour the schema does not express lives in one table, `ACP`
 in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
@@ -76,7 +85,10 @@ meets a bound its Go type does not enforce, and every nested value validates.
 Checks that guard this:
 
 - `TestGeneratedFilesUpToDate` in `cmd/generate` fails when the committed
-  `*_gen.go` files differ from the generator's output.
+  `*_gen.go` files differ from the generator's output, and
+  `TestCheckAcceptsRepository` when that output does not type-check with the
+  hand-written files. The tests of `internal/output` cover the check and the
+  staged write.
 - `TestProtocolTableAppliesToCommittedSchema` in `internal/model` fails when a
   rule of the protocol table no longer applies to the committed schema.
 - `TestKeywordRegistryMatchesLoader` and `TestCommittedSchemaKeywordsRegistered`
@@ -106,7 +118,8 @@ go.mod                    the SDK module
 cmd/generate/             the generator, its own module
   internal/load/          schema loading
   internal/model/         the resolved schema and the protocol table
-  internal/emit/          go/ast emission
+  internal/emit/          go/ast emission, rendered in memory
+  internal/output/        type-check and staged write of the output
   internal/util/          naming helpers
 schema/                   schema files and the version stamp
 example/                  agent, client, claude-code, gemini programs

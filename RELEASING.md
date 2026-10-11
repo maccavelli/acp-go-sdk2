@@ -51,6 +51,13 @@ lightweight guard that ensures both `schema/version` and the top-level `version`
 file agree before you publish. The `vX.Y.Z` commands below are the Go module tag,
 not the schema download tag.
 
+The generator type-checks its output with the hand-written files before it
+writes any file. When a new schema renames or removes a type the hand-written
+code uses, `make version` stops with the type checker's errors and changes no
+generated file. Change the hand-written code to the new names first, then rerun
+`make version`. Generated files are written with mode `0644`, and a file whose
+content did not change is not rewritten.
+
 ## Review and Commit
 
 1. Inspect the changes: `git status` and `git diff` should show updated schema

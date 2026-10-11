@@ -439,3 +439,32 @@ In the tree: `stat` of the five generated files is identical before and after re
 check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 5 on `main`.
+
+### Step 6, docs, 2026-10-10
+
+The owner committed step 5 as `fb82147`. Step 6 ran on `main` from that clean tree and changed `docs/architecture.md`, `RELEASING.md`, and this
+record. The agent did not commit.
+
+`docs/architecture.md`:
+
+* the generator paragraph names `internal/output`, and a new paragraph states the order (render, type-check with the hand-written files the go command
+  would build, at the language version of `go.mod`, then write), the refusal with the first 10 errors, that unchanged files are left alone, the
+  temporary-file names `.<name>.*.tmp`, the sync, the mode `0644`, and the renames after all are staged;
+* "Checks that guard this" names `TestCheckAcceptsRepository` and the tests of `internal/output`;
+* the tree lists `internal/output/`, and `internal/emit/` as rendered in memory.
+
+`RELEASING.md`: after the `make version` paragraph, a paragraph says the generator type-checks before it writes; that when a new schema renames or
+removes a type the hand-written code uses, `make version` stops with the type checker's errors and changes no generated file; to change the
+hand-written code first and rerun; and that files are written `0644` and an unchanged file is not rewritten. `README.md` names nothing that changed and
+is unchanged.
+
+The name check of phase 4 (`w10_names.py`) over both files, before and after the change. Before: 116 names, 6 failures, all in `RELEASING.md` lines this
+step did not touch, names outside the tree the script has no kind for (`PATH`, `agentclientprotocol/agent-client-protocol`, `curl`, `git`, `gmake`,
+`gofmt`). After: 122 names; the new ones are `TestCheckAcceptsRepository` (identifier), `go/types` (standard package), `internal/output` (path), and
+three it cannot check, which were checked by hand against the source: `.<name>.*.tmp`, reported as a missing path, is the pattern
+`"."+f.Name+".*.tmp"` of `stage` (`write.go:74`); `0644`, twice, is `fileMode = 0o644` (`write.go:19`); "the first 10 errors" is `maxReported = 10`
+(`check.go:23`). No other failure is new.
+
+No Go file changed, so `make pre-add-check` was not run. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 6 on `main`.
