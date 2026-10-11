@@ -10,6 +10,7 @@ import (
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/emit"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/output"
 )
 
 func main() {
@@ -22,7 +23,8 @@ func main() {
 // run generates the bindings. It loads the schema, builds the model, and
 // renders every file before it creates or writes anything, so a schema the
 // model refuses, or a file that fails to render, leaves the output directory
-// as it was.
+// as it was. output.Write then stages every changed file before it replaces
+// any.
 func run(args []string) error {
 	fs := flag.NewFlagSet("generate", flag.ContinueOnError)
 	schemaDir := fs.String("schema", "", "path to schema directory (defaults to <repo>/schema)")
@@ -59,12 +61,7 @@ func run(args []string) error {
 	if err := os.MkdirAll(*outDir, 0o750); err != nil {
 		return err
 	}
-	for _, f := range files {
-		if err := os.WriteFile(filepath.Join(*outDir, f.Name), f.Src, 0o600); err != nil {
-			return err
-		}
-	}
-	return nil
+	return output.Write(*outDir, files)
 }
 
 // loadSchema reads the stable schema and, when present, merges the unstable

@@ -152,7 +152,8 @@ The mode is a constant `fileMode = 0o644` in `output`.
    * `TestWriteStagingFailureReplacesNothing`: in a directory made read-only (skipped on Windows and as root), `Write` fails with `stage` and every
      existing file keeps its bytes.
    * `TestWriteRenameFailureReports`: with a directory named `helpers_gen.go` in the way, `Write` fails naming it, lists the four replaced files,
-     and the four hold the new bytes.
+     and the four hold the new bytes. (Changed 2026-10-10, see the deviation in step 4's record: the rename is injected, and the directory in the
+     way is a test of the compare step.)
    * every test requires that no `.*.tmp` file remains.
    Add `write.go`; `run` calls `output.Write`. Plants: writing each file as it is staged fails the staging test; `0o600` fails the mode test; no
    comparison fails the modification-time test; no cleanup after a failed rename fails the temporary-file check. The `Sync` call has no test that can
@@ -296,3 +297,69 @@ Regenerated: exit 0, `git diff --quiet d534f27 -- '*_gen.go'` exits 0, and `git 
 govulncheck).` `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 3 on `main`.
+
+### Step 4, stage, then replace, 2026-10-10
+
+**Deviation, 2026-10-10, before the step's tests were written.** The plan's `TestWriteRenameFailureReports` puts a directory named `helpers_gen.go`
+in the way. The design's first stage, Compare, reads `dir/helpers_gen.go` before anything is staged, and reading a directory fails ("is a directory"),
+so `Write` would return at Compare and the rename-failure path would never run. The plan was wrong, not the code. Asked, the owner chose to inject the
+rename: `Write` calls an unexported `writeWith(dir, files, rename)` with `os.Rename` (named `write` when the owner was asked;
+revive's `confusing-naming` rejects `write` beside `Write`), and the test passes a rename that fails on `helpers_gen.go`. The
+directory in the way stays as a second test, of a failure at Compare: an error, nothing replaced, no temporary file. The options declined were
+changing Compare to stage over a directory, which changes `Write`'s behaviour beyond the MADR, and dropping the test. No decision of the MADR
+changes; files in scope are unchanged.
+
+The owner committed step 3 as `9989a5c`. Step 4 ran on `main` from that clean tree and added `cmd/generate/internal/output/write.go` and
+`write_test.go`, changed `cmd/generate/main.go` and this record. The agent did not commit.
+
+Tests first, in `write_test.go`, over five small files and a check after each that no `.*.tmp` file remains:
+
+* `TestWriteReplacesChangedFiles`: a stale `types_gen.go` at `0o600` and a sentinel; all five written, each `0644` (not on Windows), the sentinel
+  unchanged.
+* `TestWriteLeavesUnchangedFiles`: modification times set an hour back; a second `Write` of the same files moves none, and one with `types_gen.go`
+  changed moves only that one.
+* `TestWriteStagingFailureReplacesNothing`, two cases: a third file named `sub/x_gen.go`, which `os.CreateTemp` refuses after two files were staged;
+  and, as the plan says, a read-only directory (skipped on Windows and as root). The first case is an addition: the read-only directory fails on the
+  first file, so it cannot tell staging from writing in place, as the first plant below shows.
+* `TestWriteRenameFailureReports`, as the deviation above: the injected rename fails on `helpers_gen.go`; the error contains `replace
+  helpers_gen.go`, the cause, `replaced: constants_gen.go, types_gen.go, agent_gen.go, client_gen.go`, and `left as they were: helpers_gen.go`; the
+  four hold the new bytes and `helpers_gen.go` the old.
+* `TestWriteCompareFailureReplacesNothing`: a directory named `helpers_gen.go`; the error names it, and the other four keep their bytes.
+
+On `9989a5c` the package does not compile: `undefined: Write` (seven places) and `undefined: write`.
+
+Change, as the design says: `Write` and `writeWith` (compare, stage, replace), `stage` (`CreateTemp` named `.<name>.*.tmp`, `Write`, `Sync`,
+`Chmod(fileMode)`, `Close`, and removal on failure), `remove`, and `nameList`; `fileMode = 0o644`. A failure to remove a temporary file is joined to the
+returned error rather than discarded (errcheck's `check-blank` rules out `_ =`). The `os.ReadFile` of the compare step carries `//nolint:gosec // G304:
+dir is the generator's explicit output directory.`. `run` returns `output.Write(*outDir, files)`, and its doc comment says that `Write` stages every
+changed file before it replaces any. The first `make pre-add-check` failed on revive's `confusing-naming` (`write` beside `Write`); the function is
+`writeWith`, and the deviation entry says so.
+
+Plants, one at a time in scratch copies of `cmd/generate` (`s4_plants.py`), against the package's tests:
+
+```text
+replace each file as it is staged: exit=1
+    --- FAIL: TestWriteStagingFailureReplacesNothing/a_file_that_cannot_be_staged_after_others_were (0.07s)
+    write_test.go:152: constants_gen.go holds "package acp\n\n// constants_gen.go v2\n", want "package acp\n\n// constants_gen.go v1\n"
+mode 0o600: exit=1
+    --- FAIL: TestWriteReplacesChangedFiles (0.13s)
+    write_test.go:85: constants_gen.go has mode -rw-------, want 0644
+no comparison: exit=1
+    --- FAIL: TestWriteLeavesUnchangedFiles (0.12s)
+    write_test.go:121: unchanged constants_gen.go was rewritten: modified 2026-10-10 22:15:31.075128622 -0500 CDT, want 2026-10-10 21:15:31 -0500 CDT
+no cleanup after a failed rename: exit=1
+    --- FAIL: TestWriteRenameFailureReports (0.09s)
+    write_test.go:202: temporary file .helpers_gen.go.1510374310.tmp left in the output directory
+no cleanup after a failed stage: exit=1
+    --- FAIL: TestWriteStagingFailureReplacesNothing/a_file_that_cannot_be_staged_after_others_were (0.10s)
+    write_test.go:153: temporary file .constants_gen.go.1874360174.tmp left in the output directory
+```
+
+The five were run again after the rename to `writeWith`; each exits 1. The `Sync` call has no test that can observe it; the code shows it.
+
+In the tree: `stat` of the five generated files (modification time and mode) before and after `cd cmd/generate && env -u GOPATH -u GOMODCACHE go
+run .` is identical, each `-rw-r--r--`; no `.tmp` file is left; `git diff --quiet d534f27 -- '*_gen.go'` exits 0, and `git status` shows no
+generated file. `go test -cover`: `internal/output` 92.9%, `internal/emit` 84.0%, `internal/model` 93.9%. `make pre-add-check`: `go-precheck: 72
+file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 4 on `main`.
