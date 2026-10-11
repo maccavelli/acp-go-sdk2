@@ -62,7 +62,7 @@ func TestRenderLayout(t *testing.T) {
 				st.comment("The name.")
 				st.add(structField("Name", id("string"), "name"))
 				st.add(structField("Count", star(id("int")), "count,omitempty"))
-				f.add(typeDecl("Thing", st.structType()))
+				f.add(typeDecl("Thing", st.structType(f)))
 			},
 			want: header + src(
 				"",
@@ -172,8 +172,62 @@ func TestLayoutStaysBelowPrinterSentinel(t *testing.T) {
 		f.line()
 	}
 	fset := token.NewFileSet()
-	file := f.layout(fset)
+	file, err := f.layout(fset)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if end := fset.File(file.Package).Size(); end >= 1<<30 {
 		t.Fatalf("layout spans %d bytes", end)
 	}
+}
+
+// TestRenderErrors requires each failure of the engine to come back as an
+// error from render, not a panic.
+func TestRenderErrors(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		build func(f *goFile)
+		want  []string
+	}{
+		{"declaration go/format cannot parse back", func(f *goFile) { f.add(typeDecl("1bad", id("int"))) }, []string{"format:", "expected 'IDENT'"}},
+		{"doc comment with no field after it", func(f *goFile) {
+			var st fieldSet
+			st.add(structField("Name", id("string"), "name"))
+			st.comment("Dangling doc.")
+			f.add(typeDecl("Thing", st.structType(f)))
+		}, []string{"has no field after it", "Dangling doc."}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newFile()
+			tt.build(f)
+			_, err := f.render()
+			if err == nil {
+				t.Fatal("render succeeded")
+			}
+			for _, w := range tt.want {
+				if !strings.Contains(err.Error(), w) {
+					t.Errorf("error %q does not contain %q", err, w)
+				}
+			}
+		})
+	}
+	t.Run("node go/format cannot print", func(t *testing.T) {
+		t.Parallel()
+		if _, err := printedSize(&ast.Field{}); err == nil || !strings.Contains(err.Error(), "print *ast.Field") {
+			t.Errorf("printedSize error = %v, want one naming *ast.Field", err)
+		}
+	})
+	t.Run("line table rejected", func(t *testing.T) {
+		t.Parallel()
+		l := &layout{}
+		l.next()
+		l.next()
+		l.reserve(1, -2*lineBytes)
+		if err := l.apply(token.NewFileSet()); err == nil || !strings.Contains(err.Error(), "line table rejected") {
+			t.Errorf("apply error = %v, want line table rejected", err)
+		}
+	})
 }

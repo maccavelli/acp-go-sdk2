@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-10
 associated-madr: "0011-MADR-harden-code-generator-engine.md"
 ---
@@ -135,7 +135,7 @@ The mode is a constant `fileMode = 0o644` in `output`.
    `make markdownlint`, records the output in this plan's execution record, and stops for the owner's commit. In every step the generated files must
    be byte-identical to `d534f27`'s, and `git status` after regenerating must show no generated file.
 2. **Errors instead of panics.** Tests in `internal/emit`, `TestRenderErrors`: a file holding `typeDecl("1bad", id("int"))` fails to render with an
-   error containing `print`; a struct `fieldSet` with a trailing doc comment fails with `has no field after it` and the comment's text;
+   error containing `print` (corrected 2026-10-10: `format:` and `expected 'IDENT'`, see step 2's record); a struct `fieldSet` with a trailing doc comment fails with `has no field after it` and the comment's text;
    `printedSize(&ast.Field{})` returns an error and does not panic; a layout with a negative reservation fails with `line table rejected`. Change
    `file.go` and `types.go` to the design; update `file_test.go` for the new signatures. Plants, in a scratch copy, one at a time: each of the three
    `panic` calls restored makes its case fail.
@@ -200,4 +200,54 @@ Rollback is `git revert` of the step commits, newest first. Each step leaves the
 
 ## Execution record
 
-Not started. The owner decided the MADR's phase 5 amendment on 2026-10-10; nothing runs until the owner approves this plan.
+The owner decided the MADR's phase 5 amendment on 2026-10-10, committed it with this plan as `f9537bd`, and approved the plan ("proceed").
+
+### Step 2, errors instead of panics, 2026-10-10
+
+Ran on `main` from `f9537bd`; changed `cmd/generate/internal/emit/file.go`, `types.go`, `file_test.go`, and this record. The agent did not commit.
+
+`TestRenderErrors` (in `file_test.go`) has four cases: a declaration named `1bad`, a struct `fieldSet` with a trailing doc comment, `printedSize` of an
+`*ast.Field`, and a layout whose reservation makes the line table decrease. `TestRenderLayout` and `TestLayoutStaysBelowPrinterSentinel` take the new
+signatures.
+
+Failing first. On `f9537bd` the test file does not compile (`too many arguments in call to st.structType`, `f.layout returns 1 value`,
+`printedSize returns 1 value`, `l.apply(...) (no value) used as value`). Adapted to the old signatures in a scratch copy (`s2_oldsig.py`), three
+cases panic: `emit: doc comment with no field after it`, `emit: print *ast.Field: go/printer: unsupported node type *ast.Field`, and
+`emit: invalid line table`.
+
+**Correction, 2026-10-10.** The plan expected the `1bad` declaration's error to contain `print`. On `f9537bd`, render already returns an error for
+it, `format: 5:6: expected 'IDENT', found 1`: `go/printer` prints the declaration and `format.Source` fails to parse it back. The case asserts `format:`
+and `expected 'IDENT'`, and it guards existing behaviour rather than failing first. No decision changes.
+
+Change, as the design says:
+
+* `goFile` has `err` and `fail`; `render` returns the recorded error before laying out, and `goFile.layout` returns `(*ast.File, error)`.
+* `fieldSet.fieldList`, `structType`, and `interfaceType` take the `*goFile`. A dangling doc comment records `doc comment "<first line>" has no field
+  after it` and is dropped. The three call sites in `types.go` pass `f`.
+* `printedSize` returns `(int, error)`, `print <type>: <cause>`; `layout.decl` records the first as `func <name>: ...`. `layout.apply` returns
+  `line table rejected`.
+
+No `panic` call remains in a non-test file of `cmd/generate` (`grep -n 'panic('`, no match).
+
+Plants, one at a time in a scratch copy (`s2_plants.py`), each putting one panic back:
+
+```text
+fieldList panics: exit=1
+    --- FAIL: TestRenderErrors (0.00s)
+    panic: emit: doc comment with no field after it [recovered, repanicked]
+printedSize panics: exit=1
+    --- FAIL: TestRenderErrors (0.00s)
+    panic: emit: print *ast.Field: go/printer: unsupported node type *ast.Field [recovered, repanicked]
+apply panics: exit=1
+    --- FAIL: TestRenderErrors (0.00s)
+    panic: emit: invalid line table [recovered, repanicked]
+```
+
+The third plant first left the `errors` import unused and failed to compile; it was changed to `panic(errors.New(...))`, and the result is the one
+above.
+
+Regenerated with `cd cmd/generate && env -u GOPATH -u GOMODCACHE go run .`: exit 0, `git diff --quiet d534f27 -- '*_gen.go'` exits 0, and
+`git status` shows no generated file. `go test -cover`: `internal/emit` 81.5%, `internal/model` 93.9%. `make pre-add-check`:
+`go-precheck: 72 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 2 on `main`.

@@ -26,17 +26,22 @@ func (s *fieldSet) add(fld *ast.Field) {
 	s.list = append(s.list, fld)
 }
 
-func (s *fieldSet) fieldList() *ast.FieldList {
+// fieldList returns the fields. A doc comment with no field after it is
+// dropped and recorded as an error on f.
+func (s *fieldSet) fieldList(f *goFile) *ast.FieldList {
 	if len(s.doc) > 0 {
-		panic("emit: doc comment with no field after it")
+		f.fail(fmt.Errorf("doc comment %q has no field after it", s.doc[0]))
+		s.doc = nil
 	}
 	return fields(s.list...)
 }
 
-func (s *fieldSet) structType() *ast.StructType { return &ast.StructType{Fields: s.fieldList()} }
+func (s *fieldSet) structType(f *goFile) *ast.StructType {
+	return &ast.StructType{Fields: s.fieldList(f)}
+}
 
-func (s *fieldSet) interfaceType() *ast.InterfaceType {
-	return &ast.InterfaceType{Methods: s.fieldList()}
+func (s *fieldSet) interfaceType(f *goFile) *ast.InterfaceType {
+	return &ast.InterfaceType{Methods: s.fieldList(f)}
 }
 
 // structField is name typ `json:"tag"`.
@@ -95,7 +100,7 @@ func emitRPCInterfaces(f *goFile, m *model.Model) {
 	}
 	for _, in := range m.Interfaces {
 		f.comment(in.Doc...)
-		f.add(typeDecl(in.Name, sets[in.Binding].interfaceType()))
+		f.add(typeDecl(in.Name, sets[in.Binding].interfaceType(f)))
 	}
 }
 
@@ -175,7 +180,7 @@ func emitStruct(f *goFile, name string, fields []*model.Field, keepExtra bool, e
 			"MarshalJSON writes them back.")
 		st.add(structField(extraField, rawMap(f.qual(pkgJSON, "RawMessage")), "-"))
 	}
-	f.add(typeDecl(name, st.structType()))
+	f.add(typeDecl(name, st.structType(f)))
 	f.line()
 	emitObjectCodec(f, name, fields, keepExtra, exempt)
 	if val != nil {
@@ -821,7 +826,7 @@ func emitUnion(f *goFile, t *model.Type) {
 	}
 	// The union's description belongs on the wrapper, after the variant types.
 	f.comment(t.Doc...)
-	f.add(typeDecl(name, st.structType()))
+	f.add(typeDecl(name, st.structType(f)))
 	f.line()
 	f.add(method(param("u", star(id(name))), "UnmarshalJSON",
 		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))),

@@ -2,6 +2,7 @@ package emit
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -34,6 +35,8 @@ type goFile struct {
 	// uses records the unexported helpers the file's code calls, so the
 	// file emits each once.
 	uses map[string]bool
+	// err is the first failure recorded while the file was built.
+	err error
 }
 
 // fileItem is one comment line, one blank line, or one declaration.
@@ -61,6 +64,13 @@ func (f *goFile) line() { f.items = append(f.items, fileItem{blank: true}) }
 // add appends a declaration.
 func (f *goFile) add(d ast.Decl) { f.items = append(f.items, fileItem{decl: d}) }
 
+// fail records err unless an earlier failure was recorded.
+func (f *goFile) fail(err error) {
+	if f.err == nil {
+		f.err = err
+	}
+}
+
 // qual returns the qualified identifier name from the package at importPath
 // and records the import.
 func (f *goFile) qual(importPath, name string) ast.Expr {
@@ -77,10 +87,17 @@ func (f *goFile) write(outDir, name string) error {
 	return os.WriteFile(filepath.Join(outDir, name), src, generatedFileMode)
 }
 
-// render prints the file and formats it.
+// render prints the file and formats it. It returns the first failure
+// recorded while the file was built, if any.
 func (f *goFile) render() ([]byte, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
 	fset := token.NewFileSet()
-	file := f.layout(fset)
+	file, err := f.layout(fset)
+	if err != nil {
+		return nil, err
+	}
 	var buf bytes.Buffer
 	if err := format.Node(&buf, fset, file); err != nil {
 		return nil, fmt.Errorf("print: %w", err)
@@ -106,7 +123,7 @@ func (f *goFile) importDecl() *ast.GenDecl {
 }
 
 // layout builds the *ast.File and gives every line-starting token a position.
-func (f *goFile) layout(fset *token.FileSet) *ast.File {
+func (f *goFile) layout(fset *token.FileSet) (*ast.File, error) {
 	l := &layout{}
 	file := &ast.File{Name: id(f.pkg)}
 
@@ -142,9 +159,14 @@ func (f *goFile) layout(fset *token.FileSet) *ast.File {
 		}
 	}
 
-	l.apply(fset)
+	if l.err != nil {
+		return nil, l.err
+	}
+	if err := l.apply(fset); err != nil {
+		return nil, err
+	}
 	file.Comments = l.comments
-	return file
+	return file, nil
 }
 
 func setDoc(d ast.Decl, g *ast.CommentGroup) {
@@ -174,6 +196,7 @@ type layout struct {
 	marks    []mark
 	comments []*ast.CommentGroup
 	extra    map[int]int // line -> bytes reserved beyond lineBytes
+	err      error       // the first failure
 }
 
 // reserve adds n bytes to the length of line.
@@ -185,12 +208,12 @@ func (l *layout) reserve(line, n int) {
 }
 
 // printedSize is the length of n printed without positions.
-func printedSize(n ast.Node) int {
+func printedSize(n ast.Node) (int, error) {
 	var buf bytes.Buffer
 	if err := format.Node(&buf, token.NewFileSet(), n); err != nil {
-		panic(fmt.Sprintf("emit: print %T: %v", n, err))
+		return 0, fmt.Errorf("print %T: %w", n, err)
 	}
-	return buf.Len()
+	return buf.Len(), nil
 }
 
 type mark struct {
@@ -220,18 +243,20 @@ func (l *layout) doc(g *ast.CommentGroup) {
 	l.comments = append(l.comments, g)
 }
 
-func (l *layout) apply(fset *token.FileSet) {
+// apply resolves the recorded positions in a file of fset.
+func (l *layout) apply(fset *token.FileSet) error {
 	lines := make([]int, l.line+1)
 	for i := 1; i < len(lines); i++ {
 		lines[i] = lines[i-1] + lineBytes + l.extra[i]
 	}
 	tf := fset.AddFile("", -1, lines[l.line]+lineBytes)
 	if !tf.SetLines(lines) {
-		panic("emit: invalid line table")
+		return errors.New("line table rejected")
 	}
 	for _, m := range l.marks {
 		*m.pos = tf.LineStart(m.line)
 	}
+	return nil
 }
 
 func (l *layout) decl(d ast.Decl) {
@@ -239,7 +264,10 @@ func (l *layout) decl(d ast.Decl) {
 	case *ast.FuncDecl:
 		// Braces on different lines keep go/printer from collapsing a short
 		// body onto the signature line.
-		size := printedSize(d.Body)
+		size, err := printedSize(d.Body)
+		if err != nil && l.err == nil {
+			l.err = fmt.Errorf("func %s: %w", d.Name.Name, err)
+		}
 		line := l.next()
 		l.reserve(line, size)
 		l.at(&d.Type.Func, line)
