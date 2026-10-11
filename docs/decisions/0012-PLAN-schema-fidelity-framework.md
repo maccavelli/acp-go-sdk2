@@ -459,3 +459,69 @@ Gates: `make pre-add-check` with the five changed Go files named: `go-precheck: 
 govulncheck).` Without names: `go-precheck: 70 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 6 on `main`.
+
+### Step 7, required keys, 2026-10-10
+
+The owner committed step 6 as `d9ffc24`. Step 7 ran on `main` from that clean tree. The agent did not commit. The owner committed the step's code and
+first tests as `3588f8a` while its plants were running; the emit test `TestRequiredKeysDecoder` and this record came after and follow that commit.
+
+Tests, written first:
+
+* `TestRequiredKeysOnDecode` (root `fidelity_test.go`): `PromptRequest` without `sessionId`, `InitializeRequest` without `protocolVersion`, an image
+  `ContentBlock` without `data`, and `null` into a `PromptRequest` fail, naming the type and the property; `ContentBlock` `{"text":"hi"}` still decodes
+  as `Text`; dispatch of `session/prompt` without `sessionId` answers `-32602` with the missing property, without reaching the agent.
+* `TestDiscriminatorExemptOnDecode` (`model/classes_test.go`): every inline variant of a union records its discriminator as `Inline.Exempt`, and no
+  `$ref` variant's own type requires its union's discriminator, which a payload placed without the key decodes through.
+
+Run before the change, the root test failed five times: each decode returned `<nil>`, and dispatch panicked on the nil agent
+(`invalid memory address or nil pointer dereference`). That panic is the current gap: `PromptRequest`'s `Validate` did not see the missing `sessionId`,
+because its `""` check skips a `$ref`'d string, so dispatch went on to call the agent. The model test did not compile (`v.Inline.Exempt undefined`).
+
+The change:
+
+* `model`: `Inline.Exempt`, set in `classifyUnion` to the union's discriminator for each inline variant.
+* `emit/decode.go` (new): `helperObjectKeys` and `emitDecodeHelpers`, which emits `objectKeys` once when the file used it; `goFile.uses` records it.
+* `emit/types.go`: `emitObjectDefaults` became `emitObjectCodec`, which emits `MarshalJSON` (`emitObjectMarshal`, as before) and, for a struct with a
+  required key, a default, or a catch-all, `UnmarshalJSON` (`emitObjectUnmarshal`): `objectKeys(b, "<Type>", <required, sorted>)`, then the alias
+  decode wrapped as `<Type>: %w`, then the defaults and `Extra` as before. `emitStruct` takes the exempt key.
+
+Corrections, recorded:
+
+* The two emit tests that type-check one struct (`TestDefaultedNullablePropertyCompiles`, `TestRequiredMapFilledOnEncode`) now call
+  `emitDecodeHelpers`, since the struct calls `objectKeys`.
+* `TestAbsentDiscriminator`'s row `AuthMethod agent without its keys` (`{"id":"a"}` set `Agent` by trial decode) is schema-invalid: the `agent` variant
+  requires `id` and `name`. It is now `AuthMethod agent missing a required key` and expects `AuthMethod: missing discriminator "type"`.
+
+Found and not changed: since a key-less variant's decoder now requires its keys, the trial decode that phase 2 emits for key-less variants after the
+key match can no longer succeed; it is dead code in five unions (`AuthMethod`, `McpServer`, `UnstableMcpServer`,
+`SetSessionConfigOptionRequest`, `MultiSelectItems`; `IdleStateUpdate`'s `None` has no required key and no trial). Removing it changes the union decoders of
+[0011-PLAN-wire-fixes.md](0011-PLAN-wire-fixes.md) and is not in this step.
+
+Regenerated: only `types_gen.go` changed, from 12,190 to 14,823 lines. Compared declaration by declaration, each with its own doc comment: 621 to 809
+declarations, none removed; 188 added, 187 `UnmarshalJSON` and the function `objectKeys`; 15 changed, all `UnmarshalJSON` of structs that had one
+for defaults or `Extra`; the 28 union decoders unchanged. `UnmarshalJSON` methods: 43 before, 230 after; `objectKeys(b, ` is called 202 times. No golden
+changed: every golden payload carries its required keys.
+
+Each part was broken in a fresh scratch copy, then the generator run and both modules tested:
+
+```text
+presence never fails: cmd/generate []; root ['TestAbsentDiscriminator', 'TestRequiredKeysOnDecode']
+required keys not listed: cmd/generate ['TestRequiredKeysDecoder']; root ['TestAbsentDiscriminator', 'TestRequiredKeysOnDecode']
+discriminator not exempt in the emitter: cmd/generate ['TestRequiredKeysDecoder']; root ['TestAbsentDiscriminator', 'TestRequiredKeysOnDecode']
+discriminator not exempt in the model: cmd/generate ['TestDiscriminatorExemptOnDecode', 'TestRequiredKeysDecoder']; root ['TestAbsentDiscriminator', 'TestRequiredKeysOnDecode']
+```
+
+Two first passed the generator's tests and failed only at the root: no generator test held the decoder's text. `TestRequiredKeysDecoder`
+(`emit/types_test.go`) now requires a struct with required keys `zeta` and `alpha` to call `objectKeys(b, "Options", "alpha", "zeta")`, an inline
+union variant to leave out its discriminator, the helper to be present, and the output to compile. The first form of the presence plant made the
+generated code fail to compile (an unused `ok`) rather than skip the check; it was rerun with code that compiles. The generator's tests check the
+decoder's text and that it compiles; its behaviour is checked at the root.
+
+After the change every test in the root (`go test -race`) and in `cmd/generate` passes; `go build ./example/...` passes. Coverage: `internal/model`
+94.3%, `internal/emit` 70.5% (54.1% before).
+
+Gates: `make pre-add-check` on `3588f8a`'s files passed before the owner's commit; with `emit/types_test.go`, the one file changed since, named:
+`go-precheck: 1 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` Without names: `go-precheck: 71 file(s) clean (...)`.
+`make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits the rest of step 7 (`emit/types_test.go` and this record) on `main`.
