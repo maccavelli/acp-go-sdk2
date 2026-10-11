@@ -44,6 +44,13 @@ jobs:
           set -euo pipefail
           go test -race -shuffle=on ./...
           ( cd cmd/generate && go test -race -shuffle=on ./... )
+      # encoding/json backed by v1 rather than v2, so a difference between the
+      # two codecs fails the build (0011-PLAN-engine-tests.md, D7).
+      - name: root tests with GOEXPERIMENT=nojsonv2
+        if: runner.os == 'Linux'
+        env:
+          GOEXPERIMENT: nojsonv2
+        run: go test -shuffle=on ./...
       - name: govulncheck
         if: runner.os == 'Linux'
         run: |

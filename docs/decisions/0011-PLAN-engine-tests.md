@@ -1389,3 +1389,24 @@ Engine, not killed (17):
 * `make check-records` and `make markdownlint` exit 0, and the identifier scan of the 26 changed and new files found nothing.
 
 Commit point: the agent stopped here. The owner commits step 9 on `main`.
+
+### Step 10, CI, 2026-10-11
+
+Ran on `main` from `41b8840`, which the owner committed and pushed. The agent did not commit.
+
+`.github/workflows/ci.yml` gained a step in the `validate` job, after the race detector and on Linux only: `root tests with
+GOEXPERIMENT=nojsonv2`, which runs `go test -shuffle=on ./...` at the root with that experiment in its environment (D7).
+
+* `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12` exits 0 on the tree.
+* The step's command passes locally: `GOEXPERIMENT=nojsonv2 go test -shuffle=on ./...` exits 0.
+* Plants in scratch copies (`s10_plants.json`):
+  * A root test that holds only under the v2-backed codec, `fmt.Sprint(json.RawMessage(nil)) == "null"`, fails under the step's command
+    (`--- FAIL: TestCodecProbe`) and passes without the experiment, so the step catches a codec difference the default run does not.
+  * `runner.oss` in the step's condition fails `actionlint`:
+    `property "oss" is not defined in object type {arch: string; ...}`. The first run of this plant stopped on `actionlint`'s search for
+    a git repository, which a scratch copy is not; given the workflow file by path, it failed as planted.
+* `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found nothing. No Go file changed.
+
+Open: the plan's "the next CI run shows the step on Linux" waits for the owner's push of this step.
+
+Commit point: the agent stopped here. The owner commits step 10 on `main`.
