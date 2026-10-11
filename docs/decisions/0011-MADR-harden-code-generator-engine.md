@@ -612,6 +612,13 @@ one source importer for the process, behind a mutex, as the test helper `enginet
 and its refusals are as phase 5 decided; only repeated calls in one process share what they imported. In a scratch copy this gave 15 s, 6 s with
 `-short`, and 38 s with `-race`.
 
+### Scope added 2026-10-11, a regression guard for raw values
+
+The owner added to phase 6 a regression the type checks did not catch: since
+[0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md) made raw values `json.RawMessage`, an empty raw tool input prints
+as `null`, and a `null` one is sent on as `null`. The fix, decided in that record's amendment of 2026-10-11, keeps `json.RawMessage` and reads a
+`null` raw value as an absent one, as ACP v1 defines them; its regression tests, the generator's change, and the docs are step 6a of the plan.
+
 The plan for these decisions is [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md).
 
 ## More Information

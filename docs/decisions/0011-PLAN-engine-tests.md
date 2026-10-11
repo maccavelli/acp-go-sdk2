@@ -33,6 +33,8 @@ In scope:
 * `Makefile` (`fuzz`, `mutation-engine`, `mutation-generated`), `.github/workflows/ci.yml` (D7)
 * `cmd/generate/internal/output/check.go`: one shared source importer (added 2026-10-11, see step 5's deviation)
 * `cmd/generate/internal/load/merge.go` and `internal/model`: where each merged definition came from (added 2026-10-11, see step 6's deviation)
+* step 6a (added by the owner on 2026-10-11): the decoding of optional raw fields in `internal/model` and `internal/emit`, `withRawPath` in
+  `helpers.go`, a regression test at the root, the engine case `accept-raw-value`, `README.md`, and `docs/architecture.md`
 * `docs/architecture.md`, `RELEASING.md`, and this plan's records
 
 Out of scope:
@@ -299,6 +301,25 @@ In the `validate` job, on Linux, a step after the race detector: `GOEXPERIMENT=n
    a generated test file referring to an undefined name is refused), update `generatedFiles`, regenerate in the tree, and commit
    `schema_gen_test.go`. Plants: the builder omitting one union fails its test; `Check` ignoring test files fails the new check case. The five SDK files
    stay byte-identical, and the root's exported API is unchanged (the API listing program of the earlier phases).
+   6a. **A null raw value is an absent one** (added 2026-10-11; decided in the 2026-10-11 amendment of
+   [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md)). Tests first, each shown failing on the tree as it is:
+   * `raw_value_test.go` at the root, the reported case: a `tool_call` and a `tool_call_update` whose `rawInput` and `rawOutput` are absent,
+     `null`, `{}`, and an object with an integer beyond 2^53. Absent and `null` give `len(v) == 0`, `string(v) == ""`, and are omitted when sent;
+     `{}` and the object are kept and sent byte for byte. `WithStartLocations` adds `path` to an input decoded from `null`, and to
+     `json.RawMessage("null")` passed in. Each of the other optional raw fields (`data`, `params`, `stopReason`) decodes `null` to empty. A
+     required `result` of `null` round-trips as `null`. The file states, with golang/go issue 81050, that `fmt` prints an empty value as `null`
+     under the default build, and does not test `fmt`.
+   * `accept-raw-value` gains an optional raw property; its behaviour file requires `null` to decode to empty and be omitted, and the required
+     `input` of `null` to stay `null`.
+
+   Then the model marks a raw field that is not required, and the emitter gives its type a decoder, or extends the one it has, that stores nothing
+   for a JSON `null` in it; `orDefault` and the lenient path do the same. `withRawPath` treats `null` as empty. Regenerate, accept the changed
+   listings with `-update`, reading each. `README.md` and `docs/architecture.md` say that an absent or `null` raw value is empty (`len(v) == 0`,
+   `string(v) == ""`), that it is not sent, and that `fmt` prints an empty `json.RawMessage` as `null` under Go 1.27.
+
+   Run the root tests also with `GOEXPERIMENT=nojsonv2`. Plants: the decoder keeping `null`; the same applied to a required field; `withRawPath`
+   leaving a `null` input unchanged. Each must fail a regression test. Classify the diff of the generated files, which may change only in how
+   optional raw fields decode; the exported API must not change.
 7. **The conformance test.** Add `instances_test.go` and `conformance_test.go` at the root. A self-test of the instance builder runs on a small inline
    schema: each construct of the list in Design gives the expected instance. Then run the conformance test on the committed schema; record every
    failure as a finding with the type, the instance, and the error, and stop for the owner before changing generated behaviour (step 1). Record the
@@ -323,7 +344,9 @@ In the `validate` job, on Linux, a step after the race detector: `GOEXPERIMENT=n
 
 ## Verification
 
-* The five SDK files are byte-identical to `f2a6a3a`'s after every step, `TestGeneratedFilesUpToDate` passes, and the root's exported API is unchanged.
+* The five SDK files are byte-identical to `f2a6a3a`'s after every step, `TestGeneratedFilesUpToDate` passes, and the root's exported API is unchanged,
+  except for step 6a, whose diff of the generated files changes only how optional raw fields decode.
+* An absent or `null` optional raw value decodes to empty and is not sent, under the default build and with `GOEXPERIMENT=nojsonv2` (step 6a).
 * Each new test failed first or was shown failing on a plant, as the execution record shows.
 * Without the nine committed-schema tests, `go test -coverpkg=./... ./...` in `cmd/generate` covers at least 95% of statements; every site of G5 runs,
   or is recorded with its reason.
@@ -338,9 +361,10 @@ In the `validate` job, on Linux, a step after the race detector: `GOEXPERIMENT=n
 
 ## Rollout and Rollback
 
-Commits land on `main`, made by the owner, one per step. No tag; a push waits for the owner's ask. The SDK's API and wire behaviour do not change, so
-the release notes need no entry; `schema_gen_test.go` is a test file and is not compiled into a dependent's build. A finding that leads to a fix
-changes this, under its own decision.
+Commits land on `main`, made by the owner, one per step. No tag; a push waits for the owner's ask. The SDK's exported API does not change.
+Step 6a changes what the SDK sends: a `null` in an optional raw field is no longer sent on, which the next minor version's release notes
+state. `schema_gen_test.go` is a test file and is not compiled into a dependent's build. A finding that leads to a fix changes this, under its
+own decision.
 
 Rollback is `git revert` of the step commits, newest first. Step 6 is reverted together with step 7 and step 8's root target, which use the
 registry; every other step leaves the generator and the SDK working alone.
@@ -735,3 +759,18 @@ Plants, each in a fresh scratch copy (`s6_plants.json`); all six failed as plant
 * `make check-records` and `make markdownlint` exit 0, and the identifier scan found nothing.
 
 Commit point: the agent stopped here. The owner commits step 6 on `main`.
+
+### Scope added 2026-10-11: step 6a, raw values
+
+The owner committed step 6 as `87f3db7`, then added to this plan's scope a regression that the type checks did not catch: empty raw tool input
+now shows as the literal `null`, and a regression test must guard it. Traced on `87f3db7` (scratch probes at `633281b^` and `87f3db7`), the
+facts are in the 2026-10-11 amendment of [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md).
+
+The owner first chose an SDK type, `RawJSON`, from three fixes. Not committed, that choice was then reopened: the owner asked for a solution in
+line with idiomatic Go, ACP's documentation, the other SDKs, and other Go projects. A probe in a scratch module (`reprprobe`) compared, under both
+builds of `encoding/json`, `json.RawMessage` as it is and with `null` read as absent, `any`, `any` decoded with `UseNumber`, `*json.RawMessage`,
+and a named type; a research report covered ACP's v1 and v2 documentation and Rust types, the TypeScript, Python, and original Go SDKs, the MCP Go
+SDKs, Kubernetes, protobuf, the Anthropic and OpenAI SDKs, oapi-codegen, and golang/go issues 81050, 40495, and 11937. Three options were put to
+the owner: `any` with `json.Number`; `json.RawMessage` with `null` read as absent and the printing documented (recommended); the SDK type. The owner
+chose the second. Step 6a is added before step 7; scope, verification, and rollout are amended above. The plan awaits the owner's approval of
+step 6a.

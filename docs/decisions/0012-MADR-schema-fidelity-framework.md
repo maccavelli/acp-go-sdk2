@@ -1,6 +1,6 @@
 ---
 status: accepted
-date: 2026-10-10
+date: 2026-10-11
 decision-makers: Repository owner
 ---
 
@@ -224,6 +224,75 @@ to encode `content` itself, with no error to return; today a value that cannot e
 Decision: the owner chose to change `content` to `json.RawMessage`, so the caller encodes it, as for the four options. The exported API changes in a
 fifth helper signature, listed in the release notes. Not chosen: keeping `content any` and leaving it out of the raw input when it cannot encode, or
 storing an invalid value so the send fails as today.
+
+## Amendment 2026-10-11, a null raw value is an absent one
+
+The owner reported a regression that no compiler caught: empty raw tool input now shows as the literal `null`. Traced on `87f3db7`:
+
+* **Printing.** In Go 1.27.2's default build `encoding/json` declares `type RawMessage = jsontext.Value` (`encoding/json/v2_stream.go:190`), and
+  `func (v Value) String() string` returns `"null"` when `v == nil` (`encoding/json/jsontext/value.go:74`–`76`). `fmt` calls it, so a raw input
+  that is absent prints as `null`. With `GOEXPERIMENT=nojsonv2`, `RawMessage` is `[]byte` (`encoding/json/stream.go:273`) and prints as `[]`.
+  Before treatment 3 the field was `any`, and an absent value printed as `<nil>`. Go issue 81050, "encoding/json: fmt.Print representation of
+  json.RawMessage changed in Go 1.27" (open, NeedsDecision), has a reply from the `encoding/json/v2` author: printing `null` for nil "seems like
+  right behavior", and `fmt` output "is generally not covered by the Go compatibility agreement"
+  (<https://github.com/golang/go/issues/81050>). The Go 1.27 release notes say the `nojsonv2` opt-out "is expected to be removed in a future
+  release".
+* **Decoding.** `json.RawMessage` keeps a JSON `null` as the four bytes `null`, where `any` held nil; Go has kept that behaviour since golang/go
+  issue 40495. A probe in scratch copies at `633281b^` (the commit before raw JSON) and at `87f3db7`, decoding a `tool_call` and a
+  `tool_call_update`, gave:
+
+  | `rawInput` on the wire | `633281b^` | `87f3db7` |
+  | --- | --- | --- |
+  | absent | nil, prints `<nil>`, omitted when sent | nil, prints `null`, omitted when sent |
+  | `null` | nil, prints `<nil>`, omitted when sent | the bytes `null`, prints `null`, sent as `"rawInput":null` |
+  | `{}` | `map[]`, sent as `{}` | `{}`, sent as `{}` |
+
+  An input decoded from `null` also defeats `WithStartLocations`: `null` decodes into a nil map, so `withRawPath` returns it unchanged and no
+  `path` is added.
+* **What ACP says.** The v1 tool-call documentation: "Omission and `null` are equivalent for `rawInput` and `rawOutput`. On an initial tool call,
+  both mean no value is provided. On a tool call update, both leave the previously reported value unchanged." The Rust reference types them
+  `Option<serde_json::Value>` under `#[skip_serializing_none]`, so a `null` is read as `None` and never sent
+  (`agent-client-protocol-schema/src/v1/tool_call.rs` at `7725341d46d7`). The TypeScript SDK declares `rawInput?: unknown`, and the Python SDK
+  `Optional[Any] = None` with `None` left out when it sends v1. ACP v2 gives these fields three states, omitted, `null`, and a value
+  (`MaybeUndefined` in Rust), which v1 does not have.
+* **Other Go code.** `github.com/coder/acp-go-sdk`, which this SDK was separated from, has declared `RawInput any` with `omitempty` in every
+  version. The MCP Go SDK uses `any` on its client side and `json.RawMessage` with a manual `len(raw) == 0 || string(raw) == "null"` check on its
+  server side. Kubernetes' `apiextensions` `JSON` and `runtime.RawExtension` map `null` to empty in `UnmarshalJSON`. `x/tools`' jsonrpc2 uses
+  `*json.RawMessage`. `mark3labs/mcp-go` keeps a decoded value and a raw copy.
+* **Scope.** All 18 fields of S3 are raw: 15 optional (`rawInput`, `rawOutput`, `data`, `params`, `stopReason`) and the 3 required `result` fields
+  of `AgentResult`, `ClientResult`, and `UnstableMessageMcpResult`. `633281b`, which made them `json.RawMessage`, is in `v0.14.0`.
+* **Why no compiler caught it.** `fmt` takes any value, and `string(v)`, `json.Unmarshal(v, &x)`, and `%v` all compile for `any` and for
+  `json.RawMessage` alike; only what they produce changed.
+
+Decision: the owner first chose an SDK type for raw values, `RawJSON`, which would print an empty value as nothing. Asked for a better solution,
+in line with idiomatic Go and with ACP, and for options from ACP's documentation, the other SDKs, and other Go projects, the owner chose instead to
+keep `json.RawMessage` and treat a `null` raw value as an absent one:
+
+* The fields stay `json.RawMessage`, as do the five helpers' parameters; the exported API does not change.
+* A JSON `null` in an optional raw field decodes to an empty value, as ACP v1 defines `null` and omission to be equivalent. An empty value is
+  omitted when sent, so a `null` is no longer sent on. `withRawPath` treats a `null` input as empty, so `WithStartLocations` adds `path` to it.
+* A required raw field, the three `result` fields, keeps `null`: it is the value the field carries.
+* Every other value is kept byte for byte, digits included. A union's `Unknown`, a catch-all's `Extra`, and the `params` of an extension method are
+  unchanged.
+* The documentation says that an absent raw value is one with `len(v) == 0`, that `string(v)` gives `""` for it, and that `fmt` prints an empty
+  `json.RawMessage` as `null` under Go 1.27's default build, as golang/go issue 81050 describes.
+
+Not chosen: going back to `any`, decoding numbers as `json.Number`, which matches the original SDK but breaks code that reads the bytes and turns
+`float64` assertions into run-time failures; and the SDK type `RawJSON`, which prints nothing for an empty value under both builds but breaks the
+API again, puts a type of the SDK's own where Go code expects the standard one, and overrides how Go prints raw JSON. Neither gives ACP v2's
+three states, which will need a type of their own.
+
+Consequences:
+
+* Good, because a `null` raw value is read and sent as ACP v1 defines it, and as before treatment 3, and `WithStartLocations` works on it again.
+* Good, because the exported API and the standard type stay; nothing changes for code written against `v0.14.0`.
+* Good, because a regression test pins what a raw value decodes to, encodes as, and gives from `string(v)`, under both builds.
+* Bad, because an empty raw value printed with `%v`, `%s`, or `fmt.Sprint` still shows `null` under the default build: that is Go 1.27's
+  behaviour for every `json.RawMessage`, documented here rather than overridden. Until the opt-out goes, the same value prints differently under
+  `GOEXPERIMENT=nojsonv2`.
+* Neutral, because an explicit `null` and an absent key are no longer told apart, as before treatment 3 and as ACP v1 defines them.
+
+Implementation: step 6a of [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md), added to that plan's scope by the owner on 2026-10-11.
 
 ## More Information
 
