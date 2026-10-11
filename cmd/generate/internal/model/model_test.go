@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"go/token"
 	"strings"
 	"testing"
@@ -201,4 +202,53 @@ func FuzzExportedName(f *testing.F) {
 			t.Fatalf("fieldName(%q) = %q, but a second pass gives %q", raw, name, again)
 		}
 	})
+}
+
+// TestNestedNameExhausted requires a nested struct or an inline variant whose
+// every candidate name is taken, up to the thousandth, to be refused by name.
+func TestNestedNameExhausted(t *testing.T) {
+	t.Parallel()
+	taken := func(base string, defs map[string]*load.Definition) {
+		defs[base] = &load.Definition{Type: "string"}
+		defs[base+"Inline"] = &load.Definition{Type: "string"}
+		for i := 2; i < 1000; i++ {
+			defs[fmt.Sprintf("%sInline%d", base, i)] = &load.Definition{Type: "string"}
+		}
+	}
+	inline := &load.Definition{Type: "object", Properties: map[string]*load.Definition{"x": {Type: "string"}}}
+	tests := []struct {
+		name string
+		defs map[string]*load.Definition
+		want string
+	}{
+		{"nested struct", map[string]*load.Definition{"Outer": {Type: "object", Properties: map[string]*load.Definition{"inner": inline}}},
+			`Outer.properties.inner: Outer: no unique nested type name for "inner"`},
+		{"inline variant", map[string]*load.Definition{"U": {AnyOf: []*load.Definition{
+			{Title: "Box", Type: "object", Properties: map[string]*load.Definition{"x": {Type: "string"}}},
+			{Title: "Bag", Type: "object", Properties: map[string]*load.Definition{"y": {Type: "string"}}}}}},
+			`U: no unique nested type name for "Box"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			base := map[string]string{"nested struct": "OuterInner", "inline variant": "UBox"}[tt.name]
+			taken(base, tt.defs)
+			_, err := Build(Input{Meta: &load.Meta{}, Schema: &load.Schema{Defs: tt.defs}})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %v, want one containing %s", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestSideOf pins the side of every binding. Build reaches it only for a
+// rule's binding, which must be an optional agent interface.
+func TestSideOf(t *testing.T) {
+	t.Parallel()
+	for b, want := range map[Binding]string{BindAgent: "agent", BindAgentOptional: "agent", BindAgentExperimental: "agent",
+		BindClient: "client", BindClientExperimental: "client", BindUnknown: ""} {
+		if got := sideOf(b); got != want {
+			t.Errorf("sideOf(%v) = %q, want %q", b, got, want)
+		}
+	}
 }

@@ -85,19 +85,28 @@ type File struct {
 	Src  []byte
 }
 
+// fileBuild is one generated file: its name and the function that builds it.
+type fileBuild struct {
+	name  string
+	build func(*model.Model) *goFile
+}
+
+// builds are the generated files, in the order the generator writes them.
+var builds = []fileBuild{
+	{"constants_gen.go", constantsFile},
+	{"types_gen.go", typesFile},
+	{"agent_gen.go", agentFile},
+	{"client_gen.go", clientFile},
+	{"helpers_gen.go", helpersFile},
+}
+
 // Render builds and formats every generated file, in the order the generator
 // writes them. It returns the first failure, prefixed with the file's name.
-func Render(m *model.Model) ([]File, error) {
-	builds := []struct {
-		name  string
-		build func(*model.Model) *goFile
-	}{
-		{"constants_gen.go", constantsFile},
-		{"types_gen.go", typesFile},
-		{"agent_gen.go", agentFile},
-		{"client_gen.go", clientFile},
-		{"helpers_gen.go", helpersFile},
-	}
+func Render(m *model.Model) ([]File, error) { return renderFiles(m, builds) }
+
+// renderFiles builds and formats each of builds for m, as Render does; a test
+// passes its own builds.
+func renderFiles(m *model.Model, builds []fileBuild) ([]File, error) {
 	files := make([]File, 0, len(builds))
 	for _, b := range builds {
 		src, err := b.build(m).render()

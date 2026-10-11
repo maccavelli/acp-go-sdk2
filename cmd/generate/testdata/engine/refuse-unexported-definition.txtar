@@ -1,0 +1,11 @@
+A definition whose name is not an exported Go identifier (names.go, declare).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "thing": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+definition thing: "thing" is not an exported Go identifier

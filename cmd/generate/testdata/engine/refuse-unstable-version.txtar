@@ -1,0 +1,18 @@
+Stable and unstable meta of different versions (merge.go).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Thing": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- meta.unstable.json --
+{"version": 2, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.unstable.json --
+{"$defs": {
+  "Thing": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+stable meta version (1) differs from unstable meta version (2)

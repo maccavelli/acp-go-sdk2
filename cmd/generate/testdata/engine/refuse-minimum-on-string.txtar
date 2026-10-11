@@ -1,0 +1,11 @@
+minimum on a string property (validate.go).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Thing": {"type": "object", "properties": {"s": {"type": "string", "minimum": 1}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+minimum or maximum on string, not a number

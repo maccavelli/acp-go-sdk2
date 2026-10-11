@@ -1,0 +1,21 @@
+An unstable-only method's type refers to a definition that is null
+(merge.go, buildUnstableDuplicateSet).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Thing": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- meta.unstable.json --
+{"version": 1, "agentMethods": {"new": "u/new"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.unstable.json --
+{"$defs": {
+  "NewRequest": {"type": "object", "properties": {"g": {"$ref": "#/$defs/Ghost"}}, "x-side": "agent", "x-method": "u/new"},
+  "NewResponse": {"type": "object", "x-side": "agent", "x-method": "u/new"},
+  "Ghost": null,
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+unstable schema missing definition "Ghost"

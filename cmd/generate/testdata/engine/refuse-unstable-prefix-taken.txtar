@@ -1,0 +1,20 @@
+An unstable-only method's type would be copied as UnstableNewRequest, a name
+the stable schema already holds (merge.go).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "UnstableNewRequest": {"type": "object", "properties": {"y": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- meta.unstable.json --
+{"version": 1, "agentMethods": {"new": "u/new"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.unstable.json --
+{"$defs": {
+  "NewRequest": {"type": "object", "properties": {"x": {"type": "string"}}, "x-side": "agent", "x-method": "u/new"},
+  "NewResponse": {"type": "object", "x-side": "agent", "x-method": "u/new"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+"UnstableNewRequest" already exists in stable defs

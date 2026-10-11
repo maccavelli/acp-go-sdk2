@@ -190,6 +190,17 @@ func TestProtocolTableRefuses(t *testing.T) {
 			wanted: []string{`agent method "s/cancel"`, `capability "session.missing"`, `SessionCaps has no property "missing"`}},
 		{name: "hand-written helpers on a non-union", table: func(p *Protocol) { p.HandWrittenHelpers = []string{"Update"} },
 			wanted: []string{"hand-written helpers for Update", "not a union"}},
+		{name: "interface without a variable name", table: func(p *Protocol) { p.Interfaces[0].Var = "" },
+			wanted: []string{"interface Loader", "it needs a variable name"}},
+		{name: "two interfaces of one binding", table: func(p *Protocol) {
+			p.Interfaces = append(p.Interfaces, Interface{Binding: BindAgentOptional, Name: "Loader2", Var: "loader2"})
+		}, wanted: []string{"interface Loader2", "another interface has its binding"}},
+		{name: "unexported interface name", table: func(p *Protocol) { p.Interfaces[0].Name = "loader" },
+			wanted: []string{"interface loader", `"loader" is not an exported Go identifier`}},
+		{name: "prompt turn and its cancel at once", table: func(p *Protocol) { p.Methods[1].CancelsPromptTurn = true },
+			wanted: []string{`agent method "s/prompt"`, "it cannot be both a prompt turn and its cancel"}},
+		{name: "capability with an empty segment", table: func(p *Protocol) { p.Methods[0].Capability = "session..list" },
+			wanted: []string{`agent method "s/load"`, `capability "session..list" has an empty segment`}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

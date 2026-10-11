@@ -239,3 +239,24 @@ func TestCheckAcceptsRepository(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestFindRepoRoot finds the SDK root from this package's directory. From a
+// directory with no schema above it, run without flags fails and names it.
+// t.Chdir keeps it from running in parallel.
+func TestFindRepoRoot(t *testing.T) {
+	root, err := findRepoRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.Abs(repoRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != want {
+		t.Errorf("findRepoRoot = %s, want %s", root, want)
+	}
+	t.Chdir(t.TempDir())
+	if err := run(nil); err == nil || !strings.Contains(err.Error(), "could not locate repository root") {
+		t.Errorf("run without flags = %v, want could not locate repository root", err)
+	}
+}

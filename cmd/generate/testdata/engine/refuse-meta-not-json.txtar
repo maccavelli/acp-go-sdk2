@@ -1,0 +1,11 @@
+meta.json that is not JSON (load.go, ReadMeta).
+
+-- meta.json --
+{"version": 1,
+-- schema.json --
+{"$defs": {
+  "Thing": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+parse meta.json

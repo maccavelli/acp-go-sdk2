@@ -1,10 +1,13 @@
 package emit
 
 import (
+	"errors"
 	"go/ast"
 	"go/token"
 	"strings"
 	"testing"
+
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
 func mustRender(t *testing.T, f *goFile) string {
@@ -191,6 +194,13 @@ func TestRenderErrors(t *testing.T) {
 		want  []string
 	}{
 		{"declaration go/format cannot parse back", func(f *goFile) { f.add(typeDecl("1bad", id("int"))) }, []string{"format:", "expected 'IDENT'"}},
+		// With grouped imports format.Node itself re-parses what it printed,
+		// so the same declaration fails in the print step.
+		{"declaration format.Node cannot parse back", func(f *goFile) {
+			f.add(typeDecl("A", f.qual("encoding/json", "RawMessage")))
+			f.add(typeDecl("B", f.qual("errors", "Frame")))
+			f.add(typeDecl("1bad", id("int")))
+		}, []string{"print:", "format.Node internal error"}},
 		{"doc comment with no field after it", func(f *goFile) {
 			var st fieldSet
 			st.add(structField("Name", id("string"), "name"))
@@ -230,4 +240,48 @@ func TestRenderErrors(t *testing.T) {
 			t.Errorf("apply error = %v, want line table rejected", err)
 		}
 	})
+}
+
+// TestRenderNamesTheFile requires a file that fails to render to be named in
+// the error, and no file to be returned.
+func TestRenderNamesTheFile(t *testing.T) {
+	t.Parallel()
+	ok := func(*model.Model) *goFile { f := newFile(); f.add(typeDecl("A", id("int"))); return f }
+	bad := func(*model.Model) *goFile { f := newFile(); f.fail(errors.New("boom")); return f }
+	files, err := renderFiles(nil, []fileBuild{{"a_gen.go", ok}, {"b_gen.go", bad}})
+	if err == nil || err.Error() != "b_gen.go: boom" || files != nil {
+		t.Errorf("renderFiles = %d files, %v; want none and b_gen.go: boom", len(files), err)
+	}
+}
+
+// TestFirstPos requires the position of the first token for each expression
+// kind firstPos knows, and nil for the others (F15).
+func TestFirstPos(t *testing.T) {
+	t.Parallel()
+	x, lit := id("x"), str("s")
+	unary := &ast.UnaryExpr{Op: token.AND, X: x}
+	star := &ast.StarExpr{X: x}
+	typed := &ast.CompositeLit{Type: id("T")}
+	untyped := &ast.CompositeLit{}
+	tests := []struct {
+		name string
+		expr ast.Expr
+		want *token.Pos
+	}{
+		{"ident", x, &x.NamePos},
+		{"basic literal", lit, &lit.ValuePos},
+		{"key-value", &ast.KeyValueExpr{Key: x, Value: lit}, &x.NamePos},
+		{"unary", unary, &unary.OpPos},
+		{"star", star, &star.Star},
+		{"selector", &ast.SelectorExpr{X: x, Sel: id("Y")}, &x.NamePos},
+		{"call", &ast.CallExpr{Fun: x}, &x.NamePos},
+		{"composite with a type", typed, &typed.Type.(*ast.Ident).NamePos},
+		{"composite without a type", untyped, &untyped.Lbrace},
+		{"index", &ast.IndexExpr{X: x, Index: lit}, nil},
+	}
+	for _, tt := range tests {
+		if got := firstPos(tt.expr); got != tt.want {
+			t.Errorf("%s: firstPos = %p, want %p", tt.name, got, tt.want)
+		}
+	}
 }

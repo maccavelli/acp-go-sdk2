@@ -1,0 +1,8 @@
+schema.json that is not JSON (load.go, ReadSchema).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": [
+-- want.err --
+parse schema.json

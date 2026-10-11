@@ -1,0 +1,14 @@
+A request named Request: its interface method name, Request less its suffix,
+is empty (methods.go).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"r": "x/r"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Request": {"type": "object", "properties": {}, "x-side": "agent", "x-method": "x/r"},
+  "Response": {"type": "object", "x-side": "agent", "x-method": "x/r"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+agent method "x/r": interface method name
+"" is not an exported Go identifier

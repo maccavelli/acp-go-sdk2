@@ -1,0 +1,13 @@
+A discriminator value that gives no exported field name (model.go,
+buildVariant).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"oneOf": [{"type": "object", "properties": {"type": {"type": "string", "const": "1x"}}, "required": ["type"]}, {"type": "object", "properties": {"type": {"type": "string", "const": "b"}}, "required": ["type"]}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+U variant 1: wrapper field
+is not an exported Go identifier

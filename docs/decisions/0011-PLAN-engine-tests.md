@@ -500,3 +500,68 @@ clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No new Go file is u
 check-records` and `make markdownlint` exit 0, and the identifier scan found nothing.
 
 Commit point: the agent stopped here. The owner commits step 3 on `main`.
+
+### Step 4, refusal cases, 2026-10-11
+
+The owner committed step 3 as `fbf15f1`. Step 4 ran on `main` from that clean tree. The agent did not commit.
+
+**Cases.** 17 refusal cases were added (`s4_cases.py` in the session scratchpad), making 27 refusal cases and 71 cases in all:
+
+* `load.go`: `refuse-meta-missing`, `refuse-meta-not-json`, `refuse-schema-missing`, `refuse-schema-not-json`, `refuse-meta-unstable-not-json`, and
+  `refuse-schema-unstable-not-json`.
+* `main.go`: `refuse-unstable-meta-alone`.
+* `merge.go`: `refuse-unstable-version`, `refuse-unstable-key-two-wires`, `refuse-unstable-prefix-taken`, and `refuse-unstable-null-definition`.
+* `validate.go`: `refuse-bound-on-named-primitive`, `refuse-minlength-on-integer`, and `refuse-minimum-on-string`.
+* `names.go`, `methods.go`, and `model.go`: `refuse-unexported-definition`, `refuse-method-name-empty`, and `refuse-variant-field-name`.
+
+**Unit tests**, for the sites a schema directory cannot reach:
+
+* `internal/load/errors_test.go` (new): `TestReadErrors`, where each of the four files is unreadable because a directory stands in its place.
+  `TestMergeRefusesNilInputs` covers the four nil inputs of `MergeStableAndUnstable`, and the two of `buildUnstableDuplicateSet`, called directly.
+* `internal/model`: five cases in `TestProtocolTableRefuses`: an interface without a variable name, two interfaces of one binding, an unexported
+  interface name, a prompt turn that is also its cancel, and a capability with an empty segment. `TestNestedNameExhausted` takes a nested struct
+  and an inline variant whose every candidate name is taken up to the thousandth. `TestSideOf` covers every binding.
+* `internal/emit`: a case in `TestRenderErrors` where `format.Node` itself fails. With grouped imports it re-parses what it printed, so an
+  unprintable declaration gives `print: format.Node internal error`, which is how phase 5's probe reached it. `TestRenderNamesTheFile` covers
+  `Render`'s wrapper, and `TestFirstPos` every expression kind `firstPos` knows, and nil for an index expression.
+* `cmd/generate`: `TestFindRepoRoot` checks the root found from the package's directory, and `run` without flags from a temporary directory, with
+  `t.Chdir`, so not in parallel.
+
+**A seam in `internal/emit`.** `Render`'s wrapper names the file only when a builder's output fails to render, and a model from `Build` cannot make a
+builder fail. `Render` now calls `renderFiles(m, builds)`, and `builds` is a package-level list of `fileBuild`; the test passes its own list, as
+phase 5 injected the rename (`writeWith`). The output does not change.
+
+The refusals were already right, so the new tests passed on their first run, all 27 refusal cases among them (`go test -v` listed 27 `PASS`). Step
+1 then asks for each to be shown failing on a plant. Twelve plants, one per file, each in a fresh scratch copy (`s4_plants.json`); all twelve failed
+the test named:
+
+* `load.go`: a bad `meta.json` accepted fails `refuse-meta-not-json`, and an unreadable `meta.unstable.json` taken as absent fails
+  `TestReadErrors`.
+* `merge.go`: a version mismatch accepted fails `refuse-unstable-version`.
+* `protocol.go`: an interface without a variable accepted fails `TestProtocolTableRefuses`.
+* `validate.go`: a minimum on a string accepted fails `refuse-minimum-on-string`.
+* `model.go`: a bad wrapper field accepted fails `refuse-variant-field-name`.
+* `names.go`: the exported-name check removed from `declare` fails `refuse-unexported-definition`.
+* `methods.go`: an empty method name accepted fails `refuse-method-name-empty`.
+* `emit/file.go`: `Render` without the file name fails `TestRenderNamesTheFile`, and the print step without `print:` fails `TestRenderErrors`.
+* `main.go`: an unstable meta alone accepted fails `refuse-unstable-meta-alone`, and the working directory taken as the root fails
+  `TestFindRepoRoot`.
+
+**The sites of G5.** All run except three, kept with the reason (`refusals.py` over the synthetic-only profile):
+
+* `emit/file.go:300` (G5's `:291`), `func %s:` in `layout.decl`: `printedSize` of a function body fails only for a node type `go/format` does not
+  support, and a body is always an `*ast.BlockStmt`. Probed in a scratch copy: a malformed statement inside a body, an `AssignStmt` with no left
+  side, makes `go/printer` panic with `index out of range` in `(*ast.AssignStmt).Pos`; it does not return an error. Only an engine defect builds such
+  a node. This is recorded for the owner; phase 5 removed the engine's own `panic` calls, and this one is in the standard library.
+* `load/merge.go:99` and `:254`: a reachable definition that is null is refused first at `:216`, which visits every reachable name before the
+  fixpoint (`:254`) and before the copy (`:99`).
+
+Of the step 3 functions sent to this step, `sideOf` and `firstPos` are now at 100%, and the unstable readers' errors run.
+
+**Coverage**, synthetic only, `internal/enginetest` left out: 95.4%, against 92.1% after step 3 and 88.0% on `f2a6a3a`.
+
+**Results.** Regenerating exited 0, and `git diff --quiet f2a6a3a -- '*_gen.go' testdata` exited 0. `make pre-add-check`: `go-precheck: 81 file(s)
+clean (gofmt, golangci-lint, go vet, go test, govulncheck).` The untracked `errors_test.go` passed by name: `go-precheck: 1 file(s) clean`. `make
+check-records` and `make markdownlint` exit 0, and the identifier scan found nothing.
+
+Commit point: the agent stopped here. The owner commits step 4 on `main`.

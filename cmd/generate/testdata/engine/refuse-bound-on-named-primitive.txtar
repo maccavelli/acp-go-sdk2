@@ -1,0 +1,12 @@
+minimum on a named integer type: Validate would have nowhere to check it
+(validate.go).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Count": {"type": "integer", "format": "int64", "minimum": 1},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Count: a bound on a named primitive type is not checked

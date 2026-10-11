@@ -1,0 +1,9 @@
+A schema directory without meta.json (load.go, ReadMeta).
+
+-- schema.json --
+{"$defs": {
+  "Thing": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+read meta.json
