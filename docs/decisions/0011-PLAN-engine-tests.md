@@ -32,6 +32,7 @@ In scope:
 * at the root: the new generated file `schema_gen_test.go`, and new hand-written `conformance_test.go`, `instances_test.go`, and `fuzz_test.go`
 * `Makefile` (`fuzz`, `mutation-engine`, `mutation-generated`), `.github/workflows/ci.yml` (D7)
 * `cmd/generate/internal/output/check.go`: one shared source importer (added 2026-10-11, see step 5's deviation)
+* `cmd/generate/internal/load/merge.go` and `internal/model`: where each merged definition came from (added 2026-10-11, see step 6's deviation)
 * `docs/architecture.md`, `RELEASING.md`, and this plan's records
 
 Out of scope:
@@ -648,3 +649,89 @@ sharedImporter()`, which is meant to compare two calls, now compares two variabl
 found nothing.
 
 Commit point: the agent stopped here. The owner commits step 5 on `main`.
+
+### Step 6 deviation, 2026-10-11: the merge records where each definition came from
+
+The owner committed step 5 as `d96d88f`. The registry is to key every generated type by its schema definition and file, but the model cannot
+say where a merged definition came from. `load.Provenance` records only the names the stable schema lacks (`UnstableDefs`, 102). A probe in a
+scratch copy (`prov_probe_test.go`) sorted the 280 merged definitions of the committed schema:
+
+* 170 are the stable definition as it is (`schema.json`, same key);
+* 8 keep a stable name with the unstable content: `SessionUpdate`, `ClientCapabilities`, `InitializeResponse`, `McpServer`, `McpCapabilities`,
+  `PromptResponse`, `AgentCapabilities`, `SessionCapabilities` (`schema.unstable.json`, same key);
+* 46 are unstable only (`schema.unstable.json`, same key);
+* 56 are copies renamed with the `Unstable` prefix (`schema.unstable.json`, the key without the prefix); for 1 of them that key is also a stable
+  definition.
+
+Resolutions put to the owner: the merge records each definition's origin in `Provenance` (recommended); the root test derives origins by rule;
+the registry embeds each merged definition. The owner chose the first. `MergeStableAndUnstable` records, for each merged definition that is not
+the stable one as it is, the file and key it came from; the model keeps it on each type; the registry writes it. Files added to the step's
+scope: `cmd/generate/internal/load/merge.go` and its test, and `cmd/generate/internal/model/model.go` and its test. The MADR is unchanged: it
+asserts nothing about provenance.
+
+### Step 6, the registry, 2026-10-11
+
+Ran on `main` from `d96d88f`. The agent did not commit.
+
+**Origins.** `load.Provenance` gained `Origins map[string]Origin`, and the constants `StableSchemaFile` and `UnstableSchemaFile`.
+`MergeStableAndUnstable` lists every merged definition that is not the stable one as it is, by pointer: a renamed copy under the key it was copied
+from, and any other under its own key. `model.Type` gained `Origin`, the merge's or, by default, `schema.json` and the type's name. Tests:
+`TestMergeOrigins`, with one definition of each kind, and `TestTypeOrigin`, with and without provenance. Both failed first, on `undefined: Origin`
+and on `Type has no field or method Origin`.
+
+**The builder.** `internal/emit/registry.go` (new): `registryFile` is the sixth entry of `builds`, `schema_gen_test.go`. Against the design:
+
+* `schemaType` also carries `Type`, the Go type, because 56 types are named apart from their key.
+* The lists are functions (`schemaTypes()`, `schemaUnions()`, `schemaMethods()`), not package variables. The layout puts the elements of a
+  composite literal on their own lines only inside a function body; a package-level literal would print on one line.
+* `New`, `Params`, and `Result` are `newOf[T]`, a generic helper emitted in the file, rather than function literals, which `firstPos` cannot place
+  (F15).
+* A `var` block asserts that `recordingAgent` and `recordingClient` implement every interface, so `output.Check` proves the recorders complete.
+  `Result` is omitted for a notification and for a request without a result. A recorder's request method returns `var r T; return r, nil`, which
+  holds for every kind of `T`.
+
+`TestRegistry` builds a model with a type of each kind, a union with a catch-all and one with `Unknown`, an agent request and notification, a
+client request without a result, a protocol method, and a type with an unstable origin. It reads the rendered file's AST: the types in model
+order with their origin, the two unions' keys, variant counts, `Unknown`, and catch-all, the four methods, the recorders' methods, and the
+assertions. It failed first, with `Render wrote no schema_gen_test.go`.
+
+**A layout correction.** The first rendering had a blank line before every element of a literal whose elements are literals, and inside a keyed
+literal value. `layout.literals` gave an element its line, then the nested literal moved its brace to the next one. Such an element now opens on
+its own line, and a keyed one on its key's line. `TestNestedLiteralLayout` failed first, showing the blank lines. No committed generated file
+had the shape: a script counted no `{` or `,` followed by a blank line in any of the five. The five stayed byte-identical.
+
+**The check.** `output.Check` already type-checks every file `Render` returns with the package, `_test.go` included.
+`TestCheckIncludesGeneratedTestFiles` passed on its first run: a generated test file that uses `missingName` is refused, naming
+`schema_gen_test.go` and `undefined: missingName`, and one that uses the package's names is accepted. Its plant is below. A hand-written
+`_test.go` is still not part of the check; a name it shares with the registry would show only in `go test`.
+
+**The committed registry.** Regenerating wrote `schema_gen_test.go` at the root, 2926 lines. By script:
+
+* 280 types, of which 110 come from `schema.unstable.json` and 56 are under another key, which matches the merge probe;
+* 28 unions with 111 variants;
+* 41 methods: 28 agent, 12 client, and 1 protocol;
+* `recordingAgent` with 28 methods and `recordingClient` with 12, asserted against `Agent`, `AgentLoader`, `AgentExperimental`, `Client`, and
+  `ClientExperimental`;
+* no blank line inside a literal.
+
+`go vet .` and `go test .` pass at the root, also with `GOEXPERIMENT=nojsonv2`.
+
+Plants, each in a fresh scratch copy (`s6_plants.json`); all six failed as planted:
+
+* The registry dropping a union with a catch-all: `--- FAIL: TestRegistry`.
+* `output.Check` skipping `_test.go` files: `--- FAIL: TestCheckIncludesGeneratedTestFiles`.
+* The merge without the origins of copies: `--- FAIL: TestMergeOrigins`.
+* The model ignoring origins: `--- FAIL: TestTypeOrigin`.
+* The layout as before: `--- FAIL: TestNestedLiteralLayout`.
+* The recorders skipping notifications: `TestCheckAcceptsRepository` failed with `recordingAgent does not implement Agent (missing method Cancel)`.
+
+**Results.**
+
+* The five SDK files are byte-identical to `f2a6a3a`'s (`git diff --quiet`).
+* The root's exported API, by the API listing program on `f2a6a3a` and on the tree: 2314 lines each, both exit 0, `cmp` identical.
+* `go test ./...` in `cmd/generate`: 12.2 s.
+* `make pre-add-check`: `go-precheck: 83 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` The four untracked Go files,
+  `registry.go`, `registry_test.go`, `origins_test.go`, and `schema_gen_test.go`, passed by name: `go-precheck: 4 file(s) clean`.
+* `make check-records` and `make markdownlint` exit 0, and the identifier scan found nothing.
+
+Commit point: the agent stopped here. The owner commits step 6 on `main`.

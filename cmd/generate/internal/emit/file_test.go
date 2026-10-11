@@ -285,3 +285,41 @@ func TestFirstPos(t *testing.T) {
 		}
 	}
 }
+
+// TestNestedLiteralLayout requires a composite literal whose elements are
+// composite literals, or keyed composite literals, to print without blank
+// lines, as gofmt writes it.
+func TestNestedLiteralLayout(t *testing.T) {
+	t.Parallel()
+	f := newFile()
+	pair := func(a, b string) ast.Expr { return composite(nil, kv(id("A"), str(a)), kv(id("B"), str(b))) }
+	f.add(function("f", funcType(nil, param("", sliceOf(id("T")))), ret(composite(sliceOf(id("T")),
+		pair("1", "2"),
+		composite(nil, kv(id("A"), str("3")), kv(id("C"), composite(sliceOf(id("T")), pair("4", "5"), pair("6", "7")))),
+	))))
+	want := `func f() []T {
+	return []T{
+		{
+			A: "1",
+			B: "2",
+		},
+		{
+			A: "3",
+			C: []T{
+				{
+					A: "4",
+					B: "5",
+				},
+				{
+					A: "6",
+					B: "7",
+				},
+			},
+		},
+	}
+}
+`
+	if got := mustRender(t, f); !strings.HasSuffix(got, want) {
+		t.Errorf("rendered:\n%s\nwant it to end with:\n%s", got, want)
+	}
+}

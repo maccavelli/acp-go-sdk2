@@ -14,7 +14,26 @@ type Provenance struct {
 	// UnstableWires names the wire methods of the unstable meta that the stable
 	// meta has in none of its agent, client, or protocol methods.
 	UnstableWires map[string]bool
+	// Origins names, for each merged definition that is not the stable one as
+	// it is, the file and key it was copied from: the unstable version of a
+	// stable definition, a definition only the unstable schema has, or a copy
+	// renamed with the Unstable prefix. A definition not listed is the stable
+	// schema's, under its own name.
+	Origins map[string]Origin
 }
+
+// Origin is the file and key of the definition a merged definition was
+// copied from.
+type Origin struct {
+	File string
+	Key  string
+}
+
+// The schema files an Origin names.
+const (
+	StableSchemaFile   = "schema.json"
+	UnstableSchemaFile = "schema.unstable.json"
+)
 
 // MergeStableAndUnstable combines stable and unstable schema inputs without mutating either.
 //
@@ -110,10 +129,22 @@ func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta
 		combinedSchema.Defs[newName] = copyDef
 	}
 
-	prov := &Provenance{UnstableDefs: map[string]bool{}, UnstableWires: map[string]bool{}}
-	for name := range combinedSchema.Defs {
+	prov := &Provenance{UnstableDefs: map[string]bool{}, UnstableWires: map[string]bool{}, Origins: map[string]Origin{}}
+	copiedFrom := make(map[string]string, len(dupMap))
+	for oldName, newName := range dupMap {
+		copiedFrom[newName] = oldName
+	}
+	for name, def := range combinedSchema.Defs {
 		if _, ok := stableSchema.Defs[name]; !ok {
 			prov.UnstableDefs[name] = true
+		}
+		// A stable definition kept as it is is the same pointer; any other
+		// was copied from the unstable schema.
+		switch {
+		case copiedFrom[name] != "":
+			prov.Origins[name] = Origin{File: UnstableSchemaFile, Key: copiedFrom[name]}
+		case def != stableSchema.Defs[name]:
+			prov.Origins[name] = Origin{File: UnstableSchemaFile, Key: name}
 		}
 	}
 	for wire := range unstableOnlyWires {

@@ -3,6 +3,7 @@ package output
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -135,5 +136,21 @@ func TestCheckConcurrently(t *testing.T) {
 		if err := <-errs; err != nil {
 			t.Error(err)
 		}
+	}
+}
+
+// TestCheckIncludesGeneratedTestFiles type-checks a generated _test.go file
+// with the package: one that refers to a name nothing declares is refused,
+// and one that uses the package's names is accepted.
+func TestCheckIncludesGeneratedTestFiles(t *testing.T) {
+	t.Parallel()
+	dir := dirWith(t, map[string]string{"hand.go": stub})
+	bad := append(slices.Clone(uses), emit.File{Name: "schema_gen_test.go", Src: []byte("package acp\n\nvar _ = missingName\n")})
+	if err := Check(dir, bad); err == nil || !strings.Contains(err.Error(), "schema_gen_test.go") || !strings.Contains(err.Error(), "undefined: missingName") {
+		t.Errorf("Check = %v, want it to refuse undefined: missingName in schema_gen_test.go", err)
+	}
+	good := append(slices.Clone(uses), emit.File{Name: "schema_gen_test.go", Src: []byte("package acp\n\nvar _ = F\n\nvar _ U\n")})
+	if err := Check(dir, good); err != nil {
+		t.Errorf("Check refused a test file that uses the package: %v", err)
 	}
 }

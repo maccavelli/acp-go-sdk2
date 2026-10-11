@@ -98,6 +98,7 @@ var builds = []fileBuild{
 	{"agent_gen.go", agentFile},
 	{"client_gen.go", clientFile},
 	{"helpers_gen.go", helpersFile},
+	{"schema_gen_test.go", registryFile},
 }
 
 // Render builds and formats every generated file, in the order the generator
@@ -373,17 +374,34 @@ func (l *layout) literals(n ast.Node, size int) {
 		l.reserve(ln, size)
 		return ln
 	}
+	var place func(lit *ast.CompositeLit, open int)
+	place = func(lit *ast.CompositeLit, open int) {
+		l.at(&lit.Lbrace, open)
+		for _, e := range lit.Elts {
+			// An element that is itself a broken literal opens on its own
+			// line, and a keyed one on its key's line, so no line stays blank.
+			if inner, ok := e.(*ast.CompositeLit); ok && inner.Type == nil && len(inner.Elts) > 1 {
+				place(inner, line())
+				continue
+			}
+			ln := line()
+			l.at(firstPos(e), ln)
+			if kv, ok := e.(*ast.KeyValueExpr); ok {
+				if inner, ok := kv.Value.(*ast.CompositeLit); ok && len(inner.Elts) > 1 {
+					place(inner, ln)
+					continue
+				}
+			}
+			l.literals(e, size)
+		}
+		l.at(&lit.Rbrace, line())
+	}
 	ast.Inspect(n, func(n ast.Node) bool {
 		lit, ok := n.(*ast.CompositeLit)
 		if !ok || len(lit.Elts) < 2 {
 			return true
 		}
-		l.at(&lit.Lbrace, line())
-		for _, e := range lit.Elts {
-			l.at(firstPos(e), line())
-			l.literals(e, size)
-		}
-		l.at(&lit.Rbrace, line())
+		place(lit, line())
 		return false
 	})
 }

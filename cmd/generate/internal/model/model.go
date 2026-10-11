@@ -91,6 +91,9 @@ type Type struct {
 	Kind Kind
 	// Unstable is true for a definition the stable schema does not have.
 	Unstable bool
+	// Origin is the file and key of the definition the type was built from,
+	// in the schema directory.
+	Origin load.Origin
 	// def is the schema definition the type comes from.
 	def *load.Definition
 	// Doc is the definition's doc comment, one entry per line.
@@ -258,6 +261,12 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 			return nil, err
 		}
 		t.Unstable = prov != nil && prov.UnstableDefs[name]
+		t.Origin = load.Origin{File: load.StableSchemaFile, Key: name}
+		if prov != nil {
+			if o, ok := prov.Origins[name]; ok {
+				t.Origin = o
+			}
+		}
 		if t.Unstable && t.Kind != KindNone {
 			t.Doc = markUnstable(t.Doc)
 		}

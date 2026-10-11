@@ -27,6 +27,7 @@ var generatedFiles = []string{
 	"agent_gen.go",
 	"client_gen.go",
 	"helpers_gen.go",
+	"schema_gen_test.go",
 }
 
 // TestGeneratedFilesUpToDate renders the bindings from schema/ in memory and

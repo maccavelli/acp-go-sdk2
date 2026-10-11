@@ -58,3 +58,28 @@ func TestUnstableMarking(t *testing.T) {
 		t.Errorf("x/old doc: %q", got)
 	}
 }
+
+// TestTypeOrigin requires each type to name the file and key of its
+// definition: the merge's origin when it has one, else the stable schema
+// under the type's own name.
+func TestTypeOrigin(t *testing.T) {
+	t.Parallel()
+	prov := &load.Provenance{Origins: map[string]load.Origin{"UnstableFresh": {File: load.UnstableSchemaFile, Key: "Fresh"}}}
+	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{"UnstableFresh":{"type":"string"},"Old":{"type":"string"}}`), Provenance: prov})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := m.Type("UnstableFresh").Origin, (load.Origin{File: load.UnstableSchemaFile, Key: "Fresh"}); got != want {
+		t.Errorf("UnstableFresh: origin %+v, want %+v", got, want)
+	}
+	if got, want := m.Type("Old").Origin, (load.Origin{File: load.StableSchemaFile, Key: "Old"}); got != want {
+		t.Errorf("Old: origin %+v, want %+v", got, want)
+	}
+	plain, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{"Old":{"type":"string"}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plain.Type("Old").Origin; got.File != load.StableSchemaFile || got.Key != "Old" {
+		t.Errorf("Old without provenance: origin %+v", got)
+	}
+}
