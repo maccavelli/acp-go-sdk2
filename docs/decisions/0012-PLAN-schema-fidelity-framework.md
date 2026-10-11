@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-10
 associated-madr: "0012-MADR-schema-fidelity-framework.md"
 ---
@@ -716,3 +716,61 @@ type's range fails to decode "unless the property is lenient", as `ResourceLink.
 No Go file changed, so `make pre-add-check` was not run. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 10 on `main`.
+
+### Step 11, review and close, 2026-10-10
+
+The owner committed step 10 as `74860cf`. Step 11 ran on `main` from that clean tree and changed this record and `docs/README.md`. The agent did not
+commit.
+
+The phase's commits, `git log --oneline 08821e9..74860cf`: `bc33916` (the MADR and this plan), `13809b6` (step 2), `b1ee848` (step 3), `42fd612`
+(step 4), `633281b` (step 5), `d9ffc24` (step 6), `3588f8a` and `1ae3f08` (step 7), `7eedeba` (step 8), `0174f4e` (step 9), `74860cf` (step 10).
+`git diff --numstat 08821e9 74860cf -- '*_gen.go' testdata` lists only `types_gen.go`, 6954 lines added and 337 removed: no other generated file and no
+golden changed. `cmd/generate` changed by 1325 lines added and 255 removed in 17 files; hand-written root files and tests by 381 and 65 in 11.
+
+Verification, as printed:
+
+* `TestKeywordRegistryMatchesLoader` and `TestCommittedSchemaKeywordsRegistered` pass. Each test this plan added failed first, as each step records,
+  and each planted breakage failed a test; where a plant first passed, the record says why and what test was added.
+* Each step's generated diff matched its expectation by script, as each step records.
+* The MADR's probes pass as tests: S1 `TestIntegerFormatsBoundDecoding`, S2 `TestTypedAdditionalProperties`, S3 `TestRawJSONKeepsDigits`, S4
+  `TestLenientFields`, S5 `TestRequiredKeysOnDecode`, S6 `TestValidateSchemaConstraints`, S7 `TestStructValuesHaveNoOmitempty`; and
+  `TestStartLocationsMergesRawInput`, `TestStartEditToolCallRawInput`.
+* `go test -race -count=1 ./...` exits 0 at the root and in `cmd/generate`; `go build ./example/...` exits 0; `TestGeneratedFilesUpToDate` passes.
+* `go test -cover`: `internal/model` 93.9%, `internal/emit` 81.2% (54.2% at `08821e9`).
+* `make pre-add-check`: `go-precheck: 72 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records` and
+  `make markdownlint` exit 0.
+
+**Exported API changes, for the release notes.** The API listing program of 0011's plans, on `08821e9` and `74860cf` (1994 and 2314 lines), classified
+by script: nothing removed; changed, 70 fields, 12 named types, and 5 signatures; added, 274 `UnmarshalJSON` and 46 `Validate` methods.
+
+* 46 integer fields take the type of their format (`uint64` 17, `uint32` 16, `int64` 12, `int32` 1), among them `ReadTextFileRequest.Line` and
+  `.Limit` (`*uint32`), `ResourceLink.Size` (`*int64`), `Usage`'s token counts (`uint64`), `TerminalExitStatus.ExitCode` (`*uint32`).
+* 12 named types: `ProtocolVersion` `uint16`; `RequestIdNumber` and `ElicitationContentValueInteger` `int64`; the nine `ErrorCode…` variants `int32`.
+* 6 maps are typed: `env` of `AuthMethodTerminal` and `AuthMethodTerminalInline`, and `UnstableSetProviderRequest.Headers` (`map[string]string`);
+  `content` of `CreateElicitationAccept` and `ElicitationAcceptAction` (`map[string]ElicitationContentValue`); `ElicitationSchema.Properties`
+  (`map[string]ElicitationPropertySchema`).
+* 18 fields are `json.RawMessage`: `RawInput` and `RawOutput` of `ToolCall`, `ToolCallUpdate`, `SessionUpdateToolCall`, `SessionToolCallUpdate`;
+  `Params` of `AgentRequest`, `AgentNotification`, `ClientRequest`, `ClientNotification`; `Result` of `AgentResult`, `ClientResult`,
+  `UnstableMessageMcpResult`; `Error.Data`, `UnstableMcpError.Data`, `IdleStateUpdateNone.StopReason`.
+* 5 signatures take `json.RawMessage`: `WithStartRawInput`, `WithStartRawOutput`, `WithUpdateRawInput`, `WithUpdateRawOutput`, and
+  `StartEditToolCall`'s `content`.
+* Not API, but visible: 8 struct-valued capability fields lose `omitempty` from their tags; the encoding is unchanged.
+
+Behaviour changes for the same notes: a message without a required key fails to decode, naming the type and property, and a request gets `-32602`;
+JSON `null` for a struct with a required key fails the same way; malformed values of `x-deserialize-default-on-error` fields fall back to the schema
+default or zero, and invalid items of `x-deserialize-skip-invalid-items` arrays are dropped; a number outside its type's range fails to decode unless
+the field is lenient; `Validate` no longer rejects a present empty string and now checks nested values, union variants, and `minLength`.
+
+**Not done, and where it belongs:**
+
+* The trial decode phase 2 emits for key-less variants is dead in five unions since step 7 (`AuthMethod`, `McpServer`, `UnstableMcpServer`,
+  `SetSessionConfigOptionRequest`, `MultiSelectItems`); removing it changes the decoders of `0011-PLAN-wire-fixes.md` and needs an amendment.
+* `_meta` and the two `mcp/message` `params` maps keep `map[string]any`, so numbers inside them decode as `float64`.
+* The generator's tests check the decoders' and `Validate`'s text and that they compile; their behaviour is checked by the root tests. Engine tests of
+  generated behaviour belong to phase 6 of `0011-MADR-harden-code-generator-engine.md`.
+* The `x-deserialize-*` keywords are marked experimental upstream; a change to their meaning needs this record amended.
+* ACP's v2 schemas, `RequestId`'s `Null` decoding of objects, and `cancelRequestParams` are unchanged, as the scope says.
+
+Every acceptance criterion in Verification holds. The status is `complete`, and `docs/README.md` shows it. The MADR stays `accepted`; its statement that
+the exported API differs exactly by the release-notes list holds, with its two amendments. Phase 5 of
+[0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md), safe output, needs its own PLAN.
