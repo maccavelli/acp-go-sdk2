@@ -33,8 +33,7 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   `ClientSideConnection.Prompt` sends `session/cancel` when its context ends
   with an error;
 - the name `SessionUpdate` for the client's `session/update` handler;
-- the unions whose constructors `helpers.go` writes, and `ToolCallUpdate`'s
-  `Validate`;
+- the unions whose constructors `helpers.go` writes;
 - the capability that gates each method, recorded and checked against the
   schema, not emitted.
 
@@ -57,8 +56,22 @@ discriminator into the schema's key-less variant, else into the one variant
 whose required keys it carries, else into `Unknown`, or fails in a union with
 a catch-all. A union without a discriminator tries required keys, array items,
 and then each variant in turn. Decode errors name the union and, for a
-variant, the discriminator value or the variant. A struct with schema defaults
-gets an `UnmarshalJSON` that fills them.
+variant, the discriminator value or the variant. A struct with a required key,
+a default, a lenient field, or a catch-all's `Extra` gets a generated
+`UnmarshalJSON`.
+
+Every keyword the schema loader accepts has one treatment, listed in
+`cmd/generate/internal/model/keywords.go`; the loader refuses any other
+keyword, and the model refuses an integer or number `format` without a Go type.
+A number takes the Go type of its `format`; a typed `additionalProperties`
+gives a typed map; a value the model gives no Go type is `json.RawMessage`; and
+an optional struct value carries no `omitempty`. A generated `UnmarshalJSON`
+requires the required keys through `objectKeys`, and decodes each
+`x-deserialize-default-on-error` field through `orDefault` and each
+`x-deserialize-skip-invalid-items` array through `skipInvalid`, three helpers
+`types_gen.go` emits once. `Validate` checks only what the schema states: a
+union has exactly one variant set, a string meets its `minLength`, a number
+meets a bound its Go type does not enforce, and every nested value validates.
 
 Checks that guard this:
 
@@ -66,6 +79,9 @@ Checks that guard this:
   `*_gen.go` files differ from the generator's output.
 - `TestProtocolTableAppliesToCommittedSchema` in `internal/model` fails when a
   rule of the protocol table no longer applies to the committed schema.
+- `TestKeywordRegistryMatchesLoader` and `TestCommittedSchemaKeywordsRegistered`
+  in `internal/model` fail when a keyword has no treatment.
+  `fidelity_test.go` covers the types, decoding, and validation it describes.
 - `json_parity_test.go` compares encodings with the goldens in
   `testdata/json_golden/`. `json_v1_pin_test.go` pins HTML escaping and sorted map
   keys. `generated_output_test.go` covers the encoding rules above, and

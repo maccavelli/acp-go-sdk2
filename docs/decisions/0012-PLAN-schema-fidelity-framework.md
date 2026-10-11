@@ -672,3 +672,47 @@ Gates: `make pre-add-check` with the thirteen changed Go files named: `go-preche
 govulncheck).` Without names: `go-precheck: 71 file(s) clean (...)`. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 9 on `main`.
+
+### Step 10, docs, 2026-10-10
+
+The owner committed step 9 as `0174f4e`. Step 10 ran on `main` from that clean tree and changed `README.md`, `docs/architecture.md`, and this record.
+The agent did not commit.
+
+`README.md`:
+
+* "Wire encoding": the bullet on `Validate` and the one on integer digits are replaced by five: numbers take the Go type of their `format` and fail out
+  of range unless lenient, and typed maps; raw JSON for values without a Go type, and where integers keep every digit (and that `_meta` numbers are
+  `float64`); a missing required key fails, naming the type and property, and gets `-32602`; the two `x-deserialize-*` keywords; `Validate` checks
+  what the schema states, at every depth, and a present empty string passes. The decisions list cites
+  `0012-MADR-schema-fidelity-framework.md`.
+* The helper list gains the tool-call constructors and says the four raw options and `StartEditToolCall`'s content take a `json.RawMessage`.
+
+`docs/architecture.md`: the protocol table no longer lists `ToolCallUpdate`'s `Validate` (removed in step 9); the wire paragraph ends with which
+structs get a generated `UnmarshalJSON`; a new paragraph states the keyword registry, the type rules, the three decoding helpers, and what `Validate`
+checks; "Checks that guard this" names the two registry tests and `fidelity_test.go`.
+
+The name check (`w10_names.py` in the scratchpad, phase 2's script with more kinds) checks every backticked name in the prose of both files. New
+kinds: a standard-library identifier (`json.RawMessage`, by `go doc`), a Go type expression of predeclared types (`map[string]string`, `uint64`; one
+that is not well formed fails), a schema keyword (a `json` tag of `load.Definition`), a generated helper (a function of `types_gen.go`), an error code
+(in `errors.go`), and an error text formatted at run time, which passes when a test asserts it verbatim (`PromptRequest: missing required property
+"sessionId"`, asserted by `TestRequiredKeysOnDecode`). Over both files: 149 names pass and none fails; not checked, as before, are `[]`, `{}`,
+`null`, `_`, `acp`, `go`, and the three trace keys.
+
+One wrong name per new kind, planted in a scratch copy of a document:
+
+```text
+std identifier: ['FAIL std identifier: json.RawMesage']
+generated helper: ['FAIL wire key: objectKey']
+schema keyword: ['FAIL schema keyword: x-deserialize-default-on-errors']
+error text: ['FAIL error text: PromptRequest: missing required properties "sessionId"']
+error code: ['FAIL error code: -32699']
+Go type: ['FAIL Go type: map[string]strng']
+```
+
+The malformed type first passed as "not checked"; the check then failed names shaped like a type expression that are not one, which first caught the
+JSON literal `[]` and the glob `*_gen.go`, so those two are excluded by shape. A README claim was narrowed while checking it: a number out of its
+type's range fails to decode "unless the property is lenient", as `ResourceLink.size` shows (step 8).
+
+No Go file changed, so `make pre-add-check` was not run. `make check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 10 on `main`.

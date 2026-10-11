@@ -62,6 +62,10 @@ Helper constructors are provided to reduce boilerplate when working with union t
 - Content blocks: `acp.TextBlock`, `acp.ImageBlock`, `acp.AudioBlock`,
   `acp.ResourceLinkBlock`, `acp.ResourceBlock`.
 - Tool content: `acp.ToolContent`, `acp.ToolDiffContent`, `acp.ToolTerminalRef`.
+- Tool calls: `acp.StartToolCall`, `acp.UpdateToolCall`, and their options.
+  `rawInput` and `rawOutput` are raw JSON, so `acp.WithStartRawInput`,
+  `acp.WithStartRawOutput`, `acp.WithUpdateRawInput`, `acp.WithUpdateRawOutput`,
+  and the content of `acp.StartEditToolCall` take a `json.RawMessage`.
 - Utility: `acp.Ptr[T]` for pointer fields in request/update structs.
 
 ### Wire encoding
@@ -88,16 +92,32 @@ follow the schema:
 - Decoding JSON `null` into a union leaves it unchanged, except `RequestId`, which
   takes it as its `Null` variant. Any other payload replaces what the union
   held, so a reused value holds only the last one decoded.
-- `Validate` on a union that must have exactly one variant counts `Unknown` as
-  that variant.
-- Integers keep every digit through a union.
+- A number takes the Go type of its schema `format` (`uint64`, `uint32`,
+  `uint16`, `int64`, `int32`, `float64`), so a value outside that range fails
+  to decode, unless the property is lenient (below). A map whose schema types its values is a typed map, such as
+  `map[string]string` for `env`.
+- A value the schema gives no Go type, such as `rawInput`, `rawOutput`, or an
+  error's `data`, is a `json.RawMessage`, carried byte for byte. Integers keep
+  every digit there, through a union, and in sized integer fields; inside
+  `_meta`, a `map[string]any`, numbers decode as `float64`.
+- Decoding a struct fails when a required key is absent, naming the type and
+  the property, such as `PromptRequest: missing required property "sessionId"`;
+  the connection answers such a request with `-32602`.
+- A property the schema marks `x-deserialize-default-on-error` takes its schema
+  default, or its zero value, when its value is malformed, and an array marked
+  `x-deserialize-skip-invalid-items` drops the items that fail to decode, as
+  ACP's Rust implementation does.
+- `Validate` checks what the schema states, at every depth: a union has exactly
+  one variant, or `Unknown`, set; a string meets its `minLength`; every nested
+  value, slice element, and map value validates. A present empty string passes.
 - A decode error names the union and, for a variant, the discriminator value or
   the variant, then the cause, such as `ContentBlock: type "text": ...`.
 
 The decisions behind these rules are
-[0009-MADR-fix-generated-output-on-json-v1.md](docs/decisions/0009-MADR-fix-generated-output-on-json-v1.md)
+[0009-MADR-fix-generated-output-on-json-v1.md](docs/decisions/0009-MADR-fix-generated-output-on-json-v1.md),
+[0011-MADR-harden-code-generator-engine.md](docs/decisions/0011-MADR-harden-code-generator-engine.md),
 and
-[0011-MADR-harden-code-generator-engine.md](docs/decisions/0011-MADR-harden-code-generator-engine.md).
+[0012-MADR-schema-fidelity-framework.md](docs/decisions/0012-MADR-schema-fidelity-framework.md).
 
 ### Extension methods
 
