@@ -175,3 +175,37 @@ func TestRegistry(t *testing.T) {
 		}
 	}
 }
+
+// TestRegistryEdges requires a null definition to leave the types after it in
+// schemaTypes, and a catch-all that is a union's first variant to be recorded
+// as its catch-all. Found by the mutation run of 0011-PLAN-engine-tests.md,
+// step 9.
+func TestRegistryEdges(t *testing.T) {
+	t.Parallel()
+	var schema load.Schema
+	if err := json.Unmarshal([]byte(`{"$defs":{
+		"A":{"type":"string","enum":["a"]},
+		"N":null,
+		"Mark":{"anyOf":[
+			{"title":"other","type":"object","properties":{"kind":{"type":"string"}},"required":["kind"],"not":{"anyOf":[{"type":"object","properties":{"kind":{"type":"string","const":"a"}},"required":["kind"]}]}},
+			{"type":"object","properties":{"kind":{"type":"string","const":"a"}},"required":["kind"]}]},
+		"Z":{"type":"string","enum":["z"]}}}`), &schema); err != nil {
+		t.Fatal(err)
+	}
+	m, err := model.Build(model.Input{Meta: &load.Meta{}, Schema: &schema})
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := rendered(t, m)["schema_gen_test.go"]
+	var types []string
+	for _, e := range registryEntries(t, src, "schemaTypes") {
+		types = append(types, e["Type"])
+	}
+	if !slices.Contains(types, "Z") || !slices.Contains(types, "Mark") || slices.Contains(types, "N") {
+		t.Errorf("schemaTypes %v, want every type but N", types)
+	}
+	unions := registryEntries(t, src, "schemaUnions")
+	if len(unions) != 1 || unions[0]["Type"] != "Mark" || unions[0]["CatchAll"] != "Other" {
+		t.Errorf("schemaUnions %v, want Mark with the catch-all Other", unions)
+	}
+}

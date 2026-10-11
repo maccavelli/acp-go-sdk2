@@ -614,12 +614,20 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 		ref = singleRefVariant(v)
 	}
 	ev := expandAllOf(schema, v)
-	s, ok := ev.Type.(string)
+	// A variant that is a $ref takes its keys, discriminator value, and shape
+	// from the definition it names; its own title and description still name
+	// and document it (0011-MADR-harden-code-generator-engine.md, "Found in step
+	// 9 and decided").
+	facts := ev
+	if target, ok := strings.CutPrefix(v.Ref, refPrefix); ok && schema.Defs[target] != nil {
+		facts = expandAllOf(schema, schema.Defs[target])
+	}
+	s, ok := facts.Type.(string)
 	isNull := ok && s == schemaTypeNull
 
 	dv := ""
 	if discKey != "" {
-		if pd := ev.Properties[discKey]; pd != nil && pd.Const != nil {
+		if pd := facts.Properties[discKey]; pd != nil && pd.Const != nil {
 			dv = fmt.Sprint(pd.Const)
 		}
 	}
@@ -657,21 +665,21 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 		field = util.ToExportedField(typeName)
 	}
 
-	isObj := len(ev.Properties) > 0
+	isObj := len(facts.Properties) > 0
 	vi := &Variant{
 		TypeName:        typeName,
 		FieldName:       field,
 		DiscValue:       dv,
 		Doc:             docLines(ev.Description),
-		Required:        ev.Required,
+		Required:        facts.Required,
 		IsObject:        isObj,
-		IsArray:         primaryType(ev) == schemaTypeArray,
+		IsArray:         primaryType(facts) == schemaTypeArray,
 		IsNull:          isNull,
-		ConstPairs:      constPairs(ev),
+		ConstPairs:      constPairs(facts),
 		HasSharedFields: ref == "" && isObj && !isNull,
 	}
 	if vi.IsArray {
-		vi.ArrayItemRequired = arrayItemRequired(schema, ev)
+		vi.ArrayItemRequired = arrayItemRequired(schema, facts)
 	}
 	// Phantom variants have no $ref, object shape, null type, or title.
 	vi.Skip = !isObj && ref == "" && !isNull && ev.Title == ""

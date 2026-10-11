@@ -40,7 +40,7 @@ func TestVariantFacts(t *testing.T) {
 	t.Parallel()
 	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
 		"Item":{"type":"object","required":["z","id"],"properties":{"id":{"type":"string"},"z":{"type":"string"}}},
-		"Ref":{"type":"object","properties":{"a":{"type":"string"}}},
+		"Ref":{"type":"object","required":["a"],"properties":{"a":{"type":"string"}}},
 		"V":{"anyOf":[
 			{"type":"object","description":"Obj.","required":["b"],"properties":{"b":{"type":"string"}}},
 			{"title":"items","type":"array","items":{"$ref":"#/$defs/Item"}},
@@ -69,9 +69,11 @@ func TestVariantFacts(t *testing.T) {
 	if !null.IsNull || null.HasSharedFields {
 		t.Errorf("null variant: %+v", null)
 	}
-	// A $ref variant is not expanded, so it has no properties of its own: it is
-	// matched by discriminator or by trial decode, never by required keys.
-	if ref.IsObject || ref.HasSharedFields || ref.Inline != nil {
+	// A $ref variant takes its shape and required keys from the definition it
+	// names, so it is matched by them; it shares no fields and has no inline
+	// struct (0011-MADR-harden-code-generator-engine.md, "Found in step 9 and
+	// decided").
+	if !ref.IsObject || !slices.Equal(ref.Required, []string{"a"}) || ref.HasSharedFields || ref.Inline != nil {
 		t.Errorf("$ref variant: %+v", ref)
 	}
 }

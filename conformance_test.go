@@ -3,8 +3,10 @@ package acp
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"reflect"
 	"slices"
@@ -769,6 +771,298 @@ func rawFields(t *testing.T, st schemaType, inst schemaNode) map[string]bool {
 		}
 	}
 	return out
+}
+
+// TestConformanceAbsentDiscriminator decodes each variant's instances without
+// the discriminator, as is and without each other required key, and requires
+// the README's rule. A variant the schema gives no discriminator value, other
+// than the catch-all, takes the payload when it carries that variant's own
+// required keys, or refuses it. Else the one variant whose own required keys
+// the payload carries takes it, or refuses it when the payload lacks a key the
+// union requires of every variant. When none or several fit, the payload is
+// kept in Unknown, or, in a union with a catch-all, refused as missing its
+// discriminator.
+func TestConformanceAbsentDiscriminator(t *testing.T) {
+	t.Parallel()
+	for _, u := range schemaUnions() {
+		if u.Key == "" {
+			continue
+		}
+		t.Run(u.Type, func(t *testing.T) {
+			t.Parallel()
+			st := typeByName[u.Type]
+			b := newBuilder(st.File)
+			members, own := unionMembers(b, st.Def)
+			if len(members) != len(u.Variants) {
+				t.Skipf("%d schema members, %d variants: a member has no field", len(members), len(u.Variants))
+			}
+			for i, member := range members {
+				if u.Variants[i].Value == "" {
+					continue
+				}
+				for _, shape := range shapes {
+					inst, _ := b.value(member, 0, shape).(schemaNode)
+					delete(inst, u.Key)
+					cases := []schemaNode{inst}
+					for _, k := range sortedKeys(inst) {
+						if slices.Contains(requiredKeys(member), k) {
+							cases = append(cases, without(inst, k))
+						}
+					}
+					for _, in := range cases {
+						checkAbsent(t, st, u, own, in)
+					}
+				}
+			}
+		})
+	}
+}
+
+// unionMembers returns the members of the union definition def in schema
+// order, each with the union's properties and required keys merged in, and
+// each member's own required keys, without the union's.
+func unionMembers(b builder, def string) ([]schemaNode, [][]string) {
+	n := b.resolve(b.def(def))
+	list, _ := n["oneOf"].([]any)
+	if list == nil {
+		list, _ = n["anyOf"].([]any)
+	}
+	shared := schemaNode{}
+	for _, k := range []string{"properties", "required"} {
+		if v, ok := n[k]; ok {
+			shared[k] = v
+		}
+	}
+	var out []schemaNode
+	var own [][]string
+	for _, raw := range list {
+		m := b.resolve(raw.(schemaNode))
+		out = append(out, merge(shared, m))
+		own = append(own, requiredKeys(m))
+	}
+	return out, own
+}
+
+// requiredKeys returns a node's required keys.
+func requiredKeys(n schemaNode) []string {
+	var out []string
+	req, _ := n["required"].([]any)
+	for _, r := range req {
+		out = append(out, r.(string))
+	}
+	return out
+}
+
+// checkAbsent decodes in, which lacks the discriminator, and requires the
+// variant, Unknown, or error the rule of TestConformanceAbsentDiscriminator
+// gives.
+func checkAbsent(t *testing.T, st schemaType, u schemaUnion, own [][]string, in schemaNode) {
+	t.Helper()
+	carries := func(i int) bool {
+		for _, k := range own[i] {
+			if _, ok := in[k]; !ok && k != u.Key {
+				return false
+			}
+		}
+		return true
+	}
+	var keyLess, fit []string
+	for i, vr := range u.Variants {
+		switch {
+		case vr.Value == "" && vr.Field != u.CatchAll:
+			if carries(i) {
+				keyLess = append(keyLess, vr.Field)
+			}
+		case vr.Field != u.CatchAll && carries(i):
+			fit = append(fit, vr.Field)
+		}
+	}
+	raw := mustJSON(t, in)
+	v := st.New()
+	err := json.Unmarshal(raw, v)
+	set := setFields(v)
+	switch {
+	case hasKeyLess(u):
+		if len(keyLess) > 0 && err == nil && !slices.Equal(set, keyLess[:1]) {
+			t.Errorf("%s: decoded into %v, %v; want %s", raw, set, err, keyLess[0])
+		}
+	case len(fit) == 1:
+		if err == nil && !slices.Equal(set, fit) {
+			t.Errorf("%s: decoded into %v; want %s", raw, set, fit[0])
+		}
+	case u.Unknown:
+		if err != nil || !slices.Equal(set, []string{"Unknown"}) {
+			t.Errorf("%s: %d variants fit (%v), decoded into %v, %v; want Unknown", raw, len(fit), fit, set, err)
+		}
+	default:
+		if err == nil || !strings.Contains(err.Error(), "missing discriminator") {
+			t.Errorf("%s: %d variants fit (%v), decoded into %v, %v; want missing discriminator", raw, len(fit), fit, set, err)
+		}
+	}
+}
+
+// hasKeyLess reports whether u has a variant without a discriminator value
+// that is not its catch-all.
+func hasKeyLess(u schemaUnion) bool {
+	for _, vr := range u.Variants {
+		if vr.Value == "" && vr.Field != u.CatchAll {
+			return true
+		}
+	}
+	return false
+}
+
+// TestConformanceNullUnion requires JSON null to leave a union that holds a
+// variant unchanged, without error, as the README states; RequestId takes it
+// as its Null variant.
+func TestConformanceNullUnion(t *testing.T) {
+	t.Parallel()
+	for _, u := range schemaUnions() {
+		t.Run(u.Type, func(t *testing.T) {
+			t.Parallel()
+			st := typeByName[u.Type]
+			v := st.New()
+			in := mustJSON(t, newBuilder(st.File).instances(st.Def)[0])
+			if err := json.Unmarshal(in, v); err != nil {
+				t.Fatalf("%s: %v", in, err)
+			}
+			before := mustJSON(t, v)
+			if err := json.Unmarshal([]byte("null"), v); err != nil {
+				t.Fatalf("null: %v", err)
+			}
+			if u.Type == "RequestId" {
+				if set := setFields(v); !slices.Equal(set, []string{"Null"}) {
+					t.Errorf("null decoded into %v; want Null", set)
+				}
+				return
+			}
+			if after := mustJSON(t, v); string(after) != string(before) {
+				t.Errorf("null changed %s to %s", before, after)
+			}
+		})
+	}
+}
+
+// TestCatchAllWithoutExtraKeys requires a catch-all variant decoded from a
+// payload with no undeclared key to leave Extra nil.
+func TestCatchAllWithoutExtraKeys(t *testing.T) {
+	t.Parallel()
+	var v StateUpdate
+	if err := json.Unmarshal([]byte(`{"state":"paused"}`), &v); err != nil || v.Other == nil {
+		t.Fatalf("decoded into %+v, %v; want Other", v, err)
+	}
+	if v.Other.Extra != nil {
+		t.Errorf("Extra = %#v, want nil", v.Other.Extra)
+	}
+}
+
+// TestConformanceReplies requires each request with a result to bring back
+// what the peer returns: an instance of the result type, equal to the one the
+// peer gave, and an error from the peer as an error.
+func TestConformanceReplies(t *testing.T) {
+	t.Parallel()
+	for _, m := range schemaMethods() {
+		if m.Side == "protocol" || m.Notification || m.Result == nil {
+			continue
+		}
+		t.Run(m.Side+" "+m.Wire, func(t *testing.T) {
+			t.Parallel()
+			params := newInstance(t, m.Params())
+			result := m.Result()
+			rt := typeByName[reflect.TypeOf(result).Elem().Name()]
+			want := newBuilder(rt.File).instances(rt.Def)[0]
+			got, err := exchange(t, m, params, func(r any) error { return json.Unmarshal(mustJSON(t, want), r) })
+			if err != nil {
+				t.Fatalf("%s: %v", m.Wire, err)
+			}
+			c := comparer{newBuilder(rt.File)}
+			if d := c.diff(rt.Type, decodeTree(t, mustJSON(t, want)), decodeTree(t, got), c.b.def(rt.Def)); len(d) > 0 {
+				t.Errorf("%s: the result arrived as %s, want %s: %v", m.Wire, got, mustJSON(t, want), d)
+			}
+			if _, err := exchange(t, m, params, func(any) error { return errors.New("refused") }); err == nil || !strings.Contains(err.Error(), "refused") {
+				t.Errorf("%s: the peer's error arrived as %v", m.Wire, err)
+			}
+		})
+	}
+}
+
+// TestConformanceNotificationErrors requires the error a notification's
+// handler returns to be logged by the connection that received it, since a
+// notification has no reply to carry it.
+func TestConformanceNotificationErrors(t *testing.T) {
+	t.Parallel()
+	for _, m := range schemaMethods() {
+		if m.Side == "protocol" || !m.Notification {
+			continue
+		}
+		t.Run(m.Side+" "+m.Wire, func(t *testing.T) {
+			t.Parallel()
+			params := newInstance(t, m.Params())
+			logged := make(chan string, 4)
+			ar, cw := io.Pipe()
+			cr, aw := io.Pipe()
+			t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+			fail := func(any) error { return errors.New("refused") }
+			asc := NewAgentSideConnection(recordingAgent{calls: make(chan any, 1), reply: fail}, aw, ar)
+			csc := NewClientSideConnection(recordingClient{calls: make(chan any, 1), reply: fail}, cw, cr)
+			sender, receiver := csc.conn, asc.conn
+			if m.Side == "client" {
+				sender, receiver = asc.conn, csc.conn
+			}
+			receiver.SetLogger(slog.New(slog.NewTextHandler(chanWriter(logged), nil)))
+			if err := sender.SendNotification(t.Context(), m.Wire, params); err != nil {
+				t.Fatalf("%s: %v", m.Wire, err)
+			}
+			select {
+			case line := <-logged:
+				if !strings.Contains(line, "failed to handle notification") || !strings.Contains(line, m.Wire) || !strings.Contains(line, "refused") {
+					t.Errorf("%s: logged %q", m.Wire, line)
+				}
+			case <-time.After(10 * time.Second):
+				t.Errorf("%s: the handler's error was not logged", m.Wire)
+			}
+		})
+	}
+}
+
+// chanWriter sends each write, a log line, on its channel.
+type chanWriter chan string
+
+func (w chanWriter) Write(b []byte) (int, error) {
+	w <- string(b)
+	return len(b), nil
+}
+
+// newInstance decodes the first schema instance of v's type into v.
+func newInstance(t *testing.T, v any) any {
+	t.Helper()
+	st, ok := typeByName[reflect.TypeOf(v).Elem().Name()]
+	if !ok {
+		t.Fatalf("%T is not in schemaTypes", v)
+	}
+	raw := mustJSON(t, newBuilder(st.File).instances(st.Def)[0])
+	if err := json.Unmarshal(raw, v); err != nil {
+		t.Fatalf("%s: %v", raw, err)
+	}
+	return reflect.ValueOf(v).Elem().Interface()
+}
+
+// exchange sends the request m with params over a pipe to a recording peer
+// whose reply is reply, and returns the raw result and the error.
+func exchange(t *testing.T, m schemaMethod, params any, reply func(any) error) (json.RawMessage, error) {
+	t.Helper()
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	agent := recordingAgent{calls: make(chan any, 1), reply: reply}
+	client := recordingClient{calls: make(chan any, 1), reply: reply}
+	asc := NewAgentSideConnection(agent, aw, ar)
+	csc := NewClientSideConnection(client, cw, cr)
+	sender := csc.conn
+	if m.Side == "client" {
+		sender = asc.conn
+	}
+	return SendRequest[json.RawMessage](sender, t.Context(), m.Wire, params)
 }
 
 // setFields returns the names of the union fields of v that are set.

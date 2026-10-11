@@ -334,7 +334,8 @@ In the `validate` job, on Linux, a step after the race detector: `GOEXPERIMENT=n
 9. **Mutation tool.** Add `internal/mutate` with tests: the operators on a fixture file (each operator's sites and its printed mutant); on a temporary
    module with one function and two tests, a mutant that a test catches is `killed`, one no test catches is `survived`, one that does not compile is
    `invalid`, and one that loops is `timeout`; the tree of that module is unchanged after the run. Add `make mutation-engine` and
-   `make mutation-generated`. Run the engine in full and the generated files with `MUTANTS=300 SEED=1`, record the reports' counts, and classify
+   `make mutation-generated`. Run ~~the engine in full~~ the engine (amended 2026-10-11: a sample, see step 9's deviation) and the generated files
+   with `MUTANTS=300 SEED=1`, record the reports' counts, and classify
    every survivor: a test added (and the mutant rerun as killed), or equivalent with the reason.
 10. **CI.** Add the `nojsonv2` step; `actionlint` passes; the next CI run shows the step on Linux.
 11. **Docs.** `docs/architecture.md`: "Checks that guard this" names `TestEngineCases`, `TestEngineBehaviour`, the conformance test, the fuzz targets,
@@ -353,7 +354,8 @@ In the `validate` job, on Linux, a step after the race detector: `GOEXPERIMENT=n
 * Each new test failed first or was shown failing on a plant, as the execution record shows.
 * Without the nine committed-schema tests, `go test -coverpkg=./... ./...` in `cmd/generate` covers at least 95% of statements; every site of G5 runs,
   or is recorded with its reason.
-* No engine mutant of the full run is killed only by `TestGeneratedFilesUpToDate`, and every survivor is classified.
+* ~~No engine mutant of the full run is killed only by `TestGeneratedFilesUpToDate`, and every survivor is classified.~~ Amended 2026-10-11:
+  the engine run is a sample of 300 mutants, seed 1, with `TestGeneratedFilesUpToDate` skipped, and every survivor of it is classified.
 * At the root, `types_gen.go` is covered at 85% or more, every union variant is decoded (`unioncov.py`), and every method is dispatched; every
   survivor of the generated-code mutation run is classified.
 * `make fuzz` ran for the default time per target, and any crasher is committed as a seed with its fix.
@@ -1178,3 +1180,212 @@ The plant helper stopped once on the invalid UTF-8 of a test's output; it now de
 
 Commit point: the agent stopped here. The owner commits step 8 on `main`, with the three seed files under `testdata/fuzz/` and
 `cmd/generate/testdata/fuzz/`.
+
+### Step 9 deviation, 2026-10-11: the engine run skips the byte comparison, and runs mutants in parallel
+
+The owner committed step 8 as `77d053b`. `internal/mutate` was written to D5's flags, with its tests. Two probes on the engine:
+
+* One mutant (seed 1) took 17.3 s, `internal/model/fields.go:393:56`, `!=` to `==`; its report names one failed test,
+  `TestGeneratedFilesUpToDate`. With `-failfast`, a report names the first failing test only, so D6's "no engine mutant killed only by
+  `TestGeneratedFilesUpToDate`" cannot be read from it. Rerun without `-failfast` in a scratch copy, the same mutant failed that test alone: it
+  is such a mutant.
+* The engine has 1065 sites; at 15 to 17 s a mutant, the full run is about 5 hours serially. Three generated-code mutants took 3.1 to 3.2 s each,
+  of 2576 sites.
+
+Resolutions put to the owner: for D6, skip the byte comparison in the engine run (recommended), turn `-failfast` off, or rerun selected mutants;
+for the time, parallel workers (recommended), a serial run in the background, or a sample. The owner chose the recommended two:
+
+* `-skip <regexp>`, passed to `go test -skip`; `make mutation-engine` skips `TestGeneratedFilesUpToDate`. A mutant only that test kills then
+  survives, and D6's check is part of classifying the survivors. `-failfast` stays.
+* `-j <count>`, mutants run at once, each with its own overlay and mutant file; default 1. A test requires `-j 2` to give the outcomes `-j 1`
+  gives. `make mutation-engine` takes `JOBS`, set from a timed sample ~~before the full run~~.
+
+Timed samples of the engine: 8 mutants (seed 3) took 147 s with `-j 1` and 80 s with `-j 4`; 24 mutants (seed 5) took 291 s with `-j 4` and
+258 s with `-j 6`. Each pair gave the same outcomes, and no mutant timed out. 9 of the 32 survived. At 10.8 s a mutant, the full run would take
+about 3.2 hours and leave some 300 survivors to classify.
+
+Amended 2026-10-11, asked by the owner: the engine run is a sample, `MUTANTS=300 SEED=1`, with `JOBS=6`, as the 0011-MADR's "D6 amended in step
+9" records. Step 9 and Verification are annotated.
+
+A finding, 2026-10-11: `TestConformanceAbsentDiscriminator`, written for survivors of the generated-code run, failed on `SessionConfigOption`
+and `CreateElicitationRequest`. Without the discriminator, the generated code picks a variant by the variant's own required keys, not those
+the union requires of every variant, so a payload without `id` decodes as `Boolean` and is refused naming `id`, where the README read as
+`Unknown`. A third failure, `SetSessionConfigOptionRequest`, was the test's: the key-less `ValueId` variant refuses a `value` of the wrong
+kind, which a rule of key names cannot see. Resolutions put to the owner: keep the behaviour and clarify the README (recommended), or count the
+union's keys in the fit. The owner kept it; the 0012-MADR is amended, the README states the rule, and the test follows it.
+
+The engine sample, 2026-10-11 (`JOBS=6`, 4631 s): 235 killed, 54 survived, 4 invalid, 7 timeout. The 4 invalid mutants are refused by
+`go vet`'s `bools` check (`suspect and: pt == schemaTypeArray && pt == schemaTypeObject`), which `go test` runs. The 7 timeouts each took 186 to
+195 s, at the 3 min test timeout under six parallel runs; rerun alone in a scratch copy, 5 were killed and 2 survived, in 16 to 29 s. The
+sample is therefore 240 killed, 56 survived, 4 invalid.
+
+Each survivor was regenerated in a scratch copy against the committed schema (`s9_outdiff.py`): 10 change only the generated text's layout,
+7 change generated code that only the byte comparison catches, and 39 change nothing. Asked, the owner classified the 10 as layout only, recorded
+in the 0011-MADR's "D6 amended in step 9".
+
+A finding, 2026-10-11: the engine cases `accept-discriminated-shapes` and `accept-union-matching`, written for survivors, failed on the
+unmutated generator: `{"kind":"start","at":9007199254740993} decoded as {None:<nil> Start:<nil> Stop:<nil> Other:0x...}, want start`, and
+`{"k":"v"} decoded as {Loose:0x... Keyed:<nil>}, <nil>; want Keyed`. `buildVariant` read a variant's facts without following a direct `$ref`.
+Resolutions put to the owner: follow the `$ref` (recommended), or refuse such a member. The owner chose to follow it, recorded in the
+0011-MADR's "Found in step 9 and decided"; `TestVariantFacts`, which pinned the old reading, follows. Added to step 9: `buildVariant` in
+`internal/model`. The committed output does not change.
+
+A correction, 2026-10-11: two step 9 amendments, "D6 amended in step 9" in the 0011-MADR and "the variant a payload without its
+discriminator fits" in the 0012-MADR, were written in place of each MADR's "## More Information" heading instead of before it. Both headings
+are restored; no text under them changed.
+
+A deviation, 2026-10-11: the scratch scripts that reran and regenerated survivors swapped an operator's text, which Go re-parses with other
+grouping for `&&` and `||`: `internal/model/protocol.go:272:45` survived the tool and was killed by the text rerun. Asked, the owner chose a
+flag in the tool, `-only file:line:col,...`, which runs just those sites as the tool builds them; `TestOnly` covers it. Every rerun below uses
+it. A process slip is recorded too: to show the test of a mutant's time failing, the fixed line of `internal/mutate/exec.go` was reverted in
+the working tree, run, and restored, where step 1 asks for a scratch copy; the file was new and uncommitted.
+
+### Step 9, the mutation tool, 2026-10-11
+
+Ran on `main` from `77d053b`. The agent did not commit.
+
+**The tool.** `cmd/generate/internal/mutate` (new): `main.go` (flags, file list, sample, the parallel runner, the report and summary),
+`sites.go` (the operators on `go/ast`, each site with the change that makes its mutant), and `exec.go` (the overlay, `go test`, and the
+outcome). D5's flags, and `-skip`, `-j`, and `-only` from the deviations above. `make mutation-engine` and `make mutation-generated` take
+`MUTANTS`, `SEED`, and `JOBS`; the engine run skips `TestGeneratedFilesUpToDate`.
+
+Its tests: `TestSites` lists the 20 sites of a fixture (`testdata/ops.go`) and checks each mutant changes only its line; `TestRun` runs a
+module of one file and two tests and requires killed (`TestSum`), survived, invalid, and timeout, the same outcomes with `-j 2`, the outcomes
+`-skip TestSum` gives, the report in file order, and the module unchanged; `TestOnly` runs two named sites and refuses one that is not a site.
+They failed first on `undefined: sites`, `unknown field jobs`, and `unknown field only`. Plants in scratch copies (`s9_plants.json`), each
+failing its test: the mutant is the original; a function literal's result not seen; a labelled branch made a site; a build failure counted
+as a kill; a test timeout counted as a kill; `-skip` not passed; results out of order with `-j`; no overlay. Three first runs did not fail as
+planted and were corrected: the fixture gained a function literal with a non-error result, `checkRun` gained the order check, and the build
+plant, which did not compile, was rewritten.
+
+**The generated-code sample**, `make mutation-generated MUTANTS=300 SEED=1 JOBS=4`: 2576 sites; 263 killed, 37 survived, none invalid or
+timed out, in 335 s.
+
+**The engine sample**, `make mutation-engine MUTANTS=300 SEED=1 JOBS=6`: 1065 sites; 235 killed, 54 survived, 4 invalid, 7 timeout, in
+4631 s. The 4 invalid are refused by `go vet`'s `bools` check. The 7 timeouts ran one at a time: 5 killed, 2 survived. 240 killed, 56
+survived, 4 invalid.
+
+**Tests added for survivors.** At the root:
+
+* `TestConformanceAbsentDiscriminator`: the 17 discriminated unions, each variant without its discriminator, as is and without each other
+  required key;
+* `TestConformanceNullUnion`: `null` into each union;
+* `TestCatchAllWithoutExtraKeys`;
+* `TestConformanceReplies`: each request with a result brings back the peer's result, an instance of its type, and its error;
+* `TestConformanceNotificationErrors`: each notification's handler error is logged by the connection that received it.
+
+For the last two, the recording peers of `schema_gen_test.go` gained a `reply` hook (`internal/emit/registry.go`), the only change in
+the generated files: `schema_gen_test.go` +126 and −2 lines.
+
+In `cmd/generate`, the engine cases:
+
+* new: `accept-union-matching`, `accept-discriminated-shapes`, `accept-null-member`, and `accept-default-map`;
+* extended: `accept-folded-keys` (a union of objects sharing a required key, after a variant without required keys) and
+  `accept-declared-discriminator` (a constructor sets the discriminator in the Go value).
+
+Unit tests:
+
+* `internal/load`: `merge_edges_test.go`, three tests;
+* `internal/model`: `edges_test.go`, ten tests; three refusal cases in `TestProtocolTableRefuses`; `TestVariantFacts` amended;
+* `internal/output`: `report_test.go`, two tests;
+* `internal/emit`: `TestRegistryEdges`.
+
+Three first versions did not kill their mutant, and were strengthened: the shared-key union now lists a variant without required keys
+first, the secondary error in `report_test.go` now has an error after it, and the allOf test covers an array.
+
+**Rerun with `-only` after the tests**, the generated survivors against the root (`-j 2`, 127 s), the engine survivors with
+`TestGeneratedFilesUpToDate` skipped (`-j 4`, 712 s, and the three strengthened at once).
+
+Generated code, killed now (14):
+
+* `client_gen.go:103:49` eq-neq (`TestConformanceNotificationErrors`)
+* `client_gen.go:155:10` eq-neq (`TestConformanceReplies`)
+* `client_gen.go:168:10` eq-neq (`TestConformanceReplies`)
+* `types_gen.go:12697:12` true-false (`TestConformanceAbsentDiscriminator`)
+* `types_gen.go:12709:12` true-false (`TestConformanceAbsentDiscriminator`)
+* `types_gen.go:13762:12` boundary (`TestCatchAllWithoutExtraKeys`)
+* `types_gen.go:14836:12` true-false (`TestConformanceAbsentDiscriminator`)
+* `types_gen.go:16406:10` return-error (`TestConformanceNullUnion`)
+* `types_gen.go:17281:12` true-false (`TestConformanceAbsentDiscriminator`)
+* `types_gen.go:17326:12` true-false (`TestConformanceAbsentDiscriminator`)
+* `types_gen.go:4467:30` and-or (`TestConformanceAbsentDiscriminator`)
+* `types_gen.go:627:10` return-error (`TestConformanceNullUnion`)
+* `types_gen.go:8959:28` and-or (`TestConformanceAbsentDiscriminator`)
+* `types_gen.go:9000:14` eq-neq (`TestConformanceAbsentDiscriminator`)
+
+Generated code, equivalent (23):
+
+* Only the error text changes; the payload lacks a key the variant requires, and either path refuses it: `types_gen.go:339:13`, `types_gen.go:1578:13`, `types_gen.go:6888:12`.
+* The trial decode that follows takes the same variant: `types_gen.go:656:12`, `types_gen.go:10813:13`.
+* Dead: the trial decode reaches a variant only when its required keys are absent, which its decoder refuses; an array decode with an empty body: `types_gen.go:975:11`, `types_gen.go:3792:29`.
+* Only the order of keys can change, which JSON does not fix: `types_gen.go:3239:16`.
+* Unreachable: a variant with no keys of its own besides the discriminator fits every payload without it, so this variant is never the only fit: `types_gen.go:3358:41`, `types_gen.go:3376:11`, `types_gen.go:4497:11`, `types_gen.go:9723:11`, `types_gen.go:12768:11`, `types_gen.go:12771:41`, `types_gen.go:12810:11`, `types_gen.go:12817:11`, `types_gen.go:12859:11`.
+* `content` makes the three message-chunk variants and `SessionInfoUpdate` fit as well, so the count never falls to one: `types_gen.go:12719:12`.
+* The default `false` equals the zero value: `types_gen.go:6645:11`, `types_gen.go:9180:11`.
+* `foldKeys` with one matching key finds it again; `orDefault` fails to decode an empty value either way; `skipInvalid`'s caller assigns nothing on either path: `types_gen.go:18658:16`, `types_gen.go:18697:14`, `types_gen.go:18719:15`.
+
+Engine, killed now (39); `model.go` sites after line 617 are named at their place in the sample, before `buildVariant` gained 8 lines:
+
+* `internal/emit/decode.go:255:4` continue-break (`TestEngineBehaviour`)
+* `internal/emit/helpers.go:27:16` eq-neq (`TestEngineBehaviour`)
+* `internal/emit/registry.go:120:16` boundary (`TestRegistryEdges`)
+* `internal/emit/registry.go:61:4` continue-break (`TestRegistryEdges`)
+* `internal/emit/types.go:590:39` eq-neq (`TestEngineBehaviour`)
+* `internal/emit/types.go:628:40` true-false (`TestEngineBehaviour`)
+* `internal/emit/types.go:636:39` true-false (`TestEngineBehaviour`)
+* `internal/emit/types.go:948:4` continue-break (`TestEngineBehaviour`)
+* `internal/load/merge.go:307:18` and-or (`TestPromoteSkipsNullStableDefinition`)
+* `internal/load/merge.go:325:4` continue-break (`TestPromoteContinuesPastMissingDefinition`)
+* `internal/load/merge.go:364:10` eq-neq (`TestEnsureRefsCopiesUnstableDependency`)
+* `internal/model/fields.go:237:9` eq-neq (`TestAllOfOfOneInlineSchema`)
+* `internal/model/fields.go:305:5` continue-break (`TestNullableWithNullFirst`)
+* `internal/model/fields.go:393:56` eq-neq (`TestEngineBehaviour`)
+* `internal/model/methods.go:71:38` and-or (`TestHalfLinkedDefinitionIgnored, TestRegistryEdges`)
+* `internal/model/model.go:409:54` and-or (`TestIntegerEnumMembers`)
+* `internal/model/model.go:409:69` and-or (`TestIntegerEnumMembers`)
+* `internal/model/model.go:520:21` and-or (`TestReferenceWithPropertiesIsNotNested`)
+* `internal/model/model.go:561:4` continue-break (`TestEngineBehaviour`)
+* `internal/model/model.go:585:4` continue-break (`TestEngineBehaviour`)
+* `internal/model/model.go:880:4` continue-break (`TestEngineBehaviour`)
+* `internal/model/model.go:895:28` boundary (`TestEngineCases`)
+* `internal/model/model.go:924:9` eq-neq (`TestEngineBehaviour`)
+* `internal/model/model.go:932:57` and-or (`TestEngineBehaviour`)
+* `internal/model/protocol.go:242:14` and-or (`TestProtocolTableRefuses`)
+* `internal/model/protocol.go:266:10` true-false (`TestProtocolTableRefuses`)
+* `internal/model/protocol.go:272:45` and-or (`TestProtocolTableRefuses`)
+* `internal/model/protocol.go:357:17` eq-neq (`TestMethodNameCollisionNamesInterface`)
+* `internal/model/schema.go:181:41` and-or (`TestOpenStringEnumMembers`)
+* `internal/model/schema.go:181:61` and-or (`TestOpenStringEnumMembers`)
+* `internal/model/schema.go:87:28` and-or (`TestExpandAllOfKeepsOwnUnion`)
+* `internal/model/validate.go:124:100` eq-neq (`TestBoundOnNamedPrimitiveRefused`)
+* `internal/model/validate.go:124:74` eq-neq (`TestBoundOnNamedPrimitiveRefused`)
+* `internal/model/validate.go:124:81` and-or (`TestBoundOnNamedPrimitiveRefused, TestEngineCases`)
+* `internal/model/validate.go:211:12` true-false (`TestNestedArraysWithoutValidation`)
+* `internal/model/validate.go:211:19` return-error (`TestNestedArraysWithoutValidation`)
+* `internal/output/check.go:157:13` return-error (`TestGoVersionWithoutGoLine`)
+* `internal/output/check.go:167:52` boundary (`TestReportGroupsSecondaryErrors`)
+* `internal/output/check.go:169:4` continue-break (`TestReportGroupsSecondaryErrors`)
+
+Engine, not killed (17):
+
+* Layout only (the owner's class): blank lines, doc comments, constant grouping, and literal line breaks; `file.go:359:21` is reachable only through an embedded field, which no emitter writes: `internal/emit/file.go:62:69`, `internal/emit/file.go:359:21`, `internal/emit/file.go:383:86`, `internal/emit/file.go:390:73`, `internal/emit/file.go:392:6`, `internal/emit/types.go:137:12`, `internal/emit/types.go:161:19`, `internal/emit/types.go:200:18`, `internal/model/methods.go:175:5`.
+* Equivalent: `printedSize` never fails (step 4 records the branch unreachable): `internal/emit/file.go:300:26`.
+* Equivalent: the decode into `arr` has an empty body when no array variant is matched by keys: `internal/emit/types.go:643:16`.
+* Equivalent: the caller returns on the error before it reads the found flag: `internal/load/load.go:202:15`.
+* Equivalent: the definition is already marked; scanning its other references adds nothing: `internal/load/merge.go:292:6`.
+* Equivalent: `checkRefs` refuses a `$ref` that is not local or does not resolve before `flatMembers` runs: `internal/model/model.go:742:10`.
+* Equivalent: the schema is never nil, and a part that is not a local `$ref` names no definition: `internal/model/schema.go:44:61`.
+* Equivalent: merged properties are read only by their length, so an empty map and nil are the same: `internal/model/schema.go:53:31`.
+* Not tested: the mutant differs only when `Write` fails, which cannot be made to happen portably without a seam: `internal/output/write.go:79:9`.
+
+**Results.**
+
+* The five SDK files are unchanged from `77d053b`; `schema_gen_test.go` gained the `reply` hook. The exported API does not change.
+* `go test -count=1 .` at the root passes, also with `-race` and with `GOEXPERIMENT=nojsonv2`, in 2.0 s. `go test -count=1 ./...` in
+  `cmd/generate` passes in 23.1 s, from 14.4 s, `internal/mutate`'s 22.4 s run beside the rest. `go build ./example/...` passes.
+* `make pre-add-check`: `go-precheck: 93 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` The seven new Go files passed
+  by name: `go-precheck: 7 file(s) clean`. Lint first reported nine issues in the tool (unchecked errors, two unused directives, repeated
+  strings), fixed before this run.
+* `make check-records` and `make markdownlint` exit 0, and the identifier scan of the 26 changed and new files found nothing.
+
+Commit point: the agent stopped here. The owner commits step 9 on `main`.

@@ -703,6 +703,33 @@ magnitude, within its format's Go type; any other is refused**, naming the type,
 may have been rounded from another integer, so it is refused rather than read. Not chosen: classifying such a definition as something other
 than an integer enum. The committed schema's `ErrorCode` values are small `int32` constants; the generated SDK does not change.
 
+### D6 amended in step 9, 2026-10-11: the engine's mutation run is a sample
+
+D6 asked for no engine mutant "of the full run" killed only by `TestGeneratedFilesUpToDate`. It rested on the probe above: 828 sites, about
+3.7 s a mutant, and 7 of 74 surviving. Measured in step 9, on the tree after step 8: 1065 sites; about 18 s a mutant run one at a time and
+10.8 s with six at once, since the engine's tests now run the engine cases and compile their behaviour packages; and 9 of 32 sampled mutants
+surviving. A full run would take about 3.2 hours and leave some 300 survivors to classify, many of the same kind.
+
+Asked, the owner decided: **the engine's mutation run is a sample, as the generated code's is: 300 mutants, seed 1**, with
+`TestGeneratedFilesUpToDate` skipped. D6 then reads: no mutant of that sample survives the engine's other tests unless it is classified, by
+a test added or as equivalent with the reason. The run reports where the tests are weak, by file and operator; it does not show that no
+engine mutant is killed only by the byte comparison. Not chosen: the full run.
+
+In the sample, 10 survivors change only the generated text's layout: comments, blank lines, and the line breaks of literals. Asked, the owner
+decided that such a mutant is classified **layout only**: it has no behaviour, and `TestGeneratedFilesUpToDate`'s byte comparison is its
+test. D6 is amended to allow it. Not chosen: an emitter test of the layout rules.
+
+### Found in step 9 and decided, 2026-10-11
+
+Engine cases written for survivors of the mutation run found that the model reads a union variant's required keys, discriminator value,
+and object shape from the variant itself, through an `allOf` of one `$ref` but not through a direct `$ref`. A variant written
+`{"$ref": "#/$defs/Start"}` got none of them: in a discriminated union, `{"kind":"start"}` decoded into the catch-all; without a
+discriminator, the trial decode's order decided, so a variant without required keys listed first took `{"k":"v"}` from the one that requires
+`k`. `TestVariantFacts` pinned the old reading ("never by required keys"). No committed union has a direct `$ref` member.
+
+Asked, the owner decided: **a variant that is a direct `$ref` takes those facts from the definition it names**; its own title and
+description still name and document it. The committed output does not change. Not chosen: refusing a direct `$ref` member.
+
 ## More Information
 
 Implementation follows in one PLAN per phase, each written and approved before its work starts. The first is the resolved model.

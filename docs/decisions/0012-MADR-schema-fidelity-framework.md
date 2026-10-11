@@ -316,6 +316,19 @@ Found by `FuzzRoundTrip` in step 8 of [0011-PLAN-engine-tests.md](0011-PLAN-engi
 * Treatment 3 carries a raw value byte for byte, invalid UTF-8 included: a string field replaces invalid UTF-8 with U+FFFD, and a raw value does
   not, as Go's `json.RawMessage` does not.
 
+## Amendment 2026-10-11, the variant a payload without its discriminator fits
+
+Found by `TestConformanceAbsentDiscriminator`, written in step 9 of [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md) for survivors of
+the generated-code mutation run. The README said a payload without its discriminator "decodes into the one variant whose required keys it
+carries". The generated code picks that variant by its own required keys, without those the union requires of every variant
+(`SessionConfigOption`'s `id` and `name`, `CreateElicitationRequest`'s `message`). A payload that lacks such a key fits a variant and is
+refused naming the key, `SessionConfigOption: variant Boolean: SessionConfigOptionBoolean: missing required property "id"`, where the README
+read as keeping it in `Unknown` or refusing it as missing its discriminator.
+
+Decision: asked, the owner kept the behaviour and the README is clarified. A payload that lacks a key every variant requires is invalid, and
+is refused naming the key, as a struct is; `Unknown` is for a payload a later schema could define, which would carry those keys. Not chosen:
+counting the union's required keys in the fit, which would keep such payloads in `Unknown`.
+
 ## More Information
 
 Sources:

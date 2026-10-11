@@ -172,6 +172,18 @@ func TestProtocolTableRefuses(t *testing.T) {
 		{name: "session key not a string", defs: func(s string) string {
 			return strings.Replace(s, `"SessionId":{"type":"string"}`, `"SessionId":{"type":"integer"}`, 1)
 		}, wanted: []string{`agent method "s/cancel"`, `"sessionId" of CancelNotification is not a string`}},
+		{name: "capability through a non-object", table: func(p *Protocol) { p.Methods[0].Capability = "loadSession.x" },
+			wanted: []string{`capability "loadSession.x"`, `bool has no property "x"`}},
+		{name: "session key an inline array", defs: func(s string) string {
+			return strings.Replace(s, `"x-method":"s/prompt","required":["sessionId"],
+		"properties":{"sessionId":{"allOf":[{"$ref":"#/$defs/SessionId"}]}}`, `"x-method":"s/prompt","required":["sessionId"],
+		"properties":{"sessionId":{"type":"array","items":{"type":"string"}}}`, 1)
+		}, wanted: []string{`agent method "s/prompt"`, `"sessionId" of PromptRequest is not a string`}},
+		{name: "session key an inline integer", defs: func(s string) string {
+			return strings.Replace(s, `"x-method":"s/prompt","required":["sessionId"],
+		"properties":{"sessionId":{"allOf":[{"$ref":"#/$defs/SessionId"}]}}`, `"x-method":"s/prompt","required":["sessionId"],
+		"properties":{"sessionId":{"type":"integer"}}`, 1)
+		}, wanted: []string{`agent method "s/prompt"`, `"sessionId" of PromptRequest is not a string`}},
 		{name: "prompt turn without its cancel", meta: func(m *load.Meta) { delete(m.AgentMethods, "cancel") },
 			wanted: []string{`agent method "s/prompt"`, "needs one prompt-turn cancel on its side, found 0"}},
 		{name: "two cancels", table: func(p *Protocol) {

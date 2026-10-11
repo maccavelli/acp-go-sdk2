@@ -1,0 +1,53 @@
+A oneOf with a null schema among its members: the member is skipped, and every
+member after it is still a variant, with its type and its constructor. Found by
+the mutation run of 0011-PLAN-engine-tests.md, step 9. The meta declares
+$/cancel_request and the schema its smallest definition, which the runtime
+needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Pair": {"oneOf": [
+    {"title": "Left", "type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"]},
+    null,
+    {"title": "Right", "type": "object", "properties": {"b": {"type": "string"}}, "required": ["b"]}
+  ]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+func NewPairLeft(a string) Pair
+func NewPairRight(b string) Pair
+type Pair struct{Left *PairLeft "json:\"-\""; Right *PairRight "json:\"-\""}
+type PairLeft struct{A string "json:\"a\""}
+type PairRight struct{B string "json:\"b\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (Pair).MarshalJSON() ([]byte, error)
+func (*Pair).UnmarshalJSON(b []byte) error
+func (*Pair).Validate() error
+func (*PairLeft).UnmarshalJSON(b []byte) error
+func (*PairRight).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestPairAfterNullMember(t *testing.T) {
+	var p Pair
+	if err := json.Unmarshal([]byte(`{"b":"x"}`), &p); err != nil || p.Right == nil || p.Right.B != "x" {
+		t.Errorf(`{"b":"x"} decoded as %+v, %v; want Right`, p, err)
+	}
+	if r := NewPairRight("x"); r.Right == nil || r.Right.B != "x" {
+		t.Errorf("NewPairRight(x) = %+v", r)
+	}
+}

@@ -81,6 +81,21 @@ fuzz: ## Runs each fuzz target for FUZZTIME (default 60s)
 	cd cmd/generate && go test -run '^$$' -fuzz '^FuzzBuild$$' -fuzztime $(FUZZTIME) .
 	cd cmd/generate && go test -run '^$$' -fuzz '^FuzzExportedName$$' -fuzztime $(FUZZTIME) ./internal/model
 
+# Mutation runs report and never gate (0011-PLAN-engine-tests.md, D5). MUTANTS
+# samples that many mutants with SEED; empty runs every one. JOBS runs that many
+# at once. The engine run skips TestGeneratedFilesUpToDate, so a mutant only
+# that byte comparison kills survives (D6).
+MUTANTS ?=
+SEED ?= 1
+JOBS ?= 1
+MUTATE := go run ./internal/mutate -seed $(SEED) -j $(JOBS) $(if $(MUTANTS),-n $(MUTANTS))
+.PHONY: mutation-engine mutation-generated
+mutation-engine: ## Runs mutants of the generator's engine against its tests
+	cd cmd/generate && $(MUTATE) -dir . -skip "^TestGeneratedFilesUpToDate$$" -files 'internal/load/*.go,internal/model/*.go,internal/emit/*.go,internal/output/*.go'
+
+mutation-generated: ## Runs mutants of the generated SDK files against the root's tests
+	cd cmd/generate && $(MUTATE) -dir ../.. -pkgs . -files 'types_gen.go,agent_gen.go,client_gen.go,helpers_gen.go'
+
 FILES ?=
 pre-add-check: ## Runs the pre-add checks
 	@./scripts/go-precheck.sh $(FILES)

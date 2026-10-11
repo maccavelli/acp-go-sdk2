@@ -17,6 +17,7 @@ the runtime needs.
   "Option": {"type": "object", "properties": {"value": {"type": "string"}, "name": {"type": "string"}}, "required": ["value", "name"]},
   "Group": {"type": "object", "properties": {"group": {"type": "string"}, "options": {"type": "array", "items": {"$ref": "#/$defs/Option"}}}, "required": ["group", "options"]},
   "Options": {"anyOf": [{"title": "Ungrouped", "type": "array", "items": {"$ref": "#/$defs/Option"}}, {"title": "Grouped", "type": "array", "items": {"$ref": "#/$defs/Group"}}]},
+  "Reply": {"anyOf": [{"title": "Loose", "type": "object", "properties": {"note": {"type": "string"}}}, {"title": "Result", "type": "object", "properties": {"id": {"type": "integer", "format": "int64"}, "result": {"type": "string"}}, "required": ["id", "result"]}, {"title": "Failure", "type": "object", "properties": {"id": {"type": "integer", "format": "int64"}, "error": {"type": "string"}}, "required": ["id", "error"]}]},
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
 }}
 -- want.api --
@@ -34,6 +35,10 @@ type OptionsGrouped []Group
 type OptionsUngrouped []Option
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
+type Reply struct{Loose *ReplyLoose "json:\"-\""; Result *ReplyResult "json:\"-\""; Failure *ReplyFailure "json:\"-\""}
+type ReplyFailure struct{Error string "json:\"error\""; Id int64 "json:\"id\""}
+type ReplyLoose struct{Note string "json:\"note,omitempty\""}
+type ReplyResult struct{Id int64 "json:\"id\""; Result string "json:\"result\""}
 type RequestScope struct{RequestId int64 "json:\"requestId\""}
 type SessionScope struct{SessionId string "json:\"sessionId\""}
 type State struct{EndTurn *StateEnd "json:\"-\""; Other *StateOther "json:\"-\""; None *StateNone "json:\"-\""}
@@ -52,6 +57,11 @@ func (*Option).UnmarshalJSON(b []byte) error
 func (Options).MarshalJSON() ([]byte, error)
 func (*Options).UnmarshalJSON(b []byte) error
 func (*Options).Validate() error
+func (Reply).MarshalJSON() ([]byte, error)
+func (*Reply).UnmarshalJSON(b []byte) error
+func (*Reply).Validate() error
+func (*ReplyFailure).UnmarshalJSON(b []byte) error
+func (*ReplyResult).UnmarshalJSON(b []byte) error
 func (*RequestScope).UnmarshalJSON(b []byte) error
 func (*SessionScope).UnmarshalJSON(b []byte) error
 func (State).MarshalJSON() ([]byte, error)
@@ -125,5 +135,15 @@ func TestFoldedArrayItems(t *testing.T) {
 	}
 	if got := *o.Grouped; len(got) != 1 || got[0].Group != "g" || len(got[0].Options) != 1 || got[0].Options[0].Name != "n" {
 		t.Errorf("Grouped = %+v", got)
+	}
+}
+
+// In a union of objects that share a required key, each variant's other keys
+// are folded too, so the key match takes the payload before the trial decode
+// reaches a variant without required keys.
+func TestFoldedSharedKeys(t *testing.T) {
+	var r Reply
+	if err := json.Unmarshal([]byte(`{"ID":1,"ERROR":"x"}`), &r); err != nil || r.Failure == nil || r.Failure.Error != "x" {
+		t.Errorf(`{"ID":1,"ERROR":"x"} decoded as %+v, %v; want Failure`, r, err)
 	}
 }

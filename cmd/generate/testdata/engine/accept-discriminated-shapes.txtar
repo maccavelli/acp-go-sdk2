@@ -1,0 +1,102 @@
+Discriminated unions in the shapes the committed schema does not use: a variant
+without a discriminator value before the others, a catch-all as the first
+variant, variants that are a direct $ref, and a variant that is an object with
+no properties (0012-MADR-schema-fidelity-framework.md).
+Found by the mutation run of 0011-PLAN-engine-tests.md, step 9. The meta
+declares $/cancel_request and the schema its smallest definition, which the
+runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Start": {"type": "object", "properties": {"kind": {"type": "string", "const": "start"}, "at": {"type": "integer", "format": "int64"}}, "required": ["kind", "at"]},
+  "Stop": {"type": "object", "properties": {"kind": {"type": "string", "const": "stop"}}, "required": ["kind"]},
+  "Event": {"oneOf": [
+    {"title": "none", "type": "object"},
+    {"$ref": "#/$defs/Start"},
+    {"$ref": "#/$defs/Stop"},
+    {"title": "other", "type": "object", "properties": {"kind": {"type": "string"}}, "required": ["kind"], "not": {"anyOf": [{"type": "object", "properties": {"kind": {"type": "string", "const": "start"}}, "required": ["kind"]}, {"type": "object", "properties": {"kind": {"type": "string", "const": "stop"}}, "required": ["kind"]}]}}
+  ], "discriminator": {"propertyName": "kind"}},
+  "Mark": {"anyOf": [
+    {"title": "other", "type": "object", "properties": {"kind": {"type": "string"}}, "required": ["kind"], "not": {"anyOf": [{"type": "object", "properties": {"kind": {"type": "string", "const": "a"}}, "required": ["kind"]}]}},
+    {"type": "object", "properties": {"kind": {"type": "string", "const": "a"}}, "required": ["kind"]}
+  ]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Event struct{None *EventNone "json:\"-\""; Start *Start "json:\"-\""; Stop *Stop "json:\"-\""; Other *EventOther "json:\"-\""}
+type EventNone map[string]any
+type EventOther struct{Kind string "json:\"kind\""; Extra map[string]json.RawMessage "json:\"-\""}
+type Mark struct{Other *MarkOther "json:\"-\""; A *MarkA "json:\"-\""}
+type MarkA struct{Kind string "json:\"kind\""}
+type MarkOther struct{Kind string "json:\"kind\""; Extra map[string]json.RawMessage "json:\"-\""}
+func NewEventNone() Event
+func NewEventOther() Event
+func NewEventStart() Event
+func NewEventStop() Event
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Start struct{At int64 "json:\"at\""; Kind string "json:\"kind\""}
+type Stop struct{Kind string "json:\"kind\""}
+func (*CancelRequestNotification).Validate() error
+func (Event).MarshalJSON() ([]byte, error)
+func (*Event).UnmarshalJSON(b []byte) error
+func (*Event).Validate() error
+func (EventOther).MarshalJSON() ([]byte, error)
+func (*EventOther).UnmarshalJSON(b []byte) error
+func (Mark).MarshalJSON() ([]byte, error)
+func (*Mark).UnmarshalJSON(b []byte) error
+func (*Mark).Validate() error
+func (MarkOther).MarshalJSON() ([]byte, error)
+func (*MarkOther).UnmarshalJSON(b []byte) error
+func (*Start).UnmarshalJSON(b []byte) error
+func (*Stop).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Each variant decodes by its discriminator; a value no variant names goes to
+// the catch-all, and a payload without one to the variant without a value.
+func TestEventVariants(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"kind":"start","at":9007199254740993}`: "start",
+		`{"kind":"stop"}`:                        "stop",
+		`{"kind":"pause"}`:                       "other",
+		`{}`:                                     "none",
+	} {
+		var e Event
+		if err := json.Unmarshal([]byte(in), &e); err != nil {
+			t.Errorf("%s: %v", in, err)
+			continue
+		}
+		got := map[bool]string{e.Start != nil: "start", e.Stop != nil: "stop", e.Other != nil: "other", e.None != nil: "none"}[true]
+		if got != want {
+			t.Errorf("%s decoded as %+v, want %s", in, e, want)
+		}
+	}
+	var e Event
+	if err := json.Unmarshal([]byte(`{"kind":"start","at":9007199254740993}`), &e); err != nil || e.Start == nil || e.Start.At != 9007199254740993 {
+		t.Errorf("start decoded as %+v, %v", e, err)
+	}
+}
+
+// A catch-all listed first still takes only the values no other variant names.
+func TestMarkCatchAllFirst(t *testing.T) {
+	var m Mark
+	if err := json.Unmarshal([]byte(`{"kind":"a"}`), &m); err != nil || m.Other != nil {
+		t.Errorf(`{"kind":"a"} decoded as %+v, %v; want the const variant`, m, err)
+	}
+	if err := json.Unmarshal([]byte(`{"kind":"b","x":1}`), &m); err != nil || m.Other == nil || m.Other.Kind != "b" || string(m.Other.Extra["x"]) != "1" {
+		t.Errorf(`{"kind":"b","x":1} decoded as %+v, %v; want Other`, m, err)
+	}
+}

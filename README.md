@@ -92,10 +92,11 @@ follow the schema:
   encoding sends the payload back unchanged.
 - A payload without its discriminator, or with it `null`, decodes into the
   variant the schema means for that case where the union has one, such as
-  `IdleStateUpdateNone`. Otherwise it decodes into the one variant whose
-  required keys it carries. When none or several fit, it is kept in `Unknown`;
-  a union with a catch-all instead fails with an error such as
-  `StateUpdate: missing discriminator "state"`.
+  `IdleStateUpdateNone`. Otherwise it decodes into the one variant whose own
+  required keys it carries, not counting those the union requires of every
+  variant; a payload that lacks one of those fails, naming the key. When none
+  or several fit, it is kept in `Unknown`; a union with a catch-all instead
+  fails with an error such as `StateUpdate: missing discriminator "state"`.
 - Decoding JSON `null` into a union leaves it unchanged, except `RequestId`, which
   takes it as its `Null` variant. Any other payload replaces what the union
   held, so a reused value holds only the last one decoded.

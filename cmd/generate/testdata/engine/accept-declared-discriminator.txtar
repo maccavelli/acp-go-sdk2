@@ -149,4 +149,8 @@ func TestShapeConstructors(t *testing.T) {
 		t.Fatal(err)
 	}
 	jsonEqual(t, b, `{"kind":"square","side":"s"}`)
+	// The constructor sets the discriminator in the Go value, not only on the wire.
+	if c := NewShapeCircle(5).Circle; c == nil || c.Kind != "circle" {
+		t.Errorf("NewShapeCircle(5).Circle = %+v, want kind circle", c)
+	}
 }

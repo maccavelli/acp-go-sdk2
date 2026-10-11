@@ -134,12 +134,15 @@ func listFunc(f *goFile, name, elem string, elts []ast.Expr, doc string) {
 }
 
 // recorder adds a type that implements every method of one side: each sends
-// its parameters on calls and returns the zero result.
+// its parameters on calls and returns the zero result, or, when reply is set,
+// what reply fills the result with and its error.
 func recorder(f *goFile, name, recvName string, methods []*model.Method, side string) {
 	f.comment(name+" implements every "+side+" interface. Each method sends its parameters on calls",
-		"and returns the zero result.")
+		"and returns the zero result, or, when reply is set, the result reply fills, nil for a method",
+		"without one, and reply's error.")
 	var s fieldSet
 	s.add(&ast.Field{Names: []*ast.Ident{id("calls")}, Type: &ast.ChanType{Dir: ast.SEND | ast.RECV, Value: id("any")}})
+	s.add(&ast.Field{Names: []*ast.Ident{id("reply")}, Type: funcType([]*ast.Field{param("result", id("any"))}, param("", id("error")))})
 	f.add(typeDecl(name, s.structType(f)))
 	f.line()
 	for _, mi := range methods {
@@ -152,9 +155,13 @@ func recorder(f *goFile, name, recvName string, methods []*model.Method, side st
 		var fn *ast.FuncDecl
 		if mi.Notif == "" && mi.HasResult {
 			fn = method(param(recvName, id(name)), mi.GoName, funcType(sig, param("", id(mi.Resp)), param("", id("error"))),
-				send, varStmt("r", id(mi.Resp)), ret(id("r"), nilExpr()))
+				send, varStmt("r", id(mi.Resp)),
+				ifStmt(nil, binary(dot(recvName, "reply"), token.NEQ, nilExpr()), ret(id("r"), call(dot(recvName, "reply"), addr(id("r"))))),
+				ret(id("r"), nilExpr()))
 		} else {
-			fn = method(param(recvName, id(name)), mi.GoName, funcType(sig, param("", id("error"))), send, ret(nilExpr()))
+			fn = method(param(recvName, id(name)), mi.GoName, funcType(sig, param("", id("error"))), send,
+				ifStmt(nil, binary(dot(recvName, "reply"), token.NEQ, nilExpr()), ret(call(dot(recvName, "reply"), nilExpr()))),
+				ret(nilExpr()))
 		}
 		f.add(fn)
 		f.line()

@@ -1,0 +1,86 @@
+A union without a discriminator decodes an object into the variant whose
+required keys it carries, before any trial decode, and an array into the
+variant whose items carry theirs; an array whose items are not objects falls to
+the trial decode (0012-MADR-schema-fidelity-framework.md). Found by the
+mutation run of 0011-PLAN-engine-tests.md, step 9. The meta declares
+$/cancel_request and the schema its smallest definition, which the runtime
+needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Note": {"type": "object", "properties": {"note": {"type": "string"}}},
+  "Keyed": {"type": "object", "properties": {"k": {"type": "string"}}, "required": ["k"]},
+  "Pick": {"anyOf": [{"title": "Loose", "$ref": "#/$defs/Note"}, {"title": "Keyed", "$ref": "#/$defs/Keyed"}]},
+  "Batch": {"anyOf": [{"title": "Loose", "type": "array", "items": {"$ref": "#/$defs/Note"}}, {"title": "Keyed", "type": "array", "items": {"$ref": "#/$defs/Keyed"}}]},
+  "Mixed": {"anyOf": [{"title": "Objects", "type": "array", "items": {"$ref": "#/$defs/Keyed"}}, {"title": "Words", "type": "array", "items": {"type": "string"}}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type Batch struct{Loose *BatchLoose "json:\"-\""; Keyed *BatchKeyed "json:\"-\""}
+type BatchKeyed []Keyed
+type BatchLoose []Note
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Keyed struct{K string "json:\"k\""}
+type Mixed struct{Objects *MixedObjects "json:\"-\""; Words *MixedWords "json:\"-\""}
+type MixedObjects []Keyed
+type MixedWords []string
+type Note struct{Note string "json:\"note,omitempty\""}
+type Pick struct{Loose *Note "json:\"-\""; Keyed *Keyed "json:\"-\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (Batch).MarshalJSON() ([]byte, error)
+func (*Batch).UnmarshalJSON(b []byte) error
+func (*Batch).Validate() error
+func (*CancelRequestNotification).Validate() error
+func (*Keyed).UnmarshalJSON(b []byte) error
+func (Mixed).MarshalJSON() ([]byte, error)
+func (*Mixed).UnmarshalJSON(b []byte) error
+func (*Mixed).Validate() error
+func (Pick).MarshalJSON() ([]byte, error)
+func (*Pick).UnmarshalJSON(b []byte) error
+func (*Pick).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// The variant whose required keys the object carries takes it, though an
+// earlier variant without required keys would decode it too.
+func TestObjectByRequiredKeys(t *testing.T) {
+	var p Pick
+	if err := json.Unmarshal([]byte(`{"k":"v"}`), &p); err != nil || p.Keyed == nil || p.Loose != nil {
+		t.Errorf(`{"k":"v"} decoded as %+v, %v; want Keyed`, p, err)
+	}
+	if err := json.Unmarshal([]byte(`{"note":"n"}`), &p); err != nil || p.Loose == nil {
+		t.Errorf(`{"note":"n"} decoded as %+v, %v; want Loose`, p, err)
+	}
+}
+
+// The array variant whose items carry their required keys takes the array.
+func TestArrayByItemKeys(t *testing.T) {
+	var b Batch
+	if err := json.Unmarshal([]byte(`[{"k":"v"}]`), &b); err != nil || b.Keyed == nil || b.Loose != nil {
+		t.Errorf(`[{"k":"v"}] decoded as %+v, %v; want Keyed`, b, err)
+	}
+}
+
+// Items that are not objects match no variant by keys; the trial decode takes
+// the array of strings.
+func TestArrayOfNonObjects(t *testing.T) {
+	var m Mixed
+	if err := json.Unmarshal([]byte(`["a","b"]`), &m); err != nil || m.Words == nil || len(*m.Words) != 2 {
+		t.Errorf(`["a","b"] decoded as %+v, %v; want Words`, m, err)
+	}
+	if err := json.Unmarshal([]byte(`[{"k":"v"}]`), &m); err != nil || m.Objects == nil {
+		t.Errorf(`[{"k":"v"}] decoded as %+v, %v; want Objects`, m, err)
+	}
+}

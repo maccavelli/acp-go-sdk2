@@ -2609,243 +2609,367 @@ func schemaMethods() []schemaMethod {
 }
 
 // recordingAgent implements every agent interface. Each method sends its parameters on calls
-// and returns the zero result.
+// and returns the zero result, or, when reply is set, the result reply fills, nil for a method
+// without one, and reply's error.
 type recordingAgent struct {
 	calls chan any
+	reply func(result any) error
 }
 
 func (a recordingAgent) Authenticate(_ context.Context, params AuthenticateRequest) (AuthenticateResponse, error) {
 	a.calls <- params
 	var r AuthenticateResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) UnstableDidChangeDocument(_ context.Context, params UnstableDidChangeDocumentNotification) error {
 	a.calls <- params
+	if a.reply != nil {
+		return a.reply(nil)
+	}
 	return nil
 }
 
 func (a recordingAgent) UnstableDidCloseDocument(_ context.Context, params UnstableDidCloseDocumentNotification) error {
 	a.calls <- params
+	if a.reply != nil {
+		return a.reply(nil)
+	}
 	return nil
 }
 
 func (a recordingAgent) UnstableDidFocusDocument(_ context.Context, params UnstableDidFocusDocumentNotification) error {
 	a.calls <- params
+	if a.reply != nil {
+		return a.reply(nil)
+	}
 	return nil
 }
 
 func (a recordingAgent) UnstableDidOpenDocument(_ context.Context, params UnstableDidOpenDocumentNotification) error {
 	a.calls <- params
+	if a.reply != nil {
+		return a.reply(nil)
+	}
 	return nil
 }
 
 func (a recordingAgent) UnstableDidSaveDocument(_ context.Context, params UnstableDidSaveDocumentNotification) error {
 	a.calls <- params
+	if a.reply != nil {
+		return a.reply(nil)
+	}
 	return nil
 }
 
 func (a recordingAgent) Initialize(_ context.Context, params InitializeRequest) (InitializeResponse, error) {
 	a.calls <- params
 	var r InitializeResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) Logout(_ context.Context, params LogoutRequest) (LogoutResponse, error) {
 	a.calls <- params
 	var r LogoutResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) UnstableMessageMcp(_ context.Context, params UnstableMessageMcpNotification) error {
 	a.calls <- params
+	if a.reply != nil {
+		return a.reply(nil)
+	}
 	return nil
 }
 
 func (a recordingAgent) UnstableAcceptNes(_ context.Context, params UnstableAcceptNesNotification) error {
 	a.calls <- params
+	if a.reply != nil {
+		return a.reply(nil)
+	}
 	return nil
 }
 
 func (a recordingAgent) UnstableCloseNes(_ context.Context, params UnstableCloseNesRequest) (UnstableCloseNesResponse, error) {
 	a.calls <- params
 	var r UnstableCloseNesResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) UnstableRejectNes(_ context.Context, params UnstableRejectNesNotification) error {
 	a.calls <- params
+	if a.reply != nil {
+		return a.reply(nil)
+	}
 	return nil
 }
 
 func (a recordingAgent) UnstableStartNes(_ context.Context, params UnstableStartNesRequest) (UnstableStartNesResponse, error) {
 	a.calls <- params
 	var r UnstableStartNesResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) UnstableSuggestNes(_ context.Context, params UnstableSuggestNesRequest) (UnstableSuggestNesResponse, error) {
 	a.calls <- params
 	var r UnstableSuggestNesResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) UnstableDisableProvider(_ context.Context, params UnstableDisableProviderRequest) (UnstableDisableProviderResponse, error) {
 	a.calls <- params
 	var r UnstableDisableProviderResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) UnstableListProviders(_ context.Context, params UnstableListProvidersRequest) (UnstableListProvidersResponse, error) {
 	a.calls <- params
 	var r UnstableListProvidersResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) UnstableSetProvider(_ context.Context, params UnstableSetProviderRequest) (UnstableSetProviderResponse, error) {
 	a.calls <- params
 	var r UnstableSetProviderResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) Cancel(_ context.Context, params CancelNotification) error {
 	a.calls <- params
+	if a.reply != nil {
+		return a.reply(nil)
+	}
 	return nil
 }
 
 func (a recordingAgent) CloseSession(_ context.Context, params CloseSessionRequest) (CloseSessionResponse, error) {
 	a.calls <- params
 	var r CloseSessionResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) DeleteSession(_ context.Context, params DeleteSessionRequest) (DeleteSessionResponse, error) {
 	a.calls <- params
 	var r DeleteSessionResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) UnstableForkSession(_ context.Context, params UnstableForkSessionRequest) (UnstableForkSessionResponse, error) {
 	a.calls <- params
 	var r UnstableForkSessionResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) ListSessions(_ context.Context, params ListSessionsRequest) (ListSessionsResponse, error) {
 	a.calls <- params
 	var r ListSessionsResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) LoadSession(_ context.Context, params LoadSessionRequest) (LoadSessionResponse, error) {
 	a.calls <- params
 	var r LoadSessionResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) NewSession(_ context.Context, params NewSessionRequest) (NewSessionResponse, error) {
 	a.calls <- params
 	var r NewSessionResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) Prompt(_ context.Context, params PromptRequest) (PromptResponse, error) {
 	a.calls <- params
 	var r PromptResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) ResumeSession(_ context.Context, params ResumeSessionRequest) (ResumeSessionResponse, error) {
 	a.calls <- params
 	var r ResumeSessionResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) SetSessionConfigOption(_ context.Context, params SetSessionConfigOptionRequest) (SetSessionConfigOptionResponse, error) {
 	a.calls <- params
 	var r SetSessionConfigOptionResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 func (a recordingAgent) SetSessionMode(_ context.Context, params SetSessionModeRequest) (SetSessionModeResponse, error) {
 	a.calls <- params
 	var r SetSessionModeResponse
+	if a.reply != nil {
+		return r, a.reply(&r)
+	}
 	return r, nil
 }
 
 // recordingClient implements every client interface. Each method sends its parameters on calls
-// and returns the zero result.
+// and returns the zero result, or, when reply is set, the result reply fills, nil for a method
+// without one, and reply's error.
 type recordingClient struct {
 	calls chan any
+	reply func(result any) error
 }
 
 func (c recordingClient) CompleteElicitation(_ context.Context, params CompleteElicitationNotification) error {
 	c.calls <- params
+	if c.reply != nil {
+		return c.reply(nil)
+	}
 	return nil
 }
 
 func (c recordingClient) CreateElicitation(_ context.Context, params CreateElicitationRequest) (CreateElicitationResponse, error) {
 	c.calls <- params
 	var r CreateElicitationResponse
+	if c.reply != nil {
+		return r, c.reply(&r)
+	}
 	return r, nil
 }
 
 func (c recordingClient) ReadTextFile(_ context.Context, params ReadTextFileRequest) (ReadTextFileResponse, error) {
 	c.calls <- params
 	var r ReadTextFileResponse
+	if c.reply != nil {
+		return r, c.reply(&r)
+	}
 	return r, nil
 }
 
 func (c recordingClient) WriteTextFile(_ context.Context, params WriteTextFileRequest) (WriteTextFileResponse, error) {
 	c.calls <- params
 	var r WriteTextFileResponse
+	if c.reply != nil {
+		return r, c.reply(&r)
+	}
 	return r, nil
 }
 
 func (c recordingClient) UnstableMessageMcp(_ context.Context, params UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error) {
 	c.calls <- params
 	var r UnstableMessageMcpResponse
+	if c.reply != nil {
+		return r, c.reply(&r)
+	}
 	return r, nil
 }
 
 func (c recordingClient) RequestPermission(_ context.Context, params RequestPermissionRequest) (RequestPermissionResponse, error) {
 	c.calls <- params
 	var r RequestPermissionResponse
+	if c.reply != nil {
+		return r, c.reply(&r)
+	}
 	return r, nil
 }
 
 func (c recordingClient) SessionUpdate(_ context.Context, params SessionNotification) error {
 	c.calls <- params
+	if c.reply != nil {
+		return c.reply(nil)
+	}
 	return nil
 }
 
 func (c recordingClient) CreateTerminal(_ context.Context, params CreateTerminalRequest) (CreateTerminalResponse, error) {
 	c.calls <- params
 	var r CreateTerminalResponse
+	if c.reply != nil {
+		return r, c.reply(&r)
+	}
 	return r, nil
 }
 
 func (c recordingClient) KillTerminal(_ context.Context, params KillTerminalRequest) (KillTerminalResponse, error) {
 	c.calls <- params
 	var r KillTerminalResponse
+	if c.reply != nil {
+		return r, c.reply(&r)
+	}
 	return r, nil
 }
 
 func (c recordingClient) TerminalOutput(_ context.Context, params TerminalOutputRequest) (TerminalOutputResponse, error) {
 	c.calls <- params
 	var r TerminalOutputResponse
+	if c.reply != nil {
+		return r, c.reply(&r)
+	}
 	return r, nil
 }
 
 func (c recordingClient) ReleaseTerminal(_ context.Context, params ReleaseTerminalRequest) (ReleaseTerminalResponse, error) {
 	c.calls <- params
 	var r ReleaseTerminalResponse
+	if c.reply != nil {
+		return r, c.reply(&r)
+	}
 	return r, nil
 }
 
 func (c recordingClient) WaitForTerminalExit(_ context.Context, params WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
 	c.calls <- params
 	var r WaitForTerminalExitResponse
+	if c.reply != nil {
+		return r, c.reply(&r)
+	}
 	return r, nil
 }
 

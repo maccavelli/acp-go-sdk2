@@ -1,0 +1,39 @@
+An optional map whose default is {} is sent even when nil, as {}: its field
+has no omitempty, and encoding fills it (0012-MADR-schema-fidelity-framework.md).
+Found by the mutation run of 0011-PLAN-engine-tests.md, step 9. The meta
+declares $/cancel_request and the schema its smallest definition, which the
+runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Opts": {"type": "object", "properties": {"labels": {"type": "object", "additionalProperties": {"type": "string"}, "default": {}}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Opts struct{Labels map[string]string "json:\"labels\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (Opts).MarshalJSON() ([]byte, error)
+func (*Opts).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestDefaultMapSent(t *testing.T) {
+	b, err := json.Marshal(Opts{})
+	if err != nil || string(b) != `{"labels":{}}` {
+		t.Errorf("Opts{} sent as %s, %v; want {\"labels\":{}}", b, err)
+	}
+}
