@@ -1,4 +1,5 @@
-// Package output writes the generated files into the output directory.
+// Package output type-checks the generated files and writes them into the
+// output directory.
 package output
 
 import (

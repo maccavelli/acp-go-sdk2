@@ -1,0 +1,118 @@
+package output
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/emit"
+)
+
+// stub declares the hand-written name the generated file of uses refers to.
+const stub = "package acp\n\ntype RequestError struct{}\n"
+
+// uses is a generated file that refers to the hand-written RequestError.
+var uses = []emit.File{{Name: "types_gen.go", Src: []byte("package acp\n\ntype U struct{}\n\nfunc F() *RequestError { return nil }\n")}}
+
+// dirWith returns a new directory holding files, by name.
+func dirWith(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func TestCheckAcceptsHandWrittenPackage(t *testing.T) {
+	t.Parallel()
+	if err := Check(dirWith(t, map[string]string{"hand.go": stub}), uses); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCheckRefuses(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		dir   func(t *testing.T) string
+		files []emit.File
+		want  []string
+	}{
+		{"an empty directory", func(t *testing.T) string { return t.TempDir() }, uses,
+			[]string{"does not type-check", "types_gen.go:5:", "undefined: RequestError"}},
+		{"a missing directory", func(t *testing.T) string { return filepath.Join(t.TempDir(), "missing") }, uses,
+			[]string{"undefined: RequestError"}},
+		{"a hand-written file that redeclares a generated type", func(t *testing.T) string {
+			return dirWith(t, map[string]string{"hand.go": stub + "\ntype U int\n"})
+		}, uses, []string{"redeclared"}},
+		{"a feature newer than the go line of go.mod", func(t *testing.T) string {
+			return dirWith(t, map[string]string{
+				"go.mod":  "module example.com/acp\n\ngo 1.21\n",
+				"hand.go": stub + "\nfunc loop() {\n\tfor range 3 {\n\t}\n}\n",
+			})
+		}, uses, []string{"requires go1.22"}},
+		{"a file of another package", func(t *testing.T) string {
+			return dirWith(t, map[string]string{"hand.go": stub, "stray.go": "package other\n"})
+		}, uses, []string{"output directory", "other"}},
+		{"a cgo file", func(t *testing.T) string {
+			return dirWith(t, map[string]string{"hand.go": stub, "c.go": "package acp\n\nimport \"C\"\n"})
+		}, uses, []string{"cgo file c.go"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := Check(tt.dir(t), tt.files)
+			if err == nil {
+				t.Fatal("Check accepted the output")
+			}
+			for _, w := range tt.want {
+				if !strings.Contains(err.Error(), w) {
+					t.Errorf("error %q does not contain %q", err, w)
+				}
+			}
+		})
+	}
+}
+
+// TestCheckSelectsLikeTheGoCommand requires the files the go command would not
+// build to stay out of the check, each of which would fail it.
+func TestCheckSelectsLikeTheGoCommand(t *testing.T) {
+	t.Parallel()
+	dir := dirWith(t, map[string]string{
+		"hand.go":         stub,
+		"ignored.go":      "//go:build ignore\n\npackage main\n\nvar _ = undefinedInIgnored\n",
+		"hand_test.go":    "package acp\n\nvar _ = undefinedInTest\n",
+		".x.tmp":          "package acp\n\nvar _ = undefinedInDotFile\n",
+		".types_gen.go.1": "package acp\n\nvar _ = undefinedInDotFile\n",
+		"other_plan9.go":  "package acp\n\nvar _ = undefinedOnPlan9\n",
+	})
+	if err := Check(dir, uses); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCheckReportsAtMostTen(t *testing.T) {
+	t.Parallel()
+	var src strings.Builder
+	src.WriteString("package acp\n")
+	for i := range 12 {
+		src.WriteString("\nvar _ = undefined" + string(rune('A'+i)) + "\n")
+	}
+	err := Check(t.TempDir(), []emit.File{{Name: "types_gen.go", Src: []byte(src.String())}})
+	if err == nil {
+		t.Fatal("Check accepted the output")
+	}
+	if got := strings.Count(err.Error(), "undefined: undefined"); got != 10 {
+		t.Errorf("error reports %d errors, want 10:\n%v", got, err)
+	}
+	if !strings.HasSuffix(err.Error(), "and 2 more") {
+		t.Errorf("error does not end with the count of the rest:\n%v", err)
+	}
+	if !strings.Contains(err.Error(), "types_gen.go:3:9: undefined: undefinedA") {
+		t.Errorf("error does not start with the first error in position order:\n%v", err)
+	}
+}

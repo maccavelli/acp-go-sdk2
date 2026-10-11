@@ -363,3 +363,79 @@ generated file. `go test -cover`: `internal/output` 92.9%, `internal/emit` 84.0%
 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 4 on `main`.
+
+### Step 5, type-check before writing, 2026-10-10
+
+The owner committed step 4 as `66e907e`. Step 5 ran on `main` from that clean tree and added `cmd/generate/internal/output/check.go` and
+`check_test.go`, changed `cmd/generate/main.go`, `main_test.go`, `internal/output/write.go` (the package comment), and this record. The agent did not
+commit.
+
+Tests first. In `internal/output`, over a synthetic generated file that refers to a hand-written `RequestError`:
+
+* `TestCheckRefuses`: an empty directory (`does not type-check`, `types_gen.go:5:`, `undefined: RequestError`); a missing directory; a hand-written
+  file that redeclares a generated type (`redeclared`); a `go.mod` at `go 1.21` with a hand-written `for range 3` (`requires go1.22`); a stray
+  `package other` file (`output directory`, `other`); a file that imports `"C"` (`cgo file c.go`).
+* `TestCheckSelectsLikeTheGoCommand`: the stub plus a `//go:build ignore` file, a `_test.go` file, `.x.tmp`, `.types_gen.go.1`, and an `_plan9.go`
+  file, each with an undefined name; `Check` returns nil.
+* `TestCheckReportsAtMostTen`: 12 undefined names; 10 reported, the first `types_gen.go:3:9: undefined: undefinedA`, ending `and 2 more`.
+* `TestCheckAcceptsHandWrittenPackage`, added: the stub and the generated file check. It is the positive control of the cases above.
+
+In `cmd/generate`: `TestRunRefusesOutputThatDoesNotTypeCheck` (the recased-union schema, now the constant `recasedUnion`, into a directory holding
+only `keep.txt`); `TestRunGeneratesRecasedUnion` writes `handWritten` into its directory as `hand_written.go` first; `TestCheckAcceptsRepository`.
+
+**Placement, 2026-10-10.** The plan lists `TestCheckAcceptsRepository` among the tests of `internal/output`. It is in `cmd/generate/main_test.go`,
+because rendering the committed schema needs `loadSchema`, which merges the unstable schema and lives in package `main`; the test does what the plan
+says, `emit.Render` of the committed schema checked against the repository root. The test of the empty directory in `internal/output` expects
+`undefined: RequestError` of its synthetic file; `undefined: AgentSideConnection`, the plan's text, is what `TestRunRefusesOutputThatDoesNotTypeCheck`
+expects of the real output.
+
+On `66e907e` neither package's tests compile (`undefined: Check`, `undefined: output.Check`). In a scratch copy without `check_test.go` and
+`TestCheckAcceptsRepository` (`s5_first.py`), the run-level test fails on the unchanged generator: `main_test.go:210: run error = <nil>, want one naming
+undefined: AgentSideConnection`; `TestRunGeneratesRecasedUnion` passes.
+
+Change, as the design says: `Check`, `handWritten`, `goVersion`, and `report` in `check.go`; `run` calls `output.Check` before `os.MkdirAll`, and its
+doc comment says so. Two details the design did not spell out:
+
+* The selection copies `build.Default` with `CgoEnabled` set, so a file that imports `"C"` is listed as a cgo file, and refused, whatever
+  `CGO_ENABLED` says; with cgo off, `go/build` would leave it out silently.
+* `conf.Check`'s returned error is discarded with `//nolint:errcheck`, because `Error` has already collected it with every other.
+
+Plants, one at a time in scratch copies of `cmd/generate` (`s5_plants.py`; a temporary path is shortened to `<tmp>`):
+
+```text
+run without the check: exit=1
+    --- FAIL: TestRunRefusesOutputThatDoesNotTypeCheck (0.06s)
+    main_test.go:211: run error = <nil>, want one naming undefined: AgentSideConnection
+UseAllFiles set: exit=1
+    --- FAIL: TestCheckSelectsLikeTheGoCommand (0.00s)
+    check_test.go:94: output directory: found packages acp (hand.go) and main (ignored.go) in <tmp>
+GoVersion left empty: exit=1
+    --- FAIL: TestCheckRefuses/a_feature_newer_than_the_go_line_of_go.mod (0.00s)
+    check_test.go:70: Check accepted the output
+no cap: exit=1
+    --- FAIL: TestCheckReportsAtMostTen (0.00s)
+    check_test.go:110: error reports 12 errors, want 10:
+```
+
+`p5_failmodes.py`, rerun: both scenarios exit 1 and rewrite nothing. The second, printed in full with the scratch copy's path shortened to `<copy>`:
+
+```text
+output that does not type-check: generator exit=1 generate: generated code does not type-check with <copy>:
+    <copy>/agent_gen.go:22:16: undefined: toReqErrMissing
+    ... eight more lines in agent_gen.go, lines 40 to 156 ...
+    <copy>/agent_gen.go:174:16: undefined: toReqErrMissing
+    and 30 more
+    rewritten: []; untouched: ['constants_gen.go', 'types_gen.go', 'agent_gen.go', 'client_gen.go', 'helpers_gen.go']
+```
+
+The render failure gives the same result as in step 3.
+
+Run time (`s5_time.py`: the binaries of `66e907e` and of this step, three runs each, on a scratch copy of the repository): before 1.55, 0.12, 0.13 s;
+after 2.25, 0.60, 0.60 s. The first run of each fills the build cache; warm, the check adds about 0.48 s, inside the MADR's 0.5 to 0.9 s.
+
+In the tree: `stat` of the five generated files is identical before and after regenerating; no `.tmp` file is left; `git diff --quiet d534f27 --
+'*_gen.go'` exits 0. No `panic` call is left in a non-test file of `cmd/generate`. `go test -cover`: `internal/output` 92.3%, `internal/emit` 84.0%,
+`internal/model` 93.9%. `make pre-add-check`: `go-precheck: 74 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make
+check-records` and `make markdownlint` exit 0.
+
+Commit point: the agent stopped here. The owner commits step 5 on `main`.

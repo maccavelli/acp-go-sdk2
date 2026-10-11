@@ -15,6 +15,7 @@ import (
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/emit"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/output"
 )
 
 // repoRoot is the SDK module root, two directories above cmd/generate.
@@ -154,14 +155,20 @@ type AgentSideConnection struct{}
 type ClientSideConnection struct{}
 `
 
-// TestRunGeneratesRecasedUnion runs the generator on the oneOf that panicked
-// before the model named variants once, and type-checks what it writes.
+// recasedUnion is the oneOf that panicked before the model named variants once.
+const recasedUnion = `{"U":{"oneOf":[
+	{"type":"object","properties":{"type":{"const":"x","type":"string"},"n":{"type":"string"}},"required":["type","n"]},
+	{"type":"object","properties":{"type":{"const":"y","type":"string"}},"required":["type"]}]}}`
+
+// TestRunGeneratesRecasedUnion runs the generator on recasedUnion, into a
+// directory holding the hand-written names, and type-checks what it writes.
 func TestRunGeneratesRecasedUnion(t *testing.T) {
 	t.Parallel()
 	out := t.TempDir()
-	err := run([]string{"-schema", writeSchema(t, `{"U":{"oneOf":[
-		{"type":"object","properties":{"type":{"const":"x","type":"string"},"n":{"type":"string"}},"required":["type","n"]},
-		{"type":"object","properties":{"type":{"const":"y","type":"string"}},"required":["type"]}]}}`), "-out", out})
+	if err := os.WriteFile(filepath.Join(out, "hand_written.go"), []byte(handWritten), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := run([]string{"-schema", writeSchema(t, recasedUnion), "-out", out})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,5 +194,48 @@ func TestRunGeneratesRecasedUnion(t *testing.T) {
 		if pkg.Scope().Lookup(name) == nil {
 			t.Errorf("generated package has no %s", name)
 		}
+	}
+}
+
+// TestRunRefusesOutputThatDoesNotTypeCheck runs the generator on recasedUnion
+// into a directory without the hand-written package. The output does not
+// type-check, so nothing may be written.
+func TestRunRefusesOutputThatDoesNotTypeCheck(t *testing.T) {
+	t.Parallel()
+	out := t.TempDir()
+	if err := os.WriteFile(filepath.Join(out, "keep.txt"), []byte("sentinel\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := run([]string{"-schema", writeSchema(t, recasedUnion), "-out", out})
+	if err == nil || !strings.Contains(err.Error(), "undefined: AgentSideConnection") {
+		t.Fatalf("run error = %v, want one naming undefined: AgentSideConnection", err)
+	}
+	entries, err := os.ReadDir(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "keep.txt" {
+		t.Errorf("output directory holds %v, want only keep.txt", entries)
+	}
+}
+
+// TestCheckAcceptsRepository renders the committed schema and checks it with
+// the repository's hand-written package, as run does before writing.
+func TestCheckAcceptsRepository(t *testing.T) {
+	t.Parallel()
+	meta, schema, prov, err := loadSchema(filepath.Join(repoRoot, "schema"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov, Protocol: &model.ACP})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := emit.Render(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := output.Check(repoRoot, files); err != nil {
+		t.Fatal(err)
 	}
 }

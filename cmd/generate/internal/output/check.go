@@ -1,0 +1,156 @@
+package output
+
+import (
+	"cmp"
+	"errors"
+	"fmt"
+	"go/ast"
+	"go/build"
+	"go/importer"
+	"go/parser"
+	"go/token"
+	"go/types"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/emit"
+)
+
+// maxReported is how many type errors Check lists before it counts the rest.
+const maxReported = 10
+
+// Check type-checks files together with the hand-written Go files of dir, and
+// returns an error listing what does not check.
+//
+// The hand-written files are those the go command would build in dir for the
+// host, less the generated names; a missing directory has none. The language
+// version is the go line of dir/go.mod, when there is one. Imports are read
+// from source.
+func Check(dir string, files []emit.File) error {
+	hand, err := handWritten(dir, files)
+	if err != nil {
+		return err
+	}
+	version, err := goVersion(dir)
+	if err != nil {
+		return err
+	}
+	fset := token.NewFileSet()
+	parsed := make([]*ast.File, 0, len(hand)+len(files))
+	for _, name := range hand {
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		parsed = append(parsed, f)
+	}
+	pkg := ""
+	for _, gf := range files {
+		f, err := parser.ParseFile(fset, filepath.Join(dir, gf.Name), gf.Src, parser.SkipObjectResolution)
+		if err != nil {
+			return err
+		}
+		pkg = f.Name.Name
+		parsed = append(parsed, f)
+	}
+
+	var errs []types.Error
+	conf := types.Config{
+		GoVersion: version,
+		Importer:  importer.ForCompiler(fset, "source", nil),
+		Error: func(err error) {
+			var te types.Error
+			if !errors.As(err, &te) {
+				te = types.Error{Fset: fset, Msg: err.Error()}
+			}
+			errs = append(errs, te)
+		},
+	}
+	_, _ = conf.Check(pkg, fset, parsed, nil) //nolint:errcheck // Error collects every error, including the one returned.
+	if len(errs) == 0 {
+		return nil
+	}
+	return report(dir, fset, errs)
+}
+
+// handWritten returns the names of the Go files the go command would build in
+// dir for the host, less the generated ones.
+func handWritten(dir string, files []emit.File) ([]string, error) {
+	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	// With cgo on, a file that imports "C" is listed as such whatever the
+	// environment says, so it is refused rather than silently left out.
+	ctxt := build.Default
+	ctxt.CgoEnabled = true
+	bp, err := ctxt.ImportDir(dir, 0)
+	var noGo *build.NoGoError
+	if errors.As(err, &noGo) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("output directory: %w", err)
+	}
+	if len(bp.CgoFiles) > 0 {
+		return nil, fmt.Errorf("output directory: cgo file %s is not supported", bp.CgoFiles[0])
+	}
+	var hand []string
+	for _, name := range bp.GoFiles {
+		if !slices.ContainsFunc(files, func(f emit.File) bool { return f.Name == name }) {
+			hand = append(hand, name)
+		}
+	}
+	return hand, nil
+}
+
+// goVersion returns the go line of dir/go.mod as a types.Config GoVersion, or
+// "" when there is none.
+func goVersion(dir string) (string, error) {
+	b, err := os.ReadFile(filepath.Join(dir, "go.mod")) //nolint:gosec // G304: dir is the generator's explicit output directory.
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	for line := range strings.Lines(string(b)) {
+		line, _, _ = strings.Cut(line, "//")
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "go "); ok {
+			return "go" + strings.TrimSpace(v), nil
+		}
+	}
+	return "", nil
+}
+
+// report lists errs in position order, a secondary error after its primary,
+// at most maxReported of them, and counts the rest.
+func report(dir string, fset *token.FileSet, errs []types.Error) error {
+	// A secondary error's message starts with a tab and belongs to the
+	// primary error before it.
+	var groups [][]types.Error
+	for _, e := range errs {
+		if strings.HasPrefix(e.Msg, "\t") && len(groups) > 0 {
+			groups[len(groups)-1] = append(groups[len(groups)-1], e)
+			continue
+		}
+		groups = append(groups, []types.Error{e})
+	}
+	slices.SortStableFunc(groups, func(a, b []types.Error) int {
+		pa, pb := fset.Position(a[0].Pos), fset.Position(b[0].Pos)
+		return cmp.Or(cmp.Compare(pa.Filename, pb.Filename), cmp.Compare(pa.Line, pb.Line), cmp.Compare(pa.Column, pb.Column))
+	})
+	lines := make([]string, 0, len(errs))
+	for _, g := range groups {
+		for _, e := range g {
+			lines = append(lines, e.Error())
+		}
+	}
+	msg := fmt.Sprintf("generated code does not type-check with %s:\n\t%s", dir, strings.Join(lines[:min(len(lines), maxReported)], "\n\t"))
+	if n := len(lines) - maxReported; n > 0 {
+		msg += fmt.Sprintf("\n\tand %d more", n)
+	}
+	return errors.New(msg)
+}
