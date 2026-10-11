@@ -1,0 +1,16 @@
+Refused, as decided on 2026-10-11 (0011-MADR-harden-code-generator-engine.md,
+phase 6 amendment, "Found in step 3 and decided"): a definition made of allOf
+was generated as any.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "A": {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"]},
+  "B": {"type": "object", "properties": {"b": {"type": "string"}}},
+  "AB": {"allOf": [{"$ref": "#/$defs/A"}, {"$ref": "#/$defs/B"}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+AB:
+allOf on a definition

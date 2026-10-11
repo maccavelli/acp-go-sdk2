@@ -1,0 +1,14 @@
+Refused, as decided on 2026-10-11 (0011-MADR-harden-code-generator-engine.md,
+phase 6 amendment, "Found in step 3 and decided"): an inline object two levels
+down was generated as map[string]any.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Outer": {"type": "object", "properties": {"inner": {"type": "object", "properties": {"x": {"type": "string"}, "deep": {"type": "object", "properties": {"y": {"type": "integer"}}}}, "required": ["x"]}}, "required": ["inner"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Outer.properties.inner.properties.deep:
+inline object with properties

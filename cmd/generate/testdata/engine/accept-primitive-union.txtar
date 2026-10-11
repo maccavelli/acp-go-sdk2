@@ -1,0 +1,27 @@
+A union of primitive types, as RequestId is.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Id": {"anyOf": [{"title": "Null", "type": "null"}, {"title": "Number", "type": "integer", "format": "int64"}, {"title": "Str", "type": "string"}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Id struct{Null *IdNull "json:\"-\""; Number *IdNumber "json:\"-\""; Str *IdStr "json:\"-\""}
+type IdNull struct{}
+type IdNumber int64
+type IdStr string
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (Id).MarshalJSON() ([]byte, error)
+func (*Id).UnmarshalJSON(b []byte) error
+func (*Id).Validate() error

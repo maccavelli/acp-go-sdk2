@@ -1,0 +1,25 @@
+x-deserialize-skip-invalid-items drops array items that fail to decode.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Item": {"type": "object", "properties": {"x": {"type": "integer"}}, "required": ["x"]},
+  "List": {"type": "object", "properties": {"items": {"type": ["array", "null"], "items": {"$ref": "#/$defs/Item"}, "x-deserialize-default-on-error": true, "x-deserialize-skip-invalid-items": true}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Item struct{X int64 "json:\"x\""}
+type List struct{Items []Item "json:\"items,omitempty\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (*Item).UnmarshalJSON(b []byte) error
+func (*List).UnmarshalJSON(b []byte) error

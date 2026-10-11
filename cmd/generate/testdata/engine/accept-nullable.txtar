@@ -1,0 +1,25 @@
+A property whose type list or anyOf includes null; a required nullable
+property.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Thing": {"type": "object", "properties": {"a": {"type": ["string", "null"]}, "b": {"anyOf": [{"$ref": "#/$defs/Child"}, {"type": "null"}]}, "c": {"type": ["integer", "null"], "format": "int64"}}, "required": ["c"]},
+  "Child": {"type": "object", "properties": {"x": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Child struct{X string "json:\"x,omitempty\""}
+type Client interface{}
+type ClientExperimental interface{}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Thing struct{A *string "json:\"a,omitempty\""; B *Child "json:\"b,omitempty\""; C *int64 "json:\"c\""}
+func (*CancelRequestNotification).Validate() error
+func (*Thing).UnmarshalJSON(b []byte) error

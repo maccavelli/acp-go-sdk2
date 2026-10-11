@@ -1,0 +1,27 @@
+A string enum is a named string with one constant per value; a value with a
+dash gets a constant name without it.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Color": {"type": "string", "enum": ["red", "dark-blue"]},
+  "Paint": {"type": "object", "properties": {"color": {"$ref": "#/$defs/Color"}}, "required": ["color"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Color string
+const ColorDarkBlue Color = "dark-blue"
+const ColorRed Color = "red"
+type Paint struct{Color Color "json:\"color\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (*Paint).UnmarshalJSON(b []byte) error

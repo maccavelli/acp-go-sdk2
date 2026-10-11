@@ -1,0 +1,25 @@
+additionalProperties with a schema gives a typed map.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Env": {"type": "object", "properties": {"vars": {"type": "object", "additionalProperties": {"type": "string"}}, "children": {"type": "object", "additionalProperties": {"$ref": "#/$defs/Child"}}}, "required": ["vars"]},
+  "Child": {"type": "object", "properties": {"x": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Child struct{X string "json:\"x,omitempty\""}
+type Client interface{}
+type ClientExperimental interface{}
+type Env struct{Children map[string]Child "json:\"children,omitempty\""; Vars map[string]string "json:\"vars\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (Env).MarshalJSON() ([]byte, error)
+func (*Env).UnmarshalJSON(b []byte) error

@@ -1,0 +1,27 @@
+A client request whose response is null: no result.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {"fs_write": "fs/write"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "WriteRequest": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "x-side": "client", "x-method": "fs/write"},
+  "WriteResponse": {"type": "null", "x-side": "client", "x-method": "fs/write"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{Write(ctx context.Context, params WriteRequest) error}
+type ClientExperimental interface{}
+const ClientMethodFsWrite untyped string = "fs/write"
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type WriteRequest struct{Path string "json:\"path\""}
+type WriteResponse interface{}
+func (*AgentSideConnection).Write(ctx context.Context, params WriteRequest) error
+func (*CancelRequestNotification).Validate() error
+func (*WriteRequest).UnmarshalJSON(b []byte) error
+func (*WriteRequest).Validate() error

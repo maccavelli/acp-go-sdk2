@@ -1,0 +1,30 @@
+An agent request with a response: a method on Agent, a client-side call,
+and dispatch.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {"initialize": "initialize"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "InitRequest": {"type": "object", "properties": {"v": {"type": "integer", "format": "uint16"}}, "required": ["v"], "x-side": "agent", "x-method": "initialize"},
+  "InitResponse": {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"], "x-side": "agent", "x-method": "initialize"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{Init(ctx context.Context, params InitRequest) (InitResponse, error)}
+type AgentExperimental interface{}
+const AgentMethodInitialize untyped string = "initialize"
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type InitRequest struct{V uint16 "json:\"v\""}
+type InitResponse struct{Ok bool "json:\"ok\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Init(ctx context.Context, params InitRequest) (InitResponse, error)
+func (*InitRequest).UnmarshalJSON(b []byte) error
+func (*InitRequest).Validate() error
+func (*InitResponse).UnmarshalJSON(b []byte) error
+func (*InitResponse).Validate() error

@@ -193,11 +193,73 @@ func isOpenStringEnum(def *load.Definition) bool {
 }
 
 // checkRefs fails on a $ref that is not local or names no definition, on an
-// integer or number whose format has no Go type (keywords.go), and on
-// x-deserialize-skip-invalid-items on a node that is not an array.
+// integer or number whose format has no Go type (keywords.go), on
+// x-deserialize-skip-invalid-items on a node that is not an array, and on a
+// shape the model would type with loss (checkTypable).
 func checkRefs(schema *load.Schema) error {
 	for _, name := range slices.Sorted(maps.Keys(schema.Defs)) {
 		if err := walkRefs(schema, name, schema.Defs[name]); err != nil {
+			return err
+		}
+		if err := checkTypable(name, schema.Defs[name], placeDefinition); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// placement is where a schema node sits, for checkTypable.
+type placement int
+
+const (
+	// placeDefinition is a definition of $defs.
+	placeDefinition placement = iota
+	// placeProperty is a property of an object definition, which becomes a
+	// nested struct when it is an inline object.
+	placeProperty
+	// placeVariant is a direct anyOf or oneOf member of a definition, which
+	// becomes an inline variant.
+	placeVariant
+	// placeOther is any other node.
+	placeOther
+)
+
+// checkTypable fails on the shapes the model would type with loss, which
+// 0011-MADR-harden-code-generator-engine.md (phase 6 amendment) refuses: an
+// allOf of more than one schema, an allOf on a definition, and an inline
+// object with properties anywhere but a definition, a property of an object
+// definition, or a direct anyOf or oneOf member of a definition. The
+// subschemas of not and unevaluatedProperties are not typed and not checked.
+func checkTypable(path string, d *load.Definition, place placement) error {
+	if d == nil {
+		return nil
+	}
+	if place == placeDefinition && len(d.AllOf) > 0 {
+		return fmt.Errorf("%s: allOf on a definition is not supported", path)
+	}
+	if n := len(slices.DeleteFunc(slices.Clone(d.AllOf), func(e *load.Definition) bool { return e == nil })); n > 1 {
+		return fmt.Errorf("%s: allOf of %d schemas has no Go type; only an allOf of one schema is supported", path, n)
+	}
+	if d.Ref == "" && len(d.Properties) > 0 {
+		typed := place == placeDefinition || place == placeVariant || (place == placeProperty && primaryType(d) == schemaTypeObject)
+		if !typed {
+			return fmt.Errorf("%s: an inline object with properties here has no Go type; declare it in $defs and refer to it", path)
+		}
+	}
+	// not and unevaluatedProperties constrain a value and are never typed, so
+	// they are not walked.
+	isUnion := len(d.AnyOf) > 0 || len(d.OneOf) > 0
+	for _, c := range subschemas(path, d) {
+		child := placeOther
+		switch {
+		case c.keyword == kwNot || c.keyword == kwUnevaluated:
+			continue
+		case c.keyword == kwProperties && place == placeDefinition && !isUnion:
+			child = placeProperty
+		case (c.keyword == kwAnyOf || c.keyword == kwOneOf) && place == placeDefinition:
+			child = placeVariant
+		}
+		if err := checkTypable(c.path, c.def, child); err != nil {
 			return err
 		}
 	}
@@ -223,24 +285,7 @@ func walkRefs(schema *load.Schema, path string, d *load.Definition) error {
 	if typ := primaryType(d); d.XDeserializeSkipInvalidItems && typ != schemaTypeArray {
 		return fmt.Errorf("%s: x-deserialize-skip-invalid-items on %s, not an array", path, typ)
 	}
-	children := []schemaNode{
-		{path + ".items", d.Items},
-		{path + ".additionalProperties", d.AdditionalProperties},
-		{path + ".not", d.Not},
-		{path + ".unevaluatedProperties", d.UnevaluatedProperties},
-	}
-	for _, k := range slices.Sorted(maps.Keys(d.Properties)) {
-		children = append(children, schemaNode{path + ".properties." + k, d.Properties[k]})
-	}
-	for _, kw := range []struct {
-		name string
-		list []*load.Definition
-	}{{"anyOf", d.AnyOf}, {"oneOf", d.OneOf}, {"allOf", d.AllOf}} {
-		for i, v := range kw.list {
-			children = append(children, schemaNode{fmt.Sprintf("%s.%s[%d]", path, kw.name, i), v})
-		}
-	}
-	for _, c := range children {
+	for _, c := range subschemas(path, d) {
 		if err := walkRefs(schema, c.path, c.def); err != nil {
 			return err
 		}
@@ -248,8 +293,46 @@ func walkRefs(schema *load.Schema, path string, d *load.Definition) error {
 	return nil
 }
 
-// schemaNode is a definition and its path from the top of the schema.
+// The keywords that hold subschemas, as subschemas names them.
+const (
+	kwItems       = "items"
+	kwAdditional  = "additionalProperties"
+	kwNot         = "not"
+	kwUnevaluated = "unevaluatedProperties"
+	kwProperties  = "properties"
+	kwAnyOf       = "anyOf"
+	kwOneOf       = "oneOf"
+	kwAllOf       = "allOf"
+)
+
+// subschemas returns the subschemas of d with their paths and the keyword that
+// holds each: items, additionalProperties, not, unevaluatedProperties, the
+// properties in name order, then the members of anyOf, oneOf, and allOf.
+func subschemas(path string, d *load.Definition) []schemaNode {
+	out := []schemaNode{
+		{path + "." + kwItems, d.Items, kwItems},
+		{path + "." + kwAdditional, d.AdditionalProperties, kwAdditional},
+		{path + "." + kwNot, d.Not, kwNot},
+		{path + "." + kwUnevaluated, d.UnevaluatedProperties, kwUnevaluated},
+	}
+	for _, k := range slices.Sorted(maps.Keys(d.Properties)) {
+		out = append(out, schemaNode{path + "." + kwProperties + "." + k, d.Properties[k], kwProperties})
+	}
+	for _, kw := range []struct {
+		name string
+		list []*load.Definition
+	}{{kwAnyOf, d.AnyOf}, {kwOneOf, d.OneOf}, {kwAllOf, d.AllOf}} {
+		for i, v := range kw.list {
+			out = append(out, schemaNode{fmt.Sprintf("%s.%s[%d]", path, kw.name, i), v, kw.name})
+		}
+	}
+	return out
+}
+
+// schemaNode is a definition, its path from the top of the schema, and the
+// keyword of its parent that holds it.
 type schemaNode struct {
-	path string
-	def  *load.Definition
+	path    string
+	def     *load.Definition
+	keyword string
 }

@@ -1,0 +1,33 @@
+Unions held in an array, a nullable property, and a map.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"oneOf": [{"type": "object", "properties": {"type": {"type": "string", "const": "a"}}, "required": ["type"]}, {"type": "object", "properties": {"type": {"type": "string", "const": "b"}}, "required": ["type"]}]},
+  "Holder": {"type": "object", "properties": {"all": {"type": "array", "items": {"$ref": "#/$defs/U"}}, "maybe": {"anyOf": [{"$ref": "#/$defs/U"}, {"type": "null"}]}, "byName": {"type": "object", "additionalProperties": {"$ref": "#/$defs/U"}}}, "required": ["all"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Holder struct{All []U "json:\"all\""; ByName map[string]U "json:\"byName,omitempty\""; Maybe *U "json:\"maybe,omitempty\""}
+func NewUA() U
+func NewUB() U
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type U struct{A *UA "json:\"-\""; B *UB "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type UA struct{Type string "json:\"type\""}
+type UB struct{Type string "json:\"type\""}
+func (*CancelRequestNotification).Validate() error
+func (Holder).MarshalJSON() ([]byte, error)
+func (*Holder).UnmarshalJSON(b []byte) error
+func (*Holder).Validate() error
+func (U).MarshalJSON() ([]byte, error)
+func (*U).UnmarshalJSON(b []byte) error
+func (*U).Validate() error

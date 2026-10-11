@@ -1,0 +1,20 @@
+A protocol notification with a field: a constant, no interface method.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "CancelRequestNotification": {"type": "object", "properties": {"requestId": {"anyOf": [{"type": "null"}, {"type": "integer", "format": "int64"}, {"type": "string"}]}}, "required": ["requestId"], "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{RequestId json.RawMessage "json:\"requestId\""}
+type Client interface{}
+type ClientExperimental interface{}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).UnmarshalJSON(b []byte) error
+func (*CancelRequestNotification).Validate() error

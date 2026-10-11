@@ -1,0 +1,43 @@
+The protocol table's prompt turn: session/prompt is cancelled by
+session/cancel on the same sessionId; session/update reaches the client as
+SessionUpdate.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {"session_prompt": "session/prompt", "session_cancel": "session/cancel"}, "clientMethods": {"session_update": "session/update"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "PromptRequest": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/prompt"},
+  "PromptResponse": {"type": "object", "properties": {"stop": {"type": "string"}}, "required": ["stop"], "x-side": "agent", "x-method": "session/prompt"},
+  "CancelNotification": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/cancel"},
+  "SessionNotification": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "client", "x-method": "session/update"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{Cancel(ctx context.Context, params CancelNotification) error; Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error)}
+type AgentExperimental interface{}
+const AgentMethodSessionCancel untyped string = "session/cancel"
+const AgentMethodSessionPrompt untyped string = "session/prompt"
+type CancelNotification struct{SessionId string "json:\"sessionId\""}
+type CancelRequestNotification struct{}
+type Client interface{SessionUpdate(ctx context.Context, params SessionNotification) error}
+type ClientExperimental interface{}
+const ClientMethodSessionUpdate untyped string = "session/update"
+type PromptRequest struct{SessionId string "json:\"sessionId\""}
+type PromptResponse struct{Stop string "json:\"stop\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type SessionNotification struct{SessionId string "json:\"sessionId\""}
+func (*AgentSideConnection).SessionUpdate(ctx context.Context, params SessionNotification) error
+func (*CancelNotification).UnmarshalJSON(b []byte) error
+func (*CancelNotification).Validate() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Cancel(ctx context.Context, params CancelNotification) error
+func (*ClientSideConnection).Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error)
+func (*PromptRequest).UnmarshalJSON(b []byte) error
+func (*PromptRequest).Validate() error
+func (*PromptResponse).UnmarshalJSON(b []byte) error
+func (*PromptResponse).Validate() error
+func (*SessionNotification).UnmarshalJSON(b []byte) error
+func (*SessionNotification).Validate() error

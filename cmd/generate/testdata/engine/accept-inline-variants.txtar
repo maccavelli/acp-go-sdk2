@@ -1,0 +1,32 @@
+Inline variants: a struct, a named array type, and empty ones for a bare
+title and for null, beside a $ref.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Ref": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "V": {"required": ["shared"], "properties": {"shared": {"type": "string"}}, "anyOf": [{"type": "object", "properties": {"kind": {"type": "string"}, "opt": {"type": "array", "items": {"type": "string"}}}, "required": ["kind"], "description": "Object."}, {"title": "list", "type": "array", "items": {"type": "string"}}, {"title": "bare"}, {"type": "null"}, {"$ref": "#/$defs/Ref"}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Ref struct{A string "json:\"a,omitempty\""}
+type V struct{VVariant1 *VVariant1 "json:\"-\""; List *VList "json:\"-\""; Bare *VBare "json:\"-\""; VVariant4 *VVariant4 "json:\"-\""; Ref *Ref "json:\"-\""}
+type VBare struct{}
+type VList []string
+type VVariant1 struct{Kind string "json:\"kind\""; Opt []string "json:\"opt,omitempty\""; Shared string "json:\"shared\""}
+type VVariant4 struct{}
+func (*CancelRequestNotification).Validate() error
+func (V).MarshalJSON() ([]byte, error)
+func (*V).UnmarshalJSON(b []byte) error
+func (*V).Validate() error
+func (*VVariant1).UnmarshalJSON(b []byte) error

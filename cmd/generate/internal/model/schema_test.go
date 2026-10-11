@@ -153,3 +153,19 @@ func TestEnumValueKinds(t *testing.T) {
 		t.Error("a non-string or null const counts as a string const union")
 	}
 }
+
+// TestCheckTypable accepts the inline objects the model types, and those in a
+// not, which only constrains; the refusals are engine cases
+// (testdata/engine/refuse-allof-*.txtar and refuse-*inline*.txtar).
+func TestCheckTypable(t *testing.T) {
+	t.Parallel()
+	schema := schemaOf(t, `{
+		"A":{"type":"object","properties":{"a":{"type":"string"}}},
+		"Nested":{"type":"object","properties":{"inner":{"type":"object","properties":{"x":{"type":"string"}}}}},
+		"Wrapped":{"type":"object","properties":{"a":{"allOf":[{"$ref":"#/$defs/A"}],"description":"One A."}}},
+		"Union":{"anyOf":[{"type":"object","properties":{"k":{"type":"string"}}},{"allOf":[{"$ref":"#/$defs/A"}]}],
+			"not":{"anyOf":[{"type":"object","properties":{"k":{"const":"x"}}}]}}}`)
+	if err := checkRefs(schema); err != nil {
+		t.Errorf("checkRefs refused shapes the model types: %v", err)
+	}
+}

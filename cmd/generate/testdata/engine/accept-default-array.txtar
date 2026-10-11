@@ -1,0 +1,23 @@
+A property with an array default.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Opts": {"type": "object", "properties": {"list": {"type": "array", "items": {"type": "string"}, "default": []}, "names": {"type": "array", "items": {"type": "string"}, "default": ["a"]}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Opts struct{List []string "json:\"list\""; Names []string "json:\"names\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (Opts).MarshalJSON() ([]byte, error)
+func (*Opts).UnmarshalJSON(b []byte) error

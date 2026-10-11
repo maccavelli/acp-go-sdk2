@@ -1,0 +1,25 @@
+An inline object property of an object definition becomes a named nested
+struct; one level is all the model types (see refuse-nested-inline).
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Outer": {"type": "object", "properties": {"inner": {"type": "object", "properties": {"x": {"type": "string"}, "n": {"type": "integer", "format": "uint32"}}, "required": ["x"]}}, "required": ["inner"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Outer struct{Inner OuterInner "json:\"inner\""}
+type OuterInner struct{N uint32 "json:\"n,omitempty\""; X string "json:\"x\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (*Outer).UnmarshalJSON(b []byte) error
+func (*OuterInner).UnmarshalJSON(b []byte) error

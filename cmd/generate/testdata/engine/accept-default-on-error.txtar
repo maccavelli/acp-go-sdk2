@@ -1,0 +1,28 @@
+x-deserialize-default-on-error on a scalar, an object, and an array
+property.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Caps": {"type": "object", "properties": {"fs": {"allOf": [{"$ref": "#/$defs/Fs"}], "default": {}, "x-deserialize-default-on-error": true}, "n": {"type": ["integer", "null"], "format": "uint32", "x-deserialize-default-on-error": true}, "names": {"type": ["array", "null"], "items": {"type": "string"}, "x-deserialize-default-on-error": true}}},
+  "Fs": {"type": "object", "properties": {"read": {"type": "boolean", "default": false}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Caps struct{Fs Fs "json:\"fs\""; N *uint32 "json:\"n,omitempty\""; Names []string "json:\"names,omitempty\""}
+type Client interface{}
+type ClientExperimental interface{}
+type Fs struct{Read bool "json:\"read,omitempty\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (Caps).MarshalJSON() ([]byte, error)
+func (*Caps).UnmarshalJSON(b []byte) error
+func (Fs).MarshalJSON() ([]byte, error)
+func (*Fs).UnmarshalJSON(b []byte) error

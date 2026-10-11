@@ -1,0 +1,34 @@
+session/load, which the protocol table puts on AgentLoader. The table names the
+capability loadSession, so the schema declares it on AgentCapabilities.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {"session_load": "session/load"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "LoadSessionRequest": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/load"},
+  "LoadSessionResponse": {"type": "object", "x-side": "agent", "x-method": "session/load"},
+  "AgentCapabilities": {"type": "object", "properties": {"loadSession": {"type": "boolean", "default": false}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentCapabilities struct{LoadSession bool "json:\"loadSession,omitempty\""}
+type AgentExperimental interface{}
+type AgentLoader interface{LoadSession(ctx context.Context, params LoadSessionRequest) (LoadSessionResponse, error)}
+const AgentMethodSessionLoad untyped string = "session/load"
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type LoadSessionRequest struct{SessionId string "json:\"sessionId\""}
+type LoadSessionResponse struct{}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (AgentCapabilities).MarshalJSON() ([]byte, error)
+func (*AgentCapabilities).UnmarshalJSON(b []byte) error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).LoadSession(ctx context.Context, params LoadSessionRequest) (LoadSessionResponse, error)
+func (*LoadSessionRequest).UnmarshalJSON(b []byte) error
+func (*LoadSessionRequest).Validate() error
+func (*LoadSessionResponse).Validate() error

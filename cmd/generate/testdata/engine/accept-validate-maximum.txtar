@@ -1,0 +1,23 @@
+maximum on integer and number fields is checked by Validate.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Range": {"type": "object", "properties": {"hi": {"type": "integer", "format": "int64", "maximum": 10}, "r": {"type": ["number", "null"], "maximum": 1.5}}, "required": ["hi"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Range struct{Hi int64 "json:\"hi\""; R *float64 "json:\"r,omitempty\""}
+func (*CancelRequestNotification).Validate() error
+func (*Range).UnmarshalJSON(b []byte) error
+func (*Range).Validate() error

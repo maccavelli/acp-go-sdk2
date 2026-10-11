@@ -1,0 +1,29 @@
+A value-less variant with not.required of the discriminator is the
+catch-all: no Unknown field, and the variant keeps Extra.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"anyOf": [{"type": "object", "properties": {"type": {"type": "string", "const": "a"}, "x": {"type": "string"}}, "required": ["type"]}, {"title": "other", "type": "object", "required": ["type"], "properties": {"type": {"type": "string"}}, "not": {"required": ["type"]}}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type U struct{A *UA "json:\"-\""; Other *UOther "json:\"-\""}
+type UA struct{Type string "json:\"type\""; X string "json:\"x,omitempty\""}
+type UOther struct{Type string "json:\"type\""; Extra map[string]json.RawMessage "json:\"-\""}
+func (*CancelRequestNotification).Validate() error
+func (U).MarshalJSON() ([]byte, error)
+func (*U).UnmarshalJSON(b []byte) error
+func (*U).Validate() error
+func (UOther).MarshalJSON() ([]byte, error)
+func (*UOther).UnmarshalJSON(b []byte) error

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 )
 
 // RuntimeFiles are the hand-written files of the SDK that refer to generated
@@ -36,6 +37,34 @@ func CopyRuntime(root, dir string) error {
 	return nil
 }
 
+// shared is the one source importer LoadPackage uses for every package. It
+// keeps what it has imported, the standard library above all, so each case
+// does not import it again; it is not safe for concurrent use, so every
+// import holds mu. Every package is parsed into its file set.
+var shared = sync.OnceValue(func() *lockedImporter {
+	fset := token.NewFileSet()
+	return &lockedImporter{fset: fset, imp: importer.ForCompiler(fset, "source", nil)}
+})
+
+type lockedImporter struct {
+	mu   sync.Mutex
+	fset *token.FileSet
+	imp  types.Importer
+}
+
+func (l *lockedImporter) Import(path string) (*types.Package, error) {
+	return l.ImportFrom(path, "", 0)
+}
+
+func (l *lockedImporter) ImportFrom(path, dir string, mode types.ImportMode) (*types.Package, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if from, ok := l.imp.(types.ImporterFrom); ok {
+		return from.ImportFrom(path, dir, mode)
+	}
+	return l.imp.Import(path)
+}
+
 // LoadPackage type-checks the non-test Go files the go command would build in
 // dir, reading imports from source, and returns every error it finds.
 func LoadPackage(dir string) (*types.Package, *token.FileSet, error) {
@@ -43,7 +72,8 @@ func LoadPackage(dir string) (*types.Package, *token.FileSet, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	fset := token.NewFileSet()
+	imp := shared()
+	fset := imp.fset
 	files := make([]*ast.File, 0, len(bp.GoFiles))
 	for _, name := range bp.GoFiles {
 		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)
@@ -54,7 +84,7 @@ func LoadPackage(dir string) (*types.Package, *token.FileSet, error) {
 	}
 	var errs []error
 	conf := types.Config{
-		Importer: importer.ForCompiler(fset, "source", nil),
+		Importer: imp,
 		Error:    func(err error) { errs = append(errs, err) },
 	}
 	pkg, _ := conf.Check(bp.Name, fset, files, nil) //nolint:errcheck // Error collects every error, including the one returned.

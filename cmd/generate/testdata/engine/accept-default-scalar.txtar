@@ -1,0 +1,23 @@
+Properties with a scalar default are filled when absent.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Opts": {"type": "object", "properties": {"mode": {"type": "string", "default": "auto"}, "n": {"type": "integer", "format": "int32", "default": 3}, "on": {"type": "boolean", "default": true}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Opts struct{Mode string "json:\"mode,omitempty\""; N int32 "json:\"n,omitempty\""; On bool "json:\"on,omitempty\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (Opts).MarshalJSON() ([]byte, error)
+func (*Opts).UnmarshalJSON(b []byte) error

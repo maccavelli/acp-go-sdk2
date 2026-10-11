@@ -1,0 +1,32 @@
+Named integer types take the Go type of their format; an integer without
+one is int64.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "I32": {"type": "integer", "format": "int32"},
+  "I64": {"type": "integer", "format": "int64"},
+  "U16": {"type": "integer", "format": "uint16"},
+  "U32": {"type": "integer", "format": "uint32"},
+  "U64": {"type": "integer", "format": "uint64"},
+  "Plain": {"type": "integer"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type I32 int32
+type I64 int64
+type Plain int64
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type U16 uint16
+type U32 uint32
+type U64 uint64
+func (*CancelRequestNotification).Validate() error

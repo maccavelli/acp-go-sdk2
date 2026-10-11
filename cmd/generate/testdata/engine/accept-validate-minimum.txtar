@@ -1,0 +1,24 @@
+minimum on integer and number fields is checked by Validate where the Go
+type does not enforce it.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Range": {"type": "object", "properties": {"lo": {"type": "integer", "format": "int64", "minimum": 1}, "u": {"type": "integer", "format": "uint32", "minimum": 0}, "r": {"type": "number", "format": "double", "minimum": 0.5}}, "required": ["lo", "u", "r"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Range struct{Lo int64 "json:\"lo\""; R float64 "json:\"r\""; U uint32 "json:\"u\""}
+func (*CancelRequestNotification).Validate() error
+func (*Range).UnmarshalJSON(b []byte) error
+func (*Range).Validate() error

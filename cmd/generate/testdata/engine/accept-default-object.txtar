@@ -1,0 +1,27 @@
+A property with an object default.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Opts": {"type": "object", "properties": {"inner": {"allOf": [{"$ref": "#/$defs/Inner"}], "default": {}}}},
+  "Inner": {"type": "object", "properties": {"x": {"type": "boolean", "default": false}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Inner struct{X bool "json:\"x,omitempty\""}
+type Opts struct{Inner Inner "json:\"inner\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (Inner).MarshalJSON() ([]byte, error)
+func (*Inner).UnmarshalJSON(b []byte) error
+func (Opts).MarshalJSON() ([]byte, error)
+func (*Opts).UnmarshalJSON(b []byte) error

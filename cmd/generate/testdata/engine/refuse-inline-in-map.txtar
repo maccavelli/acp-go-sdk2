@@ -1,0 +1,14 @@
+Refused, as decided on 2026-10-11 (0011-MADR-harden-code-generator-engine.md,
+phase 6 amendment, "Found in step 3 and decided"): an inline object as a map's
+values was generated as map[string]map[string]any.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Index": {"type": "object", "properties": {"byName": {"type": "object", "additionalProperties": {"type": "object", "properties": {"x": {"type": "string"}}}}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Index.properties.byName.additionalProperties:
+inline object with properties

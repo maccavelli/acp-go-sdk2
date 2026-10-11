@@ -1,0 +1,14 @@
+Refused, as decided on 2026-10-11 (0011-MADR-harden-code-generator-engine.md,
+phase 6 amendment, "Found in step 3 and decided"): a property of an inline union
+variant that is itself an inline object was generated as map[string]any.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"oneOf": [{"type": "object", "properties": {"type": {"type": "string", "const": "a"}, "box": {"type": "object", "properties": {"x": {"type": "string"}}}}, "required": ["type"]}, {"type": "object", "properties": {"type": {"type": "string", "const": "b"}}, "required": ["type"]}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+U.oneOf[0].properties.box:
+inline object with properties

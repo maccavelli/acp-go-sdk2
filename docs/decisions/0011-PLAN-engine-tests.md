@@ -28,6 +28,7 @@ In scope:
 * a new command `cmd/generate/internal/mutate`, with its tests
 * `cmd/generate/internal/emit` (a builder for `schema_gen_test.go`, and `Render`), `cmd/generate/internal/output/check.go`, and their tests
 * unit tests in `cmd/generate/internal/{load,model,emit,util}` for refusals and functions the cases cannot reach
+* `cmd/generate/internal/model/schema.go` and `model.go`: the refusals of two lossy shapes (added 2026-10-11, see step 3's deviation)
 * at the root: the new generated file `schema_gen_test.go`, and new hand-written `conformance_test.go`, `instances_test.go`, and `fuzz_test.go`
 * `Makefile` (`fuzz`, `mutation-engine`, `mutation-generated`), `.github/workflows/ci.yml` (D7)
 * `docs/architecture.md`, `RELEASING.md`, and this plan's records
@@ -266,6 +267,7 @@ In the `validate` job, on Linux, a step after the race detector: `GOEXPERIMENT=n
    * methods: `agent-request`, `agent-notification`, `agent-optional` (with the protocol table's `session/load` subject), `agent-experimental`,
      `client-request`, `client-experimental`, `protocol-method`, `prompt-cancellation` (the protocol table's `session/prompt` and `session/cancel`);
    * unstable: `unstable-merge` (an unstable-only type, a promoted shared definition, an unstable method), and `unstable-doc-marking`.
+   (Changed 2026-10-11, see step 3's deviation: `allof-merge` and `nested-inline` are refusal cases, with the model refusals they need.)
    Then run `go test -coverpkg=./... -skip '<the nine committed-schema tests>' ./...` in `cmd/generate`; each function of the amendment's below-70%
    list must be above 0, and each one still below 90% is recorded with the reason, or a case is added. Plants: for six cases chosen across the groups,
    a scratch-copy change in the emitter or model that changes that construct's API (a field type, a method dropped, a constant renamed) fails it.
@@ -392,3 +394,109 @@ checked by name, `GO_PRECHECK_SKIP_VULN=1 scripts/go-precheck.sh <files>`: `go-p
 `make markdownlint` exit 0; the identifier scan found nothing.
 
 Commit point: the agent stopped here. The owner commits step 2 on `main`.
+
+### Step 3 deviation, 2026-10-11: two lossy shapes are refused
+
+The owner committed step 2 as `b70e692`. Step 3's construct cases were written and their listings accepted with `-update` and read in full. Two
+showed the generator losing schema information with no error, which step 1's rule sends to the owner:
+
+* `accept-allof-merge`: the definition `"AB": {"allOf": [A, B]}` generated `type AB interface{}`, and `Holder.Ab` became `AB`, so any JSON decodes.
+* `accept-nested-inline`: `Outer.inner` became the struct `OuterInner`, but its property `deep`, an inline object with property `y`, became
+  `Deep map[string]any`.
+
+A script over `schema/schema.json` and `schema/schema.unstable.json` (`s3_allof.py` in the session scratchpad) found neither shape: every `allOf`
+has one schema (80 and 130 on properties of definitions, the rest in union members), none on a definition, and the inline objects with properties
+are all direct `anyOf` or `oneOf` members of a definition (50 and 78). (Corrected below: the script did not walk `not`.) Asked to choose between refusing both, representing both, and recording them
+for later, the owner asked for the trade-offs, then chose to refuse both now. The MADR's phase 6 amendment records the decision ("Found in step 3
+and decided").
+
+Resolution, in this step: a check in `internal/model`, run with `checkRefs` before any type is built, refuses an `allOf` of more than one schema
+anywhere, an `allOf` on a definition, and an inline object with properties anywhere but a definition, a property of an object definition, and a
+direct union variant. The two cases become `refuse-allof-several.txtar`, `refuse-allof-definition.txtar`, `refuse-nested-inline.txtar`, and
+refusal cases for the items and map-value positions. Files added to the step's scope: `cmd/generate/internal/model/schema.go` and its test.
+
+The first version of the check walked every subschema and refused the committed schema:
+`model: CreateElicitationRequest.anyOf[2].not.anyOf[0]: an inline object with properties here has no Go type`, failing
+`TestGeneratedFilesUpToDate`, `TestCheckAcceptsRepository`, and five model tests on the committed schema. The scan had not walked `not`. The model
+reads a `not` only to see that it is there (`isCatchAll`, `model.go:728`), and `unevaluatedProperties` not at all, so their subschemas are never
+typed; the check skips both, and the MADR's statement of the scan was corrected the same day.
+
+### Step 3, construct cases, 2026-10-11
+
+Ran on `main` from `b70e692`. The agent did not commit.
+
+**Cases.** 41 accepted cases were added, with the step 2 case making 44: the kinds (`enum`, `string-const-union`, `open-enum`, `primitive-string`,
+`primitive-integer-formats`, `primitive-number`, `primitive-bool`, `empty-object`, `any`, `null-definition`); objects (`required-and-optional`,
+`nullable`, `default-scalar`, `default-array`, `default-object`, `default-null`, `typed-map`, `raw-value`, `allof-property`, `nested-inline`,
+`title-only-variant`); unions (`declared-discriminator`, `derived-discriminator`, `catch-all-variant`, `key-less-variant`,
+`key-less-variant-without-keys`, `primitive-union`, `inline-variants`, `union-in-array`, `array-variants`); keywords (`default-on-error`,
+`skip-invalid-items`, `validate-minlength`, `validate-minimum`, `validate-maximum`, `validate-through-union`); methods (`agent-request`,
+`agent-notification`, `agent-optional`, `client-request`, `protocol-method`, `prompt-cancellation`); and `unstable-merge`. 8 refusal cases came from
+the deviation above (`refuse-allof-definition`, `refuse-allof-definition-one`, `refuse-allof-several`, `refuse-nested-inline`,
+`refuse-inline-in-items`, `refuse-inline-in-map`, `refuse-inline-in-variant`, `refuse-inline-nullable`), making 10 with step 2's. The cases were
+written by `s3_cases.py`, `s3_cases2.py`, and `s3_cases3.py` in the session scratchpad.
+
+Every accepted case failed first with an empty `want.api` (`API differs from want.api`), and every refusal case failed first with `run accepted the
+schema`. One accepted case failed for another reason: `agent-optional` was refused with `model: protocol table: agent method "session/load":
+capability "loadSession": AgentCapabilities has no property "loadSession"`, the table's capability check; the case declares `AgentCapabilities`
+with `loadSession` and says why. The listings were written with `-update` and read in full, 619 lines (`s3_apis.txt` in the scratchpad), before
+being kept. Besides the two shapes of the deviation, they show what the cases pin and no decision contradicts.
+
+* A definition of type `null`, as a response without a result is declared, becomes `type Nothing interface{}`.
+* An integer without a format is `int64`.
+* An inline `anyOf` in a property (`requestId`) is `json.RawMessage`.
+* A property with `"default": null` has no default: JSON `null` decodes to a nil `Default`, which the model treats as absent.
+
+Changes against the plan as written, none changing a decision:
+
+* `unstable-doc-marking` was not added. The listing of `API` has no doc comments, so a case cannot pin them; `TestUnstableMarking` in
+  `internal/model` covers the marking, and `TestGeneratedFilesUpToDate` the committed docs.
+* `agent-experimental` and `client-experimental` are one case, `unstable-merge`. An experimental binding comes only from a method that is in the
+  unstable meta alone, so the case carries the unstable files, and it holds an agent method, a client method, a promoted shared definition, and an
+  unstable-only type reached through a method.
+* `default-null`, `key-less-variant-without-keys`, and `array-variants` were added after the first coverage run, for branches the first set left
+  unrun.
+* **Test time.** Each accepted case type-checks its package twice: once in `run` (`output.Check`, the phase 5 check) and once in `LoadPackage` for
+  the listing. With 44 accepted cases, `go test ./...` in `cmd/generate` took 28 to 33 s, against 2.2 to 2.5 s before. A CPU profile of
+  `TestEngineCases` gave 30.3 s to `output.Check` and 29.4 s to `LoadPackage`, most of it the source importer type-checking the standard library
+  again for every package. `LoadPackage` now shares one source importer, behind a mutex, across all cases. After that: three runs of `go test ./...`
+  took 11.6, 12.1, and 12.5 s; `go test -race ./...` took 45.8 s; and `make pre-add-check` took 69.6 s. The other half, `output.Check` in `run`, is
+  the check phase 5 decided, and it is unchanged.
+* **Lint.** goconst reported the keyword names that `checkTypable` and `walkRefs` both listed. The two walks now share one list of a node's
+  subschemas, `subschemas`, with the keywords as constants. errcheck reported an unchecked type assertion in `enginetest`; the shared importer keeps
+  a `types.Importer` and uses `ImportFrom` when it has it.
+
+`TestCheckTypable` in `internal/model` accepts the shapes the model types: an inline variant, a nested object property, an `allOf` of one `$ref` on
+a property and on a variant, and an inline object inside a `not`.
+
+**Coverage**, `go test -coverpkg=./... -skip '<the nine committed-schema tests>' ./...` in `cmd/generate`, with `internal/enginetest` left out of the
+total: 92.1%, against 88.0% on `f2a6a3a`. Every function on the amendment's list now runs. The listed functions still below 90%, by the
+unexecuted lines (`uncovered.py`, which takes each block's highest count across the test binaries):
+
+* `sideOf` (`protocol.go:68`), 50%: the client and default branches need a protocol table with a client interface, and `run` always uses ACP's.
+  This is a unit test in step 4.
+* `firstPos` (`file.go:383`), 25%: the expression kinds no emitter places first in an element (F15). This is a unit test in step 4.
+* `enumConsts` (`types.go:108`), 83.3%: the branch for no values cannot run, since every enum kind has at least one value.
+* `defaultKindOf` (`fields.go:315`), 80%: the branch for a nil default cannot run, for the reason above.
+* `ReadMetaUnstable` and `ReadSchemaUnstable` (`load.go:175`, `:192`), 77.8%: the read and parse errors are step 4's.
+
+The error sites of G5 are as they were, for step 4. The three new sites in `schema.go` all run.
+
+Plants, each in a fresh scratch copy of the working tree (`plant.py`, `s3_plants.json`). All ten failed as planted.
+
+* An enum constant renamed in `enumConsts`: `--- FAIL: TestEngineCases/accept-enum`.
+* `uint32` mapped to `uint64` in `integerFormats`: `--- FAIL: TestEngineCases/accept-required-and-optional`.
+* `HasUnknown` forced false: `--- FAIL: TestEngineCases/accept-declared-discriminator`.
+* The `minLength` check dropped from `bounds`: `--- FAIL: TestEngineCases/accept-validate-minlength`.
+* An unstable agent method bound to `Agent`: `--- FAIL: TestEngineCases/accept-unstable-merge`.
+* The protocol table's `GoName` ignored: `--- FAIL: TestEngineCases/accept-prompt-cancellation`.
+* `allOf` on a definition allowed: `--- FAIL: TestEngineCases/refuse-allof-definition-one`.
+* `allOf` of several allowed: `--- FAIL: TestEngineCases/refuse-allof-several`.
+* Every place counted as typed: all five inline-object refusal cases failed with `run accepted the schema` (a second, verbose run listed them).
+* `not` walked again: `--- FAIL: TestCheckTypable`.
+
+**Results.** Regenerating exited 0, and `git diff --quiet f2a6a3a -- '*_gen.go' testdata` exited 0. `make pre-add-check`: `go-precheck: 81 file(s)
+clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No new Go file is untracked, so the per-file checks covered all of them. `make
+check-records` and `make markdownlint` exit 0, and the identifier scan found nothing.
+
+Commit point: the agent stopped here. The owner commits step 3 on `main`.

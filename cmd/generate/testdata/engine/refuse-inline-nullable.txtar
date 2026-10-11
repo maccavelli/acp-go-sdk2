@@ -1,0 +1,14 @@
+Refused, as decided on 2026-10-11 (0011-MADR-harden-code-generator-engine.md,
+phase 6 amendment, "Found in step 3 and decided"): an inline object in a property's
+anyOf with null was generated as a map.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Holder": {"type": "object", "properties": {"box": {"anyOf": [{"type": "object", "properties": {"x": {"type": "string"}}}, {"type": "null"}]}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Holder.properties.box.anyOf[0]:
+inline object with properties

@@ -1,0 +1,24 @@
+A named string type.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "SessionId": {"type": "string"},
+  "Holder": {"type": "object", "properties": {"id": {"$ref": "#/$defs/SessionId"}}, "required": ["id"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Holder struct{Id SessionId "json:\"id\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type SessionId string
+func (*CancelRequestNotification).Validate() error
+func (*Holder).UnmarshalJSON(b []byte) error

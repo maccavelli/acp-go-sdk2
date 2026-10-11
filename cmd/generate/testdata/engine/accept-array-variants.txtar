@@ -1,0 +1,35 @@
+A union of two arrays, told apart by the required keys of their items, as
+SessionConfigSelectOptions is: each array variant decodes when every item
+has its keys.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Option": {"type": "object", "properties": {"value": {"type": "string"}, "name": {"type": "string"}}, "required": ["value", "name"]},
+  "Group": {"type": "object", "properties": {"group": {"type": "string"}, "options": {"type": "array", "items": {"$ref": "#/$defs/Option"}}}, "required": ["group", "options"]},
+  "Options": {"anyOf": [{"title": "Ungrouped", "type": "array", "items": {"$ref": "#/$defs/Option"}}, {"title": "Grouped", "type": "array", "items": {"$ref": "#/$defs/Group"}}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Group struct{Group string "json:\"group\""; Options []Option "json:\"options\""}
+type Option struct{Name string "json:\"name\""; Value string "json:\"value\""}
+type Options struct{Ungrouped *OptionsUngrouped "json:\"-\""; Grouped *OptionsGrouped "json:\"-\""}
+type OptionsGrouped []Group
+type OptionsUngrouped []Option
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (Group).MarshalJSON() ([]byte, error)
+func (*Group).UnmarshalJSON(b []byte) error
+func (*Option).UnmarshalJSON(b []byte) error
+func (Options).MarshalJSON() ([]byte, error)
+func (*Options).UnmarshalJSON(b []byte) error
+func (*Options).Validate() error

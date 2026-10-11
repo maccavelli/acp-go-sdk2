@@ -1,0 +1,36 @@
+A oneOf with discriminator.propertyName and $ref variants.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Circle": {"type": "object", "properties": {"kind": {"type": "string", "const": "circle"}, "r": {"type": "integer", "format": "int64"}}, "required": ["kind", "r"]},
+  "Square": {"type": "object", "properties": {"kind": {"type": "string", "const": "square"}, "side": {"type": "string"}}, "required": ["kind", "side"]},
+  "Shape": {"oneOf": [{"allOf": [{"$ref": "#/$defs/Circle"}], "properties": {"kind": {"type": "string", "const": "circle"}}, "required": ["kind"]}, {"allOf": [{"$ref": "#/$defs/Square"}], "properties": {"kind": {"type": "string", "const": "square"}}, "required": ["kind"]}], "discriminator": {"propertyName": "kind"}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Circle struct{Kind string "json:\"kind\""; R int64 "json:\"r\""}
+type Client interface{}
+type ClientExperimental interface{}
+func NewShapeCircle(r int64) Shape
+func NewShapeSquare(side string) Shape
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Shape struct{Circle *ShapeCircle "json:\"-\""; Square *ShapeSquare "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type ShapeCircle struct{Kind string "json:\"kind\""; R int64 "json:\"r\""}
+type ShapeSquare struct{Kind string "json:\"kind\""; Side string "json:\"side\""}
+type Square struct{Kind string "json:\"kind\""; Side string "json:\"side\""}
+func (*CancelRequestNotification).Validate() error
+func (*Circle).UnmarshalJSON(b []byte) error
+func (Shape).MarshalJSON() ([]byte, error)
+func (*Shape).UnmarshalJSON(b []byte) error
+func (*Shape).Validate() error
+func (*ShapeCircle).UnmarshalJSON(b []byte) error
+func (*ShapeSquare).UnmarshalJSON(b []byte) error
+func (*Square).UnmarshalJSON(b []byte) error

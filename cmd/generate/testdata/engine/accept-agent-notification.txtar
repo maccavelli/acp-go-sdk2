@@ -1,0 +1,24 @@
+An agent notification: no result.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {"ping": "ping"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "PingNotification": {"type": "object", "properties": {"n": {"type": "integer"}}, "x-side": "agent", "x-method": "ping"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{Ping(ctx context.Context, params PingNotification) error}
+type AgentExperimental interface{}
+const AgentMethodPing untyped string = "ping"
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type PingNotification struct{N int64 "json:\"n,omitempty\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Ping(ctx context.Context, params PingNotification) error
+func (*PingNotification).Validate() error

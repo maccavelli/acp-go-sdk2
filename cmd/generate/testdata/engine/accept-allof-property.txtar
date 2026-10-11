@@ -1,0 +1,29 @@
+A property or variant that wraps one $ref in allOf, as the ACP schema does
+to attach a description or default, takes that type.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "A": {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"]},
+  "B": {"type": "object", "properties": {"b": {"type": "string"}}},
+  "Holder": {"type": "object", "properties": {"a": {"allOf": [{"$ref": "#/$defs/A"}], "description": "The A."}, "b": {"allOf": [{"$ref": "#/$defs/B"}], "default": {}}}, "required": ["a"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type A struct{A string "json:\"a\""}
+type Agent interface{}
+type AgentExperimental interface{}
+type B struct{B string "json:\"b,omitempty\""}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Holder struct{A A "json:\"a\""; B B "json:\"b\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*A).UnmarshalJSON(b []byte) error
+func (*CancelRequestNotification).Validate() error
+func (Holder).MarshalJSON() ([]byte, error)
+func (*Holder).UnmarshalJSON(b []byte) error

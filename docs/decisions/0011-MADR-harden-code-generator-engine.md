@@ -579,7 +579,27 @@ and a CI step with `GOEXPERIMENT=nojsonv2` (D7). The alternatives named in each 
   names it, and the list changes.
 * Bad, because a mutation run takes about 3 to 4 s a mutant, so it is a report, not a gate.
 
-The plan for these decisions is [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md), `proposed` until the owner approves it.
+### Found in step 3 and decided, 2026-10-11
+
+The construct cases of step 3 of [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md) showed two shapes the generator types with loss, with no
+error. Neither is in schema `1.25.0`: by script over both schema files, every `allOf` there has one schema and none is on a definition, and every
+inline object with properties is a direct `anyOf` or `oneOf` member of a definition, or inside a `not`
+(`CreateElicitationRequest.anyOf[2].not.anyOf[0]`), whose subschemas only constrain a value and are never typed.
+
+* A definition made of `allOf` becomes `any`: `classify` (`model.go:306`) sees no type. A property whose `allOf` has several schemas takes the first
+  `$ref` (`typeRef`, `fields.go:207`–`219`), what remains of F6.
+* An inline object with properties becomes `map[string]any`, its properties dropped, everywhere but a definition, a property of an object
+  definition (a nested struct), and a direct union variant (`typeRef`, `fields.go:235`): a nested object two levels down, an array's items, a map's
+  values, a property of an inline variant.
+
+Asked with the alternatives of representing both (a merged struct or embedding for `allOf`, nested named types at any depth) and of recording them
+for later, the owner chose to refuse both now. The model refuses an `allOf` with more than one schema anywhere, an `allOf` on a definition, and an
+inline object with properties outside the three places above, each with an error naming its path, before anything is written; the
+subschemas of `not` and `unevaluatedProperties` are not checked. Representing either
+later adds API and breaks none; a representation chosen now would fix type names and merge rules with no schema to test them against. This puts
+`internal/model` in phase 6's scope for these checks; the generated files do not change.
+
+The plan for these decisions is [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md).
 
 ## More Information
 

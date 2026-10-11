@@ -1,0 +1,23 @@
+minLength on a string field is checked by Validate.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Named": {"type": "object", "properties": {"title": {"type": "string", "minLength": 1}, "alt": {"type": ["string", "null"], "minLength": 2}}, "required": ["title"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Named struct{Alt *string "json:\"alt,omitempty\""; Title string "json:\"title\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (*Named).UnmarshalJSON(b []byte) error
+func (*Named).Validate() error

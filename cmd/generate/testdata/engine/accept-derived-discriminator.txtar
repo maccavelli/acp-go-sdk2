@@ -1,0 +1,30 @@
+Without a discriminator keyword, the first const property of the variants
+discriminates.
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Event": {"oneOf": [{"type": "object", "properties": {"event": {"type": "string", "const": "start"}, "at": {"type": "string"}}, "required": ["event", "at"]}, {"type": "object", "properties": {"event": {"type": "string", "const": "stop"}}, "required": ["event"]}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Event struct{Start *EventStart "json:\"-\""; Stop *EventStop "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type EventStart struct{At string "json:\"at\""; Event string "json:\"event\""}
+type EventStop struct{Event string "json:\"event\""}
+func NewEventStart(at string) Event
+func NewEventStop() Event
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (Event).MarshalJSON() ([]byte, error)
+func (*Event).UnmarshalJSON(b []byte) error
+func (*Event).Validate() error
+func (*EventStart).UnmarshalJSON(b []byte) error
