@@ -131,3 +131,24 @@ Ran on `main` from `735c524`. The agent did not commit.
   `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.
 
 Commit point: the agent stopped here. The owner commits step 3 on `main`.
+
+### Step 4, the release notes, 2026-10-11
+
+Ran on `main` from `e3c412a`. The agent did not commit.
+
+* `docs/reports/0013-REPORT-release-notes-v0-15-0.md` (new) holds the text for the GitHub release of `v0.15.0` and its sources, indexed in
+  `docs/README.md` as `observed`.
+* The API listing on `git archive v0.14.0` and on the tree, 2181 and 2308 lines, classified by script: changed, 4 types; removed, 21 lines,
+  all of the old `ErrorCode`; added, 8 constants, 7 fields, 87 `UnmarshalJSON`, 44 `Validate`, and 2 `MarshalJSON` methods.
+* Five commits since `v0.14.0` change the SDK's code: `7eedeba`, `0174f4e`, `6786efe`, `0e32255`, and `77d053b`. Each change in the release
+  text cites its commit and record.
+* Changes the records describe but `v0.14.0` already shipped were left out after checking the tag's `types_gen.go`: sized integers, typed maps,
+  raw JSON fields, and `objectKeys`' refusal of a missing required key.
+* Two statements were checked against the code and one corrected: the tag's `Validate` methods held 28 empty-string checks, not the 29 a first
+  count of the whole file gave. `Validate` on `Error`, `ErrorStopReason`, and `IdleStateUpdateError` is absent at the tag, present after
+  `0174f4e`, and absent after `0e32255`.
+* One sentence was cut: a reason given for the 87 new decoders that the evidence did not support.
+* `make markdownlint` first failed with 21 `MD004/ul-style` errors, `*` list markers where the linted docs use `-`. Corrected, it exits 0. `make
+  check-records` exits 0, and the identifier scan of the changed files found nothing. No Go file changed.
+
+Commit point: the agent stopped here. The owner commits step 4 on `main`.

@@ -38,6 +38,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0012 | PLAN | [Implement the schema fidelity framework](decisions/0012-PLAN-schema-fidelity-framework.md) | complete |
 | 0013 | MADR | [Close the follow-ups phase 6 left](decisions/0013-MADR-close-phase-6-follow-ups.md) | accepted |
 | 0013 | PLAN | [Implement the phase 6 follow-ups](decisions/0013-PLAN-close-phase-6-follow-ups.md) | in-progress |
+| 0013 | REPORT | [Release notes for v0.15.0, against v0.14.0](reports/0013-REPORT-release-notes-v0-15-0.md) | observed |
 
 ## I want to…
 
