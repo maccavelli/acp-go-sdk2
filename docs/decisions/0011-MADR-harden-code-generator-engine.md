@@ -436,6 +436,11 @@ restoring backups when a rename fails partway. The decisions, each with the alte
 * Bad, because an interrupted run can leave `.<name>.*.tmp` files behind. The go command and gofmt ignore names that start with `.`, and `git status`
   shows them.
 
+Carried out on 2026-10-10 by [0011-PLAN-safe-output.md](0011-PLAN-safe-output.md), commits `838a4c4` to `9efc331`, as decided: `emit.Render`,
+`output.Check`, and `output.Write`; no panic is left in `cmd/generate`. The generated files and the exported API did not change. Measured warm, the
+check made a run 0.48 s longer (0.12 to 0.60 s), just under the 0.5 to 0.9 s estimated above. The plan's deviations concern how two behaviours are
+tested; none changes a decision here.
+
 ## More Information
 
 Implementation follows in one PLAN per phase, each written and approved before its work starts. The first is the resolved model.

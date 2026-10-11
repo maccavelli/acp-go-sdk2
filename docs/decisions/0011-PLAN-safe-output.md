@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-10
 associated-madr: "0011-MADR-harden-code-generator-engine.md"
 ---
@@ -468,3 +468,46 @@ three it cannot check, which were checked by hand against the source: `.<name>.*
 No Go file changed, so `make pre-add-check` was not run. `make check-records` and `make markdownlint` exit 0.
 
 Commit point: the agent stopped here. The owner commits step 6 on `main`.
+
+### Step 7, review and close, 2026-10-10
+
+The owner committed step 6 as `9efc331`. Step 7 ran on `main` from that clean tree and changed this record, `docs/README.md`, and the MADR. The agent
+did not commit.
+
+The phase's commits, `git log --oneline d534f27..9efc331`: `f9537bd` (the MADR's amendment and this plan), `838a4c4` (step 2), `9989a5c` (step 3),
+`66e907e` (step 4), `fb82147` (step 5), `9efc331` (step 6). `git diff --name-only d534f27 9efc331` lists 19 files: 15 under `cmd/generate` (9 in
+`internal/emit`, the 4 of the new `internal/output`, `main.go`, `main_test.go`), and `RELEASING.md`, `docs/README.md`, `docs/architecture.md`, and the
+two records. No root Go file, generated file, or golden changed.
+
+Verification, as printed (`s7_verify.py`, read-only for the tree):
+
+* `git diff --quiet d534f27 <commit> -- '*_gen.go' testdata` exits 0 for each of the five step commits; `TestGeneratedFilesUpToDate` passes.
+* No `panic` call in a non-test file of `cmd/generate` (0 matches).
+* Each new test failed first, and each planted breakage of steps 2 to 5 failed a test, as each step records. Where a test did not fail first (the
+  `1bad` case of step 2) or a plant first failed for another reason (step 2's third, which left an import unused), the step says so.
+* `p5_failmodes.py` at `9efc331`: both scenarios exit 1, and all five files are untouched.
+* `go test -race -count=1 ./...`: exit 0 at the root (1 package) and in `cmd/generate` (5 packages); `go build ./example/...` exits 0.
+* `go test -cover`: `internal/output` 92.3% (at least 85% required), `internal/emit` 84.0% and `internal/model` 93.9% (81.2% and 93.9% at
+  `d534f27`).
+* The exported API of the root package (the API listing program of the earlier phases, on `d534f27` and on the tree): 2314 lines each, identical.
+  The first run of this check passed for the wrong reason: the program was started as `go run .` in a directory without `go.mod`, and both sides were
+  the same one-line error. It was rerun as `go run main.go`, with an assertion that each side exits 0 and lists more than 1000 lines.
+* The generator's run time is in step 5's record: warm, 0.12 to 0.13 s before and 0.60 s after.
+* `make pre-add-check`: `go-precheck: 76 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records` and
+  `make markdownlint` exit 0; the identifier scan of each step's diff found nothing.
+
+Deviations and corrections during the phase, each recorded in its step: the expected text of step 2's `1bad` case; step 4's rename failure tested
+through an injected rename (`writeWith`), decided by the owner, and a test of the compare step added; step 4's extra staging case that fails partway;
+step 5's `TestCheckAcceptsRepository` in `cmd/generate` rather than `internal/output`, and its positive control `TestCheckAcceptsHandWrittenPackage`.
+No decision of the MADR changed.
+
+**Not done, and where it belongs:**
+
+* The `Sync` before each rename has no test that can observe it; review shows it.
+* Nothing runs on Windows: CI lints `GOOS=windows` but runs the tests on the host only, so the read-only-directory case and the mode check are
+  skipped there and a replacement there is not atomic, as the MADR says.
+* Leftover `.<name>.*.tmp` files after an interrupted run are not ignored by `.gitignore`; the scope left that out.
+* Phase 6 of the MADR, tests of the engine, needs its own plan; so do the items `0012-PLAN-schema-fidelity-framework.md` left undone.
+
+Every acceptance criterion in Verification holds. The status is `complete`, and `docs/README.md` shows it. The MADR stays `accepted`, with a note
+under its phase 5 amendment that the decisions were carried out.

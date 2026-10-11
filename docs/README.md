@@ -32,7 +32,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0011 | PLAN | [Implement phase 1: the resolved schema model](decisions/0011-PLAN-resolved-schema-model.md) | complete |
 | 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md) | complete |
 | 0011 | PLAN | [Implement phase 3: the protocol table](decisions/0011-PLAN-protocol-table.md) | complete |
-| 0011 | PLAN | [Implement phase 5: safe output](decisions/0011-PLAN-safe-output.md) | in-progress |
+| 0011 | PLAN | [Implement phase 5: safe output](decisions/0011-PLAN-safe-output.md) | complete |
 | 0012 | MADR | [Generate the ACP schema faithfully through a keyword registry](decisions/0012-MADR-schema-fidelity-framework.md) | accepted |
 | 0012 | PLAN | [Implement the schema fidelity framework](decisions/0012-PLAN-schema-fidelity-framework.md) | complete |
 
