@@ -504,8 +504,12 @@ No decision of the MADR changed.
 **Not done, and where it belongs:**
 
 * The `Sync` before each rename has no test that can observe it; review shows it.
-* Nothing runs on Windows: CI lints `GOOS=windows` but runs the tests on the host only, so the read-only-directory case and the mode check are
-  skipped there and a replacement there is not atomic, as the MADR says.
+* ~~Nothing runs on Windows: CI lints `GOOS=windows` but runs the tests on the host only, so the read-only-directory case and the mode check are
+  skipped there and a replacement there is not atomic, as the MADR says.~~ Corrected 2026-10-11: CI runs `go test -shuffle=on ./...` in both modules
+  on `windows-2025`, and at `f2a6a3a` every package passed there, `internal/output` included. The `make pre-add-check` gate lints `GOOS=windows` and
+  runs the tests on the host only, which this entry confused with CI. On Windows the read-only-directory case and the mode check are skipped by
+  design, and a replacement is not atomic, as the MADR says. Found while measuring for
+  [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md).
 * Leftover `.<name>.*.tmp` files after an interrupted run are not ignored by `.gitignore`; the scope left that out.
 * Phase 6 of the MADR, tests of the engine, needs its own plan; so do the items `0012-PLAN-schema-fidelity-framework.md` left undone.
 

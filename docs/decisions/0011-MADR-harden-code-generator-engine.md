@@ -1,6 +1,6 @@
 ---
 status: accepted
-date: 2026-10-10
+date: 2026-10-11
 decision-makers: Repository owner
 ---
 
@@ -152,7 +152,8 @@ The phases, in order:
 5. **Safe output.** All five files are rendered in memory, type-checked together with `go/types` against the hand-written package, and written only if
    every step passes, each through a temporary file and a rename. Panics become errors. (Refined 2026-10-10: see the phase 5 amendment below.)
 6. **Tests of the engine.** Table tests run the generator on synthetic schemas for each construct and each refusal; a generated test round-trips every
-   union variant; tests cover unknown variants, the deserialization keywords, and precision.
+   union variant; tests cover unknown variants, the deserialization keywords, and precision. (Refined 2026-10-11: see the phase 6 amendment
+   below.)
 
 Each phase has its own PLAN, written and approved before its work starts. Phases 2 and 4 change the exported API: phase 2 adds the `Unknown` fields, and
 phase 4 changes the Go type of about 28 fields. The module is at `v0`, so these ship in a new minor version whose release notes list every changed
@@ -440,6 +441,145 @@ Carried out on 2026-10-10 by [0011-PLAN-safe-output.md](0011-PLAN-safe-output.md
 `output.Check`, and `output.Write`; no panic is left in `cmd/generate`. The generated files and the exported API did not change. Measured warm, the
 check made a run 0.48 s longer (0.12 to 0.60 s), just under the 0.5 to 0.9 s estimated above. The plan's deviations concern how two behaviours are
 tested; none changes a decision here.
+
+## Amendment 2026-10-11, phase 6 facts and decisions
+
+Before planning phase 6, tests of the engine, the tests of the generator and of the generated SDK were measured on `f2a6a3a`, after phase 5. The facts
+come from coverage profiles, from mutation and harness probes in scratch copies and scratch modules, from the Go documentation and source at
+`go1.27.2`, from the CI logs, and from the documentation of other projects, linked where cited; nothing in the tree changed.
+
+### Facts
+
+* **What runs today.** `cmd/generate` has 67 test functions, one of them a fuzz target (`FuzzExportedName`); the root has 91, and 33 JSON fixtures in
+  `testdata/json_golden`. Each package's own tests cover `internal/emit` 84.0%, `internal/load` 86.4%, `internal/model` 93.9%, `internal/output`
+  92.3%, and `cmd/generate` 45.9%; `internal/util` has no test file. Counted across packages (`go test -coverpkg=./... ./...` in `cmd/generate`), 92.3%
+  of the generator's statements run.
+* **What the committed schema carries.** Nine tests build or read the schema in `schema/`: `TestGeneratedFilesUpToDate`, `TestCheckAcceptsRepository`,
+  `TestUnionClassesOfCommittedSchema`, `TestFitKeysOfCommittedSchema`, `TestDiscriminatorExemptOnDecode`, `TestNoOmitemptyOnStructValues`,
+  `TestProtocolTableAppliesToCommittedSchema`, `TestCommittedSchemaKeywordsRegistered`, and `TestMergeProvenanceMatchesInputs`. Skipping them leaves
+  88.0%. Below 70% then: `clientFile` 31.6%, `emitObjectSchema` 50.0%, `emitSchemaDef` 65.0%, `unionUnmarshalBody` and `catchAllOf` 66.7%,
+  `ReadMetaUnstable` and `ReadSchemaUnstable` 44.4%, `defaultKindOf` 60.0%, `sideOf` 50.0%, `firstPos` 25.0% (F15), and `clientAssert`,
+  `singleMethodAssert`, `enumConsts`, `missingDisc`, and `keyLessBody` 0%.
+* **Refusals.** 93 lines of non-test code in `cmd/generate` create an error (`fmt.Errorf`, `errors.New`, or a recorder such as `goFile.fail`). 38
+  never run under any test, with or without the nine: all 12 in `internal/load/merge.go`, 8 of 9 in `load.go` (reading and parsing each of the four
+  files), 5 of 23 in `model/protocol.go`, 3 of 4 in `model/validate.go`, 3 of 12 in `model/model.go`, 3 of 6 wrapping lines in `emit/file.go`, 1 each in
+  `model/names.go` and `model/methods.go`, and both in `main.go`.
+* **How the emitters are tested.** The `emit` tests build small schemas and assert on the generated text with `strings.Contains` (8 places) or
+  type-check it (10 places). No test runs code generated from a synthetic schema. Behaviour is tested only in the root, on the committed schema.
+* **What the root tests run of the generated code.** 2,079 of 7,187 statements of `types_gen.go` (28.9%), 19.3% of `agent_gen.go`, 23.0% of
+  `client_gen.go`, and 18.2% of `helpers_gen.go`. Of the generated methods, 224 of 317 `UnmarshalJSON`, 34 of 76 `MarshalJSON`, and 117 of 145
+  `Validate` never run. `types_gen.go` has 27 unions with 110 variants; the root tests decode 39 of the variants, and 6 unions not at all:
+  `AgentResponse`, `ClientResponse`, `ElicitationContentValue`, `ElicitationFormMode`, `ElicitationUrlMode`, and `UnstableMessageMcpResponse`.
+* **Mutation probe, generated code.** One operator flipped per mutant (`==`/`!=`, a bound, `&&`/`||`, `true`/`false`, `return nil` to an error,
+  `continue`/`break`), in a scratch copy of the root at `f2a6a3a`, then `go test -count=1 -failfast .`. 60 mutants sampled (seed 7) from the 2,463 sites
+  in the bodies of `UnmarshalJSON`, `MarshalJSON`, and `Validate` in `types_gen.go`: all built, 24 failed a test, 36 survived. The survivors invert an
+  error check (`if err != nil` to `==`), return nil where an error belongs, or flip the `match` flag of the key-less trial decode that
+  [0012-PLAN-schema-fidelity-framework.md](0012-PLAN-schema-fidelity-framework.md) records as dead in five unions. A mutant took 3.2 s (median).
+* **Mutation probe, the engine.** The same operators on a scratch copy of `cmd/generate`, then `go test -count=1 -json ./...`. 80 mutants sampled from
+  the 828 sites in `internal/model`, `internal/emit`, and `internal/load`: 6 did not build; of 74, 67 failed a test and 7 survived (whether any is
+  equivalent was not analysed). 12 of the 67 failed only tests of the committed schema, 9 of them only `TestGeneratedFilesUpToDate`, which compares
+  bytes. In `internal/emit`, 9 of 18 failed a test that does not read the committed schema. A mutant took 3.7 s (median).
+* **What a synthetic schema needs to compile and run.** The generated files refer to seven hand-written names: `NewInvalidParams`, `toReqErr`,
+  `SendRequest`, `NewMethodNotFound`, `RequestError`, `AgentSideConnection`, and `ClientSideConnection`. Of the seven hand-written non-test files, six
+  (`agent.go`, `client.go`, `connection.go`, `doc.go`, `errors.go`, `extensions.go`) refer to generated code only through `Agent`, `Client`, and
+  `ProtocolMethodCancelRequest`; `helpers.go` refers to 27 ACP types (`ContentBlock`, `SessionUpdate`, `ToolCallContent`, and others). The model
+  refuses a `protocolMethods` entry without a definition for it: `protocol method "$/cancel_request": no request or notification definition is linked
+  to it by x-method and x-side`.
+* **Harness probe.** A synthetic schema of five definitions (a request and response bound to an agent method `echo/run`, a discriminated union, and
+  `CancelRequestNotification` with `RequestId` for the protocol method) ran through the generator binary into a scratch module holding the six files
+  above. It generated and type-checked in 1.0 to 1.2 s. A behaviour test file in that module passed `go test` in 0.49 s warm and 0.91 s first: a
+  union round-trip of each variant and of an unknown one, an `int64` beyond 2^53 and a `uint64` at its maximum, `x-deserialize-default-on-error` and
+  `x-deserialize-skip-invalid-items`, a missing required key refused, and a request answered by an `AgentSideConnection` over `io.Pipe`.
+* **Fuzzing.** `go test -fuzz` runs one target of one package; arguments are `[]byte`, `string`, the integer and float types, and `bool`; the seed
+  corpus is `f.Add` plus `testdata/fuzz/<Name>`, and a plain `go test` runs only the seeds ([go.dev/doc/security/fuzz](https://go.dev/doc/security/fuzz/)).
+  The standard library tests its own codec this way: `FuzzUnmarshalJSON` in `encoding/json` (`fuzz_test.go` and, for the v2-backed build,
+  `v2_fuzz_test.go`) unmarshals into each type of a `[]func() any`, and requires a value that decoded to marshal and to unmarshal again.
+* **`go test -overlay`.** `go help build`: the overlay makes "a build ... run as if the disk file path exists with the contents given by the backing
+  file paths", and "overlays will not appear when binaries and tests are run through go run and go test". A mutant can be compiled without writing the
+  tree; a test that reads a file at run time reads the disk.
+* **Go 1.26 and 1.27 test features.** `(*testing.T).ArtifactDir` "returns a directory in which the test should store output files", kept under
+  `-outputdir` when `go test -artifacts` is given and removed otherwise (`go doc testing.T.ArtifactDir` at `go1.27.2`).
+* **`encoding/json` at `go1.27.2`.** The `jsonv2` experiment is on by default (`internal/buildcfg/exp.go`, `JSONv2: true`), and `go list -f
+  '{{.GoFiles}}' encoding/json` lists only `v2_*.go` files: the v1 API is served by the v2 implementation. The root tests pass both by default and with
+  `GOEXPERIMENT=nojsonv2`; CI runs only the default.
+* **CI.** `.github/workflows/ci.yml` runs `go test -shuffle=on ./...` in both modules on `ubuntu-24.04`, `macos-15`, and `windows-2025`, the race
+  detector and the linters on Linux only, and is also scheduled weekly (`17 6 * * 1`). At `f2a6a3a` the Windows job passed every package, `internal/output`
+  included. [0011-PLAN-safe-output.md](0011-PLAN-safe-output.md) stated in its step 7 record that nothing runs on Windows; that is wrong, and the plan
+  carries a dated correction.
+* **Harness formats.** The standard library's txtar reader, `internal/txtar`, cannot be imported, and `golang.org/x/tools/txtar` is a module dependency
+  ([pkg.go.dev](https://pkg.go.dev/golang.org/x/tools/txtar)); the format is a line `-- name --` before each file's text. `testing/quick` "is frozen and
+  is not accepting new features" ([pkg.go.dev](https://pkg.go.dev/testing/quick)); `pgregory.net/rapid` and `github.com/rogpeppe/go-internal/testscript`
+  are module dependencies.
+* **Mutation tools.** Per their documentation: `go-gremlins/gremlins` v0.6.0 (2025-12-06, Apache-2.0) is an external command that mutates covered
+  code only and can fail on a threshold ([gremlins.dev](https://gremlins.dev/latest/usage/commands/unleash/)); `gtramontina/ooze` is a library imported
+  by a test, so a module dependency ([github.com/gtramontina/ooze](https://github.com/gtramontina/ooze)); `avito-tech/go-mutesting` is an external
+  command with several dependencies of its own ([github.com/avito-tech/go-mutesting](https://github.com/avito-tech/go-mutesting)). None was run here.
+* **How other Go generators test themselves.** Per their repositories: `ogen` generates every specification in `_testdata/positive` and requires an
+  error for each in `_testdata/negative`, and exercises 39 committed generated packages (`internal/integration/test_*`) end to end
+  ([github.com/ogen-go/ogen](https://github.com/ogen-go/ogen)); `omissis/go-jsonschema` keeps a golden `.go` file per case and compiles it in a separate
+  test module, `tests/` with its own `go.mod` ([github.com/omissis/go-jsonschema](https://github.com/omissis/go-jsonschema)); quicktype runs each
+  generated program on sample JSON in a subprocess ([github.com/glideapps/quicktype](https://github.com/glideapps/quicktype)).
+* **Fixtures elsewhere.** ACP's schema declares `https://json-schema.org/draft/2020-12/schema`. The JSON Schema Test Suite (MIT) has per-keyword
+  files for that draft ([github.com/json-schema-org/JSON-Schema-Test-Suite](https://github.com/json-schema-org/JSON-Schema-Test-Suite)); its
+  `minLength` counts code points, as the generated `Validate` does with `utf8.RuneCountInString`. ACP's Python SDK keeps 38 files of wire
+  messages under `tests/golden/` (Apache-2.0) ([github.com/agentclientprotocol/python-sdk](https://github.com/agentclientprotocol/python-sdk)).
+
+### Decisions
+
+Asked on 2026-10-11, the owner chose the recommended option of each question, listed first in each item below: txtar cases (D1); generated code
+compiled and run by one `go test` subprocess (D2); a generated registry and a schema-driven conformance test at the root (D3); fuzz targets run by
+`make fuzz`, not in CI (D4); a standard-library mutation tool that reports and never gates (D5); levels the plan meets, with no standing threshold (D6);
+and a CI step with `GOEXPERIMENT=nojsonv2` (D7). The alternatives named in each item were not chosen.
+
+* **D1. Synthetic schemas as txtar cases, run in process.** Each case is a file under `cmd/generate/testdata/engine/`: the schema files of a schema
+  directory, then what is expected, either `want.err` (substrings of the refusal) or `want.api` (the exported declarations of the generated package,
+  listed from `go/types`). A test reads the cases with a small reader in the generator's test code, runs `run` into a temporary directory holding the six
+  runtime files of the repository, and compares. A refusal also requires the directory to be as it was. Alternatives: Go literals in table tests, as
+  today, which suit small schemas and hide large ones; `testscript`, a dependency.
+* **D2. Generated code from synthetic schemas is compiled and run.** A case may add `behaviour_test.go`. One test collects those cases into one
+  temporary module, one package per case with the six runtime files, and runs `go test -json ./...` once (`GOWORK=off`, `GOFLAGS=-mod=mod`,
+  `GOTOOLCHAIN=local`, `GOPROXY=off`), keeping the module in `t.ArtifactDir()` on failure. `-short` skips it. Alternatives: committed generated packages
+  in `cmd/generate`, as ogen and go-jsonschema do, with no subprocess but a second set of files to regenerate and the runtime files copied; or no
+  execution, which leaves the engine's behaviour tested only through the committed schema.
+* **D3. Every definition, variant, and method of the committed schema is exercised at the root, from a generated registry.** The generator writes a
+  sixth file, `schema_gen_test.go`: data only, a constructor for every generated type keyed by its schema definition and file, every union's variants
+  and discriminator values, every method's wire name, side, and parameter and result types, and a recording `Agent` and `Client`. A hand-written root
+  test reads the schema files and builds instances from them independently of the generator: one per variant, with required properties only and with
+  all of them, numbers at the limits of their format. It requires each to decode, validate, and encode to equal JSON; each required key, when removed,
+  to be refused; each discriminated union to keep an unknown value; each lenient field and array to follow its keyword; each bound to fail `Validate`
+  when broken; and each method to reach the recording peer over a connection. `output.Check` type-checks `schema_gen_test.go` with the package.
+  Alternatives: a walk by reflection from `Agent` and `Client`, which misses unreachable types such as `AgentResponse`; fully generated test bodies,
+  where the engine checks itself; or a fixture per variant, hand-written or taken from the Python SDK with its licence, kept complete by a guard.
+* **D4. Fuzz targets.** At the root, `FuzzRoundTrip(which uint16, data []byte)` over the registry: no panic, and a value that decodes encodes,
+  decodes again, and encodes to the same bytes; `Validate` does not panic. In `cmd/generate`, `FuzzBuild(schema []byte)`: no panic, and a schema the
+  model accepts renders. Seeds are the D1 cases, the D3 instances, and `testdata/json_golden`. `make fuzz` runs each for `FUZZTIME`, 60 s by default.
+  Alternatives: also a time-boxed fuzz step in the weekly CI run; no fuzzing.
+* **D5. Mutation testing with a stdlib tool in the generator module.** `cmd/generate/internal/mutate`, run as `make mutation`: it lists the operator
+  sites of the files given with `go/ast`, compiles each mutant through `go test -overlay` so the tree is never written, applies a per-mutant timeout, and
+  writes a JSON report of killed, survived, and unbuildable mutants. It reports and never gates. Alternatives: gremlins v0.6.0 run with `go run` at a
+  pinned version, as CI runs `govulncheck`, after a trial; no mutation testing, as today.
+* **D6. Levels the plan meets, not standing gates.** Without the nine committed-schema tests, the engine's statements at 95% or more, every error site
+  listed above run by a test or named in the plan with its reason, and no engine mutant killed only by `TestGeneratedFilesUpToDate`. At the root,
+  `types_gen.go` at 85% or more and every union variant decoded. Every surviving mutant of the generated code fixed or recorded as equivalent.
+  Alternative: a coverage threshold enforced by a check.
+* **D7. CI runs the root tests with `GOEXPERIMENT=nojsonv2` too**, on Linux, so a difference between the v1 and v2-backed codecs fails a build.
+  Alternative: no change.
+
+### Consequences of these decisions
+
+* Good, because each construct and each refusal of the engine is specified by a case a reader can open, and the emitters' behaviour is tested
+  without the committed schema.
+* Good, because every generated decoder, union variant, and method of the SDK runs in a test, with an oracle independent of the generator.
+* Good, because mutation reports show which planted faults the tests miss, without a dependency.
+* Neutral, because the five generated SDK files and the exported API do not change; `schema_gen_test.go` is a test file.
+* Bad, because the generator gains a sixth file and `output.Check` a test file to check, which changes what phase 5 built.
+* Bad, because the compile-and-run test needs the go command and adds about 1 to 3 s to `go test` in `cmd/generate`.
+* Bad, because the instance builder is a second reading of the schema to maintain when the schema uses a construct it does not know.
+* Bad, because the six runtime files are listed in the generator's test code; when a hand-written file starts to use ACP types, a test fails and
+  names it, and the list changes.
+* Bad, because a mutation run takes about 3 to 4 s a mutant, so it is a report, not a gate.
+
+The plan for these decisions is [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md), `proposed` until the owner approves it.
 
 ## More Information
 
