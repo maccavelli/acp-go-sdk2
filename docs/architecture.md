@@ -12,10 +12,12 @@ This repository is the Go module `github.com/maccavelli/acp-go-sdk2`, package
 
 - Hand-written: `agent.go` and `client.go` (the two connection types),
   `connection.go` (JSON-RPC over a reader and a writer), `errors.go`,
-  `extensions.go` (`_`-prefixed methods), `helpers.go` (union constructors and
-  `Ptr`), and `doc.go`.
+  `extensions.go` (`_`-prefixed methods), `helpers.go` (the constructors of
+  the three unions the protocol table names, `Ptr`, and `Roots`), and `doc.go`.
 - Generated from `schema/`: `constants_gen.go`, `types_gen.go`, `agent_gen.go`,
-  `client_gen.go`, and `helpers_gen.go`, and the test file `schema_gen_test.go`,
+  `client_gen.go`, and `helpers_gen.go`, which holds a constructor for every
+  variant of every other union the schema documents, and the test file
+  `schema_gen_test.go`,
   which lists every generated type, union, and method for the conformance
   test. They are never edited by hand.
 

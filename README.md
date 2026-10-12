@@ -67,6 +67,19 @@ Helper constructors are provided to reduce boilerplate when working with union t
   `acp.WithStartRawOutput`, `acp.WithUpdateRawInput`, `acp.WithUpdateRawOutput`,
   and the content of `acp.StartEditToolCall` take a `json.RawMessage`.
 - Utility: `acp.Ptr[T]` for pointer fields in request/update structs.
+- Every other union, except `AgentResponse` and `ClientResponse`, which the
+  schema keeps out of its documentation, has a generated constructor for each
+  of its variants, `acp.New<Union><Variant>`, such as
+  `acp.NewSessionConfigOptionBoolean(id, name, currentValue)`. Its parameters
+  are the variant's required keys, in the order of the schema's `required`
+  list, each named after its key: a key that is a Go keyword or
+  predeclared name gains `Value` (`typeValue`, `errorValue`), and a key that
+  is not a Go name is joined in camel case (`x-API-key` gives `xAPIKey`). A
+  variant whose discriminator the constructor cannot write itself takes it
+  as a parameter: a catch-all, such as
+  `acp.NewElicitationPropertySchemaOther(typeValue)`, keeps any other keys in
+  its `Extra` field. A variant that is not an object takes `value`, such as
+  `acp.NewRequestIdNumber(value int64)`.
 
 ### Wire encoding
 
@@ -75,7 +88,9 @@ follow the schema:
 
 - Encoding a message whose required union has no variant set fails with an error
   that names the union, such as `RequestPermissionOutcome: no variant set`.
-- A required array or map left nil is sent as `[]` or `{}`, not `null`.
+- A required array or map left nil is sent as `[]` or `{}`, not `null`, and so
+  is a union's array variant that is set and holds nil, such as
+  `acp.NewSessionConfigSelectOptionsUngrouped(nil)`.
 - A key is read as `encoding/json` reads a struct field's name: a key that
   differs from the schema's name only in case, under Unicode case folding, is
   that name, and of several such keys the last wins. That holds for required
@@ -126,10 +141,13 @@ follow the schema:
   ACP's Rust implementation does.
 - `Validate` checks what the schema states, at every depth: a union has exactly
   one variant, or `Unknown`, set; a string meets its `minLength`; every nested
-  value, slice element, and map value validates. It also checks that each path
-  the protocol requires to be absolute is, with the host's `filepath.IsAbs`
-  (see Paths, below). Elsewhere a present empty string passes. Every failure
-  is a `*acp.ValidationError` naming the type, the property and the rule.
+  value, slice element, and map value validates; a catch-all does not hold a
+  discriminator value that names another variant, such as
+  `ElicitationPropertySchema: variant Other: type "string" names another variant`.
+  It also checks that each path the protocol requires to be absolute is, with
+  the host's `filepath.IsAbs` (see Paths, below). Elsewhere a present empty
+  string passes. Every failure is a `*acp.ValidationError` naming the type, the
+  property and the rule.
 - A decode error names the union and, for a variant, the discriminator value or
   the variant, then the cause, such as `ContentBlock: type "text": ...`.
 
@@ -221,6 +239,7 @@ The decisions behind these rules are
 [0009-MADR-fix-generated-output-on-json-v1.md](docs/decisions/0009-MADR-fix-generated-output-on-json-v1.md),
 [0011-MADR-harden-code-generator-engine.md](docs/decisions/0011-MADR-harden-code-generator-engine.md),
 [0012-MADR-schema-fidelity-framework.md](docs/decisions/0012-MADR-schema-fidelity-framework.md),
+[0014-MADR-union-constructors-take-every-required-key.md](docs/decisions/0014-MADR-union-constructors-take-every-required-key.md),
 and
 [0015-MADR-validate-absolute-protocol-paths.md](docs/decisions/0015-MADR-validate-absolute-protocol-paths.md).
 

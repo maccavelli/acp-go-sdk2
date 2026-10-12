@@ -402,3 +402,26 @@ Ran on `main` from `4b21cbe`. The agent did not commit. The deviation above, dec
   `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.
 * For the release notes: 56 constructors added; `Validate` refuses a catch-all holding another variant's value; a nil array variant is
   sent as `[]`.
+
+### Step 6, documentation, 2026-10-12
+
+Ran on `main` from `b59ced2`, after 0015 closed, as the amendment to this step requires. The agent did not commit. No Go file changed.
+
+* `README.md`, "Helper constructors": a bullet on the generated `acp.New<Union><Variant>` constructors: every union but the three
+  hand-written ones and `AgentResponse` and `ClientResponse` (marked `x-docs-ignore`, which `buildUnion` skips, `model.go:602`; neither
+  has a constructor in `helpers_gen.go`); parameters are the variant's required keys in the order of the `required` list (`paramKeys`),
+  named after the key, a keyword or predeclared name gaining `Value` and a non-Go key joined in camel case (`x-API-key` to `xAPIKey`, from
+  `accept-constructor-names`); a discriminator the constructor cannot write is a parameter, a catch-all keeping other keys in `Extra`; a
+  non-object variant takes `value`. Each example names a function in `helpers_gen.go`: `NewSessionConfigOptionBoolean(id, name,
+  currentValue)`, `NewElicitationPropertySchemaOther(typeValue)`, `NewRequestIdNumber(value int64)`.
+* `README.md`, "Wire encoding": the nil-array bullet adds a union's set array variant holding nil, with
+  `acp.NewSessionConfigSelectOptionsUngrouped(nil)`; the `Validate` bullet adds the catch-all check, quoting the generated message form
+  (`ElicitationPropertySchema: variant Other: type %q names another variant`, `types_gen.go`); the list of decisions gains this record.
+* `docs/architecture.md`, "What it is": `helpers.go` holds the constructors of the three unions the protocol table names, `Ptr` and
+  `Roots`; `helpers_gen.go` a constructor for every variant of every other union the schema documents.
+* Agreement with 0015 (the amendment): the README's `Validate` bullet now names both records' checks once and points to "Paths" for the
+  path rule; "Paths" mentions no constructor; `docs/architecture.md`'s 0015 lines (the table's `AbsolutePaths`, the `validate` pair, the
+  sending and receiving checks) are unchanged, and its `helpers.go` line now also names 0015's `Roots`. Neither file repeats the other
+  record's text.
+* `make markdownlint` and `make check-records` exit 0; the identifier scan of the changed files found nothing. No generated file and no
+  Go file changed, so no Go gate ran.
