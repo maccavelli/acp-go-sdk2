@@ -88,6 +88,60 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s: %s", e.Type, e.Field, e.Rule)
 }
 
+// ErrPromptCancelled is the cause of a prompt turn's cancellation by
+// session/cancel, read with context.Cause; a turn superseded by a later prompt
+// for its session is cancelled with an error that wraps it
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, P1 and Q1).
+var ErrPromptCancelled = errors.New("acp: prompt turn cancelled")
+
+// ErrNotInitialized is the error a typed method returns, wrapped with the
+// method's name, when initialize has not completed on its connection
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+var ErrNotInitialized = errors.New("acp: initialize has not completed")
+
+// CapabilityError reports a method, property or variant that the capabilities
+// negotiated by initialize do not allow. Method is the wire method;
+// Capability is the dotted capability path; Field is the JSON key, with an
+// index for an element, when the gate is on a property; Variant is the
+// discriminator value when the gate is on a union variant
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+type CapabilityError struct {
+	Method     string
+	Capability string
+	Field      string
+	Variant    string
+}
+
+// Error names the method and capability, then the property or variant.
+func (e *CapabilityError) Error() string {
+	msg := fmt.Sprintf("%s: capability %s not advertised", e.Method, e.Capability)
+	switch {
+	case e.Field != "":
+		msg += ": " + e.Field
+	case e.Variant != "":
+		msg += ": variant " + e.Variant
+	}
+	return msg
+}
+
+// ProtocolVersionError reports a protocol version this SDK does not speak:
+// one an application asked to send, with Answered 0, or one an agent answered
+// to the version requested. The application closes the connection and
+// informs the user, as the specification recommends
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, N1).
+type ProtocolVersionError struct {
+	Requested int
+	Answered  int
+}
+
+// Error names the versions.
+func (e *ProtocolVersionError) Error() string {
+	if e.Answered == 0 {
+		return fmt.Sprintf("acp: protocol version %d is not supported", e.Requested)
+	}
+	return fmt.Sprintf("acp: agent answered protocol version %d to a request for %d", e.Answered, e.Requested)
+}
+
 // NewParseError returns a JSON-RPC parse error (-32700).
 func NewParseError(data any) *RequestError {
 	return &RequestError{Code: -32700, Message: "Parse error", Data: data}
@@ -121,6 +175,13 @@ func NewRequestCancelled(data any) *RequestError {
 // NewAuthRequired returns an ACP authentication-required error (-32000).
 func NewAuthRequired(data any) *RequestError {
 	return &RequestError{Code: -32000, Message: "Authentication required", Data: data}
+}
+
+// NewResourceNotFound returns an ACP resource-not-found error (-32002), naming
+// the resource, such as a file, that was not found
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, K1).
+func NewResourceNotFound(uri string) *RequestError {
+	return &RequestError{Code: -32002, Message: "Resource not found", Data: map[string]any{"uri": uri}}
 }
 
 // toReqErr coerces arbitrary errors into JSON-RPC RequestError.

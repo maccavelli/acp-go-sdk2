@@ -538,3 +538,31 @@ requires; CI on `271aa1c` (run 38305945233) passed. The agent did not commit.
 * This plan's status is `in-progress`, and its row in `docs/README.md` says so.
 * `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing. No source file
   changed.
+
+### Step 3, errors and the helper, 2026-10-12
+
+Ran on `main` from `6ec3916` (step 2). The agent did not commit.
+
+* `errors.go`, which names no ACP type: `ErrPromptCancelled` (`acp: prompt turn cancelled`) and `ErrNotInitialized` (`acp: initialize
+  has not completed`); `CapabilityError` with `Method`, `Capability`, `Field` and `Variant`, whose `Error` reads `<method>: capability
+  <capability> not advertised`, then `: <field>` when `Field` is set, else `: variant <variant>` when `Variant` is; `ProtocolVersionError`
+  with `Requested` and `Answered` (`int`), whose `Error` reads `acp: protocol version <n> is not supported` when `Answered` is 0 and `acp:
+  agent answered protocol version <a> to a request for <r>` otherwise; `NewResourceNotFound(uri string)`, code `-32002`, message
+  `Resource not found`, data `{"uri": uri}`. Each doc comment cites the MADR's option.
+* Test, `errors_test.go`: `TestRemediationErrors` pins each `Error` text (four `CapabilityError` shapes, both `ProtocolVersionError`
+  shapes, both sentinels), requires `errors.Is` through `fmt.Errorf("%w")` for both sentinels and `errors.As` through one wrap for both
+  types, and requires `NewResourceNotFound("file:///a")` to encode as
+  `{"code":-32002,"message":"Resource not found","data":{"uri":"file:///a"}}`.
+* Plants, each in its own scratch copy, both `exit=1`:
+  * `NewResourceNotFound` with code `-32001`: `NewResourceNotFound encodes as {"code":-32001,...}, want {"code":-32002,...}`;
+  * `CapabilityError.Error` without the variant case: `Error() = "session/update: capability session.notices not advertised", want
+    "session/update: capability session.notices not advertised: variant notice"`.
+* Regenerated: no generated file changed. The API listing against `git archive HEAD` gains exactly `CapabilityError` with its four
+  fields and `Error`, `ProtocolVersionError` with its two fields and `Error`, `NewResourceNotFound`, `ErrNotInitialized` and
+  `ErrPromptCancelled`. No engine case's `want.api` changed; `TestEngineCases`, `TestGeneratedFilesUpToDate`,
+  `TestRuntimeFilesCoverHandWritten` and `TestCheckAcceptsRepository` pass.
+* `make pre-add-check`: `go-precheck: 105 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No untracked Go file.
+  `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the root; `GOOS=windows go vet ./...` passes in both modules; `make
+  check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
+* On the Windows host reached over SSH, with a copy of the working tree's 298 tracked and untracked files and no macOS metadata: `go test
+  -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
