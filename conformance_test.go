@@ -285,8 +285,11 @@ func roundTrip(t *testing.T, st schemaType, in []byte) (any, []string) {
 	if err := json.Unmarshal(in, v); err != nil {
 		return nil, []string{fmt.Sprintf("decode %s: %v", in, err)}
 	}
-	if val, ok := v.(interface{ Validate() error }); ok {
-		if err := val.Validate(); err != nil {
+	// A golden or an instance is a peer's message from a host this test does
+	// not know, so paths are checked with the portable rule
+	// (0015-PLAN-validate-absolute-protocol-paths.md, step 4).
+	if val, ok := v.(interface{ validate(func(string) bool) error }); ok {
+		if err := val.validate(isPortableAbs); err != nil {
 			return v, []string{fmt.Sprintf("validate %s: %v", in, err)}
 		}
 	}

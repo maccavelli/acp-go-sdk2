@@ -29,6 +29,9 @@ const (
 	CheckMinimum
 	// CheckMaximum requires the field to be at most Bound.
 	CheckMaximum
+	// CheckAbsolutePath requires the field to be an absolute path, by the
+	// rule the caller of validate passes (0015-MADR-validate-absolute-protocol-paths.md).
+	CheckAbsolutePath
 )
 
 // Check is one check of a Validate method, in field order.
@@ -156,6 +159,14 @@ func (m *Model) ownChecks(structs []shape) (map[string][]Check, error) {
 			if err != nil {
 				return nil, err
 			}
+			if m.absProps[f.prop] {
+				shape, ok := pathFieldShape(f.Type)
+				if !ok {
+					return nil, fmt.Errorf("%s: %s: an absolute path must be a string, a pointer to one, or a slice of them, not %s", s.name, f.Key, f.Type)
+				}
+				f.Facts.AbsolutePath = true
+				c = append(c, Check{Kind: CheckAbsolutePath, Key: f.Key, Shape: shape})
+			}
 			for i := range c {
 				c[i].Field = f.Name
 			}
@@ -256,4 +267,16 @@ func (m *Model) bounds(owner, key string, minimum, maximum *float64, minLength *
 		out = append(out, Check{Kind: CheckMaximum, Key: key, Shape: sh, Bound: *maximum, Integer: integer})
 	}
 	return out, nil
+}
+
+// pathFieldShape is how a field holds an absolute path: a string, a pointer
+// to one, or a slice of them.
+func pathFieldShape(r TypeRef) (RefKind, bool) {
+	switch {
+	case r.Kind == RefNamed && r.Name == schemaTypeString:
+		return RefNamed, true
+	case (r.Kind == RefPointer || r.Kind == RefSlice) && r.Elem != nil && r.Elem.Kind == RefNamed && r.Elem.Name == schemaTypeString:
+		return r.Kind, true
+	}
+	return 0, false
 }

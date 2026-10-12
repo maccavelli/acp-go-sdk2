@@ -19,6 +19,17 @@ type Protocol struct {
 	// HandWrittenHelpers lists the unions whose constructors helpers.go
 	// writes; the generator emits none for them.
 	HandWrittenHelpers []string
+	// AbsolutePaths lists the properties the protocol requires to be absolute
+	// paths, which Validate checks
+	// (0015-MADR-validate-absolute-protocol-paths.md, W1).
+	AbsolutePaths []PathRule
+}
+
+// PathRule names a property the protocol requires to be an absolute path,
+// by the definition that declares it as the merged schema names it. Source
+// is the specification sentence the rule follows.
+type PathRule struct {
+	Definition, Property, Source string
 }
 
 // Interface is a Go interface the dispatch code calls methods through.
@@ -130,6 +141,17 @@ func newRules(p *Protocol) (*rules, error) {
 	}
 	for _, name := range p.HandWrittenHelpers {
 		r.helpers[name] = true
+	}
+	seen := map[[2]string]bool{}
+	for _, rule := range p.AbsolutePaths {
+		k := [2]string{rule.Definition, rule.Property}
+		switch {
+		case rule.Definition == "" || rule.Property == "" || rule.Source == "":
+			return nil, fmt.Errorf("absolute-path rule %q.%q: it needs a definition, a property, and a source", rule.Definition, rule.Property)
+		case seen[k]:
+			return nil, fmt.Errorf("absolute-path rule %s.%s: two rules", rule.Definition, rule.Property)
+		}
+		seen[k] = true
 	}
 	return r, nil
 }

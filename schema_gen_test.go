@@ -43,6 +43,15 @@ type schemaMethod struct {
 	Notification bool
 }
 
+// schemaAbsolutePath is a property the protocol requires to be an absolute path: the Go
+// type of its definition, the definition's key in File, and the property.
+type schemaAbsolutePath struct {
+	Type     string
+	Def      string
+	File     string
+	Property string
+}
+
 // schemaHelper is a union constructor of helpers_gen.go: the union, the variant field
 // it sets, and New, which calls it with each argument's zero value.
 type schemaHelper struct {
@@ -3157,6 +3166,114 @@ func schemaHelpers() []schemaHelper {
 				v := NewUnstableNesSuggestionSearchAndReplace(*new(UnstableNesSuggestionId), *new(string), *new(string), *new(string))
 				return &v
 			},
+		},
+	}
+}
+
+// schemaAbsolutePaths returns every absolute-path rule of the protocol table that applies to the schema.
+func schemaAbsolutePaths() []schemaAbsolutePath {
+	return []schemaAbsolutePath{
+		{
+			Type:     "NewSessionRequest",
+			Def:      "NewSessionRequest",
+			File:     "schema.json",
+			Property: "cwd",
+		},
+		{
+			Type:     "NewSessionRequest",
+			Def:      "NewSessionRequest",
+			File:     "schema.json",
+			Property: "additionalDirectories",
+		},
+		{
+			Type:     "LoadSessionRequest",
+			Def:      "LoadSessionRequest",
+			File:     "schema.json",
+			Property: "cwd",
+		},
+		{
+			Type:     "LoadSessionRequest",
+			Def:      "LoadSessionRequest",
+			File:     "schema.json",
+			Property: "additionalDirectories",
+		},
+		{
+			Type:     "ResumeSessionRequest",
+			Def:      "ResumeSessionRequest",
+			File:     "schema.json",
+			Property: "cwd",
+		},
+		{
+			Type:     "ResumeSessionRequest",
+			Def:      "ResumeSessionRequest",
+			File:     "schema.json",
+			Property: "additionalDirectories",
+		},
+		{
+			Type:     "UnstableForkSessionRequest",
+			Def:      "ForkSessionRequest",
+			File:     "schema.unstable.json",
+			Property: "cwd",
+		},
+		{
+			Type:     "UnstableForkSessionRequest",
+			Def:      "ForkSessionRequest",
+			File:     "schema.unstable.json",
+			Property: "additionalDirectories",
+		},
+		{
+			Type:     "ListSessionsRequest",
+			Def:      "ListSessionsRequest",
+			File:     "schema.json",
+			Property: "cwd",
+		},
+		{
+			Type:     "SessionInfo",
+			Def:      "SessionInfo",
+			File:     "schema.json",
+			Property: "cwd",
+		},
+		{
+			Type:     "SessionInfo",
+			Def:      "SessionInfo",
+			File:     "schema.json",
+			Property: "additionalDirectories",
+		},
+		{
+			Type:     "McpServerStdio",
+			Def:      "McpServerStdio",
+			File:     "schema.json",
+			Property: "command",
+		},
+		{
+			Type:     "ReadTextFileRequest",
+			Def:      "ReadTextFileRequest",
+			File:     "schema.json",
+			Property: "path",
+		},
+		{
+			Type:     "WriteTextFileRequest",
+			Def:      "WriteTextFileRequest",
+			File:     "schema.json",
+			Property: "path",
+		},
+		{
+			Type:     "CreateTerminalRequest",
+			Def:      "CreateTerminalRequest",
+			File:     "schema.json",
+			Property: "cwd",
+		},
+		{
+			Type:     "ToolCallLocation",
+			Def:      "ToolCallLocation",
+			File:     "schema.json",
+			Property: "path",
+		},
+		{
+			Type:     "Diff",
+			Def:      "Diff",
+			File:     "schema.json",
+			Property: "path",
 		},
 	}
 }

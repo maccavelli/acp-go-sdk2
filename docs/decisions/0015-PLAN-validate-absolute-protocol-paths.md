@@ -152,10 +152,10 @@ Out of scope:
    * `fields.go`: `Field` gains an unexported `prop *load.Definition`, set by `objectFields` and `plainFields`; `Facts` gains
      `AbsolutePath bool`.
    * `model.go`: before `buildValidations`, a pass resolves each rule whose definition the schema has to that property's `*load.Definition`,
-     refusing a rule whose property is missing or is not a string, a `string | null`, or an array of strings (`<Definition>.<Property>:
+     refusing a rule whose property ~~is missing or~~ is not a string, a `string | null`, or an array of strings (`<Definition>.<Property>:
      an absolute-path rule needs a string, an optional string, or an array of strings`), then sets `Facts.AbsolutePath` on every field of
-     every type, inline variants included, whose `prop` is one of them. A rule whose definition the schema lacks is skipped, as the method
-     rules are.
+     every type, inline variants included, whose `prop` is one of them. A rule whose definition ~~the schema lacks~~ or property the schema
+     lacks is skipped, as the method rules are (amended in step 4's deviation).
    * `validate.go`: `CheckAbsolutePath`, built by `ownChecks` for a field with the fact, in the field's shape; the type validates.
    * `internal/emit/types.go`: every `Validate` becomes `func (v *T) Validate() error { return v.validate(filepath.IsAbs) }` and an
      unexported `func (v *T) validate(abs func(string) bool) error` with today's body; `validateCall` calls `x.validate(abs)`;
@@ -164,14 +164,16 @@ Out of scope:
      element).
    * `connection.go`: `isPortableAbs(p string) bool`, true for a path that begins with `/`, with a drive letter, a colon and `\` or `/`, or
      with `\\`.
-   * Regenerate. Asserted: the API listing does not change; `types_gen.go` gains the `validate` methods and the path checks, which appear
+   * Regenerate. Asserted: the API listing ~~does not change~~ gains only `Validate` on `Diff`, `McpServerStdio`, `SessionInfo`,
+     `ToolCallContentDiff` and `ToolCallLocation`, the five types whose only check is a path check (amended in step 4's second deviation);
+     `types_gen.go` gains the `validate` methods, the nested calls from those five types' parents, and the path checks, which appear
      only in the 13 types holding the 18 fields (`NewSessionRequest`, `LoadSessionRequest`, `ResumeSessionRequest`,
      `UnstableForkSessionRequest`, `ListSessionsRequest`, `SessionInfo`, `McpServerStdio`, `ReadTextFileRequest`, `WriteTextFileRequest`,
      `CreateTerminalRequest`, `ToolCallLocation`, `Diff`, `ToolCallContentDiff`); a script counts 18 `is not an absolute path` checks.
    * Tests:
      * `TestProtocolTableAppliesToCommittedSchema` requires the 17 rules to resolve on the committed schema and the 18 fields to carry the
-       fact; a model test requires `Diff`'s rule to reach `ToolCallContentDiff`, and `Build` to refuse a rule on a missing property and on
-       an integer property;
+       fact; a model test requires `Diff`'s rule to reach `ToolCallContentDiff`, and `Build` to ~~refuse a rule on a missing property and~~
+       skip a rule on a missing property and to refuse one on an integer property (amended in step 4's deviation);
      * a root unit test of `isPortableAbs` accepts `/a`, `C:\a`, `C:/a`, `\\server\share` and `\\?\C:\a`, and refuses `""`, `a`, `./a`,
        `\a` and `C:a`; it holds on every host;
      * a new engine case, `accept-absolute-paths.txtar`, defines `NewSessionRequest` (`cwd`, `additionalDirectories`),
@@ -266,7 +268,8 @@ Out of scope:
   applies.
 * A script counts 18 absolute-path checks in `types_gen.go`, in the 13 types named in step 4.
 * The exported API listing, against `23d03b5`, gains exactly `ValidationError` and its `Error`, `ValidationRule` and its seven constants,
-  `WithInboundRewrite`, `WithInboundValidation`, and the five `Roots` methods.
+  `WithInboundRewrite`, `WithInboundValidation`, the five `Roots` methods, and `Validate` on `Diff`, `McpServerStdio`, `SessionInfo`,
+  `ToolCallContentDiff` and `ToolCallLocation` (amended in step 4's second deviation).
 * `go test -race -count=1 ./...` passes at the root and in `cmd/generate`; `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the
   root; `GOOS=windows go vet ./...` passes in both modules; CI passes on `ubuntu-24.04`, `macos-15` and
   `windows-2025` for each pushed step.
@@ -334,3 +337,99 @@ Ran on `main` from `491b853`. The agent did not commit.
   * `Error` returning `""`: `TestValidateSchemaConstraints`, `title below minLength: , want "Notice: title: shorter than minLength 1"`.
 * `make pre-add-check`: `go-precheck: 103 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No untracked Go file.
   `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.
+
+### Step 4 deviation, 2026-10-12: a rule whose property the schema lacks is skipped
+
+Before writing step 4's code, a search found five fixtures, written before this plan, that define a rule's definition without its
+property, for tests of method binding: `testdata/engine/accept-agent-optional.txtar` (`LoadSessionRequest` with only `sessionId`),
+`internal/model/methods_test.go` (`NewSessionRequest` and `LoadSessionRequest`, no properties), `internal/model/protocol_test.go`
+(`LoadSessionRequest`) and `internal/model/model_test.go` (`NewSessionRequest`). The plan said `Build` refuses a rule whose property is
+missing, which would fail all of them; the protocol table's documented principle (`Protocol` in `protocol.go`) is that "Build applies each
+rule only where the schema carries its subject, so a schema without the subject builds as if the rule were absent; it refuses a subject
+whose shape the rule cannot use."
+
+Asked, the owner chose to follow the table's principle: a rule whose definition or property the schema lacks is skipped, and one whose
+property has the wrong shape is refused. `TestProtocolTableAppliesToCommittedSchema`, which requires all 17 rules to apply to the
+committed schema, still catches a rule the schema drifts away from. Not chosen: keeping the refusal and adding the properties to the five
+fixtures. The MADR's item 1 is annotated.
+
+### Step 4 deviation, 2026-10-12: five types gain an exported Validate
+
+With step 4's code generated, the API listing of `git archive HEAD` against the tree added five lines the plan did not name:
+
+```text
+method (*Diff) Validate () error
+method (*McpServerStdio) Validate () error
+method (*SessionInfo) Validate () error
+method (*ToolCallContentDiff) Validate () error
+method (*ToolCallLocation) Validate () error
+```
+
+These five types had no check before; the path check is their first, so under the MADR's item 2 ("Every type with such a check gains or
+keeps `Validate`") and 0012's rule that every validating type has `Validate`, each gains the exported method and the unexported
+`validate`, and their parents gain a nested call: `ListSessionsResponse` (`SessionInfo`), `McpServer` and `UnstableMcpServer`
+(`McpServerStdio`), `ToolCall`, `ToolCallUpdate`, `SessionUpdateToolCall` and `SessionToolCallUpdate` (`ToolCallLocation`), and
+`ToolCallContent` (`ToolCallContentDiff`). The plan's step 4 said the API listing would not change.
+
+Asked, the owner chose to keep the five exported methods, so every validating type keeps one `Validate`, and to amend the plan's step 4
+and Verification. Not chosen: giving these five only the unexported `validate`. The asserted-diff script of step 4 is written to match:
+it accepts, besides the path checks in the 13 types, new `Validate` and `validate` methods only for types among those 13, and new nested
+calls only in parents that hold one of them.
+
+### Step 4, the path rule and the receiving check, 2026-10-12
+
+Ran on `main` from `967dd26`. The agent did not commit. Both deviations above, decided by the owner, ran within this step.
+
+* Model: `protocol.go` gains `PathRule` and `Protocol.AbsolutePaths`, and `newRules` refuses a rule without a definition, property or
+  source, and a repeated one; `acp.go` lists the 17 rules, each with its source sentence (`srcAllPaths`, `srcCwd`, `srcRoots`) and the
+  keys as constants (`keyCwd`, `keyRoots`, `keyPath`, which `goconst` asked for); `fields.go`: `Field` keeps its property (`prop`) and
+  `Facts` gains `AbsolutePath`; `model.go`: `resolveAbsolutePaths`, run before `buildValidations`, resolves each rule to its property's
+  `*load.Definition`, skips a missing definition or property, refuses a property that is not a string, a `string | null` or an array of
+  strings, and records `Model.AbsolutePaths`; `validate.go`: `CheckAbsolutePath`, built in `ownChecks` for any field whose `prop` a rule
+  names, so `ToolCallContentDiff.Path`, built from `Diff.path`'s definition, is checked too.
+* Emitter: `addValidate` writes `Validate()`, which returns `validate(filepath.IsAbs)`, and the unexported `validate(abs func(string)
+  bool)` with the body; nested calls pass `abs`; `absPathStmt` writes the check for a string, a set pointer, and each element of a slice
+  (`Field: fmt.Sprintf("additionalDirectories[%d]", i)`); `validationError` takes the field as an expression. `registry.go` adds
+  `schemaAbsolutePaths()` to `schema_gen_test.go`. `connection.go` gains `isPortableAbs`.
+* Regenerated. The asserted-diff script, after the second deviation: `newly validating: ['Diff', 'McpServerStdio', 'SessionInfo',
+  'ToolCallContentDiff', 'ToolCallLocation']`; `types with path checks:` the 13 types; `parents with new nested calls:
+  ['ListSessionsResponse', 'McpServer', 'SessionToolCallUpdate', 'SessionUpdateToolCall', 'ToolCall', 'ToolCallContent', 'ToolCallUpdate',
+  'UnstableMcpServer']`, each holding one of the five; no change outside `Validate` and `validate` methods; `absolute-path checks: 18`;
+  `asserted diff: ok`. Only `types_gen.go` and `schema_gen_test.go` changed among the generated files. The API listing adds only the
+  five `Validate` methods.
+* Tests:
+  * `internal/model/paths_test.go`, new: `TestAbsolutePathRules` (a string, an optional string and an array checked as `value`, `pointer`
+    and `slice`; `Diff`'s rule reaching the inline variant `ContentDiff`; a rule on an absent definition and one on a missing property
+    skipped; the five-shape `Facts`) and `TestAbsolutePathRuleRefusals` (an integer, an enum, an array of integers; a rule without a source
+    or property; two rules). `TestProtocolTableAppliesToCommittedSchema` requires all 17 rules to apply and 18 checks, with
+    `ToolCallContentDiff`'s.
+  * Engine case `accept-absolute-paths.txtar`, new: its behaviour test refuses `""` and `rel` for `NewSessionRequest.cwd`, names
+    `additionalDirectories[1]`, accepts an unset optional `CreateTerminalRequest.cwd` and refuses a relative one, and refuses a relative
+    path in `Diff` and in `ToolCallContent`'s diff variant (`ToolCallContentDiff`, `path`), each as a `*ValidationError` with
+    `RuleAbsolutePath`; `t.TempDir()` passes.
+  * Root `paths_test.go`, new: `testAbsPath(elem ...string)`, a path under `os.TempDir()`, absolute on every host, which example functions
+    without a `*testing.T` can use (the plan said `t.TempDir()` for tests; one helper serves both); and `TestIsPortableAbs` (`/a`, `/`,
+    `C:\a`, `C:/a`, `c:\`, `\\server\share`, `\\?\C:\a`, `//server/share` accepted; `""`, `a`, `./a`, `../a`, `\a`, `C:a`, `C:`,
+    `1:/a`, `:/a`, `~/a` refused).
+  * `fidelity_test.go`: `empty required string` became `empty path` and `relative path`, refused with their messages; the elicitation
+    message case keeps 0012's rule for a present empty string where no rule applies.
+  * `instances_test.go`: the builder fills a property a rule names with `instancePath` (`filepath.Join(os.TempDir(), "acp")`), found by
+    the identity of its schema node, which `merge` keeps; a rule's property is marked in every schema file that has the definition, as the
+    unstable file carries its own `McpServerStdio` and `ToolCallLocation` for the definitions it promotes. `roundTrip` validates goldens and
+    instances with `validate(isPortableAbs)`.
+  * Host-absolute paths in the tests that send over a connection: `acp_test.go` (13 literals, and the ordering test's expected log),
+    `connection_notification_barrier_test.go`, `example_client_test.go`, `example_gemini_test.go`, `example_agent_test.go` (two
+    locations; its `rawInput` keeps its JSON, which is not a protocol path).
+* `go test -count=1 ./...` passes in `cmd/generate` (seven packages `ok`) and at the root; `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`
+  passes at the root; `GOOS=windows go vet ./...` passes in both modules. The Windows run of the tests is CI's, on the owner's push.
+* Plants, each in its own scratch copy, all `exit=1`:
+  * the rule loop over an empty list: `0 absolute-path rules apply of 17, want 17`, and `TestEngineCases/accept-absolute-paths` failed;
+  * `ReadTextFileRequest.Validate` with a non-empty test in place of `filepath.IsAbs`: `relative path: <nil>, want
+    "ReadTextFileRequest: path: \"rel\" is not an absolute path"`;
+  * the check limited to named types: `ContentDiff: absolute-path checks [], want [Path/value]`, and the committed-schema test counted 17
+    checks without `ToolCallContentDiff`'s;
+  * `isPortableAbs` accepting one leading backslash: `isPortableAbs("\\a") = true, want false`.
+* `make pre-add-check`: `go-precheck: 103 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` after `goconst` asked
+  for the key constants; the untracked `paths_test.go` and `cmd/generate/internal/model/paths_test.go`: `go-precheck: 2 file(s) clean`,
+  with `govulncheck` skipped. `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found
+  nothing.

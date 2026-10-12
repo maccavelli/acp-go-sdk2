@@ -87,7 +87,7 @@ func Example_gemini() {
 		},
 	})
 	sess, _ := conn.NewSession(ctx, NewSessionRequest{
-		Cwd:        "/",
+		Cwd:        testAbsPath(),
 		McpServers: []McpServer{},
 	})
 	_, _ = conn.Prompt(ctx, PromptRequest{

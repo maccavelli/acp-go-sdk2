@@ -32,7 +32,7 @@ func newNotificationBarrierTestPair(t *testing.T, client Client, agent Agent) (*
 func testLoadSessionRequest(sessionID string) LoadSessionRequest {
 	return LoadSessionRequest{
 		SessionId:  SessionId(sessionID),
-		Cwd:        "/",
+		Cwd:        testAbsPath(),
 		McpServers: []McpServer{},
 	}
 }

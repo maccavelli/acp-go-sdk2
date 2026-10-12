@@ -1,0 +1,92 @@
+Definitions with the names the protocol table's absolute-path rules use:
+NewSessionRequest's cwd (a string) and additionalDirectories (an array of
+strings), CreateTerminalRequest's cwd (an optional string), and Diff's path,
+which ToolCallContent's diff variant merges through allOf. Validate refuses
+a value that is not absolute on the host, by property and index, with a
+*ValidationError (0015-MADR-validate-absolute-protocol-paths.md, W1, F1, A4).
+The meta declares $/cancel_request and the schema its smallest definition,
+which the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "NewSessionRequest": {"type": "object", "properties": {"cwd": {"type": "string"}, "additionalDirectories": {"type": "array", "items": {"type": "string"}}}, "required": ["cwd"]},
+  "CreateTerminalRequest": {"type": "object", "properties": {"command": {"type": "string"}, "cwd": {"type": ["string", "null"]}}, "required": ["command"]},
+  "Diff": {"type": "object", "properties": {"path": {"type": "string"}, "newText": {"type": "string"}}, "required": ["path", "newText"]},
+  "ToolCallContent": {"oneOf": [
+    {"type": "object", "properties": {"type": {"type": "string", "const": "diff"}}, "required": ["type"], "allOf": [{"$ref": "#/$defs/Diff"}]},
+    {"type": "object", "properties": {"type": {"type": "string", "const": "terminal"}, "terminalId": {"type": "string"}}, "required": ["type", "terminalId"]}
+  ], "discriminator": {"propertyName": "type"}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type CreateTerminalRequest struct{Command string "json:\"command\""; Cwd *string "json:\"cwd,omitempty\""}
+type Diff struct{NewText string "json:\"newText\""; Path string "json:\"path\""}
+type NewSessionRequest struct{AdditionalDirectories []string "json:\"additionalDirectories,omitempty\""; Cwd string "json:\"cwd\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type ToolCallContent struct{Diff *ToolCallContentDiff "json:\"-\""; Terminal *ToolCallContentTerminal "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type ToolCallContentDiff struct{NewText string "json:\"newText\""; Path string "json:\"path\""; Type string "json:\"type\""}
+type ToolCallContentTerminal struct{TerminalId string "json:\"terminalId\""; Type string "json:\"type\""}
+func (*CancelRequestNotification).Validate() error
+func (*CreateTerminalRequest).UnmarshalJSON(b []byte) error
+func (*CreateTerminalRequest).Validate() error
+func (*Diff).UnmarshalJSON(b []byte) error
+func (*Diff).Validate() error
+func (*NewSessionRequest).UnmarshalJSON(b []byte) error
+func (*NewSessionRequest).Validate() error
+func (ToolCallContent).MarshalJSON() ([]byte, error)
+func (*ToolCallContent).UnmarshalJSON(b []byte) error
+func (*ToolCallContent).Validate() error
+func (*ToolCallContentDiff).UnmarshalJSON(b []byte) error
+func (*ToolCallContentDiff).Validate() error
+func (*ToolCallContentTerminal).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"errors"
+	"testing"
+)
+
+// pathError requires err to be a *ValidationError for an absolute path on
+// type typ and field field.
+func pathError(t *testing.T, what string, err error, typ, field string) {
+	t.Helper()
+	var ve *ValidationError
+	if !errors.As(err, &ve) || ve.Rule != RuleAbsolutePath || ve.Type != typ || ve.Field != field {
+		t.Errorf("%s: Validate() = %v, want an absolute-path error on %s %s", what, err, typ, field)
+	}
+}
+
+// Each shape refuses "" and a relative path, and accepts an absolute one.
+func TestAbsolutePaths(t *testing.T) {
+	abs := t.TempDir()
+	if err := (&NewSessionRequest{Cwd: abs, AdditionalDirectories: []string{abs}}).Validate(); err != nil {
+		t.Errorf("absolute paths: %v", err)
+	}
+	pathError(t, "empty cwd", (&NewSessionRequest{}).Validate(), "NewSessionRequest", "cwd")
+	pathError(t, "relative cwd", (&NewSessionRequest{Cwd: "rel"}).Validate(), "NewSessionRequest", "cwd")
+	pathError(t, "relative directory", (&NewSessionRequest{Cwd: abs, AdditionalDirectories: []string{abs, "rel"}}).Validate(),
+		"NewSessionRequest", "additionalDirectories[1]")
+
+	if err := (&CreateTerminalRequest{Command: "c"}).Validate(); err != nil {
+		t.Errorf("unset optional cwd: %v", err)
+	}
+	rel := "rel"
+	pathError(t, "relative optional cwd", (&CreateTerminalRequest{Command: "c", Cwd: &rel}).Validate(), "CreateTerminalRequest", "cwd")
+
+	pathError(t, "relative diff path", (&Diff{Path: "rel"}).Validate(), "Diff", "path")
+	u := ToolCallContent{Diff: &ToolCallContentDiff{Type: "diff", Path: "rel"}}
+	pathError(t, "relative path in the diff variant", u.Validate(), "ToolCallContentDiff", "path")
+	u.Diff.Path = abs
+	if err := u.Validate(); err != nil {
+		t.Errorf("absolute path in the diff variant: %v", err)
+	}
+}

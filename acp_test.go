@@ -441,7 +441,7 @@ func TestAgentDispatch_AllowsPartialUnstableMethodImplementation(t *testing.T) {
 		sessionCancels: make(map[string]context.CancelFunc),
 	}
 
-	params, err := json.Marshal(UnstableForkSessionRequest{Cwd: "/tmp", SessionId: "source-session"})
+	params, err := json.Marshal(UnstableForkSessionRequest{Cwd: testAbsPath("tmp"), SessionId: "source-session"})
 	if err != nil {
 		t.Fatalf("marshal request params: %v", err)
 	}
@@ -501,12 +501,12 @@ func TestConnectionHandlesErrorsBidirectional(t *testing.T) {
 	}, a2cW, c2aR)
 
 	// Client->Agent direction: expect error
-	if _, err := agentConn.WriteTextFile(ctx, WriteTextFileRequest{Path: "/test.txt", Content: "test", SessionId: "test-session"}); err == nil {
+	if _, err := agentConn.WriteTextFile(ctx, WriteTextFileRequest{Path: testAbsPath("test.txt"), Content: "test", SessionId: "test-session"}); err == nil {
 		t.Fatalf("expected error for writeTextFile, got nil")
 	}
 
 	// Agent->Client direction: expect error
-	if _, err := c.NewSession(ctx, NewSessionRequest{Cwd: "/test", McpServers: []McpServer{}}); err == nil {
+	if _, err := c.NewSession(ctx, NewSessionRequest{Cwd: testAbsPath("test"), McpServers: []McpServer{}}); err == nil {
 		t.Fatalf("expected error for newSession, got nil")
 	}
 }
@@ -557,9 +557,9 @@ func TestConnectionHandlesConcurrentRequests(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, 3)
 	for i, p := range []WriteTextFileRequest{
-		{Path: "/file1.txt", Content: "content1", SessionId: "session1"},
-		{Path: "/file2.txt", Content: "content2", SessionId: "session1"},
-		{Path: "/file3.txt", Content: "content3", SessionId: "session1"},
+		{Path: testAbsPath("file1.txt"), Content: "content1", SessionId: "session1"},
+		{Path: testAbsPath("file2.txt"), Content: "content2", SessionId: "session1"},
+		{Path: testAbsPath("file3.txt"), Content: "content3", SessionId: "session1"},
 	} {
 		wg.Add(1)
 		idx := i
@@ -637,13 +637,13 @@ func TestConnectionHandlesMessageOrdering(t *testing.T) {
 		},
 	}, a2cW, c2aR)
 
-	if _, err := cs.NewSession(context.Background(), NewSessionRequest{Cwd: "/test", McpServers: []McpServer{}}); err != nil {
+	if _, err := cs.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath("test"), McpServers: []McpServer{}}); err != nil {
 		t.Fatalf("newSession error: %v", err)
 	}
-	if _, err := as.WriteTextFile(context.Background(), WriteTextFileRequest{Path: "/test.txt", Content: "test", SessionId: "test-session"}); err != nil {
+	if _, err := as.WriteTextFile(context.Background(), WriteTextFileRequest{Path: testAbsPath("test.txt"), Content: "test", SessionId: "test-session"}); err != nil {
 		t.Fatalf("writeTextFile error: %v", err)
 	}
-	if _, err := as.ReadTextFile(context.Background(), ReadTextFileRequest{Path: "/test.txt", SessionId: "test-session"}); err != nil {
+	if _, err := as.ReadTextFile(context.Background(), ReadTextFileRequest{Path: testAbsPath("test.txt"), SessionId: "test-session"}); err != nil {
 		t.Fatalf("readTextFile error: %v", err)
 	}
 	if _, err := as.RequestPermission(context.Background(), RequestPermissionRequest{
@@ -664,9 +664,9 @@ func TestConnectionHandlesMessageOrdering(t *testing.T) {
 	}
 
 	expected := []string{
-		"newSession called: /test",
-		"writeTextFile called: /test.txt",
-		"readTextFile called: /test.txt",
+		"newSession called: " + testAbsPath("test"),
+		"writeTextFile called: " + testAbsPath("test.txt"),
+		"readTextFile called: " + testAbsPath("test.txt"),
 		"requestPermission called: Execute command",
 	}
 
@@ -1038,7 +1038,7 @@ func TestPromptCancellationSendsCancelAndAllowsNewSession(t *testing.T) {
 	if _, err := cs.Initialize(context.Background(), InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
-	sess, err := cs.NewSession(context.Background(), NewSessionRequest{Cwd: "/", McpServers: []McpServer{}})
+	sess, err := cs.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
 	if err != nil {
 		t.Fatalf("newSession: %v", err)
 	}
@@ -1072,7 +1072,7 @@ func TestPromptCancellationSendsCancelAndAllowsNewSession(t *testing.T) {
 	}
 
 	// Connection remains usable: create another session
-	if _, err := cs.NewSession(context.Background(), NewSessionRequest{Cwd: "/", McpServers: []McpServer{}}); err != nil {
+	if _, err := cs.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}}); err != nil {
 		t.Fatalf("newSession after cancel: %v", err)
 	}
 }
@@ -1159,7 +1159,7 @@ func TestPromptWaitsForSessionUpdatesComplete(t *testing.T) {
 	if _, err := c.Initialize(context.Background(), InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
-	sess, err := c.NewSession(context.Background(), NewSessionRequest{Cwd: "/", McpServers: []McpServer{}})
+	sess, err := c.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
 	if err != nil {
 		t.Fatalf("newSession: %v", err)
 	}
@@ -1246,7 +1246,7 @@ func TestRequestHandlerCanMakeNestedRequest(t *testing.T) {
 	if _, err := c.Initialize(context.Background(), InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
-	sess, err := c.NewSession(context.Background(), NewSessionRequest{Cwd: "/", McpServers: []McpServer{}})
+	sess, err := c.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
 	if err != nil {
 		t.Fatalf("newSession: %v", err)
 	}

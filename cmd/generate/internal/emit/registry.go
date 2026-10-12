@@ -46,6 +46,10 @@ func registryFile(m *model.Model) *goFile {
 		"result, nil for a notification or a request without one.",
 	}, field("Side", id("string")), field("Wire", id("string")), field("Params", newFunc), field("Result", newFunc),
 		field("Notification", id("bool")))
+	structDecl("schemaAbsolutePath", []string{
+		"schemaAbsolutePath is a property the protocol requires to be an absolute path: the Go",
+		"type of its definition, the definition's key in File, and the property.",
+	}, field("Type", id("string")), field("Def", id("string")), field("File", id("string")), field("Property", id("string")))
 	structDecl("schemaHelper", []string{
 		"schemaHelper is a union constructor of helpers_gen.go: the union, the variant field",
 		"it sets, and New, which calls it with each argument's zero value.",
@@ -93,6 +97,13 @@ func registryFile(m *model.Model) *goFile {
 		"schemaMethods returns every wire method: the agent's, the client's, then the protocol's.")
 	listFunc(f, "schemaHelpers", "schemaHelper", helperEntries(f, m, newFunc),
 		"schemaHelpers returns every union constructor, in the order of helpers_gen.go.")
+	var paths []ast.Expr
+	for _, pp := range m.AbsolutePaths {
+		paths = append(paths, composite(nil, kv(id("Type"), str(pp.Type)), kv(id("Def"), str(pp.Origin.Key)),
+			kv(id("File"), str(pp.Origin.File)), kv(id("Property"), str(pp.Property))))
+	}
+	listFunc(f, "schemaAbsolutePaths", "schemaAbsolutePath", paths,
+		"schemaAbsolutePaths returns every absolute-path rule of the protocol table that applies to the schema.")
 
 	recorder(f, "recordingAgent", "a", m.AgentMethods, "agent")
 	recorder(f, "recordingClient", "c", m.ClientMethods, "client")

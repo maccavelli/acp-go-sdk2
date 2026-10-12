@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -54,10 +55,31 @@ var shapes = []instanceShape{{false, false}, {true, false}, {true, true}}
 // required ones are built, so recursive definitions end.
 const maxDepth = 3
 
-// builder builds instances of the nodes of one schema file.
-type builder struct{ defs map[string]any }
+// builder builds instances of the nodes of one schema file. abs holds the
+// property nodes the protocol requires to be absolute paths, by identity,
+// which merge keeps, so a property reached through allOf is found too.
+type builder struct {
+	defs map[string]any
+	abs  map[uintptr]bool
+}
 
-func newBuilder(file string) builder { return builder{defs: schemaDefs()[file]} }
+func newBuilder(file string) builder {
+	b := builder{defs: schemaDefs()[file], abs: map[uintptr]bool{}}
+	// A definition with the rule's key in this file is the same definition the
+	// other file carries, as the merge treats it, so the rule applies here too.
+	for _, ap := range schemaAbsolutePaths() {
+		props, _ := b.def(ap.Def)["properties"].(schemaNode)
+		if n, ok := props[ap.Property].(schemaNode); ok {
+			b.abs[reflect.ValueOf(n).Pointer()] = true
+		}
+	}
+	return b
+}
+
+// instancePath is the absolute path an instance gives a property the protocol
+// requires to be one: absolute on every host
+// (0015-PLAN-validate-absolute-protocol-paths.md, step 4).
+var instancePath = filepath.Join(os.TempDir(), "acp")
 
 func (b builder) def(name string) schemaNode {
 	n, _ := b.defs[name].(schemaNode)
@@ -242,8 +264,17 @@ func (b builder) object(n schemaNode, depth int, s instanceShape) schemaNode {
 	props, _ := n["properties"].(schemaNode)
 	full := s.full && depth < maxDepth
 	for _, k := range sortedKeys(props) {
-		if full || slices.Contains(required, any(k)) {
-			out[k] = b.value(props[k].(schemaNode), depth+1, s)
+		if !full && !slices.Contains(required, any(k)) {
+			continue
+		}
+		pn := props[k].(schemaNode)
+		switch {
+		case b.abs[reflect.ValueOf(pn).Pointer()] && primaryType(pn) == "array":
+			out[k] = []any{instancePath}
+		case b.abs[reflect.ValueOf(pn).Pointer()]:
+			out[k] = instancePath
+		default:
+			out[k] = b.value(pn, depth+1, s)
 		}
 	}
 	if full {

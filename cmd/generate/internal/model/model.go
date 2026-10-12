@@ -58,6 +58,11 @@ type Model struct {
 	Types  []*Type
 	byName map[string]*Type
 
+	// AbsolutePaths are the protocol table's absolute-path rules that apply
+	// to this schema, in the table's order; absProps holds their properties.
+	AbsolutePaths []PathProperty
+	absProps      map[*load.Definition]bool
+
 	// AgentMethodConsts, ClientMethodConsts, and ProtocolMethodConsts map a
 	// meta method key to the name of its constant.
 	AgentMethodConsts    map[string]string
@@ -298,6 +303,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		m.byName[name] = t
 	}
 	m.dropStructOmitempty()
+	if err := m.resolveAbsolutePaths(r); err != nil {
+		return nil, err
+	}
 	if err := m.buildValidations(); err != nil {
 		return nil, err
 	}
@@ -1076,4 +1084,53 @@ func variantIsObject(schema *load.Schema, v *load.Definition, vi *Variant) bool 
 	}
 	d = expandAllOf(schema, d)
 	return d != nil && (primaryType(d) == schemaTypeObject || len(d.Properties) > 0)
+}
+
+// PathProperty is an absolute-path rule that applies to the schema: the Go
+// type of its definition, where the definition comes from, and the property.
+type PathProperty struct {
+	Type     string
+	Origin   load.Origin
+	Property string
+}
+
+// resolveAbsolutePaths resolves each absolute-path rule of the table to its
+// property's definition. A rule whose definition or property the schema
+// lacks is skipped, as the method rules are; one whose property is not a
+// string, an optional string, or an array of strings is refused
+// (0015-PLAN-validate-absolute-protocol-paths.md, step 4).
+func (m *Model) resolveAbsolutePaths(r *rules) error {
+	m.absProps = map[*load.Definition]bool{}
+	if r.table == nil {
+		return nil
+	}
+	for _, rule := range r.table.AbsolutePaths {
+		t := m.Type(rule.Definition)
+		def := m.schema.Defs[rule.Definition]
+		if t == nil || def == nil {
+			continue
+		}
+		prop := expandAllOf(m.schema, def).Properties[rule.Property]
+		if prop == nil {
+			continue
+		}
+		if !isPathShape(prop) {
+			return fmt.Errorf("%s.%s: an absolute-path rule needs a string, an optional string, or an array of strings", rule.Definition, rule.Property)
+		}
+		m.absProps[prop] = true
+		m.AbsolutePaths = append(m.AbsolutePaths, PathProperty{Type: t.Name, Origin: t.Origin, Property: rule.Property})
+	}
+	return nil
+}
+
+// isPathShape reports whether a property is a string, a string or null, or
+// an array of strings.
+func isPathShape(prop *load.Definition) bool {
+	switch primaryType(prop) {
+	case schemaTypeString:
+		return len(prop.Enum) == 0 && prop.Const == nil
+	case schemaTypeArray:
+		return prop.Items != nil && primaryType(prop.Items) == schemaTypeString
+	}
+	return false
 }

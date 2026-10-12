@@ -105,6 +105,9 @@ type Facts struct {
 	// DefaultOnError and SkipInvalidItems are the x-deserialize keywords.
 	DefaultOnError   bool
 	SkipInvalidItems bool
+	// AbsolutePath is set when a protocol-table rule requires the property
+	// to be an absolute path (0015-MADR-validate-absolute-protocol-paths.md).
+	AbsolutePath bool
 }
 
 // Field is one struct field.
@@ -128,6 +131,9 @@ type Field struct {
 	// 2026-10-11).
 	NullIsAbsent bool
 	Facts        Facts
+	// prop is the schema property the field is built from; every type that
+	// holds the property, an inline allOf variant included, shares it.
+	prop *load.Definition
 }
 
 // Struct is a generated struct other than a definition's own type.
@@ -375,7 +381,7 @@ func objectFields(t *Type) ([]*Field, error) {
 		if err != nil {
 			return nil, err
 		}
-		fld := &Field{Key: key, Name: name, Tag: key, Required: req[key], Doc: docLines(prop.Description), Facts: factsOf(prop)}
+		fld := &Field{Key: key, Name: name, Tag: key, Required: req[key], Doc: docLines(prop.Description), Facts: factsOf(prop), prop: prop}
 		if prop.Default != nil {
 			// Whether the field's zero value is nil (slice or map), for the encode fill-in.
 			pt := primaryType(prop)
@@ -424,7 +430,7 @@ func plainFields(owner string, props map[string]*load.Definition, req map[string
 		if err != nil {
 			return nil, err
 		}
-		fld := &Field{Key: key, Name: name, Tag: key, Required: req[key], Doc: docLines(prop.Description), Facts: factsOf(prop)}
+		fld := &Field{Key: key, Name: name, Tag: key, Required: req[key], Doc: docLines(prop.Description), Facts: factsOf(prop), prop: prop}
 		fld.Type = optionalTypeRef(prop)
 		fld.NullIsAbsent = !fld.Required && fld.Type.Kind == RefRaw
 		if fld.Required {

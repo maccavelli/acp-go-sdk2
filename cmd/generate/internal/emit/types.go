@@ -841,7 +841,7 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 		body = append(body, ifStmt(nil, binary(dot("u", unknownField), token.NEQ, nilExpr()), incr(id("count"))))
 	}
 	body = append(body, ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
-		ret(validationError(name, "", nil, "RuleOneVariant", str(name+" must have exactly one variant set")))))
+		ret(validationError(name, nil, nil, "RuleOneVariant", str(name+" must have exactly one variant set")))))
 	if ca := catchAllOf(t); ca != nil && len(ca.Excluded) > 0 {
 		// The schema's not excludes these values from the catch-all; the
 		// peer would read them as another variant
@@ -853,7 +853,7 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 		}
 		body = append(body, ifStmt(nil, binary(dot("u", ca.FieldName), token.NEQ, nilExpr()),
 			switchStmt(value, caseOf(list,
-				ret(validationError(name, t.DiscKey, value, "RuleExcludedValue",
+				ret(validationError(name, str(t.DiscKey), value, "RuleExcludedValue",
 					call(f.qual(pkgFmt, "Sprintf"), str(name+": variant "+ca.FieldName+": "+t.DiscKey+" %q names another variant"), value)))))))
 	}
 	for _, vi := range variants {
@@ -866,14 +866,21 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 	return append(body, ret(nilExpr()))
 }
 
-// validateMethod is func (recv *name) Validate() error { body }.
-func validateMethod(recv, name string, body ...ast.Stmt) *ast.FuncDecl {
-	return method(param(recv, star(id(name))), "Validate", funcType(nil, param("", id("error"))), body...)
+// addValidate adds Validate, which checks with the receiving host's rule for
+// absolute paths, and validate, which takes the rule and holds the body, so
+// the SDK can check what it sends with the portable rule
+// (0015-MADR-validate-absolute-protocol-paths.md, A4).
+func addValidate(f *goFile, recv, name string, body ...ast.Stmt) {
+	f.add(method(param(recv, star(id(name))), "Validate", funcType(nil, param("", id("error"))),
+		ret(call(sel(id(recv), "validate"), f.qual("path/filepath", "IsAbs")))))
+	f.line()
+	abs := funcType([]*ast.Field{param("", id("string"))}, param("", id("bool")))
+	f.add(method(param(recv, star(id(name))), "validate", funcType([]*ast.Field{param("abs", abs)}, param("", id("error"))), body...))
 }
 
 // validateCall is if err := x.Validate(); err != nil { return fmt.Errorf(format, args..., err) }.
 func validateCall(f *goFile, x ast.Expr, format string, args ...ast.Expr) ast.Stmt {
-	return ifStmt(define(exprs(id("err")), call(sel(x, "Validate"))), errNotNil(),
+	return ifStmt(define(exprs(id("err")), call(sel(x, "validate"), id("abs"))), errNotNil(),
 		ret(call(f.qual(pkgFmt, "Errorf"), append(append([]ast.Expr{str(format)}, args...), id("err"))...)))
 }
 
@@ -890,7 +897,7 @@ func emitValidate(f *goFile, name string, val *model.Validation) {
 			body = append(body, ifStmt(nil, binary(dot("v", mb.Field), token.NEQ, nilExpr()), incr(id("count"))))
 		}
 		body = append(body, ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
-			ret(validationError(name, "", nil, "RuleOneMember", str(name+" must have exactly one member set")))))
+			ret(validationError(name, nil, nil, "RuleOneMember", str(name+" must have exactly one member set")))))
 		for _, mb := range val.Members {
 			if mb.Validates {
 				body = append(body, ifStmt(nil, binary(dot("v", mb.Field), token.NEQ, nilExpr()),
@@ -898,7 +905,7 @@ func emitValidate(f *goFile, name string, val *model.Validation) {
 			}
 		}
 	}
-	f.add(validateMethod("v", name, append(body, ret(nilExpr()))...))
+	addValidate(f, "v", name, append(body, ret(nilExpr()))...)
 	f.line()
 }
 
@@ -906,6 +913,9 @@ func emitValidate(f *goFile, name string, val *model.Validation) {
 func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
 	field := dot("v", c.Field)
 	where := name + ": " + c.Key
+	if c.Kind == model.CheckAbsolutePath {
+		return absPathStmt(f, name, c)
+	}
 	if c.Kind == model.CheckNested {
 		switch c.Shape {
 		case model.RefPointer:
@@ -942,7 +952,32 @@ func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
 	if c.Shape == model.RefPointer {
 		cond = binary(binary(dot("v", c.Field), token.NEQ, nilExpr()), token.LAND, cond)
 	}
-	return ifStmt(nil, cond, ret(validationError(name, c.Key, value, rule, str(msg))))
+	return ifStmt(nil, cond, ret(validationError(name, str(c.Key), value, rule, str(msg))))
+}
+
+// absPathStmt checks a path the protocol requires to be absolute with the
+// rule abs, by the field's shape: a string, a pointer to one when set, or
+// each element of a slice, named by its index
+// (0015-MADR-validate-absolute-protocol-paths.md, item 2).
+func absPathStmt(f *goFile, name string, c model.Check) ast.Stmt {
+	sprintf := func(format string, args ...ast.Expr) ast.Expr {
+		return call(f.qual(pkgFmt, "Sprintf"), append([]ast.Expr{str(format)}, args...)...)
+	}
+	where := name + ": " + c.Key
+	fail := func(value ast.Expr) ast.Stmt {
+		return ret(validationError(name, str(c.Key), value, "RuleAbsolutePath", sprintf(where+": %q is not an absolute path", value)))
+	}
+	field := dot("v", c.Field)
+	switch c.Shape {
+	case model.RefPointer:
+		return ifStmt(nil, binary(binary(field, token.NEQ, nilExpr()), token.LAND, not(call(id("abs"), star(field)))), fail(star(field)))
+	case model.RefSlice:
+		elem := sprintf(c.Key+"[%d]", id("i"))
+		return rangeStmt(id("i"), id("x"), field, ifStmt(nil, not(call(id("abs"), id("x"))),
+			ret(validationError(name, elem, id("x"), "RuleAbsolutePath", sprintf(where+"[%d]: %q is not an absolute path", id("i"), id("x"))))))
+	default:
+		return ifStmt(nil, not(call(id("abs"), field)), fail(field))
+	}
 }
 
 // validationError is &ValidationError{...} for a failed check: the Go type,
@@ -950,10 +985,10 @@ func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
 // (nil for a count), the rule, and the message, which is the text Validate
 // returned before the type existed
 // (0015-PLAN-validate-absolute-protocol-paths.md, step 3).
-func validationError(typeName, key string, value ast.Expr, rule string, msg ast.Expr) ast.Expr {
+func validationError(typeName string, field, value ast.Expr, rule string, msg ast.Expr) ast.Expr {
 	elts := []ast.Expr{kv(id("Type"), str(typeName))}
-	if key != "" {
-		elts = append(elts, kv(id("Field"), str(key)))
+	if field != nil {
+		elts = append(elts, kv(id("Field"), field))
 	}
 	if value != nil {
 		elts = append(elts, kv(id("Value"), value))
@@ -1017,6 +1052,6 @@ func emitUnion(f *goFile, t *model.Type) {
 	f.line()
 
 	// Every union has exactly one variant set, which validates when it can.
-	f.add(validateMethod("u", name, unionValidateBody(f, t, variants)...))
+	addValidate(f, "u", name, unionValidateBody(f, t, variants)...)
 	f.line()
 }

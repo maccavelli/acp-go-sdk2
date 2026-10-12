@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -206,6 +207,10 @@ func (v *AgentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *AgentNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *AgentNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -235,7 +240,11 @@ func (v *AgentRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *AgentRequest) Validate() error {
-	if err := v.Id.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *AgentRequest) validate(abs func(string) bool) error {
+	if err := v.Id.validate(abs); err != nil {
 		return fmt.Errorf("AgentRequest: id: %w", err)
 	}
 	return nil
@@ -264,7 +273,11 @@ func (v *AgentResult) UnmarshalJSON(b []byte) error {
 }
 
 func (v *AgentResult) Validate() error {
-	if err := v.Id.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *AgentResult) validate(abs func(string) bool) error {
+	if err := v.Id.validate(abs); err != nil {
 		return fmt.Errorf("AgentResult: id: %w", err)
 	}
 	return nil
@@ -293,7 +306,11 @@ func (v *AgentError) UnmarshalJSON(b []byte) error {
 }
 
 func (v *AgentError) Validate() error {
-	if err := v.Id.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *AgentError) validate(abs func(string) bool) error {
+	if err := v.Id.validate(abs); err != nil {
 		return fmt.Errorf("AgentError: id: %w", err)
 	}
 	return nil
@@ -401,6 +418,10 @@ func (u AgentResponse) MarshalJSON() ([]byte, error) {
 }
 
 func (u *AgentResponse) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *AgentResponse) validate(abs func(string) bool) error {
 	var count int
 	if u.Result != nil {
 		count++
@@ -416,12 +437,12 @@ func (u *AgentResponse) Validate() error {
 		}
 	}
 	if u.Result != nil {
-		if err := u.Result.Validate(); err != nil {
+		if err := u.Result.validate(abs); err != nil {
 			return fmt.Errorf("AgentResponse: variant Result: %w", err)
 		}
 	}
 	if u.Error != nil {
-		if err := u.Error.Validate(); err != nil {
+		if err := u.Error.validate(abs); err != nil {
 			return fmt.Errorf("AgentResponse: variant Error: %w", err)
 		}
 	}
@@ -713,6 +734,10 @@ func (u AuthMethod) MarshalJSON() ([]byte, error) {
 }
 
 func (u *AuthMethod) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *AuthMethod) validate(abs func(string) bool) error {
 	var count int
 	if u.Terminal != nil {
 		count++
@@ -858,6 +883,10 @@ func (v *AuthenticateRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *AuthenticateRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *AuthenticateRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -891,6 +920,10 @@ func (v *AuthenticateResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *AuthenticateResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *AuthenticateResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -932,8 +965,12 @@ func (v *AvailableCommand) UnmarshalJSON(b []byte) error {
 }
 
 func (v *AvailableCommand) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *AvailableCommand) validate(abs func(string) bool) error {
 	if v.Input != nil {
-		if err := v.Input.Validate(); err != nil {
+		if err := v.Input.validate(abs); err != nil {
 			return fmt.Errorf("AvailableCommand: input: %w", err)
 		}
 	}
@@ -1002,6 +1039,10 @@ func (u AvailableCommandInput) MarshalJSON() ([]byte, error) {
 }
 
 func (u *AvailableCommandInput) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *AvailableCommandInput) validate(abs func(string) bool) error {
 	var count int
 	if u.Unstructured != nil {
 		count++
@@ -1062,8 +1103,12 @@ func (v *AvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *AvailableCommandsUpdate) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *AvailableCommandsUpdate) validate(abs func(string) bool) error {
 	for i := range v.AvailableCommands {
-		if err := v.AvailableCommands[i].Validate(); err != nil {
+		if err := v.AvailableCommands[i].validate(abs); err != nil {
 			return fmt.Errorf("AvailableCommandsUpdate: availableCommands[%d]: %w", i, err)
 		}
 	}
@@ -1221,6 +1266,10 @@ func (v *CancelNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CancelNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CancelNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -1258,7 +1307,11 @@ func (v *CancelRequestNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CancelRequestNotification) Validate() error {
-	if err := v.RequestId.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CancelRequestNotification) validate(abs func(string) bool) error {
+	if err := v.RequestId.validate(abs); err != nil {
 		return fmt.Errorf("CancelRequestNotification: requestId: %w", err)
 	}
 	return nil
@@ -1474,6 +1527,10 @@ func (v *ClientNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ClientNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ClientNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -1503,7 +1560,11 @@ func (v *ClientRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ClientRequest) Validate() error {
-	if err := v.Id.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ClientRequest) validate(abs func(string) bool) error {
+	if err := v.Id.validate(abs); err != nil {
 		return fmt.Errorf("ClientRequest: id: %w", err)
 	}
 	return nil
@@ -1532,7 +1593,11 @@ func (v *ClientResult) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ClientResult) Validate() error {
-	if err := v.Id.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ClientResult) validate(abs func(string) bool) error {
+	if err := v.Id.validate(abs); err != nil {
 		return fmt.Errorf("ClientResult: id: %w", err)
 	}
 	return nil
@@ -1561,7 +1626,11 @@ func (v *ClientError) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ClientError) Validate() error {
-	if err := v.Id.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ClientError) validate(abs func(string) bool) error {
+	if err := v.Id.validate(abs); err != nil {
 		return fmt.Errorf("ClientError: id: %w", err)
 	}
 	return nil
@@ -1669,6 +1738,10 @@ func (u ClientResponse) MarshalJSON() ([]byte, error) {
 }
 
 func (u *ClientResponse) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *ClientResponse) validate(abs func(string) bool) error {
 	var count int
 	if u.Result != nil {
 		count++
@@ -1684,12 +1757,12 @@ func (u *ClientResponse) Validate() error {
 		}
 	}
 	if u.Result != nil {
-		if err := u.Result.Validate(); err != nil {
+		if err := u.Result.validate(abs); err != nil {
 			return fmt.Errorf("ClientResponse: variant Result: %w", err)
 		}
 	}
 	if u.Error != nil {
-		if err := u.Error.Validate(); err != nil {
+		if err := u.Error.validate(abs); err != nil {
 			return fmt.Errorf("ClientResponse: variant Error: %w", err)
 		}
 	}
@@ -1782,6 +1855,10 @@ func (v *CloseSessionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CloseSessionRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CloseSessionRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -1815,6 +1892,10 @@ func (v *CloseSessionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CloseSessionResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CloseSessionResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -1867,7 +1948,11 @@ func (v *CompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CompactionSummaryChunk) Validate() error {
-	if err := v.Content.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CompactionSummaryChunk) validate(abs func(string) bool) error {
+	if err := v.Content.validate(abs); err != nil {
 		return fmt.Errorf("CompactionSummaryChunk: content: %w", err)
 	}
 	return nil
@@ -1920,8 +2005,12 @@ func (v *CompactionUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CompactionUpdate) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CompactionUpdate) validate(abs func(string) bool) error {
 	for i := range v.Summary {
-		if err := v.Summary[i].Validate(); err != nil {
+		if err := v.Summary[i].validate(abs); err != nil {
 			return fmt.Errorf("CompactionUpdate: summary[%d]: %w", i, err)
 		}
 	}
@@ -1962,6 +2051,10 @@ func (v *CompleteElicitationNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CompleteElicitationNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CompleteElicitationNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -2011,8 +2104,12 @@ func (v *ConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ConfigOptionUpdate) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ConfigOptionUpdate) validate(abs func(string) bool) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].Validate(); err != nil {
+		if err := v.ConfigOptions[i].validate(abs); err != nil {
 			return fmt.Errorf("ConfigOptionUpdate: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -2051,7 +2148,11 @@ func (v *Content) UnmarshalJSON(b []byte) error {
 }
 
 func (v *Content) Validate() error {
-	if err := v.Content.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *Content) validate(abs func(string) bool) error {
+	if err := v.Content.validate(abs); err != nil {
 		return fmt.Errorf("Content: content: %w", err)
 	}
 	return nil
@@ -2277,7 +2378,11 @@ func (v *ContentBlockResource) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ContentBlockResource) Validate() error {
-	if err := v.Resource.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ContentBlockResource) validate(abs func(string) bool) error {
+	if err := v.Resource.validate(abs); err != nil {
 		return fmt.Errorf("ContentBlockResource: resource: %w", err)
 	}
 	return nil
@@ -2549,6 +2654,10 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 }
 
 func (u *ContentBlock) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *ContentBlock) validate(abs func(string) bool) error {
 	var count int
 	if u.Text != nil {
 		count++
@@ -2576,7 +2685,7 @@ func (u *ContentBlock) Validate() error {
 		}
 	}
 	if u.Resource != nil {
-		if err := u.Resource.Validate(); err != nil {
+		if err := u.Resource.validate(abs); err != nil {
 			return fmt.Errorf("ContentBlock: variant Resource: %w", err)
 		}
 	}
@@ -2622,7 +2731,11 @@ func (v *ContentChunk) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ContentChunk) Validate() error {
-	if err := v.Content.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ContentChunk) validate(abs func(string) bool) error {
+	if err := v.Content.validate(abs); err != nil {
 		return fmt.Errorf("ContentChunk: content: %w", err)
 	}
 	return nil
@@ -2741,7 +2854,11 @@ func (v *CreateElicitationForm) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CreateElicitationForm) Validate() error {
-	if err := v.RequestedSchema.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CreateElicitationForm) validate(abs func(string) bool) error {
+	if err := v.RequestedSchema.validate(abs); err != nil {
 		return fmt.Errorf("CreateElicitationForm: requestedSchema: %w", err)
 	}
 	var count int
@@ -2759,7 +2876,7 @@ func (v *CreateElicitationForm) Validate() error {
 		}
 	}
 	if v.Request != nil {
-		if err := v.Request.Validate(); err != nil {
+		if err := v.Request.validate(abs); err != nil {
 			return fmt.Errorf("CreateElicitationForm: member Request: %w", err)
 		}
 	}
@@ -2848,6 +2965,10 @@ func (v *CreateElicitationUrl) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CreateElicitationUrl) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CreateElicitationUrl) validate(abs func(string) bool) error {
 	var count int
 	if v.Session != nil {
 		count++
@@ -2863,7 +2984,7 @@ func (v *CreateElicitationUrl) Validate() error {
 		}
 	}
 	if v.Request != nil {
-		if err := v.Request.Validate(); err != nil {
+		if err := v.Request.validate(abs); err != nil {
 			return fmt.Errorf("CreateElicitationUrl: member Request: %w", err)
 		}
 	}
@@ -3096,6 +3217,10 @@ func (u CreateElicitationRequest) MarshalJSON() ([]byte, error) {
 }
 
 func (u *CreateElicitationRequest) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *CreateElicitationRequest) validate(abs func(string) bool) error {
 	var count int
 	if u.Form != nil {
 		count++
@@ -3126,12 +3251,12 @@ func (u *CreateElicitationRequest) Validate() error {
 		}
 	}
 	if u.Form != nil {
-		if err := u.Form.Validate(); err != nil {
+		if err := u.Form.validate(abs); err != nil {
 			return fmt.Errorf("CreateElicitationRequest: variant Form: %w", err)
 		}
 	}
 	if u.Url != nil {
-		if err := u.Url.Validate(); err != nil {
+		if err := u.Url.validate(abs); err != nil {
 			return fmt.Errorf("CreateElicitationRequest: variant Url: %w", err)
 		}
 	}
@@ -3173,9 +3298,13 @@ func (v *CreateElicitationAccept) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CreateElicitationAccept) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CreateElicitationAccept) validate(abs func(string) bool) error {
 	for _, k := range slices.Sorted(maps.Keys(v.Content)) {
 		x := v.Content[k]
-		if err := x.Validate(); err != nil {
+		if err := x.validate(abs); err != nil {
 			return fmt.Errorf("CreateElicitationAccept: content[%q]: %w", k, err)
 		}
 	}
@@ -3475,6 +3604,10 @@ func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
 }
 
 func (u *CreateElicitationResponse) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *CreateElicitationResponse) validate(abs func(string) bool) error {
 	var count int
 	if u.Accept != nil {
 		count++
@@ -3508,7 +3641,7 @@ func (u *CreateElicitationResponse) Validate() error {
 		}
 	}
 	if u.Accept != nil {
-		if err := u.Accept.Validate(); err != nil {
+		if err := u.Accept.validate(abs); err != nil {
 			return fmt.Errorf("CreateElicitationResponse: variant Accept: %w", err)
 		}
 	}
@@ -3564,6 +3697,19 @@ func (v *CreateTerminalRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CreateTerminalRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CreateTerminalRequest) validate(abs func(string) bool) error {
+	if v.Cwd != nil && !abs(*v.Cwd) {
+		return &ValidationError{
+			Type:  "CreateTerminalRequest",
+			Field: "cwd",
+			Value: *v.Cwd,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("CreateTerminalRequest: cwd: %q is not an absolute path", *v.Cwd),
+		}
+	}
 	return nil
 }
 
@@ -3599,6 +3745,10 @@ func (v *CreateTerminalResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *CreateTerminalResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *CreateTerminalResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -3669,6 +3819,10 @@ func (v *DeleteSessionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *DeleteSessionRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *DeleteSessionRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -3702,6 +3856,10 @@ func (v *DeleteSessionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *DeleteSessionResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *DeleteSessionResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -3746,6 +3904,23 @@ func (v *Diff) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *Diff) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *Diff) validate(abs func(string) bool) error {
+	if !abs(v.Path) {
+		return &ValidationError{
+			Type:  "Diff",
+			Field: "path",
+			Value: v.Path,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("Diff: path: %q is not an absolute path", v.Path),
+		}
+	}
+	return nil
+}
+
 // The user accepted the elicitation and provided content.
 type ElicitationAcceptAction struct {
 	// The user-provided content, if any, as an object matching the requested schema.
@@ -3753,9 +3928,13 @@ type ElicitationAcceptAction struct {
 }
 
 func (v *ElicitationAcceptAction) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ElicitationAcceptAction) validate(abs func(string) bool) error {
 	for _, k := range slices.Sorted(maps.Keys(v.Content)) {
 		x := v.Content[k]
-		if err := x.Validate(); err != nil {
+		if err := x.validate(abs); err != nil {
 			return fmt.Errorf("ElicitationAcceptAction: content[%q]: %w", k, err)
 		}
 	}
@@ -3932,6 +4111,10 @@ func (u ElicitationContentValue) MarshalJSON() ([]byte, error) {
 }
 
 func (u *ElicitationContentValue) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *ElicitationContentValue) validate(abs func(string) bool) error {
 	var count int
 	if u.String != nil {
 		count++
@@ -4055,7 +4238,11 @@ func (v *ElicitationFormMode) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ElicitationFormMode) Validate() error {
-	if err := v.RequestedSchema.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ElicitationFormMode) validate(abs func(string) bool) error {
+	if err := v.RequestedSchema.validate(abs); err != nil {
 		return fmt.Errorf("ElicitationFormMode: requestedSchema: %w", err)
 	}
 	var count int
@@ -4073,7 +4260,7 @@ func (v *ElicitationFormMode) Validate() error {
 		}
 	}
 	if v.Request != nil {
-		if err := v.Request.Validate(); err != nil {
+		if err := v.Request.validate(abs); err != nil {
 			return fmt.Errorf("ElicitationFormMode: member Request: %w", err)
 		}
 	}
@@ -4386,7 +4573,11 @@ func (v *ElicitationPropertySchemaArray) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ElicitationPropertySchemaArray) Validate() error {
-	if err := v.Items.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ElicitationPropertySchemaArray) validate(abs func(string) bool) error {
+	if err := v.Items.validate(abs); err != nil {
 		return fmt.Errorf("ElicitationPropertySchemaArray: items: %w", err)
 	}
 	return nil
@@ -4675,6 +4866,10 @@ func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 }
 
 func (u *ElicitationPropertySchema) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *ElicitationPropertySchema) validate(abs func(string) bool) error {
 	var count int
 	if u.String != nil {
 		count++
@@ -4714,7 +4909,7 @@ func (u *ElicitationPropertySchema) Validate() error {
 		}
 	}
 	if u.Array != nil {
-		if err := u.Array.Validate(); err != nil {
+		if err := u.Array.validate(abs); err != nil {
 			return fmt.Errorf("ElicitationPropertySchema: variant Array: %w", err)
 		}
 	}
@@ -4743,7 +4938,11 @@ func (v *ElicitationRequestScope) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ElicitationRequestScope) Validate() error {
-	if err := v.RequestId.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ElicitationRequestScope) validate(abs func(string) bool) error {
+	if err := v.RequestId.validate(abs); err != nil {
 		return fmt.Errorf("ElicitationRequestScope: requestId: %w", err)
 	}
 	return nil
@@ -4833,9 +5032,13 @@ func (v *ElicitationSchema) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ElicitationSchema) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ElicitationSchema) validate(abs func(string) bool) error {
 	for _, k := range slices.Sorted(maps.Keys(v.Properties)) {
 		x := v.Properties[k]
-		if err := x.Validate(); err != nil {
+		if err := x.validate(abs); err != nil {
 			return fmt.Errorf("ElicitationSchema: properties[%q]: %w", k, err)
 		}
 	}
@@ -4982,6 +5185,10 @@ func (v *ElicitationUrlMode) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ElicitationUrlMode) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ElicitationUrlMode) validate(abs func(string) bool) error {
 	var count int
 	if v.Session != nil {
 		count++
@@ -4997,7 +5204,7 @@ func (v *ElicitationUrlMode) Validate() error {
 		}
 	}
 	if v.Request != nil {
-		if err := v.Request.Validate(); err != nil {
+		if err := v.Request.validate(abs); err != nil {
 			return fmt.Errorf("ElicitationUrlMode: member Request: %w", err)
 		}
 	}
@@ -5040,7 +5247,11 @@ func (v *EmbeddedResource) UnmarshalJSON(b []byte) error {
 }
 
 func (v *EmbeddedResource) Validate() error {
-	if err := v.Resource.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *EmbeddedResource) validate(abs func(string) bool) error {
+	if err := v.Resource.validate(abs); err != nil {
 		return fmt.Errorf("EmbeddedResource: resource: %w", err)
 	}
 	return nil
@@ -5148,6 +5359,10 @@ func (u EmbeddedResourceResource) MarshalJSON() ([]byte, error) {
 }
 
 func (u *EmbeddedResourceResource) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *EmbeddedResourceResource) validate(abs func(string) bool) error {
 	var count int
 	if u.TextResourceContents != nil {
 		count++
@@ -5967,6 +6182,10 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 }
 
 func (u *IdleStateUpdate) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *IdleStateUpdate) validate(abs func(string) bool) error {
 	var count int
 	if u.EndTurn != nil {
 		count++
@@ -6161,6 +6380,10 @@ func (v *InitializeRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *InitializeRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *InitializeRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -6248,8 +6471,12 @@ func (v *InitializeResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *InitializeResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *InitializeResponse) validate(abs func(string) bool) error {
 	for i := range v.AuthMethods {
-		if err := v.AuthMethods[i].Validate(); err != nil {
+		if err := v.AuthMethods[i].validate(abs); err != nil {
 			return fmt.Errorf("InitializeResponse: authMethods[%d]: %w", i, err)
 		}
 	}
@@ -6347,6 +6574,10 @@ func (v *KillTerminalRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *KillTerminalRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *KillTerminalRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -6380,6 +6611,10 @@ func (v *KillTerminalResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *KillTerminalResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *KillTerminalResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -6419,6 +6654,19 @@ func (v *ListSessionsRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ListSessionsRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ListSessionsRequest) validate(abs func(string) bool) error {
+	if v.Cwd != nil && !abs(*v.Cwd) {
+		return &ValidationError{
+			Type:  "ListSessionsRequest",
+			Field: "cwd",
+			Value: *v.Cwd,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("ListSessionsRequest: cwd: %q is not an absolute path", *v.Cwd),
+		}
+	}
 	return nil
 }
 
@@ -6473,6 +6721,15 @@ func (v *ListSessionsResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ListSessionsResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ListSessionsResponse) validate(abs func(string) bool) error {
+	for i := range v.Sessions {
+		if err := v.Sessions[i].validate(abs); err != nil {
+			return fmt.Errorf("ListSessionsResponse: sessions[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -6533,8 +6790,32 @@ func (v *LoadSessionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *LoadSessionRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *LoadSessionRequest) validate(abs func(string) bool) error {
+	for i, x := range v.AdditionalDirectories {
+		if !abs(x) {
+			return &ValidationError{
+				Type:  "LoadSessionRequest",
+				Field: fmt.Sprintf("additionalDirectories[%d]", i),
+				Value: x,
+				Rule:  RuleAbsolutePath,
+				msg:   fmt.Sprintf("LoadSessionRequest: additionalDirectories[%d]: %q is not an absolute path", i, x),
+			}
+		}
+	}
+	if !abs(v.Cwd) {
+		return &ValidationError{
+			Type:  "LoadSessionRequest",
+			Field: "cwd",
+			Value: v.Cwd,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("LoadSessionRequest: cwd: %q is not an absolute path", v.Cwd),
+		}
+	}
 	for i := range v.McpServers {
-		if err := v.McpServers[i].Validate(); err != nil {
+		if err := v.McpServers[i].validate(abs); err != nil {
 			return fmt.Errorf("LoadSessionRequest: mcpServers[%d]: %w", i, err)
 		}
 	}
@@ -6583,8 +6864,12 @@ func (v *LoadSessionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *LoadSessionResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *LoadSessionResponse) validate(abs func(string) bool) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].Validate(); err != nil {
+		if err := v.ConfigOptions[i].validate(abs); err != nil {
 			return fmt.Errorf("LoadSessionResponse: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -6654,6 +6939,10 @@ func (v *LogoutRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *LogoutRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *LogoutRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -6687,6 +6976,10 @@ func (v *LogoutResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *LogoutResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *LogoutResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -7071,6 +7364,10 @@ func (u McpServer) MarshalJSON() ([]byte, error) {
 }
 
 func (u *McpServer) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *McpServer) validate(abs func(string) bool) error {
 	var count int
 	if u.Http != nil {
 		count++
@@ -7092,6 +7389,11 @@ func (u *McpServer) Validate() error {
 			Type: "McpServer",
 			Rule: RuleOneVariant,
 			msg:  "McpServer must have exactly one variant set",
+		}
+	}
+	if u.Stdio != nil {
+		if err := u.Stdio.validate(abs); err != nil {
+			return fmt.Errorf("McpServer: variant Stdio: %w", err)
 		}
 	}
 	return nil
@@ -7287,6 +7589,23 @@ func (v *McpServerStdio) UnmarshalJSON(b []byte) error {
 	a := s.Alias
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	*v = McpServerStdio(a)
+	return nil
+}
+
+func (v *McpServerStdio) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *McpServerStdio) validate(abs func(string) bool) error {
+	if !abs(v.Command) {
+		return &ValidationError{
+			Type:  "McpServerStdio",
+			Field: "command",
+			Value: v.Command,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("McpServerStdio: command: %q is not an absolute path", v.Command),
+		}
+	}
 	return nil
 }
 
@@ -7497,6 +7816,10 @@ func (u MultiSelectItems) MarshalJSON() ([]byte, error) {
 }
 
 func (u *MultiSelectItems) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *MultiSelectItems) validate(abs func(string) bool) error {
 	var count int
 	if u.String != nil {
 		count++
@@ -7591,7 +7914,11 @@ func (v *MultiSelectPropertySchema) UnmarshalJSON(b []byte) error {
 }
 
 func (v *MultiSelectPropertySchema) Validate() error {
-	if err := v.Items.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *MultiSelectPropertySchema) validate(abs func(string) bool) error {
+	if err := v.Items.validate(abs); err != nil {
 		return fmt.Errorf("MultiSelectPropertySchema: items: %w", err)
 	}
 	return nil
@@ -8313,8 +8640,32 @@ func (v *NewSessionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *NewSessionRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *NewSessionRequest) validate(abs func(string) bool) error {
+	for i, x := range v.AdditionalDirectories {
+		if !abs(x) {
+			return &ValidationError{
+				Type:  "NewSessionRequest",
+				Field: fmt.Sprintf("additionalDirectories[%d]", i),
+				Value: x,
+				Rule:  RuleAbsolutePath,
+				msg:   fmt.Sprintf("NewSessionRequest: additionalDirectories[%d]: %q is not an absolute path", i, x),
+			}
+		}
+	}
+	if !abs(v.Cwd) {
+		return &ValidationError{
+			Type:  "NewSessionRequest",
+			Field: "cwd",
+			Value: v.Cwd,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("NewSessionRequest: cwd: %q is not an absolute path", v.Cwd),
+		}
+	}
 	for i := range v.McpServers {
-		if err := v.McpServers[i].Validate(); err != nil {
+		if err := v.McpServers[i].validate(abs); err != nil {
 			return fmt.Errorf("NewSessionRequest: mcpServers[%d]: %w", i, err)
 		}
 	}
@@ -8369,8 +8720,12 @@ func (v *NewSessionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *NewSessionResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *NewSessionResponse) validate(abs func(string) bool) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].Validate(); err != nil {
+		if err := v.ConfigOptions[i].validate(abs); err != nil {
 			return fmt.Errorf("NewSessionResponse: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -8423,6 +8778,10 @@ func (v *Notice) UnmarshalJSON(b []byte) error {
 }
 
 func (v *Notice) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *Notice) validate(abs func(string) bool) error {
 	if utf8.RuneCountInString(string(v.Title)) < 1 {
 		return &ValidationError{
 			Type:  "Notice",
@@ -8912,7 +9271,11 @@ func (v *PlanUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *PlanUpdate) Validate() error {
-	if err := v.Plan.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *PlanUpdate) validate(abs func(string) bool) error {
+	if err := v.Plan.validate(abs); err != nil {
 		return fmt.Errorf("PlanUpdate: plan: %w", err)
 	}
 	return nil
@@ -9207,6 +9570,10 @@ func (u PlanUpdateContent) MarshalJSON() ([]byte, error) {
 }
 
 func (u *PlanUpdateContent) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *PlanUpdateContent) validate(abs func(string) bool) error {
 	var count int
 	if u.Items != nil {
 		count++
@@ -9392,8 +9759,12 @@ func (v *PromptRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *PromptRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *PromptRequest) validate(abs func(string) bool) error {
 	for i := range v.Prompt {
-		if err := v.Prompt[i].Validate(); err != nil {
+		if err := v.Prompt[i].validate(abs); err != nil {
 			return fmt.Errorf("PromptRequest: prompt[%d]: %w", i, err)
 		}
 	}
@@ -9442,6 +9813,10 @@ func (v *PromptResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *PromptResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *PromptResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -9526,6 +9901,19 @@ func (v *ReadTextFileRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ReadTextFileRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ReadTextFileRequest) validate(abs func(string) bool) error {
+	if !abs(v.Path) {
+		return &ValidationError{
+			Type:  "ReadTextFileRequest",
+			Field: "path",
+			Value: v.Path,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("ReadTextFileRequest: path: %q is not an absolute path", v.Path),
+		}
+	}
 	return nil
 }
 
@@ -9561,6 +9949,10 @@ func (v *ReadTextFileResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ReadTextFileResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ReadTextFileResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -9598,6 +9990,10 @@ func (v *ReleaseTerminalRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ReleaseTerminalRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ReleaseTerminalRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -9631,6 +10027,10 @@ func (v *ReleaseTerminalResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ReleaseTerminalResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ReleaseTerminalResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -9723,6 +10123,10 @@ func (u RequestId) MarshalJSON() ([]byte, error) {
 }
 
 func (u *RequestId) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *RequestId) validate(abs func(string) bool) error {
 	var count int
 	if u.Null != nil {
 		count++
@@ -9904,6 +10308,10 @@ func (u RequestPermissionOutcome) MarshalJSON() ([]byte, error) {
 }
 
 func (u *RequestPermissionOutcome) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *RequestPermissionOutcome) validate(abs func(string) bool) error {
 	var count int
 	if u.Cancelled != nil {
 		count++
@@ -9974,7 +10382,11 @@ func (v *RequestPermissionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *RequestPermissionRequest) Validate() error {
-	if err := v.ToolCall.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *RequestPermissionRequest) validate(abs func(string) bool) error {
+	if err := v.ToolCall.validate(abs); err != nil {
 		return fmt.Errorf("RequestPermissionRequest: toolCall: %w", err)
 	}
 	return nil
@@ -10012,7 +10424,11 @@ func (v *RequestPermissionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *RequestPermissionResponse) Validate() error {
-	if err := v.Outcome.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *RequestPermissionResponse) validate(abs func(string) bool) error {
+	if err := v.Outcome.validate(abs); err != nil {
 		return fmt.Errorf("RequestPermissionResponse: outcome: %w", err)
 	}
 	return nil
@@ -10150,8 +10566,32 @@ func (v *ResumeSessionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ResumeSessionRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ResumeSessionRequest) validate(abs func(string) bool) error {
+	for i, x := range v.AdditionalDirectories {
+		if !abs(x) {
+			return &ValidationError{
+				Type:  "ResumeSessionRequest",
+				Field: fmt.Sprintf("additionalDirectories[%d]", i),
+				Value: x,
+				Rule:  RuleAbsolutePath,
+				msg:   fmt.Sprintf("ResumeSessionRequest: additionalDirectories[%d]: %q is not an absolute path", i, x),
+			}
+		}
+	}
+	if !abs(v.Cwd) {
+		return &ValidationError{
+			Type:  "ResumeSessionRequest",
+			Field: "cwd",
+			Value: v.Cwd,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("ResumeSessionRequest: cwd: %q is not an absolute path", v.Cwd),
+		}
+	}
 	for i := range v.McpServers {
-		if err := v.McpServers[i].Validate(); err != nil {
+		if err := v.McpServers[i].validate(abs); err != nil {
 			return fmt.Errorf("ResumeSessionRequest: mcpServers[%d]: %w", i, err)
 		}
 	}
@@ -10200,8 +10640,12 @@ func (v *ResumeSessionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ResumeSessionResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ResumeSessionResponse) validate(abs func(string) bool) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].Validate(); err != nil {
+		if err := v.ConfigOptions[i].validate(abs); err != nil {
 			return fmt.Errorf("ResumeSessionResponse: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -10539,7 +10983,11 @@ func (v *SessionConfigOptionSelect) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionConfigOptionSelect) Validate() error {
-	if err := v.Options.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionConfigOptionSelect) validate(abs func(string) bool) error {
+	if err := v.Options.validate(abs); err != nil {
 		return fmt.Errorf("SessionConfigOptionSelect: options: %w", err)
 	}
 	return nil
@@ -10712,6 +11160,10 @@ func (u SessionConfigOption) MarshalJSON() ([]byte, error) {
 }
 
 func (u *SessionConfigOption) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *SessionConfigOption) validate(abs func(string) bool) error {
 	var count int
 	if u.Select != nil {
 		count++
@@ -10730,7 +11182,7 @@ func (u *SessionConfigOption) Validate() error {
 		}
 	}
 	if u.Select != nil {
-		if err := u.Select.Validate(); err != nil {
+		if err := u.Select.validate(abs); err != nil {
 			return fmt.Errorf("SessionConfigOption: variant Select: %w", err)
 		}
 	}
@@ -10816,7 +11268,11 @@ func (v *SessionConfigSelect) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionConfigSelect) Validate() error {
-	if err := v.Options.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionConfigSelect) validate(abs func(string) bool) error {
+	if err := v.Options.validate(abs); err != nil {
 		return fmt.Errorf("SessionConfigSelect: options: %w", err)
 	}
 	return nil
@@ -11032,6 +11488,10 @@ func (u SessionConfigSelectOptions) MarshalJSON() ([]byte, error) {
 }
 
 func (u *SessionConfigSelectOptions) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *SessionConfigSelectOptions) validate(abs func(string) bool) error {
 	var count int
 	if u.Ungrouped != nil {
 		count++
@@ -11177,6 +11637,34 @@ func (v *SessionInfo) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+func (v *SessionInfo) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionInfo) validate(abs func(string) bool) error {
+	for i, x := range v.AdditionalDirectories {
+		if !abs(x) {
+			return &ValidationError{
+				Type:  "SessionInfo",
+				Field: fmt.Sprintf("additionalDirectories[%d]", i),
+				Value: x,
+				Rule:  RuleAbsolutePath,
+				msg:   fmt.Sprintf("SessionInfo: additionalDirectories[%d]: %q is not an absolute path", i, x),
+			}
+		}
+	}
+	if !abs(v.Cwd) {
+		return &ValidationError{
+			Type:  "SessionInfo",
+			Field: "cwd",
+			Value: v.Cwd,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("SessionInfo: cwd: %q is not an absolute path", v.Cwd),
+		}
+	}
+	return nil
+}
+
 // Update to session metadata. All fields are optional to support partial updates.
 //
 // Agents send this notification to update session information like title or custom metadata.
@@ -11297,8 +11785,12 @@ func (v *SessionMessage) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionMessage) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionMessage) validate(abs func(string) bool) error {
 	for i := range v.Content {
-		if err := v.Content[i].Validate(); err != nil {
+		if err := v.Content[i].validate(abs); err != nil {
 			return fmt.Errorf("SessionMessage: content[%d]: %w", i, err)
 		}
 	}
@@ -11349,7 +11841,11 @@ func (v *SessionMessageChunk) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionMessageChunk) Validate() error {
-	if err := v.Content.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionMessageChunk) validate(abs func(string) bool) error {
+	if err := v.Content.validate(abs); err != nil {
 		return fmt.Errorf("SessionMessageChunk: content: %w", err)
 	}
 	return nil
@@ -11482,7 +11978,11 @@ func (v *SessionNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionNotification) Validate() error {
-	if err := v.Update.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionNotification) validate(abs func(string) bool) error {
+	if err := v.Update.validate(abs); err != nil {
 		return fmt.Errorf("SessionNotification: update: %w", err)
 	}
 	return nil
@@ -11559,7 +12059,11 @@ func (v *SessionUpdateUserMessageChunk) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionUpdateUserMessageChunk) Validate() error {
-	if err := v.Content.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionUpdateUserMessageChunk) validate(abs func(string) bool) error {
+	if err := v.Content.validate(abs); err != nil {
 		return fmt.Errorf("SessionUpdateUserMessageChunk: content: %w", err)
 	}
 	return nil
@@ -11605,7 +12109,11 @@ func (v *SessionUpdateAgentMessageChunk) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionUpdateAgentMessageChunk) Validate() error {
-	if err := v.Content.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionUpdateAgentMessageChunk) validate(abs func(string) bool) error {
+	if err := v.Content.validate(abs); err != nil {
 		return fmt.Errorf("SessionUpdateAgentMessageChunk: content: %w", err)
 	}
 	return nil
@@ -11651,7 +12159,11 @@ func (v *SessionUpdateAgentThoughtChunk) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionUpdateAgentThoughtChunk) Validate() error {
-	if err := v.Content.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionUpdateAgentThoughtChunk) validate(abs func(string) bool) error {
+	if err := v.Content.validate(abs); err != nil {
 		return fmt.Errorf("SessionUpdateAgentThoughtChunk: content: %w", err)
 	}
 	return nil
@@ -11731,9 +12243,18 @@ func (v *SessionUpdateToolCall) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionUpdateToolCall) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionUpdateToolCall) validate(abs func(string) bool) error {
 	for i := range v.Content {
-		if err := v.Content[i].Validate(); err != nil {
+		if err := v.Content[i].validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdateToolCall: content[%d]: %w", i, err)
+		}
+	}
+	for i := range v.Locations {
+		if err := v.Locations[i].validate(abs); err != nil {
+			return fmt.Errorf("SessionUpdateToolCall: locations[%d]: %w", i, err)
 		}
 	}
 	return nil
@@ -11813,9 +12334,18 @@ func (v *SessionToolCallUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionToolCallUpdate) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionToolCallUpdate) validate(abs func(string) bool) error {
 	for i := range v.Content {
-		if err := v.Content[i].Validate(); err != nil {
+		if err := v.Content[i].validate(abs); err != nil {
 			return fmt.Errorf("SessionToolCallUpdate: content[%d]: %w", i, err)
+		}
+	}
+	for i := range v.Locations {
+		if err := v.Locations[i].validate(abs); err != nil {
+			return fmt.Errorf("SessionToolCallUpdate: locations[%d]: %w", i, err)
 		}
 	}
 	return nil
@@ -11908,7 +12438,11 @@ func (v *SessionPlanUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionPlanUpdate) Validate() error {
-	if err := v.Plan.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionPlanUpdate) validate(abs func(string) bool) error {
+	if err := v.Plan.validate(abs); err != nil {
 		return fmt.Errorf("SessionPlanUpdate: plan: %w", err)
 	}
 	return nil
@@ -11997,8 +12531,12 @@ func (v *SessionAvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionAvailableCommandsUpdate) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionAvailableCommandsUpdate) validate(abs func(string) bool) error {
 	for i := range v.AvailableCommands {
-		if err := v.AvailableCommands[i].Validate(); err != nil {
+		if err := v.AvailableCommands[i].validate(abs); err != nil {
 			return fmt.Errorf("SessionAvailableCommandsUpdate: availableCommands[%d]: %w", i, err)
 		}
 	}
@@ -12086,8 +12624,12 @@ func (v *SessionConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionConfigOptionUpdate) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionConfigOptionUpdate) validate(abs func(string) bool) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].Validate(); err != nil {
+		if err := v.ConfigOptions[i].validate(abs); err != nil {
 			return fmt.Errorf("SessionConfigOptionUpdate: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -12212,6 +12754,10 @@ func (v *SessionUpdateNotice) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionUpdateNotice) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionUpdateNotice) validate(abs func(string) bool) error {
 	if utf8.RuneCountInString(string(v.Title)) < 1 {
 		return &ValidationError{
 			Type:  "SessionUpdateNotice",
@@ -12268,8 +12814,12 @@ func (v *SessionCompactionUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionCompactionUpdate) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionCompactionUpdate) validate(abs func(string) bool) error {
 	for i := range v.Summary {
-		if err := v.Summary[i].Validate(); err != nil {
+		if err := v.Summary[i].validate(abs); err != nil {
 			return fmt.Errorf("SessionCompactionUpdate: summary[%d]: %w", i, err)
 		}
 	}
@@ -12310,7 +12860,11 @@ func (v *SessionUpdateCompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionUpdateCompactionSummaryChunk) Validate() error {
-	if err := v.Content.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionUpdateCompactionSummaryChunk) validate(abs func(string) bool) error {
+	if err := v.Content.validate(abs); err != nil {
 		return fmt.Errorf("SessionUpdateCompactionSummaryChunk: content: %w", err)
 	}
 	return nil
@@ -12388,8 +12942,12 @@ func (v *SessionSubagentUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionSubagentUpdate) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionSubagentUpdate) validate(abs func(string) bool) error {
 	if v.State != nil {
-		if err := v.State.Validate(); err != nil {
+		if err := v.State.validate(abs); err != nil {
 			return fmt.Errorf("SessionSubagentUpdate: state: %w", err)
 		}
 	}
@@ -12447,8 +13005,12 @@ func (v *SessionUpdateSessionMessage) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionUpdateSessionMessage) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionUpdateSessionMessage) validate(abs func(string) bool) error {
 	for i := range v.Content {
-		if err := v.Content[i].Validate(); err != nil {
+		if err := v.Content[i].validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdateSessionMessage: content[%d]: %w", i, err)
 		}
 	}
@@ -12500,7 +13062,11 @@ func (v *SessionUpdateSessionMessageChunk) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SessionUpdateSessionMessageChunk) Validate() error {
-	if err := v.Content.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SessionUpdateSessionMessageChunk) validate(abs func(string) bool) error {
+	if err := v.Content.validate(abs); err != nil {
 		return fmt.Errorf("SessionUpdateSessionMessageChunk: content: %w", err)
 	}
 	return nil
@@ -13303,6 +13869,10 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 }
 
 func (u *SessionUpdate) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *SessionUpdate) validate(abs func(string) bool) error {
 	var count int
 	if u.UserMessageChunk != nil {
 		count++
@@ -13372,72 +13942,72 @@ func (u *SessionUpdate) Validate() error {
 		}
 	}
 	if u.UserMessageChunk != nil {
-		if err := u.UserMessageChunk.Validate(); err != nil {
+		if err := u.UserMessageChunk.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant UserMessageChunk: %w", err)
 		}
 	}
 	if u.AgentMessageChunk != nil {
-		if err := u.AgentMessageChunk.Validate(); err != nil {
+		if err := u.AgentMessageChunk.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant AgentMessageChunk: %w", err)
 		}
 	}
 	if u.AgentThoughtChunk != nil {
-		if err := u.AgentThoughtChunk.Validate(); err != nil {
+		if err := u.AgentThoughtChunk.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant AgentThoughtChunk: %w", err)
 		}
 	}
 	if u.ToolCall != nil {
-		if err := u.ToolCall.Validate(); err != nil {
+		if err := u.ToolCall.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant ToolCall: %w", err)
 		}
 	}
 	if u.ToolCallUpdate != nil {
-		if err := u.ToolCallUpdate.Validate(); err != nil {
+		if err := u.ToolCallUpdate.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant ToolCallUpdate: %w", err)
 		}
 	}
 	if u.PlanUpdate != nil {
-		if err := u.PlanUpdate.Validate(); err != nil {
+		if err := u.PlanUpdate.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant PlanUpdate: %w", err)
 		}
 	}
 	if u.AvailableCommandsUpdate != nil {
-		if err := u.AvailableCommandsUpdate.Validate(); err != nil {
+		if err := u.AvailableCommandsUpdate.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant AvailableCommandsUpdate: %w", err)
 		}
 	}
 	if u.ConfigOptionUpdate != nil {
-		if err := u.ConfigOptionUpdate.Validate(); err != nil {
+		if err := u.ConfigOptionUpdate.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant ConfigOptionUpdate: %w", err)
 		}
 	}
 	if u.Notice != nil {
-		if err := u.Notice.Validate(); err != nil {
+		if err := u.Notice.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant Notice: %w", err)
 		}
 	}
 	if u.CompactionUpdate != nil {
-		if err := u.CompactionUpdate.Validate(); err != nil {
+		if err := u.CompactionUpdate.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant CompactionUpdate: %w", err)
 		}
 	}
 	if u.CompactionSummaryChunk != nil {
-		if err := u.CompactionSummaryChunk.Validate(); err != nil {
+		if err := u.CompactionSummaryChunk.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant CompactionSummaryChunk: %w", err)
 		}
 	}
 	if u.SubagentUpdate != nil {
-		if err := u.SubagentUpdate.Validate(); err != nil {
+		if err := u.SubagentUpdate.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant SubagentUpdate: %w", err)
 		}
 	}
 	if u.SessionMessage != nil {
-		if err := u.SessionMessage.Validate(); err != nil {
+		if err := u.SessionMessage.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant SessionMessage: %w", err)
 		}
 	}
 	if u.SessionMessageChunk != nil {
-		if err := u.SessionMessageChunk.Validate(); err != nil {
+		if err := u.SessionMessageChunk.validate(abs); err != nil {
 			return fmt.Errorf("SessionUpdate: variant SessionMessageChunk: %w", err)
 		}
 	}
@@ -13618,6 +14188,10 @@ func (u SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
 }
 
 func (u *SetSessionConfigOptionRequest) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *SetSessionConfigOptionRequest) validate(abs func(string) bool) error {
 	var count int
 	if u.Boolean != nil {
 		count++
@@ -13684,8 +14258,12 @@ func (v *SetSessionConfigOptionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SetSessionConfigOptionResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SetSessionConfigOptionResponse) validate(abs func(string) bool) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].Validate(); err != nil {
+		if err := v.ConfigOptions[i].validate(abs); err != nil {
 			return fmt.Errorf("SetSessionConfigOptionResponse: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -13726,6 +14304,10 @@ func (v *SetSessionModeRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SetSessionModeRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SetSessionModeRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -13759,6 +14341,10 @@ func (v *SetSessionModeResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SetSessionModeResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SetSessionModeResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -14128,6 +14714,10 @@ func (u StateUpdate) MarshalJSON() ([]byte, error) {
 }
 
 func (u *StateUpdate) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *StateUpdate) validate(abs func(string) bool) error {
 	var count int
 	if u.Running != nil {
 		count++
@@ -14472,8 +15062,12 @@ func (v *SubagentUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *SubagentUpdate) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *SubagentUpdate) validate(abs func(string) bool) error {
 	if v.State != nil {
-		if err := v.State.Validate(); err != nil {
+		if err := v.State.validate(abs); err != nil {
 			return fmt.Errorf("SubagentUpdate: state: %w", err)
 		}
 	}
@@ -14589,6 +15183,10 @@ func (v *TerminalOutputRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *TerminalOutputRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *TerminalOutputRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -14630,6 +15228,10 @@ func (v *TerminalOutputResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *TerminalOutputResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *TerminalOutputResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -14838,9 +15440,18 @@ func (v *ToolCall) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ToolCall) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ToolCall) validate(abs func(string) bool) error {
 	for i := range v.Content {
-		if err := v.Content[i].Validate(); err != nil {
+		if err := v.Content[i].validate(abs); err != nil {
 			return fmt.Errorf("ToolCall: content[%d]: %w", i, err)
+		}
+	}
+	for i := range v.Locations {
+		if err := v.Locations[i].validate(abs); err != nil {
+			return fmt.Errorf("ToolCall: locations[%d]: %w", i, err)
 		}
 	}
 	return nil
@@ -14879,7 +15490,11 @@ func (v *ToolCallContentContent) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ToolCallContentContent) Validate() error {
-	if err := v.Content.Validate(); err != nil {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ToolCallContentContent) validate(abs func(string) bool) error {
+	if err := v.Content.validate(abs); err != nil {
 		return fmt.Errorf("ToolCallContentContent: content: %w", err)
 	}
 	return nil
@@ -14920,6 +15535,23 @@ func (v *ToolCallContentDiff) UnmarshalJSON(b []byte) error {
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	a.OldText = orDefault[*string](s.OldText, "")
 	*v = ToolCallContentDiff(a)
+	return nil
+}
+
+func (v *ToolCallContentDiff) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ToolCallContentDiff) validate(abs func(string) bool) error {
+	if !abs(v.Path) {
+		return &ValidationError{
+			Type:  "ToolCallContentDiff",
+			Field: "path",
+			Value: v.Path,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("ToolCallContentDiff: path: %q is not an absolute path", v.Path),
+		}
+	}
 	return nil
 }
 
@@ -15128,6 +15760,10 @@ func (u ToolCallContent) MarshalJSON() ([]byte, error) {
 }
 
 func (u *ToolCallContent) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *ToolCallContent) validate(abs func(string) bool) error {
 	var count int
 	if u.Content != nil {
 		count++
@@ -15149,8 +15785,13 @@ func (u *ToolCallContent) Validate() error {
 		}
 	}
 	if u.Content != nil {
-		if err := u.Content.Validate(); err != nil {
+		if err := u.Content.validate(abs); err != nil {
 			return fmt.Errorf("ToolCallContent: variant Content: %w", err)
+		}
+	}
+	if u.Diff != nil {
+		if err := u.Diff.validate(abs); err != nil {
+			return fmt.Errorf("ToolCallContent: variant Diff: %w", err)
 		}
 	}
 	return nil
@@ -15196,6 +15837,23 @@ func (v *ToolCallLocation) UnmarshalJSON(b []byte) error {
 	a.Meta = orDefault[map[string]any](s.Meta, "")
 	a.Line = orDefault[*uint32](s.Line, "")
 	*v = ToolCallLocation(a)
+	return nil
+}
+
+func (v *ToolCallLocation) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ToolCallLocation) validate(abs func(string) bool) error {
+	if !abs(v.Path) {
+		return &ValidationError{
+			Type:  "ToolCallLocation",
+			Field: "path",
+			Value: v.Path,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("ToolCallLocation: path: %q is not an absolute path", v.Path),
+		}
+	}
 	return nil
 }
 
@@ -15291,9 +15949,18 @@ func (v *ToolCallUpdate) UnmarshalJSON(b []byte) error {
 }
 
 func (v *ToolCallUpdate) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *ToolCallUpdate) validate(abs func(string) bool) error {
 	for i := range v.Content {
-		if err := v.Content[i].Validate(); err != nil {
+		if err := v.Content[i].validate(abs); err != nil {
 			return fmt.Errorf("ToolCallUpdate: content[%d]: %w", i, err)
+		}
+	}
+	for i := range v.Locations {
+		if err := v.Locations[i].validate(abs); err != nil {
+			return fmt.Errorf("ToolCallUpdate: locations[%d]: %w", i, err)
 		}
 	}
 	return nil
@@ -15397,6 +16064,10 @@ func (v *UnstableAcceptNesNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableAcceptNesNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableAcceptNesNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -15439,6 +16110,10 @@ func (v *UnstableCloseNesRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableCloseNesRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableCloseNesRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -15476,6 +16151,10 @@ func (v *UnstableCloseNesResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableCloseNesResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableCloseNesResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -15531,6 +16210,10 @@ func (v *UnstableDidChangeDocumentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDidChangeDocumentNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableDidChangeDocumentNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -15572,6 +16255,10 @@ func (v *UnstableDidCloseDocumentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDidCloseDocumentNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableDidCloseDocumentNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -15619,6 +16306,10 @@ func (v *UnstableDidFocusDocumentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDidFocusDocumentNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableDidFocusDocumentNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -15666,6 +16357,10 @@ func (v *UnstableDidOpenDocumentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDidOpenDocumentNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableDidOpenDocumentNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -15707,6 +16402,10 @@ func (v *UnstableDidSaveDocumentNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDidSaveDocumentNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableDidSaveDocumentNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -15746,6 +16445,10 @@ func (v *UnstableDisableProviderRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDisableProviderRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableDisableProviderRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -15783,6 +16486,10 @@ func (v *UnstableDisableProviderResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableDisableProviderResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableDisableProviderResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -15837,8 +16544,32 @@ func (v *UnstableForkSessionRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableForkSessionRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableForkSessionRequest) validate(abs func(string) bool) error {
+	for i, x := range v.AdditionalDirectories {
+		if !abs(x) {
+			return &ValidationError{
+				Type:  "UnstableForkSessionRequest",
+				Field: fmt.Sprintf("additionalDirectories[%d]", i),
+				Value: x,
+				Rule:  RuleAbsolutePath,
+				msg:   fmt.Sprintf("UnstableForkSessionRequest: additionalDirectories[%d]: %q is not an absolute path", i, x),
+			}
+		}
+	}
+	if !abs(v.Cwd) {
+		return &ValidationError{
+			Type:  "UnstableForkSessionRequest",
+			Field: "cwd",
+			Value: v.Cwd,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("UnstableForkSessionRequest: cwd: %q is not an absolute path", v.Cwd),
+		}
+	}
 	for i := range v.McpServers {
-		if err := v.McpServers[i].Validate(); err != nil {
+		if err := v.McpServers[i].validate(abs); err != nil {
 			return fmt.Errorf("UnstableForkSessionRequest: mcpServers[%d]: %w", i, err)
 		}
 	}
@@ -15893,8 +16624,12 @@ func (v *UnstableForkSessionResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableForkSessionResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableForkSessionResponse) validate(abs func(string) bool) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].Validate(); err != nil {
+		if err := v.ConfigOptions[i].validate(abs); err != nil {
 			return fmt.Errorf("UnstableForkSessionResponse: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -15935,6 +16670,10 @@ func (v *UnstableListProvidersRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableListProvidersRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableListProvidersRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -15984,6 +16723,10 @@ func (v *UnstableListProvidersResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableListProvidersResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableListProvidersResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -16355,6 +17098,10 @@ func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 }
 
 func (u *UnstableMcpServer) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *UnstableMcpServer) validate(abs func(string) bool) error {
 	var count int
 	if u.Http != nil {
 		count++
@@ -16376,6 +17123,11 @@ func (u *UnstableMcpServer) Validate() error {
 			Type: "UnstableMcpServer",
 			Rule: RuleOneVariant,
 			msg:  "UnstableMcpServer must have exactly one variant set",
+		}
+	}
+	if u.Stdio != nil {
+		if err := u.Stdio.validate(abs); err != nil {
+			return fmt.Errorf("UnstableMcpServer: variant Stdio: %w", err)
 		}
 	}
 	return nil
@@ -16481,6 +17233,10 @@ func (v *UnstableMessageMcpNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableMessageMcpNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableMessageMcpNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -16528,6 +17284,10 @@ func (v *UnstableMessageMcpRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableMessageMcpRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableMessageMcpRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -16690,6 +17450,10 @@ func (u UnstableMessageMcpResponse) MarshalJSON() ([]byte, error) {
 }
 
 func (u *UnstableMessageMcpResponse) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *UnstableMessageMcpResponse) validate(abs func(string) bool) error {
 	var count int
 	if u.Result != nil {
 		count++
@@ -17635,6 +18399,10 @@ func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {
 }
 
 func (u *UnstableNesSuggestion) Validate() error {
+	return u.validate(filepath.IsAbs)
+}
+
+func (u *UnstableNesSuggestion) validate(abs func(string) bool) error {
 	var count int
 	if u.Edit != nil {
 		count++
@@ -17978,6 +18746,10 @@ func (v *UnstableRejectNesNotification) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableRejectNesNotification) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableRejectNesNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -18026,6 +18798,10 @@ func (v *UnstableSetProviderRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableSetProviderRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableSetProviderRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -18063,6 +18839,10 @@ func (v *UnstableSetProviderResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableSetProviderResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableSetProviderResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -18110,6 +18890,10 @@ func (v *UnstableStartNesRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableStartNesRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableStartNesRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -18149,6 +18933,10 @@ func (v *UnstableStartNesResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableStartNesResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableStartNesResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -18200,6 +18988,10 @@ func (v *UnstableSuggestNesRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableSuggestNesRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableSuggestNesRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -18249,8 +19041,12 @@ func (v *UnstableSuggestNesResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *UnstableSuggestNesResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *UnstableSuggestNesResponse) validate(abs func(string) bool) error {
 	for i := range v.Suggestions {
-		if err := v.Suggestions[i].Validate(); err != nil {
+		if err := v.Suggestions[i].validate(abs); err != nil {
 			return fmt.Errorf("UnstableSuggestNesResponse: suggestions[%d]: %w", i, err)
 		}
 	}
@@ -18487,6 +19283,10 @@ func (v *WaitForTerminalExitRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *WaitForTerminalExitRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *WaitForTerminalExitRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -18528,6 +19328,10 @@ func (v *WaitForTerminalExitResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *WaitForTerminalExitResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *WaitForTerminalExitResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
@@ -18569,6 +19373,19 @@ func (v *WriteTextFileRequest) UnmarshalJSON(b []byte) error {
 }
 
 func (v *WriteTextFileRequest) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *WriteTextFileRequest) validate(abs func(string) bool) error {
+	if !abs(v.Path) {
+		return &ValidationError{
+			Type:  "WriteTextFileRequest",
+			Field: "path",
+			Value: v.Path,
+			Rule:  RuleAbsolutePath,
+			msg:   fmt.Sprintf("WriteTextFileRequest: path: %q is not an absolute path", v.Path),
+		}
+	}
 	return nil
 }
 
@@ -18602,6 +19419,10 @@ func (v *WriteTextFileResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (v *WriteTextFileResponse) Validate() error {
+	return v.validate(filepath.IsAbs)
+}
+
+func (v *WriteTextFileResponse) validate(abs func(string) bool) error {
 	return nil
 }
 

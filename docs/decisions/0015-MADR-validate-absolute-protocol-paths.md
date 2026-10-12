@@ -287,7 +287,8 @@ Concretely:
    `WriteTextFileRequest`, `CreateTerminalRequest`, `ToolCallLocation`, `Diff`). A rule applies to every generated type that holds its
    definition's property: the definition's own type, and an inline variant built from it through `allOf`, so `Diff`'s rule covers
    `ToolCallContentDiff`. `Build` refuses a rule whose property is not a string, an optional string, or an array of strings, and applies a
-   rule only where the schema has its definition, as the table's other rules do; `TestProtocolTableAppliesToCommittedSchema` requires each
+   rule only where the schema has its definition and property, as the table's other rules do (made explicit 2026-10-12, in step 4 of the
+   PLAN: a rule whose property the schema lacks is skipped); `TestProtocolTableAppliesToCommittedSchema` requires each
    to apply to the committed schema.
 2. **The check, by direction.** A new `model.CheckAbsolutePath` kind checks a string, an optional one when set, and each element of an
    array, with a rule the caller chooses. The generated code carries the body of each `Validate` in an unexported method that takes that

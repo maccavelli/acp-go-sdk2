@@ -324,4 +324,18 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 			t.Errorf("hand-written helpers for %s: %+v", name, ty)
 		}
 	}
+	// Every absolute-path rule applies, and the 17 properties are checked in
+	// 18 fields: Diff's path also in ToolCallContentDiff, the inline variant
+	// built from it (0015-PLAN-validate-absolute-protocol-paths.md, step 4).
+	if len(m.AbsolutePaths) != len(ACP.AbsolutePaths) || len(ACP.AbsolutePaths) != 17 {
+		t.Errorf("%d absolute-path rules apply of %d, want 17", len(m.AbsolutePaths), len(ACP.AbsolutePaths))
+	}
+	checks := absolutePathChecks(m)
+	n := 0
+	for _, c := range checks {
+		n += len(c)
+	}
+	if n != 18 || len(checks["ToolCallContentDiff"]) != 1 {
+		t.Errorf("%d absolute-path checks, want 18 with ToolCallContentDiff's: %v", n, checks)
+	}
 }

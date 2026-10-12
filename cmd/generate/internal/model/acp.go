@@ -43,4 +43,42 @@ var ACP = Protocol{
 	},
 	// helpers.go builds these with TextBlock, ToolContent, and the like.
 	HandWrittenHelpers: []string{"ContentBlock", "SessionUpdate", "ToolCallContent"},
+	// The properties the protocol requires to be absolute paths, which the
+	// schema states only in prose (0015-MADR-validate-absolute-protocol-paths.md).
+	AbsolutePaths: []PathRule{
+		{Definition: "NewSessionRequest", Property: keyCwd, Source: srcCwd},
+		{Definition: "NewSessionRequest", Property: keyRoots, Source: srcRoots},
+		{Definition: "LoadSessionRequest", Property: keyCwd, Source: srcCwd},
+		{Definition: "LoadSessionRequest", Property: keyRoots, Source: srcRoots},
+		{Definition: "ResumeSessionRequest", Property: keyCwd, Source: srcCwd},
+		{Definition: "ResumeSessionRequest", Property: keyRoots, Source: srcRoots},
+		{Definition: "UnstableForkSessionRequest", Property: keyCwd, Source: srcCwd},
+		{Definition: "UnstableForkSessionRequest", Property: keyRoots, Source: srcRoots},
+		{Definition: "ListSessionsRequest", Property: keyCwd, Source: srcAllPaths},
+		{Definition: "SessionInfo", Property: keyCwd, Source: srcCwd},
+		{Definition: "SessionInfo", Property: keyRoots, Source: srcRoots},
+		{Definition: "McpServerStdio", Property: "command", Source: srcAllPaths},
+		{Definition: "ReadTextFileRequest", Property: keyPath, Source: srcAllPaths},
+		{Definition: "WriteTextFileRequest", Property: keyPath, Source: srcAllPaths},
+		{Definition: "CreateTerminalRequest", Property: keyCwd, Source: srcAllPaths},
+		{Definition: "ToolCallLocation", Property: keyPath, Source: srcAllPaths},
+		{Definition: "Diff", Property: keyPath, Source: srcAllPaths},
+	},
 }
+
+// The property keys several absolute-path rules name.
+const (
+	keyCwd   = "cwd"
+	keyRoots = "additionalDirectories"
+	keyPath  = "path"
+)
+
+// The specification sentences the absolute-path rules follow.
+const (
+	// srcAllPaths is from <https://agentclientprotocol.com/protocol/overview>.
+	srcAllPaths = "All file paths in the protocol MUST be absolute."
+	// srcCwd is from <https://agentclientprotocol.com/protocol/session-setup>, working directory.
+	srcCwd = "The cwd ... MUST be an absolute path."
+	// srcRoots is from <https://agentclientprotocol.com/protocol/session-setup>, additional workspace roots.
+	srcRoots = "each additionalDirectories entry MUST be an absolute path"
+)

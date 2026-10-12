@@ -80,7 +80,7 @@ func (a *agentExample) Prompt(ctx context.Context, p PromptRequest) (PromptRespo
 			"Modifying configuration",
 			WithStartKind(ToolKindEdit),
 			WithStartStatus(ToolCallStatusPending),
-			WithStartLocations([]ToolCallLocation{{Path: "/project/config.json"}}),
+			WithStartLocations([]ToolCallLocation{{Path: testAbsPath("project", "config.json")}}),
 			WithStartRawInput(json.RawMessage(`{"path":"/project/config.json"}`)),
 		),
 	})
@@ -93,7 +93,7 @@ func (a *agentExample) Prompt(ctx context.Context, p PromptRequest) (PromptRespo
 			Title:      new("Modifying configuration"),
 			Kind:       new(ToolKindEdit),
 			Status:     new(ToolCallStatusPending),
-			Locations:  []ToolCallLocation{{Path: "/project/config.json"}},
+			Locations:  []ToolCallLocation{{Path: testAbsPath("project", "config.json")}},
 			RawInput:   json.RawMessage(`{"path":"/project/config.json"}`),
 		},
 		Options: []PermissionOption{

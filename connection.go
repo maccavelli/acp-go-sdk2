@@ -51,6 +51,22 @@ type cancelRequestParams struct {
 	RequestID json.RawMessage `json:"requestId"`
 }
 
+// isPortableAbs reports whether p is absolute in POSIX or Windows form: it
+// begins with "/", with a drive letter, a colon and a separator, or with two
+// backslashes. It is the rule for a path the SDK sends, whose receiver's
+// operating system the SDK cannot know; a path the SDK receives is checked
+// with the host's filepath.IsAbs (0015-MADR-validate-absolute-protocol-paths.md, A4).
+func isPortableAbs(p string) bool {
+	switch {
+	case strings.HasPrefix(p, "/"), strings.HasPrefix(p, `\\`):
+		return true
+	case len(p) >= 3 && p[1] == ':' && (p[2] == '\\' || p[2] == '/'):
+		c := p[0] | 0x20
+		return c >= 'a' && c <= 'z'
+	}
+	return false
+}
+
 // MethodHandler handles one inbound JSON-RPC request or notification.
 type MethodHandler func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError)
 

@@ -312,7 +312,8 @@ func TestValidateSchemaConstraints(t *testing.T) {
 		want string // empty: Validate passes
 	}{
 		{"empty block in a prompt", &PromptRequest{SessionId: "s", Prompt: []ContentBlock{{}}}, "PromptRequest: prompt[0]: ContentBlock must have exactly one variant set"},
-		{"empty required string", &ReadTextFileRequest{SessionId: "s"}, ""},
+		{"empty path", &ReadTextFileRequest{SessionId: "s"}, `ReadTextFileRequest: path: "" is not an absolute path`},
+		{"relative path", &ReadTextFileRequest{SessionId: "s", Path: "rel"}, `ReadTextFileRequest: path: "rel" is not an absolute path`},
 		{"title below minLength", &Notice{}, "Notice: title: shorter than minLength 1"},
 		{"map value", &ElicitationSchema{Properties: map[string]ElicitationPropertySchema{"a": {}}},
 			`ElicitationSchema: properties["a"]: ElicitationPropertySchema must have exactly one variant set`},
