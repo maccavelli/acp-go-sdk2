@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-11
 associated-madr: "0013-MADR-close-phase-6-follow-ups.md"
 ---
@@ -152,3 +152,28 @@ Ran on `main` from `e3c412a`. The agent did not commit.
   check-records` exits 0, and the identifier scan of the changed files found nothing. No Go file changed.
 
 Commit point: the agent stopped here. The owner commits step 4 on `main`.
+
+### Step 5, close, 2026-10-11
+
+The owner committed step 4 as `d5a336c`, pushed `main`, and tagged and pushed `v0.15.0` (an annotated tag on `d5a336c`). The agent did not
+commit or tag. Each item of Verification:
+
+* `grep -rn SanitizeComment --include=*.go .` finds nothing (exit 1); `cmd/generate` builds and its tests pass.
+* `TestConformanceConstructors` runs 11 subtests (10 pass, `SessionConfigOption_Select` skips its round trip after its checks, as step 3's
+  deviation records) and failed on each plant of step 3. `helpers_gen.go` is at 100% from the root tests, each of its 11 functions.
+* Regenerating changes nothing. Against `85ef7a8`, no `*_gen.go` file differs, `schema_gen_test.go` gains 102 lines (the constructor list),
+  and the exported API listing is the same, 2308 lines.
+* Each statement of the report traces to a record, a commit, or the API listing; step 4 records the two checked against the code.
+* `go test -race -count=1 ./...` passes at the root and in `cmd/generate`; `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the root.
+* `make pre-add-check`: `go-precheck: 101 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records` and
+  `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.
+* CI passed for `e3c412a` and `d5a336c` on `main` (runs 38177478557 and 38178343846), and for the tag `v0.15.0` at `d5a336c` (run
+  38180472135).
+
+Not done here: the GitHub release for `v0.15.0` does not exist yet (`gh release view v0.15.0`: release not found). Its text is the report's
+"Release text"; publishing it is the owner's, as `RELEASING.md` says. The constructors still leave the keys a union requires of every variant
+at their zero values, as the MADR records; changing that would be its own decision.
+
+This plan is complete. The MADR stays `accepted`: step 3's deviation refined a test, not a decision.
+
+Commit point: the agent stopped here. The owner commits step 5 on `main`.
