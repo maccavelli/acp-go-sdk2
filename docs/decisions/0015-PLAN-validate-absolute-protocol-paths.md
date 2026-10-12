@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-12
 associated-madr: "0015-MADR-validate-absolute-protocol-paths.md"
 ---
@@ -590,3 +590,77 @@ Ran on `main` from `398b21f`, the commit of the 0017 records; the agent did not 
 * On the Windows host reached over SSH (`go1.27.2 windows/amd64`), with a copy of the working tree's 297 tracked and untracked files and
   no macOS metadata: `go test -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was
   removed afterwards.
+
+### Step 8, close, 2026-10-12
+
+Ran on `main` from `08268b4` (step 7). The agent did not commit.
+
+Verification, each item of "Verification" above:
+
+* The named tests pass under `-race`: at the root `TestIsPortableAbs`, `TestValidationErrorRules`, `TestValidateSchemaConstraints`,
+  `TestSendRefusesRelativePaths`, `TestHandlerResultValidated`, `TestReceiveRefusesRelativePaths`, `TestInboundHooks` and `TestRoots`;
+  in `cmd/generate/internal/model` `TestAbsolutePathRules`, `TestAbsolutePathRuleRefusals` and
+  `TestProtocolTableAppliesToCommittedSchema`; in `cmd/generate` `TestEngineCases/accept-absolute-paths` and
+  `TestEngineBehaviour/accept-absolute-paths`. Each failed on its step's plants, quoted in steps 3 to 7.
+* `TestValidateSchemaConstraints` has `empty path` (`ReadTextFileRequest: path: "" is not an absolute path`) and `relative path`, and
+  still passes `form with an empty message`, a present empty string where no rule applies.
+* A script over `types_gen.go` counts 18 `is not an absolute path` checks in 13 `validate` methods: two each in `NewSessionRequest`,
+  `LoadSessionRequest`, `ResumeSessionRequest`, `UnstableForkSessionRequest` and `SessionInfo`; one each in `ListSessionsRequest`,
+  `McpServerStdio`, `ReadTextFileRequest`, `WriteTextFileRequest`, `CreateTerminalRequest`, `ToolCallLocation`, `Diff` and
+  `ToolCallContentDiff`.
+* The exported API listing of `git archive 23d03b5` against the tree gains exactly: the seven `Rule...` constants; `ValidationError`
+  with its fields `Field`, `Rule`, `Type` and `Value` and its `Error`; `ValidationRule`; `WithInboundRewrite` and
+  `WithInboundValidation`; `Validate` on `Diff`, `McpServerStdio`, `SessionInfo`, `ToolCallContentDiff` and `ToolCallLocation`; and
+  `Roots` on the five types. Nothing is removed or changed.
+* `make pre-add-check`: `go-precheck: 105 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`, `go test -race` in
+  both modules among its checks. `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the root; `GOOS=windows go vet ./...` passes in
+  both modules. `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
+* CI: every pushed commit of this plan passed on `ubuntu-24.04`, `macos-15` and `windows-2025`, except `b83b84d` (run 38291760159),
+  whose Windows failure is the deviation after step 5, fixed by `fe6b1cb` (run 38292700075, green); `398b21f`, which carries step 6
+  (`a438f99`), passed in run 38301174952. Step 7 (`08268b4`) and this step had not been pushed when this was written; their tests passed
+  on the Windows host in step 7, and CI runs when the owner pushes. A failure there is a deviation of this plan.
+
+A gap found while closing, not a deviation: the first run of `TestEngineBehaviour` for this check used `-run
+'TestEngineBehaviour/accept-absolute-paths'`, which skips the test's own `generate` subtest, so nothing was generated and the case
+reported "go test reported nothing for the package". With `-run 'TestEngineBehaviour/(generate|accept-absolute-paths)'` it passes. The
+test is unchanged; the filter was wrong.
+
+Handoff: [0014-PLAN-union-constructors-take-every-required-key.md](0014-PLAN-union-constructors-take-every-required-key.md), step 6, as
+amended there: it documents both records, and its step 7 writes the `v0.16.0` notes, with the erratum's list and the advisory draft.
+
+#### Reply to issue #2, for the owner to post
+
+Post when `v0.16.0` is tagged, and close the issue with it; the advisory for `v0.15.0` is published at the same time (MADR, "Decided with
+the acceptance").
+
+Posted 2026-10-12 at the owner's request, before `v0.16.0` is tagged (issue #2, comment 6131950409), with the last line in the future
+tense: "Fixed on `main`; it ships in `v0.16.0`, and a security advisory for `v0.15.0` will be published with that release." The issue
+stays open until the tag.
+
+```markdown
+Thank you for the report and the table: it was right on every count.
+
+**What changed.** The SDK now enforces ACP's rule that "all file paths in the protocol MUST be absolute", which the schema states only
+in prose, on the 17 properties that carry a path: `cwd` and `additionalDirectories` of `session/new`, `session/load`, `session/resume`
+and the unstable `session/fork`; the `cwd` filter of `session/list` and the `cwd` and `additionalDirectories` of each listed session;
+the `command` of a stdio MCP server; the `path` of `fs/read_text_file` and `fs/write_text_file`; the `cwd` of `terminal/create`; and the
+`path` of a tool-call location and of a diff. An empty or relative value is refused, which `v0.14.0` never did for a relative one.
+
+* **Receiving.** Every request, notification and response is checked with the host's `filepath.IsAbs` before a handler runs: a request
+  is answered `-32602` naming the type and property, such as `NewSessionRequest: cwd: "" is not an absolute path`; a notification is
+  dropped and logged; a response is returned to the caller as an error. Responses are now validated too.
+* **Sending.** Everything the SDK sends is checked, with no way to turn it off; a path absolute in POSIX or Windows form passes, since
+  the sender cannot know the receiver's operating system.
+* **Adjusting.** `WithInboundRewrite` can change a received message before it is checked (resolve a bare MCP command, translate a path
+  from another host), and `WithInboundValidation` decides the outcome after, to add a rule or accept a violation deliberately.
+* **Inspecting.** Every check returns a `*acp.ValidationError` with `Type`, `Field`, `Value` and `Rule`, and `Roots()` gives a session's
+  root set, `cwd` then `additionalDirectories`. Confinement stays with the agent; the README shows `os.OpenRoot` per root.
+
+The other removed checks stay removed, as the standard states none of them; `WithInboundValidation` can add any of them back.
+
+**Records.** The decision is `docs/decisions/0015-MADR-validate-absolute-protocol-paths.md`, carried out by
+`docs/decisions/0015-PLAN-validate-absolute-protocol-paths.md`. `docs/reports/0013-REPORT-release-notes-v0-15-0.md` has an erratum
+naming the 28 empty-string checks `v0.15.0` removed, with `cwd` and `path` flagged.
+
+**Release.** Fixed in `v0.16.0`. A security advisory for `v0.15.0` is published with it.
+```
