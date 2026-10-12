@@ -110,9 +110,10 @@ type side struct {
 	// names the other side in Connection's.
 	doc, ctorDoc []string
 	peer         string
-	// promptTurns is true when the side holds prompt-turn contexts, and
-	// pending when it answers requests itself on a prompt-turn cancel.
-	promptTurns, pending bool
+	// promptTurns is true when the side holds prompt-turn contexts, pending
+	// when it answers requests itself on a prompt-turn cancel, and negotiated
+	// when it records what initialize agreed.
+	promptTurns, pending, negotiated bool
 }
 
 // agentSide and clientSide describe the two side connections of m
@@ -127,7 +128,8 @@ func agentSide(m *model.Model) side {
 			"provided Agent implementation. Optional ConnectionOption values configure",
 			"the underlying connection (e.g., WithMaxQueuedNotifications).",
 		},
-		peer: "client",
+		peer:       "client",
+		negotiated: m.Initialize != nil,
 		promptTurns: slices.ContainsFunc(m.AgentMethods, func(mi *model.Method) bool {
 			return mi.PromptTurn || mi.CancelsPromptTurn
 		}),
@@ -144,7 +146,8 @@ func clientSide(m *model.Model) side {
 			"provided Client implementation. Optional ConnectionOption values configure",
 			"the underlying connection (e.g., WithMaxQueuedNotifications).",
 		},
-		peer: "agent",
+		peer:       "agent",
+		negotiated: m.Initialize != nil,
 		pending: slices.ContainsFunc(m.ClientMethods, func(mi *model.Method) bool {
 			return mi.CancelledByPromptCancel
 		}),
@@ -164,6 +167,9 @@ func emitSideConnection(f *goFile, s side) {
 	}
 	if s.pending {
 		fs = append(fs, param("pending", id("pendingRequests")))
+	}
+	if s.negotiated {
+		fs = append(fs, param("negotiation", index(f.qual(pkgAtomic, "Pointer"), id("Negotiation"))))
 	}
 	f.comment(s.doc...)
 	f.add(typeDecl(s.typeName, &ast.StructType{Fields: fields(fs...)}))
@@ -221,6 +227,17 @@ func emitSideConnection(f *goFile, s side) {
 	)
 	f.add(method(recv(), "Connection", funcType(nil, param("", star(id("Connection")))), ret(dot("c", "conn"))))
 	f.line()
+	if s.negotiated {
+		f.comment("Negotiated returns what initialize agreed on this connection, the request",
+			"and the response of its last successful initialize, and false before one",
+			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1).")
+		f.add(method(recv(), "Negotiated", funcType(nil, param("", id("Negotiation")), param("", id("bool"))),
+			define(exprs(id("n")), call(dot("c", "negotiation", "Load"))),
+			ifStmt(nil, binary(id("n"), token.EQL, nilExpr()), ret(composite(id("Negotiation")), id("false"))),
+			ret(star(id("n")), id("true")),
+		))
+		f.line()
+	}
 	if s.promptTurns {
 		f.comment("promptTurn is one prompt turn: its cancel function and the receipt number",
 			"of its request. sessionCancels holds the running turn of each session by",
@@ -261,6 +278,8 @@ func agentFile(m *model.Model) *goFile {
 			pre, recv := agentAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Req, mi.Resp, mi.HasResult)
 			body = append(body, pre...)
 			switch {
+			case mi.Initializes:
+				body = append(body, initializeCase(recv, mi)...)
 			case mi.PromptTurn:
 				body = append(body, promptCase(f, recv, mi)...)
 			case !mi.HasResult:
@@ -333,6 +352,55 @@ func cancelledOnPromptCancel(f *goFile, recv ast.Expr, mi *model.Method) []ast.S
 	}
 }
 
+// initializeCase answers initialize: a version the handler leaves zero is
+// ProtocolVersionNumber, and any other is refused with -32603, as this SDK
+// speaks that version only; the record of the request and the answer is
+// stored before the answer is written
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, N1 and G1).
+func initializeCase(recv ast.Expr, mi *model.Method) []ast.Stmt {
+	version := dot("resp", mi.RespVersionField)
+	verr := addr(composite(id("ProtocolVersionError"),
+		kv(id("Requested"), call(id("int"), dot("p", mi.ReqVersionField))),
+		kv(id("Answered"), call(id("int"), dot("resp", mi.RespVersionField)))))
+	return []ast.Stmt{
+		define(exprs(id("resp"), id("err")), recvCall(recv, mi.GoName)),
+		ifStmt(nil, errNotNil(), toRequestError()),
+		ifStmt(nil, binary(version, token.EQL, intLit(0)), assign(exprs(dot("resp", mi.RespVersionField)), id("ProtocolVersionNumber"))),
+		ifStmt(nil, binary(dot("resp", mi.RespVersionField), token.NEQ, id("ProtocolVersionNumber")),
+			define(exprs(id("verr")), verr),
+			exprStmt(call(sel(call(dot("a", "conn", "loggerOrDefault")), "Error"), str("initialize answer not sent"), str("method"), id("method"), str("err"), id("verr"))),
+			ret(nilExpr(), call(id("NewInternalError"), composite(rawMap(id("any")), kv(str("error"), call(dot("verr", "Error")))))),
+		),
+		define(exprs(id("result"), id("rerr")), call(dot("a", "conn", "checkResult"), id("method"), id("resp"))),
+		ifStmt(nil, binary(id("rerr"), token.NEQ, nilExpr()), ret(nilExpr(), id("rerr"))),
+		exprStmt(call(dot("a", "negotiation", "Store"), addr(composite(id("Negotiation"), kv(id("Request"), id("p")), kv(id("Response"), id("resp")))))),
+		ret(id("result"), nilExpr()),
+	}
+}
+
+// initializeWrapper sends initialize: a version the request leaves zero is
+// ProtocolVersionNumber, another is refused before sending, and an answer
+// with another version is a *ProtocolVersionError and records nothing
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, N1 and G1).
+func initializeWrapper(mi *model.Method) []ast.Stmt {
+	req, resp := dot("params", mi.ReqVersionField), dot("resp", mi.RespVersionField)
+	return []ast.Stmt{
+		ifStmt(nil, binary(req, token.EQL, intLit(0)), assign(exprs(dot("params", mi.ReqVersionField)), id("ProtocolVersionNumber"))),
+		ifStmt(nil, binary(dot("params", mi.ReqVersionField), token.NEQ, id("ProtocolVersionNumber")),
+			ret(composite(id(mi.Resp)), addr(composite(id("ProtocolVersionError"),
+				kv(id("Requested"), call(id("int"), dot("params", mi.ReqVersionField))))))),
+		define(exprs(id("resp"), id("err")),
+			call(index(id("SendRequest"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), id("params"))),
+		ifStmt(nil, errNotNil(), ret(id("resp"), id("err"))),
+		ifStmt(nil, binary(resp, token.NEQ, id("ProtocolVersionNumber")),
+			ret(id("resp"), addr(composite(id("ProtocolVersionError"),
+				kv(id("Requested"), call(id("int"), dot("params", mi.ReqVersionField))),
+				kv(id("Answered"), call(id("int"), dot("resp", mi.RespVersionField))))))),
+		exprStmt(call(dot("c", "negotiation", "Store"), addr(composite(id("Negotiation"), kv(id("Request"), id("params")), kv(id("Response"), id("resp")))))),
+		ret(id("resp"), nilExpr()),
+	}
+}
+
 // emitOutbound emits one method per peer method on recvType that sends the
 // request or notification over c.conn.
 func emitOutbound(f *goFile, recvType string, methods []*model.Method) {
@@ -364,6 +432,11 @@ func emitOutbound(f *goFile, recvType string, methods []*model.Method) {
 			f.add(method(recv(), mi.GoName, funcType(params(mi.Req), param("", id("error"))),
 				ret(call(dot("c", "conn", "SendRequestNoResult"), id("ctx"), id(mi.Const), id("params"))),
 			))
+			continue
+		}
+		if mi.Initializes {
+			f.add(method(recv(), mi.GoName, funcType(params(mi.Req), param("", id(mi.Resp)), param("", id("error"))),
+				initializeWrapper(mi)...))
 			continue
 		}
 		body := []ast.Stmt{

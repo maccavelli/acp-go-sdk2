@@ -58,6 +58,13 @@ func typesFile(m *model.Model) *goFile {
 	}
 	emitRPCInterfaces(f, m)
 	emitDecodeHelpers(f)
+	if mi := m.Initialize; mi != nil {
+		f.line()
+		f.comment("Negotiation is what initialize agreed on a connection: the request the",
+			"client sent and the response the agent answered",
+			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1 and N1).")
+		f.add(typeDecl("Negotiation", &ast.StructType{Fields: fields(param("Request", id(mi.Req)), param("Response", id(mi.Resp)))}))
+	}
 
 	return f
 }

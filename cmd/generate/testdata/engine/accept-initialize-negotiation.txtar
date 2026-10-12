@@ -1,0 +1,96 @@
+The protocol table's initialize rule: both side connections record the
+request and the answer as a Negotiation, a version left zero is the SDK's, and
+a client does not send another (0017-MADR-remediate-acp-v1-conformance-violations.md,
+N1 and G1).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"initialize": "initialize"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "ProtocolVersion": {"type": "integer", "format": "uint16"},
+  "ClientCapabilities": {"type": "object", "properties": {"fs": {"type": "boolean"}}},
+  "AgentCapabilities": {"type": "object", "properties": {"loadSession": {"type": "boolean"}}},
+  "InitializeRequest": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "clientCapabilities": {"$ref": "#/$defs/ClientCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
+  "InitializeResponse": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "agentCapabilities": {"$ref": "#/$defs/AgentCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error)}
+type AgentCapabilities struct{LoadSession bool "json:\"loadSession,omitempty\""}
+type AgentExperimental interface{}
+const AgentMethodInitialize untyped string = "initialize"
+type AgentSideConnection struct{conn *Connection; agent Agent; negotiation atomic.Pointer[Negotiation]}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientCapabilities struct{Fs bool "json:\"fs,omitempty\""}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client; negotiation atomic.Pointer[Negotiation]}
+type InitializeRequest struct{ClientCapabilities ClientCapabilities "json:\"clientCapabilities\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
+type InitializeResponse struct{AgentCapabilities AgentCapabilities "json:\"agentCapabilities\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
+type Negotiation struct{Request InitializeRequest; Response InitializeResponse}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+type ProtocolVersion uint16
+const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Negotiated() (Negotiation, bool)
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error)
+func (*ClientSideConnection).Negotiated() (Negotiation, bool)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*InitializeRequest).UnmarshalJSON(b []byte) error
+func (*InitializeRequest).Validate() error
+func (*InitializeResponse).UnmarshalJSON(b []byte) error
+func (*InitializeResponse).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"errors"
+	"io"
+	"testing"
+)
+
+// zeroAgent answers initialize without a version.
+type zeroAgent struct{}
+
+func (zeroAgent) Initialize(context.Context, InitializeRequest) (InitializeResponse, error) {
+	return InitializeResponse{AgentCapabilities: AgentCapabilities{LoadSession: true}}, nil
+}
+
+type noClient struct{}
+
+// Both sides record the exchange, with the zero versions filled; a client
+// does not send a version the SDK does not speak.
+func TestNegotiation(t *testing.T) {
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	asc := NewAgentSideConnection(zeroAgent{}, aw, ar)
+	c := NewClientSideConnection(noClient{}, cw, cr)
+	if _, ok := c.Negotiated(); ok {
+		t.Error("the client has a record before initialize")
+	}
+	resp, err := c.Initialize(t.Context(), InitializeRequest{ClientCapabilities: ClientCapabilities{Fs: true}})
+	if err != nil || resp.ProtocolVersion != ProtocolVersionNumber {
+		t.Fatalf("Initialize = %+v, %v, want version %d", resp, err, ProtocolVersionNumber)
+	}
+	cn, cok := c.Negotiated()
+	an, aok := asc.Negotiated()
+	if !cok || !aok || cn != an || cn.Request.ProtocolVersion != ProtocolVersionNumber || !cn.Request.ClientCapabilities.Fs ||
+		!cn.Response.AgentCapabilities.LoadSession {
+		t.Errorf("records: client %+v %v, agent %+v %v", cn, cok, an, aok)
+	}
+	var pe *ProtocolVersionError
+	if _, err := c.Initialize(t.Context(), InitializeRequest{ProtocolVersion: 2}); !errors.As(err, &pe) || pe.Requested != 2 {
+		t.Errorf("Initialize(version 2) = %v, want a *ProtocolVersionError", err)
+	}
+}

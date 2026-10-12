@@ -4,17 +4,17 @@ The meta declares $/cancel_request and the schema its smallest definition, which
 the runtime needs.
 
 -- meta.json --
-{"version": 1, "agentMethods": {"initialize": "initialize"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+{"version": 1, "agentMethods": {"hello": "x/hello"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
 -- schema.json --
 {"$defs": {
-  "InitRequest": {"type": "object", "properties": {"v": {"type": "integer", "format": "uint16"}}, "required": ["v"], "x-side": "agent", "x-method": "initialize"},
-  "InitResponse": {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"], "x-side": "agent", "x-method": "initialize"},
+  "InitRequest": {"type": "object", "properties": {"v": {"type": "integer", "format": "uint16"}}, "required": ["v"], "x-side": "agent", "x-method": "x/hello"},
+  "InitResponse": {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"], "x-side": "agent", "x-method": "x/hello"},
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
 }}
 -- want.api --
 type Agent interface{Init(ctx context.Context, params InitRequest) (InitResponse, error)}
 type AgentExperimental interface{}
-const AgentMethodInitialize untyped string = "initialize"
+const AgentMethodHello untyped string = "x/hello"
 type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}

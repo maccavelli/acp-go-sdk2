@@ -974,6 +974,12 @@ func TestConformanceReplies(t *testing.T) {
 			result := m.Result()
 			rt := typeByName[reflect.TypeOf(result).Elem().Name()]
 			want := newBuilder(rt.File).instances(rt.Def)[0]
+			if obj, ok := want.(map[string]any); ok && m.Wire == AgentMethodInitialize {
+				// The agent answers the one version this SDK speaks; one it leaves
+				// zero is filled, which TestProtocolVersion covers
+				// (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 8).
+				obj["protocolVersion"] = ProtocolVersionNumber
+			}
 			got, err := exchange(t, m, params, func(r any) error { return json.Unmarshal(mustJSON(t, want), r) })
 			if err != nil {
 				t.Fatalf("%s: %v", m.Wire, err)

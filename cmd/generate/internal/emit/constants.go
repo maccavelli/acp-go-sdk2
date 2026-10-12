@@ -29,6 +29,7 @@ const (
 	pkgSlog    = "log/slog"
 	pkgStrings = "strings"
 	pkgSync    = "sync"
+	pkgAtomic  = "sync/atomic"
 )
 
 // constantsFile builds constants_gen.go: the version and method constants.

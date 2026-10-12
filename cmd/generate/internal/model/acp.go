@@ -16,6 +16,12 @@ var ACP = Protocol{
 		Doc:     []string{"AgentLoader defines optional support for loading sessions. Implement and advertise the capability to enable 'session/load'."},
 	}},
 	Methods: []MethodRule{
+		// Initialization: "The initialize request MUST include the latest
+		// protocol version the Client supports"; "If the Agent supports the
+		// requested version, it MUST respond with the same version. Otherwise,
+		// the Agent MUST respond with the latest version it supports."
+		{Side: sideAgent, Wire: "initialize", Initializes: true, VersionKey: "protocolVersion",
+			RequestCapabilities: "clientCapabilities", ResponseCapabilities: "agentCapabilities"},
 		// Session setup: Clients MUST NOT call session/load unless the Agent
 		// advertises loadSession, so it has its own optional interface.
 		{Side: sideAgent, Wire: "session/load", Binding: BindAgentOptional, Capability: "loadSession"},

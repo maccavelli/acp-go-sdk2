@@ -7,13 +7,15 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"sync/atomic"
 )
 
 // ClientSideConnection provides the client's view of the connection and implements Agent calls.
 type ClientSideConnection struct {
-	conn    *Connection
-	client  Client
-	pending pendingRequests
+	conn        *Connection
+	client      Client
+	pending     pendingRequests
+	negotiation atomic.Pointer[Negotiation]
 }
 
 // NewClientSideConnection creates a new client-side connection bound to the
@@ -52,6 +54,17 @@ func (c *ClientSideConnection) SetLogger(l *slog.Logger) {
 // copy.
 func (c *ClientSideConnection) Connection() *Connection {
 	return c.conn
+}
+
+// Negotiated returns what initialize agreed on this connection, the request
+// and the response of its last successful initialize, and false before one
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+func (c *ClientSideConnection) Negotiated() (Negotiation, bool) {
+	n := c.negotiation.Load()
+	if n == nil {
+		return Negotiation{}, false
+	}
+	return *n, true
 }
 
 func (c *ClientSideConnection) handle(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
@@ -251,8 +264,27 @@ func (c *ClientSideConnection) UnstableDidSaveDocument(ctx context.Context, para
 }
 
 func (c *ClientSideConnection) Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error) {
+	if params.ProtocolVersion == 0 {
+		params.ProtocolVersion = ProtocolVersionNumber
+	}
+	if params.ProtocolVersion != ProtocolVersionNumber {
+		return InitializeResponse{}, &ProtocolVersionError{Requested: int(params.ProtocolVersion)}
+	}
 	resp, err := SendRequest[InitializeResponse](c.conn, ctx, AgentMethodInitialize, params)
-	return resp, err
+	if err != nil {
+		return resp, err
+	}
+	if resp.ProtocolVersion != ProtocolVersionNumber {
+		return resp, &ProtocolVersionError{
+			Requested: int(params.ProtocolVersion),
+			Answered:  int(resp.ProtocolVersion),
+		}
+	}
+	c.negotiation.Store(&Negotiation{
+		Request:  params,
+		Response: resp,
+	})
+	return resp, nil
 }
 
 func (c *ClientSideConnection) Logout(ctx context.Context, params LogoutRequest) (LogoutResponse, error) {

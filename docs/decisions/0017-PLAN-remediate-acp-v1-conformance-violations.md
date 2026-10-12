@@ -834,3 +834,76 @@ Ran on `main` from `4e04f37` (step 6). The agent did not commit. No generated fi
   of the changed files found nothing.
 * On the Windows host reached over SSH, with a copy of the working tree's 301 tracked and untracked files and no macOS metadata: `go test
   -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
+
+### Step 8 deviation, 2026-10-12: two fixtures met the initialize rule
+
+With the `initialize` rule in place, `TestEngineCases/accept-agent-request`, its behaviour test and `TestHelperParams` failed: the case
+uses the wire `initialize` for a generic agent request with a response, whose request has no `protocolVersion`, so the rule refused its
+schema. `TestConformanceReplies` failed for `initialize`: its peer answers the schema-built `InitializeResponse`, `protocolVersion` 0,
+and the SDK fills it with 1, as N1 decided, so the reply no longer equals the peer's answer.
+
+Asked, the owner chose to rename the engine case's method to `x/hello` (meta key `hello`), keeping its subject; its `want.api` changes
+only in `const AgentMethodHello untyped string = "x/hello"`, which replaces `AgentMethodInitialize`. And to have the conformance test's
+peer answer `initialize` with `protocolVersion` set to `ProtocolVersionNumber`, a conforming answer that comes back unchanged, so the
+test still compares exactly; the zero fill is tested in `TestProtocolVersion`. Not chosen: making the engine case a real initialize;
+expecting the fill inside the generic comparison. Files added to step 8: `accept-agent-request.txtar` and `conformance_test.go`. The
+MADR is unchanged.
+
+### Step 8, negotiation and version, 2026-10-12
+
+Ran on `main` from `f025059` (step 7). The agent did not commit. The deviation above, decided by the owner, ran within this step.
+
+* `cmd/generate/internal/model`: `MethodRule` gains `Initializes`, `VersionKey`, `RequestCapabilities` and `ResponseCapabilities`;
+  `newRules` refuses more than one `Initializes` rule (`<n> initialize rules; a protocol has one`); the role checks moved from
+  `checkRule` into a new `checkRoles`, unchanged, because `gocyclo` counted 48 for `checkRule` with the new cases, and they refuse an
+  `initialize` rule off the agent side (`only an agent method initializes the connection`, a check the first test run showed was
+  missing: `linkInitialize` looks at agent methods only), one without its keys, and a key without the rule. `Method` gains
+  `Initializes`, `ReqVersionField`, `RespVersionField`, `ReqCapsField` and `RespCapsField`; `Model` gains `Initialize`.
+  `linkInitialize` requires a request with a result, the version a required integer property of both (`isInteger`, through a named
+  primitive), and each capabilities key an object property. `acp.go`: the `initialize` rule, quoting the initialization sentences.
+* `cmd/generate/internal/emit`: `typesFile` emits `Negotiation` (`Request`, `Response`) with the rule; `emitSideConnection` gives both
+  side structs `negotiation atomic.Pointer[Negotiation]` and emits `Negotiated() (Negotiation, bool)`; `initializeCase` emits the
+  agent's case (a zero version filled with `ProtocolVersionNumber`, another answered `-32603` and logged with a
+  `*ProtocolVersionError`, the result through `checkResult`, the record stored before the answer is returned for writing);
+  `initializeWrapper` emits the client's `Initialize` (zero filled; another refused before sending; an answer of another version a
+  `*ProtocolVersionError{Requested, Answered}` with nothing stored; otherwise the record stored). The first generation called
+  `a.conn.loggerOrDefault.Error` without calling `loggerOrDefault`; the generator refused its own output for not type-checking
+  (`a.conn.loggerOrDefault.Error undefined`), wrote nothing, and the emitter was fixed.
+* Generated: `types_gen.go` gains only `Negotiation`; `agent_gen.go` changes in the struct, `Negotiated`, and the `initialize` case;
+  `client_gen.go` in the struct, `Negotiated`, and `Initialize`. The API listing against `git archive HEAD` gains exactly `type
+  Negotiation struct`, its fields `Request InitializeRequest` and `Response InitializeResponse`, and `Negotiated` on both side
+  connections.
+* Engine cases: new `accept-initialize-negotiation.txtar`; its behaviour test requires the zero versions filled on both sides, the same
+  record on both, and a client's version 2 refused with a `*ProtocolVersionError`; its `want.api` holds the two `negotiation` fields,
+  `Negotiation` and the two `Negotiated`. `accept-agent-request.txtar` as the deviation says. No other `want.api` changed.
+* Generator tests: `protocolDefs` and `testProtocol` gain `s/init`; `checkTestRoles` and `checkCommittedRoles` (helpers split out of the
+  two table tests, which `gocyclo` counted at 41 and 42) require the resolved fields, `Model.Initialize`, and on the committed schema
+  `ProtocolVersion`, `ClientCapabilities` and `AgentCapabilities`; `TestProtocolTableRefuses` gains seven cases (two rules, no keys, a
+  key on a plain rule, the client side, no result, a version that is not an integer, one that is not required, capabilities that are not
+  an object); `renamedProtocol` gains `chat/hello` with `rev`, `mine` and `theirs`, and `TestDispatchFollowsTheModel` pins both sides'
+  code by those names and refuses `InitializeRequest`, `params.ProtocolVersion` and `resp.ProtocolVersion` in it;
+  `TestSideConnectionsFollowTheModel` requires the `negotiation` fields with the rule only, matching gofmt's alignment by a pattern.
+* Root tests: new file `negotiation_test.go`: `TestNegotiationRecorded` (no record before; the same record on both sides after each of
+  two `Initialize` calls, the second replacing the first) and `TestProtocolVersion` (zero filled both ways; a handler answering 2
+  answered `-32603` and not recorded; a client sending 2 refused with `*ProtocolVersionError{Requested: 2}` and no byte written; a raw
+  agent answering 2 refused with `*ProtocolVersionError{Requested: 1, Answered: 2}` and not recorded), passed twice under `-race`; they
+  reuse `countingWriter` and, through `encodesAlike`, `sameJSON`. `conformance_test.go` as the deviation says.
+* Observed, not changed: an agent answering version 0 gives the client `acp: protocol version 1 is not supported`, the message
+  `ProtocolVersionError` has for `Answered` 0 (step 3); read as "the agent does not support version 1", it holds.
+* Plants, each in its own scratch copy, all `exit=1`:
+  * the agent's zero fill removed: `TestProtocolVersion`, the zero case `want version 1`;
+  * the client's zero fill removed: the same;
+  * the client's answer check removed: `Initialize = <nil>, want *ProtocolVersionError{Requested: 1, Answered: 2}`;
+  * the client storing the record before the check: `the client recorded an answer it refused`;
+  * the agent's version check removed: `Initialize = acp: agent answered protocol version 2 to a request for 1, want -32603`;
+  * the emitter not using `initializeCase`: `TestEngineBehaviour`, `accept-initialize-negotiation`, `Initialize = {... ProtocolVersion:0},
+    acp: protocol version 1 is not supported, want version 1` (the first run expected another line of the test and is not counted);
+  * two `initialize` rules accepted: `TestProtocolTableRefuses/two_initialize_rules` failed;
+  * after the split, `checkRoles` accepting `initialize` on the client side: `TestProtocolTableRefuses/initialize_on_the_client_side`
+    failed.
+* `make pre-add-check`: the first runs failed on `gocyclo`, as above; then `go-precheck: 105 file(s) clean (gofmt, golangci-lint, go vet,
+  go test, govulncheck).`; the untracked `negotiation_test.go`: `go-precheck: 1 file(s) clean`, with `govulncheck` skipped.
+  `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the root; `GOOS=windows go vet ./...` passes in both modules; `make
+  check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
+* On the Windows host reached over SSH, with a copy of the working tree's 303 tracked and untracked files and no macOS metadata: `go test
+  -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.

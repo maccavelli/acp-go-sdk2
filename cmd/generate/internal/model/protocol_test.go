@@ -21,6 +21,12 @@ const protocolDefs = `{
 	"LoadSessionRequest":{"type":"object","x-side":"agent","x-method":"s/load"},
 	"LoadSessionResponse":{"type":"object","x-side":"agent","x-method":"s/load"},
 	"SessionNotification":{"type":"object","x-side":"client","x-method":"s/update"},
+	"Version":{"type":"integer","format":"uint16"},
+	"ClientCaps":{"type":"object","properties":{"fs":{"type":"boolean"}}},
+	"InitRequest":{"type":"object","x-side":"agent","x-method":"s/init","required":["protocolVersion"],
+		"properties":{"protocolVersion":{"allOf":[{"$ref":"#/$defs/Version"}]},"clientCapabilities":{"$ref":"#/$defs/ClientCaps"}}},
+	"InitResponse":{"type":"object","x-side":"agent","x-method":"s/init","required":["protocolVersion"],
+		"properties":{"protocolVersion":{"allOf":[{"$ref":"#/$defs/Version"}]},"agentCapabilities":{"$ref":"#/$defs/AgentCapabilities"}}},
 	"AskRequest":{"type":"object","x-side":"client","x-method":"s/ask","required":["sessionId"],
 		"properties":{"sessionId":{"allOf":[{"$ref":"#/$defs/SessionId"}]}}},
 	"AskResponse":{"type":"object","x-side":"client","x-method":"s/ask","required":["verdict"],
@@ -35,7 +41,7 @@ const protocolDefs = `{
 
 func protocolMeta() *load.Meta {
 	return &load.Meta{
-		AgentMethods:  map[string]string{"prompt": "s/prompt", "cancel": "s/cancel", "load": "s/load"},
+		AgentMethods:  map[string]string{"prompt": "s/prompt", "cancel": "s/cancel", "load": "s/load", "init": "s/init"},
 		ClientMethods: map[string]string{"update": "s/update", "ask": "s/ask"},
 	}
 }
@@ -50,6 +56,8 @@ func testProtocol() *Protocol {
 			{Side: "agent", Wire: "s/cancel", CancelsPromptTurn: true, SessionKey: "sessionId", Capability: "session.list"},
 			{Side: "client", Wire: "s/update", GoName: "SessionUpdate"},
 			{Side: "client", Wire: "s/ask", CancelledByPromptCancel: true, SessionKey: "sessionId", CancelledKey: "verdict", CancelledVariant: "withdrawn"},
+			{Side: "agent", Wire: "s/init", Initializes: true, VersionKey: "protocolVersion", RequestCapabilities: "clientCapabilities",
+				ResponseCapabilities: "agentCapabilities"},
 		},
 		HandWrittenHelpers: []string{"Block"},
 	}
@@ -63,6 +71,20 @@ func methodByWire(m *Model, wire string) *Method {
 		}
 	}
 	return nil
+}
+
+// checkTestRoles requires testProtocol's initialize and answer-on-cancel
+// rules to have resolved their fields.
+func checkTestRoles(t *testing.T, m *Model, cancel *Method) {
+	t.Helper()
+	if init := methodByWire(m, "s/init"); m.Initialize != init || !init.Initializes || init.ReqVersionField != "ProtocolVersion" ||
+		init.RespVersionField != "ProtocolVersion" || init.ReqCapsField != "ClientCapabilities" || init.RespCapsField != "AgentCapabilities" {
+		t.Errorf("s/init: %+v; Model.Initialize %v", init, m.Initialize)
+	}
+	if ask := methodByWire(m, "s/ask"); !ask.CancelledByPromptCancel || ask.SessionField != "SessionId" ||
+		ask.CancelledField != "Verdict" || ask.CancelledHelper != "NewVerdictWithdrawn" || !cancel.CancelsPending {
+		t.Errorf("s/ask: %+v; s/cancel CancelsPending %v", ask, cancel.CancelsPending)
+	}
 }
 
 func interfaceNames(m *Model) []string {
@@ -91,10 +113,7 @@ func TestProtocolTableApplies(t *testing.T) {
 	if prompt.StopField != "StopReason" || prompt.StopConst != "StopReasonCancelled" {
 		t.Errorf("s/prompt: StopField %q StopConst %q", prompt.StopField, prompt.StopConst)
 	}
-	if ask := methodByWire(m, "s/ask"); !ask.CancelledByPromptCancel || ask.SessionField != "SessionId" ||
-		ask.CancelledField != "Verdict" || ask.CancelledHelper != "NewVerdictWithdrawn" || !cancel.CancelsPending {
-		t.Errorf("s/ask: %+v; s/cancel CancelsPending %v", ask, cancel.CancelsPending)
-	}
+	checkTestRoles(t, m, cancel)
 	if !cancel.CancelsPromptTurn || cancel.SessionField != "SessionId" || cancel.Capability != "session.list" {
 		t.Errorf("s/cancel: CancelsPromptTurn %v SessionField %q capability %q", cancel.CancelsPromptTurn, cancel.SessionField, cancel.Capability)
 	}
@@ -121,8 +140,9 @@ func TestProtocolTableApplies(t *testing.T) {
 	if g := methodByWire(plain, "s/update").GoName; g != "Session" {
 		t.Errorf("without a table, s/update is %q", g)
 	}
-	if a := methodByWire(plain, "s/ask"); a.CancelledByPromptCancel || a.CancelledHelper != "" || methodByWire(plain, "s/cancel").CancelsPending {
-		t.Errorf("without a table, s/ask is answered on a cancel: %+v", a)
+	if plain.Initialize != nil || methodByWire(plain, "s/init").Initializes ||
+		methodByWire(plain, "s/ask").CancelledByPromptCancel || methodByWire(plain, "s/cancel").CancelsPending {
+		t.Errorf("without a table, a role applies: %+v %+v", plain.Initialize, methodByWire(plain, "s/ask"))
 	}
 	if p := methodByWire(plain, "s/prompt"); p.PromptTurn || p.Canceller != nil || p.SessionField != "" {
 		t.Errorf("without a table, s/prompt is a prompt turn: %+v", p)
@@ -269,6 +289,29 @@ func TestProtocolTableRefuses(t *testing.T) {
 			wanted: []string{`client method "s/ask"`, `Verdict has no constructor for a variant "gone"`}},
 		{name: "answered on a cancel, a variant with parameters", table: func(p *Protocol) { p.Methods[4].CancelledVariant = "chosen" },
 			wanted: []string{`client method "s/ask"`, "Verdict's constructor NewVerdictChosen takes parameters"}},
+		{name: "two initialize rules", table: func(p *Protocol) {
+			p.Methods[0].Initializes, p.Methods[0].VersionKey, p.Methods[0].RequestCapabilities, p.Methods[0].ResponseCapabilities = true, "v", "c", "a"
+		}, wanted: []string{"2 initialize rules; a protocol has one"}},
+		{name: "initialize without its keys", table: func(p *Protocol) { p.Methods[5].ResponseCapabilities = "" },
+			wanted: []string{`agent method "s/init"`, "needs its version key and both capabilities keys"}},
+		{name: "version key on a plain rule", table: func(p *Protocol) { p.Methods[3].VersionKey = "v" },
+			wanted: []string{`client method "s/update"`, "a version or capabilities key without an initialize rule"}},
+		{name: "initialize on the client side", table: func(p *Protocol) {
+			p.Methods[3].Initializes, p.Methods[3].VersionKey, p.Methods[3].RequestCapabilities, p.Methods[3].ResponseCapabilities = true, "v", "c", "a"
+		}, wanted: []string{`client method "s/update"`, "only an agent method initializes the connection"}},
+		{name: "initialize without a result", defs: func(s string) string {
+			return strings.Replace(s, `"InitResponse":{"type":"object"`, `"InitResponse":{"type":"null"`, 1)
+		}, wanted: []string{`agent method "s/init"`, "an initialize method must be a request with a result"}},
+		{name: "version not an integer", defs: func(s string) string {
+			return strings.Replace(s, `"Version":{"type":"integer","format":"uint16"}`, `"Version":{"type":"string"}`, 1)
+		}, wanted: []string{`agent method "s/init"`, `"protocolVersion" is not a required integer property of InitRequest`}},
+		{name: "version not required", defs: func(s string) string {
+			return strings.Replace(s, `"x-method":"s/init","required":["protocolVersion"],
+		"properties":{"protocolVersion":{"allOf":[{"$ref":"#/$defs/Version"}]},"agentCapabilities"`, `"x-method":"s/init",
+		"properties":{"protocolVersion":{"allOf":[{"$ref":"#/$defs/Version"}]},"agentCapabilities"`, 1)
+		}, wanted: []string{`agent method "s/init"`, `"protocolVersion" is not a required integer property of InitResponse`}},
+		{name: "capabilities not an object", table: func(p *Protocol) { p.Methods[5].RequestCapabilities = "protocolVersion" },
+			wanted: []string{`agent method "s/init"`, `"protocolVersion" is not an object property of InitRequest`}},
 		{name: "stop enum without the cancelled value", table: func(p *Protocol) { p.Methods[1].StopCancelled = "halted" },
 			wanted: []string{`agent method "s/prompt"`, `"stopReason" of PromptResponse has no value "halted"`}},
 	}
@@ -329,6 +372,25 @@ func capabilityDoc(t *testing.T, m *Model, side, path string) string {
 	return ""
 }
 
+// checkCommittedRoles requires an ACP rule's role to have resolved its fields
+// on the committed schema.
+func checkCommittedRoles(t *testing.T, m *Model, r *MethodRule, mi *Method) {
+	t.Helper()
+	if r.Initializes && (m.Initialize != mi || mi.ReqVersionField != "ProtocolVersion" || mi.RespVersionField != "ProtocolVersion" ||
+		mi.ReqCapsField != "ClientCapabilities" || mi.RespCapsField != "AgentCapabilities") {
+		t.Errorf("%s: %+v, want the version and capabilities fields", r.Wire, mi)
+	}
+	if r.CancelledByPromptCancel && (mi.CancelledField != "Outcome" || mi.CancelledHelper != "NewRequestPermissionOutcomeCancelled") {
+		t.Errorf("%s: CancelledField %q CancelledHelper %q", r.Wire, mi.CancelledField, mi.CancelledHelper)
+	}
+	if r.CancelsPromptTurn && !mi.CancelsPending {
+		t.Errorf("%s: CancelsPending false, want the client's pending requests answered", r.Wire)
+	}
+	if r.PromptTurn && (mi.StopField != "StopReason" || mi.StopConst != "StopReasonCancelled") {
+		t.Errorf("%s: StopField %q StopConst %q, want StopReason and StopReasonCancelled", r.Wire, mi.StopField, mi.StopConst)
+	}
+}
+
 // TestProtocolTableAppliesToCommittedSchema requires every rule of ACP to
 // apply to the schema in the repository.
 func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
@@ -350,15 +412,7 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 		if mi.PromptTurn != r.PromptTurn || mi.CancelsPromptTurn != r.CancelsPromptTurn {
 			t.Errorf("%s: PromptTurn %v CancelsPromptTurn %v", r.Wire, mi.PromptTurn, mi.CancelsPromptTurn)
 		}
-		if r.CancelledByPromptCancel && (mi.CancelledField != "Outcome" || mi.CancelledHelper != "NewRequestPermissionOutcomeCancelled") {
-			t.Errorf("%s: CancelledField %q CancelledHelper %q", r.Wire, mi.CancelledField, mi.CancelledHelper)
-		}
-		if r.CancelsPromptTurn && !mi.CancelsPending {
-			t.Errorf("%s: CancelsPending false, want the client's pending requests answered", r.Wire)
-		}
-		if r.PromptTurn && (mi.StopField != "StopReason" || mi.StopConst != "StopReasonCancelled") {
-			t.Errorf("%s: StopField %q StopConst %q, want StopReason and StopReasonCancelled", r.Wire, mi.StopField, mi.StopConst)
-		}
+		checkCommittedRoles(t, m, &r, mi)
 		if r.Capability != "" {
 			gates++
 			doc := capabilityDoc(t, m, r.Side, r.Capability)

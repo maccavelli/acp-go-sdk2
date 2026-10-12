@@ -71,6 +71,13 @@ type MethodRule struct {
 	// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).
 	CancelledByPromptCancel        bool
 	CancelledKey, CancelledVariant string
+	// Initializes marks the method that negotiates the connection: VersionKey
+	// is the protocol-version property of its request and its result, a
+	// required integer; RequestCapabilities and ResponseCapabilities the
+	// properties of each side's capabilities, objects
+	// (0017-MADR-remediate-acp-v1-conformance-violations.md, N1 and G1).
+	Initializes                                           bool
+	VersionKey, RequestCapabilities, ResponseCapabilities string
 	// Capability is the dotted path, from AgentCapabilities or
 	// ClientCapabilities, of the capability that gates the method. It is
 	// recorded and checked, not emitted.
@@ -151,6 +158,15 @@ func newRules(p *Protocol) (*rules, error) {
 		}
 		r.methods[k] = rule
 	}
+	initializes := 0
+	for _, rule := range p.Methods {
+		if rule.Initializes {
+			initializes++
+		}
+	}
+	if initializes > 1 {
+		return nil, fmt.Errorf("%d initialize rules; a protocol has one", initializes)
+	}
 	for _, name := range p.HandWrittenHelpers {
 		r.helpers[name] = true
 	}
@@ -177,6 +193,26 @@ func checkRule(rule *MethodRule, r *rules) error {
 		return fmt.Errorf("no interface of the table has its binding")
 	case rule.Binding != optionalNone && sideOf(rule.Binding) != rule.Side:
 		return fmt.Errorf("it binds to an %s interface", sideOf(rule.Binding))
+	}
+	if err := checkRoles(rule); err != nil {
+		return err
+	}
+	if rule.GoName != "" {
+		if err := checkExported(rule.GoName); err != nil {
+			return err
+		}
+	}
+	if rule.Capability != "" && slices.Contains(strings.Split(rule.Capability, "."), "") {
+		return fmt.Errorf("capability %q has an empty segment", rule.Capability)
+	}
+	return nil
+}
+
+// checkRoles checks the roles a rule gives its method: a prompt turn or its
+// cancel, a request answered on that cancel, the initialize method; each on
+// its side, with its keys, and no key without its role.
+func checkRoles(rule *MethodRule) error {
+	switch {
 	case (rule.PromptTurn || rule.CancelsPromptTurn) && rule.Side != sideAgent:
 		return fmt.Errorf("only agent methods are a prompt turn or its cancel")
 	case rule.CancelledByPromptCancel && rule.Side != sideClient:
@@ -191,18 +227,16 @@ func checkRule(rule *MethodRule, r *rules) error {
 		return fmt.Errorf("a request answered on a prompt-turn cancel needs its result key and variant")
 	case !rule.CancelledByPromptCancel && (rule.CancelledKey != "" || rule.CancelledVariant != ""):
 		return fmt.Errorf("a cancelled key without a request answered on a prompt-turn cancel")
+	case rule.Initializes && rule.Side != sideAgent:
+		return fmt.Errorf("only an agent method initializes the connection")
+	case rule.Initializes && (rule.VersionKey == "" || rule.RequestCapabilities == "" || rule.ResponseCapabilities == ""):
+		return fmt.Errorf("an initialize rule needs its version key and both capabilities keys")
+	case !rule.Initializes && (rule.VersionKey != "" || rule.RequestCapabilities != "" || rule.ResponseCapabilities != ""):
+		return fmt.Errorf("a version or capabilities key without an initialize rule")
 	case rule.PromptTurn && (rule.StopKey == "" || rule.StopCancelled == ""):
 		return fmt.Errorf("a prompt turn needs its stop key and cancelled value")
 	case !rule.PromptTurn && (rule.StopKey != "" || rule.StopCancelled != ""):
 		return fmt.Errorf("a stop key without a prompt turn")
-	}
-	if rule.GoName != "" {
-		if err := checkExported(rule.GoName); err != nil {
-			return err
-		}
-	}
-	if rule.Capability != "" && slices.Contains(strings.Split(rule.Capability, "."), "") {
-		return fmt.Errorf("capability %q has an empty segment", rule.Capability)
 	}
 	return nil
 }
@@ -219,7 +253,7 @@ func applyMethodRule(mi *Method, rule *MethodRule) {
 		mi.GoName = rule.GoName
 	}
 	mi.PromptTurn, mi.CancelsPromptTurn, mi.Capability = rule.PromptTurn, rule.CancelsPromptTurn, rule.Capability
-	mi.CancelledByPromptCancel = rule.CancelledByPromptCancel
+	mi.CancelledByPromptCancel, mi.Initializes = rule.CancelledByPromptCancel, rule.Initializes
 }
 
 // linkPromptTurns checks each prompt-turn method and cancel against the
@@ -284,6 +318,61 @@ func (m *Model) sessionField(typeName, key string) (*Field, error) {
 		return nil, fmt.Errorf("%q of %s is not a string", key, typeName)
 	}
 	return f, nil
+}
+
+// linkInitialize checks the method that negotiates the connection, a request
+// with a result, and records the Go fields of its version and of each side's
+// capabilities; Model.Initialize names it.
+func (m *Model) linkInitialize(r *rules) error {
+	for _, mi := range m.AgentMethods {
+		if !mi.Initializes {
+			continue
+		}
+		rule := r.methods[ruleKey(mi.Side, mi.Wire)]
+		if mi.Notif != "" || !mi.HasResult {
+			return fmt.Errorf("%s: an initialize method must be a request with a result", rule.owner())
+		}
+		for _, f := range []struct {
+			typeName, key string
+			into          *string
+		}{{mi.Req, rule.VersionKey, &mi.ReqVersionField}, {mi.Resp, rule.VersionKey, &mi.RespVersionField}} {
+			field := m.objectField(f.typeName, f.key)
+			if field == nil || !field.Required || !m.isInteger(field.Type) {
+				return fmt.Errorf("%s: %q is not a required integer property of %s", rule.owner(), f.key, f.typeName)
+			}
+			*f.into = field.Name
+		}
+		for _, f := range []struct {
+			typeName, key string
+			into          *string
+		}{{mi.Req, rule.RequestCapabilities, &mi.ReqCapsField}, {mi.Resp, rule.ResponseCapabilities, &mi.RespCapsField}} {
+			field := m.objectField(f.typeName, f.key)
+			if field == nil || field.Type.Kind != RefNamed || m.Type(field.Type.Name) == nil || m.Type(field.Type.Name).Kind != KindObject {
+				return fmt.Errorf("%s: %q is not an object property of %s", rule.owner(), f.key, f.typeName)
+			}
+			*f.into = field.Name
+		}
+		m.Initialize = mi
+	}
+	return nil
+}
+
+// isInteger reports whether r is a Go integer type or a definition whose Go
+// type is one.
+func (m *Model) isInteger(r TypeRef) bool {
+	if r.Kind != RefNamed {
+		return false
+	}
+	name := r.Name
+	if t := m.Type(name); t != nil && t.Kind == KindPrimitive && t.Underlying != nil {
+		name = t.Underlying.Name
+	}
+	for _, g := range integerFormats {
+		if g == name {
+			return true
+		}
+	}
+	return false
 }
 
 // linkCancelledRequests checks each request the client answers itself when

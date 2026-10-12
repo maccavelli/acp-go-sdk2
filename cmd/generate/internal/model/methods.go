@@ -63,6 +63,11 @@ type Method struct {
 	// the agent's prompt-turn cancel when the client has such requests.
 	CancelledByPromptCancel, CancelsPending bool
 	CancelledField, CancelledHelper         string
+	// Initializes marks the method that negotiates the connection, with the
+	// Go fields of the version in its request and result, and of each side's
+	// capabilities.
+	Initializes                                                    bool
+	ReqVersionField, RespVersionField, ReqCapsField, RespCapsField string
 	// Capability is the capability path that gates the method, from the
 	// protocol table.
 	Capability string

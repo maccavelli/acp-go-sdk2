@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 )
 
 // AgentSideConnection represents the agent's view of a connection to a client.
@@ -18,6 +19,7 @@ type AgentSideConnection struct {
 	mu             sync.Mutex
 	sessionCancels map[string]*promptTurn
 	lateCancels    map[string]uint64
+	negotiation    atomic.Pointer[Negotiation]
 }
 
 // NewAgentSideConnection creates a new agent-side connection bound to the
@@ -58,6 +60,17 @@ func (c *AgentSideConnection) SetLogger(l *slog.Logger) {
 // copy.
 func (c *AgentSideConnection) Connection() *Connection {
 	return c.conn
+}
+
+// Negotiated returns what initialize agreed on this connection, the request
+// and the response of its last successful initialize, and false before one
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+func (c *AgentSideConnection) Negotiated() (Negotiation, bool) {
+	n := c.negotiation.Load()
+	if n == nil {
+		return Negotiation{}, false
+	}
+	return *n, true
 }
 
 // promptTurn is one prompt turn: its cancel function and the receipt number
@@ -192,7 +205,26 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		if resp.ProtocolVersion == 0 {
+			resp.ProtocolVersion = ProtocolVersionNumber
+		}
+		if resp.ProtocolVersion != ProtocolVersionNumber {
+			verr := &ProtocolVersionError{
+				Requested: int(p.ProtocolVersion),
+				Answered:  int(resp.ProtocolVersion),
+			}
+			a.conn.loggerOrDefault().Error("initialize answer not sent", "method", method, "err", verr)
+			return nil, NewInternalError(map[string]any{"error": verr.Error()})
+		}
+		result, rerr := a.conn.checkResult(method, resp)
+		if rerr != nil {
+			return nil, rerr
+		}
+		a.negotiation.Store(&Negotiation{
+			Request:  p,
+			Response: resp,
+		})
+		return result, nil
 	case AgentMethodLogout:
 		var p LogoutRequest
 		if err := json.Unmarshal(params, &p); err != nil {

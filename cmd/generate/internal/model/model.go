@@ -75,6 +75,9 @@ type Model struct {
 	AgentMethods  []*Method
 	ClientMethods []*Method
 	Protocol      []*Method
+	// Initialize is the agent method that negotiates the connection, from
+	// the protocol table's initialize rule, or nil.
+	Initialize *Method
 	// Interfaces are the Go interfaces the methods are called through, in
 	// binding order: the SDK's four and each protocol-table interface a
 	// method binds to.
@@ -335,6 +338,7 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 	for _, step := range []func() error{
 		func() error { return m.linkPromptTurns(r) },
 		func() error { return m.linkCancelledRequests(r) },
+		func() error { return m.linkInitialize(r) },
 		func() error { return m.checkCapabilities(r) },
 		func() error { return m.checkTypeRules(r) },
 		func() error { return m.buildInterfaces(n, r) },

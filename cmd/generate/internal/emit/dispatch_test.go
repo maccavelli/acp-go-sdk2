@@ -2,6 +2,7 @@ package emit
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -39,6 +40,12 @@ func renamedProtocol(t *testing.T) *model.Model {
 			"properties":{"conversationId":{"allOf":[{"$ref":"#/$defs/ConversationId"}]}}},
 		"OpenRequest":{"type":"object","x-side":"agent","x-method":"chat/open"},
 		"OpenResponse":{"type":"object","x-side":"agent","x-method":"chat/open"},
+		"Rev":{"type":"integer","format":"uint16"},
+		"Caps":{"type":"object","properties":{"x":{"type":"boolean"}}},
+		"HelloRequest":{"type":"object","x-side":"agent","x-method":"chat/hello","required":["rev"],
+			"properties":{"rev":{"$ref":"#/$defs/Rev"},"mine":{"$ref":"#/$defs/Caps"}}},
+		"HelloResponse":{"type":"object","x-side":"agent","x-method":"chat/hello","required":["rev"],
+			"properties":{"rev":{"$ref":"#/$defs/Rev"},"theirs":{"$ref":"#/$defs/Caps"}}},
 		"AskRequest":{"type":"object","x-side":"client","x-method":"chat/ask","required":["conversationId"],
 			"properties":{"conversationId":{"allOf":[{"$ref":"#/$defs/ConversationId"}]}}},
 		"AskResponse":{"type":"object","x-side":"client","x-method":"chat/ask","required":["verdict"],
@@ -49,7 +56,7 @@ func renamedProtocol(t *testing.T) *model.Model {
 		t.Fatal(err)
 	}
 	m, err := model.Build(model.Input{
-		Meta: &load.Meta{AgentMethods: map[string]string{"send": "chat/send", "stop": "chat/stop", "open": "chat/open"},
+		Meta: &load.Meta{AgentMethods: map[string]string{"send": "chat/send", "stop": "chat/stop", "open": "chat/open", "hello": "chat/hello"},
 			ClientMethods: map[string]string{"ask": "chat/ask"}},
 		Schema: &schema,
 		Protocol: &model.Protocol{
@@ -58,6 +65,7 @@ func renamedProtocol(t *testing.T) *model.Model {
 				{Side: "agent", Wire: "chat/open", Binding: model.BindAgentOptional},
 				{Side: "agent", Wire: "chat/send", PromptTurn: true, SessionKey: "conversationId", StopKey: "outcome", StopCancelled: "halted"},
 				{Side: "agent", Wire: "chat/stop", CancelsPromptTurn: true, SessionKey: "conversationId"},
+				{Side: "agent", Wire: "chat/hello", Initializes: true, VersionKey: "rev", RequestCapabilities: "mine", ResponseCapabilities: "theirs"},
 				{Side: "client", Wire: "chat/ask", CancelledByPromptCancel: true, SessionKey: "conversationId",
 					CancelledKey: "verdict", CancelledVariant: "withdrawn"},
 			},
@@ -88,6 +96,11 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"resp = SendResponse{}",
 			"resp.Outcome, err = OutcomeHalted, nil",
 			"cn.cancel(ErrPromptCancelled)",
+			"resp, err := a.agent.Hello(ctx, p)",
+			"if resp.Rev == 0 {\n\t\t\tresp.Rev = ProtocolVersionNumber",
+			"Requested: int(p.Rev),",
+			"a.negotiation.Store(&Negotiation{",
+			"func (c *AgentSideConnection) Negotiated() (Negotiation, bool) {",
 			"if prev, ok := a.sessionCancels[string(p.ConversationId)]; ok && prev.receipt > r {",
 			"if r != 0 && a.lateCancels[string(p.ConversationId)] > r {",
 			"if cn, ok := a.sessionCancels[string(p.ConversationId)]; ok && (s == 0 || cn.receipt < s) {",
@@ -97,6 +110,10 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 		"client_gen.go": {
 			"_ = c.Stop(context.Background(), StopNotification{ConversationId: params.ConversationId})",
 			"pctx, done := c.pending.track(ctx, string(p.ConversationId))",
+			"if params.Rev == 0 {\n\t\tparams.Rev = ProtocolVersionNumber",
+			"return HelloResponse{}, &ProtocolVersionError{Requested: int(params.Rev)}",
+			"c.negotiation.Store(&Negotiation{",
+			"func (c *ClientSideConnection) Negotiated() (Negotiation, bool) {",
 			"resp, err := answerUnlessCancelled(c.conn, pctx, method, func(ctx context.Context) (AskResponse, error) {",
 			"}, AskResponse{Verdict: NewVerdictWithdrawn()})",
 			"err := c.conn.SendNotification(ctx, AgentMethodStop, params)\n\tc.pending.cancel(string(params.ConversationId))",
@@ -112,13 +129,19 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 	}
 	for name, src := range files {
 		for _, bad := range []string{"session/prompt", "SessionId", "CancelNotification", "AgentLoader", "loader", "c.Cancel(", "StopReason",
-			"RequestPermission", "RequestPermissionOutcome"} {
+			"RequestPermission", "RequestPermissionOutcome", "InitializeRequest", "params.ProtocolVersion", "resp.ProtocolVersion"} {
 			if strings.Contains(src, bad) {
 				t.Errorf("%s contains %q", name, bad)
 			}
 		}
 	}
 }
+
+// negotiationField and pendingField match the two fields as gofmt aligns them.
+var (
+	negotiationField = regexp.MustCompile(`\tnegotiation +atomic\.Pointer\[Negotiation\]\n`)
+	pendingField     = regexp.MustCompile(`\tpending +pendingRequests\n`)
+)
 
 // TestSideConnectionsFollowTheModel requires each side connection to be
 // generated with its constructor, forwarding methods and doc comments, and the
@@ -177,7 +200,12 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 		if strings.Contains(files["client_gen.go"], "sessionCancels") {
 			t.Errorf("%s: client_gen.go holds prompt-turn state", name)
 		}
-		if got, want := strings.Contains(files["client_gen.go"], "\tpending pendingRequests\n"), name == "with prompt turns"; got != want {
+		for _, file := range []string{"agent_gen.go", "client_gen.go"} {
+			if got, want := negotiationField.MatchString(files[file]), name == "with prompt turns"; got != want {
+				t.Errorf("%s: %s holds the negotiation: %v, want %v", name, file, got, want)
+			}
+		}
+		if got, want := pendingField.MatchString(files["client_gen.go"]), name == "with prompt turns"; got != want {
 			t.Errorf("%s: client_gen.go holds the pending requests: %v, want %v", name, got, want)
 		}
 	}
