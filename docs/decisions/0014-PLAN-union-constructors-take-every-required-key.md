@@ -425,3 +425,24 @@ Ran on `main` from `b59ced2`, after 0015 closed, as the amendment to this step r
   record's text.
 * `make markdownlint` and `make check-records` exit 0; the identifier scan of the changed files found nothing. No generated file and no
   Go file changed, so no Go gate ran.
+
+### Step 7, release notes, 2026-10-12
+
+Ran on `main` from `3ca6357`. The agent did not commit. No Go file changed.
+
+* New report [0014-REPORT-release-notes-v0-16-0.md](../reports/0014-REPORT-release-notes-v0-16-0.md), in the shape of the 0013 report,
+  covering this record and 0015 as the amendment to this step requires: a "Security" part on issue #2; breaking changes (the two
+  `SessionConfigOption` signatures with their replacement calls, paths no longer sent, received paths refused); changes to what the SDK
+  accepts and sends (the 17 properties, the two hooks, the 22 removed checks that stay removed and the six that return as path checks,
+  the catch-all check, `[]` for a nil array variant, typed `Validate` errors); additions (56 constructors by union, `ValidationError`,
+  `ValidationRule` and its constants, the two hooks, five `Roots`, five `Validate`); generator changes; the advisory draft for `v0.15.0`;
+  and the sources. Indexed in `docs/README.md`.
+* Facts behind it, each checked on `3ca6357`: `git diff v0.15.0 -- schema/` is empty and `schema/version` is `1.25.0`; the API listing
+  of `git archive v0.15.0` (2308 lines) against the tree (2390 lines) removes the two old `NewSessionConfigOption…` lines and adds their
+  new forms, 56 other `func New…` lines over 16 unions, and the 26 lines of 0015's additions, nothing else; `v0.15.0` had 11
+  constructors over `PlanUpdateContent`, `RequestPermissionOutcome`, `SessionConfigOption` and `UnstableNesSuggestion`, the tree 67;
+  the signature change is in `75bf968` (`git show 75bf968 -- helpers_gen.go`); the 28 removed checks are the 0013 report's erratum
+  list, of which the six `Cwd` and `Path` checks return as absolute-path checks.
+* The advisory draft names affected `v0.15.0` and patched `v0.16.0`, as 0015-MADR's C1 decided, and says in its description that no
+  version before `v0.16.0` refused a relative path. It suggests CWE-20 and leaves severity to the owner.
+* `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing.

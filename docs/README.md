@@ -41,6 +41,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0013 | REPORT | [Release notes for v0.15.0, against v0.14.0](reports/0013-REPORT-release-notes-v0-15-0.md) | observed |
 | 0014 | MADR | [Union constructors take every required key, cover the catch-all and every union](decisions/0014-MADR-union-constructors-take-every-required-key.md) | accepted |
 | 0014 | PLAN | [Implement the union constructor decisions](decisions/0014-PLAN-union-constructors-take-every-required-key.md) | in-progress |
+| 0014 | REPORT | [Release notes for v0.16.0, against v0.15.0](reports/0014-REPORT-release-notes-v0-16-0.md) | observed |
 | 0015 | MADR | [Enforce absolute protocol paths, with a consumer validation hook](decisions/0015-MADR-validate-absolute-protocol-paths.md) | accepted |
 | 0015 | PLAN | [Implement absolute protocol paths, with consumer hooks](decisions/0015-PLAN-validate-absolute-protocol-paths.md) | complete |
 | 0016 | REPORT | [ACP v1 spec adherence audit](reports/0016-REPORT-acp-v1-conformance-audit.md) | observed |
