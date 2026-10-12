@@ -104,9 +104,9 @@ func TestRunRefusesBeforeWriting(t *testing.T) {
 			[]string{"R.properties.m", "Missing"}},
 		{"field name is not an identifier", `{"Thing":{"type":"object","properties":{"2fa":{"type":"string"}},"required":["2fa"]}}`,
 			[]string{"Thing", "2fa"}},
-		{"keyword as a constructor parameter", `{"Union":{"oneOf":[
-			{"type":"object","properties":{"type":{"const":"x","type":"string"},"range":{"type":"string"}},"required":["type","range"]},
-			{"type":"object","properties":{"type":{"const":"y","type":"string"}},"required":["type"]}]}}`, []string{"Union", "range"}},
+		{"two constructor parameters with one name", `{"Union":{"oneOf":[
+			{"type":"object","properties":{"kind":{"const":"x","type":"string"},"type":{"type":"string"},"typeValue":{"type":"string"}},"required":["kind","type","typeValue"]},
+			{"type":"object","properties":{"kind":{"const":"y","type":"string"}},"required":["kind"]}]}}`, []string{"Union", "typeValue"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

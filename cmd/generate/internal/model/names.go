@@ -3,9 +3,11 @@ package model
 import (
 	"fmt"
 	"go/token"
+	"go/types"
 	"maps"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/util"
@@ -80,13 +82,56 @@ func checkFields(owner string, props map[string]*load.Definition) error {
 	return nil
 }
 
-// checkParam fails unless a raw schema key can be a Go parameter name.
-// token.IsIdentifier is false for keywords.
-func checkParam(owner, key string) error {
-	if !token.IsIdentifier(key) {
-		return fmt.Errorf("%s: required property %q cannot be a Go parameter name", owner, key)
+// paramName returns the constructor parameter name of a raw schema key
+// (0014-MADR-union-constructors-take-every-required-key.md, N1, K2 and L1):
+// the key itself when it is a Go identifier or keyword, otherwise the key's
+// words in lower camel case (lowerCamel). A name that is a Go keyword or a
+// predeclared identifier gets Value appended. It fails when no identifier
+// results: a key with no letter or digit, or one that begins with a digit.
+func paramName(owner, key string) (string, error) {
+	name := key
+	if !token.IsIdentifier(key) && !token.IsKeyword(key) {
+		name = lowerCamel(key)
 	}
-	return nil
+	if token.IsKeyword(name) || types.Universe.Lookup(name) != nil {
+		name += "Value"
+	}
+	if !token.IsIdentifier(name) {
+		return "", fmt.Errorf("%s: required property %q cannot be a Go parameter name", owner, key)
+	}
+	return name, nil
+}
+
+// lowerCamel splits key at runs of characters that are not ASCII letters
+// or digits, puts each word in Go case as util.ToExportedField does, and
+// lowers the first word's leading capitals: URL-path is urlPath, x-API-key
+// is xAPIKey, HTTPServer-url is httpServerUrl.
+func lowerCamel(key string) string {
+	words := strings.FieldsFunc(key, func(r rune) bool {
+		return r > unicode.MaxASCII || (!unicode.IsLetter(r) && !unicode.IsDigit(r))
+	})
+	for i, w := range words {
+		words[i] = util.ToExportedField(w)
+	}
+	if len(words) > 0 {
+		words[0] = lowerLead(words[0])
+	}
+	return strings.Join(words, "")
+}
+
+// lowerLead lowers the leading run of capitals of s, except a capital that
+// a lower-case letter follows, which begins the next word: URLPath is
+// urlPath, ACMEId is acmeId, HTTP2Server is http2Server (Go Code Review
+// Comments, "Initialisms"; oapi-codegen's LowercaseFirstCharacters).
+func lowerLead(s string) string {
+	r := []rune(s)
+	for i := 0; i < len(r) && unicode.IsUpper(r[i]); i++ {
+		if i > 0 && i+1 < len(r) && unicode.IsLower(r[i+1]) {
+			break
+		}
+		r[i] = unicode.ToLower(r[i])
+	}
+	return string(r)
 }
 
 // generateNestedTypeName applies multiple heuristics to create idiomatic nested type names

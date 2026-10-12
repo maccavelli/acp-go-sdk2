@@ -65,11 +65,11 @@ func TestBuildRefuses(t *testing.T) {
 			want: []string{"N.properties.p", "property schema is null"},
 		},
 		{
-			name: "keyword as a constructor parameter",
+			name: "two constructor parameters with one name",
 			defs: `{"Union":{"oneOf":[
-				{"type":"object","properties":{"type":{"const":"x","type":"string"},"range":{"type":"string"}},"required":["type","range"]},
-				{"type":"object","properties":{"type":{"const":"y","type":"string"}},"required":["type"]}]}}`,
-			want: []string{"Union variant 1", `required property "range" cannot be a Go parameter name`},
+				{"type":"object","properties":{"kind":{"const":"x","type":"string"},"type":{"type":"string"},"typeValue":{"type":"string"}},"required":["kind","type","typeValue"]},
+				{"type":"object","properties":{"kind":{"const":"y","type":"string"}},"required":["kind"]}]}}`,
+			want: []string{"Union variant 1", "parameters type and typeValue are both named typeValue"},
 		},
 		{
 			name: "union wrapper fields collide",
@@ -139,7 +139,7 @@ func TestBuildNames(t *testing.T) {
 		}
 	}
 	if len(u.Helpers) != 2 || u.Helpers[0].Name != "NewUX" || len(u.Helpers[0].Params) != 1 || len(u.Helpers[1].Params) != 0 ||
-		u.Helpers[0].Params[0] != (Param{Key: "n", Field: "N", Type: named("string")}) {
+		u.Helpers[0].Params[0] != (Param{Key: "n", Name: "n", Field: "N", Type: named("string")}) {
 		t.Errorf("U helpers: %+v %+v", u.Helpers[0], u.Helpers[1])
 	}
 	if got := m.Type("Parent").Nested["URLValue"]; got != "ParentURLValue" {

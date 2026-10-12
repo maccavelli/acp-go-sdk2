@@ -1,0 +1,51 @@
+A oneOf variant whose required keys cannot all be Go parameter names as
+they are: range is a keyword, error a predeclared identifier, x-API-key and
+URL-path not identifiers. The constructor names them rangeValue, errorValue,
+xAPIKey and urlPath, in the variant's required order
+(0014-MADR-union-constructors-take-every-required-key.md, N1, K2 and L1).
+The meta declares $/cancel_request and the schema its smallest definition,
+which the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"oneOf": [
+    {"type": "object", "properties": {"kind": {"type": "string", "const": "a"}, "range": {"type": "string"}, "error": {"type": "string"}, "x-API-key": {"type": "string"}, "URL-path": {"type": "string"}}, "required": ["kind", "range", "error", "x-API-key", "URL-path"]},
+    {"type": "object", "properties": {"kind": {"type": "string", "const": "b"}}, "required": ["kind"]}
+  ]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+func NewUA(rangeValue string, errorValue string, xAPIKey string, urlPath string) U
+func NewUB() U
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type U struct{A *UA "json:\"-\""; B *UB "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type UA struct{URLPath string "json:\"URL-path\""; Error string "json:\"error\""; Kind string "json:\"kind\""; Range string "json:\"range\""; XAPIKey string "json:\"x-API-key\""}
+type UB struct{Kind string "json:\"kind\""}
+func (*CancelRequestNotification).Validate() error
+func (U).MarshalJSON() ([]byte, error)
+func (*U).UnmarshalJSON(b []byte) error
+func (*U).Validate() error
+func (*UA).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Each renamed parameter fills the field of its own key.
+func TestConstructorNames(t *testing.T) {
+	b, err := json.Marshal(NewUA("r", "e", "k", "p"))
+	if err != nil || string(b) != `{"URL-path":"p","error":"e","kind":"a","range":"r","x-API-key":"k"}` {
+		t.Errorf("NewUA encoded as %s, %v", b, err)
+	}
+}

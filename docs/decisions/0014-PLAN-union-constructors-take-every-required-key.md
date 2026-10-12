@@ -123,7 +123,8 @@ Out of scope:
        `want.api` has `func NewUA(rangeValue string, errorValue string, xAPIKey string, urlPath string) U`, in the variant's required
        order.
    * Regenerate. Asserted diff: no generated file changes.
-   * Plants: lowering only the first rune, which must fail `TestParamName` on `uRLPath` and `xAPIKey` and `accept-constructor-names`;
+   * Plants: lowering only the first rune, which must fail `TestParamName` on `uRLPath` ~~and `xAPIKey`~~ (not `xAPIKey`, whose first word
+     is one letter, so the plant leaves it unchanged; corrected in step 4) and `accept-constructor-names`;
      dropping the `types.Universe` lookup, which must fail on `errorValue`; dropping the collision check, which must fail the two collision
      cases.
 
@@ -285,3 +286,33 @@ Ran on `main` from `98b2372`. The agent did not commit.
   exit 0, and the identifier scan of the changed files found nothing.
 * Breaking change for the release notes: `NewSessionConfigOptionSelect` and `NewSessionConfigOptionBoolean` take `id SessionConfigId,
   name string` first.
+
+### Step 4, names, 2026-10-12
+
+Ran on `main` from `75bf968`. The agent did not commit.
+
+* `internal/model/names.go`: `paramName` replaces `checkParam`, its one caller being `buildUnion`. An identifier or keyword key keeps its
+  text; any other key goes through `lowerCamel`, which splits it at runs of characters that are not ASCII letters or digits, puts each word
+  in Go case with `util.ToExportedField`, and lowers the first word with `lowerLead` (L1). A name for which `token.IsKeyword` holds or
+  `types.Universe.Lookup` is not nil gets `Value` (N1). A result that is not an identifier is refused with the message `checkParam` had.
+* `internal/model/model.go`: `Param` gains `Name`; `buildUnion` refuses two parameters of one constructor with one name (`<owner>:
+  parameters <key> and <key> are both named <name>`). `internal/emit/helpers.go` uses `p.Name`.
+* Tests: new `internal/model/names_test.go`, `TestParamName`, with 24 names (identifier keys kept, the table of the MADR's finding 12,
+  the three keywords the schema files require, `$type`, and the predeclared `error`, `string`, `any`, `min`, `nil`) and 4 refusals (`$`,
+  `--`, `2fa`, `9-lives`). The keyword cases of `TestBuildRefuses` and `TestRunRefusesBeforeWriting` became collision cases (`type` and
+  `typeValue` both required), and `TestBuildNames` compares `Param` with its `Name`. New engine case `accept-constructor-names.txtar`:
+  `func NewUA(rangeValue string, errorValue string, xAPIKey string, urlPath string) U`; its behaviour test requires `NewUA("r", "e",
+  "k", "p")` to encode `{"URL-path":"p","error":"e","kind":"a","range":"r","x-API-key":"k"}`.
+* Regenerated: no generated file changed (`git diff` of `*_gen.go` and `schema_gen_test.go`: 0 lines), as no committed constructor's key
+  is a keyword, predeclared, or not an identifier.
+* Tests: `go test -count=1 ./...` passes in `cmd/generate` (seven packages `ok`) and at the root.
+* Plants, each in its own scratch copy:
+  * `lowerLead` lowering the first rune only: `exit=1`; `TestParamName` failed on `URL-path` (`"uRLPath"`), `HTTPServer-url`,
+    `XMLHttp-request`, `HTTP2-server` and `ACME-id`, and `TestEngineCases/accept-constructor-names` got `func NewUA(rangeValue string,
+    errorValue string, xAPIKey string, uRLPath string) U`. `xAPIKey` passed, its first word being one letter; the plan's text is corrected;
+  * the `types.Universe` lookup disabled: `exit=1`, `paramName("error") = "error", <nil>; want "errorValue"`, and the same for `string`,
+    `any`, `min`, `nil`;
+  * the collision check disabled: `exit=1`, `TestBuildRefuses`: `Build accepted the schema`.
+* `make pre-add-check`: `go-precheck: 102 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` The untracked
+  `internal/model/names_test.go`: `go-precheck: 1 file(s) clean`, with `govulncheck` skipped. `make check-records` and `make
+  markdownlint` exit 0, and the identifier scan of the changed files found nothing.

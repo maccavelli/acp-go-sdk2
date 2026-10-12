@@ -220,9 +220,11 @@ type Helper struct {
 	Params []Param
 }
 
-// Param is one constructor parameter, named after its property key.
+// Param is one constructor parameter: Name is the Go name paramName gives
+// its property key.
 type Param struct {
 	Key   string
+	Name  string
 	Field string
 	Type  TypeRef
 }
@@ -595,14 +597,20 @@ func buildUnion(schema *load.Schema, n *namer, t *Type, r *rules) error {
 			return err
 		}
 		keys, props := paramKeys(schema, t, v, vi)
+		named := map[string]string{}
 		for _, key := range keys {
 			if key == discKey || props[key] == nil {
 				continue
 			}
-			if err := checkParam(owner, key); err != nil {
+			name, err := paramName(owner, key)
+			if err != nil {
 				return err
 			}
-			h.Params = append(h.Params, Param{Key: key, Field: util.ToExportedField(key), Type: typeRef(props[key])})
+			if prev, ok := named[name]; ok {
+				return fmt.Errorf("%s: parameters %s and %s are both named %s", owner, prev, key, name)
+			}
+			named[name] = key
+			h.Params = append(h.Params, Param{Key: key, Name: name, Field: util.ToExportedField(key), Type: typeRef(props[key])})
 		}
 		t.Helpers = append(t.Helpers, h)
 	}
