@@ -508,3 +508,49 @@ the first copy carried macOS `._*` metadata files, which `FuzzRoundTrip` read as
 * the copy was removed afterwards.
 
 CI on the owner's next push confirms it on the `windows-2025` runner.
+
+### Step 6, receiving: hooks and responses, 2026-10-12
+
+Ran on `main` from `fe6b1cb`. The agent did not commit. CI run 38292700075 on `fe6b1cb` passed on `ubuntu-24.04`, `macos-15` and
+`windows-2025`, confirming the fix of the deviation after step 5.
+
+* `connection.go`: `WithInboundRewrite` and `WithInboundValidation`, whose doc comments state the order, what a hook may and must not do,
+  and what accepting a violation means; `connectionConfig` and `Connection` carry the two functions; `checkInbound(ctx, method, params)`
+  runs the rewrite hook, then `validate(filepath.IsAbs)` when `params` has it, then the validation hook with that result, and returns
+  the error to act on; `inboundError` returns a `*RequestError` as it is and any other error as invalid params; `SendRequest`, after
+  decoding a non-empty result, runs `checkInbound` on it and returns a failure wrapped as `<method> response: %w` with the zero result.
+  The plan named the method `receive`, which `Connection` already has for its read loop; it is `checkInbound`, beside `checkResult`.
+* `internal/emit/dispatch_helpers.go`: `unmarshalValidate` takes the connection and replaces `p.Validate()` with `conn.checkInbound(ctx,
+  method, &p)`, answered through `inboundError`; decoding is unchanged, so a message that does not decode reaches no hook.
+* Regenerated. Asserted: `agent_gen.go: -validate 28 -invalid 28 +check 28 +inbound 28 other 0` and `client_gen.go: -validate 12
+  -invalid 12 +check 12 +inbound 12 other 0`; no `p.Validate()` is left; no other generated file changed. The API listing adds only
+  `func WithInboundRewrite` and `func WithInboundValidation`.
+* Tests, in `paths_test.go`:
+  * `TestReceiveRefusesRelativePaths`: `receiveRoutes` maps each of the 17 cases of `pathCases()` to how it arrives; requests and the two
+    notifications go through the connections' generated `handle` with JSON that was never validated, and each `""` and `relative/dir` is
+    answered `-32602` naming `<Type>: <field>:`, with no notification delivered; the two `SessionInfo` cases arrive as a `session/list`
+    result from a raw peer (`rawPeer`), and `ListSessions` returns an error that wraps the `*ValidationError`.
+  * `TestInboundHooks`: a rewrite that resolves a bare `McpServerStdio.command` reaches the handler resolved; one that leaves it relative
+    is refused naming `McpServerStdio: command`, the handler not called; one that fails refuses with its error; a validation hook that
+    accepts the violation lets the handler see `npx`; one that refuses a valid message answers `-32602` with its error, or a
+    `*RequestError`'s own code (`-32001`); the order on a `session/update` notification and a `session/list` response is `rewrite
+    session/update *acp.SessionNotification`, `validate session/update <nil>`, `rewrite session/list *acp.ListSessionsResponse`, `validate
+    session/list <nil>`; `{}` for `session/new` is answered `-32602` with no hook called.
+  * A test the plan did not name: `TestAgentDispatch_AllowsPartialUnstableMethodImplementation` builds an `AgentSideConnection` literal
+    without its connection and calls the generated `handle`, which now reads the connection's hooks; it panicked with a nil dereference,
+    and now gives the literal `conn: &Connection{}`, a connection with no hooks. Only code in the package can build that literal.
+* `go test -count=1 ./...` passes in `cmd/generate` and at the root; `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the root;
+  `GOOS=windows go vet ./...` passes in both modules.
+* On the Windows host reached over SSH (Windows build 10.0.26200, `go1.27.2 windows/amd64`), with a copy of the working tree's 294
+  tracked and untracked files and no macOS metadata: `go test -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of
+  `cmd/generate` `ok`; the copy was removed afterwards.
+* Plants, each in its own scratch copy, all `exit=1`:
+  * the rewrite hook skipped: `TestInboundHooks/rewrite_resolves_a_bare_command` failed;
+  * validation skipped: `session/new cwd = "": session/new answered <nil>, want -32602 naming NewSessionRequest: cwd:`;
+  * the validation hook skipped: `TestInboundHooks/validation_hook_accepts_a_violation` failed;
+  * `inboundError` passing only a `-32602` `*RequestError` through: the hook's `-32001` came back as
+    `{"code":-32602,"message":"Invalid params","data":{"error":"{\"code\":-32001,\"message\":\"denied\"}"}}`;
+  * `SendRequest` not acting on `checkInbound`: `session/list result cwd = "": ListSessions() = <nil>, want an error wrapping the
+    absolute-path error`.
+* `make pre-add-check`: `go-precheck: 105 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No untracked Go file.
+  `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.

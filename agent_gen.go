@@ -14,8 +14,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := a.agent.Authenticate(ctx, p)
 		if err != nil {
@@ -27,8 +27,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableDidChangeDocument(context.Context, UnstableDidChangeDocumentNotification) error
@@ -45,8 +45,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableDidCloseDocument(context.Context, UnstableDidCloseDocumentNotification) error
@@ -63,8 +63,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableDidFocusDocument(context.Context, UnstableDidFocusDocumentNotification) error
@@ -81,8 +81,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableDidOpenDocument(context.Context, UnstableDidOpenDocumentNotification) error
@@ -99,8 +99,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableDidSaveDocument(context.Context, UnstableDidSaveDocumentNotification) error
@@ -117,8 +117,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := a.agent.Initialize(ctx, p)
 		if err != nil {
@@ -130,8 +130,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := a.agent.Logout(ctx, p)
 		if err != nil {
@@ -143,8 +143,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableMessageMcp(context.Context, UnstableMessageMcpNotification) error
@@ -161,8 +161,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableAcceptNes(context.Context, UnstableAcceptNesNotification) error
@@ -179,8 +179,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableCloseNes(context.Context, UnstableCloseNesRequest) (UnstableCloseNesResponse, error)
@@ -198,8 +198,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableRejectNes(context.Context, UnstableRejectNesNotification) error
@@ -216,8 +216,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableStartNes(context.Context, UnstableStartNesRequest) (UnstableStartNesResponse, error)
@@ -235,8 +235,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableSuggestNes(context.Context, UnstableSuggestNesRequest) (UnstableSuggestNesResponse, error)
@@ -254,8 +254,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableDisableProvider(context.Context, UnstableDisableProviderRequest) (UnstableDisableProviderResponse, error)
@@ -273,8 +273,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableListProviders(context.Context, UnstableListProvidersRequest) (UnstableListProvidersResponse, error)
@@ -292,8 +292,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableSetProvider(context.Context, UnstableSetProviderRequest) (UnstableSetProviderResponse, error)
@@ -311,8 +311,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		a.mu.Lock()
 		if cn, ok := a.sessionCancels[string(p.SessionId)]; ok {
@@ -329,8 +329,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := a.agent.CloseSession(ctx, p)
 		if err != nil {
@@ -342,8 +342,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := a.agent.DeleteSession(ctx, p)
 		if err != nil {
@@ -355,8 +355,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
 			UnstableForkSession(context.Context, UnstableForkSessionRequest) (UnstableForkSessionResponse, error)
@@ -374,8 +374,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := a.agent.ListSessions(ctx, p)
 		if err != nil {
@@ -387,8 +387,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		loader, ok := a.agent.(AgentLoader)
 		if !ok {
@@ -404,8 +404,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := a.agent.NewSession(ctx, p)
 		if err != nil {
@@ -417,8 +417,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		var reqCtx context.Context
 		var cancel context.CancelFunc
@@ -442,8 +442,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := a.agent.ResumeSession(ctx, p)
 		if err != nil {
@@ -455,8 +455,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := a.agent.SetSessionConfigOption(ctx, p)
 		if err != nil {
@@ -468,8 +468,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := a.agent.SetSessionMode(ctx, p)
 		if err != nil {

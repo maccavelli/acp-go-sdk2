@@ -70,7 +70,7 @@ func agentFile(m *model.Model) *goFile {
 	for _, mi := range m.AgentMethods {
 		var body []ast.Stmt
 		if mi.Notif != "" {
-			body = append(body, unmarshalValidate(f, mi.Notif)...)
+			body = append(body, unmarshalValidate(f, dot("a", "conn"), mi.Notif)...)
 			// A prompt turn's cancel first cancels the session's in-flight prompt context.
 			if mi.CancelsPromptTurn {
 				body = append(body, cancelActivePrompt(mi.SessionField)...)
@@ -79,7 +79,7 @@ func agentFile(m *model.Model) *goFile {
 			body = append(body, pre...)
 			body = append(body, callNoResult(recv, mi.GoName)...)
 		} else {
-			body = append(body, unmarshalValidate(f, mi.Req)...)
+			body = append(body, unmarshalValidate(f, dot("a", "conn"), mi.Req)...)
 			pre, recv := agentAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Req, mi.Resp, mi.HasResult)
 			body = append(body, pre...)
 			switch {
@@ -109,12 +109,12 @@ func clientFile(m *model.Model) *goFile {
 	for _, mi := range m.ClientMethods {
 		var body []ast.Stmt
 		if mi.Notif != "" {
-			body = append(body, unmarshalValidate(f, mi.Notif)...)
+			body = append(body, unmarshalValidate(f, dot("c", "conn"), mi.Notif)...)
 			pre, recv := clientAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Notif, "", false)
 			body = append(body, pre...)
 			body = append(body, callNoResult(recv, mi.GoName)...)
 		} else {
-			body = append(body, unmarshalValidate(f, mi.Req)...)
+			body = append(body, unmarshalValidate(f, dot("c", "conn"), mi.Req)...)
 			pre, recv := clientAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Req, mi.Resp, mi.HasResult)
 			body = append(body, pre...)
 			if mi.HasResult {

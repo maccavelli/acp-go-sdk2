@@ -14,8 +14,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		if err := c.client.CompleteElicitation(ctx, p); err != nil {
 			return nil, toReqErr(err)
@@ -26,8 +26,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := c.client.CreateElicitation(ctx, p)
 		if err != nil {
@@ -39,8 +39,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := c.client.ReadTextFile(ctx, p)
 		if err != nil {
@@ -52,8 +52,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := c.client.WriteTextFile(ctx, p)
 		if err != nil {
@@ -65,8 +65,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		exp, ok := c.client.(interface {
 			UnstableMessageMcp(context.Context, UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error)
@@ -84,8 +84,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := c.client.RequestPermission(ctx, p)
 		if err != nil {
@@ -97,8 +97,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		if err := c.client.SessionUpdate(ctx, p); err != nil {
 			return nil, toReqErr(err)
@@ -109,8 +109,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := c.client.CreateTerminal(ctx, p)
 		if err != nil {
@@ -122,8 +122,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := c.client.KillTerminal(ctx, p)
 		if err != nil {
@@ -135,8 +135,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := c.client.TerminalOutput(ctx, p)
 		if err != nil {
@@ -148,8 +148,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := c.client.ReleaseTerminal(ctx, p)
 		if err != nil {
@@ -161,8 +161,8 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := p.Validate(); err != nil {
-			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
+		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+			return nil, inboundError(err)
 		}
 		resp, err := c.client.WaitForTerminalExit(ctx, p)
 		if err != nil {

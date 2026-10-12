@@ -436,8 +436,11 @@ func (a *forkOnlyUnstableAgent) UnstableForkSession(context.Context, UnstableFor
 
 func TestAgentDispatch_AllowsPartialUnstableMethodImplementation(t *testing.T) {
 	agent := &forkOnlyUnstableAgent{}
+	// A zero Connection: no hooks, which the dispatch's receiving order reads
+	// (0015-PLAN-validate-absolute-protocol-paths.md, step 6).
 	conn := &AgentSideConnection{
 		agent:          agent,
+		conn:           &Connection{},
 		sessionCancels: make(map[string]context.CancelFunc),
 	}
 

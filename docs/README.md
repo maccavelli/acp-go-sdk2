@@ -43,6 +43,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0014 | PLAN | [Implement the union constructor decisions](decisions/0014-PLAN-union-constructors-take-every-required-key.md) | in-progress |
 | 0015 | MADR | [Enforce absolute protocol paths, with a consumer validation hook](decisions/0015-MADR-validate-absolute-protocol-paths.md) | accepted |
 | 0015 | PLAN | [Implement absolute protocol paths, with consumer hooks](decisions/0015-PLAN-validate-absolute-protocol-paths.md) | in-progress |
+| 0016 | REPORT | [ACP v1 spec adherence audit](reports/0016-REPORT-acp-v1-conformance-audit.md) | observed |
 
 ## I want to…
 
@@ -50,6 +51,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | :--- | :--- |
 | see whether a Go 1.27.1 floor fits this SDK | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |
 | see how the generated API lines up with the current ACP spec | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |
+| see what the current ACP v1 spec audit found | [0016-REPORT-acp-v1-conformance-audit.md](reports/0016-REPORT-acp-v1-conformance-audit.md) |
 | know why Go was accepted at 1.27.2 with schema 1.24.1 | [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](decisions/0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md) |
 | know why the schema pin is 1.25.0 | [0004-MADR-pin-acp-schema-1-25-0.md](decisions/0004-MADR-pin-acp-schema-1-25-0.md) |
 | know why this tree is not the Coder Go SDK | [0005-MADR-separate-module-from-coder.md](decisions/0005-MADR-separate-module-from-coder.md) |

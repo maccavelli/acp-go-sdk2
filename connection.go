@@ -6,8 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -150,6 +152,10 @@ type Connection struct {
 	onNotificationDropped func(method string, totalDropped uint64)
 	// droppedNotifications counts notifications dropped under OverflowDropNewest.
 	droppedNotifications atomic.Uint64
+	// rewrite and inbound are the consumer's hooks on received messages
+	// (WithInboundRewrite, WithInboundValidation).
+	rewrite func(ctx context.Context, method string, params any) error
+	inbound func(ctx context.Context, method string, params any, err error) error
 }
 
 // ConnectionOption configures optional parameters for a Connection.
@@ -160,6 +166,8 @@ type connectionConfig struct {
 	notificationOverflow   NotificationOverflowPolicy
 	onNotificationDropped  func(method string, totalDropped uint64)
 	logger                 *slog.Logger
+	rewrite                func(ctx context.Context, method string, params any) error
+	inbound                func(ctx context.Context, method string, params any, err error) error
 }
 
 // WithMaxQueuedNotifications sets the maximum number of queued notifications
@@ -239,6 +247,39 @@ func WithLogger(l *slog.Logger) ConnectionOption {
 	}
 }
 
+// WithInboundRewrite installs a hook that sees every request, notification
+// and response the connection receives, after it is decoded and before it is
+// validated: params is a pointer to the decoded value, such as
+// *NewSessionRequest, which the hook may change, for example to resolve a
+// bare MCP server command with exec.LookPath or to translate a path from
+// another host. The SDK then validates what the hook leaves, so a handler sees
+// the rewritten value, not what the peer sent. A non-nil error refuses the
+// message as WithInboundValidation's does. A message that does not decode
+// reaches no hook (0015-MADR-validate-absolute-protocol-paths.md, H1).
+func WithInboundRewrite(fn func(ctx context.Context, method string, params any) error) ConnectionOption {
+	return func(cfg *connectionConfig) {
+		cfg.rewrite = fn
+	}
+}
+
+// WithInboundValidation installs a hook that decides the outcome of every
+// request, notification and response the connection receives, after the SDK
+// validates it: err is the SDK's result, nil when the message is valid, and
+// a *ValidationError, wrapped, when it is not. The hook returns the error to
+// act on, or nil to accept the message; returning nil for a violation accepts
+// a message the ACP standard forbids, which the application then answers
+// for. It may also refuse a valid message with its own error. A request is
+// answered with a *RequestError as it is, and with any other error as
+// invalid params (-32602); a notification with an error is dropped and
+// logged; a response's error is returned to the caller. params is the same
+// pointer the rewrite hook saw, and this hook must not change it
+// (0015-MADR-validate-absolute-protocol-paths.md, H1).
+func WithInboundValidation(fn func(ctx context.Context, method string, params any, err error) error) ConnectionOption {
+	return func(cfg *connectionConfig) {
+		cfg.inbound = fn
+	}
+}
+
 // NewConnection starts a line-delimited JSON-RPC connection.
 // peerInput receives bytes written to the peer. peerOutput supplies bytes read from the peer.
 func NewConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *Connection {
@@ -266,6 +307,8 @@ func NewConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Rea
 
 		notificationOverflow:  cfg.notificationOverflow,
 		onNotificationDropped: cfg.onNotificationDropped,
+		rewrite:               cfg.rewrite,
+		inbound:               cfg.inbound,
 	}
 	if cfg.logger != nil {
 		c.logger.Store(cfg.logger)
@@ -850,6 +893,10 @@ func SendRequest[T any](c *Connection, ctx context.Context, method string, param
 		if err := json.Unmarshal(resp.msg.Result, &result); err != nil {
 			return result, NewInternalError(map[string]any{jsonErrorField: err.Error()})
 		}
+		if err := c.checkInbound(ctx, method, &result); err != nil {
+			var zero T
+			return zero, fmt.Errorf("%s response: %w", method, err)
+		}
 	}
 	return result, nil
 }
@@ -1133,6 +1180,36 @@ func (c *Connection) checkResult(method string, result any) (any, *RequestError)
 		return nil, NewInternalError(map[string]any{jsonErrorField: err.Error()})
 	}
 	return result, nil
+}
+
+// checkInbound runs the receiving order on a decoded message: the rewrite hook,
+// the SDK's validation with the host's rule for an absolute path, then the
+// validation hook with that result. It returns the error to act on, nil to
+// accept (0015-MADR-validate-absolute-protocol-paths.md, item 5).
+func (c *Connection) checkInbound(ctx context.Context, method string, params any) error {
+	if c.rewrite != nil {
+		if err := c.rewrite(ctx, method, params); err != nil {
+			return err
+		}
+	}
+	var err error
+	if v, ok := params.(validator); ok {
+		err = v.validate(filepath.IsAbs)
+	}
+	if c.inbound != nil {
+		return c.inbound(ctx, method, params, err)
+	}
+	return err
+}
+
+// inboundError is the answer to a received request that checkInbound refused: a
+// *RequestError as it is, any other error as invalid params.
+func inboundError(err error) *RequestError {
+	var re *RequestError
+	if errors.As(err, &re) {
+		return re
+	}
+	return NewInvalidParams(map[string]any{jsonErrorField: err.Error()})
 }
 
 func (c *Connection) prepareNotification(method string, params any) (anyMessage, error) {

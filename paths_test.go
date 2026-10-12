@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -205,4 +206,239 @@ func TestHandlerResultValidated(t *testing.T) {
 	if !strings.Contains(logs.String(), "handler result fails validation") {
 		t.Errorf("the agent did not log the refused result: %q", logs.String())
 	}
+}
+
+// receiveRoutes says how each case of pathCases is received: the method a
+// request or notification arrives as, at the agent or the client, or
+// "response" for a session/list result.
+var receiveRoutes = map[string]struct{ side, method string }{
+	"session/new cwd":                           {"agent", AgentMethodSessionNew},
+	"session/new additionalDirectories":         {"agent", AgentMethodSessionNew},
+	"session/load cwd":                          {"agent", AgentMethodSessionLoad},
+	"session/load additionalDirectories":        {"agent", AgentMethodSessionLoad},
+	"session/resume cwd":                        {"agent", AgentMethodSessionResume},
+	"session/resume additionalDirectories":      {"agent", AgentMethodSessionResume},
+	"session/fork cwd":                          {"agent", AgentMethodSessionFork},
+	"session/fork additionalDirectories":        {"agent", AgentMethodSessionFork},
+	"session/list cwd":                          {"agent", AgentMethodSessionList},
+	"session/list result cwd":                   {"response", AgentMethodSessionList},
+	"session/list result additionalDirectories": {"response", AgentMethodSessionList},
+	"MCP server command":                        {"agent", AgentMethodSessionNew},
+	"fs/read_text_file path":                    {"client", ClientMethodFsReadTextFile},
+	"fs/write_text_file path":                   {"client", ClientMethodFsWriteTextFile},
+	"terminal/create cwd":                       {"client", ClientMethodTerminalCreate},
+	"tool call location":                        {"client", ClientMethodSessionUpdate},
+	"diff path":                                 {"client", ClientMethodSessionUpdate},
+}
+
+// idleReader is a peer that never sends, closed when the test ends.
+func idleReader(t *testing.T) io.Reader {
+	t.Helper()
+	pr, pw := io.Pipe()
+	t.Cleanup(func() { _ = pw.Close() })
+	return pr
+}
+
+// rawPeer starts a client connection whose agent answers every request with
+// result, as raw JSON that is not validated on its way out.
+func rawPeer(t *testing.T, result string, opts ...ConnectionOption) *ClientSideConnection {
+	t.Helper()
+	c2aR, c2aW := io.Pipe()
+	a2cR, a2cW := io.Pipe()
+	t.Cleanup(func() {
+		_ = c2aW.Close()
+		_ = a2cW.Close()
+	})
+	NewConnection(func(context.Context, string, json.RawMessage) (any, *RequestError) {
+		return json.RawMessage(result), nil
+	}, a2cW, c2aR)
+	return NewClientSideConnection(&clientFuncs{}, c2aW, a2cR, opts...)
+}
+
+// TestReceiveRefusesRelativePaths requires each of the 17 properties, received
+// empty or relative, to be refused: a request with -32602 naming the type and
+// property, before the handler runs; a notification likewise, so it is
+// dropped and not delivered; a response with an error that wraps the
+// *ValidationError (0015-PLAN-validate-absolute-protocol-paths.md, step 6).
+func TestReceiveRefusesRelativePaths(t *testing.T) {
+	t.Parallel()
+	delivered := 0
+	asc := NewAgentSideConnection(agentFuncs{}, io.Discard, idleReader(t))
+	csc := NewClientSideConnection(&clientFuncs{SessionUpdateFunc: func(context.Context, SessionNotification) error {
+		delivered++
+		return nil
+	}}, io.Discard, idleReader(t))
+	for _, tc := range pathCases() {
+		route, ok := receiveRoutes[tc.name]
+		if !ok {
+			t.Fatalf("%s: no receive route", tc.name)
+		}
+		for _, bad := range []string{"", "relative/dir"} {
+			raw, err := json.Marshal(tc.build(bad))
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := tc.typ + ": " + tc.field + ": "
+			switch route.side {
+			case "response":
+				_, err := rawPeer(t, string(raw)).ListSessions(t.Context(), ListSessionsRequest{})
+				var ve *ValidationError
+				if !errors.As(err, &ve) || ve.Type != tc.typ || ve.Field != tc.field {
+					t.Errorf("%s = %q: ListSessions() = %v, want an error wrapping the absolute-path error", tc.name, bad, err)
+				}
+			default:
+				var rerr *RequestError
+				if route.side == "agent" {
+					_, rerr = asc.handle(t.Context(), route.method, raw)
+				} else {
+					_, rerr = csc.handle(t.Context(), route.method, raw)
+				}
+				if rerr == nil || rerr.Code != -32602 || !strings.Contains(fmt.Sprint(rerr.Data), want) {
+					t.Errorf("%s = %q: %s answered %v, want -32602 naming %s", tc.name, bad, route.method, rerr, want)
+				}
+			}
+		}
+	}
+	if delivered != 0 {
+		t.Errorf("%d refused notifications were delivered", delivered)
+	}
+}
+
+// bareCommand is a session/new whose MCP server command is a bare name, as a
+// client that forwards its configuration may send it.
+func bareCommand(t *testing.T) json.RawMessage {
+	t.Helper()
+	raw, err := json.Marshal(NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{{Stdio: &McpServerStdio{Name: "m", Command: "npx"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// TestInboundHooks requires the receiving order of the MADR's H1: the rewrite
+// hook changes the decoded message, the SDK validates what it leaves, and
+// the validation hook decides with that result; a message that does not
+// decode reaches neither (0015-PLAN-validate-absolute-protocol-paths.md, step 6).
+func TestInboundHooks(t *testing.T) {
+	t.Parallel()
+	resolved := filepath.Join(testAbsPath("bin"), "npx")
+	newSession := func(got *string) agentFuncs {
+		return agentFuncs{NewSessionFunc: func(_ context.Context, p NewSessionRequest) (NewSessionResponse, error) {
+			*got = p.McpServers[0].Stdio.Command
+			return NewSessionResponse{SessionId: "s"}, nil
+		}}
+	}
+	t.Run("rewrite resolves a bare command", func(t *testing.T) {
+		var got string
+		asc := NewAgentSideConnection(newSession(&got), io.Discard, idleReader(t), WithInboundRewrite(func(_ context.Context, _ string, params any) error {
+			if r, ok := params.(*NewSessionRequest); ok && r.McpServers[0].Stdio.Command == "npx" {
+				r.McpServers[0].Stdio.Command = resolved
+			}
+			return nil
+		}))
+		if _, rerr := asc.handle(t.Context(), AgentMethodSessionNew, bareCommand(t)); rerr != nil || got != resolved {
+			t.Errorf("handle = %v, the handler saw %q, want %q", rerr, got, resolved)
+		}
+	})
+	t.Run("rewrite that leaves the command relative", func(t *testing.T) {
+		var got string
+		asc := NewAgentSideConnection(newSession(&got), io.Discard, idleReader(t),
+			WithInboundRewrite(func(context.Context, string, any) error { return nil }))
+		_, rerr := asc.handle(t.Context(), AgentMethodSessionNew, bareCommand(t))
+		if rerr == nil || rerr.Code != -32602 || !strings.Contains(fmt.Sprint(rerr.Data), "McpServerStdio: command") || got != "" {
+			t.Errorf("handle = %v, the handler saw %q, want -32602 naming the command", rerr, got)
+		}
+	})
+	t.Run("rewrite that fails", func(t *testing.T) {
+		asc := NewAgentSideConnection(agentFuncs{}, io.Discard, idleReader(t),
+			WithInboundRewrite(func(context.Context, string, any) error { return errors.New("no npx on this host") }))
+		_, rerr := asc.handle(t.Context(), AgentMethodSessionNew, bareCommand(t))
+		if rerr == nil || rerr.Code != -32602 || !strings.Contains(fmt.Sprint(rerr.Data), "no npx on this host") {
+			t.Errorf("handle = %v, want -32602 with the hook's error", rerr)
+		}
+	})
+	t.Run("validation hook accepts a violation", func(t *testing.T) {
+		var got string
+		asc := NewAgentSideConnection(newSession(&got), io.Discard, idleReader(t),
+			WithInboundValidation(func(_ context.Context, _ string, _ any, err error) error {
+				var ve *ValidationError
+				if errors.As(err, &ve) && ve.Type == "McpServerStdio" && ve.Field == "command" {
+					return nil
+				}
+				return err
+			}))
+		if _, rerr := asc.handle(t.Context(), AgentMethodSessionNew, bareCommand(t)); rerr != nil || got != "npx" {
+			t.Errorf("handle = %v, the handler saw %q, want the accepted npx", rerr, got)
+		}
+	})
+	t.Run("validation hook refuses a valid message", func(t *testing.T) {
+		raw, _ := json.Marshal(NewSessionRequest{Cwd: testAbsPath()})
+		for _, tt := range []struct {
+			hookErr  error
+			wantCode int
+			wantText string
+		}{
+			{errors.New("not in this workspace"), -32602, "not in this workspace"},
+			{&RequestError{Code: -32001, Message: "denied"}, -32001, "denied"},
+		} {
+			asc := NewAgentSideConnection(agentFuncs{}, io.Discard, idleReader(t),
+				WithInboundValidation(func(_ context.Context, _ string, _ any, err error) error {
+					if err != nil {
+						return err
+					}
+					return tt.hookErr
+				}))
+			_, rerr := asc.handle(t.Context(), AgentMethodSessionNew, raw)
+			if rerr == nil || rerr.Code != tt.wantCode || !strings.Contains(rerr.Error(), tt.wantText) {
+				t.Errorf("handle = %v, want code %d with %q", rerr, tt.wantCode, tt.wantText)
+			}
+		}
+	})
+	t.Run("order on notifications and responses", func(t *testing.T) {
+		var mu sync.Mutex
+		var order []string
+		hooks := []ConnectionOption{
+			WithInboundRewrite(func(_ context.Context, method string, params any) error {
+				mu.Lock()
+				defer mu.Unlock()
+				order = append(order, fmt.Sprintf("rewrite %s %T", method, params))
+				return nil
+			}),
+			WithInboundValidation(func(_ context.Context, method string, _ any, err error) error {
+				mu.Lock()
+				defer mu.Unlock()
+				order = append(order, fmt.Sprintf("validate %s %v", method, err))
+				return err
+			}),
+		}
+		csc := NewClientSideConnection(&clientFuncs{}, io.Discard, idleReader(t), hooks...)
+		note, _ := json.Marshal(SessionNotification{SessionId: "s", Update: StartToolCall("t", "read",
+			WithStartLocations([]ToolCallLocation{{Path: testAbsPath("a")}}))})
+		if _, rerr := csc.handle(t.Context(), ClientMethodSessionUpdate, note); rerr != nil {
+			t.Fatal(rerr)
+		}
+		list, _ := json.Marshal(ListSessionsResponse{Sessions: []SessionInfo{{SessionId: "s", Cwd: testAbsPath()}}})
+		if _, err := rawPeer(t, string(list), hooks...).ListSessions(t.Context(), ListSessionsRequest{}); err != nil {
+			t.Fatal(err)
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		want := []string{
+			"rewrite session/update *acp.SessionNotification", "validate session/update <nil>",
+			"rewrite session/list *acp.ListSessionsResponse", "validate session/list <nil>",
+		}
+		if !slices.Equal(order, want) {
+			t.Errorf("hooks ran %q, want %q", order, want)
+		}
+	})
+	t.Run("a message that does not decode reaches no hook", func(t *testing.T) {
+		calls := 0
+		count := func(context.Context, string, any) error { calls++; return nil }
+		asc := NewAgentSideConnection(agentFuncs{}, io.Discard, idleReader(t), WithInboundRewrite(count),
+			WithInboundValidation(func(context.Context, string, any, error) error { calls++; return nil }))
+		_, rerr := asc.handle(t.Context(), AgentMethodSessionNew, json.RawMessage(`{}`))
+		if rerr == nil || rerr.Code != -32602 || calls != 0 {
+			t.Errorf("handle = %v with %d hook calls, want -32602 and none", rerr, calls)
+		}
+	})
 }

@@ -24,13 +24,15 @@ func methodNotFound() ast.Stmt { return ret(nilExpr(), call(id("NewMethodNotFoun
 func errNotNil() ast.Expr { return binary(id("err"), token.NEQ, nilExpr()) }
 
 // unmarshalValidate decodes params into p and validates it.
-func unmarshalValidate(f *goFile, typeName string) []ast.Stmt {
+func unmarshalValidate(f *goFile, conn ast.Expr, typeName string) []ast.Stmt {
 	return []ast.Stmt{
 		varStmt("p", id(typeName)),
 		ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("params"), addr(id("p")))), errNotNil(),
 			invalidParams()),
-		ifStmt(define(exprs(id("err")), call(dot("p", "Validate"))), errNotNil(),
-			invalidParams()),
+		// The receiving order: the consumer's rewrite hook, validation, the
+		// validation hook (0015-MADR-validate-absolute-protocol-paths.md, H1).
+		ifStmt(define(exprs(id("err")), call(sel(conn, "checkInbound"), id("ctx"), id("method"), addr(id("p")))), errNotNil(),
+			ret(nilExpr(), call(id("inboundError"), id("err")))),
 	}
 }
 
