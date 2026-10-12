@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-12
 associated-madr: "0014-MADR-union-constructors-take-every-required-key.md"
 ---
@@ -446,3 +446,39 @@ Ran on `main` from `3ca6357`. The agent did not commit. No Go file changed.
 * The advisory draft names affected `v0.15.0` and patched `v0.16.0`, as 0015-MADR's C1 decided, and says in its description that no
   version before `v0.16.0` refused a relative path. It suggests CWE-20 and leaves severity to the owner.
 * `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
+
+### Step 8, close, 2026-10-12
+
+Ran on `main` from `1941631` (step 7). The agent did not commit. Each item of "Verification" above:
+
+* `TestHelperParams` passes (`cmd/generate`, `-race`), on the committed schema and every accepting engine case; it failed on step 3's
+  plant, quoted there.
+* `TestEngineCases/refuse-union-keys-ref-variant` passes, which requires the refusal's substrings and an unchanged directory; it failed
+  with the refusal removed, in step 3.
+* `TestParamName` passes (`internal/model`, `-race`); it failed on step 4's three plants, quoted there.
+* `TestConformanceConstructors` passes under `-race` with 67 subtests: 63 pass and 4 skip, each `the zero-argument value does not encode`
+  for a nested required union with no variant set: `ElicitationPropertySchema_Array` (`MultiSelectItems`), `SessionConfigOption_Select`
+  (`SessionConfigSelectOptions`), `CreateElicitationRequest_Form` and `CreateElicitationRequest_Url` (`CreateElicitationForm`,
+  `CreateElicitationUrl`), the four step 5 named. It failed on each of step 5's plants that names it.
+* Engine cases, comparing every case's `want.api` section at `bc0cb78` and at `23d03b5`, this plan's last code commit, by a script:
+  existing cases change by 39 added and 2 removed `func New…` lines, and by 8 other lines, all in `accept-inline-variants.txtar`: the
+  `$ref` variant moved out of `V` into the new union `W` (`type V`, `type W`, `type WVariant1`, and `W`'s `MarshalJSON`, `UnmarshalJSON`
+  and `Validate`, `WVariant1`'s `UnmarshalJSON`). Those 8 are the step 3 deviation's fixture change, which the owner chose; no other
+  `want.api` line changed. Four cases are new: `accept-constructor-names`, `accept-union-own-keys`, `accept-value-variants` and
+  `refuse-union-keys-ref-variant`, each reviewed in its step. `TestEngineCases` and `TestEngineBehaviour` pass.
+* `grep -c '^func New' helpers_gen.go` prints `67`; `go tool cover -func` over the root's tests lists all 67 functions of `helpers_gen.go`
+  at `100.0%`.
+* The exported API listing of `git archive bc0cb78` against `git archive 23d03b5`: removed, the two old `NewSessionConfigOption…`
+  signatures; added, 58 lines, all `func New…`: their two new forms and 56 constructors; nothing else. At `1941631` the listing also
+  carries 0015's 26 lines, listed in [0014-REPORT-release-notes-v0-16-0.md](../reports/0014-REPORT-release-notes-v0-16-0.md).
+* `make pre-add-check`: `go-precheck: 105 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`, with `go test -race` in
+  both modules. `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the root; `go mod tidy -diff` is clean in both modules;
+  `GOOS=windows go vet ./...` passes in both. `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed
+  files found nothing.
+* CI: the owner's pushes were batched, so no run targets this plan's commits by themselves. They are carried by run 38291760159
+  (`b83b84d`), which failed on `windows-2025` in a test of 0015 (that plan's deviation after its step 5), and by runs 38292700075
+  (`fe6b1cb`) and 38301174952 (`398b21f`), green on `ubuntu-24.04`, `macos-15` and `windows-2025`. Steps 6 to 8 change no Go file;
+  `main` was 4 commits ahead of `origin/main` when this was written, and CI runs when the owner pushes.
+
+Not done by this plan: tagging `v0.16.0`, publishing its release from the report's "Release text", appending the 0013 report's erratum to
+the `v0.15.0` release, publishing the `v0.15.0` advisory from the report's draft, and closing issue #2. Each is the owner's.
