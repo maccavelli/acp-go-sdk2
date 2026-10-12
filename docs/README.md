@@ -44,6 +44,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0015 | MADR | [Enforce absolute protocol paths, with a consumer validation hook](decisions/0015-MADR-validate-absolute-protocol-paths.md) | accepted |
 | 0015 | PLAN | [Implement absolute protocol paths, with consumer hooks](decisions/0015-PLAN-validate-absolute-protocol-paths.md) | in-progress |
 | 0016 | REPORT | [ACP v1 spec adherence audit](reports/0016-REPORT-acp-v1-conformance-audit.md) | observed |
+| 0017 | MADR | [Remediate the ACP v1 conformance violations: cancellation, JSON-RPC errors, version and capabilities](decisions/0017-MADR-remediate-acp-v1-conformance-violations.md) | accepted |
+| 0017 | PLAN | [Implement the ACP v1 conformance remediation](decisions/0017-PLAN-remediate-acp-v1-conformance-violations.md) | proposed |
 
 ## I want to…
 
