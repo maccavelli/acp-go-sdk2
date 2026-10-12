@@ -56,8 +56,9 @@ Read on `23d03b5`, 2026-10-12, beside the MADR's own facts.
   * Over a connection, with POSIX literals that the receiving rule refuses on Windows: `acp_test.go` (`Cwd: "/"`, `"/test"`, `"/tmp"`,
     `Path: "/test.txt"`, `"/file1.txt"` and others, 13 lines), `connection_notification_barrier_test.go:35`, `example_client_test.go:137`,
     `example_gemini_test.go:90`, `example_agent_test.go:83` and `:96`.
-  * Marshal only, never validated: `json_parity_test.go`, `fidelity_test.go` (bar the `Validate` table), `raw_value_test.go`,
-    `generated_output_test.go`; unaffected.
+  * Marshal only, never validated: `json_parity_test.go`, `fidelity_test.go` (bar the `Validate` table), `raw_value_test.go`~~,
+    `generated_output_test.go`~~; unaffected. (Corrected 2026-10-12: `generated_output_test.go`'s `TestNilRequiredArrayEncodesEmpty`
+    validates the value it decodes; see the deviation after step 5.)
   * `instances_test.go` fills every string with `"s"` (`:201`), and `roundTrip` (`conformance_test.go:282`) validates each instance and
     each `testdata/json_golden` file; nine goldens hold POSIX paths (`fs_read_text_file_request.json`, `new_session_request.json`,
     `tool_content_diff.json` and six more).
@@ -476,3 +477,34 @@ Ran on `main` from `992cf48`. The agent did not commit. Steps 2 to 4 were commit
   * `checkResult` not checking: `ListSessions() = <nil>, want -32603 naming SessionInfo cwd`.
 * `make pre-add-check`: `go-precheck: 105 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No untracked Go file.
   `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.
+
+### Deviation after step 5, 2026-10-12: a test step 4 missed failed on Windows
+
+The owner pushed steps 2 to 5's commits (`b83b84d`), and CI run 38291760159 passed on `ubuntu-24.04` and `macos-15` and failed on
+`windows-2025`, the first run of step 4's tests on Windows:
+
+```text
+--- FAIL: TestNilRequiredArrayEncodesEmpty
+generated_output_test.go:41: decoded {"cwd":"/home/\u003cuser\u003e/project","mcpServers":[]} fails Validate:
+NewSessionRequest: cwd: "/home/<user>/project" is not an absolute path
+```
+
+The test checks that a nil required array is sent as `[]`; its `cwd` is incidental. It decodes the value and calls `Validate()`, which
+since step 4 applies the receiving host's `filepath.IsAbs`, false on Windows for a POSIX path. This plan's facts listed
+`generated_output_test.go` as never validated, so step 4 did not change it; the other root tests that call `Validate` hold no path
+literal that reaches it (`fidelity_test.go`'s are built and compared, never validated, and passed on Windows).
+
+Asked, the owner chose to build the `cwd` with `testAbsPath("project")`, as step 4 did for the connection tests, keeping the test's
+`Validate()` on the receiving rule, and to land the fix with step 5's changes. Not chosen: validating that value with the portable rule;
+a separate commit before step 5. The facts are corrected above.
+
+Proven on Windows before the push, at the owner's direction, on a Windows host reached over SSH (Windows build 10.0.26200, `go1.27.2
+windows/amd64`), with a copy of the working tree's tracked and untracked files (294, the same as `git ls-files -co --exclude-standard`;
+the first copy carried macOS `._*` metadata files, which `FuzzRoundTrip` read as goldens, and was replaced by one made without them):
+
+* `go test -count=1 -shuffle=on ./...` at the root: `ok`; `go test -count=1 ./...` in `cmd/generate`: all seven packages `ok`;
+* with the old literal put back in that copy only, `TestNilRequiredArrayEncodesEmpty` failed as CI did (`NewSessionRequest: cwd:
+  "/home/<user>/project" is not an absolute path`), and passed again once restored;
+* the copy was removed afterwards.
+
+CI on the owner's next push confirms it on the `windows-2025` runner.

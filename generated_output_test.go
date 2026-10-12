@@ -26,7 +26,9 @@ func TestUnsetUnionFailsByName(t *testing.T) {
 
 func TestNilRequiredArrayEncodesEmpty(t *testing.T) {
 	t.Parallel()
-	b, err := json.Marshal(NewSessionRequest{Cwd: "/home/<user>/project"})
+	// An absolute cwd for the host, which Validate requires; a POSIX literal is
+	// not absolute on Windows (0015-PLAN-validate-absolute-protocol-paths.md, step 5).
+	b, err := json.Marshal(NewSessionRequest{Cwd: testAbsPath("project")})
 	if err != nil {
 		t.Fatal(err)
 	}
