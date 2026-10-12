@@ -15,6 +15,8 @@ type AgentExperimental interface{}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+func NewUFooExt(value string) U
+func NewUUVariant2() U
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type U struct{FooExt *UFooExt "json:\"-\""; UVariant2 *UVariant2 "json:\"-\""}

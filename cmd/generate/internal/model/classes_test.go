@@ -172,7 +172,7 @@ func TestCatchAllNeedsNot(t *testing.T) {
 func TestUnionClassRefusals(t *testing.T) {
 	t.Parallel()
 	const known = `{"type":"object","required":["type"],"properties":{"type":{"const":"a","type":"string"}}}`
-	const other = `{"title":"other","type":"object","required":["type"],"properties":{"type":{"type":"string"}},"not":{"required":["type"]}}`
+	const other = `{"title":"other","type":"object","required":["type"],"properties":{"type":{"type":"string"}},"not":{"anyOf":[{"type":"object","properties":{"type":{"type":"string","const":"a"}},"required":["type"]}]}}`
 	tests := []struct {
 		name, defs string
 		want       []string
@@ -183,7 +183,9 @@ func TestUnionClassRefusals(t *testing.T) {
 		{"variant field named Unknown", `{"U":{"oneOf":[{"type":"object","required":["type"],"properties":{"type":{"const":"unknown","type":"string"}}},` + known + `]}}`,
 			[]string{"U:", "takes the field Unknown"}},
 		{"catch-all property named extra", `{"U":{"anyOf":[` + known + `,{"title":"other","type":"object","required":["type"],
-			"properties":{"type":{"type":"string"},"extra":{"type":"string"}},"not":{"required":["type"]}}]}}`, []string{"U variant 2", `property "extra" becomes field Extra`}},
+			"properties":{"type":{"type":"string"},"extra":{"type":"string"}},"not":{"anyOf":[{"type":"object","properties":{"type":{"type":"string","const":"a"}},"required":["type"]}]}}]}}`, []string{"U variant 2", `property "extra" becomes field Extra`}},
+		{"catch-all excluding no value", `{"U":{"anyOf":[` + known + `,` + strings.Replace(other, `"not":{"anyOf":[{"type":"object","properties":{"type":{"type":"string","const":"a"}},"required":["type"]}]}`, `"not":{"required":["type"]}`, 1) + `]}}`,
+			[]string{"U variant 2", `the catch-all's not excludes no value of "type"`}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

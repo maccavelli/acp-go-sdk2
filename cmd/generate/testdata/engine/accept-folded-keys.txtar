@@ -29,6 +29,14 @@ type ClientExperimental interface{}
 type Group struct{Group string "json:\"group\""; Options []Option "json:\"options\""}
 type Item struct{Count int64 "json:\"count,omitempty\""; Id string "json:\"id\""}
 type Mode struct{Message string "json:\"message\""; Session *SessionScope "json:\"-\""; Request *RequestScope "json:\"-\""}
+func NewOptionsGrouped(value []Group) Options
+func NewOptionsUngrouped(value []Option) Options
+func NewReplyFailure(id int64, errorValue string) Reply
+func NewReplyLoose() Reply
+func NewReplyResult(id int64, result string) Reply
+func NewStateEndTurn() State
+func NewStateNone() State
+func NewStateOther(stopReason string) State
 type Option struct{Name string "json:\"name\""; Value string "json:\"value\""}
 type Options struct{Ungrouped *OptionsUngrouped "json:\"-\""; Grouped *OptionsGrouped "json:\"-\""}
 type OptionsGrouped []Group

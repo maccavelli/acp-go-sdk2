@@ -2,7 +2,10 @@
 
 package acp
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // schemaType is a generated type and the schema definition it was built from:
 // the definition's key in File, a file of the schema directory.
@@ -2620,6 +2623,310 @@ func schemaMethods() []schemaMethod {
 func schemaHelpers() []schemaHelper {
 	return []schemaHelper{
 		{
+			Union: "AuthMethod",
+			Field: "Terminal",
+			New: func() any {
+				v := NewAuthMethodTerminal(*new(AuthMethodId), *new(string))
+				return &v
+			},
+		},
+		{
+			Union: "AuthMethod",
+			Field: "Agent",
+			New: func() any {
+				v := NewAuthMethodAgent(*new(AuthMethodId), *new(string))
+				return &v
+			},
+		},
+		{
+			Union: "AvailableCommandInput",
+			Field: "Unstructured",
+			New: func() any {
+				v := NewAvailableCommandInputUnstructured(*new(string))
+				return &v
+			},
+		},
+		{
+			Union: "CreateElicitationRequest",
+			Field: "Form",
+			New: func() any {
+				v := NewCreateElicitationRequestForm(*new(string), *new(ElicitationSchema))
+				return &v
+			},
+		},
+		{
+			Union: "CreateElicitationRequest",
+			Field: "Url",
+			New: func() any {
+				v := NewCreateElicitationRequestUrl(*new(string), *new(ElicitationId), *new(string))
+				return &v
+			},
+		},
+		{
+			Union: "CreateElicitationRequest",
+			Field: "Other",
+			New: func() any {
+				v := NewCreateElicitationRequestOther(*new(string), *new(string))
+				return &v
+			},
+		},
+		{
+			Union: "CreateElicitationResponse",
+			Field: "Accept",
+			New: func() any {
+				v := NewCreateElicitationResponseAccept()
+				return &v
+			},
+		},
+		{
+			Union: "CreateElicitationResponse",
+			Field: "Decline",
+			New: func() any {
+				v := NewCreateElicitationResponseDecline()
+				return &v
+			},
+		},
+		{
+			Union: "CreateElicitationResponse",
+			Field: "Cancel",
+			New: func() any {
+				v := NewCreateElicitationResponseCancel()
+				return &v
+			},
+		},
+		{
+			Union: "CreateElicitationResponse",
+			Field: "Other",
+			New: func() any {
+				v := NewCreateElicitationResponseOther(*new(string))
+				return &v
+			},
+		},
+		{
+			Union: "ElicitationContentValue",
+			Field: "String",
+			New: func() any {
+				v := NewElicitationContentValueString(*new(string))
+				return &v
+			},
+		},
+		{
+			Union: "ElicitationContentValue",
+			Field: "Integer",
+			New: func() any {
+				v := NewElicitationContentValueInteger(*new(int64))
+				return &v
+			},
+		},
+		{
+			Union: "ElicitationContentValue",
+			Field: "Number",
+			New: func() any {
+				v := NewElicitationContentValueNumber(*new(float64))
+				return &v
+			},
+		},
+		{
+			Union: "ElicitationContentValue",
+			Field: "Boolean",
+			New: func() any {
+				v := NewElicitationContentValueBoolean(*new(bool))
+				return &v
+			},
+		},
+		{
+			Union: "ElicitationContentValue",
+			Field: "StringArray",
+			New: func() any {
+				v := NewElicitationContentValueStringArray(*new([]string))
+				return &v
+			},
+		},
+		{
+			Union: "ElicitationPropertySchema",
+			Field: "String",
+			New: func() any {
+				v := NewElicitationPropertySchemaString()
+				return &v
+			},
+		},
+		{
+			Union: "ElicitationPropertySchema",
+			Field: "Number",
+			New: func() any {
+				v := NewElicitationPropertySchemaNumber()
+				return &v
+			},
+		},
+		{
+			Union: "ElicitationPropertySchema",
+			Field: "Integer",
+			New: func() any {
+				v := NewElicitationPropertySchemaInteger()
+				return &v
+			},
+		},
+		{
+			Union: "ElicitationPropertySchema",
+			Field: "Boolean",
+			New: func() any {
+				v := NewElicitationPropertySchemaBoolean()
+				return &v
+			},
+		},
+		{
+			Union: "ElicitationPropertySchema",
+			Field: "Array",
+			New: func() any {
+				v := NewElicitationPropertySchemaArray(*new(MultiSelectItems))
+				return &v
+			},
+		},
+		{
+			Union: "ElicitationPropertySchema",
+			Field: "Other",
+			New: func() any {
+				v := NewElicitationPropertySchemaOther(*new(string))
+				return &v
+			},
+		},
+		{
+			Union: "EmbeddedResourceResource",
+			Field: "TextResourceContents",
+			New: func() any {
+				v := NewEmbeddedResourceResourceTextResourceContents(*new(string), *new(string))
+				return &v
+			},
+		},
+		{
+			Union: "EmbeddedResourceResource",
+			Field: "BlobResourceContents",
+			New: func() any {
+				v := NewEmbeddedResourceResourceBlobResourceContents(*new(string), *new(string))
+				return &v
+			},
+		},
+		{
+			Union: "IdleStateUpdate",
+			Field: "EndTurn",
+			New: func() any {
+				v := NewIdleStateUpdateEndTurn()
+				return &v
+			},
+		},
+		{
+			Union: "IdleStateUpdate",
+			Field: "MaxTokens",
+			New: func() any {
+				v := NewIdleStateUpdateMaxTokens()
+				return &v
+			},
+		},
+		{
+			Union: "IdleStateUpdate",
+			Field: "MaxTurnRequests",
+			New: func() any {
+				v := NewIdleStateUpdateMaxTurnRequests()
+				return &v
+			},
+		},
+		{
+			Union: "IdleStateUpdate",
+			Field: "Refusal",
+			New: func() any {
+				v := NewIdleStateUpdateRefusal()
+				return &v
+			},
+		},
+		{
+			Union: "IdleStateUpdate",
+			Field: "Cancelled",
+			New: func() any {
+				v := NewIdleStateUpdateCancelled()
+				return &v
+			},
+		},
+		{
+			Union: "IdleStateUpdate",
+			Field: "Error",
+			New: func() any {
+				v := NewIdleStateUpdateError()
+				return &v
+			},
+		},
+		{
+			Union: "IdleStateUpdate",
+			Field: "Other",
+			New: func() any {
+				v := NewIdleStateUpdateOther(*new(string))
+				return &v
+			},
+		},
+		{
+			Union: "IdleStateUpdate",
+			Field: "None",
+			New: func() any {
+				v := NewIdleStateUpdateNone()
+				return &v
+			},
+		},
+		{
+			Union: "McpServer",
+			Field: "Http",
+			New: func() any {
+				v := NewMcpServerHttp(*new(string), *new(string), *new([]HttpHeader))
+				return &v
+			},
+		},
+		{
+			Union: "McpServer",
+			Field: "Sse",
+			New: func() any {
+				v := NewMcpServerSse(*new(string), *new(string), *new([]HttpHeader))
+				return &v
+			},
+		},
+		{
+			Union: "McpServer",
+			Field: "Acp",
+			New: func() any {
+				v := NewMcpServerAcp(*new(string), *new(McpServerAcpId))
+				return &v
+			},
+		},
+		{
+			Union: "McpServer",
+			Field: "Stdio",
+			New: func() any {
+				v := NewMcpServerStdio(*new(string), *new(string), *new([]string), *new([]EnvVariable))
+				return &v
+			},
+		},
+		{
+			Union: "MultiSelectItems",
+			Field: "String",
+			New: func() any {
+				v := NewMultiSelectItemsString(*new([]string))
+				return &v
+			},
+		},
+		{
+			Union: "MultiSelectItems",
+			Field: "Other",
+			New: func() any {
+				v := NewMultiSelectItemsOther(*new(string))
+				return &v
+			},
+		},
+		{
+			Union: "MultiSelectItems",
+			Field: "Titled",
+			New: func() any {
+				v := NewMultiSelectItemsTitled(*new([]EnumOption))
+				return &v
+			},
+		},
+		{
 			Union: "PlanUpdateContent",
 			Field: "Items",
 			New: func() any {
@@ -2640,6 +2947,30 @@ func schemaHelpers() []schemaHelper {
 			Field: "Markdown",
 			New: func() any {
 				v := NewPlanUpdateContentMarkdown(*new(PlanId), *new(string))
+				return &v
+			},
+		},
+		{
+			Union: "RequestId",
+			Field: "Null",
+			New: func() any {
+				v := NewRequestIdNull()
+				return &v
+			},
+		},
+		{
+			Union: "RequestId",
+			Field: "Number",
+			New: func() any {
+				v := NewRequestIdNumber(*new(int64))
+				return &v
+			},
+		},
+		{
+			Union: "RequestId",
+			Field: "Str",
+			New: func() any {
+				v := NewRequestIdStr(*new(string))
 				return &v
 			},
 		},
@@ -2672,6 +3003,126 @@ func schemaHelpers() []schemaHelper {
 			Field: "Boolean",
 			New: func() any {
 				v := NewSessionConfigOptionBoolean(*new(SessionConfigId), *new(string), *new(bool))
+				return &v
+			},
+		},
+		{
+			Union: "SessionConfigSelectOptions",
+			Field: "Ungrouped",
+			New: func() any {
+				v := NewSessionConfigSelectOptionsUngrouped(*new([]SessionConfigSelectOption))
+				return &v
+			},
+		},
+		{
+			Union: "SessionConfigSelectOptions",
+			Field: "Grouped",
+			New: func() any {
+				v := NewSessionConfigSelectOptionsGrouped(*new([]SessionConfigSelectGroup))
+				return &v
+			},
+		},
+		{
+			Union: "SetSessionConfigOptionRequest",
+			Field: "Boolean",
+			New: func() any {
+				v := NewSetSessionConfigOptionRequestBoolean(*new(SessionId), *new(SessionConfigId), *new(bool))
+				return &v
+			},
+		},
+		{
+			Union: "SetSessionConfigOptionRequest",
+			Field: "ValueId",
+			New: func() any {
+				v := NewSetSessionConfigOptionRequestValueId(*new(SessionId), *new(SessionConfigId), *new(SessionConfigValueId))
+				return &v
+			},
+		},
+		{
+			Union: "StateUpdate",
+			Field: "Running",
+			New: func() any {
+				v := NewStateUpdateRunning()
+				return &v
+			},
+		},
+		{
+			Union: "StateUpdate",
+			Field: "Idle",
+			New: func() any {
+				v := NewStateUpdateIdle()
+				return &v
+			},
+		},
+		{
+			Union: "StateUpdate",
+			Field: "RequiresAction",
+			New: func() any {
+				v := NewStateUpdateRequiresAction()
+				return &v
+			},
+		},
+		{
+			Union: "StateUpdate",
+			Field: "Unknown",
+			New: func() any {
+				v := NewStateUpdateUnknown()
+				return &v
+			},
+		},
+		{
+			Union: "StateUpdate",
+			Field: "Other",
+			New: func() any {
+				v := NewStateUpdateOther(*new(string))
+				return &v
+			},
+		},
+		{
+			Union: "UnstableMcpServer",
+			Field: "Http",
+			New: func() any {
+				v := NewUnstableMcpServerHttp(*new(string), *new(string), *new([]HttpHeader))
+				return &v
+			},
+		},
+		{
+			Union: "UnstableMcpServer",
+			Field: "Sse",
+			New: func() any {
+				v := NewUnstableMcpServerSse(*new(string), *new(string), *new([]HttpHeader))
+				return &v
+			},
+		},
+		{
+			Union: "UnstableMcpServer",
+			Field: "Acp",
+			New: func() any {
+				v := NewUnstableMcpServerAcp(*new(string), *new(UnstableMcpServerAcpId))
+				return &v
+			},
+		},
+		{
+			Union: "UnstableMcpServer",
+			Field: "Stdio",
+			New: func() any {
+				v := NewUnstableMcpServerStdio(*new(string), *new(string), *new([]string), *new([]EnvVariable))
+				return &v
+			},
+		},
+		{
+			Union: "UnstableMessageMcpResponse",
+			Field: "Result",
+			New: func() any {
+				v := NewUnstableMessageMcpResponseResult(*new(json.RawMessage))
+				return &v
+			},
+		},
+		{
+			Union: "UnstableMessageMcpResponse",
+			Field: "Error",
+			New: func() any {
+				v := NewUnstableMessageMcpResponseError(*new(UnstableMcpError))
 				return &v
 			},
 		},

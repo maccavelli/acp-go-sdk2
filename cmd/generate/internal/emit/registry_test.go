@@ -32,7 +32,7 @@ func registryModel(t *testing.T) *model.Model {
 		"Nothing":{"type":"null"},
 		"Thing":{"type":"object","properties":{"n":{"type":"string"}}},
 		"Open":{"anyOf":[{"type":"object","required":["type"],"properties":{"type":{"type":"string","const":"a"}}},
-			{"title":"other","type":"object","required":["type"],"properties":{"type":{"type":"string"}},"not":{"required":["type"]}}]},
+			{"title":"other","type":"object","required":["type"],"properties":{"type":{"type":"string"}},"not":{"anyOf":[{"type":"object","properties":{"type":{"type":"string","const":"a"}},"required":["type"]}]}}]},
 		"Closed":{"oneOf":[{"type":"object","required":["kind"],"properties":{"kind":{"type":"string","const":"x"}}},
 			{"type":"object","required":["kind","n"],"properties":{"kind":{"type":"string","const":"y"},"n":{"type":"string"}}}]},
 		"InitRequest":{"type":"object","x-side":"agent","x-method":"init"},
@@ -155,10 +155,13 @@ func TestRegistry(t *testing.T) {
 	for _, e := range registryEntries(t, src, "schemaHelpers") {
 		helpers = append(helpers, e["Union"]+"."+e["Field"])
 	}
-	if !slices.Equal(helpers, []string{"Closed.X", "Closed.Y"}) {
-		t.Errorf("schemaHelpers %v, want Closed.X and Closed.Y", helpers)
+	// Every union has constructors, anyOf included, in model order; the
+	// catch-all's takes its discriminator
+	// (0014-PLAN-union-constructors-take-every-required-key.md, step 5).
+	if want := []string{"Closed.X", "Closed.Y", "Open.A", "Open.Other"}; !slices.Equal(helpers, want) {
+		t.Errorf("schemaHelpers %v, want %v", helpers, want)
 	}
-	for _, call := range []string{"NewClosedX()", "NewClosedY(*new(string))"} {
+	for _, call := range []string{"NewClosedX()", "NewClosedY(*new(string))", "NewOpenA()", "NewOpenOther(*new(string))"} {
 		if !strings.Contains(src, call) {
 			t.Errorf("schemaHelpers does not call %s", call)
 		}

@@ -25,6 +25,8 @@ type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
 type Mode struct{Schema map[string]string "json:\"schema\""; Session *SessionScope "json:\"-\""; Request *RequestScope "json:\"-\""}
+func NewAskForm(message string, schema map[string]string) Ask
+func NewAskOther(message string, mode string) Ask
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type RequestScope struct{RequestId int64 "json:\"requestId\""}

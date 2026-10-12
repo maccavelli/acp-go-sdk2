@@ -20,6 +20,12 @@ type AgentExperimental interface{}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+func NewVBare() V
+func NewVList(value []string) V
+func NewVVVariant1(shared string, kind string) V
+func NewVVVariant4() V
+func NewWRef() W
+func NewWWVariant1(w string) W
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type Ref struct{A string "json:\"a,omitempty\""}

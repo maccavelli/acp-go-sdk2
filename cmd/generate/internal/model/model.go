@@ -189,6 +189,10 @@ type Variant struct {
 	// its union's discriminator: a payload without the discriminator fits
 	// the variant when it carries them all. Nil outside a discriminated union.
 	FitKeys []string
+	// Excluded lists, sorted, the discriminator values a catch-all's not
+	// excludes, which its union's Validate refuses in it. Nil for any other
+	// variant (0014-MADR-union-constructors-take-every-required-key.md, C1).
+	Excluded []string
 }
 
 // DiscSource is where a union's discriminator came from.
@@ -209,15 +213,19 @@ type EnumValue struct {
 	Const string
 }
 
-// Helper is a New<Union><Field> constructor for one oneOf variant.
+// Helper is a New<Union><Field> constructor for one union variant.
 type Helper struct {
 	Name    string
 	Variant int
 	// Params are the required keys of the Go type that holds the variant,
 	// in schema order, without the discriminator: for an inline variant the
 	// union's own keys, then the variant's; for a $ref variant those of the
-	// definition it names (paramKeys).
+	// definition it names (paramKeys); a catch-all's discriminator among them.
+	// For a Value constructor, the one parameter value (valueParam).
 	Params []Param
+	// Value is true for a constructor that takes the variant's value: a
+	// variant that is not an object, null, or untyped.
+	Value bool
 }
 
 // Param is one constructor parameter: Name is the Go name paramName gives
@@ -583,7 +591,7 @@ func buildUnion(schema *load.Schema, n *namer, t *Type, r *rules) error {
 	if err := checkOwnKeys(t, list); err != nil {
 		return err
 	}
-	if !t.ExactlyOne || t.def.DocsIgnore || r.helpers[t.Name] {
+	if t.def.DocsIgnore || r.helpers[t.Name] {
 		return nil
 	}
 	for idx, v := range list {
@@ -596,10 +604,19 @@ func buildUnion(schema *load.Schema, n *namer, t *Type, r *rules) error {
 		if err := n.declare(h.Name, owner+" constructor"); err != nil {
 			return err
 		}
+		if typ, ok := valueParam(schema, v, vi); ok {
+			h.Value = true
+			h.Params = []Param{{Name: "value", Type: typ}}
+			t.Helpers = append(t.Helpers, h)
+			continue
+		}
 		keys, props := paramKeys(schema, t, v, vi)
 		named := map[string]string{}
 		for _, key := range keys {
-			if key == discKey || props[key] == nil {
+			// The discriminator is a parameter unless the constructor writes the
+			// variant's constant: a catch-all's, or a key-less variant's that
+			// requires it (P1).
+			if (key == discKey && vi.DiscValue != "") || props[key] == nil {
 				continue
 			}
 			name, err := paramName(owner, key)
@@ -633,6 +650,41 @@ func checkOwnKeys(t *Type, list []*load.Definition) error {
 			t.Name, idx+1, t.Variants[idx].TypeName, strings.Join(slices.Sorted(maps.Keys(t.def.Properties)), ", "))
 	}
 	return nil
+}
+
+// valueParam reports whether variant v's constructor takes the variant's
+// value, and the type of that parameter: for a variant that is not an
+// object, null, or untyped, the type the variant's type is declared with;
+// for a $ref to a named primitive, its underlying type; for a $ref to any
+// other definition that is not an object, that definition's own type
+// (0014-MADR-union-constructors-take-every-required-key.md, V3, and item 5).
+func valueParam(schema *load.Schema, v *load.Definition, vi *Variant) (TypeRef, bool) {
+	if vi.IsObject || vi.IsNull {
+		return TypeRef{}, false
+	}
+	if vi.Inline != nil {
+		if vi.Inline.Kind != InlineNamed || primaryType(expandAllOf(schema, v)) == schemaTypeObject {
+			return TypeRef{}, false
+		}
+		return vi.Inline.Type, true
+	}
+	ref := v.Ref
+	if ref == "" {
+		ref = singleRefVariant(v)
+	}
+	name := strings.TrimPrefix(ref, refPrefix)
+	target := schema.Defs[name]
+	if target == nil {
+		return TypeRef{}, false
+	}
+	switch classify(target) {
+	case KindObject, KindEmptyObject, KindNone:
+		return TypeRef{}, false
+	case KindPrimitive:
+		return primitiveRef(primaryType(target), target.Format), true
+	default:
+		return named(name), true
+	}
 }
 
 // paramKeys returns the required keys of the Go type that holds variant v,
@@ -946,6 +998,12 @@ func classifyUnion(schema *load.Schema, t *Type, list []*load.Definition) error 
 			return fmt.Errorf("%s: variant %d is already the catch-all", owner, t.CatchAll+1)
 		}
 		t.CatchAll = idx
+		vi.Excluded = excludedValues(expandAllOf(schema, v).Not, t.DiscKey)
+		if len(vi.Excluded) == 0 {
+			// Validate could not refuse a value the catch-all's not excludes
+			// (0014-PLAN-union-constructors-take-every-required-key.md, step 5).
+			return fmt.Errorf("%s: the catch-all's not excludes no value of %q", owner, t.DiscKey)
+		}
 		if vi.Inline != nil {
 			// The catch-all keeps every key no field declares, which would hold
 			// the members' keys a second time.
@@ -970,6 +1028,25 @@ func classifyUnion(schema *load.Schema, t *Type, list []*load.Definition) error 
 		}
 	}
 	return nil
+}
+
+// excludedValues returns, sorted and each once, the string const values of
+// key in not and in each member of its anyOf or oneOf.
+func excludedValues(not *load.Definition, key string) []string {
+	if not == nil {
+		return nil
+	}
+	var out []string
+	for _, d := range slices.Concat([]*load.Definition{not}, not.AnyOf, not.OneOf) {
+		if d == nil || d.Properties[key] == nil {
+			continue
+		}
+		if s, ok := d.Properties[key].Const.(string); ok && !slices.Contains(out, s) {
+			out = append(out, s)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // isCatchAll reports whether v is the schema's catch-all for a union

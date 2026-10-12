@@ -15,9 +15,9 @@ import (
 // of each accepting engine case to take the required keys of its variant's
 // Go type: its parameters' fields, with the discriminator field when the
 // constructor writes the variant's value, are exactly that type's required
-// fields (0014-PLAN-union-constructors-take-every-required-key.md, step 3).
-// A catch-all's discriminator is not counted: the constructor neither
-// writes nor takes it until step 5.
+// fields, a catch-all's discriminator among them. A Value constructor takes
+// one parameter, value, of the type the variant's type is declared with
+// (0014-PLAN-union-constructors-take-every-required-key.md, steps 3 and 5).
 func TestHelperParams(t *testing.T) {
 	t.Parallel()
 	models := map[string]*model.Model{"committed schema": buildModel(t, filepath.Join(repoRoot, "schema"))}
@@ -49,6 +49,12 @@ func TestHelperParams(t *testing.T) {
 			for _, h := range typ.Helpers {
 				helpers++
 				vi := typ.Variants[h.Variant]
+				if h.Value {
+					if want := valueType(m, vi); len(h.Params) != 1 || h.Params[0].Name != "value" || h.Params[0].Type.String() != want {
+						t.Errorf("%s: %s: parameters %+v, want one, value %s", name, h.Name, h.Params, want)
+					}
+					continue
+				}
 				var got []string
 				for _, p := range h.Params {
 					got = append(got, p.Field)
@@ -57,9 +63,6 @@ func TestHelperParams(t *testing.T) {
 					got = append(got, typ.DiscField)
 				}
 				want := requiredFields(m, vi)
-				if h.Variant == typ.CatchAll {
-					want = slices.DeleteFunc(want, func(f string) bool { return f == typ.DiscField })
-				}
 				if missing, extra := setDiff(want, got), setDiff(got, want); len(missing) > 0 || len(extra) > 0 {
 					t.Errorf("%s: %s: missing the required fields %v, has the fields %v the type does not require", name, h.Name, missing, extra)
 				}
@@ -83,6 +86,19 @@ func buildModel(t *testing.T, dir string) *model.Model {
 		t.Fatal(err)
 	}
 	return m
+}
+
+// valueType is the parameter type of a Value constructor for vi: the type
+// of its inline named type, the underlying type of a named primitive it
+// refers to, or the type it refers to.
+func valueType(m *model.Model, vi *model.Variant) string {
+	if vi.Inline != nil {
+		return vi.Inline.Type.String()
+	}
+	if target := m.Type(vi.TypeName); target != nil && target.Kind == model.KindPrimitive {
+		return target.Underlying.String()
+	}
+	return vi.TypeName
 }
 
 // requiredFields returns the Go names of the required fields of the type

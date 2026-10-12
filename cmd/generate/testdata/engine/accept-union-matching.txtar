@@ -30,6 +30,12 @@ type Keyed struct{K string "json:\"k\""}
 type Mixed struct{Objects *MixedObjects "json:\"-\""; Words *MixedWords "json:\"-\""}
 type MixedObjects []Keyed
 type MixedWords []string
+func NewBatchKeyed(value []Keyed) Batch
+func NewBatchLoose(value []Note) Batch
+func NewMixedObjects(value []Keyed) Mixed
+func NewMixedWords(value []string) Mixed
+func NewPickKeyed(k string) Pick
+func NewPickLoose() Pick
 type Note struct{Note string "json:\"note,omitempty\""}
 type Pick struct{Loose *Note "json:\"-\""; Keyed *Keyed "json:\"-\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"

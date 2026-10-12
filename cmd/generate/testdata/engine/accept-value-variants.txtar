@@ -1,0 +1,94 @@
+An anyOf union whose variants are not objects: null, an integer, a string,
+an array of strings, a title-only variant, a $ref to a named string, and a
+$ref to an enum. Each gets a constructor in its shape: one that takes the
+value, converted to the variant's type, or one that takes nothing; and an
+array variant holding nil is sent as []
+(0014-MADR-union-constructors-take-every-required-key.md, V3, items 5 and 7).
+The meta declares $/cancel_request and the schema its smallest definition,
+which the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Name": {"type": "string"},
+  "Color": {"type": "string", "enum": ["red", "blue"]},
+  "Val": {"anyOf": [
+    {"type": "null"},
+    {"title": "Count", "type": "integer", "format": "int64"},
+    {"title": "Text", "type": "string", "minLength": 1},
+    {"title": "Words", "type": "array", "items": {"type": "string"}},
+    {"title": "Marker"},
+    {"$ref": "#/$defs/Name"},
+    {"$ref": "#/$defs/Color"}
+  ]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type Color string
+const ColorBlue Color = "blue"
+const ColorRed Color = "red"
+type Name string
+func NewValColor(value Color) Val
+func NewValCount(value int64) Val
+func NewValMarker() Val
+func NewValName(value string) Val
+func NewValText(value string) Val
+func NewValValVariant1() Val
+func NewValWords(value []string) Val
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Val struct{ValVariant1 *ValVariant1 "json:\"-\""; Count *ValCount "json:\"-\""; Text *ValText "json:\"-\""; Words *ValWords "json:\"-\""; Marker *ValMarker "json:\"-\""; Name *Name "json:\"-\""; Color *Color "json:\"-\""}
+type ValCount int64
+type ValMarker struct{}
+type ValText string
+type ValVariant1 struct{}
+type ValWords []string
+func (*CancelRequestNotification).Validate() error
+func (Val).MarshalJSON() ([]byte, error)
+func (*Val).UnmarshalJSON(b []byte) error
+func (*Val).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Each constructor sets its variant, and a value constructor takes a plain
+// Go value; an array variant holding nil encodes as [] and decodes back.
+func TestValueVariants(t *testing.T) {
+	if b, err := json.Marshal(NewValWords(nil)); err != nil || string(b) != `[]` {
+		t.Fatalf("NewValWords(nil) encoded as %s, %v", b, err)
+	}
+	var back Val
+	if err := json.Unmarshal([]byte(`[]`), &back); err != nil || back.Words == nil {
+		t.Errorf("[] decoded as %+v, %v", back, err)
+	}
+	var n int64 = 5
+	if b, err := json.Marshal(NewValCount(n)); err != nil || string(b) != `5` {
+		t.Errorf("NewValCount(5) encoded as %s, %v", b, err)
+	}
+	s := "w"
+	if v := NewValText(s); v.Text == nil || string(*v.Text) != "w" {
+		t.Errorf("NewValText set %+v", v)
+	}
+	if v := NewValName("n"); v.Name == nil || string(*v.Name) != "n" {
+		t.Errorf("NewValName set %+v", v)
+	}
+	if v := NewValColor(ColorRed); v.Color == nil || *v.Color != ColorRed {
+		t.Errorf("NewValColor set %+v", v)
+	}
+	if b, err := json.Marshal(NewValValVariant1()); err != nil || string(b) != `null` {
+		t.Errorf("the null constructor encoded as %s, %v", b, err)
+	}
+	if v := NewValMarker(); v.Marker == nil {
+		t.Errorf("NewValMarker set %+v", v)
+	}
+}

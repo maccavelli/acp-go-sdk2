@@ -3081,6 +3081,12 @@ func (u *CreateElicitationRequest) Validate() error {
 	if count != 1 {
 		return errors.New("CreateElicitationRequest must have exactly one variant set")
 	}
+	if u.Other != nil {
+		switch u.Other.Mode {
+		case "form", "url":
+			return fmt.Errorf("CreateElicitationRequest: variant Other: mode %q names another variant", u.Other.Mode)
+		}
+	}
 	if u.Form != nil {
 		if err := u.Form.Validate(); err != nil {
 			return fmt.Errorf("CreateElicitationRequest: variant Form: %w", err)
@@ -3446,6 +3452,12 @@ func (u *CreateElicitationResponse) Validate() error {
 	}
 	if count != 1 {
 		return errors.New("CreateElicitationResponse must have exactly one variant set")
+	}
+	if u.Other != nil {
+		switch u.Other.Action {
+		case "accept", "cancel", "decline":
+			return fmt.Errorf("CreateElicitationResponse: variant Other: action %q names another variant", u.Other.Action)
+		}
 	}
 	if u.Accept != nil {
 		if err := u.Accept.Validate(); err != nil {
@@ -3859,6 +3871,9 @@ func (u ElicitationContentValue) MarshalJSON() ([]byte, error) {
 		return _b, nil
 	}
 	if u.StringArray != nil {
+		if *u.StringArray == nil {
+			return []byte("[]"), nil
+		}
 		_b, _e := json.Marshal(*u.StringArray)
 		if _e != nil {
 			return []byte{}, _e
@@ -4625,6 +4640,12 @@ func (u *ElicitationPropertySchema) Validate() error {
 	}
 	if count != 1 {
 		return errors.New("ElicitationPropertySchema must have exactly one variant set")
+	}
+	if u.Other != nil {
+		switch u.Other.Type {
+		case "array", "boolean", "integer", "number", "string":
+			return fmt.Errorf("ElicitationPropertySchema: variant Other: type %q names another variant", u.Other.Type)
+		}
 	}
 	if u.Array != nil {
 		if err := u.Array.Validate(); err != nil {
@@ -5899,6 +5920,12 @@ func (u *IdleStateUpdate) Validate() error {
 	}
 	if count != 1 {
 		return errors.New("IdleStateUpdate must have exactly one variant set")
+	}
+	if u.Other != nil {
+		switch u.Other.StopReason {
+		case "cancelled", "end_turn", "error", "max_tokens", "max_turn_requests", "refusal":
+			return fmt.Errorf("IdleStateUpdate: variant Other: stopReason %q names another variant", u.Other.StopReason)
+		}
 	}
 	return nil
 }
@@ -7394,6 +7421,12 @@ func (u *MultiSelectItems) Validate() error {
 	}
 	if count != 1 {
 		return errors.New("MultiSelectItems must have exactly one variant set")
+	}
+	if u.Other != nil {
+		switch u.Other.Type {
+		case "string":
+			return fmt.Errorf("MultiSelectItems: variant Other: type %q names another variant", u.Other.Type)
+		}
 	}
 	return nil
 }
@@ -10856,6 +10889,9 @@ func (u *SessionConfigSelectOptions) UnmarshalJSON(b []byte) error {
 
 func (u SessionConfigSelectOptions) MarshalJSON() ([]byte, error) {
 	if u.Ungrouped != nil {
+		if *u.Ungrouped == nil {
+			return []byte("[]"), nil
+		}
 		_b, _e := json.Marshal(*u.Ungrouped)
 		if _e != nil {
 			return []byte{}, _e
@@ -10863,6 +10899,9 @@ func (u SessionConfigSelectOptions) MarshalJSON() ([]byte, error) {
 		return _b, nil
 	}
 	if u.Grouped != nil {
+		if *u.Grouped == nil {
+			return []byte("[]"), nil
+		}
 		_b, _e := json.Marshal(*u.Grouped)
 		if _e != nil {
 			return []byte{}, _e
@@ -13969,6 +14008,12 @@ func (u *StateUpdate) Validate() error {
 	}
 	if count != 1 {
 		return errors.New("StateUpdate must have exactly one variant set")
+	}
+	if u.Other != nil {
+		switch u.Other.State {
+		case "idle", "requires_action", "running", "unknown":
+			return fmt.Errorf("StateUpdate: variant Other: state %q names another variant", u.Other.State)
+		}
 	}
 	return nil
 }

@@ -793,11 +793,17 @@ func unionMarshalBody(f *goFile, name string, variants []*model.Variant, hasUnkn
 			then = []ast.Stmt{ret(marshal(nilExpr()))}
 		case !vi.IsObject:
 			// Non-object variants (e.g., arrays/primitives) are already in final wire shape.
-			then = []ast.Stmt{
+			then = nil
+			if vi.IsArray {
+				// A nil array is sent as [], as a required array field is
+				// (0014-MADR-union-constructors-take-every-required-key.md, item 7).
+				then = append(then, ifStmt(nil, binary(star(dot("u", vi.FieldName)), token.EQL, nilExpr()), ret(bytesOf("[]"), nilExpr())))
+			}
+			then = append(then,
 				define(exprs(id("_b"), id("_e")), marshal(star(dot("u", vi.FieldName)))),
 				ifStmt(nil, binary(id("_e"), token.NEQ, nilExpr()), ret(emptyBytes(), id("_e"))),
 				ret(id("_b"), nilExpr()),
-			}
+			)
 		default:
 			then = []ast.Stmt{
 				define(exprs(id("_b"), id("_e")), marshal(star(dot("u", vi.FieldName)))),
@@ -823,8 +829,10 @@ func unionMarshalBody(f *goFile, name string, variants []*model.Variant, hasUnkn
 }
 
 // unionValidateBody counts the variants set, Unknown included, requires
-// exactly one, and validates the set variant when its type has Validate.
-func unionValidateBody(f *goFile, name string, variants []*model.Variant, hasUnknown bool) []ast.Stmt {
+// exactly one, refuses a catch-all holding a value its not excludes, and
+// validates the set variant when its type has Validate.
+func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []ast.Stmt {
+	name, hasUnknown := t.Name, t.HasUnknown
 	body := []ast.Stmt{varStmt("count", id("int"))}
 	for _, vi := range variants {
 		body = append(body, ifStmt(nil, binary(dot("u", vi.FieldName), token.NEQ, nilExpr()), incr(id("count"))))
@@ -834,6 +842,19 @@ func unionValidateBody(f *goFile, name string, variants []*model.Variant, hasUnk
 	}
 	body = append(body, ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
 		ret(call(f.qual(pkgErrors, "New"), str(name+" must have exactly one variant set")))))
+	if ca := catchAllOf(t); ca != nil && len(ca.Excluded) > 0 {
+		// The schema's not excludes these values from the catch-all; the
+		// peer would read them as another variant
+		// (0014-MADR-union-constructors-take-every-required-key.md, C1).
+		value := dot("u", ca.FieldName, t.DiscField)
+		var list []ast.Expr
+		for _, x := range ca.Excluded {
+			list = append(list, str(x))
+		}
+		body = append(body, ifStmt(nil, binary(dot("u", ca.FieldName), token.NEQ, nilExpr()),
+			switchStmt(value, caseOf(list,
+				ret(call(f.qual(pkgFmt, "Errorf"), str(name+": variant "+ca.FieldName+": "+t.DiscKey+" %q names another variant"), value))))))
+	}
 	for _, vi := range variants {
 		if !vi.Validates {
 			continue
@@ -978,6 +999,6 @@ func emitUnion(f *goFile, t *model.Type) {
 	f.line()
 
 	// Every union has exactly one variant set, which validates when it can.
-	f.add(validateMethod("u", name, unionValidateBody(f, name, variants, t.HasUnknown)...))
+	f.add(validateMethod("u", name, unionValidateBody(f, t, variants)...))
 	f.line()
 }

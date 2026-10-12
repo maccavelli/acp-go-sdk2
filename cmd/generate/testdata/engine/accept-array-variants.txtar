@@ -20,6 +20,8 @@ type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
 type Group struct{Group string "json:\"group\""; Options []Option "json:\"options\""}
+func NewOptionsGrouped(value []Group) Options
+func NewOptionsUngrouped(value []Option) Options
 type Option struct{Name string "json:\"name\""; Value string "json:\"value\""}
 type Options struct{Ungrouped *OptionsUngrouped "json:\"-\""; Grouped *OptionsGrouped "json:\"-\""}
 type OptionsGrouped []Group

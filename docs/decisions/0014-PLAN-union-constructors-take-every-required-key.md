@@ -131,14 +131,20 @@ Out of scope:
 5. **Catch-alls, every union and every variant, nil arrays, doc comments (C1, A3, V3, X1, items 6 to 8).**
    * Model:
      * `buildUnion` builds constructors for every union, `oneOf` or `anyOf`, unless `t.def.DocsIgnore` or it is in `HandWrittenHelpers`;
-     * a catch-all's constructor (`idx == t.CatchAll`) has its discriminator among its parameters, under the step 4 name rule;
-     * a non-object variant gets a constructor of one of two further shapes, recorded on the `Helper`: a value constructor with one
+     * a catch-all's constructor (`idx == t.CatchAll`) has its discriminator among its parameters, under the step 4 name rule; (amended
+       in step 5) so does a key-less variant's whose type requires it: the discriminator is skipped only where the constructor writes the
+       variant's constant, as the MADR's P1 and item 1 say;
+     * a non-object variant (by its JSON type: an object without properties, such as a `map[string]any` variant, keeps the object shape
+       and its constructor, amended in step 5) gets a constructor of one of two further shapes, recorded on the `Helper`: a value constructor with one
        parameter named `value`, typed by `Inline.Type` for an inline named variant, by the target's `Underlying` for a `$ref` to a
        `KindPrimitive` definition, and by the target type itself for a `$ref` to any other non-object definition; or an empty constructor,
        with no parameter, for a `null` variant and a variant with no type;
      * a catch-all `Variant` gains `Excluded []string`, the string `const` values of the discriminator in its `not` and in each member of
        the `not`'s `anyOf` or `oneOf`, sorted. A catch-all whose `not` yields none is refused (`<Union> variant <n>: the catch-all's not
        excludes no value of <key>`), following the MADR's "refuse rather than lose": its `Validate` check could not be emitted.
+     * (Added 2026-10-12, step 5's deviation.) The fixtures whose catch-all `not` names no value list the other variants' values instead,
+       and `TestUnionClassRefusals` gains the refusal as a case: `testdata/engine/accept-catch-all-variant.txtar`,
+       `internal/emit/registry_test.go`, `internal/model/classes_test.go`.
    * Emitter:
      * `helpers.go`: the value shape converts and takes the address (`v := RequestIdNumber(value); return RequestId{Number: &v}`), with no
        conversion when the parameter type is the variant type; the empty shape writes `&RequestIdNull{}`;
@@ -183,7 +189,8 @@ Out of scope:
        `ElicitationContentValue StringArray`, and `accept-value-variants` fails;
      * constructors limited to `oneOf` again: `TestRegistry` and the goldens fail;
      * the catch-all's discriminator left out of its parameters: `TestHelperParams` fails;
-     * a value constructor setting another field: `TestConformanceConstructors` reports `the constructor set`.
+     * a value constructor setting another field: `TestConformanceConstructors` reports `the constructor set`. (Amended in step 5: no two
+       variants of a committed union share a Go type, so setting another field does not compile; the plant sets a second field as well.)
 
 6. **Documentation.**
    * `README.md`, "Helper constructors": the generated `New<Union><Variant>` constructors cover every variant of every union except the
@@ -316,3 +323,72 @@ Ran on `main` from `75bf968`. The agent did not commit.
 * `make pre-add-check`: `go-precheck: 102 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` The untracked
   `internal/model/names_test.go`: `go-precheck: 1 file(s) clean`, with `govulncheck` skipped. `make check-records` and `make
   markdownlint` exit 0, and the identifier scan of the changed files found nothing.
+
+### Step 5 deviation, 2026-10-12: fixtures with a catch-all whose not names no value
+
+With step 5's model in place, `go test ./...` in `cmd/generate` failed with `model: U variant 2: the catch-all's not excludes no value of
+"type"` in `TestEngineCases/accept-catch-all-variant`, `TestEngineBehaviour/generate/accept-catch-all-variant` and `TestHelperParams`; with
+`Open variant 2` in `internal/emit`'s `TestRegistry`; and in two cases of `internal/model`'s `TestUnionClassRefusals` (`two catch-alls`,
+`catch-all property named extra`), which test other refusals. The four fixtures, written before this plan, give the catch-all `"not":
+{"required": ["type"]}`, which names no excluded value and, read as JSON Schema, refuses every payload that carries `type`, which the
+variant also requires. Both schema files list `const` values in each catch-all's `not`; `isCatchAll` accepted any `not`.
+
+Asked, the owner chose to fix the fixtures: each `not` becomes an `anyOf` of the other variant's value, `"a"`, the schema files' shape,
+and the refusal is kept as planned. `TestUnionClassRefusals` gains `catch-all excluding no value`, the old placeholder, which pins the
+refusal. Not chosen: dropping the refusal, which leaves such a catch-all unchecked; ceasing to treat such a variant as a catch-all, a
+change of classification the MADR does not decide. The MADR is unchanged: the refusal is this plan's, under its "refuse rather than lose".
+
+### Step 5, catch-alls, every union and every variant, nil arrays, doc comments, 2026-10-12
+
+Ran on `main` from `4b21cbe`. The agent did not commit. The deviation above, decided by the owner, ran within this step.
+
+* `internal/model/model.go`:
+  * constructors for every union, `oneOf` or `anyOf` (the `!t.ExactlyOne` test is gone), unless documentation-ignored or hand-written;
+  * the discriminator is a parameter wherever the constructor does not write the variant's constant: the catch-all's, and, found while
+    running `TestHelperParams`, the key-less variants of `accept-key-less-variant` and `accept-key-less-variant-without-keys`, whose types
+    require it (`NewULoose(typeValue string, x string)`). This follows the MADR's P1 and item 1; the plan's bullet is amended;
+  * `valueParam` decides the value shape: a variant that is not an object, `null`, or untyped takes `value`, typed by its inline named
+    type, by the underlying type of a named primitive it refers to, or by the definition it refers to. The shape is decided by the JSON
+    type, not `Variant.IsObject`, which is false for an object without properties: `NewEventNone()` keeps its signature;
+  * `Helper.Value` marks the value shape; `Variant.Excluded` holds the catch-all's excluded values, read by `excludedValues` from its
+    `not` and the members of the `not`'s `anyOf` or `oneOf`; a catch-all without any is refused.
+* `internal/emit`: `helpers.go` emits the value shape (`v := RequestIdNumber(value); return RequestId{Number: &v}`, or `&value` when the
+  parameter is the variant's own type) and the doc comments (`using the '<value>' variant`, else `using its <Field> variant`; a
+  catch-all's two lines on `Extra`); `types.go`'s `unionValidateBody` takes the type and emits the catch-all `switch`, and
+  `unionMarshalBody` returns `[]` for a set array variant holding nil.
+* Tests: `TestHelperParams` checks the value shape and counts every discriminator; `TestRegistry` expects `Closed.X`, `Closed.Y`, `Open.A`,
+  `Open.Other` and the call `NewOpenOther(*new(string))`; `TestUnionClassRefusals` gains `catch-all excluding no value`;
+  `accept-catch-all-variant` gains `TestCatchAllConstructor`; new case `accept-value-variants.txtar` (`NewValColor(value Color)`,
+  `NewValCount(value int64)`, `NewValMarker()`, `NewValName(value string)`, `NewValText(value string)`, `NewValValVariant1()`,
+  `NewValWords(value []string)`; its behaviour test sends `NewValWords(nil)` as `[]`); `TestConformanceConstructors` applies the MADR's
+  item 8 and checks each catch-all with `checkCatchAll` and `setDisc`.
+* Engine goldens, asserted against a snapshot taken before the step: `func New lines: 38 added, 1 removed; unexpected: 0` across eleven
+  existing cases (the one removal is `-func NewEventOther() Event`, `+func NewEventOther(kind string) Event`); the new
+  `accept-value-variants` was reviewed line by line.
+* Regenerated. `grep -c '^func New' helpers_gen.go`: `67`. The exported API listing of `git archive HEAD` (2308 lines) against the tree
+  (2364 lines): `added=56 removed=0 added-non-New=0`. `types_gen.go`, asserted by function: 6 lines in the `Validate` of each of
+  `CreateElicitationRequest`, `CreateElicitationResponse`, `ElicitationPropertySchema`, `IdleStateUpdate`, `MultiSelectItems` and
+  `StateUpdate`; 3 in `ElicitationContentValue`'s and 6 in `SessionConfigSelectOptions`' `MarshalJSON`; no line removed; `types_gen.go
+  asserted diff: ok`.
+* `TestConformanceConstructors`: 67 subtests, 63 passing and 4 skipped because the zero-argument value does not encode, each for a nested
+  required union with no variant set: `SessionConfigOption_Select` (`SessionConfigSelectOptions`), `ElicitationPropertySchema_Array`
+  (`MultiSelectItems`), `CreateElicitationRequest_Form` and `CreateElicitationRequest_Url` (the elicitation scope). Root coverage: all 67
+  functions of `helpers_gen.go` at `100.0%`.
+* Tests: `go test -count=1 ./...` passes in `cmd/generate` and at the root; `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the
+  root.
+* Plants, each in its own scratch copy, all `exit=1`:
+  * the generator's catch-all check disabled: `TestEngineBehaviour`, `NewUOther("a").Validate() = <nil>, want an error naming U, type and
+    "a"`;
+  * the `ElicitationPropertySchema` check removed from `types_gen.go`: `the catch-all holding type "string": Validate() = <nil>, want an
+    error naming ElicitationPropertySchema and the value`;
+  * the generator's `[]` branch disabled: `TestEngineBehaviour`, `NewValWords(nil) encoded as null, <nil>`;
+  * `SessionConfigSelectOptions`' `[]` branch removed from `types_gen.go`: `null decoded into [], want one variant`;
+  * constructors for `oneOf` only: `schemaHelpers [Closed.X Closed.Y], want [Closed.X Closed.Y Open.A Open.Other]`, and `TestEngineCases`
+    failed;
+  * the discriminator never a parameter: `committed schema: NewElicitationPropertySchemaOther: missing the required fields [Type]`;
+  * `NewRequestIdNumber` also setting `Null` (the plan's plant adapted, see above): `the constructor set [Null Number], want Number`;
+  * the catch-all refusal disabled: `TestUnionClassRefusals`, `Build accepted the schema`.
+* `make pre-add-check`: `go-precheck: 103 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No untracked Go file.
+  `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.
+* For the release notes: 56 constructors added; `Validate` refuses a catch-all holding another variant's value; a nil array variant is
+  sent as `[]`.

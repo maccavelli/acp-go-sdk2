@@ -16,6 +16,8 @@ type AgentExperimental interface{}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+func NewUA() U
+func NewULoose(typeValue string) U
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type U struct{A *UA "json:\"-\""; Loose *ULoose "json:\"-\""; Unknown json.RawMessage "json:\"-\""}

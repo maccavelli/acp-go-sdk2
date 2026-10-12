@@ -1069,6 +1069,10 @@ func exchange(t *testing.T, m schemaMethod, params any, reply func(any) error) (
 // with zero arguments and requires the value to set exactly its variant, with
 // the discriminator value the schema gives that variant; a value that encodes
 // must decode back to the same variant (0013-PLAN-close-phase-6-follow-ups.md).
+// A union without a discriminator need only decode to one variant that
+// encodes to the same bytes, since JSON cannot carry all its variants apart;
+// a catch-all must fail Validate holding another variant's value
+// (0014-MADR-union-constructors-take-every-required-key.md, C1 and item 8).
 func TestConformanceConstructors(t *testing.T) {
 	t.Parallel()
 	unions := map[string]schemaUnion{}
@@ -1101,6 +1105,9 @@ func TestConformanceConstructors(t *testing.T) {
 					t.Errorf("the discriminator %s is %q, want %q", u.Key, got, want)
 				}
 			}
+			if u.CatchAll == h.Field {
+				checkCatchAll(t, h, u)
+			}
 			b, err := json.Marshal(v)
 			if err != nil {
 				t.Skipf("the zero-argument value does not encode: %v", err)
@@ -1109,10 +1116,62 @@ func TestConformanceConstructors(t *testing.T) {
 			if err := json.Unmarshal(b, back); err != nil {
 				t.Fatalf("%s does not decode: %v", b, err)
 			}
-			if set := setFields(back); !slices.Equal(set, []string{h.Field}) {
-				t.Errorf("%s decoded into %v, want %s", b, set, h.Field)
+			if u.Key != "" {
+				if set := setFields(back); !slices.Equal(set, []string{h.Field}) {
+					t.Errorf("%s decoded into %v, want %s", b, set, h.Field)
+				}
+				return
+			}
+			if set := setFields(back); len(set) != 1 {
+				t.Errorf("%s decoded into %v, want one variant", b, set)
+			}
+			if again, err := json.Marshal(back); err != nil || !bytes.Equal(again, b) {
+				t.Errorf("%s decoded and encoded again as %s, %v", b, again, err)
 			}
 		})
+	}
+}
+
+// checkCatchAll requires the catch-all value h builds to fail Validate with
+// its discriminator set to each value another variant of u has, naming the
+// union and the value, and to validate and decode back to the catch-all with
+// a value no variant has.
+func checkCatchAll(t *testing.T, h schemaHelper, u schemaUnion) {
+	t.Helper()
+	validate := func(v any) error { return v.(interface{ Validate() error }).Validate() }
+	for _, vr := range u.Variants {
+		if vr.Value == "" {
+			continue
+		}
+		v := h.New()
+		setDisc(v, h.Field, u.Key, vr.Value)
+		if err := validate(v); err == nil || !strings.Contains(err.Error(), h.Union) || !strings.Contains(err.Error(), fmt.Sprintf("%q", vr.Value)) {
+			t.Errorf("the catch-all holding %s %q: Validate() = %v, want an error naming %s and the value", u.Key, vr.Value, err, h.Union)
+		}
+	}
+	v := h.New()
+	setDisc(v, h.Field, u.Key, "_conformance")
+	if err := validate(v); err != nil {
+		t.Fatalf("the catch-all holding %s %q: Validate() = %v", u.Key, "_conformance", err)
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back := typeByName[h.Union].New()
+	if err := json.Unmarshal(b, back); err != nil || !slices.Equal(setFields(back), []string{h.Field}) {
+		t.Errorf("%s decoded into %v, %v, want %s", b, setFields(back), err, h.Field)
+	}
+}
+
+// setDisc sets the string field of the variant field of the union *v whose
+// JSON key is key to value.
+func setDisc(v any, field, key, value string) {
+	s := reflect.ValueOf(v).Elem().FieldByName(field).Elem()
+	for i := range s.NumField() {
+		if strings.Split(s.Type().Field(i).Tag.Get("json"), ",")[0] == key {
+			s.Field(i).SetString(value)
+		}
 	}
 }
 

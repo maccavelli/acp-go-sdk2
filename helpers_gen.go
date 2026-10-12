@@ -2,6 +2,263 @@
 
 package acp
 
+import "encoding/json"
+
+// NewAuthMethodTerminal constructs a AuthMethod using the 'terminal' variant.
+func NewAuthMethodTerminal(id AuthMethodId, name string) AuthMethod {
+	return AuthMethod{Terminal: &AuthMethodTerminalInline{
+		Id:   id,
+		Name: name,
+		Type: "terminal",
+	}}
+}
+
+// NewAuthMethodAgent constructs a AuthMethod using its Agent variant.
+func NewAuthMethodAgent(id AuthMethodId, name string) AuthMethod {
+	return AuthMethod{Agent: &AuthMethodAgent{
+		Id:   id,
+		Name: name,
+	}}
+}
+
+// NewAvailableCommandInputUnstructured constructs a AvailableCommandInput using its Unstructured variant.
+func NewAvailableCommandInputUnstructured(hint string) AvailableCommandInput {
+	return AvailableCommandInput{Unstructured: &UnstructuredCommandInput{Hint: hint}}
+}
+
+// NewCreateElicitationRequestForm constructs a CreateElicitationRequest using the 'form' variant.
+func NewCreateElicitationRequestForm(message string, requestedSchema ElicitationSchema) CreateElicitationRequest {
+	return CreateElicitationRequest{Form: &CreateElicitationForm{
+		Message:         message,
+		Mode:            "form",
+		RequestedSchema: requestedSchema,
+	}}
+}
+
+// NewCreateElicitationRequestUrl constructs a CreateElicitationRequest using the 'url' variant.
+func NewCreateElicitationRequestUrl(message string, elicitationId ElicitationId, url string) CreateElicitationRequest {
+	return CreateElicitationRequest{Url: &CreateElicitationUrl{
+		ElicitationId: elicitationId,
+		Message:       message,
+		Mode:          "url",
+		Url:           url,
+	}}
+}
+
+// NewCreateElicitationRequestOther constructs a CreateElicitationRequest using its Other variant.
+// Keys the variant does not declare go in its Extra field, which MarshalJSON writes
+// after the declared ones; a key a declared field writes is not taken from Extra.
+func NewCreateElicitationRequestOther(message string, mode string) CreateElicitationRequest {
+	return CreateElicitationRequest{Other: &CreateElicitationOther{
+		Message: message,
+		Mode:    mode,
+	}}
+}
+
+// NewCreateElicitationResponseAccept constructs a CreateElicitationResponse using the 'accept' variant.
+func NewCreateElicitationResponseAccept() CreateElicitationResponse {
+	return CreateElicitationResponse{Accept: &CreateElicitationAccept{Action: "accept"}}
+}
+
+// NewCreateElicitationResponseDecline constructs a CreateElicitationResponse using the 'decline' variant.
+func NewCreateElicitationResponseDecline() CreateElicitationResponse {
+	return CreateElicitationResponse{Decline: &CreateElicitationDecline{Action: "decline"}}
+}
+
+// NewCreateElicitationResponseCancel constructs a CreateElicitationResponse using the 'cancel' variant.
+func NewCreateElicitationResponseCancel() CreateElicitationResponse {
+	return CreateElicitationResponse{Cancel: &CreateElicitationCancel{Action: "cancel"}}
+}
+
+// NewCreateElicitationResponseOther constructs a CreateElicitationResponse using its Other variant.
+// Keys the variant does not declare go in its Extra field, which MarshalJSON writes
+// after the declared ones; a key a declared field writes is not taken from Extra.
+func NewCreateElicitationResponseOther(action string) CreateElicitationResponse {
+	return CreateElicitationResponse{Other: &CreateElicitationResponseOther{Action: action}}
+}
+
+// NewElicitationContentValueString constructs a ElicitationContentValue using its String variant.
+func NewElicitationContentValueString(value string) ElicitationContentValue {
+	v := ElicitationContentValueString(value)
+	return ElicitationContentValue{String: &v}
+}
+
+// NewElicitationContentValueInteger constructs a ElicitationContentValue using its Integer variant.
+func NewElicitationContentValueInteger(value int64) ElicitationContentValue {
+	v := ElicitationContentValueInteger(value)
+	return ElicitationContentValue{Integer: &v}
+}
+
+// NewElicitationContentValueNumber constructs a ElicitationContentValue using its Number variant.
+func NewElicitationContentValueNumber(value float64) ElicitationContentValue {
+	v := ElicitationContentValueNumber(value)
+	return ElicitationContentValue{Number: &v}
+}
+
+// NewElicitationContentValueBoolean constructs a ElicitationContentValue using its Boolean variant.
+func NewElicitationContentValueBoolean(value bool) ElicitationContentValue {
+	v := ElicitationContentValueBoolean(value)
+	return ElicitationContentValue{Boolean: &v}
+}
+
+// NewElicitationContentValueStringArray constructs a ElicitationContentValue using its StringArray variant.
+func NewElicitationContentValueStringArray(value []string) ElicitationContentValue {
+	v := ElicitationContentValueStringArray(value)
+	return ElicitationContentValue{StringArray: &v}
+}
+
+// NewElicitationPropertySchemaString constructs a ElicitationPropertySchema using the 'string' variant.
+func NewElicitationPropertySchemaString() ElicitationPropertySchema {
+	return ElicitationPropertySchema{String: &ElicitationPropertySchemaString{Type: "string"}}
+}
+
+// NewElicitationPropertySchemaNumber constructs a ElicitationPropertySchema using the 'number' variant.
+func NewElicitationPropertySchemaNumber() ElicitationPropertySchema {
+	return ElicitationPropertySchema{Number: &ElicitationPropertySchemaNumber{Type: "number"}}
+}
+
+// NewElicitationPropertySchemaInteger constructs a ElicitationPropertySchema using the 'integer' variant.
+func NewElicitationPropertySchemaInteger() ElicitationPropertySchema {
+	return ElicitationPropertySchema{Integer: &ElicitationPropertySchemaInteger{Type: "integer"}}
+}
+
+// NewElicitationPropertySchemaBoolean constructs a ElicitationPropertySchema using the 'boolean' variant.
+func NewElicitationPropertySchemaBoolean() ElicitationPropertySchema {
+	return ElicitationPropertySchema{Boolean: &ElicitationPropertySchemaBoolean{Type: "boolean"}}
+}
+
+// NewElicitationPropertySchemaArray constructs a ElicitationPropertySchema using the 'array' variant.
+func NewElicitationPropertySchemaArray(items MultiSelectItems) ElicitationPropertySchema {
+	return ElicitationPropertySchema{Array: &ElicitationPropertySchemaArray{
+		Items: items,
+		Type:  "array",
+	}}
+}
+
+// NewElicitationPropertySchemaOther constructs a ElicitationPropertySchema using its Other variant.
+// Keys the variant does not declare go in its Extra field, which MarshalJSON writes
+// after the declared ones; a key a declared field writes is not taken from Extra.
+func NewElicitationPropertySchemaOther(typeValue string) ElicitationPropertySchema {
+	return ElicitationPropertySchema{Other: &ElicitationPropertySchemaOther{Type: typeValue}}
+}
+
+// NewEmbeddedResourceResourceTextResourceContents constructs a EmbeddedResourceResource using its TextResourceContents variant.
+func NewEmbeddedResourceResourceTextResourceContents(text string, uri string) EmbeddedResourceResource {
+	return EmbeddedResourceResource{TextResourceContents: &TextResourceContents{
+		Text: text,
+		Uri:  uri,
+	}}
+}
+
+// NewEmbeddedResourceResourceBlobResourceContents constructs a EmbeddedResourceResource using its BlobResourceContents variant.
+func NewEmbeddedResourceResourceBlobResourceContents(blob string, uri string) EmbeddedResourceResource {
+	return EmbeddedResourceResource{BlobResourceContents: &BlobResourceContents{
+		Blob: blob,
+		Uri:  uri,
+	}}
+}
+
+// NewIdleStateUpdateEndTurn constructs a IdleStateUpdate using the 'end_turn' variant.
+func NewIdleStateUpdateEndTurn() IdleStateUpdate {
+	return IdleStateUpdate{EndTurn: &IdleStateUpdateEndTurn{StopReason: "end_turn"}}
+}
+
+// NewIdleStateUpdateMaxTokens constructs a IdleStateUpdate using the 'max_tokens' variant.
+func NewIdleStateUpdateMaxTokens() IdleStateUpdate {
+	return IdleStateUpdate{MaxTokens: &IdleStateUpdateMaxTokens{StopReason: "max_tokens"}}
+}
+
+// NewIdleStateUpdateMaxTurnRequests constructs a IdleStateUpdate using the 'max_turn_requests' variant.
+func NewIdleStateUpdateMaxTurnRequests() IdleStateUpdate {
+	return IdleStateUpdate{MaxTurnRequests: &IdleStateUpdateMaxTurnRequests{StopReason: "max_turn_requests"}}
+}
+
+// NewIdleStateUpdateRefusal constructs a IdleStateUpdate using the 'refusal' variant.
+func NewIdleStateUpdateRefusal() IdleStateUpdate {
+	return IdleStateUpdate{Refusal: &IdleStateUpdateRefusal{StopReason: "refusal"}}
+}
+
+// NewIdleStateUpdateCancelled constructs a IdleStateUpdate using the 'cancelled' variant.
+func NewIdleStateUpdateCancelled() IdleStateUpdate {
+	return IdleStateUpdate{Cancelled: &IdleStateUpdateCancelled{StopReason: "cancelled"}}
+}
+
+// NewIdleStateUpdateError constructs a IdleStateUpdate using the 'error' variant.
+func NewIdleStateUpdateError() IdleStateUpdate {
+	return IdleStateUpdate{Error: &IdleStateUpdateError{StopReason: "error"}}
+}
+
+// NewIdleStateUpdateOther constructs a IdleStateUpdate using its Other variant.
+// Keys the variant does not declare go in its Extra field, which MarshalJSON writes
+// after the declared ones; a key a declared field writes is not taken from Extra.
+func NewIdleStateUpdateOther(stopReason string) IdleStateUpdate {
+	return IdleStateUpdate{Other: &IdleStateUpdateOther{StopReason: stopReason}}
+}
+
+// NewIdleStateUpdateNone constructs a IdleStateUpdate using its None variant.
+func NewIdleStateUpdateNone() IdleStateUpdate {
+	return IdleStateUpdate{None: &IdleStateUpdateNone{}}
+}
+
+// NewMcpServerHttp constructs a McpServer using the 'http' variant.
+func NewMcpServerHttp(name string, url string, headers []HttpHeader) McpServer {
+	return McpServer{Http: &McpServerHttpInline{
+		Headers: headers,
+		Name:    name,
+		Type:    "http",
+		Url:     url,
+	}}
+}
+
+// NewMcpServerSse constructs a McpServer using the 'sse' variant.
+func NewMcpServerSse(name string, url string, headers []HttpHeader) McpServer {
+	return McpServer{Sse: &McpServerSseInline{
+		Headers: headers,
+		Name:    name,
+		Type:    "sse",
+		Url:     url,
+	}}
+}
+
+// NewMcpServerAcp constructs a McpServer using the 'acp' variant.
+func NewMcpServerAcp(name string, serverId McpServerAcpId) McpServer {
+	return McpServer{Acp: &McpServerAcpInline{
+		Name:     name,
+		ServerId: serverId,
+		Type:     "acp",
+	}}
+}
+
+// NewMcpServerStdio constructs a McpServer using its Stdio variant.
+func NewMcpServerStdio(name string, command string, args []string, env []EnvVariable) McpServer {
+	return McpServer{Stdio: &McpServerStdio{
+		Args:    args,
+		Command: command,
+		Env:     env,
+		Name:    name,
+	}}
+}
+
+// NewMultiSelectItemsString constructs a MultiSelectItems using the 'string' variant.
+func NewMultiSelectItemsString(enum []string) MultiSelectItems {
+	return MultiSelectItems{String: &MultiSelectItemsString{
+		Enum: enum,
+		Type: "string",
+	}}
+}
+
+// NewMultiSelectItemsOther constructs a MultiSelectItems using its Other variant.
+// Keys the variant does not declare go in its Extra field, which MarshalJSON writes
+// after the declared ones; a key a declared field writes is not taken from Extra.
+func NewMultiSelectItemsOther(typeValue string) MultiSelectItems {
+	return MultiSelectItems{Other: &MultiSelectItemsOther{Type: typeValue}}
+}
+
+// NewMultiSelectItemsTitled constructs a MultiSelectItems using its Titled variant.
+func NewMultiSelectItemsTitled(anyOf []EnumOption) MultiSelectItems {
+	return MultiSelectItems{Titled: &TitledMultiSelectItems{AnyOf: anyOf}}
+}
+
 // NewPlanUpdateContentItems constructs a PlanUpdateContent using the 'items' variant.
 func NewPlanUpdateContentItems(planId PlanId, entries []PlanEntry) PlanUpdateContent {
 	return PlanUpdateContent{Items: &PlanUpdateContentItems{
@@ -27,6 +284,23 @@ func NewPlanUpdateContentMarkdown(planId PlanId, content string) PlanUpdateConte
 		PlanId:  planId,
 		Type:    "markdown",
 	}}
+}
+
+// NewRequestIdNull constructs a RequestId using its Null variant.
+func NewRequestIdNull() RequestId {
+	return RequestId{Null: &RequestIdNull{}}
+}
+
+// NewRequestIdNumber constructs a RequestId using its Number variant.
+func NewRequestIdNumber(value int64) RequestId {
+	v := RequestIdNumber(value)
+	return RequestId{Number: &v}
+}
+
+// NewRequestIdStr constructs a RequestId using its Str variant.
+func NewRequestIdStr(value string) RequestId {
+	v := RequestIdStr(value)
+	return RequestId{Str: &v}
 }
 
 // NewRequestPermissionOutcomeCancelled constructs a RequestPermissionOutcome using the 'cancelled' variant.
@@ -61,6 +335,113 @@ func NewSessionConfigOptionBoolean(id SessionConfigId, name string, currentValue
 		Name:         name,
 		Type:         "boolean",
 	}}
+}
+
+// NewSessionConfigSelectOptionsUngrouped constructs a SessionConfigSelectOptions using its Ungrouped variant.
+func NewSessionConfigSelectOptionsUngrouped(value []SessionConfigSelectOption) SessionConfigSelectOptions {
+	v := SessionConfigSelectOptionsUngrouped(value)
+	return SessionConfigSelectOptions{Ungrouped: &v}
+}
+
+// NewSessionConfigSelectOptionsGrouped constructs a SessionConfigSelectOptions using its Grouped variant.
+func NewSessionConfigSelectOptionsGrouped(value []SessionConfigSelectGroup) SessionConfigSelectOptions {
+	v := SessionConfigSelectOptionsGrouped(value)
+	return SessionConfigSelectOptions{Grouped: &v}
+}
+
+// NewSetSessionConfigOptionRequestBoolean constructs a SetSessionConfigOptionRequest using the 'boolean' variant.
+func NewSetSessionConfigOptionRequestBoolean(sessionId SessionId, configId SessionConfigId, value bool) SetSessionConfigOptionRequest {
+	return SetSessionConfigOptionRequest{Boolean: &SetSessionConfigOptionBoolean{
+		ConfigId:  configId,
+		SessionId: sessionId,
+		Type:      "boolean",
+		Value:     value,
+	}}
+}
+
+// NewSetSessionConfigOptionRequestValueId constructs a SetSessionConfigOptionRequest using its ValueId variant.
+func NewSetSessionConfigOptionRequestValueId(sessionId SessionId, configId SessionConfigId, value SessionConfigValueId) SetSessionConfigOptionRequest {
+	return SetSessionConfigOptionRequest{ValueId: &SetSessionConfigOptionValueId{
+		ConfigId:  configId,
+		SessionId: sessionId,
+		Value:     value,
+	}}
+}
+
+// NewStateUpdateRunning constructs a StateUpdate using the 'running' variant.
+func NewStateUpdateRunning() StateUpdate {
+	return StateUpdate{Running: &StateUpdateRunning{State: "running"}}
+}
+
+// NewStateUpdateIdle constructs a StateUpdate using the 'idle' variant.
+func NewStateUpdateIdle() StateUpdate {
+	return StateUpdate{Idle: &StateUpdateIdle{State: "idle"}}
+}
+
+// NewStateUpdateRequiresAction constructs a StateUpdate using the 'requires_action' variant.
+func NewStateUpdateRequiresAction() StateUpdate {
+	return StateUpdate{RequiresAction: &StateUpdateRequiresAction{State: "requires_action"}}
+}
+
+// NewStateUpdateUnknown constructs a StateUpdate using the 'unknown' variant.
+func NewStateUpdateUnknown() StateUpdate {
+	return StateUpdate{Unknown: &StateUpdateUnknown{State: "unknown"}}
+}
+
+// NewStateUpdateOther constructs a StateUpdate using its Other variant.
+// Keys the variant does not declare go in its Extra field, which MarshalJSON writes
+// after the declared ones; a key a declared field writes is not taken from Extra.
+func NewStateUpdateOther(state string) StateUpdate {
+	return StateUpdate{Other: &StateUpdateOther{State: state}}
+}
+
+// NewUnstableMcpServerHttp constructs a UnstableMcpServer using the 'http' variant.
+func NewUnstableMcpServerHttp(name string, url string, headers []HttpHeader) UnstableMcpServer {
+	return UnstableMcpServer{Http: &UnstableMcpServerHttp{
+		Headers: headers,
+		Name:    name,
+		Type:    "http",
+		Url:     url,
+	}}
+}
+
+// NewUnstableMcpServerSse constructs a UnstableMcpServer using the 'sse' variant.
+func NewUnstableMcpServerSse(name string, url string, headers []HttpHeader) UnstableMcpServer {
+	return UnstableMcpServer{Sse: &UnstableMcpServerSse{
+		Headers: headers,
+		Name:    name,
+		Type:    "sse",
+		Url:     url,
+	}}
+}
+
+// NewUnstableMcpServerAcp constructs a UnstableMcpServer using the 'acp' variant.
+func NewUnstableMcpServerAcp(name string, serverId UnstableMcpServerAcpId) UnstableMcpServer {
+	return UnstableMcpServer{Acp: &UnstableMcpServerAcpInline{
+		Name:     name,
+		ServerId: serverId,
+		Type:     "acp",
+	}}
+}
+
+// NewUnstableMcpServerStdio constructs a UnstableMcpServer using its Stdio variant.
+func NewUnstableMcpServerStdio(name string, command string, args []string, env []EnvVariable) UnstableMcpServer {
+	return UnstableMcpServer{Stdio: &McpServerStdio{
+		Args:    args,
+		Command: command,
+		Env:     env,
+		Name:    name,
+	}}
+}
+
+// NewUnstableMessageMcpResponseResult constructs a UnstableMessageMcpResponse using its Result variant.
+func NewUnstableMessageMcpResponseResult(result json.RawMessage) UnstableMessageMcpResponse {
+	return UnstableMessageMcpResponse{Result: &UnstableMessageMcpResult{Result: result}}
+}
+
+// NewUnstableMessageMcpResponseError constructs a UnstableMessageMcpResponse using its Error variant.
+func NewUnstableMessageMcpResponseError(errorValue UnstableMcpError) UnstableMessageMcpResponse {
+	return UnstableMessageMcpResponse{Error: &UnstableMessageMcpError{Error: errorValue}}
 }
 
 // NewUnstableNesSuggestionEdit constructs a UnstableNesSuggestion using the 'edit' variant.

@@ -19,6 +19,9 @@ type Id struct{Null *IdNull "json:\"-\""; Number *IdNumber "json:\"-\""; Str *Id
 type IdNull struct{}
 type IdNumber int64
 type IdStr string
+func NewIdNull() Id
+func NewIdNumber(value int64) Id
+func NewIdStr(value string) Id
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 func (*CancelRequestNotification).Validate() error
