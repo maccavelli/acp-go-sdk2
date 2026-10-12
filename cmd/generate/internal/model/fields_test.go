@@ -169,7 +169,9 @@ func TestInlineVariants(t *testing.T) {
 			{"title":"ExtPayload","description":"An extension payload."},
 			{"title":"list","type":"array","items":{"type":"string"}},
 			{"title":"bare"},
-			{"type":"null"},
+			{"type":"null"}]},
+		"W":{"anyOf":[
+			{"type":"object","required":["w"],"properties":{"w":{"type":"string"}}},
 			{"$ref":"#/$defs/Ref"}]}}`)})
 	if err != nil {
 		t.Fatal(err)
@@ -197,8 +199,8 @@ func TestInlineVariants(t *testing.T) {
 	if vs[4].Inline.Doc != nil {
 		t.Errorf("null variant has a doc: %v", vs[4].Inline.Doc)
 	}
-	if vs[5].Inline != nil {
-		t.Errorf("$ref variant has an inline type: %+v", vs[5].Inline)
+	if ref := m.Type("W").Variants[1]; ref.Inline != nil {
+		t.Errorf("$ref variant has an inline type: %+v", ref.Inline)
 	}
 }
 

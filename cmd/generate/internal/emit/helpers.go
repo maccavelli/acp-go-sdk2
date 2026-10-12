@@ -17,7 +17,8 @@ func emitHelperConstructors(f *goFile, t *model.Type) {
 	}
 	for _, h := range t.Helpers {
 		vi := t.Variants[h.Variant]
-		// Parameters: every required property except the const discriminator.
+		// Parameters: the required keys of the variant's Go type, except the
+		// discriminator the constructor writes (model.Helper.Params).
 		var params []*ast.Field
 		assigns := map[string]ast.Expr{}
 		for _, p := range h.Params {

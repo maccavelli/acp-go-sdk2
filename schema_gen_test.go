@@ -2663,7 +2663,7 @@ func schemaHelpers() []schemaHelper {
 			Union: "SessionConfigOption",
 			Field: "Select",
 			New: func() any {
-				v := NewSessionConfigOptionSelect(*new(SessionConfigValueId), *new(SessionConfigSelectOptions))
+				v := NewSessionConfigOptionSelect(*new(SessionConfigId), *new(string), *new(SessionConfigValueId), *new(SessionConfigSelectOptions))
 				return &v
 			},
 		},
@@ -2671,7 +2671,7 @@ func schemaHelpers() []schemaHelper {
 			Union: "SessionConfigOption",
 			Field: "Boolean",
 			New: func() any {
-				v := NewSessionConfigOptionBoolean(*new(bool))
+				v := NewSessionConfigOptionBoolean(*new(SessionConfigId), *new(string), *new(bool))
 				return &v
 			},
 		},

@@ -1,0 +1,19 @@
+Refused: a union with a property of its own and a variant that is a $ref.
+The variant is emitted as the definition it names, which does not hold the
+union's id, so id would be dropped from it on decode and never sent
+(0014-MADR-union-constructors-take-every-required-key.md, R1).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Start": {"type": "object", "properties": {"kind": {"type": "string", "const": "start"}, "at": {"type": "integer", "format": "int64"}}, "required": ["kind", "at"]},
+  "Event": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"], "oneOf": [
+    {"$ref": "#/$defs/Start"},
+    {"type": "object", "properties": {"kind": {"type": "string", "const": "stop"}}, "required": ["kind"]}
+  ], "discriminator": {"propertyName": "kind"}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Event variant 1:
+Start cannot hold the union's own properties id

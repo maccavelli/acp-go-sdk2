@@ -43,18 +43,22 @@ func NewRequestPermissionOutcomeSelected(optionId PermissionOptionId) RequestPer
 }
 
 // NewSessionConfigOptionSelect constructs a SessionConfigOption using the 'select' variant.
-func NewSessionConfigOptionSelect(currentValue SessionConfigValueId, options SessionConfigSelectOptions) SessionConfigOption {
+func NewSessionConfigOptionSelect(id SessionConfigId, name string, currentValue SessionConfigValueId, options SessionConfigSelectOptions) SessionConfigOption {
 	return SessionConfigOption{Select: &SessionConfigOptionSelect{
 		CurrentValue: currentValue,
+		Id:           id,
+		Name:         name,
 		Options:      options,
 		Type:         "select",
 	}}
 }
 
 // NewSessionConfigOptionBoolean constructs a SessionConfigOption using the 'boolean' variant.
-func NewSessionConfigOptionBoolean(currentValue bool) SessionConfigOption {
+func NewSessionConfigOptionBoolean(id SessionConfigId, name string, currentValue bool) SessionConfigOption {
 	return SessionConfigOption{Boolean: &SessionConfigOptionBoolean{
 		CurrentValue: currentValue,
+		Id:           id,
+		Name:         name,
 		Type:         "boolean",
 	}}
 }

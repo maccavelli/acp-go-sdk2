@@ -1,5 +1,7 @@
 Inline variants: a struct, a named array type, and empty ones for a bare
-title and for null, beside a $ref.
+title and for null. A $ref variant sits beside an inline one in W, a union
+without properties of its own: in V, it could not hold V's shared key
+(0014-PLAN-union-constructors-take-every-required-key.md, step 3 deviation).
 The meta declares $/cancel_request and the schema its smallest definition, which
 the runtime needs.
 
@@ -8,7 +10,8 @@ the runtime needs.
 -- schema.json --
 {"$defs": {
   "Ref": {"type": "object", "properties": {"a": {"type": "string"}}},
-  "V": {"required": ["shared"], "properties": {"shared": {"type": "string"}}, "anyOf": [{"type": "object", "properties": {"kind": {"type": "string"}, "opt": {"type": "array", "items": {"type": "string"}}}, "required": ["kind"], "description": "Object."}, {"title": "list", "type": "array", "items": {"type": "string"}}, {"title": "bare"}, {"type": "null"}, {"$ref": "#/$defs/Ref"}]},
+  "V": {"required": ["shared"], "properties": {"shared": {"type": "string"}}, "anyOf": [{"type": "object", "properties": {"kind": {"type": "string"}, "opt": {"type": "array", "items": {"type": "string"}}}, "required": ["kind"], "description": "Object."}, {"title": "list", "type": "array", "items": {"type": "string"}}, {"title": "bare"}, {"type": "null"}]},
+  "W": {"anyOf": [{"type": "object", "properties": {"w": {"type": "string"}}, "required": ["w"]}, {"$ref": "#/$defs/Ref"}]},
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
 }}
 -- want.api --
@@ -20,16 +23,22 @@ type ClientExperimental interface{}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type Ref struct{A string "json:\"a,omitempty\""}
-type V struct{VVariant1 *VVariant1 "json:\"-\""; List *VList "json:\"-\""; Bare *VBare "json:\"-\""; VVariant4 *VVariant4 "json:\"-\""; Ref *Ref "json:\"-\""}
+type V struct{VVariant1 *VVariant1 "json:\"-\""; List *VList "json:\"-\""; Bare *VBare "json:\"-\""; VVariant4 *VVariant4 "json:\"-\""}
 type VBare struct{}
 type VList []string
 type VVariant1 struct{Kind string "json:\"kind\""; Opt []string "json:\"opt,omitempty\""; Shared string "json:\"shared\""}
 type VVariant4 struct{}
+type W struct{WVariant1 *WVariant1 "json:\"-\""; Ref *Ref "json:\"-\""}
+type WVariant1 struct{W string "json:\"w\""}
 func (*CancelRequestNotification).Validate() error
 func (V).MarshalJSON() ([]byte, error)
 func (*V).UnmarshalJSON(b []byte) error
 func (*V).Validate() error
 func (*VVariant1).UnmarshalJSON(b []byte) error
+func (W).MarshalJSON() ([]byte, error)
+func (*W).UnmarshalJSON(b []byte) error
+func (*W).Validate() error
+func (*WVariant1).UnmarshalJSON(b []byte) error
 -- behaviour_test.go --
 package acp
 

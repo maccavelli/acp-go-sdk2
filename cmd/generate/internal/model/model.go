@@ -213,8 +213,10 @@ type EnumValue struct {
 type Helper struct {
 	Name    string
 	Variant int
-	// Params are the variant's required properties, in schema order, without
-	// the discriminator.
+	// Params are the required keys of the Go type that holds the variant,
+	// in schema order, without the discriminator: for an inline variant the
+	// union's own keys, then the variant's; for a $ref variant those of the
+	// definition it names (paramKeys).
 	Params []Param
 }
 
@@ -576,6 +578,9 @@ func buildUnion(schema *load.Schema, n *namer, t *Type, r *rules) error {
 	if err := classifyUnion(schema, t, list); err != nil {
 		return err
 	}
+	if err := checkOwnKeys(t, list); err != nil {
+		return err
+	}
 	if !t.ExactlyOne || t.def.DocsIgnore || r.helpers[t.Name] {
 		return nil
 	}
@@ -589,19 +594,64 @@ func buildUnion(schema *load.Schema, n *namer, t *Type, r *rules) error {
 		if err := n.declare(h.Name, owner+" constructor"); err != nil {
 			return err
 		}
-		ev := expandAllOf(schema, v)
-		for _, key := range ev.Required {
-			if key == discKey || ev.Properties[key] == nil {
+		keys, props := paramKeys(schema, t, v, vi)
+		for _, key := range keys {
+			if key == discKey || props[key] == nil {
 				continue
 			}
 			if err := checkParam(owner, key); err != nil {
 				return err
 			}
-			h.Params = append(h.Params, Param{Key: key, Field: util.ToExportedField(key), Type: typeRef(ev.Properties[key])})
+			h.Params = append(h.Params, Param{Key: key, Field: util.ToExportedField(key), Type: typeRef(props[key])})
 		}
 		t.Helpers = append(t.Helpers, h)
 	}
 	return nil
+}
+
+// checkOwnKeys refuses a union with properties of its own and a variant that
+// is a reference: the variant is emitted as the definition it names, which
+// does not hold them, so they would be dropped
+// (0014-MADR-union-constructors-take-every-required-key.md, R1).
+func checkOwnKeys(t *Type, list []*load.Definition) error {
+	if len(t.def.Properties) == 0 {
+		return nil
+	}
+	for idx, v := range list {
+		if v == nil || (v.Ref == "" && singleRefVariant(v) == "") {
+			continue
+		}
+		return fmt.Errorf("%s variant %d: %s cannot hold the union's own properties %s",
+			t.Name, idx+1, t.Variants[idx].TypeName, strings.Join(slices.Sorted(maps.Keys(t.def.Properties)), ", "))
+	}
+	return nil
+}
+
+// paramKeys returns the required keys of the Go type that holds variant v,
+// in schema order and each once, and the properties that type them: for an
+// inline object variant, the union's own keys, then the variant's, the
+// variant's property winning as in inlineOf; for a $ref variant, or an allOf
+// of one $ref, the keys of the definition it names
+// (0014-MADR-union-constructors-take-every-required-key.md, P1).
+func paramKeys(schema *load.Schema, t *Type, v *load.Definition, vi *Variant) ([]string, map[string]*load.Definition) {
+	ev := expandAllOf(schema, v)
+	if target, ok := strings.CutPrefix(v.Ref, refPrefix); ok && schema.Defs[target] != nil {
+		ev = expandAllOf(schema, schema.Defs[target])
+	}
+	keys, props := ev.Required, ev.Properties
+	if vi.HasSharedFields {
+		keys = append(slices.Clone(t.def.Required), ev.Required...)
+		props = map[string]*load.Definition{}
+		maps.Copy(props, t.def.Properties)
+		maps.Copy(props, ev.Properties)
+	}
+	var out []string
+	for _, key := range keys {
+		if !slices.Contains(out, key) {
+			out = append(out, key)
+		}
+	}
+	return out, props
 }
 
 // buildVariant names one union variant: its type, in priority $ref target,

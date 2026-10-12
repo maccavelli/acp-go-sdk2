@@ -1,0 +1,58 @@
+A oneOf union that requires id and name of every variant, beside its oneOf:
+each constructor takes them before its variant's own required keys
+(0014-MADR-union-constructors-take-every-required-key.md, P1).
+The meta declares $/cancel_request and the schema its smallest definition,
+which the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Opt": {"type": "object", "properties": {"id": {"type": "string"}, "name": {"type": "string"}}, "required": ["id", "name"], "oneOf": [
+    {"type": "object", "properties": {"type": {"type": "string", "const": "a"}, "value": {"type": "integer", "format": "int64"}}, "required": ["type", "value"]},
+    {"type": "object", "properties": {"type": {"type": "string", "const": "b"}}, "required": ["type"]}
+  ], "discriminator": {"propertyName": "type"}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+func NewOptA(id string, name string, value int64) Opt
+func NewOptB(id string, name string) Opt
+type Opt struct{A *OptA "json:\"-\""; B *OptB "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type OptA struct{Id string "json:\"id\""; Name string "json:\"name\""; Type string "json:\"type\""; Value int64 "json:\"value\""}
+type OptB struct{Id string "json:\"id\""; Name string "json:\"name\""; Type string "json:\"type\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*CancelRequestNotification).Validate() error
+func (Opt).MarshalJSON() ([]byte, error)
+func (*Opt).UnmarshalJSON(b []byte) error
+func (*Opt).Validate() error
+func (*OptA).UnmarshalJSON(b []byte) error
+func (*OptB).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// The constructors set the union's own keys, the variant's, and the
+// discriminator, and the value decodes back to its variant.
+func TestUnionOwnKeys(t *testing.T) {
+	b, err := json.Marshal(NewOptB("i", "n"))
+	if err != nil || string(b) != `{"id":"i","name":"n","type":"b"}` {
+		t.Fatalf("NewOptB encoded as %s, %v", b, err)
+	}
+	var o Opt
+	if err := json.Unmarshal(b, &o); err != nil || o.B == nil || o.B.Id != "i" || o.B.Name != "n" {
+		t.Errorf("%s decoded as %+v, %v", b, o, err)
+	}
+	if b, err := json.Marshal(NewOptA("i", "n", 5)); err != nil || string(b) != `{"id":"i","name":"n","type":"a","value":5}` {
+		t.Errorf("NewOptA encoded as %s, %v", b, err)
+	}
+}

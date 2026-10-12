@@ -69,6 +69,9 @@ copy made with `git archive bc0cb78`, never on the tree.
    ([0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md), decision drivers, and "Found in step 3 and
    decided" for two other lossy shapes). No committed union has this shape: the only definitions with both properties of their own and a
    reference variant are `ElicitationFormMode` and `ElicitationUrlMode`, two reference variants each, and both become flattened members.
+   (Amended 2026-10-12, in step 3 of the PLAN: two test fixtures had the shape, the engine case `accept-inline-variants` and the model
+   test `TestInlineVariants`, each with a `$ref` variant only to show it gets no inline type; the owner had both move it to a union
+   without properties of its own.)
 
 ### The catch-all
 

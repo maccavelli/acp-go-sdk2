@@ -38,7 +38,7 @@ type MarkA struct{Kind string "json:\"kind\""}
 type MarkOther struct{Kind string "json:\"kind\""; Extra map[string]json.RawMessage "json:\"-\""}
 func NewEventNone() Event
 func NewEventOther() Event
-func NewEventStart() Event
+func NewEventStart(at int64) Event
 func NewEventStop() Event
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1

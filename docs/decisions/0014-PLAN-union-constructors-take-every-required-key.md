@@ -52,8 +52,9 @@ Out of scope:
 ## Implementation Steps
 
 1. **Rules.** As in [0013-PLAN-close-phase-6-follow-ups.md](0013-PLAN-close-phase-6-follow-ups.md), step 1:
-   * each new test or check is seen failing on a planted break in a scratch copy (`git archive HEAD` into a temporary directory), never in the
-     tree; the record of each step quotes the failure;
+   * each new test or check is seen failing on a planted break in a scratch copy ~~(`git archive HEAD` into a temporary directory)~~ (a
+     copy of the working tree's tracked and untracked files in a temporary directory, since `git archive HEAD` lacks the step's uncommitted
+     changes; amended in step 3), never in the tree; the record of each step quotes the failure;
    * a behaviour no record decides stops the step for the owner, with evidence and resolutions that leave the tree correct;
    * after each step: regenerate (`cd cmd/generate && env -u GOPATH -u GOMODCACHE go run .`), run `make pre-add-check` and, for each
      untracked Go file, `GO_PRECHECK_SKIP_VULN=1 scripts/go-precheck.sh <file>`; `make check-records`; `make markdownlint`; and the
@@ -93,7 +94,10 @@ Out of scope:
        decode back to `B`;
      * `accept-discriminated-shapes.txtar` regenerated with `-update`: `func NewEventStart(at int64) Event`.
    * Regenerate. Asserted diff: `helpers_gen.go` changes the two `SessionConfigOption` constructors only (signature, `Id: id`, `Name:
-     name`); `schema_gen_test.go` the two matching `New` calls; `types_gen.go` nothing; engine goldens: `accept-discriminated-shapes` only.
+     name`); `schema_gen_test.go` the two matching `New` calls; `types_gen.go` nothing; engine goldens: ~~`accept-discriminated-shapes`
+     only~~ `accept-discriminated-shapes`, and `accept-inline-variants` as step 3's deviation of 2026-10-12 changes it.
+   * (Added 2026-10-12, step 3's deviation.) The fixtures that held the refused shape move their `$ref` variant into a second union
+     without properties of its own: `accept-inline-variants.txtar` and `TestInlineVariants` in `internal/model/fields_test.go`.
    * Plants: `paramKeys` returning `expandAllOf(schema, v)`'s keys, which must fail `TestHelperParams` naming `SessionConfigOption` and the
      fields `Id` and `Name`, and `accept-union-own-keys`; the refusal removed, which must fail `refuse-union-keys-ref-variant`.
 
@@ -234,3 +238,50 @@ Ran on `main` from `1067d4a`, after the owner committed the pair and said "proce
   with the probe that found it.
 * This plan's status is `in-progress`, and its row in `docs/README.md` says so.
 * No source changes, so no test and no plant.
+
+### Step 3 deviation, 2026-10-12: two fixtures held the shape R1 refuses
+
+With `checkOwnKeys` in place, `go test ./...` in `cmd/generate` failed in `TestEngineCases/accept-inline-variants`,
+`TestEngineBehaviour/generate/accept-inline-variants` and `TestHelperParams` with `model: V variant 5: Ref cannot hold the union's own
+properties shared`, and in `internal/model`'s `TestInlineVariants` with the same error for variant 6. Both fixtures, written before this
+plan, give the union `V` a required key of its own, `shared`, and a variant `{"$ref": "#/$defs/Ref"}`, whose generated type `Ref` has no
+`Shared` field: the loss R1 refuses. Neither tests `shared` for that variant; the `$ref` is there for the assertion that a `$ref` variant
+has no inline type. The MADR's "no committed union has this shape" was checked against the schema files only.
+
+Asked, the owner chose to move the `$ref` variant, in both fixtures, out of `V` into a second union `W` with no properties of its own,
+beside an inline variant, keeping the assertion. Not chosen: dropping the `$ref` variant, which loses the assertion; revisiting R1, which
+the MADR decided. The MADR's fact is amended. Files added to step 3: `internal/model/fields_test.go`, and the `want.api` and behaviour
+test of `accept-inline-variants.txtar`.
+
+### Step 3, parameters and the refusal, 2026-10-12
+
+Ran on `main` from `98b2372`. The agent did not commit.
+
+* `internal/model/model.go`: `paramKeys` returns the required keys of the variant's Go type and the properties that type them (the union's
+  own keys, then the variant's, for an inline variant; the named definition's for a `$ref` variant), and `buildUnion`'s constructor loop
+  uses it. `checkOwnKeys`, called after `classifyUnion`, refuses a union with properties of its own and a `$ref` or single-`allOf` `$ref`
+  variant. The `Helper.Params` comment, and the emitter's at `internal/emit/helpers.go`, say what the parameters are.
+* `cmd/generate/helpers_test.go`, `TestHelperParams`: on the committed schema and every accepting engine case, each constructor's parameter
+  fields, with the discriminator field when the constructor writes the variant's value, equal the required fields of the variant's Go
+  type. A catch-all's discriminator field is left out of the comparison until step 5 makes it a parameter.
+* Engine cases: new `refuse-union-keys-ref-variant.txtar` (`want.err`: `Event variant 1:` and `Start cannot hold the union's own
+  properties id`) and `accept-union-own-keys.txtar` (`func NewOptA(id string, name string, value int64) Opt`, `func NewOptB(id string,
+  name string) Opt`; its behaviour test requires `NewOptB("i", "n")` to encode `{"id":"i","name":"n","type":"b"}` and decode back to `B`).
+  `-update` changed two goldens, each line reviewed: `accept-discriminated-shapes` (`-func NewEventStart() Event`, `+func
+  NewEventStart(at int64) Event`) and, under this step's deviation, `accept-inline-variants` (`V` loses `Ref`; `W`, `WVariant1` and their
+  methods are added).
+* Regenerated. The asserted diff script passed: `helpers_gen.go: 8 changed lines`, `schema_gen_test.go: 4 changed lines`, `types_gen.go`,
+  `agent_gen.go`, `client_gen.go`, `constants_gen.go`: 0, `asserted diff: ok`; the 8 lines are the two signatures, old and new, and `Id:
+  id` and `Name: name` in each body.
+* Tests: `go test -count=1 ./...` passes in `cmd/generate` (all seven packages `ok`) and at the root; `TestConformanceConstructors` runs
+  its 11 subtests, 10 passing and `SessionConfigOption_Select` skipped as before (its zero value does not encode).
+* Plants, each in its own scratch copy:
+  * `paramKeys` replaced by the variant's own keys: `exit=1`, `committed schema: NewSessionConfigOptionBoolean: missing the required fields
+    [Id Name], has the fields [] the type does not require`, and the same for `NewOptA` and `NewOptB` of `accept-union-own-keys`, which
+    also failed `TestEngineCases`;
+  * the refusal disabled: `exit=1`, `TestEngineCases/refuse-union-keys-ref-variant`: `run accepted the schema`.
+* `make pre-add-check`: `go-precheck: 101 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` The untracked
+  `cmd/generate/helpers_test.go`: `go-precheck: 1 file(s) clean`, with `govulncheck` skipped. `make check-records` and `make markdownlint`
+  exit 0, and the identifier scan of the changed files found nothing.
+* Breaking change for the release notes: `NewSessionConfigOptionSelect` and `NewSessionConfigOptionBoolean` take `id SessionConfigId,
+  name string` first.
