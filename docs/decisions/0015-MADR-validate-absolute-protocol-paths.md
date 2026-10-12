@@ -546,7 +546,11 @@ Asked, the owner chose:
   * **Capability gates (conformance).** The standard's capability MUSTs (`session/load` only when `loadSession` is advertised; `fs/*` and
     `terminal/*` only when the client advertises them; `additionalDirectories` only when advertised) are recorded in the protocol table and
     not enforced; enforcing them needs each connection to keep what `initialize` negotiated, which would also give consumers an accessor for
-    the peer's capabilities.
+    the peer's capabilities. (Note 2026-10-12: written as
+    [0017-MADR-remediate-acp-v1-conformance-violations.md](0017-MADR-remediate-acp-v1-conformance-violations.md) at the owner's
+    request, before this record was complete, widened by the audit in
+    [0016-REPORT-acp-v1-conformance-audit.md](../reports/0016-REPORT-acp-v1-conformance-audit.md), and building on this record's hooks
+    and typed error.)
   * **Middleware (flexibility).** Sending and receiving middleware over the existing `MethodHandler`, as the MCP Go SDK has, for tracing,
     metrics and authorization; the two hooks of H1 are a narrow, ordered case it would generalize, and that record says how they relate.
 * **Not changed.** The other 22 removed checks stay removed: the standard states none of them. A consumer that wants one adds it with

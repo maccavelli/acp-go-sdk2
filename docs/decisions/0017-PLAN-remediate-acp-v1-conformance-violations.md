@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-12
 associated-madr: "0017-MADR-remediate-acp-v1-conformance-violations.md"
 ---
@@ -527,4 +527,14 @@ step 7 stands alone. Steps 2, 11, 12 and 13 are records and documentation.
 
 ## Execution record
 
-Nothing has run. The plan awaits the owner's approval.
+### Step 2, records, 2026-10-12
+
+The owner approved execution with "do 0017 step 2". The plan starts from `271aa1c`, after `v0.16.0` was tagged on `6034536`, as O1
+requires; CI on `271aa1c` (run 38305945233) passed. The agent did not commit.
+
+* [0015-MADR-validate-absolute-protocol-paths.md](0015-MADR-validate-absolute-protocol-paths.md), "More Information", "Found here,
+  decided elsewhere", capability gates: a dated note that the record was written as the 0017 MADR at the owner's request, before
+  0015 was complete, widened by the 0016 audit, building on 0015's hooks and typed error.
+* This plan's status is `in-progress`, and its row in `docs/README.md` says so.
+* `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing. No source file
+  changed.
