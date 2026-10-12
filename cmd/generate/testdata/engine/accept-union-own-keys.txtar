@@ -17,9 +17,13 @@ which the runtime needs.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 func NewOptA(id string, name string, value int64) Opt
 func NewOptB(id string, name string) Opt
 type Opt struct{A *OptA "json:\"-\""; B *OptB "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
@@ -27,7 +31,15 @@ type OptA struct{Id string "json:\"id\""; Name string "json:\"name\""; Type stri
 type OptB struct{Id string "json:\"id\""; Name string "json:\"name\""; Type string "json:\"type\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (Opt).MarshalJSON() ([]byte, error)
 func (*Opt).UnmarshalJSON(b []byte) error
 func (*Opt).Validate() error

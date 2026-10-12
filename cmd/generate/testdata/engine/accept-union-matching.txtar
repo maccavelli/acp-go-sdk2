@@ -20,18 +20,22 @@ needs.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type Batch struct{Loose *BatchLoose "json:\"-\""; Keyed *BatchKeyed "json:\"-\""}
 type BatchKeyed []Keyed
 type BatchLoose []Note
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
 type Keyed struct{K string "json:\"k\""}
 type Mixed struct{Objects *MixedObjects "json:\"-\""; Words *MixedWords "json:\"-\""}
 type MixedObjects []Keyed
 type MixedWords []string
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
 func NewBatchKeyed(value []Keyed) Batch
 func NewBatchLoose(value []Note) Batch
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 func NewMixedObjects(value []Keyed) Mixed
 func NewMixedWords(value []string) Mixed
 func NewPickKeyed(k string) Pick
@@ -40,10 +44,18 @@ type Note struct{Note string "json:\"note,omitempty\""}
 type Pick struct{Loose *Note "json:\"-\""; Keyed *Keyed "json:\"-\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (Batch).MarshalJSON() ([]byte, error)
 func (*Batch).UnmarshalJSON(b []byte) error
 func (*Batch).Validate() error
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (*Keyed).UnmarshalJSON(b []byte) error
 func (Mixed).MarshalJSON() ([]byte, error)
 func (*Mixed).UnmarshalJSON(b []byte) error

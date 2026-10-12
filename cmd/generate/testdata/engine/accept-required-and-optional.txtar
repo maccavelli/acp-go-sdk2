@@ -14,14 +14,26 @@ the runtime needs.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Child struct{X string "json:\"x,omitempty\""}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type Thing struct{Child Child "json:\"child\""; Count uint32 "json:\"count,omitempty\""; Labels map[string]string "json:\"labels,omitempty\""; Name string "json:\"name\""; Note string "json:\"note,omitempty\""; Tags []string "json:\"tags\""}
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (Thing).MarshalJSON() ([]byte, error)
 func (*Thing).UnmarshalJSON(b []byte) error
 -- behaviour_test.go --

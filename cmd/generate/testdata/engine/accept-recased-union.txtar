@@ -16,9 +16,13 @@ so the meta declares $/cancel_request and the schema its smallest definition.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 func NewUX(n string) U
 func NewUY() U
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
@@ -26,7 +30,15 @@ const ProtocolVersionNumber untyped int = 1
 type U struct{X *UX "json:\"-\""; Y *UY "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
 type UX struct{N string "json:\"n\""; Type string "json:\"type\""}
 type UY struct{Type string "json:\"type\""}
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (U).MarshalJSON() ([]byte, error)
 func (*U).UnmarshalJSON(b []byte) error
 func (*U).Validate() error

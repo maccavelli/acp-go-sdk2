@@ -95,6 +95,65 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 	}
 }
 
+// TestSideConnectionsFollowTheModel requires each side connection to be
+// generated with its constructor, forwarding methods and doc comments, and the
+// agent's prompt-turn state only when a prompt-turn rule applies
+// (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 4).
+func TestSideConnectionsFollowTheModel(t *testing.T) {
+	t.Parallel()
+	withTurns := rendered(t, renamedProtocol(t))
+	var schema load.Schema
+	if err := json.Unmarshal([]byte(`{"$defs":{
+		"OpenRequest":{"type":"object","x-side":"agent","x-method":"chat/open"},
+		"OpenResponse":{"type":"object","x-side":"agent","x-method":"chat/open"}}}`), &schema); err != nil {
+		t.Fatal(err)
+	}
+	m, err := model.Build(model.Input{Meta: &load.Meta{AgentMethods: map[string]string{"open": "chat/open"}}, Schema: &schema,
+		Protocol: &model.Protocol{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	without := rendered(t, m)
+
+	common := map[string][]string{
+		"agent_gen.go": {
+			"// AgentSideConnection represents the agent's view of a connection to a client.\ntype AgentSideConnection struct {",
+			"func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection {",
+			"asc.conn = NewConnection(asc.handleWithExtensions, peerInput, peerOutput, opts...)\n\treturn asc\n}\n",
+			"func (c *AgentSideConnection) DroppedNotifications() uint64 {",
+			"func (c *AgentSideConnection) Done() <-chan struct{} {",
+			"func (c *AgentSideConnection) SetLogger(l *slog.Logger) {",
+			"// It is for requests the typed methods cannot make: a method the client\n",
+			"func (c *AgentSideConnection) Connection() *Connection {",
+		},
+		"client_gen.go": {
+			"// ClientSideConnection provides the client's view of the connection and implements Agent calls.\ntype ClientSideConnection struct {",
+			"func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection {",
+			"// It is for requests the typed methods cannot make: a method the agent\n",
+			"func (c *ClientSideConnection) Connection() *Connection {",
+		},
+	}
+	turnState := []string{"\tmu             sync.Mutex\n", "\tsessionCancels map[string]context.CancelFunc\n",
+		"asc.sessionCancels = make(map[string]context.CancelFunc)"}
+	for name, files := range map[string]map[string]string{"with prompt turns": withTurns, "without": without} {
+		for file, lines := range common {
+			for _, w := range lines {
+				if !strings.Contains(files[file], w) {
+					t.Errorf("%s: %s lacks %q", name, file, w)
+				}
+			}
+		}
+		for _, w := range turnState {
+			if got, want := strings.Contains(files["agent_gen.go"], w), name == "with prompt turns"; got != want {
+				t.Errorf("%s: agent_gen.go holds %q: %v, want %v", name, w, got, want)
+			}
+		}
+		if strings.Contains(files["client_gen.go"], "sessionCancels") {
+			t.Errorf("%s: client_gen.go holds prompt-turn state", name)
+		}
+	}
+}
+
 // TestProtocolMethodConstants requires a constant for each protocol method of
 // the meta files, and no block when there is none.
 func TestProtocolMethodConstants(t *testing.T) {

@@ -13,14 +13,26 @@ the runtime needs.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Child struct{X string "json:\"x,omitempty\""}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
 type Env struct{Children map[string]Child "json:\"children,omitempty\""; Vars map[string]string "json:\"vars\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (Env).MarshalJSON() ([]byte, error)
 func (*Env).UnmarshalJSON(b []byte) error
 -- behaviour_test.go --

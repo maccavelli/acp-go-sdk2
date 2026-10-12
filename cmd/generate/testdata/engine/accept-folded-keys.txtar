@@ -23,12 +23,16 @@ the runtime needs.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
 type Group struct{Group string "json:\"group\""; Options []Option "json:\"options\""}
 type Item struct{Count int64 "json:\"count,omitempty\""; Id string "json:\"id\""}
 type Mode struct{Message string "json:\"message\""; Session *SessionScope "json:\"-\""; Request *RequestScope "json:\"-\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 func NewOptionsGrouped(value []Group) Options
 func NewOptionsUngrouped(value []Option) Options
 func NewReplyFailure(id int64, errorValue string) Reply
@@ -53,7 +57,15 @@ type State struct{EndTurn *StateEnd "json:\"-\""; Other *StateOther "json:\"-\""
 type StateEnd struct{StopReason string "json:\"stopReason\""}
 type StateNone struct{StopReason json.RawMessage "json:\"stopReason,omitempty\""}
 type StateOther struct{StopReason string "json:\"stopReason\""; Extra map[string]json.RawMessage "json:\"-\""}
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (Group).MarshalJSON() ([]byte, error)
 func (*Group).UnmarshalJSON(b []byte) error
 func (Item).MarshalJSON() ([]byte, error)

@@ -13,14 +13,26 @@ the runtime needs.
 type Agent interface{Ping(ctx context.Context, params PingNotification) error}
 type AgentExperimental interface{}
 const AgentMethodPing untyped string = "ping"
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 type PingNotification struct{N int64 "json:\"n,omitempty\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
 func (*ClientSideConnection).Ping(ctx context.Context, params PingNotification) error
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (*PingNotification).Validate() error
 -- behaviour_test.go --
 package acp

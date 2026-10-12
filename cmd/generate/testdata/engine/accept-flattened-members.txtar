@@ -18,19 +18,27 @@ the runtime needs.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type Ask struct{Form *AskForm "json:\"-\""; Other *AskOther "json:\"-\""}
 type AskForm struct{Message string "json:\"message\""; Mode string "json:\"mode\""; Schema map[string]string "json:\"schema\""; Session *SessionScope "json:\"-\""; Request *RequestScope "json:\"-\""}
 type AskOther struct{Message string "json:\"message\""; Mode string "json:\"mode\""; Extra map[string]json.RawMessage "json:\"-\""}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
 type Mode struct{Schema map[string]string "json:\"schema\""; Session *SessionScope "json:\"-\""; Request *RequestScope "json:\"-\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
 func NewAskForm(message string, schema map[string]string) Ask
 func NewAskOther(message string, mode string) Ask
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type RequestScope struct{RequestId int64 "json:\"requestId\""}
 type SessionScope struct{SessionId string "json:\"sessionId\""; ToolCallId *string "json:\"toolCallId,omitempty\""}
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (Ask).MarshalJSON() ([]byte, error)
 func (*Ask).UnmarshalJSON(b []byte) error
 func (*Ask).Validate() error
@@ -40,6 +48,10 @@ func (*AskForm).Validate() error
 func (AskOther).MarshalJSON() ([]byte, error)
 func (*AskOther).UnmarshalJSON(b []byte) error
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (Mode).MarshalJSON() ([]byte, error)
 func (*Mode).UnmarshalJSON(b []byte) error
 func (*Mode).Validate() error

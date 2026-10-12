@@ -19,22 +19,34 @@ type Agent interface{Cancel(ctx context.Context, params CancelNotification) erro
 type AgentExperimental interface{}
 const AgentMethodSessionCancel untyped string = "session/cancel"
 const AgentMethodSessionPrompt untyped string = "session/prompt"
+type AgentSideConnection struct{conn *Connection; agent Agent; mu sync.Mutex; sessionCancels map[string]context.CancelFunc}
 type CancelNotification struct{SessionId string "json:\"sessionId\""}
 type CancelRequestNotification struct{}
 type Client interface{SessionUpdate(ctx context.Context, params SessionNotification) error}
 type ClientExperimental interface{}
 const ClientMethodSessionUpdate untyped string = "session/update"
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 type PromptRequest struct{SessionId string "json:\"sessionId\""}
 type PromptResponse struct{Stop string "json:\"stop\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type SessionNotification struct{SessionId string "json:\"sessionId\""}
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
 func (*AgentSideConnection).SessionUpdate(ctx context.Context, params SessionNotification) error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelNotification).UnmarshalJSON(b []byte) error
 func (*CancelNotification).Validate() error
 func (*CancelRequestNotification).Validate() error
 func (*ClientSideConnection).Cancel(ctx context.Context, params CancelNotification) error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
 func (*ClientSideConnection).Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (*PromptRequest).UnmarshalJSON(b []byte) error
 func (*PromptRequest).Validate() error
 func (*PromptResponse).UnmarshalJSON(b []byte) error

@@ -18,17 +18,29 @@ type AgentCapabilities struct{LoadSession bool "json:\"loadSession,omitempty\""}
 type AgentExperimental interface{}
 type AgentLoader interface{LoadSession(ctx context.Context, params LoadSessionRequest) (LoadSessionResponse, error)}
 const AgentMethodSessionLoad untyped string = "session/load"
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
 type LoadSessionRequest struct{SessionId string "json:\"sessionId\""}
 type LoadSessionResponse struct{}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 func (AgentCapabilities).MarshalJSON() ([]byte, error)
 func (*AgentCapabilities).UnmarshalJSON(b []byte) error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
 func (*ClientSideConnection).LoadSession(ctx context.Context, params LoadSessionRequest) (LoadSessionResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (*LoadSessionRequest).UnmarshalJSON(b []byte) error
 func (*LoadSessionRequest).Validate() error
 func (*LoadSessionResponse).Validate() error

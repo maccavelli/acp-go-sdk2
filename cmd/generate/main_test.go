@@ -147,13 +147,38 @@ func TestRunRefusesBeforeWriting(t *testing.T) {
 // generated for a schema without methods refer to.
 const handWritten = `package acp
 
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+)
+
 type RequestError struct{}
 
 func NewMethodNotFound(string) *RequestError { return nil }
 
-type AgentSideConnection struct{}
+type Connection struct{}
 
-type ClientSideConnection struct{}
+type ConnectionOption func()
+
+type MethodHandler func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError)
+
+func NewConnection(MethodHandler, io.Writer, io.Reader, ...ConnectionOption) *Connection { return nil }
+
+func (*Connection) DroppedNotifications() uint64 { return 0 }
+
+func (*Connection) Done() <-chan struct{} { return nil }
+
+func (*Connection) SetLogger(*slog.Logger) {}
+
+func (a *AgentSideConnection) handleWithExtensions(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
+	return a.handle(ctx, method, params)
+}
+
+func (c *ClientSideConnection) handleWithExtensions(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
+	return c.handle(ctx, method, params)
+}
 
 type ValidationRule string
 
@@ -229,8 +254,8 @@ func TestRunRefusesOutputThatDoesNotTypeCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := run([]string{"-schema", writeSchema(t, recasedUnion), "-out", out})
-	if err == nil || !strings.Contains(err.Error(), "undefined: AgentSideConnection") {
-		t.Fatalf("run error = %v, want one naming undefined: AgentSideConnection", err)
+	if err == nil || !strings.Contains(err.Error(), "undefined: Connection") {
+		t.Fatalf("run error = %v, want one naming undefined: Connection", err)
 	}
 	entries, err := os.ReadDir(out)
 	if err != nil {

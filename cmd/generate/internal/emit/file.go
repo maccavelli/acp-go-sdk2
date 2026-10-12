@@ -304,6 +304,7 @@ func (l *layout) decl(d ast.Decl) {
 		l.reserve(line, size)
 		l.at(&d.Type.Func, line)
 		l.at(&d.Body.Lbrace, line)
+		l.inline(d, line)
 		l.literals(d.Body, size)
 		l.at(&d.Body.Rbrace, l.next())
 	case *ast.GenDecl:
@@ -343,6 +344,27 @@ func (l *layout) spec(s ast.Spec, line int) {
 			l.members(t.Methods, line)
 		}
 	}
+}
+
+// inline puts on the function's line the positions the printer reads that
+// no other rule places: an empty struct in the signature, which then prints
+// as struct{}, and the ... of a spread call in the body. A ... left at
+// placeholderPos moves the printer back to the first line, and it then
+// writes a blank line before the closing brace.
+func (l *layout) inline(d *ast.FuncDecl, line int) {
+	ast.Inspect(d.Type, func(n ast.Node) bool {
+		if st, ok := n.(*ast.StructType); ok && len(st.Fields.List) == 0 {
+			l.at(&st.Fields.Opening, line)
+			l.at(&st.Fields.Closing, line)
+		}
+		return true
+	})
+	ast.Inspect(d.Body, func(n ast.Node) bool {
+		if c, ok := n.(*ast.CallExpr); ok && c.Ellipsis.IsValid() {
+			l.at(&c.Ellipsis, line)
+		}
+		return true
+	})
 }
 
 // members puts each struct field or interface method on its own line after

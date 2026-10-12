@@ -15,10 +15,14 @@ the runtime needs.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
 type Leaf struct{Name string "json:\"name\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 func NewULeaf(leaf Leaf) U
 func NewUNone() U
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
@@ -27,7 +31,15 @@ type Root struct{Leaves []Leaf "json:\"leaves\""; U U "json:\"u\""}
 type U struct{Leaf *ULeaf "json:\"-\""; None *UNone "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
 type ULeaf struct{Leaf Leaf "json:\"leaf\""; Type string "json:\"type\""}
 type UNone struct{Type string "json:\"type\""}
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (*Leaf).UnmarshalJSON(b []byte) error
 func (*Leaf).Validate() error
 func (Root).MarshalJSON() ([]byte, error)

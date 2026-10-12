@@ -124,6 +124,25 @@ func TestRenderLayout(t *testing.T) {
 			),
 		},
 		{
+			// A spread call left at placeholderPos once added a blank line
+			// before the closing brace, and an empty struct in a signature
+			// printed over two lines (0017-PLAN, step 4 deviation).
+			name: "spread call and empty struct in a signature",
+			build: func(f *goFile) {
+				f.add(function("F", funcType([]*ast.Field{param("xs", &ast.Ellipsis{Elt: id("int")})},
+					param("", &ast.ChanType{Dir: ast.RECV, Value: &ast.StructType{Fields: fields()}})),
+					exprStmt(&ast.CallExpr{Fun: id("g"), Args: exprs(id("xs")), Ellipsis: placeholderPos}),
+					ret(nilExpr())))
+			},
+			want: header + src(
+				"",
+				"func F(xs ...int) <-chan struct{} {",
+				"\tg(xs...)",
+				"\treturn nil",
+				"}",
+			),
+		},
+		{
 			name: "imports are sorted and grouped",
 			build: func(f *goFile) {
 				f.add(function("F", funcType([]*ast.Field{param("ctx", f.qual("context", "Context"))}, param("", id("error"))),

@@ -34,10 +34,14 @@ type Agent interface{Old(ctx context.Context, params OldRequest) (OldResponse, e
 type AgentExperimental interface{UnstableNew(ctx context.Context, params UnstableNewRequest) (UnstableNewResponse, error)}
 const AgentMethodNew untyped string = "x/new"
 const AgentMethodOld untyped string = "x/old"
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{UnstableWatch(ctx context.Context, params UnstableWatchRequest) (UnstableWatchResponse, error)}
 const ClientMethodWatch untyped string = "x/watch"
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 type OldRequest struct{S Shared "json:\"s\""}
 type OldResponse struct{}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
@@ -48,9 +52,17 @@ type UnstableNewRequest struct{Extra UnstableExtra "json:\"extra\""}
 type UnstableNewResponse struct{}
 type UnstableWatchRequest struct{Path string "json:\"path\""}
 type UnstableWatchResponse struct{}
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*AgentSideConnection).UnstableWatch(ctx context.Context, params UnstableWatchRequest) (UnstableWatchResponse, error)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
 func (*ClientSideConnection).Old(ctx context.Context, params OldRequest) (OldResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (*ClientSideConnection).UnstableNew(ctx context.Context, params UnstableNewRequest) (UnstableNewResponse, error)
 func (*OldRequest).UnmarshalJSON(b []byte) error
 func (*OldRequest).Validate() error

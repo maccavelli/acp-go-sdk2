@@ -3,6 +3,7 @@ package emit
 import (
 	"go/ast"
 	"go/token"
+	"slices"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
@@ -62,9 +63,123 @@ func cancelActivePrompt(field string) []ast.Stmt {
 	}
 }
 
+// side is what tells the two side connections apart.
+type side struct {
+	// typeName, ctor and local name the type, its constructor and the
+	// constructor's variable; field and iface the handler it dispatches to.
+	typeName, ctor, local, field, iface string
+	// doc and ctorDoc are the type's and the constructor's doc comments; peer
+	// names the other side in Connection's.
+	doc, ctorDoc []string
+	peer         string
+	// promptTurns is true when the side holds prompt-turn contexts.
+	promptTurns bool
+}
+
+// agentSide and clientSide describe the two side connections of m
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, S1).
+func agentSide(m *model.Model) side {
+	return side{
+		typeName: "AgentSideConnection", ctor: "NewAgentSideConnection", local: "asc", field: "agent",
+		iface: m.InterfaceOf(model.BindAgent).Name,
+		doc:   []string{"AgentSideConnection represents the agent's view of a connection to a client."},
+		ctorDoc: []string{
+			"NewAgentSideConnection creates a new agent-side connection bound to the",
+			"provided Agent implementation. Optional ConnectionOption values configure",
+			"the underlying connection (e.g., WithMaxQueuedNotifications).",
+		},
+		peer: "client",
+		promptTurns: slices.ContainsFunc(m.AgentMethods, func(mi *model.Method) bool {
+			return mi.PromptTurn || mi.CancelsPromptTurn
+		}),
+	}
+}
+
+func clientSide(m *model.Model) side {
+	return side{
+		typeName: "ClientSideConnection", ctor: "NewClientSideConnection", local: "csc", field: "client",
+		iface: m.InterfaceOf(model.BindClient).Name,
+		doc:   []string{"ClientSideConnection provides the client's view of the connection and implements Agent calls."},
+		ctorDoc: []string{
+			"NewClientSideConnection creates a new client-side connection bound to the",
+			"provided Client implementation. Optional ConnectionOption values configure",
+			"the underlying connection (e.g., WithMaxQueuedNotifications).",
+		},
+		peer: "agent",
+	}
+}
+
+// emitSideConnection emits a side connection: its struct, which holds the
+// state its rules need, its constructor, and the methods that forward to its
+// Connection.
+func emitSideConnection(f *goFile, s side) {
+	fs := []*ast.Field{param("conn", star(id("Connection"))), param(s.field, id(s.iface))}
+	if s.promptTurns {
+		fs = append(fs,
+			param("mu", f.qual(pkgSync, "Mutex")),
+			param("sessionCancels", mapOf(id("string"), f.qual(pkgContext, "CancelFunc"))))
+	}
+	f.comment(s.doc...)
+	f.add(typeDecl(s.typeName, &ast.StructType{Fields: fields(fs...)}))
+
+	body := []ast.Stmt{
+		define(exprs(id(s.local)), addr(composite(id(s.typeName)))),
+		assign(exprs(dot(s.local, s.field)), id(s.field)),
+	}
+	if s.promptTurns {
+		body = append(body, assign(exprs(dot(s.local, "sessionCancels")),
+			call(id("make"), mapOf(id("string"), f.qual(pkgContext, "CancelFunc")))))
+	}
+	body = append(body,
+		assign(exprs(dot(s.local, "conn")), &ast.CallExpr{
+			Fun:      id("NewConnection"),
+			Args:     exprs(dot(s.local, "handleWithExtensions"), id("peerInput"), id("peerOutput"), id("opts")),
+			Ellipsis: placeholderPos,
+		}),
+		ret(id(s.local)),
+	)
+	f.line()
+	f.comment(s.ctorDoc...)
+	f.add(function(s.ctor, funcType([]*ast.Field{
+		param(s.field, id(s.iface)),
+		param("peerInput", f.qual(pkgIO, "Writer")),
+		param("peerOutput", f.qual(pkgIO, "Reader")),
+		param("opts", &ast.Ellipsis{Elt: id("ConnectionOption")}),
+	}, param("", star(id(s.typeName)))), body...))
+
+	recv := func() *ast.Field { return param("c", star(id(s.typeName))) }
+	f.line()
+	f.comment("DroppedNotifications reports how many inbound notifications the underlying",
+		"connection has dropped under OverflowDropNewest.")
+	f.add(method(recv(), "DroppedNotifications", funcType(nil, param("", id("uint64"))),
+		ret(call(dot("c", "conn", "DroppedNotifications")))))
+	f.line()
+	f.comment("Done exposes a channel that closes when the peer disconnects.")
+	f.add(method(recv(), "Done", funcType(nil, param("", &ast.ChanType{Dir: ast.RECV, Value: &ast.StructType{Fields: fields()}})),
+		ret(call(dot("c", "conn", "Done")))))
+	f.line()
+	f.comment("SetLogger directs connection diagnostics to the provided logger.")
+	f.add(method(recv(), "SetLogger", funcType([]*ast.Field{param("l", star(f.qual(pkgSlog, "Logger")))}),
+		exprStmt(call(dot("c", "conn", "SetLogger"), id("l")))))
+	f.line()
+	f.comment(
+		"Connection returns the underlying JSON-RPC connection.",
+		"",
+		"It is for requests the typed methods cannot make: a method the "+s.peer,
+		"implements that this SDK's schema does not carry, or one whose response has",
+		"fields the generated type drops. CallExtension covers only \"_\"-prefixed",
+		"methods; for anything else, use SendRequest or SendNotification on the",
+		"returned connection. It is the same connection the typed methods use, not a",
+		"copy.",
+	)
+	f.add(method(recv(), "Connection", funcType(nil, param("", star(id("Connection")))), ret(dot("c", "conn"))))
+	f.line()
+}
+
 // agentFile builds agent_gen.go: the agent's handler and its outbound wrappers.
 func agentFile(m *model.Model) *goFile {
 	f := newFile()
+	emitSideConnection(f, agentSide(m))
 
 	var cases []ast.Stmt
 	for _, mi := range m.AgentMethods {
@@ -104,6 +219,7 @@ func agentFile(m *model.Model) *goFile {
 // clientFile builds client_gen.go: the client's handler and its outbound wrappers.
 func clientFile(m *model.Model) *goFile {
 	f := newFile()
+	emitSideConnection(f, clientSide(m))
 
 	var cases []ast.Stmt
 	for _, mi := range m.ClientMethods {

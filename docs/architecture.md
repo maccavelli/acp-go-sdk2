@@ -10,16 +10,18 @@ and [README.md](README.md) points at the ones people ask for most.
 This repository is the Go module `github.com/maccavelli/acp-go-sdk2`, package
 `acp`, at the repository root.
 
-- Hand-written: `agent.go` and `client.go` (the two connection types),
-  `connection.go` (JSON-RPC over a reader and a writer), `errors.go`,
-  `extensions.go` (`_`-prefixed methods), `helpers.go` (the constructors of
-  the three unions the protocol table names, `Ptr`, and `Roots`), and `doc.go`.
-- Generated from `schema/`: `constants_gen.go`, `types_gen.go`, `agent_gen.go`,
-  `client_gen.go`, and `helpers_gen.go`, which holds a constructor for every
-  variant of every other union the schema documents, and the test file
-  `schema_gen_test.go`,
-  which lists every generated type, union, and method for the conformance
-  test. They are never edited by hand.
+- Hand-written: `connection.go` (JSON-RPC over a reader and a writer),
+  `errors.go`, `extensions.go` (`_`-prefixed methods), `helpers.go` (the
+  constructors of the three unions the protocol table names, `Ptr`, and
+  `Roots`), and `doc.go`. None of them holds protocol state.
+- Generated from `schema/`: `constants_gen.go`, `types_gen.go`, `agent_gen.go`
+  and `client_gen.go` (the two connection types, `AgentSideConnection` and
+  `ClientSideConnection`, with the state the protocol table's rules need,
+  their dispatch and their outbound methods), and `helpers_gen.go`, which
+  holds a constructor for every variant of every other union the schema
+  documents, and the test file `schema_gen_test.go`, which lists every
+  generated type, union, and method for the conformance test. They are never
+  edited by hand.
 
 `cmd/generate` is its own Go module with no requirements. `internal/load` reads
 the schema files, `internal/model` resolves them into types, unions, and

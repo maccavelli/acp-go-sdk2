@@ -15,15 +15,27 @@ the runtime needs.
 type Agent interface{Init(ctx context.Context, params InitRequest) (InitResponse, error)}
 type AgentExperimental interface{}
 const AgentMethodInitialize untyped string = "initialize"
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
 type InitRequest struct{V uint16 "json:\"v\""}
 type InitResponse struct{Ok bool "json:\"ok\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
 func (*ClientSideConnection).Init(ctx context.Context, params InitRequest) (InitResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (*InitRequest).UnmarshalJSON(b []byte) error
 func (*InitRequest).Validate() error
 func (*InitResponse).UnmarshalJSON(b []byte) error

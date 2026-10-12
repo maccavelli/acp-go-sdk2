@@ -18,10 +18,12 @@ import (
 )
 
 // RuntimeFiles are the hand-written files of the SDK that refer to generated
-// code only through Agent, Client, and ProtocolMethodCancelRequest, so the code
-// generated for a synthetic schema compiles with them. helpers.go uses ACP
-// types and is not one of them.
-var RuntimeFiles = []string{"agent.go", "client.go", "connection.go", "doc.go", "errors.go", "extensions.go"}
+// code only through what every schema generates: Agent, Client,
+// ProtocolMethodCancelRequest, AgentSideConnection and ClientSideConnection
+// with their handle methods, so the code generated for a synthetic schema
+// compiles with them. helpers.go uses ACP types and is not one of them
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, S1).
+var RuntimeFiles = []string{"connection.go", "doc.go", "errors.go", "extensions.go"}
 
 // CopyRuntime copies RuntimeFiles from the SDK root into dir.
 func CopyRuntime(root, dir string) error {

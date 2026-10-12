@@ -19666,7 +19666,6 @@ func objectKeys(b []byte, typ string, required ...string) (map[string]json.RawMe
 		}
 	}
 	return m, nil
-
 }
 
 // foldKeys makes m, the keys of the JSON object b, hold for each of names the

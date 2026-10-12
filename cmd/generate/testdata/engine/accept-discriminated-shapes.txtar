@@ -27,15 +27,19 @@ runtime needs.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
 type Event struct{None *EventNone "json:\"-\""; Start *Start "json:\"-\""; Stop *Stop "json:\"-\""; Other *EventOther "json:\"-\""}
 type EventNone map[string]any
 type EventOther struct{Kind string "json:\"kind\""; Extra map[string]json.RawMessage "json:\"-\""}
 type Mark struct{Other *MarkOther "json:\"-\""; A *MarkA "json:\"-\""}
 type MarkA struct{Kind string "json:\"kind\""}
 type MarkOther struct{Kind string "json:\"kind\""; Extra map[string]json.RawMessage "json:\"-\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 func NewEventNone() Event
 func NewEventOther(kind string) Event
 func NewEventStart(at int64) Event
@@ -46,7 +50,15 @@ const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type Start struct{At int64 "json:\"at\""; Kind string "json:\"kind\""}
 type Stop struct{Kind string "json:\"kind\""}
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (Event).MarshalJSON() ([]byte, error)
 func (*Event).UnmarshalJSON(b []byte) error
 func (*Event).Validate() error

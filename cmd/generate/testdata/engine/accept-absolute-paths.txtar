@@ -23,18 +23,30 @@ which the runtime needs.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
 type CreateTerminalRequest struct{Command string "json:\"command\""; Cwd *string "json:\"cwd,omitempty\""}
 type Diff struct{NewText string "json:\"newText\""; Path string "json:\"path\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 type NewSessionRequest struct{AdditionalDirectories []string "json:\"additionalDirectories,omitempty\""; Cwd string "json:\"cwd\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type ToolCallContent struct{Diff *ToolCallContentDiff "json:\"-\""; Terminal *ToolCallContentTerminal "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
 type ToolCallContentDiff struct{NewText string "json:\"newText\""; Path string "json:\"path\""; Type string "json:\"type\""}
 type ToolCallContentTerminal struct{TerminalId string "json:\"terminalId\""; Type string "json:\"type\""}
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (*CreateTerminalRequest).UnmarshalJSON(b []byte) error
 func (*CreateTerminalRequest).Validate() error
 func (*Diff).UnmarshalJSON(b []byte) error

@@ -19,9 +19,13 @@ which the runtime needs.
 -- want.api --
 type Agent interface{}
 type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 func NewUA(rangeValue string, errorValue string, xAPIKey string, urlPath string) U
 func NewUB() U
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
@@ -29,7 +33,15 @@ const ProtocolVersionNumber untyped int = 1
 type U struct{A *UA "json:\"-\""; B *UB "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
 type UA struct{URLPath string "json:\"URL-path\""; Error string "json:\"error\""; Kind string "json:\"kind\""; Range string "json:\"range\""; XAPIKey string "json:\"x-API-key\""}
 type UB struct{Kind string "json:\"kind\""}
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (U).MarshalJSON() ([]byte, error)
 func (*U).UnmarshalJSON(b []byte) error
 func (*U).Validate() error

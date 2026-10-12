@@ -224,11 +224,13 @@ Out of scope:
      do not change.
    * Regenerate; `-update` the engine cases. Asserted:
      * the root API listing is byte-identical to the one before the step;
-     * `agent_gen.go` and `client_gen.go` gain exactly the struct, the constructor and the four methods; no other generated file changes;
+     * `agent_gen.go` and `client_gen.go` gain exactly the struct, the constructor and the four methods; ~~no other generated file
+       changes~~ `types_gen.go` loses only the blank line before `objectKeys`' closing brace (amended in step 4's first deviation);
      * every `want.api` gains exactly `type AgentSideConnection struct{...}`, `type ClientSideConnection struct{...}`, the two
        constructors and the eight forwarding methods, the agent's struct holding `mu` and `sessionCancels` only in the cases whose schema
        has a prompt turn (`accept-prompt-cancellation.txtar` among them), and nothing else.
-   * Tests: every root and generator test passes unchanged; a new emitter test, `TestSideConnectionsFollowTheModel`, requires the
+   * Tests: every root and generator test passes ~~unchanged~~, the stub of `cmd/generate/main_test.go` excepted (amended in step 4's
+     second deviation); a new emitter test, `TestSideConnectionsFollowTheModel`, requires the
      prompt-turn fields with a prompt rule and none without, and the doc comments.
    * Plants: the constructor not making `sessionCancels` (the prompt tests panic on a nil map); the prompt fields emitted only without a
      prompt rule (the emitter test fails, and the generator refuses the root's output, which no longer type-checks).
@@ -566,3 +568,70 @@ Ran on `main` from `6ec3916` (step 2). The agent did not commit.
   check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
 * On the Windows host reached over SSH, with a copy of the working tree's 298 tracked and untracked files and no macOS metadata: `go test
   -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
+
+### Step 4 deviation, 2026-10-12: the layout misplaced a spread call and an empty struct
+
+The first generation of the side connections printed a blank line before each constructor's closing brace, and `Done`'s result as
+`<-chan struct {` with `}` on the next line. The layout (`cmd/generate/internal/emit/file.go`) gives a spread call's `...` the
+placeholder position 1, which moves the printer back to the first line, so it writes a blank line before the closing brace; it places no
+position on an empty struct in a signature, so the printer splits it. The first was already in the tree: `objectKeys` in `types_gen.go`
+ends with the same blank line.
+
+Asked, the owner chose to fix the layout: `layout.inline` puts a signature's empty struct and a body's `...` on the function's line.
+`types_gen.go` loses the blank line in `objectKeys`, and nothing else in it changes. Not chosen: leaving the artifact and recording it.
+Files added to step 4: `cmd/generate/internal/emit/file.go` and `file_test.go`, and the one line of `types_gen.go`. The MADR is
+unchanged.
+
+### Step 4 deviation, 2026-10-12: the generator's stub of the hand-written package declared the side types
+
+`TestRunGeneratesRecasedUnion` and `TestRunRefusesOutputThatDoesNotTypeCheck` (`cmd/generate/main_test.go`) failed: the first writes a
+stub of the hand-written package that declared `AgentSideConnection` and `ClientSideConnection`, now generated (`AgentSideConnection
+redeclared in this block`), and the second required the error `undefined: AgentSideConnection`, which can no longer occur. The plan said
+every generator test passes unchanged; the facts did not list the stub.
+
+Asked, the owner chose to update the stub: it no longer declares the side types, and declares what the generated side connections need
+from the runtime, `Connection`, `ConnectionOption`, `MethodHandler`, `NewConnection`, `Connection`'s `DroppedNotifications`, `Done` and
+`SetLogger`, and `handleWithExtensions` on each side; the second test requires `undefined: Connection`. Not chosen: copying the real
+runtime files, which needs a meta declaring `$/cancel_request`. File added to step 4: `cmd/generate/main_test.go`. The MADR is unchanged.
+
+### Step 4, generated side connections, 2026-10-12
+
+Ran on `main` from `80195ad` (step 3). The agent did not commit. The two deviations above, decided by the owner, ran within this step.
+
+* `cmd/generate/internal/emit/dispatch.go`: `side`, `agentSide` and `clientSide` describe each side connection; `emitSideConnection`
+  emits its struct (`conn`, and `agent Agent` or `client Client`; for the agent, `mu sync.Mutex` and `sessionCancels
+  map[string]context.CancelFunc` when a `PromptTurn` or `CancelsPromptTurn` rule applies), its constructor, and `DroppedNotifications`,
+  `Done`, `SetLogger` and `Connection`, with the doc comments of `agent.go` and `client.go`. `agentFile` and `clientFile` call it first.
+  `constants.go` gains `pkgIO`, `pkgSlog` and `pkgSync`.
+* `agent.go` and `client.go` are removed. `enginetest.RuntimeFiles` is `connection.go`, `doc.go`, `errors.go`, `extensions.go`, and its
+  comment names what the runtime refers to.
+* `docs/architecture.md`, "What it is": the hand-written files hold no protocol state; `agent_gen.go` and `client_gen.go` hold the two
+  connection types with the state the protocol table's rules need.
+* Regenerated. Asserted:
+  * a script comparing the generated declarations with `git show HEAD:agent.go` and `client.go`, whitespace collapsed and a one-line
+    body read as three lines: `AgentSideConnection: identical (41 lines)`, `ClientSideConnection: identical (38 lines)`;
+  * `agent_gen.go` gains 50 lines and `client_gen.go` 46, the side connection and its imports; `types_gen.go` loses one line, the
+    first deviation's;
+  * the root API listing of `git archive HEAD` and of the tree are byte-identical (2403 lines);
+  * `go test -run TestEngineCases -update` rewrote 55 `want.api` sections, 660 lines added and none removed; a script requires each to
+    gain exactly the two side types, the two constructors and the eight forwarding methods, and the agent's struct to hold `mu` and
+    `sessionCancels` only in `accept-prompt-cancellation`: `cases with want.api: 55; ... not as expected: 0`.
+* Tests: `TestSideConnectionsFollowTheModel` (new, `internal/emit`) renders `renamedProtocol` and a protocol with no rule, and requires
+  each side's declarations and doc comments, and the prompt-turn state in the first only; `TestRenderLayout` gains `spread call and
+  empty struct in a signature`; the stub of `main_test.go` as the second deviation says. Every other test passes unchanged, among them
+  `TestAgentDispatch_AllowsPartialUnstableMethodImplementation`, whose literal keeps its field names.
+* Plants, each in its own scratch copy, all `exit=1`:
+  * the emitter's constructor not making `sessionCancels`: `TestEngineBehaviour`, `accept-prompt-cancellation`, `panic: assignment to
+    entry in nil map`;
+  * the generated `agent_gen.go` not making it: `TestPromptCancellationSendsCancelAndAllowsNewSession`, the same panic;
+  * the prompt fields emitted only without a prompt rule: `TestSideConnectionsFollowTheModel`, `with prompt turns: agent_gen.go holds
+    "\tmu             sync.Mutex\n": false, want true` and three more, and `TestCheckAcceptsRepository` failed;
+  * `layout.inline` not called: `TestRenderLayout/spread_call_and_empty_struct_in_a_signature` failed;
+  * the stub without `NewConnection`: `TestRunGeneratesRecasedUnion`, `undefined: NewConnection` in both side files.
+* `make pre-add-check`: `go-precheck: 105 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` It also printed `lstat
+  agent.go: no such file or directory` and the same for `client.go`: its list comes from `git ls-files`, which still names the deleted,
+  unstaged files; it exits 0. `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the root; `GOOS=windows go vet ./...` passes in
+  both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
+* On the Windows host reached over SSH, with a copy of the working tree's 296 files that exist and no macOS metadata (`agent.go` and
+  `client.go` absent): `go test -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was
+  removed afterwards.
