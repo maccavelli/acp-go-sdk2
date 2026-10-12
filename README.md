@@ -126,15 +126,103 @@ follow the schema:
   ACP's Rust implementation does.
 - `Validate` checks what the schema states, at every depth: a union has exactly
   one variant, or `Unknown`, set; a string meets its `minLength`; every nested
-  value, slice element, and map value validates. A present empty string passes.
+  value, slice element, and map value validates. It also checks that each path
+  the protocol requires to be absolute is, with the host's `filepath.IsAbs`
+  (see Paths, below). Elsewhere a present empty string passes. Every failure
+  is a `*acp.ValidationError` naming the type, the property and the rule.
 - A decode error names the union and, for a variant, the discriminator value or
   the variant, then the cause, such as `ContentBlock: type "text": ...`.
+
+#### Paths
+
+ACP requires every file path in the protocol to be absolute. The SDK checks the
+17 properties that carry one: `cwd` and `additionalDirectories` of
+`session/new`, `session/load`, `session/resume` and the unstable
+`session/fork`; the `cwd` filter of `session/list` and the `cwd` and
+`additionalDirectories` of each session it lists; the `command` of a stdio MCP
+server; the `path` of `fs/read_text_file` and `fs/write_text_file`; the `cwd`
+of `terminal/create`; and the `path` of a tool-call location and of a diff.
+A failure is a `*acp.ValidationError` with `Rule` `acp.RuleAbsolutePath`, such
+as `NewSessionRequest: cwd: "" is not an absolute path`.
+
+What the SDK sends is checked with no way to turn it off. The typed methods,
+`SendRequest`, `SendRequestNoResult` and `SendNotification` return the error
+and write nothing; a handler's result that fails is not sent, and the peer gets
+`-32603`. The sender cannot know the receiver's operating system, so a path
+absolute in POSIX or Windows form passes (`/home/u/p`, `C:\p`, `C:/p`,
+`\\server\share`), and one absolute in neither fails (`""`, `src`, `./src`,
+`\src`, `C:src`). Extension methods with raw JSON params are not checked. A
+client that forwards an MCP server configured by name resolves it first, for
+example with `exec.LookPath`.
+
+What the SDK receives, every request, notification and response, is checked
+with the receiving host's `filepath.IsAbs`, so on Linux and macOS `C:\p` is
+refused. In order:
+
+1. the message is decoded; a request that does not decode is answered
+   `-32602`, and nothing that fails to decode reaches a hook;
+2. `acp.WithInboundRewrite` gets a pointer to the decoded value and may change
+   it;
+3. the SDK validates what the rewrite left;
+4. `acp.WithInboundValidation` gets the SDK's error, nil when the message is
+   valid, and returns the error to act on, or nil to accept;
+5. with an error, a request is answered with it (a `*acp.RequestError` as it
+   is, any other error as `-32602`), a notification is dropped and logged, and
+   a response's error is returned to the caller, wrapping the
+   `*acp.ValidationError` when the error is the SDK's.
+
+A rewrite hook can resolve what a peer sends as a bare name, or translate a
+path from another host, such as a Windows client's path for an agent in WSL:
+
+```go
+asc := acp.NewAgentSideConnection(agent, os.Stdout, os.Stdin,
+    acp.WithInboundRewrite(func(ctx context.Context, method string, params any) error {
+        req, ok := params.(*acp.NewSessionRequest)
+        if !ok {
+            return nil
+        }
+        for i := range req.McpServers {
+            if s := req.McpServers[i].Stdio; s != nil && !filepath.IsAbs(s.Command) {
+                path, err := exec.LookPath(s.Command)
+                if err != nil {
+                    return err
+                }
+                s.Command = path
+            }
+        }
+        return nil
+    }))
+```
+
+A validation hook can accept a violation the application chooses to handle, or
+add a rule of its own. Accepting one accepts a message the standard forbids,
+which the application then answers for; `Validate` stops at the first failure,
+so the rest of that message is not checked:
+
+```go
+acp.WithInboundValidation(func(ctx context.Context, method string, params any, err error) error {
+    var ve *acp.ValidationError
+    if errors.As(err, &ve) && ve.Type == "McpServerStdio" && ve.Field == "command" {
+        return nil // this agent resolves a bare command itself
+    }
+    return err
+})
+```
+
+A handler sees what the rewrite hook left, not what the peer sent. Absolute is
+not confined: `/a/../../etc` is absolute. `Roots()` on `NewSessionRequest`,
+`LoadSessionRequest`, `ResumeSessionRequest`, `UnstableForkSessionRequest` and
+`SessionInfo` returns the session's root set, `cwd` and then
+`additionalDirectories`; an agent that confines file access opens each root with
+`os.OpenRoot` and works through the `*os.Root`, which refuses a path that leaves
+it, symbolic links included.
 
 The decisions behind these rules are
 [0009-MADR-fix-generated-output-on-json-v1.md](docs/decisions/0009-MADR-fix-generated-output-on-json-v1.md),
 [0011-MADR-harden-code-generator-engine.md](docs/decisions/0011-MADR-harden-code-generator-engine.md),
+[0012-MADR-schema-fidelity-framework.md](docs/decisions/0012-MADR-schema-fidelity-framework.md),
 and
-[0012-MADR-schema-fidelity-framework.md](docs/decisions/0012-MADR-schema-fidelity-framework.md).
+[0015-MADR-validate-absolute-protocol-paths.md](docs/decisions/0015-MADR-validate-absolute-protocol-paths.md).
 
 ### Extension methods
 

@@ -46,7 +46,11 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
 - the name `SessionUpdate` for the client's `session/update` handler;
 - the unions whose constructors `helpers.go` writes;
 - the capability that gates each method, recorded and checked against the
-  schema, not emitted.
+  schema, not emitted;
+- `AbsolutePaths`, the 17 properties the protocol requires to be absolute
+  paths, each with the specification sentence it follows. A rule reaches every
+  type that holds its definition's property, an inline variant built through
+  `allOf` included, and `Validate` checks it.
 
 The model applies a rule only where the schema carries its subject, and refuses
 a subject whose shape the rule cannot use with an error that starts
@@ -97,9 +101,22 @@ requires the required keys through `objectKeys`, decodes each
 an optional raw value that is `null` through `absentIfNull`, so it is not
 sent on; `types_gen.go` emits each helper once. A null raw value is an absent
 one, as ACP v1 defines it for `rawInput` and `rawOutput`; a required one, such
-as `result`, keeps `null`. `Validate` checks only what the schema states: a
+as `result`, keeps `null`. `Validate` checks what the schema states: a
 union has exactly one variant set, a string meets its `minLength`, a number
-meets a bound its Go type does not enforce, and every nested value validates.
+meets a bound its Go type does not enforce, and every nested value validates;
+and it checks the table's absolute paths. Each exported `Validate` calls an
+unexported `validate(abs func(string) bool)` with the host's `filepath.IsAbs`,
+and passes `abs` to the nested values; every check returns a
+`*ValidationError` naming the type, the property and the rule.
+
+`connection.go` applies that check in both directions. Before sending, the
+params of a generated type, and a handler's result, are validated with
+`isPortableAbs`, which accepts a path absolute in POSIX or Windows form;
+nothing is written on failure, and a failing result is answered `-32603`.
+On receipt, `checkInbound` runs on every decoded request, notification and
+response: the `WithInboundRewrite` hook, then `validate(filepath.IsAbs)`,
+then the `WithInboundValidation` hook with that result. The generated
+dispatch calls it after decoding, and `SendRequest` on a decoded result.
 
 Checks that guard this:
 
@@ -115,6 +132,9 @@ Checks that guard this:
   `fidelity_test.go` covers the types, decoding, and validation it describes.
 - `raw_value_test.go` guards raw values: an absent or `null` optional one
   decodes to empty and is not sent, under both builds of `encoding/json`.
+- `paths_test.go` covers the absolute-path rule: sending, receiving, a
+  handler's result, the two hooks and their order, and `Roots`; the engine
+  case `accept-absolute-paths` covers the generated checks.
 - `TestEngineCases` in `cmd/generate` runs the generator on each synthetic case
   in `testdata/engine/`: a case with `want.err` must be refused with those
   lines, one with `want.api` must give that exported API. `TestEngineBehaviour`

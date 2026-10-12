@@ -19,6 +19,9 @@ import (
 
 type agentSession struct {
 	cancel context.CancelFunc
+	// roots is the session's root set, cwd first; a real agent confines file
+	// access to it, for example with os.OpenRoot for each root.
+	roots []string
 }
 
 type exampleAgent struct {
@@ -162,7 +165,7 @@ func (a *exampleAgent) Initialize(ctx context.Context, params acp.InitializeRequ
 func (a *exampleAgent) NewSession(ctx context.Context, params acp.NewSessionRequest) (acp.NewSessionResponse, error) {
 	sid := randomID()
 	a.mu.Lock()
-	a.sessions[sid] = &agentSession{}
+	a.sessions[sid] = &agentSession{roots: params.Roots()}
 	a.mu.Unlock()
 	return acp.NewSessionResponse{SessionId: acp.SessionId(sid)}, nil
 }

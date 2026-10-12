@@ -86,9 +86,7 @@ func displayUpdateKind(u acp.SessionUpdate) string {
 }
 
 func (e *exampleClient) WriteTextFile(ctx context.Context, params acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
-	if !filepath.IsAbs(params.Path) {
-		return acp.WriteTextFileResponse{}, fmt.Errorf("path must be absolute: %s", params.Path)
-	}
+	// The SDK has refused a path that is not absolute before this runs.
 	dir := filepath.Dir(params.Path)
 	if dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -103,9 +101,7 @@ func (e *exampleClient) WriteTextFile(ctx context.Context, params acp.WriteTextF
 }
 
 func (e *exampleClient) ReadTextFile(ctx context.Context, params acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
-	if !filepath.IsAbs(params.Path) {
-		return acp.ReadTextFileResponse{}, fmt.Errorf("path must be absolute: %s", params.Path)
-	}
+	// The SDK has refused a path that is not absolute before this runs.
 	b, err := os.ReadFile(params.Path)
 	if err != nil {
 		return acp.ReadTextFileResponse{}, fmt.Errorf("read %s: %w", params.Path, err)

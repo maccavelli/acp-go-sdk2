@@ -554,3 +554,39 @@ Ran on `main` from `fe6b1cb`. The agent did not commit. CI run 38292700075 on `f
     absolute-path error`.
 * `make pre-add-check`: `go-precheck: 105 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No untracked Go file.
   `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.
+
+### Step 7, root set, examples, documentation, 2026-10-12
+
+Ran on `main` from `398b21f`, the commit of the 0017 records; the agent did not commit.
+
+* `helpers.go`: `Roots() []string` on `*NewSessionRequest`, `*LoadSessionRequest`, `*ResumeSessionRequest`,
+  `*UnstableForkSessionRequest` and `*SessionInfo`, each `roots(r.Cwd, r.AdditionalDirectories)`, which returns `append([]string{cwd},
+  more...)`, a new slice; the documentation says `Roots` checks nothing and points to `os.OpenRoot`.
+* Examples: `example/client`, `example/claude-code`, `example/gemini` and `example_client_test.go` drop the `filepath.IsAbs` check in
+  `ReadTextFile` and `WriteTextFile`, each replaced by a comment that the SDK has refused a path that is not absolute; `filepath.Dir` keeps
+  the import in each. `example/agent` keeps each session's `Roots()` in `agentSession.roots`, with a comment on confining access.
+* `README.md`, "Wire encoding": the `Validate` bullet names the path rule and `*acp.ValidationError`; a new "Paths" part lists the 17
+  properties, the sending rule (no opt-out, the portable reading, `-32603` for a handler's result, extension methods unchecked,
+  `exec.LookPath` for a bare MCP command), the receiving order of the five steps, a rewrite hook that resolves a bare MCP command, a
+  validation hook that accepts that one violation, translating paths between hosts, `Roots`, and confining access with `os.OpenRoot`;
+  the list of decisions gains this record. Both snippets compile: a program outside the repository holding them, with a `replace` of the
+  module to the working tree, passes `go vet`. The snippets are indented with four spaces, as the README's other Go blocks; the first
+  run of `make markdownlint` failed on their tabs (`MD010/no-hard-tabs`), fixed before the run recorded below.
+* `docs/architecture.md`: the protocol table's `AbsolutePaths`; `Validate` calling `validate(abs func(string) bool)` and returning
+  `*ValidationError`; the sending check with `isPortableAbs` and the receiving order in `checkInbound`; `paths_test.go` and the engine case
+  `accept-absolute-paths` under the checks.
+* Regenerated: no generated file changed (`git status` lists none). The API listing against `git archive HEAD` gains exactly the five
+  `Roots` methods: `method (*LoadSessionRequest) Roots () []string` and the same for `NewSessionRequest`, `ResumeSessionRequest`,
+  `SessionInfo` and `UnstableForkSessionRequest`.
+* Test, in `paths_test.go`: `TestRoots`, for each of the five types: no additional directories gives `[cwd]`; two give `[cwd, a, b]`;
+  with the request's slice given room past its length, changing the result leaves the request's array as it was.
+* Plants, each in its own scratch copy, both `exit=1`:
+  * `roots` returning the additional directories first: `NewSessionRequest: Roots() = [".../a" ".../b" ".../cwd"], want ...`;
+  * `roots` appending into the request's own array (`append(more[:0], ...)`): `NewSessionRequest: Roots() shares or changed the
+    request's slice: [".../cwd" "changed" "changed" ""]`, and the same for the other four types.
+* `make pre-add-check`: `go-precheck: 105 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No untracked Go file.
+  `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the root; `GOOS=windows go vet ./...` passes in both modules; `make
+  check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
+* On the Windows host reached over SSH (`go1.27.2 windows/amd64`), with a copy of the working tree's 297 tracked and untracked files and
+  no macOS metadata: `go test -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was
+  removed afterwards.

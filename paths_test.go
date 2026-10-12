@@ -442,3 +442,52 @@ func TestInboundHooks(t *testing.T) {
 		}
 	})
 }
+
+// TestRoots requires each Roots method to return cwd, then each additional
+// directory in order, in a slice that does not share the request's
+// (0015-PLAN-validate-absolute-protocol-paths.md, step 7).
+func TestRoots(t *testing.T) {
+	t.Parallel()
+	cwd, a, b := testAbsPath("cwd"), testAbsPath("a"), testAbsPath("b")
+	// extra leaves room past its length, so a Roots that appended to it would
+	// write into the request's own array.
+	extra := func() []string {
+		s := make([]string, 2, 4)
+		s[0], s[1] = a, b
+		return s
+	}
+	for _, tc := range []struct {
+		name  string
+		roots func(dirs []string) []string
+	}{
+		{"NewSessionRequest", func(d []string) []string {
+			return (&NewSessionRequest{Cwd: cwd, AdditionalDirectories: d}).Roots()
+		}},
+		{"LoadSessionRequest", func(d []string) []string {
+			return (&LoadSessionRequest{Cwd: cwd, AdditionalDirectories: d}).Roots()
+		}},
+		{"ResumeSessionRequest", func(d []string) []string {
+			return (&ResumeSessionRequest{Cwd: cwd, AdditionalDirectories: d}).Roots()
+		}},
+		{"UnstableForkSessionRequest", func(d []string) []string {
+			return (&UnstableForkSessionRequest{Cwd: cwd, AdditionalDirectories: d}).Roots()
+		}},
+		{"SessionInfo", func(d []string) []string {
+			return (&SessionInfo{Cwd: cwd, AdditionalDirectories: d}).Roots()
+		}},
+	} {
+		if got := tc.roots(nil); !slices.Equal(got, []string{cwd}) {
+			t.Errorf("%s with no additional directories: Roots() = %q, want %q", tc.name, got, []string{cwd})
+		}
+		dirs := extra()
+		got := tc.roots(dirs)
+		if want := []string{cwd, a, b}; !slices.Equal(got, want) {
+			t.Errorf("%s: Roots() = %q, want %q", tc.name, got, want)
+			continue
+		}
+		got[1], got[2] = "changed", "changed"
+		if full := dirs[:cap(dirs)]; full[0] != a || full[1] != b || full[2] != "" {
+			t.Errorf("%s: Roots() shares or changed the request's slice: %q", tc.name, full)
+		}
+	}
+}

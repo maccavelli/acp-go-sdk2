@@ -89,6 +89,30 @@ func ToolTerminalRef(terminalID string) ToolCallContent {
 	}}
 }
 
+// roots returns cwd followed by more, in a new slice.
+func roots(cwd string, more []string) []string {
+	return append([]string{cwd}, more...)
+}
+
+// Roots returns the session's root set: cwd, then each of
+// additionalDirectories, in order, in a new slice. It checks nothing;
+// confining file access to the roots is the agent's, for example with
+// os.OpenRoot for each one (0015-MADR-validate-absolute-protocol-paths.md, X1).
+func (r *NewSessionRequest) Roots() []string { return roots(r.Cwd, r.AdditionalDirectories) }
+
+// Roots returns the session's root set, as NewSessionRequest.Roots does.
+func (r *LoadSessionRequest) Roots() []string { return roots(r.Cwd, r.AdditionalDirectories) }
+
+// Roots returns the session's root set, as NewSessionRequest.Roots does.
+func (r *ResumeSessionRequest) Roots() []string { return roots(r.Cwd, r.AdditionalDirectories) }
+
+// Roots returns the session's root set, as NewSessionRequest.Roots does.
+func (r *UnstableForkSessionRequest) Roots() []string { return roots(r.Cwd, r.AdditionalDirectories) }
+
+// Roots returns the listed session's root set, as NewSessionRequest.Roots
+// does.
+func (r *SessionInfo) Roots() []string { return roots(r.Cwd, r.AdditionalDirectories) }
+
 // Ptr returns a pointer to v.
 //
 //go:fix inline

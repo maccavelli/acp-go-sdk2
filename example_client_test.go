@@ -49,9 +49,7 @@ func (clientExample) SessionUpdate(ctx context.Context, n SessionNotification) e
 }
 
 func (clientExample) WriteTextFile(ctx context.Context, p WriteTextFileRequest) (WriteTextFileResponse, error) {
-	if !filepath.IsAbs(p.Path) {
-		return WriteTextFileResponse{}, fmt.Errorf("path must be absolute: %s", p.Path)
-	}
+	// The SDK has refused a path that is not absolute before this runs.
 	if dir := filepath.Dir(p.Path); dir != "" {
 		_ = os.MkdirAll(dir, 0o755)
 	}
@@ -59,9 +57,7 @@ func (clientExample) WriteTextFile(ctx context.Context, p WriteTextFileRequest) 
 }
 
 func (clientExample) ReadTextFile(ctx context.Context, p ReadTextFileRequest) (ReadTextFileResponse, error) {
-	if !filepath.IsAbs(p.Path) {
-		return ReadTextFileResponse{}, fmt.Errorf("path must be absolute: %s", p.Path)
-	}
+	// The SDK has refused a path that is not absolute before this runs.
 	b, err := os.ReadFile(p.Path)
 	if err != nil {
 		return ReadTextFileResponse{}, err
