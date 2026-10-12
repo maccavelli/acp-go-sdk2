@@ -482,3 +482,17 @@ Ran on `main` from `1941631` (step 7). The agent did not commit. Each item of "V
 
 Not done by this plan: tagging `v0.16.0`, publishing its release from the report's "Release text", appending the 0013 report's erratum to
 the `v0.15.0` release, publishing the `v0.15.0` advisory from the report's draft, and closing issue #2. Each is the owner's.
+
+### Release, 2026-10-12
+
+Done after the plan closed, at the owner's request, once CI on the tag (run 38305116539) passed on all three hosts:
+
+* the owner tagged `v0.16.0` on `6034536` and pushed it;
+* the GitHub release `v0.16.0` was created from the report's "Release text", in the form of the published `v0.15.0` release: no
+  version heading, `###` sections, unwrapped lines, and links made absolute to the tag;
+* the `v0.15.0` release gained the 0013 report's erratum, after a rule, its last sentence brought up to date ("See issue #2; fixed in
+  `v0.16.0`");
+* the security advisory for `v0.15.0`, GHSA-579q-9j9v-7w8w, was created from the report's draft and published: Go,
+  `github.com/maccavelli/acp-go-sdk2`, vulnerable `= 0.15.0`, patched `0.16.0`, CWE-20, severity moderate, chosen by the owner;
+* issue #2 was closed as completed, with a comment linking the release and the advisory.
+
