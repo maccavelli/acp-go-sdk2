@@ -40,7 +40,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0013 | PLAN | [Implement the phase 6 follow-ups](decisions/0013-PLAN-close-phase-6-follow-ups.md) | complete |
 | 0013 | REPORT | [Release notes for v0.15.0, against v0.14.0](reports/0013-REPORT-release-notes-v0-15-0.md) | observed |
 | 0014 | MADR | [Union constructors take every required key, cover the catch-all and every union](decisions/0014-MADR-union-constructors-take-every-required-key.md) | accepted |
-| 0014 | PLAN | [Implement the union constructor decisions](decisions/0014-PLAN-union-constructors-take-every-required-key.md) | proposed |
+| 0014 | PLAN | [Implement the union constructor decisions](decisions/0014-PLAN-union-constructors-take-every-required-key.md) | in-progress |
 
 ## I want to…
 

@@ -329,6 +329,21 @@ Decision: asked, the owner kept the behaviour and the README is clarified. A pay
 is refused naming the key, as a struct is; `Unknown` is for a payload a later schema could define, which would carry those keys. Not chosen:
 counting the union's required keys in the fit, which would keep such payloads in `Unknown`.
 
+## Amendment 2026-10-12, from 0014
+
+Decided by the owner in [0014-MADR-union-constructors-take-every-required-key.md](0014-MADR-union-constructors-take-every-required-key.md),
+and carried out by [0014-PLAN-union-constructors-take-every-required-key.md](0014-PLAN-union-constructors-take-every-required-key.md). Two
+of its decisions change what this record asserts.
+
+* **Outcome 7 gains one check.** A union's `Validate` refuses a catch-all whose discriminator is a value the catch-all's `not` excludes,
+  naming the union, the key and the value (0014-MADR, C1). The schema states the exclusion, so the check follows outcome 7's rule of
+  checking what the schema states and nothing else. A probe on `bc0cb78` found that `ElicitationPropertySchema{Other: {Type: "string"}}`
+  passed `Validate`, was sent, and was decoded by the peer as the `String` variant. The decoder never builds such a value, since it routes
+  each listed value to its own variant; the check fires only on a value built in Go.
+* **A nil array variant is sent as `[]`.** A union's `MarshalJSON` writes `[]` for a set array variant holding `nil`, as required array
+  fields already are (0014-MADR, item 7). A probe on `bc0cb78` found such a variant sent as `null`, which the schema does not allow, and
+  decoded back with no variant set and no error.
+
 ## More Information
 
 Sources:

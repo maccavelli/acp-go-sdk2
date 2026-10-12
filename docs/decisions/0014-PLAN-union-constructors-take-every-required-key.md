@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-12
 associated-madr: "0014-MADR-union-constructors-take-every-required-key.md"
 ---
@@ -225,4 +225,12 @@ step 5 depends on step 4's `Param.Name`, and step 4 on step 3's `paramKeys`.
 
 ## Execution record
 
-Not started.
+### Step 2, records, 2026-10-12
+
+Ran on `main` from `1067d4a`, after the owner committed the pair and said "proceed". The agent did not commit.
+
+* [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md) gains "Amendment 2026-10-12, from 0014", placed before
+  its "More Information", which is unchanged: outcome 7's list gains the catch-all check, and a nil array variant is sent as `[]`, each
+  with the probe that found it.
+* This plan's status is `in-progress`, and its row in `docs/README.md` says so.
+* No source changes, so no test and no plant.
