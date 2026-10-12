@@ -1263,7 +1263,10 @@ func TestConformanceMethods(t *testing.T) {
 			err := <-done
 			// The recording peer returns the zero result. When that value does
 			// not encode by itself, such as a union with no variant set, the
-			// request must fail with that error and no other.
+			// request must fail with that error and no other: since
+			// 0015-PLAN-validate-absolute-protocol-paths.md, step 5, the result
+			// is validated before it is sent, so the error reads "must have
+			// exactly one variant set" rather than the encoder's "no variant set".
 			var zeroErr error
 			if m.Result != nil {
 				_, zeroErr = json.Marshal(m.Result())
@@ -1271,7 +1274,7 @@ func TestConformanceMethods(t *testing.T) {
 			switch {
 			case zeroErr == nil && err != nil:
 				t.Errorf("%s: %v", m.Wire, err)
-			case zeroErr != nil && (err == nil || !strings.Contains(err.Error(), "no variant set")):
+			case zeroErr != nil && (err == nil || !strings.Contains(err.Error(), "variant set")):
 				t.Errorf("%s: the zero result does not encode (%v), but the request returned %v", m.Wire, zeroErr, err)
 			}
 		})

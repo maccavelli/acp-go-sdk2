@@ -67,6 +67,7 @@ func ToolContent(block ContentBlock) ToolCallContent {
 }
 
 // ToolDiffContent constructs a diff tool-call content. If oldText is omitted, the field is left empty.
+// The path must be absolute: sending fails otherwise (0015-MADR-validate-absolute-protocol-paths.md).
 func ToolDiffContent(path string, newText string, oldText ...string) ToolCallContent {
 	var o *string
 	if len(oldText) > 0 {
@@ -167,6 +168,7 @@ func WithStartContent(c []ToolCallContent) ToolCallStartOpt {
 }
 
 // WithStartLocations sets file locations and, if a single path is provided and rawInput is empty, mirrors it as rawInput.path.
+// Each path must be absolute: sending fails otherwise (0015-MADR-validate-absolute-protocol-paths.md).
 func WithStartLocations(l []ToolCallLocation) ToolCallStartOpt {
 	return func(tc *SessionUpdateToolCall) {
 		tc.Locations = l
@@ -270,6 +272,7 @@ func WithUpdateContent(c []ToolCallContent) ToolCallUpdateOpt {
 }
 
 // WithUpdateLocations replaces the locations collection for a tool_call_update.
+// Each path must be absolute: sending fails otherwise (0015-MADR-validate-absolute-protocol-paths.md).
 func WithUpdateLocations(l []ToolCallLocation) ToolCallUpdateOpt {
 	return func(tu *SessionToolCallUpdate) {
 		tu.Locations = l
@@ -291,6 +294,7 @@ func WithUpdateRawOutput(v json.RawMessage) ToolCallUpdateOpt {
 }
 
 // StartReadToolCall constructs a 'tool_call' update for reading a file: kind=read, status=pending, locations=[{path}], rawInput={path}.
+// The path must be absolute: sending fails otherwise (0015-MADR-validate-absolute-protocol-paths.md).
 func StartReadToolCall(id ToolCallId, title string, path string, opts ...ToolCallStartOpt) SessionUpdate {
 	base := []ToolCallStartOpt{WithStartKind(ToolKindRead), WithStartStatus(ToolCallStatusPending), WithStartLocations([]ToolCallLocation{{Path: path}}), WithStartRawInput(withRawPath(nil, path))}
 	base = append(base, opts...)
@@ -299,6 +303,7 @@ func StartReadToolCall(id ToolCallId, title string, path string, opts ...ToolCal
 
 // StartEditToolCall constructs a 'tool_call' update for editing content: kind=edit, status=pending, locations=[{path}], rawInput={path, content}.
 // content is the JSON of the new content, such as a quoted string; nil sends null.
+// The path must be absolute: sending fails otherwise (0015-MADR-validate-absolute-protocol-paths.md).
 func StartEditToolCall(id ToolCallId, title string, path string, content json.RawMessage, opts ...ToolCallStartOpt) SessionUpdate {
 	base := []ToolCallStartOpt{WithStartKind(ToolKindEdit), WithStartStatus(ToolCallStatusPending), WithStartLocations([]ToolCallLocation{{Path: path}}), WithStartRawInput(editRawInput(path, content))}
 	base = append(base, opts...)

@@ -433,3 +433,46 @@ Ran on `main` from `967dd26`. The agent did not commit. Both deviations above, d
   for the key constants; the untracked `paths_test.go` and `cmd/generate/internal/model/paths_test.go`: `go-precheck: 2 file(s) clean`,
   with `govulncheck` skipped. `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found
   nothing.
+
+### Step 5, sending, 2026-10-12
+
+Ran on `main` from `992cf48`. The agent did not commit. Steps 2 to 4 were committed and not yet pushed, so CI had not run them.
+
+* `connection.go`: the `validator` interface; `validateOutbound`, which validates params of a generated type with `isPortableAbs`, a
+  pointer directly (a nil one passes) and a value through an addressable copy, and lets any other params through; `prepareRequest`
+  (`SendRequest`, `SendRequestNoResult`) and `prepareNotification` (`SendNotification`) call it before marshalling and return its error
+  without writing; `Connection.checkResult` validates a handler's result the same way and, on failure, logs `handler result fails
+  validation; not sent` and returns `NewInternalError(map[string]any{"error": err.Error()})`. It sits after the `Connection` type, where
+  `gocritic`'s `typeDefFirst` wants it.
+* `internal/emit`: `callWithResult` takes the connection and ends with `checkedResult`, `return conn.checkResult(method, resp)`, as
+  `promptCase` does. `helpers.go`: `ToolDiffContent`, `StartReadToolCall`, `StartEditToolCall`, `WithStartLocations` and
+  `WithUpdateLocations` say the path must be absolute.
+* Regenerated. Asserted: `agent_gen.go: removed 19, added 19, other 0` and `client_gen.go: removed 10, added 10, other 0`, every removed
+  line `return resp, nil` and every added one `return a.conn.checkResult(method, resp)` or `c.conn`; none of the 29 plain returns is left;
+  no other generated file changed. The API listing against `git archive HEAD` does not change.
+* Tests, in `paths_test.go`:
+  * `TestSendRefusesRelativePaths`: `pathCases()`, the 17 properties each in a message that carries it (`McpServerStdio` through
+    `NewSessionRequest`, `SessionInfo` through `ListSessionsResponse`, the location and the diff through `SessionNotification`, built with
+    `StartToolCall`, `WithStartLocations`, `WithStartContent` and `ToolDiffContent`); for each, `""` and `relative/dir` return a
+    `*ValidationError` with `RuleAbsolutePath`, the case's type and field, and write nothing to a counting writer; `/a` and `C:\a` are
+    written. One `SendRequest` with a relative `ReadTextFileRequest.Path` fails before writing, under a 5-second timeout.
+  * `TestHandlerResultValidated`: an agent whose `ListSessions` returns `SessionInfo{Cwd: "rel"}` answers the client `-32603` with
+    `SessionInfo: cwd: "rel" is not an absolute path`, and logs `handler result fails validation`.
+* A test the plan did not name: `TestConformanceMethods` failed for `mcp/message`, `session/request_permission` and `elicitation/create`,
+  whose recording peers return a zero result with a union holding no variant. Before, the encoder refused it (`no variant set`); now
+  `checkResult` refuses it first, as the MADR's E1 says of any result that fails, with `-32603` and `must have exactly one variant set`.
+  The test's check, which looked for `no variant set`, now looks for `variant set`, so it accepts either wording of the same failure;
+  its comment says why.
+* The first plant run hung: with outbound validation disabled, the `SendRequest` case sent the request and waited for a reply under
+  `t.Context()`, which has no deadline. The run was stopped and its scratch copy removed; the case now runs under a 5-second timeout, so
+  the same plant fails instead of waiting.
+* `go test -count=1 ./...` passes in `cmd/generate` and at the root; `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the root;
+  `GOOS=windows go vet ./...` passes in both modules.
+* Plants, each in its own scratch copy, all `exit=1`:
+  * `validateOutbound` validating nothing: `session/new cwd = "": SendNotification() = <nil>, want an absolute-path error on
+    NewSessionRequest cwd`, the `SendRequest` case failing after its timeout;
+  * the value branch sending with a POSIX-only rule, the host rule of macOS and Linux: `session/new cwd = "C:\\a": SendNotification() =
+    NewSessionRequest: cwd: "C:\\a" is not an absolute path, 0 bytes written`, and the same for every property;
+  * `checkResult` not checking: `ListSessions() = <nil>, want -32603 naming SessionInfo cwd`.
+* `make pre-add-check`: `go-precheck: 105 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No untracked Go file.
+  `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -65,6 +66,34 @@ func isPortableAbs(p string) bool {
 		return c >= 'a' && c <= 'z'
 	}
 	return false
+}
+
+// validator is a generated type's validate, which takes the rule for an
+// absolute path.
+type validator interface {
+	validate(abs func(string) bool) error
+}
+
+// validateOutbound validates params of a generated type, a pointer or a
+// value, with the rule for a path the SDK sends; params of any other type, an
+// extension's raw JSON among them, pass (0015-MADR-validate-absolute-protocol-paths.md, E1).
+func validateOutbound(params any) error {
+	rv := reflect.ValueOf(params)
+	switch {
+	case !rv.IsValid():
+		return nil
+	case rv.Kind() == reflect.Pointer:
+		if v, ok := params.(validator); ok && !rv.IsNil() {
+			return v.validate(isPortableAbs)
+		}
+		return nil
+	}
+	ptr := reflect.New(rv.Type())
+	ptr.Elem().Set(rv)
+	if v, ok := ptr.Interface().(validator); ok {
+		return v.validate(isPortableAbs)
+	}
+	return nil
 }
 
 // MethodHandler handles one inbound JSON-RPC request or notification.
@@ -839,6 +868,9 @@ func (c *Connection) prepareRequest(method string, params any) (anyMessage, stri
 	}
 
 	if params != nil {
+		if err := validateOutbound(params); err != nil {
+			return msg, "", err
+		}
 		b, err := json.Marshal(params)
 		if err != nil {
 			return msg, "", NewInvalidParams(map[string]any{jsonErrorField: err.Error()})
@@ -1092,6 +1124,17 @@ func (c *Connection) SendNotification(ctx context.Context, method string, params
 	return nil
 }
 
+// checkResult returns a handler's result to send, after validating it as
+// sent: a result that fails is not sent, the peer gets -32603 naming the type
+// and property, and the connection logs it (0015-MADR-validate-absolute-protocol-paths.md, E1).
+func (c *Connection) checkResult(method string, result any) (any, *RequestError) {
+	if err := validateOutbound(result); err != nil {
+		c.loggerOrDefault().Error("handler result fails validation; not sent", "method", method, "err", err)
+		return nil, NewInternalError(map[string]any{jsonErrorField: err.Error()})
+	}
+	return result, nil
+}
+
 func (c *Connection) prepareNotification(method string, params any) (anyMessage, error) {
 	msg := anyMessage{
 		JSONRPC: jsonRPCVersion,
@@ -1099,6 +1142,9 @@ func (c *Connection) prepareNotification(method string, params any) (anyMessage,
 	}
 
 	if params != nil {
+		if err := validateOutbound(params); err != nil {
+			return msg, err
+		}
 		b, err := json.Marshal(params)
 		if err != nil {
 			return msg, NewInvalidParams(map[string]any{jsonErrorField: err.Error()})

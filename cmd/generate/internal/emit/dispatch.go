@@ -46,7 +46,7 @@ func promptCase(f *goFile, recv ast.Expr, methodName, field string) []ast.Stmt {
 		exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey(field))),
 		lockCall("Unlock"),
 		ifStmt(nil, errNotNil(), toRequestError()),
-		ret(id("resp"), nilExpr()),
+		checkedResult(dot("a", "conn")),
 	}
 }
 
@@ -88,7 +88,7 @@ func agentFile(m *model.Model) *goFile {
 			case !mi.HasResult:
 				body = append(body, callNoResult(recv, mi.GoName)...)
 			default:
-				body = append(body, callWithResult(recv, mi.GoName)...)
+				body = append(body, callWithResult(dot("a", "conn"), recv, mi.GoName)...)
 			}
 		}
 		cases = append(cases, caseOf(exprs(id(mi.Const)), body...))
@@ -118,7 +118,7 @@ func clientFile(m *model.Model) *goFile {
 			pre, recv := clientAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Req, mi.Resp, mi.HasResult)
 			body = append(body, pre...)
 			if mi.HasResult {
-				body = append(body, callWithResult(recv, mi.GoName)...)
+				body = append(body, callWithResult(dot("c", "conn"), recv, mi.GoName)...)
 			} else {
 				body = append(body, callNoResult(recv, mi.GoName)...)
 			}

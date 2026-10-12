@@ -21,7 +21,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodDocumentDidChange:
 		var p UnstableDidChangeDocumentNotification
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -124,7 +124,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodLogout:
 		var p LogoutRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -137,7 +137,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodMcpMessage:
 		var p UnstableMessageMcpNotification
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -192,7 +192,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodNesReject:
 		var p UnstableRejectNesNotification
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -229,7 +229,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodNesSuggest:
 		var p UnstableSuggestNesRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -248,7 +248,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodProvidersDisable:
 		var p UnstableDisableProviderRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -267,7 +267,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodProvidersList:
 		var p UnstableListProvidersRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -286,7 +286,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodProvidersSet:
 		var p UnstableSetProviderRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -305,7 +305,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodSessionCancel:
 		var p CancelNotification
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -336,7 +336,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodSessionDelete:
 		var p DeleteSessionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -349,7 +349,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodSessionFork:
 		var p UnstableForkSessionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -368,7 +368,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodSessionList:
 		var p ListSessionsRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -381,7 +381,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodSessionLoad:
 		var p LoadSessionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -398,7 +398,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodSessionNew:
 		var p NewSessionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -411,7 +411,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodSessionPrompt:
 		var p PromptRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -436,7 +436,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodSessionResume:
 		var p ResumeSessionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -449,7 +449,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodSessionSetConfigOption:
 		var p SetSessionConfigOptionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -462,7 +462,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	case AgentMethodSessionSetMode:
 		var p SetSessionModeRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -475,7 +475,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return a.conn.checkResult(method, resp)
 	default:
 		return nil, NewMethodNotFound(method)
 	}

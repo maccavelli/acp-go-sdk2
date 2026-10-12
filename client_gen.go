@@ -33,7 +33,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return c.conn.checkResult(method, resp)
 	case ClientMethodFsReadTextFile:
 		var p ReadTextFileRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -46,7 +46,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return c.conn.checkResult(method, resp)
 	case ClientMethodFsWriteTextFile:
 		var p WriteTextFileRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -59,7 +59,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return c.conn.checkResult(method, resp)
 	case ClientMethodMcpMessage:
 		var p UnstableMessageMcpRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -78,7 +78,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return c.conn.checkResult(method, resp)
 	case ClientMethodSessionRequestPermission:
 		var p RequestPermissionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -91,7 +91,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return c.conn.checkResult(method, resp)
 	case ClientMethodSessionUpdate:
 		var p SessionNotification
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -116,7 +116,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return c.conn.checkResult(method, resp)
 	case ClientMethodTerminalKill:
 		var p KillTerminalRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -129,7 +129,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return c.conn.checkResult(method, resp)
 	case ClientMethodTerminalOutput:
 		var p TerminalOutputRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -142,7 +142,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return c.conn.checkResult(method, resp)
 	case ClientMethodTerminalRelease:
 		var p ReleaseTerminalRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -155,7 +155,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return c.conn.checkResult(method, resp)
 	case ClientMethodTerminalWaitForExit:
 		var p WaitForTerminalExitRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -168,7 +168,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return resp, nil
+		return c.conn.checkResult(method, resp)
 	default:
 		return nil, NewMethodNotFound(method)
 	}

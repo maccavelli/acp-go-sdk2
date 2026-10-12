@@ -95,11 +95,19 @@ func callNoResult(recv ast.Expr, methodName string) []ast.Stmt {
 	}
 }
 
-// callWithResult calls a method that returns a response and an error.
-func callWithResult(recv ast.Expr, methodName string) []ast.Stmt {
+// callWithResult calls a method that returns a response and an error, and
+// returns the response through checkedResult.
+func callWithResult(conn, recv ast.Expr, methodName string) []ast.Stmt {
 	return []ast.Stmt{
 		define(exprs(id("resp"), id("err")), recvCall(recv, methodName)),
 		ifStmt(nil, errNotNil(), toRequestError()),
-		ret(id("resp"), nilExpr()),
+		checkedResult(conn),
 	}
+}
+
+// checkedResult is return conn.checkResult(method, resp): a result that fails
+// validation as sent is answered -32603 instead
+// (0015-MADR-validate-absolute-protocol-paths.md, E1).
+func checkedResult(conn ast.Expr) ast.Stmt {
+	return ret(call(sel(conn, "checkResult"), id("method"), id("resp")))
 }
