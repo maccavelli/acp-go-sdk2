@@ -24,7 +24,10 @@ func (*Range).Validate() error
 -- behaviour_test.go --
 package acp
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 // maximum is checked on an int64 and on a nullable number.
 func TestValidateMaximum(t *testing.T) {
@@ -42,5 +45,17 @@ func TestValidateMaximum(t *testing.T) {
 		if err := tt.v.Validate(); (err != nil) != tt.fail {
 			t.Errorf("%+v: Validate = %v, want failure %v", tt.v, err, tt.fail)
 		}
+	}
+}
+
+// A failed maximum on a nullable number is a *ValidationError holding the
+// number, not the pointer (0015-PLAN-validate-absolute-protocol-paths.md,
+// step 3).
+func TestValidateMaximumError(t *testing.T) {
+	over := 1.6
+	err := (&Range{Hi: 0, R: &over}).Validate()
+	var ve *ValidationError
+	if !errors.As(err, &ve) || ve.Type != "Range" || ve.Field != "r" || ve.Value != 1.6 || ve.Rule != RuleMaximum {
+		t.Errorf("Validate() = %#v, want a *ValidationError for Range r 1.6 maximum", err)
 	}
 }

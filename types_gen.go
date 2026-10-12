@@ -409,7 +409,11 @@ func (u *AgentResponse) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("AgentResponse must have exactly one variant set")
+		return &ValidationError{
+			Type: "AgentResponse",
+			Rule: RuleOneVariant,
+			msg:  "AgentResponse must have exactly one variant set",
+		}
 	}
 	if u.Result != nil {
 		if err := u.Result.Validate(); err != nil {
@@ -720,7 +724,11 @@ func (u *AuthMethod) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("AuthMethod must have exactly one variant set")
+		return &ValidationError{
+			Type: "AuthMethod",
+			Rule: RuleOneVariant,
+			msg:  "AuthMethod must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -999,7 +1007,11 @@ func (u *AvailableCommandInput) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("AvailableCommandInput must have exactly one variant set")
+		return &ValidationError{
+			Type: "AvailableCommandInput",
+			Rule: RuleOneVariant,
+			msg:  "AvailableCommandInput must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -1665,7 +1677,11 @@ func (u *ClientResponse) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("ClientResponse must have exactly one variant set")
+		return &ValidationError{
+			Type: "ClientResponse",
+			Rule: RuleOneVariant,
+			msg:  "ClientResponse must have exactly one variant set",
+		}
 	}
 	if u.Result != nil {
 		if err := u.Result.Validate(); err != nil {
@@ -2553,7 +2569,11 @@ func (u *ContentBlock) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("ContentBlock must have exactly one variant set")
+		return &ValidationError{
+			Type: "ContentBlock",
+			Rule: RuleOneVariant,
+			msg:  "ContentBlock must have exactly one variant set",
+		}
 	}
 	if u.Resource != nil {
 		if err := u.Resource.Validate(); err != nil {
@@ -2732,7 +2752,11 @@ func (v *CreateElicitationForm) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("CreateElicitationForm must have exactly one member set")
+		return &ValidationError{
+			Type: "CreateElicitationForm",
+			Rule: RuleOneMember,
+			msg:  "CreateElicitationForm must have exactly one member set",
+		}
 	}
 	if v.Request != nil {
 		if err := v.Request.Validate(); err != nil {
@@ -2832,7 +2856,11 @@ func (v *CreateElicitationUrl) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("CreateElicitationUrl must have exactly one member set")
+		return &ValidationError{
+			Type: "CreateElicitationUrl",
+			Rule: RuleOneMember,
+			msg:  "CreateElicitationUrl must have exactly one member set",
+		}
 	}
 	if v.Request != nil {
 		if err := v.Request.Validate(); err != nil {
@@ -3079,12 +3107,22 @@ func (u *CreateElicitationRequest) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("CreateElicitationRequest must have exactly one variant set")
+		return &ValidationError{
+			Type: "CreateElicitationRequest",
+			Rule: RuleOneVariant,
+			msg:  "CreateElicitationRequest must have exactly one variant set",
+		}
 	}
 	if u.Other != nil {
 		switch u.Other.Mode {
 		case "form", "url":
-			return fmt.Errorf("CreateElicitationRequest: variant Other: mode %q names another variant", u.Other.Mode)
+			return &ValidationError{
+				Type:  "CreateElicitationRequest",
+				Field: "mode",
+				Value: u.Other.Mode,
+				Rule:  RuleExcludedValue,
+				msg:   fmt.Sprintf("CreateElicitationRequest: variant Other: mode %q names another variant", u.Other.Mode),
+			}
 		}
 	}
 	if u.Form != nil {
@@ -3451,12 +3489,22 @@ func (u *CreateElicitationResponse) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("CreateElicitationResponse must have exactly one variant set")
+		return &ValidationError{
+			Type: "CreateElicitationResponse",
+			Rule: RuleOneVariant,
+			msg:  "CreateElicitationResponse must have exactly one variant set",
+		}
 	}
 	if u.Other != nil {
 		switch u.Other.Action {
 		case "accept", "cancel", "decline":
-			return fmt.Errorf("CreateElicitationResponse: variant Other: action %q names another variant", u.Other.Action)
+			return &ValidationError{
+				Type:  "CreateElicitationResponse",
+				Field: "action",
+				Value: u.Other.Action,
+				Rule:  RuleExcludedValue,
+				msg:   fmt.Sprintf("CreateElicitationResponse: variant Other: action %q names another variant", u.Other.Action),
+			}
 		}
 	}
 	if u.Accept != nil {
@@ -3901,7 +3949,11 @@ func (u *ElicitationContentValue) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("ElicitationContentValue must have exactly one variant set")
+		return &ValidationError{
+			Type: "ElicitationContentValue",
+			Rule: RuleOneVariant,
+			msg:  "ElicitationContentValue must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -4014,7 +4066,11 @@ func (v *ElicitationFormMode) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("ElicitationFormMode must have exactly one member set")
+		return &ValidationError{
+			Type: "ElicitationFormMode",
+			Rule: RuleOneMember,
+			msg:  "ElicitationFormMode must have exactly one member set",
+		}
 	}
 	if v.Request != nil {
 		if err := v.Request.Validate(); err != nil {
@@ -4639,12 +4695,22 @@ func (u *ElicitationPropertySchema) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("ElicitationPropertySchema must have exactly one variant set")
+		return &ValidationError{
+			Type: "ElicitationPropertySchema",
+			Rule: RuleOneVariant,
+			msg:  "ElicitationPropertySchema must have exactly one variant set",
+		}
 	}
 	if u.Other != nil {
 		switch u.Other.Type {
 		case "array", "boolean", "integer", "number", "string":
-			return fmt.Errorf("ElicitationPropertySchema: variant Other: type %q names another variant", u.Other.Type)
+			return &ValidationError{
+				Type:  "ElicitationPropertySchema",
+				Field: "type",
+				Value: u.Other.Type,
+				Rule:  RuleExcludedValue,
+				msg:   fmt.Sprintf("ElicitationPropertySchema: variant Other: type %q names another variant", u.Other.Type),
+			}
 		}
 	}
 	if u.Array != nil {
@@ -4924,7 +4990,11 @@ func (v *ElicitationUrlMode) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("ElicitationUrlMode must have exactly one member set")
+		return &ValidationError{
+			Type: "ElicitationUrlMode",
+			Rule: RuleOneMember,
+			msg:  "ElicitationUrlMode must have exactly one member set",
+		}
 	}
 	if v.Request != nil {
 		if err := v.Request.Validate(); err != nil {
@@ -5086,7 +5156,11 @@ func (u *EmbeddedResourceResource) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("EmbeddedResourceResource must have exactly one variant set")
+		return &ValidationError{
+			Type: "EmbeddedResourceResource",
+			Rule: RuleOneVariant,
+			msg:  "EmbeddedResourceResource must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -5919,12 +5993,22 @@ func (u *IdleStateUpdate) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("IdleStateUpdate must have exactly one variant set")
+		return &ValidationError{
+			Type: "IdleStateUpdate",
+			Rule: RuleOneVariant,
+			msg:  "IdleStateUpdate must have exactly one variant set",
+		}
 	}
 	if u.Other != nil {
 		switch u.Other.StopReason {
 		case "cancelled", "end_turn", "error", "max_tokens", "max_turn_requests", "refusal":
-			return fmt.Errorf("IdleStateUpdate: variant Other: stopReason %q names another variant", u.Other.StopReason)
+			return &ValidationError{
+				Type:  "IdleStateUpdate",
+				Field: "stopReason",
+				Value: u.Other.StopReason,
+				Rule:  RuleExcludedValue,
+				msg:   fmt.Sprintf("IdleStateUpdate: variant Other: stopReason %q names another variant", u.Other.StopReason),
+			}
 		}
 	}
 	return nil
@@ -7004,7 +7088,11 @@ func (u *McpServer) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("McpServer must have exactly one variant set")
+		return &ValidationError{
+			Type: "McpServer",
+			Rule: RuleOneVariant,
+			msg:  "McpServer must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -7420,12 +7508,22 @@ func (u *MultiSelectItems) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("MultiSelectItems must have exactly one variant set")
+		return &ValidationError{
+			Type: "MultiSelectItems",
+			Rule: RuleOneVariant,
+			msg:  "MultiSelectItems must have exactly one variant set",
+		}
 	}
 	if u.Other != nil {
 		switch u.Other.Type {
 		case "string":
-			return fmt.Errorf("MultiSelectItems: variant Other: type %q names another variant", u.Other.Type)
+			return &ValidationError{
+				Type:  "MultiSelectItems",
+				Field: "type",
+				Value: u.Other.Type,
+				Rule:  RuleExcludedValue,
+				msg:   fmt.Sprintf("MultiSelectItems: variant Other: type %q names another variant", u.Other.Type),
+			}
 		}
 	}
 	return nil
@@ -8326,7 +8424,13 @@ func (v *Notice) UnmarshalJSON(b []byte) error {
 
 func (v *Notice) Validate() error {
 	if utf8.RuneCountInString(string(v.Title)) < 1 {
-		return errors.New("Notice: title: shorter than minLength 1")
+		return &ValidationError{
+			Type:  "Notice",
+			Field: "title",
+			Value: v.Title,
+			Rule:  RuleMinLength,
+			msg:   "Notice: title: shorter than minLength 1",
+		}
 	}
 	return nil
 }
@@ -9117,7 +9221,11 @@ func (u *PlanUpdateContent) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("PlanUpdateContent must have exactly one variant set")
+		return &ValidationError{
+			Type: "PlanUpdateContent",
+			Rule: RuleOneVariant,
+			msg:  "PlanUpdateContent must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -9626,7 +9734,11 @@ func (u *RequestId) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("RequestId must have exactly one variant set")
+		return &ValidationError{
+			Type: "RequestId",
+			Rule: RuleOneVariant,
+			msg:  "RequestId must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -9803,7 +9915,11 @@ func (u *RequestPermissionOutcome) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("RequestPermissionOutcome must have exactly one variant set")
+		return &ValidationError{
+			Type: "RequestPermissionOutcome",
+			Rule: RuleOneVariant,
+			msg:  "RequestPermissionOutcome must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -10607,7 +10723,11 @@ func (u *SessionConfigOption) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("SessionConfigOption must have exactly one variant set")
+		return &ValidationError{
+			Type: "SessionConfigOption",
+			Rule: RuleOneVariant,
+			msg:  "SessionConfigOption must have exactly one variant set",
+		}
 	}
 	if u.Select != nil {
 		if err := u.Select.Validate(); err != nil {
@@ -10920,7 +11040,11 @@ func (u *SessionConfigSelectOptions) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("SessionConfigSelectOptions must have exactly one variant set")
+		return &ValidationError{
+			Type: "SessionConfigSelectOptions",
+			Rule: RuleOneVariant,
+			msg:  "SessionConfigSelectOptions must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -12089,7 +12213,13 @@ func (v *SessionUpdateNotice) UnmarshalJSON(b []byte) error {
 
 func (v *SessionUpdateNotice) Validate() error {
 	if utf8.RuneCountInString(string(v.Title)) < 1 {
-		return errors.New("SessionUpdateNotice: title: shorter than minLength 1")
+		return &ValidationError{
+			Type:  "SessionUpdateNotice",
+			Field: "title",
+			Value: v.Title,
+			Rule:  RuleMinLength,
+			msg:   "SessionUpdateNotice: title: shorter than minLength 1",
+		}
 	}
 	return nil
 }
@@ -13235,7 +13365,11 @@ func (u *SessionUpdate) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("SessionUpdate must have exactly one variant set")
+		return &ValidationError{
+			Type: "SessionUpdate",
+			Rule: RuleOneVariant,
+			msg:  "SessionUpdate must have exactly one variant set",
+		}
 	}
 	if u.UserMessageChunk != nil {
 		if err := u.UserMessageChunk.Validate(); err != nil {
@@ -13495,7 +13629,11 @@ func (u *SetSessionConfigOptionRequest) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("SetSessionConfigOptionRequest must have exactly one variant set")
+		return &ValidationError{
+			Type: "SetSessionConfigOptionRequest",
+			Rule: RuleOneVariant,
+			msg:  "SetSessionConfigOptionRequest must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -14007,12 +14145,22 @@ func (u *StateUpdate) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("StateUpdate must have exactly one variant set")
+		return &ValidationError{
+			Type: "StateUpdate",
+			Rule: RuleOneVariant,
+			msg:  "StateUpdate must have exactly one variant set",
+		}
 	}
 	if u.Other != nil {
 		switch u.Other.State {
 		case "idle", "requires_action", "running", "unknown":
-			return fmt.Errorf("StateUpdate: variant Other: state %q names another variant", u.Other.State)
+			return &ValidationError{
+				Type:  "StateUpdate",
+				Field: "state",
+				Value: u.Other.State,
+				Rule:  RuleExcludedValue,
+				msg:   fmt.Sprintf("StateUpdate: variant Other: state %q names another variant", u.Other.State),
+			}
 		}
 	}
 	return nil
@@ -14994,7 +15142,11 @@ func (u *ToolCallContent) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("ToolCallContent must have exactly one variant set")
+		return &ValidationError{
+			Type: "ToolCallContent",
+			Rule: RuleOneVariant,
+			msg:  "ToolCallContent must have exactly one variant set",
+		}
 	}
 	if u.Content != nil {
 		if err := u.Content.Validate(); err != nil {
@@ -16220,7 +16372,11 @@ func (u *UnstableMcpServer) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("UnstableMcpServer must have exactly one variant set")
+		return &ValidationError{
+			Type: "UnstableMcpServer",
+			Rule: RuleOneVariant,
+			msg:  "UnstableMcpServer must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -16542,7 +16698,11 @@ func (u *UnstableMessageMcpResponse) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("UnstableMessageMcpResponse must have exactly one variant set")
+		return &ValidationError{
+			Type: "UnstableMessageMcpResponse",
+			Rule: RuleOneVariant,
+			msg:  "UnstableMessageMcpResponse must have exactly one variant set",
+		}
 	}
 	return nil
 }
@@ -17492,7 +17652,11 @@ func (u *UnstableNesSuggestion) Validate() error {
 		count++
 	}
 	if count != 1 {
-		return errors.New("UnstableNesSuggestion must have exactly one variant set")
+		return &ValidationError{
+			Type: "UnstableNesSuggestion",
+			Rule: RuleOneVariant,
+			msg:  "UnstableNesSuggestion must have exactly one variant set",
+		}
 	}
 	return nil
 }

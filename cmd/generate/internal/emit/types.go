@@ -841,7 +841,7 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 		body = append(body, ifStmt(nil, binary(dot("u", unknownField), token.NEQ, nilExpr()), incr(id("count"))))
 	}
 	body = append(body, ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
-		ret(call(f.qual(pkgErrors, "New"), str(name+" must have exactly one variant set")))))
+		ret(validationError(name, "", nil, "RuleOneVariant", str(name+" must have exactly one variant set")))))
 	if ca := catchAllOf(t); ca != nil && len(ca.Excluded) > 0 {
 		// The schema's not excludes these values from the catch-all; the
 		// peer would read them as another variant
@@ -853,7 +853,8 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 		}
 		body = append(body, ifStmt(nil, binary(dot("u", ca.FieldName), token.NEQ, nilExpr()),
 			switchStmt(value, caseOf(list,
-				ret(call(f.qual(pkgFmt, "Errorf"), str(name+": variant "+ca.FieldName+": "+t.DiscKey+" %q names another variant"), value))))))
+				ret(validationError(name, t.DiscKey, value, "RuleExcludedValue",
+					call(f.qual(pkgFmt, "Sprintf"), str(name+": variant "+ca.FieldName+": "+t.DiscKey+" %q names another variant"), value)))))))
 	}
 	for _, vi := range variants {
 		if !vi.Validates {
@@ -889,7 +890,7 @@ func emitValidate(f *goFile, name string, val *model.Validation) {
 			body = append(body, ifStmt(nil, binary(dot("v", mb.Field), token.NEQ, nilExpr()), incr(id("count"))))
 		}
 		body = append(body, ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
-			ret(call(f.qual(pkgErrors, "New"), str(name+" must have exactly one member set")))))
+			ret(validationError(name, "", nil, "RuleOneMember", str(name+" must have exactly one member set")))))
 		for _, mb := range val.Members {
 			if mb.Validates {
 				body = append(body, ifStmt(nil, binary(dot("v", mb.Field), token.NEQ, nilExpr()),
@@ -926,22 +927,39 @@ func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
 	}
 	bound := boundLit(c)
 	var cond ast.Expr
-	var msg string
+	var msg, rule string
 	switch c.Kind {
 	case model.CheckMinLength:
 		cond = binary(call(f.qual("unicode/utf8", "RuneCountInString"), call(id("string"), value)), token.LSS, bound)
-		msg = where + ": shorter than minLength " + bound.Value
+		msg, rule = where+": shorter than minLength "+bound.Value, "RuleMinLength"
 	case model.CheckMinimum:
 		cond = binary(value, token.LSS, bound)
-		msg = where + ": less than minimum " + bound.Value
+		msg, rule = where+": less than minimum "+bound.Value, "RuleMinimum"
 	default:
 		cond = binary(value, token.GTR, bound)
-		msg = where + ": greater than maximum " + bound.Value
+		msg, rule = where+": greater than maximum "+bound.Value, "RuleMaximum"
 	}
 	if c.Shape == model.RefPointer {
 		cond = binary(binary(dot("v", c.Field), token.NEQ, nilExpr()), token.LAND, cond)
 	}
-	return ifStmt(nil, cond, ret(call(f.qual(pkgErrors, "New"), str(msg))))
+	return ifStmt(nil, cond, ret(validationError(name, c.Key, value, rule, str(msg))))
+}
+
+// validationError is &ValidationError{...} for a failed check: the Go type,
+// the JSON key (empty for a check of the whole value), the offending value
+// (nil for a count), the rule, and the message, which is the text Validate
+// returned before the type existed
+// (0015-PLAN-validate-absolute-protocol-paths.md, step 3).
+func validationError(typeName, key string, value ast.Expr, rule string, msg ast.Expr) ast.Expr {
+	elts := []ast.Expr{kv(id("Type"), str(typeName))}
+	if key != "" {
+		elts = append(elts, kv(id("Field"), str(key)))
+	}
+	if value != nil {
+		elts = append(elts, kv(id("Value"), value))
+	}
+	elts = append(elts, kv(id("Rule"), id(rule)), kv(id("msg"), msg))
+	return addr(composite(id("ValidationError"), elts...))
 }
 
 // boundLit is a check's bound as a literal: an integer, or a float written

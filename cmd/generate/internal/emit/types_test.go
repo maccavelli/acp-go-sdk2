@@ -42,7 +42,7 @@ func TestRequiredMapFilledOnEncode(t *testing.T) {
 		t.Fatal(err)
 	}
 	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
-	if _, err := conf.Check("acp", fset, []*ast.File{file}, nil); err != nil {
+	if _, err := conf.Check("acp", fset, withRuntimeStub(t, fset, file), nil); err != nil {
 		t.Fatalf("generated code does not compile: %v\n%s", err, src)
 	}
 }
@@ -72,7 +72,7 @@ func TestDefaultedNullablePropertyCompiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
-	if _, err := conf.Check("acp", fset, []*ast.File{file}, nil); err != nil {
+	if _, err := conf.Check("acp", fset, withRuntimeStub(t, fset, file), nil); err != nil {
 		t.Fatalf("generated code does not compile: %v\n%s", err, src)
 	}
 }
@@ -126,7 +126,7 @@ func TestRequiredKeysDecoder(t *testing.T) {
 		t.Fatal(err)
 	}
 	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
-	if _, err := conf.Check("acp", fset, []*ast.File{file}, nil); err != nil {
+	if _, err := conf.Check("acp", fset, withRuntimeStub(t, fset, file), nil); err != nil {
 		t.Fatalf("generated code does not compile: %v\n%s", err, src)
 	}
 }
@@ -178,7 +178,7 @@ func TestLenientDecoder(t *testing.T) {
 		t.Fatal(err)
 	}
 	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
-	if _, err := conf.Check("acp", fset, []*ast.File{file}, nil); err != nil {
+	if _, err := conf.Check("acp", fset, withRuntimeStub(t, fset, file), nil); err != nil {
 		t.Fatalf("generated code does not compile: %v\n%s", err, src)
 	}
 }
@@ -210,7 +210,9 @@ func TestValidateMethods(t *testing.T) {
 	src := mustRender(t, f)
 	for _, want := range []string{
 		"if utf8.RuneCountInString(string(v.T)) < 2 {",
-		`return errors.New("Leaf: t: shorter than minLength 2")`,
+		"return &ValidationError{",
+		`"Leaf: t: shorter than minLength 2",`,
+		"RuleMinLength,",
 		"if v.D != nil && *v.D > 1 {",
 		"if count != 1 {",
 		"if u.Leaf != nil {",
@@ -232,7 +234,44 @@ func TestValidateMethods(t *testing.T) {
 		t.Fatal(err)
 	}
 	conf := types.Config{Importer: importer.ForCompiler(fset, "source", nil)}
-	if _, err := conf.Check("acp", fset, []*ast.File{file}, nil); err != nil {
+	if _, err := conf.Check("acp", fset, withRuntimeStub(t, fset, file), nil); err != nil {
 		t.Fatalf("generated code does not compile: %v\n%s", err, src)
 	}
+}
+
+// runtimeStub declares the names of errors.go that generated Validate
+// methods refer to, for output type-checked without the runtime files
+// (0015-PLAN-validate-absolute-protocol-paths.md, step 3).
+const runtimeStub = `package acp
+
+type ValidationRule string
+
+const (
+	RuleAbsolutePath  ValidationRule = "absolutePath"
+	RuleMinLength     ValidationRule = "minLength"
+	RuleMinimum       ValidationRule = "minimum"
+	RuleMaximum       ValidationRule = "maximum"
+	RuleOneVariant    ValidationRule = "oneVariant"
+	RuleOneMember     ValidationRule = "oneMember"
+	RuleExcludedValue ValidationRule = "excludedValue"
+)
+
+type ValidationError struct {
+	Type, Field string
+	Value       any
+	Rule        ValidationRule
+	msg         string
+}
+
+func (e *ValidationError) Error() string { return e.msg }
+`
+
+// withRuntimeStub returns file with the parsed runtimeStub beside it.
+func withRuntimeStub(t *testing.T, fset *token.FileSet, file *ast.File) []*ast.File {
+	t.Helper()
+	stub, err := parser.ParseFile(fset, "runtime_stub.go", runtimeStub, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return []*ast.File{file, stub}
 }

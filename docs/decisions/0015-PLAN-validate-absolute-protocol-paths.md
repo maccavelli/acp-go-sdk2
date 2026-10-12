@@ -297,3 +297,40 @@ Ran on `main` from `b84e22a`, after the owner committed the pair and said "proce
   amendment after its step 7: step 6 documents both records, and step 7's report covers both and drafts the advisory.
 * This plan's status is `in-progress`, and its row in `docs/README.md` says so.
 * No source changes, so no test and no plant.
+
+### Step 3, the typed error, 2026-10-12
+
+Ran on `main` from `491b853`. The agent did not commit.
+
+* `errors.go`: `type ValidationRule string` with `RuleAbsolutePath`, `RuleMinLength`, `RuleMinimum`, `RuleMaximum`, `RuleOneVariant`,
+  `RuleOneMember` and `RuleExcludedValue`; `type ValidationError struct { Type, Field string; Value any; Rule ValidationRule; msg string }`,
+  whose `Error` returns `msg`, or, for one a consumer builds without it, `Type: Field: Rule` (`Type: Rule` without a field).
+* `internal/emit/types.go`: a helper, `validationError`, writes `&ValidationError{...}` for each own check (`checkStmt`: `minLength`,
+  minimum, maximum, with the checked value, dereferenced for a pointer), the union count (`RuleOneVariant`), the catch-all switch
+  (`RuleExcludedValue`, its message built with `fmt.Sprintf`), and the member count (`RuleOneMember`). Nested wrapping is unchanged.
+* Regenerated. The asserted diff script: `removed 37 lines, added 201; messages 37 old, 37 new, same set: True`, `Validate methods
+  before/after: 142 142`, `ValidationError returns: 37`, `asserted diff: ok`; only `types_gen.go` changed among the generated files. The
+  API listing of `git archive HEAD` against the tree adds exactly the seven constants, `type ValidationError struct` and its four
+  exported fields, `method (*ValidationError) Error () string`, and `type ValidationRule string`.
+* Tests:
+  * `fidelity_test.go`, new `TestValidationErrorRules`: `minLength` (`Notice`, `title`, value `""`), one variant directly (`ContentBlock`)
+    and through `PromptRequest`'s wrapping, one member (`CreateElicitationForm`), and the excluded value (`ElicitationPropertySchema`,
+    `type`, `"string"`), each with its message; and a consumer-built `ValidationError` reading `T: f: absolutePath` and `T: oneVariant`.
+    `TestValidateSchemaConstraints` passes unchanged.
+  * `accept-validate-minimum` and `accept-validate-maximum` gain `TestValidateMinimumError` (`Range`, `lo`, `int64(0)`) and
+    `TestValidateMaximumError` (`Range`, `r`, `1.6`, the nullable number dereferenced), since no committed type has a bound.
+  * Files the plan did not name, added to the step as fixtures of the emitter: `cmd/generate/main_test.go`'s `handWritten` stub, and
+    `internal/emit/types_test.go`, whose five type checks of rendered output now parse a `runtimeStub` beside it (`withRuntimeStub`), and
+    whose `TestValidateMethods` expects `return &ValidationError{`, the message, and `RuleMinLength,` instead of `return
+    errors.New("Leaf: t: shorter than minLength 2")`. Before the fixtures, `TestRunGeneratesRecasedUnion` and `TestRequiredKeysDecoder`
+    failed with `undefined: ValidationError`, and `TestValidateMethods` with the old expectation.
+* `go test -count=1 ./...` passes in `cmd/generate` (seven packages `ok`) and at the root; `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`
+  passes at the root; `GOOS=windows go vet ./...` passes in both modules.
+* Plants, each in its own scratch copy, all `exit=1`:
+  * `ContentBlock`'s check returning `errors.New` again in `types_gen.go`: `one variant: Validate() = ContentBlock must have exactly one
+    variant set, not a *ValidationError`;
+  * `checkStmt` emitting `errors.New` again: `TestEngineBehaviour`, `Validate() = &errors.errorString{s:"Range: lo: less than minimum 1"},
+    want a *ValidationError for Range lo 0 minimum`, and the same for the maximum case;
+  * `Error` returning `""`: `TestValidateSchemaConstraints`, `title below minLength: , want "Notice: title: shorter than minLength 1"`.
+* `make pre-add-check`: `go-precheck: 103 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No untracked Go file.
+  `make check-records` and `make markdownlint` exit 0, and the identifier scan of the changed files found nothing.

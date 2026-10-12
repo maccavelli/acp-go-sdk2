@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -246,6 +247,55 @@ func TestLenientFields(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"toolCallId":"t","title":"x","content":[{"type":"zz_future"}]}`), &tc); err != nil ||
 		len(tc.Content) != 1 || tc.Content[0].Unknown == nil {
 		t.Errorf("ToolCall content with an unknown variant: %v, %+v", err, tc.Content)
+	}
+}
+
+// TestValidationErrorRules requires every kind of generated check to return a
+// *ValidationError naming the type, the key, the value and the rule,
+// reachable with errors.As through a parent's wrapping, with the message
+// TestValidateSchemaConstraints pins; minimum and maximum, which no committed
+// type has, are checked by the engine cases accept-validate-minimum and
+// accept-validate-maximum (0015-PLAN-validate-absolute-protocol-paths.md,
+// step 3).
+func TestValidationErrorRules(t *testing.T) {
+	t.Parallel()
+	type validator interface{ Validate() error }
+	for _, tt := range []struct {
+		name        string
+		v           validator
+		typ, field  string
+		value       any
+		rule        ValidationRule
+		wantMessage string
+	}{
+		{"minLength", &Notice{}, "Notice", "title", "", RuleMinLength, "Notice: title: shorter than minLength 1"},
+		{"one variant", &ContentBlock{}, "ContentBlock", "", nil, RuleOneVariant, "ContentBlock must have exactly one variant set"},
+		{"one variant, nested", &PromptRequest{SessionId: "s", Prompt: []ContentBlock{{}}}, "ContentBlock", "", nil, RuleOneVariant,
+			"PromptRequest: prompt[0]: ContentBlock must have exactly one variant set"},
+		{"one member", &CreateElicitationForm{Mode: "form"}, "CreateElicitationForm", "", nil, RuleOneMember,
+			"CreateElicitationForm must have exactly one member set"},
+		{"excluded value", &ElicitationPropertySchema{Other: &ElicitationPropertySchemaOther{Type: "string"}}, "ElicitationPropertySchema",
+			"type", "string", RuleExcludedValue, `ElicitationPropertySchema: variant Other: type "string" names another variant`},
+	} {
+		err := tt.v.Validate()
+		var ve *ValidationError
+		if !errors.As(err, &ve) {
+			t.Errorf("%s: Validate() = %v, not a *ValidationError", tt.name, err)
+			continue
+		}
+		if ve.Type != tt.typ || ve.Field != tt.field || ve.Value != tt.value || ve.Rule != tt.rule {
+			t.Errorf("%s: %+v, want Type %q Field %q Value %v Rule %q", tt.name, *ve, tt.typ, tt.field, tt.value, tt.rule)
+		}
+		if err.Error() != tt.wantMessage {
+			t.Errorf("%s: message %q, want %q", tt.name, err.Error(), tt.wantMessage)
+		}
+	}
+	// A ValidationError a consumer builds, with no message, still reads.
+	if got := (&ValidationError{Type: "T", Field: "f", Rule: RuleAbsolutePath}).Error(); got != "T: f: absolutePath" {
+		t.Errorf("a ValidationError without a message reads %q", got)
+	}
+	if got := (&ValidationError{Type: "T", Rule: RuleOneVariant}).Error(); got != "T: oneVariant" {
+		t.Errorf("a ValidationError without a field reads %q", got)
 	}
 }
 

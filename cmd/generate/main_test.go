@@ -154,6 +154,27 @@ func NewMethodNotFound(string) *RequestError { return nil }
 type AgentSideConnection struct{}
 
 type ClientSideConnection struct{}
+
+type ValidationRule string
+
+const (
+	RuleAbsolutePath  ValidationRule = "absolutePath"
+	RuleMinLength     ValidationRule = "minLength"
+	RuleMinimum       ValidationRule = "minimum"
+	RuleMaximum       ValidationRule = "maximum"
+	RuleOneVariant    ValidationRule = "oneVariant"
+	RuleOneMember     ValidationRule = "oneMember"
+	RuleExcludedValue ValidationRule = "excludedValue"
+)
+
+type ValidationError struct {
+	Type, Field string
+	Value       any
+	Rule        ValidationRule
+	msg         string
+}
+
+func (e *ValidationError) Error() string { return e.msg }
 `
 
 // recasedUnion is the oneOf that panicked before the model named variants once.

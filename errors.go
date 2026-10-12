@@ -39,6 +39,55 @@ func (e *RequestError) Error() string {
 	return fmt.Sprintf("code %d: %s", e.Code, e.Message)
 }
 
+// ValidationRule names the rule a generated Validate check enforces.
+type ValidationRule string
+
+// The rules of the generated Validate checks
+// (0015-MADR-validate-absolute-protocol-paths.md, X1).
+const (
+	// RuleAbsolutePath: a path the protocol requires to be absolute is not.
+	RuleAbsolutePath ValidationRule = "absolutePath"
+	// RuleMinLength: a string is shorter, in characters, than its minLength.
+	RuleMinLength ValidationRule = "minLength"
+	// RuleMinimum: a number is less than its minimum.
+	RuleMinimum ValidationRule = "minimum"
+	// RuleMaximum: a number is greater than its maximum.
+	RuleMaximum ValidationRule = "maximum"
+	// RuleOneVariant: a union does not have exactly one variant set.
+	RuleOneVariant ValidationRule = "oneVariant"
+	// RuleOneMember: an object with flattened members does not have exactly
+	// one member set.
+	RuleOneMember ValidationRule = "oneMember"
+	// RuleExcludedValue: a union's catch-all holds a discriminator value that
+	// names another variant.
+	RuleExcludedValue ValidationRule = "excludedValue"
+)
+
+// ValidationError is the error a generated Validate check returns. Type is
+// the Go type checked; Field is the JSON key, with an index for an element
+// such as "additionalDirectories[1]", and is empty for a check of the whole
+// value; Value is the offending value when it is a single value; Rule is the
+// rule broken. A Validate error that wraps a nested type's error keeps this
+// one reachable with errors.As.
+type ValidationError struct {
+	Type  string
+	Field string
+	Value any
+	Rule  ValidationRule
+	msg   string
+}
+
+// Error returns the check's message.
+func (e *ValidationError) Error() string {
+	if e.msg != "" {
+		return e.msg
+	}
+	if e.Field == "" {
+		return fmt.Sprintf("%s: %s", e.Type, e.Rule)
+	}
+	return fmt.Sprintf("%s: %s: %s", e.Type, e.Field, e.Rule)
+}
+
 // NewParseError returns a JSON-RPC parse error (-32700).
 func NewParseError(data any) *RequestError {
 	return &RequestError{Code: -32700, Message: "Parse error", Data: data}
