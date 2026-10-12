@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-12
 associated-madr: "0015-MADR-validate-absolute-protocol-paths.md"
 ---
@@ -284,4 +284,16 @@ uses step 4's `isPortableAbs` and `validate`; step 4's checks return step 3's `*
 
 ## Execution record
 
-Not started.
+### Step 2, records, 2026-10-12
+
+Ran on `main` from `b84e22a`, after the owner committed the pair and said "proceed". The agent did not commit.
+
+* [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md) gains "Amendment 2026-10-12, from 0015", before its
+  "More Information", which is unchanged: the second source of checks, both directions, and the reading by direction.
+* [0013-REPORT-release-notes-v0-15-0.md](../reports/0013-REPORT-release-notes-v0-15-0.md) gains "Erratum, 2026-10-12" at its end: the 28
+  removed checks by type and field, the `Cwd` and `Path` ones in bold with their security weight, and the text for the owner to append to
+  the published `v0.15.0` release. Its "Release text" is unchanged.
+* [0014-PLAN-union-constructors-take-every-required-key.md](0014-PLAN-union-constructors-take-every-required-key.md) gains a dated
+  amendment after its step 7: step 6 documents both records, and step 7's report covers both and drafts the advisory.
+* This plan's status is `in-progress`, and its row in `docs/README.md` says so.
+* No source changes, so no test and no plant.

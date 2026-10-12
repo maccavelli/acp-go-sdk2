@@ -84,3 +84,34 @@ These change nothing in the generated SDK of this release:
   `objectKeys`.
 - `Validate` on `Error`, `ErrorStopReason`, and `IdleStateUpdateError` was added after `v0.14.0` and removed again in `0e32255`, so the
   release does not change it.
+
+## Erratum, 2026-10-12
+
+The release text says `Validate` "no longer rejects a present empty string; `v0.14.0` did, in 28 places", and does not name them.
+GitHub issue #2 found that the `Cwd` and `Path` checks among them carried security weight. A script over every `Validate` body of `git
+show v0.14.0:types_gen.go` names the 28; none survives in `v0.15.0`:
+
+- the `Method` of `AgentRequest`, `AgentNotification`, `ClientRequest`, `ClientNotification`, `UnstableMessageMcpRequest` and
+  `UnstableMessageMcpNotification`;
+- the `Message` of the `Form`, `Url` and `Other` variants of `CreateElicitationRequest`;
+- `CreateTerminalRequest.Command`;
+- **the `Cwd` of `NewSessionRequest`, `LoadSessionRequest`, `ResumeSessionRequest` and `UnstableForkSessionRequest`**;
+- **`ReadTextFileRequest.Path`**, and `WriteTextFileRequest.Path` and `.Content`;
+- `ReadTextFileResponse.Content` and `TerminalOutputResponse.Output`;
+- the `Uri` of `UnstableDidOpenDocumentNotification`, `UnstableDidChangeDocumentNotification`,
+  `UnstableDidCloseDocumentNotification`, `UnstableDidFocusDocumentNotification` and `UnstableDidSaveDocumentNotification`, with `Text`
+  and `LanguageId` on open;
+- `UnstableSuggestNesRequest.Uri` and `UnstableSetProviderRequest.BaseUrl`.
+
+The bold ones carry security weight: on `v0.15.0` an agent receives an empty `cwd`, and a client an empty `fs/read_text_file` or
+`fs/write_text_file` path, where `v0.14.0` answered `-32602`; an application that relied on that refusal must check the value itself
+until it upgrades. No version refused a relative path. The release that carries
+[0015-MADR-validate-absolute-protocol-paths.md](../decisions/0015-MADR-validate-absolute-protocol-paths.md) refuses an empty or relative
+value in every property ACP requires to be absolute, in both directions.
+
+Text to append to the published `v0.15.0` GitHub release, by the owner:
+
+> **Erratum.** `Validate` in this release no longer refuses an empty `cwd` on `session/new`, `session/load`, `session/resume` and
+> `session/fork`, or an empty `path` on `fs/read_text_file` and `fs/write_text_file`, which `v0.14.0` refused with `-32602`; no version
+> refused a relative path. Agents and clients on `v0.15.0` must check these values themselves. The 28 removed checks are listed in
+> `docs/reports/0013-REPORT-release-notes-v0-15-0.md`, "Erratum". See issue #2; the fix is in the next release.

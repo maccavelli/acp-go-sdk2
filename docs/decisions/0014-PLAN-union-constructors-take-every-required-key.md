@@ -209,6 +209,16 @@ Out of scope:
    names its source: a record, a commit, or the API listing. The version, `v0.16.0`, is the next minor; the owner confirms it at tag time.
    `docs/README.md` indexes the report.
 
+   (Amended 2026-10-12, by step 2 of [0015-PLAN-validate-absolute-protocol-paths.md](0015-PLAN-validate-absolute-protocol-paths.md), under
+   the owner's choice that 0015 runs before steps 6 to 8.) Step 6 documents both records: besides the items above, the README's "Paths"
+   part and the `docs/architecture.md` lines that 0015's step 7 writes are checked for agreement with this step's text, and neither repeats
+   the other. Step 7's report covers both records: under changes to what the SDK accepts and sends, the absolute-path checks of the 17
+   properties, sending enforced and receiving validated with the consumer's hooks, with a security note; it names the 28 empty-string
+   checks `v0.15.0` removed, as the 0013 report's erratum does; under additions, `ValidationError`, `ValidationRule` and its constants,
+   `WithInboundRewrite`, `WithInboundValidation` and the five `Roots` methods; under breaking changes, that a non-conforming path is no
+   longer sent; and it drafts the GitHub security advisory for `v0.15.0` (affected `v0.15.0`, fixed in `v0.16.0`, referring to issue #2),
+   which the owner publishes at the tag.
+
 8. **Close.** Run the verification below, record each result in the execution record, set this plan to `complete`, and update its row in
    `docs/README.md`.
 

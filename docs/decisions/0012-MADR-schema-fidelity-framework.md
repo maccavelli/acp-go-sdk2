@@ -344,6 +344,22 @@ of its decisions change what this record asserts.
   fields already are (0014-MADR, item 7). A probe on `bc0cb78` found such a variant sent as `null`, which the schema does not allow, and
   decoded back with no variant set and no error.
 
+## Amendment 2026-10-12, from 0015
+
+Decided by the owner in [0015-MADR-validate-absolute-protocol-paths.md](0015-MADR-validate-absolute-protocol-paths.md), and carried out
+by [0015-PLAN-validate-absolute-protocol-paths.md](0015-PLAN-validate-absolute-protocol-paths.md), after GitHub issue #2 found that
+`v0.15.0` accepted an empty `cwd` and that no version refused a relative one. Three of its decisions change what this record asserts.
+
+* **Outcome 7 gains a second source of checks.** Besides what the schema states, `Validate` checks the protocol's normative requirements
+  that the schema states only in prose, each listed in the generator's protocol table with the specification sentence it follows. The
+  first are the 17 properties ACP requires to be absolute ("All file paths in the protocol MUST be absolute"). `""` is still accepted
+  wherever no rule applies.
+* **`Validate` runs in both directions.** It runs on what the SDK sends, with no option to skip it, and on the responses it receives, as
+  well as on the requests and notifications it receives, where a consumer's hooks may rewrite the message first and decide the outcome
+  after.
+* **One rule reads by direction.** A path is absolute when sent if it is absolute in POSIX or Windows form, and when received if the
+  receiving host's `filepath.IsAbs` says so; `Validate()` applies the receiving reading.
+
 ## More Information
 
 Sources:
