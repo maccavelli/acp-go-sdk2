@@ -1014,6 +1014,8 @@ func TestConformanceNotificationErrors(t *testing.T) {
 			fail := func(any) error { return errors.New("refused") }
 			asc := NewAgentSideConnection(recordingAgent{calls: make(chan any, 1), reply: fail}, aw, ar)
 			csc := NewClientSideConnection(recordingClient{calls: make(chan any, 1), reply: fail}, cw, cr)
+			negotiate(t, asc, allAdvertised())
+			negotiate(t, csc, allAdvertised())
 			sender, receiver := csc.conn, asc.conn
 			if m.Side == "client" {
 				sender, receiver = asc.conn, csc.conn
@@ -1067,6 +1069,8 @@ func exchange(t *testing.T, m schemaMethod, params any, reply func(any) error) (
 	client := recordingClient{calls: make(chan any, 1), reply: reply}
 	asc := NewAgentSideConnection(agent, aw, ar)
 	csc := NewClientSideConnection(client, cw, cr)
+	negotiate(t, asc, allAdvertised())
+	negotiate(t, csc, allAdvertised())
 	sender := csc.conn
 	if m.Side == "client" {
 		sender = asc.conn
@@ -1244,6 +1248,8 @@ func TestConformanceMethods(t *testing.T) {
 			client := recordingClient{calls: make(chan any, 1)}
 			asc := NewAgentSideConnection(agent, aw, ar)
 			csc := NewClientSideConnection(client, cw, cr)
+			negotiate(t, asc, allAdvertised())
+			negotiate(t, csc, allAdvertised())
 			sender, calls := csc.conn, agent.calls
 			if m.Side == "client" {
 				sender, calls = asc.conn, client.calls

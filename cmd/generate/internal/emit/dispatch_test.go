@@ -85,7 +85,8 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 	out := rendered(t, m)
 	f := newFile()
 	emitRPCInterfaces(f, m)
-	files := map[string]string{"agent_gen.go": out["agent_gen.go"], "client_gen.go": out["client_gen.go"], "interfaces": mustRender(t, f)}
+	files := map[string]string{"agent_gen.go": out["agent_gen.go"], "client_gen.go": out["client_gen.go"], "interfaces": mustRender(t, f),
+		"types_gen.go": out["types_gen.go"]}
 
 	want := map[string][]string{
 		"agent_gen.go": {
@@ -106,6 +107,11 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"if cn, ok := a.sessionCancels[string(p.ConversationId)]; ok && (s == 0 || cn.receipt < s) {",
 			"store, ok := a.agent.(AgentStore)",
 			"resp, err := store.Open(ctx, p)",
+			"func (c *AgentSideConnection) gate(method string, params any) error {\n\treturn gateMessage(c.negotiation.Load(), method, params)",
+			"func (c *AgentSideConnection) resultGate(method string, result any) error {\n\treturn gateResult(c.negotiation.Load(), method, result)",
+			"if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {",
+			"a.conn.checkResult(method, resp, a.resultGate)",
+			"if err := c.gate(ClientMethodAsk, &params); err != nil {\n\t\treturn AskResponse{}, err",
 		},
 		"client_gen.go": {
 			"_ = c.Stop(context.Background(), StopNotification{ConversationId: params.ConversationId})",
@@ -117,6 +123,16 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"resp, err := answerUnlessCancelled(c.conn, pctx, method, func(ctx context.Context) (AskResponse, error) {",
 			"}, AskResponse{Verdict: NewVerdictWithdrawn()})",
 			"err := c.conn.SendNotification(ctx, AgentMethodStop, params)\n\tc.pending.cancel(string(params.ConversationId))",
+			"func (c *ClientSideConnection) gate(method string, params any) error {",
+			"if err := c.gate(AgentMethodSend, &params); err != nil {\n\t\treturn SendResponse{}, err",
+			"sendRequest[SendResponse](c.conn, ctx, AgentMethodSend, params, c.resultGate)",
+			"if err := c.gate(AgentMethodStop, &params); err != nil {\n\t\treturn err",
+			"if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {",
+		},
+		"types_gen.go": {
+			"func (n Negotiation) Allows(method string) error {\n\treturn nil\n}",
+			"if method == AgentMethodHello {\n\t\treturn nil\n\t}",
+			"func gateResult(_ *Negotiation, _ string, _ any) error {",
 		},
 		"interfaces": {"// AgentStore stores.\ntype AgentStore interface {", "Open(ctx context.Context, params OpenRequest) (OpenResponse, error)"},
 	}
@@ -129,7 +145,8 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 	}
 	for name, src := range files {
 		for _, bad := range []string{"session/prompt", "SessionId", "CancelNotification", "AgentLoader", "loader", "c.Cancel(", "StopReason",
-			"RequestPermission", "RequestPermissionOutcome", "InitializeRequest", "params.ProtocolVersion", "resp.ProtocolVersion"} {
+			"RequestPermission", "RequestPermissionOutcome", "InitializeRequest", "params.ProtocolVersion", "resp.ProtocolVersion",
+			"AgentMethodInitialize"} {
 			if strings.Contains(src, bad) {
 				t.Errorf("%s contains %q", name, bad)
 			}
@@ -208,6 +225,92 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 		if got, want := pendingField.MatchString(files["client_gen.go"]), name == "with prompt turns"; got != want {
 			t.Errorf("%s: client_gen.go holds the pending requests: %v, want %v", name, got, want)
 		}
+		gated := name == "with prompt turns"
+		for file, w := range map[string]string{
+			"agent_gen.go":  "func (c *AgentSideConnection) gate(",
+			"client_gen.go": "func (c *ClientSideConnection) resultGate(",
+			"types_gen.go":  "func gateMessage(",
+		} {
+			if got := strings.Contains(files[file], w); got != gated {
+				t.Errorf("%s: %s holds %q: %v, want %v", name, file, w, got, gated)
+			}
+		}
+		for file, w := range map[string]string{
+			"agent_gen.go":  "checkInbound(ctx, method, &p, nil)",
+			"client_gen.go": "sendRequest[OpenResponse](c.conn, ctx, AgentMethodOpen, params, nil)",
+		} {
+			if got := strings.Contains(files[file], w); got == gated {
+				t.Errorf("%s: %s holds %q: %v, want %v", name, file, w, got, !gated)
+			}
+		}
+	}
+}
+
+// TestGatesFollowTheModel requires Negotiation.Allows to test each method's
+// capability path from its side's capabilities in the record: a bool read as
+// it is, each optional step checked for nil, methods of one capability in one
+// case; and every typed wrapper but initialize's to call the gate first
+// (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 9).
+func TestGatesFollowTheModel(t *testing.T) {
+	t.Parallel()
+	var schema load.Schema
+	if err := json.Unmarshal([]byte(`{"$defs":{
+		"Rev":{"type":"integer","format":"uint16"},
+		"Leaf":{"type":"object"},
+		"Nested":{"type":"object","properties":{"leaf":{"anyOf":[{"$ref":"#/$defs/Leaf"},{"type":"null"}]}}},
+		"AgentCapabilities":{"type":"object","properties":{"flag":{"type":"boolean"},
+			"nested":{"anyOf":[{"$ref":"#/$defs/Nested"},{"type":"null"}]}}},
+		"ClientCapabilities":{"type":"object","properties":{"flag2":{"type":"boolean"}}},
+		"InitRequest":{"type":"object","x-side":"agent","x-method":"chat/init","required":["rev","mine"],
+			"properties":{"rev":{"$ref":"#/$defs/Rev"},"mine":{"$ref":"#/$defs/ClientCapabilities"}}},
+		"InitResponse":{"type":"object","x-side":"agent","x-method":"chat/init","required":["rev","theirs"],
+			"properties":{"rev":{"$ref":"#/$defs/Rev"},"theirs":{"$ref":"#/$defs/AgentCapabilities"}}},
+		"ARequest":{"type":"object","x-side":"agent","x-method":"chat/a"},
+		"AResponse":{"type":"object","x-side":"agent","x-method":"chat/a"},
+		"BRequest":{"type":"object","x-side":"agent","x-method":"chat/b"},
+		"BResponse":{"type":"object","x-side":"agent","x-method":"chat/b"},
+		"CRequest":{"type":"object","x-side":"agent","x-method":"chat/c"},
+		"CResponse":{"type":"object","x-side":"agent","x-method":"chat/c"},
+		"DNotification":{"type":"object","x-side":"client","x-method":"chat/d"}}}`), &schema); err != nil {
+		t.Fatal(err)
+	}
+	m, err := model.Build(model.Input{
+		Meta: &load.Meta{AgentMethods: map[string]string{"init": "chat/init", "a": "chat/a", "b": "chat/b", "c": "chat/c"},
+			ClientMethods: map[string]string{"d": "chat/d"}},
+		Schema: &schema,
+		Protocol: &model.Protocol{Methods: []model.MethodRule{
+			{Side: "agent", Wire: "chat/init", Initializes: true, VersionKey: "rev", RequestCapabilities: "mine", ResponseCapabilities: "theirs"},
+			{Side: "agent", Wire: "chat/a", Capability: "flag"},
+			{Side: "agent", Wire: "chat/b", Capability: "nested.leaf"},
+			{Side: "agent", Wire: "chat/c", Capability: "flag"},
+			{Side: "client", Wire: "chat/d", Capability: "flag2"},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := rendered(t, m)
+	for file, lines := range map[string][]string{
+		"types_gen.go": {
+			"case AgentMethodA, AgentMethodC:\n\t\tif !n.Response.Theirs.Flag {\n\t\t\treturn &CapabilityError{\n\t\t\t\tMethod:     method,\n\t\t\t\tCapability: \"flag\",",
+			"case AgentMethodB:\n\t\tif n.Response.Theirs.Nested == nil || n.Response.Theirs.Nested.Leaf == nil {",
+			"case ClientMethodD:\n\t\tif !n.Request.Mine.Flag2 {",
+			"if method == AgentMethodInit {\n\t\treturn nil\n\t}",
+		},
+		"client_gen.go": {
+			"if err := c.gate(AgentMethodA, &params); err != nil {\n\t\treturn AResponse{}, err",
+			"if err := c.gate(AgentMethodB, &params); err != nil {",
+		},
+		"agent_gen.go": {"if err := c.gate(ClientMethodD, &params); err != nil {\n\t\treturn err"},
+	} {
+		for _, w := range lines {
+			if !strings.Contains(out[file], w) {
+				t.Errorf("%s lacks %q:\n%s", file, w, out[file])
+			}
+		}
+	}
+	if strings.Contains(out["client_gen.go"], "c.gate(AgentMethodInit") {
+		t.Error("client_gen.go gates initialize")
 	}
 }
 

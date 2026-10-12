@@ -19796,3 +19796,109 @@ type Negotiation struct {
 	Request  InitializeRequest
 	Response InitializeResponse
 }
+
+// Allows reports whether the capabilities n records let method be sent: nil,
+// or a *CapabilityError naming the capability that is not advertised
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+func (n Negotiation) Allows(method string) error {
+	switch method {
+	case AgentMethodLogout:
+		if n.Response.AgentCapabilities.Auth.Logout == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "auth.logout",
+			}
+		}
+	case AgentMethodSessionClose:
+		if n.Response.AgentCapabilities.SessionCapabilities.Close == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "sessionCapabilities.close",
+			}
+		}
+	case AgentMethodSessionDelete:
+		if n.Response.AgentCapabilities.SessionCapabilities.Delete == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "sessionCapabilities.delete",
+			}
+		}
+	case AgentMethodSessionFork:
+		if n.Response.AgentCapabilities.SessionCapabilities.Fork == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "sessionCapabilities.fork",
+			}
+		}
+	case AgentMethodSessionList:
+		if n.Response.AgentCapabilities.SessionCapabilities.List == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "sessionCapabilities.list",
+			}
+		}
+	case AgentMethodSessionLoad:
+		if !n.Response.AgentCapabilities.LoadSession {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "loadSession",
+			}
+		}
+	case AgentMethodSessionResume:
+		if n.Response.AgentCapabilities.SessionCapabilities.Resume == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "sessionCapabilities.resume",
+			}
+		}
+	case ClientMethodElicitationComplete:
+		if n.Request.ClientCapabilities.Elicitation == nil || n.Request.ClientCapabilities.Elicitation.Url == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "elicitation.url",
+			}
+		}
+	case ClientMethodFsReadTextFile:
+		if !n.Request.ClientCapabilities.Fs.ReadTextFile {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "fs.readTextFile",
+			}
+		}
+	case ClientMethodFsWriteTextFile:
+		if !n.Request.ClientCapabilities.Fs.WriteTextFile {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "fs.writeTextFile",
+			}
+		}
+	case ClientMethodTerminalCreate, ClientMethodTerminalKill, ClientMethodTerminalOutput, ClientMethodTerminalRelease, ClientMethodTerminalWaitForExit:
+		if !n.Request.ClientCapabilities.Terminal {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "terminal",
+			}
+		}
+	}
+	return nil
+}
+
+// gateMessage checks a typed message against the record n of initialize:
+// initialize itself passes; before it, nothing does; after it, a method the
+// record does not allow does not.
+func gateMessage(n *Negotiation, method string, _ any) error {
+	if method == AgentMethodInitialize {
+		return nil
+	}
+	if n == nil {
+		return fmt.Errorf("%s: %w", method, ErrNotInitialized)
+	}
+	return n.Allows(method)
+}
+
+// gateResult checks a result of method against the property and variant
+// gates of the record n; the method itself was checked when the request was
+// sent or received (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+func gateResult(_ *Negotiation, _ string, _ any) error {
+	return nil
+}

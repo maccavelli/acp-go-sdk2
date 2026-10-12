@@ -18,6 +18,8 @@ func newNotificationBarrierTestPair(t *testing.T, client Client, agent Agent) (*
 
 	clientConn := NewClientSideConnection(client, c2aW, a2cR)
 	agentConn := NewAgentSideConnection(agent, a2cW, c2aR)
+	negotiate(t, clientConn, allAdvertised())
+	negotiate(t, agentConn, allAdvertised())
 
 	t.Cleanup(func() {
 		_ = c2aR.Close()

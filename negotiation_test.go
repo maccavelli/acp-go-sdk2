@@ -22,6 +22,53 @@ func initPair(t *testing.T, handle func(context.Context, InitializeRequest) (Ini
 	return asc, NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
 }
 
+// negotiate stores n as what initialize agreed on side, an
+// *AgentSideConnection or a *ClientSideConnection, for a test whose subject
+// is not initialize (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 9).
+func negotiate(t *testing.T, side any, n *Negotiation) {
+	t.Helper()
+	switch s := side.(type) {
+	case *AgentSideConnection:
+		s.negotiation.Store(n)
+	case *ClientSideConnection:
+		s.negotiation.Store(n)
+	default:
+		t.Fatalf("negotiate: %T is not a side connection", side)
+	}
+}
+
+// allAdvertised returns a record in which each side advertises every
+// capability the protocol table and its gates name.
+func allAdvertised() *Negotiation {
+	return &Negotiation{
+		Request: InitializeRequest{ProtocolVersion: ProtocolVersionNumber, ClientCapabilities: ClientCapabilities{
+			Auth:        AuthCapabilities{Terminal: true},
+			Elicitation: &ElicitationCapabilities{Form: &ElicitationFormCapabilities{}, Url: &ElicitationUrlCapabilities{}},
+			Fs:          FileSystemCapabilities{ReadTextFile: true, WriteTextFile: true},
+			Session: &ClientSessionCapabilities{
+				Compaction:    &CompactionCapabilities{},
+				ConfigOptions: &SessionConfigOptionsCapabilities{Boolean: &BooleanConfigOptionCapabilities{}},
+				Notices:       &NoticeCapabilities{},
+			},
+			Terminal: true,
+		}},
+		Response: InitializeResponse{ProtocolVersion: ProtocolVersionNumber, AgentCapabilities: AgentCapabilities{
+			Auth:               AgentAuthCapabilities{Logout: &LogoutCapabilities{}},
+			LoadSession:        true,
+			McpCapabilities:    McpCapabilities{Acp: true, Http: true, Sse: true},
+			PromptCapabilities: PromptCapabilities{Audio: true, EmbeddedContext: true, Image: true},
+			SessionCapabilities: SessionCapabilities{
+				AdditionalDirectories: &SessionAdditionalDirectoriesCapabilities{},
+				Close:                 &SessionCloseCapabilities{},
+				Delete:                &SessionDeleteCapabilities{},
+				Fork:                  &SessionForkCapabilities{},
+				List:                  &SessionListCapabilities{},
+				Resume:                &SessionResumeCapabilities{},
+			},
+		}},
+	}
+}
+
 // encodesAlike reports whether a and b encode the same JSON value.
 func encodesAlike(t *testing.T, a, b any) bool {
 	t.Helper()

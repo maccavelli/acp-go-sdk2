@@ -70,9 +70,9 @@ func rawWire(t *testing.T, start func(w io.Writer, r io.Reader)) wire {
 func agentWire(t *testing.T) wire {
 	t.Helper()
 	return rawWire(t, func(w io.Writer, r io.Reader) {
-		NewAgentSideConnection(agentFuncs{NewSessionFunc: func(context.Context, NewSessionRequest) (NewSessionResponse, error) {
+		negotiate(t, NewAgentSideConnection(agentFuncs{NewSessionFunc: func(context.Context, NewSessionRequest) (NewSessionResponse, error) {
 			return NewSessionResponse{SessionId: "s"}, nil
-		}}, w, r)
+		}}, w, r), allAdvertised())
 	})
 }
 
@@ -156,6 +156,7 @@ func TestMalformedResponseFailsCall(t *testing.T) {
 			t.Parallel()
 			var c *ClientSideConnection
 			p := rawWire(t, func(w io.Writer, r io.Reader) { c = NewClientSideConnection(&clientFuncs{}, w, r) })
+			negotiate(t, c, allAdvertised())
 			done := make(chan error, 1)
 			go func() {
 				_, err := c.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath()})

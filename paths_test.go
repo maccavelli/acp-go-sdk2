@@ -194,10 +194,12 @@ func TestHandlerResultValidated(t *testing.T) {
 		_ = a2cW.Close()
 	})
 	var logs syncBuffer
-	NewAgentSideConnection(agentFuncs{ListSessionsFunc: func(context.Context, ListSessionsRequest) (ListSessionsResponse, error) {
+	asc := NewAgentSideConnection(agentFuncs{ListSessionsFunc: func(context.Context, ListSessionsRequest) (ListSessionsResponse, error) {
 		return ListSessionsResponse{Sessions: []SessionInfo{{SessionId: "s", Cwd: "rel"}}}, nil
 	}}, a2cW, c2aR, WithLogger(slog.New(slog.NewTextHandler(&logs, nil))))
 	cs := NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
+	negotiate(t, asc, allAdvertised())
+	negotiate(t, cs, allAdvertised())
 	_, err := cs.ListSessions(t.Context(), ListSessionsRequest{})
 	var re *RequestError
 	if !errors.As(err, &re) || re.Code != -32603 || !strings.Contains(fmt.Sprint(re.Data), `SessionInfo: cwd: "rel" is not an absolute path`) {
@@ -268,6 +270,8 @@ func TestReceiveRefusesRelativePaths(t *testing.T) {
 		delivered++
 		return nil
 	}}, io.Discard, idleReader(t))
+	negotiate(t, asc, allAdvertised())
+	negotiate(t, csc, allAdvertised())
 	for _, tc := range pathCases() {
 		route, ok := receiveRoutes[tc.name]
 		if !ok {
@@ -281,7 +285,9 @@ func TestReceiveRefusesRelativePaths(t *testing.T) {
 			want := tc.typ + ": " + tc.field + ": "
 			switch route.side {
 			case "response":
-				_, err := rawPeer(t, string(raw)).ListSessions(t.Context(), ListSessionsRequest{})
+				peer := rawPeer(t, string(raw))
+				negotiate(t, peer, allAdvertised())
+				_, err := peer.ListSessions(t.Context(), ListSessionsRequest{})
 				var ve *ValidationError
 				if !errors.As(err, &ve) || ve.Type != tc.typ || ve.Field != tc.field {
 					t.Errorf("%s = %q: ListSessions() = %v, want an error wrapping the absolute-path error", tc.name, bad, err)
@@ -336,6 +342,7 @@ func TestInboundHooks(t *testing.T) {
 			}
 			return nil
 		}))
+		negotiate(t, asc, allAdvertised())
 		if _, rerr := asc.handle(t.Context(), AgentMethodSessionNew, bareCommand(t)); rerr != nil || got != resolved {
 			t.Errorf("handle = %v, the handler saw %q, want %q", rerr, got, resolved)
 		}
@@ -367,6 +374,7 @@ func TestInboundHooks(t *testing.T) {
 				}
 				return err
 			}))
+		negotiate(t, asc, allAdvertised())
 		if _, rerr := asc.handle(t.Context(), AgentMethodSessionNew, bareCommand(t)); rerr != nil || got != "npx" {
 			t.Errorf("handle = %v, the handler saw %q, want the accepted npx", rerr, got)
 		}
@@ -388,6 +396,7 @@ func TestInboundHooks(t *testing.T) {
 					}
 					return tt.hookErr
 				}))
+			negotiate(t, asc, allAdvertised())
 			_, rerr := asc.handle(t.Context(), AgentMethodSessionNew, raw)
 			if rerr == nil || rerr.Code != tt.wantCode || !strings.Contains(rerr.Error(), tt.wantText) {
 				t.Errorf("handle = %v, want code %d with %q", rerr, tt.wantCode, tt.wantText)
@@ -412,13 +421,16 @@ func TestInboundHooks(t *testing.T) {
 			}),
 		}
 		csc := NewClientSideConnection(&clientFuncs{}, io.Discard, idleReader(t), hooks...)
+		negotiate(t, csc, allAdvertised())
 		note, _ := json.Marshal(SessionNotification{SessionId: "s", Update: StartToolCall("t", "read",
 			WithStartLocations([]ToolCallLocation{{Path: testAbsPath("a")}}))})
 		if _, rerr := csc.handle(t.Context(), ClientMethodSessionUpdate, note); rerr != nil {
 			t.Fatal(rerr)
 		}
 		list, _ := json.Marshal(ListSessionsResponse{Sessions: []SessionInfo{{SessionId: "s", Cwd: testAbsPath()}}})
-		if _, err := rawPeer(t, string(list), hooks...).ListSessions(t.Context(), ListSessionsRequest{}); err != nil {
+		peer := rawPeer(t, string(list), hooks...)
+		negotiate(t, peer, allAdvertised())
+		if _, err := peer.ListSessions(t.Context(), ListSessionsRequest{}); err != nil {
 			t.Fatal(err)
 		}
 		mu.Lock()

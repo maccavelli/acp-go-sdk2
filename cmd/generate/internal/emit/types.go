@@ -64,6 +64,7 @@ func typesFile(m *model.Model) *goFile {
 			"client sent and the response the agent answered",
 			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1 and N1).")
 		f.add(typeDecl("Negotiation", &ast.StructType{Fields: fields(param("Request", id(mi.Req)), param("Response", id(mi.Resp)))}))
+		emitGates(f, m)
 	}
 
 	return f

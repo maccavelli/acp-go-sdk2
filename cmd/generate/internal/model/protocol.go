@@ -79,8 +79,9 @@ type MethodRule struct {
 	Initializes                                           bool
 	VersionKey, RequestCapabilities, ResponseCapabilities string
 	// Capability is the dotted path, from AgentCapabilities or
-	// ClientCapabilities, of the capability that gates the method. It is
-	// recorded and checked, not emitted.
+	// ClientCapabilities, of the capability that gates the method. The SDK
+	// enforces it on what it sends and receives
+	// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
 	Capability string
 }
 
@@ -494,24 +495,40 @@ func (m *Model) isString(r TypeRef) bool {
 // checkCapabilities resolves each method's capability path from its side's
 // capabilities type, through the named types of its fields.
 func (m *Model) checkCapabilities(r *rules) error {
+	roots := map[string]string{sideAgent: "AgentCapabilities", sideClient: "ClientCapabilities"}
 	for _, mi := range slices.Concat(m.AgentMethods, m.ClientMethods) {
 		if mi.Capability == "" {
 			continue
 		}
 		rule := r.methods[ruleKey(mi.Side, mi.Wire)]
-		typeName := map[string]string{sideAgent: "AgentCapabilities", sideClient: "ClientCapabilities"}[mi.Side]
+		typeName := roots[mi.Side]
+		if in := m.Initialize; in != nil {
+			holder, field := in.Resp, in.RespCapsField
+			if mi.Side == sideClient {
+				holder, field = in.Req, in.ReqCapsField
+			}
+			if got := m.fieldType(holder, field); got != typeName {
+				return fmt.Errorf("%s: capability %q: %s.%s is %s, not %s", rule.owner(), mi.Capability, holder, field, got, typeName)
+			}
+		}
 		segs := strings.Split(mi.Capability, ".")
+		mi.CapabilitySteps = nil
 		for i, seg := range segs {
 			f := m.objectField(typeName, seg)
 			if f == nil {
 				return fmt.Errorf("%s: capability %q: %s has no property %q", rule.owner(), mi.Capability, typeName, seg)
 			}
-			if i == len(segs)-1 {
-				break
-			}
 			ref := f.Type
+			step := CapabilityStep{Field: f.Name, Pointer: ref.Kind == RefPointer}
 			for ref.Kind == RefPointer {
 				ref = *ref.Elem
+			}
+			mi.CapabilitySteps = append(mi.CapabilitySteps, step)
+			if i == len(segs)-1 {
+				if !step.Pointer && (ref.Kind != RefNamed || ref.Name != goBool) {
+					return fmt.Errorf("%s: capability %q is neither a boolean nor optional", rule.owner(), mi.Capability)
+				}
+				break
 			}
 			typeName = ref.Name
 		}

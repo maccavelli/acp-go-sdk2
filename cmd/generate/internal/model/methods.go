@@ -69,8 +69,17 @@ type Method struct {
 	Initializes                                                    bool
 	ReqVersionField, RespVersionField, ReqCapsField, RespCapsField string
 	// Capability is the capability path that gates the method, from the
-	// protocol table.
-	Capability string
+	// protocol table; CapabilitySteps are its Go fields from the side's
+	// capabilities type, each marked when it is a pointer, the last a bool
+	// or a pointer whose presence is the advertisement.
+	Capability      string
+	CapabilitySteps []CapabilityStep
+}
+
+// CapabilityStep is one field of a capability path.
+type CapabilityStep struct {
+	Field   string
+	Pointer bool
 }
 
 // roles holds the definitions x-method and x-side link to one method.

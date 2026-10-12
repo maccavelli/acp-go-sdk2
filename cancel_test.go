@@ -34,8 +34,10 @@ func promptPair(t *testing.T, a agentFuncs) *ClientSideConnection {
 		_ = c2aW.Close()
 		_ = a2cW.Close()
 	})
-	NewAgentSideConnection(a, a2cW, c2aR)
-	return NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
+	negotiate(t, NewAgentSideConnection(a, a2cW, c2aR), allAdvertised())
+	csc := NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
+	negotiate(t, csc, allAdvertised())
+	return csc
 }
 
 // prompt runs Prompt for session s on its own goroutine and returns where its
@@ -114,12 +116,13 @@ func TestPromptCancelRequestAnswersCancelled(t *testing.T) {
 		_ = a2cW.Close()
 	})
 	started, causes := make(chan struct{}, 1), make(chan error, 1)
-	NewAgentSideConnection(agentFuncs{PromptFunc: func(ctx context.Context, _ PromptRequest) (PromptResponse, error) {
+	asc := NewAgentSideConnection(agentFuncs{PromptFunc: func(ctx context.Context, _ PromptRequest) (PromptResponse, error) {
 		started <- struct{}{}
 		<-ctx.Done()
 		causes <- context.Cause(ctx)
 		return PromptResponse{}, ctx.Err()
 	}}, a2cW, c2aR)
+	negotiate(t, asc, allAdvertised())
 	lines := make(chan string, 4)
 	go func() {
 		sc := bufio.NewScanner(a2cR)
@@ -238,7 +241,7 @@ func TestPromptCancelRightAfterPrompt(t *testing.T) {
 		_ = a2cW.Close()
 	})
 	var missed atomic.Int32
-	NewAgentSideConnection(agentFuncs{PromptFunc: func(ctx context.Context, _ PromptRequest) (PromptResponse, error) {
+	asc := NewAgentSideConnection(agentFuncs{PromptFunc: func(ctx context.Context, _ PromptRequest) (PromptResponse, error) {
 		select {
 		case <-ctx.Done():
 		case <-time.After(5 * time.Second):
@@ -246,6 +249,7 @@ func TestPromptCancelRightAfterPrompt(t *testing.T) {
 		}
 		return PromptResponse{}, ctx.Err()
 	}}, a2cW, c2aR)
+	negotiate(t, asc, allAdvertised())
 	answers := make(chan string, n)
 	go func() {
 		sc := bufio.NewScanner(a2cR)
@@ -286,7 +290,10 @@ func permissionPair(t *testing.T, a agentFuncs, handle func(context.Context, Req
 		_ = a2cW.Close()
 	})
 	asc := NewAgentSideConnection(a, a2cW, c2aR)
-	return asc, NewClientSideConnection(&clientFuncs{RequestPermissionFunc: handle}, c2aW, a2cR)
+	csc := NewClientSideConnection(&clientFuncs{RequestPermissionFunc: handle}, c2aW, a2cR)
+	negotiate(t, asc, allAdvertised())
+	negotiate(t, csc, allAdvertised())
+	return asc, csc
 }
 
 // askPermission sends a permission request for tool call id in session s from

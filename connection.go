@@ -201,6 +201,18 @@ func answerUnlessCancelled[T any](c *Connection, ctx context.Context, method str
 	}
 }
 
+// addressable returns v when it is a pointer, and a pointer to a copy of it
+// otherwise, so that methods with pointer receivers can be reached.
+func addressable(v any) any {
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() || rv.Kind() == reflect.Pointer {
+		return v
+	}
+	ptr := reflect.New(rv.Type())
+	ptr.Elem().Set(rv)
+	return ptr.Interface()
+}
+
 // MethodHandler handles one inbound JSON-RPC request or notification.
 type MethodHandler func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError)
 
@@ -1155,6 +1167,17 @@ func (c *Connection) sendMessage(msg anyMessage) error {
 // SendRequest sends a JSON-RPC request and returns a typed result.
 // For methods that do not return a result, use SendRequestNoResult instead.
 func SendRequest[T any](c *Connection, ctx context.Context, method string, params any) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
+	return sendRequest[T](c, ctx, method, params, nil)
+}
+
+// gateFunc checks a typed message against what initialize agreed; the
+// generated side connections pass theirs, and the raw transport passes nil
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+type gateFunc func(method string, params any) error
+
+// sendRequest is SendRequest with the gate its result is checked by, nil for
+// none.
+func sendRequest[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
 	var result T
 
 	msg, idKey, err := c.prepareRequest(method, params)
@@ -1188,7 +1211,7 @@ func SendRequest[T any](c *Connection, ctx context.Context, method string, param
 		if err := json.Unmarshal(resp.msg.Result, &result); err != nil {
 			return result, NewInternalError(map[string]any{jsonErrorField: err.Error()})
 		}
-		if err := c.checkInbound(ctx, method, &result); err != nil {
+		if err := c.checkInbound(ctx, method, &result, gate); err != nil {
 			var zero T
 			return zero, fmt.Errorf("%s response: %w", method, err)
 		}
@@ -1469,8 +1492,12 @@ func (c *Connection) SendNotification(ctx context.Context, method string, params
 // checkResult returns a handler's result to send, after validating it as
 // sent: a result that fails is not sent, the peer gets -32603 naming the type
 // and property, and the connection logs it (0015-MADR-validate-absolute-protocol-paths.md, E1).
-func (c *Connection) checkResult(method string, result any) (any, *RequestError) {
-	if err := validateOutbound(result); err != nil {
+func (c *Connection) checkResult(method string, result any, gate gateFunc) (any, *RequestError) {
+	err := validateOutbound(result)
+	if err == nil && gate != nil {
+		err = gate(method, addressable(result))
+	}
+	if err != nil {
 		c.loggerOrDefault().Error("handler result fails validation; not sent", "method", method, "err", err)
 		return nil, NewInternalError(map[string]any{jsonErrorField: err.Error()})
 	}
@@ -1480,21 +1507,36 @@ func (c *Connection) checkResult(method string, result any) (any, *RequestError)
 // checkInbound runs the receiving order on a decoded message: the rewrite hook,
 // the SDK's validation with the host's rule for an absolute path, then the
 // validation hook with that result. It returns the error to act on, nil to
-// accept (0015-MADR-validate-absolute-protocol-paths.md, item 5).
-func (c *Connection) checkInbound(ctx context.Context, method string, params any) error {
+// accept (0015-MADR-validate-absolute-protocol-paths.md, item 5). A non-nil
+// gate checks the message against what initialize agreed; the hook rules on
+// the validation error first and, only if it accepts that, on the gate's, so
+// accepting one never accepts the other
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+func (c *Connection) checkInbound(ctx context.Context, method string, params any, gate gateFunc) error {
 	if c.rewrite != nil {
 		if err := c.rewrite(ctx, method, params); err != nil {
 			return err
 		}
 	}
-	var err error
+	var err, gateErr error
 	if v, ok := params.(validator); ok {
 		err = v.validate(filepath.IsAbs)
 	}
-	if c.inbound != nil {
-		return c.inbound(ctx, method, params, err)
+	if gate != nil {
+		gateErr = gate(method, params)
 	}
-	return err
+	if c.inbound == nil {
+		if err != nil {
+			return err
+		}
+		return gateErr
+	}
+	if err != nil {
+		if err = c.inbound(ctx, method, params, err); err != nil || gateErr == nil {
+			return err
+		}
+	}
+	return c.inbound(ctx, method, params, gateErr)
 }
 
 // inboundError is the answer to a received request that checkInbound refused: a
@@ -1503,6 +1545,13 @@ func inboundError(err error) *RequestError {
 	var re *RequestError
 	if errors.As(err, &re) {
 		return re
+	}
+	// A method the record does not allow, or any before initialize, is not
+	// available: -32601. A property or variant it does not allow is a bad
+	// parameter: -32602 (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+	var ce *CapabilityError
+	if errors.Is(err, ErrNotInitialized) || (errors.As(err, &ce) && ce.Field == "" && ce.Variant == "") {
+		return &RequestError{Code: -32601, Message: "Method not found", Data: map[string]any{jsonErrorField: err.Error()}}
 	}
 	return NewInvalidParams(map[string]any{jsonErrorField: err.Error()})
 }

@@ -73,6 +73,7 @@ const (
 	goUint64  = "uint64"
 	goFloat32 = "float32"
 	goFloat64 = "float64"
+	goBool    = "bool"
 )
 
 // integerFormats and numberFormats map a format to its Go type; "" is a node

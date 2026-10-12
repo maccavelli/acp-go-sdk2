@@ -62,6 +62,18 @@ func (c *AgentSideConnection) Connection() *Connection {
 	return c.conn
 }
 
+// gate checks a message of this connection against what initialize agreed
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+func (c *AgentSideConnection) gate(method string, params any) error {
+	return gateMessage(c.negotiation.Load(), method, params)
+}
+
+// resultGate checks a result of this connection, sent or received, against
+// what initialize agreed.
+func (c *AgentSideConnection) resultGate(method string, result any) error {
+	return gateResult(c.negotiation.Load(), method, result)
+}
+
 // Negotiated returns what initialize agreed on this connection, the request
 // and the response of its last successful initialize, and false before one
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
@@ -95,20 +107,20 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := a.agent.Authenticate(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodDocumentDidChange:
 		var p UnstableDidChangeDocumentNotification
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -126,7 +138,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -144,7 +156,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -162,7 +174,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -180,7 +192,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -198,7 +210,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := a.agent.Initialize(ctx, p)
@@ -216,7 +228,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 			a.conn.loggerOrDefault().Error("initialize answer not sent", "method", method, "err", verr)
 			return nil, NewInternalError(map[string]any{"error": verr.Error()})
 		}
-		result, rerr := a.conn.checkResult(method, resp)
+		result, rerr := a.conn.checkResult(method, resp, a.resultGate)
 		if rerr != nil {
 			return nil, rerr
 		}
@@ -230,20 +242,20 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := a.agent.Logout(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodMcpMessage:
 		var p UnstableMessageMcpNotification
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -261,7 +273,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -279,7 +291,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -292,13 +304,13 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodNesReject:
 		var p UnstableRejectNesNotification
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -316,7 +328,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -329,13 +341,13 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodNesSuggest:
 		var p UnstableSuggestNesRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -348,13 +360,13 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodProvidersDisable:
 		var p UnstableDisableProviderRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -367,13 +379,13 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodProvidersList:
 		var p UnstableListProvidersRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -386,13 +398,13 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodProvidersSet:
 		var p UnstableSetProviderRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -405,13 +417,13 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionCancel:
 		var p CancelNotification
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		s := receiptOf(ctx)
@@ -434,33 +446,33 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := a.agent.CloseSession(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionDelete:
 		var p DeleteSessionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := a.agent.DeleteSession(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionFork:
 		var p UnstableForkSessionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := a.agent.(interface {
@@ -473,26 +485,26 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionList:
 		var p ListSessionsRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := a.agent.ListSessions(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionLoad:
 		var p LoadSessionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		loader, ok := a.agent.(AgentLoader)
@@ -503,26 +515,26 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionNew:
 		var p NewSessionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := a.agent.NewSession(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionPrompt:
 		var p PromptRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		r := receiptOf(ctx)
@@ -566,105 +578,141 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionResume:
 		var p ResumeSessionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := a.agent.ResumeSession(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionSetConfigOption:
 		var p SetSessionConfigOptionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := a.agent.SetSessionConfigOption(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionSetMode:
 		var p SetSessionModeRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := a.agent.SetSessionMode(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp)
+		return a.conn.checkResult(method, resp, a.resultGate)
 	default:
 		return nil, NewMethodNotFound(method)
 	}
 }
 
 func (c *AgentSideConnection) CompleteElicitation(ctx context.Context, params CompleteElicitationNotification) error {
+	if err := c.gate(ClientMethodElicitationComplete, &params); err != nil {
+		return err
+	}
 	return c.conn.SendNotification(ctx, ClientMethodElicitationComplete, params)
 }
 
 func (c *AgentSideConnection) CreateElicitation(ctx context.Context, params CreateElicitationRequest) (CreateElicitationResponse, error) {
-	resp, err := SendRequest[CreateElicitationResponse](c.conn, ctx, ClientMethodElicitationCreate, params)
+	if err := c.gate(ClientMethodElicitationCreate, &params); err != nil {
+		return CreateElicitationResponse{}, err
+	}
+	resp, err := sendRequest[CreateElicitationResponse](c.conn, ctx, ClientMethodElicitationCreate, params, c.resultGate)
 	return resp, err
 }
 
 func (c *AgentSideConnection) ReadTextFile(ctx context.Context, params ReadTextFileRequest) (ReadTextFileResponse, error) {
-	resp, err := SendRequest[ReadTextFileResponse](c.conn, ctx, ClientMethodFsReadTextFile, params)
+	if err := c.gate(ClientMethodFsReadTextFile, &params); err != nil {
+		return ReadTextFileResponse{}, err
+	}
+	resp, err := sendRequest[ReadTextFileResponse](c.conn, ctx, ClientMethodFsReadTextFile, params, c.resultGate)
 	return resp, err
 }
 
 func (c *AgentSideConnection) WriteTextFile(ctx context.Context, params WriteTextFileRequest) (WriteTextFileResponse, error) {
-	resp, err := SendRequest[WriteTextFileResponse](c.conn, ctx, ClientMethodFsWriteTextFile, params)
+	if err := c.gate(ClientMethodFsWriteTextFile, &params); err != nil {
+		return WriteTextFileResponse{}, err
+	}
+	resp, err := sendRequest[WriteTextFileResponse](c.conn, ctx, ClientMethodFsWriteTextFile, params, c.resultGate)
 	return resp, err
 }
 
 func (c *AgentSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error) {
-	resp, err := SendRequest[UnstableMessageMcpResponse](c.conn, ctx, ClientMethodMcpMessage, params)
+	if err := c.gate(ClientMethodMcpMessage, &params); err != nil {
+		return UnstableMessageMcpResponse{}, err
+	}
+	resp, err := sendRequest[UnstableMessageMcpResponse](c.conn, ctx, ClientMethodMcpMessage, params, c.resultGate)
 	return resp, err
 }
 
 func (c *AgentSideConnection) RequestPermission(ctx context.Context, params RequestPermissionRequest) (RequestPermissionResponse, error) {
-	resp, err := SendRequest[RequestPermissionResponse](c.conn, ctx, ClientMethodSessionRequestPermission, params)
+	if err := c.gate(ClientMethodSessionRequestPermission, &params); err != nil {
+		return RequestPermissionResponse{}, err
+	}
+	resp, err := sendRequest[RequestPermissionResponse](c.conn, ctx, ClientMethodSessionRequestPermission, params, c.resultGate)
 	return resp, err
 }
 
 func (c *AgentSideConnection) SessionUpdate(ctx context.Context, params SessionNotification) error {
+	if err := c.gate(ClientMethodSessionUpdate, &params); err != nil {
+		return err
+	}
 	return c.conn.SendNotification(ctx, ClientMethodSessionUpdate, params)
 }
 
 func (c *AgentSideConnection) CreateTerminal(ctx context.Context, params CreateTerminalRequest) (CreateTerminalResponse, error) {
-	resp, err := SendRequest[CreateTerminalResponse](c.conn, ctx, ClientMethodTerminalCreate, params)
+	if err := c.gate(ClientMethodTerminalCreate, &params); err != nil {
+		return CreateTerminalResponse{}, err
+	}
+	resp, err := sendRequest[CreateTerminalResponse](c.conn, ctx, ClientMethodTerminalCreate, params, c.resultGate)
 	return resp, err
 }
 
 func (c *AgentSideConnection) KillTerminal(ctx context.Context, params KillTerminalRequest) (KillTerminalResponse, error) {
-	resp, err := SendRequest[KillTerminalResponse](c.conn, ctx, ClientMethodTerminalKill, params)
+	if err := c.gate(ClientMethodTerminalKill, &params); err != nil {
+		return KillTerminalResponse{}, err
+	}
+	resp, err := sendRequest[KillTerminalResponse](c.conn, ctx, ClientMethodTerminalKill, params, c.resultGate)
 	return resp, err
 }
 
 func (c *AgentSideConnection) TerminalOutput(ctx context.Context, params TerminalOutputRequest) (TerminalOutputResponse, error) {
-	resp, err := SendRequest[TerminalOutputResponse](c.conn, ctx, ClientMethodTerminalOutput, params)
+	if err := c.gate(ClientMethodTerminalOutput, &params); err != nil {
+		return TerminalOutputResponse{}, err
+	}
+	resp, err := sendRequest[TerminalOutputResponse](c.conn, ctx, ClientMethodTerminalOutput, params, c.resultGate)
 	return resp, err
 }
 
 func (c *AgentSideConnection) ReleaseTerminal(ctx context.Context, params ReleaseTerminalRequest) (ReleaseTerminalResponse, error) {
-	resp, err := SendRequest[ReleaseTerminalResponse](c.conn, ctx, ClientMethodTerminalRelease, params)
+	if err := c.gate(ClientMethodTerminalRelease, &params); err != nil {
+		return ReleaseTerminalResponse{}, err
+	}
+	resp, err := sendRequest[ReleaseTerminalResponse](c.conn, ctx, ClientMethodTerminalRelease, params, c.resultGate)
 	return resp, err
 }
 
 func (c *AgentSideConnection) WaitForTerminalExit(ctx context.Context, params WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
-	resp, err := SendRequest[WaitForTerminalExitResponse](c.conn, ctx, ClientMethodTerminalWaitForExit, params)
+	if err := c.gate(ClientMethodTerminalWaitForExit, &params); err != nil {
+		return WaitForTerminalExitResponse{}, err
+	}
+	resp, err := sendRequest[WaitForTerminalExitResponse](c.conn, ctx, ClientMethodTerminalWaitForExit, params, c.resultGate)
 	return resp, err
 }

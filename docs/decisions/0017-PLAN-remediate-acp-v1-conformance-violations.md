@@ -130,6 +130,9 @@ Read on `a438f99`, 2026-10-12, beside the MADR's own facts and probes. Line numb
   `TestPromptCancellationSendsCancelAndAllowsNewSession`, `TestPromptWaitsForSessionUpdatesComplete`,
   `TestRequestHandlerCanMakeNestedRequest`, `Example_client` and `Example_gemini` call `Initialize` first. `Example_agent` only
   constructs a connection.
+
+  *Annotated 2026-10-12:* this list predates steps 5 to 8; the tests they added that the gates reach are in the step 9 deviation of
+  that date.
 * **Tests that must keep passing unchanged.** `connection_cancel_test.go` builds raw `NewConnection`s and requires `-32800` from a
   handler cancelled by `$/cancel_request` (lines 80, 144, 208, 381) and from `SendRequest` when the caller's context ends (lines 476,
   580); `TestToReqErr_ContextCanceledMapsToRequestCancelled` (`errors_test.go:10`).
@@ -406,19 +409,21 @@ Out of scope:
      calls `gateMessage`. A schema without the rule gets no `gate`, and its dispatch passes `nil` below.
    * `connection.go`, with the gate always an argument, never stored:
      * `checkInbound(ctx, method string, params any, gate func(method string, params any) error)`: after the SDK's validation passes, a
-       non-nil `gate` is called; the validation hook receives whichever error results;
+       non-nil `gate` is called; the validation hook receives whichever error results; *(superseded 2026-10-12, see the step 9
+       deviation "the hook rules on each error")*
      * `inboundError`: a `*CapabilityError` with no `Field` or `Variant`, or an error wrapping `ErrNotInitialized`, is answered
        `-32601` (`Method not found`, data naming the method and the reason); one with a `Field` or `Variant`, `-32602`; others as today;
      * an unexported `sendRequest[T](c, ctx, method, params, gate)` holds `SendRequest`'s body and passes `gate` to its `checkInbound`;
        `SendRequest[T]` calls it with `nil`;
-     * `checkResult(method, result, gate)` calls a non-nil `gate` on the result after validating it; a refusal is answered `-32603`.
+     * `checkResult(method, result, gate)` calls a non-nil `gate` on the result after validating it; a refusal is answered `-32603`. *(Amended 2026-10-12, see the step 9 deviation "results are gated by value only".)*
    * Emission: `unmarshalValidate` and `checkedResult` pass the side's `gate` (a method value, `a.gate` or `c.gate`); every outbound
      wrapper but `Initialize` calls the side's `gate(<Const>, &params)` before sending and returns its error without writing; request
-     wrappers call `sendRequest[T](..., c.gate)`. The record is stored by step 8 before the agent's `initialize` answer is written, and
+     wrappers call `sendRequest[T](..., c.gate)`. *(Amended 2026-10-12, see the step 9 deviation "results are gated by value only".)* The record is stored by step 8 before the agent's `initialize` answer is written, and
      before the client's `Initialize` returns, so a request sent after `Initialize` returns is checked against it.
    * Regenerate; `-update`. Asserted: `types_gen.go` gains only `Allows` and `gateMessage`; `agent_gen.go` and `client_gen.go` change in
      each case's and wrapper's gate argument or call, and gain `gate`; engine cases change only in behaviour tests that call the changed
-     runtime functions, if any; the root API listing gains only `Negotiation.Allows`.
+     runtime functions, if any; the root API listing gains only `Negotiation.Allows`. *(Corrected 2026-10-12, see the step 9
+     deviation "an engine case lists Allows".)*
    * Tests:
      * a test helper in `negotiation_test.go`, `negotiate(t, side, n *Negotiation)`, stores a record on an `AgentSideConnection` or
        `ClientSideConnection` for tests that call `handle` directly, and `allAdvertised()` returns a `Negotiation` advertising every
@@ -461,7 +466,7 @@ Out of scope:
       validate. `TestProtocolTableAppliesToCommittedSchema` requires every rule to resolve on the committed schema.
     * `emit/types.go`: an unexported `func (v *T) gates(n *Negotiation) error` on each marked type: each rule's check returning a
       `*CapabilityError` with `Field` (the JSON key, with the index of an element) or `Variant` (the discriminator value), and a call into
-      each nested marked type. `gateMessage` calls `gates` when `params` has it.
+      each nested marked type. `gateMessage` calls `gates` when `params` has it. *(Amended 2026-10-12, see the step 9 deviation "results are gated by value only".)*
     * No record exists while `initialize` is answered, so both sides check its gates against a `Negotiation` built from the request and
       the result before storing it: the agent's `initialize` case answers a refusal `-32603`, as for any result; the client's
       `Initialize` passes its result to the validation hook as `checkInbound` does for other responses, so by default it returns the
@@ -906,4 +911,147 @@ Ran on `main` from `f025059` (step 7). The agent did not commit. The deviation a
   `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at the root; `GOOS=windows go vet ./...` passes in both modules; `make
   check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
 * On the Windows host reached over SSH, with a copy of the working tree's 303 tracked and untracked files and no macOS metadata: `go test
+  -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
+
+### Step 9 deviation, 2026-10-12: tests the list did not name
+
+With the gates generated, 26 root tests failed for sending typed messages before `initialize` (`<method>: acp: initialize has not
+completed`, or an answer `-32601` with that reason). 14 are under "Tests the gates reach". The other 12 are in files that steps 5 to 8
+added or changed after the list was written: `cancel_test.go` (`TestPromptCancelledAnswersCancelled`,
+`TestPromptCancelRequestAnswersCancelled`, `TestPromptCancelAfterReturnChangesNothing`, `TestPromptSupersededKeepsSuccessorCancel`,
+`TestPromptCancelRightAfterPrompt`, `TestCancelAnswersPendingPermissions`, `TestPromptCancelAnswersPendingPermissions`,
+`TestPermissionAfterCancelHandledNormally`, through `promptPair`, `permissionPair` and two pairs built inline), `jsonrpc_test.go`
+(`TestJSONRPCErrorAnswers` through `agentWire`, `TestMalformedResponseFailsCall` through its client) and `conformance_test.go`
+(`TestConformanceMethods`, `TestConformanceReplies`, `TestConformanceNotificationErrors`, through their three connection pairs). Two
+listed tests did not fail: `TestRequiredKeysOnDecode`, rightly, since decoding refuses its input before the gate runs; and
+`TestConnectionHandlesErrorsBidirectional`, wrongly, since it requires only `err != nil` and the error came from the gate instead of the
+handler it tests.
+
+Asked, the owner chose to add the three files to step 9: each helper or pair stores a record on the sides it builds with
+`negotiate(..., allAdvertised())`, and no assertion changes. `TestConnectionHandlesErrorsBidirectional` negotiates as the list already
+says, so its error is again the handler's. Not chosen: a real `initialize` exchange in each helper, which costs lines and wire traffic in
+tests whose subject is framing or cancellation. Files added to step 9: `cancel_test.go`, `jsonrpc_test.go` and `conformance_test.go`.
+The MADR is unchanged.
+
+### Step 9 deviation, 2026-10-12: an engine case lists Allows
+
+`TestEngineCases/accept-initialize-negotiation` failed: its schema has the `initialize` rule and no gated method, so `types_gen.go`
+gains `Allows` with a body of `return nil`, and its `want.api` gains `func (Negotiation).Allows(method string) error`. The step had
+asserted that engine cases change only in behaviour tests. Asked, the owner chose to accept the line: `Allows` exists with the rule,
+so `Negotiation`'s API does not depend on whether the table gates a method. Not chosen: emitting `Allows` only when a method is gated.
+The case's `want.api` is updated with `-update`, that line its only change; no other case changed. File added to step 9:
+`accept-initialize-negotiation.txtar`. The MADR is unchanged.
+
+### Step 9 deviation, 2026-10-12: the hook rules on each error
+
+Writing the tests, a gap in the step as written: `checkInbound` called the gate only when the SDK's validation passed, so a hook that
+accepts a validation error (as `TestInboundHooks`, "validation hook accepts a violation", does for a bare MCP command) let a method
+the record does not allow reach its handler. Asked, the owner chose that the hook rule on each error: `checkInbound` runs the SDK's
+validation and the gate; the hook receives the validation error, and only if it accepts that, the gate's error; a message that
+passes both reaches the hook once, with `nil`, so `TestInboundHooks` keeps its order. `gates_test.go` gains the case: a hook that
+accepts only the `*ValidationError` of a path still has the method refused `-32601`. Not chosen: keeping the first error only, as a
+documented limit. The MADR is amended (item 4, receiving, and "More Information").
+
+### Step 9 deviation, 2026-10-12: results are gated by value only
+
+`TestMethodGates` failed for 14 of the 15 methods in its hook case: a validation hook that accepts a method gate's
+`*CapabilityError` let the handler run, and then `checkResult`, given the side's full gate as the step said, refused the result with
+the same method gate: `-32603 ... capability sessionCapabilities.list not advertised`, after the handler's effects (the notification,
+`elicitation/complete`, has no result). A method gate on a result adds nothing besides: a received request was gated in `checkInbound`,
+and a sent one in its wrapper. Asked, the owner chose that results be gated by value only: each side also emits `resultGate(method
+string, result any) error`, which calls a generated `gateResult(n *Negotiation, method string, result any) error`; the dispatch passes
+`resultGate` to `checkResult`, and the request wrappers pass it to `sendRequest`, whose gate only checks the response. In step 9
+`gateResult` returns nil, there being no value gate yet; step 10 has it call `gates` on the result, as `gateMessage` does on
+parameters, and its provisional `initialize` check is unchanged. Requests and notifications keep the full gate. The runtime's
+signatures are as the step planned. Not chosen: keeping the full gate on results, with the hook's acceptance ending in `-32603`.
+`types_gen.go` therefore gains `gateResult` besides `Allows` and `gateMessage`. The MADR is amended (item 4, sending, and "More
+Information").
+
+### Step 9, method gates and initialization order, 2026-10-12
+
+Ran on `main` from `e0db539` (step 8). The agent did not commit. The four deviations above, each decided by the owner, ran within this
+step.
+
+* `cmd/generate/internal/model`: `acp.go` quotes the specification sentence of each gate and adds the 15th, `elicitation/complete` on
+  `elicitation.url`; `protocol.go`'s `Capability` comment says the SDK enforces it. `checkCapabilities` records each method's
+  `CapabilitySteps` (`CapabilityStep{Field, Pointer}`, new in `methods.go`), refuses a path whose last step is neither a pointer nor
+  `bool` (`capability %q is neither a boolean nor optional`), and, with the `initialize` rule, requires the record's capabilities fields
+  to be `AgentCapabilities` and `ClientCapabilities` (`%s: capability %q: %s.%s is %s, not %s`); `keywords.go` gains `goBool`.
+* `cmd/generate/internal/emit`: `emitGates`, from `typesFile` with the rule, emits `Negotiation.Allows`, `gateMessage` and `gateResult`.
+  `capabilityMissing` builds the test that a capability is missing: each pointer step compared with `nil`, a last `bool` negated, joined
+  by `||`; methods of one capability share a `case`. The first emission was `!(<advertised>)`, rewritten before review into the
+  direct form. `emitSideConnection` gives each side, with the rule, `gate` (calls `gateMessage`) and `resultGate` (calls
+  `gateResult`). `unmarshalValidate` passes `gate`; `checkedResult`, `callWithResult`, `promptCase`, `cancelledOnPromptCancel` and
+  `initializeCase` pass `resultGate`; `emitOutbound` puts `if err := c.gate(<Const>, &params); err != nil` first in every wrapper but
+  `Initialize`, the `Prompt` and `Cancel` wrappers included, and request wrappers call `sendRequest[T](..., c.resultGate)`. Without the
+  rule each passes `nil`. The first build failed on an `ast.AssignStmt` given as an expression (`_ = params` in `gateMessage`); the
+  parameter is named `_` until step 10 reads it.
+* `connection.go`: `gateFunc`; `sendRequest[T]` holds `SendRequest`'s body with the gate of its response, and `SendRequest[T]` passes
+  `nil`; `checkResult` calls a non-nil gate on `addressable(result)` after validating; `checkInbound` runs validation and the gate and
+  hands the hook each error as the deviation "the hook rules on each error" says; `inboundError` answers `ErrNotInitialized` and a
+  method gate's `*CapabilityError` `-32601` `Method not found`, with the reason in `data`.
+* Generated: `types_gen.go` gains only `Allows`, `gateMessage` and `gateResult` (no line removed); `agent_gen.go` and `client_gen.go`
+  change only in each case's gate argument, each wrapper's gate call and `sendRequest`, and gain `gate` and `resultGate`. A second
+  generation changed nothing. The API listing against `git archive HEAD` gains exactly `method (Negotiation) Allows (method string)
+  error`. `enginetest.RuntimeFiles` and its comment are unchanged: the runtime names no generated declaration, the gate arriving as an
+  argument.
+* Engine cases: `accept-initialize-negotiation.txtar`'s `want.api` gains the `Allows` line, as its deviation says; no other case and no
+  behaviour test changed.
+* Generator tests: `protocol_test.go`'s fixture makes `SessionCaps.list` optional (`anyOf` of `ListCaps` and `null`) and adds a `plain`
+  object property; `TestProtocolTableRefuses` gains "capabilities of another type in initialize" and "capability neither a boolean nor
+  optional"; the committed-schema test names `elicitation/complete`'s sentence and counts 15 gates. `dispatch_test.go`:
+  `TestDispatchFollowsTheModel` pins `gate`, `resultGate`, the dispatch's and wrappers' gate calls, `sendRequest` with
+  `c.resultGate`, `Allows` with `return nil`, and `gateMessage` naming `AgentMethodHello`, and refuses `AgentMethodInitialize`;
+  `TestSideConnectionsFollowTheModel` requires `gate`, `resultGate` and `gateMessage` with the rule only, and `nil` gates without it;
+  new `TestGatesFollowTheModel` pins, on a schema of its own, a shared case for two methods of a `bool`, the guarded pointer path
+  `n.Response.Theirs.Nested == nil || n.Response.Theirs.Nested.Leaf == nil`, a client capability under `n.Request.Mine`, and no gate on
+  the initialize wrapper.
+* Root tests changed to record a negotiation, with `negotiate(t, side, allAdvertised())` from `negotiation_test.go`, and no assertion
+  changed:
+  * `acp_test.go`: `TestAgentDispatch_AllowsPartialUnstableMethodImplementation`, `TestConnectionHandlesErrorsBidirectional` (its error is
+    again the handler's), `TestConnectionHandlesConcurrentRequests` (the client, discarded as `_`, is now `cs`),
+    `TestConnectionHandlesMessageOrdering`, `TestConnectionHandlesNotifications`;
+  * `connection_notification_barrier_test.go`: `newNotificationBarrierTestPair`, used by the five listed tests;
+    `connection_queue_size_test.go`: `TestLargerQueue_SurvivesNotificationBurst`;
+  * `paths_test.go`: `TestHandlerResultValidated` (the agent, unnamed before, is now `asc`), `TestReceiveRefusesRelativePaths` (both
+    sides and the `rawPeer` client of the response cases), `TestInboundHooks` ("rewrite resolves a bare command", "validation hook
+    accepts a violation", "validation hook refuses a valid message", and both clients of "order on notifications and responses").
+    `rawPeer` itself does not negotiate: the first run did, and step 8's `TestProtocolVersion` failed (`the client recorded an answer it
+    refused`), since it needs a client with no record, so the call sites negotiate;
+  * from the deviation: `cancel_test.go` (`promptPair`, `permissionPair`, and the pairs of `TestPromptCancelRequestAnswersCancelled` and
+    `TestPromptCancelRightAfterPrompt`), `jsonrpc_test.go` (`agentWire`, and the client of `TestMalformedResponseFailsCall`),
+    `conformance_test.go` (the pairs of `TestConformanceNotificationErrors`, `exchange` and `TestConformanceMethods`).
+
+  `TestRequiredKeysOnDecode` is unchanged: decoding refuses its input before any gate.
+* New `gates_test.go`: `TestMethodGates` (each of the 15, for a record advertising everything else and one advertising nothing: the
+  typed send returns the `*CapabilityError` and writes nothing, within a two-second deadline, and the received message is answered
+  `-32601` without reaching the handler; for a record advertising only that capability, the send is written and the message handled;
+  and a hook that accepts the `*CapabilityError` has it handled), `TestHookRulesOnEachError`, `TestNotInitialized` (every typed method of
+  both sides, by reflection, but `Initialize`: an error wrapping `ErrNotInitialized`, nothing written; `session/new` and
+  `fs/read_text_file` received answered `-32601`; `initialize` handled), `TestRawPathsUngated` (`SendRequest[T]` of `session/list`,
+  `SendNotification` and `CallExtension` before `initialize`), `TestAllows` (nil for ungated methods and `initialize`, the gate's error
+  without the capability, nil with it, and equal to `gateMessage` for three records).
+* Plants, each in its own scratch copy, all `exit=1` and failing as below:
+  * the wrapper's gate call removed (emitter): `send advertising nothing: ... context deadline exceeded, want *CapabilityError{...}`.
+    Its first run, before the deadline existed, hung until the ten-minute test timeout, as did the negated `bool`; both runs are not
+    counted, and the deadline was added to the two sends of `TestMethodGates` and to `TestNotInitialized`;
+  * `checkInbound` not calling the gate: `receive advertising nothing: answered <nil>, handler ran true, want -32601 and no handler`;
+  * the `nil`-record branch removed: `TestNotInitialized` panics on a nil `*Negotiation`;
+  * a `bool` capability's test negated: `send advertising only loadSession: nothing written`, and its receive refused;
+  * `inboundError` answering `-32602` for a method gate: `TestNotInitialized` and `TestMethodGates`, `want -32601`;
+  * the hook's acceptance of a validation error accepting the gate: `TestHookRulesOnEachError`, `handle = <nil>, want -32601`;
+  * `resultGate` replaced by `gate` for results: `receive with a hook accepting the gate: answered ... -32603 ...`;
+  * pointer parents left unguarded: `TestGatesFollowTheModel` lacks the guarded `AgentMethodB` case, and at the root `TestAllows`
+    panics on a nil pointer (that run's first try exited 127 on an unquoted `|` in its `-run` pattern and is not counted);
+  * `gateMessage` skipping `Allows`: `TestAllows`, `Allows = ... not advertised, gate = <nil>`;
+  * `SendRequest` given a refusing gate: `TestRawPathsUngated`, `SendRequest: session/list response: acp: initialize has not completed`;
+  * `Allows` renamed: `TestDispatchFollowsTheModel` lacks it; the side gates emitted without the rule:
+    `TestSideConnectionsFollowTheModel`, `without: agent_gen.go holds "func (c *AgentSideConnection) gate(": true, want false`;
+  * the model's `bool` check and its capabilities-type check each removed: `TestProtocolTableRefuses` fails
+    `capability_neither_a_boolean_nor_optional` and `capabilities_of_another_type_in_initialize`.
+* `make pre-add-check`: `go-precheck: 106 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`; the untracked
+  `gates_test.go`: `go-precheck: 1 file(s) clean`, with `govulncheck` skipped. `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes
+  at the root; `GOOS=windows go vet ./...` passes in both modules; `make check-records` and `make markdownlint` exit 0; the identifier
+  scan of the changed files found nothing.
+* On the Windows host reached over SSH, with a copy of the working tree's 304 tracked and untracked files and no macOS metadata: `go test
   -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.

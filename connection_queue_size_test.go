@@ -131,6 +131,8 @@ func TestLargerQueue_SurvivesNotificationBurst(t *testing.T) {
 	// Use a queue large enough to absorb the burst.
 	clientConn := NewClientSideConnection(client, c2aW, a2cR, WithMaxQueuedNotifications(burstSize*2))
 	agentConn := NewAgentSideConnection(agentFuncs{}, a2cW, c2aR, WithMaxQueuedNotifications(burstSize*2))
+	negotiate(t, clientConn, allAdvertised())
+	negotiate(t, agentConn, allAdvertised())
 
 	for i := range burstSize {
 		if err := agentConn.SessionUpdate(context.Background(), testSessionUpdate("burst", i)); err != nil {

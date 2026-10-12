@@ -35,7 +35,8 @@ const protocolDefs = `{
 		{"type":"object","required":["verdict","choice"],"properties":{"verdict":{"const":"chosen","type":"string"},"choice":{"type":"string"}}}],
 		"discriminator":{"propertyName":"verdict"}},
 	"AgentCapabilities":{"type":"object","properties":{"loadSession":{"type":"boolean"},"session":{"allOf":[{"$ref":"#/$defs/SessionCaps"}]}}},
-	"SessionCaps":{"type":"object","properties":{"list":{"type":"object"}}},
+	"ListCaps":{"type":"object"},
+	"SessionCaps":{"type":"object","properties":{"list":{"anyOf":[{"$ref":"#/$defs/ListCaps"},{"type":"null"}]},"plain":{"type":"object"}}},
 	"Block":{"oneOf":[{"type":"object","required":["type","text"],"properties":{"type":{"const":"text","type":"string"},"text":{"type":"string"}}}]},
 	"Update":{"type":"object","required":["id"],"properties":{"id":{"type":"string"}}}}`
 
@@ -253,6 +254,10 @@ func TestProtocolTableRefuses(t *testing.T) {
 			wanted: []string{"interface loader", `"loader" is not an exported Go identifier`}},
 		{name: "prompt turn and its cancel at once", table: func(p *Protocol) { p.Methods[1].CancelsPromptTurn = true },
 			wanted: []string{`agent method "s/prompt"`, "it cannot be both a prompt turn and its cancel"}},
+		{name: "capabilities of another type in initialize", table: func(p *Protocol) { p.Methods[3].Capability = "fs" },
+			wanted: []string{`client method "s/update"`, `capability "fs": InitRequest.ClientCapabilities is ClientCaps, not ClientCapabilities`}},
+		{name: "capability neither a boolean nor optional", table: func(p *Protocol) { p.Methods[2].Capability = "session.plain" },
+			wanted: []string{`agent method "s/cancel"`, `capability "session.plain" is neither a boolean nor optional`}},
 		{name: "capability with an empty segment", table: func(p *Protocol) { p.Methods[0].Capability = "session..list" },
 			wanted: []string{`agent method "s/load"`, `capability "session..list" has an empty segment`}},
 		{name: "prompt turn without a stop key", table: func(p *Protocol) { p.Methods[1].StopKey = "" },
@@ -423,14 +428,16 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 				named = "'terminal/*'"
 			case r.Wire == "logout":
 				named = "the logout method"
+			case r.Wire == "elicitation/complete":
+				named = "URL-based elicitation"
 			}
 			if !strings.Contains(doc, named) {
 				t.Errorf("%s: capability %s does not name %s: %q", r.Wire, r.Capability, named, doc)
 			}
 		}
 	}
-	if gates != 14 {
-		t.Errorf("%d capability gates, want 14", gates)
+	if gates != 15 {
+		t.Errorf("%d capability gates, want 15", gates)
 	}
 	prompt := methodByWire(m, "session/prompt")
 	if prompt.SessionField != "SessionId" || prompt.Canceller == nil || prompt.Canceller.Wire != "session/cancel" {

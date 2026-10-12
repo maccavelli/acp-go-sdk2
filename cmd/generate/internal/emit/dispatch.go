@@ -39,7 +39,7 @@ func handleFunc(f *goFile, recv, recvType string, cases []ast.Stmt) *ast.FuncDec
 // with the cancelled stop reason, keeping the rest of the handler's result,
 // and a cancel that comes later finds no turn and changes nothing
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, P1).
-func promptCase(f *goFile, recv ast.Expr, mi *model.Method) []ast.Stmt {
+func promptCase(f *goFile, recv ast.Expr, mi *model.Method, gate ast.Expr) []ast.Stmt {
 	field := mi.SessionField
 	return []ast.Stmt{
 		define(exprs(id("r")), call(id("receiptOf"), id("ctx"))),
@@ -72,7 +72,7 @@ func promptCase(f *goFile, recv ast.Expr, mi *model.Method) []ast.Stmt {
 			assign(exprs(dot("resp", mi.StopField), id("err")), id(mi.StopConst), nilExpr()),
 		),
 		ifStmt(nil, errNotNil(), toRequestError()),
-		checkedResult(dot("a", "conn")),
+		checkedResult(dot("a", "conn"), gate),
 	}
 }
 
@@ -228,6 +228,16 @@ func emitSideConnection(f *goFile, s side) {
 	f.add(method(recv(), "Connection", funcType(nil, param("", star(id("Connection")))), ret(dot("c", "conn"))))
 	f.line()
 	if s.negotiated {
+		f.comment("gate checks a message of this connection against what initialize agreed",
+			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1).")
+		f.add(method(recv(), "gate", funcType([]*ast.Field{param("method", id("string")), param("params", id("any"))}, param("", id("error"))),
+			ret(call(id("gateMessage"), call(dot("c", "negotiation", "Load")), id("method"), id("params")))))
+		f.line()
+		f.comment("resultGate checks a result of this connection, sent or received, against",
+			"what initialize agreed.")
+		f.add(method(recv(), "resultGate", funcType([]*ast.Field{param("method", id("string")), param("result", id("any"))}, param("", id("error"))),
+			ret(call(id("gateResult"), call(dot("c", "negotiation", "Load")), id("method"), id("result")))))
+		f.line()
 		f.comment("Negotiated returns what initialize agreed on this connection, the request",
 			"and the response of its last successful initialize, and false before one",
 			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1).")
@@ -256,16 +266,127 @@ func emitSideConnection(f *goFile, s side) {
 	}
 }
 
+// gateOf returns, for each use, a new expression of the side's gate called
+// name: recv.<name> when the model has an initialize rule, nil otherwise.
+func gateOf(m *model.Model, recv, name string) func() ast.Expr {
+	return func() ast.Expr {
+		if m.Initialize == nil {
+			return nilExpr()
+		}
+		return dot(recv, name)
+	}
+}
+
+// capabilityMissing is the expression over n, a Negotiation, that is true when
+// a capability is not advertised: root is the side's capabilities in n, and
+// steps the fields of the path from it. A pointer on the path is missing when
+// nil, and a final bool when false.
+func capabilityMissing(root func() ast.Expr, steps []model.CapabilityStep) ast.Expr {
+	upTo := func(k int) ast.Expr {
+		x := root()
+		for _, st := range steps[:k+1] {
+			x = sel(x, st.Field)
+		}
+		return x
+	}
+	var cond ast.Expr
+	or := func(e ast.Expr) {
+		if cond == nil {
+			cond = e
+			return
+		}
+		cond = binary(cond, token.LOR, e)
+	}
+	for i, st := range steps {
+		switch {
+		case st.Pointer:
+			or(binary(upTo(i), token.EQL, nilExpr()))
+		case i == len(steps)-1:
+			or(not(upTo(i)))
+		}
+	}
+	return cond
+}
+
+// emitGates emits Negotiation.Allows, the method gates of the protocol table,
+// and gateMessage, which every typed message goes through
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1). Methods gated by
+// one capability share a case.
+func emitGates(f *goFile, m *model.Model) {
+	type gate struct {
+		root    func() ast.Expr
+		mi      *model.Method
+		methods []ast.Expr
+	}
+	var gates []*gate
+	byCapability := map[string]*gate{}
+	collect := func(methods []*model.Method, root func() ast.Expr) {
+		for _, mi := range methods {
+			if mi.Capability == "" {
+				continue
+			}
+			key := mi.Side + " " + mi.Capability
+			g := byCapability[key]
+			if g == nil {
+				g = &gate{root: root, mi: mi}
+				byCapability[key] = g
+				gates = append(gates, g)
+			}
+			g.methods = append(g.methods, id(mi.Const))
+		}
+	}
+	collect(m.AgentMethods, func() ast.Expr { return dot("n", "Response", m.Initialize.RespCapsField) })
+	collect(m.ClientMethods, func() ast.Expr { return dot("n", "Request", m.Initialize.ReqCapsField) })
+	var cases []ast.Stmt
+	for _, g := range gates {
+		cases = append(cases, caseOf(g.methods,
+			ifStmt(nil, capabilityMissing(g.root, g.mi.CapabilitySteps),
+				ret(addr(composite(id("CapabilityError"), kv(id("Method"), id("method")), kv(id("Capability"), str(g.mi.Capability))))))))
+	}
+	body := []ast.Stmt{}
+	if len(cases) > 0 {
+		body = append(body, switchStmt(id("method"), cases...))
+	}
+	body = append(body, ret(nilExpr()))
+	f.line()
+	f.comment("Allows reports whether the capabilities n records let method be sent: nil,",
+		"or a *CapabilityError naming the capability that is not advertised",
+		"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1).")
+	f.add(method(param("n", id("Negotiation")), "Allows", funcType([]*ast.Field{param("method", id("string"))}, param("", id("error"))), body...))
+	f.line()
+	f.comment("gateMessage checks a typed message against the record n of initialize:",
+		"initialize itself passes; before it, nothing does; after it, a method the",
+		"record does not allow does not.")
+	f.add(function("gateMessage", funcType([]*ast.Field{
+		param("n", star(id("Negotiation"))), param("method", id("string")), param("_", id("any")),
+	}, param("", id("error"))),
+		ifStmt(nil, binary(id("method"), token.EQL, id(m.Initialize.Const)), ret(nilExpr())),
+		ifStmt(nil, binary(id("n"), token.EQL, nilExpr()),
+			ret(call(f.qual(pkgFmt, "Errorf"), str("%s: %w"), id("method"), id("ErrNotInitialized")))),
+		ret(call(dot("n", "Allows"), id("method"))),
+	))
+	f.line()
+	f.comment("gateResult checks a result of method against the property and variant",
+		"gates of the record n; the method itself was checked when the request was",
+		"sent or received (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).")
+	f.add(function("gateResult", funcType([]*ast.Field{
+		param("_", star(id("Negotiation"))), param("_", id("string")), param("_", id("any")),
+	}, param("", id("error"))),
+		ret(nilExpr()),
+	))
+}
+
 // agentFile builds agent_gen.go: the agent's handler and its outbound wrappers.
 func agentFile(m *model.Model) *goFile {
 	f := newFile()
 	emitSideConnection(f, agentSide(m))
+	gate, resultGate := gateOf(m, "a", "gate"), gateOf(m, "a", "resultGate")
 
 	var cases []ast.Stmt
 	for _, mi := range m.AgentMethods {
 		var body []ast.Stmt
 		if mi.Notif != "" {
-			body = append(body, unmarshalValidate(f, dot("a", "conn"), mi.Notif)...)
+			body = append(body, unmarshalValidate(f, dot("a", "conn"), mi.Notif, gate())...)
 			// A prompt turn's cancel first cancels the session's in-flight prompt context.
 			if mi.CancelsPromptTurn {
 				body = append(body, cancelActivePrompt(mi.SessionField)...)
@@ -274,18 +395,18 @@ func agentFile(m *model.Model) *goFile {
 			body = append(body, pre...)
 			body = append(body, callNoResult(recv, mi.GoName)...)
 		} else {
-			body = append(body, unmarshalValidate(f, dot("a", "conn"), mi.Req)...)
+			body = append(body, unmarshalValidate(f, dot("a", "conn"), mi.Req, gate())...)
 			pre, recv := agentAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Req, mi.Resp, mi.HasResult)
 			body = append(body, pre...)
 			switch {
 			case mi.Initializes:
-				body = append(body, initializeCase(recv, mi)...)
+				body = append(body, initializeCase(recv, mi, resultGate())...)
 			case mi.PromptTurn:
-				body = append(body, promptCase(f, recv, mi)...)
+				body = append(body, promptCase(f, recv, mi, resultGate())...)
 			case !mi.HasResult:
 				body = append(body, callNoResult(recv, mi.GoName)...)
 			default:
-				body = append(body, callWithResult(dot("a", "conn"), recv, mi.GoName)...)
+				body = append(body, callWithResult(dot("a", "conn"), recv, mi.GoName, resultGate())...)
 			}
 		}
 		cases = append(cases, caseOf(exprs(id(mi.Const)), body...))
@@ -293,7 +414,7 @@ func agentFile(m *model.Model) *goFile {
 	f.add(handleFunc(f, "a", "AgentSideConnection", cases))
 
 	// Agent outbound wrappers (agent -> client).
-	emitOutbound(f, "AgentSideConnection", m.ClientMethods)
+	emitOutbound(f, "AgentSideConnection", m.ClientMethods, m.Initialize != nil)
 
 	return f
 }
@@ -302,24 +423,25 @@ func agentFile(m *model.Model) *goFile {
 func clientFile(m *model.Model) *goFile {
 	f := newFile()
 	emitSideConnection(f, clientSide(m))
+	gate, resultGate := gateOf(m, "c", "gate"), gateOf(m, "c", "resultGate")
 
 	var cases []ast.Stmt
 	for _, mi := range m.ClientMethods {
 		var body []ast.Stmt
 		if mi.Notif != "" {
-			body = append(body, unmarshalValidate(f, dot("c", "conn"), mi.Notif)...)
+			body = append(body, unmarshalValidate(f, dot("c", "conn"), mi.Notif, gate())...)
 			pre, recv := clientAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Notif, "", false)
 			body = append(body, pre...)
 			body = append(body, callNoResult(recv, mi.GoName)...)
 		} else {
-			body = append(body, unmarshalValidate(f, dot("c", "conn"), mi.Req)...)
+			body = append(body, unmarshalValidate(f, dot("c", "conn"), mi.Req, gate())...)
 			pre, recv := clientAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Req, mi.Resp, mi.HasResult)
 			body = append(body, pre...)
 			switch {
 			case mi.CancelledByPromptCancel:
-				body = append(body, cancelledOnPromptCancel(f, recv, mi)...)
+				body = append(body, cancelledOnPromptCancel(f, recv, mi, resultGate())...)
 			case mi.HasResult:
-				body = append(body, callWithResult(dot("c", "conn"), recv, mi.GoName)...)
+				body = append(body, callWithResult(dot("c", "conn"), recv, mi.GoName, resultGate())...)
 			default:
 				body = append(body, callNoResult(recv, mi.GoName)...)
 			}
@@ -329,7 +451,7 @@ func clientFile(m *model.Model) *goFile {
 	f.add(handleFunc(f, "c", "ClientSideConnection", cases))
 
 	// Client outbound wrappers (client -> agent).
-	emitOutbound(f, "ClientSideConnection", m.AgentMethods)
+	emitOutbound(f, "ClientSideConnection", m.AgentMethods, m.Initialize != nil)
 
 	return f
 }
@@ -337,7 +459,7 @@ func clientFile(m *model.Model) *goFile {
 // cancelledOnPromptCancel calls the method under a context its session's
 // prompt-turn cancel ends, and answers with the cancelled variant at once
 // when it does (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).
-func cancelledOnPromptCancel(f *goFile, recv ast.Expr, mi *model.Method) []ast.Stmt {
+func cancelledOnPromptCancel(f *goFile, recv ast.Expr, mi *model.Method, gate ast.Expr) []ast.Stmt {
 	callFn := &ast.FuncLit{
 		Type: funcType([]*ast.Field{param("ctx", f.qual(pkgContext, "Context"))}, param("", id(mi.Resp)), param("", id("error"))),
 		Body: block(ret(recvCall(recv, mi.GoName))),
@@ -348,7 +470,7 @@ func cancelledOnPromptCancel(f *goFile, recv ast.Expr, mi *model.Method) []ast.S
 		&ast.DeferStmt{Call: call(id("done"))},
 		define(exprs(id("resp"), id("err")), call(id("answerUnlessCancelled"), dot("c", "conn"), id("pctx"), id("method"), callFn, answer)),
 		ifStmt(nil, errNotNil(), toRequestError()),
-		checkedResult(dot("c", "conn")),
+		checkedResult(dot("c", "conn"), gate),
 	}
 }
 
@@ -357,7 +479,7 @@ func cancelledOnPromptCancel(f *goFile, recv ast.Expr, mi *model.Method) []ast.S
 // speaks that version only; the record of the request and the answer is
 // stored before the answer is written
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, N1 and G1).
-func initializeCase(recv ast.Expr, mi *model.Method) []ast.Stmt {
+func initializeCase(recv ast.Expr, mi *model.Method, gate ast.Expr) []ast.Stmt {
 	version := dot("resp", mi.RespVersionField)
 	verr := addr(composite(id("ProtocolVersionError"),
 		kv(id("Requested"), call(id("int"), dot("p", mi.ReqVersionField))),
@@ -371,7 +493,7 @@ func initializeCase(recv ast.Expr, mi *model.Method) []ast.Stmt {
 			exprStmt(call(sel(call(dot("a", "conn", "loggerOrDefault")), "Error"), str("initialize answer not sent"), str("method"), id("method"), str("err"), id("verr"))),
 			ret(nilExpr(), call(id("NewInternalError"), composite(rawMap(id("any")), kv(str("error"), call(dot("verr", "Error")))))),
 		),
-		define(exprs(id("result"), id("rerr")), call(dot("a", "conn", "checkResult"), id("method"), id("resp"))),
+		define(exprs(id("result"), id("rerr")), call(dot("a", "conn", "checkResult"), id("method"), id("resp"), gate)),
 		ifStmt(nil, binary(id("rerr"), token.NEQ, nilExpr()), ret(nilExpr(), id("rerr"))),
 		exprStmt(call(dot("a", "negotiation", "Store"), addr(composite(id("Negotiation"), kv(id("Request"), id("p")), kv(id("Response"), id("resp")))))),
 		ret(id("result"), nilExpr()),
@@ -403,10 +525,30 @@ func initializeWrapper(mi *model.Method) []ast.Stmt {
 
 // emitOutbound emits one method per peer method on recvType that sends the
 // request or notification over c.conn.
-func emitOutbound(f *goFile, recvType string, methods []*model.Method) {
+func emitOutbound(f *goFile, recvType string, methods []*model.Method, gated bool) {
 	recv := func() *ast.Field { return param("c", star(id(recvType))) }
 	params := func(typeName string) []*ast.Field {
 		return []*ast.Field{param("ctx", f.qual(pkgContext, "Context")), param("params", id(typeName))}
+	}
+	// gateFirst is if err := c.gate(<const>, &params); err != nil { return [zero,] err }:
+	// a message the record does not allow is not written
+	// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+	gateFirst := func(mi *model.Method, zero ast.Expr) []ast.Stmt {
+		if !gated {
+			return nil
+		}
+		fail := ret(id("err"))
+		if zero != nil {
+			fail = ret(zero, id("err"))
+		}
+		return []ast.Stmt{ifStmt(define(exprs(id("err")), call(dot("c", "gate"), id(mi.Const), addr(id("params")))), errNotNil(), fail)}
+	}
+	// resultArg is the gate the response is checked by.
+	resultArg := func() ast.Expr {
+		if gated {
+			return dot("c", "resultGate")
+		}
+		return nilExpr()
 	}
 
 	for _, mi := range methods {
@@ -416,21 +558,23 @@ func emitOutbound(f *goFile, recvType string, methods []*model.Method) {
 			// The cancel is written before the pending requests are answered
 			// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).
 			f.add(method(recv(), mi.GoName, funcType(params(mi.Notif), param("", id("error"))),
-				define(exprs(id("err")), call(dot("c", "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))),
-				exprStmt(call(dot("c", "pending", "cancel"), call(id("string"), dot("params", mi.SessionField)))),
-				ret(id("err")),
+				append(gateFirst(mi, nil),
+					define(exprs(id("err")), call(dot("c", "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))),
+					exprStmt(call(dot("c", "pending", "cancel"), call(id("string"), dot("params", mi.SessionField)))),
+					ret(id("err")),
+				)...,
 			))
 			continue
 		}
 		if mi.Notif != "" {
 			f.add(method(recv(), mi.GoName, funcType(params(mi.Notif), param("", id("error"))),
-				ret(call(dot("c", "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))),
+				append(gateFirst(mi, nil), ret(call(dot("c", "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))))...,
 			))
 			continue
 		}
 		if !mi.HasResult {
 			f.add(method(recv(), mi.GoName, funcType(params(mi.Req), param("", id("error"))),
-				ret(call(dot("c", "conn", "SendRequestNoResult"), id("ctx"), id(mi.Const), id("params"))),
+				append(gateFirst(mi, nil), ret(call(dot("c", "conn", "SendRequestNoResult"), id("ctx"), id(mi.Const), id("params"))))...,
 			))
 			continue
 		}
@@ -439,10 +583,10 @@ func emitOutbound(f *goFile, recvType string, methods []*model.Method) {
 				initializeWrapper(mi)...))
 			continue
 		}
-		body := []ast.Stmt{
+		body := append(gateFirst(mi, composite(id(mi.Resp))),
 			define(exprs(id("resp"), id("err")),
-				call(index(id("SendRequest"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), id("params"))),
-		}
+				call(index(id("sendRequest"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), id("params"), resultArg())),
+		)
 		// A prompt turn whose context ended sends its cancel, best effort.
 		if c := mi.Canceller; mi.PromptTurn && c != nil {
 			body = append(body, ifStmt(nil, errNotNil(),

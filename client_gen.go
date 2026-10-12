@@ -56,6 +56,18 @@ func (c *ClientSideConnection) Connection() *Connection {
 	return c.conn
 }
 
+// gate checks a message of this connection against what initialize agreed
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+func (c *ClientSideConnection) gate(method string, params any) error {
+	return gateMessage(c.negotiation.Load(), method, params)
+}
+
+// resultGate checks a result of this connection, sent or received, against
+// what initialize agreed.
+func (c *ClientSideConnection) resultGate(method string, result any) error {
+	return gateResult(c.negotiation.Load(), method, result)
+}
+
 // Negotiated returns what initialize agreed on this connection, the request
 // and the response of its last successful initialize, and false before one
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
@@ -74,7 +86,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		if err := c.client.CompleteElicitation(ctx, p); err != nil {
@@ -86,46 +98,46 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.CreateElicitation(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp)
+		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodFsReadTextFile:
 		var p ReadTextFileRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.ReadTextFile(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp)
+		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodFsWriteTextFile:
 		var p WriteTextFileRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.WriteTextFile(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp)
+		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodMcpMessage:
 		var p UnstableMessageMcpRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := c.client.(interface {
@@ -138,13 +150,13 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp)
+		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodSessionRequestPermission:
 		var p RequestPermissionRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		pctx, done := c.pending.track(ctx, string(p.SessionId))
@@ -155,13 +167,13 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp)
+		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodSessionUpdate:
 		var p SessionNotification
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		if err := c.client.SessionUpdate(ctx, p); err != nil {
@@ -173,93 +185,111 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.CreateTerminal(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp)
+		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodTerminalKill:
 		var p KillTerminalRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.KillTerminal(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp)
+		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodTerminalOutput:
 		var p TerminalOutputRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.TerminalOutput(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp)
+		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodTerminalRelease:
 		var p ReleaseTerminalRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.ReleaseTerminal(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp)
+		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodTerminalWaitForExit:
 		var p WaitForTerminalExitRequest
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.WaitForTerminalExit(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp)
+		return c.conn.checkResult(method, resp, c.resultGate)
 	default:
 		return nil, NewMethodNotFound(method)
 	}
 }
 
 func (c *ClientSideConnection) Authenticate(ctx context.Context, params AuthenticateRequest) (AuthenticateResponse, error) {
-	resp, err := SendRequest[AuthenticateResponse](c.conn, ctx, AgentMethodAuthenticate, params)
+	if err := c.gate(AgentMethodAuthenticate, &params); err != nil {
+		return AuthenticateResponse{}, err
+	}
+	resp, err := sendRequest[AuthenticateResponse](c.conn, ctx, AgentMethodAuthenticate, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) UnstableDidChangeDocument(ctx context.Context, params UnstableDidChangeDocumentNotification) error {
+	if err := c.gate(AgentMethodDocumentDidChange, &params); err != nil {
+		return err
+	}
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidChange, params)
 }
 
 func (c *ClientSideConnection) UnstableDidCloseDocument(ctx context.Context, params UnstableDidCloseDocumentNotification) error {
+	if err := c.gate(AgentMethodDocumentDidClose, &params); err != nil {
+		return err
+	}
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidClose, params)
 }
 
 func (c *ClientSideConnection) UnstableDidFocusDocument(ctx context.Context, params UnstableDidFocusDocumentNotification) error {
+	if err := c.gate(AgentMethodDocumentDidFocus, &params); err != nil {
+		return err
+	}
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidFocus, params)
 }
 
 func (c *ClientSideConnection) UnstableDidOpenDocument(ctx context.Context, params UnstableDidOpenDocumentNotification) error {
+	if err := c.gate(AgentMethodDocumentDidOpen, &params); err != nil {
+		return err
+	}
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidOpen, params)
 }
 
 func (c *ClientSideConnection) UnstableDidSaveDocument(ctx context.Context, params UnstableDidSaveDocumentNotification) error {
+	if err := c.gate(AgentMethodDocumentDidSave, &params); err != nil {
+		return err
+	}
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidSave, params)
 }
 
@@ -288,90 +318,144 @@ func (c *ClientSideConnection) Initialize(ctx context.Context, params Initialize
 }
 
 func (c *ClientSideConnection) Logout(ctx context.Context, params LogoutRequest) (LogoutResponse, error) {
-	resp, err := SendRequest[LogoutResponse](c.conn, ctx, AgentMethodLogout, params)
+	if err := c.gate(AgentMethodLogout, &params); err != nil {
+		return LogoutResponse{}, err
+	}
+	resp, err := sendRequest[LogoutResponse](c.conn, ctx, AgentMethodLogout, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpNotification) error {
+	if err := c.gate(AgentMethodMcpMessage, &params); err != nil {
+		return err
+	}
 	return c.conn.SendNotification(ctx, AgentMethodMcpMessage, params)
 }
 
 func (c *ClientSideConnection) UnstableAcceptNes(ctx context.Context, params UnstableAcceptNesNotification) error {
+	if err := c.gate(AgentMethodNesAccept, &params); err != nil {
+		return err
+	}
 	return c.conn.SendNotification(ctx, AgentMethodNesAccept, params)
 }
 
 func (c *ClientSideConnection) UnstableCloseNes(ctx context.Context, params UnstableCloseNesRequest) (UnstableCloseNesResponse, error) {
-	resp, err := SendRequest[UnstableCloseNesResponse](c.conn, ctx, AgentMethodNesClose, params)
+	if err := c.gate(AgentMethodNesClose, &params); err != nil {
+		return UnstableCloseNesResponse{}, err
+	}
+	resp, err := sendRequest[UnstableCloseNesResponse](c.conn, ctx, AgentMethodNesClose, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) UnstableRejectNes(ctx context.Context, params UnstableRejectNesNotification) error {
+	if err := c.gate(AgentMethodNesReject, &params); err != nil {
+		return err
+	}
 	return c.conn.SendNotification(ctx, AgentMethodNesReject, params)
 }
 
 func (c *ClientSideConnection) UnstableStartNes(ctx context.Context, params UnstableStartNesRequest) (UnstableStartNesResponse, error) {
-	resp, err := SendRequest[UnstableStartNesResponse](c.conn, ctx, AgentMethodNesStart, params)
+	if err := c.gate(AgentMethodNesStart, &params); err != nil {
+		return UnstableStartNesResponse{}, err
+	}
+	resp, err := sendRequest[UnstableStartNesResponse](c.conn, ctx, AgentMethodNesStart, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) UnstableSuggestNes(ctx context.Context, params UnstableSuggestNesRequest) (UnstableSuggestNesResponse, error) {
-	resp, err := SendRequest[UnstableSuggestNesResponse](c.conn, ctx, AgentMethodNesSuggest, params)
+	if err := c.gate(AgentMethodNesSuggest, &params); err != nil {
+		return UnstableSuggestNesResponse{}, err
+	}
+	resp, err := sendRequest[UnstableSuggestNesResponse](c.conn, ctx, AgentMethodNesSuggest, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) UnstableDisableProvider(ctx context.Context, params UnstableDisableProviderRequest) (UnstableDisableProviderResponse, error) {
-	resp, err := SendRequest[UnstableDisableProviderResponse](c.conn, ctx, AgentMethodProvidersDisable, params)
+	if err := c.gate(AgentMethodProvidersDisable, &params); err != nil {
+		return UnstableDisableProviderResponse{}, err
+	}
+	resp, err := sendRequest[UnstableDisableProviderResponse](c.conn, ctx, AgentMethodProvidersDisable, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) UnstableListProviders(ctx context.Context, params UnstableListProvidersRequest) (UnstableListProvidersResponse, error) {
-	resp, err := SendRequest[UnstableListProvidersResponse](c.conn, ctx, AgentMethodProvidersList, params)
+	if err := c.gate(AgentMethodProvidersList, &params); err != nil {
+		return UnstableListProvidersResponse{}, err
+	}
+	resp, err := sendRequest[UnstableListProvidersResponse](c.conn, ctx, AgentMethodProvidersList, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) UnstableSetProvider(ctx context.Context, params UnstableSetProviderRequest) (UnstableSetProviderResponse, error) {
-	resp, err := SendRequest[UnstableSetProviderResponse](c.conn, ctx, AgentMethodProvidersSet, params)
+	if err := c.gate(AgentMethodProvidersSet, &params); err != nil {
+		return UnstableSetProviderResponse{}, err
+	}
+	resp, err := sendRequest[UnstableSetProviderResponse](c.conn, ctx, AgentMethodProvidersSet, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) Cancel(ctx context.Context, params CancelNotification) error {
+	if err := c.gate(AgentMethodSessionCancel, &params); err != nil {
+		return err
+	}
 	err := c.conn.SendNotification(ctx, AgentMethodSessionCancel, params)
 	c.pending.cancel(string(params.SessionId))
 	return err
 }
 
 func (c *ClientSideConnection) CloseSession(ctx context.Context, params CloseSessionRequest) (CloseSessionResponse, error) {
-	resp, err := SendRequest[CloseSessionResponse](c.conn, ctx, AgentMethodSessionClose, params)
+	if err := c.gate(AgentMethodSessionClose, &params); err != nil {
+		return CloseSessionResponse{}, err
+	}
+	resp, err := sendRequest[CloseSessionResponse](c.conn, ctx, AgentMethodSessionClose, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) DeleteSession(ctx context.Context, params DeleteSessionRequest) (DeleteSessionResponse, error) {
-	resp, err := SendRequest[DeleteSessionResponse](c.conn, ctx, AgentMethodSessionDelete, params)
+	if err := c.gate(AgentMethodSessionDelete, &params); err != nil {
+		return DeleteSessionResponse{}, err
+	}
+	resp, err := sendRequest[DeleteSessionResponse](c.conn, ctx, AgentMethodSessionDelete, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) UnstableForkSession(ctx context.Context, params UnstableForkSessionRequest) (UnstableForkSessionResponse, error) {
-	resp, err := SendRequest[UnstableForkSessionResponse](c.conn, ctx, AgentMethodSessionFork, params)
+	if err := c.gate(AgentMethodSessionFork, &params); err != nil {
+		return UnstableForkSessionResponse{}, err
+	}
+	resp, err := sendRequest[UnstableForkSessionResponse](c.conn, ctx, AgentMethodSessionFork, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) ListSessions(ctx context.Context, params ListSessionsRequest) (ListSessionsResponse, error) {
-	resp, err := SendRequest[ListSessionsResponse](c.conn, ctx, AgentMethodSessionList, params)
+	if err := c.gate(AgentMethodSessionList, &params); err != nil {
+		return ListSessionsResponse{}, err
+	}
+	resp, err := sendRequest[ListSessionsResponse](c.conn, ctx, AgentMethodSessionList, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) LoadSession(ctx context.Context, params LoadSessionRequest) (LoadSessionResponse, error) {
-	resp, err := SendRequest[LoadSessionResponse](c.conn, ctx, AgentMethodSessionLoad, params)
+	if err := c.gate(AgentMethodSessionLoad, &params); err != nil {
+		return LoadSessionResponse{}, err
+	}
+	resp, err := sendRequest[LoadSessionResponse](c.conn, ctx, AgentMethodSessionLoad, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) NewSession(ctx context.Context, params NewSessionRequest) (NewSessionResponse, error) {
-	resp, err := SendRequest[NewSessionResponse](c.conn, ctx, AgentMethodSessionNew, params)
+	if err := c.gate(AgentMethodSessionNew, &params); err != nil {
+		return NewSessionResponse{}, err
+	}
+	resp, err := sendRequest[NewSessionResponse](c.conn, ctx, AgentMethodSessionNew, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error) {
-	resp, err := SendRequest[PromptResponse](c.conn, ctx, AgentMethodSessionPrompt, params)
+	if err := c.gate(AgentMethodSessionPrompt, &params); err != nil {
+		return PromptResponse{}, err
+	}
+	resp, err := sendRequest[PromptResponse](c.conn, ctx, AgentMethodSessionPrompt, params, c.resultGate)
 	if err != nil {
 		if ctx.Err() != nil {
 			_ = c.Cancel(context.Background(), CancelNotification{SessionId: params.SessionId})
@@ -381,16 +465,25 @@ func (c *ClientSideConnection) Prompt(ctx context.Context, params PromptRequest)
 }
 
 func (c *ClientSideConnection) ResumeSession(ctx context.Context, params ResumeSessionRequest) (ResumeSessionResponse, error) {
-	resp, err := SendRequest[ResumeSessionResponse](c.conn, ctx, AgentMethodSessionResume, params)
+	if err := c.gate(AgentMethodSessionResume, &params); err != nil {
+		return ResumeSessionResponse{}, err
+	}
+	resp, err := sendRequest[ResumeSessionResponse](c.conn, ctx, AgentMethodSessionResume, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) SetSessionConfigOption(ctx context.Context, params SetSessionConfigOptionRequest) (SetSessionConfigOptionResponse, error) {
-	resp, err := SendRequest[SetSessionConfigOptionResponse](c.conn, ctx, AgentMethodSessionSetConfigOption, params)
+	if err := c.gate(AgentMethodSessionSetConfigOption, &params); err != nil {
+		return SetSessionConfigOptionResponse{}, err
+	}
+	resp, err := sendRequest[SetSessionConfigOptionResponse](c.conn, ctx, AgentMethodSessionSetConfigOption, params, c.resultGate)
 	return resp, err
 }
 
 func (c *ClientSideConnection) SetSessionMode(ctx context.Context, params SetSessionModeRequest) (SetSessionModeResponse, error) {
-	resp, err := SendRequest[SetSessionModeResponse](c.conn, ctx, AgentMethodSessionSetMode, params)
+	if err := c.gate(AgentMethodSessionSetMode, &params); err != nil {
+		return SetSessionModeResponse{}, err
+	}
+	resp, err := sendRequest[SetSessionModeResponse](c.conn, ctx, AgentMethodSessionSetMode, params, c.resultGate)
 	return resp, err
 }

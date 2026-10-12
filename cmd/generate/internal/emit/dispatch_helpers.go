@@ -24,14 +24,14 @@ func methodNotFound() ast.Stmt { return ret(nilExpr(), call(id("NewMethodNotFoun
 func errNotNil() ast.Expr { return binary(id("err"), token.NEQ, nilExpr()) }
 
 // unmarshalValidate decodes params into p and validates it.
-func unmarshalValidate(f *goFile, conn ast.Expr, typeName string) []ast.Stmt {
+func unmarshalValidate(f *goFile, conn ast.Expr, typeName string, gate ast.Expr) []ast.Stmt {
 	return []ast.Stmt{
 		varStmt("p", id(typeName)),
 		ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("params"), addr(id("p")))), errNotNil(),
 			invalidParams()),
 		// The receiving order: the consumer's rewrite hook, validation, the
 		// validation hook (0015-MADR-validate-absolute-protocol-paths.md, H1).
-		ifStmt(define(exprs(id("err")), call(sel(conn, "checkInbound"), id("ctx"), id("method"), addr(id("p")))), errNotNil(),
+		ifStmt(define(exprs(id("err")), call(sel(conn, "checkInbound"), id("ctx"), id("method"), addr(id("p")), gate)), errNotNil(),
 			ret(nilExpr(), call(id("inboundError"), id("err")))),
 	}
 }
@@ -99,17 +99,17 @@ func callNoResult(recv ast.Expr, methodName string) []ast.Stmt {
 
 // callWithResult calls a method that returns a response and an error, and
 // returns the response through checkedResult.
-func callWithResult(conn, recv ast.Expr, methodName string) []ast.Stmt {
+func callWithResult(conn, recv ast.Expr, methodName string, gate ast.Expr) []ast.Stmt {
 	return []ast.Stmt{
 		define(exprs(id("resp"), id("err")), recvCall(recv, methodName)),
 		ifStmt(nil, errNotNil(), toRequestError()),
-		checkedResult(conn),
+		checkedResult(conn, gate),
 	}
 }
 
 // checkedResult is return conn.checkResult(method, resp): a result that fails
 // validation as sent is answered -32603 instead
 // (0015-MADR-validate-absolute-protocol-paths.md, E1).
-func checkedResult(conn ast.Expr) ast.Stmt {
-	return ret(call(sel(conn, "checkResult"), id("method"), id("resp")))
+func checkedResult(conn, gate ast.Expr) ast.Stmt {
+	return ret(call(sel(conn, "checkResult"), id("method"), id("resp"), gate))
 }

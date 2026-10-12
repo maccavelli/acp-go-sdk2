@@ -443,6 +443,7 @@ func TestAgentDispatch_AllowsPartialUnstableMethodImplementation(t *testing.T) {
 		conn:           &Connection{},
 		sessionCancels: make(map[string]*promptTurn),
 	}
+	negotiate(t, conn, allAdvertised())
 
 	params, err := json.Marshal(UnstableForkSessionRequest{Cwd: testAbsPath("tmp"), SessionId: "source-session"})
 	if err != nil {
@@ -502,6 +503,8 @@ func TestConnectionHandlesErrorsBidirectional(t *testing.T) {
 		},
 		CancelFunc: func(context.Context, CancelNotification) error { return nil },
 	}, a2cW, c2aR)
+	negotiate(t, c, allAdvertised())
+	negotiate(t, agentConn, allAdvertised())
 
 	// Client->Agent direction: expect error
 	if _, err := agentConn.WriteTextFile(ctx, WriteTextFileRequest{Path: testAbsPath("test.txt"), Content: "test", SessionId: "test-session"}); err == nil {
@@ -522,7 +525,7 @@ func TestConnectionHandlesConcurrentRequests(t *testing.T) {
 	var mu sync.Mutex
 	requestCount := 0
 
-	_ = NewClientSideConnection(&clientFuncs{
+	cs := NewClientSideConnection(&clientFuncs{
 		WriteTextFileFunc: func(context.Context, WriteTextFileRequest) (WriteTextFileResponse, error) {
 			mu.Lock()
 			requestCount++
@@ -556,6 +559,8 @@ func TestConnectionHandlesConcurrentRequests(t *testing.T) {
 		},
 		CancelFunc: func(context.Context, CancelNotification) error { return nil },
 	}, a2cW, c2aR)
+	negotiate(t, cs, allAdvertised())
+	negotiate(t, agentConn, allAdvertised())
 
 	var wg sync.WaitGroup
 	errs := make([]error, 3)
@@ -639,6 +644,8 @@ func TestConnectionHandlesMessageOrdering(t *testing.T) {
 			return nil
 		},
 	}, a2cW, c2aR)
+	negotiate(t, cs, allAdvertised())
+	negotiate(t, as, allAdvertised())
 
 	if _, err := cs.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath("test"), McpServers: []McpServer{}}); err != nil {
 		t.Fatalf("newSession error: %v", err)
@@ -738,6 +745,8 @@ func TestConnectionHandlesNotifications(t *testing.T) {
 			return nil
 		},
 	}, a2cW, c2aR)
+	negotiate(t, clientSide, allAdvertised())
+	negotiate(t, agentSide, allAdvertised())
 
 	if err := agentSide.SessionUpdate(context.Background(), SessionNotification{
 		SessionId: "test-session",

@@ -326,11 +326,13 @@ Concretely:
      comment "recorded, not acted on" goes.
    * Sending: until a negotiation is recorded, the typed methods other than `initialize` return `ErrNotInitialized`; after it, a method or
      value the record does not allow returns a `*CapabilityError` (`Method`, `Capability`, and the `Field` or `Variant` when the gate is
-     below the method) without writing. A handler's result that breaks a gate is not sent: the peer gets `-32603` naming it, as 0015 does
+     below the method) without writing. A handler's result that breaks a gate is not sent (amended 2026-10-12, "More Information": a
+     result is checked against the property and variant gates only, the method having been gated when the request was): the peer gets `-32603` naming it, as 0015 does
      for a non-conforming result. There is no option to skip this. `Connection`, `SendRequest[T]` and the extension methods hold no
      negotiation and stay ungated; their documentation says so.
    * Receiving: `checkInbound` runs the same checks against the record, after the SDK's validation and before the validation hook, which
-     receives the error and may accept it. A refused request is answered `-32601` for a method gate or before initialization, and `-32602`
+     receives the error and may accept it. (Amended 2026-10-12, "More Information".) When the message fails validation, the hook
+     receives that error first, and only if it accepts it the record's error, if any; each is accepted on its own. A refused request is answered `-32601` for a method gate or before initialization, and `-32602`
      for a property or variant gate; a refused notification is dropped and logged; a refused response is returned to the caller as an
      error.
    * Unstable features whose gates the table does not state today (`nes`, `plan`, `providers`, `subagents`, `positionEncoding`) are not
@@ -576,6 +578,18 @@ Asked, the owner chose:
   of two prompts for one session, the one received first is the one superseded. Not chosen: storing the turn in the receive loop,
   which puts protocol knowledge in the hand-written runtime S1 moved out; leaving the race and documenting it. After the change the
   probe leaves none uncancelled. This adds to item 1 below; nothing else in it changes.
+* **Decided 2026-10-12, in PLAN step 9: the hook rules on each error.** As the PLAN first wrote it, `checkInbound` called the
+  gate only after the SDK's validation passed, and the hook received the first error. A hook that accepts a validation error, as
+  0015 allows for a bare MCP command, would then let through a method the record does not allow, the gate never having run. Asked,
+  the owner chose to run both: the hook receives the validation error, and if it accepts it, the gate's error, and its answer to
+  each decides; a message that passes both reaches the hook once, with `nil`, as before. Not chosen: keeping the first error only,
+  as a documented limit. This adds to item 4's receiving clause; nothing else in it changes.
+* **Decided 2026-10-12, in PLAN step 9: results are gated by value only.** As the PLAN first wrote it, a handler's result and a
+  received response went through the side's whole gate, method gate included. A validation hook that accepted a method gate let
+  the handler run, and the result was then refused `-32603` by the same gate, after the handler's effects. Asked, the owner chose
+  that a result be checked against property and variant gates only: the method is gated when the request is received or sent.
+  Not chosen: the whole gate on results, which makes a hook's acceptance of a method gate end in `-32603`. This adds to item 4's
+  sending clause; nothing else in it changes.
 * **Revision.** Amended 2026-10-12 at the owner's request, before any decision: P1's override ends at the handler's return, so a
   cancel that arrives after the turn finished leaves the handler's answer as it is. Corrected the same day, writing the PLAN: a rule
   whose subject the schema lacks is skipped by `Build` and caught by the table's test, so "Confirmation" and G4 name that test; and
