@@ -20,9 +20,12 @@ import (
 const (
 	notificationQueueDrainTimeout = 5 * time.Second
 	defaultMaxQueuedNotifications = 1024
-	jsonRPCVersion                = "2.0"
-	jsonNull                      = "null"
-	jsonErrorField                = "error"
+	// defaultMaxMessageSize is the largest line receive accepts unless
+	// WithMaxMessageSize sets another.
+	defaultMaxMessageSize = 10 * 1024 * 1024
+	jsonRPCVersion        = "2.0"
+	jsonNull              = "null"
+	jsonErrorField        = "error"
 )
 
 var errNotificationQueueOverflow = errors.New("notification queue overflow")
@@ -244,6 +247,9 @@ type Connection struct {
 	// It is bounded to keep memory usage predictable.
 	notificationQueue chan queuedNotification
 
+	// maxMessageSize is the largest line receive accepts (WithMaxMessageSize).
+	maxMessageSize int
+
 	// notificationOverflow is what receive does with a notification that arrives
 	// when notificationQueue is full.
 	notificationOverflow NotificationOverflowPolicy
@@ -263,6 +269,7 @@ type ConnectionOption func(*connectionConfig)
 
 type connectionConfig struct {
 	maxQueuedNotifications int
+	maxMessageSize         int
 	notificationOverflow   NotificationOverflowPolicy
 	onNotificationDropped  func(method string, totalDropped uint64)
 	logger                 *slog.Logger
@@ -279,6 +286,19 @@ func WithMaxQueuedNotifications(n int) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		if n > 0 {
 			cfg.maxQueuedNotifications = n
+		}
+	}
+}
+
+// WithMaxMessageSize sets the largest message, one line in bytes without its
+// newline, the connection reads. A longer line is read through its newline,
+// discarded, logged, and answered -32600 with "id": null, and reading goes on.
+// The default is 10 MiB; n <= 0 keeps it
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, J1).
+func WithMaxMessageSize(n int) ConnectionOption {
+	return func(cfg *connectionConfig) {
+		if n > 0 {
+			cfg.maxMessageSize = n
 		}
 	}
 }
@@ -385,6 +405,7 @@ func WithInboundValidation(fn func(ctx context.Context, method string, params an
 func NewConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *Connection {
 	cfg := connectionConfig{
 		maxQueuedNotifications: defaultMaxQueuedNotifications,
+		maxMessageSize:         defaultMaxMessageSize,
 	}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -404,6 +425,7 @@ func NewConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Rea
 		inboundCtx:          inboundCtx,
 		inboundCancel:       inboundCancel,
 		notificationQueue:   make(chan queuedNotification, cfg.maxQueuedNotifications),
+		maxMessageSize:      cfg.maxMessageSize,
 
 		notificationOverflow:  cfg.notificationOverflow,
 		onNotificationDropped: cfg.onNotificationDropped,
@@ -688,110 +710,277 @@ func formatCanonicalJSONRPCNumericID(negative bool, digits string, exp10 int) (s
 	return result, nil
 }
 
-func (c *Connection) receive() {
-	const (
-		initialBufSize = 1024 * 1024
-		maxBufSize     = 10 * 1024 * 1024
-	)
-
-	var received uint64
-	scanner := bufio.NewScanner(c.r)
-	buf := make([]byte, 0, initialBufSize)
-	scanner.Buffer(buf, maxBufSize)
-
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(bytes.TrimSpace(line)) == 0 {
-			continue
-		}
-
-		var msg anyMessage
-		if err := json.Unmarshal(line, &msg); err != nil {
-			c.loggerOrDefault().Error("failed to parse incoming message", "err", err, "raw", string(line))
-			continue
-		}
-
-		// Handle $/cancel_request notifications synchronously so cancellations take effect
-		// immediately and do not participate in notification ordering.
-		if msg.ID == nil && msg.Method == ProtocolMethodCancelRequest {
-			c.handleCancelRequest(&msg)
-			continue
-		}
-
-		switch {
-		case msg.ID != nil && msg.Method == "":
-			c.handleResponse(&msg)
-		case msg.Method != "":
-			received++
-			if msg.ID != nil {
-				idKey, err := canonicalJSONRPCIDKey(*msg.ID)
-				if err != nil {
-					c.loggerOrDefault().Error("failed to canonicalize inbound request id", "err", err, "id", string(*msg.ID))
-					idKey = string(*msg.ID)
-				}
-				reqCtx, cancel := context.WithCancelCause(context.WithValue(c.ctx, receiptKey{}, received))
-
-				c.mu.Lock()
-				c.inflight[idKey] = cancel
-				c.mu.Unlock()
-
-				m := msg
-				go func(m *anyMessage, idKey string, reqCtx context.Context, cancel context.CancelCauseFunc) {
-					defer func() {
-						c.mu.Lock()
-						delete(c.inflight, idKey)
-						c.mu.Unlock()
-
-						cancel(nil)
-					}()
-					c.handleInbound(reqCtx, m)
-				}(&m, idKey, reqCtx, cancel)
-				continue
+// readLine reads one line from r, without its newline. A line longer than max
+// bytes is read through its newline and discarded, and tooLong is true. err is
+// r's error, io.EOF at the end; a last line without a newline comes with it.
+func readLine(r *bufio.Reader, maxBytes int) (line []byte, tooLong bool, err error) {
+	for {
+		chunk, err := r.ReadSlice('\n')
+		if !tooLong {
+			line = append(line, chunk...)
+			if len(bytes.TrimSuffix(line, []byte("\n"))) > maxBytes {
+				line, tooLong = nil, true
 			}
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		if tooLong {
+			return nil, true, err
+		}
+		return bytes.TrimRight(line, "\r\n"), false, err
+	}
+}
 
-			// Queue the notification for sequential processing. The sequence number marks
-			// the response-scoped barrier boundary for requests that observe later responses.
-			m := msg
-			c.notifyMu.Lock()
-			c.lastEnqueuedNotificationSeq++
-			seq := c.lastEnqueuedNotificationSeq
-			select {
-			case c.notificationQueue <- queuedNotification{seq: seq, receipt: received, msg: &m}:
-				c.notifyMu.Unlock()
-			default:
-				if c.lastEnqueuedNotificationSeq != seq {
-					c.notifyMu.Unlock()
-					panic("notification sequence advanced while receive goroutine was queueing")
-				}
-				c.lastEnqueuedNotificationSeq--
-				// invariant: completedNotificationSeq never exceeds the highest accepted enqueue.
-				if c.completedNotificationSeq > c.lastEnqueuedNotificationSeq {
-					c.notifyMu.Unlock()
-					panic("completed notification sequence exceeded enqueued notification sequence")
-				}
-				c.notifyMu.Unlock()
-				if c.notificationOverflow == OverflowDropNewest {
-					// The rollback above released this notification's sequence
-					// number, so the next one reuses it and ordering stays
-					// contiguous. The reader must not block here: responses are
-					// dispatched on this goroutine too.
-					c.dropNotification(m.Method)
-					continue
-				}
-				c.loggerOrDefault().Error("failed to queue notification; closing connection", "err", errNotificationQueueOverflow, "capacity", cap(c.notificationQueue), "queued", len(c.notificationQueue))
-				c.shutdownReceive(errNotificationQueueOverflow)
+func (c *Connection) receive() {
+	r := bufio.NewReaderSize(c.r, 64*1024)
+	var received uint64
+	cause := errors.New("peer connection closed")
+	for {
+		line, tooLong, err := readLine(r, c.maxMessageSize)
+		switch {
+		case tooLong:
+			c.loggerOrDefault().Error("incoming message exceeds the size limit; answered and skipped", "limit", c.maxMessageSize)
+			c.answer(nil, NewInvalidRequest(map[string]any{jsonErrorField: fmt.Sprintf("message exceeds %d bytes", c.maxMessageSize)}))
+		case len(bytes.TrimSpace(line)) > 0:
+			if !c.receiveLine(line, &received) {
 				return
 			}
-		default:
-			c.loggerOrDefault().Error("received message with neither id nor method", "raw", string(line))
+		}
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				cause = err
+			}
+			break
 		}
 	}
-
-	cause := errors.New("peer connection closed")
-	if err := scanner.Err(); err != nil {
-		cause = err
-	}
 	c.shutdownReceive(cause)
+}
+
+// envelope is a received JSON-RPC object's members, raw: an absent member is
+// nil, and a null one the bytes null.
+type envelope struct {
+	JSONRPC json.RawMessage `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Method  json.RawMessage `json:"method"`
+	Params  json.RawMessage `json:"params"`
+	Result  json.RawMessage `json:"result"`
+	Error   json.RawMessage `json:"error"`
+}
+
+// isVersion reports whether raw is the JSON string "2.0".
+func isVersion(raw json.RawMessage) bool {
+	var v string
+	return raw != nil && json.Unmarshal(raw, &v) == nil && v == jsonRPCVersion
+}
+
+// validID reports whether raw is a JSON-RPC id: a string, a number or null.
+func validID(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	switch c := raw[0]; {
+	case c == '"', c == '-', c >= '0' && c <= '9':
+		return true
+	}
+	return string(raw) == jsonNull
+}
+
+// requestFault returns why env is not a valid Request object, and the id to
+// answer it with: its own when the id is valid, nil (null) otherwise.
+func requestFault(env *envelope) (json.RawMessage, string) {
+	var id json.RawMessage
+	switch {
+	case env.ID != nil && !validID(env.ID):
+		return nil, "id must be a string, a number or null"
+	case env.ID != nil:
+		id = env.ID
+	}
+	switch {
+	case !isVersion(env.JSONRPC):
+		return id, `jsonrpc must be "2.0"`
+	case env.Method == nil:
+		return id, "method is missing"
+	case env.Method[0] != '"':
+		return id, "method must be a string"
+	case env.Params != nil && env.Params[0] != '{' && env.Params[0] != '[':
+		return id, "params must be an object or an array"
+	}
+	return id, ""
+}
+
+// receiveLine handles one non-blank line as JSON-RPC 2.0 requires: invalid
+// JSON is answered -32700 and anything else that is not a valid Request object
+// -32600, with the request's id when it has a valid one and null otherwise; a
+// response is never answered; a valid notification is handled and never
+// answered (0017-MADR-remediate-acp-v1-conformance-violations.md, J1). It
+// returns false when the connection has shut down.
+func (c *Connection) receiveLine(line []byte, received *uint64) bool {
+	if !json.Valid(line) {
+		c.loggerOrDefault().Error("failed to parse incoming message", "raw", string(line))
+		c.answer(nil, NewParseError(nil))
+		return true
+	}
+	line = bytes.TrimSpace(line)
+	var env envelope
+	if line[0] != '{' || json.Unmarshal(line, &env) != nil {
+		c.loggerOrDefault().Error("incoming message is not a JSON-RPC object", "raw", string(line))
+		c.answer(nil, NewInvalidRequest(map[string]any{jsonErrorField: "not a JSON-RPC object"}))
+		return true
+	}
+	if env.Method == nil && (env.Result != nil || env.Error != nil || c.isPending(env.ID)) {
+		c.receiveResponse(&env, line)
+		return true
+	}
+	id, fault := requestFault(&env)
+	if fault != "" {
+		c.loggerOrDefault().Error("invalid request", "fault", fault, "raw", string(line))
+		c.answer(id, NewInvalidRequest(map[string]any{jsonErrorField: fault}))
+		return true
+	}
+	msg := anyMessage{JSONRPC: jsonRPCVersion, Params: env.Params}
+	if err := json.Unmarshal(env.Method, &msg.Method); err != nil {
+		c.answer(id, NewInvalidRequest(map[string]any{jsonErrorField: "method must be a string"}))
+		return true
+	}
+	if env.ID != nil {
+		msg.ID = &id
+	}
+
+	// Handle $/cancel_request notifications synchronously so cancellations take effect
+	// immediately and do not participate in notification ordering.
+	if msg.ID == nil && msg.Method == ProtocolMethodCancelRequest {
+		c.handleCancelRequest(&msg)
+		return true
+	}
+
+	*received++
+	if msg.ID != nil {
+		reqCtx, cancel := context.WithCancelCause(context.WithValue(c.ctx, receiptKey{}, *received))
+		// A null id names no single request, so $/cancel_request cannot
+		// reach it, and it is not registered.
+		idKey := ""
+		if string(*msg.ID) != jsonNull {
+			var err error
+			if idKey, err = canonicalJSONRPCIDKey(*msg.ID); err != nil {
+				c.loggerOrDefault().Error("failed to canonicalize inbound request id", "err", err, "id", string(*msg.ID))
+				idKey = string(*msg.ID)
+			}
+			c.mu.Lock()
+			c.inflight[idKey] = cancel
+			c.mu.Unlock()
+		}
+
+		m := msg
+		go func(m *anyMessage, idKey string, reqCtx context.Context, cancel context.CancelCauseFunc) {
+			defer func() {
+				if idKey != "" {
+					c.mu.Lock()
+					delete(c.inflight, idKey)
+					c.mu.Unlock()
+				}
+				cancel(nil)
+			}()
+			c.handleInbound(reqCtx, m)
+		}(&m, idKey, reqCtx, cancel)
+		return true
+	}
+
+	// Queue the notification for sequential processing. The sequence number marks
+	// the response-scoped barrier boundary for requests that observe later responses.
+	m := msg
+	c.notifyMu.Lock()
+	c.lastEnqueuedNotificationSeq++
+	seq := c.lastEnqueuedNotificationSeq
+	select {
+	case c.notificationQueue <- queuedNotification{seq: seq, receipt: *received, msg: &m}:
+		c.notifyMu.Unlock()
+	default:
+		if c.lastEnqueuedNotificationSeq != seq {
+			c.notifyMu.Unlock()
+			panic("notification sequence advanced while receive goroutine was queueing")
+		}
+		c.lastEnqueuedNotificationSeq--
+		// invariant: completedNotificationSeq never exceeds the highest accepted enqueue.
+		if c.completedNotificationSeq > c.lastEnqueuedNotificationSeq {
+			c.notifyMu.Unlock()
+			panic("completed notification sequence exceeded enqueued notification sequence")
+		}
+		c.notifyMu.Unlock()
+		if c.notificationOverflow == OverflowDropNewest {
+			// The rollback above released this notification's sequence
+			// number, so the next one reuses it and ordering stays
+			// contiguous. The reader must not block here: responses are
+			// dispatched on this goroutine too.
+			c.dropNotification(m.Method)
+			return true
+		}
+		c.loggerOrDefault().Error("failed to queue notification; closing connection", "err", errNotificationQueueOverflow, "capacity", cap(c.notificationQueue), "queued", len(c.notificationQueue))
+		c.shutdownReceive(errNotificationQueueOverflow)
+		return false
+	}
+	return true
+}
+
+// isPending reports whether raw is the id of a request this connection waits
+// on, so that a message carrying it and no method is a response.
+func (c *Connection) isPending(raw json.RawMessage) bool {
+	if raw == nil || !validID(raw) {
+		return false
+	}
+	key, err := canonicalJSONRPCIDKey(raw)
+	if err != nil {
+		key = string(raw)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.pending[key] != nil
+}
+
+// receiveResponse delivers a response to the call it answers. A response that
+// breaks JSON-RPC, with jsonrpc other than "2.0", both or neither of result and
+// error, or an error that is not an error object, fails the call. A response is
+// never answered, so two peers cannot answer each other's errors.
+func (c *Connection) receiveResponse(env *envelope, line []byte) {
+	if env.ID == nil || !validID(env.ID) || string(env.ID) == jsonNull {
+		c.loggerOrDefault().Error("received a response without a request id", "raw", string(line))
+		return
+	}
+	id := env.ID
+	msg := anyMessage{JSONRPC: jsonRPCVersion, ID: &id}
+	var fault string
+	switch {
+	case !isVersion(env.JSONRPC):
+		fault = `jsonrpc must be "2.0"`
+	case env.Result != nil && env.Error != nil:
+		fault = "both result and error"
+	case env.Result == nil && env.Error == nil:
+		fault = "neither result nor error"
+	case env.Error != nil:
+		var re RequestError
+		if env.Error[0] != '{' || json.Unmarshal(env.Error, &re) != nil {
+			fault = "error is not an error object"
+		} else {
+			msg.Error = &re
+		}
+	default:
+		msg.Result = env.Result
+	}
+	if fault != "" {
+		c.loggerOrDefault().Error("malformed response", "fault", fault, "raw", string(line))
+		msg.Error = NewInternalError(map[string]any{jsonErrorField: "malformed response: " + fault})
+	}
+	c.handleResponse(&msg)
+}
+
+// answer writes an error response with id, or with "id": null when id is nil.
+func (c *Connection) answer(id json.RawMessage, e *RequestError) {
+	if id == nil {
+		id = json.RawMessage(jsonNull)
+	}
+	if err := c.sendMessage(anyMessage{ID: &id, Error: e}); err != nil {
+		c.loggerOrDefault().Debug("failed to answer an invalid message", "err", err)
+	}
 }
 
 func (c *Connection) shutdownReceive(cause error) {
@@ -860,6 +1049,10 @@ func (c *Connection) handleResponse(msg *anyMessage) {
 		delete(c.pending, idStr)
 	}
 	c.mu.Unlock()
+	if pr == nil {
+		// A late answer to a call its caller gave up on is expected.
+		c.loggerOrDefault().Debug("received a response to no pending request", "id", string(*msg.ID))
+	}
 
 	if pr != nil {
 		c.notifyMu.Lock()

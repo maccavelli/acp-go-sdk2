@@ -783,3 +783,54 @@ Ran on `main` from `f945232` (step 5). The agent did not commit. The deviation a
   markdownlint` exit 0; the identifier scan of the changed files found nothing.
 * On the Windows host reached over SSH, with a copy of the final working tree's 300 tracked and untracked files and no macOS metadata:
   `go test -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
+
+### Step 7, malformed input, 2026-10-12
+
+Ran on `main` from `4e04f37` (step 6). The agent did not commit. No generated file changed.
+
+* `connection.go`:
+  * `WithMaxMessageSize(n int)`; `connectionConfig.maxMessageSize` and `Connection.maxMessageSize`, default `defaultMaxMessageSize`, 10
+    MiB; `n <= 0` keeps it.
+  * `readLine(r *bufio.Reader, maxBytes int)` replaces `bufio.Scanner`: it returns a line without its newline (and a trailing `\r`,
+    as the scanner dropped it), or, for a line longer than the limit, reads it through its newline, keeps none of it past the limit,
+    and reports it too long. `receive` reads with it from a 64 KiB `bufio.Reader`, answers a line too long with `NewInvalidRequest`,
+    `"id": null` and `message exceeds <n> bytes`, logs it, and reads on; at `io.EOF` the cause stays `peer connection closed`.
+  * `receiveLine` classifies each non-blank line: `json.Valid` false, `-32700` with `"id": null`; not an object, `-32600` with
+    `"id": null`; otherwise an `envelope` of `json.RawMessage` members. A message with no `method` and a `result`, an `error`, or the id
+    of a pending call goes to `receiveResponse`, which never answers: a response without a usable id is logged; one whose `jsonrpc` is
+    not `"2.0"`, which has both or neither of `result` and `error`, or whose `error` is not an object, fails its call with
+    `NewInternalError` naming the fault (`malformed response: ...`). Anything else is a Request object, checked by `requestFault`
+    (`jsonrpc`, `method` a string, `id` a string, number or `null`, `params` an object or array); an invalid one is answered
+    `-32600` with its id when the id is valid and `"id": null` otherwise, an absent id included. A valid one is handled as before; a
+    request with `"id": null` is answered with `"id": null` and not registered in `inflight`.
+  * `handleResponse` logs a response to no pending request at Debug: a late answer to a call its caller gave up on is expected.
+  * `answer(id, err)` writes an error response, with `"id": null` for a nil id.
+* The first run of `make pre-add-check` failed on `errcheck` for the decode of the method name into a string (`_ = json.Unmarshal`);
+  the decode's error is now answered `-32600`, `method must be a string`.
+* Regenerated: no generated file changed. The API listing against `git archive HEAD` gains only `func WithMaxMessageSize (n int)
+  ConnectionOption`. Every existing root test passes unchanged, the raw-connection cancel tests among them.
+* Tests, new file `jsonrpc_test.go`, passed twice under `-race`. A test reads the connection's output in order; a line that must not be
+  answered is followed by a request for a method no connection has, whose `-32601` answer must come next:
+  * `TestJSONRPCErrorAnswers`: the MADR's six probe lines, `{"jsonrpc":"2.0","id":9,"method":"session/new","params":5}`, JSON-RPC's
+    `{"jsonrpc": "2.0", "method": 1, "params": "bar"}` and an object id, each with its id and code (the `null`-id `session/new`
+    answered with its result and `"id": null`); a valid notification for a method the agent lacks, not answered;
+  * `TestJSONRPCNoReplyToResponses`: an error response with `"id": null` and a result for id 99, neither answered;
+  * `TestMalformedResponseFailsCall`: neither member, both, `"jsonrpc":"1.0"`, and `"error":"boom"`, each making `NewSession` return a
+    `malformed response` error;
+  * `TestMaxMessageSize`: with `WithMaxMessageSize(1024)` and with the default, a line one byte over is answered `-32600`, `"id": null`,
+    naming the limit, and the next line, exactly at the limit, is read and answered `-32601`.
+* Plants, each in its own scratch copy, all `exit=1`:
+  * the parse error not answered: `not json did not happen`;
+  * a non-object not answered: `[] did not happen`;
+  * an invalid request not answered: `{"jsonrpc":"2.0","method":5,"id":7} did not happen`;
+  * `jsonrpc` not checked: the `"1.0"` request `answered <nil>, want -32600`;
+  * a `null` id read as a notification: the `null`-id request `did not happen`;
+  * a response without an id answered: `... was answered: got null {"code":-32600,...} before the probe's answer`;
+  * the neither-member check removed: `NewSession = <nil>, want a malformed-response error`;
+  * an overlong line closing the connection: `the overlong line's answer did not happen`, for both limits.
+* `make pre-add-check`: `go-precheck: 104 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`; the untracked
+  `jsonrpc_test.go`: `go-precheck: 1 file(s) clean`, with `govulncheck` skipped. `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes at
+  the root; `GOOS=windows go vet ./...` passes in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan
+  of the changed files found nothing.
+* On the Windows host reached over SSH, with a copy of the working tree's 301 tracked and untracked files and no macOS metadata: `go test
+  -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
