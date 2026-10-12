@@ -13,7 +13,9 @@ const protocolDefs = `{
 	"SessionId":{"type":"string"},
 	"PromptRequest":{"type":"object","x-side":"agent","x-method":"s/prompt","required":["sessionId"],
 		"properties":{"sessionId":{"allOf":[{"$ref":"#/$defs/SessionId"}]}}},
-	"PromptResponse":{"type":"object","x-side":"agent","x-method":"s/prompt"},
+	"StopReason":{"type":"string","enum":["end_turn","cancelled"]},
+	"PromptResponse":{"type":"object","x-side":"agent","x-method":"s/prompt","required":["stopReason"],
+		"properties":{"stopReason":{"$ref":"#/$defs/StopReason"}}},
 	"CancelNotification":{"type":"object","x-side":"agent","x-method":"s/cancel","required":["sessionId"],
 		"properties":{"sessionId":{"allOf":[{"$ref":"#/$defs/SessionId"}]}}},
 	"LoadSessionRequest":{"type":"object","x-side":"agent","x-method":"s/load"},
@@ -37,7 +39,7 @@ func testProtocol() *Protocol {
 		Interfaces: []Interface{{Binding: BindAgentOptional, Name: "Loader", Var: "loader", Doc: []string{"Loader loads."}}},
 		Methods: []MethodRule{
 			{Side: "agent", Wire: "s/load", Binding: BindAgentOptional, Capability: "loadSession"},
-			{Side: "agent", Wire: "s/prompt", PromptTurn: true, SessionKey: "sessionId"},
+			{Side: "agent", Wire: "s/prompt", PromptTurn: true, SessionKey: "sessionId", StopKey: "stopReason", StopCancelled: "cancelled"},
 			{Side: "agent", Wire: "s/cancel", CancelsPromptTurn: true, SessionKey: "sessionId", Capability: "session.list"},
 			{Side: "client", Wire: "s/update", GoName: "SessionUpdate"},
 		},
@@ -77,6 +79,9 @@ func TestProtocolTableApplies(t *testing.T) {
 	}
 	if !prompt.PromptTurn || prompt.SessionField != "SessionId" || prompt.Canceller != cancel {
 		t.Errorf("s/prompt: PromptTurn %v SessionField %q Canceller %v", prompt.PromptTurn, prompt.SessionField, prompt.Canceller)
+	}
+	if prompt.StopField != "StopReason" || prompt.StopConst != "StopReasonCancelled" {
+		t.Errorf("s/prompt: StopField %q StopConst %q", prompt.StopField, prompt.StopConst)
 	}
 	if !cancel.CancelsPromptTurn || cancel.SessionField != "SessionId" || cancel.Capability != "session.list" {
 		t.Errorf("s/cancel: CancelsPromptTurn %v SessionField %q capability %q", cancel.CancelsPromptTurn, cancel.SessionField, cancel.Capability)
@@ -159,7 +164,9 @@ func TestProtocolTableRefuses(t *testing.T) {
 			wanted: []string{`client method "s/update"`, "session key without a prompt-turn role"}},
 		{name: "unexported Go name", table: func(p *Protocol) { p.Methods[3].GoName = "update" },
 			wanted: []string{`client method "s/update"`, `"update" is not an exported Go identifier`}},
-		{name: "prompt turn on a notification", table: func(p *Protocol) { p.Methods[2].PromptTurn, p.Methods[2].CancelsPromptTurn = true, false },
+		{name: "prompt turn on a notification", table: func(p *Protocol) {
+			p.Methods[2].PromptTurn, p.Methods[2].CancelsPromptTurn, p.Methods[2].StopKey, p.Methods[2].StopCancelled = true, false, "stopReason", "cancelled"
+		},
 			wanted: []string{`agent method "s/cancel"`, "a prompt turn must be a request with a result"}},
 		{name: "prompt turn without a result", defs: func(s string) string {
 			return strings.Replace(s, `"PromptResponse":{"type":"object"`, `"PromptResponse":{"type":"null"`, 1)
@@ -213,6 +220,20 @@ func TestProtocolTableRefuses(t *testing.T) {
 			wanted: []string{`agent method "s/prompt"`, "it cannot be both a prompt turn and its cancel"}},
 		{name: "capability with an empty segment", table: func(p *Protocol) { p.Methods[0].Capability = "session..list" },
 			wanted: []string{`agent method "s/load"`, `capability "session..list" has an empty segment`}},
+		{name: "prompt turn without a stop key", table: func(p *Protocol) { p.Methods[1].StopKey = "" },
+			wanted: []string{`agent method "s/prompt"`, "a prompt turn needs its stop key and cancelled value"}},
+		{name: "prompt turn without a cancelled value", table: func(p *Protocol) { p.Methods[1].StopCancelled = "" },
+			wanted: []string{`agent method "s/prompt"`, "a prompt turn needs its stop key and cancelled value"}},
+		{name: "stop key on a plain rule", table: func(p *Protocol) { p.Methods[3].StopKey = "stopReason" },
+			wanted: []string{`client method "s/update"`, "a stop key without a prompt turn"}},
+		{name: "stop key not required", defs: func(s string) string {
+			return strings.Replace(s, `"x-method":"s/prompt","required":["stopReason"],`, `"x-method":"s/prompt",`, 1)
+		}, wanted: []string{`agent method "s/prompt"`, `"stopReason" is not a required property of PromptResponse naming a string enum`}},
+		{name: "stop key not a string enum", defs: func(s string) string {
+			return strings.Replace(s, `"StopReason":{"type":"string","enum":["end_turn","cancelled"]}`, `"StopReason":{"type":"string"}`, 1)
+		}, wanted: []string{`agent method "s/prompt"`, `"stopReason" of PromptResponse is not a string enum`}},
+		{name: "stop enum without the cancelled value", table: func(p *Protocol) { p.Methods[1].StopCancelled = "halted" },
+			wanted: []string{`agent method "s/prompt"`, `"stopReason" of PromptResponse has no value "halted"`}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -291,6 +312,9 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 		}
 		if mi.PromptTurn != r.PromptTurn || mi.CancelsPromptTurn != r.CancelsPromptTurn {
 			t.Errorf("%s: PromptTurn %v CancelsPromptTurn %v", r.Wire, mi.PromptTurn, mi.CancelsPromptTurn)
+		}
+		if r.PromptTurn && (mi.StopField != "StopReason" || mi.StopConst != "StopReasonCancelled") {
+			t.Errorf("%s: StopField %q StopConst %q, want StopReason and StopReasonCancelled", r.Wire, mi.StopField, mi.StopConst)
 		}
 		if r.Capability != "" {
 			gates++

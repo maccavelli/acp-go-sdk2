@@ -276,6 +276,7 @@ Out of scope:
    * The race the MADR notes ("Noted, not decided"): a probe in a scratch copy sends `session/prompt` and `session/cancel` back to back
      over the pipes, 1000 times under `-race`, and counts turns that ran to completion. Its count is recorded. A turn that was not
      cancelled stops the step for the owner as a deviation with that evidence; none leaves the MADR's note as it is, closed by the record.
+     (Ran 2026-10-12: 875 of 1000 were not cancelled; resolved by step 5's deviation, after which the probe leaves none.)
    * Plants: emitted step 5 removed (the first test fails with `-32800`); the delete made unconditional again (the supersede test fails);
      the cause read after `cancel(nil)` instead of before (the after-return test fails: `cancel(nil)` sets a cause); `cancelActivePrompt`
      cancelling with a `nil` cause (the cause check fails).
@@ -635,3 +636,83 @@ Ran on `main` from `80195ad` (step 3). The agent did not commit. The two deviati
 * On the Windows host reached over SSH, with a copy of the working tree's 296 files that exist and no macOS metadata (`agent.go` and
   `client.go` absent): `go test -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was
   removed afterwards.
+
+### Step 5 deviation, 2026-10-12: a cancel handled before its turn is stored was lost
+
+The probe this step names, run in a scratch copy under `-race` with the step's other changes in place, wrote `session/prompt` and
+`session/cancel` for one session back to back, 1000 times: `PROBE pairs=1000 handled=1000 not-cancelled=875`. `receive` starts each
+request on its own goroutine and queues each notification for another, so `session/cancel` was usually handled before the prompt case
+had decoded its request and stored its turn; it found no turn, and the turn ran to completion, not answered `cancelled`, though the agent
+had received the cancel for a turn in progress.
+
+Asked, the owner chose to order the two by receipt (the MADR's "More Information" is amended):
+
+* `connection.go`: `receive` numbers every request and notification it reads, from 1 (`received`), and puts the number in the handler's
+  context under `receiptKey`; a queued notification carries it to `processNotifications`. `receiptOf(ctx)` returns it, 0 for a context
+  `receive` did not make. It names no ACP type.
+* Generated, with the prompt rule: `promptTurn` gains `receipt`, and the agent's struct `lateCancels map[string]uint64`, made by the
+  constructor. The prompt case reads `r := receiptOf(ctx)`; under `a.mu`, when the session's running turn was received after `r`, the
+  new turn is cancelled at once as superseded and not stored; otherwise the running turn, if any, is cancelled as superseded, the new
+  turn is stored, cancelled with `ErrPromptCancelled` when a kept cancel for the session was received after it (`r != 0 &&
+  lateCancels[s] > r`), and the kept cancel is dropped. The cancel case reads `s := receiptOf(ctx)`; it cancels the running turn when
+  `s == 0` or the turn was received before it, and otherwise keeps `s` for the session when it is later than the one kept.
+
+Not chosen: storing the turn in `receive`, which needs the hand-written runtime to know which method is a prompt turn and where its
+session is; leaving the race and documenting it. Files added to step 5: `connection.go`. The rule for two prompts of one session is now
+by receipt too: the one received first is superseded, whichever stores its turn first.
+
+### Step 5, prompt turns, 2026-10-12
+
+Ran on `main` from `19e062d` (step 4). The agent did not commit. The deviation above, decided by the owner, ran within this step.
+
+* `cmd/generate/internal/model`: `MethodRule` gains `StopKey` and `StopCancelled`; `checkRule` refuses a prompt turn without them (`a
+  prompt turn needs its stop key and cancelled value`) and either without a prompt turn (`a stop key without a prompt turn`); `Method`
+  gains `StopField` and `StopConst`, which `linkPromptTurns` resolves through `stopField`: a required property of the result, naming a
+  string enum (`KindEnum`, `KindStringConstUnion` or `KindOpenEnum`) that holds the value, else `"<key>" is not a required property of
+  <type> naming a string enum`, `"<key>" of <type> is not a string enum`, or `"<key>" of <type> has no value "<value>"`. `acp.go`: the
+  `session/prompt` rule gains `StopKey: "stopReason", StopCancelled: "cancelled"`, quoting the schema's `StopReason` sentence.
+* `cmd/generate/internal/emit/dispatch.go`: `promptCase` takes the method and emits, in order, the turn's receipt and
+  `context.WithCancelCause`, the turn stored by receipt (above), the handler's call, the turn removed only if it is still the session's
+  and its context's cause read once under `a.mu`, `cancel(nil)`, `promptReturned` when set, and, when the cause is set, the zero result
+  if the handler returned an error and then `resp.<StopField>, err = <StopConst>, nil`; otherwise as before. `cancelActivePrompt`
+  cancels with `ErrPromptCancelled`, ordered by receipt. `emitSideConnection` emits `promptTurn`, `promptReturned` and the two maps
+  with the prompt rule.
+* Generated: `agent_gen.go` changes only in its imports (`fmt`), the agent's struct and constructor, the new `promptTurn` and
+  `promptReturned`, and the `session/cancel` and `session/prompt` cases; no other generated file changes. The API listing of `git archive
+  HEAD` and of the tree are byte-identical.
+* Engine cases: `accept-prompt-cancellation.txtar` gains a required `stopReason` enum, and its agent returns `ctx.Err()`; its behaviour
+  test requires `StopReasonCancelled`. Its `want.api`, asserted line by line, changes only in `type AgentSideConnection` (the two maps),
+  `type PromptResponse`, and the new `StopReason` with its two constants. New `refuse-prompt-turn-without-stop.txtar`: a `PromptResponse`
+  without `stopReason` is refused with `protocol table: agent method "session/prompt"` and the message above. Engine cases run with the
+  ACP table, so the case refuses the schema; the refusal of a table rule without a stop key is in `TestProtocolTableRefuses`.
+* Generator tests: `TestProtocolTableApplies` checks `StopField` and `StopConst`; `TestProtocolTableRefuses` gains six cases (no stop
+  key, no cancelled value, a stop key on a plain rule, the key not required, not a string enum, no such value), and `prompt turn on a
+  notification` gives its rule a stop key so that it still reaches its own refusal; `TestProtocolTableAppliesToCommittedSchema` requires
+  `StopReason` and `StopReasonCancelled` for `session/prompt`; `protocolDefs` and `renamedProtocol` gain a stop enum;
+  `TestDispatchFollowsTheModel` pins the new emission, by the renamed protocol's names, and refuses `StopReason` in it;
+  `TestSideConnectionsFollowTheModel` pins the two maps, `promptTurn` and `promptReturned`.
+* Root tests: the `AgentSideConnection` literals of `TestAgentDispatch_AllowsPartialUnstableMethodImplementation` (`acp_test.go`) and
+  `TestRequiredKeysOnDecode` (`fidelity_test.go`) take `map[string]*promptTurn`, the field's new type. New file `cancel_test.go`:
+  `TestPromptCancelledAnswersCancelled` (three handlers: `ctx.Err()`, a wrapped one, `end_turn` with `_meta`; each answered
+  `cancelled`, the third keeping its `_meta`, the cause `ErrPromptCancelled`); `TestPromptCancelRequestAnswersCancelled` (raw
+  `$/cancel_request` for id 7: answered id 7 with `cancelled`, the cause `context.Canceled`); `TestPromptCancelAfterReturnChangesNothing`
+  (through `promptReturned`, not parallel: `end_turn`); `TestPromptSupersededKeepsSuccessorCancel` (the MADR's probe: the first
+  `cancelled` with a cause wrapping `ErrPromptCancelled` and saying superseded, the second cancelled by `session/cancel` after the first
+  returned); `TestPromptCancelRightAfterPrompt` (the deviation's: 200 sessions, prompt and cancel back to back, every turn cancelled and
+  answered `cancelled`). All five passed three times under `-race`. The raw-connection tests that require `-32800` pass unchanged.
+* The probe again, after the deviation: `PROBE pairs=1000 handled=1000 not-cancelled=0`.
+* Plants, each in its own scratch copy, all `exit=1`:
+  * the generated cause branch disabled: `stopReason "end_turn", want cancelled` and `stopReason "", want cancelled` twice;
+  * the emitter's cause branch never taken: `TestEngineBehaviour`, `prompt: {"code":-32800,"message":"Request cancelled",...}`;
+  * the delete made unconditional: `TestPromptSupersededKeepsSuccessorCancel`, `the second turn's cancel did not happen`;
+  * the cause read after `cancel(nil)`: `TestPromptCancelAfterReturnChangesNothing`, `stopReason "cancelled", want the handler's
+    end_turn`;
+  * the cancel case cancelling with a nil cause: `context.Cause = context canceled, want ErrPromptCancelled`, three times;
+  * the kept cancel ignored: `TestPromptCancelRightAfterPrompt`, `36 of 200 turns were not cancelled`;
+  * the table check for the stop key weakened: `TestProtocolTableRefuses/prompt_turn_without_a_stop_key` failed.
+* `make pre-add-check`: `go-precheck: 103 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`; the untracked
+  `cancel_test.go`: `go-precheck: 1 file(s) clean`, with `govulncheck` skipped. `GOEXPERIMENT=nojsonv2 go test -count=1 ./...` passes
+  at the root; `GOOS=windows go vet ./...` passes in both modules; `make check-records` and `make markdownlint` exit 0; the identifier
+  scan of the changed files found nothing.
+* On the Windows host reached over SSH, with a copy of the working tree's 298 tracked and untracked files and no macOS metadata: `go test
+  -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.

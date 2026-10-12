@@ -1,6 +1,7 @@
 The protocol table's prompt turn: session/prompt is cancelled by
-session/cancel on the same sessionId; session/update reaches the client as
-SessionUpdate.
+session/cancel on the same sessionId, and a turn cancelled before its handler
+returns is answered with its stopReason's cancelled value whatever the handler
+returned; session/update reaches the client as SessionUpdate.
 The meta declares $/cancel_request and the schema its smallest definition, which
 the runtime needs.
 
@@ -9,7 +10,8 @@ the runtime needs.
 -- schema.json --
 {"$defs": {
   "PromptRequest": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/prompt"},
-  "PromptResponse": {"type": "object", "properties": {"stop": {"type": "string"}}, "required": ["stop"], "x-side": "agent", "x-method": "session/prompt"},
+  "StopReason": {"type": "string", "enum": ["end_turn", "cancelled"]},
+  "PromptResponse": {"type": "object", "properties": {"stopReason": {"$ref": "#/$defs/StopReason"}}, "required": ["stopReason"], "x-side": "agent", "x-method": "session/prompt"},
   "CancelNotification": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/cancel"},
   "SessionNotification": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "client", "x-method": "session/update"},
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
@@ -19,7 +21,7 @@ type Agent interface{Cancel(ctx context.Context, params CancelNotification) erro
 type AgentExperimental interface{}
 const AgentMethodSessionCancel untyped string = "session/cancel"
 const AgentMethodSessionPrompt untyped string = "session/prompt"
-type AgentSideConnection struct{conn *Connection; agent Agent; mu sync.Mutex; sessionCancels map[string]context.CancelFunc}
+type AgentSideConnection struct{conn *Connection; agent Agent; mu sync.Mutex; sessionCancels map[string]*promptTurn; lateCancels map[string]uint64}
 type CancelNotification struct{SessionId string "json:\"sessionId\""}
 type CancelRequestNotification struct{}
 type Client interface{SessionUpdate(ctx context.Context, params SessionNotification) error}
@@ -29,10 +31,13 @@ type ClientSideConnection struct{conn *Connection; client Client}
 func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
 func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 type PromptRequest struct{SessionId string "json:\"sessionId\""}
-type PromptResponse struct{Stop string "json:\"stop\""}
+type PromptResponse struct{StopReason StopReason "json:\"stopReason\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type SessionNotification struct{SessionId string "json:\"sessionId\""}
+type StopReason string
+const StopReasonCancelled StopReason = "cancelled"
+const StopReasonEndTurn StopReason = "end_turn"
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
@@ -68,11 +73,12 @@ type promptAgent struct {
 	cancelled chan CancelNotification
 }
 
-// Prompt waits until its context is cancelled, as a long turn would.
+// Prompt waits until its context is cancelled, as a long turn would, and
+// returns the context's error, as an idiomatic handler does.
 func (a promptAgent) Prompt(ctx context.Context, p PromptRequest) (PromptResponse, error) {
 	a.started <- p
 	<-ctx.Done()
-	return PromptResponse{Stop: "cancelled"}, nil
+	return PromptResponse{}, ctx.Err()
 }
 
 func (a promptAgent) Cancel(_ context.Context, p CancelNotification) error {
@@ -98,8 +104,9 @@ func wait[T any](t *testing.T, ch chan T, what string) T {
 	}
 }
 
-// session/cancel cancels the context of the session's prompt turn, and the
-// agent's Cancel is called; session/update reaches the client.
+// session/cancel cancels the context of the session's prompt turn, the agent's
+// Cancel is called, and the turn is answered cancelled although its handler
+// returned an error; session/update reaches the client.
 func TestPromptCancellation(t *testing.T) {
 	ar, cw := io.Pipe()
 	cr, aw := io.Pipe()
@@ -130,7 +137,7 @@ func TestPromptCancellation(t *testing.T) {
 	if got := wait(t, a.cancelled, "the agent's Cancel"); got.SessionId != "s" {
 		t.Errorf("agent's Cancel got %+v", got)
 	}
-	if resp := wait(t, done, "the prompt turn's end"); resp.Stop != "cancelled" {
+	if resp := wait(t, done, "the prompt turn's end"); resp.StopReason != StopReasonCancelled {
 		t.Errorf("prompt returned %+v", resp)
 	}
 }

@@ -59,6 +59,11 @@ type MethodRule struct {
 	CancelsPromptTurn bool
 	// SessionKey is the property naming the session, for the two above.
 	SessionKey string
+	// StopKey is a prompt turn's result property that holds the stop reason,
+	// a required string enum, and StopCancelled its value that answers a turn
+	// whose context was cancelled
+	// (0017-MADR-remediate-acp-v1-conformance-violations.md, P1).
+	StopKey, StopCancelled string
 	// Capability is the dotted path, from AgentCapabilities or
 	// ClientCapabilities, of the capability that gates the method. It is
 	// recorded and checked, not emitted.
@@ -173,6 +178,10 @@ func checkRule(rule *MethodRule, r *rules) error {
 		return fmt.Errorf("a prompt-turn role needs a session key")
 	case !rule.PromptTurn && !rule.CancelsPromptTurn && rule.SessionKey != "":
 		return fmt.Errorf("a session key without a prompt-turn role")
+	case rule.PromptTurn && (rule.StopKey == "" || rule.StopCancelled == ""):
+		return fmt.Errorf("a prompt turn needs its stop key and cancelled value")
+	case !rule.PromptTurn && (rule.StopKey != "" || rule.StopCancelled != ""):
+		return fmt.Errorf("a stop key without a prompt turn")
 	}
 	if rule.GoName != "" {
 		if err := checkExported(rule.GoName); err != nil {
@@ -225,6 +234,11 @@ func (m *Model) linkPromptTurns(r *rules) error {
 				return fmt.Errorf("%s: %w", rule.owner(), err)
 			}
 			mi.SessionField = f.Name
+			if mi.PromptTurn {
+				if mi.StopField, mi.StopConst, err = m.stopField(mi.Resp, rule.StopKey, rule.StopCancelled); err != nil {
+					return fmt.Errorf("%s: %w", rule.owner(), err)
+				}
+			}
 		}
 		for _, mi := range side {
 			if !mi.PromptTurn {
@@ -256,6 +270,26 @@ func (m *Model) sessionField(typeName, key string) (*Field, error) {
 		return nil, fmt.Errorf("%q of %s is not a string", key, typeName)
 	}
 	return f, nil
+}
+
+// stopField returns the Go field of a prompt turn's stop property, which
+// must be a required property of the result whose type is a string enum,
+// and the constant of its cancelled value.
+func (m *Model) stopField(typeName, key, value string) (field, constant string, err error) {
+	f := m.objectField(typeName, key)
+	if f == nil || !f.Required || f.Type.Kind != RefNamed {
+		return "", "", fmt.Errorf("%q is not a required property of %s naming a string enum", key, typeName)
+	}
+	t := m.Type(f.Type.Name)
+	if t == nil || (t.Kind != KindEnum && t.Kind != KindStringConstUnion && t.Kind != KindOpenEnum) {
+		return "", "", fmt.Errorf("%q of %s is not a string enum", key, typeName)
+	}
+	for _, ev := range t.Enum {
+		if ev.Value == value {
+			return f.Name, ev.Const, nil
+		}
+	}
+	return "", "", fmt.Errorf("%q of %s has no value %q", key, typeName, value)
 }
 
 // objectField returns the field of an object type with the given key, or nil.

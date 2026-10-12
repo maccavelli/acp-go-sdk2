@@ -194,7 +194,7 @@ func TestRequiredKeysOnDecode(t *testing.T) {
 	// Dispatch must refuse the request before it reaches the (absent) agent.
 	reqErr, panicked := func() (e *RequestError, p any) {
 		defer func() { p = recover() }()
-		a := &AgentSideConnection{sessionCancels: map[string]context.CancelFunc{}}
+		a := &AgentSideConnection{sessionCancels: map[string]*promptTurn{}}
 		_, e = a.handle(context.Background(), AgentMethodSessionPrompt, json.RawMessage(`{"prompt":[]}`))
 		return e, nil
 	}()

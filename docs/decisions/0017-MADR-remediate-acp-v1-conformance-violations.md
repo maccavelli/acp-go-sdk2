@@ -288,6 +288,9 @@ Concretely:
    * `toReqErr` keeps mapping `context.Canceled` to `-32800` for every other method, as the cancellation page asks.
    * The protocol table carries this behaviour already (`PromptTurn`, `CancelsPromptTurn`); `promptCase` in
      `cmd/generate/internal/emit/dispatch.go` emits it.
+   * (Amended 2026-10-12, "More Information".) A prompt turn and a `session/cancel` are ordered by receipt, not by which goroutine
+     runs first: a cancel received after the prompt applies to its turn even when the turn is stored later, and one received before
+     it does not.
 2. **Permission requests on cancel (Q1).** The generated `session/request_permission` case registers each pending request by session.
    When the client connection sends `session/cancel` for a session, through `Cancel` or `Prompt`, it cancels each registered handler
    context with `ErrPromptCancelled` and each pending request is answered `RequestPermissionResponse{Outcome:
@@ -563,9 +566,16 @@ Asked, the owner chose:
 * **Not changed.** The outbound cancel queue, duplicate keys and batching (beyond the single `-32600`), as the report's notes found no
   requirement unmet. A client whose `Prompt` context ends returns at once rather than waiting for the agent's `cancelled` answer; the
   cancellation page leaves that waiting a MAY.
-* **Noted, not decided.** A `session/cancel` handled before the prompt request's goroutine has stored the turn's cancel function finds no
-  turn; this is read in `receive` (requests run on their own goroutine, notifications on the queue), not probed, and the PLAN for this
-  record tests it before deciding whether it needs a remedy.
+* **~~Noted, not decided~~ Decided 2026-10-12, in PLAN step 5.** A `session/cancel` handled before the prompt request's goroutine has
+  stored the turn's cancel function finds no turn; this is read in `receive` (requests run on their own goroutine, notifications on the
+  queue)~~, not probed, and the PLAN for this record tests it before deciding whether it needs a remedy~~. The PLAN's probe, prompt and
+  cancel written back to back 1000 times, left 875 turns uncancelled, so a client that cancels at once got no `cancelled` answer,
+  against the prompt-turn MUST. Asked, the owner chose to order the two by receipt: the connection gives every received request and
+  notification its receipt number; a cancel applies to the session's running turn only if that turn's prompt was received before it,
+  and otherwise is kept for the session; a prompt that stores its turn and finds a kept cancel received after it is cancelled at once;
+  of two prompts for one session, the one received first is the one superseded. Not chosen: storing the turn in the receive loop,
+  which puts protocol knowledge in the hand-written runtime S1 moved out; leaving the race and documenting it. After the change the
+  probe leaves none uncancelled. This adds to item 1 below; nothing else in it changes.
 * **Revision.** Amended 2026-10-12 at the owner's request, before any decision: P1's override ends at the handler's return, so a
   cancel that arrives after the turn finished leaves the handler's answer as it is. Corrected the same day, writing the PLAN: a rule
   whose subject the schema lacks is skipped by `Build` and caught by the table's test, so "Confirmation" and G4 name that test; and

@@ -20,8 +20,11 @@ var ACP = Protocol{
 		// advertises loadSession, so it has its own optional interface.
 		{Side: sideAgent, Wire: "session/load", Binding: BindAgentOptional, Capability: "loadSession"},
 		// Prompt turn: session/cancel cancels the session's prompt; a
-		// client whose session/prompt context ends sends session/cancel.
-		{Side: sideAgent, Wire: "session/prompt", PromptTurn: true, SessionKey: "sessionId"},
+		// client whose session/prompt context ends sends session/cancel. The
+		// cancelled stop reason "MUST be returned when the client sends a
+		// session/cancel notification, even if the cancellation causes
+		// exceptions in underlying operations" (schema, StopReason).
+		{Side: sideAgent, Wire: "session/prompt", PromptTurn: true, SessionKey: "sessionId", StopKey: "stopReason", StopCancelled: "cancelled"},
 		{Side: sideAgent, Wire: "session/cancel", CancelsPromptTurn: true, SessionKey: "sessionId"},
 		// The client's notification handler reads as what it receives.
 		{Side: sideClient, Wire: "session/update", GoName: "SessionUpdate"},

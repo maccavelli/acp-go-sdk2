@@ -31,33 +31,71 @@ func handleFunc(f *goFile, recv, recvType string, cases []ast.Stmt) *ast.FuncDec
 	)
 }
 
-// promptCase derives a cancellable context per session for a prompt turn,
-// calls the method, then drops the cancel entry.
-func promptCase(f *goFile, recv ast.Expr, methodName, field string) []ast.Stmt {
+// promptCase runs a prompt turn under a context its session's cancel, a
+// later prompt for the session, or $/cancel_request can cancel. The turn is
+// a pointer in sessionCancels, so a turn removes only its own entry. As the
+// handler returns, the turn is removed and its context's cause read once,
+// under the lock session/cancel takes: a turn cancelled by then is answered
+// with the cancelled stop reason, keeping the rest of the handler's result,
+// and a cancel that comes later finds no turn and changes nothing
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, P1).
+func promptCase(f *goFile, recv ast.Expr, mi *model.Method) []ast.Stmt {
+	field := mi.SessionField
 	return []ast.Stmt{
-		varStmt("reqCtx", f.qual(pkgContext, "Context")),
-		varStmt("cancel", f.qual(pkgContext, "CancelFunc")),
-		assign(exprs(id("reqCtx"), id("cancel")), call(f.qual(pkgContext, "WithCancel"), id("ctx"))),
+		define(exprs(id("r")), call(id("receiptOf"), id("ctx"))),
+		define(exprs(id("reqCtx"), id("cancel")), call(f.qual(pkgContext, "WithCancelCause"), id("ctx"))),
+		define(exprs(id("turn")), addr(composite(id("promptTurn"), kv(id("cancel"), id("cancel")), kv(id("receipt"), id("r"))))),
+		define(exprs(id("superseded")), call(f.qual(pkgFmt, "Errorf"), str("%w: superseded by a new prompt"), id("ErrPromptCancelled"))),
 		lockCall("Lock"),
-		ifStmt(define(exprs(id("prev"), id("ok")), sessionCancel(field)), id("ok"), exprStmt(call(id("prev")))),
-		assign(exprs(sessionCancel(field)), id("cancel")),
+		ifElse(define(exprs(id("prev"), id("ok")), sessionCancel(field)), binary(id("ok"), token.LAND, binary(dot("prev", "receipt"), token.GTR, id("r"))),
+			[]ast.Stmt{exprStmt(call(id("cancel"), id("superseded")))},
+			[]ast.Stmt{
+				ifStmt(nil, id("ok"), exprStmt(call(dot("prev", "cancel"), id("superseded")))),
+				assign(exprs(sessionCancel(field)), id("turn")),
+				ifStmt(nil, binary(binary(id("r"), token.NEQ, intLit(0)), token.LAND,
+					binary(index(dot("a", "lateCancels"), sessionKey(field)), token.GTR, id("r"))),
+					exprStmt(call(id("cancel"), id("ErrPromptCancelled")))),
+				exprStmt(call(id("delete"), dot("a", "lateCancels"), sessionKey(field))),
+			},
+		),
 		lockCall("Unlock"),
-		define(exprs(id("resp"), id("err")), call(sel(recv, methodName), id("reqCtx"), id("p"))),
+		define(exprs(id("resp"), id("err")), call(sel(recv, mi.GoName), id("reqCtx"), id("p"))),
 		lockCall("Lock"),
-		exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey(field))),
+		ifStmt(nil, binary(sessionCancel(field), token.EQL, id("turn")),
+			exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey(field)))),
+		define(exprs(id("cause")), call(f.qual(pkgContext, "Cause"), id("reqCtx"))),
 		lockCall("Unlock"),
+		exprStmt(call(id("cancel"), nilExpr())),
+		ifStmt(nil, binary(id("promptReturned"), token.NEQ, nilExpr()), exprStmt(call(id("promptReturned")))),
+		ifStmt(nil, binary(id("cause"), token.NEQ, nilExpr()),
+			ifStmt(nil, errNotNil(), assign(exprs(id("resp")), composite(id(mi.Resp)))),
+			assign(exprs(dot("resp", mi.StopField), id("err")), id(mi.StopConst), nilExpr()),
+		),
 		ifStmt(nil, errNotNil(), toRequestError()),
 		checkedResult(dot("a", "conn")),
 	}
 }
 
-// cancelActivePrompt cancels the in-flight prompt-turn context of the session, if any.
+// cancelActivePrompt cancels the in-flight prompt-turn context of the session,
+// if any, with ErrPromptCancelled as its cause.
+//
+// A turn received after the cancel is not its: a cancel the receive loop read
+// before the prompt does not apply to it. A cancel that finds no earlier turn
+// is kept in lateCancels, for a prompt received before it whose turn is not
+// stored yet (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 5
+// deviation). A cancel with no receipt applies to the running turn.
 func cancelActivePrompt(field string) []ast.Stmt {
+	late := index(dot("a", "lateCancels"), sessionKey(field))
+	applies := binary(binary(id("s"), token.EQL, intLit(0)), token.LOR, binary(dot("cn", "receipt"), token.LSS, id("s")))
 	return []ast.Stmt{
+		define(exprs(id("s")), call(id("receiptOf"), id("ctx"))),
 		lockCall("Lock"),
-		ifStmt(define(exprs(id("cn"), id("ok")), sessionCancel(field)), id("ok"),
-			exprStmt(call(id("cn"))),
-			exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey(field))),
+		ifElse(define(exprs(id("cn"), id("ok")), sessionCancel(field)), binary(id("ok"), token.LAND, paren(applies)),
+			[]ast.Stmt{
+				exprStmt(call(dot("cn", "cancel"), id("ErrPromptCancelled"))),
+				exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey(field))),
+			},
+			[]ast.Stmt{ifStmt(nil, binary(id("s"), token.GTR, late), assign(exprs(index(dot("a", "lateCancels"), sessionKey(field))), id("s")))},
 		),
 		lockCall("Unlock"),
 	}
@@ -117,7 +155,8 @@ func emitSideConnection(f *goFile, s side) {
 	if s.promptTurns {
 		fs = append(fs,
 			param("mu", f.qual(pkgSync, "Mutex")),
-			param("sessionCancels", mapOf(id("string"), f.qual(pkgContext, "CancelFunc"))))
+			param("sessionCancels", mapOf(id("string"), star(id("promptTurn")))),
+			param("lateCancels", mapOf(id("string"), id("uint64"))))
 	}
 	f.comment(s.doc...)
 	f.add(typeDecl(s.typeName, &ast.StructType{Fields: fields(fs...)}))
@@ -128,7 +167,8 @@ func emitSideConnection(f *goFile, s side) {
 	}
 	if s.promptTurns {
 		body = append(body, assign(exprs(dot(s.local, "sessionCancels")),
-			call(id("make"), mapOf(id("string"), f.qual(pkgContext, "CancelFunc")))))
+			call(id("make"), mapOf(id("string"), star(id("promptTurn"))))),
+			assign(exprs(dot(s.local, "lateCancels")), call(id("make"), mapOf(id("string"), id("uint64")))))
 	}
 	body = append(body,
 		assign(exprs(dot(s.local, "conn")), &ast.CallExpr{
@@ -174,6 +214,22 @@ func emitSideConnection(f *goFile, s side) {
 	)
 	f.add(method(recv(), "Connection", funcType(nil, param("", star(id("Connection")))), ret(dot("c", "conn"))))
 	f.line()
+	if s.promptTurns {
+		f.comment("promptTurn is one prompt turn: its cancel function and the receipt number",
+			"of its request. sessionCancels holds the running turn of each session by",
+			"pointer, so a turn removes only its own entry, and lateCancels the receipt of",
+			"each session's latest cancel that found no earlier turn",
+			"(0017-MADR-remediate-acp-v1-conformance-violations.md, P1).")
+		f.add(typeDecl("promptTurn", &ast.StructType{Fields: fields(
+			param("cancel", f.qual(pkgContext, "CancelCauseFunc")), param("receipt", id("uint64")))}))
+		f.line()
+		f.comment("promptReturned, when a test sets it, runs after a prompt turn's handler",
+			"returns and the turn is removed, before its answer is decided. It is nil",
+			"outside tests.")
+		f.add(&ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+			Names: []*ast.Ident{id("promptReturned")}, Type: &ast.FuncType{Params: fields()}}}})
+		f.line()
+	}
 }
 
 // agentFile builds agent_gen.go: the agent's handler and its outbound wrappers.
@@ -199,7 +255,7 @@ func agentFile(m *model.Model) *goFile {
 			body = append(body, pre...)
 			switch {
 			case mi.PromptTurn:
-				body = append(body, promptCase(f, recv, mi.GoName, mi.SessionField)...)
+				body = append(body, promptCase(f, recv, mi)...)
 			case !mi.HasResult:
 				body = append(body, callNoResult(recv, mi.GoName)...)
 			default:

@@ -5,6 +5,7 @@ package acp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
@@ -15,7 +16,8 @@ type AgentSideConnection struct {
 	conn           *Connection
 	agent          Agent
 	mu             sync.Mutex
-	sessionCancels map[string]context.CancelFunc
+	sessionCancels map[string]*promptTurn
+	lateCancels    map[string]uint64
 }
 
 // NewAgentSideConnection creates a new agent-side connection bound to the
@@ -24,7 +26,8 @@ type AgentSideConnection struct {
 func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection {
 	asc := &AgentSideConnection{}
 	asc.agent = agent
-	asc.sessionCancels = make(map[string]context.CancelFunc)
+	asc.sessionCancels = make(map[string]*promptTurn)
+	asc.lateCancels = make(map[string]uint64)
 	asc.conn = NewConnection(asc.handleWithExtensions, peerInput, peerOutput, opts...)
 	return asc
 }
@@ -56,6 +59,21 @@ func (c *AgentSideConnection) SetLogger(l *slog.Logger) {
 func (c *AgentSideConnection) Connection() *Connection {
 	return c.conn
 }
+
+// promptTurn is one prompt turn: its cancel function and the receipt number
+// of its request. sessionCancels holds the running turn of each session by
+// pointer, so a turn removes only its own entry, and lateCancels the receipt of
+// each session's latest cancel that found no earlier turn
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, P1).
+type promptTurn struct {
+	cancel  context.CancelCauseFunc
+	receipt uint64
+}
+
+// promptReturned, when a test sets it, runs after a prompt turn's handler
+// returns and the turn is removed, before its answer is decided. It is nil
+// outside tests.
+var promptReturned func()
 
 func (a *AgentSideConnection) handle(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
 	switch method {
@@ -364,10 +382,15 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
 			return nil, inboundError(err)
 		}
+		s := receiptOf(ctx)
 		a.mu.Lock()
-		if cn, ok := a.sessionCancels[string(p.SessionId)]; ok {
-			cn()
+		if cn, ok := a.sessionCancels[string(p.SessionId)]; ok && (s == 0 || cn.receipt < s) {
+			cn.cancel(ErrPromptCancelled)
 			delete(a.sessionCancels, string(p.SessionId))
+		} else {
+			if s > a.lateCancels[string(p.SessionId)] {
+				a.lateCancels[string(p.SessionId)] = s
+			}
 		}
 		a.mu.Unlock()
 		if err := a.agent.Cancel(ctx, p); err != nil {
@@ -470,19 +493,44 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := a.conn.checkInbound(ctx, method, &p); err != nil {
 			return nil, inboundError(err)
 		}
-		var reqCtx context.Context
-		var cancel context.CancelFunc
-		reqCtx, cancel = context.WithCancel(ctx)
-		a.mu.Lock()
-		if prev, ok := a.sessionCancels[string(p.SessionId)]; ok {
-			prev()
+		r := receiptOf(ctx)
+		reqCtx, cancel := context.WithCancelCause(ctx)
+		turn := &promptTurn{
+			cancel:  cancel,
+			receipt: r,
 		}
-		a.sessionCancels[string(p.SessionId)] = cancel
+		superseded := fmt.Errorf("%w: superseded by a new prompt", ErrPromptCancelled)
+		a.mu.Lock()
+		if prev, ok := a.sessionCancels[string(p.SessionId)]; ok && prev.receipt > r {
+			cancel(superseded)
+		} else {
+			if ok {
+				prev.cancel(superseded)
+			}
+			a.sessionCancels[string(p.SessionId)] = turn
+			if r != 0 && a.lateCancels[string(p.SessionId)] > r {
+				cancel(ErrPromptCancelled)
+			}
+			delete(a.lateCancels, string(p.SessionId))
+		}
 		a.mu.Unlock()
 		resp, err := a.agent.Prompt(reqCtx, p)
 		a.mu.Lock()
-		delete(a.sessionCancels, string(p.SessionId))
+		if a.sessionCancels[string(p.SessionId)] == turn {
+			delete(a.sessionCancels, string(p.SessionId))
+		}
+		cause := context.Cause(reqCtx)
 		a.mu.Unlock()
+		cancel(nil)
+		if promptReturned != nil {
+			promptReturned()
+		}
+		if cause != nil {
+			if err != nil {
+				resp = PromptResponse{}
+			}
+			resp.StopReason, err = StopReasonCancelled, nil
+		}
 		if err != nil {
 			return nil, toReqErr(err)
 		}

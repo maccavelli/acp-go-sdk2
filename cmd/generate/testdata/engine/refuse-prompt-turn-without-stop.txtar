@@ -1,0 +1,17 @@
+Refused: the protocol table's prompt turn needs its result's stopReason, a
+required string enum holding cancelled, to answer a cancelled turn
+(0017-MADR-remediate-acp-v1-conformance-violations.md, P1). This PromptResponse
+has none.
+
+-- meta.json --
+{"version": 1, "agentMethods": {"session_prompt": "session/prompt", "session_cancel": "session/cancel"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "PromptRequest": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/prompt"},
+  "PromptResponse": {"type": "object", "properties": {"stop": {"type": "string"}}, "required": ["stop"], "x-side": "agent", "x-method": "session/prompt"},
+  "CancelNotification": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/cancel"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+protocol table: agent method "session/prompt"
+"stopReason" is not a required property of PromptResponse naming a string enum

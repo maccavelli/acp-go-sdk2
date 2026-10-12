@@ -54,6 +54,9 @@ type Method struct {
 	PromptTurn, CancelsPromptTurn bool
 	SessionField                  string
 	Canceller                     *Method
+	// StopField and StopConst are a prompt turn's stop-reason field and the
+	// constant that answers a cancelled turn.
+	StopField, StopConst string
 	// Capability is the capability path that gates the method, from the
 	// protocol table.
 	Capability string

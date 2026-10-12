@@ -32,7 +32,9 @@ func renamedProtocol(t *testing.T) *model.Model {
 		"ConversationId":{"type":"string"},
 		"SendRequest":{"type":"object","x-side":"agent","x-method":"chat/send","required":["conversationId"],
 			"properties":{"conversationId":{"allOf":[{"$ref":"#/$defs/ConversationId"}]}}},
-		"SendResponse":{"type":"object","x-side":"agent","x-method":"chat/send"},
+		"Outcome":{"type":"string","enum":["finished","halted"]},
+		"SendResponse":{"type":"object","x-side":"agent","x-method":"chat/send","required":["outcome"],
+			"properties":{"outcome":{"$ref":"#/$defs/Outcome"}}},
 		"StopNotification":{"type":"object","x-side":"agent","x-method":"chat/stop","required":["conversationId"],
 			"properties":{"conversationId":{"allOf":[{"$ref":"#/$defs/ConversationId"}]}}},
 		"OpenRequest":{"type":"object","x-side":"agent","x-method":"chat/open"},
@@ -46,7 +48,7 @@ func renamedProtocol(t *testing.T) *model.Model {
 			Interfaces: []model.Interface{{Binding: model.BindAgentOptional, Name: "AgentStore", Var: "store", Doc: []string{"AgentStore stores."}}},
 			Methods: []model.MethodRule{
 				{Side: "agent", Wire: "chat/open", Binding: model.BindAgentOptional},
-				{Side: "agent", Wire: "chat/send", PromptTurn: true, SessionKey: "conversationId"},
+				{Side: "agent", Wire: "chat/send", PromptTurn: true, SessionKey: "conversationId", StopKey: "outcome", StopCancelled: "halted"},
 				{Side: "agent", Wire: "chat/stop", CancelsPromptTurn: true, SessionKey: "conversationId"},
 			},
 		},
@@ -69,10 +71,16 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 
 	want := map[string][]string{
 		"agent_gen.go": {
-			"reqCtx, cancel = context.WithCancel(ctx)",
-			"a.sessionCancels[string(p.ConversationId)] = cancel",
+			"reqCtx, cancel := context.WithCancelCause(ctx)",
+			"a.sessionCancels[string(p.ConversationId)] = turn",
 			"resp, err := a.agent.Send(reqCtx, p)",
-			"if cn, ok := a.sessionCancels[string(p.ConversationId)]; ok {",
+			"if a.sessionCancels[string(p.ConversationId)] == turn {",
+			"resp = SendResponse{}",
+			"resp.Outcome, err = OutcomeHalted, nil",
+			"cn.cancel(ErrPromptCancelled)",
+			"if prev, ok := a.sessionCancels[string(p.ConversationId)]; ok && prev.receipt > r {",
+			"if r != 0 && a.lateCancels[string(p.ConversationId)] > r {",
+			"if cn, ok := a.sessionCancels[string(p.ConversationId)]; ok && (s == 0 || cn.receipt < s) {",
 			"store, ok := a.agent.(AgentStore)",
 			"resp, err := store.Open(ctx, p)",
 		},
@@ -87,7 +95,7 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 		}
 	}
 	for name, src := range files {
-		for _, bad := range []string{"session/prompt", "SessionId", "CancelNotification", "AgentLoader", "loader", "c.Cancel("} {
+		for _, bad := range []string{"session/prompt", "SessionId", "CancelNotification", "AgentLoader", "loader", "c.Cancel(", "StopReason"} {
 			if strings.Contains(src, bad) {
 				t.Errorf("%s contains %q", name, bad)
 			}
@@ -133,8 +141,9 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 			"func (c *ClientSideConnection) Connection() *Connection {",
 		},
 	}
-	turnState := []string{"\tmu             sync.Mutex\n", "\tsessionCancels map[string]context.CancelFunc\n",
-		"asc.sessionCancels = make(map[string]context.CancelFunc)"}
+	turnState := []string{"\tmu             sync.Mutex\n", "\tsessionCancels map[string]*promptTurn\n",
+		"asc.sessionCancels = make(map[string]*promptTurn)", "type promptTurn struct {", "var promptReturned func()",
+		"\tlateCancels    map[string]uint64\n", "asc.lateCancels = make(map[string]uint64)"}
 	for name, files := range map[string]map[string]string{"with prompt turns": withTurns, "without": without} {
 		for file, lines := range common {
 			for _, w := range lines {

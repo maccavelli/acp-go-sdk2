@@ -37,8 +37,25 @@ type anyMessage struct {
 }
 
 type queuedNotification struct {
-	seq uint64
-	msg *anyMessage
+	seq     uint64
+	receipt uint64
+	msg     *anyMessage
+}
+
+// receiptKey is the context key of a received request's or notification's
+// receipt number: its place, from 1, in the order receive read the requests
+// and notifications of the connection.
+type receiptKey struct{}
+
+// receiptOf returns ctx's receipt number, or 0 for a context receive did not
+// make, such as a test's call of a handler. Generated code orders a prompt
+// turn and a session/cancel by it
+// (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 5 deviation).
+func receiptOf(ctx context.Context) uint64 {
+	if r, ok := ctx.Value(receiptKey{}).(uint64); ok {
+		return r
+	}
+	return 0
 }
 
 type responseEnvelope struct {
@@ -594,6 +611,7 @@ func (c *Connection) receive() {
 		maxBufSize     = 10 * 1024 * 1024
 	)
 
+	var received uint64
 	scanner := bufio.NewScanner(c.r)
 	buf := make([]byte, 0, initialBufSize)
 	scanner.Buffer(buf, maxBufSize)
@@ -621,13 +639,14 @@ func (c *Connection) receive() {
 		case msg.ID != nil && msg.Method == "":
 			c.handleResponse(&msg)
 		case msg.Method != "":
+			received++
 			if msg.ID != nil {
 				idKey, err := canonicalJSONRPCIDKey(*msg.ID)
 				if err != nil {
 					c.loggerOrDefault().Error("failed to canonicalize inbound request id", "err", err, "id", string(*msg.ID))
 					idKey = string(*msg.ID)
 				}
-				reqCtx, cancel := context.WithCancelCause(c.ctx)
+				reqCtx, cancel := context.WithCancelCause(context.WithValue(c.ctx, receiptKey{}, received))
 
 				c.mu.Lock()
 				c.inflight[idKey] = cancel
@@ -654,7 +673,7 @@ func (c *Connection) receive() {
 			c.lastEnqueuedNotificationSeq++
 			seq := c.lastEnqueuedNotificationSeq
 			select {
-			case c.notificationQueue <- queuedNotification{seq: seq, msg: &m}:
+			case c.notificationQueue <- queuedNotification{seq: seq, receipt: received, msg: &m}:
 				c.notifyMu.Unlock()
 			default:
 				if c.lastEnqueuedNotificationSeq != seq {
@@ -727,7 +746,7 @@ func (c *Connection) shutdownReceive(cause error) {
 // It terminates when notificationQueue is closed (e.g. on disconnect in receive()).
 func (c *Connection) processNotifications() {
 	for queued := range c.notificationQueue {
-		c.handleInbound(c.inboundCtx, queued.msg)
+		c.handleInbound(context.WithValue(c.inboundCtx, receiptKey{}, queued.receipt), queued.msg)
 
 		c.notifyMu.Lock()
 		expectedSeq := c.completedNotificationSeq + 1
