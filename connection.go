@@ -115,6 +115,89 @@ func validateOutbound(params any) error {
 	return nil
 }
 
+// pendingRequest is one request a side answers itself when it cancels the
+// prompt turn of the request's session.
+type pendingRequest struct{ cancel context.CancelCauseFunc }
+
+// pendingRequests holds, by session, the contexts of the requests a side
+// answers itself when it cancels that session's prompt turn
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1). The zero value
+// is ready to use.
+type pendingRequests struct {
+	mu sync.Mutex
+	m  map[string]map[*pendingRequest]struct{}
+}
+
+// track registers a request of session and returns its context and the
+// function that removes it, which the caller defers.
+func (p *pendingRequests) track(ctx context.Context, session string) (context.Context, func()) {
+	rctx, cancel := context.WithCancelCause(ctx)
+	r := &pendingRequest{cancel: cancel}
+	p.mu.Lock()
+	if p.m == nil {
+		p.m = map[string]map[*pendingRequest]struct{}{}
+	}
+	if p.m[session] == nil {
+		p.m[session] = map[*pendingRequest]struct{}{}
+	}
+	p.m[session][r] = struct{}{}
+	p.mu.Unlock()
+	return rctx, func() {
+		p.mu.Lock()
+		delete(p.m[session], r)
+		if len(p.m[session]) == 0 {
+			delete(p.m, session)
+		}
+		p.mu.Unlock()
+		cancel(nil)
+	}
+}
+
+// cancel cancels the context of each pending request of session with
+// ErrPromptCancelled.
+func (p *pendingRequests) cancel(session string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for r := range p.m[session] {
+		r.cancel(ErrPromptCancelled)
+	}
+}
+
+// answerUnlessCancelled runs call on its own goroutine and returns its result,
+// unless ctx ends with a cause that is ErrPromptCancelled, before or after
+// call returns: then it returns cancelled at once, and a result call returns
+// later is discarded and logged at Debug. Another end of ctx, such as
+// $/cancel_request, waits for call, as a handler is otherwise awaited
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).
+func answerUnlessCancelled[T any](c *Connection, ctx context.Context, method string, call func(context.Context) (T, error), cancelled T) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
+	type result struct {
+		v   T
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		v, err := call(ctx)
+		done <- result{v, err}
+	}()
+	select {
+	case r := <-done:
+		if errors.Is(context.Cause(ctx), ErrPromptCancelled) {
+			return cancelled, nil
+		}
+		return r.v, r.err
+	case <-ctx.Done():
+		if errors.Is(context.Cause(ctx), ErrPromptCancelled) {
+			go func() {
+				r := <-done
+				c.loggerOrDefault().Debug("handler returned after its request was answered cancelled; result discarded", "method", method, "err", r.err)
+			}()
+			return cancelled, nil
+		}
+		r := <-done
+		return r.v, r.err
+	}
+}
+
 // MethodHandler handles one inbound JSON-RPC request or notification.
 type MethodHandler func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError)
 

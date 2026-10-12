@@ -285,22 +285,27 @@ Out of scope:
    * `protocol.go`: `MethodRule` gains `CancelledByPromptCancel bool` and `CancelledKey`, `CancelledVariant` (the result property and the
      variant that answer a cancelled request); `checkRule` allows this role on the client side and requires `SessionKey`; the message
      at `:169` changes to name the agent-only roles. `methods.go`: `Method` gains `CancelledField` and `CancelledHelper` (the generated
-     constructor of the variant, from the 0014 helpers). `linkPromptTurns` resolves them and links the client's cancel wrapper to them.
+     constructor of the variant, from the 0014 helpers). ~~`linkPromptTurns`~~ `linkCancelledRequests` (amended in step 6's deviation)
+     resolves them and links the client's cancel wrapper to them.
      `acp.go`: `{Side: client, Wire: "session/request_permission", CancelledByPromptCancel: true, SessionKey: "sessionId", CancelledKey:
      "outcome", CancelledVariant: "cancelled"}`, citing the prompt-turn sentence.
-   * Emitted into `client_gen.go` with that rule: the client struct gains `mu sync.Mutex` and `pending
+   * ~~Emitted into `client_gen.go` with that rule: the client struct gains `mu sync.Mutex` and `pending
      map[string]map[*pendingPermission]struct{}`, made by the constructor; `type pendingPermission struct{ cancel
      context.CancelCauseFunc }`; `trackPermission(ctx context.Context, session string) (context.Context, func())`, which registers one and
      returns its context and its removal; `cancelPermissions(session string)`, which cancels each registered context of the session with
-     `ErrPromptCancelled`.
-   * `connection.go`: `func answerUnlessCancelled[T any](ctx context.Context, call func(context.Context) (T, error), cancelled T) (T,
-     error)`: runs `call` on its own goroutine; returns `cancelled` at once when `ctx` ends with a cause that `errors.Is`
+     `ErrPromptCancelled`.~~ (Amended in step 6's deviation: `connection.go` holds a generic `pendingRequests` with `track` and
+     `cancel`; the client struct gains `pending pendingRequests` with that rule.)
+   * `connection.go`: `func answerUnlessCancelled[T any](~~ctx context.Context~~ c *Connection, ctx context.Context, method string,
+     call func(context.Context) (T, error), cancelled T) (T, error)` (the connection and method added for the Debug log, amended in step
+     6's deviation): runs `call` on its own goroutine; returns `cancelled` at once when `ctx` ends with a cause that `errors.Is`
      `ErrPromptCancelled`, and also when `call` returns after that; otherwise waits for `call` and returns its result. It names no ACP
-     type. A discarded late result is logged at Debug by the caller.
-   * Emission: the client's case for a `CancelledByPromptCancel` method calls `trackPermission`, defers the removal, and calls the handler
+     type. A discarded late result is logged at Debug ~~by the caller~~ by it.
+   * Emission: the client's case for a `CancelledByPromptCancel` method calls ~~`trackPermission`~~ `c.pending.track`, defers the
+     removal, and calls the handler
      through `answerUnlessCancelled` with `RequestPermissionResponse{Outcome: NewRequestPermissionOutcomeCancelled()}`, built from
      `CancelledField` and `CancelledHelper`; its result goes through `checkResult`. The client's outbound wrapper of the agent's
-     `CancelsPromptTurn` method (`Cancel`) calls `c.cancelPermissions(string(params.<SessionField>))` after `SendNotification` returns,
+     `CancelsPromptTurn` method (`Cancel`) calls ~~`c.cancelPermissions(...)`~~ `c.pending.cancel(string(params.<SessionField>))` after
+     `SendNotification` returns,
      so the notification is written before any answer.
    * A new engine case, `accept-permission-cancellation.txtar`, with a minimal permission request, outcome union and cancel; its behaviour
      test requires the cancelled outcome. `refuse-permission-cancel-rule.txtar` requires `Build` to refuse the role without `SessionKey`
@@ -716,3 +721,65 @@ Ran on `main` from `19e062d` (step 4). The agent did not commit. The deviation a
   scan of the changed files found nothing.
 * On the Windows host reached over SSH, with a copy of the working tree's 298 tracked and untracked files and no macOS metadata: `go test
   -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
+
+### Step 6 deviation, 2026-10-12: the pending-request registry is a generic runtime type
+
+The plan emitted the registry into `client_gen.go`: a type, a mutex, a map and two methods. Written that way it is about 40 lines of
+emitter AST for bookkeeping that names no ACP type. It was written instead as `pendingRequests` in `connection.go`: a map from a session
+string to the cancel functions of its pending requests, with `track(ctx, session)` and `cancel(session)`, ready to use as its zero value.
+The generated client holds it as a typed field, `pending pendingRequests`, only when a `CancelledByPromptCancel` rule applies, and the
+generated code decides which method uses it, by which session key, and which variant answers it. `answerUnlessCancelled` takes the
+connection and the method so that it logs a discarded late result itself. The model's resolution sits in its own `linkCancelledRequests`,
+which also marks the agent's prompt-turn cancel (`Method.CancelsPending`).
+
+Asked, the owner chose to keep the runtime type. Not chosen: emitting it as the plan said. The behaviour, the tests and the MADR are
+unchanged: the state is a typed field of the generated side connection (S1), and the runtime holds no protocol knowledge.
+
+### Step 6, permission requests on cancel, 2026-10-12
+
+Ran on `main` from `f945232` (step 5). The agent did not commit. The deviation above, decided by the owner, ran within this step.
+
+* `cmd/generate/internal/model`: `MethodRule` gains `CancelledByPromptCancel`, `CancelledKey` and `CancelledVariant`; `checkRule` says
+  `only agent methods are a prompt turn or its cancel`, refuses the new role off the client side (`only client methods are answered on
+  a prompt-turn cancel`), requires its session key, result key and variant, and refuses either key without it. `Method` gains
+  `CancelledByPromptCancel`, `CancelsPending`, `CancelledField` and `CancelledHelper`. `linkCancelledRequests` requires a request with a
+  result, a prompt-turn cancel on the agent side, and the session key, and resolves through `cancelledAnswer` a required union property
+  of the result and the constructor without parameters of its variant (`"<key>" is not a required property of <type> naming a union`,
+  `"<key>" of <type> is not a union`, `<union> has no constructor for a variant "<value>"`, `<union>'s constructor <name> takes
+  parameters`). `acp.go`: the `session/request_permission` rule, quoting the prompt-turn sentence; `keySessionID` replaces the three
+  `"sessionId"` literals, which `goconst` flagged.
+* `connection.go`: `pendingRequests`, `pendingRequest` and `answerUnlessCancelled`, naming no ACP type.
+* `cmd/generate/internal/emit/dispatch.go`: the client struct gains `pending pendingRequests` with the rule; `cancelledOnPromptCancel`
+  emits the case (`c.pending.track`, `defer done()`, `answerUnlessCancelled` with `<Resp>{<Field>: <Helper>()}`, `checkResult`); the
+  client wrapper of a `CancelsPending` cancel sends, then calls `c.pending.cancel(string(params.<SessionField>))`, then returns the send's
+  error.
+* Generated: `client_gen.go` changes only in the struct, the `session/request_permission` case and `Cancel`; no other generated file
+  changes. The API listing of `git archive HEAD` and of the tree are byte-identical. No existing engine case's `want.api` changes.
+* Engine cases: new `accept-permission-cancellation.txtar`, whose behaviour test's client handler ignores its context, and whose
+  `Cancel` still gets the request answered with the cancelled outcome; new `refuse-permission-cancel-rule.txtar`, an outcome union without
+  `cancelled`, refused with `protocol table: client method "session/request_permission"` and `RequestPermissionOutcome has no constructor
+  for a variant "cancelled"`. As in step 5, engine cases run with the ACP table, so a rule without a session key is refused in
+  `TestProtocolTableRefuses`, not by an engine case.
+* Generator tests: `protocolDefs` and `testProtocol` gain a client request `s/ask` answered with `Verdict`'s `withdrawn` variant;
+  `TestProtocolTableApplies` checks its fields and the cancel's `CancelsPending`, and their absence without a table;
+  `TestProtocolTableRefuses` gains nine cases (agent side, no variant, no session key, a cancelled key on a plain rule, a notification, no
+  cancel, a key that is not a union, no such variant, a variant with parameters); `TestProtocolTableAppliesToCommittedSchema` requires
+  `Outcome` and `NewRequestPermissionOutcomeCancelled`, and `CancelsPending` on `session/cancel`; `renamedProtocol` gains `chat/ask`, and
+  `TestDispatchFollowsTheModel` pins its case and the `Stop` wrapper by the renamed names; `TestSideConnectionsFollowTheModel` requires
+  the `pending` field with the rule only.
+* Root tests, `cancel_test.go`: `TestCancelAnswersPendingPermissions`, `TestPromptCancelAnswersPendingPermissions` and
+  `TestPermissionAfterCancelHandledNormally`, as the step says; all passed five times under `-race`. The first run of the first one
+  found a fault in the test itself: session `t`'s request, still pending at its end, failed after the test returned; the test now
+  releases the handlers and requires `t`'s own answer before it returns.
+* Plants, each in its own scratch copy, all `exit=1`:
+  * the generated `Cancel` not calling `c.pending.cancel`: `watch's answer did not happen`;
+  * the emitter's wrapper not calling it: `TestEngineBehaviour`, `accept-permission-cancellation`, `the request was not answered`;
+  * `answerUnlessCancelled` waiting for `call`: `ignore's answer did not happen`;
+  * `pendingRequests.cancel` cancelling every session: `session t's request answered {Cancelled:...} by session s's cancel`;
+  * the table check for the variant weakened: `TestProtocolTableRefuses/answered_on_a_cancel_without_its_variant` failed.
+* `make pre-add-check`: the first run failed on `goconst` (`string "sessionId" has 3 occurrences`), fixed with `keySessionID`; then
+  `go-precheck: 104 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` No untracked Go file. `GOEXPERIMENT=nojsonv2 go
+  test -count=1 ./...` passes at the root; `GOOS=windows go vet ./...` passes in both modules; `make check-records` and `make
+  markdownlint` exit 0; the identifier scan of the changed files found nothing.
+* On the Windows host reached over SSH, with a copy of the final working tree's 300 tracked and untracked files and no macOS metadata:
+  `go test -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.

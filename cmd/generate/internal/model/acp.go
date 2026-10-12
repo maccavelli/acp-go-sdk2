@@ -24,8 +24,13 @@ var ACP = Protocol{
 		// cancelled stop reason "MUST be returned when the client sends a
 		// session/cancel notification, even if the cancellation causes
 		// exceptions in underlying operations" (schema, StopReason).
-		{Side: sideAgent, Wire: "session/prompt", PromptTurn: true, SessionKey: "sessionId", StopKey: "stopReason", StopCancelled: "cancelled"},
-		{Side: sideAgent, Wire: "session/cancel", CancelsPromptTurn: true, SessionKey: "sessionId"},
+		{Side: sideAgent, Wire: "session/prompt", PromptTurn: true, SessionKey: keySessionID, StopKey: "stopReason", StopCancelled: "cancelled"},
+		{Side: sideAgent, Wire: "session/cancel", CancelsPromptTurn: true, SessionKey: keySessionID},
+		// "The Client MUST respond to all pending session/request_permission
+		// requests with the cancelled outcome" when it sends session/cancel
+		// (prompt-turn, Cancellation).
+		{Side: sideClient, Wire: "session/request_permission", CancelledByPromptCancel: true, SessionKey: keySessionID,
+			CancelledKey: "outcome", CancelledVariant: "cancelled"},
 		// The client's notification handler reads as what it receives.
 		{Side: sideClient, Wire: "session/update", GoName: "SessionUpdate"},
 
@@ -69,11 +74,12 @@ var ACP = Protocol{
 	},
 }
 
-// The property keys several absolute-path rules name.
+// The property keys several rules name.
 const (
-	keyCwd   = "cwd"
-	keyRoots = "additionalDirectories"
-	keyPath  = "path"
+	keyCwd       = "cwd"
+	keyRoots     = "additionalDirectories"
+	keyPath      = "path"
+	keySessionID = "sessionId"
 )
 
 // The specification sentences the absolute-path rules follow.

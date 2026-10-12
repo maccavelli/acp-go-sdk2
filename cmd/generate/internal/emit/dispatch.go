@@ -110,8 +110,9 @@ type side struct {
 	// names the other side in Connection's.
 	doc, ctorDoc []string
 	peer         string
-	// promptTurns is true when the side holds prompt-turn contexts.
-	promptTurns bool
+	// promptTurns is true when the side holds prompt-turn contexts, and
+	// pending when it answers requests itself on a prompt-turn cancel.
+	promptTurns, pending bool
 }
 
 // agentSide and clientSide describe the two side connections of m
@@ -144,6 +145,9 @@ func clientSide(m *model.Model) side {
 			"the underlying connection (e.g., WithMaxQueuedNotifications).",
 		},
 		peer: "agent",
+		pending: slices.ContainsFunc(m.ClientMethods, func(mi *model.Method) bool {
+			return mi.CancelledByPromptCancel
+		}),
 	}
 }
 
@@ -157,6 +161,9 @@ func emitSideConnection(f *goFile, s side) {
 			param("mu", f.qual(pkgSync, "Mutex")),
 			param("sessionCancels", mapOf(id("string"), star(id("promptTurn")))),
 			param("lateCancels", mapOf(id("string"), id("uint64"))))
+	}
+	if s.pending {
+		fs = append(fs, param("pending", id("pendingRequests")))
 	}
 	f.comment(s.doc...)
 	f.add(typeDecl(s.typeName, &ast.StructType{Fields: fields(fs...)}))
@@ -289,9 +296,12 @@ func clientFile(m *model.Model) *goFile {
 			body = append(body, unmarshalValidate(f, dot("c", "conn"), mi.Req)...)
 			pre, recv := clientAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Req, mi.Resp, mi.HasResult)
 			body = append(body, pre...)
-			if mi.HasResult {
+			switch {
+			case mi.CancelledByPromptCancel:
+				body = append(body, cancelledOnPromptCancel(f, recv, mi)...)
+			case mi.HasResult:
 				body = append(body, callWithResult(dot("c", "conn"), recv, mi.GoName)...)
-			} else {
+			default:
 				body = append(body, callNoResult(recv, mi.GoName)...)
 			}
 		}
@@ -305,6 +315,24 @@ func clientFile(m *model.Model) *goFile {
 	return f
 }
 
+// cancelledOnPromptCancel calls the method under a context its session's
+// prompt-turn cancel ends, and answers with the cancelled variant at once
+// when it does (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).
+func cancelledOnPromptCancel(f *goFile, recv ast.Expr, mi *model.Method) []ast.Stmt {
+	callFn := &ast.FuncLit{
+		Type: funcType([]*ast.Field{param("ctx", f.qual(pkgContext, "Context"))}, param("", id(mi.Resp)), param("", id("error"))),
+		Body: block(ret(recvCall(recv, mi.GoName))),
+	}
+	answer := composite(id(mi.Resp), kv(id(mi.CancelledField), call(id(mi.CancelledHelper))))
+	return []ast.Stmt{
+		define(exprs(id("pctx"), id("done")), call(dot("c", "pending", "track"), id("ctx"), sessionKey(mi.SessionField))),
+		&ast.DeferStmt{Call: call(id("done"))},
+		define(exprs(id("resp"), id("err")), call(id("answerUnlessCancelled"), dot("c", "conn"), id("pctx"), id("method"), callFn, answer)),
+		ifStmt(nil, errNotNil(), toRequestError()),
+		checkedResult(dot("c", "conn")),
+	}
+}
+
 // emitOutbound emits one method per peer method on recvType that sends the
 // request or notification over c.conn.
 func emitOutbound(f *goFile, recvType string, methods []*model.Method) {
@@ -316,6 +344,16 @@ func emitOutbound(f *goFile, recvType string, methods []*model.Method) {
 	for _, mi := range methods {
 		// A blank line separates each wrapper from the declaration before it.
 		f.line()
+		if mi.Notif != "" && mi.CancelsPending {
+			// The cancel is written before the pending requests are answered
+			// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).
+			f.add(method(recv(), mi.GoName, funcType(params(mi.Notif), param("", id("error"))),
+				define(exprs(id("err")), call(dot("c", "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))),
+				exprStmt(call(dot("c", "pending", "cancel"), call(id("string"), dot("params", mi.SessionField)))),
+				ret(id("err")),
+			))
+			continue
+		}
 		if mi.Notif != "" {
 			f.add(method(recv(), mi.GoName, funcType(params(mi.Notif), param("", id("error"))),
 				ret(call(dot("c", "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))),

@@ -64,6 +64,13 @@ type MethodRule struct {
 	// whose context was cancelled
 	// (0017-MADR-remediate-acp-v1-conformance-violations.md, P1).
 	StopKey, StopCancelled string
+	// CancelledByPromptCancel: a client request the client answers itself,
+	// at once, when it sends the agent's prompt-turn cancel for the request's
+	// session; CancelledKey is the result property, a required union, and
+	// CancelledVariant the discriminator value of the variant that answers it
+	// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).
+	CancelledByPromptCancel        bool
+	CancelledKey, CancelledVariant string
 	// Capability is the dotted path, from AgentCapabilities or
 	// ClientCapabilities, of the capability that gates the method. It is
 	// recorded and checked, not emitted.
@@ -171,13 +178,19 @@ func checkRule(rule *MethodRule, r *rules) error {
 	case rule.Binding != optionalNone && sideOf(rule.Binding) != rule.Side:
 		return fmt.Errorf("it binds to an %s interface", sideOf(rule.Binding))
 	case (rule.PromptTurn || rule.CancelsPromptTurn) && rule.Side != sideAgent:
-		return fmt.Errorf("only agent methods take part in a prompt turn; the client side holds no session contexts")
+		return fmt.Errorf("only agent methods are a prompt turn or its cancel")
+	case rule.CancelledByPromptCancel && rule.Side != sideClient:
+		return fmt.Errorf("only client methods are answered on a prompt-turn cancel")
 	case rule.PromptTurn && rule.CancelsPromptTurn:
 		return fmt.Errorf("it cannot be both a prompt turn and its cancel")
-	case (rule.PromptTurn || rule.CancelsPromptTurn) && rule.SessionKey == "":
+	case (rule.PromptTurn || rule.CancelsPromptTurn || rule.CancelledByPromptCancel) && rule.SessionKey == "":
 		return fmt.Errorf("a prompt-turn role needs a session key")
-	case !rule.PromptTurn && !rule.CancelsPromptTurn && rule.SessionKey != "":
+	case !rule.PromptTurn && !rule.CancelsPromptTurn && !rule.CancelledByPromptCancel && rule.SessionKey != "":
 		return fmt.Errorf("a session key without a prompt-turn role")
+	case rule.CancelledByPromptCancel && (rule.CancelledKey == "" || rule.CancelledVariant == ""):
+		return fmt.Errorf("a request answered on a prompt-turn cancel needs its result key and variant")
+	case !rule.CancelledByPromptCancel && (rule.CancelledKey != "" || rule.CancelledVariant != ""):
+		return fmt.Errorf("a cancelled key without a request answered on a prompt-turn cancel")
 	case rule.PromptTurn && (rule.StopKey == "" || rule.StopCancelled == ""):
 		return fmt.Errorf("a prompt turn needs its stop key and cancelled value")
 	case !rule.PromptTurn && (rule.StopKey != "" || rule.StopCancelled != ""):
@@ -206,6 +219,7 @@ func applyMethodRule(mi *Method, rule *MethodRule) {
 		mi.GoName = rule.GoName
 	}
 	mi.PromptTurn, mi.CancelsPromptTurn, mi.Capability = rule.PromptTurn, rule.CancelsPromptTurn, rule.Capability
+	mi.CancelledByPromptCancel = rule.CancelledByPromptCancel
 }
 
 // linkPromptTurns checks each prompt-turn method and cancel against the
@@ -270,6 +284,66 @@ func (m *Model) sessionField(typeName, key string) (*Field, error) {
 		return nil, fmt.Errorf("%q of %s is not a string", key, typeName)
 	}
 	return f, nil
+}
+
+// linkCancelledRequests checks each request the client answers itself when
+// it cancels a prompt turn: a request with a result, keyed by a session,
+// whose result holds a union with the answering variant, built by a
+// constructor without parameters; and marks the agent's prompt-turn cancel,
+// whose client wrapper answers them.
+func (m *Model) linkCancelledRequests(r *rules) error {
+	var cancel *Method
+	for _, mi := range m.AgentMethods {
+		if mi.CancelsPromptTurn {
+			cancel = mi
+		}
+	}
+	for _, mi := range m.ClientMethods {
+		if !mi.CancelledByPromptCancel {
+			continue
+		}
+		rule := r.methods[ruleKey(mi.Side, mi.Wire)]
+		switch {
+		case mi.Notif != "" || !mi.HasResult:
+			return fmt.Errorf("%s: a request answered on a prompt-turn cancel must be a request with a result", rule.owner())
+		case cancel == nil:
+			return fmt.Errorf("%s: the agent side has no prompt-turn cancel", rule.owner())
+		}
+		f, err := m.sessionField(mi.Req, rule.SessionKey)
+		if err != nil {
+			return fmt.Errorf("%s: %w", rule.owner(), err)
+		}
+		mi.SessionField = f.Name
+		if mi.CancelledField, mi.CancelledHelper, err = m.cancelledAnswer(mi.Resp, rule.CancelledKey, rule.CancelledVariant); err != nil {
+			return fmt.Errorf("%s: %w", rule.owner(), err)
+		}
+		cancel.CancelsPending = true
+	}
+	return nil
+}
+
+// cancelledAnswer returns the Go field of a result's union property and the
+// constructor, without parameters, of its variant with the given
+// discriminator value.
+func (m *Model) cancelledAnswer(typeName, key, variant string) (field, helper string, err error) {
+	f := m.objectField(typeName, key)
+	if f == nil || !f.Required || f.Type.Kind != RefNamed {
+		return "", "", fmt.Errorf("%q is not a required property of %s naming a union", key, typeName)
+	}
+	u := m.Type(f.Type.Name)
+	if u == nil || u.Kind != KindUnion {
+		return "", "", fmt.Errorf("%q of %s is not a union", key, typeName)
+	}
+	for _, h := range u.Helpers {
+		if u.Variants[h.Variant].DiscValue != variant {
+			continue
+		}
+		if h.Value || len(h.Params) != 0 {
+			return "", "", fmt.Errorf("%s's constructor %s takes parameters", u.Name, h.Name)
+		}
+		return f.Name, h.Name, nil
+	}
+	return "", "", fmt.Errorf("%s has no constructor for a variant %q", u.Name, variant)
 }
 
 // stopField returns the Go field of a prompt turn's stop property, which

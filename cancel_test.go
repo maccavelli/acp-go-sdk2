@@ -274,3 +274,126 @@ func TestPromptCancelRightAfterPrompt(t *testing.T) {
 		t.Errorf("%d of %d turns were not cancelled", m, n)
 	}
 }
+
+// permissionPair connects an agent and a client whose RequestPermission is
+// handle, over pipes, and returns the agent's connection and the client's.
+func permissionPair(t *testing.T, a agentFuncs, handle func(context.Context, RequestPermissionRequest) (RequestPermissionResponse, error)) (*AgentSideConnection, *ClientSideConnection) {
+	t.Helper()
+	c2aR, c2aW := io.Pipe()
+	a2cR, a2cW := io.Pipe()
+	t.Cleanup(func() {
+		_ = c2aW.Close()
+		_ = a2cW.Close()
+	})
+	asc := NewAgentSideConnection(a, a2cW, c2aR)
+	return asc, NewClientSideConnection(&clientFuncs{RequestPermissionFunc: handle}, c2aW, a2cR)
+}
+
+// askPermission sends a permission request for tool call id in session s from
+// the agent on its own goroutine, and returns where its answer arrives.
+func askPermission(t *testing.T, asc *AgentSideConnection, s SessionId, id ToolCallId) <-chan RequestPermissionResponse {
+	t.Helper()
+	answer := make(chan RequestPermissionResponse, 1)
+	go func() {
+		resp, err := asc.RequestPermission(context.Background(), RequestPermissionRequest{SessionId: s, ToolCall: ToolCallUpdate{ToolCallId: id}})
+		if err != nil {
+			t.Errorf("RequestPermission(%s, %s): %v", s, id, err)
+		}
+		answer <- resp
+	}()
+	return answer
+}
+
+// TestCancelAnswersPendingPermissions requires session/cancel, sent with the
+// client's Cancel, to answer every pending permission request of its session
+// with the cancelled outcome at once, whether or not the handler watches its
+// context, and to leave another session's alone; the watching handler sees
+// ErrPromptCancelled (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 6).
+func TestCancelAnswersPendingPermissions(t *testing.T) {
+	t.Parallel()
+	release := make(chan struct{})
+	started, causes := make(chan ToolCallId, 3), make(chan error, 1)
+	asc, c := permissionPair(t, agentFuncs{}, func(ctx context.Context, p RequestPermissionRequest) (RequestPermissionResponse, error) {
+		started <- p.ToolCall.ToolCallId
+		if p.ToolCall.ToolCallId == "watch" {
+			<-ctx.Done()
+			causes <- context.Cause(ctx)
+			return RequestPermissionResponse{}, ctx.Err()
+		}
+		<-release
+		return RequestPermissionResponse{Outcome: NewRequestPermissionOutcomeSelected("allow")}, nil
+	})
+	watch, ignore, other := askPermission(t, asc, "s", "watch"), askPermission(t, asc, "s", "ignore"), askPermission(t, asc, "t", "other")
+	for range 3 {
+		within(t, started, "a permission request")
+	}
+	if err := c.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	for name, ch := range map[string]<-chan RequestPermissionResponse{"watch": watch, "ignore": ignore} {
+		if resp := within(t, ch, name+"'s answer"); resp.Outcome.Cancelled == nil {
+			t.Errorf("%s answered %+v, want the cancelled outcome", name, resp.Outcome)
+		}
+	}
+	if cause := within(t, causes, "the watching handler's cancel"); cause != ErrPromptCancelled { //nolint:errorlint // the cause itself, not one it wraps
+		t.Errorf("context.Cause = %v, want ErrPromptCancelled", cause)
+	}
+	select {
+	case resp := <-other:
+		t.Errorf("session t's request answered %+v by session s's cancel", resp.Outcome)
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(release)
+	if resp := within(t, other, "session t's answer"); resp.Outcome.Selected == nil {
+		t.Errorf("session t's request answered %+v, want its handler's selected outcome", resp.Outcome)
+	}
+}
+
+// TestPromptCancelAnswersPendingPermissions requires the session/cancel that
+// Prompt sends when its context ends to answer the session's pending
+// permission requests with the cancelled outcome
+// (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 6).
+func TestPromptCancelAnswersPendingPermissions(t *testing.T) {
+	t.Parallel()
+	var asc *AgentSideConnection
+	answers := make(chan RequestPermissionResponse, 1)
+	asked := make(chan struct{}, 1)
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	asc, c := permissionPair(t, agentFuncs{PromptFunc: func(ctx context.Context, p PromptRequest) (PromptResponse, error) {
+		resp, err := asc.RequestPermission(context.Background(), RequestPermissionRequest{SessionId: p.SessionId, ToolCall: ToolCallUpdate{ToolCallId: "t1"}})
+		if err != nil {
+			t.Errorf("RequestPermission: %v", err)
+		}
+		answers <- resp
+		<-ctx.Done()
+		return PromptResponse{}, ctx.Err()
+	}}, func(context.Context, RequestPermissionRequest) (RequestPermissionResponse, error) {
+		asked <- struct{}{}
+		<-release
+		return RequestPermissionResponse{Outcome: NewRequestPermissionOutcomeSelected("allow")}, nil
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { _, _ = c.Prompt(ctx, PromptRequest{SessionId: "s"}) }()
+	within(t, asked, "the permission request")
+	cancel()
+	if resp := within(t, answers, "the permission answer"); resp.Outcome.Cancelled == nil {
+		t.Errorf("answered %+v, want the cancelled outcome", resp.Outcome)
+	}
+}
+
+// TestPermissionAfterCancelHandledNormally requires a permission request that
+// arrives after its session's cancel to get its handler's answer
+// (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 6).
+func TestPermissionAfterCancelHandledNormally(t *testing.T) {
+	t.Parallel()
+	asc, c := permissionPair(t, agentFuncs{}, func(context.Context, RequestPermissionRequest) (RequestPermissionResponse, error) {
+		return RequestPermissionResponse{Outcome: NewRequestPermissionOutcomeSelected("allow")}, nil
+	})
+	if err := c.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	if resp := within(t, askPermission(t, asc, "s", "t1"), "the answer"); resp.Outcome.Selected == nil || resp.Outcome.Selected.OptionId != "allow" {
+		t.Errorf("answered %+v, want the handler's selected outcome", resp.Outcome)
+	}
+}

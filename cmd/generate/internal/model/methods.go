@@ -57,6 +57,12 @@ type Method struct {
 	// StopField and StopConst are a prompt turn's stop-reason field and the
 	// constant that answers a cancelled turn.
 	StopField, StopConst string
+	// CancelledByPromptCancel marks a client request the client answers itself
+	// when it cancels the request's session's prompt turn, with the variant
+	// CancelledHelper builds in its result's CancelledField; CancelsPending marks
+	// the agent's prompt-turn cancel when the client has such requests.
+	CancelledByPromptCancel, CancelsPending bool
+	CancelledField, CancelledHelper         string
 	// Capability is the capability path that gates the method, from the
 	// protocol table.
 	Capability string

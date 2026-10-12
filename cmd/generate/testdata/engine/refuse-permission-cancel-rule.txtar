@@ -1,0 +1,24 @@
+Refused: the protocol table answers a pending session/request_permission with
+its outcome's cancelled variant when the client cancels the prompt turn
+(0017-MADR-remediate-acp-v1-conformance-violations.md, Q1); this outcome has
+no such variant.
+
+-- meta.json --
+{"version": 1, "agentMethods": {"session_prompt": "session/prompt", "session_cancel": "session/cancel"}, "clientMethods": {"session_request_permission": "session/request_permission"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "PromptRequest": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/prompt"},
+  "StopReason": {"type": "string", "enum": ["end_turn", "cancelled"]},
+  "PromptResponse": {"type": "object", "properties": {"stopReason": {"$ref": "#/$defs/StopReason"}}, "required": ["stopReason"], "x-side": "agent", "x-method": "session/prompt"},
+  "CancelNotification": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/cancel"},
+  "RequestPermissionRequest": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "client", "x-method": "session/request_permission"},
+  "RequestPermissionResponse": {"type": "object", "properties": {"outcome": {"$ref": "#/$defs/RequestPermissionOutcome"}}, "required": ["outcome"], "x-side": "client", "x-method": "session/request_permission"},
+  "RequestPermissionOutcome": {"oneOf": [
+    {"type": "object", "properties": {"outcome": {"type": "string", "const": "selected"}, "optionId": {"type": "string"}}, "required": ["outcome", "optionId"]},
+    {"type": "object", "properties": {"outcome": {"type": "string", "const": "denied"}}, "required": ["outcome"]}
+  ], "discriminator": {"propertyName": "outcome"}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+protocol table: client method "session/request_permission"
+RequestPermissionOutcome has no constructor for a variant "cancelled"

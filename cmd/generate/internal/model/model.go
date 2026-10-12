@@ -334,6 +334,7 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 	}
 	for _, step := range []func() error{
 		func() error { return m.linkPromptTurns(r) },
+		func() error { return m.linkCancelledRequests(r) },
 		func() error { return m.checkCapabilities(r) },
 		func() error { return m.checkTypeRules(r) },
 		func() error { return m.buildInterfaces(n, r) },

@@ -21,6 +21,13 @@ const protocolDefs = `{
 	"LoadSessionRequest":{"type":"object","x-side":"agent","x-method":"s/load"},
 	"LoadSessionResponse":{"type":"object","x-side":"agent","x-method":"s/load"},
 	"SessionNotification":{"type":"object","x-side":"client","x-method":"s/update"},
+	"AskRequest":{"type":"object","x-side":"client","x-method":"s/ask","required":["sessionId"],
+		"properties":{"sessionId":{"allOf":[{"$ref":"#/$defs/SessionId"}]}}},
+	"AskResponse":{"type":"object","x-side":"client","x-method":"s/ask","required":["verdict"],
+		"properties":{"verdict":{"$ref":"#/$defs/Verdict"}}},
+	"Verdict":{"oneOf":[{"type":"object","required":["verdict"],"properties":{"verdict":{"const":"withdrawn","type":"string"}}},
+		{"type":"object","required":["verdict","choice"],"properties":{"verdict":{"const":"chosen","type":"string"},"choice":{"type":"string"}}}],
+		"discriminator":{"propertyName":"verdict"}},
 	"AgentCapabilities":{"type":"object","properties":{"loadSession":{"type":"boolean"},"session":{"allOf":[{"$ref":"#/$defs/SessionCaps"}]}}},
 	"SessionCaps":{"type":"object","properties":{"list":{"type":"object"}}},
 	"Block":{"oneOf":[{"type":"object","required":["type","text"],"properties":{"type":{"const":"text","type":"string"},"text":{"type":"string"}}}]},
@@ -29,7 +36,7 @@ const protocolDefs = `{
 func protocolMeta() *load.Meta {
 	return &load.Meta{
 		AgentMethods:  map[string]string{"prompt": "s/prompt", "cancel": "s/cancel", "load": "s/load"},
-		ClientMethods: map[string]string{"update": "s/update"},
+		ClientMethods: map[string]string{"update": "s/update", "ask": "s/ask"},
 	}
 }
 
@@ -42,6 +49,7 @@ func testProtocol() *Protocol {
 			{Side: "agent", Wire: "s/prompt", PromptTurn: true, SessionKey: "sessionId", StopKey: "stopReason", StopCancelled: "cancelled"},
 			{Side: "agent", Wire: "s/cancel", CancelsPromptTurn: true, SessionKey: "sessionId", Capability: "session.list"},
 			{Side: "client", Wire: "s/update", GoName: "SessionUpdate"},
+			{Side: "client", Wire: "s/ask", CancelledByPromptCancel: true, SessionKey: "sessionId", CancelledKey: "verdict", CancelledVariant: "withdrawn"},
 		},
 		HandWrittenHelpers: []string{"Block"},
 	}
@@ -83,6 +91,10 @@ func TestProtocolTableApplies(t *testing.T) {
 	if prompt.StopField != "StopReason" || prompt.StopConst != "StopReasonCancelled" {
 		t.Errorf("s/prompt: StopField %q StopConst %q", prompt.StopField, prompt.StopConst)
 	}
+	if ask := methodByWire(m, "s/ask"); !ask.CancelledByPromptCancel || ask.SessionField != "SessionId" ||
+		ask.CancelledField != "Verdict" || ask.CancelledHelper != "NewVerdictWithdrawn" || !cancel.CancelsPending {
+		t.Errorf("s/ask: %+v; s/cancel CancelsPending %v", ask, cancel.CancelsPending)
+	}
 	if !cancel.CancelsPromptTurn || cancel.SessionField != "SessionId" || cancel.Capability != "session.list" {
 		t.Errorf("s/cancel: CancelsPromptTurn %v SessionField %q capability %q", cancel.CancelsPromptTurn, cancel.SessionField, cancel.Capability)
 	}
@@ -108,6 +120,9 @@ func TestProtocolTableApplies(t *testing.T) {
 	}
 	if g := methodByWire(plain, "s/update").GoName; g != "Session" {
 		t.Errorf("without a table, s/update is %q", g)
+	}
+	if a := methodByWire(plain, "s/ask"); a.CancelledByPromptCancel || a.CancelledHelper != "" || methodByWire(plain, "s/cancel").CancelsPending {
+		t.Errorf("without a table, s/ask is answered on a cancel: %+v", a)
 	}
 	if p := methodByWire(plain, "s/prompt"); p.PromptTurn || p.Canceller != nil || p.SessionField != "" {
 		t.Errorf("without a table, s/prompt is a prompt turn: %+v", p)
@@ -232,6 +247,28 @@ func TestProtocolTableRefuses(t *testing.T) {
 		{name: "stop key not a string enum", defs: func(s string) string {
 			return strings.Replace(s, `"StopReason":{"type":"string","enum":["end_turn","cancelled"]}`, `"StopReason":{"type":"string"}`, 1)
 		}, wanted: []string{`agent method "s/prompt"`, `"stopReason" of PromptResponse is not a string enum`}},
+		{name: "answered on a cancel on the agent side", table: func(p *Protocol) {
+			p.Methods[0].CancelledByPromptCancel, p.Methods[0].SessionKey, p.Methods[0].CancelledKey, p.Methods[0].CancelledVariant = true, "sessionId", "v", "w"
+		}, wanted: []string{`agent method "s/load"`, "only client methods are answered on a prompt-turn cancel"}},
+		{name: "answered on a cancel without its variant", table: func(p *Protocol) { p.Methods[4].CancelledVariant = "" },
+			wanted: []string{`client method "s/ask"`, "needs its result key and variant"}},
+		{name: "answered on a cancel without a session key", table: func(p *Protocol) { p.Methods[4].SessionKey = "" },
+			wanted: []string{`client method "s/ask"`, "a prompt-turn role needs a session key"}},
+		{name: "cancelled key on a plain rule", table: func(p *Protocol) { p.Methods[3].CancelledKey = "verdict" },
+			wanted: []string{`client method "s/update"`, "a cancelled key without a request answered on a prompt-turn cancel"}},
+		{name: "answered on a cancel, a notification", table: func(p *Protocol) {
+			p.Methods[3].CancelledByPromptCancel, p.Methods[3].SessionKey, p.Methods[3].CancelledKey, p.Methods[3].CancelledVariant = true, "sessionId", "v", "w"
+		}, wanted: []string{`client method "s/update"`, "must be a request with a result"}},
+		{name: "answered on a cancel with no cancel", table: func(p *Protocol) {
+			p.Methods[1] = MethodRule{Side: "agent", Wire: "s/prompt"}
+			p.Methods[2] = MethodRule{Side: "agent", Wire: "s/cancel"}
+		}, wanted: []string{`client method "s/ask"`, "the agent side has no prompt-turn cancel"}},
+		{name: "answered on a cancel, key not a union", table: func(p *Protocol) { p.Methods[4].CancelledKey = "sessionId" },
+			wanted: []string{`client method "s/ask"`, `"sessionId" is not a required property of AskResponse naming a union`}},
+		{name: "answered on a cancel, no such variant", table: func(p *Protocol) { p.Methods[4].CancelledVariant = "gone" },
+			wanted: []string{`client method "s/ask"`, `Verdict has no constructor for a variant "gone"`}},
+		{name: "answered on a cancel, a variant with parameters", table: func(p *Protocol) { p.Methods[4].CancelledVariant = "chosen" },
+			wanted: []string{`client method "s/ask"`, "Verdict's constructor NewVerdictChosen takes parameters"}},
 		{name: "stop enum without the cancelled value", table: func(p *Protocol) { p.Methods[1].StopCancelled = "halted" },
 			wanted: []string{`agent method "s/prompt"`, `"stopReason" of PromptResponse has no value "halted"`}},
 	}
@@ -312,6 +349,12 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 		}
 		if mi.PromptTurn != r.PromptTurn || mi.CancelsPromptTurn != r.CancelsPromptTurn {
 			t.Errorf("%s: PromptTurn %v CancelsPromptTurn %v", r.Wire, mi.PromptTurn, mi.CancelsPromptTurn)
+		}
+		if r.CancelledByPromptCancel && (mi.CancelledField != "Outcome" || mi.CancelledHelper != "NewRequestPermissionOutcomeCancelled") {
+			t.Errorf("%s: CancelledField %q CancelledHelper %q", r.Wire, mi.CancelledField, mi.CancelledHelper)
+		}
+		if r.CancelsPromptTurn && !mi.CancelsPending {
+			t.Errorf("%s: CancelsPending false, want the client's pending requests answered", r.Wire)
 		}
 		if r.PromptTurn && (mi.StopField != "StopReason" || mi.StopConst != "StopReasonCancelled") {
 			t.Errorf("%s: StopField %q StopConst %q, want StopReason and StopReasonCancelled", r.Wire, mi.StopField, mi.StopConst)

@@ -11,8 +11,9 @@ import (
 
 // ClientSideConnection provides the client's view of the connection and implements Agent calls.
 type ClientSideConnection struct {
-	conn   *Connection
-	client Client
+	conn    *Connection
+	client  Client
+	pending pendingRequests
 }
 
 // NewClientSideConnection creates a new client-side connection bound to the
@@ -133,7 +134,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := c.conn.checkInbound(ctx, method, &p); err != nil {
 			return nil, inboundError(err)
 		}
-		resp, err := c.client.RequestPermission(ctx, p)
+		pctx, done := c.pending.track(ctx, string(p.SessionId))
+		defer done()
+		resp, err := answerUnlessCancelled(c.conn, pctx, method, func(ctx context.Context) (RequestPermissionResponse, error) {
+			return c.client.RequestPermission(ctx, p)
+		}, RequestPermissionResponse{Outcome: NewRequestPermissionOutcomeCancelled()})
 		if err != nil {
 			return nil, toReqErr(err)
 		}
@@ -298,7 +303,9 @@ func (c *ClientSideConnection) UnstableSetProvider(ctx context.Context, params U
 }
 
 func (c *ClientSideConnection) Cancel(ctx context.Context, params CancelNotification) error {
-	return c.conn.SendNotification(ctx, AgentMethodSessionCancel, params)
+	err := c.conn.SendNotification(ctx, AgentMethodSessionCancel, params)
+	c.pending.cancel(string(params.SessionId))
+	return err
 }
 
 func (c *ClientSideConnection) CloseSession(ctx context.Context, params CloseSessionRequest) (CloseSessionResponse, error) {

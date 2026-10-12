@@ -38,11 +38,19 @@ func renamedProtocol(t *testing.T) *model.Model {
 		"StopNotification":{"type":"object","x-side":"agent","x-method":"chat/stop","required":["conversationId"],
 			"properties":{"conversationId":{"allOf":[{"$ref":"#/$defs/ConversationId"}]}}},
 		"OpenRequest":{"type":"object","x-side":"agent","x-method":"chat/open"},
-		"OpenResponse":{"type":"object","x-side":"agent","x-method":"chat/open"}}}`), &schema); err != nil {
+		"OpenResponse":{"type":"object","x-side":"agent","x-method":"chat/open"},
+		"AskRequest":{"type":"object","x-side":"client","x-method":"chat/ask","required":["conversationId"],
+			"properties":{"conversationId":{"allOf":[{"$ref":"#/$defs/ConversationId"}]}}},
+		"AskResponse":{"type":"object","x-side":"client","x-method":"chat/ask","required":["verdict"],
+			"properties":{"verdict":{"$ref":"#/$defs/Verdict"}}},
+		"Verdict":{"oneOf":[{"type":"object","required":["verdict"],"properties":{"verdict":{"const":"withdrawn","type":"string"}}},
+			{"type":"object","required":["verdict","choice"],"properties":{"verdict":{"const":"chosen","type":"string"},"choice":{"type":"string"}}}],
+			"discriminator":{"propertyName":"verdict"}}}}`), &schema); err != nil {
 		t.Fatal(err)
 	}
 	m, err := model.Build(model.Input{
-		Meta:   &load.Meta{AgentMethods: map[string]string{"send": "chat/send", "stop": "chat/stop", "open": "chat/open"}},
+		Meta: &load.Meta{AgentMethods: map[string]string{"send": "chat/send", "stop": "chat/stop", "open": "chat/open"},
+			ClientMethods: map[string]string{"ask": "chat/ask"}},
 		Schema: &schema,
 		Protocol: &model.Protocol{
 			Interfaces: []model.Interface{{Binding: model.BindAgentOptional, Name: "AgentStore", Var: "store", Doc: []string{"AgentStore stores."}}},
@@ -50,6 +58,8 @@ func renamedProtocol(t *testing.T) *model.Model {
 				{Side: "agent", Wire: "chat/open", Binding: model.BindAgentOptional},
 				{Side: "agent", Wire: "chat/send", PromptTurn: true, SessionKey: "conversationId", StopKey: "outcome", StopCancelled: "halted"},
 				{Side: "agent", Wire: "chat/stop", CancelsPromptTurn: true, SessionKey: "conversationId"},
+				{Side: "client", Wire: "chat/ask", CancelledByPromptCancel: true, SessionKey: "conversationId",
+					CancelledKey: "verdict", CancelledVariant: "withdrawn"},
 			},
 		},
 	})
@@ -84,8 +94,14 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"store, ok := a.agent.(AgentStore)",
 			"resp, err := store.Open(ctx, p)",
 		},
-		"client_gen.go": {"_ = c.Stop(context.Background(), StopNotification{ConversationId: params.ConversationId})"},
-		"interfaces":    {"// AgentStore stores.\ntype AgentStore interface {", "Open(ctx context.Context, params OpenRequest) (OpenResponse, error)"},
+		"client_gen.go": {
+			"_ = c.Stop(context.Background(), StopNotification{ConversationId: params.ConversationId})",
+			"pctx, done := c.pending.track(ctx, string(p.ConversationId))",
+			"resp, err := answerUnlessCancelled(c.conn, pctx, method, func(ctx context.Context) (AskResponse, error) {",
+			"}, AskResponse{Verdict: NewVerdictWithdrawn()})",
+			"err := c.conn.SendNotification(ctx, AgentMethodStop, params)\n\tc.pending.cancel(string(params.ConversationId))",
+		},
+		"interfaces": {"// AgentStore stores.\ntype AgentStore interface {", "Open(ctx context.Context, params OpenRequest) (OpenResponse, error)"},
 	}
 	for name, lines := range want {
 		for _, w := range lines {
@@ -95,7 +111,8 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 		}
 	}
 	for name, src := range files {
-		for _, bad := range []string{"session/prompt", "SessionId", "CancelNotification", "AgentLoader", "loader", "c.Cancel(", "StopReason"} {
+		for _, bad := range []string{"session/prompt", "SessionId", "CancelNotification", "AgentLoader", "loader", "c.Cancel(", "StopReason",
+			"RequestPermission", "RequestPermissionOutcome"} {
 			if strings.Contains(src, bad) {
 				t.Errorf("%s contains %q", name, bad)
 			}
@@ -159,6 +176,9 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 		}
 		if strings.Contains(files["client_gen.go"], "sessionCancels") {
 			t.Errorf("%s: client_gen.go holds prompt-turn state", name)
+		}
+		if got, want := strings.Contains(files["client_gen.go"], "\tpending pendingRequests\n"), name == "with prompt turns"; got != want {
+			t.Errorf("%s: client_gen.go holds the pending requests: %v, want %v", name, got, want)
 		}
 	}
 }
