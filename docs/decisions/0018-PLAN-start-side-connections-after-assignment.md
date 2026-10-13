@@ -150,3 +150,27 @@ Verification on the tree:
 * `go test -race -count=50 -run TestConstructorAssignsBeforeReading .`: exit 0 (10000 constructions).
 * The exported API listing of `v0.17.0` and of the tree: 2411 lines each, no difference.
 * Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`, and `-count=20` of the new test exit 0.
+
+The owner committed steps 2 to 4 as `3a9b5c4`.
+
+### Step 5, architecture, 2026-10-13
+
+`docs/architecture.md`, in the list entry on the generated side connections: each constructor assigns every field, the `Connection`
+from `buildConnection` included, before it calls `start`, so a message already waiting never reaches the dispatch with a field unset.
+
+### Step 6, release notes, 2026-10-13
+
+`docs/reports/0018-REPORT-release-notes-v0-17-1.md`, observed on `3a9b5c4`, indexed in `docs/README.md`: one fix, the
+`NewConnection` documentation note, the generator's constructor order, the commits since `v0.17.0` (`b5f13fb`, `3a9b5c4`), an empty
+schema diff and an unchanged API listing.
+
+### Step 7, verification, 2026-10-13
+
+No Go file changed after `3a9b5c4`, so the code verification recorded for steps 2 to 4, the Windows run included, stands for this
+commit. For steps 5 and 6: `make check-records` and `make markdownlint` exit 0, and the identifier scan of `docs/architecture.md`,
+`docs/README.md` and the report finds no local account name, hostname, real-machine path or downstream project name. The pre-push
+disclosure guard, run over `b5f13fb` and `3a9b5c4` against `origin/main`, exits 0.
+
+The close is in two stages, as for 0017: once the owner has pushed `main` and CI has passed on it, the PLAN and its `docs/README.md`
+row become `complete` in a close commit, and then the owner tags `v0.17.1`, publishes the release from the report's "Release text",
+and closes issue #3 with a reference to the release.

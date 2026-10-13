@@ -19,8 +19,10 @@ This repository is the Go module `github.com/maccavelli/acp-go-sdk2`, package
   `ClientSideConnection`, with the state the protocol table's rules need:
   the agent's prompt turns, the client's pending permission requests, and
   on both the record of `initialize`; their dispatch, their outbound
-  methods, and the gates each passes to `connection.go`), and
-  `helpers_gen.go`, which
+  methods, and the gates each passes to `connection.go`. Each constructor
+  assigns every field, the `Connection` from `buildConnection` included,
+  before it calls `start`, so a message already waiting never reaches the
+  dispatch with a field unset), and `helpers_gen.go`, which
   holds a constructor for every variant of every other union the schema
   documents, and the test file `schema_gen_test.go`, which lists every
   generated type, union, and method for the conformance test. They are never
