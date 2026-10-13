@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-13
 associated-madr: "0018-MADR-start-side-connections-after-assignment.md"
 ---
@@ -174,3 +174,13 @@ disclosure guard, run over `b5f13fb` and `3a9b5c4` against `origin/main`, exits 
 The close is in two stages, as for 0017: once the owner has pushed `main` and CI has passed on it, the PLAN and its `docs/README.md`
 row become `complete` in a close commit, and then the owner tags `v0.17.1`, publishes the release from the report's "Release text",
 and closes issue #3 with a reference to the release.
+
+The owner committed steps 5 to 7 as `d029d48`.
+
+### Close, 2026-10-13
+
+The disclosure guard exited 0 over `b5f13fb`, `3a9b5c4` and `d029d48`, and the owner pushed `main` to `d029d48`. CI run `38417573297`
+on `d029d48` concluded `success` on `validate (ubuntu-24.04)`, `validate (macos-15)` and `validate (windows-2025)`; the Linux job runs
+the race detector over both modules, `TestConstructorAssignsBeforeReading` included. Every acceptance criterion in "Verification" is
+met, so this PLAN and its `docs/README.md` row are `complete`. Tagging `v0.17.1`, publishing the release and closing issue #3 remain
+the owner's, after this commit.

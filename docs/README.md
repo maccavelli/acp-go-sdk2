@@ -49,7 +49,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0017 | PLAN | [Implement the ACP v1 conformance remediation](decisions/0017-PLAN-remediate-acp-v1-conformance-violations.md) | complete |
 | 0017 | REPORT | [Release notes for v0.17.0, against v0.16.0](reports/0017-REPORT-release-notes-v0-17-0.md) | observed |
 | 0018 | MADR | [A side connection assigns its Connection before the Connection starts reading](decisions/0018-MADR-start-side-connections-after-assignment.md) | accepted |
-| 0018 | PLAN | [Implement the side connections' start after assignment](decisions/0018-PLAN-start-side-connections-after-assignment.md) | in-progress |
+| 0018 | PLAN | [Implement the side connections' start after assignment](decisions/0018-PLAN-start-side-connections-after-assignment.md) | complete |
 | 0018 | REPORT | [Release notes for v0.17.1, against v0.17.0](reports/0018-REPORT-release-notes-v0-17-1.md) | observed |
 
 ## I want to…
