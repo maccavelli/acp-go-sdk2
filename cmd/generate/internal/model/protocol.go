@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -23,6 +24,10 @@ type Protocol struct {
 	// paths, which Validate checks
 	// (0015-MADR-validate-absolute-protocol-paths.md, W1).
 	AbsolutePaths []PathRule
+	// CapabilityRules lists the properties and variants the capabilities
+	// negotiated by initialize gate, which each side's gates check
+	// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+	CapabilityRules []CapabilityRule
 }
 
 // PathRule names a property the protocol requires to be an absolute path,
@@ -30,6 +35,44 @@ type Protocol struct {
 // is the specification sentence the rule follows.
 type PathRule struct {
 	Definition, Property, Source string
+}
+
+// GateKind is what a capability rule checks.
+type GateKind int
+
+const (
+	// GateNonEmpty requires Property, an array, to be empty unless
+	// Capability is advertised.
+	GateNonEmpty GateKind = iota + 1
+	// GateVariant requires the union variant whose discriminator value is
+	// Variant not to be set unless Capability is advertised: Definition's own,
+	// when Property is empty, or Property's, a union or an array of one.
+	GateVariant
+	// GateNotTerminalAuthMethod requires Property, an auth method id, not to
+	// name a method of the initialize response whose variant is Variant. No
+	// capability lifts it, and the rule names none.
+	GateNotTerminalAuthMethod
+)
+
+// CapabilityRule gates a property or variant of a definition, as the merged
+// schema names it, on a capability: Side is whose capabilities the dotted
+// path Capability starts from, and Source the specification sentence the
+// rule follows.
+type CapabilityRule struct {
+	Side, Definition, Property, Variant, Capability, Source string
+	Kind                                                    GateKind
+}
+
+// name is how an error names the rule.
+func (r CapabilityRule) name() string {
+	s := "capability rule " + r.Definition
+	if r.Property != "" {
+		s += "." + r.Property
+	}
+	if r.Variant != "" {
+		s += " " + strconv.Quote(r.Variant)
+	}
+	return s
 }
 
 // Interface is a Go interface the dispatch code calls methods through.
@@ -182,7 +225,44 @@ func newRules(p *Protocol) (*rules, error) {
 		}
 		seen[k] = true
 	}
+	if err := checkCapabilityRules(p.CapabilityRules); err != nil {
+		return nil, err
+	}
 	return r, nil
+}
+
+// checkCapabilityRules checks what each capability rule needs for its kind,
+// and that no two gate the same thing.
+func checkCapabilityRules(rules []CapabilityRule) error {
+	type key struct {
+		definition, property, variant string
+		kind                          GateKind
+	}
+	seen := map[key]bool{}
+	for _, rule := range rules {
+		var missing bool
+		switch rule.Kind {
+		case GateNonEmpty:
+			missing = rule.Property == "" || rule.Variant != "" || rule.Capability == ""
+		case GateVariant:
+			missing = rule.Variant == "" || rule.Capability == ""
+		case GateNotTerminalAuthMethod:
+			missing = rule.Property == "" || rule.Variant == "" || rule.Capability != ""
+		default:
+			return fmt.Errorf("%s: no gate kind", rule.name())
+		}
+		k := key{rule.Definition, rule.Property, rule.Variant, rule.Kind}
+		switch {
+		case rule.Side != sideAgent && rule.Side != sideClient:
+			return fmt.Errorf(`%s: its side must be "agent" or "client"`, rule.name())
+		case rule.Definition == "" || rule.Source == "" || missing:
+			return fmt.Errorf("%s: it lacks a field its kind needs, or has one it does not take", rule.name())
+		case seen[k]:
+			return fmt.Errorf("%s: two rules", rule.name())
+		}
+		seen[k] = true
+	}
+	return nil
 }
 
 // checkRule checks one method rule against the table's interfaces.
@@ -495,45 +575,56 @@ func (m *Model) isString(r TypeRef) bool {
 // checkCapabilities resolves each method's capability path from its side's
 // capabilities type, through the named types of its fields.
 func (m *Model) checkCapabilities(r *rules) error {
-	roots := map[string]string{sideAgent: "AgentCapabilities", sideClient: "ClientCapabilities"}
 	for _, mi := range slices.Concat(m.AgentMethods, m.ClientMethods) {
 		if mi.Capability == "" {
 			continue
 		}
-		rule := r.methods[ruleKey(mi.Side, mi.Wire)]
-		typeName := roots[mi.Side]
-		if in := m.Initialize; in != nil {
-			holder, field := in.Resp, in.RespCapsField
-			if mi.Side == sideClient {
-				holder, field = in.Req, in.ReqCapsField
-			}
-			if got := m.fieldType(holder, field); got != typeName {
-				return fmt.Errorf("%s: capability %q: %s.%s is %s, not %s", rule.owner(), mi.Capability, holder, field, got, typeName)
-			}
+		steps, err := m.capabilitySteps(mi.Side, mi.Capability)
+		if err != nil {
+			return fmt.Errorf("%s: %w", r.methods[ruleKey(mi.Side, mi.Wire)].owner(), err)
 		}
-		segs := strings.Split(mi.Capability, ".")
-		mi.CapabilitySteps = nil
-		for i, seg := range segs {
-			f := m.objectField(typeName, seg)
-			if f == nil {
-				return fmt.Errorf("%s: capability %q: %s has no property %q", rule.owner(), mi.Capability, typeName, seg)
-			}
-			ref := f.Type
-			step := CapabilityStep{Field: f.Name, Pointer: ref.Kind == RefPointer}
-			for ref.Kind == RefPointer {
-				ref = *ref.Elem
-			}
-			mi.CapabilitySteps = append(mi.CapabilitySteps, step)
-			if i == len(segs)-1 {
-				if !step.Pointer && (ref.Kind != RefNamed || ref.Name != goBool) {
-					return fmt.Errorf("%s: capability %q is neither a boolean nor optional", rule.owner(), mi.Capability)
-				}
-				break
-			}
-			typeName = ref.Name
-		}
+		mi.CapabilitySteps = steps
 	}
 	return nil
+}
+
+// capabilitySteps resolves a dotted capability path from side's capabilities
+// type, through the named types of its fields, to its Go fields: each
+// marked when it is a pointer, the last a bool or a pointer. With the
+// initialize rule, the record's capabilities field must be that type.
+func (m *Model) capabilitySteps(side, capability string) ([]CapabilityStep, error) {
+	typeName := map[string]string{sideAgent: "AgentCapabilities", sideClient: "ClientCapabilities"}[side]
+	if in := m.Initialize; in != nil {
+		holder, field := in.Resp, in.RespCapsField
+		if side == sideClient {
+			holder, field = in.Req, in.ReqCapsField
+		}
+		if got := m.fieldType(holder, field); got != typeName {
+			return nil, fmt.Errorf("capability %q: %s.%s is %s, not %s", capability, holder, field, got, typeName)
+		}
+	}
+	segs := strings.Split(capability, ".")
+	var steps []CapabilityStep
+	for i, seg := range segs {
+		f := m.objectField(typeName, seg)
+		if f == nil {
+			return nil, fmt.Errorf("capability %q: %s has no property %q", capability, typeName, seg)
+		}
+		ref := f.Type
+		step := CapabilityStep{Field: f.Name, Pointer: ref.Kind == RefPointer}
+		for ref.Kind == RefPointer {
+			ref = *ref.Elem
+		}
+		steps = append(steps, step)
+		if i == len(segs)-1 {
+			if !step.Pointer && (ref.Kind != RefNamed || ref.Name != goBool) {
+				return nil, fmt.Errorf("capability %q is neither a boolean nor optional", capability)
+			}
+			break
+		}
+		typeName = ref.Name
+	}
+	return steps, nil
 }
 
 // checkTypeRules refuses a hand-written-helpers type that is not a union; a

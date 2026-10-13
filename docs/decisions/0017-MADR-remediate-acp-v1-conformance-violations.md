@@ -326,7 +326,8 @@ Concretely:
      comment "recorded, not acted on" goes.
    * Sending: until a negotiation is recorded, the typed methods other than `initialize` return `ErrNotInitialized`; after it, a method or
      value the record does not allow returns a `*CapabilityError` (`Method`, `Capability`, and the `Field` or `Variant` when the gate is
-     below the method) without writing. A handler's result that breaks a gate is not sent (amended 2026-10-12, "More Information": a
+     below the method) without writing; an `authenticate` naming a terminal method returns an error wrapping `ErrTerminalAuthMethod`
+     instead (amended 2026-10-12, "More Information"). A handler's result that breaks a gate is not sent (amended 2026-10-12, "More Information": a
      result is checked against the property and variant gates only, the method having been gated when the request was): the peer gets `-32603` naming it, as 0015 does
      for a non-conforming result. There is no option to skip this. `Connection`, `SendRequest[T]` and the extension methods hold no
      negotiation and stay ungated; their documentation says so.
@@ -584,6 +585,12 @@ Asked, the owner chose:
   the owner chose to run both: the hook receives the validation error, and if it accepts it, the gate's error, and its answer to
   each decides; a message that passes both reaches the hook once, with `nil`, as before. Not chosen: keeping the first error only,
   as a documented limit. This adds to item 4's receiving clause; nothing else in it changes.
+* **Decided 2026-10-12, in PLAN step 10: the terminal-auth rule has its own error.** The authentication page's "the Client MUST NOT
+  send an `authenticate` request for a terminal method" depends on no capability, so a `*CapabilityError`, whose message names a
+  capability not advertised, would state something false. Asked, the owner chose an exported sentinel, `ErrTerminalAuthMethod`,
+  which the refusal wraps with the method and the id; received, it is answered `-32602`, like the other value gates. The rule
+  carries no capability. Not chosen: a `*CapabilityError` with an empty `Capability` and a message for that case. The exported API
+  gains the sentinel. This adds to item 4's sending clause; nothing else in it changes.
 * **Decided 2026-10-12, in PLAN step 9: results are gated by value only.** As the PLAN first wrote it, a handler's result and a
   received response went through the side's whole gate, method gate included. A validation hook that accepted a method gate let
   the handler run, and the result was then refused `-32603` by the same gate, after the handler's effects. Asked, the owner chose

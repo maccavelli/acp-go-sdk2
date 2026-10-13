@@ -112,6 +112,7 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {",
 			"a.conn.checkResult(method, resp, a.resultGate)",
 			"if err := c.gate(ClientMethodAsk, &params); err != nil {\n\t\treturn AskResponse{}, err",
+			"result, rerr := a.conn.checkResult(method, resp, func(method string, result any) error {\n\t\t\treturn gateResult(&Negotiation{",
 		},
 		"client_gen.go": {
 			"_ = c.Stop(context.Background(), StopNotification{ConversationId: params.ConversationId})",
@@ -126,13 +127,17 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"func (c *ClientSideConnection) gate(method string, params any) error {",
 			"if err := c.gate(AgentMethodSend, &params); err != nil {\n\t\treturn SendResponse{}, err",
 			"sendRequest[SendResponse](c.conn, ctx, AgentMethodSend, params, c.resultGate)",
+			"sendRequest[HelloResponse](c.conn, ctx, AgentMethodHello, params, func(method string, result any) error {",
+			"Response: *result.(*HelloResponse),",
 			"if err := c.gate(AgentMethodStop, &params); err != nil {\n\t\treturn err",
 			"if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {",
 		},
 		"types_gen.go": {
 			"func (n Negotiation) Allows(method string) error {\n\treturn nil\n}",
 			"if method == AgentMethodHello {\n\t\treturn nil\n\t}",
-			"func gateResult(_ *Negotiation, _ string, _ any) error {",
+			"func gateResult(n *Negotiation, method string, result any) error {",
+			"if g, ok := params.(gater); ok {\n\t\treturn g.gates(n, method)",
+			"type gater interface {\n\tgates(n *Negotiation, method string) error",
 		},
 		"interfaces": {"// AgentStore stores.\ntype AgentStore interface {", "Open(ctx context.Context, params OpenRequest) (OpenResponse, error)"},
 	}

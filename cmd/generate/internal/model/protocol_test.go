@@ -466,4 +466,5 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 	if n != 18 || len(checks["ToolCallContentDiff"]) != 1 {
 		t.Errorf("%d absolute-path checks, want 18 with ToolCallContentDiff's: %v", n, checks)
 	}
+	checkCommittedGates(t, m)
 }

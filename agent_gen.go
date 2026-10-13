@@ -228,7 +228,12 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 			a.conn.loggerOrDefault().Error("initialize answer not sent", "method", method, "err", verr)
 			return nil, NewInternalError(map[string]any{"error": verr.Error()})
 		}
-		result, rerr := a.conn.checkResult(method, resp, a.resultGate)
+		result, rerr := a.conn.checkResult(method, resp, func(method string, result any) error {
+			return gateResult(&Negotiation{
+				Request:  p,
+				Response: resp,
+			}, method, result)
+		})
 		if rerr != nil {
 			return nil, rerr
 		}

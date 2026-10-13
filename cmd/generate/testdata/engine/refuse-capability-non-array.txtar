@@ -1,0 +1,24 @@
+A non-empty rule's property must be an array: additionalDirectories as a
+string cannot carry the rule that gates it on
+sessionCapabilities.additionalDirectories (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 10).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"initialize": "initialize", "new": "x/new"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "ProtocolVersion": {"type": "integer", "format": "uint16"},
+  "PromptCapabilities": {"type": "object", "properties": {"image": {"type": "boolean"}, "audio": {"type": "boolean"}, "embeddedContext": {"type": "boolean"}}},
+  "Flag": {"type": "object"},
+  "SessionCapabilities": {"type": "object", "properties": {"additionalDirectories": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}}},
+  "AgentCapabilities": {"type": "object", "properties": {"sessionCapabilities": {"$ref": "#/$defs/SessionCapabilities"}, "promptCapabilities": {"$ref": "#/$defs/PromptCapabilities"}}},
+  "ClientCapabilities": {"type": "object", "properties": {"fs": {"type": "boolean"}}},
+  "InitializeRequest": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "clientCapabilities": {"$ref": "#/$defs/ClientCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
+  "InitializeResponse": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "agentCapabilities": {"$ref": "#/$defs/AgentCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"},
+  "NewSessionRequest": {"type": "object", "properties": {"additionalDirectories": {"type": "string"}}, "x-side": "agent", "x-method": "x/new"},
+  "NewSessionResponse": {"type": "object", "x-side": "agent", "x-method": "x/new"}
+}}
+-- want.err --
+protocol table:
+capability rule NewSessionRequest.additionalDirectories
+additionalDirectories is string, not an array

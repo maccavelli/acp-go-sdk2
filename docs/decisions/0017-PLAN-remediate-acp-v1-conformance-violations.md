@@ -449,6 +449,7 @@ Out of scope:
       Variant, Capability, Source string; Kind GateKind }`, with `GateNonEmpty` (a property that must be empty unless advertised),
       `GateVariant` (a variant that must not be set unless advertised, on the definition itself or on the elements of `Property`) and
       `GateNotTerminalAuthMethod` (a property naming an auth method id that must not name a `terminal` method of the record's response).
+      *(Amended 2026-10-12, see the step 10 deviation "the terminal-auth rule has its own error".)*
       `Side` is whose capabilities the path starts from. `newRules` refuses an empty field and a duplicate.
     * `acp.go`: the rules, each with its source sentence from the MADR's findings, variants named by their discriminator values:
       * client side, gated on the agent's capabilities: `additionalDirectories` of `NewSessionRequest`, `LoadSessionRequest`,
@@ -1054,4 +1055,98 @@ step.
   at the root; `GOOS=windows go vet ./...` passes in both modules; `make check-records` and `make markdownlint` exit 0; the identifier
   scan of the changed files found nothing.
 * On the Windows host reached over SSH, with a copy of the working tree's 304 tracked and untracked files and no macOS metadata: `go test
+  -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
+
+### Step 10 deviation, 2026-10-12: the terminal-auth rule has its own error
+
+Before writing the step: the step gives every capability rule a capability, which `newRules` requires, and every refusal is a
+`*CapabilityError`, whose message is `<method>: capability <capability> not advertised: <field>`. The authentication page's "the Client
+MUST NOT send an `authenticate` request for a terminal method" depends on no capability, so any name there would state something false.
+Asked, the owner chose an exported sentinel in `errors.go`, `ErrTerminalAuthMethod`, which the refusal wraps with the method, the key
+and the id (`authenticate: methodId "x": acp: ...`); received, it is answered `-32602`, as `inboundError` answers any error that is not
+a method gate. A `GateNotTerminalAuthMethod` rule carries no capability: `newRules` requires it empty for that kind and non-empty for
+the others. Not chosen: a `*CapabilityError` with an empty `Capability` and an `Error` branch for it. Consequences for the step: `errors.go`
+is added to its files; the root API listing gains `var ErrTerminalAuthMethod error`, where the step asserted no change; `TestValueGates`
+requires `errors.Is(err, ErrTerminalAuthMethod)` for that rule. The MADR is amended (item 4, sending, and "More Information").
+
+Decided in the same step, as how the step is built, not as a change of its decisions: the emitted method is `gates(n *Negotiation,
+method string) error`, taking the method so that each error names it as built; the rule finds the record's list as the `initialize`
+response's array property whose union has the rule's variant, and the id as that variant's field of the property's type, so it names
+no ACP property itself.
+
+### Step 10, property and variant gates, 2026-10-12
+
+Ran on `main` from `fb3464e` (step 9). The agent did not commit. The deviation above, decided by the owner, ran within this step.
+
+* `cmd/generate/internal/model`: `protocol.go` gains `GateKind` (`GateNonEmpty`, `GateVariant`, `GateNotTerminalAuthMethod`),
+  `CapabilityRule` and `Protocol.CapabilityRules`; `checkCapabilityRules`, called from `newRules`, refuses a rule without a kind, of
+  another side, without a definition or source, lacking a field its kind needs or carrying one it does not take (a capability on the
+  terminal-auth kind), and two rules for one definition, property, variant and kind. `checkCapabilities`' walk moved into
+  `capabilitySteps`, which the method gates and the capability rules share; its messages are unchanged. New `gates.go`:
+  `resolveGates`, a step after `checkCapabilities`, resolves each rule on its definition (`gateCheck`, `variantOf`, `terminalAuth`),
+  then marks, to a fixed point, every struct, nested struct, inline variant and union that holds a gated value through a field (by
+  value or one pointer, slice or map deep), a member or a variant, refusing a gated type held deeper, and lists each with its checks
+  in `Model.Gated`. `acp.go`: the 18 rules, each with its source sentence; the definitions several rules name, and the `prompt` key,
+  are constants, which `goconst` required.
+* Resolution order and scope, as built: a rule's subject is resolved before its capability, so a schema without the property skips the
+  rule instead of failing on a capability it also lacks (the first run failed five engine cases that way: `ClientCapabilities has no
+  property "auth"` where `InitializeResponse` had no `authMethods`); and with no `initialize` rule no capability rule applies, since
+  there is no record to check against (the first run failed `accept-absolute-paths`, `accept-prompt-cancellation` and three more,
+  whose schemas have `NewSessionRequest` or `PromptRequest` and no `initialize`). The step had said only that a rule whose definition or
+  property the schema lacks is skipped.
+* `cmd/generate/internal/emit`: new `gates.go`: `emitValueGates` emits `gates(n *Negotiation, method string) error` on each type of
+  `Model.Gated` (`gateStmt`, `nestedGate`), a variant of an array property named by index (`prompt[1]`), the terminal-auth check a
+  loop over the record's `authMethods` returning `fmt.Errorf("%s: methodId %q: %w", method, id, ErrTerminalAuthMethod)`; `emitGater`
+  emits the unexported interface `gater`, which `gateMessage` (after `Allows`) and `gateResult` (with a record) assert. The first
+  emission asserted an anonymous interface, which gofmt splits over three lines at each use; the named type replaced it before review.
+  `initializeCase` checks the answer with a gate built from `Negotiation{Request: p, Response: resp}`, and `initializeWrapper` sends with
+  `sendRequest[T]` and a gate built from the request and the answer, so its error passes the validation hook as any response does.
+* `errors.go`: `ErrTerminalAuthMethod`, as the deviation says.
+* Generated: `types_gen.go` gains `gater`, 19 `gates` methods (on `AuthenticateRequest`, `ConfigOptionUpdate`,
+  `CreateElicitationRequest`, `InitializeResponse`, `LoadSessionRequest` and `LoadSessionResponse`, `McpServer`, `NewSessionRequest`
+  and `NewSessionResponse`, `PromptRequest`, `ResumeSessionRequest` and `ResumeSessionResponse`, `SessionConfigOption`,
+  `SessionConfigOptionUpdate`, `SessionNotification`, `SessionUpdate`, `SetSessionConfigOptionResponse`, `UnstableForkSessionRequest`
+  and `UnstableForkSessionResponse`), the call in `gateMessage`, and `gateResult`'s body; the step had named only the methods and the
+  call, `gater` and `gateResult` (owed to step 9's deviation "results are gated by value only") being the rest. `agent_gen.go` and
+  `client_gen.go` change only in the `initialize` paths. A second generation changed nothing. The API listing against `git archive
+  HEAD` gains exactly `var ErrTerminalAuthMethod`.
+* Engine cases: new `accept-capability-gates.txtar`, with ACP's definition names so the table's rules apply: `NewSessionRequest`'s
+  optional `additionalDirectories`, `PromptRequest.prompt` of a `ContentBlock` union, and `SessionUpdate` in a notification; its
+  behaviour tests `TestGatesRefuse` (each refused before sending with the property or variant named; a raw `x/new` with directories
+  answered `-32602`; a raw notice dropped, the next update delivered) and `TestGatesAllow`. The step's one `refuse-capability-rule.txtar`
+  is two files, since one `Build` reports one error: `refuse-capability-variant.txtar` (`ContentBlock has no variant "audio"`) and
+  `refuse-capability-non-array.txtar` (`additionalDirectories is string, not an array`). No other case's `want.api` changed.
+* Generator tests: new `model/gates_test.go`: `TestCapabilityRulesApply` (a variant of a union, one of a property's union, the nested
+  call, the capability's Go path; absent definition and property skipped; nothing without `initialize`), `TestCapabilityRulesRefuse`
+  (twelve cases), and `checkCommittedGates`, which `TestProtocolTableAppliesToCommittedSchema` calls: all 18 rules resolve, the
+  terminal-auth check finds `AuthMethods`, `Terminal` and `Id`. `dispatch_test.go`'s `TestDispatchFollowsTheModel` pins `gateResult`'s
+  signature, the `gater` assertion and type, and both `initialize` gates under the renamed protocol's names.
+* Root tests, `gates_test.go`: `TestValueGates` (16 messages for the 17 rules a typed method sends, the boolean config option through
+  `config_option_update`: without the capability, the `*CapabilityError` naming method, capability, field and variant, nothing written,
+  and `-32602` received without the handler; with it, written and handled), `TestResultGates` (an agent's `session/new` result with a
+  boolean option answered `-32603` without the capability; a client receiving one returns the error), `TestInitializeGates` (an agent
+  listing a terminal auth method to a client without `auth.terminal` answers `-32603` and records nothing; a client given one returns the
+  `*CapabilityError` and records nothing, and with a hook accepting it, records), `TestTerminalAuthMethod` (`errors.Is(err,
+  ErrTerminalAuthMethod)` with the exact message, nothing written, `-32602` received, another method sent). `receive` gives the recording
+  client a valid elicitation answer, `validReply`: the first run failed both elicitation cases on the zero `CreateElicitationResponse`
+  failing result validation after the handler ran, not on a gate. No existing test changed.
+* Plants, each in its own scratch copy, all `exit=1`:
+  * a rule removed (`McpServer` `sse`): `TestValueGates/mcpCapabilities.sse_sse`, and on the committed model `17 capability rules
+    resolve of 17, want 18`;
+  * the element loop checking element 0 only: `TestValueGates`, `prompt[1]`, and the engine case's `Prompt = <nil>`;
+  * `gateMessage` not calling `gates`: `TestValueGates`, `send = <nil>, want *CapabilityError{...}`;
+  * `gateResult` never calling `gates`: `TestResultGates`, `advertised false: the agent answered <nil>`;
+  * the agent's `initialize` gate given no record: `auth.terminal false: the agent answered <nil>, recorded true`; the client's:
+    `Initialize = <nil>, recorded true`;
+  * the terminal-auth error formatted with `%v`: `TestTerminalAuthMethod`, `want ErrTerminalAuthMethod`;
+  * holders not marked: `TestValueGates/session.notices_notice`; rules applied without `initialize`: `TestCapabilityRulesApply`;
+  * a non-array accepted for `GateNonEmpty`: `TestCapabilityRulesRefuse` and `refuse-capability-non-array`; two rules accepted, and a
+    terminal-auth rule with a capability accepted: their `TestCapabilityRulesRefuse` cases.
+* `make pre-add-check`: the first run failed on nine `goconst` findings (the repeated definition names and `"client"`, which became the
+  check's `FromRequest`); the second on `prompt`; then `go-precheck: 107 file(s) clean (gofmt, golangci-lint, go vet, go test,
+  govulncheck).`; the three untracked Go files: `go-precheck: 3 file(s) clean`, with `govulncheck` skipped. The generated files were
+  the same before and after those changes. `GOEXPERIMENT=nojsonv2 go test -count=1 .` passes; `GOOS=windows go vet ./...` passes in
+  both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing; no example
+  sends a gated value (a `grep` of `example/`).
+* On the Windows host reached over SSH, with a copy of the working tree's 310 tracked and untracked files and no macOS metadata: `go test
   -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.

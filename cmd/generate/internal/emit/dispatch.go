@@ -353,27 +353,34 @@ func emitGates(f *goFile, m *model.Model) {
 		"or a *CapabilityError naming the capability that is not advertised",
 		"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1).")
 	f.add(method(param("n", id("Negotiation")), "Allows", funcType([]*ast.Field{param("method", id("string"))}, param("", id("error"))), body...))
+	emitGater(f)
 	f.line()
 	f.comment("gateMessage checks a typed message against the record n of initialize:",
 		"initialize itself passes; before it, nothing does; after it, a method the",
-		"record does not allow does not.")
+		"record does not allow does not, nor a property or variant it does not.")
 	f.add(function("gateMessage", funcType([]*ast.Field{
-		param("n", star(id("Negotiation"))), param("method", id("string")), param("_", id("any")),
+		param("n", star(id("Negotiation"))), param("method", id("string")), param("params", id("any")),
 	}, param("", id("error"))),
 		ifStmt(nil, binary(id("method"), token.EQL, id(m.Initialize.Const)), ret(nilExpr())),
 		ifStmt(nil, binary(id("n"), token.EQL, nilExpr()),
 			ret(call(f.qual(pkgFmt, "Errorf"), str("%s: %w"), id("method"), id("ErrNotInitialized")))),
-		ret(call(dot("n", "Allows"), id("method"))),
+		ifStmt(define(exprs(id("err")), call(dot("n", "Allows"), id("method"))), errNotNil(), ret(id("err"))),
+		ifStmt(define(exprs(id("g"), id("ok")), typeAssert(id("params"), id("gater"))), id("ok"),
+			ret(call(dot("g", "gates"), id("n"), id("method")))),
+		ret(nilExpr()),
 	))
 	f.line()
 	f.comment("gateResult checks a result of method against the property and variant",
 		"gates of the record n; the method itself was checked when the request was",
 		"sent or received (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).")
 	f.add(function("gateResult", funcType([]*ast.Field{
-		param("_", star(id("Negotiation"))), param("_", id("string")), param("_", id("any")),
+		param("n", star(id("Negotiation"))), param("method", id("string")), param("result", id("any")),
 	}, param("", id("error"))),
+		ifStmt(define(exprs(id("g"), id("ok")), typeAssert(id("result"), id("gater"))), binary(id("ok"), token.LAND, binary(id("n"), token.NEQ, nilExpr())),
+			ret(call(dot("g", "gates"), id("n"), id("method")))),
 		ret(nilExpr()),
 	))
+	emitValueGates(f, m)
 }
 
 // agentFile builds agent_gen.go: the agent's handler and its outbound wrappers.
@@ -400,7 +407,7 @@ func agentFile(m *model.Model) *goFile {
 			body = append(body, pre...)
 			switch {
 			case mi.Initializes:
-				body = append(body, initializeCase(recv, mi, resultGate())...)
+				body = append(body, initializeCase(recv, mi)...)
 			case mi.PromptTurn:
 				body = append(body, promptCase(f, recv, mi, resultGate())...)
 			case !mi.HasResult:
@@ -477,9 +484,12 @@ func cancelledOnPromptCancel(f *goFile, recv ast.Expr, mi *model.Method, gate as
 // initializeCase answers initialize: a version the handler leaves zero is
 // ProtocolVersionNumber, and any other is refused with -32603, as this SDK
 // speaks that version only; the record of the request and the answer is
-// stored before the answer is written
+// stored before the answer is written; the answer's gates are checked
+// against that record, there being none before it
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, N1 and G1).
-func initializeCase(recv ast.Expr, mi *model.Method, gate ast.Expr) []ast.Stmt {
+func initializeCase(recv ast.Expr, mi *model.Method) []ast.Stmt {
+	gate := gateFuncLit(ret(call(id("gateResult"),
+		addr(composite(id("Negotiation"), kv(id("Request"), id("p")), kv(id("Response"), id("resp")))), id("method"), id("result"))))
 	version := dot("resp", mi.RespVersionField)
 	verr := addr(composite(id("ProtocolVersionError"),
 		kv(id("Requested"), call(id("int"), dot("p", mi.ReqVersionField))),
@@ -502,17 +512,22 @@ func initializeCase(recv ast.Expr, mi *model.Method, gate ast.Expr) []ast.Stmt {
 
 // initializeWrapper sends initialize: a version the request leaves zero is
 // ProtocolVersionNumber, another is refused before sending, and an answer
-// with another version is a *ProtocolVersionError and records nothing
+// with another version is a *ProtocolVersionError and records nothing; the
+// answer's gates are checked against the record it would make, through the
+// validation hook as any response is
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, N1 and G1).
 func initializeWrapper(mi *model.Method) []ast.Stmt {
 	req, resp := dot("params", mi.ReqVersionField), dot("resp", mi.RespVersionField)
+	gate := gateFuncLit(ret(call(id("gateResult"),
+		addr(composite(id("Negotiation"), kv(id("Request"), id("params")), kv(id("Response"), star(typeAssert(id("result"), star(id(mi.Resp))))))),
+		id("method"), id("result"))))
 	return []ast.Stmt{
 		ifStmt(nil, binary(req, token.EQL, intLit(0)), assign(exprs(dot("params", mi.ReqVersionField)), id("ProtocolVersionNumber"))),
 		ifStmt(nil, binary(dot("params", mi.ReqVersionField), token.NEQ, id("ProtocolVersionNumber")),
 			ret(composite(id(mi.Resp)), addr(composite(id("ProtocolVersionError"),
 				kv(id("Requested"), call(id("int"), dot("params", mi.ReqVersionField))))))),
 		define(exprs(id("resp"), id("err")),
-			call(index(id("SendRequest"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), id("params"))),
+			call(index(id("sendRequest"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), id("params"), gate)),
 		ifStmt(nil, errNotNil(), ret(id("resp"), id("err"))),
 		ifStmt(nil, binary(resp, token.NEQ, id("ProtocolVersionNumber")),
 			ret(id("resp"), addr(composite(id("ProtocolVersionError"),

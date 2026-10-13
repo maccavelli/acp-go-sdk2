@@ -1,0 +1,28 @@
+A capability rule's variant must be one the union has: ContentBlock without
+an audio variant cannot carry the rule that gates audio on
+promptCapabilities.audio (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 10).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"initialize": "initialize", "prompt": "x/prompt"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "ProtocolVersion": {"type": "integer", "format": "uint16"},
+  "PromptCapabilities": {"type": "object", "properties": {"image": {"type": "boolean"}, "audio": {"type": "boolean"}, "embeddedContext": {"type": "boolean"}}},
+  "Flag": {"type": "object"},
+  "SessionCapabilities": {"type": "object", "properties": {"additionalDirectories": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}}},
+  "AgentCapabilities": {"type": "object", "properties": {"sessionCapabilities": {"$ref": "#/$defs/SessionCapabilities"}, "promptCapabilities": {"$ref": "#/$defs/PromptCapabilities"}}},
+  "ClientCapabilities": {"type": "object", "properties": {"fs": {"type": "boolean"}}},
+  "InitializeRequest": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "clientCapabilities": {"$ref": "#/$defs/ClientCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
+  "InitializeResponse": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "agentCapabilities": {"$ref": "#/$defs/AgentCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"},
+  "ContentBlock": {"oneOf": [
+    {"type": "object", "required": ["type", "data"], "properties": {"type": {"const": "image", "type": "string"}, "data": {"type": "string"}}},
+    {"type": "object", "required": ["type", "uri"], "properties": {"type": {"const": "resource", "type": "string"}, "uri": {"type": "string"}}}
+  ], "discriminator": {"propertyName": "type"}},
+  "PromptRequest": {"type": "object", "properties": {"prompt": {"type": "array", "items": {"$ref": "#/$defs/ContentBlock"}}}, "required": ["prompt"], "x-side": "agent", "x-method": "x/prompt"},
+  "PromptResponse": {"type": "object", "x-side": "agent", "x-method": "x/prompt"}
+}}
+-- want.err --
+protocol table:
+capability rule PromptRequest.prompt "audio"
+ContentBlock has no variant "audio"

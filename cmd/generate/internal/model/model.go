@@ -62,6 +62,9 @@ type Model struct {
 	// to this schema, in the table's order; absProps holds their properties.
 	AbsolutePaths []PathProperty
 	absProps      map[*load.Definition]bool
+	// Gated lists, in type order, each type with a gates method and what it
+	// checks (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+	Gated []*Gates
 
 	// AgentMethodConsts, ClientMethodConsts, and ProtocolMethodConsts map a
 	// meta method key to the name of its constant.
@@ -340,6 +343,7 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		func() error { return m.linkCancelledRequests(r) },
 		func() error { return m.linkInitialize(r) },
 		func() error { return m.checkCapabilities(r) },
+		func() error { return m.resolveGates(r) },
 		func() error { return m.checkTypeRules(r) },
 		func() error { return m.buildInterfaces(n, r) },
 	} {

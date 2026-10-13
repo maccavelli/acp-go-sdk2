@@ -99,6 +99,13 @@ var ErrPromptCancelled = errors.New("acp: prompt turn cancelled")
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
 var ErrNotInitialized = errors.New("acp: initialize has not completed")
 
+// ErrTerminalAuthMethod is the error, wrapped with the method, the property
+// and the id, that an authenticate naming a terminal auth method of the
+// agent's initialize answer meets: a terminal method is run, not
+// authenticated, and the client must not send it
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+var ErrTerminalAuthMethod = errors.New("acp: a terminal auth method is not authenticated")
+
 // CapabilityError reports a method, property or variant that the capabilities
 // negotiated by initialize do not allow. Method is the wire method;
 // Capability is the dotted capability path; Field is the JSON key, with an

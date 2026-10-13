@@ -139,6 +139,14 @@ func sides(t *testing.T, w *countingWriter, n *Negotiation, opts ...ConnectionOp
 	return asc, csc
 }
 
+// validReply fills a result the zero value of which does not validate.
+func validReply(result any) error {
+	if r, ok := result.(*CreateElicitationResponse); ok {
+		*r = NewCreateElicitationResponseCancel()
+	}
+	return nil
+}
+
 // receive hands m to the side that receives it, returning its answer and
 // whether the handler ran.
 func receive(t *testing.T, m gatedMethod, n *Negotiation, opts ...ConnectionOption) (*RequestError, bool) {
@@ -156,7 +164,7 @@ func receive(t *testing.T, m gatedMethod, n *Negotiation, opts ...ConnectionOpti
 		}
 		_, rerr = asc.handle(t.Context(), m.wire, raw)
 	} else {
-		csc := NewClientSideConnection(recordingClient{calls: calls}, &countingWriter{}, idleReader(t), opts...)
+		csc := NewClientSideConnection(recordingClient{calls: calls, reply: validReply}, &countingWriter{}, idleReader(t), opts...)
 		if n != nil {
 			negotiate(t, csc, n)
 		}
@@ -361,5 +369,296 @@ func TestAllows(t *testing.T) {
 				t.Errorf("%s: Allows = %v, gate = %v", m.wire, a, g)
 			}
 		}
+	}
+}
+
+// valueGate is one capability rule of the protocol table on a message that
+// carries its property or variant: the gatedMethod fields say how it is sent
+// and received and how to advertise the capability, and field and variant
+// what the *CapabilityError names.
+type valueGate struct {
+	gatedMethod
+	field, variant string
+}
+
+// decoded is raw decoded into a T, as a peer's message would be.
+func decoded[T any](t *testing.T, raw string) T {
+	t.Helper()
+	var v T
+	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+		t.Fatalf("%s: %v", raw, err)
+	}
+	return v
+}
+
+// jsonOf is v as JSON text.
+func jsonOf(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// valueGates returns a message for each of the 17 capability rules that a
+// typed method sends; the terminal-auth rule and the result-only gates have
+// tests of their own.
+func valueGates(t *testing.T) []valueGate {
+	t.Helper()
+	dir, other := jsonOf(t, testAbsPath()), jsonOf(t, testAbsPath("more"))
+	roots := `"additionalDirectories":[` + other + `]`
+	agentCaps := func(n *Negotiation) *AgentCapabilities { return &n.Response.AgentCapabilities }
+	clientCaps := func(n *Negotiation) *ClientCapabilities { return &n.Request.ClientCapabilities }
+	rootsCap := func(n *Negotiation, on bool) {
+		agentCaps(n).SessionCapabilities.AdditionalDirectories = when(on, &SessionAdditionalDirectoriesCapabilities{})
+	}
+	session := func(n *Negotiation) *ClientSessionCapabilities {
+		if clientCaps(n).Session == nil {
+			clientCaps(n).Session = &ClientSessionCapabilities{}
+		}
+		return clientCaps(n).Session
+	}
+	elicitation := func(n *Negotiation) *ElicitationCapabilities {
+		if clientCaps(n).Elicitation == nil {
+			clientCaps(n).Elicitation = &ElicitationCapabilities{}
+		}
+		return clientCaps(n).Elicitation
+	}
+	newSession := func(extra string) any {
+		return decoded[NewSessionRequest](t, `{"cwd":`+dir+`,"mcpServers":[`+extra+`]}`)
+	}
+	withRoots := func(m gatedMethod) valueGate {
+		m.capability, m.toAgent, m.advertise = "sessionCapabilities.additionalDirectories", true, rootsCap
+		return valueGate{gatedMethod: m, field: "additionalDirectories"}
+	}
+	mcp := func(variant, server string, advertise func(n *Negotiation, on bool)) valueGate {
+		return valueGate{gatedMethod: gatedMethod{wire: AgentMethodSessionNew, capability: "mcpCapabilities." + variant, toAgent: true,
+			params: newSession(server), send: fromClient((*ClientSideConnection).NewSession), advertise: advertise}, variant: variant}
+	}
+	block := func(variant, capability, raw string, advertise func(n *Negotiation, on bool)) valueGate {
+		return valueGate{gatedMethod: gatedMethod{wire: AgentMethodSessionPrompt, capability: "promptCapabilities." + capability, toAgent: true,
+			params: decoded[PromptRequest](t, `{"sessionId":"s","prompt":[{"type":"text","text":"a"},`+raw+`]}`),
+			send:   fromClient((*ClientSideConnection).Prompt), advertise: advertise}, field: "prompt[1]", variant: variant}
+	}
+	update := func(variant, capability, raw string, advertise func(n *Negotiation, on bool)) valueGate {
+		return valueGate{gatedMethod: gatedMethod{wire: ClientMethodSessionUpdate, capability: capability, notifies: true,
+			params: decoded[SessionNotification](t, `{"sessionId":"s","update":`+raw+`}`),
+			send: func(ctx context.Context, asc *AgentSideConnection, _ *ClientSideConnection, params any) error {
+				return asc.SessionUpdate(ctx, params.(SessionNotification))
+			}, advertise: advertise}, variant: variant}
+	}
+	elicit := func(variant, raw string, advertise func(n *Negotiation, on bool)) valueGate {
+		return valueGate{gatedMethod: gatedMethod{wire: ClientMethodElicitationCreate, capability: "elicitation." + variant,
+			params: decoded[CreateElicitationRequest](t, raw), send: fromAgent((*AgentSideConnection).CreateElicitation),
+			advertise: advertise}, variant: variant}
+	}
+	return []valueGate{
+		withRoots(gatedMethod{wire: AgentMethodSessionNew, params: decoded[NewSessionRequest](t, `{"cwd":`+dir+`,"mcpServers":[],`+roots+`}`),
+			send: fromClient((*ClientSideConnection).NewSession)}),
+		withRoots(gatedMethod{wire: AgentMethodSessionLoad,
+			params: decoded[LoadSessionRequest](t, `{"sessionId":"s","cwd":`+dir+`,"mcpServers":[],`+roots+`}`),
+			send:   fromClient((*ClientSideConnection).LoadSession)}),
+		withRoots(gatedMethod{wire: AgentMethodSessionResume, params: decoded[ResumeSessionRequest](t, `{"sessionId":"s","cwd":`+dir+`,`+roots+`}`),
+			send: fromClient((*ClientSideConnection).ResumeSession)}),
+		withRoots(gatedMethod{wire: AgentMethodSessionFork, params: decoded[UnstableForkSessionRequest](t, `{"sessionId":"s","cwd":`+dir+`,`+roots+`}`),
+			send: fromClient((*ClientSideConnection).UnstableForkSession)}),
+		mcp("http", `{"type":"http","name":"m","url":"https://example.invalid","headers":[]}`,
+			func(n *Negotiation, on bool) { agentCaps(n).McpCapabilities.Http = on }),
+		mcp("sse", `{"type":"sse","name":"m","url":"https://example.invalid","headers":[]}`,
+			func(n *Negotiation, on bool) { agentCaps(n).McpCapabilities.Sse = on }),
+		mcp("acp", `{"type":"acp","name":"m","serverId":"x"}`, func(n *Negotiation, on bool) { agentCaps(n).McpCapabilities.Acp = on }),
+		block("image", "image", `{"type":"image","data":"x","mimeType":"image/png"}`,
+			func(n *Negotiation, on bool) { agentCaps(n).PromptCapabilities.Image = on }),
+		block("audio", "audio", `{"type":"audio","data":"x","mimeType":"audio/wav"}`,
+			func(n *Negotiation, on bool) { agentCaps(n).PromptCapabilities.Audio = on }),
+		block("resource", "embeddedContext", `{"type":"resource","resource":{"uri":"file:///x","text":"t"}}`,
+			func(n *Negotiation, on bool) { agentCaps(n).PromptCapabilities.EmbeddedContext = on }),
+		elicit("form", `{"mode":"form","message":"m","requestedSchema":{"type":"object","properties":{}},"sessionId":"s"}`,
+			func(n *Negotiation, on bool) { elicitation(n).Form = when(on, &ElicitationFormCapabilities{}) }),
+		elicit("url", `{"mode":"url","message":"m","elicitationId":"e","url":"https://example.invalid","sessionId":"s"}`,
+			func(n *Negotiation, on bool) { elicitation(n).Url = when(on, &ElicitationUrlCapabilities{}) }),
+		update("notice", "session.notices", `{"sessionUpdate":"notice","severity":"info","title":"t"}`,
+			func(n *Negotiation, on bool) { session(n).Notices = when(on, &NoticeCapabilities{}) }),
+		update("compaction_update", "session.compaction", `{"sessionUpdate":"compaction_update","compactionId":"c","status":"completed"}`,
+			func(n *Negotiation, on bool) { session(n).Compaction = when(on, &CompactionCapabilities{}) }),
+		update("compaction_summary_chunk", "session.compaction",
+			`{"sessionUpdate":"compaction_summary_chunk","compactionId":"c","content":{"type":"text","text":"x"}}`,
+			func(n *Negotiation, on bool) { session(n).Compaction = when(on, &CompactionCapabilities{}) }),
+		update("boolean", "session.configOptions.boolean",
+			`{"sessionUpdate":"config_option_update","configOptions":[{"type":"boolean","id":"b","name":"B","currentValue":true}]}`,
+			func(n *Negotiation, on bool) {
+				if on {
+					session(n).ConfigOptions = &SessionConfigOptionsCapabilities{Boolean: &BooleanConfigOptionCapabilities{}}
+				} else if session(n).ConfigOptions != nil {
+					session(n).ConfigOptions.Boolean = nil
+				}
+			}),
+	}
+}
+
+// TestValueGates requires each capability rule both ways: sent with a record
+// that does not advertise its capability, the typed method returns a
+// *CapabilityError naming the property or variant and writes nothing; with one
+// that does, it is written; received without it, it is answered -32602
+// (a notification's answer is dropped) without reaching the handler, and with
+// it, it is handled (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 10).
+func TestValueGates(t *testing.T) {
+	t.Parallel()
+	gates := valueGates(t)
+	if len(gates) != 16 {
+		t.Fatalf("%d value gates, want 16", len(gates))
+	}
+	for _, g := range gates {
+		t.Run(g.capability+" "+g.variant+g.field, func(t *testing.T) {
+			t.Parallel()
+			without, with := allAdvertised(), allAdvertised()
+			g.advertise(without, false)
+			w := &countingWriter{}
+			asc, csc := sides(t, w, without)
+			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+			err := g.send(ctx, asc, csc, g.params)
+			cancel()
+			var ce *CapabilityError
+			if !errors.As(err, &ce) || ce.Method != g.wire || ce.Capability != g.capability || ce.Field != g.field || ce.Variant != g.variant {
+				t.Errorf("send = %v, want *CapabilityError{%s, %s, Field %q, Variant %q}", err, g.wire, g.capability, g.field, g.variant)
+			}
+			if got := w.count(); got != 0 {
+				t.Errorf("%d bytes written, want none", got)
+			}
+			if rerr, ran := receive(t, g.gatedMethod, without); rerr == nil || rerr.Code != -32602 || ran {
+				t.Errorf("received without the capability: %v, handler ran %v, want -32602 and no handler", rerr, ran)
+			}
+
+			w = &countingWriter{}
+			asc, csc = sides(t, w, with)
+			ctx, cancel = context.WithCancel(t.Context())
+			sent := make(chan error, 1)
+			go func() { sent <- g.send(ctx, asc, csc, g.params) }()
+			for deadline := time.Now().Add(5 * time.Second); w.count() == 0 && time.Now().Before(deadline); {
+				time.Sleep(time.Millisecond)
+			}
+			if w.count() == 0 {
+				t.Error("with the capability, nothing written")
+			}
+			cancel()
+			if err := within(t, sent, "the send"); errors.As(err, &ce) || (g.notifies && err != nil) {
+				t.Errorf("send with the capability: %v", err)
+			}
+			if rerr, ran := receive(t, g.gatedMethod, with); rerr != nil || !ran {
+				t.Errorf("received with the capability: %v, handler ran %v, want it handled", rerr, ran)
+			}
+		})
+	}
+}
+
+// TestResultGates requires a result to be checked against the gates too: an
+// agent whose session/new result holds a boolean config option for a client
+// that did not advertise them answers -32603, and a client given one returns
+// the *CapabilityError (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 10).
+func TestResultGates(t *testing.T) {
+	t.Parallel()
+	option := `{"sessionId":"s","configOptions":[{"type":"boolean","id":"b","name":"B","currentValue":true}]}`
+	result := decoded[NewSessionResponse](t, option)
+	params := jsonOf(t, NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
+	for _, advertised := range []bool{false, true} {
+		n := allAdvertised()
+		if !advertised {
+			n.Request.ClientCapabilities.Session.ConfigOptions.Boolean = nil
+		}
+		asc := NewAgentSideConnection(agentFuncs{NewSessionFunc: func(context.Context, NewSessionRequest) (NewSessionResponse, error) {
+			return result, nil
+		}}, &countingWriter{}, idleReader(t))
+		negotiate(t, asc, n)
+		_, rerr := asc.handle(t.Context(), AgentMethodSessionNew, json.RawMessage(params))
+		if advertised != (rerr == nil) || (rerr != nil && rerr.Code != -32603) {
+			t.Errorf("advertised %v: the agent answered %v", advertised, rerr)
+		}
+		peer := rawPeer(t, option)
+		negotiate(t, peer, n)
+		_, err := peer.NewSession(t.Context(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
+		var ce *CapabilityError
+		if advertised != (err == nil) || (err != nil && (!errors.As(err, &ce) || ce.Variant != "boolean")) {
+			t.Errorf("advertised %v: the client's NewSession = %v", advertised, err)
+		}
+	}
+}
+
+// TestInitializeGates requires initialize's answer to be checked against the
+// record it makes: an agent listing a terminal auth method to a client
+// without auth.terminal answers -32603 and records nothing, and a client
+// given one returns the *CapabilityError and records nothing unless a
+// validation hook accepts it (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 10).
+func TestInitializeGates(t *testing.T) {
+	t.Parallel()
+	terminal := InitializeResponse{ProtocolVersion: ProtocolVersionNumber, AuthMethods: []AuthMethod{NewAuthMethodTerminal("t", "T")}}
+	for _, advertised := range []bool{false, true} {
+		asc := NewAgentSideConnection(agentFuncs{InitializeFunc: func(context.Context, InitializeRequest) (InitializeResponse, error) {
+			return terminal, nil
+		}}, &countingWriter{}, idleReader(t))
+		req := jsonOf(t, InitializeRequest{ProtocolVersion: ProtocolVersionNumber, ClientCapabilities: ClientCapabilities{Auth: AuthCapabilities{Terminal: advertised}}})
+		_, rerr := asc.handle(t.Context(), AgentMethodInitialize, json.RawMessage(req))
+		if _, ok := asc.Negotiated(); advertised != (rerr == nil) || advertised != ok || (rerr != nil && rerr.Code != -32603) {
+			t.Errorf("auth.terminal %v: the agent answered %v, recorded %v", advertised, rerr, ok)
+		}
+	}
+	answer := jsonOf(t, terminal)
+	c := rawPeer(t, answer)
+	_, err := c.Initialize(t.Context(), InitializeRequest{})
+	var ce *CapabilityError
+	if _, ok := c.Negotiated(); !errors.As(err, &ce) || ce.Field != "authMethods[0]" || ce.Variant != "terminal" || ok {
+		t.Errorf("Initialize = %v, recorded %v; want the *CapabilityError and no record", err, ok)
+	}
+	accept := WithInboundValidation(func(_ context.Context, _ string, _ any, err error) error {
+		if errors.As(err, &ce) {
+			return nil
+		}
+		return err
+	})
+	c = rawPeer(t, answer, accept)
+	if _, err := c.Initialize(t.Context(), InitializeRequest{}); err != nil {
+		t.Errorf("Initialize with a hook accepting the gate: %v", err)
+	}
+	if _, ok := c.Negotiated(); !ok {
+		t.Error("with a hook accepting the gate, no record")
+	}
+}
+
+// TestTerminalAuthMethod requires authenticate naming a terminal method of
+// the record to be refused with ErrTerminalAuthMethod before it is sent, and
+// answered -32602 when received; another method is sent
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+func TestTerminalAuthMethod(t *testing.T) {
+	t.Parallel()
+	n := allAdvertised()
+	n.Response.AuthMethods = []AuthMethod{NewAuthMethodAgent("a", "A"), NewAuthMethodTerminal("t", "T")}
+	w := &countingWriter{}
+	_, csc := sides(t, w, n)
+	err := fromClient((*ClientSideConnection).Authenticate)(t.Context(), nil, csc, AuthenticateRequest{MethodId: "t"})
+	if !errors.Is(err, ErrTerminalAuthMethod) || err.Error() != `authenticate: methodId "t": `+ErrTerminalAuthMethod.Error() {
+		t.Errorf("Authenticate(t) = %v, want ErrTerminalAuthMethod", err)
+	}
+	if got := w.count(); got != 0 {
+		t.Errorf("%d bytes written, want none", got)
+	}
+	m := gatedMethod{wire: AgentMethodAuthenticate, toAgent: true, params: AuthenticateRequest{MethodId: "t"}}
+	if rerr, ran := receive(t, m, n); rerr == nil || rerr.Code != -32602 || ran {
+		t.Errorf("received: %v, handler ran %v, want -32602 and no handler", rerr, ran)
+	}
+	m.params = AuthenticateRequest{MethodId: "a"}
+	if rerr, ran := receive(t, m, n); rerr != nil || !ran {
+		t.Errorf("received the agent method: %v, handler ran %v", rerr, ran)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	sent := make(chan error, 1)
+	go func() {
+		sent <- fromClient((*ClientSideConnection).Authenticate)(ctx, nil, csc, AuthenticateRequest{MethodId: "a"})
+	}()
+	for deadline := time.Now().Add(5 * time.Second); w.count() == 0 && time.Now().Before(deadline); {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	if w.count() == 0 || errors.Is(within(t, sent, "the send"), ErrTerminalAuthMethod) {
+		t.Error("Authenticate(a) was not sent")
 	}
 }

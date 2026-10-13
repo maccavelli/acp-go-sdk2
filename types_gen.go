@@ -19883,22 +19883,306 @@ func (n Negotiation) Allows(method string) error {
 	return nil
 }
 
+// gater is a value that holds a property or variant the capabilities gate.
+type gater interface {
+	gates(n *Negotiation, method string) error
+}
+
 // gateMessage checks a typed message against the record n of initialize:
 // initialize itself passes; before it, nothing does; after it, a method the
-// record does not allow does not.
-func gateMessage(n *Negotiation, method string, _ any) error {
+// record does not allow does not, nor a property or variant it does not.
+func gateMessage(n *Negotiation, method string, params any) error {
 	if method == AgentMethodInitialize {
 		return nil
 	}
 	if n == nil {
 		return fmt.Errorf("%s: %w", method, ErrNotInitialized)
 	}
-	return n.Allows(method)
+	if err := n.Allows(method); err != nil {
+		return err
+	}
+	if g, ok := params.(gater); ok {
+		return g.gates(n, method)
+	}
+	return nil
 }
 
 // gateResult checks a result of method against the property and variant
 // gates of the record n; the method itself was checked when the request was
 // sent or received (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
-func gateResult(_ *Negotiation, _ string, _ any) error {
+func gateResult(n *Negotiation, method string, result any) error {
+	if g, ok := result.(gater); ok && n != nil {
+		return g.gates(n, method)
+	}
+	return nil
+}
+
+func (v *AuthenticateRequest) gates(n *Negotiation, method string) error {
+	for _, a := range n.Response.AuthMethods {
+		if a.Terminal != nil && a.Terminal.Id == v.MethodId {
+			return fmt.Errorf("%s: methodId %q: %w", method, v.MethodId, ErrTerminalAuthMethod)
+		}
+	}
+	return nil
+}
+
+func (v *ConfigOptionUpdate) gates(n *Negotiation, method string) error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].gates(n, method); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (u *CreateElicitationRequest) gates(n *Negotiation, method string) error {
+	if u.Form != nil && (n.Request.ClientCapabilities.Elicitation == nil || n.Request.ClientCapabilities.Elicitation.Form == nil) {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "elicitation.form",
+			Variant:    "form",
+		}
+	}
+	if u.Url != nil && (n.Request.ClientCapabilities.Elicitation == nil || n.Request.ClientCapabilities.Elicitation.Url == nil) {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "elicitation.url",
+			Variant:    "url",
+		}
+	}
+	return nil
+}
+
+func (v *InitializeResponse) gates(n *Negotiation, method string) error {
+	for i := range v.AuthMethods {
+		if v.AuthMethods[i].Terminal != nil && !n.Request.ClientCapabilities.Auth.Terminal {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "auth.terminal",
+				Field:      fmt.Sprintf("authMethods[%d]", i),
+				Variant:    "terminal",
+			}
+		}
+	}
+	return nil
+}
+
+func (v *LoadSessionRequest) gates(n *Negotiation, method string) error {
+	if len(v.AdditionalDirectories) > 0 && n.Response.AgentCapabilities.SessionCapabilities.AdditionalDirectories == nil {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "sessionCapabilities.additionalDirectories",
+			Field:      "additionalDirectories",
+		}
+	}
+	for i := range v.McpServers {
+		if err := v.McpServers[i].gates(n, method); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (v *LoadSessionResponse) gates(n *Negotiation, method string) error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].gates(n, method); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (u *McpServer) gates(n *Negotiation, method string) error {
+	if u.Http != nil && !n.Response.AgentCapabilities.McpCapabilities.Http {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "mcpCapabilities.http",
+			Variant:    "http",
+		}
+	}
+	if u.Sse != nil && !n.Response.AgentCapabilities.McpCapabilities.Sse {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "mcpCapabilities.sse",
+			Variant:    "sse",
+		}
+	}
+	if u.Acp != nil && !n.Response.AgentCapabilities.McpCapabilities.Acp {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "mcpCapabilities.acp",
+			Variant:    "acp",
+		}
+	}
+	return nil
+}
+
+func (v *NewSessionRequest) gates(n *Negotiation, method string) error {
+	if len(v.AdditionalDirectories) > 0 && n.Response.AgentCapabilities.SessionCapabilities.AdditionalDirectories == nil {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "sessionCapabilities.additionalDirectories",
+			Field:      "additionalDirectories",
+		}
+	}
+	for i := range v.McpServers {
+		if err := v.McpServers[i].gates(n, method); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (v *NewSessionResponse) gates(n *Negotiation, method string) error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].gates(n, method); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (v *PromptRequest) gates(n *Negotiation, method string) error {
+	for i := range v.Prompt {
+		if v.Prompt[i].Image != nil && !n.Response.AgentCapabilities.PromptCapabilities.Image {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "promptCapabilities.image",
+				Field:      fmt.Sprintf("prompt[%d]", i),
+				Variant:    "image",
+			}
+		}
+	}
+	for i := range v.Prompt {
+		if v.Prompt[i].Audio != nil && !n.Response.AgentCapabilities.PromptCapabilities.Audio {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "promptCapabilities.audio",
+				Field:      fmt.Sprintf("prompt[%d]", i),
+				Variant:    "audio",
+			}
+		}
+	}
+	for i := range v.Prompt {
+		if v.Prompt[i].Resource != nil && !n.Response.AgentCapabilities.PromptCapabilities.EmbeddedContext {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "promptCapabilities.embeddedContext",
+				Field:      fmt.Sprintf("prompt[%d]", i),
+				Variant:    "resource",
+			}
+		}
+	}
+	return nil
+}
+
+func (v *ResumeSessionRequest) gates(n *Negotiation, method string) error {
+	if len(v.AdditionalDirectories) > 0 && n.Response.AgentCapabilities.SessionCapabilities.AdditionalDirectories == nil {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "sessionCapabilities.additionalDirectories",
+			Field:      "additionalDirectories",
+		}
+	}
+	for i := range v.McpServers {
+		if err := v.McpServers[i].gates(n, method); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (v *ResumeSessionResponse) gates(n *Negotiation, method string) error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].gates(n, method); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (u *SessionConfigOption) gates(n *Negotiation, method string) error {
+	if u.Boolean != nil && (n.Request.ClientCapabilities.Session == nil || n.Request.ClientCapabilities.Session.ConfigOptions == nil || n.Request.ClientCapabilities.Session.ConfigOptions.Boolean == nil) {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "session.configOptions.boolean",
+			Variant:    "boolean",
+		}
+	}
+	return nil
+}
+
+func (v *SessionNotification) gates(n *Negotiation, method string) error {
+	if err := v.Update.gates(n, method); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (u *SessionUpdate) gates(n *Negotiation, method string) error {
+	if u.Notice != nil && (n.Request.ClientCapabilities.Session == nil || n.Request.ClientCapabilities.Session.Notices == nil) {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "session.notices",
+			Variant:    "notice",
+		}
+	}
+	if u.CompactionUpdate != nil && (n.Request.ClientCapabilities.Session == nil || n.Request.ClientCapabilities.Session.Compaction == nil) {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "session.compaction",
+			Variant:    "compaction_update",
+		}
+	}
+	if u.CompactionSummaryChunk != nil && (n.Request.ClientCapabilities.Session == nil || n.Request.ClientCapabilities.Session.Compaction == nil) {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "session.compaction",
+			Variant:    "compaction_summary_chunk",
+		}
+	}
+	if u.ConfigOptionUpdate != nil {
+		if err := u.ConfigOptionUpdate.gates(n, method); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (v *SessionConfigOptionUpdate) gates(n *Negotiation, method string) error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].gates(n, method); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (v *SetSessionConfigOptionResponse) gates(n *Negotiation, method string) error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].gates(n, method); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (v *UnstableForkSessionRequest) gates(n *Negotiation, method string) error {
+	if len(v.AdditionalDirectories) > 0 && n.Response.AgentCapabilities.SessionCapabilities.AdditionalDirectories == nil {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "sessionCapabilities.additionalDirectories",
+			Field:      "additionalDirectories",
+		}
+	}
+	return nil
+}
+
+func (v *UnstableForkSessionResponse) gates(n *Negotiation, method string) error {
+	for i := range v.ConfigOptions {
+		if err := v.ConfigOptions[i].gates(n, method); err != nil {
+			return err
+		}
+	}
 	return nil
 }

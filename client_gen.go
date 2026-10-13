@@ -300,7 +300,12 @@ func (c *ClientSideConnection) Initialize(ctx context.Context, params Initialize
 	if params.ProtocolVersion != ProtocolVersionNumber {
 		return InitializeResponse{}, &ProtocolVersionError{Requested: int(params.ProtocolVersion)}
 	}
-	resp, err := SendRequest[InitializeResponse](c.conn, ctx, AgentMethodInitialize, params)
+	resp, err := sendRequest[InitializeResponse](c.conn, ctx, AgentMethodInitialize, params, func(method string, result any) error {
+		return gateResult(&Negotiation{
+			Request:  params,
+			Response: *result.(*InitializeResponse),
+		}, method, result)
+	})
 	if err != nil {
 		return resp, err
 	}

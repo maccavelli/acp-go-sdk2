@@ -76,18 +76,18 @@ var ACP = Protocol{
 		{Side: sideClient, Wire: "elicitation/complete", Capability: "elicitation.url"},
 	},
 	// helpers.go builds these with TextBlock, ToolContent, and the like.
-	HandWrittenHelpers: []string{"ContentBlock", "SessionUpdate", "ToolCallContent"},
+	HandWrittenHelpers: []string{"ContentBlock", defSessionUpdate, "ToolCallContent"},
 	// The properties the protocol requires to be absolute paths, which the
 	// schema states only in prose (0015-MADR-validate-absolute-protocol-paths.md).
 	AbsolutePaths: []PathRule{
-		{Definition: "NewSessionRequest", Property: keyCwd, Source: srcCwd},
-		{Definition: "NewSessionRequest", Property: keyRoots, Source: srcRoots},
-		{Definition: "LoadSessionRequest", Property: keyCwd, Source: srcCwd},
-		{Definition: "LoadSessionRequest", Property: keyRoots, Source: srcRoots},
-		{Definition: "ResumeSessionRequest", Property: keyCwd, Source: srcCwd},
-		{Definition: "ResumeSessionRequest", Property: keyRoots, Source: srcRoots},
-		{Definition: "UnstableForkSessionRequest", Property: keyCwd, Source: srcCwd},
-		{Definition: "UnstableForkSessionRequest", Property: keyRoots, Source: srcRoots},
+		{Definition: defNewSession, Property: keyCwd, Source: srcCwd},
+		{Definition: defNewSession, Property: keyRoots, Source: srcRoots},
+		{Definition: defLoadSession, Property: keyCwd, Source: srcCwd},
+		{Definition: defLoadSession, Property: keyRoots, Source: srcRoots},
+		{Definition: defResumeSession, Property: keyCwd, Source: srcCwd},
+		{Definition: defResumeSession, Property: keyRoots, Source: srcRoots},
+		{Definition: defForkSession, Property: keyCwd, Source: srcCwd},
+		{Definition: defForkSession, Property: keyRoots, Source: srcRoots},
 		{Definition: "ListSessionsRequest", Property: keyCwd, Source: srcAllPaths},
 		{Definition: "SessionInfo", Property: keyCwd, Source: srcCwd},
 		{Definition: "SessionInfo", Property: keyRoots, Source: srcRoots},
@@ -98,7 +98,42 @@ var ACP = Protocol{
 		{Definition: "ToolCallLocation", Property: keyPath, Source: srcAllPaths},
 		{Definition: "Diff", Property: keyPath, Source: srcAllPaths},
 	},
+	// The properties and variants the negotiated capabilities gate, which
+	// the SDK checks on what each side sends and receives
+	// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+	CapabilityRules: []CapabilityRule{
+		{Side: sideAgent, Definition: defNewSession, Property: keyRoots, Capability: capRoots, Source: srcRootsGate, Kind: GateNonEmpty},
+		{Side: sideAgent, Definition: defLoadSession, Property: keyRoots, Capability: capRoots, Source: srcRootsGate, Kind: GateNonEmpty},
+		{Side: sideAgent, Definition: defResumeSession, Property: keyRoots, Capability: capRoots, Source: srcRootsGate, Kind: GateNonEmpty},
+		{Side: sideAgent, Definition: defForkSession, Property: keyRoots, Capability: capRoots, Source: srcRootsGate, Kind: GateNonEmpty},
+		{Side: sideAgent, Definition: defMcpServer, Variant: "http", Capability: "mcpCapabilities.http", Source: srcMcp, Kind: GateVariant},
+		{Side: sideAgent, Definition: defMcpServer, Variant: "sse", Capability: "mcpCapabilities.sse", Source: srcMcp, Kind: GateVariant},
+		// Unstable: the schema's capability for the acp transport.
+		{Side: sideAgent, Definition: defMcpServer, Variant: "acp", Capability: "mcpCapabilities.acp", Source: srcMcp, Kind: GateVariant},
+		{Side: sideAgent, Definition: defPrompt, Property: keyPrompt, Variant: "image", Capability: "promptCapabilities.image", Source: srcPrompt, Kind: GateVariant},
+		{Side: sideAgent, Definition: defPrompt, Property: keyPrompt, Variant: "audio", Capability: "promptCapabilities.audio", Source: srcPrompt, Kind: GateVariant},
+		{Side: sideAgent, Definition: defPrompt, Property: keyPrompt, Variant: "resource", Capability: "promptCapabilities.embeddedContext", Source: srcPrompt, Kind: GateVariant},
+		{Side: sideAgent, Definition: "AuthenticateRequest", Property: "methodId", Variant: "terminal", Source: srcAuthenticate, Kind: GateNotTerminalAuthMethod},
+		{Side: sideClient, Definition: "CreateElicitationRequest", Variant: "form", Capability: "elicitation.form", Source: srcElicitation, Kind: GateVariant},
+		{Side: sideClient, Definition: "CreateElicitationRequest", Variant: "url", Capability: "elicitation.url", Source: srcElicitation, Kind: GateVariant},
+		{Side: sideClient, Definition: defSessionUpdate, Variant: "notice", Capability: "session.notices", Source: srcSessionUpdate, Kind: GateVariant},
+		{Side: sideClient, Definition: defSessionUpdate, Variant: "compaction_update", Capability: "session.compaction", Source: srcSessionUpdate, Kind: GateVariant},
+		{Side: sideClient, Definition: defSessionUpdate, Variant: "compaction_summary_chunk", Capability: "session.compaction", Source: srcSessionUpdate, Kind: GateVariant},
+		{Side: sideClient, Definition: "SessionConfigOption", Variant: "boolean", Capability: "session.configOptions.boolean", Source: srcBooleanOption, Kind: GateVariant},
+		{Side: sideClient, Definition: "InitializeResponse", Property: "authMethods", Variant: "terminal", Capability: "auth.terminal", Source: srcTerminalAuth, Kind: GateVariant},
+	},
 }
+
+// The definitions several rules name.
+const (
+	defNewSession    = "NewSessionRequest"
+	defLoadSession   = "LoadSessionRequest"
+	defResumeSession = "ResumeSessionRequest"
+	defForkSession   = "UnstableForkSessionRequest"
+	defMcpServer     = "McpServer"
+	defPrompt        = "PromptRequest"
+	defSessionUpdate = "SessionUpdate"
+)
 
 // The property keys several rules name.
 const (
@@ -106,6 +141,7 @@ const (
 	keyRoots     = "additionalDirectories"
 	keyPath      = "path"
 	keySessionID = "sessionId"
+	keyPrompt    = "prompt"
 )
 
 // The specification sentences the absolute-path rules follow.
@@ -116,4 +152,27 @@ const (
 	srcCwd = "The cwd ... MUST be an absolute path."
 	// srcRoots is from <https://agentclientprotocol.com/protocol/session-setup>, additional workspace roots.
 	srcRoots = "each additionalDirectories entry MUST be an absolute path"
+)
+
+// capRoots is the capability that gates additionalDirectories.
+const capRoots = "sessionCapabilities.additionalDirectories"
+
+// The specification sentences the capability rules follow.
+const (
+	// srcRootsGate is from <https://agentclientprotocol.com/protocol/session-setup>, additional workspace roots.
+	srcRootsGate = "Clients MUST only send additionalDirectories when the Agent advertises sessionCapabilities.additionalDirectories"
+	// srcMcp is from <https://agentclientprotocol.com/protocol/session-setup>, MCP servers.
+	srcMcp = "Before using HTTP or SSE transports, Clients MUST verify the Agent's capabilities"
+	// srcPrompt is from <https://agentclientprotocol.com/protocol/prompt-turn>.
+	srcPrompt = "Clients MUST restrict types of content according to the Prompt Capabilities established during initialization"
+	// srcAuthenticate is from <https://agentclientprotocol.com/protocol/authentication>.
+	srcAuthenticate = "the Client MUST NOT send an authenticate request for a terminal method"
+	// srcElicitation is from the elicitation page.
+	srcElicitation = "Agents MUST NOT request a mode the Client has not advertised"
+	// srcSessionUpdate is from the schema, Notice and the compaction updates.
+	srcSessionUpdate = "Agents MUST only send this update when the Client advertised"
+	// srcBooleanOption is from <https://agentclientprotocol.com/protocol/session-config-options>.
+	srcBooleanOption = "Agents MUST NOT include type: \"boolean\" options in configOptions payloads unless the Client advertised support"
+	// srcTerminalAuth is from the schema, AuthMethodTerminal.
+	srcTerminalAuth = "Agents MUST advertise this method only when the client enabled its terminal authentication capability"
 )
