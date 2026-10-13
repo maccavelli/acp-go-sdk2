@@ -510,6 +510,7 @@ Out of scope:
     "Release text" section for the owner. Indexed in `docs/README.md`.
 
 13. **Close.** Run the verification below and record each result; set this plan to `complete` and its row in `docs/README.md`.
+    *(Amended 2026-10-12, see the step 13 deviation "the close waits for CI".)*
 
 ## Verification
 
@@ -1209,3 +1210,39 @@ Ran on `main` from `d7babc2` (step 11). The agent did not commit.
 * `docs/README.md` indexes the report, `observed`.
 * Only records changed, so no Go gate, plant or Windows run applies. `make check-records` and `make markdownlint` (12 files) exit 0;
   the identifier scan of the report and the index found nothing.
+
+### Step 13 deviation, 2026-10-12: the close waits for CI
+
+Running the verification: one item, CI on `ubuntu-24.04`, `macos-15` and `windows-2025` for each pushed step, can run only once the
+commits are pushed, and none is; a plan is `complete` only when every criterion is met. Asked, the owner chose to close in two stages:
+this step records every result, the CI item as pending, and leaves the plan `in-progress`; after the push, once CI has run, the run is
+recorded and the plan and its row in `docs/README.md` are set to `complete`, in a commit of the records alone, before `v0.17.0` is
+tagged. Not chosen: setting `complete` now with the CI item noted as still to run. The MADR is unchanged.
+
+### Step 13, verification, 2026-10-12
+
+Ran on `main` from `0ec604e` (step 12). The agent did not commit.
+
+* Every test this plan names passes (`go test -race -count=1 ./...` below); each step's record lists the plants its tests were seen to
+  fail on.
+* The MADR's four probes, in a scratch copy of the tree with a negotiated record added to each connection (the probes predate
+  `initialize` being required, and without a record every message is refused `ErrNotInitialized`), removed with the copy:
+  * a prompt cancelled by `session/cancel`, its handler returning `ctx.Err()`: `result={map[] cancelled <nil>} error=null`;
+  * a superseded turn: the successor's context cancelled by `session/cancel` after the first returned: `true`; the first answered
+    without an error;
+  * malformed lines: `not json` -> `-32700` with `"id":null`; `method` 5 -> `-32600` with `"id":7`; `jsonrpc` `"1.0"` ->
+    `-32600` with `"id":8`; `"id":null` -> the result with `"id":null`; `{"jsonrpc":"2.0"}` and `[]` -> `-32600` with `"id":null`;
+  * a response with neither `result` nor `error`: `err={"code":-32603,..."malformed response: neither result nor error"}`.
+* `agent.go` and `client.go` do not exist; `TestRuntimeFilesCoverHandWritten` passes; `connection.go` holds no `atomic.Value` (0
+  matches) and no `gate` field (`grep` exit 1).
+* The API listing on `git archive 6ec3916`, the commit step 3 started from, against the tree gains exactly the lines this section
+  lists, and `var ErrTerminalAuthMethod`, which the step 10 deviation added; nothing is removed or changed.
+* `TestProtocolTableAppliesToCommittedSchema` passes, every method and capability rule applied; `TestEngineCases` passes; each
+  `want.api` change is recorded in its step.
+* `go test -race -count=1 ./...`: `ok` at the root and in all seven packages of `cmd/generate`; `GOEXPERIMENT=nojsonv2 go test
+  -count=1 ./...` at the root `ok`; `GOOS=windows go vet ./...` passes in both modules. On the Windows host reached over SSH, with a copy
+  of the working tree's 311 tracked and untracked files and no macOS metadata: `go test -count=1 -shuffle=on ./...` at the root `ok`, and
+  all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
+* CI on `ubuntu-24.04`, `macos-15` and `windows-2025`: pending; no step is pushed yet (the deviation above).
+* `make pre-add-check`: `go-precheck: 110 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records`
+  and `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
