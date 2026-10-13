@@ -597,6 +597,12 @@ Asked, the owner chose:
   that a result be checked against property and variant gates only: the method is gated when the request is received or sent.
   Not chosen: the whole gate on results, which makes a hook's acceptance of a method gate end in `-32603`. This adds to item 4's
   sending clause; nothing else in it changes.
+* **Amended by 0019, 2026-10-13: `"params": null` is accepted.** J1 answers an object that is not a valid Request object `-32600`,
+  and the implementation counted a `params` of `null` among those. ACP schema 1.25.0 declares `params` in its request and notification
+  envelopes as the params union or `null`. The owner decided that a received `"params": null` is treated as omitted params; the SDK
+  still never sends it. Recorded in
+  [0019-MADR-remediate-debugging-pass-findings.md](0019-MADR-remediate-debugging-pass-findings.md), decision 13; nothing else in J1
+  changes.
 * **Revision.** Amended 2026-10-12 at the owner's request, before any decision: P1's override ends at the handler's return, so a
   cancel that arrives after the turn finished leaves the handler's answer as it is. Corrected the same day, writing the PLAN: a rule
   whose subject the schema lacks is skipped by `Build` and caught by the table's test, so "Confirmation" and G4 name that test; and
