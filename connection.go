@@ -243,7 +243,7 @@ type Connection struct {
 	inboundCtx    context.Context
 	inboundCancel context.CancelCauseFunc
 
-	// logger is read by the connection's goroutines, which NewConnection starts,
+	// logger is read by the connection's goroutines, which start starts,
 	// so it is set atomically: by WithLogger before they start, or by SetLogger
 	// at any time.
 	logger atomic.Pointer[slog.Logger]
@@ -414,7 +414,19 @@ func WithInboundValidation(fn func(ctx context.Context, method string, params an
 
 // NewConnection starts a line-delimited JSON-RPC connection.
 // peerInput receives bytes written to the peer. peerOutput supplies bytes read from the peer.
+//
+// Reading starts before NewConnection returns, so handler may be called
+// before then: it must not read a variable assigned from the result.
 func NewConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *Connection {
+	c := buildConnection(handler, peerInput, peerOutput, opts...)
+	c.start()
+	return c
+}
+
+// buildConnection builds a connection and starts none of its goroutines. The
+// side connections assign the result before calling start, so their handlers
+// never see it unset (0018-MADR-start-side-connections-after-assignment.md).
+func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *Connection {
 	cfg := connectionConfig{
 		maxQueuedNotifications: defaultMaxQueuedNotifications,
 		maxMessageSize:         defaultMaxMessageSize,
@@ -448,6 +460,12 @@ func NewConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Rea
 		c.logger.Store(cfg.logger)
 	}
 	c.notifyCond = sync.NewCond(&c.notifyMu)
+	return c
+}
+
+// start starts the connection's goroutines, reading included. It is called
+// once, after the connection is built.
+func (c *Connection) start() {
 	go func() {
 		<-c.ctx.Done()
 		c.notifyMu.Lock()
@@ -457,7 +475,6 @@ func NewConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Rea
 	go c.sendCancelRequests()
 	go c.receive()
 	go c.processNotifications()
-	return c
 }
 
 // DroppedNotifications reports how many inbound notifications this connection

@@ -166,6 +166,10 @@ type MethodHandler func(ctx context.Context, method string, params json.RawMessa
 
 func NewConnection(MethodHandler, io.Writer, io.Reader, ...ConnectionOption) *Connection { return nil }
 
+func buildConnection(MethodHandler, io.Writer, io.Reader, ...ConnectionOption) *Connection { return nil }
+
+func (*Connection) start() {}
+
 func (*Connection) DroppedNotifications() uint64 { return 0 }
 
 func (*Connection) Done() <-chan struct{} { return nil }

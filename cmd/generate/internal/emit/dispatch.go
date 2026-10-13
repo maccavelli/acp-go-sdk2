@@ -183,12 +183,16 @@ func emitSideConnection(f *goFile, s side) {
 			call(id("make"), mapOf(id("string"), star(id("promptTurn"))))),
 			assign(exprs(dot(s.local, "lateCancels")), call(id("make"), mapOf(id("string"), id("uint64")))))
 	}
+	// The connection is assigned before it starts reading, so a message that
+	// is already waiting never reaches handle with conn unset
+	// (0018-MADR-start-side-connections-after-assignment.md).
 	body = append(body,
 		assign(exprs(dot(s.local, "conn")), &ast.CallExpr{
-			Fun:      id("NewConnection"),
+			Fun:      id("buildConnection"),
 			Args:     exprs(dot(s.local, "handleWithExtensions"), id("peerInput"), id("peerOutput"), id("opts")),
 			Ellipsis: placeholderPos,
 		}),
+		exprStmt(call(dot(s.local, "conn", "start"))),
 		ret(id(s.local)),
 	)
 	f.line()

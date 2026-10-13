@@ -145,3 +145,9 @@ costs nothing per message, and changes no exported identifier or behaviour.
   unchanged. The reads in `handle` came from [0015-MADR-validate-absolute-protocol-paths.md](0015-MADR-validate-absolute-protocol-paths.md).
   Both records are complete; this is a new defect found after release, so it takes its own number.
 * The implementation is [0018-PLAN-start-side-connections-after-assignment.md](0018-PLAN-start-side-connections-after-assignment.md).
+
+### Amended during implementation, 2026-10-13
+
+* **The builder is `buildConnection`, not `newConnection`.** revive's `confusing-naming` rule refuses an unexported function that differs
+  from `NewConnection` only by case. Outcomes 1 and 3 hold with that name; nothing else changes. Recorded in the PLAN's deviation entry
+  of the same date.
