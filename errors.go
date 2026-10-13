@@ -197,6 +197,11 @@ func toReqErr(err error) *RequestError {
 		return nil
 	}
 	if re, ok := errors.AsType[*RequestError](err); ok {
+		// A nil *RequestError in a non-nil error is an error, not success
+		// (0019-PLAN-behaviour-fixes.md, B8).
+		if re == nil {
+			return NewInternalError(map[string]any{jsonErrorField: "handler returned a nil *RequestError"})
+		}
 		return re
 	}
 	if errors.Is(err, context.Canceled) {

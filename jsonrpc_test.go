@@ -4,10 +4,13 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"testing"
+	"time"
 )
 
 // wire is a raw peer of a connection: it writes lines to it and reads the
@@ -211,5 +214,124 @@ func TestMaxMessageSize(t *testing.T) {
 				t.Errorf("line at the limit answered %s %+v, want -32601 with id 2", a.ID, a.Error)
 			}
 		})
+	}
+}
+
+// TestParamsNeverSentAsNull requires params that encode as null to be left
+// out, and params that encode as neither an object nor an array to be refused
+// before anything is written (0019-PLAN-behaviour-fixes.md, B10).
+func TestParamsNeverSentAsNull(t *testing.T) {
+	t.Parallel()
+	var c *Connection
+	p := rawWire(t, func(w io.Writer, r io.Reader) { c = NewConnection(nil, w, r) })
+	for _, params := range []any{map[string]any(nil), (*NewSessionRequest)(nil), json.RawMessage("null")} {
+		if err := c.SendNotification(t.Context(), "_test/n", params); err != nil {
+			t.Fatalf("SendNotification(%T): %v", params, err)
+		}
+		line := within(t, p.lines, "the notification")
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := m["params"]; ok {
+			t.Errorf("%T sent as %s: params present", params, line)
+		}
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- c.SendRequestNoResult(ctx, "_test/r", map[string]any(nil)) }()
+	line := within(t, p.lines, "the request")
+	if strings.Contains(line, `"params"`) {
+		t.Errorf("a request with nil params sent as %s", line)
+	}
+	cancel()
+	<-done
+	if line := within(t, p.lines, "the cancel request"); !strings.Contains(line, ProtocolMethodCancelRequest) {
+		t.Fatalf("expected the abandoned request's %s, got %s", ProtocolMethodCancelRequest, line)
+	}
+
+	for _, params := range []any{"bar", 42, true} {
+		err := c.SendNotification(t.Context(), "_test/n", params)
+		if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != -32602 {
+			t.Errorf("SendNotification(%#v) = %v, want -32602", params, err)
+		}
+		// The peer never answers: a request that is written ends at the
+		// deadline instead of with -32602.
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		_, err = SendRequest[json.RawMessage](c, ctx, "_test/r", params)
+		cancel()
+		if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != -32602 {
+			t.Fatalf("SendRequest(%#v) = %v, want -32602", params, err)
+		}
+	}
+	if err := c.SendNotification(t.Context(), "_test/after", map[string]any{}); err != nil {
+		t.Fatal(err)
+	}
+	if line := within(t, p.lines, "the next notification"); !strings.Contains(line, `"_test/after"`) {
+		t.Fatalf("refused params were written: next line %s", line)
+	}
+}
+
+// TestNullParamsReceivedAsOmitted requires a request or notification whose
+// params are null to reach its handler as one whose params are left out, as
+// ACP's schema allows, while any other value that is not an object or an
+// array stays an invalid request
+// (0019-MADR-remediate-debugging-pass-findings.md, decision 13).
+func TestNullParamsReceivedAsOmitted(t *testing.T) {
+	t.Parallel()
+	got := make(chan json.RawMessage, 2)
+	handler := func(_ context.Context, _ string, params json.RawMessage) (any, *RequestError) {
+		got <- params
+		return map[string]any{}, nil
+	}
+	p := rawWire(t, func(w io.Writer, r io.Reader) { NewConnection(handler, w, r) })
+	p.send(`{"jsonrpc":"2.0","id":1,"method":"_test/r","params":null}`)
+	if params := within(t, got, "the request's handler"); params != nil {
+		t.Errorf("request handler got params %s, want none", params)
+	}
+	if a := p.next("the request's answer"); a.Error != nil {
+		t.Errorf("a request with null params answered %+v", a.Error)
+	}
+	p.send(`{"jsonrpc":"2.0","method":"_test/n","params":null}`)
+	if params := within(t, got, "the notification's handler"); params != nil {
+		t.Errorf("notification handler got params %s, want none", params)
+	}
+	p.send(`{"jsonrpc":"2.0","id":2,"method":"_test/r","params":"bar"}`)
+	if a := p.next("the answer to string params"); a.Error == nil || a.Error.Code != -32600 {
+		t.Errorf("string params answered %+v, want -32600", a)
+	}
+}
+
+// TestMalformedInputNotLogged requires a malformed message to be logged by its
+// fault and size, never by its content
+// (0019-PLAN-behaviour-fixes.md, B15).
+func TestMalformedInputNotLogged(t *testing.T) {
+	t.Parallel()
+	const marker = "CONTENT-MARKER-4711"
+	for _, line := range []string{
+		`{"jsonrpc":"2.0","id":1,"method":"x","params":{"text":"` + marker + `"}`,
+		`["` + marker + `"]`,
+		`{"jsonrpc":"1.0","id":2,"method":"x","params":{"text":"` + marker + `"}}`,
+		`{"jsonrpc":"2.0","result":{"text":"` + marker + `"}}`,
+	} {
+		var logs syncBuffer
+		r, w := io.Pipe()
+		c := NewConnection(nil, io.Discard, r, WithLogger(slog.New(slog.NewTextHandler(&logs, nil))))
+		if _, err := io.WriteString(w, line+"\n"); err != nil {
+			t.Fatal(err)
+		}
+		_ = w.Close()
+		select {
+		case <-c.Done():
+		case <-time.After(5 * time.Second):
+			t.Fatal("the connection did not end")
+		}
+		out := logs.String()
+		if strings.Contains(out, marker) {
+			t.Errorf("content of %.30s… logged: %s", line, out)
+		}
+		if !strings.Contains(out, "size=") {
+			t.Errorf("%.30s… logged without its size: %s", line, out)
+		}
 	}
 }

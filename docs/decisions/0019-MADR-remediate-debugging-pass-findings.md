@@ -276,7 +276,9 @@ Phases 3 to 5 ride the release after each lands (decision 12).
 
 * Each phase's PLAN lists its findings by id, and its execution record shows, for each, the test or engine case that failed before
   the fix and passes after it.
-* After phase 1, the probes for B1 to B13 pass against the tree as committed tests.
+* After phase 1, the probes for B1 to B13 pass against the tree as committed tests. Amended 2026-10-13, phase 1 step 2: B1's
+  original probe sends from the handler under a context unrelated to the handler's, the limit decision 2 accepts; it keeps failing,
+  and `TestRequestFromNotificationHandler` covers the handler's context and one derived from it.
 * After phase 5, `go fix -diff ./...` reports nothing in either module, and the lint configuration of E16 is clean.
 * The owner settled the program and the decisions on 2026-10-13, and this record is `accepted`; a decision changed later is recorded
   here as an amendment before the phase that uses it.

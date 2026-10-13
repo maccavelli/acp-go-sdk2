@@ -61,6 +61,29 @@ func receiptOf(ctx context.Context) uint64 {
 	return 0
 }
 
+// messageKey is the context key of the kind of message a handler's context
+// was made for: a request, or a notification with its sequence number in the
+// notification queue (0019-PLAN-behaviour-fixes.md, B1).
+type messageKey struct{}
+
+// messageMark is what messageKey holds.
+type messageMark struct {
+	notification bool
+	seq          uint64
+}
+
+// markOf returns ctx's mark, and false for a context receive did not make,
+// such as a test's call of a handler.
+func markOf(ctx context.Context) (messageMark, bool) {
+	m, ok := ctx.Value(messageKey{}).(messageMark)
+	return m, ok
+}
+
+// inflightRequest is one received request whose handler is running, held by
+// pointer so that a request removes only its own entry
+// (0019-PLAN-behaviour-fixes.md, B11).
+type inflightRequest struct{ cancel context.CancelCauseFunc }
+
 type responseEnvelope struct {
 	msg                   anyMessage
 	notificationWatermark uint64
@@ -214,6 +237,14 @@ func addressable(v any) any {
 }
 
 // MethodHandler handles one inbound JSON-RPC request or notification.
+//
+// Notifications are handled one at a time, in the order received, and a
+// response is returned to its caller only after the notifications received
+// before it are handled. A notification handler that sends a request on the
+// same connection must send it under the handler's context, or one derived
+// from it: such a request does not wait for the handler that sent it. Sent
+// under an unrelated context, such as context.Background(), it waits for that
+// handler, which is waiting for it (0019-PLAN-behaviour-fixes.md, B1).
 type MethodHandler func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError)
 
 // Connection is a simple JSON-RPC 2.0 connection over line-delimited JSON.
@@ -226,7 +257,7 @@ type Connection struct {
 	writeMu              sync.Mutex
 	nextID               atomic.Uint64
 	pending              map[string]*pendingResponse
-	inflight             map[string]context.CancelCauseFunc
+	inflight             map[string]*inflightRequest
 	pendingCancelRequest []string
 	cancelRequestSignal  chan struct{}
 
@@ -442,7 +473,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		r:                   peerOutput,
 		handler:             handler,
 		pending:             make(map[string]*pendingResponse),
-		inflight:            make(map[string]context.CancelCauseFunc),
+		inflight:            make(map[string]*inflightRequest),
 		cancelRequestSignal: make(chan struct{}, 1),
 		ctx:                 ctx,
 		cancel:              cancel,
@@ -832,8 +863,8 @@ func requestFault(env *envelope) (json.RawMessage, string) {
 		return id, "method is missing"
 	case env.Method[0] != '"':
 		return id, "method must be a string"
-	case env.Params != nil && env.Params[0] != '{' && env.Params[0] != '[':
-		return id, "params must be an object or an array"
+	case env.Params != nil && string(env.Params) != jsonNull && env.Params[0] != '{' && env.Params[0] != '[':
+		return id, "params must be an object, an array or null"
 	}
 	return id, ""
 }
@@ -845,15 +876,18 @@ func requestFault(env *envelope) (json.RawMessage, string) {
 // answered (0017-MADR-remediate-acp-v1-conformance-violations.md, J1). It
 // returns false when the connection has shut down.
 func (c *Connection) receiveLine(line []byte, received *uint64) bool {
+	// A message's content is never logged: it may hold prompt text or file
+	// contents. Its size, the fault and a valid id are
+	// (0019-PLAN-behaviour-fixes.md, B15).
 	if !json.Valid(line) {
-		c.loggerOrDefault().Error("failed to parse incoming message", "raw", string(line))
+		c.loggerOrDefault().Error("failed to parse incoming message", "size", len(line))
 		c.answer(nil, NewParseError(nil))
 		return true
 	}
 	line = bytes.TrimSpace(line)
 	var env envelope
 	if line[0] != '{' || json.Unmarshal(line, &env) != nil {
-		c.loggerOrDefault().Error("incoming message is not a JSON-RPC object", "raw", string(line))
+		c.loggerOrDefault().Error("incoming message is not a JSON-RPC object", "size", len(line))
 		c.answer(nil, NewInvalidRequest(map[string]any{jsonErrorField: "not a JSON-RPC object"}))
 		return true
 	}
@@ -863,11 +897,17 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 	}
 	id, fault := requestFault(&env)
 	if fault != "" {
-		c.loggerOrDefault().Error("invalid request", "fault", fault, "raw", string(line))
+		c.loggerOrDefault().Error("invalid request", "fault", fault, "size", len(line), "id", string(id))
 		c.answer(id, NewInvalidRequest(map[string]any{jsonErrorField: fault}))
 		return true
 	}
 	msg := anyMessage{JSONRPC: jsonRPCVersion, Params: env.Params}
+	// ACP's schema lets an envelope carry "params": null, which is read as
+	// params left out (0019-MADR-remediate-debugging-pass-findings.md,
+	// decision 13).
+	if string(msg.Params) == jsonNull {
+		msg.Params = nil
+	}
 	if err := json.Unmarshal(env.Method, &msg.Method); err != nil {
 		c.answer(id, NewInvalidRequest(map[string]any{jsonErrorField: "method must be a string"}))
 		return true
@@ -885,10 +925,14 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 
 	*received++
 	if msg.ID != nil {
-		reqCtx, cancel := context.WithCancelCause(context.WithValue(c.ctx, receiptKey{}, *received))
+		base := context.WithValue(context.WithValue(c.ctx, receiptKey{}, *received), messageKey{}, messageMark{})
+		reqCtx, cancel := context.WithCancelCause(base)
 		// A null id names no single request, so $/cancel_request cannot
-		// reach it, and it is not registered.
+		// reach it, and it is not registered. A request that reuses the id
+		// of one still running takes its entry, and each removes only its
+		// own (0019-PLAN-behaviour-fixes.md, B11).
 		idKey := ""
+		own := &inflightRequest{cancel: cancel}
 		if string(*msg.ID) != jsonNull {
 			var err error
 			if idKey, err = canonicalJSONRPCIDKey(*msg.ID); err != nil {
@@ -896,22 +940,28 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 				idKey = string(*msg.ID)
 			}
 			c.mu.Lock()
-			c.inflight[idKey] = cancel
+			_, reused := c.inflight[idKey]
+			c.inflight[idKey] = own
 			c.mu.Unlock()
+			if reused {
+				c.loggerOrDefault().Debug("received a request whose id is still in flight", "id", string(*msg.ID))
+			}
 		}
 
 		m := msg
-		go func(m *anyMessage, idKey string, reqCtx context.Context, cancel context.CancelCauseFunc) {
+		go func(m *anyMessage, idKey string, reqCtx context.Context, own *inflightRequest) {
 			defer func() {
 				if idKey != "" {
 					c.mu.Lock()
-					delete(c.inflight, idKey)
+					if c.inflight[idKey] == own {
+						delete(c.inflight, idKey)
+					}
 					c.mu.Unlock()
 				}
-				cancel(nil)
+				own.cancel(nil)
 			}()
 			c.handleInbound(reqCtx, m)
-		}(&m, idKey, reqCtx, cancel)
+		}(&m, idKey, reqCtx, own)
 		return true
 	}
 
@@ -972,7 +1022,7 @@ func (c *Connection) isPending(raw json.RawMessage) bool {
 // never answered, so two peers cannot answer each other's errors.
 func (c *Connection) receiveResponse(env *envelope, line []byte) {
 	if env.ID == nil || !validID(env.ID) || string(env.ID) == jsonNull {
-		c.loggerOrDefault().Error("received a response without a request id", "raw", string(line))
+		c.loggerOrDefault().Error("received a response without a request id", "size", len(line))
 		return
 	}
 	id := env.ID
@@ -996,7 +1046,7 @@ func (c *Connection) receiveResponse(env *envelope, line []byte) {
 		msg.Result = env.Result
 	}
 	if fault != "" {
-		c.loggerOrDefault().Error("malformed response", "fault", fault, "raw", string(line))
+		c.loggerOrDefault().Error("malformed response", "fault", fault, "size", len(line), "id", string(id))
 		msg.Error = NewInternalError(map[string]any{jsonErrorField: "malformed response: " + fault})
 	}
 	c.handleResponse(&msg)
@@ -1047,7 +1097,9 @@ func (c *Connection) shutdownReceive(cause error) {
 // It terminates when notificationQueue is closed (e.g. on disconnect in receive()).
 func (c *Connection) processNotifications() {
 	for queued := range c.notificationQueue {
-		c.handleInbound(context.WithValue(c.inboundCtx, receiptKey{}, queued.receipt), queued.msg)
+		ctx := context.WithValue(context.WithValue(c.inboundCtx, receiptKey{}, queued.receipt),
+			messageKey{}, messageMark{notification: true, seq: queued.seq})
+		c.handleInbound(ctx, queued.msg)
 
 		c.notifyMu.Lock()
 		expectedSeq := c.completedNotificationSeq + 1
@@ -1113,13 +1165,13 @@ func (c *Connection) handleCancelRequest(msg *anyMessage) {
 	}
 
 	c.mu.Lock()
-	cancel := c.inflight[idKey]
+	r := c.inflight[idKey]
 	c.mu.Unlock()
-	if cancel == nil {
+	if r == nil {
 		return
 	}
 
-	cancel(context.Canceled)
+	r.cancel(context.Canceled)
 }
 
 func (c *Connection) handleInbound(ctx context.Context, req *anyMessage) {
@@ -1199,6 +1251,11 @@ type gateFunc func(method string, params any) error
 // none.
 func sendRequest[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
 	var result T
+	// A request whose context has already ended is not written
+	// (0019-PLAN-behaviour-fixes.md, B9).
+	if ctx.Err() != nil {
+		return result, toReqErr(context.Cause(ctx))
+	}
 
 	msg, idKey, err := c.prepareRequest(method, params)
 	if err != nil {
@@ -1251,19 +1308,33 @@ func (c *Connection) prepareRequest(method string, params any) (anyMessage, stri
 		ID:      (*json.RawMessage)(&idRaw),
 		Method:  method,
 	}
-
-	if params != nil {
-		if err := validateOutbound(params); err != nil {
-			return msg, "", err
-		}
-		b, err := json.Marshal(params)
-		if err != nil {
-			return msg, "", NewInvalidParams(map[string]any{jsonErrorField: err.Error()})
-		}
-		msg.Params = b
+	if msg.Params, err = encodeParams(params); err != nil {
+		return msg, "", err
 	}
-
 	return msg, string(idRaw), nil
+}
+
+// encodeParams validates and encodes a message's params: nil for none, and
+// for params that encode as null, which are left out; anything that is not an
+// object or an array is refused, as JSON-RPC 2.0 requires a structured value
+// (0019-PLAN-behaviour-fixes.md, B10).
+func encodeParams(params any) (json.RawMessage, error) {
+	if params == nil {
+		return nil, nil
+	}
+	if err := validateOutbound(params); err != nil {
+		return nil, err
+	}
+	b, err := json.Marshal(params)
+	switch {
+	case err != nil:
+		return nil, NewInvalidParams(map[string]any{jsonErrorField: err.Error()})
+	case string(b) == jsonNull:
+		return nil, nil
+	case b[0] != '{' && b[0] != '[':
+		return nil, NewInvalidParams(map[string]any{jsonErrorField: "params must encode as a JSON object or array"})
+	}
+	return b, nil
 }
 
 func (c *Connection) sendCancelRequests() {
@@ -1369,6 +1440,13 @@ func (c *Connection) waitNotificationsUpTo(ctx context.Context, target uint64) e
 	if target > c.lastEnqueuedNotificationSeq {
 		panic("response watermark exceeded last enqueued notification sequence")
 	}
+	// A request sent under the context of a notification whose handler is
+	// still running would wait for that handler, which may be the caller:
+	// the wait stops before it. Notifications before it have completed, the
+	// queue running one at a time (0019-PLAN-behaviour-fixes.md, B1).
+	if m, ok := markOf(ctx); ok && m.notification && c.completedNotificationSeq < m.seq && target >= m.seq {
+		target = m.seq - 1
+	}
 
 	go func() {
 		select {
@@ -1462,6 +1540,9 @@ func (c *Connection) cleanupPending(idKey string) {
 // SendRequestNoResult sends a JSON-RPC request that returns no result payload.
 // Like SendRequest, it does not check what initialize negotiated.
 func (c *Connection) SendRequestNoResult(ctx context.Context, method string, params any) error {
+	if ctx.Err() != nil {
+		return toReqErr(context.Cause(ctx))
+	}
 	msg, idKey, err := c.prepareRequest(method, params)
 	if err != nil {
 		return err
@@ -1583,19 +1664,9 @@ func (c *Connection) prepareNotification(method string, params any) (anyMessage,
 		JSONRPC: jsonRPCVersion,
 		Method:  method,
 	}
-
-	if params != nil {
-		if err := validateOutbound(params); err != nil {
-			return msg, err
-		}
-		b, err := json.Marshal(params)
-		if err != nil {
-			return msg, NewInvalidParams(map[string]any{jsonErrorField: err.Error()})
-		}
-		msg.Params = b
-	}
-
-	return msg, nil
+	var err error
+	msg.Params, err = encodeParams(params)
+	return msg, err
 }
 
 // Done returns a channel that is closed when the underlying reader loop exits

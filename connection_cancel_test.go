@@ -591,7 +591,7 @@ func TestConnectionSendCancelRequest_BoundsPendingQueue(t *testing.T) {
 
 	c := &Connection{
 		pending:             make(map[string]*pendingResponse),
-		inflight:            make(map[string]context.CancelCauseFunc),
+		inflight:            make(map[string]*inflightRequest),
 		cancelRequestSignal: make(chan struct{}, 1),
 		ctx:                 baseCtx,
 		cancel:              baseCancel,
@@ -653,5 +653,79 @@ func TestConnectionWaitForResponse_PeerDisconnectWinsOverDerivedContextCancel(t 
 		if _, ok := c.pending[idKey]; ok {
 			t.Fatalf("iteration %d: pending request %q was not cleaned up", i, idKey)
 		}
+	}
+}
+
+// TestRequestWithEndedContextWritesNothing requires a request whose context has
+// already ended to return its end and write nothing, neither the request nor a
+// $/cancel_request for it (0019-PLAN-behaviour-fixes.md, B9).
+func TestRequestWithEndedContextWritesNothing(t *testing.T) {
+	t.Parallel()
+	w := &countingWriter{}
+	c := NewConnection(nil, w, idleReader(t))
+
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	expired, stop := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer stop()
+	for _, tt := range []struct {
+		name string
+		ctx  context.Context
+		code int
+	}{{"cancelled", cancelled, -32800}, {"past its deadline", expired, -32603}} {
+		_, err := SendRequest[json.RawMessage](c, tt.ctx, "_test/x", map[string]any{})
+		if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != tt.code {
+			t.Errorf("SendRequest, context %s: %v, want %d", tt.name, err, tt.code)
+		}
+		err = c.SendRequestNoResult(tt.ctx, "_test/x", map[string]any{})
+		if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != tt.code {
+			t.Errorf("SendRequestNoResult, context %s: %v, want %d", tt.name, err, tt.code)
+		}
+	}
+	// A cancel request would be written by its own goroutine; give it time.
+	time.Sleep(50 * time.Millisecond)
+	if n := w.count(); n != 0 {
+		t.Fatalf("%d bytes written for requests whose context had ended", n)
+	}
+}
+
+// TestDuplicateInflightIDKeepsLaterCancel requires a request that reuses the id
+// of one still in flight to stay reachable by $/cancel_request after the first
+// returns (0019-PLAN-behaviour-fixes.md, B11).
+func TestDuplicateInflightIDKeepsLaterCancel(t *testing.T) {
+	t.Parallel()
+	releaseFirst := make(chan struct{})
+	firstStarted := make(chan struct{})
+	second := make(chan context.Context, 1)
+	handler := func(ctx context.Context, method string, _ json.RawMessage) (any, *RequestError) {
+		switch method {
+		case "_test/first":
+			close(firstStarted)
+			<-releaseFirst
+			return "one", nil
+		case "_test/second":
+			second <- ctx
+			<-ctx.Done()
+			return nil, toReqErr(ctx.Err())
+		}
+		return nil, NewMethodNotFound(method)
+	}
+	p := rawWire(t, func(w io.Writer, r io.Reader) { NewConnection(handler, w, r) })
+	p.send(`{"jsonrpc":"2.0","id":7,"method":"_test/first"}`)
+	within(t, firstStarted, "the first request's handler")
+	p.send(`{"jsonrpc":"2.0","id":7,"method":"_test/second"}`)
+	secondCtx := within(t, second, "the second request's handler")
+	close(releaseFirst)
+	if a := p.next("the first request's answer"); string(a.Result) != `"one"` {
+		t.Fatalf("first answer: %+v", a)
+	}
+	p.send(`{"jsonrpc":"2.0","method":"$/cancel_request","params":{"requestId":7}}`)
+	select {
+	case <-secondCtx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("$/cancel_request did not reach the request that reused the id")
+	}
+	if a := p.next("the second request's answer"); a.Error == nil || a.Error.Code != -32800 {
+		t.Fatalf("second answer: %+v, want -32800", a)
 	}
 }

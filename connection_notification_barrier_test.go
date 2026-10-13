@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"sync"
@@ -404,5 +405,109 @@ func TestShutdownDrainsNotifications_WithBarrier(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatalf("timeout waiting for shutdown to drain notifications")
+	}
+}
+
+// TestRequestFromNotificationHandler requires a request a notification
+// handler sends under its context, or one derived from it, to be answered
+// without waiting for that handler, which is its caller
+// (0019-PLAN-behaviour-fixes.md, B1).
+func TestRequestFromNotificationHandler(t *testing.T) {
+	var clientConn *ClientSideConnection
+	results := make(chan error, 2)
+	client := &clientFuncs{SessionUpdateFunc: func(ctx context.Context, _ SessionNotification) error {
+		_, err := clientConn.CallExtension(ctx, "_test/echo", map[string]any{})
+		results <- err
+		derived, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		_, err = clientConn.CallExtension(derived, "_test/echo", map[string]any{})
+		results <- err
+		return nil
+	}}
+	agent := agentFuncs{HandleExtensionMethodFunc: func(context.Context, string, json.RawMessage) (any, error) {
+		return map[string]any{}, nil
+	}}
+	var agentConn *AgentSideConnection
+	clientConn, agentConn = newNotificationBarrierTestPair(t, client, agent)
+
+	if err := agentConn.SessionUpdate(t.Context(), testSessionUpdate("s", 1)); err != nil {
+		t.Fatal(err)
+	}
+	for i, what := range []string{"under the handler's context", "under a context derived from it"} {
+		select {
+		case err := <-results:
+			if err != nil {
+				t.Fatalf("request %d, %s: %v", i+1, what, err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("request %d, %s, did not return: it waits for its own notification", i+1, what)
+		}
+	}
+}
+
+// TestBarrierAfterOwnNotification requires a request sent under a
+// notification's context after that notification completed to wait, as any
+// request does, for the notifications received before its response
+// (0019-PLAN-behaviour-fixes.md, B1).
+func TestBarrierAfterOwnNotification(t *testing.T) {
+	var clientConn *ClientSideConnection
+	var agentConn *AgentSideConnection
+	laterStarted, releaseLater := make(chan struct{}), make(chan struct{})
+	result := make(chan error, 1)
+	client := &clientFuncs{SessionUpdateFunc: func(ctx context.Context, n SessionNotification) error {
+		switch notificationSequence(t, n) {
+		case 1:
+			go func() {
+				deadline := time.Now().Add(2 * time.Second)
+				for {
+					clientConn.conn.notifyMu.Lock()
+					done := clientConn.conn.completedNotificationSeq >= 1
+					clientConn.conn.notifyMu.Unlock()
+					if done {
+						break
+					}
+					if time.Now().After(deadline) {
+						result <- fmt.Errorf("the first notification did not complete")
+						return
+					}
+					time.Sleep(time.Millisecond)
+				}
+				_, err := clientConn.CallExtension(ctx, "_test/notify", map[string]any{})
+				result <- err
+			}()
+		case 2:
+			close(laterStarted)
+			<-releaseLater
+		}
+		return nil
+	}}
+	agent := agentFuncs{HandleExtensionMethodFunc: func(ctx context.Context, _ string, _ json.RawMessage) (any, error) {
+		return map[string]any{}, agentConn.SessionUpdate(ctx, testSessionUpdate("s", 2))
+	}}
+	clientConn, agentConn = newNotificationBarrierTestPair(t, client, agent)
+
+	if err := agentConn.SessionUpdate(t.Context(), testSessionUpdate("s", 1)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-laterStarted:
+	case err := <-result:
+		t.Fatalf("the request returned before the notification sent ahead of its response: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("the notification sent ahead of the response was not handled")
+	}
+	select {
+	case err := <-result:
+		t.Fatalf("the request returned while the notification before its response was still running: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(releaseLater)
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the request did not return after the notification before its response completed")
 	}
 }

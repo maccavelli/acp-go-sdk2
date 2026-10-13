@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 )
 
@@ -91,5 +92,31 @@ func TestRemediationErrors(t *testing.T) {
 	}
 	if want := `{"code":-32002,"message":"Resource not found","data":{"uri":"file:///a"}}`; string(b) != want {
 		t.Errorf("NewResourceNotFound encodes as %s, want %s", b, want)
+	}
+}
+
+// TestToReqErrTypedNil requires a nil *RequestError held in a non-nil error,
+// returned directly or by a handler, to be an internal error, never success
+// (0019-PLAN-behaviour-fixes.md, B8).
+func TestToReqErrTypedNil(t *testing.T) {
+	t.Parallel()
+	var nilRE *RequestError
+	var err error = nilRE
+	if got := toReqErr(err); got == nil || got.Code != -32603 {
+		t.Fatalf("toReqErr(typed nil) = %v, want -32603", got)
+	}
+
+	asc := NewAgentSideConnection(agentFuncs{NewSessionFunc: func(context.Context, NewSessionRequest) (NewSessionResponse, error) {
+		var none *RequestError
+		return NewSessionResponse{SessionId: "s"}, none
+	}}, io.Discard, idleReader(t))
+	negotiate(t, asc, allAdvertised())
+	cwd, err := json.Marshal(testAbsPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, rerr := asc.handle(t.Context(), AgentMethodSessionNew, json.RawMessage(`{"cwd":`+string(cwd)+`,"mcpServers":[]}`))
+	if rerr == nil || rerr.Code != -32603 {
+		t.Fatalf("a handler's typed-nil *RequestError answered result %v, error %v; want -32603", result, rerr)
 	}
 }

@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-13
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
@@ -289,7 +289,8 @@ before reading its output. Per code step:
 * `go test -count=1 -shuffle=on ./...` at the root and in `cmd/generate` on the owner's Windows host, the tree copied there by a
   Python script.
 
-Phase acceptance: every finding above has a committed test or a recorded program run; the phase 1 probes all pass on the tree; the API
+Phase acceptance: every finding above has a committed test or a recorded program run; the phase 1 probes all pass on the tree
+(amended 2026-10-13, see "Step 2 deviation": all but B1's original probe, whose unrelated context is the documented limit); the API
 listing equals `v0.17.1`'s; CI passes on the pushed commits.
 
 ## Rollout and Rollback
@@ -302,4 +303,72 @@ after the steps that build on it (3 and 4 use step 2's marks; 4 uses step 3's di
 
 ## Execution record
 
-Nothing executed yet.
+### Step 1, records, 2026-10-13
+
+This PLAN, the MADR's decision 13, its pointer in the 0017 MADR, and the `docs/README.md` row; `make check-records` and `make
+markdownlint` exit 0, and the identifier scan of the four files finds no local account name, hostname, real-machine path or
+downstream project name. The owner committed them as `e91d1b8`, after `d0c8d74` had committed the MADR's index row without the MADR,
+and approved execution on 2026-10-13.
+
+### Step 2 deviation, 2026-10-13: B1's original probe stays failing
+
+Found: re-run on the step 2 tree, `TestProbeNotificationHandlerRequestDeadlock` still fails, "request sent from a notification handler
+did not complete", while the PLAN's acceptance asked every phase 1 probe to pass. The probe's handler sends under
+`context.WithTimeout(context.Background(), 2*time.Second)`, a context unrelated to its own; decision 2's cap applies to the handler's
+context and those derived from it, the limit "Design", B1, states. An unrelated context cannot be told from another goroutine's without
+breaking the barrier's guarantee that a response is not returned before the notifications received ahead of it are handled. Decision
+(owner, 2026-10-13): amend the acceptance, not the design. Every phase 1 probe must pass except that one; its case is documented on
+`MethodHandler` (this step) and in the README (step 9). The MADR's "Confirmation" carries the same amendment.
+
+### Step 2, runtime-only fixes, 2026-10-13
+
+What was built, in `connection.go` and `errors.go`:
+
+* B1: `messageKey`, `messageMark` and `markOf`; the request goroutine's context is marked a request, each notification handler's
+  context a notification with its queue sequence number; `waitNotificationsUpTo` caps its target at the number before a notification
+  that has not completed, when the request's context carries that notification's mark.
+* B8: `toReqErr` answers a matched nil `*RequestError` `-32603`, "handler returned a nil *RequestError".
+* B9: `sendRequest` and `SendRequestNoResult` return `toReqErr(context.Cause(ctx))` before taking an id when the context has ended.
+* B10: `encodeParams`, used by `prepareRequest` and `prepareNotification`: params encoding as `null` are left out, anything but an
+  object or an array is refused `-32602`, "params must encode as a JSON object or array".
+* B11: `inflightRequest`; `inflight` holds a pointer per request, each request deletes only its own entry, and a reused id is logged
+  at Debug. `TestConnectionSendCancelRequest_BoundsPendingQueue` builds a `Connection` literal, whose `inflight` field took the new
+  type; nothing else in that test changed.
+* B15: the five sites log `size` and, where the message has one, `id`, never the line.
+* Decision 13, receiving half: `receiveLine` reads `"params": null` as absent, and `requestFault` refuses a present `params` that is
+  not an object, an array or `null`, "params must be an object, an array or null". The typed dispatch still decodes absent params as an
+  error until step 3.
+
+Tests added: `TestRequestFromNotificationHandler` and `TestBarrierAfterOwnNotification` (`connection_notification_barrier_test.go`);
+`TestToReqErrTypedNil` (`errors_test.go`); `TestRequestWithEndedContextWritesNothing` and `TestDuplicateInflightIDKeepsLaterCancel`
+(`connection_cancel_test.go`); `TestParamsNeverSentAsNull`, `TestNullParamsReceivedAsOmitted` and `TestMalformedInputNotLogged`
+(`jsonrpc_test.go`). `go test -race -count=5` of the eight: ok.
+
+Seen to fail, each break in its own scratch copy of the step 2 tree (11 of 11):
+
+* `b1-no-cap` (the cap removed): `TestRequestFromNotificationHandler`, "request 1, under the handler's context, did not return: it
+  waits for its own notification".
+* `b1-cap-after-completion` (the "has not completed" condition removed): `TestBarrierAfterOwnNotification`, "the request returned
+  before the notification sent ahead of its response".
+* `b8-typed-nil`: `TestToReqErrTypedNil`, "toReqErr(typed nil) = <nil>, want -32603".
+* `b9-sendrequest`, `b9-noresult` (each check removed alone): `TestRequestWithEndedContextWritesNothing`, "254 bytes written for
+  requests whose context had ended".
+* `b10-null-sent` (null encoded params kept): `TestParamsNeverSentAsNull`, `{"jsonrpc":"2.0","method":"_test/n","params":null}:
+  params present` for each of the three.
+* `b10-scalar-sent` (the structured-value check removed): `SendNotification("bar") = <nil>, want -32602`, and `SendRequest("bar")`
+  ended at its deadline, `-32603`. Its first run hung to the 10-minute test timeout, the request to a silent peer having no deadline;
+  the test was given a 1-second deadline on those requests before this run, and nothing it asserts changed.
+* `b11-delete-any`: `TestDuplicateInflightIDKeepsLaterCancel`, "$/cancel_request did not reach the request that reused the id".
+* `d13-null-kept`: `TestNullParamsReceivedAsOmitted`, "request handler got params null, want none".
+* `d13-null-refused`: the same test, "the request's handler did not happen" (answered `-32600`).
+* `b15-raw-logged` (`raw` restored at one site): `TestMalformedInputNotLogged`, "content of … logged".
+
+The original probes, re-run on the step 2 tree: B8, B9, B10, B11 and B15 pass; B1's fails as the deviation above records; B3's logs
+only and is replaced by step 3's tests; B4, B5, B6, B7, B12 and B13 fail, their steps being later.
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0, "111 file(s) clean (gofmt,
+golangci-lint, go vet, go test, govulncheck)"; no new `.go` file; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet`
+exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed files finds nothing;
+the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added. Windows: `go test -count=1 -shuffle=on ./...` exit
+0 at the root and in `cmd/generate`. The `MethodHandler` documentation of the limit was added after those runs; `make pre-add-check`,
+the records gates, the identifier scan and the API listing were run again and pass.
