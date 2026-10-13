@@ -500,7 +500,8 @@ Out of scope:
       where each gate runs, and the protocol table's new rules.
     * Examples: run each against the gates; any check the SDK now makes is dropped; a capability an example uses but does not advertise
       is a deviation for the owner, not a silent change (none is known: see the facts).
-    * Regenerate: nothing changes; the API listings do not change.
+    * Regenerate: nothing changes; the API listings do not change. *(Corrected 2026-10-12, see the step 11 deviation "the raw
+      paths say they are ungated".)*
 
 12. **Release notes.** `docs/reports/0017-REPORT-release-notes-v0-17-0.md`, in the form of the `v0.16.0` release-notes report that
     step 7 of [0014-PLAN-union-constructors-take-every-required-key.md](0014-PLAN-union-constructors-take-every-required-key.md)
@@ -1148,5 +1149,46 @@ Ran on `main` from `fb3464e` (step 9). The agent did not commit. The deviation a
   the same before and after those changes. `GOEXPERIMENT=nojsonv2 go test -count=1 .` passes; `GOOS=windows go vet ./...` passes in
   both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed files found nothing; no example
   sends a gated value (a `grep` of `example/`).
+* On the Windows host reached over SSH, with a copy of the working tree's 310 tracked and untracked files and no macOS metadata: `go test
+  -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
+
+### Step 11 deviation, 2026-10-12: the raw paths say they are ungated
+
+Before writing the step: the MADR's item 4 says `Connection`, `SendRequest[T]` and the extension methods hold no negotiation and
+stay ungated, and "their documentation says so"; no step writes those doc comments, and step 11 named only the README and
+`docs/architecture.md`. Asked, the owner chose to add one sentence each to the doc comments of `SendRequest`, `SendRequestNoResult`
+and `SendNotification` in `connection.go`, of the four extension methods in `extensions.go`, and of the generated `Connection`, through
+`emitSideConnection` in `cmd/generate/internal/emit/dispatch.go`: they send without checking the record of `initialize`. So
+regenerating changes `agent_gen.go` and `client_gen.go` in that comment only, where the step asserted no change; the API listings do
+not change. Not chosen: the README alone, with the MADR amended to mean it. Files added to step 11: `connection.go`, `extensions.go` and
+`dispatch.go`. The MADR is unchanged.
+
+### Step 11, documentation and examples, 2026-10-12
+
+Ran on `main` from `8fae8b3` (step 10). The agent did not commit. The deviation above, decided by the owner, ran within this step.
+
+* `README.md`: three new sections before "Extension methods". "Initialization and capabilities": the record and `Negotiated`, the
+  version rule and the application's part on a `*ProtocolVersionError`, `ErrNotInitialized`, the 15 method gates and the value gates by
+  capability, `*CapabilityError` with its property or variant, the answers on receipt and to a handler's result, `initialize`'s own
+  check, `ErrTerminalAuthMethod`, `Negotiation.Allows`, the validation hook's order with an example that accepts an unadvertised
+  `fs.readTextFile`, the ungated raw paths, and the unstable features not checked. "Cancellation": the turn's context and
+  `ErrPromptCancelled`, the `cancelled` answer, the after-return boundary, receipt order, `-32800` for other requests, the client's
+  `Prompt` and `Cancel`, permission requests answered `cancelled`, and unfinished tool calls left to the application. "Errors on the
+  wire": the JSON-RPC answers, the size limit and `WithMaxMessageSize`, `null` ids, responses never answered, and
+  `NewResourceNotFound`. Paths' receiving order names `-32601` for a method the record does not allow.
+* `docs/architecture.md`: the side connections' state; the protocol table's prompt turn (receipt numbers, `lateCancels`, the one
+  reading of the cause), permission requests, `initialize`, the 15 method gates and `CapabilityRules`; `checkInbound`'s order with
+  the gate; where each gate runs and that `connection.go` stores none; `receive`'s classification; and the new test files and engine
+  cases among the checks.
+* Doc comments, as the deviation says: `SendRequest`, `SendRequestNoResult`, `SendNotification`, the four extension methods, and the
+  generated `Connection`. Regenerating changed `agent_gen.go` and `client_gen.go` in that comment only; a second generation changed
+  nothing; the API listing against `git archive HEAD` does not change.
+* Examples: none checks what the SDK now checks (a `grep` of `example/` for capabilities and versions finds only what each sends in
+  `initialize`), so none changed. `go run ./example/client`, which starts `example/agent`, completed its turn, the permission request
+  included, under the gates; `example/claude-code` and `example/gemini` need their external CLIs and were not run.
+* No check was added, so no plant ran.
+* `make pre-add-check`: `go-precheck: 110 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).`
+  `GOEXPERIMENT=nojsonv2 go test -count=1 .` passes; `GOOS=windows go vet ./...` passes in both modules; `make check-records` and
+  `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
 * On the Windows host reached over SSH, with a copy of the working tree's 310 tracked and untracked files and no macOS metadata: `go test
   -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.

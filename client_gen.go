@@ -51,7 +51,8 @@ func (c *ClientSideConnection) SetLogger(l *slog.Logger) {
 // fields the generated type drops. CallExtension covers only "_"-prefixed
 // methods; for anything else, use SendRequest or SendNotification on the
 // returned connection. It is the same connection the typed methods use, not a
-// copy.
+// copy. It holds no record of initialize, so what is sent through it is not
+// checked against the negotiated capabilities.
 func (c *ClientSideConnection) Connection() *Connection {
 	return c.conn
 }

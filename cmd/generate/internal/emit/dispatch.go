@@ -223,7 +223,8 @@ func emitSideConnection(f *goFile, s side) {
 		"fields the generated type drops. CallExtension covers only \"_\"-prefixed",
 		"methods; for anything else, use SendRequest or SendNotification on the",
 		"returned connection. It is the same connection the typed methods use, not a",
-		"copy.",
+		"copy. It holds no record of initialize, so what is sent through it is not",
+		"checked against the negotiated capabilities.",
 	)
 	f.add(method(recv(), "Connection", funcType(nil, param("", star(id("Connection")))), ret(dot("c", "conn"))))
 	f.line()

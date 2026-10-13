@@ -1166,6 +1166,9 @@ func (c *Connection) sendMessage(msg anyMessage) error {
 
 // SendRequest sends a JSON-RPC request and returns a typed result.
 // For methods that do not return a result, use SendRequestNoResult instead.
+// Unlike the typed methods of the side connections, it does not check what
+// initialize negotiated: it sends any method, before initialize too
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
 func SendRequest[T any](c *Connection, ctx context.Context, method string, params any) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
 	return sendRequest[T](c, ctx, method, params, nil)
 }
@@ -1440,6 +1443,7 @@ func (c *Connection) cleanupPending(idKey string) {
 }
 
 // SendRequestNoResult sends a JSON-RPC request that returns no result payload.
+// Like SendRequest, it does not check what initialize negotiated.
 func (c *Connection) SendRequestNoResult(ctx context.Context, method string, params any) error {
 	msg, idKey, err := c.prepareRequest(method, params)
 	if err != nil {
@@ -1471,6 +1475,7 @@ func (c *Connection) SendRequestNoResult(ctx context.Context, method string, par
 }
 
 // SendNotification sends a JSON-RPC notification. It does not wait for a response.
+// Like SendRequest, it does not check what initialize negotiated.
 func (c *Connection) SendNotification(ctx context.Context, method string, params any) error {
 	select {
 	case <-ctx.Done():

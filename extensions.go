@@ -67,7 +67,7 @@ func (c *ClientSideConnection) handleWithExtensions(ctx context.Context, method 
 }
 
 // CallExtension sends an ACP extension-method request (method names starting with "_")
-// from an agent to its client.
+// from an agent to its client. It does not check what initialize negotiated.
 func (a *AgentSideConnection) CallExtension(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	if err := validateExtensionMethodName(method); err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func (a *AgentSideConnection) CallExtension(ctx context.Context, method string, 
 }
 
 // NotifyExtension sends an ACP extension-method notification (method names starting with "_")
-// from an agent to its client.
+// from an agent to its client. It does not check what initialize negotiated.
 func (a *AgentSideConnection) NotifyExtension(ctx context.Context, method string, params any) error {
 	if err := validateExtensionMethodName(method); err != nil {
 		return err
@@ -85,7 +85,7 @@ func (a *AgentSideConnection) NotifyExtension(ctx context.Context, method string
 }
 
 // CallExtension sends an ACP extension-method request (method names starting with "_")
-// from a client to its agent.
+// from a client to its agent. It does not check what initialize negotiated.
 func (c *ClientSideConnection) CallExtension(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	if err := validateExtensionMethodName(method); err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ func (c *ClientSideConnection) CallExtension(ctx context.Context, method string,
 }
 
 // NotifyExtension sends an ACP extension-method notification (method names starting with "_")
-// from a client to its agent.
+// from a client to its agent. It does not check what initialize negotiated.
 func (c *ClientSideConnection) NotifyExtension(ctx context.Context, method string, params any) error {
 	if err := validateExtensionMethodName(method); err != nil {
 		return err

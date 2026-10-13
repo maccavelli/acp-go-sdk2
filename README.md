@@ -185,7 +185,8 @@ refused. In order:
 4. `acp.WithInboundValidation` gets the SDK's error, nil when the message is
    valid, and returns the error to act on, or nil to accept;
 5. with an error, a request is answered with it (a `*acp.RequestError` as it
-   is, any other error as `-32602`), a notification is dropped and logged, and
+   is, a method that what `initialize` negotiated does not allow as `-32601`,
+   any other error as `-32602`), a notification is dropped and logged, and
    a response's error is returned to the caller, wrapping the
    `*acp.ValidationError` when the error is the SDK's.
 
@@ -242,6 +243,132 @@ The decisions behind these rules are
 [0014-MADR-union-constructors-take-every-required-key.md](docs/decisions/0014-MADR-union-constructors-take-every-required-key.md),
 and
 [0015-MADR-validate-absolute-protocol-paths.md](docs/decisions/0015-MADR-validate-absolute-protocol-paths.md).
+
+### Initialization and capabilities
+
+A connection starts with `initialize`. `ClientSideConnection.Initialize` records
+the request and the agent's answer as an `acp.Negotiation` when it returns
+without error, and `AgentSideConnection` records the same before its answer is
+written. `Negotiated()` on either side returns the record and whether there is
+one; a later `initialize` replaces it.
+
+The protocol version is `acp.ProtocolVersionNumber`. Left zero, in the request
+or in an agent's answer, it is filled in. A client asked to send another gets a
+`*acp.ProtocolVersionError` and nothing is sent; an agent whose handler answers
+another is answered `-32603`. An agent that answers another version makes
+`Initialize` return a `*acp.ProtocolVersionError` with `Requested` and
+`Answered`, and records nothing, so every typed method keeps refusing. The
+specification leaves the rest to the application: close the connection and
+tell the user.
+
+Until the record exists, every typed method but `Initialize` returns an error
+wrapping `acp.ErrNotInitialized` and writes nothing, and a request received is
+answered `-32601`. After it, the SDK checks what each side sends and receives
+against the capabilities in the record:
+
+- Methods: `session/load` needs `loadSession`; `session/list`, `session/delete`,
+  `session/resume`, `session/close` and the unstable `session/fork` need the
+  matching `sessionCapabilities` entry; `logout` needs `auth.logout`;
+  `fs/read_text_file` and `fs/write_text_file` need `fs.readTextFile` and
+  `fs.writeTextFile`; the `terminal/*` methods need `terminal`; and
+  `elicitation/complete` needs `elicitation.url`.
+- Values: a non-empty `additionalDirectories` on `session/new`, `session/load`,
+  `session/resume` and `session/fork` needs
+  `sessionCapabilities.additionalDirectories`; an `http`, `sse` or unstable
+  `acp` MCP server needs `mcpCapabilities.http`, `.sse` or `.acp`; an `image`,
+  `audio` or `resource` block in a prompt needs `promptCapabilities.image`,
+  `.audio` or `.embeddedContext`; an elicitation's `form` or `url` mode needs
+  `elicitation.form` or `.url`; a `notice` update needs `session.notices` and a
+  compaction update `session.compaction`; a `boolean` config option, wherever an
+  agent sends one, needs `session.configOptions.boolean`; and a `terminal` auth
+  method in the `initialize` answer needs `auth.terminal`.
+
+A typed method that would send what the record does not allow returns a
+`*acp.CapabilityError` naming the method and the capability, and the property
+(`prompt[1]`) or the variant (`image`) for a value; nothing is written. A
+handler's result that breaks a value rule is not sent, and the peer gets
+`-32603`. What is received goes through the receiving order of
+[Paths](#paths): a request the record does not allow is answered `-32601` for a
+method and `-32602` for a value, a notification is dropped and logged, and a
+response's error is returned to the caller. The answer to `initialize` is
+checked against the record it is about to make, so an agent offering a terminal
+auth method to a client without `auth.terminal` answers `-32603`, and a client
+given one returns the error and records nothing.
+
+`Authenticate` with the id of a `terminal` auth method the agent listed returns
+an error wrapping `acp.ErrTerminalAuthMethod` and sends nothing, since a
+terminal method is run, not authenticated; received, it is answered `-32602`.
+
+`Negotiation.Allows(method)` reports whether the record lets a method be sent,
+for an application that shows or hides features: nil, or the
+`*acp.CapabilityError`.
+
+A validation hook sees these errors after the SDK's own validation: a message
+that fails validation reaches the hook with that error first and, only if the
+hook accepts it, with the capability error, so accepting one never accepts the
+other. A hook can accept a peer that does not follow the record:
+
+```go
+acp.WithInboundValidation(func(ctx context.Context, method string, params any, err error) error {
+    var ce *acp.CapabilityError
+    if errors.As(err, &ce) && ce.Capability == "fs.readTextFile" {
+        return nil // this client serves reads it did not advertise
+    }
+    return err
+})
+```
+
+`Connection()`, `SendRequest`, `SendRequestNoResult`, `SendNotification`, and
+`CallExtension` and `NotifyExtension` hold no record: they send any method,
+before `initialize` too. The unstable features whose capabilities the
+specification does not tie to a rule (`nes`, `plan`, `providers`, `subagents`,
+`positionEncoding`) are not checked.
+
+### Cancellation
+
+An agent's `Prompt` handler runs under a context that `session/cancel` for its
+session cancels, with `acp.ErrPromptCancelled` as `context.Cause`; a second
+prompt for the same session cancels the first with an error that wraps it.
+When the handler returns, if its context was cancelled, by `session/cancel` or
+`$/cancel_request`, the answer is `stopReason` `cancelled`, keeping the rest of
+the handler's result, whatever the handler returned. A `session/cancel` that
+arrives after the handler has returned changes nothing. A prompt and a cancel
+are ordered as they were received, so a cancel sent right after a prompt
+cancels that turn. Any other request whose handler `$/cancel_request`
+cancels, and that returns the context's error, is answered `-32800`.
+
+`ClientSideConnection.Prompt` sends `session/cancel` when its context ends with
+an error, and returns. When a client sends `session/cancel`, through `Cancel` or
+`Prompt`, each `session/request_permission` of that session still pending is
+answered `cancelled` at once; its handler's context is cancelled with
+`acp.ErrPromptCancelled`, and what it returns later is discarded. A permission
+request that arrives after the cancel is handled as usual. Marking the turn's
+unfinished tool calls `cancelled`, which the specification recommends, is the
+client application's.
+
+### Errors on the wire
+
+The connection reads one JSON-RPC message per line and answers what JSON-RPC
+2.0 says to answer:
+
+- a line that is not JSON: `-32700`, with `"id": null`;
+- JSON that is not an object, a batch included: `-32600`, with `"id": null`;
+- an object that is not a valid request or notification (`jsonrpc` other than
+  `"2.0"`, `method` absent or not a string, an `id` that is not a string,
+  number or `null`, `params` that is not an object or array): `-32600`, with its
+  id when the id is valid and `null` otherwise, an absent id included;
+- a line longer than the limit: read through its newline, discarded, logged,
+  and answered `-32600` with `"id": null` and the limit in `data`; reading goes
+  on. The limit is 10 MiB unless `acp.WithMaxMessageSize(n)` sets another.
+
+A request whose id is `null` is answered with `"id": null`. A response is never
+answered: one that matches no pending call is logged at Debug, and one that
+holds neither or both of `result` and `error`, or another `jsonrpc`, fails the
+call it answers. `acp.NewResourceNotFound(uri)` builds the `-32002` error ACP
+defines for a resource, such as a file, that does not exist.
+
+These rules are decided in
+[0017-MADR-remediate-acp-v1-conformance-violations.md](docs/decisions/0017-MADR-remediate-acp-v1-conformance-violations.md).
 
 ### Extension methods
 
