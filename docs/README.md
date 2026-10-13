@@ -47,6 +47,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0016 | REPORT | [ACP v1 spec adherence audit](reports/0016-REPORT-acp-v1-conformance-audit.md) | observed |
 | 0017 | MADR | [Remediate the ACP v1 conformance violations: cancellation, JSON-RPC errors, version and capabilities](decisions/0017-MADR-remediate-acp-v1-conformance-violations.md) | accepted |
 | 0017 | PLAN | [Implement the ACP v1 conformance remediation](decisions/0017-PLAN-remediate-acp-v1-conformance-violations.md) | in-progress |
+| 0017 | REPORT | [Release notes for v0.17.0, against v0.16.0](reports/0017-REPORT-release-notes-v0-17-0.md) | observed |
 
 ## I want to…
 

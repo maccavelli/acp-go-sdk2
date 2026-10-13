@@ -1192,3 +1192,20 @@ Ran on `main` from `8fae8b3` (step 10). The agent did not commit. The deviation 
   `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
 * On the Windows host reached over SSH, with a copy of the working tree's 310 tracked and untracked files and no macOS metadata: `go test
   -count=1 -shuffle=on ./...` at the root `ok`, and all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
+
+### Step 12, release notes, 2026-10-12
+
+Ran on `main` from `d7babc2` (step 11). The agent did not commit.
+
+* New `docs/reports/0017-REPORT-release-notes-v0-17-0.md`, in the form of
+  [0014-REPORT-release-notes-v0-16-0.md](../reports/0014-REPORT-release-notes-v0-16-0.md): a "Release text" with eight breaking
+  changes, each with what an application does (`initialize` first, the method gates, the value gates, the terminal-auth refusal, the
+  version, the `cancelled` answer, permission requests on cancel, malformed input answered), the three defects fixed (the supersede
+  bookkeeping, the malformed response, the `null` id), the additions, and the generator's changes, the generated side connections
+  among them with no API change; and the sources not in the release text.
+* Its facts, each from a source it names: `git diff v0.16.0 -- schema/` is empty and `schema/version` is `1.25.0`; the commits from `git
+  log v0.16.0..HEAD`, for the SDK and for `cmd/generate`; the API listing on `git archive v0.16.0` (2390 lines) and on `d7babc2`
+  (2411 lines) differs only in 21 added lines, classified in the report.
+* `docs/README.md` indexes the report, `observed`.
+* Only records changed, so no Go gate, plant or Windows run applies. `make check-records` and `make markdownlint` (12 files) exit 0;
+  the identifier scan of the report and the index found nothing.
