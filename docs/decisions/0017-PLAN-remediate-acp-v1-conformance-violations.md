@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-10-12
+status: complete
+date: 2026-10-13
 associated-madr: "0017-MADR-remediate-acp-v1-conformance-violations.md"
 ---
 
@@ -1243,6 +1243,16 @@ Ran on `main` from `0ec604e` (step 12). The agent did not commit.
   -count=1 ./...` at the root `ok`; `GOOS=windows go vet ./...` passes in both modules. On the Windows host reached over SSH, with a copy
   of the working tree's 311 tracked and untracked files and no macOS metadata: `go test -count=1 -shuffle=on ./...` at the root `ok`, and
   all seven packages of `cmd/generate` `ok`; the copy was removed afterwards.
-* CI on `ubuntu-24.04`, `macos-15` and `windows-2025`: pending; no step is pushed yet (the deviation above).
+* CI on `ubuntu-24.04`, `macos-15` and `windows-2025`: pending; no step is pushed yet (the deviation above). *(Recorded
+  2026-10-13, below.)*
 * `make pre-add-check`: `go-precheck: 110 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).` `make check-records`
   and `make markdownlint` exit 0; the identifier scan of the changed files found nothing.
+
+### Close, 2026-10-13
+
+The owner pushed `main` at `509709d`, with the twelve commits from `6ec3916` to it in one push, after the disclosure guard passed over
+them. GitHub Actions run `38332363477` (`CI`) on `509709d` concluded `success`, its three jobs `validate (ubuntu-24.04)`,
+`validate (macos-15)` and `validate (windows-2025)` each `success` (`gh run view 38332363477`). The steps were pushed together, so
+this run is the CI of every step. Every verification item is now met; this plan is `complete`, and so is its row in `docs/README.md`.
+`v0.17.0` is the owner's to tag, with the release text of
+[0017-REPORT-release-notes-v0-17-0.md](../reports/0017-REPORT-release-notes-v0-17-0.md).
