@@ -262,3 +262,68 @@ Decision, the owner's: the three `want.api` files are rewritten with `-update` a
 tests take the new type in place, `stored` finding the turn of receipt `r` anywhere in the session's turns; `Method.SessionKey` is
 kept. Files added to step 3's scope: the three `want.api` files and `acp_test.go`, besides `model/methods.go` and
 `model/protocol.go`, which the model's scope line covers but whose list of items did not name this.
+
+### Step 3, `WithPromptOverlapPolicy`, 2026-10-14
+
+What was built:
+
+* Runtime, `connection.go`: `PromptOverlapPolicy`, `PromptOverlapSupersede` (zero), `PromptOverlapRefuse` and
+  `PromptOverlapConcurrent`, each documented with the MADR's behaviour; `WithPromptOverlapPolicy`, documented as applying to an
+  `AgentSideConnection`, ignored by the other connections, a value the package does not define being the default; the
+  `connectionConfig` field, and `Connection.promptOverlap`, set by `buildConnection`.
+* Model: `Method.SessionKey`, the session property's JSON key, set beside `SessionField` ("Deviation, 2026-10-14, during step 3", above).
+* Emitter, `emit/dispatch.go`: `sessionCancels` is `map[string][]*promptTurn`; `emitTurnStore` emits three methods on the agent
+  side, under `a.mu`: `storeTurn(key, turn) bool`, which switches on `a.conn.promptOverlap` (refuse returns false while a turn is
+  stored; concurrent appends; the default case, so supersede and any undefined value, keeps today's behaviour), then applies a kept
+  cancel received after the prompt; `removeTurn`, which removes only the turn given; and `cancelTurns(key, s)`, which cancels and
+  removes every stored turn received before the cancel of receipt `s`, or every one when `s` is 0. The prompt case calls
+  `storeTurn`, and on refusal cancels its own context and answers `-32603` with `data` `{"error": "a prompt turn is already running
+  for this session", <session key>: <id>}` without calling the handler; afterwards it calls `removeTurn`. The cancel and close
+  cases call `cancelTurns` and then `keepCancel`, as before. The `sessionCancel` helper lost its callers and was removed.
+* A design detail the PLAN did not state: a kept cancel is deleted on store only under supersede, where the stored turn replaces
+  every other. Under refuse and concurrent it stays, so that an older prompt not yet stored is still cancelled by it.
+* Regenerated `agent_gen.go`: the `sessionCancels` type, its `make`, the three methods, and the prompt, cancel and close cases;
+  nothing else.
+
+Tests added, `cancel_test.go` (`promptPair` and `newReceiptAgent` take connection options; `stored` finds the turn of a receipt
+among the session's turns): `TestPromptOverlapRefuse` (a second prompt is answered `-32603` with the data, under a ten-second
+deadline so that a prompt not refused fails rather than hangs; the handler ran once; the running turn's context is not cancelled; a
+prompt for another session runs); `TestPromptOverlapRefuseAfterCancel` (with the cancelled handler held, a prompt sent after
+`session/cancel` reaches the handler uncancelled); `TestPromptOverlapConcurrent` (over the wire: two prompts both reach the
+handler, neither cancelled; one `session/cancel` cancels both with `ErrPromptCancelled` and both are answered `cancelled`; a
+prompt after it is not cancelled; through the dispatch with receipts: a kept cancel cancels a prompt received before it and
+stored after it); `TestPromptOverlapDefault` (no option, `PromptOverlapSupersede`, 99 and -1 all supersede). The existing
+supersede and receipt tests pass unchanged. Engine case `accept-prompt-overlap.txtar`: its `want.api` written by `-update` and
+read; its behaviour test runs refuse (the refusal, the handler not called, a prompt after the cancel running while the cancelled
+handler is held) and concurrent (both prompts handled, one cancel ending both) through the generated dispatch. The pins of
+`emit/dispatch_test.go` follow the new emitted text: `storeTurn`, `removeTurn`, `cancelTurns`, the policy switch, the refusal
+naming the table's key (`conversationId` in that test's protocol), and the slice type.
+
+Seen to fail, each in its own scratch copy, the emitter broken and, for the root tests, the code regenerated (11 of 11):
+
+* `refuse-never-refuses` (the stored-turn check inverted): root, "refusal data map[error:context deadline exceeded]", "handler
+  called 2 times, want once"; engine, "refusal data map[error:context deadline exceeded]".
+* `refuse-after-cancel` (the cancel leaves the turn stored): root, the prompt after the cancel answered `-32603` and "the prompt
+  sent after the cancel did not happen"; engine, the same `-32603` answer.
+* `concurrent-supersedes` (the concurrent case removed): root, "turn 1 cancelled by the other: … superseded by a new prompt";
+  engine, "the first turn was cancelled by the second".
+* `cancel-only-first` (the cancel applies only to the first stored turn): root, "a turn's cancel did not happen"; engine, "a
+  turn's answer did not happen".
+* `undefined-not-default` (the default case made `case PromptOverlapSupersede`): `TestPromptOverlapDefault/undefined` and
+  `/negative`, "the first turn's cancel did not happen". In the first run, the shared `prompt` helper's goroutine reported after
+  the failed subtest had ended, and the resulting panic hid the message; a rerun with `-v` showed it.
+* `pins-concurrent-supersedes` (as above, against `emit`): "agent_gen.go lacks \"case PromptOverlapConcurrent: …\"";
+  `pins-store-renamed` (the emitted method renamed): "agent_gen.go holds \"func (a *AgentSideConnection) storeTurn(…\": false, want
+  true".
+
+The engine case's refuse test, as first written, waited for the cancelled turn's answer before sending the next prompt, so
+`refuse-after-cancel` passed against it; it now holds the cancelled handler, and the four engine plants were run again against
+the corrected case, each failing as above.
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0, after `gofmt` joined a
+blank line and wrapped one line of `dispatch.go`; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in
+both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing; the prompt and cancel tests,
+`-race -count=20 -shuffle=on`: ok. The API listing against `v0.17.1`, 2411 and 2426 lines: besides step 2's and the 0019 PLAN's
+changes, exactly five additions, `type PromptOverlapPolicy int`, `const PromptOverlapSupersede`, `const PromptOverlapRefuse`,
+`const PromptOverlapConcurrent` and `func WithPromptOverlapPolicy (p PromptOverlapPolicy) ConnectionOption`. Windows:
+`go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.

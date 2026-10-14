@@ -11,7 +11,6 @@ import (
 // sessionKey is string(p.<field>), the session's key in sessionCancels.
 func sessionKey(field string) ast.Expr { return call(id("string"), dot("p", field)) }
 
-
 // lockCall is a.mu.Lock() or a.mu.Unlock().
 func lockCall(name string) ast.Stmt { return exprStmt(call(dot("a", "mu", name))) }
 
@@ -301,7 +300,9 @@ func emitTurnStore(f *goFile, s side) {
 	recv := func() *ast.Field { return param("a", star(id(s.typeName))) }
 	turns := func() ast.Expr { return index(dot("a", "sessionCancels"), id("key")) }
 	single := func() ast.Expr { return composite(sliceOf(star(id("promptTurn"))), id("turn")) }
-	keyTurn := func() []*ast.Field { return []*ast.Field{param("key", id("string")), param("turn", star(id("promptTurn")))} }
+	keyTurn := func() []*ast.Field {
+		return []*ast.Field{param("key", id("string")), param("turn", star(id("promptTurn")))}
+	}
 	late := binary(binary(dot("turn", "receipt"), token.NEQ, intLit(0)), token.LAND,
 		binary(index(dot("a", "lateCancels"), id("key")), token.GTR, dot("turn", "receipt")))
 	f.comment("storeTurn stores turn, a prompt turn of the session key, as the connection's",
