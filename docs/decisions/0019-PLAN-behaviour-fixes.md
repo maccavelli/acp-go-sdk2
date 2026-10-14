@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-13
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
@@ -722,3 +722,14 @@ Run over the finished tree at `f3b684c`, through the Python runner:
 Every finding of phase 1 has a committed test or a recorded program run: B1, B3, B4, B5, B6, B7, B8, B9, B10, B11, B12, B13, B15
 and G1 by the tests of steps 2 to 7, E1 to E4 by the runs of step 8. Acceptance waits on CI for the pushed commits; then this PLAN
 and its `docs/README.md` row become `complete`. Nothing is tagged (decision 12): phase 1 ships with phase 2 as `v0.18.0`.
+
+The owner committed step 10's record as `ff0c358`.
+
+### Close, 2026-10-13
+
+The owner pushed `main` to `ff0c358`, the 12 commits of this phase from `d0c8d74`. CI run `38495260347` on `ff0c358` concluded
+`success` on `validate (ubuntu-24.04)`, `validate (macos-15)` and `validate (windows-2025)`; the Linux job runs the race detector
+and the `nojsonv2` build over both modules, the tests of steps 2 to 7 included. Every acceptance criterion in "Verification" is met,
+with the three probe exemptions and the corrected E1 figure the deviation entries record, so this PLAN and its `docs/README.md` row
+are `complete`. Nothing is tagged: phase 1 ships with phase 2 as `v0.18.0` (decision 12), and the MADR stays `accepted` with phases 2
+to 5 to come.
