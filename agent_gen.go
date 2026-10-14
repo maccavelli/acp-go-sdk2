@@ -492,11 +492,8 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if cn, ok := a.sessionCancels[string(p.SessionId)]; ok && (s == 0 || cn.receipt < s) {
 			cn.cancel(ErrPromptCancelled)
 			delete(a.sessionCancels, string(p.SessionId))
-		} else {
-			if s > a.lateCancels[string(p.SessionId)] {
-				a.lateCancels[string(p.SessionId)] = s
-			}
 		}
+		a.conn.keepCancel(a.lateCancels, string(p.SessionId), s)
 		a.mu.Unlock()
 		if err := a.agent.Cancel(ctx, p); err != nil {
 			return nil, toReqErr(err)
@@ -513,6 +510,14 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
 			return nil, inboundError(err)
 		}
+		s := receiptOf(ctx)
+		a.mu.Lock()
+		if cn, ok := a.sessionCancels[string(p.SessionId)]; ok && (s == 0 || cn.receipt < s) {
+			cn.cancel(ErrPromptCancelled)
+			delete(a.sessionCancels, string(p.SessionId))
+		}
+		a.conn.keepCancel(a.lateCancels, string(p.SessionId), s)
+		a.mu.Unlock()
 		resp, err := a.agent.CloseSession(ctx, p)
 		if err != nil {
 			return nil, toReqErr(err)
@@ -636,8 +641,9 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 			a.sessionCancels[string(p.SessionId)] = turn
 			if r != 0 && a.lateCancels[string(p.SessionId)] > r {
 				cancel(ErrPromptCancelled)
+			} else {
+				delete(a.lateCancels, string(p.SessionId))
 			}
-			delete(a.lateCancels, string(p.SessionId))
 		}
 		a.mu.Unlock()
 		resp, err := a.agent.Prompt(reqCtx, p)

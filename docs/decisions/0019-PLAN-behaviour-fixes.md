@@ -154,11 +154,13 @@ before it is relied on; the break named is the one to plant.
   records the receipt of every in-flight request (`null` id included) in `inflightReceipts`, added in the receive loop before the
   request's goroutine starts and removed when it returns, and exposes `oldestInflight() (uint64, bool)`.
 * Cancel (generated `cancelActivePrompt`, used by `session/cancel` and `session/close`): when it cancels a stored turn, it also keeps
-  its receipt for the session (B5, case a); in both branches it keeps the receipt only if some in-flight request is older than it,
-  and on each keep it removes every kept receipt not newer than the oldest in-flight request (B7).
+  its receipt for the session (B5, case a); ~~in both branches it keeps the receipt only if some in-flight request is older than
+  it,~~ in both branches it keeps the receipt (amended before step 4, see "Step 4 deviation"), and on each keep it removes every kept
+  receipt not newer than the oldest in-flight request (B7).
 * Prompt (generated `promptCase`): it is cancelled when a kept cancel is newer than it, as now, and removes the kept cancel only
   when the prompt is newer than the cancel (B5, case b). A prompt stored after a newer one is superseded, as now, so removal is safe.
-* The map then holds at most one entry per session cancelled during the life of the oldest in-flight request.
+* The map then holds at most one entry per session cancelled during the life of the oldest in-flight request, and, with nothing in
+  flight, at most the one entry just kept.
 * Tests, `cancel_test.go`: `TestCancelOrderedAcrossTwoPrompts` (both of the probe's orders, with receipts); `TestLateCancelsBounded`
   (500 cancels with nothing in flight keep nothing; with one request in flight they are kept, and after it returns the next cancel
   sweeps them); the existing `TestPromptCancelRightAfterPrompt` and `TestPromptSupersededKeepsSuccessorCancel` still pass. Planted
@@ -291,7 +293,9 @@ before reading its output. Per code step:
 
 Phase acceptance: every finding above has a committed test or a recorded program run; the phase 1 probes all pass on the tree
 (amended 2026-10-13, see "Step 2 deviation": all but B1's original probe, whose unrelated context is the documented limit; and
-see "Step 3 deviation": all but `TestProbeS_PromptAsNotification`, whose pass condition is the behaviour B12 replaces); the API
+see "Step 3 deviation": all but `TestProbeS_PromptAsNotification`, whose pass condition is the behaviour B12 replaces; and see
+"Step 4 deviation, after the code": all but `TestProbeS_ClientCloseSessionLeavesPermissionPending`, whose pass condition is the
+behaviour B4's design rejects); the API
 listing equals `v0.17.1`'s; CI passes on the pushed commits.
 
 ## Rollout and Rollback
@@ -422,6 +426,86 @@ their steps being later.
 
 Gates, through the Python runner: regenerating again changes no generated file; `make pre-add-check` exit 0, "111 file(s) clean
 (gofmt, golangci-lint, go vet, go test, govulncheck)"; no new `.go` file; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+`GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing;
+the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added. Windows: `go test -count=1 -shuffle=on ./...` exit
+0 at the root and in `cmd/generate`.
+
+The owner committed step 3 as `23396f4`.
+
+### Step 4 deviation, 2026-10-13, before any code: a cancel is always kept
+
+Found, designing step 4: "Design", B5 and B7, kept a cancel only while an older request is in flight. The in-flight receipts are
+registered by the receive loop, so a cancel driven through the dispatch any other way, as the original B5 probes drive it with
+hand-made receipts, would never be kept, and B5's lost cancel would reappear there. Keeping every cancel's receipt and sweeping on each
+keep bounds the map as well: an entry survives a sweep only while a request older than it is in flight, and with nothing in flight
+the map holds at most the entry just kept. Decision (owner, 2026-10-13): always keep, and sweep on every keep. The design paragraph is
+annotated; no MADR decision changes.
+
+### Step 4 deviation, 2026-10-13, after the code: one B4 probe stays failing
+
+Found: re-run on the step 4 tree, `TestProbeS_ClientCloseSessionLeavesPermissionPending` fails, "CloseSession left the permission
+request pending". The probe has no peer, so its `CloseSession` ends with `-32603` "context deadline exceeded", and it then requires
+the session's pending permission request to be cancelled; the design answers pending requests only when the agent answers the close
+with success, since after a refused close the turn may still be running. The other B4 probe passes. Decision (owner, 2026-10-13):
+exempt that probe from the acceptance, as B1's and one of B12's are; `TestCloseSessionAnswersPendingPermissions` and
+`TestFailedCloseLeavesPermissionsPending` stand for the client half. The MADR's "Confirmation" carries the same amendment.
+
+### Step 4, prompt-turn bookkeeping, 2026-10-13
+
+What was built:
+
+* `connection.go`: `inflightReceipts`, the receipt of every received request, a `null` id's included, added in the receive loop before
+  the request's goroutine starts and removed when it returns; `oldestInflight`; `keepCancel`, which removes every kept receipt no
+  in-flight request is older than (all of them with nothing in flight) and then keeps the given receipt for its session, a receipt of
+  0 not being kept.
+* Model: `MethodRule.ClosesSession` and `Method.ClosesSession`. `checkRoles` refuses a close on the client side, a close that is also a
+  prompt turn or its cancel, and a close without a session key; `linkPromptTurns` refuses a close that is a notification, and one
+  whose session key is not the cancel's, and records its session field; `linkCancelledRequests` marks each close `CancelsPending`.
+  `checkRoles` was split into `checkSessionRoles` and `checkRoleKeys`, keeping the order of its cases, after `gocyclo` reported its
+  complexity at 45 against the limit of 40. The table: `session/close` has `ClosesSession` and `SessionKey`, with the session-setup
+  sentence.
+* Emitter: `cancelActivePrompt` keeps every cancel through `keepCancel`, whether or not it found a turn; `promptCase` removes the kept
+  cancel only when the prompt is newer than it; the agent's close case runs `cancelActivePrompt` before `CloseSession`; the client's
+  `CloseSession` cancels the session's pending requests when the call succeeds.
+* Regenerated: `agent_gen.go` (the cancel, close and prompt cases) and `client_gen.go` (`CloseSession`); no other generated file
+  changed.
+* The first gate run failed `make pre-add-check` on three counts the new code caused, and they were fixed before any result above
+  was relied on: `gofmt` (the new field's alignment, fixed by `gofmt -w`), `gocritic` `typeDefFirst` (`keepCancel` and
+  `oldestInflight` sat above the `Connection` type; moved below it), and `gocyclo` (the split above). No lint setting changed.
+
+Tests added: `TestCloseSessionCancelsTurn`, `TestCloseSessionAnswersPendingPermissions`, `TestFailedCloseLeavesPermissionsPending`,
+`TestCancelOrderedAcrossTwoPrompts` (two orders, through the dispatch with receipts) and `TestLateCancelsBounded` (`cancel_test.go`);
+the model's fixture gains `s/close` with its rule, `TestProtocolTableApplies` checks it, `TestProtocolTableRefuses` gains six cases
+(client side, with the cancel role, without a session key, on a notification, without a cancel, with another session type), and
+`checkCommittedRoles` and `TestProtocolTableAppliesToCommittedSchema` check `ClosesSession`; the existing refusal case "answered on a
+cancel with no cancel" also clears the fixture's new close rule, which otherwise reports its own error first, and asserts what it did.
+Engine case `accept-session-close-cancels.txtar`, its `want.api` written by `-update` and its behaviour test passing in
+`TestEngineBehaviour`. `go test -race -count=10` of the five root tests: ok.
+
+Seen to fail, each in its own scratch copy of the final step 4 tree (8 of 8):
+
+* `b4-agent-no-bookkeeping` (the close case's bookkeeping removed, regenerated): `TestCloseSessionCancelsTurn`, "the turn's end did
+  not happen".
+* `b4-client-no-pending` (the wrapper's pending cancel removed, regenerated): `TestCloseSessionAnswersPendingPermissions`, "the closed
+  session's answer did not happen".
+* `b4-client-pending-on-error` (the pending cancel made unconditional, regenerated): `TestFailedCloseLeavesPermissionsPending`, "a
+  refused close answered the pending request".
+* `b5-delete-always` (the prompt removes the kept cancel whatever its receipt, regenerated): `TestCancelOrderedAcrossTwoPrompts`, "two
+  turns stored after the cancel", "turn 2, received before the cancel, answered end_turn".
+* `b5-found-not-kept` (a cancel that finds a turn keeps nothing, regenerated): the same test, "a stored turn and one stored after the
+  cancel", "turn 2, received before the cancel and stored after it, answered end_turn".
+* `b7-no-sweep`: `TestLateCancelsBounded`, "500 cancels kept with no request in flight, want at most 1".
+* `b4-model-client-close` (the client-side refusal removed): `TestProtocolTableRefuses`, "session close on the client side", another
+  error than "only an agent method closes a session".
+* `b4-model-session-type` (the session-type check removed): the same test, "session close with another session type", "Build
+  accepted the table".
+
+The original probes, re-run on the step 4 tree: B5's two, B7's and `TestProbeS_CloseSessionLeavesTurnRunning` now pass, with those of
+steps 2 and 3; B1's, `TestProbeS_PromptAsNotification` and `TestProbeS_ClientCloseSessionLeavesPermissionPending` fail as the three
+deviations record; B6 and B13 fail, their steps being later.
+
+Gates, through the Python runner, after the lint fixes: regenerating again changes no generated file; `make pre-add-check` exit 0,
+"111 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
 `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing;
 the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added. Windows: `go test -count=1 -shuffle=on ./...` exit
 0 at the root and in `cmd/generate`.

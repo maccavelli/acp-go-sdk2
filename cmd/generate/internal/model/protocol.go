@@ -100,7 +100,13 @@ type MethodRule struct {
 	// CancelsPromptTurn: inbound, the method first cancels the session's
 	// prompt-turn context.
 	CancelsPromptTurn bool
-	// SessionKey is the property naming the session, for the two above.
+	// ClosesSession: an agent request that ends its session's work as if the
+	// prompt-turn cancel had been sent. Inbound, it cancels the session's
+	// prompt turn before its handler runs; outbound, a call the agent answers
+	// with success then answers the session's pending requests
+	// (0019-PLAN-behaviour-fixes.md, B4).
+	ClosesSession bool
+	// SessionKey is the property naming the session, for the three above.
 	SessionKey string
 	// StopKey is a prompt turn's result property that holds the stop reason,
 	// a required string enum, and StopCancelled its value that answers a turn
@@ -290,9 +296,18 @@ func checkRule(rule *MethodRule, r *rules) error {
 }
 
 // checkRoles checks the roles a rule gives its method: a prompt turn or its
-// cancel, a request answered on that cancel, the initialize method; each on
-// its side, with its keys, and no key without its role.
+// cancel, a session close, a request answered on that cancel, the initialize
+// method; each on its side, with its keys, and no key without its role.
 func checkRoles(rule *MethodRule) error {
+	if err := checkSessionRoles(rule); err != nil {
+		return err
+	}
+	return checkRoleKeys(rule)
+}
+
+// checkSessionRoles checks the roles keyed by a session: each on its side, no
+// two that exclude each other, and a session key exactly when one is given.
+func checkSessionRoles(rule *MethodRule) error {
 	switch {
 	case (rule.PromptTurn || rule.CancelsPromptTurn) && rule.Side != sideAgent:
 		return fmt.Errorf("only agent methods are a prompt turn or its cancel")
@@ -300,10 +315,22 @@ func checkRoles(rule *MethodRule) error {
 		return fmt.Errorf("only client methods are answered on a prompt-turn cancel")
 	case rule.PromptTurn && rule.CancelsPromptTurn:
 		return fmt.Errorf("it cannot be both a prompt turn and its cancel")
-	case (rule.PromptTurn || rule.CancelsPromptTurn || rule.CancelledByPromptCancel) && rule.SessionKey == "":
+	case rule.ClosesSession && rule.Side != sideAgent:
+		return fmt.Errorf("only an agent method closes a session")
+	case rule.ClosesSession && (rule.PromptTurn || rule.CancelsPromptTurn):
+		return fmt.Errorf("a session close cannot be a prompt turn or its cancel")
+	case (rule.PromptTurn || rule.CancelsPromptTurn || rule.CancelledByPromptCancel || rule.ClosesSession) && rule.SessionKey == "":
 		return fmt.Errorf("a prompt-turn role needs a session key")
-	case !rule.PromptTurn && !rule.CancelsPromptTurn && !rule.CancelledByPromptCancel && rule.SessionKey != "":
+	case !rule.PromptTurn && !rule.CancelsPromptTurn && !rule.CancelledByPromptCancel && !rule.ClosesSession && rule.SessionKey != "":
 		return fmt.Errorf("a session key without a prompt-turn role")
+	}
+	return nil
+}
+
+// checkRoleKeys checks the other keys a role needs, each given exactly when
+// its role is, and the initialize method's side.
+func checkRoleKeys(rule *MethodRule) error {
+	switch {
 	case rule.CancelledByPromptCancel && (rule.CancelledKey == "" || rule.CancelledVariant == ""):
 		return fmt.Errorf("a request answered on a prompt-turn cancel needs its result key and variant")
 	case !rule.CancelledByPromptCancel && (rule.CancelledKey != "" || rule.CancelledVariant != ""):
@@ -334,6 +361,7 @@ func applyMethodRule(mi *Method, rule *MethodRule) {
 		mi.GoName = rule.GoName
 	}
 	mi.PromptTurn, mi.CancelsPromptTurn, mi.Capability = rule.PromptTurn, rule.CancelsPromptTurn, rule.Capability
+	mi.ClosesSession = rule.ClosesSession
 	mi.CancelledByPromptCancel, mi.Initializes = rule.CancelledByPromptCancel, rule.Initializes
 }
 
@@ -344,7 +372,7 @@ func (m *Model) linkPromptTurns(r *rules) error {
 	for _, side := range [][]*Method{m.AgentMethods, m.ClientMethods} {
 		var cancels []*Method
 		for _, mi := range side {
-			if !mi.PromptTurn && !mi.CancelsPromptTurn {
+			if !mi.PromptTurn && !mi.CancelsPromptTurn && !mi.ClosesSession {
 				continue
 			}
 			rule := r.methods[ruleKey(mi.Side, mi.Wire)]
@@ -352,6 +380,8 @@ func (m *Model) linkPromptTurns(r *rules) error {
 			switch {
 			case mi.PromptTurn && (mi.Notif != "" || !mi.HasResult):
 				return fmt.Errorf("%s: a prompt turn must be a request with a result", rule.owner())
+			case mi.ClosesSession && mi.Notif != "":
+				return fmt.Errorf("%s: a session close must be a request", rule.owner())
 			case mi.CancelsPromptTurn && mi.Notif == "":
 				return fmt.Errorf("%s: a prompt-turn cancel must be a notification", rule.owner())
 			case mi.CancelsPromptTurn:
@@ -383,6 +413,22 @@ func (m *Model) linkPromptTurns(r *rules) error {
 				return fmt.Errorf("%s: its cancel %s keys the session by %s %s, not %s %s", rule.owner(), c.Wire, c.SessionField, ct, mi.SessionField, mt)
 			}
 			mi.Canceller = c
+		}
+		// A session close runs the cancel's bookkeeping, so it keys the
+		// session as the cancel does (0019-PLAN-behaviour-fixes.md, B4).
+		for _, mi := range side {
+			if !mi.ClosesSession {
+				continue
+			}
+			rule := r.methods[ruleKey(mi.Side, mi.Wire)]
+			if len(cancels) != 1 {
+				return fmt.Errorf("%s: a session close needs one prompt-turn cancel on its side, found %d", rule.owner(), len(cancels))
+			}
+			c := cancels[0]
+			mt, ct := m.fieldType(mi.Req, mi.SessionField), m.fieldType(c.Notif, c.SessionField)
+			if mi.SessionField != c.SessionField || mt != ct {
+				return fmt.Errorf("%s: its cancel %s keys the session by %s %s, not %s %s", rule.owner(), c.Wire, c.SessionField, ct, mi.SessionField, mt)
+			}
 		}
 	}
 	return nil
@@ -488,6 +534,11 @@ func (m *Model) linkCancelledRequests(r *rules) error {
 			return fmt.Errorf("%s: %w", rule.owner(), err)
 		}
 		cancel.CancelsPending = true
+		for _, cl := range m.AgentMethods {
+			if cl.ClosesSession {
+				cl.CancelsPending = true
+			}
+		}
 	}
 	return nil
 }

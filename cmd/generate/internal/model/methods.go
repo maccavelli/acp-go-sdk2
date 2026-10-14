@@ -49,18 +49,20 @@ type Method struct {
 	// Doc is the interface method's doc comment.
 	Doc []string
 	// PromptTurn and CancelsPromptTurn are the method's prompt-turn role
-	// from the protocol table; SessionField is the Go field of its session
-	// key; Canceller is a prompt turn's cancel.
-	PromptTurn, CancelsPromptTurn bool
-	SessionField                  string
-	Canceller                     *Method
+	// from the protocol table, and ClosesSession marks a request that ends its
+	// session's work as the cancel does; SessionField is the Go field of its
+	// session key; Canceller is a prompt turn's cancel.
+	PromptTurn, CancelsPromptTurn, ClosesSession bool
+	SessionField                                 string
+	Canceller                                    *Method
 	// StopField and StopConst are a prompt turn's stop-reason field and the
 	// constant that answers a cancelled turn.
 	StopField, StopConst string
 	// CancelledByPromptCancel marks a client request the client answers itself
 	// when it cancels the request's session's prompt turn, with the variant
 	// CancelledHelper builds in its result's CancelledField; CancelsPending marks
-	// the agent's prompt-turn cancel when the client has such requests.
+	// the agent's prompt-turn cancel, and each session close, when the client
+	// has such requests.
 	CancelledByPromptCancel, CancelsPending bool
 	CancelledField, CancelledHelper         string
 	// Initializes marks the method that negotiates the connection, with the

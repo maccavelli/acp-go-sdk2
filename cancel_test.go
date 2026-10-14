@@ -404,3 +404,264 @@ func TestPermissionAfterCancelHandledNormally(t *testing.T) {
 		t.Errorf("answered %+v, want the handler's selected outcome", resp.Outcome)
 	}
 }
+
+// TestCloseSessionCancelsTurn requires session/close to cancel the session's
+// running turn, with ErrPromptCancelled as its cause and the cancelled stop
+// reason as its answer, as if session/cancel had been sent
+// (0019-PLAN-behaviour-fixes.md, B4).
+func TestCloseSessionCancelsTurn(t *testing.T) {
+	t.Parallel()
+	started, causes := make(chan struct{}, 1), make(chan error, 1)
+	c := promptPair(t, agentFuncs{PromptFunc: func(ctx context.Context, _ PromptRequest) (PromptResponse, error) {
+		started <- struct{}{}
+		<-ctx.Done()
+		causes <- context.Cause(ctx)
+		return PromptResponse{}, ctx.Err()
+	}})
+	answer := prompt(t, c, "s")
+	within(t, started, "the turn")
+	if _, err := c.CloseSession(t.Context(), CloseSessionRequest{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	if cause := within(t, causes, "the turn's end"); !errors.Is(cause, ErrPromptCancelled) {
+		t.Errorf("context.Cause = %v, want ErrPromptCancelled", cause)
+	}
+	if resp := within(t, answer, "the prompt's answer"); resp.StopReason != StopReasonCancelled {
+		t.Errorf("the prompt was answered %q, want cancelled", resp.StopReason)
+	}
+}
+
+// TestCloseSessionAnswersPendingPermissions requires a session/close the agent
+// answers with success to answer the session's pending permission requests
+// with the cancelled outcome, and to leave another session's alone
+// (0019-PLAN-behaviour-fixes.md, B4).
+func TestCloseSessionAnswersPendingPermissions(t *testing.T) {
+	t.Parallel()
+	release, started := make(chan struct{}), make(chan ToolCallId, 2)
+	asc, c := permissionPair(t, agentFuncs{}, func(_ context.Context, p RequestPermissionRequest) (RequestPermissionResponse, error) {
+		started <- p.ToolCall.ToolCallId
+		<-release
+		return RequestPermissionResponse{Outcome: NewRequestPermissionOutcomeSelected("allow")}, nil
+	})
+	mine, other := askPermission(t, asc, "s", "mine"), askPermission(t, asc, "t", "other")
+	within(t, started, "a permission request")
+	within(t, started, "a permission request")
+	if _, err := c.CloseSession(t.Context(), CloseSessionRequest{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	if resp := within(t, mine, "the closed session's answer"); resp.Outcome.Cancelled == nil {
+		t.Errorf("the closed session's request answered %+v, want the cancelled outcome", resp.Outcome)
+	}
+	select {
+	case resp := <-other:
+		t.Errorf("session t's request answered %+v by session s's close", resp.Outcome)
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(release)
+	if resp := within(t, other, "session t's answer"); resp.Outcome.Selected == nil {
+		t.Errorf("session t's request answered %+v, want its handler's", resp.Outcome)
+	}
+}
+
+// TestFailedCloseLeavesPermissionsPending requires a session/close the agent
+// refuses to leave the session's pending permission requests to their
+// handlers, the turn possibly still running (0019-PLAN-behaviour-fixes.md, B4).
+func TestFailedCloseLeavesPermissionsPending(t *testing.T) {
+	t.Parallel()
+	release, started := make(chan struct{}), make(chan ToolCallId, 1)
+	asc, c := permissionPair(t, agentFuncs{CloseSessionFunc: func(context.Context, CloseSessionRequest) (CloseSessionResponse, error) {
+		return CloseSessionResponse{}, NewInvalidParams(map[string]any{"error": "unknown session"})
+	}}, func(_ context.Context, p RequestPermissionRequest) (RequestPermissionResponse, error) {
+		started <- p.ToolCall.ToolCallId
+		<-release
+		return RequestPermissionResponse{Outcome: NewRequestPermissionOutcomeSelected("allow")}, nil
+	})
+	answer := askPermission(t, asc, "s", "mine")
+	within(t, started, "the permission request")
+	if _, err := c.CloseSession(t.Context(), CloseSessionRequest{SessionId: "s"}); err == nil {
+		t.Fatal("the refused close returned no error")
+	}
+	select {
+	case resp := <-answer:
+		t.Fatalf("a refused close answered the pending request %+v", resp.Outcome)
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(release)
+	if resp := within(t, answer, "the handler's answer"); resp.Outcome.Selected == nil {
+		t.Errorf("answered %+v, want the handler's selected outcome", resp.Outcome)
+	}
+}
+
+// receiptAgent is an agent whose turns run until cancelled or two seconds,
+// handled through its dispatch with the receipt numbers a test gives, as the
+// receive loop would give them.
+type receiptAgent struct {
+	t       *testing.T
+	asc     *AgentSideConnection
+	started chan struct{}
+}
+
+func newReceiptAgent(t *testing.T) *receiptAgent {
+	t.Helper()
+	ra := &receiptAgent{t: t, started: make(chan struct{}, 4)}
+	ra.asc = NewAgentSideConnection(agentFuncs{PromptFunc: func(ctx context.Context, _ PromptRequest) (PromptResponse, error) {
+		ra.started <- struct{}{}
+		select {
+		case <-ctx.Done():
+			return PromptResponse{}, ctx.Err()
+		case <-time.After(2 * time.Second):
+			return PromptResponse{StopReason: StopReasonEndTurn}, nil
+		}
+	}}, io.Discard, idleReader(t))
+	negotiate(t, ra.asc, allAdvertised())
+	return ra
+}
+
+// prompt handles session/prompt for session s with receipt r on its own
+// goroutine and returns where its stop reason arrives.
+func (ra *receiptAgent) prompt(r uint64) <-chan StopReason {
+	out := make(chan StopReason, 1)
+	go func() {
+		res, rerr := ra.asc.handle(context.WithValue(ra.t.Context(), receiptKey{}, r), AgentMethodSessionPrompt,
+			json.RawMessage(`{"sessionId":"s","prompt":[]}`))
+		resp, ok := res.(PromptResponse)
+		if rerr != nil || !ok {
+			ra.t.Errorf("prompt %d: %v %v", r, res, rerr)
+		}
+		out <- resp.StopReason
+	}()
+	return out
+}
+
+// cancel handles session/cancel for session s with receipt r.
+func (ra *receiptAgent) cancel(r uint64) {
+	if _, rerr := ra.asc.handle(context.WithValue(ra.t.Context(), receiptKey{}, r), AgentMethodSessionCancel,
+		json.RawMessage(`{"sessionId":"s"}`)); rerr != nil {
+		ra.t.Fatalf("cancel %d: %v", r, rerr)
+	}
+}
+
+// stored waits until session s's turn of receipt r is stored.
+func (ra *receiptAgent) stored(r uint64) {
+	for deadline := time.Now().Add(2 * time.Second); ; {
+		ra.asc.mu.Lock()
+		turn := ra.asc.sessionCancels["s"]
+		ra.asc.mu.Unlock()
+		if turn != nil && turn.receipt == r {
+			return
+		}
+		if time.Now().After(deadline) {
+			ra.t.Fatalf("turn %d was not stored", r)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// TestCancelOrderedAcrossTwoPrompts requires a cancel to apply to every prompt
+// of its session received before it, whatever order the turns are stored in
+// (0019-PLAN-behaviour-fixes.md, B5).
+func TestCancelOrderedAcrossTwoPrompts(t *testing.T) {
+	t.Parallel()
+	t.Run("a stored turn and one stored after the cancel", func(t *testing.T) {
+		t.Parallel()
+		ra := newReceiptAgent(t)
+		first := ra.prompt(1)
+		within(t, ra.started, "turn 1")
+		ra.stored(1)
+		ra.cancel(3)
+		second := ra.prompt(2)
+		if got := within(t, first, "turn 1's answer"); got != StopReasonCancelled {
+			t.Errorf("turn 1, received before the cancel, answered %q", got)
+		}
+		if got := within(t, second, "turn 2's answer"); got != StopReasonCancelled {
+			t.Errorf("turn 2, received before the cancel and stored after it, answered %q", got)
+		}
+	})
+	t.Run("two turns stored after the cancel", func(t *testing.T) {
+		t.Parallel()
+		ra := newReceiptAgent(t)
+		ra.cancel(3)
+		first := ra.prompt(1)
+		if got := within(t, first, "turn 1's answer"); got != StopReasonCancelled {
+			t.Errorf("turn 1, received before the cancel, answered %q", got)
+		}
+		second := ra.prompt(2)
+		if got := within(t, second, "turn 2's answer"); got != StopReasonCancelled {
+			t.Errorf("turn 2, received before the cancel, answered %q", got)
+		}
+	})
+}
+
+// TestLateCancelsBounded requires the kept cancels to stay bounded: with no
+// request in flight a cancel keeps at most itself, a cancel kept while an
+// older request runs stays until that request returns, and the next cancel
+// then removes it (0019-PLAN-behaviour-fixes.md, B7).
+func TestLateCancelsBounded(t *testing.T) {
+	t.Parallel()
+	release, listing := make(chan struct{}), make(chan struct{}, 1)
+	handled := make(chan struct{}, 1024)
+	asc, c := permissionPair(t, agentFuncs{
+		CancelFunc: func(context.Context, CancelNotification) error {
+			handled <- struct{}{}
+			return nil
+		},
+		ListSessionsFunc: func(context.Context, ListSessionsRequest) (ListSessionsResponse, error) {
+			listing <- struct{}{}
+			<-release
+			return ListSessionsResponse{Sessions: []SessionInfo{}}, nil
+		},
+	}, nil)
+	kept := func() int {
+		asc.mu.Lock()
+		defer asc.mu.Unlock()
+		return len(asc.lateCancels)
+	}
+	cancelAll := func(prefix string, n int) {
+		t.Helper()
+		for i := range n {
+			if err := c.Cancel(t.Context(), CancelNotification{SessionId: SessionId(fmt.Sprintf("%s%d", prefix, i))}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for range n {
+			within(t, handled, "a cancel")
+		}
+	}
+
+	cancelAll("idle-", 500)
+	if n := kept(); n > 1 {
+		t.Fatalf("%d cancels kept with no request in flight, want at most 1", n)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.ListSessions(t.Context(), ListSessionsRequest{})
+		done <- err
+	}()
+	within(t, listing, "the long request")
+	cancelAll("busy-", 100)
+	if n := kept(); n != 100 {
+		t.Fatalf("%d cancels kept while an older request runs, want 100", n)
+	}
+	close(release)
+	if err := within(t, done, "the long request's answer"); err != nil {
+		t.Fatal(err)
+	}
+	// The request's receipt is removed after its answer is written.
+	for deadline := time.Now().Add(2 * time.Second); ; {
+		asc.conn.mu.Lock()
+		running := len(asc.conn.inflightReceipts)
+		asc.conn.mu.Unlock()
+		if running == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the long request stayed in flight")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancelAll("after-", 1)
+	if n := kept(); n != 1 {
+		t.Fatalf("%d cancels kept after the request returned, want 1", n)
+	}
+}

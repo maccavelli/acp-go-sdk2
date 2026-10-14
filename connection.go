@@ -278,11 +278,15 @@ type Connection struct {
 	r       io.Reader
 	handler MethodHandler
 
-	mu                   sync.Mutex
-	writeMu              sync.Mutex
-	nextID               atomic.Uint64
-	pending              map[string]*pendingResponse
-	inflight             map[string]*inflightRequest
+	mu       sync.Mutex
+	writeMu  sync.Mutex
+	nextID   atomic.Uint64
+	pending  map[string]*pendingResponse
+	inflight map[string]*inflightRequest
+	// inflightReceipts holds the receipt of every received request whose
+	// handler is running, a null id's included (0019-PLAN-behaviour-fixes.md,
+	// B7).
+	inflightReceipts     map[uint64]struct{}
 	pendingCancelRequest []string
 	cancelRequestSignal  chan struct{}
 
@@ -499,6 +503,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		handler:             handler,
 		pending:             make(map[string]*pendingResponse),
 		inflight:            make(map[string]*inflightRequest),
+		inflightReceipts:    make(map[uint64]struct{}),
 		cancelRequestSignal: make(chan struct{}, 1),
 		ctx:                 ctx,
 		cancel:              cancel,
@@ -958,6 +963,10 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		// own (0019-PLAN-behaviour-fixes.md, B11).
 		idKey := ""
 		own := &inflightRequest{cancel: cancel}
+		receipt := *received
+		c.mu.Lock()
+		c.inflightReceipts[receipt] = struct{}{}
+		c.mu.Unlock()
 		if string(*msg.ID) != jsonNull {
 			var err error
 			if idKey, err = canonicalJSONRPCIDKey(*msg.ID); err != nil {
@@ -976,13 +985,12 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		m := msg
 		go func(m *anyMessage, idKey string, reqCtx context.Context, own *inflightRequest) {
 			defer func() {
-				if idKey != "" {
-					c.mu.Lock()
-					if c.inflight[idKey] == own {
-						delete(c.inflight, idKey)
-					}
-					c.mu.Unlock()
+				c.mu.Lock()
+				if idKey != "" && c.inflight[idKey] == own {
+					delete(c.inflight, idKey)
 				}
+				delete(c.inflightReceipts, receipt)
+				c.mu.Unlock()
 				own.cancel(nil)
 			}()
 			c.handleInbound(reqCtx, m)
@@ -1024,6 +1032,42 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		return false
 	}
 	return true
+}
+
+// keepCancel keeps receipt, a session/cancel's or a session close's, as the
+// session's kept cancel, for a prompt received before it whose turn is not
+// stored yet. Such a prompt is a request still in flight, so a kept receipt
+// that no in-flight request is older than can no longer apply: each keep
+// first removes those (0019-PLAN-behaviour-fixes.md, B5 and B7). A receipt of
+// 0, from a context receive did not make, is not kept. The caller holds the
+// lock that guards kept.
+func (c *Connection) keepCancel(kept map[string]uint64, session string, receipt uint64) {
+	if receipt == 0 {
+		return
+	}
+	oldest, inFlight := c.oldestInflight()
+	for k, r := range kept {
+		if !inFlight || r <= oldest {
+			delete(kept, k)
+		}
+	}
+	if receipt > kept[session] {
+		kept[session] = receipt
+	}
+}
+
+// oldestInflight returns the smallest receipt of a received request whose
+// handler is running, and false when there is none.
+func (c *Connection) oldestInflight() (uint64, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var oldest uint64
+	for r := range c.inflightReceipts {
+		if oldest == 0 || r < oldest {
+			oldest = r
+		}
+	}
+	return oldest, oldest != 0
 }
 
 // isPending reports whether raw is the id of a request this connection waits

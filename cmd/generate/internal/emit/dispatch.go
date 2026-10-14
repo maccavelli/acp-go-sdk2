@@ -52,10 +52,14 @@ func promptCase(f *goFile, recv ast.Expr, mi *model.Method, gate ast.Expr) []ast
 			[]ast.Stmt{
 				ifStmt(nil, id("ok"), exprStmt(call(dot("prev", "cancel"), id("superseded")))),
 				assign(exprs(sessionCancel(field)), id("turn")),
-				ifStmt(nil, binary(binary(id("r"), token.NEQ, intLit(0)), token.LAND,
+				// A kept cancel received after this prompt cancels it, and stays
+				// for any other prompt received before it; a prompt newer than
+				// the kept cancel ends it, as a prompt stored after a newer one
+				// is superseded anyway (0019-PLAN-behaviour-fixes.md, B5).
+				ifElse(nil, binary(binary(id("r"), token.NEQ, intLit(0)), token.LAND,
 					binary(index(dot("a", "lateCancels"), sessionKey(field)), token.GTR, id("r"))),
-					exprStmt(call(id("cancel"), id("ErrPromptCancelled")))),
-				exprStmt(call(id("delete"), dot("a", "lateCancels"), sessionKey(field))),
+					[]ast.Stmt{exprStmt(call(id("cancel"), id("ErrPromptCancelled")))},
+					[]ast.Stmt{exprStmt(call(id("delete"), dot("a", "lateCancels"), sessionKey(field)))}),
 			},
 		),
 		lockCall("Unlock"),
@@ -80,23 +84,21 @@ func promptCase(f *goFile, recv ast.Expr, mi *model.Method, gate ast.Expr) []ast
 // if any, with ErrPromptCancelled as its cause.
 //
 // A turn received after the cancel is not its: a cancel the receive loop read
-// before the prompt does not apply to it. A cancel that finds no earlier turn
-// is kept in lateCancels, for a prompt received before it whose turn is not
-// stored yet (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 5
-// deviation). A cancel with no receipt applies to the running turn.
+// before the prompt does not apply to it. Every cancel is kept in lateCancels,
+// whether or not it found a turn, for a prompt received before it whose turn
+// is not stored yet (0017-PLAN-remediate-acp-v1-conformance-violations.md,
+// step 5 deviation; 0019-PLAN-behaviour-fixes.md, B5); keepCancel bounds what
+// is kept (B7). A cancel with no receipt applies to the running turn.
 func cancelActivePrompt(field string) []ast.Stmt {
-	late := index(dot("a", "lateCancels"), sessionKey(field))
 	applies := binary(binary(id("s"), token.EQL, intLit(0)), token.LOR, binary(dot("cn", "receipt"), token.LSS, id("s")))
 	return []ast.Stmt{
 		define(exprs(id("s")), call(id("receiptOf"), id("ctx"))),
 		lockCall("Lock"),
-		ifElse(define(exprs(id("cn"), id("ok")), sessionCancel(field)), binary(id("ok"), token.LAND, paren(applies)),
-			[]ast.Stmt{
-				exprStmt(call(dot("cn", "cancel"), id("ErrPromptCancelled"))),
-				exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey(field))),
-			},
-			[]ast.Stmt{ifStmt(nil, binary(id("s"), token.GTR, late), assign(exprs(index(dot("a", "lateCancels"), sessionKey(field))), id("s")))},
+		ifStmt(define(exprs(id("cn"), id("ok")), sessionCancel(field)), binary(id("ok"), token.LAND, paren(applies)),
+			exprStmt(call(dot("cn", "cancel"), id("ErrPromptCancelled"))),
+			exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey(field))),
 		),
+		exprStmt(call(dot("a", "conn", "keepCancel"), dot("a", "lateCancels"), sessionKey(field), id("s"))),
 		lockCall("Unlock"),
 	}
 }
@@ -412,6 +414,11 @@ func agentFile(m *model.Model) *goFile {
 			body = append(body, unmarshalValidate(dot("a", "conn"), mi.Req, gate())...)
 			pre, recv := agentAssert(f, m.InterfaceOf(mi.Binding), mi.GoName, mi.Req, mi.Resp, mi.HasResult)
 			body = append(body, pre...)
+			// A session close first does what the prompt-turn cancel does
+			// (0019-PLAN-behaviour-fixes.md, B4).
+			if mi.ClosesSession {
+				body = append(body, cancelActivePrompt(mi.SessionField)...)
+			}
 			switch {
 			case mi.Initializes:
 				body = append(body, initializeCase(recv, mi)...)
@@ -611,6 +618,13 @@ func emitOutbound(f *goFile, recvType string, methods []*model.Method, gated boo
 			define(exprs(id("resp"), id("err")),
 				call(index(id("sendRequest"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), id("params"), resultArg())),
 		)
+		// A session close the agent accepted has ended the session's turn, so
+		// its pending requests are answered as on the prompt-turn cancel
+		// (0019-PLAN-behaviour-fixes.md, B4).
+		if mi.CancelsPending {
+			body = append(body, ifStmt(nil, binary(id("err"), token.EQL, nilExpr()),
+				exprStmt(call(dot("c", "pending", "cancel"), call(id("string"), dot("params", mi.SessionField))))))
+		}
 		// A prompt turn whose context ended sends its cancel, best effort.
 		if c := mi.Canceller; mi.PromptTurn && c != nil {
 			body = append(body, ifStmt(nil, errNotNil(),

@@ -18,6 +18,9 @@ const protocolDefs = `{
 		"properties":{"stopReason":{"$ref":"#/$defs/StopReason"}}},
 	"CancelNotification":{"type":"object","x-side":"agent","x-method":"s/cancel","required":["sessionId"],
 		"properties":{"sessionId":{"allOf":[{"$ref":"#/$defs/SessionId"}]}}},
+	"CloseRequest":{"type":"object","x-side":"agent","x-method":"s/close","required":["sessionId"],
+		"properties":{"sessionId":{"allOf":[{"$ref":"#/$defs/SessionId"}]}}},
+	"CloseResponse":{"type":"object","x-side":"agent","x-method":"s/close"},
 	"LoadSessionRequest":{"type":"object","x-side":"agent","x-method":"s/load"},
 	"LoadSessionResponse":{"type":"object","x-side":"agent","x-method":"s/load"},
 	"SessionNotification":{"type":"object","x-side":"client","x-method":"s/update"},
@@ -42,7 +45,7 @@ const protocolDefs = `{
 
 func protocolMeta() *load.Meta {
 	return &load.Meta{
-		AgentMethods:  map[string]string{"prompt": "s/prompt", "cancel": "s/cancel", "load": "s/load", "init": "s/init"},
+		AgentMethods:  map[string]string{"prompt": "s/prompt", "cancel": "s/cancel", "load": "s/load", "init": "s/init", "close": "s/close"},
 		ClientMethods: map[string]string{"update": "s/update", "ask": "s/ask"},
 	}
 }
@@ -59,6 +62,7 @@ func testProtocol() *Protocol {
 			{Side: "client", Wire: "s/ask", CancelledByPromptCancel: true, SessionKey: "sessionId", CancelledKey: "verdict", CancelledVariant: "withdrawn"},
 			{Side: "agent", Wire: "s/init", Initializes: true, VersionKey: "protocolVersion", RequestCapabilities: "clientCapabilities",
 				ResponseCapabilities: "agentCapabilities"},
+			{Side: "agent", Wire: "s/close", ClosesSession: true, SessionKey: "sessionId"},
 		},
 		HandWrittenHelpers: []string{"Block"},
 	}
@@ -121,6 +125,9 @@ func TestProtocolTableApplies(t *testing.T) {
 	if update.GoName != "SessionUpdate" {
 		t.Errorf("s/update: GoName %q", update.GoName)
 	}
+	if cl := methodByWire(m, "s/close"); !cl.ClosesSession || cl.SessionField != "SessionId" || !cl.CancelsPending {
+		t.Errorf("s/close: ClosesSession %v SessionField %q CancelsPending %v", cl.ClosesSession, cl.SessionField, cl.CancelsPending)
+	}
 	if got := interfaceNames(m); !slices.Equal(got, []string{"Agent", "Loader", "AgentExperimental", "Client", "ClientExperimental"}) {
 		t.Errorf("interfaces %v", got)
 	}
@@ -144,6 +151,9 @@ func TestProtocolTableApplies(t *testing.T) {
 	if plain.Initialize != nil || methodByWire(plain, "s/init").Initializes ||
 		methodByWire(plain, "s/ask").CancelledByPromptCancel || methodByWire(plain, "s/cancel").CancelsPending {
 		t.Errorf("without a table, a role applies: %+v %+v", plain.Initialize, methodByWire(plain, "s/ask"))
+	}
+	if cl := methodByWire(plain, "s/close"); cl.ClosesSession || cl.CancelsPending || cl.SessionField != "" {
+		t.Errorf("without a table, s/close closes its session: %+v", cl)
 	}
 	if p := methodByWire(plain, "s/prompt"); p.PromptTurn || p.Canceller != nil || p.SessionField != "" {
 		t.Errorf("without a table, s/prompt is a prompt turn: %+v", p)
@@ -252,6 +262,25 @@ func TestProtocolTableRefuses(t *testing.T) {
 		}, wanted: []string{"interface Loader2", "another interface has its binding"}},
 		{name: "unexported interface name", table: func(p *Protocol) { p.Interfaces[0].Name = "loader" },
 			wanted: []string{"interface loader", `"loader" is not an exported Go identifier`}},
+		{name: "session close on the client side", table: func(p *Protocol) { p.Methods[3].ClosesSession, p.Methods[3].SessionKey = true, "sessionId" },
+			wanted: []string{`client method "s/update"`, "only an agent method closes a session"}},
+		{name: "session close and its cancel at once", table: func(p *Protocol) { p.Methods[2].ClosesSession = true },
+			wanted: []string{`agent method "s/cancel"`, "a session close cannot be a prompt turn or its cancel"}},
+		{name: "session close without a session key", table: func(p *Protocol) { p.Methods[6].SessionKey = "" },
+			wanted: []string{`agent method "s/close"`, "a prompt-turn role needs a session key"}},
+		{name: "session close on a notification", table: func(p *Protocol) {
+			p.Methods[2].CancelsPromptTurn, p.Methods[2].ClosesSession = false, true
+			p.Methods[1] = MethodRule{Side: "agent", Wire: "s/prompt"}
+		}, wanted: []string{`agent method "s/cancel"`, "a session close must be a request"}},
+		{name: "session close without a cancel", table: func(p *Protocol) {
+			p.Methods[1] = MethodRule{Side: "agent", Wire: "s/prompt"}
+			p.Methods[2] = MethodRule{Side: "agent", Wire: "s/cancel"}
+		}, wanted: []string{`agent method "s/close"`, "a session close needs one prompt-turn cancel on its side, found 0"}},
+		{name: "session close with another session type", defs: func(s string) string {
+			return strings.Replace(s, `"x-method":"s/close","required":["sessionId"],
+		"properties":{"sessionId":{"allOf":[{"$ref":"#/$defs/SessionId"}]}}`, `"x-method":"s/close","required":["sessionId"],
+		"properties":{"sessionId":{"type":"string"}}`, 1)
+		}, wanted: []string{`agent method "s/close"`, "its cancel s/cancel keys the session by SessionId SessionId, not SessionId string"}},
 		{name: "prompt turn and its cancel at once", table: func(p *Protocol) { p.Methods[1].CancelsPromptTurn = true },
 			wanted: []string{`agent method "s/prompt"`, "it cannot be both a prompt turn and its cancel"}},
 		{name: "capabilities of another type in initialize", table: func(p *Protocol) { p.Methods[3].Capability = "fs" },
@@ -287,6 +316,7 @@ func TestProtocolTableRefuses(t *testing.T) {
 		{name: "answered on a cancel with no cancel", table: func(p *Protocol) {
 			p.Methods[1] = MethodRule{Side: "agent", Wire: "s/prompt"}
 			p.Methods[2] = MethodRule{Side: "agent", Wire: "s/cancel"}
+			p.Methods[6] = MethodRule{Side: "agent", Wire: "s/close"}
 		}, wanted: []string{`client method "s/ask"`, "the agent side has no prompt-turn cancel"}},
 		{name: "answered on a cancel, key not a union", table: func(p *Protocol) { p.Methods[4].CancelledKey = "sessionId" },
 			wanted: []string{`client method "s/ask"`, `"sessionId" is not a required property of AskResponse naming a union`}},
@@ -388,8 +418,11 @@ func checkCommittedRoles(t *testing.T, m *Model, r *MethodRule, mi *Method) {
 	if r.CancelledByPromptCancel && (mi.CancelledField != "Outcome" || mi.CancelledHelper != "NewRequestPermissionOutcomeCancelled") {
 		t.Errorf("%s: CancelledField %q CancelledHelper %q", r.Wire, mi.CancelledField, mi.CancelledHelper)
 	}
-	if r.CancelsPromptTurn && !mi.CancelsPending {
+	if (r.CancelsPromptTurn || r.ClosesSession) && !mi.CancelsPending {
 		t.Errorf("%s: CancelsPending false, want the client's pending requests answered", r.Wire)
+	}
+	if mi.ClosesSession != r.ClosesSession || (r.ClosesSession && mi.SessionField != "SessionId") {
+		t.Errorf("%s: ClosesSession %v SessionField %q", r.Wire, mi.ClosesSession, mi.SessionField)
 	}
 	if r.PromptTurn && (mi.StopField != "StopReason" || mi.StopConst != "StopReasonCancelled") {
 		t.Errorf("%s: StopField %q StopConst %q, want StopReason and StopReasonCancelled", r.Wire, mi.StopField, mi.StopConst)

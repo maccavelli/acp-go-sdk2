@@ -1,0 +1,193 @@
+The protocol table's session close: session/close ends its session's work as
+if session/cancel had been sent. The agent cancels the session's running turn,
+which is answered with the cancelled stop reason, before its handler runs; a
+close the agent answers with success answers the client's pending
+session/request_permission for that session with the cancelled outcome
+(0019-PLAN-behaviour-fixes.md, B4).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"session_prompt": "session/prompt", "session_cancel": "session/cancel", "session_close": "session/close"}, "clientMethods": {"session_request_permission": "session/request_permission"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "PromptRequest": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/prompt"},
+  "StopReason": {"type": "string", "enum": ["end_turn", "cancelled"]},
+  "PromptResponse": {"type": "object", "properties": {"stopReason": {"$ref": "#/$defs/StopReason"}}, "required": ["stopReason"], "x-side": "agent", "x-method": "session/prompt"},
+  "CancelNotification": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/cancel"},
+  "CloseSessionRequest": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/close"},
+  "CloseSessionResponse": {"type": "object", "x-side": "agent", "x-method": "session/close"},
+  "RequestPermissionRequest": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "client", "x-method": "session/request_permission"},
+  "RequestPermissionResponse": {"type": "object", "properties": {"outcome": {"$ref": "#/$defs/RequestPermissionOutcome"}}, "required": ["outcome"], "x-side": "client", "x-method": "session/request_permission"},
+  "RequestPermissionOutcome": {"oneOf": [
+    {"type": "object", "properties": {"outcome": {"type": "string", "const": "cancelled"}}, "required": ["outcome"]},
+    {"type": "object", "properties": {"outcome": {"type": "string", "const": "selected"}, "optionId": {"type": "string"}}, "required": ["outcome", "optionId"]}
+  ], "discriminator": {"propertyName": "outcome"}},
+  "AgentCapabilities": {"type": "object", "properties": {"sessionCapabilities": {"$ref": "#/$defs/SessionCapabilities"}}},
+  "SessionCapabilities": {"type": "object", "properties": {"close": {"anyOf": [{"$ref": "#/$defs/SessionCloseCapabilities"}, {"type": "null"}]}}},
+  "SessionCloseCapabilities": {"type": "object"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{Cancel(ctx context.Context, params CancelNotification) error; CloseSession(ctx context.Context, params CloseSessionRequest) (CloseSessionResponse, error); Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error)}
+type AgentCapabilities struct{SessionCapabilities SessionCapabilities "json:\"sessionCapabilities\""}
+type AgentExperimental interface{}
+const AgentMethodSessionCancel untyped string = "session/cancel"
+const AgentMethodSessionClose untyped string = "session/close"
+const AgentMethodSessionPrompt untyped string = "session/prompt"
+type AgentSideConnection struct{conn *Connection; agent Agent; mu sync.Mutex; sessionCancels map[string]*promptTurn; lateCancels map[string]uint64}
+type CancelNotification struct{SessionId string "json:\"sessionId\""}
+type CancelRequestNotification struct{}
+type Client interface{RequestPermission(ctx context.Context, params RequestPermissionRequest) (RequestPermissionResponse, error)}
+type ClientExperimental interface{}
+const ClientMethodSessionRequestPermission untyped string = "session/request_permission"
+type ClientSideConnection struct{conn *Connection; client Client; pending pendingRequests}
+type CloseSessionRequest struct{SessionId string "json:\"sessionId\""}
+type CloseSessionResponse struct{}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewRequestPermissionOutcomeCancelled() RequestPermissionOutcome
+func NewRequestPermissionOutcomeSelected(optionId string) RequestPermissionOutcome
+type PromptRequest struct{SessionId string "json:\"sessionId\""}
+type PromptResponse struct{StopReason StopReason "json:\"stopReason\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type RequestPermissionOutcome struct{Cancelled *RequestPermissionOutcomeCancelled "json:\"-\""; Selected *RequestPermissionOutcomeSelected "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type RequestPermissionOutcomeCancelled struct{Outcome string "json:\"outcome\""}
+type RequestPermissionOutcomeSelected struct{OptionId string "json:\"optionId\""; Outcome string "json:\"outcome\""}
+type RequestPermissionRequest struct{SessionId string "json:\"sessionId\""}
+type RequestPermissionResponse struct{Outcome RequestPermissionOutcome "json:\"outcome\""}
+type SessionCapabilities struct{Close *SessionCloseCapabilities "json:\"close,omitempty\""}
+type SessionCloseCapabilities struct{}
+type StopReason string
+const StopReasonCancelled StopReason = "cancelled"
+const StopReasonEndTurn StopReason = "end_turn"
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).RequestPermission(ctx context.Context, params RequestPermissionRequest) (RequestPermissionResponse, error)
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelNotification).UnmarshalJSON(b []byte) error
+func (*CancelNotification).Validate() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Cancel(ctx context.Context, params CancelNotification) error
+func (*ClientSideConnection).CloseSession(ctx context.Context, params CloseSessionRequest) (CloseSessionResponse, error)
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*CloseSessionRequest).UnmarshalJSON(b []byte) error
+func (*CloseSessionRequest).Validate() error
+func (*CloseSessionResponse).Validate() error
+func (*PromptRequest).UnmarshalJSON(b []byte) error
+func (*PromptRequest).Validate() error
+func (*PromptResponse).UnmarshalJSON(b []byte) error
+func (*PromptResponse).Validate() error
+func (RequestPermissionOutcome).MarshalJSON() ([]byte, error)
+func (*RequestPermissionOutcome).UnmarshalJSON(b []byte) error
+func (*RequestPermissionOutcome).Validate() error
+func (*RequestPermissionOutcomeSelected).UnmarshalJSON(b []byte) error
+func (*RequestPermissionRequest).UnmarshalJSON(b []byte) error
+func (*RequestPermissionRequest).Validate() error
+func (*RequestPermissionResponse).UnmarshalJSON(b []byte) error
+func (*RequestPermissionResponse).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"errors"
+	"io"
+	"testing"
+	"time"
+)
+
+// closingAgent's turn runs until its context ends, and reports its cause.
+type closingAgent struct{ started, ended chan error }
+
+func (a closingAgent) Prompt(ctx context.Context, _ PromptRequest) (PromptResponse, error) {
+	a.started <- nil
+	<-ctx.Done()
+	a.ended <- context.Cause(ctx)
+	return PromptResponse{}, ctx.Err()
+}
+
+func (closingAgent) Cancel(context.Context, CancelNotification) error { return nil }
+
+func (closingAgent) CloseSession(context.Context, CloseSessionRequest) (CloseSessionResponse, error) {
+	return CloseSessionResponse{}, nil
+}
+
+// waitingClient's permission handler ignores its context until the test ends.
+type waitingClient struct{ asked, end chan struct{} }
+
+func (c waitingClient) RequestPermission(context.Context, RequestPermissionRequest) (RequestPermissionResponse, error) {
+	c.asked <- struct{}{}
+	<-c.end
+	return RequestPermissionResponse{Outcome: NewRequestPermissionOutcomeSelected("allow")}, nil
+}
+
+func closePair(t *testing.T) (*AgentSideConnection, *ClientSideConnection, closingAgent, waitingClient) {
+	t.Helper()
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	end := make(chan struct{})
+	t.Cleanup(func() { close(end); _ = cw.Close(); _ = aw.Close() })
+	agent := closingAgent{started: make(chan error, 1), ended: make(chan error, 1)}
+	client := waitingClient{asked: make(chan struct{}, 1), end: end}
+	return NewAgentSideConnection(agent, aw, ar), NewClientSideConnection(client, cw, cr), agent, client
+}
+
+func await[T any](t *testing.T, ch <-chan T, what string) T {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(10 * time.Second):
+		t.Fatalf("%s did not happen", what)
+		panic("unreachable")
+	}
+}
+
+// session/close cancels the session's running turn, answered cancelled.
+func TestCloseCancelsTurn(t *testing.T) {
+	_, c, agent, _ := closePair(t)
+	answer := make(chan PromptResponse, 1)
+	go func() {
+		resp, err := c.Prompt(context.Background(), PromptRequest{SessionId: "s"})
+		if err != nil {
+			t.Errorf("Prompt: %v", err)
+		}
+		answer <- resp
+	}()
+	await(t, agent.started, "the turn")
+	if _, err := c.CloseSession(t.Context(), CloseSessionRequest{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	if cause := await(t, agent.ended, "the turn's end"); !errors.Is(cause, ErrPromptCancelled) {
+		t.Errorf("the turn ended with %v, want ErrPromptCancelled", cause)
+	}
+	if resp := await(t, answer, "the prompt's answer"); resp.StopReason != StopReasonCancelled {
+		t.Errorf("the prompt was answered %q, want cancelled", resp.StopReason)
+	}
+}
+
+// A close the agent accepts answers the session's pending permission request
+// with the cancelled outcome, though its handler has not returned.
+func TestCloseAnswersPermission(t *testing.T) {
+	a, c, _, client := closePair(t)
+	answer := make(chan RequestPermissionResponse, 1)
+	go func() {
+		resp, err := a.RequestPermission(context.Background(), RequestPermissionRequest{SessionId: "s"})
+		if err != nil {
+			t.Errorf("RequestPermission: %v", err)
+		}
+		answer <- resp
+	}()
+	await(t, client.asked, "the permission request")
+	if _, err := c.CloseSession(t.Context(), CloseSessionRequest{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	if resp := await(t, answer, "the permission answer"); resp.Outcome.Cancelled == nil {
+		t.Errorf("answered %+v, want the cancelled outcome", resp.Outcome)
+	}
+}

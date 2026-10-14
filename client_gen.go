@@ -451,6 +451,9 @@ func (c *ClientSideConnection) CloseSession(ctx context.Context, params CloseSes
 		return CloseSessionResponse{}, err
 	}
 	resp, err := sendRequest[CloseSessionResponse](c.conn, ctx, AgentMethodSessionClose, params, c.resultGate)
+	if err == nil {
+		c.pending.cancel(string(params.SessionId))
+	}
 	return resp, err
 }
 

@@ -51,9 +51,13 @@ var ACP = Protocol{
 		// "Clients MUST NOT attempt to call session/delete."
 		{Side: sideAgent, Wire: "session/delete", Capability: "sessionCapabilities.delete"},
 		// session/resume and session/close: the session-setup sentence of
-		// session/load, for each.
+		// session/load, for each. Closing, "The Agent MUST cancel any ongoing
+		// work for that session as if session/cancel had been called"
+		// (session-setup); the client's pending requests for the session are
+		// answered as on session/cancel, once the agent answers with success
+		// (0019-PLAN-behaviour-fixes.md, B4).
 		{Side: sideAgent, Wire: "session/resume", Capability: "sessionCapabilities.resume"},
-		{Side: sideAgent, Wire: "session/close", Capability: "sessionCapabilities.close"},
+		{Side: sideAgent, Wire: "session/close", Capability: "sessionCapabilities.close", ClosesSession: true, SessionKey: keySessionID},
 		// Unstable: the schema's capability for session/fork.
 		{Side: sideAgent, Wire: "session/fork", Capability: "sessionCapabilities.fork"},
 		// "If agentCapabilities.auth.logout is omitted or null, the Agent does
