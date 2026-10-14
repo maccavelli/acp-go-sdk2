@@ -1,24 +1,34 @@
-# Release notes for v0.18.0, against v0.17.1
+# Release notes for v1.14.0, against v0.17.1
 
 Observed 2026-10-14 on `d4e1ec4`, for
-[0019-PLAN-api-decisions.md](../decisions/0019-PLAN-api-decisions.md), step 10. This report drafts the text of the GitHub release for
-`v0.18.0`, as `RELEASING.md` describes it. It decides nothing. Each statement names its source: a record, a commit, or the exported
+[0019-PLAN-api-decisions.md](../decisions/0019-PLAN-api-decisions.md), step 10, and amended on 2026-10-14 by
+[0020-PLAN-retract-accidental-v1-tag.md](../decisions/0020-PLAN-retract-accidental-v1-tag.md), step 2, for the version: drafted for
+`v0.18.0`, it keeps the file name it is cited by. This report drafts the text of the GitHub release for `v1.14.0`, as `RELEASING.md`
+describes it. It decides nothing. Each statement names its source: a record, a commit, or the exported
 API listing of the 0013 report's listing program, run on `git archive v0.17.1` (2411 lines) and on the tree at `d4e1ec4` (2413
-lines). Bring it up to date if more changes land before the tag. The version, `v0.18.0`, is decision 12 of
-[0019-MADR-remediate-debugging-pass-findings.md](../decisions/0019-MADR-remediate-debugging-pass-findings.md): phases 1 and 2 of that
-record ship together; the owner confirms it at the tag.
+lines). Bring it up to date if more changes land before the tag. Phases 1 and 2 of
+[0019-MADR-remediate-debugging-pass-findings.md](../decisions/0019-MADR-remediate-debugging-pass-findings.md) ship together (decision
+12), as `v1.14.0`, [0020-MADR-retract-accidental-v1-tag.md](../decisions/0020-MADR-retract-accidental-v1-tag.md); the owner confirms
+it at the tag.
 
 The section "Release text" is what goes into the GitHub release.
 
 ## Release text
 
-### v0.18.0
+### v1.14.0
 
 The ACP schema is still `1.25.0` (`git diff v0.17.1 -- schema/` is empty). This release fixes what a debugging pass of `v0.17.1`
 found: a deadlock, races, gaps against ACP and JSON-RPC 2.0, and a connection that could not be closed. It adds `Close`, a bound on
 concurrent requests, a race-free way for an agent or a client to keep its connection, and errors that keep their Go cause. Some
 changes are breaking for an application that relied on the old behaviour; each says what to do. The exported API grows by nine
 entries and loses seven methods no caller needs. (0019-MADR.)
+
+#### Versions
+
+This is the first `v1` release, and the upgrade from `v0.17.1` is direct. Under Go's module rules, a later incompatible change of the
+exported API needs a new module path ending in `/v2`. A tag `v1.13.0` was pushed by accident at an unfinished commit of this work,
+whose tests fail, and the Go module proxy keeps it; it is not a release. This release's `go.mod` retracts it, so `go get
+github.com/maccavelli/acp-go-sdk2@latest` and `go get -u` skip it, and a module that pins it is told it is retracted. (0020-MADR.)
 
 #### Breaking changes
 

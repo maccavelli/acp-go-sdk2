@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-14
 associated-madr: "0020-MADR-retract-accidental-v1-tag.md"
 ---
@@ -53,3 +53,29 @@ superseded only by a higher version's `go.mod`, which keeps the directive. Befor
 reverting it.
 
 ## Execution record
+
+### Step 1, records, 2026-10-14
+
+This pair, the 0019 MADR's amendment of decision 12, the 0019 phase 2 PLAN's deviation entry, and the `docs/README.md` rows;
+`make check-records`, `make markdownlint` and the identifier scan exit 0. The owner committed and pushed them as `3bef7cd`. The
+owner's choice of 2026-10-14, the directive added by the agent, approved step 2.
+
+### Step 2, the directive and the notes, 2026-10-14
+
+* `go.mod`: `retract v1.13.0 // Published accidentally from an unfinished commit.` after the `go` line. `go mod edit -json` shows
+  `"Retract": [{"Low": "v1.13.0", "High": "v1.13.0", "Rationale": "Published accidentally from an unfinished commit."}]`.
+* [0019-REPORT-release-notes-v0-18-0.md](../reports/0019-REPORT-release-notes-v0-18-0.md): the title, the header and the release
+  text's heading name `v1.14.0`; the header says the report was drafted for `v0.18.0` and keeps its file name; the release text
+  gains "Versions": the first `v1` release, the `/v2` rule for a later incompatible change, and `v1.13.0` retracted. Its
+  `docs/README.md` row follows the title.
+
+The probe of the MADR's "Confirmation", a scratch file proxy for `github.com/maccavelli/acp-go-sdk2` holding `v0.17.1`, `v1.13.0`
+and a `v1.14.0` whose `.mod` is the committed `go.mod`: `@latest` is `v1.14.0`; `-versions` lists `v0.17.1 v1.14.0`; `v1.13.0`
+pinned reports `retracted=[Published accidentally from an unfinished commit.]`, update `v1.14.0`. Seen to fail with the directive
+removed in a scratch copy of the `go.mod`: `-versions` lists `v0.17.1 v1.13.0 v1.14.0`, and `v1.13.0` pinned reports
+`retracted=[]`.
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0, `go mod tidy -diff` among
+its checks; no new `.go` file; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make
+check-records` and `make markdownlint` exit 0; the identifier scan finds nothing; the API listing against `v0.17.1` unchanged from
+the 0019 phase 2 PLAN's step 11. Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
