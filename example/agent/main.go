@@ -151,7 +151,8 @@ func (a *exampleAgent) CloseSession(ctx context.Context, params acp.CloseSession
 	return acp.CloseSessionResponse{}, acp.NewMethodNotFound(acp.AgentMethodSessionClose)
 }
 
-// Implement acp.AgentConnAware to receive the connection after construction.
+// SetAgentConnection implements acp.AgentConnAware: NewAgentSideConnection
+// hands the agent its connection before reading starts.
 func (a *exampleAgent) SetAgentConnection(conn *acp.AgentSideConnection) { a.conn = conn }
 
 func (a *exampleAgent) Initialize(ctx context.Context, params acp.InitializeRequest) (acp.InitializeResponse, error) {
@@ -447,7 +448,6 @@ func main() {
 	ag := newExampleAgent()
 	asc := acp.NewAgentSideConnection(ag, out, in)
 	asc.SetLogger(slog.Default())
-	ag.SetAgentConnection(asc)
 
 	// Block until the peer disconnects or the agent is interrupted.
 	select {

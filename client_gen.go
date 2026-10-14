@@ -25,6 +25,9 @@ func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.R
 	csc := &ClientSideConnection{}
 	csc.client = client
 	csc.conn = buildConnection(csc.handleWithExtensions, peerInput, peerOutput, opts...)
+	if aware, ok := client.(ClientConnAware); ok {
+		aware.SetClientConnection(csc)
+	}
 	csc.conn.start()
 	return csc
 }

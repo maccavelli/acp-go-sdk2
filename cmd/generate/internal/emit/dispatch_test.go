@@ -191,7 +191,9 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 		"agent_gen.go": {
 			"// AgentSideConnection represents the agent's view of a connection to a client.\ntype AgentSideConnection struct {",
 			"func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection {",
-			"asc.conn = buildConnection(asc.handleWithExtensions, peerInput, peerOutput, opts...)\n\tasc.conn.start()\n\treturn asc\n}\n",
+			"asc.conn = buildConnection(asc.handleWithExtensions, peerInput, peerOutput, opts...)\n" +
+				"\tif aware, ok := agent.(AgentConnAware); ok {\n\t\taware.SetAgentConnection(asc)\n\t}\n" +
+				"\tasc.conn.start()\n\treturn asc\n}\n",
 			"func (c *AgentSideConnection) DroppedNotifications() uint64 {",
 			"func (c *AgentSideConnection) Done() <-chan struct{} {",
 			"func (c *AgentSideConnection) SetLogger(l *slog.Logger) {",
@@ -201,7 +203,9 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 		"client_gen.go": {
 			"// ClientSideConnection provides the client's view of the connection and implements Agent calls.\ntype ClientSideConnection struct {",
 			"func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection {",
-			"csc.conn = buildConnection(csc.handleWithExtensions, peerInput, peerOutput, opts...)\n\tcsc.conn.start()\n\treturn csc\n}\n",
+			"csc.conn = buildConnection(csc.handleWithExtensions, peerInput, peerOutput, opts...)\n" +
+				"\tif aware, ok := client.(ClientConnAware); ok {\n\t\taware.SetClientConnection(csc)\n\t}\n" +
+				"\tcsc.conn.start()\n\treturn csc\n}\n",
 			"// It is for requests the typed methods cannot make: a method the agent\n",
 			"func (c *ClientSideConnection) Connection() *Connection {",
 		},

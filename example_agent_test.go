@@ -48,6 +48,8 @@ func (a *agentExample) Logout(ctx context.Context, params LogoutRequest) (Logout
 	return LogoutResponse{}, nil
 }
 
+// SetAgentConnection implements AgentConnAware: NewAgentSideConnection hands
+// the agent its connection before reading starts.
 func (a *agentExample) SetAgentConnection(c *AgentSideConnection) { a.conn = c }
 
 func (agentExample) Authenticate(ctx context.Context, _ AuthenticateRequest) (AuthenticateResponse, error) {
@@ -125,8 +127,9 @@ func (a *agentExample) Prompt(ctx context.Context, p PromptRequest) (PromptRespo
 // can connect via this process' stdin/stdout.
 func Example_agent() {
 	ag := &agentExample{}
+	// The constructor hands ag its connection before reading starts.
 	asc := NewAgentSideConnection(ag, os.Stdout, os.Stdin)
-	ag.SetAgentConnection(asc)
 	// In a real program, block until the peer disconnects:
 	// <-asc.Done()
+	_ = asc
 }

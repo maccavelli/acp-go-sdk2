@@ -525,6 +525,25 @@ func NewConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Rea
 	return c
 }
 
+// AgentConnAware is implemented by an Agent that keeps its connection, to send
+// the client requests and notifications. NewAgentSideConnection calls
+// SetAgentConnection once, after building the connection and before reading
+// starts, so a handler always finds it set. The method must only store the
+// connection: it is not running yet, and a send from the method would block
+// the constructor (0019-MADR-remediate-debugging-pass-findings.md,
+// decision 1).
+type AgentConnAware interface {
+	SetAgentConnection(conn *AgentSideConnection)
+}
+
+// ClientConnAware is implemented by a Client that keeps its connection, as
+// AgentConnAware is by an Agent: NewClientSideConnection calls
+// SetClientConnection once, before reading starts, and the method must only
+// store the connection.
+type ClientConnAware interface {
+	SetClientConnection(conn *ClientSideConnection)
+}
+
 // buildConnection builds a connection and starts none of its goroutines. The
 // side connections assign the result before calling start, so their handlers
 // never see it unset (0018-MADR-start-side-connections-after-assignment.md).

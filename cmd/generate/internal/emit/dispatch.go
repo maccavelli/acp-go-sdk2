@@ -106,8 +106,10 @@ func cancelActivePrompt(field string) []ast.Stmt {
 // side is what tells the two side connections apart.
 type side struct {
 	// typeName, ctor and local name the type, its constructor and the
-	// constructor's variable; field and iface the handler it dispatches to.
-	typeName, ctor, local, field, iface string
+	// constructor's variable; field and iface the handler it dispatches to;
+	// aware and setter the hand-written interface through which the
+	// constructor hands the handler its connection, and its method.
+	typeName, ctor, local, field, iface, aware, setter string
 	// doc and ctorDoc are the type's and the constructor's doc comments; peer
 	// names the other side in Connection's.
 	doc, ctorDoc []string
@@ -123,8 +125,8 @@ type side struct {
 func agentSide(m *model.Model) side {
 	return side{
 		typeName: "AgentSideConnection", ctor: "NewAgentSideConnection", local: "asc", field: "agent",
-		iface: m.InterfaceOf(model.BindAgent).Name,
-		doc:   []string{"AgentSideConnection represents the agent's view of a connection to a client."},
+		iface: m.InterfaceOf(model.BindAgent).Name, aware: "AgentConnAware", setter: "SetAgentConnection",
+		doc: []string{"AgentSideConnection represents the agent's view of a connection to a client."},
 		ctorDoc: []string{
 			"NewAgentSideConnection creates a new agent-side connection bound to the",
 			"provided Agent implementation. Optional ConnectionOption values configure",
@@ -141,8 +143,8 @@ func agentSide(m *model.Model) side {
 func clientSide(m *model.Model) side {
 	return side{
 		typeName: "ClientSideConnection", ctor: "NewClientSideConnection", local: "csc", field: "client",
-		iface: m.InterfaceOf(model.BindClient).Name,
-		doc:   []string{"ClientSideConnection provides the client's view of the connection and implements Agent calls."},
+		iface: m.InterfaceOf(model.BindClient).Name, aware: "ClientConnAware", setter: "SetClientConnection",
+		doc: []string{"ClientSideConnection provides the client's view of the connection and implements Agent calls."},
 		ctorDoc: []string{
 			"NewClientSideConnection creates a new client-side connection bound to the",
 			"provided Client implementation. Optional ConnectionOption values configure",
@@ -187,13 +189,17 @@ func emitSideConnection(f *goFile, s side) {
 	}
 	// The connection is assigned before it starts reading, so a message that
 	// is already waiting never reaches handle with conn unset
-	// (0018-MADR-start-side-connections-after-assignment.md).
+	// (0018-MADR-start-side-connections-after-assignment.md); the handler is
+	// handed it in between, for the same reason
+	// (0019-PLAN-api-decisions.md, B2).
 	body = append(body,
 		assign(exprs(dot(s.local, "conn")), &ast.CallExpr{
 			Fun:      id("buildConnection"),
 			Args:     exprs(dot(s.local, "handleWithExtensions"), id("peerInput"), id("peerOutput"), id("opts")),
 			Ellipsis: placeholderPos,
 		}),
+		ifStmt(define(exprs(id("aware"), id("ok")), typeAssert(id(s.field), id(s.aware))), id("ok"),
+			exprStmt(call(dot("aware", s.setter), id(s.local)))),
 		exprStmt(call(dot(s.local, "conn", "start"))),
 		ret(id(s.local)),
 	)

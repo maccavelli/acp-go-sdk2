@@ -366,3 +366,60 @@ tree it still reports "nothing bounds concurrent inbound requests (200 running)"
 `TestMaxConcurrentRequests` passes, and the planted break that ignores the limit fails it. Decision (owner): the B18 probe is exempt,
 as phase 1 exempted three of its probes, and `TestMaxConcurrentRequests` is the evidence for B18; the acceptance line is annotated.
 The MADR is unchanged: no decision and no asserted fact moves.
+
+### Step 5, the connection hand-off, 2026-10-13
+
+What was built:
+
+* `connection.go`: `AgentConnAware` (`SetAgentConnection(conn *AgentSideConnection)`) and `ClientConnAware`
+  (`SetClientConnection(conn *ClientSideConnection)`), exported and documented: the constructor calls the method once, after building
+  the connection and before reading starts, and the method must only store the connection, since a send from it would block the
+  constructor.
+* Generator, `cmd/generate/internal/emit/dispatch.go`: `side` names each side's interface and setter, and `emitSideConnection` emits
+  `if aware, ok := agent.(AgentConnAware); ok { aware.SetAgentConnection(asc) }`, and the client's equivalent, between the
+  assignment of `conn` and `start`. `cmd/generate/main_test.go`'s stub declares the two interfaces. Regenerated: `agent_gen.go` and
+  `client_gen.go`; the engine goldens list no function bodies and are unchanged.
+* `example/agent/main.go` and `example_agent_test.go` drop the call after the constructor, and the comment on each
+  `SetAgentConnection` says it implements `AgentConnAware`, which the constructor calls before reading starts. `Example_agent` keeps
+  its `asc` for the comment that blocks on `Done`, as `_ = asc`.
+
+Tests added, `conn_aware_test.go`: `TestConnAwareCalledBeforeReading`, for both sides, with a line already waiting on the input. The
+input's first read reports whether the setter had returned; the setter pauses 10 ms before it marks itself done, so a read begun
+during it finds the hand-off unfinished. Each side requires the setter to have returned before the first read and to have been given
+the connection the constructor returns, built; the agent's `initialize` handler, run for the waiting line, finds the connection set.
+`go test -race -count=20` of it, with `Example_agent`: ok, no race report. `TestSideConnectionsFollowTheModel` pins the call, per
+the first deviation below.
+
+Seen to fail, in a scratch copy (1 of 1): `b2-setter-after-start` (the generator emits the call after `start`, regenerated):
+"reading started before SetAgentConnection returned" and "the initialize handler found the connection unset" for the agent,
+"reading started before SetClientConnection returned" for the client. It failed by these assertions; the race detector reported
+nothing.
+
+The phase 2 probes, re-run on the step 5 tree with B2's restated, per the second deviation below: `TestP2_B2_HandOffBeforeReading`
+passes, "ran 50 hand-offs; the handler found the connection unset 0 times", with no race report; on `e5e716e`, extracted with `git
+archive` into a scratch directory, it fails, "CONFIRMED: the initialize handler found the connection unset in 50 of 50 hand-offs".
+B16's, B17's and B19's pass; B18's is exempt (step 4); the others fail, their steps being later, but B21's, which is text only. The
+original B2 probe's text is kept in the scratch directory beside the restated one.
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0, after `gofmt` aligned two
+`side` literals, which the first run reported; the new test file passes the same check; `GOEXPERIMENT=nojsonv2 go test ./...` exit
+0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan finds
+nothing; the API listing against `v0.17.1`, 2411 and 2420 lines, adds exactly the seven entries of steps 2 to 4 and `type
+AgentConnAware interface { SetAgentConnection(conn *AgentSideConnection) }` and `type ClientConnAware interface {
+SetClientConnection(conn *ClientSideConnection) }`, as expected for this step. Windows: `go test -count=1 -shuffle=on ./...` exit 0
+at the root and in `cmd/generate`.
+
+Deviation, 2026-10-13: "Design", B2, says `TestDispatchFollowsTheModel` gains the call. The test that pins the constructor is 0018's
+`TestSideConnectionsFollowTheModel` (`cmd/generate/internal/emit/dispatch_test.go`), which requires the exact text of the
+assignment, `start` and `return`; with the call between them it failed on both sides, with prompt turns and without.
+`TestDispatchFollowsTheModel` checks the names the dispatch takes from the model, and the interface and setter names are
+hand-written. Decision (owner): `TestSideConnectionsFollowTheModel`'s pinned sequence gains the call, assignment, then the call,
+then `start`, then `return`, on both sides; `TestDispatchFollowsTheModel` is unchanged. The MADR is unchanged.
+
+Deviation, 2026-10-13: the phase 2 probe of B2, `TestP2_B2_SetterAfterConstructorRaces`, assigns the connection to the
+agent after the constructor returns, as the examples did, so it races by construction whatever the SDK does: on the step 5 tree it
+still reports one `DATA RACE`. This step removes that assignment from the examples, and "Verification" requires the probe to pass.
+Decision (owner): restate the probe as the examples' new pattern, an agent that implements `SetAgentConnection` and assigns nothing
+after the constructor, whose `initialize` handler, run for input already waiting, must find its connection set with no race report;
+show that the restated probe fails on `e5e716e`, where the setter is never called, and passes on the step 5 tree, and record both
+runs here. The MADR is unchanged.

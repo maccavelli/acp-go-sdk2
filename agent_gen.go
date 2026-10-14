@@ -31,6 +31,9 @@ func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Read
 	asc.sessionCancels = make(map[string]*promptTurn)
 	asc.lateCancels = make(map[string]uint64)
 	asc.conn = buildConnection(asc.handleWithExtensions, peerInput, peerOutput, opts...)
+	if aware, ok := agent.(AgentConnAware); ok {
+		aware.SetAgentConnection(asc)
+	}
 	asc.conn.start()
 	return asc
 }
