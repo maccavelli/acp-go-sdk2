@@ -35,6 +35,9 @@ through `go/format` into memory, `internal/output` type-checks and writes them,
 and `internal/util` holds naming helpers. `make version` downloads the schema
 for the stamp in `schema/version` and runs the generator.
 
+Every line of a generated comment, a schema description's included, is
+written as a line comment, so no description can become code or a directive.
+
 The generator writes nothing until every file has rendered and the five files
 type-check with `go/types` together with the hand-written files of the output
 directory: those the go command would build there, at the language version of
@@ -53,19 +56,27 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   `session/cancel` or a later prompt for the session cancels with
   `ErrPromptCancelled` as its cause. Every received request and
   notification has a receipt number from `connection.go`, and a cancel
-  applies only to a turn received before it, kept in `lateCancels` when the
-  turn is not stored yet. When the handler returns, the case takes the
+  applies only to a turn received before it. Every cancel is also kept in
+  `lateCancels` for its session, for a prompt received before it whose turn
+  is not stored yet; `keepCancel` in `connection.go` first removes each kept
+  receipt that no request in flight is older than, from the receipts it
+  keeps of the requests in flight, and a prompt newer than the kept cancel
+  removes it. `session/close` (the table's `ClosesSession`) runs the same
+  cancel before its handler. When the handler returns, the case takes the
   lock, removes the turn and reads its cause once: a cancelled turn is
   answered `cancelled`, else the handler's answer stands.
   `ClientSideConnection.Prompt` sends `session/cancel` when its context ends
   with an error;
 - the permission requests: the client's `session/request_permission` case
   registers each pending request by session in `pending`, and its
-  `session/cancel` cancels them, so `answerUnlessCancelled` in
+  `session/cancel`, and a `session/close` the agent answers with success,
+  cancel them, so `answerUnlessCancelled` in
   `connection.go` answers each `cancelled` at once;
 - `initialize`: its version and capabilities keys. Both sides keep the
   request and the answer as a `Negotiation` in an
-  `atomic.Pointer[Negotiation]`, stored by the agent before its answer is
+  `atomic.Pointer[Negotiation]`, the JSON form of what was sent and received
+  (`jsonCopy`), and `Negotiated` returns a copy of it; it is stored by the
+  agent before its answer is
   written and by the client when `Initialize` returns, a zero version
   filled and another refused;
 - the name `SessionUpdate` for the client's `session/update` handler;
@@ -75,7 +86,8 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
 - `CapabilityRules`, the 18 properties and variants a capability gates,
   each with the specification sentence it follows, and the rule that an
   `authenticate` must not name a terminal auth method. `model/gates.go`
-  resolves each on its definition and gives a `gates` method to every type
+  resolves each on its definition and on each copy of it the merge made from
+  the unstable schema under another name, and gives a `gates` method to every type
   that holds one, directly or through fields, members or variants; with no
   `initialize` rule, none applies;
 - `AbsolutePaths`, the 17 properties the protocol requires to be absolute
@@ -148,7 +160,11 @@ On receipt, `checkInbound` runs on every decoded request, notification and
 response: the `WithInboundRewrite` hook, then `validate(filepath.IsAbs)`
 and the gate, then the `WithInboundValidation` hook with the validation
 error and, only if it accepts that, the gate's. The generated dispatch
-calls it after decoding, and `sendRequest` on a decoded result.
+first refuses a method received as the other kind, a request sent without an
+id or a notification sent with one, by the mark `connection.go` puts in the
+handler's context; it then decodes the params, absent ones as `{}`
+(`decodeParams`), and calls `checkInbound`; `sendRequest` calls it on a
+decoded result.
 
 Gates are generated and passed in, never stored: `connection.go` holds no
 record. `gateMessage` in `types_gen.go` lets `initialize` through, refuses
@@ -171,7 +187,19 @@ line is discarded and answered `-32600`; a line `json.Valid` refuses,
 `error` is a response, matched to its pending call and never answered;
 anything else is a request (an `id` member, `null` included) or a
 notification, and one that is not a valid Request object is answered
-`-32600`, with its id when valid and `null` otherwise.
+`-32600`, with its id when valid and `null` otherwise; `params` of `null` are
+read as absent. A malformed line is logged by its fault, size and id, never its
+content.
+
+Each request runs on its own goroutine, its receipt kept in `inflightReceipts`
+while it runs and its cancel in `inflight` by id, each request removing only
+its own entry. Notifications run one at a time from a queue, each handler's
+context marked with its sequence number. A response is returned after the
+notifications received before it are handled, unless the request was sent
+under the context of a notification whose handler is still running: that wait
+stops before it. A message's params are left out when they encode as `null`,
+refused when they encode as neither an object nor an array, and a request
+whose context has ended is not written.
 
 Checks that guard this:
 
@@ -190,14 +218,17 @@ Checks that guard this:
 - `paths_test.go` covers the absolute-path rule: sending, receiving, a
   handler's result, the two hooks and their order, and `Roots`; the engine
   case `accept-absolute-paths` covers the generated checks.
-- `cancel_test.go` covers prompt turns and permission requests on cancel,
+- `cancel_test.go` covers prompt turns and permission requests on cancel
+  and on `session/close`, cancels ordered across two prompts, and the bound
+  on kept cancels,
   `jsonrpc_test.go` the answers to malformed input and the size limit,
   `negotiation_test.go` the record and the version, and `gates_test.go`
   every method and value gate both ways, the hook's order, the raw paths,
   and `initialize`'s own check; the engine cases
   `accept-prompt-cancellation`, `accept-permission-cancellation`,
-  `accept-initialize-negotiation` and `accept-capability-gates` cover the
-  generated code.
+  `accept-initialize-negotiation`, `accept-capability-gates` and
+  `accept-session-close-cancels` cover the generated code, and
+  `accept-description-comment-markers` the generator's comments.
 - `TestEngineCases` in `cmd/generate` runs the generator on each synthetic case
   in `testdata/engine/`: a case with `want.err` must be refused with those
   lines, one with `want.api` must give that exported API. `TestEngineBehaviour`
