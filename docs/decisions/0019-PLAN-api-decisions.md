@@ -330,6 +330,8 @@ suite: `TestEngineCases` failed in each case with "API differs from want.api". M
 suite then passes. Decision (owner): accept the goldens; the 60 files join step 3's scope. The MADR is unchanged: no decision and no
 asserted fact moves.
 
+Amended 2026-10-13, during step 7: a send whose write had finished could return its context's error; see step 7's deviation.
+
 ### Step 4, a bound on concurrent inbound requests, 2026-10-13
 
 What was built:
@@ -470,3 +472,72 @@ refuses. `TestExtensionMethods_ClientToAgentRequest` and `TestExtensionMethods_A
 notification dropped before the handler. Decision (owner): each test completes a real `Initialize` from the client over its pipe
 pair before the extension call, as the other pair tests in that file do, with every assertion kept; the agent-to-client test keeps
 the client connection it discarded. A fourth, `TestExtensionMethods_UnknownRequest_ReturnsMethodNotFound`, still passed, but its `-32601` came from the gate rather than from the agent that lacks `HandleExtensionMethod`, so it no longer tested what it names; the owner chose the same change for it. `acp_test.go` joins step 6's scope. The MADR is unchanged: decision 7 names this change.
+
+### Step 7, an undeclared elicitation mode refused both ways, 2026-10-13
+
+What was built:
+
+* Model, `cmd/generate/internal/model`: the gate kind `GateUndeclaredVariant` (`protocol.go`), whose rule names a definition and a
+  capability prefix and takes no property or variant; `checkCapabilityRules` requires exactly that. `gateCheck` resolves it
+  (`gates.go`, `catchAll`) to a `GateCheckUndeclaredVariant` with the catch-all's Go field and, in the new `GateCheck.Disc`, the Go
+  field of the catch-all's discriminator, a string; a union without a catch-all, or a catch-all without a string discriminator, is
+  refused.
+* Table, `acp.go`: `{Side: client, Definition: CreateElicitationRequest, Capability: "elicitation", Kind: GateUndeclaredVariant}`,
+  its source `srcElicitation`, the sentence the form and url rules already cite; the definition's name is now the constant
+  `defElicitation`, which `golangci-lint`'s `goconst` asked for once it occurred three times.
+* Emitter, `emit/gates.go`: `if u.Other != nil` returns `&CapabilityError{Method: method, Capability: "elicitation." +
+  u.Other.Mode, Variant: u.Other.Mode}`, so the message reads "capability elicitation.telepathy not advertised: variant telepathy".
+  Regenerated: `types_gen.go` gains those seven lines in `(*CreateElicitationRequest).gates` and nothing else. Sending is refused;
+  received, `inboundError` answers `-32602`, as for every value gate, and the validation hook can accept it.
+
+Tests added or changed:
+
+* `gates_test.go`: `TestUndeclaredElicitationMode`. With every elicitation capability advertised, `CreateElicitation` in mode
+  `telepathy` returns that `*CapabilityError` and writes nothing; received, it is answered `-32602` without reaching the handler;
+  with a validation hook that returns nil, it is handled. Its send runs under a 2 s deadline, so a missing gate fails it instead of
+  waiting for an answer the idle peer never sends, which the first run of the first plant below showed: it hung until `go test`'s
+  timeout. `valueGates`' comment names this test beside the terminal-auth rule's; `TestValueGates` keeps its 19 gates, since nothing
+  advertises an undeclared mode and so it has no with-capability half.
+* `cmd/generate/internal/model/gates_test.go`: `TestCapabilityRulesApply` resolves the kind on a union with a catch-all, to its
+  `Other` field and `Kind` discriminator; `TestCapabilityRulesRefuse` gains the kind with a variant, without a capability, and on a
+  union without a catch-all; `checkCommittedGates` expects 22 checks from 19 rules and the elicitation catch-all's on `Mode`.
+* Engine case `accept-capability-undeclared-variant.txtar`, its `want.api` written by `-update` and read: a client-side
+  `CreateElicitationRequest` with form, url and a catch-all, and a behaviour test, `TestUndeclaredModeRefused`, over a real pair
+  with both modes advertised: `telepathy` refused on send, a raw send answered `-32602`, and `form` handled. The behaviour tests run
+  under `TestEngineBehaviour`, not `TestEngineCases`; the case's ran and passed.
+
+`go test -race -count=20` of `TestUndeclaredElicitationMode` and `TestValueGates`: ok.
+
+Seen to fail, each in its own scratch copy (3 of 3):
+
+* `b20-drop-emitted-check` (the emitter writes no check, regenerated): `TestUndeclaredElicitationMode`, "send = …context deadline
+  exceeded…, want *CapabilityError{elicitation/create, elicitation.telepathy, Variant telepathy}", "99 bytes written, want none",
+  "received: <nil>, handler ran true, want -32602 and no handler".
+* `b20-drop-emitted-check-engine` (the same edit, under `TestEngineBehaviour`): "CreateElicitation(telepathy) = <nil>". Its first
+  run filtered `TestEngineCases`, which runs no behaviour test, and passed; the plant was corrected and re-run.
+* `b20-no-catch-all-accepted` (the kind resolves to nothing on a union without a catch-all): `TestCapabilityRulesRefuse`, "Build =
+  <nil>, want an error containing \"Verdict is not a union with a catch-all variant\"".
+
+The amendment of step 3, per the deviation below: `go test -race -count=400 -run '^TestValueGates$'` on the step 7 tree, 0
+failures, against 8 on `a49d0bb`.
+
+The phase 2 probes, re-run on the step 7 tree: `TestP2_B20_UndeclaredModeBothWays` now passes, "sent: elicitation/create: capability
+elicitation.telepathy not advertised: variant telepathy; received: -32602"; B2's, B14's, B16's, B17's and B19's pass; B18's is
+exempt (step 4); B21's is text only.
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0, after the `goconst` finding
+above; no new `.go` file; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make
+check-records` and `make markdownlint` exit 0; the identifier scan finds nothing; the API listing against `v0.17.1` is unchanged
+from step 5, the nine expected entries. The generator module's suite under `-race`: ok. Windows: `go test -count=1 -shuffle=on
+./...` exit 0 at the root and in `cmd/generate`.
+
+Deviation, 2026-10-13, an amendment of step 3 (B16): the step 7 run of `TestValueGates` failed once,
+`session.notices_notice`, "send with the capability: {"code":-32800,…"context canceled"}". Measured with `go test -race
+-count=400 -run '^TestValueGates$'` in scratch copies: 8 failures on `a49d0bb`, every one a notification's send, and none on
+`29778f3`, before step 3. Two causes: in `sendMessage`, once the write has finished and the context has ended, both cases of the
+second `select` are ready and Go picks one at random, so a message that was written can be reported cancelled; and the test
+cancels as soon as it sees bytes, which can fall between the write and its report, where step 3's documented behaviour lets the
+context's error win. Decision (owner): `sendMessage` takes a write that has finished before it returns the context's cause; and
+`TestValueGates` waits for a notification's send, which returns once written, before it cancels, while a request is cancelled
+after its bytes are seen, as before. `connection.go` and `gates_test.go`'s `TestValueGates` join step 7's scope. The MADR is
+unchanged: decision 4's behaviour is as it states.

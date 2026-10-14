@@ -1496,7 +1496,14 @@ func (c *Connection) sendMessage(ctx context.Context, msg anyMessage) error {
 	case err := <-req.done:
 		return err
 	case <-ctx.Done():
-		return context.Cause(ctx)
+		// A write that finished as the context ended is reported, not the
+		// context's cause, which select may pick when both are ready.
+		select {
+		case err := <-req.done:
+			return err
+		default:
+			return context.Cause(ctx)
+		}
 	}
 }
 

@@ -82,6 +82,24 @@ func TestCapabilityRulesApply(t *testing.T) {
 	if c := gatesOf(withCopy, "Verdict"); len(c) != 1 || c[0].Value != "chosen" {
 		t.Errorf("Verdict beside its copy: %+v", c)
 	}
+
+	// An undeclared-variant rule resolves to the union's catch-all field and
+	// its discriminator's field (0019-PLAN-api-decisions.md, B20).
+	withOther := strings.Replace(protocolDefs, `"Update":`, `"Choice":{"anyOf":[
+		{"type":"object","required":["kind"],"properties":{"kind":{"const":"plain","type":"string"}}},
+		{"title":"other","type":"object","required":["kind"],"properties":{"kind":{"type":"string"}},
+		 "not":{"anyOf":[{"type":"object","required":["kind"],"properties":{"kind":{"const":"plain","type":"string"}}}]}}],
+		"discriminator":{"propertyName":"kind"}},"Update":`, 1)
+	p = testProtocol()
+	p.CapabilityRules = []CapabilityRule{{Side: "agent", Definition: "Choice", Capability: "session.list", Source: "s", Kind: GateUndeclaredVariant}}
+	undeclared, err := Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, withOther), Protocol: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := gatesOf(undeclared, "Choice"); len(c) != 1 || c[0].Kind != GateCheckUndeclaredVariant || c[0].Variant != "Other" ||
+		c[0].Disc != "Kind" || c[0].Capability != "session.list" || c[0].Value != "" || c[0].Field != "" {
+		t.Errorf("Choice: %+v", c)
+	}
 }
 
 // TestCapabilityRulesRefuse requires the table's checks of a rule's fields,
@@ -106,6 +124,12 @@ func TestCapabilityRulesRefuse(t *testing.T) {
 		{"non-empty without a property", with(func(r *CapabilityRule) { r.Kind, r.Variant = GateNonEmpty, "" }), "it lacks a field its kind needs"},
 		{"terminal auth with a capability", with(func(r *CapabilityRule) { r.Kind, r.Property = GateNotTerminalAuthMethod, "id" }),
 			"or has one it does not take"},
+		{"undeclared variant with a variant", with(func(r *CapabilityRule) { r.Kind = GateUndeclaredVariant }),
+			"or has one it does not take"},
+		{"undeclared variant without a capability", with(func(r *CapabilityRule) { r.Kind, r.Variant, r.Capability = GateUndeclaredVariant, "", "" }),
+			"it lacks a field its kind needs"},
+		{"undeclared variant of a union without a catch-all", with(func(r *CapabilityRule) { r.Kind, r.Variant = GateUndeclaredVariant, "" }),
+			"Verdict is not a union with a catch-all variant"},
 		{"two rules", []CapabilityRule{ok, ok}, `capability rule Verdict "chosen": two rules`},
 		{"a variant the union lacks", with(func(r *CapabilityRule) { r.Variant = "maybe" }), `Verdict has no variant "maybe"`},
 		{"a variant of a type that is not a union", with(func(r *CapabilityRule) { r.Definition = "Update" }), "Update is not a union"},
@@ -134,7 +158,8 @@ func TestCapabilityRulesRefuse(t *testing.T) {
 // the committed schema, as one check of its definition's gates and one of
 // each unstable copy of that definition: the three MCP rules on
 // UnstableMcpServer, the type of session/fork's servers
-// (0019-PLAN-behaviour-fixes.md, B6).
+// (0019-PLAN-behaviour-fixes.md, B6); and the undeclared elicitation mode on
+// the catch-all's mode (0019-PLAN-api-decisions.md, B20).
 func checkCommittedGates(t *testing.T, m *Model) {
 	t.Helper()
 	own := map[string][]GateCheck{}
@@ -147,8 +172,8 @@ func checkCommittedGates(t *testing.T, m *Model) {
 			}
 		}
 	}
-	if len(ACP.CapabilityRules) != 18 || n != 21 {
-		t.Errorf("%d checks resolve from %d capability rules, want 21 from 18: %v", n, len(ACP.CapabilityRules), own)
+	if len(ACP.CapabilityRules) != 19 || n != 22 {
+		t.Errorf("%d checks resolve from %d capability rules, want 22 from 19: %v", n, len(ACP.CapabilityRules), own)
 	}
 	for _, r := range ACP.CapabilityRules {
 		for _, ty := range m.ruleTypes(r.Definition) {
@@ -167,5 +192,9 @@ func checkCommittedGates(t *testing.T, m *Model) {
 	if a := own["AuthenticateRequest"]; len(a) != 1 || a[0].Kind != GateCheckTerminalAuth || a[0].List != "AuthMethods" ||
 		a[0].Variant != "Terminal" || a[0].ID != "Id" || a[0].Field != "MethodId" {
 		t.Errorf("AuthenticateRequest: %+v", a)
+	}
+	if e := own["CreateElicitationRequest"]; len(e) != 3 || e[2].Kind != GateCheckUndeclaredVariant || e[2].Variant != "Other" ||
+		e[2].Disc != "Mode" || e[2].Capability != "elicitation" {
+		t.Errorf("CreateElicitationRequest: %+v", e)
 	}
 }

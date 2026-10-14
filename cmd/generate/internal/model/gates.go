@@ -28,6 +28,8 @@ const (
 	// GateCheckTerminalAuth refuses an id that names a method of the
 	// initialize response's list in the variant.
 	GateCheckTerminalAuth
+	// GateCheckUndeclaredVariant refuses the union's catch-all variant, set.
+	GateCheckUndeclaredVariant
 )
 
 // GateCheck is one check of a gates method.
@@ -52,6 +54,10 @@ type GateCheck struct {
 	// List is the initialize response's field holding the methods, and ID
 	// the variant's field the checked property names, for GateCheckTerminalAuth.
 	List, ID string
+	// Disc is the catch-all variant's Go field holding the discriminator
+	// value, for GateCheckUndeclaredVariant, whose Variant is the catch-all's
+	// field and whose Capability is the prefix of the capability it names.
+	Disc string
 }
 
 // gateHolder is one generated type a gates method may sit on: a struct with
@@ -180,6 +186,10 @@ func (m *Model) gateCheck(t *Type, rule CapabilityRule) (GateCheck, bool, error)
 		if err := m.terminalAuth(&c, f, rule.Variant); err != nil {
 			return c, false, err
 		}
+	case GateUndeclaredVariant:
+		if err := m.catchAll(&c, t); err != nil {
+			return c, false, err
+		}
 	}
 	if rule.Capability != "" {
 		steps, err := m.capabilitySteps(rule.Side, rule.Capability)
@@ -189,6 +199,21 @@ func (m *Model) gateCheck(t *Type, rule CapabilityRule) (GateCheck, bool, error)
 		c.Steps = steps
 	}
 	return c, true, nil
+}
+
+// catchAll finds union t's catch-all variant and its discriminator's field.
+func (m *Model) catchAll(c *GateCheck, t *Type) error {
+	if t.Kind != KindUnion || t.CatchAll < 0 {
+		return fmt.Errorf("%s is not a union with a catch-all variant", t.Name)
+	}
+	vi := t.Variants[t.CatchAll]
+	for _, f := range m.variantFields(vi) {
+		if f.Key == t.DiscKey && f.Type.Kind == RefNamed && f.Type.Name == "string" {
+			c.Kind, c.Variant, c.Disc = GateCheckUndeclaredVariant, vi.FieldName, f.Name
+			return nil
+		}
+	}
+	return fmt.Errorf("%s: the catch-all variant has no string %s", t.Name, t.DiscKey)
 }
 
 // variantOf returns the variant of union t whose discriminator value is value.

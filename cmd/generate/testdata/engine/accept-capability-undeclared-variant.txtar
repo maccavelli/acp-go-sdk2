@@ -1,0 +1,157 @@
+The protocol table's undeclared-variant rule: an elicitation request whose
+mode the schema does not list, held by its union's catch-all, is one no
+capability advertises, so it is refused when sent and answered -32602 when
+received, with every elicitation capability advertised
+(0019-PLAN-api-decisions.md, B20).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"initialize": "initialize"}, "clientMethods": {"elicit": "x/elicit"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "ProtocolVersion": {"type": "integer", "format": "uint16"},
+  "Flag": {"type": "object"},
+  "ElicitationCapabilities": {"type": "object", "properties": {"form": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}, "url": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}}},
+  "ClientCapabilities": {"type": "object", "properties": {"elicitation": {"anyOf": [{"$ref": "#/$defs/ElicitationCapabilities"}, {"type": "null"}]}}},
+  "AgentCapabilities": {"type": "object", "properties": {"loadSession": {"type": "boolean"}}},
+  "InitializeRequest": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "clientCapabilities": {"$ref": "#/$defs/ClientCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
+  "InitializeResponse": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "agentCapabilities": {"$ref": "#/$defs/AgentCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
+  "CreateElicitationRequest": {"anyOf": [
+    {"title": "form", "type": "object", "required": ["mode", "message"], "properties": {"mode": {"const": "form", "type": "string"}, "message": {"type": "string"}}},
+    {"title": "url", "type": "object", "required": ["mode", "url"], "properties": {"mode": {"const": "url", "type": "string"}, "url": {"type": "string"}}},
+    {"title": "other", "type": "object", "required": ["mode"], "properties": {"mode": {"type": "string"}}, "not": {"anyOf": [
+      {"type": "object", "required": ["mode"], "properties": {"mode": {"const": "form", "type": "string"}}},
+      {"type": "object", "required": ["mode"], "properties": {"mode": {"const": "url", "type": "string"}}}]}}
+  ], "x-side": "client", "x-method": "x/elicit"},
+  "CreateElicitationResponse": {"type": "object", "x-side": "client", "x-method": "x/elicit"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error)}
+type AgentCapabilities struct{LoadSession bool "json:\"loadSession,omitempty\""}
+type AgentExperimental interface{}
+const AgentMethodInitialize untyped string = "initialize"
+type AgentSideConnection struct{conn *Connection; agent Agent; negotiation atomic.Pointer[Negotiation]}
+type CancelRequestNotification struct{}
+type Client interface{CreateElicitation(ctx context.Context, params CreateElicitationRequest) (CreateElicitationResponse, error)}
+type ClientCapabilities struct{Elicitation *ElicitationCapabilities "json:\"elicitation,omitempty\""}
+type ClientExperimental interface{}
+const ClientMethodElicit untyped string = "x/elicit"
+type ClientSideConnection struct{conn *Connection; client Client; negotiation atomic.Pointer[Negotiation]}
+type CreateElicitationForm struct{Message string "json:\"message\""; Mode string "json:\"mode\""}
+type CreateElicitationOther struct{Mode string "json:\"mode\""; Extra map[string]json.RawMessage "json:\"-\""}
+type CreateElicitationRequest struct{Form *CreateElicitationForm "json:\"-\""; Url *CreateElicitationUrl "json:\"-\""; Other *CreateElicitationOther "json:\"-\""}
+type CreateElicitationResponse struct{}
+type CreateElicitationUrl struct{Mode string "json:\"mode\""; Url string "json:\"url\""}
+type ElicitationCapabilities struct{Form *Flag "json:\"form,omitempty\""; Url *Flag "json:\"url,omitempty\""}
+type Flag struct{}
+type InitializeRequest struct{ClientCapabilities ClientCapabilities "json:\"clientCapabilities\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
+type InitializeResponse struct{AgentCapabilities AgentCapabilities "json:\"agentCapabilities\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
+type Negotiation struct{Request InitializeRequest; Response InitializeResponse}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewCreateElicitationRequestForm(message string) CreateElicitationRequest
+func NewCreateElicitationRequestOther(mode string) CreateElicitationRequest
+func NewCreateElicitationRequestUrl(url string) CreateElicitationRequest
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+type ProtocolVersion uint16
+const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).CreateElicitation(ctx context.Context, params CreateElicitationRequest) (CreateElicitationResponse, error)
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Negotiated() (Negotiation, bool)
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error)
+func (*ClientSideConnection).Negotiated() (Negotiation, bool)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*CreateElicitationForm).UnmarshalJSON(b []byte) error
+func (CreateElicitationOther).MarshalJSON() ([]byte, error)
+func (*CreateElicitationOther).UnmarshalJSON(b []byte) error
+func (CreateElicitationRequest).MarshalJSON() ([]byte, error)
+func (*CreateElicitationRequest).UnmarshalJSON(b []byte) error
+func (*CreateElicitationRequest).Validate() error
+func (*CreateElicitationResponse).Validate() error
+func (*CreateElicitationUrl).UnmarshalJSON(b []byte) error
+func (*InitializeRequest).UnmarshalJSON(b []byte) error
+func (*InitializeRequest).Validate() error
+func (*InitializeResponse).UnmarshalJSON(b []byte) error
+func (*InitializeResponse).Validate() error
+func (Negotiation).Allows(method string) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"errors"
+	"io"
+	"testing"
+	"time"
+)
+
+type elicitAgent struct{}
+
+func (elicitAgent) Initialize(context.Context, InitializeRequest) (InitializeResponse, error) {
+	return InitializeResponse{}, nil
+}
+
+// elicitClient reports the mode of each elicitation it handles on modes.
+type elicitClient struct{ modes chan string }
+
+func (c elicitClient) CreateElicitation(_ context.Context, p CreateElicitationRequest) (CreateElicitationResponse, error) {
+	switch {
+	case p.Form != nil:
+		c.modes <- p.Form.Mode
+	case p.Url != nil:
+		c.modes <- p.Url.Mode
+	case p.Other != nil:
+		c.modes <- p.Other.Mode
+	}
+	return CreateElicitationResponse{}, nil
+}
+
+// An elicitation in a mode the schema does not list is refused when sent,
+// naming the mode, and answered -32602 when received, though the client
+// advertises every mode the schema lists; a listed mode goes through.
+func TestUndeclaredModeRefused(t *testing.T) {
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	modes := make(chan string, 4)
+	asc := NewAgentSideConnection(elicitAgent{}, aw, ar)
+	csc := NewClientSideConnection(elicitClient{modes}, cw, cr)
+	all := ClientCapabilities{Elicitation: &ElicitationCapabilities{Form: &Flag{}, Url: &Flag{}}}
+	if _, err := csc.Initialize(t.Context(), InitializeRequest{ClientCapabilities: all}); err != nil {
+		t.Fatal(err)
+	}
+
+	telepathy := NewCreateElicitationRequestOther("telepathy")
+	var ce *CapabilityError
+	if _, err := asc.CreateElicitation(t.Context(), telepathy); !errors.As(err, &ce) || ce.Method != ClientMethodElicit ||
+		ce.Capability != "elicitation.telepathy" || ce.Variant != "telepathy" {
+		t.Errorf("CreateElicitation(telepathy) = %v", err)
+	}
+	var re *RequestError
+	if _, err := SendRequest[CreateElicitationResponse](asc.Connection(), t.Context(), ClientMethodElicit, telepathy); !errors.As(err, &re) || re.Code != -32602 {
+		t.Errorf("a raw telepathy elicitation = %v, want -32602", err)
+	}
+	if _, err := asc.CreateElicitation(t.Context(), NewCreateElicitationRequestForm("m")); err != nil {
+		t.Fatalf("CreateElicitation(form) = %v", err)
+	}
+	select {
+	case m := <-modes:
+		if m != "form" {
+			t.Errorf("the client handled %q first, want form", m)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the form elicitation was not handled")
+	}
+	if len(modes) != 0 {
+		t.Errorf("the client also handled %q", <-modes)
+	}
+}

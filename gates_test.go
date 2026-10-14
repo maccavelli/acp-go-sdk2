@@ -8,6 +8,7 @@ import (
 	"io"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -408,8 +409,9 @@ func jsonOf(t *testing.T, v any) string {
 // valueGates returns a message for each of the 17 capability rules that a
 // typed method sends, and the three MCP rules again on session/fork, whose
 // servers are the unstable copy of McpServer (0019-PLAN-behaviour-fixes.md,
-// B6); the terminal-auth rule and the result-only gates have tests of their
-// own.
+// B6); the terminal-auth rule, the undeclared elicitation mode
+// (TestUndeclaredElicitationMode) and the result-only gates have tests of
+// their own.
 func valueGates(t *testing.T) []valueGate {
 	t.Helper()
 	dir, other := jsonOf(t, testAbsPath()), jsonOf(t, testAbsPath("more"))
@@ -551,6 +553,14 @@ func TestValueGates(t *testing.T) {
 			ctx, cancel = context.WithCancel(t.Context())
 			sent := make(chan error, 1)
 			go func() { sent <- g.send(ctx, asc, csc, g.params) }()
+			// A notification's send returns once written, so it is awaited
+			// before the cancel; a request's waits for an answer that never
+			// comes, so it is cancelled once its bytes are seen
+			// (0019-PLAN-api-decisions.md, step 7's deviation).
+			err = nil
+			if g.notifies {
+				err = within(t, sent, "the send")
+			}
 			for deadline := time.Now().Add(5 * time.Second); w.count() == 0 && time.Now().Before(deadline); {
 				time.Sleep(time.Millisecond)
 			}
@@ -558,7 +568,10 @@ func TestValueGates(t *testing.T) {
 				t.Error("with the capability, nothing written")
 			}
 			cancel()
-			if err := within(t, sent, "the send"); errors.As(err, &ce) || (g.notifies && err != nil) {
+			if !g.notifies {
+				err = within(t, sent, "the send")
+			}
+			if errors.As(err, &ce) || (g.notifies && err != nil) {
 				t.Errorf("send with the capability: %v", err)
 			}
 			if rerr, ran := receive(t, g.gatedMethod, with); rerr != nil || !ran {
@@ -766,5 +779,46 @@ func TestExtensionMessagesHookedAndGated(t *testing.T) {
 				t.Errorf("the hooks never saw %q", want)
 			}
 		}
+	}
+}
+
+// TestUndeclaredElicitationMode requires an elicitation in a mode the schema
+// does not list to be refused both ways, with every elicitation capability
+// advertised: sent, the typed method returns a *CapabilityError naming the
+// mode and writes nothing; received, it is answered -32602 without reaching
+// the handler, unless the validation hook accepts it
+// (0019-PLAN-api-decisions.md, B20).
+func TestUndeclaredElicitationMode(t *testing.T) {
+	t.Parallel()
+	req := decoded[CreateElicitationRequest](t, `{"mode":"telepathy","message":"m"}`)
+	if req.Other == nil || req.Other.Mode != "telepathy" {
+		t.Fatalf("decoded as %+v, want the catch-all", req)
+	}
+
+	w := &countingWriter{}
+	asc, _ := sides(t, w, allAdvertised())
+	// The peer never answers, so a send the gate let through ends at the
+	// deadline instead of hanging the test.
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	_, err := asc.CreateElicitation(ctx, req)
+	cancel()
+	var ce *CapabilityError
+	if !errors.As(err, &ce) || ce.Method != ClientMethodElicitationCreate || ce.Capability != "elicitation.telepathy" ||
+		ce.Variant != "telepathy" || ce.Field != "" {
+		t.Errorf("send = %v, want *CapabilityError{%s, elicitation.telepathy, Variant telepathy}", err, ClientMethodElicitationCreate)
+	} else if want := "capability elicitation.telepathy not advertised: variant telepathy"; !strings.HasSuffix(err.Error(), want) {
+		t.Errorf("send = %q, want it to end %q", err, want)
+	}
+	if got := w.count(); got != 0 {
+		t.Errorf("%d bytes written, want none", got)
+	}
+
+	m := gatedMethod{wire: ClientMethodElicitationCreate, params: req}
+	if rerr, ran := receive(t, m, allAdvertised()); rerr == nil || rerr.Code != -32602 || ran {
+		t.Errorf("received: %v, handler ran %v, want -32602 and no handler", rerr, ran)
+	}
+	accept := WithInboundValidation(func(context.Context, string, any, error) error { return nil })
+	if rerr, ran := receive(t, m, allAdvertised(), accept); rerr != nil || !ran {
+		t.Errorf("received with a validation hook that accepts it: %v, handler ran %v, want it handled", rerr, ran)
 	}
 }

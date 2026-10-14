@@ -118,8 +118,11 @@ var ACP = Protocol{
 		{Side: sideAgent, Definition: defPrompt, Property: keyPrompt, Variant: "audio", Capability: "promptCapabilities.audio", Source: srcPrompt, Kind: GateVariant},
 		{Side: sideAgent, Definition: defPrompt, Property: keyPrompt, Variant: "resource", Capability: "promptCapabilities.embeddedContext", Source: srcPrompt, Kind: GateVariant},
 		{Side: sideAgent, Definition: "AuthenticateRequest", Property: "methodId", Variant: "terminal", Source: srcAuthenticate, Kind: GateNotTerminalAuthMethod},
-		{Side: sideClient, Definition: "CreateElicitationRequest", Variant: "form", Capability: "elicitation.form", Source: srcElicitation, Kind: GateVariant},
-		{Side: sideClient, Definition: "CreateElicitationRequest", Variant: "url", Capability: "elicitation.url", Source: srcElicitation, Kind: GateVariant},
+		{Side: sideClient, Definition: defElicitation, Variant: "form", Capability: "elicitation.form", Source: srcElicitation, Kind: GateVariant},
+		{Side: sideClient, Definition: defElicitation, Variant: "url", Capability: "elicitation.url", Source: srcElicitation, Kind: GateVariant},
+		// A mode the schema does not list is one no capability advertises
+		// (0019-MADR-remediate-debugging-pass-findings.md, decision 6).
+		{Side: sideClient, Definition: defElicitation, Capability: "elicitation", Source: srcElicitation, Kind: GateUndeclaredVariant},
 		{Side: sideClient, Definition: defSessionUpdate, Variant: "notice", Capability: "session.notices", Source: srcSessionUpdate, Kind: GateVariant},
 		{Side: sideClient, Definition: defSessionUpdate, Variant: "compaction_update", Capability: "session.compaction", Source: srcSessionUpdate, Kind: GateVariant},
 		{Side: sideClient, Definition: defSessionUpdate, Variant: "compaction_summary_chunk", Capability: "session.compaction", Source: srcSessionUpdate, Kind: GateVariant},
@@ -137,6 +140,7 @@ const (
 	defMcpServer     = "McpServer"
 	defPrompt        = "PromptRequest"
 	defSessionUpdate = "SessionUpdate"
+	defElicitation   = "CreateElicitationRequest"
 )
 
 // The property keys several rules name.

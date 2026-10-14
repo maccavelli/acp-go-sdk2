@@ -19950,6 +19950,13 @@ func (u *CreateElicitationRequest) gates(n *Negotiation, method string) error {
 			Variant:    "url",
 		}
 	}
+	if u.Other != nil {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "elicitation." + u.Other.Mode,
+			Variant:    u.Other.Mode,
+		}
+	}
 	return nil
 }
 

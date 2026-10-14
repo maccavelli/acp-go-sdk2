@@ -53,6 +53,14 @@ func gateStmt(f *goFile, m *model.Model, recv string, c model.GateCheck) ast.Stm
 	switch c.Kind {
 	case model.GateCheckNested:
 		return nestedGate(f, field, c)
+	case model.GateCheckUndeclaredVariant:
+		// The catch-all holds a value no capability advertises
+		// (0019-PLAN-api-decisions.md, B20).
+		v := func() ast.Expr { return dot(recv, c.Variant) }
+		return ifStmt(nil, binary(v(), token.NEQ, nilExpr()),
+			ret(addr(composite(id("CapabilityError"), kv(id("Method"), id("method")),
+				kv(id("Capability"), binary(str(c.Capability+"."), token.ADD, sel(v(), c.Disc))),
+				kv(id("Variant"), sel(v(), c.Disc))))))
 	case model.GateCheckTerminalAuth:
 		a := func() ast.Expr { return dot("a", c.Variant) }
 		return rangeStmt(id("_"), id("a"), dot("n", "Response", c.List),

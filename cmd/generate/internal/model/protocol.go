@@ -52,6 +52,12 @@ const (
 	// name a method of the initialize response whose variant is Variant. No
 	// capability lifts it, and the rule names none.
 	GateNotTerminalAuthMethod
+	// GateUndeclaredVariant requires Definition's catch-all variant, which
+	// holds a discriminator value the schema reserves for custom or future
+	// variants, to be unset: no capability advertises such a value. Capability
+	// is the prefix the refusal names, followed by "." and that value
+	// (0019-PLAN-api-decisions.md, B20).
+	GateUndeclaredVariant
 )
 
 // CapabilityRule gates a property or variant of a definition, as the merged
@@ -254,6 +260,8 @@ func checkCapabilityRules(rules []CapabilityRule) error {
 			missing = rule.Variant == "" || rule.Capability == ""
 		case GateNotTerminalAuthMethod:
 			missing = rule.Property == "" || rule.Variant == "" || rule.Capability != ""
+		case GateUndeclaredVariant:
+			missing = rule.Property != "" || rule.Variant != "" || rule.Capability == ""
 		default:
 			return fmt.Errorf("%s: no gate kind", rule.name())
 		}
