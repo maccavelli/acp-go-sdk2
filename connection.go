@@ -104,6 +104,20 @@ func decodeParams(params json.RawMessage, p any) error {
 	return json.Unmarshal(params, p)
 }
 
+// jsonCopy returns v encoded and decoded again: its JSON form, what a peer
+// sees of it, sharing no memory with v. The side connections keep the record
+// of initialize this way, so a handler's or a caller's values and the record
+// never alias (0019-PLAN-behaviour-fixes.md, B13).
+func jsonCopy[T any](v T) (T, error) {
+	var out T
+	b, err := json.Marshal(v)
+	if err != nil {
+		return out, err
+	}
+	err = json.Unmarshal(b, &out)
+	return out, err
+}
+
 // inflightRequest is one received request whose handler is running, held by
 // pointer so that a request removes only its own entry
 // (0019-PLAN-behaviour-fixes.md, B11).

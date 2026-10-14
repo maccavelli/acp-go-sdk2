@@ -548,3 +548,48 @@ Gates, through the Python runner: regenerating again changes no generated file; 
 test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier
 scan finds nothing; the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added (`gates` is unexported).
 Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+
+The owner committed step 5 as `03fcfa6`.
+
+### Step 6 deviation, 2026-10-13: a generator test asserts the record's store
+
+Found: after regenerating, `TestDispatchFollowsTheModel` in `cmd/generate/internal/emit/dispatch_test.go:103` and `:122`, which step 6
+did not list, expects the old store text, `a.negotiation.Store(&Negotiation{` and `c.negotiation.Store(&Negotiation{`, and fails on
+both sides; the SDK's own tests pass. Decision (owner, 2026-10-13): `dispatch_test.go` joins step 6's scope, and each side's
+expectation becomes the copy and its store, `rec, cerr := jsonCopy(Negotiation{` and `a.negotiation.Store(&rec)` for the agent,
+`rec, err := jsonCopy(Negotiation{` and `c.negotiation.Store(&rec)` for the client, so the generator's own test pins that the record
+is the JSON copy.
+
+### Step 6, negotiation record, 2026-10-13
+
+What was built:
+
+* `connection.go`: `jsonCopy[T]`, which encodes a value and decodes it again, returning a copy that shares no memory with it.
+* Emitter (`cmd/generate/internal/emit/dispatch.go`): the agent's `initialize` case stores `jsonCopy(Negotiation{Request: p,
+  Response: resp})`, and when the copy fails logs "initialize answer not sent" and answers `-32603` without storing; the client's
+  `Initialize` stores the copy of `Negotiation{Request: params, Response: resp}`, and returns the copy's error with the response when it
+  fails; `Negotiated` returns `jsonCopy(*n)` and, if that fails, the zero record and false. Its documentation says the record is the
+  JSON form of what was sent and received and that each call returns a copy.
+* Regenerated: `agent_gen.go` and `client_gen.go`; no other generated file changed.
+* `cmd/generate/internal/emit/dispatch_test.go`: as the deviation entry above records.
+
+Test added: `TestNegotiatedIsACopy` (`negotiation_test.go`), through a real `initialize` over pipes: with `elicitation.form`
+advertised, the agent's and the client's gate for a form elicitation pass before any write, after writing `nil` through each record
+`Negotiated` returned, after the agent's handler wrote through the request it was given, and after the client's caller wrote through
+its params. `go test -race -count=10`: ok. The existing negotiation tests pass on the JSON-form record unchanged.
+
+Seen to fail, each in its own scratch copy, regenerated (3 of 3):
+
+* `b13-returned-shared` (`Negotiated` returns `*n`): "agent, after writing through the records Negotiated returned: elicitation/create:
+  capability elicitation.form not advertised: variant form", and the same for the client.
+* `b13-agent-stores-own` (the agent stores its own values): "agent, after the agent's handler wrote through its request: …".
+* `b13-client-stores-own` (the client stores the caller's values): "client, after the client's caller wrote through its params: …".
+
+The original probes, re-run on the step 6 tree: `TestProbeS_NegotiatedAliases` now passes. Every phase 1 probe passes but the three
+the deviations of steps 2, 3 and 4 exempt: B1's, `TestProbeS_PromptAsNotification` and
+`TestProbeS_ClientCloseSessionLeavesPermissionPending`.
+
+Gates, through the Python runner: regenerating again changes no generated file; `make pre-add-check` exit 0; `GOEXPERIMENT=nojsonv2 go
+test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier
+scan finds nothing; the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added. Windows: `go test -count=1
+-shuffle=on ./...` exit 0 at the root and in `cmd/generate`.

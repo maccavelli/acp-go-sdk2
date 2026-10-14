@@ -78,13 +78,20 @@ func (c *AgentSideConnection) resultGate(method string, result any) error {
 
 // Negotiated returns what initialize agreed on this connection, the request
 // and the response of its last successful initialize, and false before one
-// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1). The record is
+// the JSON form of what was sent and received, and each call returns a copy
+// of it that shares no memory with the connection's or the caller's values
+// (0019-PLAN-behaviour-fixes.md, B13).
 func (c *AgentSideConnection) Negotiated() (Negotiation, bool) {
 	n := c.negotiation.Load()
 	if n == nil {
 		return Negotiation{}, false
 	}
-	return *n, true
+	rec, err := jsonCopy(*n)
+	if err != nil {
+		return Negotiation{}, false
+	}
+	return rec, true
 }
 
 // promptTurn is one prompt turn: its cancel function and the receipt number
@@ -260,10 +267,15 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if rerr != nil {
 			return nil, rerr
 		}
-		a.negotiation.Store(&Negotiation{
+		rec, cerr := jsonCopy(Negotiation{
 			Request:  p,
 			Response: resp,
 		})
+		if cerr != nil {
+			a.conn.loggerOrDefault().Error("initialize answer not sent", "method", method, "err", cerr)
+			return nil, NewInternalError(map[string]any{"error": cerr.Error()})
+		}
+		a.negotiation.Store(&rec)
 		return result, nil
 	case AgentMethodLogout:
 		if sentAsNotification(ctx) {

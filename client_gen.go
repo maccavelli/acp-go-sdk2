@@ -72,13 +72,20 @@ func (c *ClientSideConnection) resultGate(method string, result any) error {
 
 // Negotiated returns what initialize agreed on this connection, the request
 // and the response of its last successful initialize, and false before one
-// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1). The record is
+// the JSON form of what was sent and received, and each call returns a copy
+// of it that shares no memory with the connection's or the caller's values
+// (0019-PLAN-behaviour-fixes.md, B13).
 func (c *ClientSideConnection) Negotiated() (Negotiation, bool) {
 	n := c.negotiation.Load()
 	if n == nil {
 		return Negotiation{}, false
 	}
-	return *n, true
+	rec, err := jsonCopy(*n)
+	if err != nil {
+		return Negotiation{}, false
+	}
+	return rec, true
 }
 
 func (c *ClientSideConnection) handle(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
@@ -353,10 +360,14 @@ func (c *ClientSideConnection) Initialize(ctx context.Context, params Initialize
 			Answered:  int(resp.ProtocolVersion),
 		}
 	}
-	c.negotiation.Store(&Negotiation{
+	rec, err := jsonCopy(Negotiation{
 		Request:  params,
 		Response: resp,
 	})
+	if err != nil {
+		return resp, err
+	}
+	c.negotiation.Store(&rec)
 	return resp, nil
 }
 

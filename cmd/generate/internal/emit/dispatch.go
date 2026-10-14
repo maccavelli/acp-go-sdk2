@@ -247,11 +247,16 @@ func emitSideConnection(f *goFile, s side) {
 		f.line()
 		f.comment("Negotiated returns what initialize agreed on this connection, the request",
 			"and the response of its last successful initialize, and false before one",
-			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1).")
+			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1). The record is",
+			"the JSON form of what was sent and received, and each call returns a copy",
+			"of it that shares no memory with the connection's or the caller's values",
+			"(0019-PLAN-behaviour-fixes.md, B13).")
 		f.add(method(recv(), "Negotiated", funcType(nil, param("", id("Negotiation")), param("", id("bool"))),
 			define(exprs(id("n")), call(dot("c", "negotiation", "Load"))),
 			ifStmt(nil, binary(id("n"), token.EQL, nilExpr()), ret(composite(id("Negotiation")), id("false"))),
-			ret(star(id("n")), id("true")),
+			define(exprs(id("rec"), id("err")), call(id("jsonCopy"), star(id("n")))),
+			ifStmt(nil, errNotNil(), ret(composite(id("Negotiation")), id("false"))),
+			ret(id("rec"), id("true")),
 		))
 		f.line()
 	}
@@ -521,7 +526,15 @@ func initializeCase(recv ast.Expr, mi *model.Method) []ast.Stmt {
 		),
 		define(exprs(id("result"), id("rerr")), call(dot("a", "conn", "checkResult"), id("method"), id("resp"), gate)),
 		ifStmt(nil, binary(id("rerr"), token.NEQ, nilExpr()), ret(nilExpr(), id("rerr"))),
-		exprStmt(call(dot("a", "negotiation", "Store"), addr(composite(id("Negotiation"), kv(id("Request"), id("p")), kv(id("Response"), id("resp")))))),
+		// The record is the JSON form of the request and the answer, sharing
+		// no memory with the handler's values (0019-PLAN-behaviour-fixes.md, B13).
+		define(exprs(id("rec"), id("cerr")), call(id("jsonCopy"),
+			composite(id("Negotiation"), kv(id("Request"), id("p")), kv(id("Response"), id("resp"))))),
+		ifStmt(nil, binary(id("cerr"), token.NEQ, nilExpr()),
+			exprStmt(call(sel(call(dot("a", "conn", "loggerOrDefault")), "Error"), str("initialize answer not sent"), str("method"), id("method"), str("err"), id("cerr"))),
+			ret(nilExpr(), call(id("NewInternalError"), composite(rawMap(id("any")), kv(str("error"), call(dot("cerr", "Error")))))),
+		),
+		exprStmt(call(dot("a", "negotiation", "Store"), addr(id("rec")))),
 		ret(id("result"), nilExpr()),
 	}
 }
@@ -549,7 +562,12 @@ func initializeWrapper(mi *model.Method) []ast.Stmt {
 			ret(id("resp"), addr(composite(id("ProtocolVersionError"),
 				kv(id("Requested"), call(id("int"), dot("params", mi.ReqVersionField))),
 				kv(id("Answered"), call(id("int"), dot("resp", mi.RespVersionField))))))),
-		exprStmt(call(dot("c", "negotiation", "Store"), addr(composite(id("Negotiation"), kv(id("Request"), id("params")), kv(id("Response"), id("resp")))))),
+		// The record is the JSON form of what was sent and received, sharing no
+		// memory with the caller's values (0019-PLAN-behaviour-fixes.md, B13).
+		define(exprs(id("rec"), id("err")), call(id("jsonCopy"),
+			composite(id("Negotiation"), kv(id("Request"), id("params")), kv(id("Response"), id("resp"))))),
+		ifStmt(nil, errNotNil(), ret(id("resp"), id("err"))),
+		exprStmt(call(dot("c", "negotiation", "Store"), addr(id("rec")))),
 		ret(id("resp"), nilExpr()),
 	}
 }

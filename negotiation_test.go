@@ -175,3 +175,50 @@ func TestProtocolVersion(t *testing.T) {
 		}
 	})
 }
+
+// TestNegotiatedIsACopy requires the record of initialize to share no memory
+// with the values it was made from or handed out as: writing through the
+// record Negotiated returns, through the request the agent's handler was
+// given, or through the params a client passed changes no gate
+// (0019-PLAN-behaviour-fixes.md, B13).
+func TestNegotiatedIsACopy(t *testing.T) {
+	t.Parallel()
+	var kept *ElicitationCapabilities
+	asc, csc := initPair(t, func(_ context.Context, p InitializeRequest) (InitializeResponse, error) {
+		kept = p.ClientCapabilities.Elicitation
+		return InitializeResponse{}, nil
+	})
+	params := InitializeRequest{ClientCapabilities: ClientCapabilities{
+		Elicitation: &ElicitationCapabilities{Form: &ElicitationFormCapabilities{}},
+	}}
+	if _, err := csc.Initialize(t.Context(), params); err != nil {
+		t.Fatal(err)
+	}
+	form := decoded[CreateElicitationRequest](t,
+		`{"mode":"form","message":"m","requestedSchema":{"type":"object","properties":{}},"sessionId":"s"}`)
+	gatesPass := func(when string) {
+		t.Helper()
+		if err := asc.gate(ClientMethodElicitationCreate, &form); err != nil {
+			t.Errorf("agent, %s: %v", when, err)
+		}
+		if err := csc.gate(ClientMethodElicitationCreate, &form); err != nil {
+			t.Errorf("client, %s: %v", when, err)
+		}
+	}
+	gatesPass("before any write")
+
+	for _, side := range []interface{ Negotiated() (Negotiation, bool) }{asc, csc} {
+		rec, ok := side.Negotiated()
+		if !ok || rec.Request.ClientCapabilities.Elicitation == nil || rec.Request.ClientCapabilities.Elicitation.Form == nil {
+			t.Fatalf("%T.Negotiated() = %+v, %v", side, rec, ok)
+		}
+		rec.Request.ClientCapabilities.Elicitation.Form = nil
+	}
+	gatesPass("after writing through the records Negotiated returned")
+
+	kept.Form = nil
+	gatesPass("after the agent's handler wrote through its request")
+
+	params.ClientCapabilities.Elicitation.Form = nil
+	gatesPass("after the client's caller wrote through its params")
+}
