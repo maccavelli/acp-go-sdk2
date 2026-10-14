@@ -700,3 +700,25 @@ What was written, and the committed test each new statement rests on:
 
 Every code identifier the new text names was checked to exist in the tree's Go source or engine cases (22 of 22). `make
 check-records` and `make markdownlint` exit 0; the identifier scan of the changed files finds nothing. No Go file changed.
+
+The owner committed step 9 as `6eeadfd` (README) and `f3b684c` (architecture).
+
+### Step 10, verification, 2026-10-13
+
+Run over the finished tree at `f3b684c`, through the Python runner:
+
+* regenerating changes no generated file; `make pre-add-check` exit 0; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+  `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan finds
+  nothing; Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+* The exported API listing: 2411 lines at `v0.17.1` and at `f3b684c`, no line removed or added. Phase 1 changes no exported
+  identifier.
+* The original probes: every phase 1 probe passes but the three the deviations of steps 2, 3 and 4 exempt, which fail as recorded
+  there (`TestProbeNotificationHandlerRequestDeadlock`, `TestProbeS_PromptAsNotification`,
+  `TestProbeS_ClientCloseSessionLeavesPermissionPending`). The G1 probe, run as an engine behaviour case, no longer builds, "undefined:
+  Injected".
+* The example checks of step 8: 6 of 6 pass again (the client at EOF ended in 4.5 s this run, with one prompt).
+* The pre-push disclosure guard, over the 11 commits from `c77f25a` to `f3b684c`: exit 0.
+
+Every finding of phase 1 has a committed test or a recorded program run: B1, B3, B4, B5, B6, B7, B8, B9, B10, B11, B12, B13, B15
+and G1 by the tests of steps 2 to 7, E1 to E4 by the runs of step 8. Acceptance waits on CI for the pushed commits; then this PLAN
+and its `docs/README.md` row become `complete`. Nothing is tagged (decision 12): phase 1 ships with phase 2 as `v0.18.0`.
