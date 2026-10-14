@@ -489,7 +489,9 @@ func WithLogger(l *slog.Logger) ConnectionOption {
 // another host. The SDK then validates what the hook leaves, so a handler sees
 // the rewritten value, not what the peer sent. A non-nil error refuses the
 // message as WithInboundValidation's does. A message that does not decode
-// reaches no hook (0015-MADR-validate-absolute-protocol-paths.md, H1).
+// reaches no hook (0015-MADR-validate-absolute-protocol-paths.md, H1). An
+// extension message's params is a *json.RawMessage
+// (0019-PLAN-api-decisions.md, B14).
 func WithInboundRewrite(fn func(ctx context.Context, method string, params any) error) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		cfg.rewrite = fn

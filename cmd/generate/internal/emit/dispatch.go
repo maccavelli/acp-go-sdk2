@@ -246,6 +246,17 @@ func emitSideConnection(f *goFile, s side) {
 	)
 	f.add(method(recv(), "Connection", funcType(nil, param("", star(id("Connection")))), ret(dot("c", "conn"))))
 	f.line()
+	// The hand-written extension dispatch, compiled with every schema, takes
+	// its gate from here (0019-PLAN-api-decisions.md, B14).
+	var inbound ast.Expr = nilExpr()
+	if s.negotiated {
+		inbound = dot("c", "gate")
+	}
+	f.comment("inboundGate is the gate of the received messages the generated dispatch",
+		"does not decode, the extension messages: gate, or nil when the schema has",
+		"no initialize (0019-PLAN-api-decisions.md, B14).")
+	f.add(method(recv(), "inboundGate", funcType(nil, param("", id("gateFunc"))), ret(inbound)))
+	f.line()
 	if s.negotiated {
 		f.comment("gate checks a message of this connection against what initialize agreed",
 			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1).")

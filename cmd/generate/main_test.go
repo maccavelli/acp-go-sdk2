@@ -162,6 +162,8 @@ type Connection struct{}
 
 type ConnectionOption func()
 
+type gateFunc func(method string, params any) error
+
 type MethodHandler func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError)
 
 func NewConnection(MethodHandler, io.Writer, io.Reader, ...ConnectionOption) *Connection { return nil }

@@ -68,6 +68,13 @@ func (c *ClientSideConnection) Connection() *Connection {
 	return c.conn
 }
 
+// inboundGate is the gate of the received messages the generated dispatch
+// does not decode, the extension messages: gate, or nil when the schema has
+// no initialize (0019-PLAN-api-decisions.md, B14).
+func (c *ClientSideConnection) inboundGate() gateFunc {
+	return c.gate
+}
+
 // gate checks a message of this connection against what initialize agreed
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
 func (c *ClientSideConnection) gate(method string, params any) error {

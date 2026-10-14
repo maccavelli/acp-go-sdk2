@@ -15,6 +15,13 @@ import (
 //
 // If the method is unrecognized, implementations should return NewMethodNotFound(method).
 //
+// A received extension message passes the inbound hooks and the initialize
+// gate before it reaches HandleExtensionMethod, as a typed one does: before
+// initialize, a request is answered -32601 and a notification dropped; the
+// hooks see params as a *json.RawMessage, which WithInboundRewrite may
+// replace, and the method gets what they leave
+// (0019-MADR-remediate-debugging-pass-findings.md, decision 7).
+//
 // See: https://agentclientprotocol.com/protocol/extensibility#extension-methods
 type ExtensionMethodHandler interface {
 	HandleExtensionMethod(ctx context.Context, method string, params json.RawMessage) (any, error)
@@ -36,15 +43,7 @@ func isExtensionMethodName(method string) bool {
 
 func (a *AgentSideConnection) handleWithExtensions(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
 	if isExtensionMethodName(method) {
-		h, ok := a.agent.(ExtensionMethodHandler)
-		if !ok {
-			return nil, NewMethodNotFound(method)
-		}
-		resp, err := h.HandleExtensionMethod(ctx, method, params)
-		if err != nil {
-			return nil, toReqErr(err)
-		}
-		return resp, nil
+		return handleExtension(ctx, a.conn, a.inboundGate(), a.agent, method, params)
 	}
 
 	return a.handle(ctx, method, params)
@@ -52,18 +51,30 @@ func (a *AgentSideConnection) handleWithExtensions(ctx context.Context, method s
 
 func (c *ClientSideConnection) handleWithExtensions(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
 	if isExtensionMethodName(method) {
-		h, ok := c.client.(ExtensionMethodHandler)
-		if !ok {
-			return nil, NewMethodNotFound(method)
-		}
-		resp, err := h.HandleExtensionMethod(ctx, method, params)
-		if err != nil {
-			return nil, toReqErr(err)
-		}
-		return resp, nil
+		return handleExtension(ctx, c.conn, c.inboundGate(), c.client, method, params)
 	}
 
 	return c.handle(ctx, method, params)
+}
+
+// handleExtension checks a received extension message with the inbound hooks
+// and gate, as the generated dispatch checks a typed one, then hands it to
+// value when value implements ExtensionMethodHandler
+// (0019-PLAN-api-decisions.md, B14).
+func handleExtension(ctx context.Context, conn *Connection, gate gateFunc, value any, method string, params json.RawMessage) (any, *RequestError) {
+	raw := params
+	if err := conn.checkInbound(ctx, method, &raw, gate); err != nil {
+		return nil, inboundError(err)
+	}
+	h, ok := value.(ExtensionMethodHandler)
+	if !ok {
+		return nil, NewMethodNotFound(method)
+	}
+	resp, err := h.HandleExtensionMethod(ctx, method, raw)
+	if err != nil {
+		return nil, toReqErr(err)
+	}
+	return resp, nil
 }
 
 // CallExtension sends an ACP extension-method request (method names starting with "_")

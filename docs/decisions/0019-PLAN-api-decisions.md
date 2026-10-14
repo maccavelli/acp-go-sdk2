@@ -423,3 +423,12 @@ Decision (owner): restate the probe as the examples' new pattern, an agent that 
 after the constructor, whose `initialize` handler, run for input already waiting, must find its connection set with no race report;
 show that the restated probe fails on `e5e716e`, where the setter is never called, and passes on the step 5 tree, and record both
 runs here. The MADR is unchanged.
+
+### Step 6, extension messages hooked and gated, 2026-10-13
+
+Deviation, 2026-10-13: three existing tests in `acp_test.go` send an extension message before `initialize`, which decision 7 now
+refuses. `TestExtensionMethods_ClientToAgentRequest` and `TestExtensionMethods_AgentToClientRequest` failed with `-32601`
+"_vendor.test/echo: acp: initialize has not completed", and `TestExtensionMethods_UnknownNotification_DoesNotLog` timed out, its
+notification dropped before the handler. Decision (owner): each test completes a real `Initialize` from the client over its pipe
+pair before the extension call, as the other pair tests in that file do, with every assertion kept; the agent-to-client test keeps
+the client connection it discarded. `acp_test.go` joins step 6's scope. The MADR is unchanged: decision 7 names this change.
