@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"testing"
 	"time"
 )
@@ -728,4 +730,76 @@ func TestDuplicateInflightIDKeepsLaterCancel(t *testing.T) {
 	if a := p.next("the second request's answer"); a.Error == nil || a.Error.Code != -32800 {
 		t.Fatalf("second answer: %+v, want -32800", a)
 	}
+}
+
+// blockingRequests starts a connection, with opts, whose handler reports the
+// params of each request it runs on started and returns when release yields.
+func blockingRequests(t *testing.T, started chan<- string, release <-chan struct{}, opts ...ConnectionOption) wire {
+	t.Helper()
+	return rawWire(t, func(w io.Writer, r io.Reader) {
+		NewConnection(func(_ context.Context, _ string, params json.RawMessage) (any, *RequestError) {
+			started <- string(params)
+			<-release
+			return map[string]any{}, nil
+		}, w, r, opts...)
+	})
+}
+
+// TestMaxConcurrentRequests requires a request over the limit of
+// WithMaxConcurrentRequests to be answered -32603 at once without its handler
+// running, and a request sent once a running one has answered to run; with
+// no limit, 200 blocking requests all run (0019-PLAN-api-decisions.md, B18).
+func TestMaxConcurrentRequests(t *testing.T) {
+	t.Parallel()
+	t.Run("limit 2", func(t *testing.T) {
+		t.Parallel()
+		started, release := make(chan string, 8), make(chan struct{})
+		p := blockingRequests(t, started, release, WithMaxConcurrentRequests(2))
+		request := func(n int) {
+			p.send(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"_x/r","params":{"n":%d}}`, n, n))
+		}
+		for n := 1; n <= 3; n++ {
+			request(n)
+		}
+		a := p.next("the third request's answer")
+		if string(a.ID) != "3" || a.Error == nil || a.Error.Code != -32603 {
+			t.Fatalf("first answer: id %s, %+v; want id 3 refused -32603", a.ID, a.Error)
+		}
+		if data, _ := a.Error.Data.(map[string]any); data["error"] != "too many concurrent requests" || data["limit"] != float64(2) {
+			t.Errorf("refusal data %v, want the error and limit 2", a.Error.Data)
+		}
+
+		ran := map[string]bool{}
+		for range 2 {
+			ran[within(t, started, "a request under the limit")] = true
+		}
+		release <- struct{}{}
+		if a := p.next("a released request's answer"); a.Error != nil {
+			t.Fatalf("a released request answered %+v", a.Error)
+		}
+		request(4)
+		ran[within(t, started, "a request sent once one had answered")] = true
+		close(release)
+		for range 2 {
+			p.next("the remaining answers")
+		}
+		for len(started) > 0 {
+			ran[<-started] = true
+		}
+		if want := map[string]bool{`{"n":1}`: true, `{"n":2}`: true, `{"n":4}`: true}; !maps.Equal(ran, want) {
+			t.Errorf("handlers ran for %v, want requests 1, 2 and 4", slices.Sorted(maps.Keys(ran)))
+		}
+	})
+	t.Run("unlimited by default", func(t *testing.T) {
+		t.Parallel()
+		started, release := make(chan string, 200), make(chan struct{})
+		p := blockingRequests(t, started, release)
+		for n := 1; n <= 200; n++ {
+			p.send(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"_x/r","params":{}}`, n))
+		}
+		for range 200 {
+			within(t, started, "one of 200 blocking requests")
+		}
+		close(release)
+	})
 }

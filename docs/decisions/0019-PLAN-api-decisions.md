@@ -206,7 +206,7 @@ Expected API listing difference at the end, against `v0.17.1`: added `func (*Con
 ErrPeerDisconnected error`, `var ErrConnectionClosed error`, `func WithMaxConcurrentRequests(n int) ConnectionOption`, `type
 AgentConnAware interface{…}`, `type ClientConnAware interface{…}`; removed the seven `MarshalJSON` methods of I8. Nothing else.
 
-Phase acceptance: every phase 2 finding has a test or a recorded check; the phase 2 probes pass, B21's being text only; the phase 1
+Phase acceptance: every phase 2 finding has a test or a recorded check; the phase 2 probes pass, B21's being text only and B18's exempt (step 4's deviation of 2026-10-13); the phase 1
 probes still pass, with phase 1's three exemptions; the API listing matches the expected difference; CI passes; `v0.18.0` is tagged
 and its release published.
 
@@ -329,3 +329,40 @@ suite: `TestEngineCases` failed in each case with "API differs from want.api". M
 (*ClientSideConnection).Close() error` to each golden and changes no other line and no file outside `testdata`, and the generator
 suite then passes. Decision (owner): accept the goldens; the 60 files join step 3's scope. The MADR is unchanged: no decision and no
 asserted fact moves.
+
+### Step 4, a bound on concurrent inbound requests, 2026-10-13
+
+What was built:
+
+* `connection.go`: `WithMaxConcurrentRequests(n int)`, unlimited when `n` is zero or less, the default. A connection with a limit
+  holds a slot channel of capacity `n`. The receive loop takes a slot for each request, a null id's included, before counting it as
+  received; with none free it answers at once, `-32603` with `data` `{"error": "too many concurrent requests", "limit": n}`, logs
+  the refusal at Debug, and does not start the handler. It never waits for a slot. Notifications and `$/cancel_request` take none.
+* A slot is released when the handler returns, before its answer is written, through a `handled` callback `handleInbound` now takes
+  (nil for notifications), and once more, idempotently, when the request's goroutine ends, which covers a connection with no handler.
+  "Design", B18, says a request counts while it is running; releasing before the answer means a peer that sends a request after
+  reading an answer is not refused for a slot the answered request still held.
+
+Tests added, `connection_cancel_test.go`: `TestMaxConcurrentRequests`. With a limit of 2, of three blocking requests the third is
+answered first, `-32603` with the error and `"limit": 2`; once one of the two running requests is released and answered, a fourth
+runs; the handlers ran for requests 1, 2 and 4 only. Without the option, 200 blocking requests all run. `go test -race -count=20` of
+it: ok.
+
+Seen to fail, in a scratch copy (1 of 1): `b18-limit-ignored` (the check is never taken): "the third request's answer did not
+happen".
+
+The phase 2 probes, re-run on the step 4 tree: B16's, B17's and B19's pass; `TestP2_B18_RequestsUnbounded` still reports 200
+running, which the deviation below records; the others fail, their steps being later, but B21's, which is text only.
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
+`GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; the API listing against `v0.17.1`, 2411 and 2418 lines, adds exactly the
+six entries of steps 2 and 3 and `func WithMaxConcurrentRequests (n int) ConnectionOption`, as expected for this step. Windows: `go
+test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+
+Deviation, 2026-10-13: "Verification" requires the phase 2 probes to pass, and `TestP2_B18_RequestsUnbounded` cannot. It measures
+the default, 200 blocking requests with no option, and "Design", B18, after decision 4, keeps the default unlimited; on the step 4
+tree it still reports "nothing bounds concurrent inbound requests (200 running)". With the option set the bound holds:
+`TestMaxConcurrentRequests` passes, and the planted break that ignores the limit fails it. Decision (owner): the B18 probe is exempt,
+as phase 1 exempted three of its probes, and `TestMaxConcurrentRequests` is the evidence for B18; the acceptance line is annotated.
+The MADR is unchanged: no decision and no asserted fact moves.

@@ -294,6 +294,10 @@ type Connection struct {
 	handler MethodHandler
 
 	mu sync.Mutex
+	// requestSlots holds a value for each inbound request whose handler is
+	// running; it is nil when requests are unbounded, and its capacity is the
+	// limit (0019-PLAN-api-decisions.md, B18).
+	requestSlots chan struct{}
 	// writes hands each message to the writer goroutine, which writes them one
 	// at a time in the order it receives them (0019-PLAN-api-decisions.md, B16).
 	writes chan writeRequest
@@ -369,6 +373,7 @@ type connectionConfig struct {
 	logger                 *slog.Logger
 	rewrite                func(ctx context.Context, method string, params any) error
 	inbound                func(ctx context.Context, method string, params any, err error) error
+	maxConcurrentRequests  int
 }
 
 // WithMaxQueuedNotifications sets the maximum number of queued notifications
@@ -381,6 +386,21 @@ func WithMaxQueuedNotifications(n int) ConnectionOption {
 		if n > 0 {
 			cfg.maxQueuedNotifications = n
 		}
+	}
+}
+
+// WithMaxConcurrentRequests bounds the inbound requests whose handlers run at
+// once. When n are running, a further request is answered at once with -32603
+// and data {"error": "too many concurrent requests", "limit": n}, its handler
+// does not run, and the refusal is logged at Debug. A request stops counting
+// when its handler returns, before its answer is written. The reader never
+// waits for a handler to end: a running handler may be waiting for a response
+// only the reader can deliver. Notifications and $/cancel_request are not
+// counted. n <= 0, the default, leaves requests unbounded
+// (0019-PLAN-api-decisions.md, B18).
+func WithMaxConcurrentRequests(n int) ConnectionOption {
+	return func(cfg *connectionConfig) {
+		cfg.maxConcurrentRequests = n
 	}
 }
 
@@ -539,6 +559,9 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		onNotificationDropped: cfg.onNotificationDropped,
 		rewrite:               cfg.rewrite,
 		inbound:               cfg.inbound,
+	}
+	if cfg.maxConcurrentRequests > 0 {
+		c.requestSlots = make(chan struct{}, cfg.maxConcurrentRequests)
 	}
 	if cfg.logger != nil {
 		c.logger.Store(cfg.logger)
@@ -1058,6 +1081,21 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		return true
 	}
 
+	// A request over the limit is answered at once and its handler never
+	// runs; the reader does not wait for a slot, since a running handler may
+	// be waiting for a response only the reader delivers
+	// (0019-PLAN-api-decisions.md, B18).
+	if msg.ID != nil && c.requestSlots != nil {
+		select {
+		case c.requestSlots <- struct{}{}:
+		default:
+			limit := cap(c.requestSlots)
+			c.loggerOrDefault().Debug("refused a request over the concurrency limit", "method", msg.Method, "limit", limit)
+			c.answer(id, NewInternalError(map[string]any{jsonErrorField: "too many concurrent requests", "limit": limit}))
+			return true
+		}
+	}
+
 	*received++
 	if msg.ID != nil {
 		base := context.WithValue(context.WithValue(c.ctx, receiptKey{}, *received), messageKey{}, messageMark{})
@@ -1089,7 +1127,12 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 
 		m := msg
 		go func(m *anyMessage, idKey string, reqCtx context.Context, own *inflightRequest) {
+			release := func() {}
+			if c.requestSlots != nil {
+				release = sync.OnceFunc(func() { <-c.requestSlots })
+			}
 			defer func() {
+				release()
 				c.mu.Lock()
 				if idKey != "" && c.inflight[idKey] == own {
 					delete(c.inflight, idKey)
@@ -1098,7 +1141,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 				c.mu.Unlock()
 				own.cancel(nil)
 			}()
-			c.handleInbound(reqCtx, m)
+			c.handleInbound(reqCtx, m, release)
 		}(&m, idKey, reqCtx, own)
 		return true
 	}
@@ -1278,7 +1321,7 @@ func (c *Connection) processNotifications() {
 	for queued := range c.notificationQueue {
 		ctx := context.WithValue(context.WithValue(c.inboundCtx, receiptKey{}, queued.receipt),
 			messageKey{}, messageMark{notification: true, seq: queued.seq})
-		c.handleInbound(ctx, queued.msg)
+		c.handleInbound(ctx, queued.msg, nil)
 
 		c.notifyMu.Lock()
 		expectedSeq := c.completedNotificationSeq + 1
@@ -1353,7 +1396,10 @@ func (c *Connection) handleCancelRequest(msg *anyMessage) {
 	r.cancel(context.Canceled)
 }
 
-func (c *Connection) handleInbound(ctx context.Context, req *anyMessage) {
+// handleInbound runs the handler for req and answers it when it is a request.
+// handled, when not nil, is called as the handler returns, before the answer
+// is written.
+func (c *Connection) handleInbound(ctx context.Context, req *anyMessage, handled func()) {
 	res := anyMessage{JSONRPC: jsonRPCVersion}
 
 	// copy ID if present
@@ -1371,6 +1417,9 @@ func (c *Connection) handleInbound(ctx context.Context, req *anyMessage) {
 	}
 
 	result, err := c.handler(ctx, req.Method, req.Params)
+	if handled != nil {
+		handled()
+	}
 	if req.ID == nil {
 		// Notification: no response is sent; log handler errors to surface decode failures.
 		if err != nil {
