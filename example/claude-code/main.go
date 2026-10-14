@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -20,6 +21,20 @@ import (
 
 type replClient struct {
 	autoApprove bool
+	// answers carries the lines typed while a turn runs, for its permission
+	// prompt; the REPL loop owns stdin (0019-PLAN-behaviour-fixes.md, E2).
+	answers chan string
+}
+
+// drainAnswers drops lines typed during a turn that no prompt took.
+func (c *replClient) drainAnswers() {
+	for {
+		select {
+		case <-c.answers:
+		default:
+			return
+		}
+	}
 }
 
 var _ acp.Client = (*replClient)(nil)
@@ -47,11 +62,22 @@ func (c *replClient) RequestPermission(ctx context.Context, params acp.RequestPe
 	for i, opt := range params.Options {
 		fmt.Printf("   %d. %s (%s)\n", i+1, opt.Name, opt.Kind)
 	}
-	reader := bufio.NewReader(os.Stdin)
+	cancelled := acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}
 	for {
 		fmt.Printf("\nChoose an option: ")
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
+		var line string
+		select {
+		case <-ctx.Done():
+			// The turn was cancelled; the SDK has answered for us.
+			fmt.Println("\nThe permission request was cancelled.")
+			return cancelled, nil
+		case l, ok := <-c.answers:
+			if !ok {
+				fmt.Println("\nNo more input: the permission request is answered cancelled.")
+				return cancelled, nil
+			}
+			line = strings.TrimSpace(l)
+		}
 		if line == "" {
 			continue
 		}
@@ -192,7 +218,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := &replClient{autoApprove: *yolo}
+	client := &replClient{autoApprove: *yolo, answers: make(chan string, 16)}
 	conn := acp.NewClientSideConnection(client, stdin, stdout)
 	conn.SetLogger(slog.Default())
 
@@ -234,13 +260,14 @@ func main() {
 	fmt.Printf("📝 Created session: %s\n", newSess.SessionId)
 
 	fmt.Println("Type a message and press Enter to send. Commands: :cancel, :exit")
-	scanner := bufio.NewScanner(os.Stdin)
+	lines := readLines(os.Stdin)
 	for {
 		fmt.Print("> ")
-		if !scanner.Scan() {
+		line, ok := <-lines
+		if !ok {
 			break
 		}
-		line := strings.TrimSpace(scanner.Text())
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
@@ -249,28 +276,90 @@ func main() {
 			cancel()
 			return
 		case ":cancel":
-			_ = conn.Cancel(ctx, acp.CancelNotification{SessionId: newSess.SessionId})
+			fmt.Println("No turn is running.")
 			continue
 		}
-		// Send prompt and wait for completion while streaming updates are printed via SessionUpdate
-		if _, err := conn.Prompt(ctx, acp.PromptRequest{
-			SessionId: newSess.SessionId,
-			Prompt:    []acp.ContentBlock{acp.TextBlock(line)},
-		}); err != nil {
-			// If it's a JSON-RPC RequestError, surface more detail for troubleshooting
-			if re, ok := err.(*acp.RequestError); ok {
-				if b, mErr := json.MarshalIndent(re, "", "  "); mErr == nil {
-					fmt.Fprintf(os.Stderr, "[Client] Error: %s\n", string(b))
-				} else {
-					fmt.Fprintf(os.Stderr, "prompt error (%d): %s\n", re.Code, re.Message)
-				}
-			} else {
-				fmt.Fprintf(os.Stderr, "prompt error: %v\n", err)
-			}
+		if !runTurn(ctx, conn, client, lines, newSess.SessionId, line) {
+			break
 		}
 	}
 
 	_ = cmd.Process.Kill()
+}
+
+// readLines reads r on its own goroutine and sends each line on the channel it
+// returns, which it closes at the end of input. The whole program reads stdin
+// through it, so no two readers split its lines (0019-PLAN-behaviour-fixes.md,
+// E1 and E2).
+func readLines(r io.Reader) <-chan string {
+	lines := make(chan string)
+	go func() {
+		defer close(lines)
+		sc := bufio.NewScanner(r)
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+	}()
+	return lines
+}
+
+// runTurn sends one prompt and reads stdin until the turn ends: ":cancel"
+// cancels the turn's context, which sends session/cancel; ":exit" does the
+// same and ends the REPL, as the end of input does; any other line goes to the
+// turn's permission prompt. It returns false when the REPL should end
+// (0019-PLAN-behaviour-fixes.md, E2).
+func runTurn(ctx context.Context, conn *acp.ClientSideConnection, client *replClient, lines <-chan string, sid acp.SessionId, text string) bool {
+	turnCtx, cancelTurn := context.WithCancel(ctx)
+	defer cancelTurn()
+	done := make(chan error, 1)
+	go func() {
+		_, err := conn.Prompt(turnCtx, acp.PromptRequest{SessionId: sid, Prompt: []acp.ContentBlock{acp.TextBlock(text)}})
+		done <- err
+	}()
+	keepGoing := true
+	for {
+		select {
+		case err := <-done:
+			switch {
+			case turnCtx.Err() != nil:
+				fmt.Println("\n[turn cancelled]")
+			case err != nil:
+				printPromptError(err)
+			}
+			client.drainAnswers()
+			return keepGoing
+		case line, ok := <-lines:
+			switch l := strings.TrimSpace(line); {
+			case !ok:
+				lines, keepGoing = nil, false
+				cancelTurn()
+			case l == ":cancel":
+				cancelTurn()
+			case l == ":exit" || l == ":quit":
+				keepGoing = false
+				cancelTurn()
+			case l != "":
+				select {
+				case client.answers <- l:
+				default:
+					fmt.Println("(input ignored while a turn runs; type :cancel to cancel it)")
+				}
+			}
+		}
+	}
+}
+
+// printPromptError surfaces a prompt's error, with a JSON-RPC error's detail.
+func printPromptError(err error) {
+	if re, ok := err.(*acp.RequestError); ok {
+		if b, mErr := json.MarshalIndent(re, "", "  "); mErr == nil {
+			fmt.Fprintf(os.Stderr, "[Client] Error: %s\n", string(b))
+		} else {
+			fmt.Fprintf(os.Stderr, "prompt error (%d): %s\n", re.Code, re.Message)
+		}
+		return
+	}
+	fmt.Fprintf(os.Stderr, "prompt error: %v\n", err)
 }
 
 func mustCwd() string {

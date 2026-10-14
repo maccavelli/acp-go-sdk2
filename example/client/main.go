@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -15,7 +16,10 @@ import (
 	"github.com/maccavelli/acp-go-sdk2"
 )
 
-type exampleClient struct{}
+type exampleClient struct {
+	// lines carries stdin, a line at a time; it is closed at the end of input.
+	lines <-chan string
+}
 
 var _ acp.Client = (*exampleClient)(nil)
 
@@ -29,11 +33,22 @@ func (e *exampleClient) RequestPermission(ctx context.Context, params acp.Reques
 	for i, opt := range params.Options {
 		fmt.Printf("   %d. %s (%s)\n", i+1, opt.Name, opt.Kind)
 	}
-	reader := bufio.NewReader(os.Stdin)
+	cancelled := acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}
 	for {
 		fmt.Printf("\nChoose an option: ")
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
+		var line string
+		select {
+		case <-ctx.Done():
+			// The turn was cancelled; the SDK has answered for us.
+			fmt.Println("\nThe permission request was cancelled.")
+			return cancelled, nil
+		case l, ok := <-e.lines:
+			if !ok {
+				fmt.Println("\nNo more input: the permission request is answered cancelled.")
+				return cancelled, nil
+			}
+			line = strings.TrimSpace(l)
+		}
 		if line == "" {
 			continue
 		}
@@ -199,7 +214,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := &exampleClient{}
+	client := &exampleClient{lines: readLines(os.Stdin)}
 	conn := acp.NewClientSideConnection(client, stdin, stdout)
 	conn.SetLogger(slog.Default())
 
@@ -264,6 +279,22 @@ func main() {
 	}
 
 	_ = cmd.Process.Kill()
+}
+
+// readLines reads r on its own goroutine and sends each line on the channel it
+// returns, which it closes at the end of input. The whole program reads stdin
+// through it, so no two readers split its lines (0019-PLAN-behaviour-fixes.md,
+// E1 and E2).
+func readLines(r io.Reader) <-chan string {
+	lines := make(chan string)
+	go func() {
+		defer close(lines)
+		sc := bufio.NewScanner(r)
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+	}()
+	return lines
 }
 
 func mustCwd() string {

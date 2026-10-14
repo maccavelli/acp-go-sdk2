@@ -247,8 +247,8 @@ before it is relied on; the break named is the one to plant.
   with a message.
 * E3: the example agent waits on `ctx.Done()` or `asc.Done()`, and lists only `os.Interrupt`.
 * E4: the example agent builds its tool-call paths with `filepath.Join` under the session's first root, its `cwd`.
-* No committed test (phase 4, E12). Each is proved by running the built programs: the client with stdin at EOF ends within 5 s
-  with the permission answered `cancelled`; the REPL's `:cancel` ends a turn early with `cancelled`, and a piped answer reaches the
+* No committed test (phase 4, E12). Each is proved by running the built programs: the client with stdin at EOF ~~ends within 5 s~~
+  ends with one prompt, answered `cancelled`, once the agent asks (amended in step 8, see "Step 8 deviation"); the REPL's `:cancel` ends a turn early with `cancelled`, and a piped answer reaches the
   permission prompt; the agent exits within 2 s of SIGINT; the example pair completes a turn on Windows.
 
 ## Implementation Steps
@@ -617,6 +617,54 @@ Seen to fail, each in its own scratch copy, with the pass-through restored (2 of
 
 The original G1 probe, re-run on the step 7 tree as an engine behaviour case: its behaviour test, which calls `Injected()`, no longer
 builds, "undefined: Injected".
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0; `GOEXPERIMENT=nojsonv2 go test
+./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan
+finds nothing; the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added. Windows: `go test -count=1
+-shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+
+The owner committed step 7 as `a356149`.
+
+### Step 8 deviation, 2026-10-13: the E1 figure
+
+Found: "Design", E1 to E4, asked the client with stdin at EOF to end "within 5 s". The fixed client ends in 5.3 s: it answers the
+permission request `cancelled` as soon as it reaches the prompt, but the example agent's scripted pauses before it asks, 250 ms and
+four of 1 s, come first, which the figure did not count. Decision (owner, 2026-10-13): correct the figure, not the agent's pacing; the
+criterion is that the client ends with one prompt, answered `cancelled`, once the agent asks. The design paragraph is annotated; no
+MADR decision changes.
+
+### Step 8, the examples, 2026-10-13
+
+What was built:
+
+* E1, `example/client/main.go`, and the permission prompt of `example/claude-code` and `example/gemini`: `readLines` reads stdin on one
+  goroutine into a channel closed at the end of input; the prompt waits on it, or on the REPLs' `answers`, and on its context, and
+  answers `cancelled` at the end of input or when the context ends (the SDK has then answered for it).
+* E2, `example/claude-code` and `example/gemini`: the REPL loop owns stdin; `runTurn` runs `Prompt` on its own goroutine under a
+  cancellable context and reads stdin until the turn ends: `:cancel` cancels the turn's context, which sends `session/cancel`; `:exit`
+  does the same and ends the REPL, as the end of input does; any other line goes to the permission prompt through `answers`, a
+  buffer of 16 drained when the turn ends. `printPromptError` holds the error printing the loop had inline.
+* E3, `example/agent/main.go`: `signal.NotifyContext` lists `os.Interrupt` only, and `main` waits on `asc.Done()` or the context.
+* E4, `example/agent/main.go`: `sessionPath` joins a name under the session's first root, its `cwd`; `pathInput` builds the raw input;
+  the three tool-call paths and their raw inputs use them.
+* `gofmt -l` reports nothing; `go vet ./example/...` and `GOOS=windows go vet ./example/...` exit 0.
+
+No committed test, as "Design" says (phase 4, E12). Proved by running the programs built from the working tree, with a Python driver
+that writes stdin over time and reads stdout (6 of 6 checks):
+
+* E1, the client given the agent and stdin at EOF: ended in 5.3 s with one prompt and "the permission request is answered cancelled",
+  then "Agent completed", 717 bytes of output. Before the fix it was killed at 10 s after 1,895,570 prompts.
+* E1, the client answering "1": ended in 5.3 s with the change applied.
+* E2, the gemini REPL against the example agent through a Python wrapper: `:cancel` during a turn printed "[turn cancelled]" 0.03 s
+  later, and the turn did not run to its end. Before the fix the turn ran to its end.
+* E2, an answer typed at the permission prompt: one prompt, the change applied. Before the fix the scanner swallowed it and the
+  prompt spun 8,659,951 times.
+* E2, the end of input at the permission prompt: the REPL exited 4.4 s after start, with one prompt.
+* E3, the agent in stdio mode with stdin held open: exited 0 within 0.00 s of SIGINT. Before the fix it was still running 3 s later.
+* E4, the pair built for Windows and run on the owner's Windows host with the permission answered "1": built from `a356149`, the
+  client dropped the agent's `session/update` for `/project/README.md` and `/project/config.json`, "is not an absolute path", and
+  answered its `session/request_permission` `-32602`, so the turn failed; built from the working tree, the turn completed, "Agent
+  completed", with the change applied and no path refused.
 
 Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0; `GOEXPERIMENT=nojsonv2 go test
 ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -224,7 +225,34 @@ func (a *exampleAgent) Prompt(_ context.Context, params acp.PromptRequest) (acp.
 	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
 }
 
+// sessionPath is name under the session's cwd, its first root, so that every
+// path the agent sends is absolute on the client's host
+// (0019-PLAN-behaviour-fixes.md, E4).
+func (a *exampleAgent) sessionPath(sid, name string) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if s, ok := a.sessions[sid]; ok && len(s.roots) > 0 {
+		return filepath.Join(s.roots[0], name)
+	}
+	return name
+}
+
+// pathInput is a tool call's raw input naming path, with content when set.
+func pathInput(path, content string) json.RawMessage {
+	fields := map[string]string{"path": path}
+	if content != "" {
+		fields["content"] = content
+	}
+	b, err := json.Marshal(fields)
+	if err != nil {
+		panic(err) // a map of strings always encodes
+	}
+	return b
+}
+
 func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
+	readme, config := a.sessionPath(sid, "README.md"), a.sessionPath(sid, "config.json")
+	const configChange = `{"database": {"host": "new-host"}}`
 	// disclaimer: stream a demo notice so clients see it's the example agent
 	if err := a.conn.SessionUpdate(ctx, acp.SessionNotification{
 		SessionId: acp.SessionId(sid),
@@ -254,8 +282,8 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 			"Reading project files",
 			acp.WithStartKind(acp.ToolKindRead),
 			acp.WithStartStatus(acp.ToolCallStatusPending),
-			acp.WithStartLocations([]acp.ToolCallLocation{{Path: "/project/README.md"}}),
-			acp.WithStartRawInput(json.RawMessage(`{"path":"/project/README.md"}`)),
+			acp.WithStartLocations([]acp.ToolCallLocation{{Path: readme}}),
+			acp.WithStartRawInput(pathInput(readme, "")),
 		),
 	}); err != nil {
 		return err
@@ -299,8 +327,8 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 			"Modifying critical configuration file",
 			acp.WithStartKind(acp.ToolKindEdit),
 			acp.WithStartStatus(acp.ToolCallStatusPending),
-			acp.WithStartLocations([]acp.ToolCallLocation{{Path: "/project/config.json"}}),
-			acp.WithStartRawInput(json.RawMessage(`{"content":"{\"database\": {\"host\": \"new-host\"}}","path":"/project/config.json"}`)),
+			acp.WithStartLocations([]acp.ToolCallLocation{{Path: config}}),
+			acp.WithStartRawInput(pathInput(config, configChange)),
 		),
 	}); err != nil {
 		return err
@@ -314,8 +342,8 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 			Title:      new("Modifying critical configuration file"),
 			Kind:       acp.Ptr(acp.ToolKindEdit),
 			Status:     acp.Ptr(acp.ToolCallStatusPending),
-			Locations:  []acp.ToolCallLocation{{Path: "/home/user/project/config.json"}},
-			RawInput:   json.RawMessage(`{"content":"{\"database\": {\"host\": \"new-host\"}}","path":"/home/user/project/config.json"}`),
+			Locations:  []acp.ToolCallLocation{{Path: config}},
+			RawInput:   pathInput(config, configChange),
 		},
 		Options: []acp.PermissionOption{
 			{Kind: acp.PermissionOptionKindAllowOnce, Name: "Allow this change", OptionId: acp.PermissionOptionId("allow")},
@@ -394,7 +422,8 @@ func pause(ctx context.Context, d time.Duration) error {
 func main() {
 	// If args provided, treat them as client program + args to spawn and connect via stdio.
 	// Otherwise, default to stdio (allowing manual wiring or use by another process).
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	// os.Kill cannot be caught; SIGINT ends the agent (0019-PLAN-behaviour-fixes.md, E3).
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
 	var (
@@ -420,8 +449,11 @@ func main() {
 	asc.SetLogger(slog.Default())
 	ag.SetAgentConnection(asc)
 
-	// Block until the peer disconnects.
-	<-asc.Done()
+	// Block until the peer disconnects or the agent is interrupted.
+	select {
+	case <-asc.Done():
+	case <-ctx.Done():
+	}
 
 	if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Kill()
