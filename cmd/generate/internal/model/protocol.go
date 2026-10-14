@@ -423,7 +423,7 @@ func (m *Model) linkPromptTurns(r *rules) error {
 			if err != nil {
 				return fmt.Errorf("%s: %w", rule.owner(), err)
 			}
-			mi.SessionField = f.Name
+			mi.SessionField, mi.SessionKey = f.Name, f.Key
 			if mi.PromptTurn {
 				if mi.StopField, mi.StopConst, err = m.stopField(mi.Resp, rule.StopKey, rule.StopCancelled); err != nil {
 					return fmt.Errorf("%s: %w", rule.owner(), err)

@@ -1,0 +1,197 @@
+The prompt-overlap policy through the generated dispatch: under
+PromptOverlapRefuse a second prompt for a session whose turn is running is
+answered -32603 naming the table's session key, without calling the handler,
+and a prompt after session/cancel runs though the cancelled handler has not
+returned; under PromptOverlapConcurrent both
+prompts reach the handler and one session/cancel cancels both
+(0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md, step 3).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"session_prompt": "session/prompt", "session_cancel": "session/cancel"}, "clientMethods": {"session_update": "session/update"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "PromptRequest": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/prompt"},
+  "StopReason": {"type": "string", "enum": ["end_turn", "cancelled"]},
+  "PromptResponse": {"type": "object", "properties": {"stopReason": {"$ref": "#/$defs/StopReason"}}, "required": ["stopReason"], "x-side": "agent", "x-method": "session/prompt"},
+  "CancelNotification": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/cancel"},
+  "SessionNotification": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "client", "x-method": "session/update"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{Cancel(ctx context.Context, params CancelNotification) error; Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error)}
+type AgentExperimental interface{}
+const AgentMethodSessionCancel untyped string = "session/cancel"
+const AgentMethodSessionPrompt untyped string = "session/prompt"
+type AgentSideConnection struct{conn *Connection; agent Agent; mu sync.Mutex; sessionCancels map[string][]*promptTurn; lateCancels map[string]uint64}
+type CancelNotification struct{SessionId string "json:\"sessionId\""}
+type CancelRequestNotification struct{}
+type Client interface{SessionUpdate(ctx context.Context, params SessionNotification) error}
+type ClientExperimental interface{}
+const ClientMethodSessionUpdate untyped string = "session/update"
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+type PromptRequest struct{SessionId string "json:\"sessionId\""}
+type PromptResponse struct{StopReason StopReason "json:\"stopReason\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type SessionNotification struct{SessionId string "json:\"sessionId\""}
+type StopReason string
+const StopReasonCancelled StopReason = "cancelled"
+const StopReasonEndTurn StopReason = "end_turn"
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SessionUpdate(ctx context.Context, params SessionNotification) error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelNotification).UnmarshalJSON(b []byte) error
+func (*CancelNotification).Validate() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Cancel(ctx context.Context, params CancelNotification) error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*PromptRequest).UnmarshalJSON(b []byte) error
+func (*PromptRequest).Validate() error
+func (*PromptResponse).UnmarshalJSON(b []byte) error
+func (*PromptResponse).Validate() error
+func (*SessionNotification).UnmarshalJSON(b []byte) error
+func (*SessionNotification).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"errors"
+	"io"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+type overlapAgent struct {
+	calls     *atomic.Int32
+	started   chan context.Context
+	cancelled chan struct{}
+	hold      chan struct{}
+}
+
+// Prompt waits until its context is cancelled, as a long turn would, then
+// until hold is closed.
+func (a overlapAgent) Prompt(ctx context.Context, _ PromptRequest) (PromptResponse, error) {
+	a.calls.Add(1)
+	a.started <- ctx
+	<-ctx.Done()
+	a.cancelled <- struct{}{}
+	<-a.hold
+	return PromptResponse{}, ctx.Err()
+}
+
+func (overlapAgent) Cancel(context.Context, CancelNotification) error { return nil }
+
+type quietClient struct{}
+
+func (quietClient) SessionUpdate(context.Context, SessionNotification) error { return nil }
+
+func wait[T any](t *testing.T, ch chan T, what string) T {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(10 * time.Second):
+		t.Fatalf("%s did not happen", what)
+		panic("unreachable")
+	}
+}
+
+// overlapPair connects an overlapAgent under policy p to a client; the agent's
+// handlers return once cancelled unless held.
+func overlapPair(t *testing.T, p PromptOverlapPolicy, held bool) (overlapAgent, *ClientSideConnection) {
+	t.Helper()
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	a := overlapAgent{calls: new(atomic.Int32), started: make(chan context.Context, 4), cancelled: make(chan struct{}, 4),
+		hold: make(chan struct{})}
+	if !held {
+		close(a.hold)
+	}
+	NewAgentSideConnection(a, aw, ar, WithPromptOverlapPolicy(p))
+	return a, NewClientSideConnection(quietClient{}, cw, cr)
+}
+
+func send(t *testing.T, c *ClientSideConnection) chan PromptResponse {
+	t.Helper()
+	done := make(chan PromptResponse, 1)
+	go func() {
+		resp, err := c.Prompt(context.Background(), PromptRequest{SessionId: "s"})
+		if err != nil {
+			t.Errorf("prompt: %v", err)
+		}
+		done <- resp
+	}()
+	return done
+}
+
+// Refuse answers a second prompt -32603 without calling the handler or
+// cancelling the running turn, and runs a prompt sent after session/cancel
+// before the cancelled handler returns.
+func TestPromptOverlapRefuse(t *testing.T) {
+	a, c := overlapPair(t, PromptOverlapRefuse, true)
+	first := send(t, c)
+	running := wait(t, a.started, "the running turn")
+	refusing, stop := context.WithTimeout(t.Context(), 10*time.Second)
+	defer stop()
+	_, err := c.Prompt(refusing, PromptRequest{SessionId: "s"})
+	var re *RequestError
+	if !errors.As(err, &re) || re.Code != -32603 {
+		t.Fatalf("second prompt: %v, want -32603", err)
+	}
+	if data, _ := re.Data.(map[string]any); data["error"] != "a prompt turn is already running for this session" || data["sessionId"] != "s" {
+		t.Errorf("refusal data %v", re.Data)
+	}
+	if n := a.calls.Load(); n != 1 || running.Err() != nil {
+		t.Errorf("handler called %d times, running turn's error %v; want once and nil", n, running.Err())
+	}
+	if err := c.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	wait(t, a.cancelled, "the running turn's cancel")
+	next := send(t, c)
+	if ctx := wait(t, a.started, "the prompt after the cancel"); ctx.Err() != nil {
+		t.Errorf("the prompt after the cancel was cancelled")
+	}
+	close(a.hold)
+	if resp := wait(t, first, "the first answer"); resp.StopReason != StopReasonCancelled {
+		t.Errorf("first answer %+v", resp)
+	}
+	if err := c.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	wait(t, next, "the last answer")
+}
+
+// Concurrent calls the handler for both prompts, and one session/cancel
+// cancels both.
+func TestPromptOverlapConcurrent(t *testing.T) {
+	a, c := overlapPair(t, PromptOverlapConcurrent, false)
+	first := send(t, c)
+	ctx1 := wait(t, a.started, "the first turn")
+	second := send(t, c)
+	wait(t, a.started, "the second turn")
+	if ctx1.Err() != nil {
+		t.Errorf("the first turn was cancelled by the second")
+	}
+	if err := c.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, done := range []chan PromptResponse{first, second} {
+		if resp := wait(t, done, "a turn's answer"); resp.StopReason != StopReasonCancelled {
+			t.Errorf("answer %+v, want cancelled", resp)
+		}
+	}
+}

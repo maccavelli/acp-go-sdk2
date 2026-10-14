@@ -33,7 +33,7 @@ type AgentExperimental interface{}
 const AgentMethodSessionCancel untyped string = "session/cancel"
 const AgentMethodSessionClose untyped string = "session/close"
 const AgentMethodSessionPrompt untyped string = "session/prompt"
-type AgentSideConnection struct{conn *Connection; agent Agent; mu sync.Mutex; sessionCancels map[string]*promptTurn; lateCancels map[string]uint64}
+type AgentSideConnection struct{conn *Connection; agent Agent; mu sync.Mutex; sessionCancels map[string][]*promptTurn; lateCancels map[string]uint64}
 type CancelNotification struct{SessionId string "json:\"sessionId\""}
 type CancelRequestNotification struct{}
 type Client interface{RequestPermission(ctx context.Context, params RequestPermissionRequest) (RequestPermissionResponse, error)}

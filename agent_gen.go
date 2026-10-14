@@ -17,7 +17,7 @@ type AgentSideConnection struct {
 	conn           *Connection
 	agent          Agent
 	mu             sync.Mutex
-	sessionCancels map[string]*promptTurn
+	sessionCancels map[string][]*promptTurn
 	lateCancels    map[string]uint64
 	negotiation    atomic.Pointer[Negotiation]
 }
@@ -28,7 +28,7 @@ type AgentSideConnection struct {
 func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection {
 	asc := &AgentSideConnection{}
 	asc.agent = agent
-	asc.sessionCancels = make(map[string]*promptTurn)
+	asc.sessionCancels = make(map[string][]*promptTurn)
 	asc.lateCancels = make(map[string]uint64)
 	asc.conn = buildConnection(asc.handleWithExtensions, peerInput, peerOutput, opts...)
 	if aware, ok := agent.(AgentConnAware); ok {
@@ -112,10 +112,11 @@ func (c *AgentSideConnection) Negotiated() (Negotiation, bool) {
 }
 
 // promptTurn is one prompt turn: its cancel function and the receipt number
-// of its request. sessionCancels holds the running turn of each session by
+// of its request. sessionCancels holds the running turns of each session by
 // pointer, so a turn removes only its own entry, and lateCancels the receipt of
-// each session's latest cancel that found no earlier turn
-// (0017-MADR-remediate-acp-v1-conformance-violations.md, P1).
+// each session's latest cancel, for a prompt received before it and not stored
+// yet (0017-MADR-remediate-acp-v1-conformance-violations.md, P1;
+// 0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md, step 3).
 type promptTurn struct {
 	cancel  context.CancelCauseFunc
 	receipt uint64
@@ -125,6 +126,79 @@ type promptTurn struct {
 // returns and the turn is removed, before its answer is decided. It is nil
 // outside tests.
 var promptReturned func()
+
+// storeTurn stores turn, a prompt turn of the session key, as the connection's
+// prompt-overlap policy has it, and reports false when the policy refuses it.
+// Supersede, the default, cancels the stored turns, or this one when a stored
+// turn was received after it; refuse refuses it while a turn is stored;
+// concurrent adds it. A kept cancel received after the prompt cancels it, and
+// under supersede a prompt newer than the kept cancel ends it, a prompt stored
+// after a newer one being superseded anyway (0019-PLAN-behaviour-fixes.md, B5).
+// The caller holds a.mu.
+func (a *AgentSideConnection) storeTurn(key string, turn *promptTurn) bool {
+	supersedes := false
+	switch a.conn.promptOverlap {
+	case PromptOverlapRefuse:
+		if len(a.sessionCancels[key]) > 0 {
+			return false
+		}
+		a.sessionCancels[key] = []*promptTurn{turn}
+	case PromptOverlapConcurrent:
+		a.sessionCancels[key] = append(a.sessionCancels[key], turn)
+	default:
+		superseded := fmt.Errorf("%w: superseded by a new prompt", ErrPromptCancelled)
+		for _, prev := range a.sessionCancels[key] {
+			if prev.receipt > turn.receipt {
+				turn.cancel(superseded)
+				return true
+			}
+		}
+		for _, prev := range a.sessionCancels[key] {
+			prev.cancel(superseded)
+		}
+		a.sessionCancels[key] = []*promptTurn{turn}
+		supersedes = true
+	}
+	if turn.receipt != 0 && a.lateCancels[key] > turn.receipt {
+		turn.cancel(ErrPromptCancelled)
+	} else if supersedes {
+		delete(a.lateCancels, key)
+	}
+	return true
+}
+
+// removeTurn removes turn from the turns of the session key. The caller holds a.mu.
+func (a *AgentSideConnection) removeTurn(key string, turn *promptTurn) {
+	var kept []*promptTurn
+	for _, t := range a.sessionCancels[key] {
+		if t != turn {
+			kept = append(kept, t)
+		}
+	}
+	if len(kept) == 0 {
+		delete(a.sessionCancels, key)
+	} else {
+		a.sessionCancels[key] = kept
+	}
+}
+
+// cancelTurns cancels and removes every turn of the session key received before
+// the cancel whose receipt is s, or every one when s is 0. The caller holds a.mu.
+func (a *AgentSideConnection) cancelTurns(key string, s uint64) {
+	var kept []*promptTurn
+	for _, t := range a.sessionCancels[key] {
+		if s == 0 || t.receipt < s {
+			t.cancel(ErrPromptCancelled)
+		} else {
+			kept = append(kept, t)
+		}
+	}
+	if len(kept) == 0 {
+		delete(a.sessionCancels, key)
+	} else {
+		a.sessionCancels[key] = kept
+	}
+}
 
 func (a *AgentSideConnection) handle(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
 	switch method {
@@ -518,10 +592,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		s := receiptOf(ctx)
 		a.mu.Lock()
-		if cn, ok := a.sessionCancels[string(p.SessionId)]; ok && (s == 0 || cn.receipt < s) {
-			cn.cancel(ErrPromptCancelled)
-			delete(a.sessionCancels, string(p.SessionId))
-		}
+		a.cancelTurns(string(p.SessionId), s)
 		a.conn.keepCancel(a.lateCancels, string(p.SessionId), s)
 		a.mu.Unlock()
 		if err := a.agent.Cancel(ctx, p); err != nil {
@@ -541,10 +612,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		s := receiptOf(ctx)
 		a.mu.Lock()
-		if cn, ok := a.sessionCancels[string(p.SessionId)]; ok && (s == 0 || cn.receipt < s) {
-			cn.cancel(ErrPromptCancelled)
-			delete(a.sessionCancels, string(p.SessionId))
-		}
+		a.cancelTurns(string(p.SessionId), s)
 		a.conn.keepCancel(a.lateCancels, string(p.SessionId), s)
 		a.mu.Unlock()
 		resp, err := a.agent.CloseSession(ctx, p)
@@ -659,27 +727,19 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 			cancel:  cancel,
 			receipt: r,
 		}
-		superseded := fmt.Errorf("%w: superseded by a new prompt", ErrPromptCancelled)
 		a.mu.Lock()
-		if prev, ok := a.sessionCancels[string(p.SessionId)]; ok && prev.receipt > r {
-			cancel(superseded)
-		} else {
-			if ok {
-				prev.cancel(superseded)
-			}
-			a.sessionCancels[string(p.SessionId)] = turn
-			if r != 0 && a.lateCancels[string(p.SessionId)] > r {
-				cancel(ErrPromptCancelled)
-			} else {
-				delete(a.lateCancels, string(p.SessionId))
-			}
-		}
+		stored := a.storeTurn(string(p.SessionId), turn)
 		a.mu.Unlock()
+		if !stored {
+			cancel(nil)
+			return nil, NewInternalError(map[string]any{
+				"error":     "a prompt turn is already running for this session",
+				"sessionId": p.SessionId,
+			})
+		}
 		resp, err := a.agent.Prompt(reqCtx, p)
 		a.mu.Lock()
-		if a.sessionCancels[string(p.SessionId)] == turn {
-			delete(a.sessionCancels, string(p.SessionId))
-		}
+		a.removeTurn(string(p.SessionId), turn)
 		cause := context.Cause(reqCtx)
 		a.mu.Unlock()
 		cancel(nil)

@@ -51,9 +51,9 @@ type Method struct {
 	// PromptTurn and CancelsPromptTurn are the method's prompt-turn role
 	// from the protocol table, and ClosesSession marks a request that ends its
 	// session's work as the cancel does; SessionField is the Go field of its
-	// session key; Canceller is a prompt turn's cancel.
+	// session key, and SessionKey that key; Canceller is a prompt turn's cancel.
 	PromptTurn, CancelsPromptTurn, ClosesSession bool
-	SessionField                                 string
+	SessionField, SessionKey                     string
 	Canceller                                    *Method
 	// StopField and StopConst are a prompt turn's stop-reason field and the
 	// constant that answers a cancelled turn.

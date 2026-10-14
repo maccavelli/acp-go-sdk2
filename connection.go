@@ -294,6 +294,9 @@ type Connection struct {
 	handler MethodHandler
 
 	mu sync.Mutex
+	// promptOverlap is the agent side's prompt-overlap policy, which the
+	// generated prompt-turn code reads (0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md, step 3).
+	promptOverlap PromptOverlapPolicy
 	// requestSlots holds a value for each inbound request whose handler is
 	// running; it is nil when requests are unbounded, and its capacity is the
 	// limit (0019-PLAN-api-decisions.md, B18).
@@ -373,6 +376,7 @@ type connectionConfig struct {
 	rewrite                func(ctx context.Context, method string, params any) error
 	inbound                func(ctx context.Context, method string, params any, err error) error
 	maxConcurrentRequests  int
+	promptOverlap          PromptOverlapPolicy
 }
 
 // WithMaxQueuedNotifications sets the maximum number of queued notifications
@@ -385,6 +389,41 @@ func WithMaxQueuedNotifications(n int) ConnectionOption {
 		if n > 0 {
 			cfg.maxQueuedNotifications = n
 		}
+	}
+}
+
+// PromptOverlapPolicy selects what an AgentSideConnection does with a
+// session/prompt for a session whose prompt turn is still running. ACP does
+// not define it (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md, issue #4).
+type PromptOverlapPolicy int
+
+const (
+	// PromptOverlapSupersede cancels the running turn, with a cause that wraps
+	// ErrPromptCancelled, and runs the new prompt. A prompt received before
+	// the running turn's is cancelled at once instead. This is the default.
+	PromptOverlapSupersede PromptOverlapPolicy = iota
+
+	// PromptOverlapRefuse answers the new prompt at once, -32603 with data
+	// {"error": "a prompt turn is already running for this session",
+	// "sessionId": <id>}, and does not call Prompt; the running turn goes on.
+	// A turn that session/cancel or session/close has cancelled no longer
+	// counts, so a prompt sent after a cancel runs.
+	PromptOverlapRefuse
+
+	// PromptOverlapConcurrent calls Prompt for every prompt, so the agent
+	// queues, steers or refuses in its own handler. session/cancel and
+	// session/close cancel every running turn of the session received before
+	// them.
+	PromptOverlapConcurrent
+)
+
+// WithPromptOverlapPolicy sets what an AgentSideConnection does with a
+// session/prompt for a session whose turn is running. The default is
+// PromptOverlapSupersede, and any value this package does not define is
+// treated as the default. Other connections ignore it.
+func WithPromptOverlapPolicy(p PromptOverlapPolicy) ConnectionOption {
+	return func(cfg *connectionConfig) {
+		cfg.promptOverlap = p
 	}
 }
 
@@ -583,6 +622,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 	if cfg.maxConcurrentRequests > 0 {
 		c.requestSlots = make(chan struct{}, cfg.maxConcurrentRequests)
 	}
+	c.promptOverlap = cfg.promptOverlap
 	if cfg.logger != nil {
 		c.logger.Store(cfg.logger)
 	}

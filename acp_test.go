@@ -441,7 +441,7 @@ func TestAgentDispatch_AllowsPartialUnstableMethodImplementation(t *testing.T) {
 	conn := &AgentSideConnection{
 		agent:          agent,
 		conn:           &Connection{},
-		sessionCancels: make(map[string]*promptTurn),
+		sessionCancels: make(map[string][]*promptTurn),
 	}
 	negotiate(t, conn, allAdvertised())
 

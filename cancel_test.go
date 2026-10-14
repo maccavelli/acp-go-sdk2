@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -25,8 +26,8 @@ func within[T any](t *testing.T, ch <-chan T, what string) T {
 	}
 }
 
-// promptPair connects an agent built from a and a client over pipes.
-func promptPair(t *testing.T, a agentFuncs) *ClientSideConnection {
+// promptPair connects an agent built from a with opts and a client over pipes.
+func promptPair(t *testing.T, a agentFuncs, opts ...ConnectionOption) *ClientSideConnection {
 	t.Helper()
 	c2aR, c2aW := io.Pipe()
 	a2cR, a2cW := io.Pipe()
@@ -34,7 +35,7 @@ func promptPair(t *testing.T, a agentFuncs) *ClientSideConnection {
 		_ = c2aW.Close()
 		_ = a2cW.Close()
 	})
-	negotiate(t, NewAgentSideConnection(a, a2cW, c2aR), allAdvertised())
+	negotiate(t, NewAgentSideConnection(a, a2cW, c2aR, opts...), allAdvertised())
 	csc := NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
 	negotiate(t, csc, allAdvertised())
 	return csc
@@ -501,7 +502,7 @@ type receiptAgent struct {
 	started chan struct{}
 }
 
-func newReceiptAgent(t *testing.T) *receiptAgent {
+func newReceiptAgent(t *testing.T, opts ...ConnectionOption) *receiptAgent {
 	t.Helper()
 	ra := &receiptAgent{t: t, started: make(chan struct{}, 4)}
 	ra.asc = NewAgentSideConnection(agentFuncs{PromptFunc: func(ctx context.Context, _ PromptRequest) (PromptResponse, error) {
@@ -512,7 +513,7 @@ func newReceiptAgent(t *testing.T) *receiptAgent {
 		case <-time.After(2 * time.Second):
 			return PromptResponse{StopReason: StopReasonEndTurn}, nil
 		}
-	}}, io.Discard, idleReader(t))
+	}}, io.Discard, idleReader(t), opts...)
 	negotiate(t, ra.asc, allAdvertised())
 	return ra
 }
@@ -545,9 +546,9 @@ func (ra *receiptAgent) cancel(r uint64) {
 func (ra *receiptAgent) stored(r uint64) {
 	for deadline := time.Now().Add(2 * time.Second); ; {
 		ra.asc.mu.Lock()
-		turn := ra.asc.sessionCancels["s"]
+		found := slices.ContainsFunc(ra.asc.sessionCancels["s"], func(t *promptTurn) bool { return t.receipt == r })
 		ra.asc.mu.Unlock()
-		if turn != nil && turn.receipt == r {
+		if found {
 			return
 		}
 		if time.Now().After(deadline) {
@@ -663,5 +664,195 @@ func TestLateCancelsBounded(t *testing.T) {
 	cancelAll("after-", 1)
 	if n := kept(); n != 1 {
 		t.Fatalf("%d cancels kept after the request returned, want 1", n)
+	}
+}
+
+// overlapAgent is an agent whose turns run until cancelled, connected to a
+// client under the prompt-overlap policy opts give. Its handler sends each
+// turn's context on started before it waits, and its cause on causes once
+// cancelled; it then returns, or, when hold is not nil, waits for hold to close.
+type overlapAgent struct {
+	c       *ClientSideConnection
+	calls   atomic.Int32
+	started chan context.Context
+	causes  chan error
+}
+
+func newOverlapAgent(t *testing.T, hold <-chan struct{}, opts ...ConnectionOption) *overlapAgent {
+	t.Helper()
+	oa := &overlapAgent{started: make(chan context.Context, 4), causes: make(chan error, 4)}
+	oa.c = promptPair(t, agentFuncs{PromptFunc: func(ctx context.Context, _ PromptRequest) (PromptResponse, error) {
+		oa.calls.Add(1)
+		oa.started <- ctx
+		<-ctx.Done()
+		oa.causes <- context.Cause(ctx)
+		if hold != nil {
+			<-hold
+		}
+		return PromptResponse{}, ctx.Err()
+	}}, opts...)
+	return oa
+}
+
+// TestPromptOverlapRefuse requires a prompt for a session whose turn is
+// running to be answered -32603 at once under PromptOverlapRefuse, without
+// calling the handler or cancelling the running turn, and a prompt for another
+// session to run (0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md, step 3).
+func TestPromptOverlapRefuse(t *testing.T) {
+	t.Parallel()
+	oa := newOverlapAgent(t, nil, WithPromptOverlapPolicy(PromptOverlapRefuse))
+	first := prompt(t, oa.c, "s")
+	running := within(t, oa.started, "the running turn")
+	refusing, stop := context.WithTimeout(t.Context(), 10*time.Second)
+	defer stop()
+	_, err := oa.c.Prompt(refusing, PromptRequest{SessionId: "s"})
+	var re *RequestError
+	if !errors.As(err, &re) || re.Code != -32603 {
+		t.Fatalf("second prompt: %v, want -32603", err)
+	}
+	if data, _ := re.Data.(map[string]any); data["error"] != "a prompt turn is already running for this session" || data["sessionId"] != "s" {
+		t.Errorf("refusal data %v, want the error and sessionId s", re.Data)
+	}
+	if n := oa.calls.Load(); n != 1 {
+		t.Errorf("handler called %d times, want once", n)
+	}
+	if running.Err() != nil {
+		t.Errorf("the running turn was cancelled: %v", context.Cause(running))
+	}
+	other := prompt(t, oa.c, "other")
+	if ctx := within(t, oa.started, "another session's turn"); ctx.Err() != nil {
+		t.Errorf("another session's turn was cancelled: %v", context.Cause(ctx))
+	}
+	for _, s := range []SessionId{"s", "other"} {
+		if err := oa.c.Cancel(t.Context(), CancelNotification{SessionId: s}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, done := range []<-chan PromptResponse{first, other} {
+		if resp := within(t, done, "a turn's answer"); resp.StopReason != StopReasonCancelled {
+			t.Errorf("stopReason %q, want cancelled", resp.StopReason)
+		}
+	}
+}
+
+// TestPromptOverlapRefuseAfterCancel requires a prompt sent after
+// session/cancel to run under PromptOverlapRefuse, though the cancelled turn's
+// handler has not returned (0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md,
+// step 3).
+func TestPromptOverlapRefuseAfterCancel(t *testing.T) {
+	t.Parallel()
+	hold := make(chan struct{})
+	oa := newOverlapAgent(t, hold, WithPromptOverlapPolicy(PromptOverlapRefuse))
+	first := prompt(t, oa.c, "s")
+	within(t, oa.started, "the first turn")
+	if err := oa.c.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	within(t, oa.causes, "the first turn's cancel")
+	second := prompt(t, oa.c, "s")
+	if ctx := within(t, oa.started, "the prompt sent after the cancel"); ctx.Err() != nil {
+		t.Errorf("the prompt sent after the cancel was cancelled: %v", context.Cause(ctx))
+	}
+	close(hold)
+	if resp := within(t, first, "the first answer"); resp.StopReason != StopReasonCancelled {
+		t.Errorf("first turn stopReason %q, want cancelled", resp.StopReason)
+	}
+	if err := oa.c.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	if resp := within(t, second, "the second answer"); resp.StopReason != StopReasonCancelled {
+		t.Errorf("second turn stopReason %q, want cancelled", resp.StopReason)
+	}
+}
+
+// TestPromptOverlapConcurrent requires every prompt for a session to reach the
+// handler under PromptOverlapConcurrent, a session/cancel to cancel every turn
+// received before it and no turn received after it, and a kept cancel to
+// cancel a prompt received before it and stored after it
+// (0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md, step 3).
+func TestPromptOverlapConcurrent(t *testing.T) {
+	t.Parallel()
+	t.Run("over the wire", func(t *testing.T) {
+		t.Parallel()
+		oa := newOverlapAgent(t, nil, WithPromptOverlapPolicy(PromptOverlapConcurrent))
+		first := prompt(t, oa.c, "s")
+		ctx1 := within(t, oa.started, "the first turn")
+		second := prompt(t, oa.c, "s")
+		ctx2 := within(t, oa.started, "the second turn")
+		for i, ctx := range []context.Context{ctx1, ctx2} {
+			if ctx.Err() != nil {
+				t.Errorf("turn %d cancelled by the other: %v", i+1, context.Cause(ctx))
+			}
+		}
+		if err := oa.c.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+			t.Fatal(err)
+		}
+		for i, done := range []<-chan PromptResponse{first, second} {
+			if cause := within(t, oa.causes, "a turn's cancel"); cause != ErrPromptCancelled { //nolint:errorlint // the cause itself, not one it wraps
+				t.Errorf("a turn's cause %v, want ErrPromptCancelled", cause)
+			}
+			if resp := within(t, done, "a turn's answer"); resp.StopReason != StopReasonCancelled {
+				t.Errorf("turn %d stopReason %q, want cancelled", i+1, resp.StopReason)
+			}
+		}
+		third := prompt(t, oa.c, "s")
+		if ctx := within(t, oa.started, "the prompt sent after the cancel"); ctx.Err() != nil {
+			t.Errorf("the prompt sent after the cancel was cancelled: %v", context.Cause(ctx))
+		}
+		if err := oa.c.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+			t.Fatal(err)
+		}
+		within(t, third, "the third answer")
+	})
+	t.Run("a kept cancel", func(t *testing.T) {
+		t.Parallel()
+		ra := newReceiptAgent(t, WithPromptOverlapPolicy(PromptOverlapConcurrent))
+		first := ra.prompt(1)
+		within(t, ra.started, "turn 1")
+		ra.stored(1)
+		ra.cancel(3)
+		second := ra.prompt(2)
+		if got := within(t, first, "turn 1's answer"); got != StopReasonCancelled {
+			t.Errorf("turn 1, received before the cancel, answered %q", got)
+		}
+		if got := within(t, second, "turn 2's answer"); got != StopReasonCancelled {
+			t.Errorf("turn 2, received before the cancel and stored after it, answered %q", got)
+		}
+	})
+}
+
+// TestPromptOverlapDefault requires no option, PromptOverlapSupersede and a
+// value the package does not define all to supersede the running turn
+// (0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md, step 3).
+func TestPromptOverlapDefault(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name string
+		opts []ConnectionOption
+	}{
+		{"no option", nil},
+		{"supersede", []ConnectionOption{WithPromptOverlapPolicy(PromptOverlapSupersede)}},
+		{"undefined", []ConnectionOption{WithPromptOverlapPolicy(PromptOverlapPolicy(99))}},
+		{"negative", []ConnectionOption{WithPromptOverlapPolicy(PromptOverlapPolicy(-1))}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			oa := newOverlapAgent(t, nil, tt.opts...)
+			first := prompt(t, oa.c, "s")
+			within(t, oa.started, "the first turn")
+			second := prompt(t, oa.c, "s")
+			within(t, oa.started, "the second turn")
+			if cause := within(t, oa.causes, "the first turn's cancel"); !errors.Is(cause, ErrPromptCancelled) ||
+				!strings.Contains(cause.Error(), "superseded") {
+				t.Errorf("first turn's cause %v, want one wrapping ErrPromptCancelled that says superseded", cause)
+			}
+			if resp := within(t, first, "the first answer"); resp.StopReason != StopReasonCancelled {
+				t.Errorf("first turn stopReason %q, want cancelled", resp.StopReason)
+			}
+			if err := oa.c.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+				t.Fatal(err)
+			}
+			within(t, second, "the second answer")
+		})
 	}
 }

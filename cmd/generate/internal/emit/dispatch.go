@@ -11,10 +11,6 @@ import (
 // sessionKey is string(p.<field>), the session's key in sessionCancels.
 func sessionKey(field string) ast.Expr { return call(id("string"), dot("p", field)) }
 
-// sessionCancel is a.sessionCancels[string(p.<field>)].
-func sessionCancel(field string) ast.Expr {
-	return index(dot("a", "sessionCancels"), sessionKey(field))
-}
 
 // lockCall is a.mu.Lock() or a.mu.Unlock().
 func lockCall(name string) ast.Stmt { return exprStmt(call(dot("a", "mu", name))) }
@@ -32,41 +28,33 @@ func handleFunc(f *goFile, recv, recvType string, cases []ast.Stmt) *ast.FuncDec
 }
 
 // promptCase runs a prompt turn under a context its session's cancel, a
-// later prompt for the session, or $/cancel_request can cancel. The turn is
-// a pointer in sessionCancels, so a turn removes only its own entry. As the
-// handler returns, the turn is removed and its context's cause read once,
-// under the lock session/cancel takes: a turn cancelled by then is answered
-// with the cancelled stop reason, keeping the rest of the handler's result,
-// and a cancel that comes later finds no turn and changes nothing
-// (0017-MADR-remediate-acp-v1-conformance-violations.md, P1).
+// later prompt for the session, or $/cancel_request can cancel. storeTurn
+// stores the turn as the prompt-overlap policy has it, or refuses it, which
+// is answered at once without the handler. As the handler returns, the turn
+// is removed and its context's cause read once, under the lock session/cancel
+// takes: a turn cancelled by then is answered with the cancelled stop reason,
+// keeping the rest of the handler's result, and a cancel that comes later
+// finds no turn and changes nothing
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, P1;
+// 0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md, step 3).
 func promptCase(f *goFile, recv ast.Expr, mi *model.Method, gate ast.Expr) []ast.Stmt {
 	field := mi.SessionField
+	refused := call(id("NewInternalError"), composite(rawMap(id("any")),
+		kv(str("error"), str("a prompt turn is already running for this session")),
+		kv(str(mi.SessionKey), dot("p", field))))
 	return []ast.Stmt{
 		define(exprs(id("r")), call(id("receiptOf"), id("ctx"))),
 		define(exprs(id("reqCtx"), id("cancel")), call(f.qual(pkgContext, "WithCancelCause"), id("ctx"))),
 		define(exprs(id("turn")), addr(composite(id("promptTurn"), kv(id("cancel"), id("cancel")), kv(id("receipt"), id("r"))))),
-		define(exprs(id("superseded")), call(f.qual(pkgFmt, "Errorf"), str("%w: superseded by a new prompt"), id("ErrPromptCancelled"))),
 		lockCall("Lock"),
-		ifElse(define(exprs(id("prev"), id("ok")), sessionCancel(field)), binary(id("ok"), token.LAND, binary(dot("prev", "receipt"), token.GTR, id("r"))),
-			[]ast.Stmt{exprStmt(call(id("cancel"), id("superseded")))},
-			[]ast.Stmt{
-				ifStmt(nil, id("ok"), exprStmt(call(dot("prev", "cancel"), id("superseded")))),
-				assign(exprs(sessionCancel(field)), id("turn")),
-				// A kept cancel received after this prompt cancels it, and stays
-				// for any other prompt received before it; a prompt newer than
-				// the kept cancel ends it, as a prompt stored after a newer one
-				// is superseded anyway (0019-PLAN-behaviour-fixes.md, B5).
-				ifElse(nil, binary(binary(id("r"), token.NEQ, intLit(0)), token.LAND,
-					binary(index(dot("a", "lateCancels"), sessionKey(field)), token.GTR, id("r"))),
-					[]ast.Stmt{exprStmt(call(id("cancel"), id("ErrPromptCancelled")))},
-					[]ast.Stmt{exprStmt(call(id("delete"), dot("a", "lateCancels"), sessionKey(field)))}),
-			},
-		),
+		define(exprs(id("stored")), call(dot("a", "storeTurn"), sessionKey(field), id("turn"))),
 		lockCall("Unlock"),
+		ifStmt(nil, not(id("stored")),
+			exprStmt(call(id("cancel"), nilExpr())),
+			ret(nilExpr(), refused)),
 		define(exprs(id("resp"), id("err")), call(sel(recv, mi.GoName), id("reqCtx"), id("p"))),
 		lockCall("Lock"),
-		ifStmt(nil, binary(sessionCancel(field), token.EQL, id("turn")),
-			exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey(field)))),
+		exprStmt(call(dot("a", "removeTurn"), sessionKey(field), id("turn"))),
 		define(exprs(id("cause")), call(f.qual(pkgContext, "Cause"), id("reqCtx"))),
 		lockCall("Unlock"),
 		exprStmt(call(id("cancel"), nilExpr())),
@@ -90,14 +78,10 @@ func promptCase(f *goFile, recv ast.Expr, mi *model.Method, gate ast.Expr) []ast
 // step 5 deviation; 0019-PLAN-behaviour-fixes.md, B5); keepCancel bounds what
 // is kept (B7). A cancel with no receipt applies to the running turn.
 func cancelActivePrompt(field string) []ast.Stmt {
-	applies := binary(binary(id("s"), token.EQL, intLit(0)), token.LOR, binary(dot("cn", "receipt"), token.LSS, id("s")))
 	return []ast.Stmt{
 		define(exprs(id("s")), call(id("receiptOf"), id("ctx"))),
 		lockCall("Lock"),
-		ifStmt(define(exprs(id("cn"), id("ok")), sessionCancel(field)), binary(id("ok"), token.LAND, paren(applies)),
-			exprStmt(call(dot("cn", "cancel"), id("ErrPromptCancelled"))),
-			exprStmt(call(id("delete"), dot("a", "sessionCancels"), sessionKey(field))),
-		),
+		exprStmt(call(dot("a", "cancelTurns"), sessionKey(field), id("s"))),
 		exprStmt(call(dot("a", "conn", "keepCancel"), dot("a", "lateCancels"), sessionKey(field), id("s"))),
 		lockCall("Unlock"),
 	}
@@ -166,7 +150,7 @@ func emitSideConnection(f *goFile, s side) {
 	if s.promptTurns {
 		fs = append(fs,
 			param("mu", f.qual(pkgSync, "Mutex")),
-			param("sessionCancels", mapOf(id("string"), star(id("promptTurn")))),
+			param("sessionCancels", mapOf(id("string"), sliceOf(star(id("promptTurn"))))),
 			param("lateCancels", mapOf(id("string"), id("uint64"))))
 	}
 	if s.pending {
@@ -184,7 +168,7 @@ func emitSideConnection(f *goFile, s side) {
 	}
 	if s.promptTurns {
 		body = append(body, assign(exprs(dot(s.local, "sessionCancels")),
-			call(id("make"), mapOf(id("string"), star(id("promptTurn"))))),
+			call(id("make"), mapOf(id("string"), sliceOf(star(id("promptTurn")))))),
 			assign(exprs(dot(s.local, "lateCancels")), call(id("make"), mapOf(id("string"), id("uint64")))))
 	}
 	// The connection is assigned before it starts reading, so a message that
@@ -285,10 +269,11 @@ func emitSideConnection(f *goFile, s side) {
 	}
 	if s.promptTurns {
 		f.comment("promptTurn is one prompt turn: its cancel function and the receipt number",
-			"of its request. sessionCancels holds the running turn of each session by",
+			"of its request. sessionCancels holds the running turns of each session by",
 			"pointer, so a turn removes only its own entry, and lateCancels the receipt of",
-			"each session's latest cancel that found no earlier turn",
-			"(0017-MADR-remediate-acp-v1-conformance-violations.md, P1).")
+			"each session's latest cancel, for a prompt received before it and not stored",
+			"yet (0017-MADR-remediate-acp-v1-conformance-violations.md, P1;",
+			"0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md, step 3).")
 		f.add(typeDecl("promptTurn", &ast.StructType{Fields: fields(
 			param("cancel", f.qual(pkgContext, "CancelCauseFunc")), param("receipt", id("uint64")))}))
 		f.line()
@@ -298,7 +283,79 @@ func emitSideConnection(f *goFile, s side) {
 		f.add(&ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
 			Names: []*ast.Ident{id("promptReturned")}, Type: &ast.FuncType{Params: fields()}}}})
 		f.line()
+		emitTurnStore(f, s)
 	}
+}
+
+// elseIf is s with next as its else-if branch.
+func elseIf(s, next *ast.IfStmt) *ast.IfStmt {
+	s.Else = next
+	return s
+}
+
+// emitTurnStore emits the side's prompt-turn store: storeTurn, removeTurn
+// and cancelTurns, each called under a.mu, which keep sessionCancels by the
+// connection's prompt-overlap policy
+// (0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md, step 3).
+func emitTurnStore(f *goFile, s side) {
+	recv := func() *ast.Field { return param("a", star(id(s.typeName))) }
+	turns := func() ast.Expr { return index(dot("a", "sessionCancels"), id("key")) }
+	single := func() ast.Expr { return composite(sliceOf(star(id("promptTurn"))), id("turn")) }
+	keyTurn := func() []*ast.Field { return []*ast.Field{param("key", id("string")), param("turn", star(id("promptTurn")))} }
+	late := binary(binary(dot("turn", "receipt"), token.NEQ, intLit(0)), token.LAND,
+		binary(index(dot("a", "lateCancels"), id("key")), token.GTR, dot("turn", "receipt")))
+	f.comment("storeTurn stores turn, a prompt turn of the session key, as the connection's",
+		"prompt-overlap policy has it, and reports false when the policy refuses it.",
+		"Supersede, the default, cancels the stored turns, or this one when a stored",
+		"turn was received after it; refuse refuses it while a turn is stored;",
+		"concurrent adds it. A kept cancel received after the prompt cancels it, and",
+		"under supersede a prompt newer than the kept cancel ends it, a prompt stored",
+		"after a newer one being superseded anyway (0019-PLAN-behaviour-fixes.md, B5).",
+		"The caller holds a.mu.")
+	f.add(method(recv(), "storeTurn", funcType(keyTurn(), param("", id("bool"))),
+		define(exprs(id("supersedes")), boolLit(false)),
+		switchStmt(dot("a", "conn", "promptOverlap"),
+			caseOf(exprs(id("PromptOverlapRefuse")),
+				ifStmt(nil, binary(call(id("len"), turns()), token.GTR, intLit(0)), ret(boolLit(false))),
+				assign(exprs(turns()), single())),
+			caseOf(exprs(id("PromptOverlapConcurrent")),
+				assign(exprs(turns()), call(id("append"), turns(), id("turn")))),
+			caseOf(nil,
+				define(exprs(id("superseded")), call(f.qual(pkgFmt, "Errorf"), str("%w: superseded by a new prompt"), id("ErrPromptCancelled"))),
+				rangeStmt(id("_"), id("prev"), turns(),
+					ifStmt(nil, binary(dot("prev", "receipt"), token.GTR, dot("turn", "receipt")),
+						exprStmt(call(dot("turn", "cancel"), id("superseded"))), ret(boolLit(true)))),
+				rangeStmt(id("_"), id("prev"), turns(), exprStmt(call(dot("prev", "cancel"), id("superseded")))),
+				assign(exprs(turns()), single()),
+				assign(exprs(id("supersedes")), boolLit(true))),
+		),
+		elseIf(ifStmt(nil, late, exprStmt(call(dot("turn", "cancel"), id("ErrPromptCancelled")))),
+			ifStmt(nil, id("supersedes"), exprStmt(call(id("delete"), dot("a", "lateCancels"), id("key"))))),
+		ret(boolLit(true)),
+	))
+	f.line()
+	keep := func(body ast.Stmt) []ast.Stmt {
+		return []ast.Stmt{
+			varStmt("kept", sliceOf(star(id("promptTurn")))),
+			rangeStmt(id("_"), id("t"), turns(), body),
+			ifElse(nil, binary(call(id("len"), id("kept")), token.EQL, intLit(0)),
+				[]ast.Stmt{exprStmt(call(id("delete"), dot("a", "sessionCancels"), id("key")))},
+				[]ast.Stmt{assign(exprs(turns()), id("kept"))}),
+		}
+	}
+	appendKept := assign(exprs(id("kept")), call(id("append"), id("kept"), id("t")))
+	f.comment("removeTurn removes turn from the turns of the session key. The caller holds a.mu.")
+	f.add(method(recv(), "removeTurn", funcType(keyTurn()),
+		keep(ifStmt(nil, binary(id("t"), token.NEQ, id("turn")), appendKept))...))
+	f.line()
+	applies := binary(binary(id("s"), token.EQL, intLit(0)), token.LOR, binary(dot("t", "receipt"), token.LSS, id("s")))
+	f.comment("cancelTurns cancels and removes every turn of the session key received before",
+		"the cancel whose receipt is s, or every one when s is 0. The caller holds a.mu.")
+	f.add(method(recv(), "cancelTurns", funcType([]*ast.Field{param("key", id("string")), param("s", id("uint64"))}),
+		keep(ifElse(nil, applies,
+			[]ast.Stmt{exprStmt(call(dot("t", "cancel"), id("ErrPromptCancelled")))},
+			[]ast.Stmt{assign(exprs(id("kept")), call(id("append"), id("kept"), id("t")))}))...))
+	f.line()
 }
 
 // gateOf returns, for each use, a new expression of the side's gate called

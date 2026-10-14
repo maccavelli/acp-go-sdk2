@@ -125,6 +125,9 @@ Generator, `cmd/generate/internal/emit/dispatch.go`:
 
 Regenerate: `agent_gen.go` changes in the prompt, cancel and close cases and the `sessionCancels` type; nothing else.
 
+Amended 2026-10-14 (see "Deviation, 2026-10-14, during step 3"): the type change also rewrites one line of three engine cases'
+`want.api` and the old type in `acp_test.go`, `fidelity_test.go` and `cancel_test.go`; the model gains `Method.SessionKey`.
+
 Tests, `cancel_test.go`:
 
 * `TestPromptOverlapRefuse`: with a turn running, a second prompt for its session is answered `-32603` with the data above and its
@@ -239,3 +242,23 @@ markdownlint` exit 0; the identifier scan finds nothing. The API listing against
 types change, each from its `v0.17.1` type to `Patch` of it, and `Patch`, its five methods, `PatchValue` and `PatchNull` are added,
 besides the 0019 PLAN's nine additions and seven removals; nothing else. Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the
 root and in `cmd/generate`.
+
+### Deviation, 2026-10-14, during step 3
+
+Found after regenerating `agent_gen.go` with the turn set: changing the type of `sessionCancels` to `map[string][]*promptTurn`, as step
+3 states, reaches four places the step does not name.
+
+* Three existing engine cases, `accept-session-close-cancels`, `accept-prompt-cancellation` and `accept-permission-cancellation`,
+  print `AgentSideConnection`'s unexported fields in `want.api`; each differs from the regenerated API in that one line,
+  `sessionCancels map[string]*promptTurn` becoming `map[string][]*promptTurn`, and in nothing else.
+* The root package does not build: `acp_test.go` (line 444) and `fidelity_test.go` (line 197) construct an `AgentSideConnection`
+  with the old map type, and `cancel_test.go`'s `stored` helper (line 550) reads one turn from the map.
+* The generator model gains `Method.SessionKey`, the JSON key of the session property, set beside `SessionField` in
+  `model/protocol.go` and declared in `model/methods.go`, so that the refusal's `data` names the protocol table's own key rather
+  than the emitter assuming ACP's `sessionId`. For ACP the data is as step 3 states.
+* `emit/dispatch_test.go` pins the old emitted text; it is a test of a package step 3 touches, and so within the scope as written.
+
+Decision, the owner's: the three `want.api` files are rewritten with `-update` and each diff read to that one line; the three root
+tests take the new type in place, `stored` finding the turn of receipt `r` anywhere in the session's turns; `Method.SessionKey` is
+kept. Files added to step 3's scope: the three `want.api` files and `acp_test.go`, besides `model/methods.go` and
+`model/protocol.go`, which the model's scope line covers but whose list of items did not name this.
