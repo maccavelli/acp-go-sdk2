@@ -619,3 +619,16 @@ later `Close` returned the same error. `TestCloseEndsConnection` did not see it,
 `closeWith` returns the errors from the call that closed and nil from every later one, and `closeErr` goes; the test gains a writer
 whose `Close` fails, the first `Close` returning that error and the second nil. `connection.go` and `connection_close_test.go`
 join step 9's scope. The MADR is unchanged.
+
+### Step 10, release notes, 2026-10-14
+
+[0019-REPORT-release-notes-v0-18-0.md](../reports/0019-REPORT-release-notes-v0-18-0.md), shaped like the 0017 and 0018 reports and
+observed on `d4e1ec4`: phases 1 and 2 against `v0.17.1`, with ten breaking changes, each with what to do, the fixes, the additions
+and the generator's changes, each naming its commit and its MADR item; and, outside the release text, the commits that change Go
+code in each module, the API listing classified (changed none, removed the seven `MarshalJSON` methods, added the nine entries) and
+the byte proof of step 8. Indexed in `docs/README.md`. Two statements were corrected against the records before the gates: B1's
+example, which named a method an agent calls rather than one a client's `SessionUpdate` would, and B7's sweep, which happens when a
+cancel is kept.
+
+Gates: `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed and new files finds nothing. No code
+changed.
