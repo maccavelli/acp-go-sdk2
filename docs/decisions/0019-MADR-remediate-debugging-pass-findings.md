@@ -218,6 +218,16 @@ The owner answered each question on 2026-10-13. Three answers differ from the re
     omitted params**, as ACP's schema allows, and the SDK still never sends it (B10). This amends 0017's J1 for that one case. It is
     in phase 1, with B3.
 
+### Amended while planning phase 2, 2026-10-13
+
+* **Decision 6 changes: an undeclared elicitation mode is refused both ways.** Research for the phase 2 PLAN found that the current
+  ACP elicitation page (upstream `agentclientprotocol/agent-client-protocol` at `e5bcca615c2560a7d707365c773ae768ae595e88`,
+  `docs/protocol/v1/elicitation.mdx:166`) says "Requests using a mode the Client has not advertised produce JSON-RPC `-32602`
+  (Invalid params)". A client can advertise only `form` and `url`, so the schema's `other` variant, a "Custom or future elicitation
+  mode", is never advertised. Decision 6 accepted it on receipt. The owner decided on 2026-10-13: sending `other` is refused, as
+  decided, and a received one is answered `-32602`, as every value gate is, with the `WithInboundValidation` hook able to accept it,
+  so a proxy or an application that advertised a `_`-prefixed mode through `_meta` keeps working.
+
 ## Decision Drivers
 
 * An SDK user must not meet a deadlock, a lost cancel or a refused valid request in ordinary use (B1 to B5).
