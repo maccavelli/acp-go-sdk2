@@ -79,6 +79,23 @@ var ACP = Protocol{
 		// elicitation is complete" (schema), so it needs the URL mode.
 		{Side: sideClient, Wire: "elicitation/complete", Capability: "elicitation.url"},
 	},
+	// The properties whose omission, null, and value mean unchanged, cleared,
+	// and replaced, which the schema states only in prose
+	// (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md, issue #5).
+	PatchFields: []PatchRule{
+		{Definition: defCompaction, Property: "summary", Source: srcCompactionPatch},
+		{Definition: defCompaction, Property: "error", Source: srcCompactionPatch},
+		{Definition: defCompaction, Property: keyMeta, Source: srcCompactionPatch},
+		{Definition: defSessionInfo, Property: keyTitle, Source: srcSessionInfoClear},
+		{Definition: defSessionInfo, Property: "updatedAt", Source: srcSessionInfoClear},
+		{Definition: defSubagent, Property: keyTitle, Source: srcSubagentPatch},
+		{Definition: defSubagent, Property: "description", Source: srcSubagentPatch},
+		{Definition: defSubagent, Property: "capabilities", Source: srcSubagentPatch},
+		{Definition: defSubagent, Property: "state", Source: srcSubagentPatch},
+		{Definition: defSubagent, Property: keyMeta, Source: srcSubagentPatch},
+		{Definition: defMessage, Property: "content", Source: srcMessageContent},
+		{Definition: defMessage, Property: keyMeta, Source: srcMessageMeta},
+	},
 	// helpers.go builds these with TextBlock, ToolContent, and the like.
 	HandWrittenHelpers: []string{"ContentBlock", defSessionUpdate, "ToolCallContent"},
 	// The properties the protocol requires to be absolute paths, which the
@@ -141,6 +158,10 @@ const (
 	defPrompt        = "PromptRequest"
 	defSessionUpdate = "SessionUpdate"
 	defElicitation   = "CreateElicitationRequest"
+	defCompaction    = "CompactionUpdate"
+	defSubagent      = "SubagentUpdate"
+	defMessage       = "SessionMessage"
+	defSessionInfo   = "SessionInfoUpdate"
 )
 
 // The property keys several rules name.
@@ -150,6 +171,22 @@ const (
 	keyPath      = "path"
 	keySessionID = "sessionId"
 	keyPrompt    = "prompt"
+	keyMeta      = "_meta"
+	keyTitle     = "title"
+)
+
+// The schema sentences the patch rules follow.
+const (
+	// srcCompactionPatch is from the schema, CompactionUpdate.
+	srcCompactionPatch = "`summary`, `error`, and `_meta` have patch semantics: omission leaves the stored value unchanged, `null` clears it, and a concrete value replaces it."
+	// srcSessionInfoClear is from the schema, SessionInfoUpdate's title and updatedAt.
+	srcSessionInfoClear = "Set to null to clear."
+	// srcSubagentPatch is from the schema, SubagentUpdate.
+	srcSubagentPatch = "Omitted patch fields keep their previous values; `null` clears them."
+	// srcMessageContent is from the schema, SessionMessage's content.
+	srcMessageContent = "Omitted leaves content unchanged; `null` or `[]` clears it."
+	// srcMessageMeta is from the schema, SessionMessage's _meta.
+	srcMessageMeta = "Omitted leaves metadata unchanged; `null` removes it."
 )
 
 // The specification sentences the absolute-path rules follow.

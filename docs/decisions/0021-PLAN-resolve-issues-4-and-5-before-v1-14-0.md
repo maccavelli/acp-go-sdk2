@@ -185,3 +185,57 @@ removed.
 The 0021 MADR, committed by the owner after review; this PLAN, its `docs/README.md` row, and the 0020 PLAN's dated entry that the
 tag waits on this PLAN, committed by the owner. The owner approved this PLAN on 2026-10-14 ("proceed"), which accepts the MADR: its
 status is `accepted` from this commit. `make check-records`, `make markdownlint` and the identifier scan exit 0.
+
+### Step 2, `Patch[T]` for the patch fields, 2026-10-14
+
+What was built:
+
+* Model: `Protocol.PatchFields []PatchRule` (`protocol.go`), with the table's checks (a rule needs a definition, a property and a
+  source; two rules for one property are refused); the 12 rules in `acp.go`, each with its schema sentence; `RefPatch` and
+  `Field.Patch` (`fields.go`); `resolvePatchFields` (`model.go`), run after `resolveAbsolutePaths` and before validation and gates,
+  keyed by the schema property as `absProps` is, so the rule reaches the `SessionUpdate` variant built from each definition. A
+  patch field's type becomes `Patch` of its type with the pointer removed, its tag `key,omitzero`. Beyond the PLAN's refusal of a
+  required property, the model also refuses a patch property with a default and one without `x-deserialize-default-on-error`,
+  since the patch decoders read a malformed value as absent; none of the 12 has either. `nested` (`validate.go`) looks through a
+  patch to its value, and a nested `Check` gains `InPatch`; the gate guard (`gates.go`) refuses a patch field holding a gated type,
+  and its nested calls skip patches; none holds one.
+* Emitter: `typeAST` renders `Patch[T]`; a patch field always takes the lenient decode path, calling `patchOf` or, for an array with
+  `x-deserialize-skip-invalid-items`, `patchItems`; `nestedStmt` (`types.go`) carries the nested checks, reached through `Value()`
+  for a patch; `emitPatchType`, `emitPatchOf` and `emitPatchItems` (`decode.go`) emit the type, its constructors `PatchValue` and
+  `PatchNull`, its methods `IsZero`, `IsNull`, `Value`, `MarshalJSON` and `UnmarshalJSON`, and the two helpers, once, when used.
+* Regenerated `types_gen.go`: the 24 fields, their 8 decoders and 6 validators, the type and its helpers; nothing else changed.
+  `TestConformanceRoundTrip`, the JSON goldens and every other test passed unchanged, so the deviation the PLAN anticipated for a
+  golden did not arise.
+
+Tests added: `patch_test.go`, root: `TestPatch` (the three states sent and read back for a string, a slice, a map and a union,
+empty values included; the zero value; `IsZero`, `IsNull`, `Value`; a nil slice value sent as `null`; comparison);
+`TestPatchFields` (each of the 24 fields read omitted, null, a value and a malformed value as absent, null, the value and absent,
+and sent back as read); `TestPatchFieldsValidate` (an empty block in a summary value fails `Validate` naming `summary[1]`, an empty
+state fails naming `state`, a null of each passes). `cmd/generate/internal/model/patch_test.go`: `TestPatchRules`, and
+`checkCommittedPatchFields`, called by `TestProtocolTableAppliesToCommittedSchema`, which requires every property of the merged
+committed schema whose description gives `null` a meaning omission does not have to be a rule or one of five named exceptions (the
+`SessionMessage` and `SessionMessageChunk` sender and recipient, and `UnstableMcpError.data`, the merged name of `McpError`), and the
+model to hold the 24 patch fields. Engine case `accept-patch-fields.txtar`: `SessionInfoUpdate` and `SessionMessage` with a patch
+string, array and object and an unruled string that stays `*string`, its `want.api` written by `-update` and read, and a behaviour
+test of the three states both ways and of a malformed value; it runs under `TestEngineBehaviour` and passed.
+
+Seen to fail, each in its own scratch copy (6 of 6):
+
+* `patch-null-read-as-absent` (`patchOf` returns absent for `null`): `TestPatchFields`, "CompactionUpdate.error null: IsZero true
+  IsNull false" and "sent … without the key".
+* `patch-tag-omitempty` (the tag is `omitempty`, which does not omit a struct): `TestPatchFields`, "CompactionUpdate.summary
+  omitted: sent {…,"summary":null}, want the key left out".
+* `patch-iszero-null` (`IsZero` true for null): `TestPatch`, "null: sent {}", and `TestPatchFields`.
+* `patch-rule-removed` (the `SubagentUpdate.description` rule removed): the guard, "SubagentUpdate.description: its description
+  gives null a meaning of its own, and no patch rule names it", and "22 Patch fields, want 24".
+* `patch-definition-only` (the rule not applied to variants): the root package does not build, the variant's `Summary` being
+  `[]ContentBlock` again; run against the model as `patch-definition-only-model`, the guard reports "12 Patch fields, want 24".
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0, after `gofmt` aligned
+`fields.go` and `patch_test.go` and `staticcheck`'s SA4000 on a comparison of two identical calls in `TestPatch` was rewritten to
+compare variables; the new test files pass the same check; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit
+0 in both modules; the generator suite under `-race`, engine behaviour cases included: ok; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing. The API listing against `v0.17.1`, 2411 and 2421 lines: the 24 fields'
+types change, each from its `v0.17.1` type to `Patch` of it, and `Patch`, its five methods, `PatchValue` and `PatchNull` are added,
+besides the 0019 PLAN's nine additions and seven removals; nothing else. Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the
+root and in `cmd/generate`.

@@ -115,7 +115,8 @@ func (m *Model) resolveGates(r *rules) error {
 	}
 	for _, h := range holders {
 		for _, f := range h.fields {
-			if f.Type.Kind != RefNamed && f.Type.Elem != nil && f.Type.Elem.Kind != RefNamed && holdsGated(*f.Type.Elem, gated) {
+			deep := f.Type.Kind == RefPatch || (f.Type.Kind != RefNamed && f.Type.Elem != nil && f.Type.Elem.Kind != RefNamed)
+			if deep && holdsGated(*f.Type.Elem, gated) {
 				return fmt.Errorf("%s.%s: %s holds a gated type in a shape gates does not descend into", h.name, f.Key, f.Type)
 			}
 		}
@@ -308,7 +309,7 @@ func (h gateHolder) nested(gated map[string]bool) []GateCheck {
 		switch {
 		case r.Kind == RefNamed && gated[r.Name]:
 			out = append(out, GateCheck{Kind: GateCheckNested, Field: f.Name, Key: f.Key, Shape: RefNamed})
-		case r.Kind != RefNamed && r.Elem != nil && r.Elem.Kind == RefNamed && gated[r.Elem.Name]:
+		case r.Kind != RefNamed && r.Kind != RefPatch && r.Elem != nil && r.Elem.Kind == RefNamed && gated[r.Elem.Name]:
 			out = append(out, GateCheck{Kind: GateCheckNested, Field: f.Name, Key: f.Key, Shape: r.Kind})
 		}
 	}

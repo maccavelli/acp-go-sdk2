@@ -62,6 +62,8 @@ type Model struct {
 	// to this schema, in the table's order; absProps holds their properties.
 	AbsolutePaths []PathProperty
 	absProps      map[*load.Definition]bool
+	// patchProps holds the properties the protocol table's patch rules name.
+	patchProps map[*load.Definition]bool
 	// Gated lists, in type order, each type with a gates method and what it
 	// checks (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
 	Gated []*Gates
@@ -310,6 +312,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 	}
 	m.dropStructOmitempty()
 	if err := m.resolveAbsolutePaths(r); err != nil {
+		return nil, err
+	}
+	if err := m.resolvePatchFields(r); err != nil {
 		return nil, err
 	}
 	if err := m.buildValidations(); err != nil {
@@ -1128,6 +1133,66 @@ func (m *Model) resolveAbsolutePaths(r *rules) error {
 		}
 		m.absProps[prop] = true
 		m.AbsolutePaths = append(m.AbsolutePaths, PathProperty{Type: t.Name, Origin: t.Origin, Property: rule.Property})
+	}
+	return nil
+}
+
+// resolvePatchFields resolves each patch rule of the table to its property's
+// definition, and makes every field built from that property, in every type
+// that holds it, an inline allOf variant included, a Patch of the type it
+// had, its pointer removed, omitted when absent. A rule whose definition or
+// property the schema lacks is skipped; one on a required property, or one
+// with a default, is refused
+// (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md, issue #5).
+func (m *Model) resolvePatchFields(r *rules) error {
+	m.patchProps = map[*load.Definition]bool{}
+	if r.table == nil {
+		return nil
+	}
+	for _, rule := range r.table.PatchFields {
+		def := m.schema.Defs[rule.Definition]
+		if m.Type(rule.Definition) == nil || def == nil {
+			continue
+		}
+		ed := expandAllOf(m.schema, def)
+		prop := ed.Properties[rule.Property]
+		if prop == nil {
+			continue
+		}
+		switch {
+		case slices.Contains(ed.Required, rule.Property):
+			return fmt.Errorf("%s.%s: a patch rule needs an optional property", rule.Definition, rule.Property)
+		case prop.Default != nil:
+			return fmt.Errorf("%s.%s: a patch rule needs a property without a default", rule.Definition, rule.Property)
+		case !prop.XDeserializeDefaultOnError:
+			// The patch decoders read a malformed value as absent, which only
+			// x-deserialize-default-on-error allows.
+			return fmt.Errorf("%s.%s: a patch rule needs x-deserialize-default-on-error", rule.Definition, rule.Property)
+		}
+		m.patchProps[prop] = true
+	}
+	patch := func(fields []*Field) {
+		for _, f := range fields {
+			if !m.patchProps[f.prop] {
+				continue
+			}
+			elem := f.Type
+			if elem.Kind == RefPointer {
+				elem = *elem.Elem
+			}
+			f.Type, f.Tag, f.Patch = wrap(RefPatch, elem), f.Key+",omitzero", true
+		}
+	}
+	for _, t := range m.Types {
+		patch(t.Fields)
+		for _, ns := range t.NestedStructs {
+			patch(ns.Fields)
+		}
+		for _, vi := range t.Variants {
+			if vi.Inline != nil {
+				patch(vi.Inline.Fields)
+			}
+		}
 	}
 	return nil
 }

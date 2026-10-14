@@ -33,6 +33,9 @@ const (
 	// RefRaw is json.RawMessage: a value the schema gives no Go type, carried
 	// as it was received (0012-MADR-schema-fidelity-framework.md).
 	RefRaw
+	// RefPatch is Patch[Elem]: absent, null, or a value, for a property with
+	// patch semantics (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md).
+	RefPatch
 )
 
 // TypeRef is a Go type expression.
@@ -60,6 +63,8 @@ func (r TypeRef) String() string {
 		return "map[string]" + r.Elem.String()
 	case RefRaw:
 		return "json.RawMessage"
+	case RefPatch:
+		return "Patch[" + r.Elem.String() + "]"
 	default:
 		return r.Name
 	}
@@ -130,7 +135,10 @@ type Field struct {
 	// be an absent one (0012-MADR-schema-fidelity-framework.md, amendment of
 	// 2026-10-11).
 	NullIsAbsent bool
-	Facts        Facts
+	// Patch is true for a property a patch rule names: its type is RefPatch,
+	// omitted when absent (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md).
+	Patch bool
+	Facts Facts
 	// prop is the schema property the field is built from; every type that
 	// holds the property, an inline allOf variant included, shares it.
 	prop *load.Definition

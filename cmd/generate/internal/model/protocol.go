@@ -28,12 +28,24 @@ type Protocol struct {
 	// negotiated by initialize gate, which each side's gates check
 	// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
 	CapabilityRules []CapabilityRule
+	// PatchFields lists the properties with patch semantics: omitted leaves
+	// the stored value unchanged, null clears it, and a value replaces it.
+	// Each becomes a Patch of its type
+	// (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md, issue #5).
+	PatchFields []PatchRule
 }
 
 // PathRule names a property the protocol requires to be an absolute path,
 // by the definition that declares it as the merged schema names it. Source
 // is the specification sentence the rule follows.
 type PathRule struct {
+	Definition, Property, Source string
+}
+
+// PatchRule names a property with patch semantics, by the definition that
+// declares it as the merged schema names it. Source is the specification
+// sentence the rule follows.
+type PatchRule struct {
 	Definition, Property, Source string
 }
 
@@ -236,6 +248,17 @@ func newRules(p *Protocol) (*rules, error) {
 			return nil, fmt.Errorf("absolute-path rule %s.%s: two rules", rule.Definition, rule.Property)
 		}
 		seen[k] = true
+	}
+	patched := map[[2]string]bool{}
+	for _, rule := range p.PatchFields {
+		k := [2]string{rule.Definition, rule.Property}
+		switch {
+		case rule.Definition == "" || rule.Property == "" || rule.Source == "":
+			return nil, fmt.Errorf("patch rule %q.%q: it needs a definition, a property, and a source", rule.Definition, rule.Property)
+		case patched[k]:
+			return nil, fmt.Errorf("patch rule %s.%s: two rules", rule.Definition, rule.Property)
+		}
+		patched[k] = true
 	}
 	if err := checkCapabilityRules(p.CapabilityRules); err != nil {
 		return nil, err

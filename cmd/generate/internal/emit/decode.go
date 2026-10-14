@@ -18,10 +18,27 @@ const (
 	helperMergeObject  = "mergeObject"
 	helperFoldKeys     = "foldKeys"
 	helperLastKey      = "lastKey"
+	helperPatchOf      = "patchOf"
+	helperPatchItems   = "patchItems"
 )
+
+// typePatch is the exported generic type of a property with patch semantics,
+// emitted with the helpers that read it
+// (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md, issue #5).
+const typePatch = "Patch"
 
 // emitDecodeHelpers appends the helpers f uses.
 func emitDecodeHelpers(f *goFile) {
+	if f.uses[helperPatchItems] {
+		f.uses[helperSkipInvalid] = true
+		f.uses[typePatch] = true
+	}
+	if f.uses[helperPatchOf] {
+		f.uses[typePatch] = true
+	}
+	if f.uses[typePatch] {
+		emitPatchType(f)
+	}
 	if f.uses[helperObjectKeys] {
 		emitObjectKeys(f)
 		f.uses[helperFoldKeys] = true
@@ -34,6 +51,12 @@ func emitDecodeHelpers(f *goFile) {
 	}
 	if f.uses[helperSkipInvalid] {
 		emitSkipInvalid(f)
+	}
+	if f.uses[helperPatchOf] {
+		emitPatchOf(f)
+	}
+	if f.uses[helperPatchItems] {
+		emitPatchItems(f)
 	}
 	if f.uses[helperAbsentIfNull] {
 		emitAbsentIfNull(f)
@@ -96,6 +119,117 @@ func emitAbsentIfNull(f *goFile) {
 // typeParamT is the type parameter list [T any].
 func typeParamT() *ast.FieldList {
 	return fields(&ast.Field{Names: []*ast.Ident{id("T")}, Type: id("any")})
+}
+
+// patchOfT is Patch[t].
+func patchOfT(t ast.Expr) ast.Expr { return index(id(typePatch), t) }
+
+// emitPatchType emits Patch[T], the three states of a property with patch
+// semantics, its constructors, and its methods. Its state is unexported, so
+// no value is both null and set, and its zero value is absent, which
+// omitzero omits (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md).
+func emitPatchType(f *goFile) {
+	pt := func() ast.Expr { return patchOfT(id("T")) }
+	recv := func() *ast.Field { return param("p", pt()) }
+	f.line()
+	f.comment(
+		"Patch is a property with patch semantics: absent leaves the stored value",
+		"unchanged, null clears it, and a value replaces it. The zero value is absent.",
+		"A field of this type is tagged omitzero, so an absent one is not sent; a null",
+		"one is sent as null. A value is sent as T encodes, so a value holding a nil",
+		"slice or map is sent as null: send an empty one for [] or {}. Where the schema",
+		"says so, as for a compaction's summary, an empty value also clears.",
+	)
+	f.add(&ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{&ast.TypeSpec{Name: id(typePatch), TypeParams: typeParamT(),
+		Type: &ast.StructType{Fields: fields(param("present", id("bool")), param("null", id("bool")), param("value", id("T")))}}}})
+
+	value := function("PatchValue", funcType([]*ast.Field{param("v", id("T"))}, param("", pt())),
+		ret(composite(pt(), kv(id("present"), boolLit(true)), kv(id("value"), id("v")))))
+	value.Type.TypeParams = typeParamT()
+	f.line()
+	f.comment("PatchValue returns a Patch that replaces the stored value with v.")
+	f.add(value)
+
+	null := function("PatchNull", funcType(nil, param("", pt())),
+		ret(composite(pt(), kv(id("present"), boolLit(true)), kv(id("null"), boolLit(true)))))
+	null.Type.TypeParams = typeParamT()
+	f.line()
+	f.comment("PatchNull returns a Patch that clears the stored value: it is sent as null.")
+	f.add(null)
+
+	f.line()
+	f.comment("IsZero reports whether p is absent: the stored value is left unchanged.")
+	f.add(method(recv(), "IsZero", funcType(nil, param("", id("bool"))), ret(not(dot("p", "present")))))
+	f.line()
+	f.comment("IsNull reports whether p is null: the stored value is cleared.")
+	f.add(method(recv(), "IsNull", funcType(nil, param("", id("bool"))),
+		ret(binary(dot("p", "present"), token.LAND, dot("p", "null")))))
+	f.line()
+	f.comment("Value returns the value p replaces the stored value with, and whether it",
+		"holds one.")
+	f.add(method(recv(), "Value", funcType(nil, param("", id("T")), param("", id("bool"))),
+		ret(dot("p", "value"), binary(dot("p", "present"), token.LAND, not(dot("p", "null"))))))
+	f.line()
+	f.comment("MarshalJSON encodes p's value, or null when p is null or absent.")
+	f.add(method(recv(), "MarshalJSON", funcType(nil, param("", byteSlice()), param("", id("error"))),
+		ifStmt(nil, binary(not(dot("p", "present")), token.LOR, dot("p", "null")), ret(bytesOf(schemaTypeNull), nilExpr())),
+		ret(call(f.qual(pkgJSON, "Marshal"), dot("p", "value")))))
+	f.line()
+	f.comment("UnmarshalJSON decodes null as a null p and anything else as a value.")
+	f.add(method(param("p", star(pt())), "UnmarshalJSON", funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))),
+		ifStmt(nil, binary(call(id("string"), id("b")), token.EQL, str(schemaTypeNull)),
+			assign(exprs(star(id("p"))), call(index(id("PatchNull"), id("T")))), ret(nilExpr())),
+		varStmt("v", id("T")),
+		ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v")))), errNotNil(), ret(id("err"))),
+		assign(exprs(star(id("p"))), call(id("PatchValue"), id("v"))),
+		ret(nilExpr())))
+}
+
+// emitPatchOf emits
+//
+//	func patchOf[T any](raw json.RawMessage) Patch[T]
+//
+// which reads a patch property's raw value: empty is absent, null is null, a
+// value that decodes into a T is that value, and one that does not is absent,
+// as x-deserialize-default-on-error has it.
+func emitPatchOf(f *goFile) {
+	pt := func() ast.Expr { return patchOfT(id("T")) }
+	fn := function(helperPatchOf,
+		funcType([]*ast.Field{param("raw", f.qual(pkgJSON, "RawMessage"))}, param("", pt())),
+		ifStmt(nil, binary(call(id("len"), id("raw")), token.EQL, intLit(0)), ret(composite(pt()))),
+		ifStmt(nil, binary(call(id("string"), id("raw")), token.EQL, str(schemaTypeNull)), ret(call(index(id("PatchNull"), id("T"))))),
+		varStmt("v", id("T")),
+		ifStmt(nil, binary(call(f.qual(pkgJSON, "Unmarshal"), id("raw"), addr(id("v"))), token.NEQ, nilExpr()), ret(composite(pt()))),
+		ret(call(id("PatchValue"), id("v"))),
+	)
+	fn.Type.TypeParams = typeParamT()
+	f.line()
+	f.comment("patchOf reads a patch property's raw value: empty is absent, null is null, a",
+		"value that decodes into a T is that value, and one that does not is absent.")
+	f.add(fn)
+}
+
+// emitPatchItems emits
+//
+//	func patchItems[T any](raw json.RawMessage) Patch[[]T]
+//
+// which is patchOf for an array with x-deserialize-skip-invalid-items: the
+// items that do not decode into a T are dropped, as skipInvalid drops them.
+func emitPatchItems(f *goFile) {
+	pt := func() ast.Expr { return patchOfT(sliceOf(id("T"))) }
+	fn := function(helperPatchItems,
+		funcType([]*ast.Field{param("raw", f.qual(pkgJSON, "RawMessage"))}, param("", pt())),
+		ifStmt(nil, binary(call(id("len"), id("raw")), token.EQL, intLit(0)), ret(composite(pt()))),
+		ifStmt(nil, binary(call(id("string"), id("raw")), token.EQL, str(schemaTypeNull)), ret(call(index(id("PatchNull"), sliceOf(id("T")))))),
+		define(exprs(id("items"), id("err")), call(index(id(helperSkipInvalid), id("T")), id("raw"))),
+		ifStmt(nil, errNotNil(), ret(composite(pt()))),
+		ret(call(id("PatchValue"), id("items"))),
+	)
+	fn.Type.TypeParams = typeParamT()
+	f.line()
+	f.comment("patchItems is patchOf for an array, dropping the items that do not decode",
+		"into a T, as skipInvalid does.")
+	f.add(fn)
 }
 
 // emitOrDefault emits

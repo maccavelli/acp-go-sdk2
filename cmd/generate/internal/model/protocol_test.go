@@ -500,4 +500,5 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 		t.Errorf("%d absolute-path checks, want 18 with ToolCallContentDiff's: %v", n, checks)
 	}
 	checkCommittedGates(t, m)
+	checkCommittedPatchFields(t, m)
 }

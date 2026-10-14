@@ -1947,15 +1947,15 @@ func (v *CompactionSummaryChunk) validate(abs func(string) bool) error {
 // 'summary: []' also clears the summary.
 type CompactionUpdate struct {
 	// Extensible metadata patch for this compaction.
-	Meta map[string]any `json:"_meta,omitempty"`
+	Meta Patch[map[string]any] `json:"_meta,omitzero"`
 	// The Agent-owned ID of this compaction, unique within the session.
 	CompactionId CompactionId `json:"compactionId"`
 	// Human-readable error details for the compaction.
-	Error *string `json:"error,omitempty"`
+	Error Patch[string] `json:"error,omitzero"`
 	// Current lifecycle status.
 	Status CompactionStatus `json:"status"`
 	// Complete replacement user-displayable summary content for the compaction.
-	Summary []ContentBlock `json:"summary,omitempty"`
+	Summary Patch[[]ContentBlock] `json:"summary,omitzero"`
 }
 
 func (v *CompactionUpdate) UnmarshalJSON(b []byte) error {
@@ -1974,11 +1974,9 @@ func (v *CompactionUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CompactionUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Error = orDefault[*string](s.Error, "")
-	if items, err := skipInvalid[ContentBlock](s.Summary); err == nil {
-		a.Summary = items
-	}
+	a.Meta = patchOf[map[string]any](s.Meta)
+	a.Error = patchOf[string](s.Error)
+	a.Summary = patchItems[ContentBlock](s.Summary)
 	*v = CompactionUpdate(a)
 	return nil
 }
@@ -1988,9 +1986,11 @@ func (v *CompactionUpdate) Validate() error {
 }
 
 func (v *CompactionUpdate) validate(abs func(string) bool) error {
-	for i := range v.Summary {
-		if err := v.Summary[i].validate(abs); err != nil {
-			return fmt.Errorf("CompactionUpdate: summary[%d]: %w", i, err)
+	if pv, ok := v.Summary.Value(); ok {
+		for i := range pv {
+			if err := pv[i].validate(abs); err != nil {
+				return fmt.Errorf("CompactionUpdate: summary[%d]: %w", i, err)
+			}
 		}
 	}
 	return nil
@@ -11628,9 +11628,9 @@ type SessionInfoUpdate struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Human-readable title for the session. Set to null to clear.
-	Title *string `json:"title,omitempty"`
+	Title Patch[string] `json:"title,omitzero"`
 	// ISO 8601 timestamp of last activity. Set to null to clear.
-	UpdatedAt *string `json:"updatedAt,omitempty"`
+	UpdatedAt Patch[string] `json:"updatedAt,omitzero"`
 }
 
 func (v *SessionInfoUpdate) UnmarshalJSON(b []byte) error {
@@ -11650,8 +11650,8 @@ func (v *SessionInfoUpdate) UnmarshalJSON(b []byte) error {
 	}
 	a := s.Alias
 	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Title = orDefault[*string](s.Title, "")
-	a.UpdatedAt = orDefault[*string](s.UpdatedAt, "")
+	a.Title = patchOf[string](s.Title)
+	a.UpdatedAt = patchOf[string](s.UpdatedAt)
 	*v = SessionInfoUpdate(a)
 	return nil
 }
@@ -11696,10 +11696,10 @@ type SessionMessage struct {
 	// Omitted leaves metadata unchanged; 'null' removes it.
 	//
 	// Implementations MUST NOT make assumptions about values in '_meta'.
-	Meta map[string]any `json:"_meta,omitempty"`
+	Meta Patch[map[string]any] `json:"_meta,omitzero"`
 	// Omitted leaves content unchanged; 'null' or '[]' clears it.
 	// A non-empty array replaces all content.
-	Content []ContentBlock `json:"content,omitempty"`
+	Content Patch[[]ContentBlock] `json:"content,omitzero"`
 	// Identifier of this message within the enclosing session's transcript.
 	MessageId MessageId `json:"messageId"`
 	// Optional receiving session identity; omission or 'null' retains a known value.
@@ -11725,10 +11725,8 @@ func (v *SessionMessage) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionMessage: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	if items, err := skipInvalid[ContentBlock](s.Content); err == nil {
-		a.Content = items
-	}
+	a.Meta = patchOf[map[string]any](s.Meta)
+	a.Content = patchItems[ContentBlock](s.Content)
 	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
 	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
 	*v = SessionMessage(a)
@@ -11740,9 +11738,11 @@ func (v *SessionMessage) Validate() error {
 }
 
 func (v *SessionMessage) validate(abs func(string) bool) error {
-	for i := range v.Content {
-		if err := v.Content[i].validate(abs); err != nil {
-			return fmt.Errorf("SessionMessage: content[%d]: %w", i, err)
+	if pv, ok := v.Content.Value(); ok {
+		for i := range pv {
+			if err := pv[i].validate(abs); err != nil {
+				return fmt.Errorf("SessionMessage: content[%d]: %w", i, err)
+			}
 		}
 	}
 	return nil
@@ -12597,9 +12597,9 @@ type SessionSessionInfoUpdate struct {
 	Meta          map[string]any `json:"_meta,omitempty"`
 	SessionUpdate string         `json:"sessionUpdate"`
 	// Human-readable title for the session. Set to null to clear.
-	Title *string `json:"title,omitempty"`
+	Title Patch[string] `json:"title,omitzero"`
 	// ISO 8601 timestamp of last activity. Set to null to clear.
-	UpdatedAt *string `json:"updatedAt,omitempty"`
+	UpdatedAt Patch[string] `json:"updatedAt,omitzero"`
 }
 
 func (v *SessionSessionInfoUpdate) UnmarshalJSON(b []byte) error {
@@ -12619,8 +12619,8 @@ func (v *SessionSessionInfoUpdate) UnmarshalJSON(b []byte) error {
 	}
 	a := s.Alias
 	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Title = orDefault[*string](s.Title, "")
-	a.UpdatedAt = orDefault[*string](s.UpdatedAt, "")
+	a.Title = patchOf[string](s.Title)
+	a.UpdatedAt = patchOf[string](s.UpdatedAt)
 	*v = SessionSessionInfoUpdate(a)
 	return nil
 }
@@ -12727,16 +12727,16 @@ func (v *SessionUpdateNotice) validate(abs func(string) bool) error {
 // ['ClientSessionCapabilities::compaction'].
 type SessionCompactionUpdate struct {
 	// Extensible metadata patch for this compaction.
-	Meta map[string]any `json:"_meta,omitempty"`
+	Meta Patch[map[string]any] `json:"_meta,omitzero"`
 	// The Agent-owned ID of this compaction, unique within the session.
 	CompactionId CompactionId `json:"compactionId"`
 	// Human-readable error details for the compaction.
-	Error         *string `json:"error,omitempty"`
-	SessionUpdate string  `json:"sessionUpdate"`
+	Error         Patch[string] `json:"error,omitzero"`
+	SessionUpdate string        `json:"sessionUpdate"`
 	// Current lifecycle status.
 	Status CompactionStatus `json:"status"`
 	// Complete replacement user-displayable summary content for the compaction.
-	Summary []ContentBlock `json:"summary,omitempty"`
+	Summary Patch[[]ContentBlock] `json:"summary,omitzero"`
 }
 
 func (v *SessionCompactionUpdate) UnmarshalJSON(b []byte) error {
@@ -12755,11 +12755,9 @@ func (v *SessionCompactionUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionCompactionUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Error = orDefault[*string](s.Error, "")
-	if items, err := skipInvalid[ContentBlock](s.Summary); err == nil {
-		a.Summary = items
-	}
+	a.Meta = patchOf[map[string]any](s.Meta)
+	a.Error = patchOf[string](s.Error)
+	a.Summary = patchItems[ContentBlock](s.Summary)
 	*v = SessionCompactionUpdate(a)
 	return nil
 }
@@ -12769,9 +12767,11 @@ func (v *SessionCompactionUpdate) Validate() error {
 }
 
 func (v *SessionCompactionUpdate) validate(abs func(string) bool) error {
-	for i := range v.Summary {
-		if err := v.Summary[i].validate(abs); err != nil {
-			return fmt.Errorf("SessionCompactionUpdate: summary[%d]: %w", i, err)
+	if pv, ok := v.Summary.Value(); ok {
+		for i := range pv {
+			if err := pv[i].validate(abs); err != nil {
+				return fmt.Errorf("SessionCompactionUpdate: summary[%d]: %w", i, err)
+			}
 		}
 	}
 	return nil
@@ -12834,20 +12834,20 @@ type SessionSubagentUpdate struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	// Omitted means unchanged; 'null' removes the metadata.
-	Meta map[string]any `json:"_meta,omitempty"`
+	Meta Patch[map[string]any] `json:"_meta,omitzero"`
 	// Client-initiated session mutations permitted for this subagent session.
 	//
 	// Omitted means unchanged; 'null' clears the capability set and disables
 	// child mutations. If never supplied, no session mutations are permitted.
 	// Read-only operations retain their normal protocol semantics and capability
 	// requirements. A concrete object replaces the whole capability set.
-	Capabilities *SubagentSessionCapabilities `json:"capabilities,omitempty"`
+	Capabilities Patch[SubagentSessionCapabilities] `json:"capabilities,omitzero"`
 	// The parent's human-readable description of the child's role or purpose.
 	//
 	// Omitted means unchanged; 'null' clears it. If unset, the Client chooses
 	// a fallback presentation. This is current display metadata, not the
 	// history of instructions sent to the child.
-	Description *string `json:"description,omitempty"`
+	Description Patch[string] `json:"description,omitzero"`
 	// The opaque session ID identifying the child in all ACP messages.
 	SessionId     SessionId `json:"sessionId"`
 	SessionUpdate string    `json:"sessionUpdate"`
@@ -12857,12 +12857,12 @@ type SessionSubagentUpdate struct {
 	// asserting idle or sending an 'unknown' snapshot. A concrete state
 	// replaces the previous state object wholesale. If never supplied, the
 	// current activity is unset/unconfirmed.
-	State *StateUpdate `json:"state,omitempty"`
+	State Patch[StateUpdate] `json:"state,omitzero"`
 	// The parent's human-readable display title for this child. It need not be unique.
 	//
 	// Omitted means unchanged; 'null' clears it. If unset, the Client chooses
 	// a fallback presentation.
-	Title *string `json:"title,omitempty"`
+	Title Patch[string] `json:"title,omitzero"`
 }
 
 func (v *SessionSubagentUpdate) UnmarshalJSON(b []byte) error {
@@ -12883,11 +12883,11 @@ func (v *SessionSubagentUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionSubagentUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Capabilities = orDefault[*SubagentSessionCapabilities](s.Capabilities, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.State = orDefault[*StateUpdate](s.State, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = patchOf[map[string]any](s.Meta)
+	a.Capabilities = patchOf[SubagentSessionCapabilities](s.Capabilities)
+	a.Description = patchOf[string](s.Description)
+	a.State = patchOf[StateUpdate](s.State)
+	a.Title = patchOf[string](s.Title)
 	*v = SessionSubagentUpdate(a)
 	return nil
 }
@@ -12897,8 +12897,8 @@ func (v *SessionSubagentUpdate) Validate() error {
 }
 
 func (v *SessionSubagentUpdate) validate(abs func(string) bool) error {
-	if v.State != nil {
-		if err := v.State.validate(abs); err != nil {
+	if pv, ok := v.State.Value(); ok {
+		if err := pv.validate(abs); err != nil {
 			return fmt.Errorf("SessionSubagentUpdate: state: %w", err)
 		}
 	}
@@ -12915,10 +12915,10 @@ type SessionUpdateSessionMessage struct {
 	// Omitted leaves metadata unchanged; 'null' removes it.
 	//
 	// Implementations MUST NOT make assumptions about values in '_meta'.
-	Meta map[string]any `json:"_meta,omitempty"`
+	Meta Patch[map[string]any] `json:"_meta,omitzero"`
 	// Omitted leaves content unchanged; 'null' or '[]' clears it.
 	// A non-empty array replaces all content.
-	Content []ContentBlock `json:"content,omitempty"`
+	Content Patch[[]ContentBlock] `json:"content,omitzero"`
 	// Identifier of this message within the enclosing session's transcript.
 	MessageId MessageId `json:"messageId"`
 	// Optional receiving session identity; omission or 'null' retains a known value.
@@ -12945,10 +12945,8 @@ func (v *SessionUpdateSessionMessage) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionUpdateSessionMessage: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	if items, err := skipInvalid[ContentBlock](s.Content); err == nil {
-		a.Content = items
-	}
+	a.Meta = patchOf[map[string]any](s.Meta)
+	a.Content = patchItems[ContentBlock](s.Content)
 	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
 	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
 	*v = SessionUpdateSessionMessage(a)
@@ -12960,9 +12958,11 @@ func (v *SessionUpdateSessionMessage) Validate() error {
 }
 
 func (v *SessionUpdateSessionMessage) validate(abs func(string) bool) error {
-	for i := range v.Content {
-		if err := v.Content[i].validate(abs); err != nil {
-			return fmt.Errorf("SessionUpdateSessionMessage: content[%d]: %w", i, err)
+	if pv, ok := v.Content.Value(); ok {
+		for i := range pv {
+			if err := pv[i].validate(abs); err != nil {
+				return fmt.Errorf("SessionUpdateSessionMessage: content[%d]: %w", i, err)
+			}
 		}
 	}
 	return nil
@@ -14955,20 +14955,20 @@ type SubagentUpdate struct {
 	//
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	// Omitted means unchanged; 'null' removes the metadata.
-	Meta map[string]any `json:"_meta,omitempty"`
+	Meta Patch[map[string]any] `json:"_meta,omitzero"`
 	// Client-initiated session mutations permitted for this subagent session.
 	//
 	// Omitted means unchanged; 'null' clears the capability set and disables
 	// child mutations. If never supplied, no session mutations are permitted.
 	// Read-only operations retain their normal protocol semantics and capability
 	// requirements. A concrete object replaces the whole capability set.
-	Capabilities *SubagentSessionCapabilities `json:"capabilities,omitempty"`
+	Capabilities Patch[SubagentSessionCapabilities] `json:"capabilities,omitzero"`
 	// The parent's human-readable description of the child's role or purpose.
 	//
 	// Omitted means unchanged; 'null' clears it. If unset, the Client chooses
 	// a fallback presentation. This is current display metadata, not the
 	// history of instructions sent to the child.
-	Description *string `json:"description,omitempty"`
+	Description Patch[string] `json:"description,omitzero"`
 	// The opaque session ID identifying the child in all ACP messages.
 	SessionId SessionId `json:"sessionId"`
 	// Current state snapshot for the child session.
@@ -14977,12 +14977,12 @@ type SubagentUpdate struct {
 	// asserting idle or sending an 'unknown' snapshot. A concrete state
 	// replaces the previous state object wholesale. If never supplied, the
 	// current activity is unset/unconfirmed.
-	State *StateUpdate `json:"state,omitempty"`
+	State Patch[StateUpdate] `json:"state,omitzero"`
 	// The parent's human-readable display title for this child. It need not be unique.
 	//
 	// Omitted means unchanged; 'null' clears it. If unset, the Client chooses
 	// a fallback presentation.
-	Title *string `json:"title,omitempty"`
+	Title Patch[string] `json:"title,omitzero"`
 }
 
 func (v *SubagentUpdate) UnmarshalJSON(b []byte) error {
@@ -15003,11 +15003,11 @@ func (v *SubagentUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SubagentUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Capabilities = orDefault[*SubagentSessionCapabilities](s.Capabilities, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.State = orDefault[*StateUpdate](s.State, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = patchOf[map[string]any](s.Meta)
+	a.Capabilities = patchOf[SubagentSessionCapabilities](s.Capabilities)
+	a.Description = patchOf[string](s.Description)
+	a.State = patchOf[StateUpdate](s.State)
+	a.Title = patchOf[string](s.Title)
 	*v = SubagentUpdate(a)
 	return nil
 }
@@ -15017,8 +15017,8 @@ func (v *SubagentUpdate) Validate() error {
 }
 
 func (v *SubagentUpdate) validate(abs func(string) bool) error {
-	if v.State != nil {
-		if err := v.State.validate(abs); err != nil {
+	if pv, ok := v.State.Value(); ok {
+		if err := pv.validate(abs); err != nil {
 			return fmt.Errorf("SubagentUpdate: state: %w", err)
 		}
 	}
@@ -19602,6 +19602,72 @@ type ClientExperimental interface {
 	UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error)
 }
 
+// Patch is a property with patch semantics: absent leaves the stored value
+// unchanged, null clears it, and a value replaces it. The zero value is absent.
+// A field of this type is tagged omitzero, so an absent one is not sent; a null
+// one is sent as null. A value is sent as T encodes, so a value holding a nil
+// slice or map is sent as null: send an empty one for [] or {}. Where the schema
+// says so, as for a compaction's summary, an empty value also clears.
+type Patch[T any] struct {
+	present bool
+	null    bool
+	value   T
+}
+
+// PatchValue returns a Patch that replaces the stored value with v.
+func PatchValue[T any](v T) Patch[T] {
+	return Patch[T]{
+		present: true,
+		value:   v,
+	}
+}
+
+// PatchNull returns a Patch that clears the stored value: it is sent as null.
+func PatchNull[T any]() Patch[T] {
+	return Patch[T]{
+		present: true,
+		null:    true,
+	}
+}
+
+// IsZero reports whether p is absent: the stored value is left unchanged.
+func (p Patch[T]) IsZero() bool {
+	return !p.present
+}
+
+// IsNull reports whether p is null: the stored value is cleared.
+func (p Patch[T]) IsNull() bool {
+	return p.present && p.null
+}
+
+// Value returns the value p replaces the stored value with, and whether it
+// holds one.
+func (p Patch[T]) Value() (T, bool) {
+	return p.value, p.present && !p.null
+}
+
+// MarshalJSON encodes p's value, or null when p is null or absent.
+func (p Patch[T]) MarshalJSON() ([]byte, error) {
+	if !p.present || p.null {
+		return []byte("null"), nil
+	}
+	return json.Marshal(p.value)
+}
+
+// UnmarshalJSON decodes null as a null p and anything else as a value.
+func (p *Patch[T]) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		*p = PatchNull[T]()
+		return nil
+	}
+	var v T
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	*p = PatchValue(v)
+	return nil
+}
+
 // objectKeys decodes b as a JSON object, folds the required keys as foldKeys
 // does, and fails, naming typ and the key, when a required key is absent. JSON
 // null is an object without keys.
@@ -19706,6 +19772,38 @@ func skipInvalid[T any](raw json.RawMessage) ([]T, error) {
 		}
 	}
 	return out, nil
+}
+
+// patchOf reads a patch property's raw value: empty is absent, null is null, a
+// value that decodes into a T is that value, and one that does not is absent.
+func patchOf[T any](raw json.RawMessage) Patch[T] {
+	if len(raw) == 0 {
+		return Patch[T]{}
+	}
+	if string(raw) == "null" {
+		return PatchNull[T]()
+	}
+	var v T
+	if json.Unmarshal(raw, &v) != nil {
+		return Patch[T]{}
+	}
+	return PatchValue(v)
+}
+
+// patchItems is patchOf for an array, dropping the items that do not decode
+// into a T, as skipInvalid does.
+func patchItems[T any](raw json.RawMessage) Patch[[]T] {
+	if len(raw) == 0 {
+		return Patch[[]T]{}
+	}
+	if string(raw) == "null" {
+		return PatchNull[[]T]()
+	}
+	items, err := skipInvalid[T](raw)
+	if err != nil {
+		return Patch[[]T]{}
+	}
+	return PatchValue(items)
 }
 
 // absentIfNull returns raw, or nil when raw is the JSON null: a null raw value

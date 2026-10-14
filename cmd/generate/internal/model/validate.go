@@ -45,6 +45,9 @@ type Check struct {
 	// field is an integer, so the bound is written without a fraction.
 	Bound   float64
 	Integer bool
+	// InPatch is true for a nested check of a Patch field: Shape is that of
+	// the patch's value, checked when the patch holds one.
+	InPatch bool
 }
 
 // goRange is the range of each sized Go number type.
@@ -106,7 +109,7 @@ func (m *Model) buildValidations() error {
 			if sh, ok, err := m.nested(s.name, f); err != nil {
 				return err
 			} else if ok {
-				v.Checks = append(v.Checks, Check{Kind: CheckNested, Field: f.Name, Key: f.Key, Shape: sh})
+				v.Checks = append(v.Checks, Check{Kind: CheckNested, Field: f.Name, Key: f.Key, Shape: sh, InPatch: f.Type.Kind == RefPatch})
 			}
 		}
 		s.set(v)
@@ -205,8 +208,12 @@ func (m *Model) spreadValidates(structs []shape) error {
 
 // nested reports whether field f holds a type that validates, and in which
 // shape. A validated type deeper than one pointer, slice, or map is refused.
+// A Patch is looked through: the shape is that of its value.
 func (m *Model) nested(owner string, f *Field) (RefKind, bool, error) {
 	r := f.Type
+	if r.Kind == RefPatch {
+		r = *r.Elem
+	}
 	if r.Kind == RefNamed {
 		return RefNamed, m.validates[r.Name], nil
 	}

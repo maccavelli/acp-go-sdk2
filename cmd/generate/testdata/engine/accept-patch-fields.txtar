@@ -1,0 +1,102 @@
+The protocol table's patch rules: a property whose omission, null and value
+mean unchanged, cleared and replaced becomes a Patch of its type, a string, an
+array and an object here, read and sent in all three states
+(0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md, step 2).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "SessionInfoUpdate": {"type": "object", "properties": {
+    "title": {"type": ["string", "null"], "x-deserialize-default-on-error": true},
+    "updatedAt": {"type": ["string", "null"], "x-deserialize-default-on-error": true},
+    "note": {"type": ["string", "null"], "x-deserialize-default-on-error": true}}},
+  "SessionMessage": {"type": "object", "required": ["messageId"], "properties": {
+    "messageId": {"type": "string"},
+    "content": {"type": ["array", "null"], "items": {"type": "string"}, "x-deserialize-default-on-error": true, "x-deserialize-skip-invalid-items": true},
+    "_meta": {"type": ["object", "null"], "additionalProperties": true, "x-deserialize-default-on-error": true}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+type Patch[T any] struct{present bool; null bool; value T}
+func PatchNull[T any]() Patch[T]
+func PatchValue[T any](v T) Patch[T]
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type SessionInfoUpdate struct{Note *string "json:\"note,omitempty\""; Title Patch[string] "json:\"title,omitzero\""; UpdatedAt Patch[string] "json:\"updatedAt,omitzero\""}
+type SessionMessage struct{Meta Patch[map[string]any] "json:\"_meta,omitzero\""; Content Patch[[]string] "json:\"content,omitzero\""; MessageId string "json:\"messageId\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (Patch[T]).IsNull() bool
+func (Patch[T]).IsZero() bool
+func (Patch[T]).MarshalJSON() ([]byte, error)
+func (*Patch[T]).UnmarshalJSON(b []byte) error
+func (Patch[T]).Value() (T, bool)
+func (*SessionInfoUpdate).UnmarshalJSON(b []byte) error
+func (*SessionMessage).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Each patch field reads an omitted key as absent, null as null, a value as
+// that value and a malformed one as absent, and sends each back as it was
+// read; the field without a rule keeps reading null as nil.
+func TestPatchFieldsThreeStates(t *testing.T) {
+	for _, tt := range []struct{ in, want string }{
+		{`{}`, `{}`},
+		{`{"title":null,"updatedAt":null,"note":null}`, `{"title":null,"updatedAt":null}`},
+		{`{"title":"t","updatedAt":"","note":"n"}`, `{"note":"n","title":"t","updatedAt":""}`},
+		{`{"title":5,"updatedAt":true}`, `{}`},
+	} {
+		var u SessionInfoUpdate
+		if err := json.Unmarshal([]byte(tt.in), &u); err != nil {
+			t.Fatalf("%s: %v", tt.in, err)
+		}
+		b, err := json.Marshal(u)
+		if err != nil || string(b) != tt.want {
+			t.Errorf("%s: sent back as %s, %v; want %s", tt.in, b, err, tt.want)
+		}
+	}
+	for _, tt := range []struct{ in, want string }{
+		{`{"messageId":"m"}`, `{"messageId":"m"}`},
+		{`{"messageId":"m","content":null,"_meta":null}`, `{"_meta":null,"content":null,"messageId":"m"}`},
+		{`{"messageId":"m","content":[],"_meta":{}}`, `{"_meta":{},"content":[],"messageId":"m"}`},
+		{`{"messageId":"m","content":["a",1,"b"],"_meta":{"k":1}}`, `{"_meta":{"k":1},"content":["a","b"],"messageId":"m"}`},
+		{`{"messageId":"m","content":5,"_meta":5}`, `{"messageId":"m"}`},
+	} {
+		var m SessionMessage
+		if err := json.Unmarshal([]byte(tt.in), &m); err != nil {
+			t.Fatalf("%s: %v", tt.in, err)
+		}
+		b, err := json.Marshal(m)
+		if err != nil || string(b) != tt.want {
+			t.Errorf("%s: sent back as %s, %v; want %s", tt.in, b, err, tt.want)
+		}
+	}
+	m := SessionMessage{MessageId: "m", Content: PatchNull[[]string](), Meta: PatchValue(map[string]any{})}
+	if b, _ := json.Marshal(m); string(b) != `{"_meta":{},"content":null,"messageId":"m"}` {
+		t.Errorf("a null content and an empty _meta sent as %s", b)
+	}
+}

@@ -237,6 +237,8 @@ func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 		return rawMap(typeAST(f, *r.Elem))
 	case model.RefRaw:
 		return f.qual(pkgJSON, "RawMessage")
+	case model.RefPatch:
+		return index(id(typePatch), typeAST(f, *r.Elem))
 	default:
 		return id(r.Name)
 	}
@@ -254,7 +256,7 @@ func emitObjectCodec(f *goFile, name string, fields []*model.Field, members []*m
 		if fld.Default != nil {
 			defaults = append(defaults, fld)
 		}
-		if fld.Facts.DefaultOnError || fld.Facts.SkipInvalidItems {
+		if fld.Facts.DefaultOnError || fld.Facts.SkipInvalidItems || fld.Patch {
 			lenient = append(lenient, fld)
 		}
 		if fld.Fill {
@@ -481,6 +483,17 @@ func lenientDecode(f *goFile, name string, lenient []*model.Field, wrap func() a
 		}
 		raw := dot("s", fld.Name)
 		field := dot("a", fld.Name)
+		if fld.Patch {
+			// Absent, null, or a value (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md).
+			if elem := *fld.Type.Elem; fld.Facts.SkipInvalidItems && elem.Kind == model.RefSlice {
+				f.uses[helperPatchItems] = true
+				body = append(body, assign(exprs(field), call(index(id(helperPatchItems), typeAST(f, *elem.Elem)), raw)))
+			} else {
+				f.uses[helperPatchOf] = true
+				body = append(body, assign(exprs(field), call(index(id(helperPatchOf), typeAST(f, elem)), raw)))
+			}
+			continue
+		}
 		if !fld.Facts.SkipInvalidItems {
 			f.uses[helperOrDefault] = true
 			body = append(body, assign(exprs(field), call(index(id(helperOrDefault), typeAST(f, fld.Type)), raw, str(def))))
@@ -934,19 +947,12 @@ func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
 		return absPathStmt(f, name, c)
 	}
 	if c.Kind == model.CheckNested {
-		switch c.Shape {
-		case model.RefPointer:
-			return ifStmt(nil, binary(field, token.NEQ, nilExpr()), validateCall(f, field, where+": %w"))
-		case model.RefSlice:
-			return rangeStmt(id("i"), nil, field, validateCall(f, index(dot("v", c.Field), id("i")), where+"[%d]: %w", id("i")))
-		case model.RefMap:
-			keys := call(f.qual("slices", "Sorted"), call(f.qual("maps", "Keys"), field))
-			return rangeStmt(id("_"), id("k"), keys,
-				define(exprs(id("x")), index(dot("v", c.Field), id("k"))),
-				validateCall(f, id("x"), where+"[%q]: %w", id("k")))
-		default:
-			return validateCall(f, field, where+": %w")
+		if c.InPatch {
+			// A patch's value is checked when it holds one.
+			return ifStmt(define(exprs(id("pv"), id("ok")), call(sel(field, "Value"))), id("ok"),
+				nestedStmt(f, func() ast.Expr { return id("pv") }, c.Shape, where))
 		}
+		return nestedStmt(f, func() ast.Expr { return dot("v", c.Field) }, c.Shape, where)
 	}
 	value := field
 	if c.Shape == model.RefPointer {
@@ -970,6 +976,25 @@ func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
 		cond = binary(binary(dot("v", c.Field), token.NEQ, nilExpr()), token.LAND, cond)
 	}
 	return ifStmt(nil, cond, ret(validationError(name, str(c.Key), value, rule, str(msg))))
+}
+
+// nestedStmt calls the Validate of what x holds, by its shape: a value, a
+// pointer when set, each element of a slice, or each value of a map in key
+// order.
+func nestedStmt(f *goFile, x func() ast.Expr, shape model.RefKind, where string) ast.Stmt {
+	switch shape {
+	case model.RefPointer:
+		return ifStmt(nil, binary(x(), token.NEQ, nilExpr()), validateCall(f, x(), where+": %w"))
+	case model.RefSlice:
+		return rangeStmt(id("i"), nil, x(), validateCall(f, index(x(), id("i")), where+"[%d]: %w", id("i")))
+	case model.RefMap:
+		keys := call(f.qual("slices", "Sorted"), call(f.qual("maps", "Keys"), x()))
+		return rangeStmt(id("_"), id("k"), keys,
+			define(exprs(id("x")), index(x(), id("k"))),
+			validateCall(f, id("x"), where+"[%q]: %w", id("k")))
+	default:
+		return validateCall(f, x(), where+": %w")
+	}
 }
 
 // absPathStmt checks a path the protocol requires to be absolute with the
