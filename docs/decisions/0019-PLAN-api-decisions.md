@@ -632,3 +632,28 @@ cancel is kept.
 
 Gates: `make check-records` and `make markdownlint` exit 0; the identifier scan of the changed and new files finds nothing. No code
 changed.
+
+### Step 11, verification, 2026-10-14
+
+Run over the finished tree at `3bbac82`, through the Python runner:
+
+* Regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file; `GOEXPERIMENT=nojsonv2 go test ./...`
+  exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan finds
+  nothing; Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+* The exported API listing: 2411 lines at `v0.17.1`, 2413 at `3bbac82`; removed exactly the seven `MarshalJSON` methods of I8 and
+  added exactly the nine entries "Verification" names. Nothing else.
+* The phase 2 probes: B2's (restated, step 5), B14's, B16's, B17's, B19's and B20's pass. B18's fails as step 4's deviation records,
+  exempt, "nothing bounds concurrent inbound requests (200 running)", the default being unlimited by decision. B21's is text only and
+  fails as step 9's deviation records, "the answer did not happen", nothing being written after the connection's end.
+* The phase 1 probes still pass, with phase 1's three exemptions failing as its steps 2, 3 and 4 record
+  (`TestProbeNotificationHandlerRequestDeadlock`, `TestProbeS_PromptAsNotification`,
+  `TestProbeS_ClientCloseSessionLeavesPermissionPending`). The G1 probe, run as an engine behaviour case, still does not build,
+  "undefined: Injected".
+* The example checks of phase 1's step 8: 6 of 6 pass, the client at EOF ending in 5.4 s with one prompt.
+* The pre-push disclosure guard over the 5 commits not yet pushed, `943f073..3bbac82`: exit 0.
+
+Every phase 2 finding has a committed test or a recorded check: B19 by step 2's tests, B16 and B17 by step 3's and the
+amendments in steps 7 and 9, B18 by step 4's, B2 by step 5's, B14 by step 6's, B20 by step 7's, I8 by step 8's byte comparison, and
+B21 by the amendments of step 9. Acceptance waits on CI for the pushed commits; then this PLAN and its `docs/README.md` row become
+`complete`, and the owner tags `v0.18.0` and publishes its release from
+[0019-REPORT-release-notes-v0-18-0.md](../reports/0019-REPORT-release-notes-v0-18-0.md).
