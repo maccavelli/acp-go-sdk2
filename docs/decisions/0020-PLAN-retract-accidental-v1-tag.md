@@ -79,3 +79,10 @@ Gates, through the Python runner: regenerating changes no generated file; `make 
 its checks; no new `.go` file; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make
 check-records` and `make markdownlint` exit 0; the identifier scan finds nothing; the API listing against `v0.17.1` unchanged from
 the 0019 phase 2 PLAN's step 11. Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+
+Deviation, 2026-10-14, before step 3: CI passed on `c1b1185` (run `38565152865`), and the owner, before tagging, asked for the two
+open issues, #4 and #5, to be resolved first. They are decided in
+[0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md](0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md) and implemented by
+[0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md](0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md). Step 3 waits on that PLAN:
+`v1.14.0` is tagged on the commit it verifies, not on `c1b1185`. The `retract` directive and the release notes of step 2 stand; the
+0021 PLAN adds to the notes.
