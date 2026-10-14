@@ -79,6 +79,31 @@ func markOf(ctx context.Context) (messageMark, bool) {
 	return m, ok
 }
 
+// sentAsNotification and sentAsRequest report whether receive made ctx for a
+// notification or for a request; a context receive did not make is neither.
+// The generated dispatch refuses a method sent as the other kind
+// (0019-PLAN-behaviour-fixes.md, B12).
+func sentAsNotification(ctx context.Context) bool {
+	m, ok := markOf(ctx)
+	return ok && m.notification
+}
+
+func sentAsRequest(ctx context.Context) bool {
+	m, ok := markOf(ctx)
+	return ok && !m.notification
+}
+
+// decodeParams decodes a received message's params into p. Params left out,
+// which JSON-RPC 2.0 allows and ACP's schema does not require, decode as an
+// empty object, so a type with required keys refuses them by name
+// (0019-PLAN-behaviour-fixes.md, B3).
+func decodeParams(params json.RawMessage, p any) error {
+	if len(params) == 0 {
+		params = json.RawMessage("{}")
+	}
+	return json.Unmarshal(params, p)
+}
+
 // inflightRequest is one received request whose handler is running, held by
 // pointer so that a request removes only its own entry
 // (0019-PLAN-behaviour-fixes.md, B11).

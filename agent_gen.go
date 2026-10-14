@@ -105,8 +105,11 @@ var promptReturned func()
 func (a *AgentSideConnection) handle(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
 	switch method {
 	case AgentMethodAuthenticate:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p AuthenticateRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -118,8 +121,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodDocumentDidChange:
+		if sentAsRequest(ctx) {
+			return nil, NewMethodNotFound(method)
+		}
 		var p UnstableDidChangeDocumentNotification
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -136,8 +142,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return nil, nil
 	case AgentMethodDocumentDidClose:
+		if sentAsRequest(ctx) {
+			return nil, NewMethodNotFound(method)
+		}
 		var p UnstableDidCloseDocumentNotification
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -154,8 +163,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return nil, nil
 	case AgentMethodDocumentDidFocus:
+		if sentAsRequest(ctx) {
+			return nil, NewMethodNotFound(method)
+		}
 		var p UnstableDidFocusDocumentNotification
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -172,8 +184,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return nil, nil
 	case AgentMethodDocumentDidOpen:
+		if sentAsRequest(ctx) {
+			return nil, NewMethodNotFound(method)
+		}
 		var p UnstableDidOpenDocumentNotification
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -190,8 +205,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return nil, nil
 	case AgentMethodDocumentDidSave:
+		if sentAsRequest(ctx) {
+			return nil, NewMethodNotFound(method)
+		}
 		var p UnstableDidSaveDocumentNotification
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -208,8 +226,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return nil, nil
 	case AgentMethodInitialize:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p InitializeRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -245,8 +266,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		})
 		return result, nil
 	case AgentMethodLogout:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p LogoutRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -258,8 +282,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodMcpMessage:
+		if sentAsRequest(ctx) {
+			return nil, NewMethodNotFound(method)
+		}
 		var p UnstableMessageMcpNotification
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -276,8 +303,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return nil, nil
 	case AgentMethodNesAccept:
+		if sentAsRequest(ctx) {
+			return nil, NewMethodNotFound(method)
+		}
 		var p UnstableAcceptNesNotification
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -294,8 +324,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return nil, nil
 	case AgentMethodNesClose:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p UnstableCloseNesRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -313,8 +346,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodNesReject:
+		if sentAsRequest(ctx) {
+			return nil, NewMethodNotFound(method)
+		}
 		var p UnstableRejectNesNotification
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -331,8 +367,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return nil, nil
 	case AgentMethodNesStart:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p UnstableStartNesRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -350,8 +389,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodNesSuggest:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p UnstableSuggestNesRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -369,8 +411,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodProvidersDisable:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p UnstableDisableProviderRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -388,8 +433,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodProvidersList:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p UnstableListProvidersRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -407,8 +455,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodProvidersSet:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p UnstableSetProviderRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -426,8 +477,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionCancel:
+		if sentAsRequest(ctx) {
+			return nil, NewMethodNotFound(method)
+		}
 		var p CancelNotification
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -449,8 +503,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return nil, nil
 	case AgentMethodSessionClose:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p CloseSessionRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -462,8 +519,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionDelete:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p DeleteSessionRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -475,8 +535,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionFork:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p UnstableForkSessionRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -494,8 +557,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionList:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p ListSessionsRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -507,8 +573,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionLoad:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p LoadSessionRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -524,8 +593,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionNew:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p NewSessionRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -537,8 +609,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionPrompt:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p PromptRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -587,8 +662,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionResume:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p ResumeSessionRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -600,8 +678,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionSetConfigOption:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p SetSessionConfigOptionRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {
@@ -613,8 +694,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		return a.conn.checkResult(method, resp, a.resultGate)
 	case AgentMethodSessionSetMode:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p SetSessionModeRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {

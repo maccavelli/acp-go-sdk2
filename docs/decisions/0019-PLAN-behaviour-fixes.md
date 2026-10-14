@@ -290,7 +290,8 @@ before reading its output. Per code step:
   Python script.
 
 Phase acceptance: every finding above has a committed test or a recorded program run; the phase 1 probes all pass on the tree
-(amended 2026-10-13, see "Step 2 deviation": all but B1's original probe, whose unrelated context is the documented limit); the API
+(amended 2026-10-13, see "Step 2 deviation": all but B1's original probe, whose unrelated context is the documented limit; and
+see "Step 3 deviation": all but `TestProbeS_PromptAsNotification`, whose pass condition is the behaviour B12 replaces); the API
 listing equals `v0.17.1`'s; CI passes on the pushed commits.
 
 ## Rollout and Rollback
@@ -372,3 +373,55 @@ exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the
 the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added. Windows: `go test -count=1 -shuffle=on ./...` exit
 0 at the root and in `cmd/generate`. The `MethodHandler` documentation of the limit was added after those runs; `make pre-add-check`,
 the records gates, the identifier scan and the API listing were run again and pass.
+
+The owner committed step 2 as `c342496`.
+
+### Step 3 deviation, 2026-10-13: one B12 probe stays failing
+
+Found: re-run on the step 3 tree, `TestProbeS_PromptAsNotification` fails, "the notification prompt turn did not happen". The probe
+passes only if a `session/prompt` sent without an id runs as a turn and a `session/cancel` then reaches it; the decided remedy drops
+such a prompt, logs it, and runs nothing. The other B12 probe, `TestProbeRequestMethodAsNotificationHoldsQueue`, passes. Decision
+(owner, 2026-10-13): exempt that probe from the acceptance, as B1's is; `TestMethodKindMismatch` and the passing probe stand for the
+finding. The MADR's "Confirmation" carries the same amendment.
+
+### Step 3, dispatch decoding and kinds, 2026-10-13
+
+What was built:
+
+* `connection.go`: `decodeParams`, which decodes absent params as `{}`; `sentAsNotification` and `sentAsRequest`, which read the marks
+  of step 2.
+* `cmd/generate/internal/emit/dispatch_helpers.go`: `kindCheck`, emitted first in every dispatch case: a notification method returns
+  `NewMethodNotFound` when its context is a request's, a request method returns `NewInvalidRequest` "<method> is a request, and it was
+  sent without an id" when its context is a notification's. `unmarshalValidate` emits `decodeParams` and no longer takes the
+  `goFile`, which only `json.Unmarshal` needed. `dispatch.go`: the four call sites.
+* Regenerated: `agent_gen.go` and `client_gen.go`, each case gaining its kind check and decoding through `decodeParams`; no other
+  generated file changed.
+* Not done: the stub in `cmd/generate/main_test.go` was not given `decodeParams`, which step 3 and "Design", B3, named. The stub
+  serves a schema without methods, whose generated files have no dispatch case and do not refer to it; the generator's tests pass
+  without it, which is the proof.
+
+Tests added, `jsonrpc_test.go`: `TestOmittedParams` and `TestNullParams` (through `checkParamsLeftOut`: `logout` and `session/list`
+reach their handlers, `session/new` is answered `-32602` naming `cwd`), and `TestMethodKindMismatch`. Before any planted break was
+run, `TestMethodKindMismatch`'s last check was changed to wait for its log line, up to 2 s: the probe request it relies on runs on its
+own goroutine and can be answered before the notification queue reaches the dropped `mcp/message`. `go test -race -count=20` of the
+three: ok.
+
+Seen to fail, each in its own scratch copy (4 of 4):
+
+* `b3-no-default` (`decodeParams` without the empty-object default): `TestOmittedParams` and `TestNullParams`, "logout with params …
+  answered … unexpected end of JSON input", "logout's handler did not happen".
+* `b3-emit-unmarshal` (the emitter back to `json.Unmarshal`, regenerated): the same two tests, the same failures.
+* `b12-no-request-check` (the notification methods' check made false, regenerated): `TestMethodKindMismatch`, "session/cancel with an
+  id answered {ID:9 Result:null Error:<nil>}, want -32601", "session/cancel sent with an id ran its handler".
+* `b12-no-notification-check` (the request methods' check made false, regenerated): "a session/prompt sent without an id ran its
+  handler", and neither dropped message logged.
+
+The original probes, re-run on the step 3 tree: B3's and `TestProbeRequestMethodAsNotificationHoldsQueue` pass, with B8, B9, B10,
+B11 and B15 from step 2; B1's and `TestProbeS_PromptAsNotification` fail as the two deviations record; B4, B5, B6, B7 and B13 fail,
+their steps being later.
+
+Gates, through the Python runner: regenerating again changes no generated file; `make pre-add-check` exit 0, "111 file(s) clean
+(gofmt, golangci-lint, go vet, go test, govulncheck)"; no new `.go` file; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+`GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing;
+the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added. Windows: `go test -count=1 -shuffle=on ./...` exit
+0 at the root and in `cmd/generate`.

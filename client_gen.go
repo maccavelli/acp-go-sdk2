@@ -84,8 +84,11 @@ func (c *ClientSideConnection) Negotiated() (Negotiation, bool) {
 func (c *ClientSideConnection) handle(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
 	switch method {
 	case ClientMethodElicitationComplete:
+		if sentAsRequest(ctx) {
+			return nil, NewMethodNotFound(method)
+		}
 		var p CompleteElicitationNotification
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
@@ -96,8 +99,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		}
 		return nil, nil
 	case ClientMethodElicitationCreate:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p CreateElicitationRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
@@ -109,8 +115,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		}
 		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodFsReadTextFile:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p ReadTextFileRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
@@ -122,8 +131,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		}
 		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodFsWriteTextFile:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p WriteTextFileRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
@@ -135,8 +147,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		}
 		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodMcpMessage:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p UnstableMessageMcpRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
@@ -154,8 +169,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		}
 		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodSessionRequestPermission:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p RequestPermissionRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
@@ -171,8 +189,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		}
 		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodSessionUpdate:
+		if sentAsRequest(ctx) {
+			return nil, NewMethodNotFound(method)
+		}
 		var p SessionNotification
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
@@ -183,8 +204,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		}
 		return nil, nil
 	case ClientMethodTerminalCreate:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p CreateTerminalRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
@@ -196,8 +220,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		}
 		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodTerminalKill:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p KillTerminalRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
@@ -209,8 +236,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		}
 		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodTerminalOutput:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p TerminalOutputRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
@@ -222,8 +252,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		}
 		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodTerminalRelease:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p ReleaseTerminalRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
@@ -235,8 +268,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		}
 		return c.conn.checkResult(method, resp, c.resultGate)
 	case ClientMethodTerminalWaitForExit:
+		if sentAsNotification(ctx) {
+			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
+		}
 		var p WaitForTerminalExitRequest
-		if err := json.Unmarshal(params, &p); err != nil {
+		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
 		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {

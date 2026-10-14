@@ -335,3 +335,131 @@ func TestMalformedInputNotLogged(t *testing.T) {
 		}
 	}
 }
+
+// paramsAgent is a raw peer of an agent whose logout and session/list report
+// their calls on called.
+func paramsAgent(t *testing.T, called chan<- string) wire {
+	t.Helper()
+	return rawWire(t, func(w io.Writer, r io.Reader) {
+		negotiate(t, NewAgentSideConnection(agentFuncs{
+			LogoutFunc: func(context.Context, LogoutRequest) (LogoutResponse, error) {
+				called <- AgentMethodLogout
+				return LogoutResponse{}, nil
+			},
+			ListSessionsFunc: func(context.Context, ListSessionsRequest) (ListSessionsResponse, error) {
+				called <- AgentMethodSessionList
+				return ListSessionsResponse{Sessions: []SessionInfo{}}, nil
+			},
+		}, w, r), allAdvertised())
+	})
+}
+
+// checkParamsLeftOut sends logout, session/list and session/new with the
+// given params member: the first two reach their handlers, which JSON-RPC 2.0
+// and ACP's schema allow, and session/new is refused -32602 naming its
+// missing cwd.
+func checkParamsLeftOut(t *testing.T, member string) {
+	t.Helper()
+	called := make(chan string, 4)
+	p := paramsAgent(t, called)
+	for i, method := range []string{AgentMethodLogout, AgentMethodSessionList} {
+		p.send(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":%q%s}`, i+1, method, member))
+		if a := p.next(method + "'s answer"); a.Error != nil {
+			t.Errorf("%s with params %q answered %+v", method, member, a.Error)
+		}
+		if got := within(t, called, method+"'s handler"); got != method {
+			t.Errorf("handler %s called for %s", got, method)
+		}
+	}
+	p.send(`{"jsonrpc":"2.0","id":3,"method":"session/new"` + member + `}`)
+	a := p.next("session/new's answer")
+	if a.Error == nil || a.Error.Code != -32602 || !strings.Contains(a.Error.Error(), "cwd") {
+		t.Errorf("session/new with params %q answered %+v, want -32602 naming cwd", member, a.Error)
+	}
+}
+
+// TestOmittedParams requires a request whose params are left out to decode
+// as one with empty params (0019-PLAN-behaviour-fixes.md, B3).
+func TestOmittedParams(t *testing.T) {
+	t.Parallel()
+	checkParamsLeftOut(t, "")
+}
+
+// TestNullParams requires "params": null to behave as params left out
+// (0019-MADR-remediate-debugging-pass-findings.md, decision 13).
+func TestNullParams(t *testing.T) {
+	t.Parallel()
+	checkParamsLeftOut(t, `,"params":null`)
+}
+
+// TestMethodKindMismatch requires a method received as the other kind to be
+// refused: a request sent without an id is not handled, logged, and holds up
+// nothing; a notification sent with an id is answered -32601. Each side knows
+// the kind of its own methods, mcp/message among them
+// (0019-PLAN-behaviour-fixes.md, B12).
+func TestMethodKindMismatch(t *testing.T) {
+	t.Parallel()
+	var agentLogs, clientLogs syncBuffer
+	prompted := make(chan struct{}, 1)
+	cancelled := make(chan struct{}, 2)
+	mcp := make(chan struct{}, 1)
+	agent := rawWire(t, func(w io.Writer, r io.Reader) {
+		negotiate(t, NewAgentSideConnection(agentFuncs{
+			PromptFunc: func(context.Context, PromptRequest) (PromptResponse, error) {
+				prompted <- struct{}{}
+				return PromptResponse{StopReason: StopReasonEndTurn}, nil
+			},
+			CancelFunc: func(context.Context, CancelNotification) error {
+				cancelled <- struct{}{}
+				return nil
+			},
+			UnstableMessageMcpFunc: func(context.Context, UnstableMessageMcpNotification) error {
+				mcp <- struct{}{}
+				return nil
+			},
+		}, w, r, WithLogger(slog.New(slog.NewTextHandler(&agentLogs, nil)))), allAdvertised())
+	})
+
+	agent.send(`{"jsonrpc":"2.0","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}`)
+	agent.send(`{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}`)
+	within(t, cancelled, "the session/cancel queued behind a prompt sent without an id")
+	select {
+	case <-prompted:
+		t.Error("a session/prompt sent without an id ran its handler")
+	default:
+	}
+	if !strings.Contains(agentLogs.String(), "session/prompt is a request, and it was sent without an id") {
+		t.Errorf("the dropped session/prompt was not logged: %s", agentLogs.String())
+	}
+
+	agent.send(`{"jsonrpc":"2.0","id":9,"method":"session/cancel","params":{"sessionId":"s"}}`)
+	if a := agent.next("the answer to session/cancel sent with an id"); a.Error == nil || a.Error.Code != -32601 {
+		t.Errorf("session/cancel with an id answered %+v, want -32601", a)
+	}
+	agent.send(`{"jsonrpc":"2.0","id":10,"method":"mcp/message","params":{}}`)
+	if a := agent.next("the answer to mcp/message sent to the agent with an id"); a.Error == nil || a.Error.Code != -32601 {
+		t.Errorf("mcp/message to the agent with an id answered %+v, want -32601", a)
+	}
+	select {
+	case <-cancelled:
+		t.Error("session/cancel sent with an id ran its handler")
+	case <-mcp:
+		t.Error("mcp/message sent to the agent with an id ran its handler")
+	default:
+	}
+
+	client := rawWire(t, func(w io.Writer, r io.Reader) {
+		negotiate(t, NewClientSideConnection(&clientFuncs{}, w, r,
+			WithLogger(slog.New(slog.NewTextHandler(&clientLogs, nil)))), allAdvertised())
+	})
+	expectNoAnswer(t, client, `{"jsonrpc":"2.0","method":"mcp/message","params":{}}`)
+	// The probe's answer can come before the notification queue reaches the
+	// dropped message, so its log line is waited for.
+	const dropped = "mcp/message is a request, and it was sent without an id"
+	for deadline := time.Now().Add(2 * time.Second); !strings.Contains(clientLogs.String(), dropped); {
+		if time.Now().After(deadline) {
+			t.Fatalf("the dropped mcp/message was not logged: %s", clientLogs.String())
+		}
+		time.Sleep(time.Millisecond)
+	}
+}

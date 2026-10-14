@@ -23,11 +23,25 @@ func methodNotFound() ast.Stmt { return ret(nilExpr(), call(id("NewMethodNotFoun
 // errNotNil is err != nil.
 func errNotNil() ast.Expr { return binary(id("err"), token.NEQ, nilExpr()) }
 
-// unmarshalValidate decodes params into p and validates it.
-func unmarshalValidate(f *goFile, conn ast.Expr, typeName string, gate ast.Expr) []ast.Stmt {
+// kindCheck refuses a method received as the other kind: a request sent
+// without an id is not handled, and nothing answers it; a notification sent
+// with an id is answered method not found, as no request of that name exists
+// (0019-PLAN-behaviour-fixes.md, B12).
+func kindCheck(notification bool) ast.Stmt {
+	if notification {
+		return ifStmt(nil, call(id("sentAsRequest"), id("ctx")), methodNotFound())
+	}
+	return ifStmt(nil, call(id("sentAsNotification"), id("ctx")),
+		ret(nilExpr(), call(id("NewInvalidRequest"), composite(rawMap(id("any")),
+			kv(str("error"), binary(id("method"), token.ADD, str(" is a request, and it was sent without an id")))))))
+}
+
+// unmarshalValidate decodes params into p and validates it. Params left out
+// decode as an empty object (0019-PLAN-behaviour-fixes.md, B3).
+func unmarshalValidate(conn ast.Expr, typeName string, gate ast.Expr) []ast.Stmt {
 	return []ast.Stmt{
 		varStmt("p", id(typeName)),
-		ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("params"), addr(id("p")))), errNotNil(),
+		ifStmt(define(exprs(id("err")), call(id("decodeParams"), id("params"), addr(id("p")))), errNotNil(),
 			invalidParams()),
 		// The receiving order: the consumer's rewrite hook, validation, the
 		// validation hook (0015-MADR-validate-absolute-protocol-paths.md, H1).
