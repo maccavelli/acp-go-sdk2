@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-14
 associated-madr: "0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md"
 ---
@@ -179,3 +179,9 @@ independent of step 2. After the tag, step 2's field types cannot be reverted wi
 removed.
 
 ## Execution record
+
+### Step 1, records, 2026-10-14
+
+The 0021 MADR, committed by the owner after review; this PLAN, its `docs/README.md` row, and the 0020 PLAN's dated entry that the
+tag waits on this PLAN, committed by the owner. The owner approved this PLAN on 2026-10-14 ("proceed"), which accepts the MADR: its
+status is `accepted` from this commit. `make check-records`, `make markdownlint` and the identifier scan exit 0.
