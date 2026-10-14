@@ -1356,6 +1356,10 @@ func TestExtensionMethods_ClientToAgentRequest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
+	if _, err := c.Initialize(ctx, InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+
 	raw, err := c.CallExtension(ctx, method, extEchoParams{Msg: "hi"})
 	if err != nil {
 		t.Fatalf("CallExtension: %v", err)
@@ -1378,6 +1382,10 @@ func TestExtensionMethods_UnknownRequest_ReturnsMethodNotFound(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
+
+	if _, err := c.Initialize(ctx, InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
 
 	_, err := c.CallExtension(ctx, "_vendor.test/missing", extEchoParams{Msg: "hi"})
 	if err == nil {
@@ -1413,6 +1421,10 @@ func TestExtensionMethods_UnknownNotification_DoesNotLog(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
+	if _, err := c.Initialize(ctx, InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+
 	if err := c.NotifyExtension(ctx, "_vendor.test/notify", map[string]any{"hello": "world"}); err != nil {
 		t.Fatalf("NotifyExtension: %v", err)
 	}
@@ -1435,7 +1447,7 @@ func TestExtensionMethods_AgentToClientRequest(t *testing.T) {
 
 	method := "_vendor.test/echo"
 
-	_ = NewClientSideConnection(&clientFuncs{
+	cl := NewClientSideConnection(&clientFuncs{
 		HandleExtensionMethodFunc: func(ctx context.Context, gotMethod string, params json.RawMessage) (any, error) {
 			if gotMethod != method {
 				return nil, NewInternalError(map[string]any{"expected": method, "got": gotMethod})
@@ -1452,6 +1464,10 @@ func TestExtensionMethods_AgentToClientRequest(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
+
+	if _, err := cl.Initialize(ctx, InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
 
 	raw, err := ag.CallExtension(ctx, method, extEchoParams{Msg: "hi"})
 	if err != nil {

@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"reflect"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 )
@@ -672,5 +676,95 @@ func TestTerminalAuthMethod(t *testing.T) {
 	cancel()
 	if w.count() == 0 || errors.Is(within(t, sent, "the send"), ErrTerminalAuthMethod) {
 		t.Error("Authenticate(a) was not sent")
+	}
+}
+
+// TestExtensionMessagesHookedAndGated requires a received extension message to
+// pass the inbound hooks and the initialize gate as a typed one does: before
+// initialize a request is answered -32601 and a notification dropped, neither
+// reaching the handler; after it, both hooks see the method with
+// *json.RawMessage params, a rewrite reaches the handler, and a refusal by the
+// validation hook is answered -32602 (0019-PLAN-api-decisions.md, B14).
+func TestExtensionMessagesHookedAndGated(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex
+	var hooked []string
+	note := func(s string) {
+		mu.Lock()
+		defer mu.Unlock()
+		hooked = append(hooked, s)
+	}
+	saw := func(s string) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Contains(hooked, s)
+	}
+	// kind names params' type by assertion: %T prints the alias target of
+	// json.RawMessage, which depends on the json build.
+	kind := func(params any) string {
+		if _, ok := params.(*json.RawMessage); ok {
+			return "*json.RawMessage"
+		}
+		return fmt.Sprintf("%T", params)
+	}
+	handled := make(chan string, 8)
+	var asc *AgentSideConnection
+	p := rawWire(t, func(w io.Writer, r io.Reader) {
+		asc = NewAgentSideConnection(agentFuncs{HandleExtensionMethodFunc: func(_ context.Context, method string, params json.RawMessage) (any, error) {
+			handled <- method + " " + string(params)
+			return params, nil
+		}}, w, r,
+			WithInboundRewrite(func(_ context.Context, method string, params any) error {
+				note("rewrite " + method + " " + kind(params))
+				if raw, ok := params.(*json.RawMessage); ok && method == "_x/echo" {
+					*raw = json.RawMessage(`{"v":2}`)
+				}
+				return nil
+			}),
+			WithInboundValidation(func(_ context.Context, method string, params any, err error) error {
+				note("validate " + method + " " + kind(params))
+				if method == "_x/refuse" {
+					return errors.New("refused by the hook")
+				}
+				return err
+			}))
+	})
+
+	p.send(`{"jsonrpc":"2.0","id":1,"method":"_x/echo","params":{"v":1}}`)
+	if a := p.next("the early request's answer"); string(a.ID) != "1" || a.Error == nil || a.Error.Code != -32601 {
+		t.Errorf("a request before initialize: id %s, %+v; want -32601", a.ID, a.Error)
+	}
+	// The validation hook runs after the gate, so once it has seen the early
+	// notification, the gate has refused it.
+	p.send(`{"jsonrpc":"2.0","method":"_x/early","params":{}}`)
+	for deadline := time.Now().Add(5 * time.Second); !saw("validate _x/early *json.RawMessage"); time.Sleep(time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the hooks never saw the notification sent before initialize")
+		}
+	}
+
+	negotiate(t, asc, allAdvertised())
+	p.send(`{"jsonrpc":"2.0","id":2,"method":"_x/echo","params":{"v":1}}`)
+	if a := p.next("the echo's answer"); string(a.ID) != "2" || a.Error != nil || string(a.Result) != `{"v":2}` {
+		t.Errorf("the echo answered id %s, result %s, error %+v; want the rewritten {\"v\":2}", a.ID, a.Result, a.Error)
+	}
+	p.send(`{"jsonrpc":"2.0","id":3,"method":"_x/refuse","params":{}}`)
+	if a := p.next("the refused request's answer"); string(a.ID) != "3" || a.Error == nil || a.Error.Code != -32602 {
+		t.Errorf("a request the validation hook refused: id %s, %+v; want -32602", a.ID, a.Error)
+	}
+	p.send(`{"jsonrpc":"2.0","method":"_x/late","params":{}}`)
+
+	// Notifications are handled in order, so the late one comes after any
+	// early one that got through.
+	got := []string{within(t, handled, "the echo's handler"), within(t, handled, "the late notification's handler")}
+	if want := []string{`_x/echo {"v":2}`, `_x/late {}`}; !slices.Equal(got, want) {
+		t.Errorf("the handler ran for %q, want %q", got, want)
+	}
+	for _, h := range []string{"rewrite", "validate"} {
+		for _, m := range []string{"_x/echo", "_x/refuse", "_x/late"} {
+			if want := h + " " + m + " *json.RawMessage"; !saw(want) {
+				t.Errorf("the hooks never saw %q", want)
+			}
+		}
 	}
 }

@@ -426,9 +426,47 @@ runs here. The MADR is unchanged.
 
 ### Step 6, extension messages hooked and gated, 2026-10-13
 
+What was built:
+
+* Generator, `cmd/generate/internal/emit/dispatch.go`: each side connection gains `inboundGate() gateFunc`, returning its `gate`
+  when the schema has `initialize` and nil otherwise, so `extensions.go`, compiled with every engine case, can call it.
+  `cmd/generate/main_test.go`'s stub declares `gateFunc`. Regenerated: `agent_gen.go` and `client_gen.go`; the engine goldens list
+  no unexported methods and are unchanged.
+* `extensions.go`: both `handleWithExtensions` hand a `_` message to `handleExtension`, which runs `checkInbound(ctx, method, &raw,
+  gate)`, with `raw` the message's params as a `json.RawMessage`, before it looks for `ExtensionMethodHandler`; the handler gets
+  what the hooks leave. A refusal is answered as a typed one's, through `inboundError`: before `initialize`, `-32601` for a request,
+  and a notification dropped without a log line, since `handleInbound` already ignores a `-32601` for a `_` notification (Q5).
+  `ExtensionMethodHandler`'s documentation says so. `CallExtension` and `NotifyExtension` stay ungated; their documentation already
+  says they do not check what `initialize` negotiated.
+* `connection.go`: `WithInboundRewrite`'s documentation says an extension message's params is a `*json.RawMessage`.
+
+Tests added, `gates_test.go`: `TestExtensionMessagesHookedAndGated`. Before `initialize`, a `_` request is answered `-32601`, and a
+`_` notification is refused, its handler not run. After it, both hooks see `_x/echo`, `_x/refuse` and `_x/late` with
+`*json.RawMessage` params; the rewrite of `_x/echo` reaches the handler and its answer; `_x/refuse`, which the validation hook
+refuses, is answered `-32602` and its handler does not run; the handler runs for `_x/echo` and `_x/late` only, in that order. The
+params' type is named by type assertion: with the default `encoding/json`, `%T` prints `*jsontext.Value`, the alias target, which
+the first run showed. `go test -race -count=20` of it and the `TestExtensionMethods` tests: ok.
+
+Seen to fail, each in its own scratch copy (2 of 2):
+
+* `b14-no-check-inbound` (no `checkInbound` on a `_` message): "a request before initialize: id 1, <nil>; want -32601" and "the hooks
+  never saw the notification sent before initialize".
+* `b14-nil-gate` (the hooks run with no gate): "a request before initialize: id 1, <nil>; want -32601" and the handler running for `_x/echo` and
+  `_x/early`, the early notification having reached the handler, where `_x/echo` and `_x/late` were wanted.
+
+The phase 2 probes, re-run on the step 6 tree: `TestP2_B14_ExtensionSkipsHooksAndGate` now passes, `_x/ping` answered `-32601`
+before `initialize` as `session/list` is; B2's, B16's, B17's and B19's pass; B18's is exempt (step 4); B20's fails, its step being
+later, and B21's is text only.
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
+`GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; the API listing against `v0.17.1` is unchanged from step 5, 2420 lines,
+the nine expected entries, since `inboundGate` is unexported. The generator module's suite under `-race`: ok. Windows: `go test
+-count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+
 Deviation, 2026-10-13: three existing tests in `acp_test.go` send an extension message before `initialize`, which decision 7 now
 refuses. `TestExtensionMethods_ClientToAgentRequest` and `TestExtensionMethods_AgentToClientRequest` failed with `-32601`
 "_vendor.test/echo: acp: initialize has not completed", and `TestExtensionMethods_UnknownNotification_DoesNotLog` timed out, its
 notification dropped before the handler. Decision (owner): each test completes a real `Initialize` from the client over its pipe
 pair before the extension call, as the other pair tests in that file do, with every assertion kept; the agent-to-client test keeps
-the client connection it discarded. `acp_test.go` joins step 6's scope. The MADR is unchanged: decision 7 names this change.
+the client connection it discarded. A fourth, `TestExtensionMethods_UnknownRequest_ReturnsMethodNotFound`, still passed, but its `-32601` came from the gate rather than from the agent that lacks `HandleExtensionMethod`, so it no longer tested what it names; the owner chose the same change for it. `acp_test.go` joins step 6's scope. The MADR is unchanged: decision 7 names this change.
