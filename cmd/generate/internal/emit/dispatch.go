@@ -213,9 +213,15 @@ func emitSideConnection(f *goFile, s side) {
 	f.add(method(recv(), "DroppedNotifications", funcType(nil, param("", id("uint64"))),
 		ret(call(dot("c", "conn", "DroppedNotifications")))))
 	f.line()
-	f.comment("Done exposes a channel that closes when the peer disconnects.")
+	f.comment("Done exposes a channel that closes when the connection ends: the peer",
+		"disconnects, or Close or the overflow policy closes it.")
 	f.add(method(recv(), "Done", funcType(nil, param("", &ast.ChanType{Dir: ast.RECV, Value: &ast.StructType{Fields: fields()}})),
 		ret(call(dot("c", "conn", "Done")))))
+	f.line()
+	f.comment("Close closes the underlying connection; see Connection.Close",
+		"(0019-PLAN-api-decisions.md, B17).")
+	f.add(method(recv(), "Close", funcType(nil, param("", id("error"))),
+		ret(call(dot("c", "conn", "Close")))))
 	f.line()
 	f.comment("SetLogger directs connection diagnostics to the provided logger.")
 	f.add(method(recv(), "SetLogger", funcType([]*ast.Field{param("l", star(f.qual(pkgSlog, "Logger")))}),

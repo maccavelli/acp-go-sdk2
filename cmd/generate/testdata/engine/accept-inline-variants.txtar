@@ -40,11 +40,13 @@ type VVariant1 struct{Kind string "json:\"kind\""; Opt []string "json:\"opt,omit
 type VVariant4 struct{}
 type W struct{WVariant1 *WVariant1 "json:\"-\""; Ref *Ref "json:\"-\""}
 type WVariant1 struct{W string "json:\"w\""}
+func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64

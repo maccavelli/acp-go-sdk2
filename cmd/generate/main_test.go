@@ -174,6 +174,8 @@ func (*Connection) DroppedNotifications() uint64 { return 0 }
 
 func (*Connection) Done() <-chan struct{} { return nil }
 
+func (*Connection) Close() error { return nil }
+
 func (*Connection) SetLogger(*slog.Logger) {}
 
 func (a *AgentSideConnection) handleWithExtensions(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {

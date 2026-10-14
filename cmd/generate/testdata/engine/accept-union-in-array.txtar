@@ -28,11 +28,13 @@ const ProtocolVersionNumber untyped int = 1
 type U struct{A *UA "json:\"-\""; B *UB "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
 type UA struct{Type string "json:\"type\""}
 type UB struct{Type string "json:\"type\""}
+func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64

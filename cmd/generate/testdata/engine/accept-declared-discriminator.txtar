@@ -30,12 +30,14 @@ type Shape struct{Circle *ShapeCircle "json:\"-\""; Square *ShapeSquare "json:\"
 type ShapeCircle struct{Kind string "json:\"kind\""; R int64 "json:\"r\""}
 type ShapeSquare struct{Kind string "json:\"kind\""; Side string "json:\"side\""}
 type Square struct{Kind string "json:\"kind\""; Side string "json:\"side\""}
+func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
 func (*Circle).UnmarshalJSON(b []byte) error
+func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64

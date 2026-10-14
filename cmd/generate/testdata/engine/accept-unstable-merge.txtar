@@ -52,12 +52,14 @@ type UnstableNewRequest struct{Extra UnstableExtra "json:\"extra\""}
 type UnstableNewResponse struct{}
 type UnstableWatchRequest struct{Path string "json:\"path\""}
 type UnstableWatchResponse struct{}
+func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*AgentSideConnection).UnstableWatch(ctx context.Context, params UnstableWatchRequest) (UnstableWatchResponse, error)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64

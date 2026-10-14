@@ -57,11 +57,13 @@ type State struct{EndTurn *StateEnd "json:\"-\""; Other *StateOther "json:\"-\""
 type StateEnd struct{StopReason string "json:\"stopReason\""}
 type StateNone struct{StopReason json.RawMessage "json:\"stopReason,omitempty\""}
 type StateOther struct{StopReason string "json:\"stopReason\""; Extra map[string]json.RawMessage "json:\"-\""}
+func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64

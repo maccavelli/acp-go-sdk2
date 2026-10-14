@@ -31,11 +31,13 @@ type Root struct{Leaves []Leaf "json:\"leaves\""; U U "json:\"u\""}
 type U struct{Leaf *ULeaf "json:\"-\""; None *UNone "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
 type ULeaf struct{Leaf Leaf "json:\"leaf\""; Type string "json:\"type\""}
 type UNone struct{Type string "json:\"type\""}
+func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64

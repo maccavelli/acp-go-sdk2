@@ -44,6 +44,7 @@ type Note struct{Note string "json:\"note,omitempty\""}
 type Pick struct{Loose *Note "json:\"-\""; Keyed *Keyed "json:\"-\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
@@ -52,6 +53,7 @@ func (Batch).MarshalJSON() ([]byte, error)
 func (*Batch).UnmarshalJSON(b []byte) error
 func (*Batch).Validate() error
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64

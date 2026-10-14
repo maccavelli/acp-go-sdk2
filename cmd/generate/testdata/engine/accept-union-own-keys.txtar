@@ -31,11 +31,13 @@ type OptA struct{Id string "json:\"id\""; Name string "json:\"name\""; Type stri
 type OptB struct{Id string "json:\"id\""; Name string "json:\"name\""; Type string "json:\"type\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64

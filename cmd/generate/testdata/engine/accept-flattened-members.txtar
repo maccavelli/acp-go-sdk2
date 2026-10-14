@@ -35,6 +35,7 @@ const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type RequestScope struct{RequestId int64 "json:\"requestId\""}
 type SessionScope struct{SessionId string "json:\"sessionId\""; ToolCallId *string "json:\"toolCallId,omitempty\""}
+func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
@@ -48,6 +49,7 @@ func (*AskForm).Validate() error
 func (AskOther).MarshalJSON() ([]byte, error)
 func (*AskOther).UnmarshalJSON(b []byte) error
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64

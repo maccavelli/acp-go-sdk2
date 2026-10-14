@@ -134,6 +134,11 @@ var ErrTerminalAuthMethod = errors.New("acp: a terminal auth method is not authe
 // (0019-MADR-remediate-debugging-pass-findings.md, decision 3).
 var ErrPeerDisconnected = errors.New("acp: peer disconnected")
 
+// ErrConnectionClosed is the cause of the error a call or a send returns once
+// Close has ended its connection, read with errors.Is
+// (0019-MADR-remediate-debugging-pass-findings.md, decision 4).
+var ErrConnectionClosed = errors.New("acp: connection closed")
+
 // CapabilityError reports a method, property or variant that the capabilities
 // negotiated by initialize do not allow. Method is the wire method;
 // Capability is the dotted capability path; Field is the JSON key, with an

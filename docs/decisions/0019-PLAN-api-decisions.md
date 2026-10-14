@@ -263,3 +263,69 @@ Gates, through the Python runner: regenerating changes no generated file; `make 
 markdownlint` exit 0; the identifier scan finds nothing; the API listing against `v0.17.1`, 2411 and 2413 lines, adds exactly
 `method (*RequestError) Unwrap () error` and `var ErrPeerDisconnected`, as expected for this step. Windows: `go test -count=1
 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+
+### Step 3, writer, `Close` and the end of a connection, 2026-10-13
+
+What was built:
+
+* `connection.go`: `writeMu` is replaced by a writer goroutine, started by `start`, that takes each message from an unbuffered
+  channel and writes it, and stops when the connection's context ends. `sendMessage` takes a context: it returns `endError` at once
+  when the connection has ended; otherwise it hands the message to the writer, or returns when its context or the connection ends;
+  then it waits for the write, or returns when its context ends. Answers to received messages are sent under
+  `context.Background()`, so they wait only for the writer or the connection's end. `sendRequest` and `SendRequestNoResult` whose
+  send ended on their context send `$/cancel_request` for the id, since the message may have been written, and return `toReqErr`
+  of the error, which keeps its cause and its code; `SendNotification` returns the same.
+* `Close() error` on `Connection`: once, it marks the connection closed locally, ends its context with `ErrConnectionClosed`, and
+  closes the reader and the writer when they implement `io.Closer`, one pointer passed as both closed once, returning their errors
+  joined; a later call returns that result. Its body is `closeWith(cause)`, which `OverflowCloseConnection` calls with the overflow
+  as the cause, before `shutdownReceive`, so the context's cause stays the overflow, which the existing overflow tests pin, and the
+  connection is marked closed before its context ends, so every waiter reads the same cause.
+* `endError`: `ErrConnectionClosed` when this side closed the connection, wrapping the overflow when that closed it; otherwise
+  `ErrPeerDisconnected`, wrapping how the peer ended it. The errors of a call waiting for a response, or for the notifications
+  before it, are made when they are returned, from `endError`, and their message is "connection ended …" in place of "peer
+  disconnected …"; their code is unchanged.
+* `errors.go`: `ErrConnectionClosed`. The documentation of `Done` and of `OverflowCloseConnection` says what ends the connection;
+  the latter no longer claims the behaviour of every earlier release, which closing the transport changes.
+* Generator, `cmd/generate/internal/emit/dispatch.go`: each side connection gains `Close() error`, forwarding to its connection, and
+  the documentation of its `Done` follows `Connection.Done`. `cmd/generate/main_test.go`'s stub gains `Close`. Regenerated:
+  `agent_gen.go` and `client_gen.go`, and the 60 engine goldens of the deviation below.
+
+Tests added, `connection_close_test.go`: `TestSendHonoursContextWhileWriteBlocks` (a peer that does not read: a send whose write
+has begun and one behind it each return within 1 s of a 200 ms deadline, `-32603` wrapping `context.DeadlineExceeded`; once the peer
+reads, a third send succeeds and the peer reads the first message and the third, not the second); `TestCloseEndsConnection`
+(`Done` closes, a pending call returns `-32603` wrapping `ErrConnectionClosed`, a send after it fails the same way and writes
+nothing, the writer is closed and its reader sees the end, a peer's write meets a closed reader, a second `Close` returns nil);
+`TestSendAfterPeerEndFails` (a notification and a request after the peer ended each fail `-32603` wrapping `ErrPeerDisconnected`,
+not `ErrConnectionClosed`, and nothing is written); `TestOverflowCloseClosesTransport` (after an overflow the reader is closed, and
+a send fails `-32603` wrapping `ErrConnectionClosed` and the overflow). `go test -race -count=20` of the four: ok. The full root and
+generator suites under `-race`: ok, the generator's after the deviation below. No existing test sends after `Done`; the deviation
+"Design", B16 and B17, provides for did not arise.
+
+Seen to fail, each in its own scratch copy (3 of 3):
+
+* `b16-write-under-lock` (the write runs under a mutex on the sender's goroutine, as before): `TestSendHonoursContextWhileWriteBlocks`,
+  "a send whose write blocks did not return within 1s of its 200ms deadline".
+* `b17-no-after-done-check` (no check before the hand-off, no end case at it, and a writer that outlives the connection):
+  `TestSendAfterPeerEndFails`, "a notification after the peer ended: <nil>, want a *RequestError with code -32603" and "2 writes
+  after the peer ended, want 0".
+* `b17-transport-left-open` (`Close` closes nothing): `TestCloseEndsConnection`, "Close left the writer open";
+  `TestOverflowCloseClosesTransport`, "the reader's close did not happen".
+
+The phase 2 probes, re-run on the step 3 tree: `TestP2_B16_WriteIgnoresCtx` and `TestP2_B17_SendAfterDone` now pass, the latter with
+0 bytes written, as does B19's; the others fail, their steps being later, but B21's, which is text only.
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0, after `gofmt` aligned the
+connection's struct fields, which the first run reported; the new test file passes the same check; `GOEXPERIMENT=nojsonv2 go test
+./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan
+finds nothing; the API listing against `v0.17.1`, 2411 and 2417 lines, adds exactly the step 2 pair and `method (*Connection) Close
+() error`, `method (*AgentSideConnection) Close () error`, `method (*ClientSideConnection) Close () error` and `var
+ErrConnectionClosed`, as expected for this step. Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the root and in
+`cmd/generate`.
+
+Deviation, 2026-10-13: the generated `Close` of `AgentSideConnection` and `ClientSideConnection` changes the `want.api` golden of
+every engine case, 60 files under `cmd/generate/testdata/`, which "Design", B16 and B17, does not name. Found by the generator
+suite: `TestEngineCases` failed in each case with "API differs from want.api". Measured in a scratch copy before choosing:
+`go test -run TestEngineCases . -update` adds `func (*AgentSideConnection).Close() error` and `func
+(*ClientSideConnection).Close() error` to each golden and changes no other line and no file outside `testdata`, and the generator
+suite then passes. Decision (owner): accept the goldens; the 60 files join step 3's scope. The MADR is unchanged: no decision and no
+asserted fact moves.

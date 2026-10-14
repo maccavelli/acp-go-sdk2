@@ -25,12 +25,14 @@ const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 type WriteRequest struct{Path string "json:\"path\""}
 type WriteResponse = json.RawMessage
+func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*AgentSideConnection).Write(ctx context.Context, params WriteRequest) error
 func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64

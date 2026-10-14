@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -292,11 +293,18 @@ type Connection struct {
 	r       io.Reader
 	handler MethodHandler
 
-	mu       sync.Mutex
-	writeMu  sync.Mutex
-	nextID   atomic.Uint64
-	pending  map[string]*pendingResponse
-	inflight map[string]*inflightRequest
+	mu sync.Mutex
+	// writes hands each message to the writer goroutine, which writes them one
+	// at a time in the order it receives them (0019-PLAN-api-decisions.md, B16).
+	writes chan writeRequest
+	// closeOnce guards Close, closeErr is its result, and closedLocally
+	// records that Close ended the connection (B17).
+	closeOnce     sync.Once
+	closeErr      error
+	closedLocally atomic.Bool
+	nextID        atomic.Uint64
+	pending       map[string]*pendingResponse
+	inflight      map[string]*inflightRequest
 	// inflightReceipts holds the receipt of every received request whose
 	// handler is running, a null id's included (0019-PLAN-behaviour-fixes.md,
 	// B7).
@@ -396,8 +404,8 @@ type NotificationOverflowPolicy int
 
 const (
 	// OverflowCloseConnection closes the connection when a notification cannot
-	// be queued, and in-flight requests fail. This is the default, and the
-	// behaviour of every release before this option existed.
+	// be queued, as Close does, its transport included, and in-flight requests
+	// fail. This is the default.
 	OverflowCloseConnection NotificationOverflowPolicy = iota
 
 	// OverflowDropNewest discards the notification that could not be queued and
@@ -515,6 +523,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		w:                   peerInput,
 		r:                   peerOutput,
 		handler:             handler,
+		writes:              make(chan writeRequest),
 		pending:             make(map[string]*pendingResponse),
 		inflight:            make(map[string]*inflightRequest),
 		inflightReceipts:    make(map[uint64]struct{}),
@@ -547,9 +556,91 @@ func (c *Connection) start() {
 		c.notifyCond.Broadcast()
 		c.notifyMu.Unlock()
 	}()
+	go c.writeLoop()
 	go c.sendCancelRequests()
 	go c.receive()
 	go c.processNotifications()
+}
+
+// writeRequest is one message for the writer goroutine and where it reports
+// the write's result.
+type writeRequest struct {
+	b    []byte
+	done chan error
+}
+
+// writeLoop writes each message sendMessage hands it, until the connection
+// ends. A write that has begun runs to its end, so its sender may already
+// have returned on its context (0019-PLAN-api-decisions.md, B16).
+func (c *Connection) writeLoop() {
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case req := <-c.writes:
+			_, err := c.w.Write(req.b)
+			req.done <- err
+		}
+	}
+}
+
+// endError is the error a send or a call meets once the connection has
+// ended: ErrConnectionClosed when this side closed it, wrapping the overflow
+// that made it close; otherwise ErrPeerDisconnected, wrapping how the peer
+// ended it (0019-PLAN-api-decisions.md, B17).
+func (c *Connection) endError() error {
+	if c.closedLocally.Load() {
+		if cause := context.Cause(c.ctx); cause != nil && !errors.Is(cause, ErrConnectionClosed) {
+			return fmt.Errorf("%w: %w", ErrConnectionClosed, cause)
+		}
+		return ErrConnectionClosed
+	}
+	if cause := context.Cause(c.ctx); cause != nil && !errors.Is(cause, ErrPeerDisconnected) {
+		return fmt.Errorf("%w: %w", ErrPeerDisconnected, cause)
+	}
+	return ErrPeerDisconnected
+}
+
+// Close ends the connection: its context ends with ErrConnectionClosed, so
+// Done is closed, every call waiting for a response returns, and every later
+// send fails without writing; and its reader and writer are closed when they
+// implement io.Closer, which also ends a read in progress. It returns their
+// errors joined, and nil when it was called before
+// (0019-PLAN-api-decisions.md, B17).
+func (c *Connection) Close() error {
+	return c.closeWith(ErrConnectionClosed)
+}
+
+// closeWith is Close, ending the context with cause. It marks the connection
+// closed locally before the context ends, so every waiter reads endError
+// after the mark.
+func (c *Connection) closeWith(cause error) error {
+	c.closeOnce.Do(func() {
+		c.closedLocally.Store(true)
+		c.cancel(cause)
+		var closers []io.Closer
+		for _, x := range []any{c.r, c.w} {
+			cl, ok := x.(io.Closer)
+			if !ok || slices.ContainsFunc(closers, func(have io.Closer) bool { return sameValue(have, cl) }) {
+				continue
+			}
+			closers = append(closers, cl)
+		}
+		var errs []error
+		for _, cl := range closers {
+			errs = append(errs, cl.Close())
+		}
+		c.closeErr = errors.Join(errs...)
+	})
+	return c.closeErr
+}
+
+// sameValue reports whether a and b are the same pointer, such as one
+// *net.TCPConn passed as both the reader and the writer. Only pointers are
+// compared, which never panics.
+func sameValue(a, b any) bool {
+	ta := reflect.TypeOf(a)
+	return ta != nil && ta == reflect.TypeOf(b) && ta.Kind() == reflect.Pointer && a == b
 }
 
 // DroppedNotifications reports how many inbound notifications this connection
@@ -1042,6 +1133,11 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 			return true
 		}
 		c.loggerOrDefault().Error("failed to queue notification; closing connection", "err", errNotificationQueueOverflow, "capacity", cap(c.notificationQueue), "queued", len(c.notificationQueue))
+		// The policy closes the connection, its transport included
+		// (0019-PLAN-api-decisions.md, B17).
+		if err := c.closeWith(errNotificationQueueOverflow); err != nil {
+			c.loggerOrDefault().Debug("closing the transport after a notification overflow", "err", err)
+		}
 		c.shutdownReceive(errNotificationQueueOverflow)
 		return false
 	}
@@ -1140,7 +1236,7 @@ func (c *Connection) answer(id json.RawMessage, e *RequestError) {
 	if id == nil {
 		id = json.RawMessage(jsonNull)
 	}
-	if err := c.sendMessage(anyMessage{ID: &id, Error: e}); err != nil {
+	if err := c.sendMessage(context.Background(), anyMessage{ID: &id, Error: e}); err != nil {
 		c.loggerOrDefault().Debug("failed to answer an invalid message", "err", err)
 	}
 }
@@ -1267,7 +1363,7 @@ func (c *Connection) handleInbound(ctx context.Context, req *anyMessage) {
 	if c.handler == nil {
 		if req.ID != nil {
 			res.Error = NewMethodNotFound(req.Method)
-			if err := c.sendMessage(res); err != nil {
+			if err := c.sendMessage(context.Background(), res); err != nil {
 				return
 			}
 		}
@@ -1297,23 +1393,41 @@ func (c *Connection) handleInbound(ctx context.Context, req *anyMessage) {
 			res.Result = b
 		}
 	}
-	if err := c.sendMessage(res); err != nil {
+	if err := c.sendMessage(context.Background(), res); err != nil {
 		return
 	}
 }
 
-func (c *Connection) sendMessage(msg anyMessage) error {
+// sendMessage hands msg to the writer goroutine and waits for its write. Once
+// the connection has ended it returns endError and writes nothing; when ctx
+// ends first it returns the context's cause, and a write that has begun runs
+// to its end, so the message may still reach the peer
+// (0019-PLAN-api-decisions.md, B16 and B17).
+func (c *Connection) sendMessage(ctx context.Context, msg anyMessage) error {
+	select {
+	case <-c.ctx.Done():
+		return c.endError()
+	default:
+	}
 	msg.JSONRPC = jsonRPCVersion
 	b, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	b = append(b, '\n')
-
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
-	_, err = c.w.Write(b)
-	return err
+	req := writeRequest{b: append(b, '\n'), done: make(chan error, 1)}
+	select {
+	case c.writes <- req:
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case <-c.ctx.Done():
+		return c.endError()
+	}
+	select {
+	case err := <-req.done:
+		return err
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
 }
 
 // SendRequest sends a JSON-RPC request and returns a typed result.
@@ -1350,9 +1464,12 @@ func sendRequest[T any](c *Connection, ctx context.Context, method string, param
 	c.pending[idKey] = pr
 	c.mu.Unlock()
 
-	if err := c.sendMessage(msg); err != nil {
+	if err := c.sendMessage(ctx, msg); err != nil {
 		c.cleanupPending(idKey)
-		return result, NewInternalError(map[string]any{jsonErrorField: err.Error()}).withCause(err)
+		if ctx.Err() != nil {
+			c.sendCancelRequest(idKey)
+		}
+		return result, toReqErr(err)
 	}
 
 	resp, err := c.waitForResponse(ctx, pr, idKey)
@@ -1477,7 +1594,9 @@ func (c *Connection) sendCancelRequest(idKey string) {
 }
 
 func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, idKey string) (responseEnvelope, error) {
-	peerDisconnectedErr := NewInternalError(map[string]any{jsonErrorField: "peer disconnected before response"}).withCause(ErrPeerDisconnected)
+	ended := func() *RequestError {
+		return NewInternalError(map[string]any{jsonErrorField: "connection ended before response"}).withCause(c.endError())
+	}
 
 	select {
 	case resp := <-pr.ch:
@@ -1488,7 +1607,7 @@ func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, i
 		select {
 		case <-c.Done():
 			c.cleanupPending(idKey)
-			return responseEnvelope{}, peerDisconnectedErr
+			return responseEnvelope{}, ended()
 		default:
 		}
 
@@ -1505,7 +1624,7 @@ func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, i
 		return responseEnvelope{}, NewInternalError(map[string]any{jsonErrorField: "request context ended without cause"})
 	case <-c.Done():
 		c.cleanupPending(idKey)
-		return responseEnvelope{}, peerDisconnectedErr
+		return responseEnvelope{}, ended()
 	}
 }
 
@@ -1514,7 +1633,9 @@ func (c *Connection) waitNotificationsUpTo(ctx context.Context, target uint64) e
 		return nil
 	}
 
-	peerDisconnectedErr := NewInternalError(map[string]any{jsonErrorField: "peer disconnected while waiting for pre-response notifications"}).withCause(ErrPeerDisconnected)
+	ended := func() *RequestError {
+		return NewInternalError(map[string]any{jsonErrorField: "connection ended while waiting for pre-response notifications"}).withCause(c.endError())
+	}
 	stopWake := make(chan struct{})
 	defer close(stopWake)
 
@@ -1549,14 +1670,14 @@ func (c *Connection) waitNotificationsUpTo(ctx context.Context, target uint64) e
 
 		select {
 		case <-c.Done():
-			return peerDisconnectedErr
+			return ended()
 		default:
 		}
 		select {
 		case <-ctx.Done():
 			select {
 			case <-c.Done():
-				return peerDisconnectedErr
+				return ended()
 			default:
 			}
 			cause := context.Cause(ctx)
@@ -1636,9 +1757,12 @@ func (c *Connection) SendRequestNoResult(ctx context.Context, method string, par
 	c.pending[idKey] = pr
 	c.mu.Unlock()
 
-	if err := c.sendMessage(msg); err != nil {
+	if err := c.sendMessage(ctx, msg); err != nil {
 		c.cleanupPending(idKey)
-		return NewInternalError(map[string]any{jsonErrorField: err.Error()}).withCause(err)
+		if ctx.Err() != nil {
+			c.sendCancelRequest(idKey)
+		}
+		return toReqErr(err)
 	}
 
 	resp, err := c.waitForResponse(ctx, pr, idKey)
@@ -1669,8 +1793,8 @@ func (c *Connection) SendNotification(ctx context.Context, method string, params
 		return err
 	}
 
-	if err := c.sendMessage(msg); err != nil {
-		return NewInternalError(map[string]any{jsonErrorField: err.Error()}).withCause(err)
+	if err := c.sendMessage(ctx, msg); err != nil {
+		return toReqErr(err)
 	}
 	return nil
 }
@@ -1752,8 +1876,10 @@ func (c *Connection) prepareNotification(method string, params any) (anyMessage,
 	return msg, err
 }
 
-// Done returns a channel that is closed when the underlying reader loop exits
-// (typically when the peer disconnects or the input stream is closed).
+// Done returns a channel that is closed when the connection ends: when the
+// peer disconnects or the input stream is closed, when Close is called, or
+// when OverflowCloseConnection closes it. Once it is closed every send fails
+// without writing.
 func (c *Connection) Done() <-chan struct{} {
 	return c.ctx.Done()
 }

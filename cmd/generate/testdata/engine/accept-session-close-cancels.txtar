@@ -60,6 +60,7 @@ type SessionCloseCapabilities struct{}
 type StopReason string
 const StopReasonCancelled StopReason = "cancelled"
 const StopReasonEndTurn StopReason = "end_turn"
+func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
@@ -69,6 +70,7 @@ func (*CancelNotification).UnmarshalJSON(b []byte) error
 func (*CancelNotification).Validate() error
 func (*CancelRequestNotification).Validate() error
 func (*ClientSideConnection).Cancel(ctx context.Context, params CancelNotification) error
+func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).CloseSession(ctx context.Context, params CloseSessionRequest) (CloseSessionResponse, error)
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}

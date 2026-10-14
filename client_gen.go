@@ -35,9 +35,16 @@ func (c *ClientSideConnection) DroppedNotifications() uint64 {
 	return c.conn.DroppedNotifications()
 }
 
-// Done exposes a channel that closes when the peer disconnects.
+// Done exposes a channel that closes when the connection ends: the peer
+// disconnects, or Close or the overflow policy closes it.
 func (c *ClientSideConnection) Done() <-chan struct{} {
 	return c.conn.Done()
+}
+
+// Close closes the underlying connection; see Connection.Close
+// (0019-PLAN-api-decisions.md, B17).
+func (c *ClientSideConnection) Close() error {
+	return c.conn.Close()
 }
 
 // SetLogger directs connection diagnostics to the provided logger.
