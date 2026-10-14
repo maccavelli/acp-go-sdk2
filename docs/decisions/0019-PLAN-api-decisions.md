@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-13
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
@@ -221,4 +221,45 @@ generated accessors only in the same files).
 
 ## Execution record
 
-Nothing executed yet.
+### Step 1, records, 2026-10-13
+
+This PLAN, its `docs/README.md` row, and the MADR's amendment of decision 6, made while planning; `make check-records` and `make
+markdownlint` exit 0, and the identifier scan of the three files finds nothing. The owner committed them as `484f65d` and approved
+execution on 2026-10-13.
+
+### Step 2, error identity, 2026-10-13
+
+What was built:
+
+* `errors.go`: `RequestError` gains the unexported `cause` and the exported `Unwrap() error`, nil-safe, and the unexported
+  `withCause`. Its documentation says which errors carry a cause. `ErrPeerDisconnected` is added. `toReqErr` keeps the error it
+  converts as the cause, for a cancelled context (`-32800`) and for any other error (`-32603`).
+* `connection.go`: the two disconnect errors carry `ErrPeerDisconnected`; `SendNotification`'s ended context carries
+  `context.Cause(ctx)`; the ended contexts of `sendRequest`, `SendRequestNoResult`, `waitForResponse` and `waitNotificationsUpTo`
+  carry theirs through `toReqErr`. Beyond the sites "Design", B19, lists, the three failed writes (in `sendRequest`,
+  `SendRequestNoResult` and `SendNotification`) carry the write's error, which the same rule, a local failure keeps its cause, covers
+  and the type's documentation names. A result that fails to decode and a result that fails validation are not failures of the
+  connection, and carry none. Every code is unchanged.
+
+Tests added, `errors_test.go`: `TestLocalErrorsUnwrap` (a cancelled request `-32800` and a cancelled notification `-32603` wrap
+`context.Canceled`, a request past its deadline `-32603` wraps `context.DeadlineExceeded`, a request whose peer disconnected `-32603`
+wraps `ErrPeerDisconnected`) and `TestPeerErrorsWrapNothing` (a peer's `-32800` answer unwraps to nothing). `go test -race -count=10`
+of the two: ok; the whole root suite under `-race`: ok, the tests that pin the codes included.
+
+Seen to fail, each in its own scratch copy (5 of 5):
+
+* `b19-no-disconnect-cause`: "a request whose peer disconnected: … does not wrap acp: peer disconnected".
+* `b19-no-cancel-cause` (`toReqErr` without the cause): "a cancelled request: … does not wrap context canceled".
+* `b19-no-notification-cause`: "a cancelled notification: … does not wrap context canceled".
+* `b19-unwrap-nil` (`Unwrap` returns nil): the cancelled request, the cancelled notification and the deadline each "does not wrap".
+* `b19-peer-error-caused` (a decoded answer given a cause): `TestPeerErrorsWrapNothing`, "the peer's -32800 unwraps to context
+  canceled".
+
+The phase 2 probes, re-run on the step 2 tree: `TestP2_B19_ErrorsLoseIdentity` now passes; the others fail, their steps being later,
+but B21's, which is text only.
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
+`GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; the API listing against `v0.17.1`, 2411 and 2413 lines, adds exactly
+`method (*RequestError) Unwrap () error` and `var ErrPeerDisconnected`, as expected for this step. Windows: `go test -count=1
+-shuffle=on ./...` exit 0 at the root and in `cmd/generate`.

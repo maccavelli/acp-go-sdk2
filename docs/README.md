@@ -53,7 +53,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0018 | REPORT | [Release notes for v0.17.1, against v0.17.0](reports/0018-REPORT-release-notes-v0-17-1.md) | observed |
 | 0019 | MADR | [Remediate the defects, gaps and idiom drift the 2026-10-13 debugging pass found](decisions/0019-MADR-remediate-debugging-pass-findings.md) | accepted |
 | 0019 | PLAN | [Implement phase 1 of 0019: the behaviour fixes, with no exported change](decisions/0019-PLAN-behaviour-fixes.md) | complete |
-| 0019 | PLAN | [Implement phase 2 of 0019: the API and behaviour decisions, released with phase 1 as v0.18.0](decisions/0019-PLAN-api-decisions.md) | proposed |
+| 0019 | PLAN | [Implement phase 2 of 0019: the API and behaviour decisions, released with phase 1 as v0.18.0](decisions/0019-PLAN-api-decisions.md) | in-progress |
 
 ## I want to…
 

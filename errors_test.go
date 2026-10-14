@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"testing"
+	"time"
 )
 
 func TestToReqErr_ContextCanceledMapsToRequestCancelled(t *testing.T) {
@@ -118,5 +119,79 @@ func TestToReqErrTypedNil(t *testing.T) {
 	result, rerr := asc.handle(t.Context(), AgentMethodSessionNew, json.RawMessage(`{"cwd":`+string(cwd)+`,"mcpServers":[]}`))
 	if rerr == nil || rerr.Code != -32603 {
 		t.Fatalf("a handler's typed-nil *RequestError answered result %v, error %v; want -32603", result, rerr)
+	}
+}
+
+// TestLocalErrorsUnwrap requires an error the connection makes for a local
+// failure to keep that failure as its cause, with its code unchanged: a
+// cancelled context, a deadline, a disconnect while waiting
+// (0019-PLAN-api-decisions.md, B19).
+func TestLocalErrorsUnwrap(t *testing.T) {
+	t.Parallel()
+	c := NewConnection(nil, io.Discard, idleReader(t))
+
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err := SendRequest[json.RawMessage](c, cancelled, "_test/r", map[string]any{})
+	checkLocal(t, "a cancelled request", err, context.Canceled, -32800)
+	err = c.SendNotification(cancelled, "_test/n", map[string]any{})
+	checkLocal(t, "a cancelled notification", err, context.Canceled, -32603)
+
+	expired, stop := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer stop()
+	_, err = SendRequest[json.RawMessage](c, expired, "_test/r", map[string]any{})
+	checkLocal(t, "a request past its deadline", err, context.DeadlineExceeded, -32603)
+
+	r, w := io.Pipe()
+	d := NewConnection(nil, io.Discard, r)
+	done := make(chan error, 1)
+	go func() {
+		_, err := SendRequest[json.RawMessage](d, t.Context(), "_test/r", map[string]any{})
+		done <- err
+	}()
+	waitForPendingRequests(t, d, 1, 2*time.Second)
+	_ = w.Close()
+	checkLocal(t, "a request whose peer disconnected", within(t, done, "the disconnect"), ErrPeerDisconnected, -32603)
+}
+
+// checkLocal requires err to be a *RequestError with code that wraps cause.
+func checkLocal(t *testing.T, what string, err, cause error, code int) {
+	t.Helper()
+	re, ok := errors.AsType[*RequestError](err)
+	if !ok || re.Code != code {
+		t.Errorf("%s: %v, want a *RequestError with code %d", what, err, code)
+	}
+	if !errors.Is(err, cause) {
+		t.Errorf("%s: %v does not wrap %v", what, err, cause)
+	}
+}
+
+// TestPeerErrorsWrapNothing requires an error a peer answered to wrap no
+// local cause, even with the code a local cancel has
+// (0019-PLAN-api-decisions.md, B19).
+func TestPeerErrorsWrapNothing(t *testing.T) {
+	t.Parallel()
+	var c *Connection
+	p := rawWire(t, func(w io.Writer, r io.Reader) { c = NewConnection(nil, w, r) })
+	done := make(chan error, 1)
+	go func() {
+		_, err := SendRequest[json.RawMessage](c, t.Context(), "_test/r", map[string]any{})
+		done <- err
+	}()
+	line := within(t, p.lines, "the request")
+	var req struct {
+		ID json.RawMessage `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(line), &req); err != nil {
+		t.Fatal(err)
+	}
+	p.send(`{"jsonrpc":"2.0","id":` + string(req.ID) + `,"error":{"code":-32800,"message":"Request cancelled"}}`)
+	err := within(t, done, "the answer")
+	re, ok := errors.AsType[*RequestError](err)
+	if !ok || re.Code != -32800 {
+		t.Fatalf("the peer's answer: %v, want its -32800", err)
+	}
+	if errors.Unwrap(err) != nil || errors.Is(err, context.Canceled) {
+		t.Errorf("the peer's -32800 unwraps to %v", errors.Unwrap(err))
 	}
 }

@@ -8,10 +8,33 @@ import (
 )
 
 // RequestError represents a JSON-RPC error response.
+//
+// An error the connection makes itself for a local failure keeps that
+// failure as its cause, which Unwrap returns: the context.Canceled or
+// context.DeadlineExceeded of a context that ended, ErrPeerDisconnected, or
+// the error that failed a write. An error a peer answered has none
+// (0019-MADR-remediate-debugging-pass-findings.md, decision 3).
 type RequestError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Data    any    `json:"data,omitempty"`
+
+	cause error
+}
+
+// Unwrap returns the local failure e stands for, or nil for an error a peer
+// answered.
+func (e *RequestError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.cause
+}
+
+// withCause sets e's cause and returns e.
+func (e *RequestError) withCause(cause error) *RequestError {
+	e.cause = cause
+	return e
 }
 
 func (e *RequestError) Error() string {
@@ -105,6 +128,11 @@ var ErrNotInitialized = errors.New("acp: initialize has not completed")
 // authenticated, and the client must not send it
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
 var ErrTerminalAuthMethod = errors.New("acp: a terminal auth method is not authenticated")
+
+// ErrPeerDisconnected is the cause of the error a call returns when its
+// connection ended because the peer closed it, read with errors.Is
+// (0019-MADR-remediate-debugging-pass-findings.md, decision 3).
+var ErrPeerDisconnected = errors.New("acp: peer disconnected")
 
 // CapabilityError reports a method, property or variant that the capabilities
 // negotiated by initialize do not allow. Method is the wire method;
@@ -205,7 +233,7 @@ func toReqErr(err error) *RequestError {
 		return re
 	}
 	if errors.Is(err, context.Canceled) {
-		return NewRequestCancelled(map[string]any{jsonErrorField: err.Error()})
+		return NewRequestCancelled(map[string]any{jsonErrorField: err.Error()}).withCause(err)
 	}
-	return NewInternalError(map[string]any{jsonErrorField: err.Error()})
+	return NewInternalError(map[string]any{jsonErrorField: err.Error()}).withCause(err)
 }

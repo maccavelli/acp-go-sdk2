@@ -1352,7 +1352,7 @@ func sendRequest[T any](c *Connection, ctx context.Context, method string, param
 
 	if err := c.sendMessage(msg); err != nil {
 		c.cleanupPending(idKey)
-		return result, NewInternalError(map[string]any{jsonErrorField: err.Error()})
+		return result, NewInternalError(map[string]any{jsonErrorField: err.Error()}).withCause(err)
 	}
 
 	resp, err := c.waitForResponse(ctx, pr, idKey)
@@ -1477,7 +1477,7 @@ func (c *Connection) sendCancelRequest(idKey string) {
 }
 
 func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, idKey string) (responseEnvelope, error) {
-	peerDisconnectedErr := NewInternalError(map[string]any{jsonErrorField: "peer disconnected before response"})
+	peerDisconnectedErr := NewInternalError(map[string]any{jsonErrorField: "peer disconnected before response"}).withCause(ErrPeerDisconnected)
 
 	select {
 	case resp := <-pr.ch:
@@ -1514,7 +1514,7 @@ func (c *Connection) waitNotificationsUpTo(ctx context.Context, target uint64) e
 		return nil
 	}
 
-	peerDisconnectedErr := NewInternalError(map[string]any{jsonErrorField: "peer disconnected while waiting for pre-response notifications"})
+	peerDisconnectedErr := NewInternalError(map[string]any{jsonErrorField: "peer disconnected while waiting for pre-response notifications"}).withCause(ErrPeerDisconnected)
 	stopWake := make(chan struct{})
 	defer close(stopWake)
 
@@ -1638,7 +1638,7 @@ func (c *Connection) SendRequestNoResult(ctx context.Context, method string, par
 
 	if err := c.sendMessage(msg); err != nil {
 		c.cleanupPending(idKey)
-		return NewInternalError(map[string]any{jsonErrorField: err.Error()})
+		return NewInternalError(map[string]any{jsonErrorField: err.Error()}).withCause(err)
 	}
 
 	resp, err := c.waitForResponse(ctx, pr, idKey)
@@ -1660,7 +1660,7 @@ func (c *Connection) SendRequestNoResult(ctx context.Context, method string, par
 func (c *Connection) SendNotification(ctx context.Context, method string, params any) error {
 	select {
 	case <-ctx.Done():
-		return NewInternalError(map[string]any{jsonErrorField: ctx.Err().Error()})
+		return NewInternalError(map[string]any{jsonErrorField: ctx.Err().Error()}).withCause(context.Cause(ctx))
 	default:
 	}
 
@@ -1670,7 +1670,7 @@ func (c *Connection) SendNotification(ctx context.Context, method string, params
 	}
 
 	if err := c.sendMessage(msg); err != nil {
-		return NewInternalError(map[string]any{jsonErrorField: err.Error()})
+		return NewInternalError(map[string]any{jsonErrorField: err.Error()}).withCause(err)
 	}
 	return nil
 }
