@@ -35,9 +35,7 @@ func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64
 func (*ClientSideConnection).SetLogger(l *slog.Logger)
-func (Inner).MarshalJSON() ([]byte, error)
 func (*Inner).UnmarshalJSON(b []byte) error
-func (Opts).MarshalJSON() ([]byte, error)
 func (*Opts).UnmarshalJSON(b []byte) error
 -- behaviour_test.go --
 package acp

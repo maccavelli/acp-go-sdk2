@@ -31,14 +31,12 @@ func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*CancelRequestNotification).Validate() error
-func (Caps).MarshalJSON() ([]byte, error)
 func (*Caps).UnmarshalJSON(b []byte) error
 func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64
 func (*ClientSideConnection).SetLogger(l *slog.Logger)
-func (Fs).MarshalJSON() ([]byte, error)
 func (*Fs).UnmarshalJSON(b []byte) error
 -- behaviour_test.go --
 package acp

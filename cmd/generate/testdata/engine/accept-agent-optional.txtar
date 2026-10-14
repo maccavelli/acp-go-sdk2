@@ -29,7 +29,6 @@ func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Read
 func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
-func (AgentCapabilities).MarshalJSON() ([]byte, error)
 func (*AgentCapabilities).UnmarshalJSON(b []byte) error
 func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection

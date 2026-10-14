@@ -242,8 +242,9 @@ func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 	}
 }
 
-// emitObjectCodec synthesizes MarshalJSON for structs with fields that carry
-// schema defaults or are required slices or maps, and UnmarshalJSON for
+// emitObjectCodec synthesizes MarshalJSON for structs with fields whose
+// schema defaults it injects or that are required slices or maps, a
+// catch-all's Extra, or flattened members, and UnmarshalJSON for
 // structs with required keys, defaults, lenient fields, optional raw fields,
 // flattened members, or a catch-all's Extra.
 func emitObjectCodec(f *goFile, name string, fields []*model.Field, members []*model.Member, keepExtra bool, exempt string) {
@@ -267,12 +268,22 @@ func emitObjectCodec(f *goFile, name string, fields []*model.Field, members []*m
 		}
 	}
 	slices.Sort(required)
-	if len(defaults) > 0 || len(fills) > 0 || keepExtra || len(members) > 0 {
+	// A MarshalJSON that would only copy into an alias and encode it is not
+	// emitted (0019-PLAN-api-decisions.md, I8).
+	if slices.ContainsFunc(defaults, injectsDefault) || len(fills) > 0 || keepExtra || len(members) > 0 {
 		emitObjectMarshal(f, name, defaults, fills, members, keepExtra)
 	}
 	if len(defaults) > 0 || keepExtra || len(required) > 0 || len(lenient) > 0 || len(absent) > 0 || len(members) > 0 {
 		emitObjectUnmarshal(f, name, fields, defaults, lenient, absent, members, required, keepExtra)
 	}
+}
+
+// injectsDefault reports whether MarshalJSON writes fld's default into a nil
+// value: a nilable array or object default. A typed object default, not
+// nilable, is not injected on encode.
+func injectsDefault(fld *model.Field) bool {
+	dp := fld.Default
+	return (dp.Kind == model.DefaultArray || dp.Kind == model.DefaultObject) && dp.Nilable
 }
 
 // emitObjectMarshal emits MarshalJSON: it fills nil slices and maps with
@@ -290,11 +301,9 @@ func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, m
 		assign(exprs(id("a")), call(id("Alias"), id("v"))),
 	}
 	for _, fld := range defaults {
-		// Typed object defaults (non-nilable) are not injected on encode.
-		dp := fld.Default
-		if (dp.Kind == model.DefaultArray || dp.Kind == model.DefaultObject) && dp.Nilable {
+		if injectsDefault(fld) {
 			body = append(body, ifStmt(nil, binary(dot("a", fld.Name), token.EQL, nilExpr()),
-				exprStmt(unmarshal(bytesOf(dp.JSON), addr(dot("a", fld.Name)))),
+				exprStmt(unmarshal(bytesOf(fld.Default.JSON), addr(dot("a", fld.Name)))),
 			))
 		}
 	}

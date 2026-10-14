@@ -70,7 +70,6 @@ func (*ClientSideConnection).DroppedNotifications() uint64
 func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (Group).MarshalJSON() ([]byte, error)
 func (*Group).UnmarshalJSON(b []byte) error
-func (Item).MarshalJSON() ([]byte, error)
 func (*Item).UnmarshalJSON(b []byte) error
 func (Mode).MarshalJSON() ([]byte, error)
 func (*Mode).UnmarshalJSON(b []byte) error

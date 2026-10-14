@@ -541,3 +541,37 @@ context's error win. Decision (owner): `sendMessage` takes a write that has fini
 `TestValueGates` waits for a notification's send, which returns once written, before it cancels, while a request is cancelled
 after its bytes are seen, as before. `connection.go` and `gates_test.go`'s `TestValueGates` join step 7's scope. The MADR is
 unchanged: decision 4's behaviour is as it states.
+
+### Step 8, identity `MarshalJSON` methods not emitted, 2026-10-14
+
+What was built:
+
+* Generator, `cmd/generate/internal/emit/types.go`: `emitObjectCodec` calls `emitObjectMarshal` only when the method adds a
+  statement: a default it injects, a fill, an `Extra`, or members. `injectsDefault`, a nilable array or object default, is the test
+  `emitObjectMarshal`'s loop already applied, now named and shared. Regenerated: `types_gen.go` loses the seven methods, 49 lines,
+  at the lines "Facts" names (`AgentCapabilities`, `AuthCapabilities`, `ClientCapabilities`, `FileSystemCapabilities`,
+  `InitializeRequest`, `McpCapabilities`, `PromptCapabilities`), and changes nothing else; none of the seven had an
+  `UnmarshalJSON` to lose. No identity `MarshalJSON` remains.
+
+The byte proof, a scratch test run in two scratch copies, `c28159c` and the step 8 tree: `json.Marshal` of every generated schema
+type's zero value and of every instance the conformance builder makes, decoded, each through a pointer and through a value, 1528
+encodings, 28 of them of the seven types, 7 of those zero values. Before and after are identical byte for byte; no instance failed
+to decode. The comparison was seen to fail: with the guard also dropping a type with fills, regenerated in the after copy, 23
+encodings differed, `{"availableCommands":[]}` becoming `{"availableCommands":null}` and the like. `TestConformanceRoundTrip`
+passes, and no JSON golden changed.
+
+The phase 2 probes are unchanged from step 7: none concerns I8.
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
+`GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; the API listing against `v0.17.1`, 2411 and 2413 lines, removes exactly
+the seven `MarshalJSON` methods and adds exactly the nine entries of steps 2 to 5, the difference "Verification" expects for the
+phase. The generator module's suite under `-race`: ok. Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the root and in
+`cmd/generate`.
+
+Deviation, 2026-10-14: the generator change also removes identity `MarshalJSON` methods from six engine cases' `want.api`
+goldens, which "Design", I8, does not name: `TestEngineCases` failed with "API differs from want.api" in
+`accept-agent-optional`, `accept-allof-property`, `accept-default-object`, `accept-default-on-error`, `accept-default-scalar` and
+`accept-folded-keys`. Measured in a scratch copy before choosing: `go test -run TestEngineCases . -update` removes 8 lines, each a
+`func (T).MarshalJSON() ([]byte, error)`, and changes nothing else, and the generator suite, behaviour tests included, then
+passes. Decision (owner): accept the goldens; the six files join step 8's scope. The MADR is unchanged.

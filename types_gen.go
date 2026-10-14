@@ -110,13 +110,6 @@ type AgentCapabilities struct {
 	SessionCapabilities SessionCapabilities `json:"sessionCapabilities"`
 }
 
-func (v AgentCapabilities) MarshalJSON() ([]byte, error) {
-	type Alias AgentCapabilities
-	var a Alias
-	a = Alias(v)
-	return json.Marshal(a)
-}
-
 func (v *AgentCapabilities) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "AgentCapabilities")
 	if err != nil {
@@ -549,13 +542,6 @@ type AuthCapabilities struct {
 	//
 	// Defaults to false if unset.
 	Terminal bool `json:"terminal,omitempty"`
-}
-
-func (v AuthCapabilities) MarshalJSON() ([]byte, error) {
-	type Alias AuthCapabilities
-	var a Alias
-	a = Alias(v)
-	return json.Marshal(a)
 }
 
 func (v *AuthCapabilities) UnmarshalJSON(b []byte) error {
@@ -1391,13 +1377,6 @@ type ClientCapabilities struct {
 	//
 	// Defaults to false if unset.
 	Terminal bool `json:"terminal,omitempty"`
-}
-
-func (v ClientCapabilities) MarshalJSON() ([]byte, error) {
-	type Alias ClientCapabilities
-	var a Alias
-	a = Alias(v)
-	return json.Marshal(a)
 }
 
 func (v *ClientCapabilities) UnmarshalJSON(b []byte) error {
@@ -5582,13 +5561,6 @@ type FileSystemCapabilities struct {
 	WriteTextFile bool `json:"writeTextFile,omitempty"`
 }
 
-func (v FileSystemCapabilities) MarshalJSON() ([]byte, error) {
-	type Alias FileSystemCapabilities
-	var a Alias
-	a = Alias(v)
-	return json.Marshal(a)
-}
-
 func (v *FileSystemCapabilities) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "FileSystemCapabilities")
 	if err != nil {
@@ -6342,13 +6314,6 @@ type InitializeRequest struct {
 	ProtocolVersion ProtocolVersion `json:"protocolVersion"`
 }
 
-func (v InitializeRequest) MarshalJSON() ([]byte, error) {
-	type Alias InitializeRequest
-	var a Alias
-	a = Alias(v)
-	return json.Marshal(a)
-}
-
 func (v *InitializeRequest) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "InitializeRequest", "protocolVersion")
 	if err != nil {
@@ -7007,13 +6972,6 @@ type McpCapabilities struct {
 	//
 	// Defaults to false if unset.
 	Sse bool `json:"sse,omitempty"`
-}
-
-func (v McpCapabilities) MarshalJSON() ([]byte, error) {
-	type Alias McpCapabilities
-	var a Alias
-	a = Alias(v)
-	return json.Marshal(a)
 }
 
 func (v *McpCapabilities) UnmarshalJSON(b []byte) error {
@@ -9646,13 +9604,6 @@ type PromptCapabilities struct {
 	//
 	// Defaults to false if unset.
 	Image bool `json:"image,omitempty"`
-}
-
-func (v PromptCapabilities) MarshalJSON() ([]byte, error) {
-	type Alias PromptCapabilities
-	var a Alias
-	a = Alias(v)
-	return json.Marshal(a)
 }
 
 func (v *PromptCapabilities) UnmarshalJSON(b []byte) error {

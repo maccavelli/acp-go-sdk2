@@ -39,5 +39,4 @@ func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64
 func (*ClientSideConnection).SetLogger(l *slog.Logger)
-func (Holder).MarshalJSON() ([]byte, error)
 func (*Holder).UnmarshalJSON(b []byte) error
