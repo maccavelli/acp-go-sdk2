@@ -250,7 +250,11 @@ A connection starts with `initialize`. `ClientSideConnection.Initialize` records
 the request and the agent's answer as an `acp.Negotiation` when it returns
 without error, and `AgentSideConnection` records the same before its answer is
 written. `Negotiated()` on either side returns the record and whether there is
-one; a later `initialize` replaces it.
+one; a later `initialize` replaces it. The record is the JSON form of the
+request and the answer as they went over the wire: it shares no memory with the
+values passed to or returned by `Initialize` or a handler, and each call of
+`Negotiated()` returns a new copy, so changing one changes nothing the SDK
+checks.
 
 The protocol version is `acp.ProtocolVersionNumber`. Left zero, in the request
 or in an agent's answer, it is filled in. A client asked to send another gets a
@@ -275,7 +279,8 @@ against the capabilities in the record:
 - Values: a non-empty `additionalDirectories` on `session/new`, `session/load`,
   `session/resume` and `session/fork` needs
   `sessionCapabilities.additionalDirectories`; an `http`, `sse` or unstable
-  `acp` MCP server needs `mcpCapabilities.http`, `.sse` or `.acp`; an `image`,
+  `acp` MCP server, on any of those four methods, needs `mcpCapabilities.http`,
+  `.sse` or `.acp`; an `image`,
   `audio` or `resource` block in a prompt needs `promptCapabilities.image`,
   `.audio` or `.embeddedContext`; an elicitation's `form` or `url` mode needs
   `elicitation.form` or `.url`; a `notice` update needs `session.notices` and a
@@ -334,8 +339,25 @@ When the handler returns, if its context was cancelled, by `session/cancel` or
 the handler's result, whatever the handler returned. A `session/cancel` that
 arrives after the handler has returned changes nothing. A prompt and a cancel
 are ordered as they were received, so a cancel sent right after a prompt
-cancels that turn. Any other request whose handler `$/cancel_request`
-cancels, and that returns the context's error, is answered `-32800`.
+cancels that turn. A cancel applies to every prompt of its session received
+before it, two prompts in flight included. Any other request whose handler
+`$/cancel_request` cancels, and that returns the context's error, is answered
+`-32800`.
+
+`session/close` ends its session's work as `session/cancel` does: before the
+agent's `CloseSession` handler runs, the session's running turn is cancelled and
+answered `cancelled`. When the agent answers a client's `CloseSession` with
+success, each `session/request_permission` of that session still pending is
+answered `cancelled`, as on `Cancel`; a close the agent refuses leaves them to
+their handlers.
+
+Notifications are handled one at a time, in the order received, and a response
+is returned to its caller only after the notifications received before it are
+handled. A notification handler, such as a client's `SessionUpdate`, that sends
+a request on its own connection must send it under the handler's context, or
+one derived from it: such a request does not wait for the handler that sent
+it. Sent under an unrelated context, such as `context.Background()`, it waits
+for that handler, which is waiting for it.
 
 `ClientSideConnection.Prompt` sends `session/cancel` when its context ends with
 an error, and returns. When a client sends `session/cancel`, through `Cancel` or
@@ -355,7 +377,8 @@ The connection reads one JSON-RPC message per line and answers what JSON-RPC
 - JSON that is not an object, a batch included: `-32600`, with `"id": null`;
 - an object that is not a valid request or notification (`jsonrpc` other than
   `"2.0"`, `method` absent or not a string, an `id` that is not a string,
-  number or `null`, `params` that is not an object or array): `-32600`, with its
+  number or `null`, `params` that is present and is not an object, an array or
+  `null`): `-32600`, with its
   id when the id is valid and `null` otherwise, an absent id included;
 - a line longer than the limit: read through its newline, discarded, logged,
   and answered `-32600` with `"id": null` and the limit in `data`; reading goes
@@ -367,8 +390,27 @@ holds neither or both of `result` and `error`, or another `jsonrpc`, fails the
 call it answers. `acp.NewResourceNotFound(uri)` builds the `-32002` error ACP
 defines for a resource, such as a file, that does not exist.
 
+`params` left out, or `null`, which ACP's schema allows, read as empty params:
+a method whose params have no required property, such as `logout` or
+`session/list`, is handled, and one with required properties is answered
+`-32602` naming the one missing. The SDK never sends `params` as `null`: params
+that encode as `null` are left out, and params that encode as neither an
+object nor an array are refused `-32602` before anything is written. A request
+whose context has already ended is not written.
+
+Each method is handled as the kind the schema makes it: a request-only method
+sent without an id runs no handler and is logged, and a notification-only
+method sent with an id is answered `-32601`. When two requests in flight carry
+the same id, `$/cancel_request` for it reaches the later one. A handler that
+returns a nil `*acp.RequestError` as a non-nil `error` is answered `-32603`.
+
+A malformed message is logged by its fault, its size and, when it has a valid
+one, its id, never by its content, which may hold prompt text or file contents.
+
 These rules are decided in
-[0017-MADR-remediate-acp-v1-conformance-violations.md](docs/decisions/0017-MADR-remediate-acp-v1-conformance-violations.md).
+[0017-MADR-remediate-acp-v1-conformance-violations.md](docs/decisions/0017-MADR-remediate-acp-v1-conformance-violations.md)
+and
+[0019-MADR-remediate-debugging-pass-findings.md](docs/decisions/0019-MADR-remediate-debugging-pass-findings.md).
 
 ### Extension methods
 

@@ -670,3 +670,33 @@ Gates, through the Python runner: regenerating changes no generated file; `make 
 ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan
 finds nothing; the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added. Windows: `go test -count=1
 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+
+The owner committed step 8 as `77704b7`.
+
+### Step 9, documentation, 2026-10-13
+
+What was written, and the committed test each new statement rests on:
+
+* `README.md`, "Initialization and capabilities": the record is the JSON form of what went over the wire, shares no memory with the
+  values passed or returned, and `Negotiated()` returns a new copy (`TestNegotiatedIsACopy`); the MCP rule applies on each of the
+  four session methods, `session/fork` included (`TestValueGates`, its three fork cases).
+* "Cancellation": a cancel applies to every prompt received before it, two in flight included (`TestCancelOrderedAcrossTwoPrompts`);
+  `session/close` cancels the running turn before the handler runs (`TestCloseSessionCancelsTurn`), and a close the agent accepts
+  answers pending permission requests `cancelled` while one it refuses does not (`TestCloseSessionAnswersPendingPermissions`,
+  `TestFailedCloseLeavesPermissionsPending`); a request from a notification handler under its context or one derived from it does
+  not wait for the handler, and under an unrelated context it does (`TestRequestFromNotificationHandler`,
+  `TestBarrierAfterOwnNotification`, and the documented limit of the step 2 deviation).
+* "Errors on the wire": `params` present and not an object, an array or `null` is `-32600` (`TestNullParamsReceivedAsOmitted`);
+  params left out or `null` read as empty, `logout` and `session/list` handled, `session/new` answered `-32602` naming `cwd`
+  (`TestOmittedParams`, `TestNullParams`); params never sent as `null` and non-structured params refused before writing
+  (`TestParamsNeverSentAsNull`); a request whose context has ended is not written (`TestRequestWithEndedContextWritesNothing`); the
+  kind of each method (`TestMethodKindMismatch`); the later of two requests with one id stays cancellable
+  (`TestDuplicateInflightIDKeepsLaterCancel`); a nil `*RequestError` is `-32603` (`TestToReqErrTypedNil`); malformed messages logged
+  without content (`TestMalformedInputNotLogged`). The rules now cite the 0019 MADR beside the 0017 one.
+* `docs/architecture.md`, as the tree is now: comments always line comments (`TestCommentTextAlwaysComments`); the kept cancels,
+  `keepCancel` and the in-flight receipts, and `session/close` running the cancel (`ClosesSession`); the record's JSON form
+  (`jsonCopy`); rules on unstable copies; the dispatch's kind check and `decodeParams`; the receive and send rules of steps 2 and 3;
+  and the checks list, which gains the step 4 tests and the two new engine cases.
+
+Every code identifier the new text names was checked to exist in the tree's Go source or engine cases (22 of 22). `make
+check-records` and `make markdownlint` exit 0; the identifier scan of the changed files finds nothing. No Go file changed.
