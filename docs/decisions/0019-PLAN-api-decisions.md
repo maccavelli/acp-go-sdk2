@@ -172,6 +172,8 @@ Every new test is seen to fail on a planted break, in a scratch copy, before it 
 
 * An amendment in the 0017 MADR's "More Information": a turn whose connection ended is answered `cancelled`, which no peer receives;
   the outcome's "for any reason but the connection's end" is superseded. No code change.
+* Amended 2026-10-14, step 9's deviation: since B17 (step 3) no answer is written after the connection's end; the turn is settled
+  as `cancelled` and its answer is not sent. The amendment says so.
 
 ## Implementation Steps
 
@@ -312,7 +314,7 @@ Seen to fail, each in its own scratch copy (3 of 3):
   `TestOverflowCloseClosesTransport`, "the reader's close did not happen".
 
 The phase 2 probes, re-run on the step 3 tree: `TestP2_B16_WriteIgnoresCtx` and `TestP2_B17_SendAfterDone` now pass, the latter with
-0 bytes written, as does B19's; the others fail, their steps being later, but B21's, which is text only.
+0 bytes written, as does B19's; the others fail, their steps being later, but B21's, which is text only (corrected 2026-10-14: from step 3 it fails, "the answer did not happen"; see step 9's deviation).
 
 Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0, after `gofmt` aligned the
 connection's struct fields, which the first run reported; the new test file passes the same check; `GOEXPERIMENT=nojsonv2 go test
@@ -331,6 +333,7 @@ suite then passes. Decision (owner): accept the goldens; the 60 files join step 
 asserted fact moves.
 
 Amended 2026-10-13, during step 7: a send whose write had finished could return its context's error; see step 7's deviation.
+Amended 2026-10-14, during step 9: a later `Close` returned the first one's errors, not nil; see step 9's second deviation.
 
 ### Step 4, a bound on concurrent inbound requests, 2026-10-13
 
@@ -354,7 +357,7 @@ Seen to fail, in a scratch copy (1 of 1): `b18-limit-ignored` (the check is neve
 happen".
 
 The phase 2 probes, re-run on the step 4 tree: B16's, B17's and B19's pass; `TestP2_B18_RequestsUnbounded` still reports 200
-running, which the deviation below records; the others fail, their steps being later, but B21's, which is text only.
+running, which the deviation below records; the others fail, their steps being later, but B21's, which is text only (corrected 2026-10-14: from step 3 it fails, "the answer did not happen"; see step 9's deviation).
 
 Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
 `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
@@ -400,7 +403,7 @@ nothing.
 The phase 2 probes, re-run on the step 5 tree with B2's restated, per the second deviation below: `TestP2_B2_HandOffBeforeReading`
 passes, "ran 50 hand-offs; the handler found the connection unset 0 times", with no race report; on `e5e716e`, extracted with `git
 archive` into a scratch directory, it fails, "CONFIRMED: the initialize handler found the connection unset in 50 of 50 hand-offs".
-B16's, B17's and B19's pass; B18's is exempt (step 4); the others fail, their steps being later, but B21's, which is text only. The
+B16's, B17's and B19's pass; B18's is exempt (step 4); the others fail, their steps being later, but B21's, which is text only (corrected 2026-10-14: from step 3 it fails, "the answer did not happen"; see step 9's deviation). The
 original B2 probe's text is kept in the scratch directory beside the restated one.
 
 Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0, after `gofmt` aligned two
@@ -458,7 +461,7 @@ Seen to fail, each in its own scratch copy (2 of 2):
 
 The phase 2 probes, re-run on the step 6 tree: `TestP2_B14_ExtensionSkipsHooksAndGate` now passes, `_x/ping` answered `-32601`
 before `initialize` as `session/list` is; B2's, B16's, B17's and B19's pass; B18's is exempt (step 4); B20's fails, its step being
-later, and B21's is text only.
+later, and B21's is text only (corrected 2026-10-14: from step 3 it fails, "the answer did not happen"; see step 9's deviation).
 
 Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
 `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
@@ -523,7 +526,7 @@ failures, against 8 on `a49d0bb`.
 
 The phase 2 probes, re-run on the step 7 tree: `TestP2_B20_UndeclaredModeBothWays` now passes, "sent: elicitation/create: capability
 elicitation.telepathy not advertised: variant telepathy; received: -32602"; B2's, B14's, B16's, B17's and B19's pass; B18's is
-exempt (step 4); B21's is text only.
+exempt (step 4); B21's is text only (corrected 2026-10-14: from step 3 it fails, "the answer did not happen"; see step 9's deviation).
 
 Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0, after the `goconst` finding
 above; no new `.go` file; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make
@@ -575,3 +578,44 @@ goldens, which "Design", I8, does not name: `TestEngineCases` failed with "API d
 `accept-folded-keys`. Measured in a scratch copy before choosing: `go test -run TestEngineCases . -update` removes 8 lines, each a
 `func (T).MarshalJSON() ([]byte, error)`, and changes nothing else, and the generator suite, behaviour tests included, then
 passes. Decision (owner): accept the goldens; the six files join step 8's scope. The MADR is unchanged.
+
+### Step 9, the 0017 amendment and the documentation, 2026-10-14
+
+What was done:
+
+* `0017-MADR-remediate-acp-v1-conformance-violations.md`: the outcome's "for any reason but the connection's end" is struck through
+  and annotated, and "More Information" gains "Amended by 0019, 2026-10-14: the connection's end is no exception", stating what the
+  code does, per the first deviation below.
+* `0019-MADR-remediate-debugging-pass-findings.md`: "Amended while executing phase 2, 2026-10-14", B21's fact.
+* `README.md`: in "Explore the API", `AgentConnAware` and `ClientConnAware` and why the constructor, not an assignment after it,
+  hands the connection over; the undeclared elicitation mode in the value gates; received extension messages held to the record,
+  in "Initialization and capabilities" and in "Handling inbound extension methods", the hooks seeing `*json.RawMessage`; in
+  "Cancellation", that a turn whose connection ended is not answered; a new "Closing and limits", for `Close`, `Done`, a send that
+  returns on its context and `WithMaxConcurrentRequests`; and in "Errors on the wire", the causes `errors.Is` finds. No passage
+  mentioned `MarshalJSON`.
+* `docs/architecture.md`: the hand-off in the constructors; 19 capability rules, the undeclared variant among them; when a struct
+  gets `MarshalJSON`; `checkInbound` on extension messages, and the outbound extension methods ungated; the request slots; the
+  writer goroutine, `endError`, `Close` and error causes; the new tests and engine case among the checks.
+* `connection.go` and `connection_close_test.go`, per the second deviation below: a later `Close` returns nil, and
+  `TestCloseReturnsErrorOnce` covers it. `go test -race -count=20` of the close tests: ok. Seen to fail in a scratch copy (1 of 1):
+  `b17-close-result-cached` (every `Close` returns the first one's errors again), "a second Close: close failed, want nil".
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
+`GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; the API listing against `v0.17.1` is unchanged from step 8. Windows: `go
+test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+
+Deviation, 2026-10-14: "Design", B21, and the MADR's B21 finding say a turn whose connection ended is answered `cancelled`. Since
+step 3 no answer is written: B17 fails every send after the connection's end. The probe shows it: on `29778f3`, before step 3,
+"answer after the connection's end: {"jsonrpc":"2.0","id":7,"result":{"stopReason":"cancelled"}}"; on `7e7acfd`, step 3, and
+after, "the answer did not happen". The step 3 to 8 records called that probe text only while it failed so; they are annotated.
+Decision (owner): the 0017 amendment states what the code does, the turn settled as `cancelled` and nothing written; the MADR gets
+a dated amendment of B21's fact; decision 10 and the acceptance's "B21's being text only" stand. No code change.
+
+Deviation, 2026-10-14, an amendment of step 3 (B17): writing the README found that `Close`'s documentation, "nil when it was called before", and
+"Design", B16 and B17, "a second `Close` returns nil", disagree with the code: `closeWith` kept the first call's joined transport
+errors in `closeErr` and returned them on every call, so after a first `Close` whose transport failed, or an overflow close, every
+later `Close` returned the same error. `TestCloseEndsConnection` did not see it, its first `Close` returning nil. Decision (owner):
+`closeWith` returns the errors from the call that closed and nil from every later one, and `closeErr` goes; the test gains a writer
+whose `Close` fails, the first `Close` returning that error and the second nil. `connection.go` and `connection_close_test.go`
+join step 9's scope. The MADR is unchanged.

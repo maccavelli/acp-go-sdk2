@@ -279,7 +279,8 @@ Concretely:
      pointer is), and removes the entry only if it is still that turn's.
    * The boundary is the handler's return. As soon as it returns, the case takes `a.mu`, the lock `session/cancel` and a superseding
      prompt take, removes the turn's entry and reads `context.Cause` of the turn's context once, then releases the lock; the answer
-     follows from that one reading. When the turn's context was cancelled by then, for any reason but the connection's end, the answer
+     follows from that one reading. When the turn's context was cancelled by then, ~~for any reason but the connection's end~~ for
+     any reason (amended by 0019, 2026-10-14, "More Information"), the answer
      is `PromptResponse{StopReason: StopReasonCancelled}`, keeping the rest of the handler's result when it returned one. Otherwise
      the handler's result or error is answered as today, so a `session/cancel` that arrives after the handler returned finds no turn
      and changes nothing. `$/cancel_request` cancels the request's context without that lock, so one that arrives in the instant
@@ -603,6 +604,12 @@ Asked, the owner chose:
   still never sends it. Recorded in
   [0019-MADR-remediate-debugging-pass-findings.md](0019-MADR-remediate-debugging-pass-findings.md), decision 13; nothing else in J1
   changes.
+* **Amended by 0019, 2026-10-14: the connection's end is no exception.** Item 1 answered a cancelled turn `cancelled` "for any
+  reason but the connection's end". The code never made that exception: a turn whose context ends because the connection ended is
+  settled as `cancelled` like any other. Before 0019's B17 that answer was written to a peer that had gone; since then nothing is
+  written after the connection's end, so it is not sent at all. The exception is superseded, and what a peer sees does not
+  change. Recorded in [0019-MADR-remediate-debugging-pass-findings.md](0019-MADR-remediate-debugging-pass-findings.md), decision 10
+  and its amendment of 2026-10-14; nothing else in item 1 changes.
 * **Revision.** Amended 2026-10-12 at the owner's request, before any decision: P1's override ends at the handler's return, so a
   cancel that arrives after the turn finished leaves the handler's answer as it is. Corrected the same day, writing the PLAN: a rule
   whose subject the schema lacks is skipped by `Build` and caught by the table's test, so "Confirmation" and G4 name that test; and

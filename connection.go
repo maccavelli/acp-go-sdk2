@@ -301,10 +301,9 @@ type Connection struct {
 	// writes hands each message to the writer goroutine, which writes them one
 	// at a time in the order it receives them (0019-PLAN-api-decisions.md, B16).
 	writes chan writeRequest
-	// closeOnce guards Close, closeErr is its result, and closedLocally
-	// records that Close ended the connection (B17).
+	// closeOnce guards Close, and closedLocally records that this side ended
+	// the connection (B17).
 	closeOnce     sync.Once
-	closeErr      error
 	closedLocally atomic.Bool
 	nextID        atomic.Uint64
 	pending       map[string]*pendingResponse
@@ -659,6 +658,7 @@ func (c *Connection) Close() error {
 // closed locally before the context ends, so every waiter reads endError
 // after the mark.
 func (c *Connection) closeWith(cause error) error {
+	var err error
 	c.closeOnce.Do(func() {
 		c.closedLocally.Store(true)
 		c.cancel(cause)
@@ -674,9 +674,9 @@ func (c *Connection) closeWith(cause error) error {
 		for _, cl := range closers {
 			errs = append(errs, cl.Close())
 		}
-		c.closeErr = errors.Join(errs...)
+		err = errors.Join(errs...)
 	})
-	return c.closeErr
+	return err
 }
 
 // sameValue reports whether a and b are the same pointer, such as one

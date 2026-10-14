@@ -20,7 +20,9 @@ This repository is the Go module `github.com/maccavelli/acp-go-sdk2`, package
   the agent's prompt turns, the client's pending permission requests, and
   on both the record of `initialize`; their dispatch, their outbound
   methods, and the gates each passes to `connection.go`. Each constructor
-  assigns every field, the `Connection` from `buildConnection` included,
+  assigns every field, the `Connection` from `buildConnection` included, and
+  hands the agent or client its connection through `AgentConnAware` or
+  `ClientConnAware`, declared in `connection.go`, when it implements them,
   before it calls `start`, so a message already waiting never reaches the
   dispatch with a field unset), and `helpers_gen.go`, which
   holds a constructor for every variant of every other union the schema
@@ -83,9 +85,12 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
 - the unions whose constructors `helpers.go` writes;
 - the capability that gates each of 15 methods, resolved to its Go fields
   (`CapabilitySteps`);
-- `CapabilityRules`, the 18 properties and variants a capability gates,
-  each with the specification sentence it follows, and the rule that an
-  `authenticate` must not name a terminal auth method. `model/gates.go`
+- `CapabilityRules`, the 19 properties and variants a capability gates,
+  each with the specification sentence it follows: among them the rule that an
+  `authenticate` must not name a terminal auth method, and the rule that an
+  elicitation's catch-all variant, a mode the schema does not list, is set
+  only under a capability no client can advertise, so it is always refused,
+  naming `elicitation.` and the mode (`GateUndeclaredVariant`). `model/gates.go`
   resolves each on its definition and on each copy of it the merge made from
   the unstable schema under another name, and gives a `gates` method to every type
   that holds one, directly or through fields, members or variants; with no
@@ -118,7 +123,10 @@ variant in turn. A variant that is a `$ref` takes its keys, discriminator
 value, and shape from the definition it names. Decode errors name the union
 and, for a variant, the discriminator value or the variant. A struct with a
 required key, a default, a lenient field, flattened members, or a catch-all's
-`Extra` gets a generated `UnmarshalJSON`.
+`Extra` gets a generated `UnmarshalJSON`. A struct gets a generated
+`MarshalJSON` only when it does more than encode its fields: a nilable array
+or object default it writes in, a nil required array or map, a catch-all's
+`Extra`, or flattened members.
 
 Generated decoders read a key as `encoding/json` reads a struct field's name:
 under Unicode case folding, the last matching key winning (`foldKeys` in
@@ -164,7 +172,10 @@ first refuses a method received as the other kind, a request sent without an
 id or a notification sent with one, by the mark `connection.go` puts in the
 handler's context; it then decodes the params, absent ones as `{}`
 (`decodeParams`), and calls `checkInbound`; `sendRequest` calls it on a
-decoded result.
+decoded result. `extensions.go` calls it on a received `_` message, with its
+params as a `*json.RawMessage` and the side's `inboundGate`, the side's `gate`
+when the schema has `initialize`, before the message reaches
+`HandleExtensionMethod`.
 
 Gates are generated and passed in, never stored: `connection.go` holds no
 record. `gateMessage` in `types_gen.go` lets `initialize` through, refuses
@@ -178,7 +189,7 @@ passes `resultGate` for the response; the dispatch passes `gate` to
 paths check the answer against the record it is about to make.
 `inboundError` answers `ErrNotInitialized` and a method gate's
 `*CapabilityError` `-32601`, other refusals `-32602`. `Connection`,
-`SendRequest[T]` and the extension methods pass no gate.
+`SendRequest[T]` and the outbound extension methods pass no gate.
 
 `receive` reads one line at a time through a `bufio.Reader`, up to
 `WithMaxMessageSize` (10 MiB by default), and classifies it: an overlong
@@ -193,13 +204,29 @@ content.
 
 Each request runs on its own goroutine, its receipt kept in `inflightReceipts`
 while it runs and its cancel in `inflight` by id, each request removing only
-its own entry. Notifications run one at a time from a queue, each handler's
+its own entry. With `WithMaxConcurrentRequests(n)`, `receive` takes a slot of
+`requestSlots`, a channel of capacity `n`, for each request, and answers one it
+finds no slot for `-32603` without starting it; a slot is given back when the
+handler returns, before its answer is written. Notifications run one at a time from a queue, each handler's
 context marked with its sequence number. A response is returned after the
 notifications received before it are handled, unless the request was sent
 under the context of a notification whose handler is still running: that wait
 stops before it. A message's params are left out when they encode as `null`,
 refused when they encode as neither an object nor an array, and a request
 whose context has ended is not written.
+
+One writer goroutine, started by `start`, writes every message, in the order
+`sendMessage` hands them over through an unbuffered channel; a sender returns
+when its context ends, even while a write is blocked, and a write that has
+finished is reported in preference to the context. Once the connection's
+context has ended, `sendMessage` writes nothing and returns `endError`:
+`ErrConnectionClosed` when this side closed it, through `Close` or the
+overflow policy (`closeWith`), and otherwise `ErrPeerDisconnected` wrapping how
+the reader ended. `Close` runs once: it marks the connection closed, ends its
+context with `ErrConnectionClosed`, and closes the reader and the writer that
+implement `io.Closer`. A `*RequestError` the connection makes for a local
+failure keeps that failure as its cause, which `Unwrap` returns; one a peer
+answered has none.
 
 Checks that guard this:
 
@@ -218,16 +245,22 @@ Checks that guard this:
 - `paths_test.go` covers the absolute-path rule: sending, receiving, a
   handler's result, the two hooks and their order, and `Roots`; the engine
   case `accept-absolute-paths` covers the generated checks.
+- `connection_close_test.go` covers a send that returns on its context, `Close`,
+  a send after either end, and the overflow close; `errors_test.go` the
+  causes of local errors; `conn_aware_test.go` the hand-off before reading,
+  on both sides; and `connection_cancel_test.go` the request limit.
 - `cancel_test.go` covers prompt turns and permission requests on cancel
   and on `session/close`, cancels ordered across two prompts, and the bound
   on kept cancels,
   `jsonrpc_test.go` the answers to malformed input and the size limit,
   `negotiation_test.go` the record and the version, and `gates_test.go`
-  every method and value gate both ways, the hook's order, the raw paths,
-  and `initialize`'s own check; the engine cases
+  every method and value gate both ways, the undeclared elicitation mode,
+  extension messages through the hooks and the gate, the hook's order, the
+  raw paths, and `initialize`'s own check; the engine cases
   `accept-prompt-cancellation`, `accept-permission-cancellation`,
-  `accept-initialize-negotiation`, `accept-capability-gates` and
-  `accept-session-close-cancels` cover the generated code, and
+  `accept-initialize-negotiation`, `accept-capability-gates`,
+  `accept-capability-undeclared-variant` and `accept-session-close-cancels`
+  cover the generated code, and
   `accept-description-comment-markers` the generator's comments.
 - `TestEngineCases` in `cmd/generate` runs the generator on each synthetic case
   in `testdata/engine/`: a case with `want.err` must be refused with those

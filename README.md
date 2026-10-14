@@ -47,7 +47,12 @@ If you're building an [Agent](https://agentclientprotocol.com/protocol/overview#
 
 - Implement the `acp.Agent` interface (and optionally `acp.AgentLoader` for `session/load`).
 - Create a connection with `acp.NewAgentSideConnection(agent, os.Stdout, os.Stdin)`.
-- Send updates and make client requests using the returned connection.
+- Send updates and make client requests using the returned connection. An agent
+  that keeps the connection for its handlers implements `acp.AgentConnAware`:
+  the constructor calls its `SetAgentConnection` before it reads anything, so a
+  handler always finds the connection set. The method only stores it.
+  Assigning the returned connection after the constructor instead races a
+  handler that is already running.
 
 If you're building a [Client](https://agentclientprotocol.com/protocol/overview#client):
 
@@ -56,6 +61,8 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
 - Launch or connect to your Agent process (stdio), then create a connection with
   `acp.NewClientSideConnection(client, stdin, stdout)`.
 - Call `Initialize`, `NewSession`, and `Prompt` to run a turn and stream updates.
+  A client that keeps its connection implements `acp.ClientConnAware`, whose
+  `SetClientConnection` the constructor calls the same way.
 
 Helper constructors are provided to reduce boilerplate when working with union types:
 
@@ -283,7 +290,9 @@ against the capabilities in the record:
   `.sse` or `.acp`; an `image`,
   `audio` or `resource` block in a prompt needs `promptCapabilities.image`,
   `.audio` or `.embeddedContext`; an elicitation's `form` or `url` mode needs
-  `elicitation.form` or `.url`; a `notice` update needs `session.notices` and a
+  `elicitation.form` or `.url`, and an elicitation in any other mode, which no
+  capability advertises, is refused, as `elicitation.<mode>`, with every
+  capability advertised; a `notice` update needs `session.notices` and a
   compaction update `session.compaction`; a `boolean` config option, wherever an
   agent sends one, needs `session.configOptions.boolean`; and a `terminal` auth
   method in the `initialize` answer needs `auth.terminal`.
@@ -325,7 +334,8 @@ acp.WithInboundValidation(func(ctx context.Context, method string, params any, e
 
 `Connection()`, `SendRequest`, `SendRequestNoResult`, `SendNotification`, and
 `CallExtension` and `NotifyExtension` hold no record: they send any method,
-before `initialize` too. The unstable features whose capabilities the
+before `initialize` too. What is received holds to it, extension messages
+included (see [Extension methods](#extension-methods)). The unstable features whose capabilities the
 specification does not tie to a rule (`nes`, `plan`, `providers`, `subagents`,
 `positionEncoding`) are not checked.
 
@@ -336,7 +346,8 @@ session cancels, with `acp.ErrPromptCancelled` as `context.Cause`; a second
 prompt for the same session cancels the first with an error that wraps it.
 When the handler returns, if its context was cancelled, by `session/cancel` or
 `$/cancel_request`, the answer is `stopReason` `cancelled`, keeping the rest of
-the handler's result, whatever the handler returned. A `session/cancel` that
+the handler's result, whatever the handler returned. A turn whose connection
+has ended is not answered: nothing is written after the end. A `session/cancel` that
 arrives after the handler has returned changes nothing. A prompt and a cancel
 are ordered as they were received, so a cancel sent right after a prompt
 cancels that turn. A cancel applies to every prompt of its session received
@@ -367,6 +378,26 @@ answered `cancelled` at once; its handler's context is cancelled with
 request that arrives after the cancel is handled as usual. Marking the turn's
 unfinished tool calls `cancelled`, which the specification recommends, is the
 client application's.
+
+### Closing and limits
+
+`Close()`, on a connection or on either side connection, ends it: `Done()`
+closes, every call waiting for an answer returns, every later send fails
+without writing, and the reader and the writer are closed when they implement
+`io.Closer`, which also ends a read in progress. A second `Close` returns nil.
+When the peer ends the connection, the same holds, but for the transport,
+which is the application's to close. The default overflow policy,
+`acp.OverflowCloseConnection`, closes the connection as `Close` does.
+
+Every send returns when its context ends, even while the peer does not read.
+A message whose write has begun may still reach the peer.
+
+`acp.WithMaxConcurrentRequests(n)` bounds the received requests whose handlers
+run at once. Over the limit, a request is answered at once, `-32603` with
+`{"error": "too many concurrent requests", "limit": n}`, and its handler does not
+run; the reader never waits for a handler, since a running one may be waiting
+for a response only the reader delivers. Notifications and `$/cancel_request`
+do not count. The default is no limit.
 
 ### Errors on the wire
 
@@ -404,6 +435,13 @@ method sent with an id is answered `-32601`. When two requests in flight carry
 the same id, `$/cancel_request` for it reaches the later one. A handler that
 returns a nil `*acp.RequestError` as a non-nil `error` is answered `-32603`.
 
+An error the connection makes for a local failure keeps that failure, for
+`errors.Is`: a call whose context ended wraps `context.Canceled` or
+`context.DeadlineExceeded`; one whose connection ended wraps
+`acp.ErrPeerDisconnected`, or `acp.ErrConnectionClosed` after `Close`; one
+whose write failed wraps the write's error. Its code is as before. An error the
+peer answered wraps nothing, so a peer's `-32800` is not `context.Canceled`.
+
 A malformed message is logged by its fault, its size and, when it has a valid
 one, its id, never by its content, which may hold prompt text or file contents.
 
@@ -421,6 +459,11 @@ Use them to add functionality without conflicting with future ACP versions.
 
 Implement `acp.ExtensionMethodHandler` on your Agent or Client. Your handler will be
 invoked for any incoming method starting with `_`.
+
+Before it runs, the message goes through what a typed one does: both inbound
+hooks, which see `params` as a `*json.RawMessage` that `acp.WithInboundRewrite`
+may replace, and the record of `initialize`. Before `initialize`, an extension
+request is answered `-32601` and an extension notification is dropped.
 
 ```go
 // HandleExtensionMethod handles ACP extension methods (names starting with "_").

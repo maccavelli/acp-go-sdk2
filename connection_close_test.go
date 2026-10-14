@@ -133,6 +133,27 @@ func TestCloseEndsConnection(t *testing.T) {
 	}
 }
 
+// failingCloser is a writer whose Close fails.
+type failingCloser struct{ io.Writer }
+
+var errCloseFailed = errors.New("close failed")
+
+func (failingCloser) Close() error { return errCloseFailed }
+
+// TestCloseReturnsErrorOnce requires the Close that closes the connection to
+// return its transport's error, and a later Close to return nil
+// (0019-PLAN-api-decisions.md, step 9's second deviation).
+func TestCloseReturnsErrorOnce(t *testing.T) {
+	t.Parallel()
+	c := NewConnection(nil, failingCloser{io.Discard}, idleReader(t))
+	if err := c.Close(); !errors.Is(err, errCloseFailed) {
+		t.Errorf("the first Close: %v, want the writer's error", err)
+	}
+	if err := c.Close(); err != nil {
+		t.Errorf("a second Close: %v, want nil", err)
+	}
+}
+
 // TestSendAfterPeerEndFails requires a send after the peer ended the
 // connection to fail with ErrPeerDisconnected and write nothing
 // (0019-PLAN-api-decisions.md, B17).

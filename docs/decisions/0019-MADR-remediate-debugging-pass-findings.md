@@ -228,6 +228,15 @@ The owner answered each question on 2026-10-13. Three answers differ from the re
   decided, and a received one is answered `-32602`, as every value gate is, with the `WithInboundValidation` hook able to accept it,
   so a proxy or an application that advertised a `_`-prefixed mode through `_meta` keeps working.
 
+### Amended while executing phase 2, 2026-10-14
+
+* **B21's fact changes: no answer is written after the connection's end.** The finding says a turn whose connection ended "is
+  answered `cancelled`", and no peer receives it. That held at `e5e716e`: the answer, `{"stopReason":"cancelled"}`, was written.
+  Since phase 2's B17 ([0019-PLAN-api-decisions.md](0019-PLAN-api-decisions.md), step 3), every send after the connection's end
+  fails without writing, so the dispatch still settles the turn as `cancelled` and its answer is not written. Decision 10 is
+  unchanged: the 0017 text is amended to what the code does, which is now this. Found and decided with the owner on 2026-10-14,
+  writing the amendment.
+
 ## Decision Drivers
 
 * An SDK user must not meet a deadlock, a lost cancel or a refused valid request in ordinary use (B1 to B5).
