@@ -4,7 +4,6 @@ import (
 	"go/ast"
 	"go/token"
 	"strconv"
-	"strings"
 )
 
 // Small constructors for go/ast nodes. They keep the emitters readable and
@@ -223,13 +222,13 @@ func docLines(lines ...string) *ast.CommentGroup {
 	return g
 }
 
+// commentText is one line of a comment as Go source. Every line, a schema
+// description's included, is a line comment: a line that starts with "//" or
+// "/*" stays text inside it, so a description cannot become code or a
+// directive (0019-PLAN-behaviour-fixes.md, G1).
 func commentText(line string) string {
-	switch {
-	case strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*"):
-		return line
-	case line == "":
+	if line == "" {
 		return "//"
-	default:
-		return "// " + line
 	}
+	return "// " + line
 }

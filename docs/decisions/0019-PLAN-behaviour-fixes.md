@@ -593,3 +593,32 @@ Gates, through the Python runner: regenerating again changes no generated file; 
 test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier
 scan finds nothing; the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added. Windows: `go test -count=1
 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+
+The owner committed step 6 as `199f99e`.
+
+### Step 7, description comments, 2026-10-13
+
+What was built: `commentText` (`cmd/generate/internal/emit/ast.go`) writes every line as `"// " + line`, and an empty line as `"//"`;
+the case that passed a line starting with `//` or `/*` through is gone, and with it the `strings` import. It serves both schema
+descriptions and the generator's own comments (`emit/file.go:184`). Regenerating changed no generated file, which is the proof that no
+description of the committed schema and no comment the emitters write used the pass-through.
+
+Tests added: `TestCommentTextAlwaysComments` (`cmd/generate/internal/emit/file_test.go`): an empty line, plain text, `// …`, `/* x */
+func Injected() …`, `//go:generate …` and `//line …` each become a line comment, and a rendered type whose doc carries them holds no
+`/* x */`, `//go:generate` or `func Injected` at the start of a line. Engine case `accept-description-comment-markers.txtar`: the
+probe's description, with a `//line` directive added; its `want.api`, written by `-update`, has no `Injected`.
+
+Seen to fail, each in its own scratch copy, with the pass-through restored (2 of 2):
+
+* `g1-pass-through-unit`: `TestCommentTextAlwaysComments`, `commentText("/* x */ func Injected() int { return 42 }") = "/* x */ func
+  Injected() int { return 42 }", want "// /* x */ …"`, and the same for `//` and `//go:generate`.
+* `g1-pass-through-engine`: `TestEngineCases`, `accept-description-comment-markers`, "API differs from want.api", the generated API
+  holding `func Injected() int`.
+
+The original G1 probe, re-run on the step 7 tree as an engine behaviour case: its behaviour test, which calls `Injected()`, no longer
+builds, "undefined: Injected".
+
+Gates, through the Python runner: regenerating changes no generated file; `make pre-add-check` exit 0; `GOEXPERIMENT=nojsonv2 go test
+./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan
+finds nothing; the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added. Windows: `go test -count=1
+-shuffle=on ./...` exit 0 at the root and in `cmd/generate`.

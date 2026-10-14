@@ -342,3 +342,32 @@ func TestNestedLiteralLayout(t *testing.T) {
 		t.Errorf("rendered:\n%s\nwant it to end with:\n%s", got, want)
 	}
 }
+
+// TestCommentTextAlwaysComments requires every comment line, a description's
+// included, to be a line comment, so a line that starts with a comment marker
+// stays text: no code, no directive (0019-PLAN-behaviour-fixes.md, G1).
+func TestCommentTextAlwaysComments(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{
+		"":                     "//",
+		"A paint.":             "// A paint.",
+		"// already a comment": "// // already a comment",
+		"/* x */ func Injected() int { return 42 }": "// /* x */ func Injected() int { return 42 }",
+		"//go:generate echo directive":              "// //go:generate echo directive",
+		"//line other.go:1":                         "// //line other.go:1",
+	} {
+		if got := commentText(in); got != want {
+			t.Errorf("commentText(%q) = %q, want %q", in, got, want)
+		}
+	}
+
+	f := newFile()
+	f.comment("A paint.", "/* x */ func Injected() int { return 42 }", "//go:generate echo directive")
+	f.add(typeDecl("Paint", &ast.StructType{Fields: fields()}))
+	out := mustRender(t, f)
+	for _, bad := range []string{"\n/* x */", "\n//go:generate", "\nfunc Injected"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("rendered %q as source:\n%s", strings.TrimSpace(bad), out)
+		}
+	}
+}
