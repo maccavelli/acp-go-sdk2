@@ -1,6 +1,10 @@
 package model
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
+)
 
 // Gates is what one type's gates method checks against the record of
 // initialize: its own rules, then each field, member, or variant whose type
@@ -74,16 +78,17 @@ func (m *Model) resolveGates(r *rules) error {
 	}
 	own := map[string][]GateCheck{}
 	for _, rule := range r.table.CapabilityRules {
-		t := m.Type(rule.Definition)
-		if t == nil || m.Initialize == nil {
+		if m.Initialize == nil {
 			continue
 		}
-		c, ok, err := m.gateCheck(t, rule)
-		if err != nil {
-			return fmt.Errorf("%s: %w", rule.name(), err)
-		}
-		if ok {
-			own[t.Name] = append(own[t.Name], c)
+		for _, t := range m.ruleTypes(rule.Definition) {
+			c, ok, err := m.gateCheck(t, rule)
+			if err != nil {
+				return fmt.Errorf("%s: %w", rule.name(), err)
+			}
+			if ok {
+				own[t.Name] = append(own[t.Name], c)
+			}
 		}
 	}
 	holders := m.gateHolders()
@@ -113,6 +118,23 @@ func (m *Model) resolveGates(r *rules) error {
 		}
 	}
 	return nil
+}
+
+// ruleTypes returns the types a capability rule names: its definition's, and
+// each copy the merge made of that definition from the unstable schema under
+// another name, as it does for a changed definition an unstable one reaches
+// (0019-PLAN-behaviour-fixes.md, B6). It is empty when the schema has none.
+func (m *Model) ruleTypes(def string) []*Type {
+	var out []*Type
+	if t := m.Type(def); t != nil {
+		out = append(out, t)
+	}
+	for _, t := range m.Types {
+		if t.Name != def && t.Origin.File == load.UnstableSchemaFile && t.Origin.Key == def {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // gateCheck resolves one rule on its definition t; false when the schema

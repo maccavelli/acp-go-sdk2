@@ -509,3 +509,42 @@ Gates, through the Python runner, after the lint fixes: regenerating again chang
 `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing;
 the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added. Windows: `go test -count=1 -shuffle=on ./...` exit
 0 at the root and in `cmd/generate`.
+
+The owner committed step 4 as `13dc276`.
+
+### Step 5, gates on unstable copies, 2026-10-13
+
+What was built:
+
+* `cmd/generate/internal/model/gates.go`: `ruleTypes`, the types a capability rule names: its definition's, and each type whose
+  `Origin` is that definition in `schema.unstable.json` under another name. `resolveGates` resolves each rule on every one of them.
+* Regenerated: `types_gen.go` only. `UnstableMcpServer` gains `gates`, checking `http`, `sse` and `acp` against `mcpCapabilities`, and
+  `UnstableForkSessionRequest.gates` descends into its `McpServers`; 30 lines added, none removed.
+
+Tests:
+
+* `gates_test.go`: `valueGates` gains `forkMcp` and three `session/fork` cases, `http`, `sse` and `acp`, beside the `session/new` ones;
+  `TestValueGates` now expects 19 cases. Their subtests share the `session/new` cases' names and take the `#01` suffix. Run on the
+  unfixed code first, the three failed as B6 is: "send = … context deadline exceeded, want *CapabilityError{session/fork, …}",
+  "… bytes written, want none", "received without the capability: <nil>, handler ran true".
+* `model/gates_test.go`: `TestCapabilityRulesApply` builds the fixture with an unstable copy of `Verdict`, `UnstableVerdict`, and
+  requires the rule on both. `checkCommittedGates`, which `TestProtocolTableAppliesToCommittedSchema` runs, required exactly one check
+  per rule, 18; it now requires each rule on its definition and on every copy, 21 checks, three of them on `UnstableMcpServer`. The
+  count changes because the fix adds those three checks.
+* `go test -race -count=3 -run TestValueGates`: ok; `go test ./...` in `cmd/generate`: ok.
+
+Seen to fail, each in its own scratch copy (2 of 2), with `ruleTypes` returning the definition's type alone:
+
+* `b6-no-copies-sdk`, regenerated: `TestValueGates`, the three fork cases, "send = … context deadline exceeded, want
+  *CapabilityError{session/fork, mcpCapabilities.acp, …}", "260 bytes written, want none".
+* `b6-no-copies-model`: `TestCapabilityRulesApply`, "UnstableVerdict, the unstable copy of Verdict: []", and
+  `TestProtocolTableAppliesToCommittedSchema`, "18 checks resolve from 18 capability rules, want 21 from 18".
+
+The original probes, re-run on the step 5 tree: `TestProbeS_ForkMcpServersUngated` now passes, with those of steps 2 to 4; B1's,
+`TestProbeS_PromptAsNotification` and `TestProbeS_ClientCloseSessionLeavesPermissionPending` fail as their deviations record; B13's
+fails, its step being next.
+
+Gates, through the Python runner: regenerating again changes no generated file; `make pre-add-check` exit 0; `GOEXPERIMENT=nojsonv2 go
+test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier
+scan finds nothing; the API listing, 2411 lines at `v0.17.1` and in the tree, no line removed or added (`gates` is unexported).
+Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.

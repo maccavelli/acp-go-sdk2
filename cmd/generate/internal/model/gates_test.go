@@ -3,6 +3,8 @@ package model
 import (
 	"strings"
 	"testing"
+
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 )
 
 // gatesOf returns the checks of type name's gates, or nil.
@@ -60,6 +62,26 @@ func TestCapabilityRulesApply(t *testing.T) {
 	if len(plain.Gated) != 0 {
 		t.Errorf("without the initialize rule, %d types have gates", len(plain.Gated))
 	}
+
+	// A copy the merge made of a rule's definition under another name gets
+	// the rule too (0019-PLAN-behaviour-fixes.md, B6).
+	copied := strings.Replace(protocolDefs, `"Update":`, `"UnstableVerdict":{"oneOf":[{"type":"object","required":["verdict"],"properties":{"verdict":{"const":"withdrawn","type":"string"}}},
+		{"type":"object","required":["verdict","choice"],"properties":{"verdict":{"const":"chosen","type":"string"},"choice":{"type":"string"}}}],
+		"discriminator":{"propertyName":"verdict"}},"Update":`, 1)
+	prov := &load.Provenance{UnstableDefs: map[string]bool{"UnstableVerdict": true},
+		Origins: map[string]load.Origin{"UnstableVerdict": {File: load.UnstableSchemaFile, Key: "Verdict"}}}
+	p = testProtocol()
+	p.CapabilityRules = rules[:1]
+	withCopy, err := Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, copied), Provenance: prov, Protocol: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := gatesOf(withCopy, "UnstableVerdict"); len(c) != 1 || c[0].Value != "chosen" || c[0].Capability != "session.list" {
+		t.Errorf("UnstableVerdict, the unstable copy of Verdict: %+v", c)
+	}
+	if c := gatesOf(withCopy, "Verdict"); len(c) != 1 || c[0].Value != "chosen" {
+		t.Errorf("Verdict beside its copy: %+v", c)
+	}
 }
 
 // TestCapabilityRulesRefuse requires the table's checks of a rule's fields,
@@ -109,7 +131,10 @@ func TestCapabilityRulesRefuse(t *testing.T) {
 }
 
 // checkCommittedGates requires every capability rule of ACP to resolve on
-// the committed schema, as one check of its definition's gates.
+// the committed schema, as one check of its definition's gates and one of
+// each unstable copy of that definition: the three MCP rules on
+// UnstableMcpServer, the type of session/fork's servers
+// (0019-PLAN-behaviour-fixes.md, B6).
 func checkCommittedGates(t *testing.T, m *Model) {
 	t.Helper()
 	own := map[string][]GateCheck{}
@@ -122,17 +147,22 @@ func checkCommittedGates(t *testing.T, m *Model) {
 			}
 		}
 	}
-	if n != len(ACP.CapabilityRules) || n != 18 {
-		t.Errorf("%d capability rules resolve of %d, want 18: %v", n, len(ACP.CapabilityRules), own)
+	if len(ACP.CapabilityRules) != 18 || n != 21 {
+		t.Errorf("%d checks resolve from %d capability rules, want 21 from 18: %v", n, len(ACP.CapabilityRules), own)
 	}
 	for _, r := range ACP.CapabilityRules {
-		found := false
-		for _, c := range own[r.Definition] {
-			found = found || (c.Value == r.Variant && c.Capability == r.Capability && (r.Property == "" || c.Key == r.Property))
+		for _, ty := range m.ruleTypes(r.Definition) {
+			found := false
+			for _, c := range own[ty.Name] {
+				found = found || (c.Value == r.Variant && c.Capability == r.Capability && (r.Property == "" || c.Key == r.Property))
+			}
+			if !found {
+				t.Errorf("%s: no check of %s", r.name(), ty.Name)
+			}
 		}
-		if !found {
-			t.Errorf("%s: no check of %s", r.name(), r.Definition)
-		}
+	}
+	if u := own["UnstableMcpServer"]; len(u) != 3 {
+		t.Errorf("UnstableMcpServer: %d checks, want the three MCP rules: %+v", len(u), u)
 	}
 	if a := own["AuthenticateRequest"]; len(a) != 1 || a[0].Kind != GateCheckTerminalAuth || a[0].List != "AuthMethods" ||
 		a[0].Variant != "Terminal" || a[0].ID != "Id" || a[0].Field != "MethodId" {

@@ -402,8 +402,10 @@ func jsonOf(t *testing.T, v any) string {
 }
 
 // valueGates returns a message for each of the 17 capability rules that a
-// typed method sends; the terminal-auth rule and the result-only gates have
-// tests of their own.
+// typed method sends, and the three MCP rules again on session/fork, whose
+// servers are the unstable copy of McpServer (0019-PLAN-behaviour-fixes.md,
+// B6); the terminal-auth rule and the result-only gates have tests of their
+// own.
 func valueGates(t *testing.T) []valueGate {
 	t.Helper()
 	dir, other := jsonOf(t, testAbsPath()), jsonOf(t, testAbsPath("more"))
@@ -435,6 +437,11 @@ func valueGates(t *testing.T) []valueGate {
 	mcp := func(variant, server string, advertise func(n *Negotiation, on bool)) valueGate {
 		return valueGate{gatedMethod: gatedMethod{wire: AgentMethodSessionNew, capability: "mcpCapabilities." + variant, toAgent: true,
 			params: newSession(server), send: fromClient((*ClientSideConnection).NewSession), advertise: advertise}, variant: variant}
+	}
+	forkMcp := func(variant, server string, advertise func(n *Negotiation, on bool)) valueGate {
+		return valueGate{gatedMethod: gatedMethod{wire: AgentMethodSessionFork, capability: "mcpCapabilities." + variant, toAgent: true,
+			params: decoded[UnstableForkSessionRequest](t, `{"sessionId":"s","cwd":`+dir+`,"mcpServers":[`+server+`]}`),
+			send:   fromClient((*ClientSideConnection).UnstableForkSession), advertise: advertise}, variant: variant}
 	}
 	block := func(variant, capability, raw string, advertise func(n *Negotiation, on bool)) valueGate {
 		return valueGate{gatedMethod: gatedMethod{wire: AgentMethodSessionPrompt, capability: "promptCapabilities." + capability, toAgent: true,
@@ -468,6 +475,11 @@ func valueGates(t *testing.T) []valueGate {
 		mcp("sse", `{"type":"sse","name":"m","url":"https://example.invalid","headers":[]}`,
 			func(n *Negotiation, on bool) { agentCaps(n).McpCapabilities.Sse = on }),
 		mcp("acp", `{"type":"acp","name":"m","serverId":"x"}`, func(n *Negotiation, on bool) { agentCaps(n).McpCapabilities.Acp = on }),
+		forkMcp("http", `{"type":"http","name":"m","url":"https://example.invalid","headers":[]}`,
+			func(n *Negotiation, on bool) { agentCaps(n).McpCapabilities.Http = on }),
+		forkMcp("sse", `{"type":"sse","name":"m","url":"https://example.invalid","headers":[]}`,
+			func(n *Negotiation, on bool) { agentCaps(n).McpCapabilities.Sse = on }),
+		forkMcp("acp", `{"type":"acp","name":"m","serverId":"x"}`, func(n *Negotiation, on bool) { agentCaps(n).McpCapabilities.Acp = on }),
 		block("image", "image", `{"type":"image","data":"x","mimeType":"image/png"}`,
 			func(n *Negotiation, on bool) { agentCaps(n).PromptCapabilities.Image = on }),
 		block("audio", "audio", `{"type":"audio","data":"x","mimeType":"audio/wav"}`,
@@ -506,8 +518,8 @@ func valueGates(t *testing.T) []valueGate {
 func TestValueGates(t *testing.T) {
 	t.Parallel()
 	gates := valueGates(t)
-	if len(gates) != 16 {
-		t.Fatalf("%d value gates, want 16", len(gates))
+	if len(gates) != 19 {
+		t.Fatalf("%d value gates, want 19", len(gates))
 	}
 	for _, g := range gates {
 		t.Run(g.capability+" "+g.variant+g.field, func(t *testing.T) {

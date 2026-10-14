@@ -20175,6 +20175,11 @@ func (v *UnstableForkSessionRequest) gates(n *Negotiation, method string) error 
 			Field:      "additionalDirectories",
 		}
 	}
+	for i := range v.McpServers {
+		if err := v.McpServers[i].gates(n, method); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -20182,6 +20187,31 @@ func (v *UnstableForkSessionResponse) gates(n *Negotiation, method string) error
 	for i := range v.ConfigOptions {
 		if err := v.ConfigOptions[i].gates(n, method); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (u *UnstableMcpServer) gates(n *Negotiation, method string) error {
+	if u.Http != nil && !n.Response.AgentCapabilities.McpCapabilities.Http {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "mcpCapabilities.http",
+			Variant:    "http",
+		}
+	}
+	if u.Sse != nil && !n.Response.AgentCapabilities.McpCapabilities.Sse {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "mcpCapabilities.sse",
+			Variant:    "sse",
+		}
+	}
+	if u.Acp != nil && !n.Response.AgentCapabilities.McpCapabilities.Acp {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "mcpCapabilities.acp",
+			Variant:    "acp",
 		}
 	}
 	return nil
