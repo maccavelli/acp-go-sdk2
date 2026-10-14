@@ -236,6 +236,10 @@ The owner answered each question on 2026-10-13. Three answers differ from the re
   fails without writing, so the dispatch still settles the turn as `cancelled` and its answer is not written. Decision 10 is
   unchanged: the 0017 text is amended to what the code does, which is now this. Found and decided with the owner on 2026-10-14,
   writing the amendment.
+* **Decision 12's version changes: phases 1 and 2 ship as `v1.14.0`.** A tag `v1.13.0`, pushed by accident at an unfinished
+  commit of phase 2, was cached by the Go module proxy, which made it the module's `@latest`. The owner decided on 2026-10-14 to
+  release phases 1 and 2 as `v1.14.0`, its `go.mod` retracting `v1.13.0`, in place of `v0.18.0`; nothing else in decision 12 changes.
+  Recorded in [0020-MADR-retract-accidental-v1-tag.md](0020-MADR-retract-accidental-v1-tag.md).
 
 ## Decision Drivers
 

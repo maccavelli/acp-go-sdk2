@@ -657,3 +657,10 @@ amendments in steps 7 and 9, B18 by step 4's, B2 by step 5's, B14 by step 6's, B
 B21 by the amendments of step 9. Acceptance waits on CI for the pushed commits; then this PLAN and its `docs/README.md` row become
 `complete`, and the owner tags `v0.18.0` and publishes its release from
 [0019-REPORT-release-notes-v0-18-0.md](../reports/0019-REPORT-release-notes-v0-18-0.md).
+
+Deviation, 2026-10-14: the release version. After step 11, the owner found that a tag `v1.13.0`, pushed by accident at `943f073`, step 6's
+unfinished commit, had been cached by the Go module proxy and was the module's `@latest` (CI run `38505697749` on it failed). The
+owner deleted the remote tag and decided to release phases 1 and 2 as `v1.14.0`, its `go.mod` retracting `v1.13.0`, in place of
+`v0.18.0`: [0020-MADR-retract-accidental-v1-tag.md](0020-MADR-retract-accidental-v1-tag.md), executed by
+[0020-PLAN-retract-accidental-v1-tag.md](0020-PLAN-retract-accidental-v1-tag.md). Where this PLAN says `v0.18.0`, read `v1.14.0`;
+its acceptance's tag is `v1.14.0`, and its close follows 0020's step 4. The release notes keep their file's name.
