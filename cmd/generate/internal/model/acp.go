@@ -96,6 +96,11 @@ var ACP = Protocol{
 		{Definition: defMessage, Property: "content", Source: srcMessageContent},
 		{Definition: defMessage, Property: keyMeta, Source: srcMessageMeta},
 	},
+	// The optional raw properties whose explicit null the schema keeps apart
+	// from omission (0019-PLAN-generator-hardening.md, G3).
+	NullRetained: []PatchRule{
+		{Definition: "UnstableMcpError", Property: "data", Source: srcMcpErrorData},
+	},
 	// helpers.go builds these with TextBlock, ToolContent, and the like.
 	HandWrittenHelpers: []string{"ContentBlock", defSessionUpdate, "ToolCallContent"},
 	// The properties the protocol requires to be absolute paths, which the
@@ -175,7 +180,7 @@ const (
 	keyTitle     = "title"
 )
 
-// The schema sentences the patch rules follow.
+// The schema sentences the patch and null-retained rules follow.
 const (
 	// srcCompactionPatch is from the schema, CompactionUpdate.
 	srcCompactionPatch = "`summary`, `error`, and `_meta` have patch semantics: omission leaves the stored value unchanged, `null` clears it, and a concrete value replaces it."
@@ -187,6 +192,8 @@ const (
 	srcMessageContent = "Omitted leaves content unchanged; `null` or `[]` clears it."
 	// srcMessageMeta is from the schema, SessionMessage's _meta.
 	srcMessageMeta = "Omitted leaves metadata unchanged; `null` removes it."
+	// srcMcpErrorData is from the unstable schema, McpError's data.
+	srcMcpErrorData = "Optional error data; explicit null is retained."
 )
 
 // The specification sentences the absolute-path rules follow.

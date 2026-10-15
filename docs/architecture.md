@@ -110,7 +110,10 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   definition, as `AbsolutePaths` does, and the model refuses one whose property
   is required, has a default, or lacks `x-deserialize-default-on-error`. The
   field's type becomes a `RefPatch` of its type without the pointer, emitted as
-  `Patch[T]` and tagged `omitzero`.
+  `Patch[T]` and tagged `omitzero`;
+- `NullRetained`, the optional raw properties whose explicit `null` the schema
+  keeps apart from omission, each with the schema sentence it follows: the
+  unstable `McpError.data`. A field built from one keeps `null` when decoded.
 
 The model applies a rule only where the schema carries its subject, and refuses
 a subject whose shape the rule cannot use with an error that starts
@@ -134,11 +137,17 @@ without a discriminator tries required keys, array items, and then each
 variant in turn. A variant that is a `$ref` takes its keys, discriminator
 value, and shape from the definition it names. Decode errors name the union
 and, for a variant, the discriminator value or the variant. A struct with a
-required key, a default, a lenient field, flattened members, or a catch-all's
-`Extra` gets a generated `UnmarshalJSON`. A struct gets a generated
+required key, a default, a lenient field, flattened members, or an `Extra`
+gets a generated `UnmarshalJSON`. A struct gets a generated
 `MarshalJSON` only when it does more than encode its fields: a nilable array
-or object default it writes in, a nil required array or map, a catch-all's
-`Extra`, or flattened members.
+or object default it writes in, a nil required array or map, an `Extra`, or
+flattened members. A catch-all has an `Extra`, and so does an object whose
+`additionalProperties` is `true` (`Type.KeepExtra`): it keeps the keys it does
+not declare, after folding, and writes them back, a declared field winning.
+The model refuses an `additionalProperties` the struct would not keep: a typed
+one on an object with properties, one beside flattened members, on a union
+with keys of its own, on an inline object property, or on an inline variant
+other than the catch-all, and a property that would take the field `Extra`.
 
 Generated decoders read a key as `encoding/json` reads a struct field's name:
 under Unicode case folding, the last matching key winning (`foldKeys` in
@@ -168,7 +177,12 @@ value that decodes is that value, and one that does not is absent;
 `types_gen.go` emits each helper once, and `Patch[T]` with its constructors
 and methods once, when a patch field exists. A null raw value is an absent
 one, as ACP v1 defines it for `rawInput` and `rawOutput`; a required one, such
-as `result`, keeps `null`. `Validate` checks what the schema states: a
+as `result`, keeps `null`, and so does an optional one the protocol table's
+`NullRetained` names, a property whose schema says explicit null is retained
+(the unstable `McpError.data`): the model refuses such a rule on a required or
+non-raw property, or one whose description does not state its source, and a
+model test requires every committed property that says so to be named.
+`Validate` checks what the schema states: a
 union has exactly one variant set, a string meets its `minLength`, a number
 meets a bound its Go type does not enforce, and every nested value validates,
 a patch's through the value it holds;

@@ -191,7 +191,7 @@ func emitObjectSchema(f *goFile, t *model.Type) {
 		f.comment(ns.Doc...)
 		emitStruct(f, ns.Name, ns.Fields, nil, false, "", ns.Validation)
 	}
-	emitStruct(f, t.Name, t.Fields, t.Members, false, "", t.Validation)
+	emitStruct(f, t.Name, t.Fields, t.Members, t.KeepExtra, "", t.Validation)
 }
 
 // emitStruct emits type name struct { fields } and the methods its required
@@ -245,10 +245,11 @@ func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 }
 
 // emitObjectCodec synthesizes MarshalJSON for structs with fields whose
-// schema defaults it injects or that are required slices or maps, a
-// catch-all's Extra, or flattened members, and UnmarshalJSON for
-// structs with required keys, defaults, lenient fields, optional raw fields,
-// flattened members, or a catch-all's Extra.
+// schema defaults it injects or that are required slices or maps, an Extra
+// (a catch-all's, or an object's whose additionalProperties is true), or
+// flattened members, and UnmarshalJSON for structs with required keys,
+// defaults, lenient fields, optional raw fields, flattened members, or an
+// Extra.
 func emitObjectCodec(f *goFile, name string, fields []*model.Field, members []*model.Member, keepExtra bool, exempt string) {
 	var defaults, fills, lenient, absent []*model.Field
 	var required []string
@@ -290,7 +291,7 @@ func injectsDefault(fld *model.Field) bool {
 
 // emitObjectMarshal emits MarshalJSON: it fills nil slices and maps with
 // their defaults, and nil required ones with empty values, before encoding,
-// writes back a catch-all's Extra, and writes the set member's keys.
+// writes back an Extra, and writes the set member's keys.
 func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, members []*model.Member, keepExtra bool) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	marshal := func(x ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Marshal"), x) }

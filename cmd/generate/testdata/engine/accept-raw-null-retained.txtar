@@ -1,0 +1,85 @@
+The protocol table's null-retained rule: an optional raw property whose schema
+says explicit null is retained keeps null, distinct from absent; another
+optional raw property reads null as absent (0019-PLAN-generator-hardening.md,
+G3). The definition takes the name the rule gives, as the merged schema names
+it. The meta declares $/cancel_request and the schema its smallest definition,
+which the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "UnstableMcpError": {"type": "object", "properties": {"code": {"type": "integer", "format": "int32"}, "data": {"description": "Optional error data; explicit null is retained."}}, "required": ["code"]},
+  "Holder": {"type": "object", "properties": {"code": {"type": "integer", "format": "int32"}, "data": {"description": "Optional data."}}, "required": ["code"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+type Holder struct{Code int32 "json:\"code\""; Data json.RawMessage "json:\"data,omitempty\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type UnstableMcpError struct{Code int32 "json:\"code\""; Data json.RawMessage "json:\"data,omitempty\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*Holder).UnmarshalJSON(b []byte) error
+func (*UnstableMcpError).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Absent, null, and a value are three states: nil, the bytes null, and the
+// value, each sent back as it came.
+func TestNullRetained(t *testing.T) {
+	for _, tc := range []struct{ in, data, out string }{
+		{`{"code":1}`, "", `{"code":1}`},
+		{`{"code":1,"data":null}`, "null", `{"code":1,"data":null}`},
+		{`{"code":1,"data":{"k":1}}`, `{"k":1}`, `{"code":1,"data":{"k":1}}`},
+	} {
+		var e UnstableMcpError
+		if err := json.Unmarshal([]byte(tc.in), &e); err != nil {
+			t.Fatal(err)
+		}
+		if string(e.Data) != tc.data || (tc.data == "" && e.Data != nil) {
+			t.Errorf("%s: data decoded as %q", tc.in, string(e.Data))
+		}
+		b, err := json.Marshal(e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(b) != tc.out {
+			t.Errorf("%s sent as %s, want %s", tc.in, b, tc.out)
+		}
+	}
+}
+
+// Elsewhere an optional raw null is absent, as ACP v1 defines.
+func TestNullStillAbsentElsewhere(t *testing.T) {
+	var h Holder
+	if err := json.Unmarshal([]byte(`{"code":1,"data":null}`), &h); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.Data) != 0 {
+		t.Errorf("data decoded as %q, want empty", string(h.Data))
+	}
+}

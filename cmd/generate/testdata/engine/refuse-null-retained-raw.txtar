@@ -1,0 +1,13 @@
+Refused: the protocol table's null-retained rule on a property that is not
+raw JSON, which has no null of its own (0019-PLAN-generator-hardening.md, G3).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "UnstableMcpError": {"type": "object", "properties": {"code": {"type": "integer", "format": "int32"}, "data": {"type": ["string", "null"], "description": "Optional error data; explicit null is retained."}}, "required": ["code"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+UnstableMcpError.data:
+a null-retained rule needs a raw property, not *string

@@ -131,6 +131,11 @@ type Type struct {
 	// references (0011-MADR-harden-code-generator-engine.md, "Found in step 7
 	// and decided").
 	Members []*Member
+	// KeepExtra is true for a KindObject whose additionalProperties is the
+	// boolean schema true: the struct keeps the keys it does not declare, so
+	// the payload encodes back with them (0019-PLAN-generator-hardening.md,
+	// G2).
+	KeepExtra bool
 	// Underlying is the Go type of a KindPrimitive.
 	Underlying *TypeRef
 	// Variants holds one entry per entry of a KindUnion's anyOf or oneOf.
@@ -315,6 +320,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		return nil, err
 	}
 	if err := m.resolvePatchFields(r); err != nil {
+		return nil, err
+	}
+	if err := m.resolveNullRetained(r); err != nil {
 		return nil, err
 	}
 	if err := m.buildValidations(); err != nil {
@@ -554,6 +562,9 @@ func buildObject(n *namer, t *Type) error {
 		if prop.Ref != "" || primaryType(prop) != schemaTypeObject || len(prop.Properties) == 0 {
 			continue
 		}
+		if admitsExtra(prop.AdditionalProperties) {
+			return fmt.Errorf("%s: additionalProperties on an inline object is not kept; declare it as a definition", owner)
+		}
 		nested, err := generateNestedTypeName(t.Name, key, n.typeNames)
 		if err != nil {
 			return fmt.Errorf("%s: %w", owner, err)
@@ -576,7 +587,62 @@ func buildObject(n *namer, t *Type) error {
 		return err
 	}
 	t.Fields = fields
+	return keepExtra(t)
+}
+
+// keepExtra sets t.KeepExtra when t's additionalProperties is the boolean
+// schema true, and refuses what the struct could not keep: a typed
+// additionalProperties, flattened members, whose keys Extra would hold a
+// second time, and a property that would take the field Extra
+// (0019-PLAN-generator-hardening.md, G2).
+func keepExtra(t *Type) error {
+	ap := t.def.AdditionalProperties
+	if !admitsExtra(ap) {
+		return nil
+	}
+	if v, ok := ap.BoolSchema(); !ok || !v {
+		return fmt.Errorf("%s: a typed additionalProperties on an object with properties is not kept; only true is", t.Name)
+	}
+	if len(t.Members) > 0 {
+		return fmt.Errorf("%s: additionalProperties cannot keep the keys of an object with flattened members", t.Name)
+	}
+	for _, f := range t.Fields {
+		if f.Name == "Extra" {
+			return fmt.Errorf("%s: property %q becomes field Extra, which additionalProperties needs", t.Name, f.Key)
+		}
+	}
+	t.KeepExtra = true
 	return nil
+}
+
+// checkUnionExtra refuses an additionalProperties a union would not keep: on
+// a union with keys of its own, and on an inline variant other than the
+// catch-all, which alone keeps the keys it does not declare
+// (0019-PLAN-generator-hardening.md, G2).
+func checkUnionExtra(t *Type, list []*load.Definition) error {
+	if len(t.def.Properties) > 0 && admitsExtra(t.def.AdditionalProperties) {
+		return fmt.Errorf("%s: additionalProperties on a union with keys of its own is not kept", t.Name)
+	}
+	for idx, v := range list {
+		vi := t.Variants[idx]
+		if vi.Skip || vi.Inline == nil || vi.Inline.Kind != InlineStruct || idx == t.CatchAll {
+			continue
+		}
+		if admitsExtra(v.AdditionalProperties) {
+			return fmt.Errorf("%s variant %d: additionalProperties on a variant other than the catch-all is not kept", t.Name, idx+1)
+		}
+	}
+	return nil
+}
+
+// admitsExtra reports whether an additionalProperties admits keys an object
+// does not declare: it is present and not the boolean schema false.
+func admitsExtra(ap *load.Definition) bool {
+	if ap == nil {
+		return false
+	}
+	v, ok := ap.BoolSchema()
+	return !ok || v
 }
 
 // buildUnion names every variant of t, in schema order, and its helpers.
@@ -611,6 +677,9 @@ func buildUnion(schema *load.Schema, n *namer, t *Type, r *rules) error {
 		return err
 	}
 	if err := checkOwnKeys(t, list); err != nil {
+		return err
+	}
+	if err := checkUnionExtra(t, list); err != nil {
 		return err
 	}
 	if t.def.DocsIgnore || r.helpers[t.Name] {
@@ -1191,6 +1260,68 @@ func (m *Model) resolvePatchFields(r *rules) error {
 		for _, vi := range t.Variants {
 			if vi.Inline != nil {
 				patch(vi.Inline.Fields)
+			}
+		}
+	}
+	return nil
+}
+
+// resolveNullRetained resolves each null-retained rule of the table to its
+// property's definition, and makes every field built from that property keep
+// a JSON null, where another optional raw field reads it as absent. A rule
+// whose definition or property the schema lacks is skipped; one on a required
+// or non-raw property, or one whose source the property's description does
+// not state, is refused (0019-PLAN-generator-hardening.md, G3).
+func (m *Model) resolveNullRetained(r *rules) error {
+	if r.table == nil {
+		return nil
+	}
+	props := map[*load.Definition]string{}
+	for _, rule := range r.table.NullRetained {
+		def := m.schema.Defs[rule.Definition]
+		if m.Type(rule.Definition) == nil || def == nil {
+			continue
+		}
+		ed := expandAllOf(m.schema, def)
+		prop := ed.Properties[rule.Property]
+		if prop == nil {
+			continue
+		}
+		owner := rule.Definition + "." + rule.Property
+		switch {
+		case slices.Contains(ed.Required, rule.Property):
+			return fmt.Errorf("%s: a null-retained rule needs an optional property", owner)
+		case !strings.Contains(prop.Description, rule.Source):
+			return fmt.Errorf("%s: its description does not state %q", owner, rule.Source)
+		}
+		props[prop] = owner
+	}
+	retain := func(fields []*Field) error {
+		for _, f := range fields {
+			owner, ok := props[f.prop]
+			if !ok {
+				continue
+			}
+			if f.Type.Kind != RefRaw {
+				return fmt.Errorf("%s: a null-retained rule needs a raw property, not %s", owner, f.Type)
+			}
+			f.NullIsAbsent = false
+		}
+		return nil
+	}
+	for _, t := range m.Types {
+		lists := [][]*Field{t.Fields}
+		for _, ns := range t.NestedStructs {
+			lists = append(lists, ns.Fields)
+		}
+		for _, vi := range t.Variants {
+			if vi.Inline != nil {
+				lists = append(lists, vi.Inline.Fields)
+			}
+		}
+		for _, fields := range lists {
+			if err := retain(fields); err != nil {
+				return err
 			}
 		}
 	}

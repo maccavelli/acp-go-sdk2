@@ -1,0 +1,15 @@
+Refused: additionalProperties true on an inline variant other than the
+catch-all, which alone keeps the keys it does not declare (0019-PLAN-generator-hardening.md, G2).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"oneOf": [
+    {"title": "A", "type": "object", "properties": {"kind": {"type": "string", "const": "a"}}, "required": ["kind"], "additionalProperties": true},
+    {"title": "B", "type": "object", "properties": {"kind": {"type": "string", "const": "b"}}, "required": ["kind"]}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+U variant 1:
+additionalProperties on a variant other than the catch-all is not kept

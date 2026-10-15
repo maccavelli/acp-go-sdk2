@@ -127,11 +127,6 @@ func TestOptionalRawFieldsNullIsAbsent(t *testing.T) {
 			mustDecode(t, b, &v)
 			return v.Data
 		}},
-		{"UnstableMcpError.data", `{"code":1,"message":"m","data":`, func(t *testing.T, b []byte) json.RawMessage {
-			var v UnstableMcpError
-			mustDecode(t, b, &v)
-			return v.Data
-		}},
 		{"AgentNotification.params", `{"method":"m","params":`, func(t *testing.T, b []byte) json.RawMessage {
 			var v AgentNotification
 			mustDecode(t, b, &v)
@@ -169,6 +164,65 @@ func TestOptionalRawFieldsNullIsAbsent(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestUnstableMcpErrorKeepsExtraAndNull covers McpError, whose schema keeps
+// the keys it does not declare and an explicit null data apart from an omitted
+// one (0019-PLAN-generator-hardening.md, G2 and G3): each is read and sent back
+// as received.
+func TestUnstableMcpErrorKeepsExtraAndNull(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, in, data string
+		extra          map[string]string
+	}{
+		{"absent", `{"code":1,"message":"m"}`, "", nil},
+		{"null", `{"code":1,"message":"m","data":null}`, "null", nil},
+		{"value", `{"code":1,"message":"m","data":{"n":9007199254740993}}`, `{"n":9007199254740993}`, nil},
+		{"extra keys", `{"code":1,"message":"m","vendor":"x","n":[1,2]}`, "", map[string]string{"vendor": `"x"`, "n": `[1,2]`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var v UnstableMcpError
+			mustDecode(t, []byte(tt.in), &v)
+			if string(v.Data) != tt.data || (tt.data == "" && v.Data != nil) {
+				t.Errorf("data decoded as %q, want %q", string(v.Data), tt.data)
+			}
+			if len(v.Extra) != len(tt.extra) {
+				t.Errorf("Extra %v, want %v", v.Extra, tt.extra)
+			}
+			for k, want := range tt.extra {
+				if string(v.Extra[k]) != want {
+					t.Errorf("Extra[%q] = %s, want %s", k, v.Extra[k], want)
+				}
+			}
+			out, err := json.Marshal(v)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sent := rawKeys(t, out)
+			if got, ok := sent["data"]; (tt.data == "" && ok) || string(got) != tt.data {
+				t.Errorf("data sent as %s, want %q: %s", got, tt.data, out)
+			}
+			for k, want := range tt.extra {
+				if string(sent[k]) != want {
+					t.Errorf("%s sent as %s, want %s: %s", k, sent[k], want, out)
+				}
+			}
+		})
+	}
+	t.Run("a declared key wins", func(t *testing.T) {
+		t.Parallel()
+		v := UnstableMcpError{Code: 1, Message: "m", Extra: map[string]json.RawMessage{"message": json.RawMessage(`"x"`)}}
+		out, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := string(rawKeys(t, out)["message"]); got != `"m"` {
+			t.Errorf("message sent as %s, want \"m\": %s", got, out)
+		}
+	})
 }
 
 // TestRequiredRawResultKeepsNull requires a required raw field to keep null:

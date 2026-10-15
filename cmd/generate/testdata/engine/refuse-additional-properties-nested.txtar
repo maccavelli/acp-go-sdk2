@@ -1,0 +1,13 @@
+Refused: additionalProperties true on an inline object property, whose
+struct keeps no other keys (0019-PLAN-generator-hardening.md, G2).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Outer": {"type": "object", "properties": {"inner": {"type": "object", "properties": {"a": {"type": "string"}}, "additionalProperties": true}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Outer.properties.inner:
+additionalProperties on an inline object is not kept; declare it as a definition

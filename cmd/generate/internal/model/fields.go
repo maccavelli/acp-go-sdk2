@@ -133,7 +133,7 @@ type Field struct {
 	// NullIsAbsent is true for a raw field that is not required: a JSON null
 	// in it decodes to an empty value, as ACP v1 defines a null raw value to
 	// be an absent one (0012-MADR-schema-fidelity-framework.md, amendment of
-	// 2026-10-11).
+	// 2026-10-11), unless a null-retained rule names its property.
 	NullIsAbsent bool
 	// Patch is true for a property a patch rule names: its type is RefPatch,
 	// omitted when absent (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md).

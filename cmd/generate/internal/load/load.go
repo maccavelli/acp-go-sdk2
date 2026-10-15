@@ -80,6 +80,15 @@ type Definition struct {
 	boolSchema *bool `json:"-"`
 }
 
+// BoolSchema reports whether d was the boolean schema true or false, and
+// which.
+func (d *Definition) BoolSchema() (value, ok bool) {
+	if d == nil || d.boolSchema == nil {
+		return false, false
+	}
+	return *d.boolSchema, true
+}
+
 // UnmarshalJSON allows Definition to decode both object and boolean JSON
 // Schema forms. A keyword Definition does not model is an error, so a schema
 // update that adds one fails here rather than being ignored.

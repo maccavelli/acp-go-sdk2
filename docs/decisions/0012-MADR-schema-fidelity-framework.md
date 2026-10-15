@@ -360,6 +360,23 @@ by [0015-PLAN-validate-absolute-protocol-paths.md](0015-PLAN-validate-absolute-p
 * **One rule reads by direction.** A path is absolute when sent if it is absolute in POSIX or Windows form, and when received if the
   receiving host's `filepath.IsAbs` says so; `Validate()` applies the receiving reading.
 
+## Amendment 2026-10-14, explicit null retained where the schema says so
+
+Decided by the owner in [0019-MADR-remediate-debugging-pass-findings.md](0019-MADR-remediate-debugging-pass-findings.md), decision 5, and
+carried out by step 2 of [0019-PLAN-generator-hardening.md](0019-PLAN-generator-hardening.md). The amendment of 2026-10-11, "a null raw value
+is an absent one", rests on ACP v1's rule for `rawInput` and `rawOutput`, and applied it to every optional raw field. The unstable schema's
+`McpError.data` says the opposite of its own field: "Optional error data; explicit null is retained." (`schema/schema.unstable.json:8991`),
+and its definition that "explicit `null` is preserved separately from an omitted key".
+
+* **An optional raw field the protocol table names keeps `null`.** The generator's protocol table lists such properties as `NullRetained`,
+  each with the schema sentence it follows; one is `UnstableMcpError.data`. The field stays `json.RawMessage`: `nil` is absent, the bytes
+  `null` are an explicit null, and any other bytes a value, each sent back as it came. The exported API does not change.
+* **The rule of 2026-10-11 holds everywhere else.** Every other optional raw field still reads `null` as absent. A model test requires every
+  property of the committed schemas whose description says an explicit null is retained to be named in the table, and the model refuses a
+  rule on a required or non-raw property, or on one whose description no longer states the rule's sentence.
+* **A behaviour change for one unstable type.** A peer's `"data": null` in an `UnstableMcpError` now decodes to the bytes `null`, where it
+  decoded empty, and is sent on; the release notes name it.
+
 ## More Information
 
 Sources:

@@ -1,0 +1,13 @@
+Refused: an object whose additionalProperties is true keeps its other keys in
+the field Extra, which a property of its own would take (0019-PLAN-generator-hardening.md, G2).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Open": {"type": "object", "properties": {"extra": {"type": "string"}}, "additionalProperties": true},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Open:
+property "extra" becomes field Extra, which additionalProperties needs

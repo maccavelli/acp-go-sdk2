@@ -69,6 +69,106 @@ func TestPatchRules(t *testing.T) {
 	}
 }
 
+// retainedDefs adds Held, an object with a required integer, an optional raw
+// value whose description states the rule's source, one that does not, a
+// required raw value that does, and an optional string that does, to
+// protocolDefs.
+const retainedDefs = `"Held":{"type":"object","required":["code","need"],"properties":{
+	"code":{"type":"integer"},
+	"data":{"description":"Data; explicit null is retained."},
+	"other":{"description":"Other data."},
+	"need":{"description":"Needed; explicit null is retained."},
+	"str":{"type":["string","null"],"description":"Text; explicit null is retained."}}},`
+
+// TestNullRetainedRules requires a null-retained rule to make its property's
+// field keep null, another optional raw field to read null as absent, a rule
+// whose definition or property the schema lacks to apply nothing, and the
+// table's checks and Build's to refuse a rule they cannot use
+// (0019-PLAN-generator-hardening.md, G3).
+func TestNullRetainedRules(t *testing.T) {
+	t.Parallel()
+	defs := strings.Replace(protocolDefs, `"Update":`, retainedDefs+`"Update":`, 1)
+	const src = "explicit null is retained"
+	build := func(rules ...PatchRule) (*Model, error) {
+		p := testProtocol()
+		p.NullRetained = rules
+		return Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, defs), Protocol: p})
+	}
+	m, err := build(PatchRule{"Held", "data", src}, PatchRule{"Held", "nope", src}, PatchRule{"Nope", "data", src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]*Field{}
+	for _, f := range m.Type("Held").Fields {
+		got[f.Key] = f
+	}
+	if f := got["data"]; f.NullIsAbsent || f.Type.Kind != RefRaw {
+		t.Errorf("data, ruled: NullIsAbsent %v, %s", f.NullIsAbsent, f.Type)
+	}
+	if f := got["other"]; !f.NullIsAbsent {
+		t.Errorf("other, no rule: NullIsAbsent %v", f.NullIsAbsent)
+	}
+
+	for _, tt := range []struct {
+		name string
+		rule PatchRule
+		want string
+	}{
+		{"required", PatchRule{"Held", "need", src}, "Held.need: a null-retained rule needs an optional property"},
+		{"not raw", PatchRule{"Held", "str", src}, "Held.str: a null-retained rule needs a raw property, not *string"},
+		{"not stated", PatchRule{"Held", "other", src}, `Held.other: its description does not state "explicit null is retained"`},
+		{"no source", PatchRule{"Held", "data", ""}, "it needs a definition, a property, and a source"},
+	} {
+		if _, err := build(tt.rule); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: Build = %v, want an error containing %q", tt.name, err, tt.want)
+		}
+	}
+	if _, err := build(PatchRule{"Held", "data", src}, PatchRule{"Held", "data", "Data"}); err == nil ||
+		!strings.Contains(err.Error(), "null-retained rule Held.data: two rules") {
+		t.Errorf("two rules: Build = %v", err)
+	}
+}
+
+// retainedWording is how the schema says that an explicit null is kept apart
+// from omission (0019-PLAN-generator-hardening.md, G3).
+var retainedWording = regexp.MustCompile("(?i)explicit [`']?null[`']? is (retained|preserved)")
+
+// checkCommittedNullRetained requires every property of the committed schemas
+// whose description says an explicit null is retained, and every definition
+// that says so of a property, to have a null-retained rule of ACP, and the
+// rules to leave exactly UnstableMcpError.data an optional raw field that
+// keeps null.
+func checkCommittedNullRetained(t *testing.T, m *Model) {
+	t.Helper()
+	rules := map[[2]string]bool{}
+	ruled := map[string]bool{}
+	for _, r := range ACP.NullRetained {
+		rules[[2]string{r.Definition, r.Property}] = true
+		ruled[r.Definition] = true
+	}
+	for name, def := range m.schema.Defs {
+		if retainedWording.MatchString(def.Description) && !ruled[name] {
+			t.Errorf("%s: its description says an explicit null is retained, and no null-retained rule names it", name)
+		}
+		for key, p := range expandAllOf(m.schema, def).Properties {
+			if retainedWording.MatchString(p.Description) && !rules[[2]string{name, key}] {
+				t.Errorf("%s.%s: its description says an explicit null is retained, and no null-retained rule names it", name, key)
+			}
+		}
+	}
+	var kept []string
+	for _, ty := range m.Types {
+		for _, f := range ty.Fields {
+			if f.Type.Kind == RefRaw && !f.Required && !f.NullIsAbsent {
+				kept = append(kept, ty.Name+"."+f.Key)
+			}
+		}
+	}
+	if !slices.Equal(kept, []string{"UnstableMcpError.data"}) {
+		t.Errorf("optional raw fields that keep null: %v, want [UnstableMcpError.data]", kept)
+	}
+}
+
 // patchWording is how the schema says that null differs from omission, and
 // sameWording how it says that they do not
 // (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md, issue #5).
@@ -78,12 +178,11 @@ var (
 )
 
 // patchExceptions are the properties the patch wording matches whose text
-// says null and omission are the same, or which 0019's G3 decides, by the
-// names of the merged schema.
+// says null and omission are the same, by the names of the merged schema. A
+// property a null-retained rule names is not a patch field either.
 var patchExceptions = [][2]string{
 	{"SessionMessage", "recipientSessionId"}, {"SessionMessage", "senderSessionId"},
 	{"SessionMessageChunk", "recipientSessionId"}, {"SessionMessageChunk", "senderSessionId"},
-	{"UnstableMcpError", "data"},
 }
 
 // checkCommittedPatchFields requires every property of the committed schemas
@@ -109,7 +208,8 @@ func checkCommittedPatchFields(t *testing.T, m *Model) {
 				continue
 			}
 			k := [2]string{name, key}
-			if !rules[k] && !slices.Contains(patchExceptions, k) {
+			retained := slices.ContainsFunc(ACP.NullRetained, func(r PatchRule) bool { return r.Definition == name && r.Property == key })
+			if !rules[k] && !slices.Contains(patchExceptions, k) && !retained {
 				t.Errorf("%s.%s: its description gives null a meaning of its own, and no patch rule names it: %q", name, key, d)
 			}
 		}

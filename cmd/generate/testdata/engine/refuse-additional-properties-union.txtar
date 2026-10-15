@@ -1,0 +1,15 @@
+Refused: additionalProperties true on a union with keys of its own, which
+keeps no other keys (0019-PLAN-generator-hardening.md, G2).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"type": "object", "properties": {"note": {"type": "string"}}, "additionalProperties": true, "oneOf": [
+    {"title": "A", "type": "object", "properties": {"kind": {"type": "string", "const": "a"}}, "required": ["kind"]},
+    {"title": "B", "type": "object", "properties": {"kind": {"type": "string", "const": "b"}}, "required": ["kind"]}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+U:
+additionalProperties on a union with keys of its own is not kept

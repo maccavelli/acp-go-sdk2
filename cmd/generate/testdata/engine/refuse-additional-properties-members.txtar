@@ -1,0 +1,15 @@
+Refused: additionalProperties true on an object with flattened members, whose
+keys Extra would hold a second time (0019-PLAN-generator-hardening.md, G2).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "A": {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"]},
+  "B": {"type": "object", "properties": {"b": {"type": "string"}}, "required": ["b"]},
+  "Both": {"type": "object", "properties": {"note": {"type": "string"}}, "additionalProperties": true, "anyOf": [{"$ref": "#/$defs/A"}, {"$ref": "#/$defs/B"}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Both:
+additionalProperties cannot keep the keys of an object with flattened members

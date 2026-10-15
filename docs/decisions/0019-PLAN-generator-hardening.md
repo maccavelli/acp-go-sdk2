@@ -259,3 +259,64 @@ planted break in a scratch copy: with `types_gen.go:16729` and `main.go:66` chan
 
 Gates, through the Python runner: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file
 changed in this step.
+
+The owner committed step 1's record as `100701e`.
+
+### Step 2, G2 and G3, 2026-10-14
+
+What was built, on `100701e`:
+
+* G2. `load.Definition.BoolSchema` reports a boolean schema. `model.Type.KeepExtra` is set by `keepExtra`, called at the end of
+  `buildObject`, when `additionalProperties` is the boolean schema `true`; `emitObjectSchema` passes it to `emitStruct`, the catch-all's
+  path. The model refuses, naming the definition: a typed `additionalProperties` on an object with properties; one beside flattened
+  members; a property that would take the field `Extra`; one on an inline object property (in `buildObject`); and, in
+  `checkUnionExtra`, one on a union with keys of its own or on an inline variant other than the catch-all. `admitsExtra` reads an
+  `additionalProperties` that is present and not `false`.
+* G3. The protocol table's `NullRetained []PatchRule`, checked by `checkRules` like `PatchFields` (a definition, a property and a
+  source; no two rules for one property), with one rule in `ACP`: `UnstableMcpError` `data`, its source the schema's sentence
+  "Optional error data; explicit null is retained." `resolveNullRetained`, after `resolvePatchFields`, skips a rule whose definition or
+  property the schema lacks, refuses one on a required property or whose source the description does not contain, and, for every field
+  built from the property, refuses a non-raw one and clears `NullIsAbsent` on a raw one.
+* Regenerated: `types_gen.go` changes in `UnstableMcpError` alone: the field `Extra`, a `MarshalJSON`, and an `UnmarshalJSON` that fills
+  `Extra` and no longer calls `absentIfNull` on `Data`; 35 lines added, 2 removed. No other generated file changes.
+* Tests. Root: the `UnstableMcpError.data` row leaves `TestOptionalRawFieldsNullIsAbsent`; `TestUnstableMcpErrorKeepsExtraAndNull`
+  (`raw_value_test.go`) requires absent, `null`, a value and extra keys to be read and sent back as received, and a declared key to win
+  over an `Extra` entry of its name, under both builds. Model: `TestNullRetainedRules` (`patch_test.go`); the guard
+  `checkCommittedNullRetained`, called by `TestProtocolTableAppliesToCommittedSchema`, requires every committed definition and property
+  whose description says an explicit null is retained to be named by a rule, and `UnstableMcpError.data` to be the only optional raw
+  field that keeps `null`. Engine cases: `accept-additional-properties` and `accept-raw-null-retained`, each with a behaviour test;
+  `refuse-additional-properties-extra-name`, `-members`, `-typed`, `-nested`, `-union`, `-variant`; `refuse-null-retained-required`,
+  `-source`, `-raw`.
+* Documentation: `README.md`, the raw-value passage (`UnstableMcpError.data` keeps `null`) and a new passage on `Extra`;
+  `docs/architecture.md`, the protocol table's `NullRetained`, the open object's `Extra` and its refusals, and the null-retained
+  exception to the raw `null` rule; [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md), "Amendment
+  2026-10-14, explicit null retained where the schema says so", placed last, after the amendments in date order.
+
+Where this differs from "Design" in detail, not in decision: the rule names the definition `UnstableMcpError`, as the merged schema
+names it and as every rule of the table does, where "Design" says `McpError`; the design named two of G2's refusal cases and two of G3's,
+and the step pins each refusal it lists, so four more G2 cases and `refuse-null-retained-raw` were added; the `UnstableMcpError.data`
+entry leaves `patchExceptions`, which now skips a property a null-retained rule names.
+
+Planted breaks, each in a fresh scratch copy (15 of 15 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| `emitStruct` given `false` for `t.KeepExtra` | `TestEngineBehaviour/accept-additional-properties`: "o.Extra undefined" |
+| the same, regenerated, at the root | `raw_value_test.go:192`: "v.Extra undefined" (build failed) |
+| the `Extra` name check never matches | `refuse-additional-properties-extra-name`: the output does not type-check, not the expected error |
+| each of the members, typed, nested, union and variant refusals removed | its case: "run accepted the schema" |
+| `NullIsAbsent` not cleared | `TestEngineBehaviour/accept-raw-null-retained`: `{"code":1,"data":null}: data decoded as ""` |
+| the same, regenerated, at the root | `TestUnstableMcpErrorKeepsExtraAndNull/null`: `data decoded as "", want "null"` |
+| each of the required, source and raw refusals removed | its case: "run accepted the schema" |
+| the `ACP` rule removed | `TestProtocolTableAppliesToCommittedSchema`: "UnstableMcpError.data: its description says an explicit null is retained, and no null-retained rule names it" |
+| the two-rules check never matches | `TestNullRetainedRules`: "two rules: Build = \<nil\>" |
+
+Gates, through the Python runner, on the tree: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
+`GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in
+`cmd/generate`. The API listing: 2426 lines at `v1.14.0`, 2428 in the tree; 0 removed and 2 added, exactly as expected:
+
+```text
++ field UnstableMcpError.Extra map[string]json.RawMessage
++ method (UnstableMcpError) MarshalJSON () ([]byte, error)
+```

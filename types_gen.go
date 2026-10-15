@@ -16714,19 +16714,52 @@ type UnstableMcpError struct {
 	Data json.RawMessage `json:"data,omitempty"`
 	// Inner MCP error message.
 	Message string `json:"message"`
+	// Extra holds the keys of the payload this struct does not declare, as received.
+	// MarshalJSON writes them back.
+	Extra map[string]json.RawMessage `json:"-"`
+}
+
+func (v UnstableMcpError) MarshalJSON() ([]byte, error) {
+	type Alias UnstableMcpError
+	var a Alias
+	a = Alias(v)
+	b, err := json.Marshal(a)
+	if err != nil || len(v.Extra) == 0 {
+		return b, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	for k, x := range v.Extra {
+		if _, ok := m[k]; !ok {
+			m[k] = x
+		}
+	}
+	return json.Marshal(m)
 }
 
 func (v *UnstableMcpError) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableMcpError", "code", "message")
+	m, err := objectKeys(b, "UnstableMcpError", "code", "message")
 	if err != nil {
 		return err
 	}
+	foldKeys(b, m, "data")
 	type Alias UnstableMcpError
 	var a Alias
 	if err := json.Unmarshal(b, &a); err != nil {
 		return fmt.Errorf("UnstableMcpError: %w", err)
 	}
-	a.Data = absentIfNull(a.Data)
+	for _, k := range []string{
+		"code",
+		"data",
+		"message",
+	} {
+		delete(m, k)
+	}
+	if len(m) > 0 {
+		a.Extra = m
+	}
 	*v = UnstableMcpError(a)
 	return nil
 }

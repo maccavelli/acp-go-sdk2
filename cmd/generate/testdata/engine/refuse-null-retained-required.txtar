@@ -1,0 +1,13 @@
+Refused: the protocol table's null-retained rule on a required property,
+which is never absent (0019-PLAN-generator-hardening.md, G3).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "UnstableMcpError": {"type": "object", "properties": {"code": {"type": "integer", "format": "int32"}, "data": {"description": "Optional error data; explicit null is retained."}}, "required": ["code", "data"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+UnstableMcpError.data:
+a null-retained rule needs an optional property

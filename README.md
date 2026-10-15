@@ -138,7 +138,14 @@ follow the schema:
   not sent. Formatted with `fmt` (`%v`, `%s`, `fmt.Sprint`), an empty
   `json.RawMessage` prints as `null` under Go 1.27's default build, where it is
   `jsontext.Value` ([golang/go#81050](https://github.com/golang/go/issues/81050)).
-  A required raw value, such as a response's `result`, keeps `null`.
+  A required raw value, such as a response's `result`, keeps `null`, and so
+  does the unstable `UnstableMcpError`'s `data`, whose schema says "explicit
+  null is retained": there `nil` is absent, `null` is sent as `null`, and
+  `string(v) == "null"` tells the two apart.
+- An object whose schema allows keys it does not declare
+  (`additionalProperties: true`), such as `UnstableMcpError`, keeps them in
+  its `Extra` field as received, and sends them back; a declared field wins
+  over an `Extra` key of the same name.
 - Decoding a struct fails when a required key is absent, naming the type and
   the property, such as `PromptRequest: missing required property "sessionId"`;
   the connection answers such a request with `-32602`.

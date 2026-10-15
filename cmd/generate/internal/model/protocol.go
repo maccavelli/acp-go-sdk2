@@ -33,6 +33,11 @@ type Protocol struct {
 	// Each becomes a Patch of its type
 	// (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md, issue #5).
 	PatchFields []PatchRule
+	// NullRetained lists the optional raw properties whose explicit null the
+	// schema keeps apart from omission. Each keeps null when decoded, where
+	// another optional raw value reads null as absent; Source must be in the
+	// property's description (0019-PLAN-generator-hardening.md, G3).
+	NullRetained []PatchRule
 }
 
 // PathRule names a property the protocol requires to be an absolute path,
@@ -259,6 +264,17 @@ func newRules(p *Protocol) (*rules, error) {
 			return nil, fmt.Errorf("patch rule %s.%s: two rules", rule.Definition, rule.Property)
 		}
 		patched[k] = true
+	}
+	retained := map[[2]string]bool{}
+	for _, rule := range p.NullRetained {
+		k := [2]string{rule.Definition, rule.Property}
+		switch {
+		case rule.Definition == "" || rule.Property == "" || rule.Source == "":
+			return nil, fmt.Errorf("null-retained rule %q.%q: it needs a definition, a property, and a source", rule.Definition, rule.Property)
+		case retained[k]:
+			return nil, fmt.Errorf("null-retained rule %s.%s: two rules", rule.Definition, rule.Property)
+		}
+		retained[k] = true
 	}
 	if err := checkCapabilityRules(p.CapabilityRules); err != nil {
 		return nil, err
