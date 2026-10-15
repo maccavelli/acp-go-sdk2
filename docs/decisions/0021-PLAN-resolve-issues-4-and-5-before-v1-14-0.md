@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-14
 associated-madr: "0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md"
 ---
@@ -390,3 +390,16 @@ Run over the finished tree at `2da1fc6`, through the Python runner:
 No test or gate was added in this step, so there was nothing to plant. Acceptance waits on CI for the pushed records; then this PLAN
 and its `docs/README.md` row become `complete`, the owner closes issues #4 and #5 naming `25eedff` and `36c04a5`, and the 0020 PLAN's
 step 3, the `v1.14.0` tag, resumes on the verified commit.
+
+The owner committed step 5's record as `3ea449d`.
+
+### Close, 2026-10-14
+
+The owner pushed `main` to `3ea449d`; it carries the 6 commits of this PLAN, from `233f0a7`. CI run `38671196970` on `3ea449d` concluded
+`success` on `validate (ubuntu-24.04)`, `validate (macos-15)` and `validate (windows-2025)`; the Linux job runs the race detector
+and the `nojsonv2` build over both modules, the tests of steps 2 and 3 included. Every acceptance criterion in "Verification" is
+met, with the deviation of step 3 recorded above, so this PLAN and its `docs/README.md` row are `complete`. The MADR stays
+`accepted`.
+
+Left to the owner: closing issues #4 and #5, naming `36c04a5` and `25eedff`; and the 0020 PLAN's step 3, the `v1.14.0` tag, on the
+commit that carries this entry once its CI passes, with the release text extracted from the amended release notes.
