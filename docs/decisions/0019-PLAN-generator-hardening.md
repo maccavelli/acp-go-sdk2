@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-10-14
+status: complete
+date: 2026-10-15
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
 
@@ -664,3 +664,16 @@ Meanwhile the owner had GitHub issue #6 investigated, and decided on 2026-10-15 
 implemented by [0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md](0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md).
 This PLAN's close, and the tag of `v1.15.0`, follow the commit that PLAN verifies, not `3a84443`; its acceptance's CI is that
 commit's. The release notes of step 7 stand; the 0022 PLAN adds to them.
+
+### Close, 2026-10-15
+
+As the entry above has it, this PLAN closes on the commit
+[0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md](0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md) verifies.
+CI passed on it: run `38752965643` on `12589de`, first attempt, `success` on `validate (ubuntu-24.04)`, `validate (macos-15)` and
+`validate (windows-2025)`. The code of this PLAN is unchanged since step 8's verification at `501e07d`, apart from what the 0022 PLAN
+adds and verified at `cfcda09`: the full gates and Windows passed there, and the API listing against `v1.14.0` is that PLAN's three
+lines, this PLAN's two among them.
+
+Every acceptance criterion in "Verification" is met, so this PLAN and its `docs/README.md` row are `complete`. The MADR stays
+`accepted`, with phases 4 and 5 to come. Left to the owner: the tag `v1.15.0` on `12589de` and its release, published from the
+release text of [0019-REPORT-release-notes-v1-15-0.md](../reports/0019-REPORT-release-notes-v1-15-0.md).

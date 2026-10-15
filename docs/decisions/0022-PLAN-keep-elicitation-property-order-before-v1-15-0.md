@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-15
 associated-madr: "0022-MADR-keep-elicitation-property-order-before-v1-15-0.md"
 ---
@@ -246,3 +246,26 @@ On `cfcda09`, with the tree clean before and after:
 
 Left for after the push: CI on the pushed commits; then this PLAN and its row become `complete`, the 0019 phase 3 PLAN closes on the
 same verified commit, the owner tags `v1.15.0` and publishes its release, and closes issue #6 naming `561d12b`.
+
+### Deviation, 2026-10-15, during step 4
+
+Found: the release text of [0019-REPORT-release-notes-v1-15-0.md](../reports/0019-REPORT-release-notes-v1-15-0.md) links two records
+relatively (`../decisions/0012-MADR-schema-fidelity-framework.md`, `../decisions/0011-MADR-harden-code-generator-engine.md`), as it
+has since `501e07d`. The links work in the repository and not on a GitHub release page. Decision (owner, 2026-10-15): the extraction
+of the release text rewrites each relative link to the file at the tag, `https://github.com/maccavelli/acp-go-sdk2/blob/v1.15.0/docs/…`,
+as it already lowers the headings; the report keeps its relative links. No decision or fact of the MADR changes.
+
+### Close, 2026-10-15
+
+The owner pushed `main` to `12589de`, carrying this PLAN's commits from `98d3e7c`. CI run `38752965643` on it, first attempt,
+concluded `success` on `validate (ubuntu-24.04)`, `validate (macos-15)` and `validate (windows-2025)`; the macOS job setup that failed
+twice on `3a84443` passed with the pin unchanged.
+
+The release text, extracted from the report without its two headings, its two relative links rewritten as the deviation above
+decides: 51 lines; no relative link remains; the identifier scan finds nothing in it.
+
+Every acceptance criterion in "Verification" is met: each step's checks passed and its record is written; issue #6's reproduction
+gives the agent's order back under both builds (step 4); a value without an order encodes byte for byte as before (step 2's byte
+expectations); the API listing matches; CI passed on the pushed commits. This PLAN and its `docs/README.md` row are `complete`; the
+MADR stays `accepted`. Left to the owner: the tag `v1.15.0` on `12589de` and its release, published from the extracted text, and
+closing issue #6 naming `561d12b`.
