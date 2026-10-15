@@ -327,3 +327,34 @@ both modules; `make check-records` and `make markdownlint` exit 0; the identifie
 changes, exactly five additions, `type PromptOverlapPolicy int`, `const PromptOverlapSupersede`, `const PromptOverlapRefuse`,
 `const PromptOverlapConcurrent` and `func WithPromptOverlapPolicy (p PromptOverlapPolicy) ConnectionOption`. Windows:
 `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+
+### Step 4, documentation and release notes, 2026-10-14
+
+What was written, on `7e96d39`:
+
+* `README.md`: "Wire encoding" gains "Patch fields", before "Paths": the three states; a table of the 8 types and their 24 fields
+  with their `Patch` types; setting with `PatchValue` and `PatchNull`, and reading with `Value`, `IsNull` and `IsZero`, each with an
+  example; that a value is sent as its type encodes (an empty slice as `[]`, a nil one as `null`); the `[]` rule of `summary` and
+  `content`, which the SDK reads as a value and leaves to the receiver; a malformed value read as absent; `Validate` reaching the
+  value. Its list of decisions gains the 0021 MADR. "Cancellation" gains the policy option, its three behaviours, the default for an
+  undefined value, `$/cancel_request` unchanged, and an example; its first paragraph says supersession is the default, and its
+  close paragraph says each running turn is cancelled.
+* `docs/architecture.md`: the prompt-turn entry of the protocol table describes the turn set, `storeTurn` under the policy,
+  `cancelTurns`, `removeTurn`, and a kept cancel removed by a newer prompt only under supersede; a `PatchFields` entry follows
+  `AbsolutePaths`, with the model's refusals and `RefPatch`; the decoding paragraph gains `patchOf` and `patchItems`, `Patch[T]`
+  emitted once when used, and `Validate` reaching through a patch.
+* The release notes, `0019-REPORT-release-notes-v0-18-0.md`: its preamble names this amendment and the third API listing (2426
+  lines at `7e96d39`); the release text's summary names issues #4 and #5 and recounts the API (22 entries added, 24 fields changed,
+  7 methods removed); "Breaking changes" gains the 24 fields' new types, with the replacement code for setting and reading them,
+  and what `null`, an empty value and a nil value mean on the wire both ways; "Additions" gains `Patch[T]` and
+  `WithPromptOverlapPolicy` with its constants, and the README entry names the two new passages; "For the generator" gains
+  `PatchFields` and the turn store; "Sources not in the release text" gains `25eedff`, `36c04a5` and `7e96d39` in the commit lists,
+  the API listing difference recounted (31 removed and 46 added lines: 24 changed fields, 7 removed methods, 22 additions, 9 of
+  0019, 8 of `Patch` and 5 of the policy), and this PLAN among the execution records.
+
+Checked: the claim that `v0.17.1` left an empty slice or map out, against its `types_gen.go`, where each of these fields is
+`omitempty`; the README's two new Go snippets, and the release notes' `Summary: acp.PatchValue(blocks)`, compiled and run as a
+test in a scratch copy of the tree (ok); the API counts, against the step 3 gate's listing.
+
+Gates, through the Python runner: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file
+changed in this step.

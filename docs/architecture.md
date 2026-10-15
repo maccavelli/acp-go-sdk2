@@ -54,19 +54,24 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
 
 - the optional `AgentLoader` interface, for `session/load`;
 - the prompt turn: `AgentSideConnection` runs `session/prompt` under a
-  per-turn context, kept in `sessionCancels` by session, that an inbound
-  `session/cancel` or a later prompt for the session cancels with
-  `ErrPromptCancelled` as its cause. Every received request and
+  per-turn context. `sessionCancels` holds each session's running turns, and
+  `storeTurn` stores a new one as the connection's `WithPromptOverlapPolicy`
+  has it: supersede, the default, cancels the stored turns with a cause that
+  wraps `ErrPromptCancelled`; refuse answers the prompt `-32603` while a turn
+  is stored, without calling the handler; concurrent adds it. An inbound
+  `session/cancel` cancels the session's stored turns through `cancelTurns`,
+  with `ErrPromptCancelled` as their cause. Every received request and
   notification has a receipt number from `connection.go`, and a cancel
   applies only to a turn received before it. Every cancel is also kept in
   `lateCancels` for its session, for a prompt received before it whose turn
   is not stored yet; `keepCancel` in `connection.go` first removes each kept
   receipt that no request in flight is older than, from the receipts it
-  keeps of the requests in flight, and a prompt newer than the kept cancel
-  removes it. `session/close` (the table's `ClosesSession`) runs the same
-  cancel before its handler. When the handler returns, the case takes the
-  lock, removes the turn and reads its cause once: a cancelled turn is
-  answered `cancelled`, else the handler's answer stands.
+  keeps of the requests in flight, and, under supersede, a prompt newer than
+  the kept cancel removes it. `session/close` (the table's `ClosesSession`)
+  runs the same cancel before its handler. When the handler returns, the case
+  takes the lock, removes its own turn (`removeTurn`) and reads its cause
+  once: a cancelled turn is answered `cancelled`, else the handler's answer
+  stands.
   `ClientSideConnection.Prompt` sends `session/cancel` when its context ends
   with an error;
 - the permission requests: the client's `session/request_permission` case
@@ -98,7 +103,14 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
 - `AbsolutePaths`, the 17 properties the protocol requires to be absolute
   paths, each with the specification sentence it follows. A rule reaches every
   type that holds its definition's property, an inline variant built through
-  `allOf` included, and `Validate` checks it.
+  `allOf` included, and `Validate` checks it;
+- `PatchFields`, the 12 properties with patch semantics (omitted keeps the
+  stored value, `null` clears it, a value replaces it), each with the
+  specification sentence it follows. A rule reaches every type built from its
+  definition, as `AbsolutePaths` does, and the model refuses one whose property
+  is required, has a default, or lacks `x-deserialize-default-on-error`. The
+  field's type becomes a `RefPatch` of its type without the pointer, emitted as
+  `Patch[T]` and tagged `omitzero`.
 
 The model applies a rule only where the schema carries its subject, and refuses
 a subject whose shape the rule cannot use with an error that starts
@@ -148,13 +160,18 @@ gives a typed map; a value the model gives no Go type is `json.RawMessage`; and
 an optional struct value carries no `omitempty`. A generated `UnmarshalJSON`
 requires the required keys through `objectKeys`, decodes each
 `x-deserialize-default-on-error` field through `orDefault` and each
-`x-deserialize-skip-invalid-items` array through `skipInvalid`, and empties
+`x-deserialize-skip-invalid-items` array through `skipInvalid`, empties
 an optional raw value that is `null` through `absentIfNull`, so it is not
-sent on; `types_gen.go` emits each helper once. A null raw value is an absent
+sent on, and reads a patch field through `patchOf`, or `patchItems` for an
+array that skips invalid items: a missing key is absent, `null` is null, a
+value that decodes is that value, and one that does not is absent;
+`types_gen.go` emits each helper once, and `Patch[T]` with its constructors
+and methods once, when a patch field exists. A null raw value is an absent
 one, as ACP v1 defines it for `rawInput` and `rawOutput`; a required one, such
 as `result`, keeps `null`. `Validate` checks what the schema states: a
 union has exactly one variant set, a string meets its `minLength`, a number
-meets a bound its Go type does not enforce, and every nested value validates;
+meets a bound its Go type does not enforce, and every nested value validates,
+a patch's through the value it holds;
 and it checks the table's absolute paths. Each exported `Validate` calls an
 unexported `validate(abs func(string) bool)` with the host's `filepath.IsAbs`,
 and passes `abs` to the nested values; every check returns a

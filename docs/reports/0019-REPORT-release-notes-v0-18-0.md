@@ -3,10 +3,12 @@
 Observed 2026-10-14 on `d4e1ec4`, for
 [0019-PLAN-api-decisions.md](../decisions/0019-PLAN-api-decisions.md), step 10, and amended on 2026-10-14 by
 [0020-PLAN-retract-accidental-v1-tag.md](../decisions/0020-PLAN-retract-accidental-v1-tag.md), step 2, for the version: drafted for
-`v0.18.0`, it keeps the file name it is cited by. This report drafts the text of the GitHub release for `v1.14.0`, as `RELEASING.md`
+`v0.18.0`, it keeps the file name it is cited by. Amended again on 2026-10-14 by
+[0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md](../decisions/0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md), step 4, for
+issues #4 and #5, observed on `7e96d39`. This report drafts the text of the GitHub release for `v1.14.0`, as `RELEASING.md`
 describes it. It decides nothing. Each statement names its source: a record, a commit, or the exported
-API listing of the 0013 report's listing program, run on `git archive v0.17.1` (2411 lines) and on the tree at `d4e1ec4` (2413
-lines). Bring it up to date if more changes land before the tag. Phases 1 and 2 of
+API listing of the 0013 report's listing program, run on `git archive v0.17.1` (2411 lines), on the tree at `d4e1ec4` (2413
+lines), and on the tree at `7e96d39` (2426 lines). Bring it up to date if more changes land before the tag. Phases 1 and 2 of
 [0019-MADR-remediate-debugging-pass-findings.md](../decisions/0019-MADR-remediate-debugging-pass-findings.md) ship together (decision
 12), as `v1.14.0`, [0020-MADR-retract-accidental-v1-tag.md](../decisions/0020-MADR-retract-accidental-v1-tag.md); the owner confirms
 it at the tag.
@@ -19,9 +21,12 @@ The section "Release text" is what goes into the GitHub release.
 
 The ACP schema is still `1.25.0` (`git diff v0.17.1 -- schema/` is empty). This release fixes what a debugging pass of `v0.17.1`
 found: a deadlock, races, gaps against ACP and JSON-RPC 2.0, and a connection that could not be closed. It adds `Close`, a bound on
-concurrent requests, a race-free way for an agent or a client to keep its connection, and errors that keep their Go cause. Some
-changes are breaking for an application that relied on the old behaviour; each says what to do. The exported API grows by nine
-entries and loses seven methods no caller needs. (0019-MADR.)
+concurrent requests, a race-free way for an agent or a client to keep its connection, and errors that keep their Go cause. It
+resolves two issues: `null` in ACP's patch fields now survives both ways
+([#5](https://github.com/maccavelli/acp-go-sdk2/issues/5)), and an agent chooses what a prompt for a session whose turn is running
+does ([#4](https://github.com/maccavelli/acp-go-sdk2/issues/4)). Some changes are breaking for an application that relied on the old
+behaviour; each says what to do. The exported API grows by 22 entries, changes the type of 24 fields, and loses seven methods no
+caller needs. (0019-MADR, 0021-MADR.)
 
 #### Versions
 
@@ -32,6 +37,17 @@ github.com/maccavelli/acp-go-sdk2@latest` and `go get -u` skip it, and a module 
 
 #### Breaking changes
 
+- **The 24 patch fields are `Patch[T]`** ([#5](https://github.com/maccavelli/acp-go-sdk2/issues/5)). The fields whose `null`
+  means "clear", unlike omission, were pointers, slices and maps, which read `null` as absent and could not send it. Each is now
+  `Patch[T]`, `T` its old type without the pointer: `Summary`, `Error` and `Meta` of `CompactionUpdate` and
+  `SessionCompactionUpdate`; `Title` and `UpdatedAt` of `SessionInfoUpdate` and `SessionSessionInfoUpdate`; and, unstable, `Title`,
+  `Description`, `Capabilities`, `State` and `Meta` of `SubagentUpdate` and `SessionSubagentUpdate`, and `Content` and `Meta` of
+  `SessionMessage` and `SessionUpdateSessionMessage`. To set one, write `Title: acp.PatchValue(t)` for `Title: &t`,
+  `Summary: acp.PatchValue(blocks)` for `Summary: blocks`, and `acp.PatchNull[string]()` to clear; to read one, write
+  `if v, ok := u.Title.Value(); ok` for `if u.Title != nil`, and `u.Title.IsNull()` for a clear. On the wire, a received `null` is
+  now `IsNull()`, where it read as absent; a clear is sent as `null`; a value is sent as it encodes, so an empty slice or map is
+  sent as `[]` or `{}`, where it was left out, and a value holding a nil one as `null`. A malformed value still reads as absent.
+  (`25eedff`; 0021-MADR, B1.)
 - **Extension messages received before `initialize` are refused.** A received `_`-prefixed message now goes through what a typed
   one does: both inbound hooks, then the record of `initialize`. Before `initialize`, an extension request is answered `-32601` and
   an extension notification is dropped. A peer that sends extension requests first must send `initialize` first. `WithInboundRewrite`
@@ -106,8 +122,16 @@ github.com/maccavelli/acp-go-sdk2@latest` and `go get -u` skip it, and a module 
   concurrent requests", "limit": n}`, and its handler does not run. The default is no limit. (API listing; `52fe4ed`; 0019-MADR,
   decision 4.)
 - `AgentConnAware` and `ClientConnAware`, the interfaces of the hand-off above. (API listing; `3f0a822`; 0019-MADR, decision 1.)
-- The README gains "Closing and limits", and documents the hand-off, error causes, extension messages and the undeclared mode.
-  (`d4e1ec4`.)
+- `Patch[T]`, its constructors `PatchValue` and `PatchNull`, and its methods `IsZero`, `IsNull`, `Value`, `MarshalJSON` and
+  `UnmarshalJSON`: the three states of a patch field, above. (API listing; `25eedff`; 0021-MADR, B1.)
+- `WithPromptOverlapPolicy(p PromptOverlapPolicy)`, with `PromptOverlapSupersede` (the default, the behaviour so far),
+  `PromptOverlapRefuse` and `PromptOverlapConcurrent` ([#4](https://github.com/maccavelli/acp-go-sdk2/issues/4)). Refuse answers a
+  prompt for a session whose turn is running at once, `-32603` with `{"error": "a prompt turn is already running for this
+  session", "sessionId": <id>}`, without calling `Prompt`; a turn that a cancel or a close has cancelled no longer counts.
+  Concurrent calls `Prompt` for every prompt, and `session/cancel` and `session/close` cancel every turn of the session received
+  before them. A value the package does not define is the default. (API listing; `36c04a5`; 0021-MADR, A1.)
+- The README gains "Closing and limits" and "Patch fields", and documents the hand-off, error causes, extension messages, the
+  undeclared mode and the prompt-overlap policy. (`d4e1ec4`; 0021-PLAN, step 4.)
 
 #### For the generator
 
@@ -121,24 +145,33 @@ These change nothing in the generated SDK beyond what is listed above:
 - The dispatch decodes params through `decodeParams` and refuses a method received as the other kind. (`23396f4`.)
 - A struct gets a `MarshalJSON` only when it does more than encode its fields, and every line of a generated comment is a line
   comment, so no description can become code. (`323f539`, `a356149`.)
+- The protocol table gains `PatchFields`, the 12 patch properties; the model types each field as `RefPatch`, and `types_gen.go`
+  gains `Patch[T]` and the decode helpers `patchOf` and `patchItems`. (`25eedff`.)
+- The agent side keeps each session's prompt turns as a list, `map[string][]*promptTurn`, through the generated `storeTurn`,
+  `removeTurn` and `cancelTurns`; the model's `Method.SessionKey` names the session's key in a refusal. (`36c04a5`, `7e96d39`.)
 
 ## Sources not in the release text
 
 - The commits since `v0.17.1` that change the SDK's Go code: `c342496`, `23396f4`, `13dc276`, `03fcfa6`, `199f99e`, `77704b7`,
-  `29778f3`, `7e7acfd`, `52fe4ed`, `3f0a822`, `943f073`, `a49d0bb`, `c28159c`, `323f539`, `d4e1ec4` (`git log v0.17.1..HEAD -- '*.go'
-  ':!cmd/generate'`); and the generator's: `23396f4`, `13dc276`, `03fcfa6`, `199f99e`, `a356149`, `7e7acfd`, `3f0a822`, `943f073`,
-  `c28159c`, `323f539` (`git log v0.17.1..HEAD -- cmd/generate`). `a49d0bb` changes tests only. The others change records and
-  documentation.
-- The API listing difference, classified: changed, none; removed, 7 lines, the `MarshalJSON` methods of `AgentCapabilities`,
+  `29778f3`, `7e7acfd`, `52fe4ed`, `3f0a822`, `943f073`, `a49d0bb`, `c28159c`, `323f539`, `d4e1ec4`, `25eedff`, `36c04a5`
+  (`git log v0.17.1..HEAD -- '*.go' ':!cmd/generate'`); and the generator's: `23396f4`, `13dc276`, `03fcfa6`, `199f99e`, `a356149`,
+  `7e7acfd`, `3f0a822`, `943f073`, `c28159c`, `323f539`, `25eedff`, `36c04a5`, `7e96d39` (`git log v0.17.1..HEAD -- cmd/generate`).
+  `a49d0bb` changes tests only, and `7e96d39` the layout of one generator file. The others change records and documentation.
+- The API listing difference at `7e96d39`, 31 lines removed and 46 added, classified: changed, 24 fields, each from its `v0.17.1`
+  type to `Patch` of it, a removed and an added line each; removed, 7 lines, the `MarshalJSON` methods of `AgentCapabilities`,
   `AuthCapabilities`, `ClientCapabilities`, `FileSystemCapabilities`, `InitializeRequest`, `McpCapabilities` and
-  `PromptCapabilities`; added, 9 lines, `func WithMaxConcurrentRequests (n int) ConnectionOption`, the three `Close () error`
-  methods, `method (*RequestError) Unwrap () error`, `type AgentConnAware`, `type ClientConnAware`, `var ErrConnectionClosed` and
-  `var ErrPeerDisconnected`.
+  `PromptCapabilities`; added, 22 lines: 9 of 0019, `func WithMaxConcurrentRequests (n int) ConnectionOption`, the three
+  `Close () error` methods, `method (*RequestError) Unwrap () error`, `type AgentConnAware`, `type ClientConnAware`,
+  `var ErrConnectionClosed` and `var ErrPeerDisconnected`; 8 of `Patch`, `type Patch struct`, `func PatchNull`, `func PatchValue`
+  and its five methods; and 5 of the policy, `type PromptOverlapPolicy int`, its three constants and
+  `func WithPromptOverlapPolicy (p PromptOverlapPolicy) ConnectionOption`.
 - `json.Marshal` of every generated type's zero value and of every instance the conformance builder makes, 1528 encodings, is
   identical byte for byte before and after the `MarshalJSON` removal ([0019-PLAN-api-decisions.md](../decisions/0019-PLAN-api-decisions.md),
   step 8).
 - Each change, its tests, the planted breaks each test was seen to fail on, and a run on Windows for each step are in the execution
-  records of [0019-PLAN-behaviour-fixes.md](../decisions/0019-PLAN-behaviour-fixes.md) and
-  [0019-PLAN-api-decisions.md](../decisions/0019-PLAN-api-decisions.md), with every deviation from them.
+  records of [0019-PLAN-behaviour-fixes.md](../decisions/0019-PLAN-behaviour-fixes.md),
+  [0019-PLAN-api-decisions.md](../decisions/0019-PLAN-api-decisions.md) and
+  [0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md](../decisions/0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md), with every
+  deviation from them.
 - Not in this release: phases 3 to 5 of 0019 (generator hardening, tooling, idioms and performance), which ride the releases after
   each lands (0019-MADR, decision 12).

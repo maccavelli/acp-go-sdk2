@@ -158,6 +158,50 @@ follow the schema:
 - A decode error names the union and, for a variant, the discriminator value or
   the variant, then the cause, such as `ContentBlock: type "text": ...`.
 
+#### Patch fields
+
+Twelve properties of ACP's update messages have patch semantics: left out, the
+receiver keeps what it stored; `null`, it clears it; a value, it replaces it.
+Each is an `acp.Patch[T]`, which holds those three states:
+
+| Types | Fields |
+| :--- | :--- |
+| `CompactionUpdate`, `SessionCompactionUpdate` | `Summary` `Patch[[]ContentBlock]`, `Error` `Patch[string]`, `Meta` `Patch[map[string]any]` |
+| `SessionInfoUpdate`, `SessionSessionInfoUpdate` | `Title` and `UpdatedAt` `Patch[string]` |
+| `SubagentUpdate`, `SessionSubagentUpdate` (unstable) | `Title` and `Description` `Patch[string]`, `Capabilities` `Patch[SubagentSessionCapabilities]`, `State` `Patch[StateUpdate]`, `Meta` `Patch[map[string]any]` |
+| `SessionMessage`, `SessionUpdateSessionMessage` (unstable) | `Content` `Patch[[]ContentBlock]`, `Meta` `Patch[map[string]any]` |
+
+The zero value is absent, and a field left unset is not sent.
+`acp.PatchValue(v)` replaces the stored value and `acp.PatchNull[T]()` clears
+it, sent as `null`:
+
+```go
+update := acp.SessionInfoUpdate{
+    Title:     acp.PatchValue("Refactor the parser"),
+    UpdatedAt: acp.PatchNull[string](),
+}
+```
+
+A receiver tells the three states apart with `Value`, `IsNull` and `IsZero`:
+
+```go
+if v, ok := u.Title.Value(); ok {
+    title = v
+} else if u.Title.IsNull() {
+    title = ""
+} // absent: keep the stored title
+```
+
+- A value is sent as its type encodes: `acp.PatchValue([]acp.ContentBlock{})`
+  is sent as `[]`, and a value holding a nil slice or map as `null`. An empty
+  value read back is a value.
+- For `summary` and `content`, ACP also has `[]` clear. The SDK reads `[]` as a
+  value, and the receiver applies that rule.
+- A value that does not decode is read as absent, as the schema's
+  `x-deserialize-default-on-error` has it for these properties; an array drops
+  the items that do not decode.
+- `Validate` checks the value a patch holds.
+
 #### Paths
 
 ACP requires every file path in the protocol to be absolute. The SDK checks the
@@ -248,8 +292,9 @@ The decisions behind these rules are
 [0011-MADR-harden-code-generator-engine.md](docs/decisions/0011-MADR-harden-code-generator-engine.md),
 [0012-MADR-schema-fidelity-framework.md](docs/decisions/0012-MADR-schema-fidelity-framework.md),
 [0014-MADR-union-constructors-take-every-required-key.md](docs/decisions/0014-MADR-union-constructors-take-every-required-key.md),
+[0015-MADR-validate-absolute-protocol-paths.md](docs/decisions/0015-MADR-validate-absolute-protocol-paths.md),
 and
-[0015-MADR-validate-absolute-protocol-paths.md](docs/decisions/0015-MADR-validate-absolute-protocol-paths.md).
+[0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md](docs/decisions/0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md).
 
 ### Initialization and capabilities
 
@@ -342,8 +387,9 @@ specification does not tie to a rule (`nes`, `plan`, `providers`, `subagents`,
 ### Cancellation
 
 An agent's `Prompt` handler runs under a context that `session/cancel` for its
-session cancels, with `acp.ErrPromptCancelled` as `context.Cause`; a second
-prompt for the same session cancels the first with an error that wraps it.
+session cancels, with `acp.ErrPromptCancelled` as `context.Cause`; by
+default, a second prompt for the same session cancels the first with an error
+that wraps it (see the prompt-overlap policy below).
 When the handler returns, if its context was cancelled, by `session/cancel` or
 `$/cancel_request`, the answer is `stopReason` `cancelled`, keeping the rest of
 the handler's result, whatever the handler returned. A turn whose connection
@@ -355,9 +401,36 @@ before it, two prompts in flight included. Any other request whose handler
 `$/cancel_request` cancels, and that returns the context's error, is answered
 `-32800`.
 
+`acp.WithPromptOverlapPolicy` chooses what an `AgentSideConnection` does with a
+prompt for a session whose turn is still running, which ACP leaves to the
+agent:
+
+- `acp.PromptOverlapSupersede`, the default: the running turn is cancelled,
+  with a cause that wraps `acp.ErrPromptCancelled`, and the new prompt runs. A
+  prompt received before the running turn's is cancelled at once instead.
+- `acp.PromptOverlapRefuse`: the new prompt is answered at once, `-32603` with
+  `data` `{"error": "a prompt turn is already running for this session",
+  "sessionId": <id>}`, and `Prompt` is not called; the running turn goes on. A
+  turn that `session/cancel` or `session/close` has cancelled no longer counts,
+  so a prompt sent after a cancel runs, even before the cancelled handler
+  returns.
+- `acp.PromptOverlapConcurrent`: every prompt calls `Prompt`, and the agent
+  queues, steers or refuses in its own handler. `session/cancel` and
+  `session/close` cancel every running turn of the session received before
+  them.
+
+A value the package does not define is the default, and the other connections
+ignore the option. Under every policy, `$/cancel_request` cancels only its own
+request.
+
+```go
+asc := acp.NewAgentSideConnection(agent, os.Stdout, os.Stdin,
+    acp.WithPromptOverlapPolicy(acp.PromptOverlapRefuse))
+```
+
 `session/close` ends its session's work as `session/cancel` does: before the
-agent's `CloseSession` handler runs, the session's running turn is cancelled and
-answered `cancelled`. When the agent answers a client's `CloseSession` with
+agent's `CloseSession` handler runs, each running turn of the session is
+cancelled and answered `cancelled`. When the agent answers a client's `CloseSession` with
 success, each `session/request_permission` of that session still pending is
 answered `cancelled`, as on `Cancel`; a close the agent refuses leaves them to
 their handlers.
