@@ -173,6 +173,29 @@ func TestWriteStagingFailureReplacesNothing(t *testing.T) {
 	})
 }
 
+// TestWriteStagedFileFailureReplacesNothing requires a temporary file that
+// was created and then cannot be written to be removed, and nothing
+// replaced (0019-PLAN-generator-hardening.md, G19).
+func TestWriteStagedFileFailureReplacesNothing(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	old := generated("v1")
+	writeAll(t, dir, old)
+	closed := func(dir, pattern string) (*os.File, error) {
+		f, err := os.CreateTemp(dir, pattern)
+		if err == nil {
+			err = f.Close()
+		}
+		return f, err
+	}
+	err := writeWith(dir, generated("v2"), closed, os.Rename)
+	if err == nil || !strings.Contains(err.Error(), "stage constants_gen.go") || !strings.Contains(err.Error(), "already closed") {
+		t.Fatalf("writeWith error = %v, want staging constants_gen.go to fail on a closed file", err)
+	}
+	requireContents(t, dir, old)
+	requireNoTemporaryFiles(t, dir)
+}
+
 func TestWriteRenameFailureReports(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -185,7 +208,7 @@ func TestWriteRenameFailureReports(t *testing.T) {
 		}
 		return os.Rename(from, to)
 	}
-	err := writeWith(dir, files, failing)
+	err := writeWith(dir, files, os.CreateTemp, failing)
 	if err == nil {
 		t.Fatal("writeWith succeeded")
 	}

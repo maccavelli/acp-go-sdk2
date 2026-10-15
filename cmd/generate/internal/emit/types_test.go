@@ -14,6 +14,22 @@ import (
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
+// TestFoldNamesRecordsCaseCollision runs the emitter's backstop for two keys
+// that differ only in case, which the model refuses first, so no schema
+// reaches it: it records the failure and keeps each key once
+// (0019-PLAN-generator-hardening.md, G19).
+func TestFoldNamesRecordsCaseCollision(t *testing.T) {
+	t.Parallel()
+	f := newFile()
+	got := foldNames(f, "T", []string{"a", "b", "a", "B"})
+	if f.err == nil || !strings.Contains(f.err.Error(), `T: the keys "b" and "B" differ only in case, and would be read as one`) {
+		t.Errorf("recorded %v, want the keys b and B refused", f.err)
+	}
+	if strings.Join(got, ",") != "a,b,B" {
+		t.Errorf("foldNames = %v, want [a b B]", got)
+	}
+}
+
 // TestRequiredMapFilledOnEncode requires the MarshalJSON of an object with a
 // required map to send a nil map as {}, a shape schema 1.25.0 does not contain.
 func TestRequiredMapFilledOnEncode(t *testing.T) {

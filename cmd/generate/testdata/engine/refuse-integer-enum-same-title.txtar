@@ -1,0 +1,10 @@
+Refused: two integer-enum members with one title, which would name one constant twice. It runs the error site at model/model.go:498, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"N": {"oneOf": [{"type": "integer", "format": "int32", "const": 1, "title": "One"}, {"type": "integer", "format": "int32", "const": 2, "title": "One"}]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+N value 2:
+NOne is already declared by N value 1

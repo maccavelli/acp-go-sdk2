@@ -402,12 +402,14 @@ func admits(schema *load.Schema, where string, d *load.Definition, v any) error 
 		pt = schemaTypeObject
 	}
 	if v == nil {
-		if pt == "" || includesNull(d) {
+		if pt == "" || pt == schemaTypeNull || includesNull(d) {
 			return nil
 		}
 		return fmt.Errorf("%s: default null is not a %s", where, pt)
 	}
 	switch pt {
+	case schemaTypeNull:
+		return fmt.Errorf("%s: default %s is not null", where, valueText(v))
 	case schemaTypeString:
 		if _, ok := v.(string); !ok {
 			return fmt.Errorf("%s: default %s is not a string", where, valueText(v))

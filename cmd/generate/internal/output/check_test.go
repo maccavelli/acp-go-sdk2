@@ -62,6 +62,20 @@ func TestCheckRefuses(t *testing.T) {
 		{"a cgo file", func(t *testing.T) string {
 			return dirWith(t, map[string]string{"hand.go": stub, "c.go": "package acp\n\nimport \"C\"\n"})
 		}, uses, []string{"cgo file c.go"}},
+		// The sites below no test ran (0019-PLAN-generator-hardening.md, G19).
+		{"a go.mod that cannot be read", func(t *testing.T) string {
+			dir := dirWith(t, map[string]string{"hand.go": stub})
+			if err := os.Mkdir(filepath.Join(dir, "go.mod"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			return dir
+		}, uses, []string{"go.mod"}},
+		{"a hand-written file that does not parse", func(t *testing.T) string {
+			return dirWith(t, map[string]string{"hand.go": stub, "broken.go": "package acp\n\nfunc {\n"})
+		}, uses, []string{"broken.go:3:"}},
+		{"a generated file that does not parse", func(t *testing.T) string {
+			return dirWith(t, map[string]string{"hand.go": stub})
+		}, []emit.File{{Name: "types_gen.go", Src: []byte("package acp\n\nfunc {\n")}}, []string{"types_gen.go:3:"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

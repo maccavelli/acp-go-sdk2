@@ -336,3 +336,24 @@ func TestFindRepoRoot(t *testing.T) {
 		t.Errorf("run without flags = %v, want could not locate repository root", err)
 	}
 }
+
+// TestRunRefusesUnknownFlag and TestFindRepoRootWithoutWorkingDirectory run
+// two error sites no test ran (0019-PLAN-generator-hardening.md, G19).
+func TestRunRefusesUnknownFlag(t *testing.T) {
+	t.Parallel()
+	if err := run([]string{"-nope"}); err == nil || !strings.Contains(err.Error(), "flag provided but not defined: -nope") {
+		t.Errorf("run -nope = %v, want the flag refused", err)
+	}
+}
+
+// A working directory the system cannot return is reported: Getwd fails so
+// rarely (macOS still resolves a removed directory) that a function stands in
+// for it.
+func TestFindRepoRootWithoutWorkingDirectory(t *testing.T) {
+	t.Parallel()
+	errNoDir := errors.New("no working directory")
+	root, err := findRepoRootFrom(func() (string, error) { return "", errNoDir })
+	if !errors.Is(err, errNoDir) {
+		t.Errorf("findRepoRootFrom = %q, %v, want the working directory's error", root, err)
+	}
+}

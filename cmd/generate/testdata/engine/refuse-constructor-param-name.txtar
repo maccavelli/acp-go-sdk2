@@ -1,0 +1,10 @@
+Refused: a required key no constructor parameter can be named for. It runs the error site at model/model.go:785, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"A": {"oneOf": [{"$ref": "#/$defs/Z1"}, {"$ref": "#/$defs/Z2"}], "discriminator": {"propertyName": "type"}}, "Z1": {"type": "object", "properties": {"type": {"type": "string", "const": "a"}, "1x": {"type": "string"}}, "required": ["type", "1x"]}, "Z2": {"type": "object", "properties": {"type": {"type": "string", "const": "b"}}, "required": ["type"]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+A variant 1:
+required property "1x" cannot be a Go parameter name

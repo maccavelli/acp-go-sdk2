@@ -1,0 +1,13 @@
+Refused: a protocol meta key the unstable meta maps to another wire. It runs the error site at load/merge.go:93, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- meta.unstable.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/other"}}
+-- schema.unstable.json --
+{"$defs": {"CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+method key "cancel_request" maps to both "$/cancel_request" and "$/other"

@@ -1,0 +1,10 @@
+Refused: an inline object property whose nested type name an enum constant already has. It runs the error site at model/model.go:584, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"X": {"type": "string", "enum": ["q"]}, "XRequest": {"type": "object", "properties": {"q": {"type": "object", "properties": {"z": {"type": "string"}}}}}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+XRequest.properties.q:
+XQ is already declared by X enum value "q"

@@ -1,0 +1,10 @@
+Refused: a required key an object with flattened members does not declare, nor its members. It runs the error site at model/model.go:427, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"A": {"type": "object", "properties": {"a1": {"type": "string"}}}, "B": {"type": "object", "properties": {"b1": {"type": "string"}}}, "F": {"type": "object", "properties": {"n": {"type": "string"}}, "required": ["missing"], "anyOf": [{"$ref": "#/$defs/A"}, {"$ref": "#/$defs/B"}]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+F:
+required key "missing" is not a property

@@ -1,0 +1,10 @@
+Refused: an inline variant with a key no Go field can take. It runs the error site at model/model.go:979, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"U": {"oneOf": [{"type": "object", "properties": {"type": {"type": "string", "const": "a"}, "-": {"type": "string"}}, "required": ["type"]}, {"type": "object", "properties": {"type": {"type": "string", "const": "b"}}, "required": ["type"]}], "discriminator": {"propertyName": "type"}}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+UA.properties.-:
+field name: "" is not an exported Go identifier

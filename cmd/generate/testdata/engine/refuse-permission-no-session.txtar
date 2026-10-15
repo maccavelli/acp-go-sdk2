@@ -1,0 +1,10 @@
+Refused: a permission request answered on a prompt-turn cancel without a session key. It runs the error site at model/protocol.go:577, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"session_prompt": "session/prompt", "session_cancel": "session/cancel"}, "clientMethods": {"session_request_permission": "session/request_permission"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"PromptRequest": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/prompt"}, "StopReason": {"type": "string", "enum": ["end_turn", "cancelled"]}, "PromptResponse": {"type": "object", "properties": {"stopReason": {"$ref": "#/$defs/StopReason"}}, "required": ["stopReason"], "x-side": "agent", "x-method": "session/prompt"}, "CancelNotification": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"], "x-side": "agent", "x-method": "session/cancel"}, "RequestPermissionRequest": {"type": "object", "properties": {"other": {"type": "string"}}, "required": ["other"], "x-side": "client", "x-method": "session/request_permission"}, "RequestPermissionResponse": {"type": "object", "properties": {"outcome": {"$ref": "#/$defs/RequestPermissionOutcome"}}, "required": ["outcome"], "x-side": "client", "x-method": "session/request_permission"}, "RequestPermissionOutcome": {"oneOf": [{"type": "object", "properties": {"outcome": {"type": "string", "const": "selected"}, "optionId": {"type": "string"}}, "required": ["outcome", "optionId"]}, {"type": "object", "properties": {"outcome": {"type": "string", "const": "cancelled"}}, "required": ["outcome"]}], "discriminator": {"propertyName": "outcome"}}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+client method "session/request_permission"
+"sessionId" is not a required property of RequestPermissionRequest

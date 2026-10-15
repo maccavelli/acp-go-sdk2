@@ -493,3 +493,96 @@ markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count
 `cmd/generate`. The API listing against `v1.14.0` is unchanged from step 2's.
 
 The documentation of the missing directory and of the second type-check is step 7's.
+
+The owner committed step 5's record as `852054f`.
+
+### Step 6, G19, every engine error site run or named, 2026-10-15
+
+**The measure**, D6's (Q3): `go test -count=1 -coverpkg=./... -coverprofile … -skip '^(<the nine>)$' ./...` in `cmd/generate`, the nine
+being the committed-schema tests of
+[0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md): `TestGeneratedFilesUpToDate`,
+`TestCheckAcceptsRepository`, `TestUnionClassesOfCommittedSchema`, `TestFitKeysOfCommittedSchema`, `TestDiscriminatorExemptOnDecode`,
+`TestNoOmitemptyOnStructValues`, `TestProtocolTableAppliesToCommittedSchema`, `TestCommittedSchemaKeywordsRegistered` and
+`TestMergeProvenanceMatchesInputs`. A block counts at its highest count across the test binaries; an error site is a line of
+non-test code that returns or builds an error (`return … err`, `fmt.Errorf`, `errors.New`, `f.fail(`) in a block that never ran.
+
+On `852054f`, after steps 2 to 5: the engine (`main.go` and `internal/`, less `internal/mutate` and `internal/enginetest`) at 96.4% (3694
+of 3832 statements), 48 engine sites unrun, and 23 in the tooling. "Design"'s table had 41 engine sites, measured with every test on
+`c97e6d3`; the sites steps 2 to 5 added and the nine skipped make the difference, among them eight of step 4's `admits` and the
+`maximum` of G21.
+
+**Run by a test, 35 sites:**
+
+* 18 engine cases, `refuse-*.txtar`, one site each: `merge-client-key-two-wires` and `merge-protocol-key-two-wires` (`load/merge.go:89`,
+  `:93`); `required-undeclared-members` (`model/model.go:427`), `integer-enum-same-title` (`:498`), `nested-name-taken` (`:584`),
+  `nested-bad-key` (`:587`), `required-undeclared-nested` (`:672`), `constructor-name-taken` (`:766`), `constructor-param-name`
+  (`:785`), `variant-name-taken` (`:923`), `variant-bad-key` (`:979`); `gated-in-patch` (`model/gates.go:120`),
+  `gated-property-not-union` (`:178`), `catch-all-discriminator-nullable` (`:217`), `auth-method-id-not-named` (`:237`);
+  `permission-no-session` (`model/protocol.go:577`), `permission-outcome-not-union` (`:603`); `rpc-holds-deep-union`
+  (`model/validate.go:111`). Each schema came from the probes of the planning; each was run through the generator before it was
+  written, and its `want.err` is the error it gave.
+* `TestDefaultsChecked` (`model/fields_test.go`): `admits`' const, union, null, string, number, array, array item and object refusals,
+  and `bounds`' unreachable `maximum` (`model/validate.go:295`); and the defaults it must accept.
+* `TestCheckRefuses` (`output/check_test.go`), three cases: a `go.mod` that is a directory (`output/check.go:45`, `:180`), a hand-written
+  file that does not parse (`:66`), a generated one that does not parse (`:74`).
+* `TestWriteStagedFileFailureReplacesNothing` (`output/write_test.go`), through a seam: `writeWith` takes the function that creates the
+  temporary file, as it already took the rename, so a test hands `stage` a file closed once created (`output/write.go:93`, "`:89`" on
+  `852054f`).
+* `TestRunRefusesUnknownFlag` (`main.go:34`); `TestFindRepoRootWithoutWorkingDirectory`, through a seam: `findRepoRoot` is
+  `findRepoRootFrom(os.Getwd)`, so a test hands it a working directory that fails (`main.go:105`, "`:101`" on `852054f`). A first
+  version removed the working directory under `t.Chdir`; it passed, but for another reason: a probe on this host found `os.Getwd`
+  returning the removed directory's path with no error, so the test reached "could not locate repository root", not the site. It was
+  replaced before this record.
+* `TestFoldNamesRecordsCaseCollision` (`emit/types_test.go`): the emitter's backstop `foldNames` (`emit/decode.go:393`), called
+  directly, since the model refuses such keys first.
+
+**Found while writing `TestDefaultsChecked`:** step 4's `admits` accepted any value for a `{"type":"null"}` member, so a union of a
+string and null admitted the default `5`; and it would have refused a `null` for that member, since `includesNull` reads only a type
+list. `admits` gains a `null` case and accepts `null` for the `null` type, and the test pins both.
+
+**Named, 13 engine sites**, each with its reason:
+
+| Site | Why no test runs it |
+| :--- | :--- |
+| `model/fields.go:521` (`objectFields`), `model/model.go:598` | `buildObject` runs `checkFields` on the same properties first; `fieldName` cannot fail on a key it accepted. |
+| `model/fields.go:570` (`plainFields`), `model/model.go:591`, `model/fields.go:607` (`inlineOf`) | the same, after `checkFields` on the nested object's properties, or on the variant's merged properties, which are the properties `inlineOf` receives. The planted breaks show these are second checks, not dead code: with `model.go:587` or `:979` broken alone, the engine case still saw the same error from here. |
+| `model/validate.go:169` | `isPathShape` admits a string without enum or const, or an array whose items are strings; such a field is `string`, `*string` or `[]string` (a nullable item is a string, probed), and the path rules name no patch property. Before G5 a type list of two types reached it; G5 refuses that list. |
+| `emit/file.go:131`, `:195`, `:301` | `layout` fails only through `decl`, which records a `printedSize` error of a function body; a body is an `*ast.BlockStmt`, which `go/printer` prints or panics on, never returning an error (0011, step 4). `:131` passes `layout`'s error on. |
+| `emit/file.go:198` | `apply` fails only on a negative reservation, which only a test builds. |
+| `load/merge.go:118`, `:285` | a reachable definition that is null is refused first, by the visit of every reachable name before the fixpoint and the copy (0011, step 4). |
+| `main.go:60` | `emit.Render` fails only when an emitter refuses what the model accepted, which the model's refusals prevent; `foldNames`' backstop above is such a refusal. |
+
+**Tooling, outside D6's engine, 23 sites, named:** `internal/mutate` (20: `main.go:81` to `:261`, the mutation tool's flags, `go list`
+and file errors; `sites.go:69` to `:96`) and `internal/enginetest` (3: `api.go:36`, `:75`, `:83`, the test helper's read errors). They
+are the test tooling's, not the engine's.
+
+**After**, the same measure: the engine at 97.4% (3736 of 3834), 13 engine sites unrun, each named above; the 23 of the tooling.
+
+Planted breaks, each in a fresh scratch copy: each covered site's line, checked against its text, replaced by a statement that does
+nothing, and every test that targets it required to fail (16 of 16 groups):
+
+| Group | What failed |
+| :--- | :--- |
+| `merge.go:89`, `:93` | both `refuse-merge-*` cases |
+| the seven single `model.go` sites | their seven cases |
+| `model.go:587` with its second check `:591`; `:979` with `fields.go:607` | `refuse-nested-bad-key`: "run accepted the schema"; `refuse-variant-bad-key`: the output does not type-check |
+| each `gates.go` site, alone | `:120`: "run accepted the schema"; `:178` and `:237`: a nil dereference in the generator; `:217`: a print error, not the expected one |
+| each `protocol.go` site, alone | `:577`: a nil dereference; `:603`: "RequestPermissionOutcome has no constructor for a variant \"cancelled\"", not the expected error |
+| `validate.go:111` | `refuse-rpc-holds-deep-union` |
+| the nine `admits` sites and `validate.go:295` | `TestDefaultsChecked` |
+| `check.go:45`, `:66`, `:74` | the three `TestCheckRefuses` cases |
+| `write.go:93` | `TestWriteStagedFileFailureReplacesNothing` |
+| `main.go:34`, `:105` | `TestRunRefusesUnknownFlag`, `TestFindRepoRootWithoutWorkingDirectory` |
+| `decode.go:393` | `TestFoldNamesRecordsCaseCollision`: "recorded \<nil\>" |
+
+The first run of these breaks grouped every site of a file in one copy. Four groups did not show each test failing: the two bad-key
+cases, because of the second checks above; `gates.go` and `protocol.go`, because one site's nil dereference ended the test binary
+before the others ran; and `decode.go`, because the replacement left `fmt` unused and the package did not build. They were split or
+corrected as the table shows, and every group was run again.
+
+Gates, through the Python runner, on the tree: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
+`GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in
+`cmd/generate`. The API listing against `v1.14.0` is unchanged from step 2's. Its first run in this step failed before listing
+anything: the scratch directory outside the tree that holds the listing tool had been emptied by the host's cleanup of temporary
+files at midnight; the tool was restored from this session's record of it, and the listing gave the counts of steps 2 to 5 again.

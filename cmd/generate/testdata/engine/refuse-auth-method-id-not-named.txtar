@@ -1,0 +1,10 @@
+Refused: an authenticate request whose method id is not a named type. It runs the error site at model/gates.go:237, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"initialize": "initialize", "auth": "authenticate"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"ProtocolVersion": {"type": "integer", "format": "uint16"}, "Flag": {"type": "object"}, "ClientCapabilities": {"type": "object", "properties": {"elicitation": {"anyOf": [{"$ref": "#/$defs/ElicitationCapabilities"}, {"type": "null"}]}}}, "ElicitationCapabilities": {"type": "object", "properties": {"form": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}, "url": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}}}, "AgentCapabilities": {"type": "object", "properties": {"loadSession": {"type": "boolean"}}}, "InitializeRequest": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "clientCapabilities": {"$ref": "#/$defs/ClientCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"}, "InitializeResponse": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "agentCapabilities": {"$ref": "#/$defs/AgentCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"}, "AuthenticateRequest": {"type": "object", "properties": {"methodId": {"type": "array", "items": {"type": "string"}}}, "required": ["methodId"], "x-side": "agent", "x-method": "authenticate"}, "AuthenticateResponse": {"type": "object", "x-side": "agent", "x-method": "authenticate"}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+capability rule AuthenticateRequest.methodId
+methodId is []string, not an id

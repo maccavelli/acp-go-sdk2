@@ -27,15 +27,19 @@ const fileMode = 0o644
 // replaced. Each is then renamed into place in the order of files. A rename
 // that fails ends the run with an error naming the files already replaced and
 // those left as they were.
-func Write(dir string, files []emit.File) error { return writeWith(dir, files, os.Rename) }
+func Write(dir string, files []emit.File) error {
+	return writeWith(dir, files, os.CreateTemp, os.Rename)
+}
 
 // staged is a file written to its temporary path and not yet renamed.
 type staged struct {
 	name, tmp string
 }
 
-// writeWith is Write with the rename it uses, so a test can make one fail.
-func writeWith(dir string, files []emit.File, rename func(oldpath, newpath string) error) error {
+// writeWith is Write with the functions it creates a temporary file and
+// renames with, so a test can make one fail.
+func writeWith(dir string, files []emit.File, createTemp func(dir, pattern string) (*os.File, error),
+	rename func(oldpath, newpath string) error) error {
 	var changed []emit.File
 	for _, f := range files {
 		old, err := os.ReadFile(filepath.Join(dir, f.Name)) //nolint:gosec // G304: dir is the generator's explicit output directory.
@@ -50,7 +54,7 @@ func writeWith(dir string, files []emit.File, rename func(oldpath, newpath strin
 
 	temps := make([]staged, 0, len(changed))
 	for _, f := range changed {
-		tmp, err := stage(dir, f)
+		tmp, err := stage(dir, f, createTemp)
 		if err != nil {
 			return errors.Join(fmt.Errorf("stage %s: %w", f.Name, err), remove(temps))
 		}
@@ -70,8 +74,8 @@ func writeWith(dir string, files []emit.File, rename func(oldpath, newpath strin
 
 // stage writes f to a new temporary file in dir and returns its path. The
 // name starts with a dot, so the go command and gofmt ignore a leftover.
-func stage(dir string, f emit.File) (string, error) {
-	t, err := os.CreateTemp(dir, "."+f.Name+".*.tmp")
+func stage(dir string, f emit.File, createTemp func(dir, pattern string) (*os.File, error)) (string, error) {
+	t, err := createTemp(dir, "."+f.Name+".*.tmp")
 	if err != nil {
 		return "", err
 	}

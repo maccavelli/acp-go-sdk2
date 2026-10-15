@@ -1,0 +1,13 @@
+Refused: a client meta key the unstable meta maps to another wire. It runs the error site at load/merge.go:89, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {"x": "s/x"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"XRequest": {"type": "object", "properties": {}, "x-side": "client", "x-method": "s/x"}, "XResponse": {"type": "object", "x-side": "client", "x-method": "s/x"}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- meta.unstable.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {"x": "u/x"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.unstable.json --
+{"$defs": {"Thing": {"type": "object", "properties": {"a": {"type": "string"}}}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+cannot merge unstable meta: method key "x" maps to both "s/x" and "u/x"

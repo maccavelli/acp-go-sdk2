@@ -1,0 +1,10 @@
+Refused: a required key an inline object property does not declare. It runs the error site at model/model.go:672, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"O": {"type": "object", "properties": {"in": {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a", "missing"]}}}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+O.properties.in:
+required key "missing" is not a property

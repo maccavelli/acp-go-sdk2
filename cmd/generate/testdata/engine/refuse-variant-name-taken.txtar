@@ -1,0 +1,10 @@
+Refused: an inline variant whose type name an enum constant already has. It runs the error site at model/model.go:923, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"New": {"type": "string", "enum": ["a"]}, "NewRequest": {"oneOf": [{"title": "a", "type": "object", "properties": {"p": {"type": "string"}}, "required": ["p"]}, {"title": "b", "type": "object", "properties": {"q": {"type": "string"}}, "required": ["q"]}]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+NewRequest variant 1:
+NewA is already declared by New enum value "a"

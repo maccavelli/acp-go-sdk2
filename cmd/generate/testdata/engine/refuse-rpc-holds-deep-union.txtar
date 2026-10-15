@@ -1,0 +1,10 @@
+Refused: a request that holds a validated union in a shape Validate does not descend into. It runs the error site at model/validate.go:111, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"U": {"oneOf": [{"type": "object", "properties": {"type": {"type": "string", "const": "a"}}, "required": ["type"]}, {"type": "object", "properties": {"type": {"type": "string", "const": "b"}}, "required": ["type"]}], "discriminator": {"propertyName": "type"}}, "HoldRequest": {"type": "object", "properties": {"u": {"type": "array", "items": {"type": "array", "items": {"$ref": "#/$defs/U"}}}}}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+HoldRequest.u:
+[][]U holds a validated type in a shape Validate does not descend into

@@ -1,0 +1,10 @@
+Refused: an inline object property with a key no Go field can take. It runs the error site at model/model.go:587, which no test ran
+(0019-PLAN-generator-hardening.md, G19).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"O": {"type": "object", "properties": {"in": {"type": "object", "properties": {"-": {"type": "string"}}}}}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+OIn.properties.-:
+"" is not an exported Go identifier

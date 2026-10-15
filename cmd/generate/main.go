@@ -95,8 +95,12 @@ func loadSchema(schemaDir string) (*load.Meta, *load.Schema, *load.Provenance, e
 
 // findRepoRoot walks up from the working directory to the first directory
 // with schema/meta.json and schema/schema.json.
-func findRepoRoot() (string, error) {
-	cwd, err := os.Getwd()
+func findRepoRoot() (string, error) { return findRepoRootFrom(os.Getwd) }
+
+// findRepoRootFrom is findRepoRoot with the function that returns the working
+// directory, so a test can make it fail.
+func findRepoRootFrom(getwd func() (string, error)) (string, error) {
+	cwd, err := getwd()
 	if err != nil {
 		return "", err
 	}

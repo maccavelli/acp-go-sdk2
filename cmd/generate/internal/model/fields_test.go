@@ -204,6 +204,47 @@ func TestInlineVariants(t *testing.T) {
 	}
 }
 
+// TestDefaultsChecked requires a default its property's schema admits to be
+// accepted, through a reference, a union member, a nullable or raw value, and
+// array items and object properties, and every other to be refused, naming
+// where in the default it is (0019-PLAN-generator-hardening.md, G10, and G19
+// for the sites the engine cases do not run).
+func TestDefaultsChecked(t *testing.T) {
+	t.Parallel()
+	build := func(prop string) error {
+		_, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{"S":{"type":"string"},
+			"T":{"type":"object","properties":{"p":`+prop+`}}}`)})
+		return err
+	}
+	for _, prop := range []string{
+		`{"anyOf":[{"$ref":"#/$defs/S"},{"type":"null"}],"default":"x"}`,
+		`{"type":"object","properties":{"x":{"type":["string","null"]}},"default":{"x":null}}`,
+		`{"type":"object","properties":{"x":{"anyOf":[{"$ref":"#/$defs/S"},{"type":"null"}]}},"default":{"x":null}}`,
+		`{"default":{"any":[1,"two"]}}`,
+		`{"type":"array","items":{"type":"number"},"default":[1,2.5]}`,
+		`{"type":"string","const":"a","default":"a"}`,
+	} {
+		if err := build(prop); err != nil {
+			t.Errorf("%s: %v", prop, err)
+		}
+	}
+	for _, tt := range []struct{ prop, want string }{
+		{`{"type":"string","const":"a","default":"b"}`, `T.p: default "b" is not its const "a"`},
+		{`{"anyOf":[{"$ref":"#/$defs/S"},{"type":"null"}],"default":5}`, "T.p: default 5 fits no member of its union"},
+		{`{"type":"object","properties":{"x":{"type":"string"}},"default":{"x":null}}`, "T.p.x: default null is not a string"},
+		{`{"type":"string","default":1}`, "T.p: default 1 is not a string"},
+		{`{"type":"number","default":"x"}`, `T.p: default "x" is not a number`},
+		{`{"type":"array","items":{"type":"string"},"default":"x"}`, `T.p: default "x" is not an array`},
+		{`{"type":"array","items":{"type":"string"},"default":["a",1]}`, "T.p[1]: default 1 is not a string"},
+		{`{"type":"object","properties":{"x":{"type":"string"}},"default":[1]}`, "T.p: default array is not an object"},
+		{`{"type":"integer","format":"uint8","maximum":-1}`, "T.p: maximum -1 is out of range for uint8"},
+	} {
+		if err := build(tt.prop); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: Build = %v, want an error containing %q", tt.prop, err, tt.want)
+		}
+	}
+}
+
 // TestNullIsAbsent marks every raw field that is not required, in an object,
 // a nested struct, and an inline variant: a null in it decodes to nothing
 // (0012-MADR-schema-fidelity-framework.md, amendment of 2026-10-11).
