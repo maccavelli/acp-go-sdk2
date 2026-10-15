@@ -229,3 +229,20 @@ removed; the API counts are step 2's gate's, on the same code.
 
 Gates, through the Python runner: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file
 changed in this step.
+
+The owner committed step 3's record as `cfcda09`.
+
+### Step 4, verification, 2026-10-15
+
+On `cfcda09`, with the tree clean before and after:
+
+* Issue #6's reproduction, the probe of the issue added to a scratch copy of the tree, under both builds, exit 0: the form
+  `name, email, age` is sent back as `{"properties":{"name":…,"email":…,"age":…},"required":["email"],"type":"object"}`, alone and
+  inside a `CreateElicitationRequest`. Before step 2, the same probe gave `age, email, name`.
+* Gates, through the Python runner, all exit 0: regenerating changes no generated file; `make pre-add-check`; no new `.go` file;
+  `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet` in both modules; `make check-records`; `make markdownlint`; the
+  identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` at the root and in `cmd/generate`, every package `ok`.
+* The API listing: 2426 lines at `v1.14.0`, 2429 in the tree; 0 removed and 3 added, exactly the three lines step 2 recorded.
+
+Left for after the push: CI on the pushed commits; then this PLAN and its row become `complete`, the 0019 phase 3 PLAN closes on the
+same verified commit, the owner tags `v1.15.0` and publishes its release, and closes issue #6 naming `561d12b`.
