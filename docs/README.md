@@ -61,6 +61,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0020 | PLAN | [Implement the v1.14.0 release and the retraction of v1.13.0](decisions/0020-PLAN-retract-accidental-v1-tag.md) | complete |
 | 0021 | MADR | [Resolve issues #4 and #5 before v1.14.0: a prompt-overlap policy option and a three-state Patch[T] for patch fields](decisions/0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md) | accepted |
 | 0021 | PLAN | [Implement the prompt-overlap policy option and the three-state Patch[T] before v1.14.0](decisions/0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md) | complete |
+| 0022 | MADR | [Keep the order of an elicitation form's properties before v1.15.0: a generated PropertyOrder beside the map](decisions/0022-MADR-keep-elicitation-property-order-before-v1-15-0.md) | accepted |
+| 0022 | PLAN | [Implement a generated PropertyOrder that keeps an elicitation form's property order, before v1.15.0](decisions/0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md) | in-progress |
 
 ## I want to…
 

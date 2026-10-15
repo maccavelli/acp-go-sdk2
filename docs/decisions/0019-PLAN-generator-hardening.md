@@ -649,3 +649,18 @@ G4 to G8 and G20 by step 3's, G9 to G14 and G21 by step 4's, G15 to G18 by step 
 with their reasons. Acceptance waits on CI for the pushed commits; then this PLAN and its `docs/README.md` row become `complete`, and
 the owner tags `v1.15.0` and publishes its release from
 [0019-REPORT-release-notes-v1-15-0.md](../reports/0019-REPORT-release-notes-v1-15-0.md).
+
+### After step 8, 2026-10-15: the tag waits on 0022
+
+The owner pushed `main` to `3a84443`, carrying this PLAN's commits from `100701e`. CI run `38687138852` on it passed on `validate
+(ubuntu-24.04)` and `validate (windows-2025)`; `validate (macos-15)` failed twice, on the first attempt and on a rerun of the failed
+job, both times at job setup, before any of the repository's code ran: "An action could not be found at the URI
+'https://codeload.github.com/actions/setup-go/tar.gz/b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'". The pinned commit exists in
+`actions/setup-go`, the same URL answered `200` from the owner's host, GitHub's status page reported every system operational, and
+the same pin passed on all three runners for `c97e6d3` earlier that day.
+
+Meanwhile the owner had GitHub issue #6 investigated, and decided on 2026-10-15 to resolve it before the tag:
+[0022-MADR-keep-elicitation-property-order-before-v1-15-0.md](0022-MADR-keep-elicitation-property-order-before-v1-15-0.md),
+implemented by [0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md](0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md).
+This PLAN's close, and the tag of `v1.15.0`, follow the commit that PLAN verifies, not `3a84443`; its acceptance's CI is that
+commit's. The release notes of step 7 stand; the 0022 PLAN adds to them.
