@@ -375,3 +375,71 @@ markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count
 `cmd/generate`. The API listing against `v1.14.0` is unchanged from step 2's: 0 removed, the same 2 added.
 
 The documentation of the refused shapes and of G6's handling is step 7's.
+
+The owner committed step 3's record as `1ee1eb7`.
+
+### Step 4, keywords and values, 2026-10-14
+
+What was built, on `1ee1eb7`:
+
+* G9 and G14, `model/names.go`. `fieldName` refuses a key a json struct tag cannot carry (`tagKey`, Q2's rule: "a json struct tag
+  cannot carry this key") and a field named for a generated method (`checkNotMethod`: `MarshalJSON`, `UnmarshalJSON`, `Validate`; "field
+  Validate collides with the generated method Validate"). `buildVariant` applies `checkNotMethod` to a wrapper field and `checkMembers`
+  to a flattened member's field. `discriminatorValue`, out of `buildVariant`, refuses a discriminator const that is not a string
+  ("discriminator 1 is not a string"), which `fmt.Sprint` turned into a value before. `Roots`, hand-written on five types, is left to
+  the type checker, as "Design" says; step 7 documents it.
+* G10, `model/fields.go`. `checkDefaults`, a model pass after `resolveNullRetained`, checks every property default through `admits`:
+  `$ref` and an allOf of one followed (`resolveSchema`), then `enum` and `const`, a union admitting what any member admits, and the
+  JSON kind, an integer also integral and in the range of its format's Go type ("default 300 is not a uint8"), array items and object
+  properties by recursion. The 43 committed defaults pass; the 24 generated `json.Unmarshal` statements are unchanged.
+* G11. `checkRequired` (`model/model.go`), for an object and an object with flattened members, refuses a required key that neither
+  the object nor a member declares, and does the same for each inline object property; `inlineOf` (`model/fields.go`) for an inline
+  variant against the union's properties and its own ("required key \"missing\" is not a property").
+* G12 and G21. `bounds` (`model/validate.go`) rounds an integer `minimum` up and `maximum` down, refuses one the Go type cannot reach
+  after rounding ("minimum 300 is out of range for uint8"), and omits one the type always meets, as before; `boundLit`
+  (`emit/types.go`) writes an integer bound at or above `math.MaxInt64` through `strconv.FormatUint`.
+* G13, `load/load.go`. `decodeStrict` first runs `exactKeys`, which refuses a key that is a field's JSON name in another letter case;
+  a key that names no field is still refused by `DisallowUnknownFields`, so its text, `unknown field "x-new"`, is unchanged. The
+  error for a mis-cased key reads `unknown field "REQUIRED": keywords are matched exactly, and this is "required" in another case`.
+  `Discriminator` gains an `UnmarshalJSON` through `decodeStrict`, and `parseSchema` applies `exactKeys` to the top level, so a
+  mis-cased `$defs` is refused.
+* Tests. `TestKeywordsMatchExactly` (`load/load_test.go`): a definition, a nested property, a discriminator, the top level and a meta
+  file each refuse a mis-cased key, and exact keywords pass. Engine cases: `refuse-property-key-comma`, `-quote`; `refuse-default-range`,
+  `-type`, `-nested`, `-enum`; `refuse-required-undeclared`, `-variant`; `refuse-unreachable-bound`; `refuse-keyword-case`;
+  `refuse-discriminator-const`; `refuse-method-field`, `-variant`, `-member`; `accept-validate-fractional-bound`, its `want.api` written
+  by `-update` and read, with a behaviour test: `minimum 1.5` refuses 1 and accepts 2, `maximum -1.5` refuses -1 and accepts -2, and a
+  `uint64` `maximum 1e19` accepts `10000000000000000000` and refuses one more.
+* Regenerated: no generated file changes.
+
+Where this differs from "Design" in detail, not in decision: the design named one or two cases per finding, and the step pins each
+refusal it lists, so `refuse-default-nested`, `refuse-default-enum`, `refuse-required-undeclared-variant` and `refuse-method-member`
+were added, and the design's `refuse-default-type` is split into `-range` and `-type`, since one schema stops at its first error; the
+error texts read as above, where "Design" sketches them.
+
+The first run of `make pre-add-check` failed on lint, and the code was corrected before this record: `buildVariant`'s cyclomatic
+complexity 41 over the limit of 40 (gocyclo), lowered by moving the discriminator's value into `discriminatorValue`; and `exactKeys`
+returning nil on a decode error (nilerr), now returning the error after checking that the input is an object. The first planted break
+of the kind check, `g10-no-kind`, failed only because it left a variable unused; it was rewritten. Every planted break was then run
+again on the corrected tree; the results below are that run's.
+
+Planted breaks, each in a fresh scratch copy (19 of 19 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| `tagKey` admitting every key | `refuse-property-key-comma` and `-quote`: "run accepted the schema" |
+| `checkNotMethod` admitting every name | `refuse-method-field`, `-variant`, `-member`: the output does not type-check |
+| the wrapper's check, or the member's check, ignored | `refuse-method-variant`, or `refuse-method-member`: the output does not type-check |
+| a discriminator const turned into a string | `refuse-discriminator-const`: "wrapper field: \"1\" is not an exported Go identifier", not the expected error |
+| `checkDefaults` ignored | the four `refuse-default-*` cases |
+| the range, kind, recursion or enum check ignored | `refuse-default-range`, `-type`, `-nested`, `-enum` in turn |
+| the object or the inline-variant required check ignored | `refuse-required-undeclared`, or `-variant` |
+| `minimum` or `maximum` truncated, not rounded | `accept-validate-fractional-bound`: "{Hi:-2 Lo:1 U:0}: error \<nil\>", "{Hi:-1 Lo:2 U:0}: error \<nil\>" |
+| the bound written through `int64` | the same case: "u: greater than maximum 9223372036854775807" |
+| an unreachable minimum accepted | `refuse-unreachable-bound`: the output does not type-check |
+| `exactKeys` matching no name | `refuse-keyword-case`: "run accepted the schema" |
+| the discriminator decoded loosely; the top level unchecked | `TestKeywordsMatchExactly`: "discriminator: got \<nil\>"; "top level: got \<nil\>" |
+
+Gates, through the Python runner, on the tree: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
+`GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in
+`cmd/generate`. The API listing against `v1.14.0` is unchanged from step 2's.

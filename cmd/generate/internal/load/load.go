@@ -9,7 +9,9 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
+	"strings"
 )
 
 // Meta mirrors schema/meta.json for method maps and version.
@@ -112,11 +114,55 @@ func (d *Definition) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// decodeStrict decodes b into v and fails on a key v does not declare.
+// decodeStrict decodes b into v, a pointer to a struct, and fails on a key v
+// does not declare, and on one that names a field in another letter case,
+// which encoding/json would match (0019-PLAN-generator-hardening.md, G13).
 func decodeStrict(b []byte, v any) error {
+	if err := exactKeys(b, reflect.TypeOf(v).Elem()); err != nil {
+		return err
+	}
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	return dec.Decode(v)
+}
+
+// exactKeys fails when a key of the JSON object b differs only in letter case
+// from the JSON name of a field of the struct type t. A b that is not an
+// object is left to the decoder.
+func exactKeys(b []byte, t reflect.Type) error {
+	if !bytes.HasPrefix(bytes.TrimSpace(b), []byte("{")) {
+		return nil
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return err
+	}
+	var names []string
+	for f := range t.Fields() {
+		if name, _, _ := strings.Cut(f.Tag.Get("json"), ","); name != "" && name != "-" {
+			names = append(names, name)
+		}
+	}
+	for _, key := range slices.Sorted(maps.Keys(obj)) {
+		if slices.Contains(names, key) {
+			continue
+		}
+		if i := slices.IndexFunc(names, func(n string) bool { return strings.EqualFold(n, key) }); i >= 0 {
+			return fmt.Errorf("unknown field %q: keywords are matched exactly, and this is %q in another case", key, names[i])
+		}
+	}
+	return nil
+}
+
+// UnmarshalJSON decodes a discriminator strictly.
+func (d *Discriminator) UnmarshalJSON(b []byte) error {
+	type alias Discriminator
+	var a alias
+	if err := decodeStrict(b, &a); err != nil {
+		return err
+	}
+	*d = Discriminator(a)
+	return nil
 }
 
 // parseMeta decodes a meta file strictly.
@@ -135,6 +181,9 @@ func parseSchema(b []byte) (*Schema, error) {
 		Defs map[string]json.RawMessage `json:"$defs"`
 	}
 	if err := json.Unmarshal(b, &top); err != nil {
+		return nil, err
+	}
+	if err := exactKeys(b, reflect.TypeOf(top)); err != nil {
 		return nil, err
 	}
 	schema := &Schema{Defs: make(map[string]*Definition, len(top.Defs))}

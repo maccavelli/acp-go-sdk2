@@ -1,0 +1,13 @@
+Refused: a required key the object does not declare, whose absence nothing
+would check (0019-PLAN-generator-hardening.md, G11).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Obj": {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a", "missing"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Obj:
+required key "missing" is not a property

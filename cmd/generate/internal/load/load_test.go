@@ -74,6 +74,36 @@ func TestParseMetaRejectsUnknownKeys(t *testing.T) {
 	}
 }
 
+// TestKeywordsMatchExactly requires every decoder of the loader to refuse a
+// key that names a keyword in another letter case, which encoding/json would
+// match as the keyword (0019-PLAN-generator-hardening.md, G13).
+func TestKeywordsMatchExactly(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name, input string
+		parse       func([]byte) error
+		want        string
+	}{
+		{"definition", `{"$defs":{"T":{"type":"object","Properties":{}}}}`, schemaParse, `unknown field "Properties"`},
+		{"nested", `{"$defs":{"T":{"type":"object","properties":{"a":{"TYPE":"string"}}}}}`, schemaParse, `unknown field "TYPE"`},
+		{"discriminator", `{"$defs":{"T":{"discriminator":{"PropertyName":"kind"},"oneOf":[]}}}`, schemaParse,
+			`unknown field "PropertyName"`},
+		{"top level", `{"$DEFS":{}}`, schemaParse, `unknown field "$DEFS"`},
+		{"meta", `{"version":1,"AgentMethods":{},"clientMethods":{}}`, metaParse, `unknown field "AgentMethods"`},
+	} {
+		if err := tt.parse([]byte(tt.input)); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: got %v, want an error containing %q", tt.name, err, tt.want)
+		}
+	}
+	if err := schemaParse([]byte(`{"$defs":{"T":{"type":"object","properties":{"a":{"type":"string"}},"required":["a"]}}}`)); err != nil {
+		t.Errorf("exact keywords: %v", err)
+	}
+}
+
+func schemaParse(b []byte) error { _, err := parseSchema(b); return err }
+
+func metaParse(b []byte) error { _, err := parseMeta(b); return err }
+
 // TestDeepCopyDefinitionCoversEveryField fails when a field of Definition is
 // left out of the fixture, or when deepCopyDefinition shares a pointer, map,
 // or slice field with its input.

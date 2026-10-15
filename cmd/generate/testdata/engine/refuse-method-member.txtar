@@ -1,0 +1,15 @@
+Refused: a flattened member whose field would take the name of the generated
+method MarshalJSON (0019-PLAN-generator-hardening.md, G14).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "A": {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"]},
+  "B": {"type": "object", "properties": {"b": {"type": "string"}}, "required": ["b"]},
+  "Both": {"type": "object", "properties": {"note": {"type": "string"}}, "anyOf": [{"title": "MarshalJSON", "allOf": [{"$ref": "#/$defs/A"}]}, {"$ref": "#/$defs/B"}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Both: member A:
+field MarshalJSON collides with the generated method MarshalJSON

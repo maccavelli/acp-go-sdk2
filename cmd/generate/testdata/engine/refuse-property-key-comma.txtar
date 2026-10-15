@@ -1,0 +1,13 @@
+Refused: a property key with a comma, which a json struct tag would read as
+its options (0019-PLAN-generator-hardening.md, G9).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Obj": {"type": "object", "properties": {"a,omitempty": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Obj.properties.a,omitempty:
+a json struct tag cannot carry this key

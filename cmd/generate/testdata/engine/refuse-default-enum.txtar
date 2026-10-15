@@ -1,0 +1,12 @@
+Refused: a string default outside its enum (0019-PLAN-generator-hardening.md, G10).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Opts": {"type": "object", "properties": {"mode": {"type": "string", "enum": ["fast", "slow"], "default": "medium"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Opts.mode:
+default "medium" is not one of its enum values

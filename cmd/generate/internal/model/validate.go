@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"math"
+	"strconv"
 )
 
 // Validation is what a type's Validate method checks: nil means the type has
@@ -267,13 +268,44 @@ func (m *Model) bounds(owner, key string, minimum, maximum *float64, minLength *
 	if r.Kind != RefNamed || (!integer && base != goFloat32 && base != goFloat64) {
 		return nil, fmt.Errorf("%s: minimum or maximum on %s, not a number", where, r)
 	}
-	if minimum != nil && (!integer || *minimum > rng[0]) {
-		out = append(out, Check{Kind: CheckMinimum, Key: key, Shape: sh, Bound: *minimum, Integer: integer})
+	if !integer {
+		if minimum != nil {
+			out = append(out, Check{Kind: CheckMinimum, Key: key, Shape: sh, Bound: *minimum})
+		}
+		if maximum != nil {
+			out = append(out, Check{Kind: CheckMaximum, Key: key, Shape: sh, Bound: *maximum})
+		}
+		return out, nil
 	}
-	if maximum != nil && (!integer || *maximum < rng[1]) {
-		out = append(out, Check{Kind: CheckMaximum, Key: key, Shape: sh, Bound: *maximum, Integer: integer})
+	// An integer bound rounds inward, so a fractional one admits exactly the
+	// integers it allows; one the Go type cannot reach would leave no value,
+	// and the type checker would refuse the generated comparison
+	// (0019-PLAN-generator-hardening.md, G12 and G21).
+	if minimum != nil {
+		lo := math.Ceil(*minimum)
+		if lo > rng[1] {
+			return nil, fmt.Errorf("%s: minimum %s is out of range for %s", where, formatBound(*minimum), base)
+		}
+		if lo > rng[0] {
+			out = append(out, Check{Kind: CheckMinimum, Key: key, Shape: sh, Bound: lo, Integer: true})
+		}
+	}
+	if maximum != nil {
+		hi := math.Floor(*maximum)
+		if hi < rng[0] {
+			return nil, fmt.Errorf("%s: maximum %s is out of range for %s", where, formatBound(*maximum), base)
+		}
+		if hi < rng[1] {
+			out = append(out, Check{Kind: CheckMaximum, Key: key, Shape: sh, Bound: hi, Integer: true})
+		}
 	}
 	return out, nil
+}
+
+// formatBound writes a schema bound as the schema does, without a needless
+// fraction or exponent.
+func formatBound(f float64) string {
+	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
 // pathFieldShape is how a field holds an absolute path: a string, a pointer

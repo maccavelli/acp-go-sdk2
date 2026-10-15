@@ -1,0 +1,14 @@
+Refused: an object default whose property, reached through an allOf of one
+reference, has a value of another kind (0019-PLAN-generator-hardening.md, G10).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Caps": {"type": "object", "properties": {"image": {"type": "boolean", "default": false}}},
+  "Opts": {"type": "object", "properties": {"caps": {"allOf": [{"$ref": "#/$defs/Caps"}], "default": {"image": "yes"}}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Opts.caps.image:
+default "yes" is not a bool

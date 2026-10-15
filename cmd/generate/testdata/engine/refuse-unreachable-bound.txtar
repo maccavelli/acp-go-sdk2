@@ -1,0 +1,13 @@
+Refused: a minimum its integer type cannot reach, which would leave no valid
+value and fail in the type checker (0019-PLAN-generator-hardening.md, G21).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "T": {"type": "object", "properties": {"n": {"type": "integer", "format": "uint8", "minimum": 300}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+T.n:
+minimum 300 is out of range for uint8

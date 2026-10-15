@@ -1,0 +1,13 @@
+Refused: a default of another JSON kind than its property's type, which would
+decode as zero (0019-PLAN-generator-hardening.md, G10).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Opts": {"type": "object", "properties": {"n": {"type": "integer", "format": "int32", "default": "x"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Opts.n:
+default "x" is not a int32

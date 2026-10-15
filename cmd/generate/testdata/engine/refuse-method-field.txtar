@@ -1,0 +1,13 @@
+Refused: a property whose field would take the name of the generated method
+Validate (0019-PLAN-generator-hardening.md, G14).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Obj": {"type": "object", "properties": {"validate": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Obj.properties.validate:
+field Validate collides with the generated method Validate

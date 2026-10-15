@@ -1,0 +1,12 @@
+Refused: a required key an inline variant and its union do not declare
+(0019-PLAN-generator-hardening.md, G11).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"oneOf": [{"title": "A", "type": "object", "properties": {"kind": {"type": "string", "const": "a"}}, "required": ["kind", "missing"]}, {"title": "B", "type": "object", "properties": {"kind": {"type": "string", "const": "b"}}, "required": ["kind"]}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+required key "missing" is not a property

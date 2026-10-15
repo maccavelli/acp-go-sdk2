@@ -1,0 +1,13 @@
+Refused: a discriminator const that is not a string, which the union matches
+and sends as one (0019-PLAN-generator-hardening.md, G14).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"discriminator": {"propertyName": "kind"}, "oneOf": [{"title": "One", "type": "object", "properties": {"kind": {"type": "integer", "const": 1}}, "required": ["kind"]}, {"title": "Two", "type": "object", "properties": {"kind": {"type": "integer", "const": 2}}, "required": ["kind"]}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+U variant 1:
+discriminator 1 is not a string

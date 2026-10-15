@@ -325,6 +325,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 	if err := m.resolveNullRetained(r); err != nil {
 		return nil, err
 	}
+	if err := m.checkDefaults(); err != nil {
+		return nil, err
+	}
 	if err := m.buildValidations(); err != nil {
 		return nil, err
 	}
@@ -420,6 +423,9 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition,
 			if err := checkMembers(name, t.Fields, members); err != nil {
 				return nil, err
 			}
+			if err := checkRequired(schema, t); err != nil {
+				return nil, err
+			}
 			break
 		}
 		t.ExactlyOne = len(def.AnyOf) == 0
@@ -428,6 +434,9 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition,
 		}
 	case KindObject:
 		if err := buildObject(n, t); err != nil {
+			return nil, err
+		}
+		if err := checkRequired(schema, t); err != nil {
 			return nil, err
 		}
 	case KindPrimitive:
@@ -614,6 +623,65 @@ func keepExtra(t *Type) error {
 		}
 	}
 	t.KeepExtra = true
+	return nil
+}
+
+// discriminatorValue returns the const a variant's facts give its union's
+// discriminator, or "" for none. A const that is not a string is refused: the
+// union matches and sends the discriminator as a string
+// (0019-PLAN-generator-hardening.md, G14).
+func discriminatorValue(owner string, facts *load.Definition, discKey string) (string, error) {
+	if discKey == "" {
+		return "", nil
+	}
+	pd := facts.Properties[discKey]
+	if pd == nil || pd.Const == nil {
+		return "", nil
+	}
+	s, ok := pd.Const.(string)
+	if !ok {
+		return "", fmt.Errorf("%s: discriminator %s is not a string", owner, schemaValue(pd.Const))
+	}
+	return s, nil
+}
+
+// checkRequired refuses a required key that no property of the object, of its
+// flattened members, or of an inline object property declares: nothing
+// would read it, so its absence would go unchecked
+// (0019-PLAN-generator-hardening.md, G11).
+func checkRequired(schema *load.Schema, t *Type) error {
+	have := map[string]bool{}
+	for key := range t.def.Properties {
+		have[key] = true
+	}
+	for _, mb := range t.Members {
+		for key := range expandAllOf(schema, schema.Defs[mb.Type]).Properties {
+			have[key] = true
+		}
+	}
+	if err := requiredDeclared(t.Name, t.def.Required, have); err != nil {
+		return err
+	}
+	for _, key := range slices.Sorted(maps.Keys(t.Nested)) {
+		prop := t.def.Properties[key]
+		nested := map[string]bool{}
+		for k := range prop.Properties {
+			nested[k] = true
+		}
+		if err := requiredDeclared(t.Name+".properties."+key, prop.Required, nested); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// requiredDeclared fails on the first key of required not in have.
+func requiredDeclared(owner string, required []string, have map[string]bool) error {
+	for _, key := range required {
+		if !have[key] {
+			return fmt.Errorf("%s: required key %q is not a property", owner, key)
+		}
+	}
 	return nil
 }
 
@@ -828,11 +896,9 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 	s, ok := facts.Type.(string)
 	isNull := ok && s == schemaTypeNull
 
-	dv := ""
-	if discKey != "" {
-		if pd := facts.Properties[discKey]; pd != nil && pd.Const != nil {
-			dv = fmt.Sprint(pd.Const)
-		}
+	dv, err := discriminatorValue(owner, facts, discKey)
+	if err != nil {
+		return nil, err
 	}
 
 	var typeName string
@@ -899,6 +965,9 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 	}
 	if err := checkExported(field); err != nil {
 		return nil, fmt.Errorf("%s: wrapper field: %w", owner, err)
+	}
+	if err := checkNotMethod(field); err != nil {
+		return nil, fmt.Errorf("%s: wrapper %w", owner, err)
 	}
 	if ref == "" && isObj && !isNull {
 		merged := maps.Clone(t.def.Properties)
@@ -976,6 +1045,9 @@ func checkMembers(owner string, fields []*Field, members []*Member) error {
 	}
 	for _, mb := range members {
 		if err := checkExported(mb.Field); err != nil {
+			return fmt.Errorf("%s: member %s: %w", owner, mb.Type, err)
+		}
+		if err := checkNotMethod(mb.Field); err != nil {
 			return fmt.Errorf("%s: member %s: %w", owner, mb.Type, err)
 		}
 		if prev, ok := seen[mb.Field]; ok {

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -347,6 +349,144 @@ func includesNull(d *load.Definition) bool {
 	return ok && slices.Contains(arr, any(schemaTypeNull))
 }
 
+// checkDefaults refuses a property default its schema does not admit: a value
+// of another JSON kind, an integer that is fractional or outside the range of
+// its format's Go type, a value outside its enum or other than its const,
+// through a reference, an allOf of one, array items, object properties and
+// union members. The generated code decodes a default without checking the
+// error, which a default checked here cannot return
+// (0019-PLAN-generator-hardening.md, G10).
+func (m *Model) checkDefaults() error {
+	for _, t := range m.Types {
+		lists := [][]*Field{t.Fields}
+		for _, ns := range t.NestedStructs {
+			lists = append(lists, ns.Fields)
+		}
+		for _, vi := range t.Variants {
+			if vi.Inline != nil {
+				lists = append(lists, vi.Inline.Fields)
+			}
+		}
+		for _, fields := range lists {
+			for _, f := range fields {
+				if f.prop == nil || f.prop.Default == nil {
+					continue
+				}
+				if err := admits(m.schema, t.Name+"."+f.Key, f.prop, f.prop.Default); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// admits fails when the schema d does not admit the JSON value v, naming
+// where in the default it is.
+func admits(schema *load.Schema, where string, d *load.Definition, v any) error {
+	d = resolveSchema(schema, d)
+	if d == nil {
+		return nil
+	}
+	if len(d.Enum) > 0 && !slices.ContainsFunc(d.Enum, func(e any) bool { return reflect.DeepEqual(e, v) }) {
+		return fmt.Errorf("%s: default %s is not one of its enum values", where, valueText(v))
+	}
+	if d.Const != nil && !reflect.DeepEqual(d.Const, v) {
+		return fmt.Errorf("%s: default %s is not its const %s", where, valueText(v), valueText(d.Const))
+	}
+	if list := slices.Concat(d.AnyOf, d.OneOf); len(list) > 0 && len(d.Properties) == 0 {
+		for _, member := range list {
+			if member != nil && admits(schema, where, member, v) == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("%s: default %s fits no member of its union", where, valueText(v))
+	}
+	pt := primaryType(d)
+	if pt == "" && len(d.Properties) > 0 {
+		pt = schemaTypeObject
+	}
+	if v == nil {
+		if pt == "" || includesNull(d) {
+			return nil
+		}
+		return fmt.Errorf("%s: default null is not a %s", where, pt)
+	}
+	switch pt {
+	case schemaTypeString:
+		if _, ok := v.(string); !ok {
+			return fmt.Errorf("%s: default %s is not a string", where, valueText(v))
+		}
+	case schemaTypeBoolean:
+		if _, ok := v.(bool); !ok {
+			return fmt.Errorf("%s: default %s is not a bool", where, valueText(v))
+		}
+	case schemaTypeNumber:
+		if _, ok := v.(float64); !ok {
+			return fmt.Errorf("%s: default %s is not a number", where, valueText(v))
+		}
+	case schemaTypeInteger:
+		goType := numericFormat(pt, d.Format)
+		f, ok := v.(float64)
+		rng, sized := goRange[goType]
+		if !ok || f != math.Trunc(f) || (sized && (f < rng[0] || f > rng[1])) {
+			return fmt.Errorf("%s: default %s is not a %s", where, valueText(v), goType)
+		}
+	case schemaTypeArray:
+		items, ok := v.([]any)
+		if !ok {
+			return fmt.Errorf("%s: default %s is not an array", where, valueText(v))
+		}
+		for i, item := range items {
+			if err := admits(schema, fmt.Sprintf("%s[%d]", where, i), d.Items, item); err != nil {
+				return err
+			}
+		}
+	case schemaTypeObject:
+		obj, ok := v.(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s: default %s is not an object", where, valueText(v))
+		}
+		props := expandAllOf(schema, d).Properties
+		for _, key := range slices.Sorted(maps.Keys(obj)) {
+			if err := admits(schema, where+"."+key, props[key], obj[key]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// resolveSchema follows d's $ref, and an allOf of one schema, to the schema
+// that types it, or nil for a reference the schema lacks.
+func resolveSchema(schema *load.Schema, d *load.Definition) *load.Definition {
+	for range len(schema.Defs) + 1 {
+		switch {
+		case d == nil:
+			return nil
+		case d.Ref != "":
+			d = schema.Defs[strings.TrimPrefix(d.Ref, refPrefix)]
+		case len(d.AllOf) == 1 && len(d.Properties) == 0:
+			d = d.AllOf[0]
+		default:
+			return d
+		}
+	}
+	return d
+}
+
+// valueText writes a JSON value of the schema for an error: a scalar as the
+// schema writes it, an array or an object by its kind.
+func valueText(v any) string {
+	switch v.(type) {
+	case []any:
+		return "array"
+	case map[string]any:
+		return "object"
+	}
+	return schemaValue(v)
+}
+
 // defaultKindOf classifies a default value decoded from JSON.
 func defaultKindOf(val any) DefaultKind {
 	switch val.(type) {
@@ -465,6 +605,12 @@ func inlineOf(t *Type, tname string, ev *load.Definition, isObj, isNull bool) (*
 			props = map[string]*load.Definition{}
 		}
 		maps.Copy(props, ev.Properties)
+		for _, key := range slices.Sorted(maps.Keys(req)) {
+			if props[key] == nil {
+				// (0019-PLAN-generator-hardening.md, G11.)
+				return nil, fmt.Errorf("%s: required key %q is not a property", tname, key)
+			}
+		}
 		fields, err := plainFields(tname, props, req)
 		if err != nil {
 			return nil, err

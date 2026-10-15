@@ -1,0 +1,13 @@
+Refused: a property key with a quotation mark, which a json struct tag cannot
+carry, and the two JSON builds would read differently (0019-PLAN-generator-hardening.md, G9).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Obj": {"type": "object", "properties": {"a\"b": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Obj.properties.a"b:
+a json struct tag cannot carry this key

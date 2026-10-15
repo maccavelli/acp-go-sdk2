@@ -1,0 +1,13 @@
+Refused: an integer default outside the range of its format's Go type, which
+would decode as zero (0019-PLAN-generator-hardening.md, G10).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Opts": {"type": "object", "properties": {"n": {"type": "integer", "format": "uint8", "default": 300}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Opts.n:
+default 300 is not a uint8

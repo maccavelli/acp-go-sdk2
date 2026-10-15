@@ -1,0 +1,13 @@
+Refused: a union variant whose wrapper field would take the name of the
+generated method Validate (0019-PLAN-generator-hardening.md, G14).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"oneOf": [{"type": "object", "properties": {"type": {"type": "string", "const": "validate"}}, "required": ["type"]}, {"type": "object", "properties": {"type": {"type": "string", "const": "b"}}, "required": ["type"]}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+U variant 1:
+wrapper field Validate collides with the generated method Validate

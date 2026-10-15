@@ -1,0 +1,65 @@
+An integer minimum or maximum with a fraction rounds inward, so it admits
+exactly the integers the schema allows, and a uint64 bound above the int64
+range is written as a uint64 (0019-PLAN-generator-hardening.md, G12 and G21).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "T": {"type": "object", "properties": {"lo": {"type": "integer", "format": "int64", "minimum": 1.5}, "hi": {"type": "integer", "format": "int64", "maximum": -1.5}, "u": {"type": "integer", "format": "uint64", "maximum": 1e19}}, "required": ["lo", "hi", "u"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type T struct{Hi int64 "json:\"hi\""; Lo int64 "json:\"lo\""; U uint64 "json:\"u\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*T).UnmarshalJSON(b []byte) error
+func (*T).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestFractionalBounds(t *testing.T) {
+	for _, tc := range []struct {
+		v    T
+		want string
+	}{
+		{T{Lo: 2, Hi: -2}, ""},
+		{T{Lo: 1, Hi: -2}, "less than minimum 2"},
+		{T{Lo: 2, Hi: -1}, "greater than maximum -2"},
+		{T{Lo: 2, Hi: -2, U: 10000000000000000000}, ""},
+		{T{Lo: 2, Hi: -2, U: 10000000000000000001}, "greater than maximum 10000000000000000000"},
+	} {
+		err := tc.v.Validate()
+		switch {
+		case tc.want == "" && err != nil:
+			t.Errorf("%+v: %v", tc.v, err)
+		case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
+			t.Errorf("%+v: error %v, want one containing %q", tc.v, err, tc.want)
+		}
+	}
+}

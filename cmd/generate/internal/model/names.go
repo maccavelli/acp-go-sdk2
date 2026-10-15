@@ -56,13 +56,51 @@ func checkExported(name string) error {
 	return nil
 }
 
-// fieldName is the Go field name of a schema property.
+// fieldName is the Go field name of a schema property. It fails when the
+// field would not be an exported identifier, when a json struct tag cannot
+// carry the key (G9), and when the field would take the name of a method the
+// generator emits (G14) (0019-PLAN-generator-hardening.md).
 func fieldName(owner, key string) (string, error) {
 	name := util.ToExportedField(key)
 	if err := checkExported(name); err != nil {
 		return "", fmt.Errorf("%s.properties.%s: field name: %w", owner, key, err)
 	}
+	if !tagKey(key) {
+		return "", fmt.Errorf("%s.properties.%s: a json struct tag cannot carry this key", owner, key)
+	}
+	if err := checkNotMethod(name); err != nil {
+		return "", fmt.Errorf("%s.properties.%s: %w", owner, key, err)
+	}
 	return name, nil
+}
+
+// generatedMethods are the methods the generator emits on a struct or a
+// union; a field of one of these names would collide with it.
+var generatedMethods = []string{"MarshalJSON", "UnmarshalJSON", "Validate"}
+
+// checkNotMethod fails when a field name is that of a generated method.
+func checkNotMethod(name string) error {
+	if slices.Contains(generatedMethods, name) {
+		return fmt.Errorf("field %s collides with the generated method %s", name, name)
+	}
+	return nil
+}
+
+// tagKey reports whether a json struct tag can carry key as its name, as
+// encoding/json's Marshal documents: a non-empty string of Unicode letters,
+// digits, and ASCII punctuation except quotation marks, backslash, and comma.
+func tagKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	for _, r := range key {
+		switch {
+		case strings.ContainsRune("!#$%&()*+-./:;<=>?@[]^_{|}~ ", r):
+		case !unicode.IsLetter(r) && !unicode.IsDigit(r):
+			return false
+		}
+	}
+	return true
 }
 
 // checkFields fails when two properties of one struct become the same field,
