@@ -508,4 +508,5 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 	checkCommittedGates(t, m)
 	checkCommittedPatchFields(t, m)
 	checkCommittedNullRetained(t, m)
+	checkCommittedKeyOrders(t, m)
 }

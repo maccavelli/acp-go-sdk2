@@ -38,6 +38,18 @@ type Protocol struct {
 	// another optional raw value reads null as absent; Source must be in the
 	// property's description (0019-PLAN-generator-hardening.md, G3).
 	NullRetained []PatchRule
+	// KeyOrders lists the typed map properties whose key order the protocol
+	// gives meaning, which the schema does not state: each struct gains
+	// Field, the order of the map's keys, read when decoded and written when
+	// encoded (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
+	KeyOrders []OrderRule
+}
+
+// OrderRule names a typed map property whose key order is kept, by the
+// definition that declares it as the merged schema names it; Field is the Go
+// name of the field that holds the order, and Source the reason.
+type OrderRule struct {
+	Definition, Property, Field, Source string
 }
 
 // PathRule names a property the protocol requires to be an absolute path,
@@ -275,6 +287,19 @@ func newRules(p *Protocol) (*rules, error) {
 			return nil, fmt.Errorf("null-retained rule %s.%s: two rules", rule.Definition, rule.Property)
 		}
 		retained[k] = true
+	}
+	ordered := map[[2]string]bool{}
+	for _, rule := range p.KeyOrders {
+		k := [2]string{rule.Definition, rule.Property}
+		switch {
+		case rule.Definition == "" || rule.Property == "" || rule.Field == "" || rule.Source == "":
+			return nil, fmt.Errorf("key-order rule %q.%q: it needs a definition, a property, a field, and a source", rule.Definition, rule.Property)
+		case checkExported(rule.Field) != nil:
+			return nil, fmt.Errorf("key-order rule %s.%s: field %q is not an exported Go identifier", rule.Definition, rule.Property, rule.Field)
+		case ordered[k]:
+			return nil, fmt.Errorf("key-order rule %s.%s: two rules", rule.Definition, rule.Property)
+		}
+		ordered[k] = true
 	}
 	if err := checkCapabilityRules(p.CapabilityRules); err != nil {
 		return nil, err

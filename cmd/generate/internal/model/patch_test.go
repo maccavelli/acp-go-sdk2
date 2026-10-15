@@ -129,6 +129,80 @@ func TestNullRetainedRules(t *testing.T) {
 	}
 }
 
+// orderedDefs adds, to protocolDefs, an object with a typed map, an array and
+// a string; a union with a typed map of its own; an object with flattened
+// members and one that keeps extra keys, each with a typed map.
+const orderedDefs = `"Ordered":{"type":"object","properties":{
+	"props":{"type":"object","additionalProperties":{"type":"string"}},
+	"list":{"type":"array","items":{"type":"string"}},
+	"note":{"type":"string"}}},
+	"OrdU":{"type":"object","properties":{"m":{"type":"object","additionalProperties":{"type":"string"}}},
+		"oneOf":[{"title":"A","type":"object","properties":{"a":{"type":"string"}},"required":["a"]}]},
+	"OrdA":{"type":"object","properties":{"a":{"type":"string"}},"required":["a"]},
+	"OrdB":{"type":"object","properties":{"b":{"type":"string"}},"required":["b"]},
+	"OrdF":{"type":"object","properties":{"m":{"type":"object","additionalProperties":{"type":"string"}}},
+		"anyOf":[{"$ref":"#/$defs/OrdA"},{"$ref":"#/$defs/OrdB"}]},
+	"OrdX":{"type":"object","properties":{"m":{"type":"object","additionalProperties":{"type":"string"}}},"additionalProperties":true},`
+
+// TestKeyOrderRules requires a key-order rule to give its type the order of
+// its map, a rule whose definition or property the schema lacks to apply
+// nothing, and the table's checks and Build's to refuse a rule they cannot
+// use (0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md).
+func TestKeyOrderRules(t *testing.T) {
+	t.Parallel()
+	defs := strings.Replace(protocolDefs, `"Update":`, orderedDefs+`"Update":`, 1)
+	build := func(rules ...OrderRule) (*Model, error) {
+		p := testProtocol()
+		p.KeyOrders = rules
+		return Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, defs), Protocol: p})
+	}
+	m, err := build(OrderRule{"Ordered", "props", "PropsOrder", "s"}, OrderRule{"Nope", "props", "X", "s"},
+		OrderRule{"Ordered", "nope", "Y", "s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Type("Ordered").KeyOrders; len(got) != 1 || *got[0] != (KeyOrder{Field: "PropsOrder", Map: "Props", Key: "props"}) {
+		t.Errorf("Ordered.KeyOrders = %v", got)
+	}
+	for _, tt := range []struct {
+		name  string
+		rules []OrderRule
+		want  string
+	}{
+		{"no field", []OrderRule{{"Ordered", "props", "", "s"}}, "it needs a definition, a property, a field, and a source"},
+		{"an unexported field", []OrderRule{{"Ordered", "props", "order", "s"}}, `field "order" is not an exported Go identifier`},
+		{"two rules", []OrderRule{{"Ordered", "props", "A", "s"}, {"Ordered", "props", "B", "s"}}, "key-order rule Ordered.props: two rules"},
+		{"not an object", []OrderRule{{"OrdU", "m", "MOrder", "s"}}, "OrdU.m: a key-order rule needs a property of an object"},
+		{"not a map", []OrderRule{{"Ordered", "list", "ListOrder", "s"}}, "Ordered.list: a key-order rule needs a typed map, not []string"},
+		{"flattened members", []OrderRule{{"OrdF", "m", "MOrder", "s"}}, "OrdF.m: a key-order rule on a struct with flattened members"},
+		{"kept extra keys", []OrderRule{{"OrdX", "m", "MOrder", "s"}}, "OrdX.m: a key-order rule on a struct with flattened members or kept extra keys"},
+		{"a field taken", []OrderRule{{"Ordered", "props", "Note", "s"}}, "Ordered.props: the key-order field Note is already a field of Ordered"},
+	} {
+		if _, err := build(tt.rules...); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: Build = %v, want an error containing %q", tt.name, err, tt.want)
+		}
+	}
+}
+
+// checkCommittedKeyOrders requires ACP's key-order rule to give the committed
+// ElicitationSchema its PropertyOrder, and no other type an order.
+func checkCommittedKeyOrders(t *testing.T, m *Model) {
+	t.Helper()
+	for _, ty := range m.Types {
+		want := 0
+		if ty.Name == "ElicitationSchema" {
+			want = 1
+		}
+		if len(ty.KeyOrders) != want {
+			t.Errorf("%s: %d key orders, want %d", ty.Name, len(ty.KeyOrders), want)
+		}
+	}
+	if got := m.Type("ElicitationSchema").KeyOrders; len(got) != 1 ||
+		*got[0] != (KeyOrder{Field: "PropertyOrder", Map: "Properties", Key: "properties"}) {
+		t.Errorf("ElicitationSchema.KeyOrders = %v", got)
+	}
+}
+
 // retainedWording is how the schema says that an explicit null is kept apart
 // from omission (0019-PLAN-generator-hardening.md, G3).
 var retainedWording = regexp.MustCompile("(?i)explicit [`']?null[`']? is (retained|preserved)")

@@ -136,6 +136,9 @@ type Type struct {
 	// the payload encodes back with them (0019-PLAN-generator-hardening.md,
 	// G2).
 	KeepExtra bool
+	// KeyOrders are a KindObject's typed maps whose key order a protocol-table
+	// rule keeps (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
+	KeyOrders []*KeyOrder
 	// Underlying is the Go type of a KindPrimitive.
 	Underlying *TypeRef
 	// Variants holds one entry per entry of a KindUnion's anyOf or oneOf.
@@ -323,6 +326,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		return nil, err
 	}
 	if err := m.resolveNullRetained(r); err != nil {
+		return nil, err
+	}
+	if err := m.resolveKeyOrders(r); err != nil {
 		return nil, err
 	}
 	if err := m.checkDefaults(); err != nil {
@@ -1406,6 +1412,44 @@ func (m *Model) resolveNullRetained(r *rules) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// KeyOrder is a typed map field whose key order a sibling field holds: Field
+// is the order's Go name, Map the map's, and Key the map's JSON key.
+type KeyOrder struct {
+	Field, Map, Key string
+}
+
+// resolveKeyOrders resolves each key-order rule of the table to its type's
+// map field. A rule whose definition or property the schema lacks is skipped;
+// one whose property is not a typed map field of a struct, whose struct has
+// flattened members or keeps extra keys, or whose field name the struct
+// already has, is refused
+// (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
+func (m *Model) resolveKeyOrders(r *rules) error {
+	if r.table == nil {
+		return nil
+	}
+	for _, rule := range r.table.KeyOrders {
+		t, def := m.Type(rule.Definition), m.schema.Defs[rule.Definition]
+		if t == nil || def == nil || expandAllOf(m.schema, def).Properties[rule.Property] == nil {
+			continue
+		}
+		owner := rule.Definition + "." + rule.Property
+		i := slices.IndexFunc(t.Fields, func(f *Field) bool { return f.Key == rule.Property })
+		switch {
+		case t.Kind != KindObject || i < 0:
+			return fmt.Errorf("%s: a key-order rule needs a property of an object", owner)
+		case t.Fields[i].Type.Kind != RefMap:
+			return fmt.Errorf("%s: a key-order rule needs a typed map, not %s", owner, t.Fields[i].Type)
+		case len(t.Members) > 0 || t.KeepExtra:
+			return fmt.Errorf("%s: a key-order rule on a struct with flattened members or kept extra keys is not supported", owner)
+		case slices.ContainsFunc(t.Fields, func(f *Field) bool { return f.Name == rule.Field }):
+			return fmt.Errorf("%s: the key-order field %s is already a field of %s", owner, rule.Field, t.Name)
+		}
+		t.KeyOrders = append(t.KeyOrders, &KeyOrder{Field: rule.Field, Map: t.Fields[i].Name, Key: rule.Property})
 	}
 	return nil
 }

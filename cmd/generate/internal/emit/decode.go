@@ -20,6 +20,10 @@ const (
 	helperLastKey      = "lastKey"
 	helperPatchOf      = "patchOf"
 	helperPatchItems   = "patchItems"
+	// The helpers of a key-order rule
+	// (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
+	helperKeyOrder      = "keyOrder"
+	helperOrderedObject = "orderedObject"
 )
 
 // typePatch is the exported generic type of a property with patch semantics,
@@ -64,6 +68,86 @@ func emitDecodeHelpers(f *goFile) {
 	if f.uses[helperMergeObject] {
 		emitMergeObject(f)
 	}
+	if f.uses[helperKeyOrder] {
+		emitKeyOrder(f)
+	}
+	if f.uses[helperOrderedObject] {
+		emitOrderedObject(f)
+	}
+}
+
+// emitKeyOrder emits
+//
+//	func keyOrder(raw json.RawMessage) []string
+//
+// which returns the keys of the JSON object raw in the order they appear, each
+// once at its first appearance, or nil when raw is empty, null, or not an
+// object (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
+func emitKeyOrder(f *goFile) {
+	delim := call(f.qual(pkgJSON, "Delim"), &ast.BasicLit{Kind: token.CHAR, Value: "'{'"})
+	strs := func() ast.Expr { return sliceOf(id("string")) }
+	fn := function(helperKeyOrder,
+		funcType([]*ast.Field{param("raw", f.qual(pkgJSON, "RawMessage"))}, param("", strs())),
+		define(exprs(id("d")), call(f.qual(pkgJSON, "NewDecoder"), call(f.qual(pkgBytes, "NewReader"), id("raw")))),
+		ifStmt(define(exprs(id("t"), id("err")), call(dot("d", "Token"))),
+			binary(errNotNil(), token.LOR, binary(id("t"), token.NEQ, delim)), ret(nilExpr())),
+		varStmt("keys", strs()),
+		forCond(call(dot("d", "More")),
+			define(exprs(id("t"), id("err")), call(dot("d", "Token"))),
+			define(exprs(id("k"), id("ok")), typeAssert(id("t"), id("string"))),
+			varStmt("x", f.qual(pkgJSON, "RawMessage")),
+			ifStmt(nil, binary(binary(errNotNil(), token.LOR, not(id("ok"))), token.LOR,
+				binary(call(dot("d", "Decode"), addr(id("x"))), token.NEQ, nilExpr())), ret(id("keys"))),
+			ifStmt(nil, not(call(f.qual("slices", "Contains"), id("keys"), id("k"))),
+				assign(exprs(id("keys")), call(id("append"), id("keys"), id("k")))),
+		),
+		ret(id("keys")),
+	)
+	f.line()
+	f.comment("keyOrder returns the keys of the JSON object raw in the order they appear, each",
+		"once at its first appearance, or nil when raw is empty, null, or not an object.")
+	f.add(fn)
+}
+
+// emitOrderedObject emits
+//
+//	func orderedObject[V any](m map[string]V, order []string) (json.RawMessage, error)
+//
+// which encodes m as a JSON object whose keys are the names of order that m
+// holds, in that order and each once, then m's other keys, sorted
+// (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
+func emitOrderedObject(f *goFile) {
+	marshal := func(x ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Marshal"), x) }
+	add := func(x ast.Expr) ast.Stmt {
+		return ifStmt(nil, not(call(f.qual("slices", "Contains"), id("keys"), id("k"))),
+			assign(exprs(id("keys")), call(id("append"), id("keys"), x)))
+	}
+	char := func(c string) ast.Expr { return &ast.BasicLit{Kind: token.CHAR, Value: "'" + c + "'"} }
+	fn := function(helperOrderedObject,
+		funcType([]*ast.Field{param("m", mapOf(id("string"), id("V"))), param("order", sliceOf(id("string")))},
+			param("", f.qual(pkgJSON, "RawMessage")), param("", id("error"))),
+		define(exprs(id("keys")), call(id("make"), sliceOf(id("string")), intLit(0), call(id("len"), id("m")))),
+		rangeStmt(id("_"), id("k"), id("order"),
+			ifStmt(define(exprs(id("_"), id("ok")), index(id("m"), id("k"))), id("ok"), add(id("k")))),
+		rangeStmt(id("_"), id("k"), call(f.qual("slices", "Sorted"), call(f.qual("maps", "Keys"), id("m"))), add(id("k"))),
+		define(exprs(id("b")), call(byteSlice(), str("{"))),
+		rangeStmt(id("i"), id("k"), id("keys"),
+			ifStmt(nil, binary(id("i"), token.GTR, intLit(0)), assign(exprs(id("b")), call(id("append"), id("b"), char(",")))),
+			define(exprs(id("kb"), id("err")), marshal(id("k"))),
+			ifStmt(nil, errNotNil(), ret(nilExpr(), id("err"))),
+			define(exprs(id("vb"), id("err")), marshal(index(id("m"), id("k")))),
+			ifStmt(nil, errNotNil(), ret(nilExpr(), id("err"))),
+			assign(exprs(id("b")), &ast.CallExpr{Fun: id("append"), Args: exprs(id("b"), id("kb")), Ellipsis: placeholderPos}),
+			assign(exprs(id("b")), call(id("append"), id("b"), char(":"))),
+			assign(exprs(id("b")), &ast.CallExpr{Fun: id("append"), Args: exprs(id("b"), id("vb")), Ellipsis: placeholderPos}),
+		),
+		ret(call(id("append"), id("b"), char("}")), nilExpr()),
+	)
+	fn.Type.TypeParams = fields(&ast.Field{Names: []*ast.Ident{id("V")}, Type: id("any")})
+	f.line()
+	f.comment("orderedObject encodes m as a JSON object whose keys are the names of order that",
+		"m holds, in that order and each once, then m's other keys, sorted.")
+	f.add(fn)
 }
 
 // emitMergeObject emits

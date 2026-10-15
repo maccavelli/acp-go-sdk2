@@ -1,0 +1,13 @@
+Refused: the protocol table's key-order rule on a property that is not a typed
+map, which has no keys to order (0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "ElicitationSchema": {"type": "object", "properties": {"properties": {"type": "array", "items": {"type": "string"}}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+ElicitationSchema.properties:
+a key-order rule needs a typed map, not []string

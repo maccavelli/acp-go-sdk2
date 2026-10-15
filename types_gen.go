@@ -4960,6 +4960,10 @@ type ElicitationSchema struct {
 	//
 	// Defaults to "object" if unset.
 	Type ElicitationSchemaType `json:"type,omitempty"`
+	// PropertyOrder is the order of the keys of Properties: UnmarshalJSON fills it in the order
+	// they appear, and MarshalJSON writes the keys it names first, in its order, then
+	// the others, sorted; a name with no entry is skipped. Nil keeps the sorted order.
+	PropertyOrder []string `json:"-"`
 }
 
 func (v ElicitationSchema) MarshalJSON() ([]byte, error) {
@@ -4969,7 +4973,25 @@ func (v ElicitationSchema) MarshalJSON() ([]byte, error) {
 	if a.Properties == nil {
 		json.Unmarshal([]byte("{}"), &a.Properties)
 	}
-	return json.Marshal(a)
+	if len(v.PropertyOrder) == 0 {
+		return json.Marshal(a)
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	if _, ok := m["properties"]; ok {
+		x, err := orderedObject(a.Properties, v.PropertyOrder)
+		if err != nil {
+			return nil, err
+		}
+		m["properties"] = x
+	}
+	return json.Marshal(m)
 }
 
 func (v *ElicitationSchema) UnmarshalJSON(b []byte) error {
@@ -5006,6 +5028,7 @@ func (v *ElicitationSchema) UnmarshalJSON(b []byte) error {
 			json.Unmarshal([]byte("\"object\""), &a.Type)
 		}
 	}
+	a.PropertyOrder = keyOrder(m["properties"])
 	*v = ElicitationSchema(a)
 	return nil
 }
@@ -19869,6 +19892,64 @@ func mergeObject(b []byte, x any) ([]byte, error) {
 		}
 	}
 	return json.Marshal(m)
+}
+
+// keyOrder returns the keys of the JSON object raw in the order they appear, each
+// once at its first appearance, or nil when raw is empty, null, or not an object.
+func keyOrder(raw json.RawMessage) []string {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	if t, err := d.Token(); err != nil || t != json.Delim('{') {
+		return nil
+	}
+	var keys []string
+	for d.More() {
+		t, err := d.Token()
+		k, ok := t.(string)
+		var x json.RawMessage
+		if err != nil || !ok || d.Decode(&x) != nil {
+			return keys
+		}
+		if !slices.Contains(keys, k) {
+			keys = append(keys, k)
+		}
+	}
+	return keys
+}
+
+// orderedObject encodes m as a JSON object whose keys are the names of order that
+// m holds, in that order and each once, then m's other keys, sorted.
+func orderedObject[V any](m map[string]V, order []string) (json.RawMessage, error) {
+	keys := make([]string, 0, len(m))
+	for _, k := range order {
+		if _, ok := m[k]; ok {
+			if !slices.Contains(keys, k) {
+				keys = append(keys, k)
+			}
+		}
+	}
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		if !slices.Contains(keys, k) {
+			keys = append(keys, k)
+		}
+	}
+	b := []byte("{")
+	for i, k := range keys {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		kb, err := json.Marshal(k)
+		if err != nil {
+			return nil, err
+		}
+		vb, err := json.Marshal(m[k])
+		if err != nil {
+			return nil, err
+		}
+		b = append(b, kb...)
+		b = append(b, ':')
+		b = append(b, vb...)
+	}
+	return append(b, '}'), nil
 }
 
 // Negotiation is what initialize agreed on a connection: the request the

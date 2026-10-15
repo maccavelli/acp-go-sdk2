@@ -146,6 +146,13 @@ follow the schema:
   (`additionalProperties: true`), such as `UnstableMcpError`, keeps them in
   its `Extra` field as received, and sends them back; a declared field wins
   over an `Extra` key of the same name.
+- An elicitation form keeps the order of its fields. A decoded
+  `ElicitationSchema` holds the keys of `properties` in `PropertyOrder`, in
+  the order the agent wrote them, and sends them back in that order. An agent
+  sets `PropertyOrder` to choose the order it sends: the keys it names come
+  first, in its order, then any others, sorted; a name with no property is
+  skipped. With no `PropertyOrder`, the keys are sent sorted, as `encoding/json`
+  sends a map.
 - Decoding a struct fails when a required key is absent, naming the type and
   the property, such as `PromptRequest: missing required property "sessionId"`;
   the connection answers such a request with `-32602`.

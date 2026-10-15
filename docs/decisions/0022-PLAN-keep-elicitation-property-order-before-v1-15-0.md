@@ -146,3 +146,67 @@ code): 14 of 14 hold, among them `NullRetained` in the table (`model/protocol.go
 
 Gates, through the Python runner: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file
 changed in this step.
+
+### Deviation, 2026-10-15, during step 2
+
+Found: step 2's code refuses two cases "Design"'s step 2 does not list: a rule whose property is not a field of an object
+(`resolveKeyOrders` finds no field of the property on a `KindObject`; a union's own key is one), and a rule on a struct with flattened
+members or kept extra keys, whose `MarshalJSON` ends in the members' merge or the `Extra` path, which the ordered encoding would have
+to compose with. Decision (owner, 2026-10-15): keep both refusals, and record them here and in the MADR ("Amended while executing step
+2, 2026-10-15"). No committed schema has either shape. `TestKeyOrderRules` pins both, and each was seen to fail on a planted break.
+
+The owner committed step 1's record as `98d3e7c`.
+
+### Step 2, the rule, the field and their code, 2026-10-15
+
+What was built, on `98d3e7c`:
+
+* Model. `Protocol.KeyOrders []OrderRule`, `OrderRule{Definition, Property, Field, Source}`, checked by `checkRules` (a definition, a
+  property, a field and a source; an exported field name; no two rules for one property); `ACP` gains one rule, `ElicitationSchema`
+  `properties`, field `PropertyOrder`, its source `srcFormOrder`. `resolveKeyOrders`, after `resolveNullRetained`, skips a rule whose
+  definition or property the schema lacks, refuses one whose property is not a field of an object, is not a typed map, sits on a
+  struct with flattened members or kept extra keys, or whose field name the struct has, and otherwise gives the type
+  `KeyOrder{Field, Map, Key}` on `Type.KeyOrders`.
+* Emitter. `emitStruct` and its codec take the type's key orders: the struct gains `PropertyOrder []string`, tagged `json:"-"` and
+  documented; `UnmarshalJSON`, whose `objectKeys` map now always binds and folds the map's key, sets the order from
+  `keyOrder(m["properties"])`; `MarshalJSON` (`orderedMarshal`) returns the alias's encoding as before when every order is empty,
+  and otherwise encodes the alias, decodes it into `map[string]json.RawMessage`, writes each present map through `orderedObject`, and
+  encodes the map. `keyOrder` (a `json.Decoder` token pass) and `orderedObject[V any]` are emitted once, when used.
+* Regenerated: `types_gen.go` changes in `ElicitationSchema` alone (the field, `MarshalJSON`, `UnmarshalJSON`), and gains `keyOrder`
+  and `orderedObject`; 82 lines added, 1 removed. No other generated file changes.
+* Tests. Root, `TestElicitationSchemaKeepsPropertyOrder` (`elicitation_order_test.go`, new): the agent's order, a reversed one, a
+  duplicate key (first place, last value), an absent and a `null` `properties`, an order set by hand that names a missing key, leaves
+  one out and repeats one, no order, and a `CreateElicitationRequest` round trip, under both builds. Its expectations for no order
+  are the bytes the code before this step gives: a probe on `git archive HEAD` under both builds printed exactly them. Model:
+  `TestKeyOrderRules`; `checkCommittedKeyOrders`, called by `TestProtocolTableAppliesToCommittedSchema`, requires the committed
+  `ElicitationSchema`, and no other type, to have its order. Engine cases: `accept-key-order` (its `want.api` written by `-update` and
+  read; a behaviour test of decode, encode, a set order and none), `refuse-key-order-not-map`, `refuse-key-order-field-taken`.
+* Documentation: `README.md`, "Wire encoding", a passage on `PropertyOrder`; `docs/architecture.md`, the protocol table's
+  `KeyOrders` and the two helpers.
+
+Issue #6's reproduction, on the tree: `name, email, age` is read as that order and sent back in it, alone and in a request.
+
+Planted breaks, each in a fresh scratch copy (16 of 16 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| the order not read (`a.PropertyOrder = nil`), at the root and through the engine | the root test: "PropertyOrder = [], want …"; `accept-key-order`: "PropertyOrder = []" |
+| the order not written (no named key placed first), both | the root test's order cases; `accept-key-order`: sent sorted |
+| a repeated name written twice, both | the root test: the request's encoding fails; `accept-key-order`: every key twice |
+| a missing name not skipped, both | the root test; `accept-key-order`: `"gone":""` sent |
+| the unset case through `orderedObject`, which drops unnamed keys | the root test's "no order" case: `properties` sent empty |
+| each of the seven refusals removed | `TestKeyOrderRules`, and for the typed-map and field-taken refusals their engine cases |
+
+The first version of the unset plant added whitespace to `orderedObject`'s output and passed: the outer `json.Marshal` compacts a
+`json.RawMessage`, so that layout cannot reach the wire. It was replaced by the plant above, which the byte expectations catch.
+
+Gates, through the Python runner, on the tree: regenerating changes no generated file; `make pre-add-check` exit 0, the new test file
+among its files; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and
+`make markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in
+`cmd/generate`. The API listing: 2426 lines at `v1.14.0`, 2429 in the tree; 0 removed and 3 added, exactly as expected:
+
+```text
++ field ElicitationSchema.PropertyOrder []string
++ field UnstableMcpError.Extra map[string]json.RawMessage
++ method (UnstableMcpError) MarshalJSON () ([]byte, error)
+```

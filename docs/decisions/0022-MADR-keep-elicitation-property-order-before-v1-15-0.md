@@ -90,6 +90,13 @@ decoder's raw members the generator already has.
 * **Release.** `v1.15.0` carries it; its notes add the field to "Additions" and name issue #6, which the owner closes when the
   release is published.
 
+### Amended while executing step 2, 2026-10-15
+
+Two more refusals, which the outcome above does not list, decided by the owner on 2026-10-15 when step 2 found them: a rule whose
+property is not a field of an object (a union's own key, for one), and a rule on a struct with flattened members or kept extra keys,
+whose `MarshalJSON` already ends in a path of its own (the members' merge, or `Extra`) that the ordered encoding would have to
+compose with. No committed schema has either shape; the one rule is on `ElicitationSchema`, a plain object.
+
 ### Consequences
 
 * Good, because a client can show a form's fields in the order the agent wrote them, and an agent can send them in the order it

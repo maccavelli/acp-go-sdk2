@@ -1,0 +1,13 @@
+Refused: the protocol table's key-order rule whose field a property of the
+struct already takes (0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "ElicitationSchema": {"type": "object", "properties": {"properties": {"type": "object", "additionalProperties": {"type": "string"}}, "propertyOrder": {"type": "string"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+ElicitationSchema.properties:
+the key-order field PropertyOrder is already a field of ElicitationSchema

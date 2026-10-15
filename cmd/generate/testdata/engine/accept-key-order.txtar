@@ -1,0 +1,75 @@
+The protocol table's key-order rule: ElicitationSchema's typed map keeps the
+order of its keys in PropertyOrder, read when decoded and written when encoded;
+without an order the map is written sorted, as before (0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md). The definition
+takes the name the rule gives. The meta declares $/cancel_request and the
+schema its smallest definition, which the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "ElicitationSchema": {"type": "object", "properties": {
+    "properties": {"type": "object", "default": {}, "additionalProperties": {"type": "string"}},
+    "title": {"type": ["string", "null"]}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+type ElicitationSchema struct{Properties map[string]string "json:\"properties\""; Title *string "json:\"title,omitempty\""; PropertyOrder []string "json:\"-\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (ElicitationSchema).MarshalJSON() ([]byte, error)
+func (*ElicitationSchema).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"slices"
+	"testing"
+)
+
+func TestKeyOrder(t *testing.T) {
+	var s ElicitationSchema
+	if err := json.Unmarshal([]byte(`{"title":"t","properties":{"z":"1","a":"2","m":"3"}}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(s.PropertyOrder, []string{"z", "a", "m"}) {
+		t.Errorf("PropertyOrder = %q", s.PropertyOrder)
+	}
+	out, err := json.Marshal(s)
+	if err != nil || string(out) != `{"properties":{"z":"1","a":"2","m":"3"},"title":"t"}` {
+		t.Errorf("sent as %s, %v", out, err)
+	}
+	s.PropertyOrder = []string{"m", "gone"}
+	if out, err = json.Marshal(s); err != nil || string(out) != `{"properties":{"m":"3","a":"2","z":"1"},"title":"t"}` {
+		t.Errorf("with a set order, sent as %s, %v", out, err)
+	}
+	s.PropertyOrder = nil
+	if out, err = json.Marshal(s); err != nil || string(out) != `{"properties":{"a":"2","m":"3","z":"1"},"title":"t"}` {
+		t.Errorf("without an order, sent as %s, %v", out, err)
+	}
+	var empty ElicitationSchema
+	if err := json.Unmarshal([]byte(`{"properties":null}`), &empty); err != nil || empty.PropertyOrder != nil {
+		t.Errorf("null properties: order %q, %v", empty.PropertyOrder, err)
+	}
+}

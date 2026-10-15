@@ -119,7 +119,15 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   `Patch[T]` and tagged `omitzero`;
 - `NullRetained`, the optional raw properties whose explicit `null` the schema
   keeps apart from omission, each with the schema sentence it follows: the
-  unstable `McpError.data`. A field built from one keeps `null` when decoded.
+  unstable `McpError.data`. A field built from one keeps `null` when decoded;
+- `KeyOrders`, the typed maps whose key order the protocol gives meaning, each
+  with the field that holds the order and the reason: `ElicitationSchema`'s
+  `properties`, field `PropertyOrder`. The generated `UnmarshalJSON` reads the
+  map's keys in order through `keyOrder`; `MarshalJSON` writes them in that
+  order through `orderedObject` when an order is set, and as before when none
+  is. The model refuses a rule on a property that is not a typed map of a
+  struct, on a struct with flattened members or kept extra keys, or whose
+  field the struct already has.
 
 The model applies a rule only where the schema carries its subject, and refuses
 a subject whose shape the rule cannot use with an error that starts

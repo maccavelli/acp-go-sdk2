@@ -101,6 +101,11 @@ var ACP = Protocol{
 	NullRetained: []PatchRule{
 		{Definition: "UnstableMcpError", Property: "data", Source: srcMcpErrorData},
 	},
+	// The typed maps whose key order the protocol gives meaning
+	// (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
+	KeyOrders: []OrderRule{
+		{Definition: "ElicitationSchema", Property: "properties", Field: "PropertyOrder", Source: srcFormOrder},
+	},
 	// helpers.go builds these with TextBlock, ToolContent, and the like.
 	HandWrittenHelpers: []string{"ContentBlock", defSessionUpdate, "ToolCallContent"},
 	// The properties the protocol requires to be absolute paths, which the
@@ -195,6 +200,10 @@ const (
 	// srcMcpErrorData is from the unstable schema, McpError's data.
 	srcMcpErrorData = "Optional error data; explicit null is retained."
 )
+
+// srcFormOrder is the reason the key-order rule follows: the schema states no
+// order (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
+const srcFormOrder = "An elicitation schema is a form, whose fields its author orders (GitHub issue #6)."
 
 // The specification sentences the absolute-path rules follow.
 const (

@@ -190,15 +190,16 @@ func emitObjectSchema(f *goFile, t *model.Type) {
 	// Nested struct types for inline object properties come first.
 	for _, ns := range t.NestedStructs {
 		f.comment(ns.Doc...)
-		emitStruct(f, ns.Name, ns.Fields, nil, false, "", ns.Validation)
+		emitStruct(f, ns.Name, ns.Fields, nil, false, nil, "", ns.Validation)
 	}
-	emitStruct(f, t.Name, t.Fields, t.Members, t.KeepExtra, "", t.Validation)
+	emitStruct(f, t.Name, t.Fields, t.Members, t.KeepExtra, t.KeyOrders, "", t.Validation)
 }
 
 // emitStruct emits type name struct { fields } and the methods its required
-// keys, defaults, fills, flattened members, and validation need; exempt is a
-// required key decoding does not check.
-func emitStruct(f *goFile, name string, fields []*model.Field, members []*model.Member, keepExtra bool, exempt string, val *model.Validation) {
+// keys, defaults, fills, flattened members, kept keys, key orders, and
+// validation need; exempt is a required key decoding does not check.
+func emitStruct(f *goFile, name string, fields []*model.Field, members []*model.Member, keepExtra bool, orders []*model.KeyOrder,
+	exempt string, val *model.Validation) {
 	var st fieldSet
 	for _, fld := range fields {
 		st.comment(fld.Doc...)
@@ -217,9 +218,15 @@ func emitStruct(f *goFile, name string, fields []*model.Field, members []*model.
 			"MarshalJSON writes them back.")
 		st.add(structField(extraField, rawMap(f.qual(pkgJSON, "RawMessage")), "-"))
 	}
+	for _, o := range orders {
+		st.comment(o.Field+" is the order of the keys of "+o.Map+": UnmarshalJSON fills it in the order",
+			"they appear, and MarshalJSON writes the keys it names first, in its order, then",
+			"the others, sorted; a name with no entry is skipped. Nil keeps the sorted order.")
+		st.add(structField(o.Field, sliceOf(id("string")), "-"))
+	}
 	f.add(typeDecl(name, st.structType(f)))
 	f.line()
-	emitObjectCodec(f, name, fields, members, keepExtra, exempt)
+	emitObjectCodec(f, name, fields, members, keepExtra, orders, exempt)
 	if val != nil {
 		emitValidate(f, name, val)
 	}
@@ -251,7 +258,8 @@ func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 // flattened members, and UnmarshalJSON for structs with required keys,
 // defaults, lenient fields, optional raw fields, flattened members, or an
 // Extra.
-func emitObjectCodec(f *goFile, name string, fields []*model.Field, members []*model.Member, keepExtra bool, exempt string) {
+func emitObjectCodec(f *goFile, name string, fields []*model.Field, members []*model.Member, keepExtra bool, orders []*model.KeyOrder,
+	exempt string) {
 	var defaults, fills, lenient, absent []*model.Field
 	var required []string
 	for _, fld := range fields {
@@ -274,11 +282,11 @@ func emitObjectCodec(f *goFile, name string, fields []*model.Field, members []*m
 	slices.Sort(required)
 	// A MarshalJSON that would only copy into an alias and encode it is not
 	// emitted (0019-PLAN-api-decisions.md, I8).
-	if slices.ContainsFunc(defaults, injectsDefault) || len(fills) > 0 || keepExtra || len(members) > 0 {
-		emitObjectMarshal(f, name, defaults, fills, members, keepExtra)
+	if slices.ContainsFunc(defaults, injectsDefault) || len(fills) > 0 || keepExtra || len(members) > 0 || len(orders) > 0 {
+		emitObjectMarshal(f, name, defaults, fills, members, keepExtra, orders)
 	}
-	if len(defaults) > 0 || keepExtra || len(required) > 0 || len(lenient) > 0 || len(absent) > 0 || len(members) > 0 {
-		emitObjectUnmarshal(f, name, fields, defaults, lenient, absent, members, required, keepExtra)
+	if len(defaults) > 0 || keepExtra || len(required) > 0 || len(lenient) > 0 || len(absent) > 0 || len(members) > 0 || len(orders) > 0 {
+		emitObjectUnmarshal(f, name, fields, defaults, lenient, absent, members, required, keepExtra, orders)
 	}
 }
 
@@ -292,8 +300,11 @@ func injectsDefault(fld *model.Field) bool {
 
 // emitObjectMarshal emits MarshalJSON: it fills nil slices and maps with
 // their defaults, and nil required ones with empty values, before encoding,
-// writes back an Extra, and writes the set member's keys.
-func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, members []*model.Member, keepExtra bool) {
+// writes back an Extra, writes the set member's keys, and writes a map in the
+// order its key order names (the model refuses an order beside an Extra or
+// members).
+func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, members []*model.Member, keepExtra bool,
+	orders []*model.KeyOrder) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	marshal := func(x ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Marshal"), x) }
 
@@ -342,6 +353,8 @@ func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, m
 			switchStmt(nil, cases...),
 			ret(nilExpr(), call(f.qual(pkgErrors, "New"), str(name+": no member set"))),
 		)
+	} else if len(orders) > 0 {
+		body = append(body, orderedMarshal(f, orders)...)
 	} else {
 		body = append(body, ret(marshal(id("a"))))
 	}
@@ -355,7 +368,8 @@ func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, m
 // empties each optional raw field that holds null, applies defaults when a
 // field is missing, or null when the schema does not allow null, and keeps a
 // catch-all's undeclared keys.
-func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, absent []*model.Field, members []*model.Member, required []string, keepExtra bool) {
+func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, absent []*model.Field, members []*model.Member, required []string,
+	keepExtra bool, orders []*model.KeyOrder) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	f.uses[helperObjectKeys] = true
 	keys := []ast.Expr{id("b"), str(name)}
@@ -363,7 +377,7 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, abse
 		keys = append(keys, str(k))
 	}
 	m := id("m")
-	if len(defaults) == 0 && !keepExtra && len(members) == 0 {
+	if len(defaults) == 0 && !keepExtra && len(members) == 0 && len(orders) == 0 {
 		m = id("_")
 	}
 	// The keys read beyond the required ones, which objectKeys folds.
@@ -373,6 +387,9 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, abse
 	}
 	for _, mb := range members {
 		more = append(more, mb.Required...)
+	}
+	for _, o := range orders {
+		more = append(more, o.Key)
 	}
 	if keepExtra {
 		for _, fld := range fields {
@@ -428,6 +445,11 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, abse
 			ifStmt(nil, binary(call(id("len"), id("m")), token.GTR, intLit(0)), assign(exprs(dot("a", extraField)), id("m"))),
 		)
 	}
+	for _, o := range orders {
+		// The order the keys of the map's object appear in.
+		f.uses[helperKeyOrder] = true
+		body = append(body, assign(exprs(dot("a", o.Field)), call(id(helperKeyOrder), index(id("m"), str(o.Key)))))
+	}
 	body = append(body,
 		assign(exprs(star(id("v"))), call(id(name), id("a"))),
 		ret(nilExpr()),
@@ -435,6 +457,39 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, abse
 	f.add(method(param("v", star(id(name))), "UnmarshalJSON",
 		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))), body...))
 	f.line()
+}
+
+// orderedMarshal ends a MarshalJSON whose struct keeps key orders: with no
+// order set it encodes the alias a as before; otherwise it writes each map
+// whose key the encoding holds in its order, through orderedObject
+// (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
+func orderedMarshal(f *goFile, orders []*model.KeyOrder) []ast.Stmt {
+	f.uses[helperOrderedObject] = true
+	marshal := func(x ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Marshal"), x) }
+	var unset ast.Expr
+	for _, o := range orders {
+		c := binary(call(id("len"), dot("v", o.Field)), token.EQL, intLit(0))
+		if unset == nil {
+			unset = c
+		} else {
+			unset = binary(unset, token.LAND, c)
+		}
+	}
+	body := []ast.Stmt{
+		ifStmt(nil, unset, ret(marshal(id("a")))),
+		define(exprs(id("b"), id("err")), marshal(id("a"))),
+		ifStmt(nil, errNotNil(), ret(nilExpr(), id("err"))),
+		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
+		ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("m")))), errNotNil(), ret(nilExpr(), id("err"))),
+	}
+	for _, o := range orders {
+		body = append(body, ifStmt(define(exprs(id("_"), id("ok")), index(id("m"), str(o.Key))), id("ok"),
+			define(exprs(id("x"), id("err")), call(id(helperOrderedObject), dot("a", o.Map), dot("v", o.Field))),
+			ifStmt(nil, errNotNil(), ret(nilExpr(), id("err"))),
+			assign(exprs(index(id("m"), str(o.Key))), id("x")),
+		))
+	}
+	return append(body, ret(marshal(id("m"))))
 }
 
 // memberDecode decodes b into the first member, in schema order, whose
@@ -535,7 +590,7 @@ func emitInlineVariant(f *goFile, tname string, in *model.Inline) {
 	f.comment(in.Doc...)
 	switch in.Kind {
 	case model.InlineStruct:
-		emitStruct(f, tname, in.Fields, in.Members, in.KeepExtra, in.Exempt, in.Validation)
+		emitStruct(f, tname, in.Fields, in.Members, in.KeepExtra, nil, in.Exempt, in.Validation)
 	case model.InlineNamed:
 		// Non-object title-only variants can still carry payloads (e.g. arrays).
 		f.add(typeDecl(tname, typeAST(f, in.Type)))
