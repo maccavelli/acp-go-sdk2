@@ -210,3 +210,22 @@ among its files; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go 
 + field UnstableMcpError.Extra map[string]json.RawMessage
 + method (UnstableMcpError) MarshalJSON () ([]byte, error)
 ```
+
+The owner committed step 2's record as `561d12b`.
+
+### Step 3, release notes, 2026-10-15
+
+[0019-REPORT-release-notes-v1-15-0.md](../reports/0019-REPORT-release-notes-v1-15-0.md), amended on `561d12b`: its preamble names this
+amendment and the listing at `561d12b` (2429 lines); the release text's summary names issue #6, says two types change, and counts
+three API entries added and none removed; "Additions" gains `ElicitationSchema.PropertyOrder`, what it holds when decoded, how an
+agent sets it, and that a form without an order is sent as before, and the README entry names all three passages; "For the
+generator" gains `KeyOrders` and the two helpers; "Sources not in the release text" gains `561d12b` in both commit lists, the
+generated diff against `v1.14.0` recounted (117 lines added, 3 removed in `types_gen.go`), the listing difference at `561d12b` (0
+removed, 3 added), and this PLAN among the execution records.
+
+Checked: `git log v1.14.0..HEAD -- '*.go' ':!cmd/generate'` lists `561d12b` and `131fa07`; `-- cmd/generate` lists `561d12b`,
+`3704df9`, `852054f`, `8d2286a`, `1ee1eb7` and `131fa07`; `git diff --stat v1.14.0 -- types_gen.go` is 117 lines added and 3
+removed; the API counts are step 2's gate's, on the same code.
+
+Gates, through the Python runner: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file
+changed in this step.

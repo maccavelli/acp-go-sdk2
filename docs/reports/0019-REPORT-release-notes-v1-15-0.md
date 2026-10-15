@@ -1,9 +1,10 @@
 # Release notes for v1.15.0, against v1.14.0
 
-Observed 2026-10-15 on `3704df9`, for [0019-PLAN-generator-hardening.md](../decisions/0019-PLAN-generator-hardening.md), step 7. This
-report drafts the text of the GitHub release for `v1.15.0`, as `RELEASING.md` describes it. It decides nothing. Each statement names
+Observed 2026-10-15 on `3704df9`, for [0019-PLAN-generator-hardening.md](../decisions/0019-PLAN-generator-hardening.md), step 7, and
+amended on 2026-10-15 by [0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md](../decisions/0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md),
+step 3, for issue #6, observed on `561d12b`. This report drafts the text of the GitHub release for `v1.15.0`, as `RELEASING.md` describes it. It decides nothing. Each statement names
 its source: a record, a commit, or the exported API listing of the 0013 report's listing program, run on `git archive v1.14.0` (2426
-lines) and on the tree at `3704df9` (2428 lines). Bring it up to date if more changes land before the tag. Phase 3 of
+lines), on the tree at `3704df9` (2428 lines), and on the tree at `561d12b` (2429 lines). Bring it up to date if more changes land before the tag. Phase 3 of
 [0019-MADR-remediate-debugging-pass-findings.md](../decisions/0019-MADR-remediate-debugging-pass-findings.md) rides the release after
 it lands (decision 12); it adds exported API, so the release is a minor version, which the owner confirms at the tag.
 
@@ -15,8 +16,10 @@ The section "Release text" is what goes into the GitHub release.
 
 The ACP schema is still `1.25.0` (`git diff v1.14.0 -- schema/` is empty). This release hardens the code generator: shapes of a
 schema that it typed wrongly or without a word are now refused with an error naming the definition, or typed correctly. For the SDK,
-one type changes: the unstable `UnstableMcpError` keeps the keys it does not declare, and an explicit `null` in its `data`, as its
-schema says. The exported API grows by two entries and loses none. (0019-MADR, phase 3.)
+two types change: the unstable `UnstableMcpError` keeps the keys it does not declare, and an explicit `null` in its `data`, as its
+schema says; and an elicitation form keeps the order of its fields
+([#6](https://github.com/maccavelli/acp-go-sdk2/issues/6)). The exported API grows by three entries and loses none. (0019-MADR,
+phase 3; 0022-MADR.)
 
 #### Behaviour change
 
@@ -32,7 +35,11 @@ schema says. The exported API grows by two entries and loses none. (0019-MADR, p
 - `UnstableMcpError.Extra map[string]json.RawMessage` and `(UnstableMcpError) MarshalJSON`: the keys of a received error that the
   type does not declare are kept in `Extra`, as received, and sent back; a declared field wins over an `Extra` key of the same name.
   The schema gives `McpError` `"additionalProperties": true`. (`131fa07`; 0019-MADR, decision 5.)
-- The README documents both, in "Wire encoding". (`131fa07`.)
+- `ElicitationSchema.PropertyOrder []string` ([#6](https://github.com/maccavelli/acp-go-sdk2/issues/6)): a decoded form holds the
+  keys of `Properties` in the order the agent wrote them, and is sent back in that order. An agent sets it to choose the order it
+  sends: the keys it names come first, in its order, then the others, sorted; a name with no property is skipped. A form without
+  an order is sent exactly as before, its fields sorted. (`561d12b`; 0022-MADR.)
+- The README documents all three, in "Wire encoding". (`131fa07`, `561d12b`.)
 
 #### For the generator
 
@@ -51,6 +58,8 @@ error that names the definition and the property or variant:
   `minimum` or `maximum` with a fraction is rounded inward; a `uint64` bound above the `int64` range is written as one; an object
   whose `additionalProperties` is `true` keeps its other keys in `Extra`; and the protocol table's `NullRetained` names a raw property
   that keeps `null`. (`1ee1eb7`, `8d2286a`, `131fa07`.)
+- The protocol table gains `KeyOrders`, the typed maps whose key order is kept, with the one rule on `ElicitationSchema`'s
+  `properties`; `types_gen.go` gains the helpers `keyOrder` and `orderedObject`. (`561d12b`.)
 - The output check type-checks the package as tested too, with the hand-written test files, so a name a test file and
   `schema_gen_test.go` both declare is refused, as `go vet` refuses it; and a missing output directory is refused, where it gave
   hundreds of type errors. (`852054f`.)
@@ -59,13 +68,16 @@ error that names the definition and the property or variant:
 
 ## Sources not in the release text
 
-- The commits since `v1.14.0` that change the SDK's Go code: `131fa07` (`git log v1.14.0..HEAD -- '*.go' ':!cmd/generate'`), whose
-  only change to a generated file is `UnstableMcpError` in `types_gen.go` (35 lines added, 2 removed); and the generator's:
-  `131fa07`, `1ee1eb7`, `8d2286a`, `852054f`, `3704df9` (`git log v1.14.0..HEAD -- cmd/generate`). The others change records and
+- The commits since `v1.14.0` that change the SDK's Go code: `131fa07` and `561d12b` (`git log v1.14.0..HEAD -- '*.go'
+  ':!cmd/generate'`), whose only changes to a generated file are `UnstableMcpError` and `ElicitationSchema` in `types_gen.go`, with
+  the helpers `keyOrder` and `orderedObject` (117 lines added, 3 removed in all); and the generator's: `131fa07`, `1ee1eb7`,
+  `8d2286a`, `852054f`, `3704df9`, `561d12b` (`git log v1.14.0..HEAD -- cmd/generate`). The others change records and
   documentation.
-- The API listing difference at `3704df9`: 0 lines removed, 2 added, `field UnstableMcpError.Extra map[string]json.RawMessage` and
-  `method (UnstableMcpError) MarshalJSON () ([]byte, error)`.
+- The API listing difference at `561d12b`: 0 lines removed, 3 added, `field ElicitationSchema.PropertyOrder []string`,
+  `field UnstableMcpError.Extra map[string]json.RawMessage` and `method (UnstableMcpError) MarshalJSON () ([]byte, error)`.
 - Each change, its tests, the planted breaks each test was seen to fail on, and a run on Windows for each step are in the execution
-  record of [0019-PLAN-generator-hardening.md](../decisions/0019-PLAN-generator-hardening.md), with every deviation from it.
+  records of [0019-PLAN-generator-hardening.md](../decisions/0019-PLAN-generator-hardening.md) and
+  [0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md](../decisions/0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md),
+  with every deviation from them.
 - Not in this release: phases 4 and 5 of 0019 (tooling, examples and documentation; idioms and performance), which ride the releases
   after each lands (0019-MADR, decision 12).
