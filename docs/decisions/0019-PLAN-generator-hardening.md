@@ -610,3 +610,42 @@ is `types_gen.go`, 35 lines added and 2 removed; the API counts are step 6's gat
 
 Gates, through the Python runner: regenerating changes no generated file; `make check-records` and `make markdownlint` exit 0; the
 identifier scan finds nothing. No Go file changed in this step.
+
+The owner committed step 7's record as `501e07d`.
+
+### Step 8, verification, 2026-10-15
+
+Run over the finished tree at `501e07d`, through the Python runner:
+
+* Regenerating changes no generated file; `make pre-add-check` exit 0; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go
+  vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing; Windows: `go
+  test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+* The exported API listing: 2426 lines at `v1.14.0`, 2428 at `501e07d`; 0 removed and 2 added, exactly "Verification"'s expectation,
+  `field UnstableMcpError.Extra map[string]json.RawMessage` and `method (UnstableMcpError) MarshalJSON () ([]byte, error)`.
+* The probes of the planning, re-run unchanged on a fresh scratch copy of `501e07d` (`reprobe.py`), twice, with identical results:
+  * G2 and G3, the root probe, default build and `GOEXPERIMENT=nojsonv2` alike: `{"code":1,"message":"m","vendor":"x"}` is sent back
+    with `"vendor":"x"`; `"data":null` decodes to `null` and is sent as `null`; an absent `data` stays absent; a value is kept; the
+    `mcp/message` carrier sends back both. Before phase 3 the vendor key was dropped and the null read as absent.
+  * The 27 engine-shape probes, through the generator built from the copy: 24 refused, each naming its definition and what it has
+    no Go type for (G4's integer and mixed enums, G5's type list, G7's named array, G8's untitled variant, G9's comma and quote keys,
+    G10's out-of-range defaults, G11's undeclared required key, G21's unreachable bound, G13's mis-cased `Properties` and `REQUIRED`,
+    G14's integer and boolean discriminators and its `validate`, `unmarshalJSON` and variant `Validate`, G20's const union); and three
+    accepted, as "Design" handles them: G6's untyped object, G12's fractional bound and G21's `uint64` bound, whose behaviour the
+    accept cases of steps 3 and 4 pin.
+  * G15: a root test file declaring `recordingAgent` is refused, "schema_gen_test.go:3284:6: recordingAgent redeclared in this
+    block". G16: `-out` a missing directory, "output directory …/missing: does not exist", and nothing created. G18: the committed
+    schema with `OrphanThingNotification` linked to `orphan/thing` added, "definition OrphanThingNotification: linked by x-method and
+    x-side to agent method \"orphan/thing\", which no meta file lists". G17: `grep` finds none of the deleted names, nor the
+    impossible check.
+  * G19, the measure of step 6: the engine at 97.4% (3736 of 3834), the 13 engine sites step 6 names and the 23 of the tooling, no
+    other.
+  The first run of the script added the orphan definition to the copy's schema before the measure, which a test then read, and its
+  `grep` for the emitter's deleted constants searched the model too, which has its own; both were corrected in the script, and the
+  run above is the corrected one.
+* The pre-push disclosure guard, over the commits not yet pushed, is run when the owner is asked to push.
+
+Every finding of phase 3 has an engine case, a unit test, or a recorded check that failed on a planted break: G2 and G3 by step 2's,
+G4 to G8 and G20 by step 3's, G9 to G14 and G21 by step 4's, G15 to G18 by step 5's, and G19 by step 6's, its 13 remaining sites named
+with their reasons. Acceptance waits on CI for the pushed commits; then this PLAN and its `docs/README.md` row become `complete`, and
+the owner tags `v1.15.0` and publishes its release from
+[0019-REPORT-release-notes-v1-15-0.md](../reports/0019-REPORT-release-notes-v1-15-0.md).
