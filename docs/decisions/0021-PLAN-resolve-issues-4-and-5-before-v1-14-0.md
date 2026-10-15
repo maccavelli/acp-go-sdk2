@@ -358,3 +358,35 @@ test in a scratch copy of the tree (ok); the API counts, against the step 3 gate
 
 Gates, through the Python runner: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file
 changed in this step.
+
+The owner committed step 4's record as `2da1fc6`.
+
+### Step 5, verification, 2026-10-14
+
+Run over the finished tree at `2da1fc6`, through the Python runner:
+
+* regenerating changes no generated file; `make pre-add-check` exit 0; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+  `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier scan finds
+  nothing; Windows: `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+* The exported API listing: 2411 lines at `v0.17.1`, 2426 at `2da1fc6`; 31 removed and 46 added, exactly the expected lines: the 24
+  fields' old and new types, the 7 removed methods, the 9 additions of 0019, the 8 of `Patch` and the 5 of the policy.
+* Issue #5's reproduction, the MADR's inputs re-run in a scratch copy, under the default build and under `GOEXPERIMENT=nojsonv2`
+  with identical output. Decoding: `compaction_update` without the three fields gives `Error`, `Summary` and `Meta` absent; with
+  `"error":null,"summary":null,"_meta":null`, all three null; with `"error":"boom","summary":[],"_meta":{}`, the values `"boom"`,
+  `[]` and `{}`. `session_info_update` without `title` and `updatedAt` gives both absent, with `null` both null; `subagent_update`
+  without `title`, `capabilities` and `state` gives all three absent, with `null` all three null. Encoding: `SubagentUpdate` with
+  `Title` absent writes `{"sessionId":"child"}`, with `PatchNull` `{"sessionId":"child","title":null}`; a `session_info_update`
+  with `Title: PatchNull[string]()` writes `"title":null`; a `SessionCompactionUpdate` with `Summary: PatchValue([]ContentBlock{})`
+  and `Meta: PatchValue(map[string]any{})` writes `"_meta":{}` and `"summary":[]`. Every row the MADR recorded as losing a state
+  now keeps it.
+* Issue #4's behaviour is covered by the tests of step 3, which pass in the runs above under both builds and on Windows.
+* The example checks of 0019 phase 1, step 8: 6 of 6 pass (the client at EOF ended in 5.3 s with one prompt).
+* CI run `38578188846` on `7e96d39`, which carries both code commits, `25eedff` and `36c04a5`: `success` on `validate
+  (ubuntu-24.04)`, `validate (macos-15)` and `validate (windows-2025)`.
+* The pre-push disclosure guard, over the outgoing commit `2da1fc6`: exit 0.
+* The `v1.14.0` release text, extracted again from the amended release notes for the release: 130 lines, from 104; the identifier
+  scan finds nothing in it.
+
+No test or gate was added in this step, so there was nothing to plant. Acceptance waits on CI for the pushed records; then this PLAN
+and its `docs/README.md` row become `complete`, the owner closes issues #4 and #5 naming `25eedff` and `36c04a5`, and the 0020 PLAN's
+step 3, the `v1.14.0` tag, resumes on the verified commit.
