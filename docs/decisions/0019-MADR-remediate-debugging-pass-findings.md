@@ -241,6 +241,24 @@ The owner answered each question on 2026-10-13. Three answers differ from the re
   release phases 1 and 2 as `v1.14.0`, its `go.mod` retracting `v1.13.0`, in place of `v0.18.0`; nothing else in decision 12 changes.
   Recorded in [0020-MADR-retract-accidental-v1-tag.md](0020-MADR-retract-accidental-v1-tag.md).
 
+### Amended while planning phase 3, 2026-10-14
+
+* **Two findings join phase 3.** Re-running the probes of G2 to G19 on `c97e6d3` for the phase 3 PLAN found two latent defects the
+  pass did not list. The owner decided on 2026-10-14 to add both to phase 3: G20 is refused, G21 is handled with G12. The committed
+  schemas contain neither shape; their only non-string `const` values are the 8 integers of `ErrorCode`, on the integer-enum path.
+
+  | Id | Severity | Finding | Evidence | Fix in |
+  | :--- | :--- | :--- | :--- | :--- |
+  | G20 | latent | A union variant with no `$ref` and no properties whose `const` is a number, a boolean, or a string in a union that also holds a non-string const is generated with the const dropped: the wrapper is typed by the variant's `type` (or is an empty struct when it has none), and decoding, sending and `Validate` accept any value of that type. | Probe on `c97e6d3`: `oneOf` of number consts 1.5 and 2.5 decoded `3.5` and `Validate` passed; boolean consts `true` and `false` decoded `false` as the `true` variant; a string const `"a"` beside an integer const accepted `"b"`. | gen |
+  | G21 | latent | An integer bound is emitted through `int64`: a `uint64` `maximum` above `math.MaxInt64` saturates, so `maximum: 1e19` is emitted as `9223372036854775807` and refuses valid values; and a bound the Go type cannot reach (`uint8` with `minimum: 300`) is refused only by the type checker, in the generated file, without naming the property. | Probe on `c97e6d3`. | gen |
+
+* **Facts that moved since `c77f25a`.** Each of G2 to G19 still reproduces on `c97e6d3`. G6's third re-read of `type` is gone; two
+  remain. G19's list of untested error sites is replaced, in the phase 3 PLAN, by the list measured on `c97e6d3`. Decision 5 is
+  unchanged: the field "whose schema text says explicit null is retained" is named in the protocol table with that schema sentence,
+  and a guard test requires every property whose description says so to be named there, as
+  [0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md](0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md) did for the patch
+  fields; the one such property today is the unstable `McpError.data`.
+
 ## Decision Drivers
 
 * An SDK user must not meet a deadlock, a lost cancel or a refused valid request in ordinary use (B1 to B5).
@@ -275,6 +293,7 @@ The phases, each a `0019-PLAN-<scope>.md` beside this record, written and approv
    with the writer goroutine (decision 4), B19 (decision 3), B20 (decision 6), I8 (decision 9), B21 (decision 10). Phases 1 and 2
    ship together as `v0.18.0` (decision 12).
 3. **Generator hardening**: G2 and G3 (decision 5), G4 to G19, each latent shape refused or handled, with an engine case each.
+   Amended 2026-10-14: and G20 and G21 ("Amended while planning phase 3, 2026-10-14").
 4. **Examples, documentation, tests and tooling**: E5 to E16, I12, with E11 through the template (decision 11).
 5. **Idioms and performance**: I1 to I7, I9 to I11, I13 to I16, with benchmarks committed so the gains are measured, not asserted.
 
