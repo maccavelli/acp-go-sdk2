@@ -677,3 +677,20 @@ lines, this PLAN's two among them.
 Every acceptance criterion in "Verification" is met, so this PLAN and its `docs/README.md` row are `complete`. The MADR stays
 `accepted`, with phases 4 and 5 to come. Left to the owner: the tag `v1.15.0` on `12589de` and its release, published from the
 release text of [0019-REPORT-release-notes-v1-15-0.md](../reports/0019-REPORT-release-notes-v1-15-0.md).
+
+### Publication, 2026-10-15
+
+CI run `38755171587` on the close commit `2138f06`, records only, concluded `success` on `validate (ubuntu-24.04)`, `validate
+(macos-15)` and `validate (windows-2025)`. The owner tagged `12589de` `v1.15.0`, an annotated tag as `v1.14.0` is, pushed the tag,
+and published the GitHub release `v1.15.0`, marked latest, from the release text of
+[0019-REPORT-release-notes-v1-15-0.md](../reports/0019-REPORT-release-notes-v1-15-0.md), extracted as the 0022 PLAN's deviation
+during step 4 decides.
+
+Checked by a Python script outside the tree, from a scratch consumer, `GOPROXY` the default `https://proxy.golang.org,direct`, a
+scratch `GOMODCACHE` and `GOPATH`, checksum database on: the release is not a draft or a prerelease, and its body is the extracted
+text; the proxy's `@v/v1.15.0.info` answers `200`, its origin `refs/tags/v1.15.0` at `12589de`; `go list -m
+github.com/maccavelli/acp-go-sdk2@latest` gives `v1.15.0`; `go mod download` of `v1.15.0` exits 0. The check was seen to fail on a
+planted break in a scratch copy of it: expecting `2138f06` as the tagged commit, it reported that the result does not hold and
+exited 1.
+
+This phase's changes are released in `v1.15.0`.
