@@ -42,9 +42,15 @@ written as a line comment, so no description can become code or a directive.
 
 The generator writes nothing until every file has rendered and the five files
 type-check with `go/types` together with the hand-written files of the output
-directory: those the go command would build there, at the language version of
-its `go.mod`. Output that does not type-check is refused with the first 10
-errors. A file whose bytes have not changed is left alone. Every other file is
+directory, at the language version of its `go.mod`: first the package as
+built, the hand-written files the go command would build there with the
+generated files that are not tests, then the package as tested, which adds
+the hand-written in-package test files and `schema_gen_test.go`, so a name
+both declare is refused as `go vet` would refuse it. Output that does not
+type-check is refused with the first 10 errors, those in generated files
+first. The output directory must exist; a missing one is refused, since the
+generated code needs the hand-written runtime beside it. A file whose bytes
+have not changed is left alone. Every other file is
 staged in the output directory as `.<name>.*.tmp`, synced, and set to mode
 `0644`; once all are staged, each is renamed into place.
 
@@ -161,9 +167,31 @@ type with a constant per value, named by the member's title; any integer
 decodes. A definition the model gives no Go type is an alias of
 `json.RawMessage`.
 
+A definition with properties and no `type` is an object, as a variant with
+properties is: it gets its decoder, `Validate` and gates, and refuses a value
+that is not an object, which plain JSON Schema would allow. The model refuses,
+naming the definition, the shapes no Go type holds as the schema states them
+([0019-PLAN-generator-hardening.md](decisions/0019-PLAN-generator-hardening.md)):
+an `enum` with a value that is not a string; a type list of two types other
+than `null`; a named array definition; a union variant with no title, `$ref`,
+properties or null type; a `const` on a union variant that is not an object,
+which no generated code would check (a `oneOf` of string consts, or of titled
+integer consts, is an enum kind); a discriminator const that is not a string;
+a property key a json struct tag cannot carry; a field, union wrapper field or
+flattened member named `MarshalJSON`, `UnmarshalJSON` or `Validate`; a
+`required` key no property declares; and a definition linked by `x-method` and
+`x-side` to a method no meta file lists. `Roots`, written by hand on five
+request types, is left to the type checker: a property named `roots` there
+does not type-check.
+
 Every keyword the schema loader accepts has one treatment, listed in
 `cmd/generate/internal/model/keywords.go`; the loader refuses any other
-keyword, and the model refuses an integer or number `format` without a Go type.
+keyword, and one written in another letter case, which `encoding/json` would
+match, and the model refuses an integer or number `format` without a Go type.
+A property's `default` is checked against its schema, through references,
+union members, array items and object properties: its JSON kind, an integer's
+range for its format, its `enum` and its `const`, so the generated decoding of
+a default, which ignores the error, cannot fail.
 A number takes the Go type of its `format`; a typed `additionalProperties`
 gives a typed map; a value the model gives no Go type is `json.RawMessage`; and
 an optional struct value carries no `omitempty`. A generated `UnmarshalJSON`
@@ -185,7 +213,9 @@ model test requires every committed property that says so to be named.
 `Validate` checks what the schema states: a
 union has exactly one variant set, a string meets its `minLength`, a number
 meets a bound its Go type does not enforce, and every nested value validates,
-a patch's through the value it holds;
+a patch's through the value it holds; an integer bound with a fraction is
+rounded inward, a `uint64` one above the `int64` range is written as such, and
+one the Go type cannot reach is refused;
 and it checks the table's absolute paths. Each exported `Validate` calls an
 unexported `validate(abs func(string) bool)` with the host's `filepath.IsAbs`,
 and passes `abs` to the nested values; every check returns a

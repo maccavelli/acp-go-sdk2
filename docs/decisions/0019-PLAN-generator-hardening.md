@@ -586,3 +586,27 @@ markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count
 `cmd/generate`. The API listing against `v1.14.0` is unchanged from step 2's. Its first run in this step failed before listing
 anything: the scratch directory outside the tree that holds the listing tool had been emptied by the host's cleanup of temporary
 files at midnight; the tool was restored from this session's record of it, and the listing gave the counts of steps 2 to 5 again.
+
+The owner committed step 6's record as `3704df9`.
+
+### Step 7, documentation and release notes, 2026-10-15
+
+What was written, on `3704df9`:
+
+* `docs/architecture.md`: the output check's two passes, the package as built and as tested, errors in generated files listed first,
+  and the refusal of a missing output directory (G15, G16); a new paragraph after the types the model gives no Go type: an untyped
+  definition with properties is an object, which refuses a value that is not one (G6), the shapes the model refuses, naming the
+  definition (G4, G5, G7, G8, G9, G11, G14, G18, G20), and `Roots`, written by hand on five request types, left to the type checker
+  (G14); the loader's refusal of a keyword in another letter case (G13) and the check of every `default` (G10); integer bounds rounded
+  inward, a `uint64` bound written as one, and an unreachable bound refused (G12, G21). Step 2 wrote G2's and G3's passages.
+* [0019-REPORT-release-notes-v1-15-0.md](../reports/0019-REPORT-release-notes-v1-15-0.md), with its `docs/README.md` row: the release
+  text for `v1.15.0`, against `v1.14.0`: the behaviour change of `UnstableMcpError.Data`, with what to test instead; the two additions;
+  and, for the generator, what is refused, what is handled, the output check and the error sites; with its sources: the commits since
+  `v1.14.0` (`131fa07` the only one that changes the SDK's Go code), and the API listing difference, 0 removed and 2 added.
+
+Checked: `git diff v1.14.0 -- schema/` is empty; `git log v1.14.0..HEAD -- '*.go' ':!cmd/generate'` lists `131fa07` alone, and
+`-- cmd/generate` lists `131fa07`, `1ee1eb7`, `8d2286a`, `852054f` and `3704df9`; `git diff --stat v1.14.0` of the generated files
+is `types_gen.go`, 35 lines added and 2 removed; the API counts are step 6's gate's, on the same code.
+
+Gates, through the Python runner: regenerating changes no generated file; `make check-records` and `make markdownlint` exit 0; the
+identifier scan finds nothing. No Go file changed in this step.
