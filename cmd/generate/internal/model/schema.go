@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
@@ -240,6 +241,9 @@ func checkTypable(path string, d *load.Definition, place placement) error {
 	if n := len(slices.DeleteFunc(slices.Clone(d.AllOf), func(e *load.Definition) bool { return e == nil })); n > 1 {
 		return fmt.Errorf("%s: allOf of %d schemas has no Go type; only an allOf of one schema is supported", path, n)
 	}
+	if err := checkGoType(path, d, place); err != nil {
+		return err
+	}
 	if d.Ref == "" && len(d.Properties) > 0 {
 		typed := place == placeDefinition || place == placeVariant || (place == placeProperty && primaryType(d) == schemaTypeObject)
 		if !typed {
@@ -264,6 +268,46 @@ func checkTypable(path string, d *load.Definition, place placement) error {
 		}
 	}
 	return nil
+}
+
+// checkGoType refuses the shapes no Go type holds as the schema states them
+// (0019-PLAN-generator-hardening.md): an enum with a value that is not a
+// string, which would become a string type that refuses the value (G4); a
+// type list with two types other than null, of which the model would keep
+// one (G5); and a named array definition, which would be raw JSON (G7).
+func checkGoType(path string, d *load.Definition, place placement) error {
+	for _, v := range d.Enum {
+		if _, ok := v.(string); !ok {
+			return fmt.Errorf("%s: enum value %s is not a string; only a string enum has a Go type", path, schemaValue(v))
+		}
+	}
+	if list, ok := d.Type.([]any); ok {
+		var types []string
+		for _, e := range list {
+			if s, ok := e.(string); ok && s != schemaTypeNull && !slices.Contains(types, s) {
+				types = append(types, s)
+			}
+		}
+		if len(types) > 1 {
+			return fmt.Errorf("%s: type list of %s has no Go type; only one type, or one type and null, has one", path, strings.Join(types, " and "))
+		}
+	}
+	if place == placeDefinition && primaryType(d) == schemaTypeArray {
+		return fmt.Errorf("%s: a named array definition has no Go type; declare the array where it is used", path)
+	}
+	return nil
+}
+
+// schemaValue renders a scalar JSON value of the schema, a string, number,
+// boolean or null, as it is written there.
+func schemaValue(v any) string {
+	switch v := v.(type) {
+	case nil:
+		return schemaTypeNull
+	case string:
+		return strconv.Quote(v)
+	}
+	return fmt.Sprint(v)
 }
 
 func walkRefs(schema *load.Schema, path string, d *load.Definition) error {

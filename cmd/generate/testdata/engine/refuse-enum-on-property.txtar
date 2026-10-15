@@ -1,0 +1,10 @@
+Refused: an integer enum on a property, which would become a string field
+(0019-PLAN-generator-hardening.md, G4).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"Obj": {"type": "object", "properties": {"n": {"type": "integer", "enum": [3]}}}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+Obj.properties.n:
+enum value 3 is not a string

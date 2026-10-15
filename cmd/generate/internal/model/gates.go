@@ -275,8 +275,8 @@ func (m *Model) variantFields(vi *Variant) []*Field {
 func (m *Model) gateHolders() []gateHolder {
 	var out []gateHolder
 	for _, t := range m.Types {
-		switch {
-		case t.Kind == KindUnion:
+		switch t.Kind {
+		case KindUnion:
 			var vs []*Variant
 			for _, vi := range t.Variants {
 				if !vi.Skip {
@@ -284,7 +284,7 @@ func (m *Model) gateHolders() []gateHolder {
 				}
 			}
 			out = append(out, gateHolder{name: t.Name, union: true, variants: vs})
-		case t.Kind != KindNone && primaryType(t.def) == schemaTypeObject:
+		case KindObject, KindEmptyObject:
 			out = append(out, gateHolder{name: t.Name, fields: t.Fields, members: t.Members})
 		}
 		for _, ns := range t.NestedStructs {

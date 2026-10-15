@@ -1,0 +1,10 @@
+Refused: null in an enum, which would become the constant "<nil>"
+(0019-PLAN-generator-hardening.md, G4).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"Nul": {"type": ["string", "null"], "enum": ["a", null]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+Nul:
+enum value null is not a string

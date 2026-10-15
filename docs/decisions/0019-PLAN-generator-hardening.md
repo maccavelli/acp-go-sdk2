@@ -320,3 +320,58 @@ markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count
 + field UnstableMcpError.Extra map[string]json.RawMessage
 + method (UnstableMcpError) MarshalJSON () ([]byte, error)
 ```
+
+The owner committed step 2's record as `131fa07`.
+
+### Step 3, shapes, 2026-10-14
+
+What was built, on `131fa07`:
+
+* G4, G5, G7. `checkGoType`, called by `checkTypable` for every typed node (`model/schema.go`), refuses an `enum` value that is not
+  a string ("enum value 1 is not a string; only a string enum has a Go type"), a type list with two types other than `null` ("type list
+  of integer and string has no Go type; only one type, or one type and null, has one"), and a named array definition ("a named array
+  definition has no Go type; declare the array where it is used"). `schemaValue` renders the offending value as the schema writes it.
+* G6. `classify` makes a definition with properties and no `type` a `KindObject`, and `gateHolders` (`model/gates.go`) and
+  `validationShapes` (`model/validate.go`) select by kind, `KindObject` or `KindEmptyObject`, where they re-read `type`. Such a definition
+  now refuses a value that is not an object, as a typed one does.
+* G8. `buildVariant` refuses a variant with no title, `$ref`, properties or null type, which it skipped: "a variant without a title,
+  $ref, properties, or null type has no Go name". A `nil` entry of a union's list is still skipped.
+* G20. `buildVariant` refuses a variant with no `$ref` and no properties that has a `const`: one reaches the union path only beside a
+  non-string const, since a oneOf of string consts and one of integer consts are enum kinds: "const 1.5 on a union variant is not
+  enforced; only a oneOf of string consts or of titled integer consts has a Go type".
+* Tests. `TestEnumValueKinds` no longer builds the number enum `Nums` as a string enum; it requires `Build` to refuse it. The untitled
+  filler variants of `TestUnionDiscriminator`, `TestValidations` (two schemas) and `TestNoOmitemptyOnStructValues` gain titles. Engine
+  cases: `refuse-enum-integer`, `refuse-enum-null`, `refuse-enum-on-property`; `refuse-type-list-two-types`, `refuse-type-list-nullable`;
+  `refuse-named-array`; `refuse-untitled-primitive-variant`, `refuse-untitled-array-variant`; `refuse-const-variant-number`, `-boolean`,
+  `-mixed`, `-untyped`; `accept-untyped-object` (with a behaviour test: decodes, requires, validates, refuses `42`, and its flattened
+  form validates and encodes its member) and `accept-untyped-object-gates` (`accept-capability-gates` with `type` left out of the gated
+  request, same API, its behaviour test).
+* Regenerated: no generated file changes.
+
+The first run of `make pre-add-check` failed on lint, and the code was corrected before this record: `json.Marshal`'s error discarded
+twice (errcheck), replaced by `schemaValue`, which cannot fail; and `gateHolders`' switch on `t.Kind` (staticcheck QF1002), now a tagged
+switch. The planted breaks were then run again on the corrected tree; the results below are that run's.
+
+Planted breaks, each in a fresh scratch copy (14 of 14 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| G4's check never matches | `refuse-enum-integer`, `-null`, `-on-property`: "run accepted the schema" |
+| G4 on definitions only | `refuse-enum-on-property` |
+| G4 skipping `null` | `refuse-enum-null` |
+| G5's check removed; G5 refusing only more than two types | `refuse-type-list-two-types` and `-nullable` |
+| G7's check removed | `refuse-named-array` |
+| `classify` reverted | `accept-untyped-object-gates`: "undefined: AdditionalDirectories" |
+| `validationShapes` re-reading `type` | `accept-untyped-object`: "(&Plain{}).Validate undefined" |
+| `gateHolders` re-reading `type` | `accept-untyped-object-gates`: "NewSession = \<nil\>", the ungated send passing |
+| G8's untitled variant skipped again | `refuse-untitled-primitive-variant` and `-array-variant` |
+| G20's check removed | all four `refuse-const-variant-*` cases |
+| G20 on non-string consts only; on number consts only | `refuse-const-variant-mixed`: the integer variant refused, not the string one |
+| G20 on typed variants only | `refuse-const-variant-untyped` |
+
+Gates, through the Python runner, on the tree: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
+`GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in
+`cmd/generate`. The API listing against `v1.14.0` is unchanged from step 2's: 0 removed, the same 2 added.
+
+The documentation of the refused shapes and of G6's handling is step 7's.

@@ -1,0 +1,10 @@
+Refused: a boolean const on a union variant, which no generated code would
+check (0019-PLAN-generator-hardening.md, G20).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"Flag": {"oneOf": [{"title": "Text", "type": "string"}, {"title": "Yes", "type": "boolean", "const": true}]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+Flag variant 2:
+const true on a union variant is not enforced

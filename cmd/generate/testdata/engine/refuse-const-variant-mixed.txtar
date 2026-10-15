@@ -1,0 +1,10 @@
+Refused: a string const on a union variant beside an integer const, which no
+generated code would check (0019-PLAN-generator-hardening.md, G20).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"Mix": {"oneOf": [{"title": "Str", "type": "string", "const": "a"}, {"title": "Int", "type": "integer", "const": 1}]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+Mix variant 1:
+const "a" on a union variant is not enforced

@@ -2,6 +2,7 @@ package model
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
@@ -124,8 +125,7 @@ func TestEnumValueKinds(t *testing.T) {
 	t.Parallel()
 	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
 		"Consts":{"oneOf":[{"const":"a-b"},{"const":"c"}]},
-		"Open":{"anyOf":[{"type":"string","const":"known"},{"type":"string"}]},
-		"Nums":{"enum":[1,2.5]}}`)})
+		"Open":{"anyOf":[{"type":"string","const":"known"},{"type":"string"}]}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,6 @@ func TestEnumValueKinds(t *testing.T) {
 	}{
 		{"Consts", KindStringConstUnion, []EnumValue{{"a-b", "ConstsAB"}, {"c", "ConstsC"}}},
 		{"Open", KindOpenEnum, []EnumValue{{"known", "OpenKnown"}}},
-		{"Nums", KindEnum, []EnumValue{{"1", "Nums1"}, {"2.5", "Nums25"}}},
 	} {
 		ty := m.Type(tt.name)
 		if ty.Kind != tt.kind || !slices.Equal(ty.Enum, tt.want) {
@@ -148,6 +147,12 @@ func TestEnumValueKinds(t *testing.T) {
 		if isOpenStringEnum(defOf(t, def)) {
 			t.Errorf("isOpenStringEnum(%s) is true", def)
 		}
+	}
+	// An enum of anything but strings has no Go type
+	// (0019-PLAN-generator-hardening.md, G4).
+	if _, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{"Nums":{"enum":[1,2.5]}}`)}); err == nil ||
+		!strings.Contains(err.Error(), "Nums: enum value 1 is not a string") {
+		t.Errorf("a number enum: Build = %v", err)
 	}
 	if isStringConstUnion(defOf(t, `{"oneOf":[{"const":1}]}`)) || isStringConstUnion(defOf(t, `{"oneOf":[null]}`)) {
 		t.Error("a non-string or null const counts as a string const union")

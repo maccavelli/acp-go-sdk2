@@ -384,7 +384,9 @@ func classify(def *load.Definition) Kind {
 		return KindIntegerEnum
 	case len(def.AnyOf) > 0, len(def.OneOf) > 0:
 		return KindUnion
-	case t == schemaTypeObject && len(def.Properties) > 0:
+	case (t == schemaTypeObject || t == "") && len(def.Properties) > 0:
+		// Properties without a type mean an object, as they do for a
+		// variant (0019-PLAN-generator-hardening.md, G6).
 		return KindObject
 	case t == schemaTypeString || t == "integer" || t == "number" || t == "boolean":
 		return KindPrimitive
@@ -882,10 +884,18 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 	if vi.IsArray {
 		vi.ArrayItemRequired = arrayItemRequired(schema, facts)
 	}
-	// Phantom variants have no $ref, object shape, null type, or title.
-	vi.Skip = !isObj && ref == "" && !isNull && ev.Title == ""
-	if vi.Skip {
-		return vi, nil
+	// A const on a variant that is not an object reaches here only beside a
+	// non-string const (a oneOf of string consts, or of integer consts, is an
+	// enum kind), and no generated code would check it
+	// (0019-PLAN-generator-hardening.md, G20).
+	if ref == "" && !isObj && ev.Const != nil {
+		return nil, fmt.Errorf("%s: const %s on a union variant is not enforced; only a oneOf of string consts or of titled integer consts has a Go type", owner, schemaValue(ev.Const))
+	}
+	// A variant with no $ref, object shape, null type, or title has no name
+	// for its field and would match nothing
+	// (0019-PLAN-generator-hardening.md, G8).
+	if !isObj && ref == "" && !isNull && ev.Title == "" {
+		return nil, fmt.Errorf("%s: a variant without a title, $ref, properties, or null type has no Go name", owner)
 	}
 	if err := checkExported(field); err != nil {
 		return nil, fmt.Errorf("%s: wrapper field: %w", owner, err)

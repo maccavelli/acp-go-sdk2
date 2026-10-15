@@ -1,0 +1,10 @@
+Refused: a named array definition, which would be raw JSON
+(0019-PLAN-generator-hardening.md, G7).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"Tags": {"type": "array", "items": {"type": "string"}}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+Tags:
+a named array definition has no Go type

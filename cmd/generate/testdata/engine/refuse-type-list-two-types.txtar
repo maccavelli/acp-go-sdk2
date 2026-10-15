@@ -1,0 +1,10 @@
+Refused: a type list of two types other than null on a required property, of
+which the model would keep one (0019-PLAN-generator-hardening.md, G5).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"Obj": {"type": "object", "properties": {"a": {"type": ["string", "integer"]}}, "required": ["a"]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+Obj.properties.a:
+type list of string and integer

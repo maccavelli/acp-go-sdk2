@@ -1,0 +1,94 @@
+A definition with properties and no "type": "object" is an object, as a variant
+is: a struct with its UnmarshalJSON and Validate, plain and with flattened
+members, refusing a value that is not an object
+(0019-PLAN-generator-hardening.md, G6).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Plain": {"properties": {"name": {"type": "string", "minLength": 1}}, "required": ["name"]},
+  "Typed": {"type": "object", "properties": {"name": {"type": "string", "minLength": 1}}, "required": ["name"]},
+  "A": {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"]},
+  "B": {"type": "object", "properties": {"b": {"type": "string"}}, "required": ["b"]},
+  "FlatUntyped": {"properties": {"name": {"type": "string", "minLength": 1}}, "required": ["name"], "anyOf": [{"$ref": "#/$defs/A"}, {"$ref": "#/$defs/B"}]},
+  "FlatTyped": {"type": "object", "properties": {"name": {"type": "string", "minLength": 1}}, "required": ["name"], "anyOf": [{"$ref": "#/$defs/A"}, {"$ref": "#/$defs/B"}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type A struct{A string "json:\"a\""}
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type B struct{B string "json:\"b\""}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+type FlatTyped struct{Name string "json:\"name\""; A *A "json:\"-\""; B *B "json:\"-\""}
+type FlatUntyped struct{Name string "json:\"name\""; A *A "json:\"-\""; B *B "json:\"-\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+type Plain struct{Name string "json:\"name\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Typed struct{Name string "json:\"name\""}
+func (*A).UnmarshalJSON(b []byte) error
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*B).UnmarshalJSON(b []byte) error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (FlatTyped).MarshalJSON() ([]byte, error)
+func (*FlatTyped).UnmarshalJSON(b []byte) error
+func (*FlatTyped).Validate() error
+func (FlatUntyped).MarshalJSON() ([]byte, error)
+func (*FlatUntyped).UnmarshalJSON(b []byte) error
+func (*FlatUntyped).Validate() error
+func (*Plain).UnmarshalJSON(b []byte) error
+func (*Plain).Validate() error
+func (*Typed).UnmarshalJSON(b []byte) error
+func (*Typed).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// An untyped object definition decodes, requires and validates as a typed one
+// does, and refuses a value that is not an object.
+func TestUntypedObject(t *testing.T) {
+	var p Plain
+	if err := json.Unmarshal([]byte(`{"name":"x"}`), &p); err != nil || p.Name != "x" {
+		t.Fatalf("decoded %+v, %v", p, err)
+	}
+	if err := json.Unmarshal([]byte(`42`), &p); err == nil {
+		t.Error("42 decoded into Plain")
+	}
+	if err := json.Unmarshal([]byte(`{}`), &p); err == nil {
+		t.Error("Plain without name decoded")
+	}
+	if err := (&Plain{}).Validate(); err == nil {
+		t.Error("Plain with an empty name validated")
+	}
+	f := FlatUntyped{Name: "n", A: &A{A: "a"}}
+	if err := f.Validate(); err != nil {
+		t.Errorf("FlatUntyped: %v", err)
+	}
+	if err := (&FlatUntyped{Name: "n"}).Validate(); err == nil {
+		t.Error("FlatUntyped with no member set validated")
+	}
+	b, err := json.Marshal(f)
+	if err != nil || string(b) != `{"a":"a","name":"n"}` {
+		t.Errorf("FlatUntyped sent as %s, %v", b, err)
+	}
+}

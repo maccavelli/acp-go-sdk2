@@ -1,0 +1,10 @@
+Refused: a const on an untyped union variant, which would become an empty
+struct (0019-PLAN-generator-hardening.md, G20).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"Odd": {"anyOf": [{"title": "Text", "type": "string"}, {"title": "Bare", "const": 1.5}]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+Odd variant 2:
+const 1.5 on a union variant is not enforced

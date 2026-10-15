@@ -1,0 +1,10 @@
+Refused: number consts on union variants, which no generated code would check
+(0019-PLAN-generator-hardening.md, G20).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"Num": {"oneOf": [{"title": "One", "type": "number", "const": 1.5}, {"title": "Two", "type": "number", "const": 2.5}]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+Num variant 1:
+const 1.5 on a union variant is not enforced

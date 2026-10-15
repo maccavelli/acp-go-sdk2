@@ -131,7 +131,7 @@ func (m *Model) validationShapes() ([]shape, error) {
 			if own, err := m.bounds(t.Name, "", t.def.Minimum, t.def.Maximum, t.def.MinLength, *t.Underlying); err != nil || len(own) > 0 {
 				return nil, fmt.Errorf("%s: a bound on a named primitive type is not checked", t.Name)
 			}
-		case t.Kind != KindNone && primaryType(t.def) == schemaTypeObject:
+		case t.Kind == KindObject || t.Kind == KindEmptyObject:
 			structs = append(structs, shape{t.Name, t.Fields, isRPCTypeName(t.Name), func(v *Validation) { t.Validation = v }, t.Members})
 		}
 		for _, ns := range t.NestedStructs {

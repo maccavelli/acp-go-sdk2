@@ -1,0 +1,263 @@
+accept-capability-gates with "type": "object" left out of the gated request
+NewSessionRequest: the same API, and its gates still checked
+(0019-PLAN-generator-hardening.md, G6).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"initialize": "initialize", "new": "x/new", "prompt": "x/prompt"}, "clientMethods": {"update": "x/update"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "ProtocolVersion": {"type": "integer", "format": "uint16"},
+  "Flag": {"type": "object"},
+  "SessionCapabilities": {"type": "object", "properties": {"additionalDirectories": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}}},
+  "PromptCapabilities": {"type": "object", "properties": {"image": {"type": "boolean"}, "audio": {"type": "boolean"}, "embeddedContext": {"type": "boolean"}}},
+  "AgentCapabilities": {"type": "object", "properties": {"sessionCapabilities": {"$ref": "#/$defs/SessionCapabilities"}, "promptCapabilities": {"$ref": "#/$defs/PromptCapabilities"}}},
+  "ClientSessionCapabilities": {"type": "object", "properties": {"notices": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}, "compaction": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}}},
+  "ClientCapabilities": {"type": "object", "properties": {"session": {"anyOf": [{"$ref": "#/$defs/ClientSessionCapabilities"}, {"type": "null"}]}}},
+  "InitializeRequest": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "clientCapabilities": {"$ref": "#/$defs/ClientCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
+  "InitializeResponse": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "agentCapabilities": {"$ref": "#/$defs/AgentCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
+  "NewSessionRequest": {"properties": {"additionalDirectories": {"type": "array", "items": {"type": "string"}}}, "x-side": "agent", "x-method": "x/new"},
+  "NewSessionResponse": {"type": "object", "x-side": "agent", "x-method": "x/new"},
+  "ContentBlock": {"oneOf": [
+    {"type": "object", "required": ["type", "text"], "properties": {"type": {"const": "text", "type": "string"}, "text": {"type": "string"}}},
+    {"type": "object", "required": ["type", "data"], "properties": {"type": {"const": "image", "type": "string"}, "data": {"type": "string"}}},
+    {"type": "object", "required": ["type", "data"], "properties": {"type": {"const": "audio", "type": "string"}, "data": {"type": "string"}}},
+    {"type": "object", "required": ["type", "uri"], "properties": {"type": {"const": "resource", "type": "string"}, "uri": {"type": "string"}}}
+  ], "discriminator": {"propertyName": "type"}},
+  "PromptRequest": {"type": "object", "properties": {"prompt": {"type": "array", "items": {"$ref": "#/$defs/ContentBlock"}}}, "required": ["prompt"], "x-side": "agent", "x-method": "x/prompt"},
+  "PromptResponse": {"type": "object", "x-side": "agent", "x-method": "x/prompt"},
+  "SessionUpdate": {"oneOf": [
+    {"type": "object", "required": ["sessionUpdate", "text"], "properties": {"sessionUpdate": {"const": "agent_message_chunk", "type": "string"}, "text": {"type": "string"}}},
+    {"type": "object", "required": ["sessionUpdate", "text"], "properties": {"sessionUpdate": {"const": "notice", "type": "string"}, "text": {"type": "string"}}},
+    {"type": "object", "required": ["sessionUpdate"], "properties": {"sessionUpdate": {"const": "compaction_update", "type": "string"}}},
+    {"type": "object", "required": ["sessionUpdate", "text"], "properties": {"sessionUpdate": {"const": "compaction_summary_chunk", "type": "string"}, "text": {"type": "string"}}}
+  ], "discriminator": {"propertyName": "sessionUpdate"}},
+  "SessionNotification": {"type": "object", "properties": {"update": {"$ref": "#/$defs/SessionUpdate"}}, "required": ["update"], "x-side": "client", "x-method": "x/update"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error); NewSession(ctx context.Context, params NewSessionRequest) (NewSessionResponse, error); Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error)}
+type AgentCapabilities struct{PromptCapabilities PromptCapabilities "json:\"promptCapabilities\""; SessionCapabilities SessionCapabilities "json:\"sessionCapabilities\""}
+type AgentExperimental interface{}
+const AgentMethodInitialize untyped string = "initialize"
+const AgentMethodNew untyped string = "x/new"
+const AgentMethodPrompt untyped string = "x/prompt"
+type AgentSideConnection struct{conn *Connection; agent Agent; negotiation atomic.Pointer[Negotiation]}
+type CancelRequestNotification struct{}
+type Client interface{Session(ctx context.Context, params SessionNotification) error}
+type ClientCapabilities struct{Session *ClientSessionCapabilities "json:\"session,omitempty\""}
+type ClientExperimental interface{}
+const ClientMethodUpdate untyped string = "x/update"
+type ClientSessionCapabilities struct{Compaction *Flag "json:\"compaction,omitempty\""; Notices *Flag "json:\"notices,omitempty\""}
+type ClientSideConnection struct{conn *Connection; client Client; negotiation atomic.Pointer[Negotiation]}
+type ContentBlock struct{Text *ContentBlockText "json:\"-\""; Image *ContentBlockImage "json:\"-\""; Audio *ContentBlockAudio "json:\"-\""; Resource *ContentBlockResource "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type ContentBlockAudio struct{Data string "json:\"data\""; Type string "json:\"type\""}
+type ContentBlockImage struct{Data string "json:\"data\""; Type string "json:\"type\""}
+type ContentBlockResource struct{Type string "json:\"type\""; Uri string "json:\"uri\""}
+type ContentBlockText struct{Text string "json:\"text\""; Type string "json:\"type\""}
+type Flag struct{}
+type InitializeRequest struct{ClientCapabilities ClientCapabilities "json:\"clientCapabilities\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
+type InitializeResponse struct{AgentCapabilities AgentCapabilities "json:\"agentCapabilities\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
+type Negotiation struct{Request InitializeRequest; Response InitializeResponse}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+type NewSessionRequest struct{AdditionalDirectories []string "json:\"additionalDirectories,omitempty\""}
+type NewSessionResponse struct{}
+type PromptCapabilities struct{Audio bool "json:\"audio,omitempty\""; EmbeddedContext bool "json:\"embeddedContext,omitempty\""; Image bool "json:\"image,omitempty\""}
+type PromptRequest struct{Prompt []ContentBlock "json:\"prompt\""}
+type PromptResponse struct{}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+type ProtocolVersion uint16
+const ProtocolVersionNumber untyped int = 1
+type SessionCapabilities struct{AdditionalDirectories *Flag "json:\"additionalDirectories,omitempty\""}
+type SessionCompactionUpdate struct{SessionUpdate string "json:\"sessionUpdate\""}
+type SessionNotification struct{Update SessionUpdate "json:\"update\""}
+type SessionUpdate struct{AgentMessageChunk *SessionUpdateAgentMessageChunk "json:\"-\""; Notice *SessionUpdateNotice "json:\"-\""; CompactionUpdate *SessionCompactionUpdate "json:\"-\""; CompactionSummaryChunk *SessionUpdateCompactionSummaryChunk "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type SessionUpdateAgentMessageChunk struct{SessionUpdate string "json:\"sessionUpdate\""; Text string "json:\"text\""}
+type SessionUpdateCompactionSummaryChunk struct{SessionUpdate string "json:\"sessionUpdate\""; Text string "json:\"text\""}
+type SessionUpdateNotice struct{SessionUpdate string "json:\"sessionUpdate\""; Text string "json:\"text\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Negotiated() (Negotiation, bool)
+func (*AgentSideConnection).Session(ctx context.Context, params SessionNotification) error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error)
+func (*ClientSideConnection).Negotiated() (Negotiation, bool)
+func (*ClientSideConnection).NewSession(ctx context.Context, params NewSessionRequest) (NewSessionResponse, error)
+func (*ClientSideConnection).Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (ContentBlock).MarshalJSON() ([]byte, error)
+func (*ContentBlock).UnmarshalJSON(b []byte) error
+func (*ContentBlock).Validate() error
+func (*ContentBlockAudio).UnmarshalJSON(b []byte) error
+func (*ContentBlockImage).UnmarshalJSON(b []byte) error
+func (*ContentBlockResource).UnmarshalJSON(b []byte) error
+func (*ContentBlockText).UnmarshalJSON(b []byte) error
+func (*InitializeRequest).UnmarshalJSON(b []byte) error
+func (*InitializeRequest).Validate() error
+func (*InitializeResponse).UnmarshalJSON(b []byte) error
+func (*InitializeResponse).Validate() error
+func (Negotiation).Allows(method string) error
+func (*NewSessionRequest).Validate() error
+func (*NewSessionResponse).Validate() error
+func (PromptRequest).MarshalJSON() ([]byte, error)
+func (*PromptRequest).UnmarshalJSON(b []byte) error
+func (*PromptRequest).Validate() error
+func (*PromptResponse).Validate() error
+func (*SessionNotification).UnmarshalJSON(b []byte) error
+func (*SessionNotification).Validate() error
+func (SessionUpdate).MarshalJSON() ([]byte, error)
+func (*SessionUpdate).UnmarshalJSON(b []byte) error
+func (*SessionUpdate).Validate() error
+func (*SessionUpdateAgentMessageChunk).UnmarshalJSON(b []byte) error
+func (*SessionUpdateCompactionSummaryChunk).UnmarshalJSON(b []byte) error
+func (*SessionUpdateNotice).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"errors"
+	"io"
+	"testing"
+	"time"
+)
+
+// gateAgent advertises caps and reports each handled request on calls.
+type gateAgent struct {
+	caps  AgentCapabilities
+	calls chan string
+}
+
+func (a gateAgent) Initialize(context.Context, InitializeRequest) (InitializeResponse, error) {
+	return InitializeResponse{AgentCapabilities: a.caps}, nil
+}
+
+func (a gateAgent) NewSession(context.Context, NewSessionRequest) (NewSessionResponse, error) {
+	a.calls <- "new"
+	return NewSessionResponse{}, nil
+}
+
+func (a gateAgent) Prompt(context.Context, PromptRequest) (PromptResponse, error) {
+	a.calls <- "prompt"
+	return PromptResponse{}, nil
+}
+
+// gateClient reports each delivered update on calls.
+type gateClient struct{ calls chan string }
+
+func (c gateClient) Session(_ context.Context, n SessionNotification) error {
+	if n.Update.Notice != nil {
+		c.calls <- "notice"
+	} else {
+		c.calls <- "chunk"
+	}
+	return nil
+}
+
+// gatePair connects an agent advertising agent and a client advertising
+// client, and initializes; it returns where each reports its calls.
+func gatePair(t *testing.T, agent AgentCapabilities, client ClientCapabilities) (*AgentSideConnection, *ClientSideConnection, chan string, chan string) {
+	t.Helper()
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	ac, cc := make(chan string, 4), make(chan string, 4)
+	asc := NewAgentSideConnection(gateAgent{agent, ac}, aw, ar)
+	csc := NewClientSideConnection(gateClient{cc}, cw, cr)
+	if _, err := csc.Initialize(t.Context(), InitializeRequest{ClientCapabilities: client}); err != nil {
+		t.Fatal(err)
+	}
+	return asc, csc, ac, cc
+}
+
+// next returns the next call on ch.
+func next(t *testing.T, ch chan string) string {
+	t.Helper()
+	select {
+	case s := <-ch:
+		return s
+	case <-time.After(5 * time.Second):
+		t.Fatal("no call")
+		return ""
+	}
+}
+
+func prompt() PromptRequest {
+	return PromptRequest{Prompt: []ContentBlock{
+		{Text: &ContentBlockText{Type: "text", Text: "hi"}},
+		{Image: &ContentBlockImage{Type: "image", Data: "x"}},
+	}}
+}
+
+func notice() SessionNotification {
+	return SessionNotification{Update: SessionUpdate{Notice: &SessionUpdateNotice{SessionUpdate: "notice", Text: "n"}}}
+}
+
+func chunk() SessionNotification {
+	return SessionNotification{Update: SessionUpdate{AgentMessageChunk: &SessionUpdateAgentMessageChunk{SessionUpdate: "agent_message_chunk", Text: "c"}}}
+}
+
+// Without the capabilities, each gated value is refused before it is sent,
+// with the property or variant named, and refused when it is received.
+func TestGatesRefuse(t *testing.T) {
+	asc, csc, ac, cc := gatePair(t, AgentCapabilities{}, ClientCapabilities{})
+	dirs := NewSessionRequest{AdditionalDirectories: []string{t.TempDir()}}
+	var ce *CapabilityError
+	if _, err := csc.NewSession(t.Context(), dirs); !errors.As(err, &ce) || ce.Field != "additionalDirectories" ||
+		ce.Capability != "sessionCapabilities.additionalDirectories" || ce.Method != AgentMethodNew {
+		t.Errorf("NewSession = %v", err)
+	}
+	if _, err := csc.Prompt(t.Context(), prompt()); !errors.As(err, &ce) || ce.Field != "prompt[1]" || ce.Variant != "image" ||
+		ce.Capability != "promptCapabilities.image" {
+		t.Errorf("Prompt = %v", err)
+	}
+	if err := asc.Session(t.Context(), notice()); !errors.As(err, &ce) || ce.Variant != "notice" || ce.Capability != "session.notices" {
+		t.Errorf("Session = %v", err)
+	}
+	if _, err := csc.NewSession(t.Context(), NewSessionRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := next(t, ac); got != "new" {
+		t.Errorf("the agent handled %q first, want the ungated new", got)
+	}
+
+	var re *RequestError
+	if _, err := SendRequest[NewSessionResponse](csc.Connection(), t.Context(), AgentMethodNew, dirs); !errors.As(err, &re) || re.Code != -32602 {
+		t.Errorf("a raw new with directories = %v, want -32602", err)
+	}
+	if err := asc.Connection().SendNotification(t.Context(), ClientMethodUpdate, notice()); err != nil {
+		t.Fatal(err)
+	}
+	if err := asc.Session(t.Context(), chunk()); err != nil {
+		t.Fatal(err)
+	}
+	if got := next(t, cc); got != "chunk" {
+		t.Errorf("the client was delivered %q first, want the chunk after the dropped notice", got)
+	}
+	if len(ac) != 0 {
+		t.Errorf("the agent handled %q", <-ac)
+	}
+}
+
+// With the capabilities, each is sent and handled.
+func TestGatesAllow(t *testing.T) {
+	asc, csc, ac, cc := gatePair(t,
+		AgentCapabilities{SessionCapabilities: SessionCapabilities{AdditionalDirectories: &Flag{}}, PromptCapabilities: PromptCapabilities{Image: true}},
+		ClientCapabilities{Session: &ClientSessionCapabilities{Notices: &Flag{}}})
+	if _, err := csc.NewSession(t.Context(), NewSessionRequest{AdditionalDirectories: []string{t.TempDir()}}); err != nil || next(t, ac) != "new" {
+		t.Errorf("NewSession = %v", err)
+	}
+	if _, err := csc.Prompt(t.Context(), prompt()); err != nil || next(t, ac) != "prompt" {
+		t.Errorf("Prompt = %v", err)
+	}
+	if err := asc.Session(t.Context(), notice()); err != nil || next(t, cc) != "notice" {
+		t.Errorf("Session = %v", err)
+	}
+}

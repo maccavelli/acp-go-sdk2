@@ -235,7 +235,7 @@ func TestNoOmitemptyOnStructValues(t *testing.T) {
 	}
 	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
 		"Obj":{"type":"object","properties":{"a":{"type":"string"}}},
-		"Uni":{"oneOf":[{"type":"string"},{"type":"integer"}]},
+		"Uni":{"oneOf":[{"title":"S","type":"string"},{"title":"I","type":"integer"}]},
 		"T":{"type":"object","properties":{
 			"obj":{"allOf":[{"$ref":"#/$defs/Obj"}]},
 			"uni":{"allOf":[{"$ref":"#/$defs/Uni"}]},

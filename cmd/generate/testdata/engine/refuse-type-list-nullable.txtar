@@ -1,0 +1,10 @@
+Refused: a type list of two types other than null, and null, on a
+definition, of which the model would keep one (0019-PLAN-generator-hardening.md, G5).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"Both": {"type": ["integer", "null", "string"]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+Both:
+type list of integer and string

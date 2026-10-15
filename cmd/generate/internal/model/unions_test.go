@@ -14,7 +14,7 @@ func TestUnionDiscriminator(t *testing.T) {
 		"Declared":{"discriminator":{"propertyName":"kind"},"oneOf":[
 			{"type":"object","properties":{"kind":{"const":"a","type":"string"},"other":{"const":"z","type":"string"}}}]},
 		"Derived":{"oneOf":[{"type":"object","properties":{"zeta":{"const":"a","type":"string"},"alpha":{"const":"b","type":"string"}}}]},
-		"Plain":{"anyOf":[{"type":"string"},{"type":"integer"}]}}`)})
+		"Plain":{"anyOf":[{"title":"S","type":"string"},{"title":"I","type":"integer"}]}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestVariantFacts(t *testing.T) {
 func TestValidations(t *testing.T) {
 	t.Parallel()
 	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
-		"U":{"oneOf":[{"type":"string"},{"type":"integer"}]},
+		"U":{"oneOf":[{"title":"S","type":"string"},{"title":"I","type":"integer"}]},
 		"BarResponse":{"type":"object"},
 		"Plain":{"type":"object","required":["a"],"properties":{"a":{"type":"string"}}},
 		"Str":{"type":"object","properties":{"t":{"type":"string","minLength":2}}},
@@ -144,7 +144,7 @@ func TestValidations(t *testing.T) {
 		t.Error("Validates disagrees with Validation")
 	}
 	_, err = Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
-		"U":{"oneOf":[{"type":"string"},{"type":"integer"}]},
+		"U":{"oneOf":[{"title":"S","type":"string"},{"title":"I","type":"integer"}]},
 		"Bad":{"type":"object","properties":{"x":{"type":"array","items":{"type":"array","items":{"$ref":"#/$defs/U"}}}}}}`)})
 	if want := "Bad.x: [][]U holds a validated type in a shape Validate does not descend into"; err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("error %v, want one containing %q", err, want)

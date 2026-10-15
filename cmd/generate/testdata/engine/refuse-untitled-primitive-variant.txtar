@@ -1,0 +1,10 @@
+Refused: an untitled string variant, which has no name for its field and
+would be dropped (0019-PLAN-generator-hardening.md, G8).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"U": {"anyOf": [{"type": "string"}, {"title": "Num", "type": "integer", "format": "int64"}]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+U variant 1:
+has no Go name

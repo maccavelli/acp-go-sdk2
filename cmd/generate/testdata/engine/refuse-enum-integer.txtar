@@ -1,0 +1,10 @@
+Refused: an integer enum, which a string type would refuse on the wire
+(0019-PLAN-generator-hardening.md, G4).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"Level": {"type": "integer", "enum": [1, 2]}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+Level:
+enum value 1 is not a string
