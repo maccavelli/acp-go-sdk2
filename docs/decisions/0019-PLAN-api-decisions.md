@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-10-13
+status: complete
+date: 2026-10-14
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
 
@@ -664,3 +664,13 @@ owner deleted the remote tag and decided to release phases 1 and 2 as `v1.14.0`,
 `v0.18.0`: [0020-MADR-retract-accidental-v1-tag.md](0020-MADR-retract-accidental-v1-tag.md), executed by
 [0020-PLAN-retract-accidental-v1-tag.md](0020-PLAN-retract-accidental-v1-tag.md). Where this PLAN says `v0.18.0`, read `v1.14.0`;
 its acceptance's tag is `v1.14.0`, and its close follows 0020's step 4. The release notes keep their file's name.
+
+### Close, 2026-10-14
+
+CI passed on the pushed commits: run `38672326828` on `e24efbb`, `success` on `validate (ubuntu-24.04)`, `validate (macos-15)` and
+`validate (windows-2025)`. As the deviation above has it, phases 1 and 2 were released as `v1.14.0`, not `v0.18.0`: the owner tagged
+`e24efbb` `v1.14.0` and published its release from
+[0019-REPORT-release-notes-v0-18-0.md](../reports/0019-REPORT-release-notes-v0-18-0.md), and step 4 of
+[0020-PLAN-retract-accidental-v1-tag.md](0020-PLAN-retract-accidental-v1-tag.md) found, against the public proxy, `@latest` at
+`v1.14.0` and `v1.13.0` retracted. Every acceptance criterion in "Verification" is met, so this PLAN and its `docs/README.md` row
+are `complete`. The MADR stays `accepted`, with phases 3 to 5 to come.

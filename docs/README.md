@@ -53,10 +53,10 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0018 | REPORT | [Release notes for v0.17.1, against v0.17.0](reports/0018-REPORT-release-notes-v0-17-1.md) | observed |
 | 0019 | MADR | [Remediate the defects, gaps and idiom drift the 2026-10-13 debugging pass found](decisions/0019-MADR-remediate-debugging-pass-findings.md) | accepted |
 | 0019 | PLAN | [Implement phase 1 of 0019: the behaviour fixes, with no exported change](decisions/0019-PLAN-behaviour-fixes.md) | complete |
-| 0019 | PLAN | [Implement phase 2 of 0019: the API and behaviour decisions, released with phase 1 as v0.18.0](decisions/0019-PLAN-api-decisions.md) | in-progress |
+| 0019 | PLAN | [Implement phase 2 of 0019: the API and behaviour decisions, released with phase 1 as v0.18.0](decisions/0019-PLAN-api-decisions.md) | complete |
 | 0019 | REPORT | [Release notes for v1.14.0, against v0.17.1](reports/0019-REPORT-release-notes-v0-18-0.md) | observed |
 | 0020 | MADR | [Release phases 1 and 2 of 0019 as v1.14.0, retracting the accidental v1.13.0](decisions/0020-MADR-retract-accidental-v1-tag.md) | accepted |
-| 0020 | PLAN | [Implement the v1.14.0 release and the retraction of v1.13.0](decisions/0020-PLAN-retract-accidental-v1-tag.md) | in-progress |
+| 0020 | PLAN | [Implement the v1.14.0 release and the retraction of v1.13.0](decisions/0020-PLAN-retract-accidental-v1-tag.md) | complete |
 | 0021 | MADR | [Resolve issues #4 and #5 before v1.14.0: a prompt-overlap policy option and a three-state Patch[T] for patch fields](decisions/0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md) | accepted |
 | 0021 | PLAN | [Implement the prompt-overlap policy option and the three-state Patch[T] before v1.14.0](decisions/0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md) | complete |
 

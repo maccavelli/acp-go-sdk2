@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-14
 associated-madr: "0020-MADR-retract-accidental-v1-tag.md"
 ---
@@ -86,3 +86,30 @@ open issues, #4 and #5, to be resolved first. They are decided in
 [0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md](0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md). Step 3 waits on that PLAN:
 `v1.14.0` is tagged on the commit it verifies, not on `c1b1185`. The `retract` directive and the release notes of step 2 stand; the
 0021 PLAN adds to the notes.
+
+### Step 3, publication, 2026-10-14
+
+The 0021 PLAN closed on `e24efbb`, and CI run `38672326828` on it concluded `success` on `validate (ubuntu-24.04)`, `validate
+(macos-15)` and `validate (windows-2025)`. The owner tagged `e24efbb` `v1.14.0`, an annotated tag as `v0.17.1` is, pushed the tag,
+and published the GitHub release `v1.14.0`, marked latest, from the release text of
+[0019-REPORT-release-notes-v0-18-0.md](../reports/0019-REPORT-release-notes-v0-18-0.md) as the 0021 PLAN amended it, extracted
+without its two headings (130 lines; the identifier scan finds nothing in it).
+
+### Step 4, verification and close, 2026-10-14
+
+From a scratch consumer, `GOPROXY` the default `https://proxy.golang.org,direct`, a scratch `GOMODCACHE` and `GOPATH`, checksum
+database on:
+
+* the proxy's `@v/v1.14.0.info` answers `200`, its origin `refs/tags/v1.14.0` at `e24efbb`;
+* its `@v/v1.14.0.mod` answers `200` and holds `retract v1.13.0 // Published accidentally from an unfinished commit.`;
+* `go list -m github.com/maccavelli/acp-go-sdk2@latest` gives `v1.14.0`;
+* `go list -m -versions` lists `v0.14.0 v0.15.0 v0.16.0 v0.17.0 v0.17.1 v1.14.0`, without `v1.13.0`;
+* `v1.13.0` pinned, `-u -retracted`, reports `retracted=[Published accidentally from an unfinished commit.]` and the update
+  `v1.14.0`.
+
+The check, a Python script outside the tree, was seen to fail on a planted break in a scratch copy of it: expecting `retract v1.13.1`,
+it reported that the result does not hold and exited 1.
+
+Every acceptance criterion in "Verification" is met, with the deviation before step 3 recorded above, so this PLAN and its
+`docs/README.md` row are `complete`, and so are the 0019 phase 2 PLAN and its row, whose close followed this step. The MADR stays
+`accepted`. Issues #4 and #5, which `v1.14.0` resolves, are left to the owner to close.
