@@ -7,14 +7,8 @@ import (
 )
 
 const (
-	schemaTypeObject  = "object"
-	schemaTypeArray   = "array"
-	schemaTypeString  = "string"
-	schemaTypeInteger = "integer"
-	schemaTypeNumber  = "number"
-	schemaTypeBoolean = "boolean"
-	schemaTypeNull    = "null"
-	jsonStructTag     = "json"
+	schemaTypeNull = "null"
+	jsonStructTag  = "json"
 	// unknownField holds a discriminated union's unrecognized payload.
 	unknownField = "Unknown"
 	// extraField holds the keys a union's catch-all variant does not declare.

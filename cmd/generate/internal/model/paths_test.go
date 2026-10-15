@@ -84,11 +84,6 @@ func TestAbsolutePathRules(t *testing.T) {
 	if len(got) != len(want) {
 		t.Errorf("absolute-path checks in %v, want only %v", got, want)
 	}
-	for _, f := range m.Type("Req").Fields {
-		if f.Facts.AbsolutePath != slices.Contains([]string{"cwd", "dirs", "opt"}, f.Key) {
-			t.Errorf("Req.%s: Facts.AbsolutePath %v", f.Key, f.Facts.AbsolutePath)
-		}
-	}
 	if !m.Validates("Diff") || !m.Validates("ContentDiff") {
 		t.Error("a type whose only check is a path check does not validate")
 	}

@@ -29,7 +29,7 @@ func FormatDocComment(desc string) []string {
 	var result []string
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		// Preserve blank lines as empty strings - jen will render them as "//"
+		// A blank line stays an empty string, which the emitter writes as "//".
 		result = append(result, trimmed)
 	}
 

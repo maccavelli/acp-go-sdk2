@@ -347,8 +347,15 @@ func TestProtocolMethodConstants(t *testing.T) {
 		{"one", map[string]string{"cancel_request": "$/cancel_request"}, "// Protocol method names\nconst (\n\tProtocolMethodCancelRequest = \"$/cancel_request\"\n)\n", true},
 		{"none", nil, "Protocol method names", false},
 	} {
+		// Without the protocol method, its definition is left out: a definition
+		// linked to a method no meta file lists is refused
+		// (0019-PLAN-generator-hardening.md, G18).
+		defs := `{"$defs":{}}`
+		if tt.protocol != nil {
+			defs = `{"$defs":{"CancelRequestNotification":{"type":"object","x-side":"protocol","x-method":"$/cancel_request"}}}`
+		}
 		var schema load.Schema
-		if err := json.Unmarshal([]byte(`{"$defs":{"CancelRequestNotification":{"type":"object","x-side":"protocol","x-method":"$/cancel_request"}}}`), &schema); err != nil {
+		if err := json.Unmarshal([]byte(defs), &schema); err != nil {
 			t.Fatal(err)
 		}
 		m, err := model.Build(model.Input{Meta: &load.Meta{Version: 1, ProtocolMethods: tt.protocol}, Schema: &schema})

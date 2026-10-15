@@ -24,6 +24,26 @@ func TestGoVersionWithoutGoLine(t *testing.T) {
 	}
 }
 
+// TestReportListsGeneratedFilesFirst requires the errors in generated files to
+// come before those in hand-written ones, whatever their names, each part in
+// position order (0019-PLAN-generator-hardening.md, G15).
+func TestReportListsGeneratedFilesFirst(t *testing.T) {
+	t.Parallel()
+	fset := token.NewFileSet()
+	hand, gen := fset.AddFile("a_test.go", -1, 100), fset.AddFile("z_gen_test.go", -1, 100)
+	hand.SetLines([]int{0, 10, 20})
+	gen.SetLines([]int{0, 10, 20})
+	err := report("dir", fset, []types.Error{
+		{Fset: fset, Pos: hand.LineStart(1), Msg: "in hand"},
+		{Fset: fset, Pos: gen.LineStart(2), Msg: "second in generated"},
+		{Fset: fset, Pos: gen.LineStart(1), Msg: "first in generated"},
+	}, map[string]bool{"z_gen_test.go": true})
+	got := err.Error()
+	if a, b, c := strings.Index(got, "first in generated"), strings.Index(got, "second in generated"), strings.Index(got, "in hand"); a > b || b > c {
+		t.Errorf("report:\n%s\nwant the generated file's errors first, in position order", got)
+	}
+}
+
 // TestReportGroupsSecondaryErrors requires a secondary error to follow its
 // primary, every error to be listed, and a secondary error with no primary
 // before it to stand alone.
@@ -35,7 +55,7 @@ func TestReportGroupsSecondaryErrors(t *testing.T) {
 	at := func(line int, msg string) types.Error {
 		return types.Error{Fset: fset, Pos: f.LineStart(line), Msg: msg}
 	}
-	err := report("dir", fset, []types.Error{at(1, "\torphan"), at(2, "early"), at(2, "\tdetail of early"), at(4, "late")})
+	err := report("dir", fset, []types.Error{at(1, "\torphan"), at(2, "early"), at(2, "\tdetail of early"), at(4, "late")}, nil)
 	if err == nil {
 		t.Fatal("no error")
 	}

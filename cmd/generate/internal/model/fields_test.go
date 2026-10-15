@@ -128,7 +128,7 @@ func TestObjectFieldDefaultsAndFacts(t *testing.T) {
 		t.Errorf("mode default: %+v", d)
 	}
 	c := fieldByKey(t, fields, "count").Facts
-	if c.Format != "uint64" || c.Minimum == nil || *c.Minimum != 0 || c.Maximum == nil || *c.Maximum != 9 || !c.DefaultOnError {
+	if c.Minimum == nil || *c.Minimum != 0 || c.Maximum == nil || *c.Maximum != 9 || !c.DefaultOnError {
 		t.Errorf("count facts: %+v", c)
 	}
 	if !fieldByKey(t, fields, "list").Facts.SkipInvalidItems {
@@ -137,8 +137,8 @@ func TestObjectFieldDefaultsAndFacts(t *testing.T) {
 	if ml := fieldByKey(t, fields, "mode").Facts.MinLength; ml == nil || *ml != 1 {
 		t.Errorf("mode MinLength: %v", ml)
 	}
-	if v := fieldByKey(t, fields, "env").Facts.Values; v == nil || v.String() != "string" {
-		t.Errorf("env additional values: %v", v)
+	if v := fieldByKey(t, fields, "env").Type; v.String() != "map[string]string" {
+		t.Errorf("env: %v, want map[string]string", v)
 	}
 	if u := m.Type("Foo").Underlying; u == nil || u.String() != "string" {
 		t.Errorf("Foo underlying: %v", u)

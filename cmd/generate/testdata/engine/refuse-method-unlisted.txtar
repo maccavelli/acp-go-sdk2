@@ -1,0 +1,14 @@
+Refused: a definition linked by x-method and x-side to a method no meta file
+lists, which would become a plain type with its method never wired
+(0019-PLAN-generator-hardening.md, G18).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "OrphanThingNotification": {"type": "object", "x-side": "agent", "x-method": "orphan/thing"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+definition OrphanThingNotification:
+linked by x-method and x-side to agent method "orphan/thing", which no meta file lists

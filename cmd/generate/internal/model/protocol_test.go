@@ -238,6 +238,12 @@ func TestProtocolTableRefuses(t *testing.T) {
 		"properties":{"sessionId":{"type":"integer"}}`, 1)
 		}, wanted: []string{`agent method "s/prompt"`, `"sessionId" of PromptRequest is not a string`}},
 		{name: "prompt turn without its cancel", meta: func(m *load.Meta) { delete(m.AgentMethods, "cancel") },
+			defs: func(s string) string {
+				// A definition linked to a method no meta file lists is refused
+				// first (0019-PLAN-generator-hardening.md, G18).
+				return strings.Replace(s, `"CancelNotification":{"type":"object","x-side":"agent","x-method":"s/cancel",`,
+					`"CancelNotification":{"type":"object",`, 1)
+			},
 			wanted: []string{`agent method "s/prompt"`, "needs one prompt-turn cancel on its side, found 0"}},
 		{name: "two cancels", table: func(p *Protocol) {
 			p.Methods = append(p.Methods, MethodRule{Side: "agent", Wire: "s/stop", CancelsPromptTurn: true, SessionKey: "sessionId"})

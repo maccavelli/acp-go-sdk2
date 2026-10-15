@@ -26,12 +26,17 @@ const maxReported = 10
 // Check type-checks files together with the hand-written Go files of dir, and
 // returns an error listing what does not check.
 //
-// The hand-written files are those the go command would build in dir for the
-// host, less the generated names; a missing directory has none. The language
-// version is the go line of dir/go.mod, when there is one. Imports are read
-// from source, by one importer that every call in the process shares.
+// It checks the package as built, the hand-written files with the generated
+// files that are not tests, and then the package as tested, which adds the
+// hand-written in-package test files and the generated ones, so a name a test
+// file of either kind declares twice is refused
+// (0019-PLAN-generator-hardening.md, G15). The hand-written files are those
+// the go command would build or test in dir for the host, less the generated
+// names; dir must exist (G16). The language version is the go line of
+// dir/go.mod, when there is one. Imports are read from source, by one
+// importer that every call in the process shares.
 func Check(dir string, files []emit.File) error {
-	hand, err := handWritten(dir, files)
+	hand, handTests, err := handWritten(dir, files)
 	if err != nil {
 		return err
 	}
@@ -39,6 +44,19 @@ func Check(dir string, files []emit.File) error {
 	if err != nil {
 		return err
 	}
+	built := slices.DeleteFunc(slices.Clone(files), func(f emit.File) bool { return strings.HasSuffix(f.Name, "_test.go") })
+	if err := checkPackage(dir, version, hand, built); err != nil {
+		return err
+	}
+	if len(built) == len(files) && len(handTests) == 0 {
+		return nil
+	}
+	return checkPackage(dir, version, slices.Concat(hand, handTests), files)
+}
+
+// checkPackage type-checks the hand-written files named hand, in dir, with
+// the generated files.
+func checkPackage(dir, version string, hand []string, files []emit.File) error {
 	imp := sharedImporter()
 	fset := imp.fset
 	parsed := make([]*ast.File, 0, len(hand)+len(files))
@@ -75,7 +93,11 @@ func Check(dir string, files []emit.File) error {
 	if len(errs) == 0 {
 		return nil
 	}
-	return report(dir, fset, errs)
+	generated := map[string]bool{}
+	for _, gf := range files {
+		generated[filepath.Join(dir, gf.Name)] = true
+	}
+	return report(dir, fset, errs, generated)
 }
 
 // sharedImporter is the source importer every Check uses. It keeps what it
@@ -109,10 +131,12 @@ func (l *lockedImporter) ImportFrom(path, dir string, mode types.ImportMode) (*t
 }
 
 // handWritten returns the names of the Go files the go command would build in
-// dir for the host, less the generated ones.
-func handWritten(dir string, files []emit.File) ([]string, error) {
+// dir for the host, and of its in-package test files, less the generated
+// ones. A missing dir is refused: the generated code needs the hand-written
+// runtime beside it (0019-PLAN-generator-hardening.md, G16).
+func handWritten(dir string, files []emit.File) (hand, tests []string, err error) {
 	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
+		return nil, nil, fmt.Errorf("output directory %s: does not exist", dir)
 	}
 	// With cgo on, a file that imports "C" is listed as such whatever the
 	// environment says, so it is refused rather than silently left out.
@@ -121,21 +145,28 @@ func handWritten(dir string, files []emit.File) ([]string, error) {
 	bp, err := ctxt.ImportDir(dir, 0)
 	var noGo *build.NoGoError
 	if errors.As(err, &noGo) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("output directory: %w", err)
+		return nil, nil, fmt.Errorf("output directory: %w", err)
 	}
 	if len(bp.CgoFiles) > 0 {
-		return nil, fmt.Errorf("output directory: cgo file %s is not supported", bp.CgoFiles[0])
+		return nil, nil, fmt.Errorf("output directory: cgo file %s is not supported", bp.CgoFiles[0])
 	}
-	var hand []string
+	generated := func(name string) bool {
+		return slices.ContainsFunc(files, func(f emit.File) bool { return f.Name == name })
+	}
 	for _, name := range bp.GoFiles {
-		if !slices.ContainsFunc(files, func(f emit.File) bool { return f.Name == name }) {
+		if !generated(name) {
 			hand = append(hand, name)
 		}
 	}
-	return hand, nil
+	for _, name := range bp.TestGoFiles {
+		if !generated(name) {
+			tests = append(tests, name)
+		}
+	}
+	return hand, tests, nil
 }
 
 // goVersion returns the go line of dir/go.mod as a types.Config GoVersion, or
@@ -157,9 +188,10 @@ func goVersion(dir string) (string, error) {
 	return "", nil
 }
 
-// report lists errs in position order, a secondary error after its primary,
-// at most maxReported of them, and counts the rest.
-func report(dir string, fset *token.FileSet, errs []types.Error) error {
+// report lists errs, those in generated files first and each part in
+// position order, a secondary error after its primary, at most maxReported of
+// them, and counts the rest.
+func report(dir string, fset *token.FileSet, errs []types.Error, generated map[string]bool) error {
 	// A secondary error's message starts with a tab and belongs to the
 	// primary error before it.
 	var groups [][]types.Error
@@ -172,7 +204,8 @@ func report(dir string, fset *token.FileSet, errs []types.Error) error {
 	}
 	slices.SortStableFunc(groups, func(a, b []types.Error) int {
 		pa, pb := fset.Position(a[0].Pos), fset.Position(b[0].Pos)
-		return cmp.Or(cmp.Compare(pa.Filename, pb.Filename), cmp.Compare(pa.Line, pb.Line), cmp.Compare(pa.Column, pb.Column))
+		return cmp.Or(compareBool(generated[pb.Filename], generated[pa.Filename]), cmp.Compare(pa.Filename, pb.Filename),
+			cmp.Compare(pa.Line, pb.Line), cmp.Compare(pa.Column, pb.Column))
 	})
 	lines := make([]string, 0, len(errs))
 	for _, g := range groups {
@@ -185,4 +218,15 @@ func report(dir string, fset *token.FileSet, errs []types.Error) error {
 		msg += fmt.Sprintf("\n\tand %d more", n)
 	}
 	return errors.New(msg)
+}
+
+// compareBool orders false before true.
+func compareBool(a, b bool) int {
+	switch {
+	case a == b:
+		return 0
+	case a:
+		return 1
+	}
+	return -1
 }

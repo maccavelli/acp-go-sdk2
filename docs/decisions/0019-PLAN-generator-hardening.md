@@ -443,3 +443,53 @@ Gates, through the Python runner, on the tree: regenerating changes no generated
 `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
 markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in
 `cmd/generate`. The API listing against `v1.14.0` is unchanged from step 2's.
+
+The owner committed step 4's record as `8d2286a`.
+
+### Step 5, output, `main` and hygiene, 2026-10-14
+
+What was built, on `8d2286a`:
+
+* G15, `output/check.go`. `Check` type-checks the package as built, the hand-written `GoFiles` with the generated files that are not
+  tests, and then, when there are test files, the package as tested: those with the hand-written `TestGoFiles` and every generated
+  file, so a name a hand-written test file and `schema_gen_test.go` both declare is refused, as `go vet` refuses it, and a built file
+  that needs a name only a test file declares is refused too. An external test package (`XTestGoFiles`) is another package and stays
+  out. `report` lists the errors in generated files first, then the rest, each part in position order (`compareBool`).
+* G16. `handWritten` refuses a missing output directory, "output directory \<dir\>: does not exist"; `main.go` loses its
+  `os.MkdirAll`, which a missing directory never reached, and `run`'s documentation says the directory must exist.
+* G17. The six unused constants of `emit/constants.go` are deleted, `schemaTypeNull` and `jsonStructTag` kept; `Facts.Format`,
+  `Facts.Values` and `Facts.AbsolutePath` are deleted with their writes (`factsOf`, `validationShapes`), and the `Facts` documentation
+  says what the model reads from it; `util.go`'s comment no longer names Jennifer; `buildMethod`'s `resp == nil`, which `buildMethod`'s
+  own refusal of a request without a response and `linkRoles`' skipping of a null definition make impossible, is removed. The tests
+  that read the deleted fields check the field's type instead (`env`, `map[string]string`), or drop the read (`paths_test.go`, whose
+  `CheckAbsolutePath` assertions remain).
+* G18, `model/methods.go`. `buildMethods` refuses a definition linked by `x-method` and `x-side` to a method no meta file lists:
+  "definition OrphanThingNotification: linked by x-method and x-side to agent method \"orphan/thing\", which no meta file lists".
+* Tests. `TestCheckIncludesHandWrittenTestFiles` and `TestReportListsGeneratedFilesFirst` (`output`);
+  `TestCheckSelectsLikeTheGoCommand` now has a valid in-package `hand_test.go`, which is checked, and an external test package with
+  an undefined name, which is not; `TestCheckRefuses`' missing directory wants "does not exist"; `report`'s other caller passes no
+  generated files; `TestRunRefusesMissingOutputDirectory` (`main_test.go`) requires the refusal and that nothing is created. The fixtures
+  that used an unlisted linked definition: `TestProtocolMethodConstants` leaves the definition out when it lists no protocol method,
+  and the "prompt turn without its cancel" case of `TestProtocolTableRefuses` unlinks the cancel definition it removes from the meta.
+  Engine case `refuse-method-unlisted`.
+* Regenerated: no generated file changes.
+
+Planted breaks, each in a fresh scratch copy (6 of 6 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| hand-written test files left out | `TestCheckIncludesHandWrittenTestFiles`: "Check = \<nil\>, want it to refuse recordingAgent redeclared" |
+| the built package's pass ignored | the same test: "want it to refuse a built file that needs a test file's name" |
+| position order only | `TestReportListsGeneratedFilesFirst`: the hand-written file's error listed first |
+| a missing directory accepted | `TestRunRefusesMissingOutputDirectory`: "generated code does not type-check with …/missing" |
+| `HasResult` inverted, so the remaining expression is pinned | `TestGeneratedFilesUpToDate`: "a prompt turn must be a request with a result" |
+| an unlisted definition accepted | `refuse-method-unlisted`: "run accepted the schema" |
+
+The deletions of G17 are checked by the compiler, which builds no reader of a deleted name, and by `grep`.
+
+Gates, through the Python runner, on the tree: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go` file;
+`GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in
+`cmd/generate`. The API listing against `v1.14.0` is unchanged from step 2's.
+
+The documentation of the missing directory and of the second type-check is step 7's.

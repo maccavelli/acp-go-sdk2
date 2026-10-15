@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"go/ast"
 	"go/importer"
 	"go/parser"
 	"go/token"
 	"go/types"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -275,6 +277,21 @@ func TestRunRefusesOutputThatDoesNotTypeCheck(t *testing.T) {
 	}
 	if len(entries) != 1 || entries[0].Name() != "keep.txt" {
 		t.Errorf("output directory holds %v, want only keep.txt", entries)
+	}
+}
+
+// TestRunRefusesMissingOutputDirectory requires a missing -out to be refused
+// with an error that says so, and not created
+// (0019-PLAN-generator-hardening.md, G16).
+func TestRunRefusesMissingOutputDirectory(t *testing.T) {
+	t.Parallel()
+	out := filepath.Join(t.TempDir(), "missing")
+	err := run([]string{"-schema", writeSchema(t, recasedUnion), "-out", out})
+	if err == nil || !strings.Contains(err.Error(), "missing: does not exist") {
+		t.Fatalf("run error = %v, want one saying the output directory does not exist", err)
+	}
+	if _, err := os.Stat(out); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("output directory: Stat = %v, want it not to exist", err)
 	}
 }
 

@@ -22,10 +22,10 @@ func main() {
 
 // run generates the bindings. It loads the schema, builds the model, renders
 // every file, and type-checks the files with the hand-written package of the
-// output directory before it creates or writes anything, so a schema the model
-// refuses, a file that fails to render, or output that does not type-check
-// leaves the output directory as it was. output.Write then stages every
-// changed file before it replaces any.
+// output directory, which must exist, before it writes anything, so a schema
+// the model refuses, a file that fails to render, or output that does not
+// type-check leaves the output directory as it was. output.Write then stages
+// every changed file before it replaces any.
 func run(args []string) error {
 	fs := flag.NewFlagSet("generate", flag.ContinueOnError)
 	schemaDir := fs.String("schema", "", "path to schema directory (defaults to <repo>/schema)")
@@ -60,9 +60,6 @@ func run(args []string) error {
 		return err
 	}
 	if err := output.Check(*outDir, files); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(*outDir, 0o750); err != nil {
 		return err
 	}
 	return output.Write(*outDir, files)

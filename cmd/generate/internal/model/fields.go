@@ -100,21 +100,16 @@ type Default struct {
 	Nilable bool
 }
 
-// Facts are the schema's constraints on a property. The emitters do not use
-// them yet.
+// Facts are the schema's constraints on a property that the model reads
+// after the field is built: the bounds, which validation checks, and the
+// x-deserialize keywords, which the decoders follow.
 type Facts struct {
-	Format    string
 	Minimum   *float64
 	Maximum   *float64
 	MinLength *int
-	// Values is the type of an object's additional property values.
-	Values *TypeRef
 	// DefaultOnError and SkipInvalidItems are the x-deserialize keywords.
 	DefaultOnError   bool
 	SkipInvalidItems bool
-	// AbsolutePath is set when a protocol-table rule requires the property
-	// to be an absolute path (0015-MADR-validate-absolute-protocol-paths.md).
-	AbsolutePath bool
 }
 
 // Field is one struct field.
@@ -503,19 +498,13 @@ func defaultKindOf(val any) DefaultKind {
 
 // factsOf records the constraints of prop.
 func factsOf(prop *load.Definition) Facts {
-	f := Facts{
-		Format:           prop.Format,
+	return Facts{
 		Minimum:          prop.Minimum,
 		Maximum:          prop.Maximum,
 		MinLength:        prop.MinLength,
 		DefaultOnError:   prop.XDeserializeDefaultOnError,
 		SkipInvalidItems: prop.XDeserializeSkipInvalidItems,
 	}
-	if prop.AdditionalProperties != nil {
-		v := mapValues(prop.AdditionalProperties)
-		f.Values = &v
-	}
-	return f
 }
 
 // objectFields builds the fields of a definition's own struct. A property

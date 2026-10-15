@@ -168,7 +168,6 @@ func (m *Model) ownChecks(structs []shape) (map[string][]Check, error) {
 				if !ok {
 					return nil, fmt.Errorf("%s: %s: an absolute path must be a string, a pointer to one, or a slice of them, not %s", s.name, f.Key, f.Type)
 				}
-				f.Facts.AbsolutePath = true
 				c = append(c, Check{Kind: CheckAbsolutePath, Key: f.Key, Shape: shape})
 			}
 			for i := range c {

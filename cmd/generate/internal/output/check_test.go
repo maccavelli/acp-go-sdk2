@@ -46,7 +46,7 @@ func TestCheckRefuses(t *testing.T) {
 		{"an empty directory", func(t *testing.T) string { return t.TempDir() }, uses,
 			[]string{"does not type-check", "types_gen.go:5:", "undefined: RequestError"}},
 		{"a missing directory", func(t *testing.T) string { return filepath.Join(t.TempDir(), "missing") }, uses,
-			[]string{"undefined: RequestError"}},
+			[]string{"output directory", "missing: does not exist"}},
 		{"a hand-written file that redeclares a generated type", func(t *testing.T) string {
 			return dirWith(t, map[string]string{"hand.go": stub + "\ntype U int\n"})
 		}, uses, []string{"redeclared"}},
@@ -80,13 +80,16 @@ func TestCheckRefuses(t *testing.T) {
 }
 
 // TestCheckSelectsLikeTheGoCommand requires the files the go command would not
-// build to stay out of the check, each of which would fail it.
+// build or test with the package to stay out of the check, each of which
+// would fail it: an external test package is another package. An in-package
+// test file is checked (0019-PLAN-generator-hardening.md, G15).
 func TestCheckSelectsLikeTheGoCommand(t *testing.T) {
 	t.Parallel()
 	dir := dirWith(t, map[string]string{
 		"hand.go":         stub,
 		"ignored.go":      "//go:build ignore\n\npackage main\n\nvar _ = undefinedInIgnored\n",
-		"hand_test.go":    "package acp\n\nvar _ = undefinedInTest\n",
+		"hand_test.go":    "package acp\n\nvar _ = F\n",
+		"hand_x_test.go":  "package acp_test\n\nvar _ = undefinedInExternalTest\n",
 		".x.tmp":          "package acp\n\nvar _ = undefinedInDotFile\n",
 		".types_gen.go.1": "package acp\n\nvar _ = undefinedInDotFile\n",
 		"other_plan9.go":  "package acp\n\nvar _ = undefinedOnPlan9\n",
@@ -136,6 +139,30 @@ func TestCheckConcurrently(t *testing.T) {
 		if err := <-errs; err != nil {
 			t.Error(err)
 		}
+	}
+}
+
+// TestCheckIncludesHandWrittenTestFiles requires a name that a hand-written
+// test file and a generated one both declare to be refused, as go vet would,
+// and a generated file that is not a test to be checked without the test
+// files, as the package is built (0019-PLAN-generator-hardening.md, G15).
+func TestCheckIncludesHandWrittenTestFiles(t *testing.T) {
+	t.Parallel()
+	gen := append(slices.Clone(uses), emit.File{Name: "schema_gen_test.go", Src: []byte("package acp\n\ntype recordingAgent struct{}\n")})
+	dir := dirWith(t, map[string]string{"hand.go": stub, "agent_test.go": "package acp\n\ntype recordingAgent struct{}\n"})
+	err := Check(dir, gen)
+	if err == nil || !strings.Contains(err.Error(), "recordingAgent redeclared") {
+		t.Errorf("Check = %v, want it to refuse recordingAgent redeclared", err)
+	}
+	if err != nil && strings.Index(err.Error(), "schema_gen_test.go") > strings.Index(err.Error(), "agent_test.go") {
+		t.Errorf("the generated file's error is not reported first:\n%v", err)
+	}
+	onlyInTests := []emit.File{
+		{Name: "types_gen.go", Src: []byte("package acp\n\nvar _ = helperInTests\n")},
+		{Name: "schema_gen_test.go", Src: []byte("package acp\n\nvar helperInTests int\n")},
+	}
+	if err := Check(dirWith(t, map[string]string{"hand.go": stub}), onlyInTests); err == nil || !strings.Contains(err.Error(), "undefined: helperInTests") {
+		t.Errorf("Check = %v, want it to refuse a built file that needs a test file's name", err)
 	}
 }
 

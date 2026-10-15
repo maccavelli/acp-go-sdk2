@@ -1,6 +1,7 @@
 package model
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"slices"
@@ -128,6 +129,7 @@ func buildMethods(m *Model, prov *load.Provenance, r *rules) error {
 	if err != nil {
 		return err
 	}
+	listed := map[string]bool{}
 	for _, side := range []struct {
 		name    string
 		methods map[string]string
@@ -146,7 +148,19 @@ func buildMethods(m *Model, prov *load.Provenance, r *rules) error {
 			mi.Const = side.consts[key]
 			applyMethodRule(mi, r.methods[ruleKey(mi.Side, mi.Wire)])
 			*side.out = append(*side.out, mi)
+			listed[side.name+"|"+side.methods[key]] = true
 		}
+	}
+	// A definition linked to a method no meta file lists would be a plain
+	// type, its method never wired (0019-PLAN-generator-hardening.md, G18).
+	for _, k := range slices.Sorted(maps.Keys(linked)) {
+		if listed[k] {
+			continue
+		}
+		r := linked[k]
+		side, wire, _ := strings.Cut(k, "|")
+		return fmt.Errorf("definition %s: linked by x-method and x-side to %s method %q, which no meta file lists",
+			cmp.Or(r.req, r.notif, r.resp), side, wire)
 	}
 
 	seen := map[Binding]map[string]string{}
@@ -183,7 +197,7 @@ func buildMethod(schema *load.Schema, linked map[string]*roles, prov *load.Prove
 	} else {
 		mi.GoName = strings.TrimSuffix(r.req, "Request")
 		resp := schema.Defs[r.resp]
-		mi.HasResult = resp == nil || resp.Type != schemaTypeNull
+		mi.HasResult = resp.Type != schemaTypeNull
 	}
 	mi.Unstable = prov != nil && prov.UnstableWires[wire]
 	mi.Binding = bindingOf(side, mi.Unstable)
