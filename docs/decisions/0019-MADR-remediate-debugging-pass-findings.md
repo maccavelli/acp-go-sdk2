@@ -259,6 +259,31 @@ The owner answered each question on 2026-10-13. Three answers differ from the re
   [0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md](0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md) did for the patch
   fields; the one such property today is the unstable `McpError.data`.
 
+### Amended while planning phase 4, 2026-10-16
+
+Re-checking E5 to E16 and I12 on `0acc8e1` for the phase 4 PLAN found each still present, some wider, and one new tooling finding.
+The owner decided on 2026-10-16, each as recommended:
+
+* **E16 is split.** Its modernizing linters, and lint over generated code, move to phase 5 with the fixes for what they flag: enabled
+  on `0acc8e1`, they report 126 issues at the root, most in generated code, and 28 in `cmd/generate`, which are phase 5's I9, I13 and
+  I14. Phase 4 keeps E16's tool pin: govulncheck v1.9.0 in CI, which the pre-add check reads.
+* **I12 covers every exported identifier.** 654 exported identifiers have no doc comment, where I12 named 191: also 316
+  `UnmarshalJSON`, 71 `MarshalJSON` and 76 enum constants, whose values' schema descriptions the generator drops. Phase 4 documents
+  all of them, and a test requires a doc on every exported declaration.
+* **E5 settles gemini's flag.** The gemini CLI 0.64.0 marks `--experimental-acp` deprecated, "use --acp instead"; the example passes
+  `--acp`. This answers the question "More Information" left unchecked.
+* **E7 is decided:** the example clients advertise only what they implement; their terminal methods answer method-not-found, and a
+  write outside the session's working directory is refused.
+* **E17 joins phase 4, and `mise.lock` is removed.**
+
+  | Id | Severity | Finding | Evidence | Fix in |
+  | :--- | :--- | :--- | :--- | :--- |
+  | E17 | ci | `mise.lock` is tracked with no `mise.toml`, so it configures nothing, and its pins contradict the real ones: golangci-lint 2.12.2 and Go 1.26.3, where CI, the `Makefile` and the pre-add check use v2.14.0 and `go.mod` 1.27.2. | Read, on `0acc8e1`. | tool |
+
+* **Facts that moved since `c77f25a`.** Root coverage is still 88.8%; `SendRequestNoResult` is now partly run. E10 has a third fixed
+  sleep (`connection_cancel_test.go:688`), and `TestConformanceConstructors` still skips four subtests. The examples give 50 lint
+  issues, where E12 counted 55.
+
 ## Decision Drivers
 
 * An SDK user must not meet a deadlock, a lost cancel or a refused valid request in ordinary use (B1 to B5).
@@ -295,7 +320,10 @@ The phases, each a `0019-PLAN-<scope>.md` beside this record, written and approv
 3. **Generator hardening**: G2 and G3 (decision 5), G4 to G19, each latent shape refused or handled, with an engine case each.
    Amended 2026-10-14: and G20 and G21 ("Amended while planning phase 3, 2026-10-14").
 4. **Examples, documentation, tests and tooling**: E5 to E16, I12, with E11 through the template (decision 11).
+   Amended 2026-10-16: E16's linters move to phase 5, I12 covers every exported identifier, and E17 joins ("Amended
+   while planning phase 4, 2026-10-16").
 5. **Idioms and performance**: I1 to I7, I9 to I11, I13 to I16, with benchmarks committed so the gains are measured, not asserted.
+   Amended 2026-10-16: and E16's linters, with lint over generated code.
 
 Phases 3 to 5 ride the release after each lands (decision 12).
 
