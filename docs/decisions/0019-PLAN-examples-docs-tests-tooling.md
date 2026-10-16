@@ -225,3 +225,50 @@ starts from the same code): 75 of 75 hold. The check was seen to fail on a plant
 
 Gates, through the Python runner: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file
 changed in this step.
+
+The owner committed step 1's record as `2906c21`.
+
+### Step 2, E11, the records script, 2026-10-16
+
+Decision 11, template first. Before any change, the workspace template's `templates/scripts/check_records.py` and
+`references/gates.md` (the `workspace-scaffolding` skill, not under version control) were saved outside the tree; `cmp` of the
+template's script against `scripts/check_records.py` exited 0, so the copy was byte-identical when the step began.
+
+The template's script, changed:
+
+* `check_structure` reports a PLAN without a MADR, a GATES without a PLAN, two MADRs on one number and a record outside its
+  directory as errors, each setting exit 1; several PLANs and REPORTs on one number stay allowed.
+* `check_names`, new: a Markdown file in a `docs/decisions` or `docs/reports` directory that `RECORD_RE` does not match, or any
+  Markdown file named like a record in another case or width (`^\d+-(madr|plan|report|gates)-`, case-insensitive), is a "misnamed
+  record".
+* `check_links` checks a link's fragment, to another Markdown file or to the same one, against the target's anchors: its ATX headings
+  as GitHub computes them (inline markup removed, lowercased, characters other than letters, digits, `_`, space and `-` removed,
+  spaces to `-`, a repeated heading suffixed `-1`, `-2`; fenced code ignored) and its HTML `id` and `name` anchors.
+* `next_number` returns one more than the highest number in use.
+* The summary line is "N error(s)"; the docstring states every error.
+
+Its `references/gates.md` gains a plant for each. Then `cp` to `scripts/check_records.py`: `cmp` exit 0.
+
+Probes, a Python script outside the tree, each case in a fresh copy of `git archive HEAD`, the script under test copied in:
+
+| Case | Planted | New script | Old script |
+| :--- | :--- | :--- | :--- |
+| baseline | nothing | exit 0, `--next` `0023` | the same |
+| PLAN without a MADR | `docs/decisions/0023-PLAN-orphan.md` | exit 1, "number 0023 has a PLAN but no MADR" | exit 0, a warning |
+| GATES without a PLAN | `docs/reports/0023-GATES-orphan.md` | exit 1, "has a GATES but no PLAN" | exit 0, a warning |
+| a reused number | `docs/decisions/0022-MADR-dup.md` | exit 1, "is claimed by 2 MADRs" | exit 0, a warning |
+| misplaced | a 0023 MADR and PLAN in `docs/reports` | exit 1, "record outside its directory" | exit 0, a warning |
+| not a record | `docs/decisions/notes.md` | exit 1, "misnamed record" | exit 0, silent |
+| misnamed | `docs/decisions/23-MADR-x.md`; `docs/decisions/0023-madr-x.md`; `docs/0023-madr-x.md` | exit 1, "misnamed record", each | exit 0, silent |
+| missing anchor | a link to `0019-MADR-…#no-such-heading` in a record; `[x](#no-such-heading)` in `README.md` | exit 1, "broken anchor", each | exit 0, silent |
+| a repeated heading | `## Same` twice, links to `#same` and `#same-1`; then to `#same-2` | exit 0; exit 1 | exit 0; exit 0 |
+| a heading with markup | ``## The `Agent` *type*``, a link to `#the-agent-type` | exit 0 | exit 0 |
+| missing file | `[x](missing.md)` in `README.md` | exit 1, "broken relative link" | the same |
+| a gap | the 0016 report deleted | `--next` `0023` | `--next` `0016` |
+
+The old script is the planted break for each new check: structural errors back to warnings, the fragment dropped, `--next` back to the
+lowest gap. It missed 12 of the 16 cases; the new one matched all 16.
+
+On the tree: `make check-records` exit 0 (it runs `python3`, the host's 3.9, which the script supports), `--next` `0023`. Gates,
+through the Python runner: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file changed
+in this step.
