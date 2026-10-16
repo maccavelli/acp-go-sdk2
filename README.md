@@ -31,11 +31,18 @@ contains simple implementations of both Agents and Clients in Go.
 You can run them from your terminal or connect to external ACP agents.
 
 - `go run ./example/agent` starts a minimal ACP agent over stdio.
-- `go run ./example/claude-code` demonstrates bridging to Claude Code.
-- `go run ./example/client` connects to a running agent and streams a sample turn.
-- `go run ./example/gemini` bridges to the Gemini CLI in ACP mode (flags: -model, -sandbox, -yolo, -debug, -gemini /path/to/gemini).
+- `go run ./example/claude-code` bridges to Claude Code through its ACP adapter,
+  `@agentclientprotocol/claude-agent-acp`, which it runs with `npx`.
+- `go run ./example/client` starts the example agent with `go run` (from a
+  source checkout) or the agent command given as its arguments, sends one
+  prompt, and prints the streamed turn and its stop reason.
+- `go run ./example/gemini` bridges to the Gemini CLI in ACP mode, `gemini --acp`
+  (flags: -model, -sandbox, -yolo, -debug, -gemini /path/to/gemini).
 
-You can watch the interaction by running `go run ./example/client` locally.
+The example clients advertise the file-system capability and not the terminal
+one, and write only inside the session's working directory. You can watch the
+interaction by running `go run ./example/client` locally, answering the
+permission request with `1` or `2`.
 
 ### Explore the API
 

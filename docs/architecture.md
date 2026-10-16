@@ -263,9 +263,11 @@ paths check the answer against the record it is about to make.
 `receive` reads one line at a time through a `bufio.Reader`, up to
 `WithMaxMessageSize` (10 MiB by default), and classifies it: an overlong
 line is discarded and answered `-32600`; a line `json.Valid` refuses,
-`-32700`; JSON that is not an object, `-32600`; an object with `result` or
-`error` is a response, matched to its pending call and never answered;
-anything else is a request (an `id` member, `null` included) or a
+`-32700`; JSON that is not an object, `-32600`; an object without `method`
+that has `result` or `error`, or whose `id` names a call still pending, is a
+response, matched to its pending call and never answered (one with neither
+`result` nor `error` is logged as a malformed response); anything else is a
+request (an `id` member, `null` included) or a
 notification, and one that is not a valid Request object is answered
 `-32600`, with its id when valid and `null` otherwise; `params` of `null` are
 read as absent. A malformed line is logged by its fault, size and id, never its

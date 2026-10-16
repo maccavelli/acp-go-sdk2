@@ -1,3 +1,7 @@
+// Command agent is a minimal ACP agent for trying the SDK: over stdio, it
+// answers each prompt with a scripted turn of streamed text, tool calls and a
+// permission request. With arguments, it starts that command as its client
+// and talks to it over the command's stdio instead.
 package main
 
 import (
@@ -19,7 +23,6 @@ import (
 )
 
 type agentSession struct {
-	cancel context.CancelFunc
 	// roots is the session's root set, cwd first; a real agent confines file
 	// access to it, for example with os.OpenRoot for each root.
 	roots []string
@@ -180,50 +183,36 @@ func (a *exampleAgent) LoadSession(ctx context.Context, _ acp.LoadSessionRequest
 	return acp.LoadSessionResponse{}, nil
 }
 
+// Cancel implements acp.Agent. The SDK cancels the running turn's context for
+// a session/cancel before this runs, so the agent has nothing to track.
 func (a *exampleAgent) Cancel(ctx context.Context, params acp.CancelNotification) error {
-	a.mu.Lock()
-	s, ok := a.sessions[string(params.SessionId)]
-	a.mu.Unlock()
-	if ok && s != nil && s.cancel != nil {
-		s.cancel()
-	}
 	return nil
 }
 
-func (a *exampleAgent) Prompt(_ context.Context, params acp.PromptRequest) (acp.PromptResponse, error) {
+// Prompt runs the turn under the context the SDK gives it, which ends on
+// session/cancel, on a later prompt for the session, and on the connection's
+// end; the SDK then answers the turn cancelled.
+func (a *exampleAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.PromptResponse, error) {
 	sid := string(params.SessionId)
 	a.mu.Lock()
-	s, ok := a.sessions[sid]
+	_, ok := a.sessions[sid]
 	a.mu.Unlock()
 	if !ok {
 		return acp.PromptResponse{}, fmt.Errorf("session %s not found", sid)
 	}
 
-	// cancel any previous turn
-	a.mu.Lock()
-	if s.cancel != nil {
-		prev := s.cancel
-		a.mu.Unlock()
-		prev()
-	} else {
-		a.mu.Unlock()
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	a.mu.Lock()
-	s.cancel = cancel
-	a.mu.Unlock()
-
 	// simulate a full turn with streaming updates and a permission request
-	if err := a.simulateTurn(ctx, sid); err != nil {
-		if ctx.Err() != nil {
-			return acp.PromptResponse{StopReason: acp.StopReasonCancelled}, nil
-		}
+	stop, err := a.simulateTurn(ctx, sid)
+	select {
+	case <-ctx.Done():
+		// The turn was cancelled, which is why simulateTurn stopped.
+		return acp.PromptResponse{StopReason: acp.StopReasonCancelled}, nil
+	default:
+	}
+	if err != nil {
 		return acp.PromptResponse{}, err
 	}
-	a.mu.Lock()
-	s.cancel = nil
-	a.mu.Unlock()
-	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
+	return acp.PromptResponse{StopReason: stop}, nil
 }
 
 // sessionPath is name under the session's cwd, its first root, so that every
@@ -251,7 +240,9 @@ func pathInput(path, content string) json.RawMessage {
 	return b
 }
 
-func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
+// simulateTurn streams the scripted turn and returns how it ended: end_turn,
+// or cancelled when the client answers the permission request cancelled.
+func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) (acp.StopReason, error) {
 	readme, config := a.sessionPath(sid, "README.md"), a.sessionPath(sid, "config.json")
 	const configChange = `{"database": {"host": "new-host"}}`
 	// disclaimer: stream a demo notice so clients see it's the example agent
@@ -259,20 +250,20 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 		SessionId: acp.SessionId(sid),
 		Update:    acp.UpdateAgentMessageText("ACP Go Example Agent — demo only (no AI model)."),
 	}); err != nil {
-		return err
+		return "", err
 	}
 	if err := pause(ctx, 250*time.Millisecond); err != nil {
-		return err
+		return "", err
 	}
 	// initial message chunk
 	if err := a.conn.SessionUpdate(ctx, acp.SessionNotification{
 		SessionId: acp.SessionId(sid),
 		Update:    acp.UpdateAgentMessageText("I'll help you with that. Let me start by reading some files to understand the current situation."),
 	}); err != nil {
-		return err
+		return "", err
 	}
 	if err := pause(ctx, time.Second); err != nil {
-		return err
+		return "", err
 	}
 
 	// tool call without permission
@@ -287,10 +278,10 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 			acp.WithStartRawInput(pathInput(readme, "")),
 		),
 	}); err != nil {
-		return err
+		return "", err
 	}
 	if err := pause(ctx, time.Second); err != nil {
-		return err
+		return "", err
 	}
 
 	// update tool call completed
@@ -303,10 +294,10 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 			acp.WithUpdateRawOutput(json.RawMessage(`{"content":"# My Project\n\nThis is a sample project..."}`)),
 		),
 	}); err != nil {
-		return err
+		return "", err
 	}
 	if err := pause(ctx, time.Second); err != nil {
-		return err
+		return "", err
 	}
 
 	// more text
@@ -314,10 +305,10 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 		SessionId: acp.SessionId(sid),
 		Update:    acp.UpdateAgentMessageText(" Now I understand the project structure. I need to make some changes to improve it."),
 	}); err != nil {
-		return err
+		return "", err
 	}
 	if err := pause(ctx, time.Second); err != nil {
-		return err
+		return "", err
 	}
 
 	// tool call requiring permission
@@ -332,7 +323,7 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 			acp.WithStartRawInput(pathInput(config, configChange)),
 		),
 	}); err != nil {
-		return err
+		return "", err
 	}
 
 	// request permission for sensitive operation
@@ -341,8 +332,8 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 		ToolCall: acp.ToolCallUpdate{
 			ToolCallId: acp.ToolCallId("call_2"),
 			Title:      new("Modifying critical configuration file"),
-			Kind:       acp.Ptr(acp.ToolKindEdit),
-			Status:     acp.Ptr(acp.ToolCallStatusPending),
+			Kind:       new(acp.ToolKindEdit),
+			Status:     new(acp.ToolCallStatusPending),
 			Locations:  []acp.ToolCallLocation{{Path: config}},
 			RawInput:   pathInput(config, configChange),
 		},
@@ -352,15 +343,15 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 		},
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// handle permission outcome
 	if permResp.Outcome.Cancelled != nil {
-		return nil
+		return acp.StopReasonCancelled, nil
 	}
 	if permResp.Outcome.Selected == nil {
-		return fmt.Errorf("unexpected permission outcome")
+		return "", fmt.Errorf("unexpected permission outcome")
 	}
 	switch string(permResp.Outcome.Selected.OptionId) {
 	case "allow":
@@ -373,31 +364,31 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) error {
 				acp.WithUpdateTitle("Modifying critical configuration file"),
 			),
 		}); err != nil {
-			return err
+			return "", err
 		}
 		if err := pause(ctx, time.Second); err != nil {
-			return err
+			return "", err
 		}
 		if err := a.conn.SessionUpdate(ctx, acp.SessionNotification{
 			SessionId: acp.SessionId(sid),
 			Update:    acp.UpdateAgentMessageText(" Perfect! I've successfully updated the configuration. The changes have been applied."),
 		}); err != nil {
-			return err
+			return "", err
 		}
 	case "reject":
 		if err := pause(ctx, time.Second); err != nil {
-			return err
+			return "", err
 		}
 		if err := a.conn.SessionUpdate(ctx, acp.SessionNotification{
 			SessionId: acp.SessionId(sid),
 			Update:    acp.UpdateAgentMessageText(" I understand you prefer not to make that change. I'll skip the configuration update."),
 		}); err != nil {
-			return err
+			return "", err
 		}
 	default:
-		return fmt.Errorf("unexpected permission option: %s", permResp.Outcome.Selected.OptionId)
+		return "", fmt.Errorf("unexpected permission option: %s", permResp.Outcome.Selected.OptionId)
 	}
-	return nil
+	return acp.StopReasonEndTurn, nil
 }
 
 func randomID() string {
@@ -433,10 +424,18 @@ func main() {
 		cmd *exec.Cmd
 	)
 	if len(os.Args) > 1 {
-		cmd = exec.CommandContext(ctx, os.Args[1], os.Args[2:]...)
+		cmd = exec.CommandContext(ctx, os.Args[1], os.Args[2:]...) //nolint:gosec // G204: the client command the user names is what this mode runs.
 		cmd.Stderr = os.Stderr
-		stdin, _ := cmd.StdinPipe()
-		stdout, _ := cmd.StdoutPipe()
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "stdin pipe error: %v\n", err)
+			os.Exit(1)
+		}
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "stdout pipe error: %v\n", err)
+			os.Exit(1)
+		}
 		if err := cmd.Start(); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to start client: %v\n", err)
 			os.Exit(1)
@@ -455,7 +454,11 @@ func main() {
 	case <-ctx.Done():
 	}
 
-	if cmd != nil && cmd.Process != nil {
-		_ = cmd.Process.Kill()
+	// A client this agent started has disconnected, or is killed by the
+	// interrupt's cancel of ctx; wait for it either way.
+	if cmd != nil {
+		if err := cmd.Wait(); err != nil && ctx.Err() == nil {
+			fmt.Fprintf(os.Stderr, "client exited: %v\n", err)
+		}
 	}
 }

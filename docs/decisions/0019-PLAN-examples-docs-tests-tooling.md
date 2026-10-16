@@ -103,7 +103,9 @@ The template's `references/gates.md` gains a plant for each. Probes in scratch c
 * E7: `example/client` and `example/gemini` stop advertising `terminal`; the five terminal methods of all three clients answer
   `acp.NewMethodNotFound` with their method's name. `WriteTextFile` records each session's working directory when the session is made
   and refuses, with `acp.NewInvalidParams`, a path whose `filepath.Rel` from it is absolute or starts with `..`.
-* E12: `.golangci.yml` stops excluding `^example/`, and the 50 issues are fixed in the examples, none suppressed. A root test,
+* E12: `.golangci.yml` stops excluding `^example/`, and the 50 issues are fixed in the examples, none suppressed. Amended
+  2026-10-16: but the four gosec G204 launches of a command the user names, each marked `//nolint:gosec` with its reason
+  ("Deviation, 2026-10-16, during step 4"). A root test,
   `TestExamplePair`, builds `./example/agent` and `./example/client` into a temporary directory, runs the client with the agent's
   binary as its argument and scripted input, and checks that it exits 0 and prints the turn's stop reason. `go test ./...` already runs
   on all three CI runners, so the pair runs on Windows too (E4's regression).
@@ -303,3 +305,62 @@ file; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0
 markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in
 `cmd/generate`; actionlint v1.7.12 on the workflow exit 0. The API listing: 2429 lines at `v1.15.0` and in the tree; 0 removed, 0
 added.
+
+The owner committed step 3's record as `394572f`.
+
+### Deviation, 2026-10-16, during step 4
+
+Found: four of the 50 example lint issues are gosec G204, "Subprocess launched with a potential tainted input or cmd arguments" (or
+"with variable"), at `example/agent/main.go:436` (the client command the agent's arguments name), `example/client/main.go:188` (the
+agent command the client's arguments name), `example/client/main.go:206` (the default `go run <agent dir>`) and
+`example/gemini/main.go:218` (the `-gemini` binary). Launching the command the user names is what those programs do, and
+`TestExamplePair` runs the client with the agent's binary as its argument; no change short of removing the feature clears them.
+Decision (owner, 2026-10-16): each of the four is marked `//nolint:gosec // G204: <why>`, as `cmd/generate` already marks its own
+launches, with `nolintlint` requiring each to name its linter and still be needed; the other 46 are fixed, none suppressed. "Design",
+E12, is amended to say so. No decision or fact of the MADR changes.
+
+### Step 4, examples: E5, E6, E7, E12, E14, 2026-10-16
+
+What changed, on `394572f`:
+
+* E5: `example/claude-code` runs `npx -y @agentclientprotocol/claude-agent-acp@latest`; `example/gemini` passes `--acp`.
+  `Example_gemini` keeps its flag until step 5, which rewrites that file.
+* E6: the example agent's `Prompt` runs under the SDK's context; its cancel map, the code that cancelled the previous turn, and the
+  context it made are gone, and `Cancel` does nothing, its doc saying why. `simulateTurn` returns the turn's stop reason: `cancelled`
+  when the permission request is answered cancelled, where the turn ended `end_turn`.
+* E7: `example/client` and `example/gemini` no longer advertise `terminal`; the five terminal methods of all three clients answer
+  `acp.NewMethodNotFound` with their method. Each client keeps the working directory of the session it opens, and `WriteTextFile`
+  refuses with `acp.NewInvalidParams` a path whose `filepath.Rel` from it is not `filepath.IsLocal`, then writes through an `os.Root`
+  of it, so a symbolic link cannot lead out either.
+* E12: `.golangci.yml` no longer excludes `^example/`. The 50 issues: 46 fixed (errors checked, the child stopped by closing its
+  input and waiting, `errors.AsType` for `*acp.RequestError`, `strconv.Atoi` for the option number, `0o750` and `0o600`, a line
+  window without an integer conversion, `new(x)` for `acp.Ptr(x)`, a package doc each, one receiver renamed, the agent's cancel
+  check without the `nilerr` pattern); the four G204 launches marked, as the deviation above records.
+* E12: `TestExamplePair` (`example_pair_test.go`, new) builds `./example/agent` and `./example/client` and runs the client with the
+  agent's binary: input `1` gives "stop reason end_turn", the end of input "stop reason cancelled"; the client exits 0 each time.
+  `TestWriteTextFileStaysInCwd` and `TestTerminalMethodsNotFound` in each of the three clients (`example/*/main_test.go`, new).
+* E14: `docs/architecture.md` states the response classification as `connection.go:1113` has it; the README's examples list says
+  what the client starts, that it prints the stop reason (which it now does, and exits 1 on a failed call), the Claude Code adapter
+  and `gemini --acp`, and that the example clients advertise no terminal and write only inside the working directory.
+
+Planted breaks, each in a fresh scratch copy (11 of 11 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| a cancelled permission ends the turn `end_turn` | `TestExamplePair/input_ended`: "the client's output lacks \"stop reason cancelled\"" |
+| the client prints no stop reason | `TestExamplePair`, both cases |
+| a write outside the working directory not refused, in each client | `TestWriteTextFileStaysInCwd`: both outside paths not answered invalid params (the `os.Root` still refused them) |
+| writes not through an `os.Root`, in each client | `TestWriteTextFileStaysInCwd`: "a write through a link out of the working directory succeeded" |
+| `CreateTerminal` answering success, in each client | `TestTerminalMethodsNotFound`: "CreateTerminal: <nil>, want method not found" |
+
+On a host that cannot make a symbolic link, the test logs that and checks the rest; macOS made one. Whether the Windows host did is
+not established: its run reports the packages `ok`, not the log line.
+
+Found, not changed: the example clients print a tool call update's status with `%v` of a pointer (`updated: 0x369dbacca890`), as they
+did before this step. It is outside E5 to E17 and is left for the owner.
+
+Gates, through the Python runner, on the tree: regenerating changes no generated file; `make pre-add-check` exit 0, which now lints
+the examples for the host and for Windows; the four new test files clean through `scripts/go-precheck.sh`; `GOEXPERIMENT=nojsonv2 go
+test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier
+scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root (the example packages and `TestExamplePair`
+among them) and in `cmd/generate`. The API listing: 2429 lines at `v1.15.0` and in the tree; 0 removed, 0 added.

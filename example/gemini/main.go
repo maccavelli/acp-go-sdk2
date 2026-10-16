@@ -1,9 +1,13 @@
+// Command gemini is a REPL over the Gemini CLI in ACP mode: it starts
+// `gemini --acp`, opens a session in the current directory, and sends each
+// line typed as a prompt, printing the streamed turn.
 package main
 
 import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -11,19 +15,21 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/maccavelli/acp-go-sdk2"
 )
-
-// GeminiREPL demonstrates connecting to the Gemini CLI running in ACP mode
-// and providing a simple REPL to send prompts and print streamed updates.
 
 type replClient struct {
 	autoApprove bool
 	// answers carries the lines typed while a turn runs, for its permission
 	// prompt; the REPL loop owns stdin (0019-PLAN-behaviour-fixes.md, E2).
 	answers chan string
+	// cwd is the working directory of the session this client opens; the
+	// client writes files only inside it.
+	cwd string
 }
 
 // drainAnswers drops lines typed during a turn that no prompt took.
@@ -81,11 +87,8 @@ func (c *replClient) RequestPermission(ctx context.Context, params acp.RequestPe
 		if line == "" {
 			continue
 		}
-		idx := -1
-		_, _ = fmt.Sscanf(line, "%d", &idx)
-		idx = idx - 1
-		if idx >= 0 && idx < len(params.Options) {
-			return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{Selected: &acp.RequestPermissionOutcomeSelected{OptionId: params.Options[idx].OptionId}}}, nil
+		if n, err := strconv.Atoi(line); err == nil && n >= 1 && n <= len(params.Options) {
+			return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{Selected: &acp.RequestPermissionOutcomeSelected{OptionId: params.Options[n-1].OptionId}}}, nil
 		}
 		fmt.Println("Invalid option. Please try again.")
 	}
@@ -116,15 +119,19 @@ func (c *replClient) SessionUpdate(ctx context.Context, params acp.SessionNotifi
 	return nil
 }
 
+// WriteTextFile writes only inside the session's working directory, through
+// an os.Root so that a symbolic link cannot lead out of it, and refuses any
+// other path.
 func (c *replClient) WriteTextFile(ctx context.Context, params acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
 	// The SDK has refused a path that is not absolute before this runs.
-	dir := filepath.Dir(params.Path)
-	if dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return acp.WriteTextFileResponse{}, fmt.Errorf("mkdir %s: %w", dir, err)
-		}
+	rel, err := filepath.Rel(c.cwd, params.Path)
+	if err != nil || !filepath.IsLocal(rel) {
+		return acp.WriteTextFileResponse{}, acp.NewInvalidParams(map[string]string{
+			"path":  params.Path,
+			"error": "outside the session's working directory",
+		})
 	}
-	if err := os.WriteFile(params.Path, []byte(params.Content), 0o644); err != nil {
+	if err := writeInside(c.cwd, rel, []byte(params.Content)); err != nil {
 		return acp.WriteTextFileResponse{}, fmt.Errorf("write %s: %w", params.Path, err)
 	}
 	fmt.Printf("[Client] Wrote %d bytes to %s\n", len(params.Content), params.Path)
@@ -140,39 +147,35 @@ func (c *replClient) ReadTextFile(ctx context.Context, params acp.ReadTextFileRe
 	content := string(b)
 	if params.Line != nil || params.Limit != nil {
 		lines := strings.Split(content, "\n")
-		start := 0
-		if params.Line != nil && *params.Line > 0 {
-			start = int(min(uint64(*params.Line-1), uint64(len(lines))))
+		if params.Line != nil && *params.Line > 1 {
+			lines = lines[min(uint64(*params.Line)-1, uint64(len(lines))):]
 		}
-		end := len(lines)
-		if params.Limit != nil && *params.Limit > 0 && uint64(*params.Limit) < uint64(end-start) {
-			end = start + int(*params.Limit)
+		if params.Limit != nil && *params.Limit > 0 && uint64(*params.Limit) < uint64(len(lines)) {
+			lines = lines[:*params.Limit]
 		}
-		content = strings.Join(lines[start:end], "\n")
+		content = strings.Join(lines, "\n")
 	}
 	fmt.Printf("[Client] ReadTextFile: %s (%d bytes)\n", params.Path, len(content))
 	return acp.ReadTextFileResponse{Content: content}, nil
 }
 
-// Optional/UNSTABLE terminal methods: implement as no-ops for example
+// The client does not advertise the terminal capability, so the terminal
+// methods answer method-not-found.
+
 func (c *replClient) CreateTerminal(ctx context.Context, params acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
-	fmt.Printf("[Client] CreateTerminal: %v\n", params)
-	return acp.CreateTerminalResponse{TerminalId: "term-1"}, nil
+	return acp.CreateTerminalResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalCreate)
 }
 
 func (c *replClient) TerminalOutput(ctx context.Context, params acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
-	fmt.Printf("[Client] TerminalOutput: %v\n", params)
-	return acp.TerminalOutputResponse{Output: "", Truncated: false}, nil
+	return acp.TerminalOutputResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalOutput)
 }
 
 func (c *replClient) ReleaseTerminal(ctx context.Context, params acp.ReleaseTerminalRequest) (acp.ReleaseTerminalResponse, error) {
-	fmt.Printf("[Client] ReleaseTerminal: %v\n", params)
-	return acp.ReleaseTerminalResponse{}, nil
+	return acp.ReleaseTerminalResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalRelease)
 }
 
 func (c *replClient) WaitForTerminalExit(ctx context.Context, params acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
-	fmt.Printf("[Client] WaitForTerminalExit: %v\n", params)
-	return acp.WaitForTerminalExitResponse{}, nil
+	return acp.WaitForTerminalExitResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalWaitForExit)
 }
 
 // CompleteElicitation implements acp.Client.
@@ -189,8 +192,7 @@ func (c *replClient) CreateElicitation(ctx context.Context, params acp.CreateEli
 
 // KillTerminal implements acp.Client.
 func (c *replClient) KillTerminal(ctx context.Context, params acp.KillTerminalRequest) (acp.KillTerminalResponse, error) {
-	fmt.Printf("[Client] KillTerminal: %v\n", params)
-	return acp.KillTerminalResponse{}, nil
+	return acp.KillTerminalResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalKill)
 }
 
 func main() {
@@ -201,7 +203,7 @@ func main() {
 	debug := flag.Bool("debug", false, "Pass --debug to Gemini")
 	flag.Parse()
 
-	args := []string{"--experimental-acp"}
+	args := []string{"--acp"}
 	if *model != "" {
 		args = append(args, "--model", *model)
 	}
@@ -215,7 +217,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, *binary, args...)
+	cmd := exec.CommandContext(ctx, *binary, args...) //nolint:gosec // G204: the Gemini CLI binary the user names.
 	cmd.Stderr = os.Stderr
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -233,7 +235,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := &replClient{autoApprove: *yolo, answers: make(chan string, 16)}
+	client := &replClient{autoApprove: *yolo, answers: make(chan string, 16), cwd: mustCwd()}
 	conn := acp.NewClientSideConnection(client, stdin, stdout)
 	conn.SetLogger(slog.Default())
 
@@ -241,41 +243,24 @@ func main() {
 	initResp, err := conn.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 		ClientCapabilities: acp.ClientCapabilities{
-			Fs:       acp.FileSystemCapabilities{ReadTextFile: true, WriteTextFile: true},
-			Terminal: true,
+			Fs: acp.FileSystemCapabilities{ReadTextFile: true, WriteTextFile: true},
 		},
 	})
 	if err != nil {
-		if re, ok := err.(*acp.RequestError); ok {
-			if b, mErr := json.MarshalIndent(re, "", "  "); mErr == nil {
-				fmt.Fprintf(os.Stderr, "[Client] Error: %s\n", string(b))
-			} else {
-				fmt.Fprintf(os.Stderr, "initialize error (%d): %s\n", re.Code, re.Message)
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "initialize error: %v\n", err)
-		}
-		_ = cmd.Process.Kill()
+		printRequestError("initialize", err)
+		stopAgent(cmd, stdin, cancel)
 		os.Exit(1)
 	}
 	fmt.Printf("✅ Connected to Gemini (protocol v%v)\n", initResp.ProtocolVersion)
 
 	// New session
 	newSess, err := conn.NewSession(ctx, acp.NewSessionRequest{
-		Cwd:        mustCwd(),
+		Cwd:        client.cwd,
 		McpServers: []acp.McpServer{},
 	})
 	if err != nil {
-		if re, ok := err.(*acp.RequestError); ok {
-			if b, mErr := json.MarshalIndent(re, "", "  "); mErr == nil {
-				fmt.Fprintf(os.Stderr, "[Client] Error: %s\n", string(b))
-			} else {
-				fmt.Fprintf(os.Stderr, "newSession error (%d): %s\n", re.Code, re.Message)
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "newSession error: %v\n", err)
-		}
-		_ = cmd.Process.Kill()
+		printRequestError("newSession", err)
+		stopAgent(cmd, stdin, cancel)
 		os.Exit(1)
 	}
 	fmt.Printf("📝 Created session: %s\n", newSess.SessionId)
@@ -294,7 +279,7 @@ func main() {
 		}
 		switch line {
 		case ":exit", ":quit":
-			cancel()
+			stopAgent(cmd, stdin, cancel)
 			return
 		case ":cancel":
 			fmt.Println("No turn is running.")
@@ -305,7 +290,7 @@ func main() {
 		}
 	}
 
-	_ = cmd.Process.Kill()
+	stopAgent(cmd, stdin, cancel)
 }
 
 // readLines reads r on its own goroutine and sends each line on the channel it
@@ -345,7 +330,7 @@ func runTurn(ctx context.Context, conn *acp.ClientSideConnection, client *replCl
 			case turnCtx.Err() != nil:
 				fmt.Println("\n[turn cancelled]")
 			case err != nil:
-				printPromptError(err)
+				printRequestError("prompt", err)
 			}
 			client.drainAnswers()
 			return keepGoing
@@ -370,17 +355,46 @@ func runTurn(ctx context.Context, conn *acp.ClientSideConnection, client *replCl
 	}
 }
 
-// printPromptError surfaces a prompt's error, with a JSON-RPC error's detail.
-func printPromptError(err error) {
-	if re, ok := err.(*acp.RequestError); ok {
-		if b, mErr := json.MarshalIndent(re, "", "  "); mErr == nil {
-			fmt.Fprintf(os.Stderr, "[Client] Error: %s\n", string(b))
-		} else {
-			fmt.Fprintf(os.Stderr, "prompt error (%d): %s\n", re.Code, re.Message)
-		}
+// printRequestError surfaces a failed call, with a JSON-RPC error's detail.
+func printRequestError(op string, err error) {
+	re, ok := errors.AsType[*acp.RequestError](err)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "%s error: %v\n", op, err)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "prompt error: %v\n", err)
+	if b, mErr := json.MarshalIndent(re, "", "  "); mErr == nil {
+		fmt.Fprintf(os.Stderr, "[Client] Error: %s\n", string(b))
+	} else {
+		fmt.Fprintf(os.Stderr, "%s error (%d): %s\n", op, re.Code, re.Message)
+	}
+}
+
+// stopAgent closes the agent's input, which ends an ACP agent, and waits for
+// it to exit; after five seconds it cancels the agent's context, which kills
+// it.
+func stopAgent(cmd *exec.Cmd, stdin io.Closer, cancel context.CancelFunc) {
+	if err := stdin.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "close agent input: %v\n", err)
+	}
+	t := time.AfterFunc(5*time.Second, cancel)
+	defer t.Stop()
+	if err := cmd.Wait(); err != nil {
+		fmt.Fprintf(os.Stderr, "agent exited: %v\n", err)
+	}
+}
+
+// writeInside writes data to rel, a local path, inside dir, making its parent
+// directories.
+func writeInside(dir, rel string, data []byte) error {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	err = root.MkdirAll(filepath.Dir(rel), 0o750)
+	if err == nil {
+		err = root.WriteFile(rel, data, 0o600)
+	}
+	return errors.Join(err, root.Close())
 }
 
 func mustCwd() string {

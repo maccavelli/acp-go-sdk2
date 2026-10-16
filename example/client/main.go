@@ -1,9 +1,15 @@
+// Command client is a minimal ACP client for trying the SDK: it starts an
+// agent, opens a session in the current directory, sends one prompt, prints
+// the streamed turn and its stop reason, and asks on stdin for each
+// permission. With arguments, it starts that command as its agent; without,
+// it runs the example agent from a source checkout with `go run`.
 package main
 
 import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,7 +17,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/maccavelli/acp-go-sdk2"
 )
@@ -19,6 +27,9 @@ import (
 type exampleClient struct {
 	// lines carries stdin, a line at a time; it is closed at the end of input.
 	lines <-chan string
+	// cwd is the working directory of the session this client opens; the
+	// client writes files only inside it.
+	cwd string
 }
 
 var _ acp.Client = (*exampleClient)(nil)
@@ -52,11 +63,8 @@ func (e *exampleClient) RequestPermission(ctx context.Context, params acp.Reques
 		if line == "" {
 			continue
 		}
-		idx := -1
-		_, _ = fmt.Sscanf(line, "%d", &idx)
-		idx = idx - 1
-		if idx >= 0 && idx < len(params.Options) {
-			return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{Selected: &acp.RequestPermissionOutcomeSelected{OptionId: params.Options[idx].OptionId}}}, nil
+		if n, err := strconv.Atoi(line); err == nil && n >= 1 && n <= len(params.Options) {
+			return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{Selected: &acp.RequestPermissionOutcomeSelected{OptionId: params.Options[n-1].OptionId}}}, nil
 		}
 		fmt.Println("Invalid option. Please try again.")
 	}
@@ -100,19 +108,37 @@ func displayUpdateKind(u acp.SessionUpdate) string {
 	}
 }
 
+// WriteTextFile writes only inside the session's working directory, through
+// an os.Root so that a symbolic link cannot lead out of it, and refuses any
+// other path.
 func (e *exampleClient) WriteTextFile(ctx context.Context, params acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
 	// The SDK has refused a path that is not absolute before this runs.
-	dir := filepath.Dir(params.Path)
-	if dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return acp.WriteTextFileResponse{}, fmt.Errorf("mkdir %s: %w", dir, err)
-		}
+	rel, err := filepath.Rel(e.cwd, params.Path)
+	if err != nil || !filepath.IsLocal(rel) {
+		return acp.WriteTextFileResponse{}, acp.NewInvalidParams(map[string]string{
+			"path":  params.Path,
+			"error": "outside the session's working directory",
+		})
 	}
-	if err := os.WriteFile(params.Path, []byte(params.Content), 0o644); err != nil {
+	if err := writeInside(e.cwd, rel, []byte(params.Content)); err != nil {
 		return acp.WriteTextFileResponse{}, fmt.Errorf("write %s: %w", params.Path, err)
 	}
 	fmt.Printf("[Client] Wrote %d bytes to %s\n", len(params.Content), params.Path)
 	return acp.WriteTextFileResponse{}, nil
+}
+
+// writeInside writes data to rel, a local path, inside dir, making its parent
+// directories.
+func writeInside(dir, rel string, data []byte) error {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	err = root.MkdirAll(filepath.Dir(rel), 0o750)
+	if err == nil {
+		err = root.WriteFile(rel, data, 0o600)
+	}
+	return errors.Join(err, root.Close())
 }
 
 func (e *exampleClient) ReadTextFile(ctx context.Context, params acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
@@ -125,39 +151,40 @@ func (e *exampleClient) ReadTextFile(ctx context.Context, params acp.ReadTextFil
 	// Apply optional line/limit (1-based line index)
 	if params.Line != nil || params.Limit != nil {
 		lines := strings.Split(content, "\n")
-		start := 0
-		if params.Line != nil && *params.Line > 0 {
-			start = int(min(uint64(*params.Line-1), uint64(len(lines))))
+		if params.Line != nil && *params.Line > 1 {
+			lines = lines[min(uint64(*params.Line)-1, uint64(len(lines))):]
 		}
-		end := len(lines)
-		if params.Limit != nil && *params.Limit > 0 && uint64(*params.Limit) < uint64(end-start) {
-			end = start + int(*params.Limit)
+		if params.Limit != nil && *params.Limit > 0 && uint64(*params.Limit) < uint64(len(lines)) {
+			lines = lines[:*params.Limit]
 		}
-		content = strings.Join(lines[start:end], "\n")
+		content = strings.Join(lines, "\n")
 	}
 	fmt.Printf("[Client] ReadTextFile: %s (%d bytes)\n", params.Path, len(content))
 	return acp.ReadTextFileResponse{Content: content}, nil
 }
 
-// Optional/UNSTABLE terminal methods: implement as no-ops for example
+// The client does not advertise the terminal capability, so the terminal
+// methods answer method-not-found.
+
 func (e *exampleClient) CreateTerminal(ctx context.Context, params acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
-	fmt.Printf("[Client] CreateTerminal: %v\n", params)
-	return acp.CreateTerminalResponse{TerminalId: "term-1"}, nil
+	return acp.CreateTerminalResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalCreate)
 }
 
 func (e *exampleClient) TerminalOutput(ctx context.Context, params acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
-	fmt.Printf("[Client] TerminalOutput: %v\n", params)
-	return acp.TerminalOutputResponse{Output: "", Truncated: false}, nil
+	return acp.TerminalOutputResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalOutput)
 }
 
 func (e *exampleClient) ReleaseTerminal(ctx context.Context, params acp.ReleaseTerminalRequest) (acp.ReleaseTerminalResponse, error) {
-	fmt.Printf("[Client] ReleaseTerminal: %v\n", params)
-	return acp.ReleaseTerminalResponse{}, nil
+	return acp.ReleaseTerminalResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalRelease)
 }
 
 func (e *exampleClient) WaitForTerminalExit(ctx context.Context, params acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
-	fmt.Printf("[Client] WaitForTerminalExit: %v\n", params)
-	return acp.WaitForTerminalExitResponse{}, nil
+	return acp.WaitForTerminalExitResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalWaitForExit)
+}
+
+// KillTerminal implements acp.Client.
+func (e *exampleClient) KillTerminal(ctx context.Context, params acp.KillTerminalRequest) (acp.KillTerminalResponse, error) {
+	return acp.KillTerminalResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalKill)
 }
 
 // CompleteElicitation implements acp.Client.
@@ -172,12 +199,6 @@ func (e *exampleClient) CreateElicitation(ctx context.Context, params acp.Create
 	return acp.CreateElicitationResponse{}, nil
 }
 
-// KillTerminal implements acp.Client.
-func (c *exampleClient) KillTerminal(ctx context.Context, params acp.KillTerminalRequest) (acp.KillTerminalResponse, error) {
-	fmt.Printf("[Client] KillTerminal: %v\n", params)
-	return acp.KillTerminalResponse{}, nil
-}
-
 func main() {
 	// If args provided, treat them as agent program + args. Otherwise run the Go agent example.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -185,7 +206,7 @@ func main() {
 
 	var cmd *exec.Cmd
 	if len(os.Args) > 1 {
-		cmd = exec.CommandContext(ctx, os.Args[1], os.Args[2:]...)
+		cmd = exec.CommandContext(ctx, os.Args[1], os.Args[2:]...) //nolint:gosec // G204: the agent command the user names is what this mode runs.
 	} else {
 		// Default: run the Go example agent. Detect relative to this client's location.
 		_, filename, _, ok := runtime.Caller(0)
@@ -203,18 +224,26 @@ func main() {
 			os.Exit(1)
 		}
 
-		cmd = exec.CommandContext(ctx, "go", "run", agentPath)
+		cmd = exec.CommandContext(ctx, "go", "run", agentPath) //nolint:gosec // G204: the example agent's directory in this source checkout.
 	}
 	cmd.Stderr = os.Stderr
 	// Set up pipes for stdio
-	stdin, _ := cmd.StdinPipe()
-	stdout, _ := cmd.StdoutPipe()
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "stdin pipe error: %v\n", err)
+		os.Exit(1)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "stdout pipe error: %v\n", err)
+		os.Exit(1)
+	}
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start agent: %v\n", err)
 		os.Exit(1)
 	}
 
-	client := &exampleClient{lines: readLines(os.Stdin)}
+	client := &exampleClient{lines: readLines(os.Stdin), cwd: mustCwd()}
 	conn := acp.NewClientSideConnection(client, stdin, stdout)
 	conn.SetLogger(slog.Default())
 
@@ -222,38 +251,21 @@ func main() {
 	initResp, err := conn.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 		ClientCapabilities: acp.ClientCapabilities{
-			Fs:       acp.FileSystemCapabilities{ReadTextFile: true, WriteTextFile: true},
-			Terminal: true,
+			Fs: acp.FileSystemCapabilities{ReadTextFile: true, WriteTextFile: true},
 		},
 	})
 	if err != nil {
-		if re, ok := err.(*acp.RequestError); ok {
-			if b, mErr := json.MarshalIndent(re, "", "  "); mErr == nil {
-				fmt.Fprintf(os.Stderr, "[Client] Error: %s\n", string(b))
-			} else {
-				fmt.Fprintf(os.Stderr, "initialize error (%d): %s\n", re.Code, re.Message)
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "initialize error: %v\n", err)
-		}
-		_ = cmd.Process.Kill()
+		printRequestError("initialize", err)
+		stopAgent(cmd, stdin, cancel)
 		os.Exit(1)
 	}
 	fmt.Printf("✅ Connected to agent (protocol v%v)\n", initResp.ProtocolVersion)
 
 	// New session
-	newSess, err := conn.NewSession(ctx, acp.NewSessionRequest{Cwd: mustCwd(), McpServers: []acp.McpServer{}})
+	newSess, err := conn.NewSession(ctx, acp.NewSessionRequest{Cwd: client.cwd, McpServers: []acp.McpServer{}})
 	if err != nil {
-		if re, ok := err.(*acp.RequestError); ok {
-			if b, mErr := json.MarshalIndent(re, "", "  "); mErr == nil {
-				fmt.Fprintf(os.Stderr, "[Client] Error: %s\n", string(b))
-			} else {
-				fmt.Fprintf(os.Stderr, "newSession error (%d): %s\n", re.Code, re.Message)
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "newSession error: %v\n", err)
-		}
-		_ = cmd.Process.Kill()
+		printRequestError("newSession", err)
+		stopAgent(cmd, stdin, cancel)
 		os.Exit(1)
 	}
 	fmt.Printf("📝 Created session: %s\n", newSess.SessionId)
@@ -261,24 +273,45 @@ func main() {
 	fmt.Print(" ")
 
 	// Send prompt
-	if _, err := conn.Prompt(ctx, acp.PromptRequest{
+	resp, err := conn.Prompt(ctx, acp.PromptRequest{
 		SessionId: newSess.SessionId,
 		Prompt:    []acp.ContentBlock{acp.TextBlock("Hello, agent!")},
-	}); err != nil {
-		if re, ok := err.(*acp.RequestError); ok {
-			if b, mErr := json.MarshalIndent(re, "", "  "); mErr == nil {
-				fmt.Fprintf(os.Stderr, "[Client] Error: %s\n", string(b))
-			} else {
-				fmt.Fprintf(os.Stderr, "prompt error (%d): %s\n", re.Code, re.Message)
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "prompt error: %v\n", err)
-		}
-	} else {
-		fmt.Printf("\n\n✅ Agent completed\n")
+	})
+	if err != nil {
+		printRequestError("prompt", err)
+		stopAgent(cmd, stdin, cancel)
+		os.Exit(1)
 	}
+	fmt.Printf("\n\n✅ Turn ended: stop reason %s\n", resp.StopReason)
+	stopAgent(cmd, stdin, cancel)
+}
 
-	_ = cmd.Process.Kill()
+// printRequestError surfaces a failed call, with a JSON-RPC error's detail.
+func printRequestError(op string, err error) {
+	re, ok := errors.AsType[*acp.RequestError](err)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "%s error: %v\n", op, err)
+		return
+	}
+	if b, mErr := json.MarshalIndent(re, "", "  "); mErr == nil {
+		fmt.Fprintf(os.Stderr, "[Client] Error: %s\n", string(b))
+	} else {
+		fmt.Fprintf(os.Stderr, "%s error (%d): %s\n", op, re.Code, re.Message)
+	}
+}
+
+// stopAgent closes the agent's input, which ends an ACP agent, and waits for
+// it to exit; after five seconds it cancels the agent's context, which kills
+// it.
+func stopAgent(cmd *exec.Cmd, stdin io.Closer, cancel context.CancelFunc) {
+	if err := stdin.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "close agent input: %v\n", err)
+	}
+	t := time.AfterFunc(5*time.Second, cancel)
+	defer t.Stop()
+	if err := cmd.Wait(); err != nil {
+		fmt.Fprintf(os.Stderr, "agent exited: %v\n", err)
+	}
 }
 
 // readLines reads r on its own goroutine and sends each line on the channel it
