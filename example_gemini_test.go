@@ -1,97 +1,68 @@
-package acp
+package acp_test
 
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+
+	acp "github.com/maccavelli/acp-go-sdk2"
 )
 
-// geminiClient mirrors go/example/gemini in brief: prints text chunks and
-// selects the first permission option. File ops are no-ops here.
-type geminiClient struct{}
-
-var _ Client = (*geminiClient)(nil)
-
-func (geminiClient) RequestPermission(ctx context.Context, p RequestPermissionRequest) (RequestPermissionResponse, error) {
-	if len(p.Options) == 0 {
-		return RequestPermissionResponse{Outcome: RequestPermissionOutcome{Cancelled: &RequestPermissionOutcomeCancelled{}}}, nil
-	}
-	return RequestPermissionResponse{Outcome: RequestPermissionOutcome{Selected: &RequestPermissionOutcomeSelected{OptionId: p.Options[0].OptionId}}}, nil
-}
-
-func (geminiClient) SessionUpdate(ctx context.Context, n SessionNotification) error {
-	if n.Update.AgentMessageChunk != nil {
-		c := n.Update.AgentMessageChunk.Content
-		if c.Text != nil {
-			fmt.Print(c.Text.Text)
-		}
-	}
-	return nil
-}
-
-func (geminiClient) ReadTextFile(ctx context.Context, _ ReadTextFileRequest) (ReadTextFileResponse, error) {
-	return ReadTextFileResponse{}, nil
-}
-
-func (geminiClient) WriteTextFile(ctx context.Context, _ WriteTextFileRequest) (WriteTextFileResponse, error) {
-	return WriteTextFileResponse{}, nil
-}
-
-// Terminal interface implementations (minimal stubs for examples)
-func (geminiClient) CreateTerminal(ctx context.Context, p CreateTerminalRequest) (CreateTerminalResponse, error) {
-	return CreateTerminalResponse{TerminalId: "t-1"}, nil
-}
-
-func (geminiClient) KillTerminal(ctx context.Context, p KillTerminalRequest) (KillTerminalResponse, error) {
-	return KillTerminalResponse{}, nil
-}
-
-func (geminiClient) ReleaseTerminal(ctx context.Context, p ReleaseTerminalRequest) (ReleaseTerminalResponse, error) {
-	return ReleaseTerminalResponse{}, nil
-}
-
-func (geminiClient) TerminalOutput(ctx context.Context, p TerminalOutputRequest) (TerminalOutputResponse, error) {
-	return TerminalOutputResponse{Output: "ok", Truncated: false}, nil
-}
-
-func (geminiClient) CompleteElicitation(ctx context.Context, p CompleteElicitationNotification) error {
-	return nil
-}
-
-func (geminiClient) CreateElicitation(ctx context.Context, p CreateElicitationRequest) (CreateElicitationResponse, error) {
-	return CreateElicitationResponse{}, nil
-}
-
-func (geminiClient) WaitForTerminalExit(ctx context.Context, p WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
-	return WaitForTerminalExitResponse{}, nil
-}
-
-// Example_gemini connects to a Gemini CLI speaking ACP over stdio,
-// then initializes, opens a session, and sends a prompt.
+// Example_gemini starts the Gemini CLI in ACP mode, `gemini --acp`, and
+// connects to it over its stdio as the client: it initializes, opens a
+// session in the current directory, sends a prompt and prints the streamed
+// turn. It needs the gemini binary, so it has no checked output and does not
+// run under go test.
 func Example_gemini() {
-	ctx := context.Background()
-	cmd := exec.Command("gemini", "--experimental-acp")
-	stdin, _ := cmd.StdinPipe()
-	stdout, _ := cmd.StdoutPipe()
-	_ = cmd.Start()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "gemini", "--acp")
+	cmd.Stderr = os.Stderr
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		fmt.Println("stdin:", err)
+		return
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		fmt.Println("stdout:", err)
+		return
+	}
+	if err := cmd.Start(); err != nil {
+		fmt.Println("start gemini:", err)
+		return
+	}
+	// Closing gemini's input ends it; waiting reaps it.
+	defer func() {
+		if err := stdin.Close(); err != nil {
+			fmt.Println("close:", err)
+		}
+		if err := cmd.Wait(); err != nil {
+			fmt.Println("gemini:", err)
+		}
+	}()
 
-	conn := NewClientSideConnection(geminiClient{}, stdin, stdout)
-	_, _ = conn.Initialize(ctx, InitializeRequest{
-		ProtocolVersion: ProtocolVersionNumber,
-		ClientCapabilities: ClientCapabilities{
-			Fs: FileSystemCapabilities{
-				ReadTextFile:  true,
-				WriteTextFile: true,
-			},
-			Terminal: true,
-		},
-	})
-	sess, _ := conn.NewSession(ctx, NewSessionRequest{
-		Cwd:        testAbsPath(),
-		McpServers: []McpServer{},
-	})
-	_, _ = conn.Prompt(ctx, PromptRequest{
-		SessionId: sess.SessionId,
-		Prompt:    []ContentBlock{TextBlock("list files")},
-	})
+	csc := acp.NewClientSideConnection(&demoClient{}, stdin, stdout)
+	if _, err := csc.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
+		fmt.Println("initialize:", err)
+		return
+	}
+	cwd, err := filepath.Abs(".")
+	if err != nil {
+		fmt.Println("cwd:", err)
+		return
+	}
+	sess, err := csc.NewSession(ctx, acp.NewSessionRequest{Cwd: cwd, McpServers: []acp.McpServer{}})
+	if err != nil {
+		fmt.Println("new session:", err)
+		return
+	}
+	resp, err := csc.Prompt(ctx, acp.PromptRequest{SessionId: sess.SessionId, Prompt: []acp.ContentBlock{acp.TextBlock("List the files here.")}})
+	if err != nil {
+		fmt.Println("prompt:", err)
+		return
+	}
+	fmt.Println("stop reason:", resp.StopReason)
 }

@@ -1,142 +1,131 @@
-package acp
+package acp_test
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
+
+	acp "github.com/maccavelli/acp-go-sdk2"
 )
 
-// clientExample mirrors go/example/client in a compact form: prints
-// streamed updates, handles simple file ops, and picks the first
-// permission option.
-type clientExample struct{}
+// demoClient prints the turn's text and tool calls and allows every
+// permission request with its first option. It advertises no file system or
+// terminal, so those methods answer method-not-found.
+type demoClient struct{}
 
-var _ Client = (*clientExample)(nil)
+var _ acp.Client = (*demoClient)(nil)
 
-func (clientExample) RequestPermission(ctx context.Context, p RequestPermissionRequest) (RequestPermissionResponse, error) {
-	if len(p.Options) == 0 {
-		return RequestPermissionResponse{
-			Outcome: RequestPermissionOutcome{
-				Cancelled: &RequestPermissionOutcomeCancelled{},
-			},
-		}, nil
-	}
-	return RequestPermissionResponse{
-		Outcome: RequestPermissionOutcome{
-			Selected: &RequestPermissionOutcomeSelected{OptionId: p.Options[0].OptionId},
-		},
-	}, nil
-}
-
-func (clientExample) SessionUpdate(ctx context.Context, n SessionNotification) error {
-	u := n.Update
-	switch {
-	case u.AgentMessageChunk != nil:
-		c := u.AgentMessageChunk.Content
-		if c.Text != nil {
-			fmt.Print(c.Text.Text)
-		}
+func (demoClient) SessionUpdate(ctx context.Context, n acp.SessionNotification) error {
+	switch u := n.Update; {
+	case u.AgentMessageChunk != nil && u.AgentMessageChunk.Content.Text != nil:
+		fmt.Println(u.AgentMessageChunk.Content.Text.Text)
 	case u.ToolCall != nil:
-		title := u.ToolCall.Title
-		fmt.Printf("\n[tool] %s (%s)\n", title, u.ToolCall.Status)
-	case u.ToolCallUpdate != nil:
-		fmt.Printf("\n[tool] %s -> %v\n", u.ToolCallUpdate.ToolCallId, u.ToolCallUpdate.Status)
+		fmt.Printf("[tool] %s (%s)\n", u.ToolCall.Title, u.ToolCall.Status)
+	case u.ToolCallUpdate != nil && u.ToolCallUpdate.Status != nil:
+		fmt.Printf("[tool] %s: %s\n", u.ToolCallUpdate.ToolCallId, *u.ToolCallUpdate.Status)
 	}
 	return nil
 }
 
-func (clientExample) WriteTextFile(ctx context.Context, p WriteTextFileRequest) (WriteTextFileResponse, error) {
-	// The SDK has refused a path that is not absolute before this runs.
-	if dir := filepath.Dir(p.Path); dir != "" {
-		_ = os.MkdirAll(dir, 0o755)
+// RequestPermission prints nothing: a request runs on its own goroutine, so
+// its output could interleave with the notifications'.
+func (demoClient) RequestPermission(ctx context.Context, p acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	if len(p.Options) == 0 {
+		return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
 	}
-	return WriteTextFileResponse{}, os.WriteFile(p.Path, []byte(p.Content), 0o644)
+	return acp.RequestPermissionResponse{Outcome: acp.RequestPermissionOutcome{
+		Selected: &acp.RequestPermissionOutcomeSelected{OptionId: p.Options[0].OptionId},
+	}}, nil
 }
 
-func (clientExample) ReadTextFile(ctx context.Context, p ReadTextFileRequest) (ReadTextFileResponse, error) {
-	// The SDK has refused a path that is not absolute before this runs.
-	b, err := os.ReadFile(p.Path)
-	if err != nil {
-		return ReadTextFileResponse{}, err
-	}
-	content := string(b)
-	if p.Line != nil || p.Limit != nil {
-		lines := strings.Split(content, "\n")
-		start := 0
-		if p.Line != nil && *p.Line > 0 {
-			start = int(min(uint64(*p.Line-1), uint64(len(lines))))
-		}
-		end := len(lines)
-		if p.Limit != nil && *p.Limit > 0 && uint64(*p.Limit) < uint64(end-start) {
-			end = start + int(*p.Limit)
-		}
-		content = strings.Join(lines[start:end], "\n")
-	}
-	return ReadTextFileResponse{Content: content}, nil
+func (demoClient) ReadTextFile(ctx context.Context, _ acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
+	return acp.ReadTextFileResponse{}, acp.NewMethodNotFound(acp.ClientMethodFsReadTextFile)
 }
 
-// Terminal interface implementations (minimal stubs for examples)
-func (clientExample) CreateTerminal(ctx context.Context, p CreateTerminalRequest) (CreateTerminalResponse, error) {
-	// Return a dummy terminal id
-	return CreateTerminalResponse{TerminalId: "t-1"}, nil
+func (demoClient) WriteTextFile(ctx context.Context, _ acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
+	return acp.WriteTextFileResponse{}, acp.NewMethodNotFound(acp.ClientMethodFsWriteTextFile)
 }
 
-func (clientExample) KillTerminal(ctx context.Context, p KillTerminalRequest) (KillTerminalResponse, error) {
-	return KillTerminalResponse{}, nil
+func (demoClient) CreateTerminal(ctx context.Context, _ acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
+	return acp.CreateTerminalResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalCreate)
 }
 
-func (clientExample) ReleaseTerminal(ctx context.Context, p ReleaseTerminalRequest) (ReleaseTerminalResponse, error) {
-	return ReleaseTerminalResponse{}, nil
+func (demoClient) TerminalOutput(ctx context.Context, _ acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
+	return acp.TerminalOutputResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalOutput)
 }
 
-func (clientExample) TerminalOutput(ctx context.Context, p TerminalOutputRequest) (TerminalOutputResponse, error) {
-	// Provide non-empty output to satisfy validation
-	return TerminalOutputResponse{Output: "ok", Truncated: false}, nil
+func (demoClient) ReleaseTerminal(ctx context.Context, _ acp.ReleaseTerminalRequest) (acp.ReleaseTerminalResponse, error) {
+	return acp.ReleaseTerminalResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalRelease)
 }
 
-func (clientExample) CompleteElicitation(ctx context.Context, p CompleteElicitationNotification) error {
+func (demoClient) WaitForTerminalExit(ctx context.Context, _ acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
+	return acp.WaitForTerminalExitResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalWaitForExit)
+}
+
+func (demoClient) KillTerminal(ctx context.Context, _ acp.KillTerminalRequest) (acp.KillTerminalResponse, error) {
+	return acp.KillTerminalResponse{}, acp.NewMethodNotFound(acp.ClientMethodTerminalKill)
+}
+
+func (demoClient) CreateElicitation(ctx context.Context, _ acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
+	return acp.CreateElicitationResponse{}, acp.NewMethodNotFound(acp.ClientMethodElicitationCreate)
+}
+
+func (demoClient) CompleteElicitation(ctx context.Context, _ acp.CompleteElicitationNotification) error {
 	return nil
 }
 
-func (clientExample) CreateElicitation(ctx context.Context, p CreateElicitationRequest) (CreateElicitationResponse, error) {
-	return CreateElicitationResponse{}, nil
-}
-
-func (clientExample) WaitForTerminalExit(ctx context.Context, p WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
-	return WaitForTerminalExitResponse{}, nil
-}
-
-// Example_client launches the Go agent example, negotiates protocol,
-// opens a session, and sends a simple prompt.
+// Example_client connects a Client to an agent, opens a session in a working
+// directory, sends a prompt and prints the streamed turn and its stop reason,
+// in one process over two pipes. A real client starts the agent and connects
+// to its stdio instead:
+//
+//	cmd := exec.Command("my-agent")
+//	stdin, _ := cmd.StdinPipe()
+//	stdout, _ := cmd.StdoutPipe()
+//	csc := acp.NewClientSideConnection(client, stdin, stdout)
 func Example_client() {
 	ctx := context.Background()
-	cmd := exec.Command("go", "run", "./example/agent")
-	stdin, _ := cmd.StdinPipe()
-	stdout, _ := cmd.StdoutPipe()
-	_ = cmd.Start()
+	toAgent, fromClient := io.Pipe()
+	toClient, fromAgent := io.Pipe()
 
-	conn := NewClientSideConnection(clientExample{}, stdin, stdout)
-	_, _ = conn.Initialize(ctx, InitializeRequest{
-		ProtocolVersion: ProtocolVersionNumber,
-		ClientCapabilities: ClientCapabilities{
-			Fs: FileSystemCapabilities{
-				ReadTextFile:  true,
-				WriteTextFile: true,
-			},
-			Terminal: true,
-		},
-	})
-	sess, _ := conn.NewSession(ctx, NewSessionRequest{
-		Cwd:        testAbsPath(),
-		McpServers: []McpServer{},
-	})
-	_, _ = conn.Prompt(ctx, PromptRequest{
-		SessionId: sess.SessionId,
-		Prompt:    []ContentBlock{TextBlock("Hello, agent!")},
-	})
+	asc := acp.NewAgentSideConnection(&demoAgent{}, fromAgent, toAgent)
+	csc := acp.NewClientSideConnection(&demoClient{}, fromClient, toClient)
 
-	_ = cmd.Process.Kill()
+	ir, err := csc.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
+	if err != nil {
+		fmt.Println("initialize:", err)
+		return
+	}
+	fmt.Println("protocol version:", ir.ProtocolVersion)
+
+	// The working directory must be absolute on the host.
+	cwd, err := filepath.Abs(os.TempDir())
+	if err != nil {
+		fmt.Println("cwd:", err)
+		return
+	}
+	sess, err := csc.NewSession(ctx, acp.NewSessionRequest{Cwd: cwd, McpServers: []acp.McpServer{}})
+	if err != nil {
+		fmt.Println("new session:", err)
+		return
+	}
+	resp, err := csc.Prompt(ctx, acp.PromptRequest{SessionId: sess.SessionId, Prompt: []acp.ContentBlock{acp.TextBlock("Hello, agent!")}})
+	if err != nil {
+		fmt.Println("prompt:", err)
+		return
+	}
+	fmt.Println("stop reason:", resp.StopReason)
+
+	if err := csc.Close(); err != nil {
+		fmt.Println("close:", err)
+	}
+	<-asc.Done()
+	// Output:
+	// protocol version: 1
+	// I'll update the configuration.
+	// [tool] Modifying configuration (pending)
+	// [tool] call_1: completed
+	// stop reason: end_turn
 }

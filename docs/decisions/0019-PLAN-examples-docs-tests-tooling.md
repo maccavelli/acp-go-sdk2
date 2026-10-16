@@ -364,3 +364,38 @@ the examples for the host and for Windows; the four new test files clean through
 test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make markdownlint` exit 0; the identifier
 scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root (the example packages and `TestExamplePair`
 among them) and in `cmd/generate`. The API listing: 2429 lines at `v1.15.0` and in the tree; 0 removed, 0 added.
+
+The owner committed step 4's record as `fdbdff6`.
+
+### Step 5, E8, the `Example` functions, 2026-10-16
+
+What changed, on `fdbdff6`: the three files are `package acp_test`, importing the package as a user does, and none calls
+`testAbsPath` or drops an error.
+
+* `example_agent_test.go`: `demoAgent`, an `Agent` that streams a message, starts a tool call, asks permission and completes or fails
+  the call by the answer, with the session's working directory in its paths and every method it does not offer answering
+  method-not-found; `Example_agent` serves it and drives it with `demoClient` over two `io.Pipe`s, prints the stop reason, closes the
+  client's connection and waits for the agent's to end. Its doc shows the stdio form a real agent uses.
+* `example_client_test.go`: `demoClient`, a `Client` that prints the turn's text and tool calls (a status by value, not the
+  pointer), allows each permission with the first option, prints nothing from that request (it runs on its own goroutine, so its
+  output could interleave), and answers the file-system, terminal and elicitation requests method-not-found, advertising none of
+  them; `Example_client` runs it against `demoAgent` and also prints the protocol version.
+* `example_gemini_test.go`: `Example_gemini` starts `gemini --acp` (E5) with `exec.CommandContext`, checks every error, uses
+  `demoClient`, and closes gemini's input and waits for it when done. It needs the binary, so it has no `// Output:`.
+
+Each runnable example ends in `// Output:`: the streamed text, the tool call started and completed, and `stop reason: end_turn`.
+`go test -list Example .` lists `Example_agent` and `Example_client`; `go test -count=1 -run Example -v .` passes both; `go test
+-race -count=50 -run '^Example_(agent|client)$' .` passes.
+
+Planted breaks, each in a fresh scratch copy (3 of 3 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| a line of the agent's streamed text changed | `Example_agent` and `Example_client`, their output |
+| the client rejects the change (the last option) | `Example_agent` and `Example_client`: the tool call is reported failed |
+| the client prints the status pointer | the build: `go vet`'s printf check refuses `%s` for `*ToolCallStatus`, before the examples run |
+
+Gates, through the Python runner, on the tree: regenerating changes no generated file; `make pre-add-check` exit 0;
+`GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root, where the
+two examples run, and in `cmd/generate`. The API listing: 2429 lines at `v1.15.0` and in the tree; 0 removed, 0 added.
