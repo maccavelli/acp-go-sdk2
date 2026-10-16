@@ -174,4 +174,4 @@ release:
 	$(MAKE) pre-add-check
 	@cmp -s schema/version version || (echo "schema/version and version differ; rerun 'make version'" 1>&2; exit 1)
 	@echo
-	@echo "Release candidate for $(VERSION) is ready. Review changes, commit, then tag v$(VERSION)."
+	@echo "Schema $(VERSION) is ready. Review the changes and commit; the module's tag follows RELEASING.md, not the schema version."

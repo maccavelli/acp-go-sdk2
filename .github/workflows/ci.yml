@@ -55,8 +55,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
-          go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
-          ( cd cmd/generate && go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./... )
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+          ( cd cmd/generate && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... )
       - name: vet, gofmt, tidy, lint
         if: runner.os == 'Linux'
         run: |

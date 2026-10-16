@@ -272,3 +272,34 @@ lowest gap. It missed 12 of the 16 cases; the new one matched all 16.
 On the tree: `make check-records` exit 0 (it runs `python3`, the host's 3.9, which the script supports), `--next` `0023`. Gates,
 through the Python runner: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file changed
 in this step.
+
+The owner committed step 2's record as `ca166fb`. The workspace template's two files changed in that step are not in any repository.
+
+### Step 3, tooling: E13, E15, the pins of E16, E17, 2026-10-16
+
+What changed, on `ca166fb`:
+
+* E13: `make release` ends "Schema $(VERSION) is ready. Review the changes and commit; the module's tag follows RELEASING.md, not
+  the schema version.", where it said "then tag v$(VERSION)".
+* E15: `scripts/go-precheck.sh` records why govulncheck was skipped (`GO_PRECHECK_SKIP_VULN=1`, or "offline" when the offline
+  heuristic matched for either module), and the success line then reads "clean (gofmt, golangci-lint, go vet, go test); govulncheck
+  skipped (<reason>)."; it names govulncheck among the clean checks only when it ran. The heuristic itself is unchanged.
+* E16, the pins: `.github/workflows/ci.yml` runs `golang.org/x/vuln/cmd/govulncheck@v1.9.0` in both modules, which the precheck and
+  the `Makefile` read from it. govulncheck v1.9.0 on the tree: "No vulnerabilities found", exit 0, in both modules.
+* E17: `mise.lock` removed. No file outside the records names mise.
+
+E15, checked by running the precheck on one file in throwaway git repositories made from scratch copies, reading its last line:
+
+| Case | Last line |
+| :--- | :--- |
+| the new script, `GO_PRECHECK_SKIP_VULN=1` | "go-precheck: 1 file(s) clean (gofmt, golangci-lint, go vet, go test); govulncheck skipped (GO_PRECHECK_SKIP_VULN=1)." |
+| the new script, `GOPROXY=off` and an empty module cache | "… go test); govulncheck skipped (offline).", after "could not reach the vulnerability database; skipped." for both modules |
+| the script at `ca166fb`, `GO_PRECHECK_SKIP_VULN=1` (the planted break) | "go-precheck: 1 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)." |
+
+On the tree, where it ran, the line is "go-precheck: 116 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+
+Gates, through the Python runner, on the tree: regenerating changes no generated file; `make pre-add-check` exit 0; no new `.go`
+file; `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
+markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in
+`cmd/generate`; actionlint v1.7.12 on the workflow exit 0. The API listing: 2429 lines at `v1.15.0` and in the tree; 0 removed, 0
+added.

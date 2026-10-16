@@ -198,6 +198,7 @@ tidy_module .
 tidy_module cmd/generate
 
 vuln_pin="$(grep -oE 'golang.org/x/vuln/cmd/govulncheck@v[0-9][0-9.]*' .github/workflows/ci.yml 2>/dev/null | head -1)"
+vuln_skipped=""
 run_vuln() {
   local dir="$1" vuln_out vuln_rc
   vuln_out="$(cd "$dir" && go run "$vuln_pin" ./... 2>&1)"
@@ -209,6 +210,7 @@ run_vuln() {
   elif [ "$vuln_rc" -ne 0 ]; then
     if printf '%s' "$vuln_out" | grep -qiE 'no such host|connection refused|timeout|dial tcp|proxy'; then
       echo "govulncheck ($dir): could not reach the vulnerability database; skipped." >&2
+      vuln_skipped="offline"
     else
       echo "govulncheck ($dir): failed (exit $vuln_rc):" >&2
       printf '%s\n' "$vuln_out" | tail -30 | sed 's/^/  /' >&2
@@ -218,6 +220,7 @@ run_vuln() {
 }
 if [ "${GO_PRECHECK_SKIP_VULN:-0}" = "1" ]; then
   echo "govulncheck: skipped (GO_PRECHECK_SKIP_VULN=1)" >&2
+  vuln_skipped="GO_PRECHECK_SKIP_VULN=1"
 elif [ -z "$vuln_pin" ]; then
   echo "govulncheck: no pin in .github/workflows/ci.yml" >&2
   fail 2
@@ -227,6 +230,10 @@ else
 fi
 
 if [ "$failed" -eq 0 ]; then
-  echo "go-precheck: ${#files[@]} file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+  if [ -n "$vuln_skipped" ]; then
+    echo "go-precheck: ${#files[@]} file(s) clean (gofmt, golangci-lint, go vet, go test); govulncheck skipped ($vuln_skipped)."
+  else
+    echo "go-precheck: ${#files[@]} file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+  fi
 fi
 exit "$failed"
