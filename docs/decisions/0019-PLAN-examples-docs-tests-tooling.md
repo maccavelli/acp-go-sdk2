@@ -1,6 +1,6 @@
 ---
 status: in-progress
-date: 2026-10-16
+date: 2026-10-17
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
 
@@ -399,3 +399,124 @@ Gates, through the Python runner, on the tree: regenerating changes no generated
 `GOEXPERIMENT=nojsonv2 go test ./...` exit 0; `GOOS=windows go vet` exit 0 in both modules; `make check-records` and `make
 markdownlint` exit 0; the identifier scan finds nothing; Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root, where the
 two examples run, and in `cmd/generate`. The API listing: 2429 lines at `v1.15.0` and in the tree; 0 removed, 0 added.
+
+The owner committed step 5's record as `4da5878`.
+
+### Step 6, E9 and E10, the tests, 2026-10-17
+
+What changed, on `4da5878`: a new `branches_test.go`, and edits to `acp_test.go`, `connection_cancel_test.go` and
+`conformance_test.go`. No SDK source changes.
+
+E9, `branches_test.go`, one test per documented branch the profile showed unrun:
+
+* `TestSendRequestNoResultAnswers`: after the write, a result returns nil, an error response returns the peer's error, and the
+  peer's end returns -32603 wrapping `ErrPeerDisconnected`.
+* `TestSendRequestNoResultHeldBehindNotification`, in a `synctest` bubble: an answer that arrives while an earlier notification's
+  handler still runs is held. When the caller's context ends first, the call returns -32800 wrapping `context.Canceled`.
+* `TestNotifyExtensionNames`: both sides refuse `""` and `x/ping` and write nothing; the agent's `_x/ping` is sent as a notification.
+* `TestAnswerUnlessCancelledHandlerFirst`: the handler returns first under a context whose cause is already `ErrPromptCancelled`; the
+  answer is cancelled. The context withholds its `Done` channel to stage that race, the race of a `session/cancel` with a handler's
+  return.
+* `TestPermissionCancelRequestWaitsForHandler`, in a `synctest` bubble: a permission request cancelled by `$/cancel_request` is
+  answered with what its handler returns.
+* `TestWaitNotificationsEnds`: the wait for earlier notifications returns the caller's cause when its context ends, and the
+  connection's end when the connection ends.
+* `TestCancelRequestFaults`: params that do not decode (`[1]`), no `requestId`, and two unknown ids (`1e4999`, `2`) cancel nothing,
+  the first two logged. A request with id `1e5000`, which does not canonicalise, is keyed by its bytes, and `$/cancel_request` naming
+  `1e5000` cancels it (-32800, id `1e5000`).
+* `TestNilHandlerAnswers`: a connection without a handler answers a request -32601 and leaves a notification unanswered.
+* `TestUnmarshalableResultAnswered`: a result that does not encode is answered -32603, naming the encoding error.
+* `TestUncanonicalIDs`: a response whose id does not canonicalise is logged and dropped. An object with such an id and no method,
+  result or error is answered -32600 with that id.
+* `TestSmallConstructors` (`NewAuthRequired`, `Ptr`, `WithStartRawOutput`) and `TestRequestErrorNilAndFallback` (nil receivers,
+  and `Error`'s plain-text fallback when the data does not encode).
+
+`Ptr` carries `//go:fix inline`, so govet's `inline` analyzer reports any call to it, with or without a type argument. Its own test
+has to call it, so that line carries `//nolint:govet // inline: …`, the repository's justified-nolint form.
+
+E10, as designed; both designs held on their first prototype in a scratch copy:
+
+* The three fixed sleeps are gone. `TestConnectionHandlesNotifications`, `TestPromptCancellationSendsCancelAndAllowsNewSession` and
+  `TestRequestWithEndedContextWritesNothing` each run their body in `synctest.Test`. The body makes its pipes and goroutines and closes
+  the pipes in `t.Cleanup`, and `synctest.Wait()` replaces the sleep. No goroutine outside a bubble is involved, so no event wait was
+  needed.
+* `TestConformanceConstructors` calls `fillEmptyUnions` before encoding and fails, rather than skips, a value that still does not
+  encode.
+  * Two of the four were a union field left empty (`SessionConfigOption_Select`'s `SessionConfigSelectOptions`,
+    `ElicitationPropertySchema_Array`'s `MultiSelectItems`). Each is filled with its type's first instance from the instance builder.
+  * In the other two (`CreateElicitationRequest_Form`, `CreateElicitationRequest_Url`), the scope union is folded into the variant's
+    own struct, as members of which exactly one is set, so it has no type of its own to take an instance of. When none is set and the
+    struct does not encode, the first member is filled with its type's first instance (`ElicitationSessionScope`).
+  * All 67 subtests encode, decode and compare.
+
+Coverage, `go test -count=1 -coverprofile` at the root: 88.8% before, 89.3% after.
+
+| Function | Before | After |
+| :--- | ---: | ---: |
+| `answerUnlessCancelled` | 81.2% | 100.0% |
+| `handleCancelRequest` | 58.8% | 100.0% |
+| `handleInbound` | 76.9% | 96.2% |
+| `waitNotificationsUpTo` | 55.9% | 85.3% |
+| `SendRequestNoResult` | 59.1% | 95.5% |
+| `(*AgentSideConnection).NotifyExtension` | 0.0% | 100.0% |
+| `(*ClientSideConnection).NotifyExtension` | 66.7% | 100.0% |
+| `(*RequestError).Unwrap` | 66.7% | 100.0% |
+| `(*RequestError).Error` | 60.0% | 90.0% |
+| `NewAuthRequired`, `Ptr`, `WithStartRawOutput` | 0.0% | 100.0% |
+
+Each line range the facts table names for E9 is run, apart from the five lines below. None is a documented branch.
+
+* `connection.go:1474`: the method-not-found answer of a connection without a handler fails to send. It returns early, the same as
+  falling through.
+* `connection.go:1797`: the context and the connection end at once. A same-instant race; each alone is tested.
+* `connection.go:1802-1803` and `:1807`: a done context with no cause, which cannot occur; `context.Cause` gives `Err` at worst.
+* `errors.go:62`: `Error`'s fallback without data. The view without data always encodes, so it cannot be reached.
+
+The other unrun line in `SendRequestNoResult` (`connection.go:1869`, params that do not encode) is before the write, outside E9.
+
+`go test -race -count=50 -v` over the three E10 tests, `TestConformanceConstructors` and the six E9 tests with a context or a bubble:
+50 PASS for each of the ten, no SKIP.
+
+Planted breaks, each in a fresh scratch copy (28 of 28 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| `SendRequestNoResult` drops the error response | `TestSendRequestNoResultAnswers/an_error`: nil, want -32602 |
+| `SendRequestNoResult` does not wait for notifications | `TestSendRequestNoResultHeldBehindNotification`: returned while the handler ran |
+| the agent's `NotifyExtension` does not check the name | `TestNotifyExtensionNames`: nil for `""` and `x/ping`; the wrong first line |
+| the client's `NotifyExtension` does not check the name | `TestNotifyExtensionNames`: nil for `""` and `x/ping` |
+| a handler's result is kept under `ErrPromptCancelled` | `TestAnswerUnlessCancelledHandlerFirst`: the handler's result |
+| every cause answers cancelled at once | `TestPermissionCancelRequestWaitsForHandler`: the cancelled outcome |
+| the wait ignores the context's end | `TestWaitNotificationsEnds/context`: nil |
+| the wait ignores the connection's end | `TestWaitNotificationsEnds/connection`: nil |
+| bad `$/cancel_request` params not logged | `TestCancelRequestFaults`: the log line missing |
+| a missing `requestId` not logged | `TestCancelRequestFaults`: the log line missing |
+| the `requestId` fallback to its bytes removed | `TestCancelRequestFaults`: `1e5000` never cancelled |
+| the inbound request id fallback to its bytes removed | `TestCancelRequestFaults`: `1e5000` never cancelled |
+| an unknown id cancels another request | `TestCancelRequestFaults`: `1e4999` cancelled `1e5000` |
+| no handler answers -32603 | `TestNilHandlerAnswers`: -32603, want -32601 |
+| no handler answers a notification | `TestNilHandlerAnswers`: answered before the probe |
+| a result that does not encode is sent as null | `TestUnmarshalableResultAnswered`: no error |
+| the response id's canonicalisation failure not logged | `TestUncanonicalIDs`: the log line missing |
+| an id that does not canonicalise counts as pending | `TestUncanonicalIDs`: the -32600 answer never came |
+| `NewAuthRequired` gives -32001 | `TestSmallConstructors` |
+| `Ptr` returns a pointer to a zero value | `TestSmallConstructors` |
+| `WithStartRawOutput` sets `rawInput` | `TestSmallConstructors` |
+| a nil `Error()` gives `""` | `TestRequestErrorNilAndFallback` |
+| a nil `Unwrap()` gives `ErrConnectionClosed` | `TestRequestErrorNilAndFallback` |
+| `Error`'s fallback drops the data | `TestRequestErrorNilAndFallback` |
+| the conformance fill removed | `TestConformanceConstructors`: the four subtests fail, not skip |
+| a request with an ended context queues a `$/cancel_request` | `TestRequestWithEndedContextWritesNothing`: 142 bytes written |
+| the agent does not call `Cancel` for `session/cancel` | `TestConnectionHandlesNotifications`: the cancel entry missing |
+| the client does not send `session/cancel` when a prompt's context ends | `TestPromptCancellationSendsCancelAndAllowsNewSession`: timeout |
+
+Gates, through the Python runner, on the tree:
+
+* regenerating changes no generated file;
+* `make pre-add-check` exit 0;
+* `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+* `GOOS=windows go vet` exit 0 in both modules;
+* `make check-records` and `make markdownlint` exit 0;
+* the identifier scan finds nothing;
+* Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root, where the `synctest` tests run, and in `cmd/generate`;
+* the API listing: 2429 lines at `v1.15.0` and in the tree; 0 removed, 0 added.

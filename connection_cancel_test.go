@@ -10,6 +10,7 @@ import (
 	"maps"
 	"slices"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -660,9 +661,15 @@ func TestConnectionWaitForResponse_PeerDisconnectWinsOverDerivedContextCancel(t 
 
 // TestRequestWithEndedContextWritesNothing requires a request whose context has
 // already ended to return its end and write nothing, neither the request nor a
-// $/cancel_request for it (0019-PLAN-behaviour-fixes.md, B9).
+// $/cancel_request for it (0019-PLAN-behaviour-fixes.md, B9). It runs in a
+// synctest bubble, so it counts once every goroutine is blocked
+// (0019-PLAN-examples-docs-tests-tooling.md, E10).
 func TestRequestWithEndedContextWritesNothing(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, testRequestWithEndedContextWritesNothing)
+}
+
+func testRequestWithEndedContextWritesNothing(t *testing.T) {
 	w := &countingWriter{}
 	c := NewConnection(nil, w, idleReader(t))
 
@@ -684,8 +691,9 @@ func TestRequestWithEndedContextWritesNothing(t *testing.T) {
 			t.Errorf("SendRequestNoResult, context %s: %v, want %d", tt.name, err, tt.code)
 		}
 	}
-	// A cancel request would be written by its own goroutine; give it time.
-	time.Sleep(50 * time.Millisecond)
+	// A cancel request would be written by its own goroutine: wait until
+	// every goroutine is blocked.
+	synctest.Wait()
 	if n := w.count(); n != 0 {
 		t.Fatalf("%d bytes written for requests whose context had ended", n)
 	}

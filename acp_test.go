@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -693,10 +694,19 @@ func TestConnectionHandlesMessageOrdering(t *testing.T) {
 	}
 }
 
-// Test notifications
+// TestConnectionHandlesNotifications requires a notification each way to
+// reach its handler. It runs in a synctest bubble, so it asserts once every
+// goroutine is blocked, rather than after a fixed pause
+// (0019-PLAN-examples-docs-tests-tooling.md, E10).
 func TestConnectionHandlesNotifications(t *testing.T) {
+	synctest.Test(t, testConnectionHandlesNotifications)
+}
+
+func testConnectionHandlesNotifications(t *testing.T) {
 	c2aR, c2aW := io.Pipe()
 	a2cR, a2cW := io.Pipe()
+	// Closing both pipes ends both connections, so the bubble's goroutines exit.
+	t.Cleanup(func() { _ = c2aW.Close(); _ = a2cW.Close() })
 
 	var mu sync.Mutex
 	var logs []string
@@ -763,7 +773,7 @@ func TestConnectionHandlesNotifications(t *testing.T) {
 		t.Fatalf("cancel error: %v", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	synctest.Wait()
 
 	mu.Lock()
 	got := append([]string(nil), logs...)
@@ -992,10 +1002,18 @@ func TestConnectionHandlesInitialize(t *testing.T) {
 }
 
 // Test that canceling the client's Prompt context sends a session/cancel
-// to the agent, and that the connection remains usable afterwards.
+// to the agent, and that the connection remains usable afterwards. It runs in
+// a synctest bubble, so the prompt is cancelled once its handler waits, rather
+// than after a fixed pause (0019-PLAN-examples-docs-tests-tooling.md, E10).
 func TestPromptCancellationSendsCancelAndAllowsNewSession(t *testing.T) {
+	synctest.Test(t, testPromptCancellationSendsCancelAndAllowsNewSession)
+}
+
+func testPromptCancellationSendsCancelAndAllowsNewSession(t *testing.T) {
 	c2aR, c2aW := io.Pipe()
 	a2cR, a2cW := io.Pipe()
+	// Closing both pipes ends both connections, so the bubble's goroutines exit.
+	t.Cleanup(func() { _ = c2aW.Close(); _ = a2cW.Close() })
 
 	cancelCh := make(chan string, 1)
 	promptDone := make(chan struct{}, 1)
@@ -1063,7 +1081,8 @@ func TestPromptCancellationSendsCancelAndAllowsNewSession(t *testing.T) {
 		errCh <- err
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	// Every goroutine blocks once the agent's Prompt waits on its context.
+	synctest.Wait()
 	cancel()
 
 	// Expect a session/cancel notification on the agent side

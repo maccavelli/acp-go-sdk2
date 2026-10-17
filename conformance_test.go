@@ -1086,6 +1086,9 @@ func exchange(t *testing.T, m schemaMethod, params any, reply func(any) error) (
 // encodes to the same bytes, since JSON cannot carry all its variants apart;
 // a catch-all must fail Validate holding another variant's value
 // (0014-MADR-union-constructors-take-every-required-key.md, C1 and item 8).
+// A required union the constructor leaves empty does not encode, so it is
+// filled from the instance builder first, and a value that still does not
+// encode fails the test (0019-PLAN-examples-docs-tests-tooling.md, E10).
 func TestConformanceConstructors(t *testing.T) {
 	t.Parallel()
 	unions := map[string]schemaUnion{}
@@ -1121,9 +1124,10 @@ func TestConformanceConstructors(t *testing.T) {
 			if u.CatchAll == h.Field {
 				checkCatchAll(t, h, u)
 			}
+			fillEmptyUnions(t, reflect.ValueOf(v), unions)
 			b, err := json.Marshal(v)
 			if err != nil {
-				t.Skipf("the zero-argument value does not encode: %v", err)
+				t.Fatalf("the value does not encode, its empty unions filled: %v", err)
 			}
 			back := typeByName[h.Union].New()
 			if err := json.Unmarshal(b, back); err != nil {
@@ -1143,6 +1147,47 @@ func TestConformanceConstructors(t *testing.T) {
 			}
 		})
 	}
+}
+
+// fillEmptyUnions sets each required union that v, a pointer to a struct,
+// leaves empty, at any depth, from the instance builder: a union field to its
+// type's first instance, and members folded into a struct, when none is set
+// and the struct does not encode, to its first member's first instance.
+func fillEmptyUnions(t *testing.T, v reflect.Value, unions map[string]schemaUnion) {
+	t.Helper()
+	s := v.Elem()
+	if s.Kind() != reflect.Struct {
+		return
+	}
+	var members []reflect.Value
+	set := false
+	for i := range s.NumField() {
+		f, sf := s.Field(i), s.Type().Field(i)
+		switch {
+		case !sf.IsExported():
+		case f.Kind() == reflect.Pointer && f.Type().Elem().Kind() == reflect.Struct && sf.Tag.Get("json") == "-":
+			if f.IsNil() {
+				members = append(members, f)
+				continue
+			}
+			set = true
+			fillEmptyUnions(t, f, unions)
+		case f.Kind() == reflect.Struct:
+			if _, union := unions[f.Type().Name()]; union && f.IsZero() {
+				newInstance(t, f.Addr().Interface())
+				continue
+			}
+			fillEmptyUnions(t, f.Addr(), unions)
+		}
+	}
+	if _, union := unions[s.Type().Name()]; union || set || len(members) == 0 {
+		return
+	}
+	if _, err := json.Marshal(v.Interface()); err == nil {
+		return
+	}
+	members[0].Set(reflect.New(members[0].Type().Elem()))
+	newInstance(t, members[0].Interface())
 }
 
 // checkCatchAll requires the catch-all value h builds to fail Validate with
