@@ -159,7 +159,9 @@ func TestCapabilityRulesRefuse(t *testing.T) {
 // each unstable copy of that definition: the three MCP rules on
 // UnstableMcpServer, the type of session/fork's servers
 // (0019-PLAN-behaviour-fixes.md, B6); and the undeclared elicitation mode on
-// the catch-all's mode (0019-PLAN-api-decisions.md, B20).
+// the catch-all's mode (0019-PLAN-api-decisions.md, B20). The three subagent
+// variants of SessionUpdate add three rules and three checks
+// (0019-PLAN-issue-fixes.md, B24).
 func checkCommittedGates(t *testing.T, m *Model) {
 	t.Helper()
 	own := map[string][]GateCheck{}
@@ -172,8 +174,8 @@ func checkCommittedGates(t *testing.T, m *Model) {
 			}
 		}
 	}
-	if len(ACP.CapabilityRules) != 19 || n != 22 {
-		t.Errorf("%d checks resolve from %d capability rules, want 22 from 19: %v", n, len(ACP.CapabilityRules), own)
+	if len(ACP.CapabilityRules) != 22 || n != 25 {
+		t.Errorf("%d checks resolve from %d capability rules, want 25 from 22: %v", n, len(ACP.CapabilityRules), own)
 	}
 	for _, r := range ACP.CapabilityRules {
 		for _, ty := range m.ruleTypes(r.Definition) {

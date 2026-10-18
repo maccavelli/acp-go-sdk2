@@ -21094,6 +21094,27 @@ func (u *SessionUpdate) gates(n *Negotiation, method string) error {
 			Variant:    "compaction_summary_chunk",
 		}
 	}
+	if u.SubagentUpdate != nil && n.Request.ClientCapabilities.Subagents == nil {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "subagents",
+			Variant:    "subagent_update",
+		}
+	}
+	if u.SessionMessage != nil && n.Request.ClientCapabilities.Subagents == nil {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "subagents",
+			Variant:    "session_message",
+		}
+	}
+	if u.SessionMessageChunk != nil && n.Request.ClientCapabilities.Subagents == nil {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "subagents",
+			Variant:    "session_message_chunk",
+		}
+	}
 	if u.ConfigOptionUpdate != nil {
 		if err := u.ConfigOptionUpdate.gates(n, method); err != nil {
 			return err

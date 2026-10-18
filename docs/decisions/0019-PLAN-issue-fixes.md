@@ -115,7 +115,7 @@ wall time:
 
 The protocol table gains three variant rules on `subagents`, beside `notice` and the compaction variants: `subagent_update`,
 `session_message` and `session_message_chunk`. A new source constant holds Q1's sentence, and the generator's existing guard requires
-it to be found in the schema.
+it to be found in the schema. Amended 2026-10-18: there was no such guard; step 2 adds one ("Deviation, 2026-10-18, during step 2").
 
 Each follows 0017's rules:
 
@@ -169,7 +169,7 @@ Planted breaks, at least:
 | :--- | :--- |
 | B22 | the cancel sent whatever was written; the cancel sent under `context.Background()` (seen by `TestDispatchFollowsTheModel`) |
 | B23 | the end of input cancelling the handlers at once, as now; pending requests left waiting; a new request written after the end of input; the drain unbounded |
-| B24 | each variant's rule removed; the source sentence altered (refused by the generator's guard) |
+| B24 | each variant's rule removed; the source sentence altered (refused by the guard step 2 adds, as the deviation of 2026-10-18 records) |
 | E18 | the status printed as its pointer |
 
 Expected API listing difference against `v1.15.1`: none.
@@ -217,3 +217,85 @@ The script was seen to fail on a planted break: run on the `v1.15.0` tree, whose
 The issue probes of the MADR's evaluation, rerun when step 7 verifies, are kept outside the tree with the probe of step 4's prototype.
 
 Gates on the tree: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file changed.
+
+The owner committed step 1's record as `b092edb`.
+
+### Deviation, 2026-10-18, during step 2
+
+**Found.** B24's design and the planted-break table say that the generator's existing guard refuses a capability rule's source
+sentence that is not found in the schema. There is no such guard. The model requires only that a source be non-empty
+(`cmd/generate/internal/model/gates_test.go:122`). The capability rules quote two kinds of source:
+
+- **Web pages:** `srcRootsGate`, `srcMcp`, `srcPrompt`, `srcAuthenticate`, `srcElicitation` and `srcBooleanOption`.
+- **The schema:** `srcSessionUpdate`, `srcTerminalAuth`, and the new source of B24.
+
+So the planted break "the source sentence altered" could not fail.
+
+**Decision (owner, 2026-10-18).** Step 2 adds the guard: a model test requires each capability rule's source to appear, with whitespace
+normalised, in the committed schema's descriptions. The web-page sources are exempt, each named with the page it quotes, and an
+exemption no rule uses fails the test. The planted break then holds. "Design", B24, and the planted-break row are annotated.
+
+The test covers the capability rules only, as decided. The schema-quoting sources of the patch and null-retained rules are not
+covered by it. No decision or fact of the MADR changes.
+
+### Step 2, B24, the subagent updates gated, 2026-10-18
+
+What changed, on `b092edb`:
+
+- **The protocol table** (`cmd/generate/internal/model/acp.go`) gains three variant rules on `SessionUpdate`: `subagent_update`,
+  `session_message` and `session_message_chunk`, each on `capSubagents` (`"subagents"`), a new constant like `capRoots`. Their
+  source, `srcSubagents`, is Q1's sentence.
+- **`types_gen.go`**, regenerated: `(*SessionUpdate).gates` gains the three checks, a `*CapabilityError` naming `subagents` and the
+  variant. The diff is those 21 lines.
+- **The guard the deviation of 2026-10-18 adds:** `TestCapabilitySourcesQuoteTheSchema` (`cmd/generate/internal/model/sources_test.go`,
+  new) requires each capability rule's source to appear, with whitespace collapsed, in a description of the committed schema
+  files. The exceptions are the six sources quoted from the specification's pages, each listed with its page, and the test also
+  fails on a listed page source that no rule uses.
+- **Root tests:**
+  - `TestValueGates` gains the three variants as value gates, sent and received with the capability and without it, so it holds 22
+    gates, where it held 19.
+  - `allAdvertised` advertises `subagents`, as its doc requires it to advertise every capability the table names.
+- **Generator tests:**
+  - `checkCommittedGates` counts 25 checks from 22 rules, where it counted 22 from 19.
+  - The four engine fixtures that mirror `SessionUpdate`'s gated variants gain the three variants and `ClientCapabilities.subagents`
+    (`accept-capability-gates`, `accept-untyped-object-gates`, `refuse-gated-in-patch` and `refuse-gated-property-not-union`).
+  - Their `want.api` was rewritten with `-update`. The difference is the three variant types and the `Subagents` field. The two refuse
+    cases still refuse with their own errors.
+- **`README.md`**: the gate list names the three variants, and the list of unchecked unstable features no longer names `subagents`.
+
+The first pre-add check failed on `goconst`: `"subagents"` appeared three times in the table. That is why the constant
+`capSubagents` was added. The planted breaks below were re-run against the rules as committed.
+
+Issue #9's probe, from the MADR's evaluation, was run on scratch copies:
+
+- **The fix:** all four of its cases pass.
+- **`b092edb`:** all four fail.
+
+The probe now builds its record without `subagents` explicitly, since `allAdvertised` now advertises it. What it checks is unchanged.
+
+Planted breaks, each in a fresh scratch copy; those in the table regenerate in the copy (6 of 6 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| the `subagent_update` rule removed | `TestValueGates/subagents_subagent_update`: `send = <nil>`, 136 bytes written |
+| the `session_message` rule removed | `TestValueGates/subagents_session_message`: `send = <nil>`, 133 bytes written |
+| the `session_message_chunk` rule removed | `TestValueGates/subagents_session_message_chunk`: `send = <nil>`, 176 bytes written |
+| `srcSubagents` reworded | `TestCapabilitySourcesQuoteTheSchema`: no description contains it, for each of the three rules |
+| `srcSubagents`'s "must" written "MUST" | `TestCapabilitySourcesQuoteTheSchema`, the same three |
+| an unused page source listed | `TestCapabilitySourcesQuoteTheSchema`: used by no capability rule |
+
+`go test -race -count=50` over the three new value gates: 50 PASS each.
+
+The plant runner was rewritten to its former behaviour for this step, after the cleanup of the host's temporary directory that
+step 9 of the phase 4 PLAN records.
+
+Gates, through the Python runner, on the tree:
+
+- regenerating changes no generated file;
+- `make pre-add-check` exit 0, and `scripts/go-precheck.sh` on the new file exit 0;
+- `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+- `GOOS=windows go vet` exit 0 in both modules;
+- `make check-records` and `make markdownlint` exit 0;
+- the identifier scan finds nothing;
+- Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`;
+- the API listing: 2429 lines at `v1.15.1` and in the tree; 0 removed, 0 added.

@@ -50,7 +50,8 @@ func allAdvertised() *Negotiation {
 				ConfigOptions: &SessionConfigOptionsCapabilities{Boolean: &BooleanConfigOptionCapabilities{}},
 				Notices:       &NoticeCapabilities{},
 			},
-			Terminal: true,
+			Subagents: &SubagentCapabilities{},
+			Terminal:  true,
 		}},
 		Response: InitializeResponse{ProtocolVersion: ProtocolVersionNumber, AgentCapabilities: AgentCapabilities{
 			Auth:               AgentAuthCapabilities{Logout: &LogoutCapabilities{}},

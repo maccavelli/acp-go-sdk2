@@ -14,7 +14,7 @@ on what is sent and what is received
   "PromptCapabilities": {"type": "object", "properties": {"image": {"type": "boolean"}, "audio": {"type": "boolean"}, "embeddedContext": {"type": "boolean"}}},
   "AgentCapabilities": {"type": "object", "properties": {"sessionCapabilities": {"$ref": "#/$defs/SessionCapabilities"}, "promptCapabilities": {"$ref": "#/$defs/PromptCapabilities"}}},
   "ClientSessionCapabilities": {"type": "object", "properties": {"notices": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}, "compaction": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}}},
-  "ClientCapabilities": {"type": "object", "properties": {"session": {"anyOf": [{"$ref": "#/$defs/ClientSessionCapabilities"}, {"type": "null"}]}}},
+  "ClientCapabilities": {"type": "object", "properties": {"session": {"anyOf": [{"$ref": "#/$defs/ClientSessionCapabilities"}, {"type": "null"}]}, "subagents": {"anyOf": [{"$ref": "#/$defs/Flag"}, {"type": "null"}]}}},
   "InitializeRequest": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "clientCapabilities": {"$ref": "#/$defs/ClientCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
   "InitializeResponse": {"type": "object", "properties": {"protocolVersion": {"$ref": "#/$defs/ProtocolVersion"}, "agentCapabilities": {"$ref": "#/$defs/AgentCapabilities"}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"},
   "NewSessionRequest": {"type": "object", "properties": {"additionalDirectories": {"type": "array", "items": {"type": "string"}}}, "x-side": "agent", "x-method": "x/new"},
@@ -31,7 +31,10 @@ on what is sent and what is received
     {"type": "object", "required": ["sessionUpdate", "text"], "properties": {"sessionUpdate": {"const": "agent_message_chunk", "type": "string"}, "text": {"type": "string"}}},
     {"type": "object", "required": ["sessionUpdate", "text"], "properties": {"sessionUpdate": {"const": "notice", "type": "string"}, "text": {"type": "string"}}},
     {"type": "object", "required": ["sessionUpdate"], "properties": {"sessionUpdate": {"const": "compaction_update", "type": "string"}}},
-    {"type": "object", "required": ["sessionUpdate", "text"], "properties": {"sessionUpdate": {"const": "compaction_summary_chunk", "type": "string"}, "text": {"type": "string"}}}
+    {"type": "object", "required": ["sessionUpdate", "text"], "properties": {"sessionUpdate": {"const": "compaction_summary_chunk", "type": "string"}, "text": {"type": "string"}}},
+    {"type": "object", "required": ["sessionUpdate"], "properties": {"sessionUpdate": {"const": "subagent_update", "type": "string"}}},
+    {"type": "object", "required": ["sessionUpdate"], "properties": {"sessionUpdate": {"const": "session_message", "type": "string"}}},
+    {"type": "object", "required": ["sessionUpdate"], "properties": {"sessionUpdate": {"const": "session_message_chunk", "type": "string"}}}
   ], "discriminator": {"propertyName": "sessionUpdate"}},
   "SessionNotification": {"type": "object", "properties": {"update": {"$ref": "#/$defs/SessionUpdate"}}, "required": ["update"], "x-side": "client", "x-method": "x/update"},
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
@@ -46,7 +49,7 @@ const AgentMethodPrompt untyped string = "x/prompt"
 type AgentSideConnection struct{conn *Connection; agent Agent; negotiation atomic.Pointer[Negotiation]}
 type CancelRequestNotification struct{}
 type Client interface{Session(ctx context.Context, params SessionNotification) error}
-type ClientCapabilities struct{Session *ClientSessionCapabilities "json:\"session,omitempty\""}
+type ClientCapabilities struct{Session *ClientSessionCapabilities "json:\"session,omitempty\""; Subagents *Flag "json:\"subagents,omitempty\""}
 type ClientExperimental interface{}
 const ClientMethodUpdate untyped string = "x/update"
 type ClientSessionCapabilities struct{Compaction *Flag "json:\"compaction,omitempty\""; Notices *Flag "json:\"notices,omitempty\""}
@@ -73,10 +76,13 @@ const ProtocolVersionNumber untyped int = 1
 type SessionCapabilities struct{AdditionalDirectories *Flag "json:\"additionalDirectories,omitempty\""}
 type SessionCompactionUpdate struct{SessionUpdate string "json:\"sessionUpdate\""}
 type SessionNotification struct{Update SessionUpdate "json:\"update\""}
-type SessionUpdate struct{AgentMessageChunk *SessionUpdateAgentMessageChunk "json:\"-\""; Notice *SessionUpdateNotice "json:\"-\""; CompactionUpdate *SessionCompactionUpdate "json:\"-\""; CompactionSummaryChunk *SessionUpdateCompactionSummaryChunk "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type SessionSubagentUpdate struct{SessionUpdate string "json:\"sessionUpdate\""}
+type SessionUpdate struct{AgentMessageChunk *SessionUpdateAgentMessageChunk "json:\"-\""; Notice *SessionUpdateNotice "json:\"-\""; CompactionUpdate *SessionCompactionUpdate "json:\"-\""; CompactionSummaryChunk *SessionUpdateCompactionSummaryChunk "json:\"-\""; SubagentUpdate *SessionSubagentUpdate "json:\"-\""; SessionMessage *SessionUpdateSessionMessage "json:\"-\""; SessionMessageChunk *SessionUpdateSessionMessageChunk "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
 type SessionUpdateAgentMessageChunk struct{SessionUpdate string "json:\"sessionUpdate\""; Text string "json:\"text\""}
 type SessionUpdateCompactionSummaryChunk struct{SessionUpdate string "json:\"sessionUpdate\""; Text string "json:\"text\""}
 type SessionUpdateNotice struct{SessionUpdate string "json:\"sessionUpdate\""; Text string "json:\"text\""}
+type SessionUpdateSessionMessage struct{SessionUpdate string "json:\"sessionUpdate\""}
+type SessionUpdateSessionMessageChunk struct{SessionUpdate string "json:\"sessionUpdate\""}
 func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}

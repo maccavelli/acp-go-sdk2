@@ -503,6 +503,20 @@ func valueGates(t *testing.T) []valueGate {
 		update("compaction_summary_chunk", "session.compaction",
 			`{"sessionUpdate":"compaction_summary_chunk","compactionId":"c","content":{"type":"text","text":"x"}}`,
 			func(n *Negotiation, on bool) { session(n).Compaction = when(on, &CompactionCapabilities{}) }),
+		// The subagent updates (0019-PLAN-issue-fixes.md, B24).
+		update("subagent_update", "subagents", `{"sessionUpdate":"subagent_update","sessionId":"child"}`,
+			func(n *Negotiation, on bool) {
+				n.Request.ClientCapabilities.Subagents = when(on, &SubagentCapabilities{})
+			}),
+		update("session_message", "subagents", `{"sessionUpdate":"session_message","messageId":"m1"}`,
+			func(n *Negotiation, on bool) {
+				n.Request.ClientCapabilities.Subagents = when(on, &SubagentCapabilities{})
+			}),
+		update("session_message_chunk", "subagents",
+			`{"sessionUpdate":"session_message_chunk","messageId":"m1","content":{"type":"text","text":"x"}}`,
+			func(n *Negotiation, on bool) {
+				n.Request.ClientCapabilities.Subagents = when(on, &SubagentCapabilities{})
+			}),
 		update("boolean", "session.configOptions.boolean",
 			`{"sessionUpdate":"config_option_update","configOptions":[{"type":"boolean","id":"b","name":"B","currentValue":true}]}`,
 			func(n *Negotiation, on bool) {
@@ -524,8 +538,9 @@ func valueGates(t *testing.T) []valueGate {
 func TestValueGates(t *testing.T) {
 	t.Parallel()
 	gates := valueGates(t)
-	if len(gates) != 19 {
-		t.Fatalf("%d value gates, want 19", len(gates))
+	// 22 with the three subagent updates (0019-PLAN-issue-fixes.md, B24).
+	if len(gates) != 22 {
+		t.Fatalf("%d value gates, want 22", len(gates))
 	}
 	for _, g := range gates {
 		t.Run(g.capability+" "+g.variant+g.field, func(t *testing.T) {

@@ -358,10 +358,12 @@ against the capabilities in the record:
   `.audio` or `.embeddedContext`; an elicitation's `form` or `url` mode needs
   `elicitation.form` or `.url`, and an elicitation in any other mode, which no
   capability advertises, is refused, as `elicitation.<mode>`, with every
-  capability advertised; a `notice` update needs `session.notices` and a
-  compaction update `session.compaction`; a `boolean` config option, wherever an
-  agent sends one, needs `session.configOptions.boolean`; and a `terminal` auth
-  method in the `initialize` answer needs `auth.terminal`.
+  capability advertised; a `notice` update needs `session.notices`, a
+  compaction update `session.compaction`, and the unstable `subagent_update`,
+  `session_message` and `session_message_chunk` need `subagents`; a `boolean`
+  config option, wherever an agent sends one, needs
+  `session.configOptions.boolean`; and a `terminal` auth method in the
+  `initialize` answer needs `auth.terminal`.
 
 A typed method that would send what the record does not allow returns a
 `*acp.CapabilityError` naming the method and the capability, and the property
@@ -402,7 +404,7 @@ acp.WithInboundValidation(func(ctx context.Context, method string, params any, e
 `CallExtension` and `NotifyExtension` hold no record: they send any method,
 before `initialize` too. What is received holds to it, extension messages
 included (see [Extension methods](#extension-methods)). The unstable features whose capabilities the
-specification does not tie to a rule (`nes`, `plan`, `providers`, `subagents`,
+specification does not tie to a rule (`nes`, `plan`, `providers`,
 `positionEncoding`) are not checked.
 
 ### Cancellation

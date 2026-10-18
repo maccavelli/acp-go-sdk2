@@ -153,6 +153,10 @@ var ACP = Protocol{
 		{Side: sideClient, Definition: defSessionUpdate, Variant: "notice", Capability: "session.notices", Source: srcSessionUpdate, Kind: GateVariant},
 		{Side: sideClient, Definition: defSessionUpdate, Variant: "compaction_update", Capability: "session.compaction", Source: srcSessionUpdate, Kind: GateVariant},
 		{Side: sideClient, Definition: defSessionUpdate, Variant: "compaction_summary_chunk", Capability: "session.compaction", Source: srcSessionUpdate, Kind: GateVariant},
+		// (0019-MADR-remediate-debugging-pass-findings.md, B24.)
+		{Side: sideClient, Definition: defSessionUpdate, Variant: "subagent_update", Capability: capSubagents, Source: srcSubagents, Kind: GateVariant},
+		{Side: sideClient, Definition: defSessionUpdate, Variant: "session_message", Capability: capSubagents, Source: srcSubagents, Kind: GateVariant},
+		{Side: sideClient, Definition: defSessionUpdate, Variant: "session_message_chunk", Capability: capSubagents, Source: srcSubagents, Kind: GateVariant},
 		{Side: sideClient, Definition: "SessionConfigOption", Variant: "boolean", Capability: "session.configOptions.boolean", Source: srcBooleanOption, Kind: GateVariant},
 		{Side: sideClient, Definition: "InitializeResponse", Property: "authMethods", Variant: "terminal", Capability: "auth.terminal", Source: srcTerminalAuth, Kind: GateVariant},
 	},
@@ -218,6 +222,10 @@ const (
 // capRoots is the capability that gates additionalDirectories.
 const capRoots = "sessionCapabilities.additionalDirectories"
 
+// capSubagents is the capability that gates the subagent updates
+// (0019-PLAN-issue-fixes.md, B24).
+const capSubagents = "subagents"
+
 // The specification sentences the capability rules follow.
 const (
 	// srcRootsGate is from <https://agentclientprotocol.com/protocol/session-setup>, additional workspace roots.
@@ -236,4 +244,6 @@ const (
 	srcBooleanOption = "Agents MUST NOT include type: \"boolean\" options in configOptions payloads unless the Client advertised support"
 	// srcTerminalAuth is from the schema, AuthMethodTerminal.
 	srcTerminalAuth = "Agents MUST advertise this method only when the client enabled its terminal authentication capability"
+	// srcSubagents is from the unstable schema, SubagentCapabilities.
+	srcSubagents = "The client must advertise this capability before the agent sends subagent updates or session-directed messages."
 )
