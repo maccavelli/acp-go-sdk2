@@ -439,3 +439,36 @@ took 11.5 s; the prototype's comparison is in "Facts".
 - the identifier scan finds nothing;
 - Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`;
 - the API listing: 2429 lines at `v1.15.1` and in the tree; 0 removed, 0 added.
+
+The owner committed step 4's record as `5763a36`.
+
+### Step 5, E18, the tool call status printed, 2026-10-18
+
+What changed, on `5763a36`:
+
+- **The three example clients** (`example/client`, `example/claude-code`, `example/gemini`) each gain `toolCallUpdateLine`. It returns
+  the line printed for a tool call update: its id and its status's value, or the id alone when the update carries no status. It
+  replaces `Printf("… updated: %v", …, u.ToolCallUpdate.Status)`, which printed the `*acp.ToolCallStatus` pointer.
+- **Tests:** each client's `main_test.go` gains `TestToolCallUpdateLine`, covering a set status (`completed`) and none. Like the tests
+  beside it, it does not call `t.Parallel`.
+
+`gocritic`'s `sprintfQuotedString` refused the first form, which wrote the id in a backquoted `%s`. The id is now formatted with
+`%#q`, which gives the same backquoted text for these ids, and lint over the examples is clean for the host and for Windows.
+
+Planted breaks, each in a fresh scratch copy (6 of 6 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| each client printing the status with `%v` of its pointer, as before | `TestToolCallUpdateLine`: "updated: 0xc0001c2320", want "updated: completed" (each client, its own address) |
+| each client without the absent status's case | `TestToolCallUpdateLine`: "invalid memory address or nil pointer dereference" |
+
+Gates, through the Python runner, on the tree:
+
+- regenerating changes no generated file;
+- `make pre-add-check` exit 0, which lints the examples;
+- `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+- `GOOS=windows go vet` exit 0 in both modules;
+- `make check-records` and `make markdownlint` exit 0;
+- the identifier scan finds nothing;
+- Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root, the example packages included, and in `cmd/generate`;
+- the API listing: 2429 lines at `v1.15.1` and in the tree; 0 removed, 0 added.

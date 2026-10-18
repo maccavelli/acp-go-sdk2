@@ -94,6 +94,16 @@ func (c *replClient) RequestPermission(ctx context.Context, params acp.RequestPe
 	}
 }
 
+// toolCallUpdateLine is the line printed for a tool call update: its id, and
+// its status's value when the update carries one (0019-PLAN-issue-fixes.md,
+// E18).
+func toolCallUpdateLine(u *acp.SessionToolCallUpdate) string {
+	if u.Status == nil {
+		return fmt.Sprintf("🔧 Tool call %#q updated", u.ToolCallId)
+	}
+	return fmt.Sprintf("🔧 Tool call %#q updated: %s", u.ToolCallId, *u.Status)
+}
+
 func (c *replClient) SessionUpdate(ctx context.Context, params acp.SessionNotification) error {
 	u := params.Update
 	switch {
@@ -105,7 +115,7 @@ func (c *replClient) SessionUpdate(ctx context.Context, params acp.SessionNotifi
 	case u.ToolCall != nil:
 		fmt.Printf("\n🔧 %s (%s)\n", u.ToolCall.Title, u.ToolCall.Status)
 	case u.ToolCallUpdate != nil:
-		fmt.Printf("\n🔧 Tool call `%s` updated: %v\n\n", u.ToolCallUpdate.ToolCallId, u.ToolCallUpdate.Status)
+		fmt.Printf("\n%s\n\n", toolCallUpdateLine(u.ToolCallUpdate))
 	case u.Plan != nil:
 		fmt.Println("[plan update]")
 	case u.AgentThoughtChunk != nil:

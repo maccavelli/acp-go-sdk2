@@ -51,3 +51,20 @@ func TestTerminalMethodsNotFound(t *testing.T) {
 		t.Fatalf("CreateTerminal: %v, want method not found", err)
 	}
 }
+
+// TestToolCallUpdateLine requires a tool call update's status printed as its
+// value, not its pointer, and left out when the update carries none
+// (0019-PLAN-issue-fixes.md, E18).
+func TestToolCallUpdateLine(t *testing.T) {
+	for _, tt := range []struct {
+		u    acp.SessionToolCallUpdate
+		want string
+	}{
+		{acp.SessionToolCallUpdate{ToolCallId: "c1", Status: new(acp.ToolCallStatusCompleted)}, "🔧 Tool call `c1` updated: completed"},
+		{acp.SessionToolCallUpdate{ToolCallId: "c2"}, "🔧 Tool call `c2` updated"},
+	} {
+		if got := toolCallUpdateLine(&tt.u); got != tt.want {
+			t.Errorf("toolCallUpdateLine(%s) = %q, want %q", tt.u.ToolCallId, got, tt.want)
+		}
+	}
+}
