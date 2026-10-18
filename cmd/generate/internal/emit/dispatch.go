@@ -521,7 +521,7 @@ func agentFile(m *model.Model) *goFile {
 	f.add(handleFunc(f, "a", "AgentSideConnection", cases))
 
 	// Agent outbound wrappers (agent -> client).
-	emitOutbound(f, "AgentSideConnection", m.ClientMethods, m.Initialize != nil)
+	emitOutbound(f, "AgentSideConnection", agentSide(m).peer, m.ClientMethods, m.Initialize != nil)
 
 	return f
 }
@@ -560,7 +560,7 @@ func clientFile(m *model.Model) *goFile {
 	f.add(handleFunc(f, "c", "ClientSideConnection", cases))
 
 	// Client outbound wrappers (client -> agent).
-	emitOutbound(f, "ClientSideConnection", m.AgentMethods, m.Initialize != nil)
+	emitOutbound(f, "ClientSideConnection", clientSide(m).peer, m.AgentMethods, m.Initialize != nil)
 
 	return f
 }
@@ -653,9 +653,25 @@ func initializeWrapper(mi *model.Method) []ast.Stmt {
 	}
 }
 
+// outboundDoc is a typed outbound method's doc: what it sends to peer, then
+// the interface method's doc (0019-PLAN-examples-docs-tests-tooling.md, I12).
+func outboundDoc(mi *model.Method, peer string) []string {
+	first := mi.GoName + " sends the " + mi.Wire + " request to the " + peer + " and returns its response."
+	switch {
+	case mi.Notif != "":
+		first = mi.GoName + " sends the " + mi.Wire + " notification to the " + peer + "."
+	case !mi.HasResult:
+		first = mi.GoName + " sends the " + mi.Wire + " request to the " + peer + " and returns the error it is answered with, or nil."
+	}
+	if len(mi.Doc) == 0 {
+		return []string{first}
+	}
+	return append([]string{first, ""}, mi.Doc...)
+}
+
 // emitOutbound emits one method per peer method on recvType that sends the
-// request or notification over c.conn.
-func emitOutbound(f *goFile, recvType string, methods []*model.Method, gated bool) {
+// request or notification over c.conn to peer.
+func emitOutbound(f *goFile, recvType, peer string, methods []*model.Method, gated bool) {
 	recv := func() *ast.Field { return param("c", star(id(recvType))) }
 	params := func(typeName string) []*ast.Field {
 		return []*ast.Field{param("ctx", f.qual(pkgContext, "Context")), param("params", id(typeName))}
@@ -684,6 +700,7 @@ func emitOutbound(f *goFile, recvType string, methods []*model.Method, gated boo
 	for _, mi := range methods {
 		// A blank line separates each wrapper from the declaration before it.
 		f.line()
+		f.comment(outboundDoc(mi, peer)...)
 		if mi.Notif != "" && mi.CancelsPending {
 			// The cancel is written before the pending requests are answered
 			// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).

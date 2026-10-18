@@ -143,7 +143,10 @@ type Field struct {
 
 // Struct is a generated struct other than a definition's own type.
 type Struct struct {
-	Name   string
+	Name string
+	// Key is the property of the owning definition the struct is the
+	// object of.
+	Key    string
 	Doc    []string
 	Fields []*Field
 	// Validation is what the struct's Validate checks; nil is no Validate.
@@ -587,7 +590,7 @@ func plainFields(owner string, props map[string]*load.Definition, req map[string
 func inlineOf(t *Type, tname string, ev *load.Definition, isObj, isNull bool) (*Inline, error) {
 	switch {
 	case isNull:
-		return &Inline{Kind: InlineEmpty}, nil
+		return &Inline{Kind: InlineEmpty, Doc: docLines(ev.Description)}, nil
 	case isObj:
 		req := requiredSet(ev.Required)
 		maps.Copy(req, requiredSet(t.def.Required))

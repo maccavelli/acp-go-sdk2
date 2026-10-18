@@ -40,6 +40,20 @@ for the stamp in `schema/version` and runs the generator.
 Every line of a generated comment, a schema description's included, is
 written as a line comment, so no description can become code or a directive.
 
+Every exported generated declaration has a doc comment
+(0019-PLAN-examples-docs-tests-tooling.md, I12):
+
+- a type, field or interface method has its schema description;
+- `Agent` and `Client` say which side implements them and what serves them;
+- an enum constant names its value, then gives the value's description;
+- a codec or `Validate` names where its type's schema sits: a definition, by
+  its own key; a union's variant; or a property's inline object;
+- a typed outbound method says what it sends and to which side, then repeats
+  the interface method's doc.
+
+`TestExportedDeclarationsDocumented` parses the package's non-test files and
+fails on each exported declaration without a doc comment.
+
 The generator writes nothing until every file has rendered and the five files
 type-check with `go/types` together with the hand-written files of the output
 directory, at the language version of its `go.mod`: first the package as

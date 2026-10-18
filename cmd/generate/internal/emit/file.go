@@ -318,6 +318,10 @@ func (l *layout) genDecl(d *ast.GenDecl) {
 	if d.Lparen.IsValid() || len(d.Specs) != 1 {
 		l.at(&d.Lparen, line)
 		for _, s := range d.Specs {
+			// A grouped constant's doc sits on the lines above it.
+			if vs, ok := s.(*ast.ValueSpec); ok {
+				l.doc(vs.Doc)
+			}
 			l.spec(s, l.next())
 		}
 		l.at(&d.Rparen, l.next())

@@ -143,7 +143,9 @@ The generator attaches:
   the `<method>` notification to the …", then a blank comment line and the method's doc as the interface method has it;
 * to `Validate`: "Validate returns an error if v does not satisfy the `<Definition>` schema definition.";
 * to `MarshalJSON` and `UnmarshalJSON`: "MarshalJSON encodes v as the `<Definition>` schema definition's JSON." and "UnmarshalJSON
-  decodes the `<Definition>` schema definition's JSON into v.";
+  decodes the `<Definition>` schema definition's JSON into v."; amended 2026-10-17: `<Definition>` is the definition's own key, and a
+  type that is not itself a definition names where it sits, as "the `<value>` variant of the `<Definition>` schema definition" or
+  "the `<key>` property of the `<Definition>` schema definition" ("Deviation, 2026-10-17, during step 7");
 * to an enum constant: "`<Const>` is the `"<value>"` value.", then the value's schema description when it has one (`EnumValue` gains
   `Doc`, from the variant's `description`);
 * to `Agent` and `Client`: a doc in `sdkInterfaces` naming the side, the methods it implements and the side connection that serves it;
@@ -520,3 +522,111 @@ Gates, through the Python runner, on the tree:
 * the identifier scan finds nothing;
 * Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root, where the `synctest` tests run, and in `cmd/generate`;
 * the API listing: 2429 lines at `v1.15.0` and in the tree; 0 removed, 0 added.
+
+The owner committed step 6's record as `d13d2d5`.
+
+### Deviation, 2026-10-17, during step 7
+
+Found: the sentence "Design", I12, gives `Validate`, `MarshalJSON` and `UnmarshalJSON` names "the `<Definition>` schema definition",
+but 208 of the 534 such methods have no definition of that name. Those 208 are 128 `UnmarshalJSON`, 28 `MarshalJSON` and 52 `Validate`.
+124 are on inline union variants, such as `RequestPermissionOutcomeSelected`. The other 84 are on 48 definitions whose Go name differs
+from the definition's key: `UnstableDidChangeDocumentNotification` is the `DidChangeDocumentNotification` definition. The structs of
+inline object properties have the same gap, but in the current schema none of them has a codec or `Validate`. The 208 are a `go/parser`
+pass over the package, checked against the keys of the two schema files; the split is counted from the regenerated docs.
+
+Decision (owner, 2026-10-17): each doc names where the type's schema sits.
+
+* A definition is named by its own key.
+* A variant is "the `<value>` variant of the `<Definition>` schema definition": its discriminator value, else its Go field name.
+* A nested struct is "the `<key>` property of the `<Definition>` schema definition".
+
+The emitter hands that phrase to the code that emits a struct's and a union's methods. "Design", I12, is annotated to say so. No
+decision or fact of the MADR changes.
+
+### Step 7, I12, doc comments on every exported identifier, 2026-10-17
+
+What changed, on `d13d2d5`, as "Design", I12, sets it and as the deviation above amends it:
+
+- The model (`cmd/generate/internal/model`):
+  - `EnumValue` gains `Doc`, the value's schema description, for a string-const union, an open enum and an integer enum; a plain
+    `enum` has no per-value description.
+  - `Struct` gains `Key`, the property its object is.
+  - The null variant keeps its description, so `RequestIdNull` is documented.
+  - `sdkInterfaces` gives `Agent` and `Client` their docs.
+- The emitter (`cmd/generate/internal/emit`):
+  - `Validate`, `MarshalJSON` and `UnmarshalJSON` are documented by where their type's schema sits.
+  - `emitStruct`, `emitObjectCodec`, `emitValidate`, `addValidate` and `emitInlineVariant` take that phrase. `defPlace` names a
+    definition by its own key, and `schemaVariantPlace` a variant.
+  - Each enum constant's spec carries its doc, and the layout places a grouped constant's doc on the lines above it.
+  - Each typed outbound method gets `outboundDoc`, its peer taken from the side table.
+- The regenerated `types_gen.go`, `agent_gen.go` and `client_gen.go`; the hand-written doc on `(*RequestError).Error`.
+- Tests:
+  - the root test `TestExportedDeclarationsDocumented`;
+  - the model's `TestEnumValueKinds` pins `EnumValue.Doc` for the three kinds that carry one, and a plain enum's none;
+  - the existing comparison in `model_test.go` follows the new field.
+- `docs/architecture.md`, on the generated docs and the test.
+
+The comments use none of the backticks the PLAN uses to mark placeholders, like every other generated comment. Identifiers are plain
+and wire values in double quotes: `StopReasonEndTurn is the "end_turn" value.`, `UnmarshalJSON decodes the "selected" variant of the
+RequestPermissionOutcome schema definition's JSON into v.`, `Prompt sends the session/prompt request to the agent and returns its
+response.`
+
+The first draft of the `Agent` doc named `AgentLoader`. `TestDispatchFollowsTheModel`, which runs the generator on a protocol of its
+own, refused it: `sdkInterfaces` serves every protocol, and only ACP's table defines `AgentLoader`. Both docs now name only what every
+generated SDK has.
+
+Two branches produce no output under the current schema. The property phrase is unused, since no inline object's struct has a codec or
+`Validate`. The wording for a request without a result is unused, since every request has one.
+
+Results:
+
+- **Undocumented declarations:** 654 before, 0 after (`TestExportedDeclarationsDocumented`).
+- **Codec and `Validate` docs:** 534. 326 name a definition under the type's own name, 84 a definition under another name (48 types,
+  all `Unstable`-prefixed), and 124 a union's variant.
+- **Enum constants:** 76 documented.
+- **Typed outbound methods:** 40 documented.
+- **Code unchanged:** the five generated files match `d13d2d5`'s in code. A scratch Go program parses each file at the commit and in
+  the tree without comments and compares their syntax trees, positions left out: equal for all five.
+- **Why positions are left out:** a first version reprinted each tree and compared the text. That differed in 170 lines of
+  `types_gen.go`, all layout: with docs between them, the printer aligns and separates grouped constants differently.
+- **API:** unchanged, as the API listing below shows.
+
+Planted breaks, each in a fresh scratch copy; those in the generator regenerate in the copy (12 of 12 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| `addValidate` attaches no doc | `TestExportedDeclarationsDocumented`: 147 `Validate`s listed |
+| an object's `UnmarshalJSON` gets no doc | `TestExportedDeclarationsDocumented`: 291 `UnmarshalJSON`s listed |
+| the outbound methods get no doc | `TestExportedDeclarationsDocumented`: 40 methods listed |
+| the layout drops a grouped constant's doc | `TestExportedDeclarationsDocumented`: 76 constants listed |
+| `Client` has no doc in `sdkInterfaces` | `TestExportedDeclarationsDocumented`: `Client` |
+| the null variant's description dropped | `TestExportedDeclarationsDocumented`: `RequestIdNull` |
+| `(*RequestError).Error`'s doc removed | `TestExportedDeclarationsDocumented`: `RequestError.Error` |
+| an exported constant added without a doc | `TestExportedDeclarationsDocumented`: the constant |
+| an exported method added without a doc | `TestExportedDeclarationsDocumented`: the method |
+| a string-const union value's description dropped | `TestEnumValueKinds`: `Consts`'s `Doc` empty |
+| an open enum value's description dropped | `TestEnumValueKinds`: `Open`'s `Doc` empty |
+| an integer enum value's description dropped | `TestEnumValueKinds`: `Codes`'s `Doc` empty |
+
+The first form of the `(*RequestError).Error` plant removed only the doc's last line, left the method documented, and passed. It was
+corrected to remove the whole doc, and then failed.
+
+The comments-only check, on scratch copies of the tree:
+
+- changing an enum constant's value was refused;
+- adding a statement to a generated method was refused;
+- changing a comment was accepted.
+
+Gates, through the Python runner, on the tree:
+
+- regenerating changes no generated file;
+- `make pre-add-check` exit 0, both modules, the host and `GOOS=windows`;
+- `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+- `GOOS=windows go vet` exit 0 in both modules;
+- `make check-records` and `make markdownlint` exit 0;
+- the identifier scan finds nothing;
+- Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`;
+- the API listing: 2429 lines at `v1.15.0` and in the tree; 0 removed, 0 added.
+
+The first full run failed `make markdownlint` on `docs/architecture.md`: MD004, the new list's `*` in a file whose lists use `-`. After
+the markers were changed, the records, Markdown and identifier gates passed again; no other file changed.

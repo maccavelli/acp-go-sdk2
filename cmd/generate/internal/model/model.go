@@ -228,10 +228,13 @@ const (
 	DiscDerived
 )
 
-// EnumValue is one constant of an enum kind.
+// EnumValue is one constant of an enum kind. Doc is the value's schema
+// description, one entry per line, nil when it has none
+// (0019-PLAN-examples-docs-tests-tooling.md, I12).
 type EnumValue struct {
 	Value string
 	Const string
+	Doc   []string
 }
 
 // Helper is a New<Union><Field> constructor for one union variant.
@@ -414,11 +417,11 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition,
 	switch t.Kind {
 	case KindEnum, KindStringConstUnion, KindOpenEnum:
 		for _, v := range enumValues(t) {
-			c := util.ToEnumConst(name, v)
-			if err := n.declare(c, fmt.Sprintf("%s enum value %q", name, v)); err != nil {
+			v.Const = util.ToEnumConst(name, v.Value)
+			if err := n.declare(v.Const, fmt.Sprintf("%s enum value %q", name, v.Value)); err != nil {
 				return nil, err
 			}
-			t.Enum = append(t.Enum, EnumValue{Value: v, Const: c})
+			t.Enum = append(t.Enum, v)
 		}
 	case KindUnion:
 		if members, ok := flatMembers(schema, def); ok {
@@ -503,7 +506,7 @@ func buildIntegerEnum(n *namer, t *Type) error {
 		if err := n.declare(c, fmt.Sprintf("%s value %s", t.Name, value)); err != nil {
 			return err
 		}
-		t.Enum = append(t.Enum, EnumValue{Value: value, Const: c})
+		t.Enum = append(t.Enum, EnumValue{Value: value, Const: c, Doc: docLines(v.Description)})
 	}
 	u := primitiveRef(schemaTypeInteger, format)
 	t.Underlying = &u
@@ -536,17 +539,17 @@ func integerConst(c any, format string) (string, error) {
 
 // enumValues returns the constant values of an enum kind, as the types
 // emitter collects them.
-func enumValues(t *Type) []string {
-	var values []string
+func enumValues(t *Type) []EnumValue {
+	var values []EnumValue
 	switch t.Kind {
 	case KindEnum:
 		for _, v := range t.def.Enum {
-			values = append(values, fmt.Sprint(v))
+			values = append(values, EnumValue{Value: fmt.Sprint(v)})
 		}
 	case KindStringConstUnion:
 		for _, v := range t.def.OneOf {
 			if v != nil && v.Const != nil {
-				values = append(values, fmt.Sprint(v.Const))
+				values = append(values, EnumValue{Value: fmt.Sprint(v.Const), Doc: docLines(v.Description)})
 			}
 		}
 	case KindOpenEnum:
@@ -555,7 +558,7 @@ func enumValues(t *Type) []string {
 				continue
 			}
 			if s, ok := v.Const.(string); ok {
-				values = append(values, s)
+				values = append(values, EnumValue{Value: s, Doc: docLines(v.Description)})
 			}
 		}
 	}
@@ -597,7 +600,7 @@ func buildObject(n *namer, t *Type) error {
 			return err
 		}
 		t.Nested[key] = nested
-		t.NestedStructs = append(t.NestedStructs, &Struct{Name: nested, Doc: docLines(prop.Description), Fields: fields})
+		t.NestedStructs = append(t.NestedStructs, &Struct{Name: nested, Key: key, Doc: docLines(prop.Description), Fields: fields})
 	}
 	fields, err := objectFields(t)
 	if err != nil {

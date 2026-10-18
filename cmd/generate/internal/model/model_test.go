@@ -145,7 +145,7 @@ func TestBuildNames(t *testing.T) {
 	if got := m.Type("Parent").Nested["URLValue"]; got != "ParentURLValue" {
 		t.Errorf("Parent.URLValue nested type: got %q, want ParentURLValue", got)
 	}
-	if got := m.Type("Kind").Enum; len(got) != 1 || got[0] != (EnumValue{Value: "one_two", Const: "KindOneTwo"}) {
+	if got := m.Type("Kind").Enum; len(got) != 1 || got[0].Value != "one_two" || got[0].Const != "KindOneTwo" || got[0].Doc != nil {
 		t.Errorf("Kind enum: %+v", got)
 	}
 	if got := m.AgentMethodConsts["session_new"]; got != "AgentMethodSessionNew" {

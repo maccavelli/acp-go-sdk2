@@ -37,6 +37,10 @@ func (e *RequestError) withCause(cause error) *RequestError {
 	return e
 }
 
+// Error returns e as compact JSON, its code, message and any data, as the
+// error object is written on the wire; when the data does not encode, it
+// returns "code <code>: <message>" with the data printed by fmt. A nil e
+// returns "<nil>".
 func (e *RequestError) Error() string {
 	// Prefer a structured, JSON-style string so callers get details by default
 	// similar to the TypeScript client.

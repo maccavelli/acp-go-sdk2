@@ -30,6 +30,7 @@ type AgentAuthCapabilities struct {
 	Logout *LogoutCapabilities `json:"logout,omitempty"`
 }
 
+// UnmarshalJSON decodes the AgentAuthCapabilities schema definition's JSON into v.
 func (v *AgentAuthCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AgentAuthCapabilities")
 	if err != nil {
@@ -110,6 +111,7 @@ type AgentCapabilities struct {
 	SessionCapabilities SessionCapabilities `json:"sessionCapabilities"`
 }
 
+// UnmarshalJSON decodes the AgentCapabilities schema definition's JSON into v.
 func (v *AgentCapabilities) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "AgentCapabilities")
 	if err != nil {
@@ -184,6 +186,7 @@ type AgentNotification struct {
 	Params json.RawMessage `json:"params,omitempty"`
 }
 
+// UnmarshalJSON decodes the AgentNotification schema definition's JSON into v.
 func (v *AgentNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AgentNotification", "method")
 	if err != nil {
@@ -199,6 +202,7 @@ func (v *AgentNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the AgentNotification schema definition.
 func (v *AgentNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -217,6 +221,7 @@ type AgentRequest struct {
 	Params json.RawMessage `json:"params,omitempty"`
 }
 
+// UnmarshalJSON decodes the AgentRequest schema definition's JSON into v.
 func (v *AgentRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AgentRequest", "id", "method")
 	if err != nil {
@@ -232,6 +237,7 @@ func (v *AgentRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the AgentRequest schema definition.
 func (v *AgentRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -251,6 +257,7 @@ type AgentResult struct {
 	Result json.RawMessage `json:"result"`
 }
 
+// UnmarshalJSON decodes the Result variant of the AgentResponse schema definition's JSON into v.
 func (v *AgentResult) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AgentResult", "id", "result")
 	if err != nil {
@@ -265,6 +272,7 @@ func (v *AgentResult) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the Result variant of the AgentResponse schema definition.
 func (v *AgentResult) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -284,6 +292,7 @@ type AgentError struct {
 	Id RequestId `json:"id"`
 }
 
+// UnmarshalJSON decodes the Error variant of the AgentResponse schema definition's JSON into v.
 func (v *AgentError) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AgentError", "error", "id")
 	if err != nil {
@@ -298,6 +307,7 @@ func (v *AgentError) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the Error variant of the AgentResponse schema definition.
 func (v *AgentError) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -317,6 +327,7 @@ type AgentResponse struct {
 	Error *AgentError `json:"-"`
 }
 
+// UnmarshalJSON decodes the AgentResponse schema definition's JSON into u.
 func (u *AgentResponse) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -384,6 +395,7 @@ func (u *AgentResponse) UnmarshalJSON(b []byte) error {
 	return errors.New("AgentResponse: no variant matches")
 }
 
+// MarshalJSON encodes u as the AgentResponse schema definition's JSON.
 func (u AgentResponse) MarshalJSON() ([]byte, error) {
 	if u.Result != nil {
 		_b, _e := json.Marshal(*u.Result)
@@ -410,6 +422,7 @@ func (u AgentResponse) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("AgentResponse: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the AgentResponse schema definition.
 func (u *AgentResponse) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -458,6 +471,7 @@ type Annotations struct {
 	Priority *float64 `json:"priority,omitempty"`
 }
 
+// UnmarshalJSON decodes the Annotations schema definition's JSON into v.
 func (v *Annotations) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "Annotations")
 	if err != nil {
@@ -501,6 +515,7 @@ type AudioContent struct {
 	MimeType string `json:"mimeType"`
 }
 
+// UnmarshalJSON decodes the AudioContent schema definition's JSON into v.
 func (v *AudioContent) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AudioContent", "data", "mimeType")
 	if err != nil {
@@ -544,6 +559,7 @@ type AuthCapabilities struct {
 	Terminal bool `json:"terminal,omitempty"`
 }
 
+// UnmarshalJSON decodes the AuthCapabilities schema definition's JSON into v.
 func (v *AuthCapabilities) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "AuthCapabilities")
 	if err != nil {
@@ -595,6 +611,7 @@ type AuthMethodTerminalInline struct {
 	Type string `json:"type"`
 }
 
+// UnmarshalJSON decodes the "terminal" variant of the AuthMethod schema definition's JSON into v.
 func (v *AuthMethodTerminalInline) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AuthMethodTerminalInline", "id", "name")
 	if err != nil {
@@ -633,6 +650,7 @@ type AuthMethod struct {
 	Unknown json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes the AuthMethod schema definition's JSON into u.
 func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -689,6 +707,7 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 	return errors.New("AuthMethod: missing discriminator \"type\"")
 }
 
+// MarshalJSON encodes u as the AuthMethod schema definition's JSON.
 func (u AuthMethod) MarshalJSON() ([]byte, error) {
 	if u.Terminal != nil {
 		_b, _e := json.Marshal(*u.Terminal)
@@ -719,6 +738,7 @@ func (u AuthMethod) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("AuthMethod: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the AuthMethod schema definition.
 func (u *AuthMethod) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -762,6 +782,7 @@ type AuthMethodAgent struct {
 	Name string `json:"name"`
 }
 
+// UnmarshalJSON decodes the AuthMethodAgent schema definition's JSON into v.
 func (v *AuthMethodAgent) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AuthMethodAgent", "id", "name")
 	if err != nil {
@@ -813,6 +834,7 @@ type AuthMethodTerminal struct {
 	Name string `json:"name"`
 }
 
+// UnmarshalJSON decodes the AuthMethodTerminal schema definition's JSON into v.
 func (v *AuthMethodTerminal) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AuthMethodTerminal", "id", "name")
 	if err != nil {
@@ -849,6 +871,7 @@ type AuthenticateRequest struct {
 	MethodId AuthMethodId `json:"methodId"`
 }
 
+// UnmarshalJSON decodes the AuthenticateRequest schema definition's JSON into v.
 func (v *AuthenticateRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AuthenticateRequest", "methodId")
 	if err != nil {
@@ -868,6 +891,7 @@ func (v *AuthenticateRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the AuthenticateRequest schema definition.
 func (v *AuthenticateRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -886,6 +910,7 @@ type AuthenticateResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the AuthenticateResponse schema definition's JSON into v.
 func (v *AuthenticateResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AuthenticateResponse")
 	if err != nil {
@@ -905,6 +930,7 @@ func (v *AuthenticateResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the AuthenticateResponse schema definition.
 func (v *AuthenticateResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -929,6 +955,7 @@ type AvailableCommand struct {
 	Name string `json:"name"`
 }
 
+// UnmarshalJSON decodes the AvailableCommand schema definition's JSON into v.
 func (v *AvailableCommand) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AvailableCommand", "description", "name")
 	if err != nil {
@@ -950,6 +977,7 @@ func (v *AvailableCommand) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the AvailableCommand schema definition.
 func (v *AvailableCommand) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -969,6 +997,7 @@ type AvailableCommandInput struct {
 	Unstructured *UnstructuredCommandInput `json:"-"`
 }
 
+// UnmarshalJSON decodes the AvailableCommandInput schema definition's JSON into u.
 func (u *AvailableCommandInput) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -1009,6 +1038,7 @@ func (u *AvailableCommandInput) UnmarshalJSON(b []byte) error {
 	return errors.New("AvailableCommandInput: no variant matches")
 }
 
+// MarshalJSON encodes u as the AvailableCommandInput schema definition's JSON.
 func (u AvailableCommandInput) MarshalJSON() ([]byte, error) {
 	if u.Unstructured != nil {
 		_b, _e := json.Marshal(*u.Unstructured)
@@ -1024,6 +1054,7 @@ func (u AvailableCommandInput) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("AvailableCommandInput: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the AvailableCommandInput schema definition.
 func (u *AvailableCommandInput) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -1055,6 +1086,7 @@ type AvailableCommandsUpdate struct {
 	AvailableCommands []AvailableCommand `json:"availableCommands"`
 }
 
+// MarshalJSON encodes v as the AvailableCommandsUpdate schema definition's JSON.
 func (v AvailableCommandsUpdate) MarshalJSON() ([]byte, error) {
 	type Alias AvailableCommandsUpdate
 	var a Alias
@@ -1065,6 +1097,7 @@ func (v AvailableCommandsUpdate) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the AvailableCommandsUpdate schema definition's JSON into v.
 func (v *AvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "AvailableCommandsUpdate", "availableCommands")
 	if err != nil {
@@ -1088,6 +1121,7 @@ func (v *AvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the AvailableCommandsUpdate schema definition.
 func (v *AvailableCommandsUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -1117,6 +1151,7 @@ type BlobResourceContents struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the BlobResourceContents schema definition's JSON into v.
 func (v *BlobResourceContents) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "BlobResourceContents", "blob", "uri")
 	if err != nil {
@@ -1150,6 +1185,7 @@ type BooleanConfigOptionCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the BooleanConfigOptionCapabilities schema definition's JSON into v.
 func (v *BooleanConfigOptionCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "BooleanConfigOptionCapabilities")
 	if err != nil {
@@ -1193,6 +1229,7 @@ type BooleanPropertySchema struct {
 	Title *string `json:"title,omitempty"`
 }
 
+// UnmarshalJSON decodes the BooleanPropertySchema schema definition's JSON into v.
 func (v *BooleanPropertySchema) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "BooleanPropertySchema")
 	if err != nil {
@@ -1232,6 +1269,7 @@ type CancelNotification struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the CancelNotification schema definition's JSON into v.
 func (v *CancelNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CancelNotification", "sessionId")
 	if err != nil {
@@ -1251,6 +1289,7 @@ func (v *CancelNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the CancelNotification schema definition.
 func (v *CancelNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -1273,6 +1312,7 @@ type CancelRequestNotification struct {
 	RequestId RequestId `json:"requestId"`
 }
 
+// UnmarshalJSON decodes the CancelRequestNotification schema definition's JSON into v.
 func (v *CancelRequestNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CancelRequestNotification", "requestId")
 	if err != nil {
@@ -1292,6 +1332,7 @@ func (v *CancelRequestNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the CancelRequestNotification schema definition.
 func (v *CancelRequestNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -1379,6 +1420,7 @@ type ClientCapabilities struct {
 	Terminal bool `json:"terminal,omitempty"`
 }
 
+// UnmarshalJSON decodes the ClientCapabilities schema definition's JSON into v.
 func (v *ClientCapabilities) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "ClientCapabilities")
 	if err != nil {
@@ -1457,6 +1499,7 @@ type ClientNesCapabilities struct {
 	SearchAndReplace *NesSearchAndReplaceCapabilities `json:"searchAndReplace,omitempty"`
 }
 
+// UnmarshalJSON decodes the ClientNesCapabilities schema definition's JSON into v.
 func (v *ClientNesCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ClientNesCapabilities")
 	if err != nil {
@@ -1490,6 +1533,7 @@ type ClientNotification struct {
 	Params json.RawMessage `json:"params,omitempty"`
 }
 
+// UnmarshalJSON decodes the ClientNotification schema definition's JSON into v.
 func (v *ClientNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ClientNotification", "method")
 	if err != nil {
@@ -1505,6 +1549,7 @@ func (v *ClientNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ClientNotification schema definition.
 func (v *ClientNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -1523,6 +1568,7 @@ type ClientRequest struct {
 	Params json.RawMessage `json:"params,omitempty"`
 }
 
+// UnmarshalJSON decodes the ClientRequest schema definition's JSON into v.
 func (v *ClientRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ClientRequest", "id", "method")
 	if err != nil {
@@ -1538,6 +1584,7 @@ func (v *ClientRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ClientRequest schema definition.
 func (v *ClientRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -1557,6 +1604,7 @@ type ClientResult struct {
 	Result json.RawMessage `json:"result"`
 }
 
+// UnmarshalJSON decodes the Result variant of the ClientResponse schema definition's JSON into v.
 func (v *ClientResult) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ClientResult", "id", "result")
 	if err != nil {
@@ -1571,6 +1619,7 @@ func (v *ClientResult) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the Result variant of the ClientResponse schema definition.
 func (v *ClientResult) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -1590,6 +1639,7 @@ type ClientError struct {
 	Id RequestId `json:"id"`
 }
 
+// UnmarshalJSON decodes the Error variant of the ClientResponse schema definition's JSON into v.
 func (v *ClientError) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ClientError", "error", "id")
 	if err != nil {
@@ -1604,6 +1654,7 @@ func (v *ClientError) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the Error variant of the ClientResponse schema definition.
 func (v *ClientError) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -1623,6 +1674,7 @@ type ClientResponse struct {
 	Error *ClientError `json:"-"`
 }
 
+// UnmarshalJSON decodes the ClientResponse schema definition's JSON into u.
 func (u *ClientResponse) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -1690,6 +1742,7 @@ func (u *ClientResponse) UnmarshalJSON(b []byte) error {
 	return errors.New("ClientResponse: no variant matches")
 }
 
+// MarshalJSON encodes u as the ClientResponse schema definition's JSON.
 func (u ClientResponse) MarshalJSON() ([]byte, error) {
 	if u.Result != nil {
 		_b, _e := json.Marshal(*u.Result)
@@ -1716,6 +1769,7 @@ func (u ClientResponse) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ClientResponse: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the ClientResponse schema definition.
 func (u *ClientResponse) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -1771,6 +1825,7 @@ type ClientSessionCapabilities struct {
 	Notices *NoticeCapabilities `json:"notices,omitempty"`
 }
 
+// UnmarshalJSON decodes the ClientSessionCapabilities schema definition's JSON into v.
 func (v *ClientSessionCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ClientSessionCapabilities")
 	if err != nil {
@@ -1814,6 +1869,7 @@ type CloseSessionRequest struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the CloseSessionRequest schema definition's JSON into v.
 func (v *CloseSessionRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CloseSessionRequest", "sessionId")
 	if err != nil {
@@ -1833,6 +1889,7 @@ func (v *CloseSessionRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the CloseSessionRequest schema definition.
 func (v *CloseSessionRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -1851,6 +1908,7 @@ type CloseSessionResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the CloseSessionResponse schema definition's JSON into v.
 func (v *CloseSessionResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CloseSessionResponse")
 	if err != nil {
@@ -1870,6 +1928,7 @@ func (v *CloseSessionResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the CloseSessionResponse schema definition.
 func (v *CloseSessionResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -1888,10 +1947,22 @@ type CompactionId string
 type CompactionStatus string
 
 const (
+	// CompactionStatusInProgress is the "in_progress" value.
+	//
+	// Compaction has started and has not finished.
 	CompactionStatusInProgress CompactionStatus = "in_progress"
-	CompactionStatusCompleted  CompactionStatus = "completed"
-	CompactionStatusFailed     CompactionStatus = "failed"
-	CompactionStatusCancelled  CompactionStatus = "cancelled"
+	// CompactionStatusCompleted is the "completed" value.
+	//
+	// Compaction finished successfully.
+	CompactionStatusCompleted CompactionStatus = "completed"
+	// CompactionStatusFailed is the "failed" value.
+	//
+	// Compaction finished unsuccessfully.
+	CompactionStatusFailed CompactionStatus = "failed"
+	// CompactionStatusCancelled is the "cancelled" value.
+	//
+	// Compaction was cancelled before it finished.
+	CompactionStatusCancelled CompactionStatus = "cancelled"
 )
 
 // A content block appended to a compaction's summary. A first-seen ID creates
@@ -1907,6 +1978,7 @@ type CompactionSummaryChunk struct {
 	Content ContentBlock `json:"content"`
 }
 
+// UnmarshalJSON decodes the CompactionSummaryChunk schema definition's JSON into v.
 func (v *CompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CompactionSummaryChunk", "compactionId", "content")
 	if err != nil {
@@ -1926,6 +1998,7 @@ func (v *CompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the CompactionSummaryChunk schema definition.
 func (v *CompactionSummaryChunk) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -1958,6 +2031,7 @@ type CompactionUpdate struct {
 	Summary Patch[[]ContentBlock] `json:"summary,omitzero"`
 }
 
+// UnmarshalJSON decodes the CompactionUpdate schema definition's JSON into v.
 func (v *CompactionUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CompactionUpdate", "compactionId", "status")
 	if err != nil {
@@ -1981,6 +2055,7 @@ func (v *CompactionUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the CompactionUpdate schema definition.
 func (v *CompactionUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -2010,6 +2085,7 @@ type CompleteElicitationNotification struct {
 	ElicitationId ElicitationId `json:"elicitationId"`
 }
 
+// UnmarshalJSON decodes the CompleteElicitationNotification schema definition's JSON into v.
 func (v *CompleteElicitationNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CompleteElicitationNotification", "elicitationId")
 	if err != nil {
@@ -2029,6 +2105,7 @@ func (v *CompleteElicitationNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the CompleteElicitationNotification schema definition.
 func (v *CompleteElicitationNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -2049,6 +2126,7 @@ type ConfigOptionUpdate struct {
 	ConfigOptions []SessionConfigOption `json:"configOptions"`
 }
 
+// MarshalJSON encodes v as the ConfigOptionUpdate schema definition's JSON.
 func (v ConfigOptionUpdate) MarshalJSON() ([]byte, error) {
 	type Alias ConfigOptionUpdate
 	var a Alias
@@ -2059,6 +2137,7 @@ func (v ConfigOptionUpdate) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the ConfigOptionUpdate schema definition's JSON into v.
 func (v *ConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ConfigOptionUpdate", "configOptions")
 	if err != nil {
@@ -2082,6 +2161,7 @@ func (v *ConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ConfigOptionUpdate schema definition.
 func (v *ConfigOptionUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -2107,6 +2187,7 @@ type Content struct {
 	Content ContentBlock `json:"content"`
 }
 
+// UnmarshalJSON decodes the Content schema definition's JSON into v.
 func (v *Content) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "Content", "content")
 	if err != nil {
@@ -2126,6 +2207,7 @@ func (v *Content) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the Content schema definition.
 func (v *Content) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -2155,6 +2237,7 @@ type ContentBlockText struct {
 	Type string `json:"type"`
 }
 
+// UnmarshalJSON decodes the "text" variant of the ContentBlock schema definition's JSON into v.
 func (v *ContentBlockText) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ContentBlockText", "text")
 	if err != nil {
@@ -2197,6 +2280,7 @@ type ContentBlockImage struct {
 	Uri *string `json:"uri,omitempty"`
 }
 
+// UnmarshalJSON decodes the "image" variant of the ContentBlock schema definition's JSON into v.
 func (v *ContentBlockImage) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ContentBlockImage", "data", "mimeType")
 	if err != nil {
@@ -2239,6 +2323,7 @@ type ContentBlockAudio struct {
 	Type     string `json:"type"`
 }
 
+// UnmarshalJSON decodes the "audio" variant of the ContentBlock schema definition's JSON into v.
 func (v *ContentBlockAudio) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ContentBlockAudio", "data", "mimeType")
 	if err != nil {
@@ -2287,6 +2372,7 @@ type ContentBlockResourceLink struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the "resource_link" variant of the ContentBlock schema definition's JSON into v.
 func (v *ContentBlockResourceLink) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ContentBlockResourceLink", "name", "uri")
 	if err != nil {
@@ -2335,6 +2421,7 @@ type ContentBlockResource struct {
 	Type     string                   `json:"type"`
 }
 
+// UnmarshalJSON decodes the "resource" variant of the ContentBlock schema definition's JSON into v.
 func (v *ContentBlockResource) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ContentBlockResource", "resource")
 	if err != nil {
@@ -2356,6 +2443,7 @@ func (v *ContentBlockResource) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "resource" variant of the ContentBlock schema definition.
 func (v *ContentBlockResource) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -2410,6 +2498,7 @@ type ContentBlock struct {
 	Unknown json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes the ContentBlock schema definition's JSON into u.
 func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -2565,6 +2654,7 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes u as the ContentBlock schema definition's JSON.
 func (u ContentBlock) MarshalJSON() ([]byte, error) {
 	if u.Text != nil {
 		_b, _e := json.Marshal(*u.Text)
@@ -2632,6 +2722,7 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ContentBlock: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the ContentBlock schema definition.
 func (u *ContentBlock) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -2688,6 +2779,7 @@ type ContentChunk struct {
 	MessageId *MessageId `json:"messageId,omitempty"`
 }
 
+// UnmarshalJSON decodes the ContentChunk schema definition's JSON into v.
 func (v *ContentChunk) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ContentChunk", "content")
 	if err != nil {
@@ -2709,6 +2801,7 @@ func (v *ContentChunk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ContentChunk schema definition.
 func (v *ContentChunk) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -2734,6 +2827,7 @@ type Cost struct {
 	Currency string `json:"currency"`
 }
 
+// UnmarshalJSON decodes the Cost schema definition's JSON into v.
 func (v *Cost) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "Cost", "amount", "currency")
 	if err != nil {
@@ -2779,6 +2873,7 @@ type CreateElicitationForm struct {
 	Request *ElicitationRequestScope `json:"-"`
 }
 
+// MarshalJSON encodes v as the "form" variant of the CreateElicitationRequest schema definition's JSON.
 func (v CreateElicitationForm) MarshalJSON() ([]byte, error) {
 	type Alias CreateElicitationForm
 	var a Alias
@@ -2796,6 +2891,7 @@ func (v CreateElicitationForm) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("CreateElicitationForm: no member set")
 }
 
+// UnmarshalJSON decodes the "form" variant of the CreateElicitationRequest schema definition's JSON into v.
 func (v *CreateElicitationForm) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "CreateElicitationForm", "message", "requestedSchema")
 	if err != nil {
@@ -2832,6 +2928,7 @@ func (v *CreateElicitationForm) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "form" variant of the CreateElicitationRequest schema definition.
 func (v *CreateElicitationForm) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -2890,6 +2987,7 @@ type CreateElicitationUrl struct {
 	Request *ElicitationRequestScope `json:"-"`
 }
 
+// MarshalJSON encodes v as the "url" variant of the CreateElicitationRequest schema definition's JSON.
 func (v CreateElicitationUrl) MarshalJSON() ([]byte, error) {
 	type Alias CreateElicitationUrl
 	var a Alias
@@ -2907,6 +3005,7 @@ func (v CreateElicitationUrl) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("CreateElicitationUrl: no member set")
 }
 
+// UnmarshalJSON decodes the "url" variant of the CreateElicitationRequest schema definition's JSON into v.
 func (v *CreateElicitationUrl) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "CreateElicitationUrl", "elicitationId", "message", "url")
 	if err != nil {
@@ -2943,6 +3042,7 @@ func (v *CreateElicitationUrl) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "url" variant of the CreateElicitationRequest schema definition.
 func (v *CreateElicitationUrl) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -3001,6 +3101,7 @@ type CreateElicitationOther struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
+// MarshalJSON encodes v as the Other variant of the CreateElicitationRequest schema definition's JSON.
 func (v CreateElicitationOther) MarshalJSON() ([]byte, error) {
 	type Alias CreateElicitationOther
 	var a Alias
@@ -3021,6 +3122,7 @@ func (v CreateElicitationOther) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// UnmarshalJSON decodes the Other variant of the CreateElicitationRequest schema definition's JSON into v.
 func (v *CreateElicitationOther) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "CreateElicitationOther", "message")
 	if err != nil {
@@ -3073,6 +3175,7 @@ type CreateElicitationRequest struct {
 	Other *CreateElicitationOther `json:"-"`
 }
 
+// UnmarshalJSON decodes the CreateElicitationRequest schema definition's JSON into u.
 func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -3156,6 +3259,7 @@ func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 	return errors.New("CreateElicitationRequest: missing discriminator \"mode\"")
 }
 
+// MarshalJSON encodes u as the CreateElicitationRequest schema definition's JSON.
 func (u CreateElicitationRequest) MarshalJSON() ([]byte, error) {
 	if u.Form != nil {
 		_b, _e := json.Marshal(*u.Form)
@@ -3195,6 +3299,7 @@ func (u CreateElicitationRequest) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("CreateElicitationRequest: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the CreateElicitationRequest schema definition.
 func (u *CreateElicitationRequest) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -3257,6 +3362,7 @@ type CreateElicitationAccept struct {
 	Content map[string]ElicitationContentValue `json:"content,omitempty"`
 }
 
+// UnmarshalJSON decodes the "accept" variant of the CreateElicitationResponse schema definition's JSON into v.
 func (v *CreateElicitationAccept) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CreateElicitationAccept")
 	if err != nil {
@@ -3276,6 +3382,7 @@ func (v *CreateElicitationAccept) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "accept" variant of the CreateElicitationResponse schema definition.
 func (v *CreateElicitationAccept) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -3303,6 +3410,7 @@ type CreateElicitationDecline struct {
 	Action string         `json:"action"`
 }
 
+// UnmarshalJSON decodes the "decline" variant of the CreateElicitationResponse schema definition's JSON into v.
 func (v *CreateElicitationDecline) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CreateElicitationDecline")
 	if err != nil {
@@ -3335,6 +3443,7 @@ type CreateElicitationCancel struct {
 	Action string         `json:"action"`
 }
 
+// UnmarshalJSON decodes the "cancel" variant of the CreateElicitationResponse schema definition's JSON into v.
 func (v *CreateElicitationCancel) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CreateElicitationCancel")
 	if err != nil {
@@ -3383,6 +3492,7 @@ type CreateElicitationResponseOther struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
+// MarshalJSON encodes v as the Other variant of the CreateElicitationResponse schema definition's JSON.
 func (v CreateElicitationResponseOther) MarshalJSON() ([]byte, error) {
 	type Alias CreateElicitationResponseOther
 	var a Alias
@@ -3403,6 +3513,7 @@ func (v CreateElicitationResponseOther) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// UnmarshalJSON decodes the Other variant of the CreateElicitationResponse schema definition's JSON into v.
 func (v *CreateElicitationResponseOther) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "CreateElicitationResponseOther")
 	if err != nil {
@@ -3452,6 +3563,7 @@ type CreateElicitationResponse struct {
 	Other *CreateElicitationResponseOther `json:"-"`
 }
 
+// UnmarshalJSON decodes the CreateElicitationResponse schema definition's JSON into u.
 func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -3531,6 +3643,7 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 	return errors.New("CreateElicitationResponse: missing discriminator \"action\"")
 }
 
+// MarshalJSON encodes u as the CreateElicitationResponse schema definition's JSON.
 func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
 	if u.Accept != nil {
 		_b, _e := json.Marshal(*u.Accept)
@@ -3582,6 +3695,7 @@ func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("CreateElicitationResponse: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the CreateElicitationResponse schema definition.
 func (u *CreateElicitationResponse) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -3656,6 +3770,7 @@ type CreateTerminalRequest struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the CreateTerminalRequest schema definition's JSON into v.
 func (v *CreateTerminalRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CreateTerminalRequest", "command", "sessionId")
 	if err != nil {
@@ -3675,6 +3790,7 @@ func (v *CreateTerminalRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the CreateTerminalRequest schema definition.
 func (v *CreateTerminalRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -3704,6 +3820,7 @@ type CreateTerminalResponse struct {
 	TerminalId TerminalId `json:"terminalId"`
 }
 
+// UnmarshalJSON decodes the CreateTerminalResponse schema definition's JSON into v.
 func (v *CreateTerminalResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CreateTerminalResponse", "terminalId")
 	if err != nil {
@@ -3723,6 +3840,7 @@ func (v *CreateTerminalResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the CreateTerminalResponse schema definition.
 func (v *CreateTerminalResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -3745,6 +3863,7 @@ type CurrentModeUpdate struct {
 	CurrentModeId SessionModeId `json:"currentModeId"`
 }
 
+// UnmarshalJSON decodes the CurrentModeUpdate schema definition's JSON into v.
 func (v *CurrentModeUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "CurrentModeUpdate", "currentModeId")
 	if err != nil {
@@ -3778,6 +3897,7 @@ type DeleteSessionRequest struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the DeleteSessionRequest schema definition's JSON into v.
 func (v *DeleteSessionRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "DeleteSessionRequest", "sessionId")
 	if err != nil {
@@ -3797,6 +3917,7 @@ func (v *DeleteSessionRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the DeleteSessionRequest schema definition.
 func (v *DeleteSessionRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -3815,6 +3936,7 @@ type DeleteSessionResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the DeleteSessionResponse schema definition's JSON into v.
 func (v *DeleteSessionResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "DeleteSessionResponse")
 	if err != nil {
@@ -3834,6 +3956,7 @@ func (v *DeleteSessionResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the DeleteSessionResponse schema definition.
 func (v *DeleteSessionResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -3862,6 +3985,7 @@ type Diff struct {
 	Path string `json:"path"`
 }
 
+// UnmarshalJSON decodes the Diff schema definition's JSON into v.
 func (v *Diff) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "Diff", "newText", "path")
 	if err != nil {
@@ -3883,6 +4007,7 @@ func (v *Diff) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the Diff schema definition.
 func (v *Diff) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -3906,6 +4031,7 @@ type ElicitationAcceptAction struct {
 	Content map[string]ElicitationContentValue `json:"content,omitempty"`
 }
 
+// Validate returns an error if v does not satisfy the ElicitationAcceptAction schema definition.
 func (v *ElicitationAcceptAction) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -3942,6 +4068,7 @@ type ElicitationCapabilities struct {
 	Url *ElicitationUrlCapabilities `json:"url,omitempty"`
 }
 
+// UnmarshalJSON decodes the ElicitationCapabilities schema definition's JSON into v.
 func (v *ElicitationCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ElicitationCapabilities")
 	if err != nil {
@@ -3994,6 +4121,7 @@ type ElicitationContentValue struct {
 	StringArray *ElicitationContentValueStringArray `json:"-"`
 }
 
+// UnmarshalJSON decodes the ElicitationContentValue schema definition's JSON into u.
 func (u *ElicitationContentValue) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -4047,6 +4175,7 @@ func (u *ElicitationContentValue) UnmarshalJSON(b []byte) error {
 	return errors.New("ElicitationContentValue: no variant matches")
 }
 
+// MarshalJSON encodes u as the ElicitationContentValue schema definition's JSON.
 func (u ElicitationContentValue) MarshalJSON() ([]byte, error) {
 	if u.String != nil {
 		_b, _e := json.Marshal(*u.String)
@@ -4089,6 +4218,7 @@ func (u ElicitationContentValue) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ElicitationContentValue: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the ElicitationContentValue schema definition.
 func (u *ElicitationContentValue) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -4134,6 +4264,7 @@ type ElicitationFormCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the ElicitationFormCapabilities schema definition's JSON into v.
 func (v *ElicitationFormCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ElicitationFormCapabilities")
 	if err != nil {
@@ -4168,6 +4299,7 @@ type ElicitationFormMode struct {
 	Request *ElicitationRequestScope `json:"-"`
 }
 
+// MarshalJSON encodes v as the ElicitationFormMode schema definition's JSON.
 func (v ElicitationFormMode) MarshalJSON() ([]byte, error) {
 	type Alias ElicitationFormMode
 	var a Alias
@@ -4185,6 +4317,7 @@ func (v ElicitationFormMode) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ElicitationFormMode: no member set")
 }
 
+// UnmarshalJSON decodes the ElicitationFormMode schema definition's JSON into v.
 func (v *ElicitationFormMode) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "ElicitationFormMode", "requestedSchema")
 	if err != nil {
@@ -4216,6 +4349,7 @@ func (v *ElicitationFormMode) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ElicitationFormMode schema definition.
 func (v *ElicitationFormMode) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -4298,6 +4432,7 @@ type ElicitationPropertySchemaString struct {
 	Type  string  `json:"type"`
 }
 
+// UnmarshalJSON decodes the "string" variant of the ElicitationPropertySchema schema definition's JSON into v.
 func (v *ElicitationPropertySchemaString) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ElicitationPropertySchemaString")
 	if err != nil {
@@ -4356,6 +4491,7 @@ type ElicitationPropertySchemaNumber struct {
 	Type  string  `json:"type"`
 }
 
+// UnmarshalJSON decodes the "number" variant of the ElicitationPropertySchema schema definition's JSON into v.
 func (v *ElicitationPropertySchemaNumber) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ElicitationPropertySchemaNumber")
 	if err != nil {
@@ -4414,6 +4550,7 @@ type ElicitationPropertySchemaInteger struct {
 	Type  string  `json:"type"`
 }
 
+// UnmarshalJSON decodes the "integer" variant of the ElicitationPropertySchema schema definition's JSON into v.
 func (v *ElicitationPropertySchemaInteger) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ElicitationPropertySchemaInteger")
 	if err != nil {
@@ -4464,6 +4601,7 @@ type ElicitationPropertySchemaBoolean struct {
 	Type  string  `json:"type"`
 }
 
+// UnmarshalJSON decodes the "boolean" variant of the ElicitationPropertySchema schema definition's JSON into v.
 func (v *ElicitationPropertySchemaBoolean) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ElicitationPropertySchemaBoolean")
 	if err != nil {
@@ -4524,6 +4662,7 @@ type ElicitationPropertySchemaArray struct {
 	Type  string  `json:"type"`
 }
 
+// UnmarshalJSON decodes the "array" variant of the ElicitationPropertySchema schema definition's JSON into v.
 func (v *ElicitationPropertySchemaArray) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ElicitationPropertySchemaArray", "items")
 	if err != nil {
@@ -4551,6 +4690,7 @@ func (v *ElicitationPropertySchemaArray) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "array" variant of the ElicitationPropertySchema schema definition.
 func (v *ElicitationPropertySchemaArray) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -4583,6 +4723,7 @@ type ElicitationPropertySchemaOther struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
+// MarshalJSON encodes v as the Other variant of the ElicitationPropertySchema schema definition's JSON.
 func (v ElicitationPropertySchemaOther) MarshalJSON() ([]byte, error) {
 	type Alias ElicitationPropertySchemaOther
 	var a Alias
@@ -4603,6 +4744,7 @@ func (v ElicitationPropertySchemaOther) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// UnmarshalJSON decodes the Other variant of the ElicitationPropertySchema schema definition's JSON into v.
 func (v *ElicitationPropertySchemaOther) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "ElicitationPropertySchemaOther")
 	if err != nil {
@@ -4652,6 +4794,7 @@ type ElicitationPropertySchema struct {
 	Other *ElicitationPropertySchemaOther `json:"-"`
 }
 
+// UnmarshalJSON decodes the ElicitationPropertySchema schema definition's JSON into u.
 func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -4769,6 +4912,7 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 	return errors.New("ElicitationPropertySchema: missing discriminator \"type\"")
 }
 
+// MarshalJSON encodes u as the ElicitationPropertySchema schema definition's JSON.
 func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 	if u.String != nil {
 		_b, _e := json.Marshal(*u.String)
@@ -4844,6 +4988,7 @@ func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ElicitationPropertySchema: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the ElicitationPropertySchema schema definition.
 func (u *ElicitationPropertySchema) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -4902,6 +5047,7 @@ type ElicitationRequestScope struct {
 	RequestId RequestId `json:"requestId"`
 }
 
+// UnmarshalJSON decodes the ElicitationRequestScope schema definition's JSON into v.
 func (v *ElicitationRequestScope) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ElicitationRequestScope", "requestId")
 	if err != nil {
@@ -4916,6 +5062,7 @@ func (v *ElicitationRequestScope) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ElicitationRequestScope schema definition.
 func (v *ElicitationRequestScope) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -4966,6 +5113,7 @@ type ElicitationSchema struct {
 	PropertyOrder []string `json:"-"`
 }
 
+// MarshalJSON encodes v as the ElicitationSchema schema definition's JSON.
 func (v ElicitationSchema) MarshalJSON() ([]byte, error) {
 	type Alias ElicitationSchema
 	var a Alias
@@ -4994,6 +5142,7 @@ func (v ElicitationSchema) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// UnmarshalJSON decodes the ElicitationSchema schema definition's JSON into v.
 func (v *ElicitationSchema) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "ElicitationSchema")
 	if err != nil {
@@ -5033,6 +5182,7 @@ func (v *ElicitationSchema) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ElicitationSchema schema definition.
 func (v *ElicitationSchema) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -5051,6 +5201,9 @@ func (v *ElicitationSchema) validate(abs func(string) bool) error {
 type ElicitationSchemaType string
 
 const (
+	// ElicitationSchemaTypeObject is the "object" value.
+	//
+	// Object schema type.
 	ElicitationSchemaTypeObject ElicitationSchemaType = "object"
 )
 
@@ -5069,6 +5222,7 @@ type ElicitationSessionScope struct {
 	ToolCallId *ToolCallId `json:"toolCallId,omitempty"`
 }
 
+// UnmarshalJSON decodes the ElicitationSessionScope schema definition's JSON into v.
 func (v *ElicitationSessionScope) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ElicitationSessionScope", "sessionId")
 	if err != nil {
@@ -5102,6 +5256,7 @@ type ElicitationUrlCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the ElicitationUrlCapabilities schema definition's JSON into v.
 func (v *ElicitationUrlCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ElicitationUrlCapabilities")
 	if err != nil {
@@ -5138,6 +5293,7 @@ type ElicitationUrlMode struct {
 	Request *ElicitationRequestScope `json:"-"`
 }
 
+// MarshalJSON encodes v as the ElicitationUrlMode schema definition's JSON.
 func (v ElicitationUrlMode) MarshalJSON() ([]byte, error) {
 	type Alias ElicitationUrlMode
 	var a Alias
@@ -5155,6 +5311,7 @@ func (v ElicitationUrlMode) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ElicitationUrlMode: no member set")
 }
 
+// UnmarshalJSON decodes the ElicitationUrlMode schema definition's JSON into v.
 func (v *ElicitationUrlMode) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "ElicitationUrlMode", "elicitationId", "url")
 	if err != nil {
@@ -5186,6 +5343,7 @@ func (v *ElicitationUrlMode) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ElicitationUrlMode schema definition.
 func (v *ElicitationUrlMode) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -5227,6 +5385,7 @@ type EmbeddedResource struct {
 	Resource EmbeddedResourceResource `json:"resource"`
 }
 
+// UnmarshalJSON decodes the EmbeddedResource schema definition's JSON into v.
 func (v *EmbeddedResource) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "EmbeddedResource", "resource")
 	if err != nil {
@@ -5248,6 +5407,7 @@ func (v *EmbeddedResource) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the EmbeddedResource schema definition.
 func (v *EmbeddedResource) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -5267,6 +5427,7 @@ type EmbeddedResourceResource struct {
 	BlobResourceContents *BlobResourceContents `json:"-"`
 }
 
+// UnmarshalJSON decodes the EmbeddedResourceResource schema definition's JSON into u.
 func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -5334,6 +5495,7 @@ func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
 	return errors.New("EmbeddedResourceResource: no variant matches")
 }
 
+// MarshalJSON encodes u as the EmbeddedResourceResource schema definition's JSON.
 func (u EmbeddedResourceResource) MarshalJSON() ([]byte, error) {
 	if u.TextResourceContents != nil {
 		_b, _e := json.Marshal(*u.TextResourceContents)
@@ -5360,6 +5522,7 @@ func (u EmbeddedResourceResource) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("EmbeddedResourceResource: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the EmbeddedResourceResource schema definition.
 func (u *EmbeddedResourceResource) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -5402,6 +5565,7 @@ type EnumOption struct {
 	Title string `json:"title"`
 }
 
+// UnmarshalJSON decodes the EnumOption schema definition's JSON into v.
 func (v *EnumOption) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "EnumOption", "const", "title")
 	if err != nil {
@@ -5437,6 +5601,7 @@ type EnvVariable struct {
 	Value string `json:"value"`
 }
 
+// UnmarshalJSON decodes the EnvVariable schema definition's JSON into v.
 func (v *EnvVariable) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "EnvVariable", "name", "value")
 	if err != nil {
@@ -5474,6 +5639,7 @@ type Error struct {
 	Message string `json:"message"`
 }
 
+// UnmarshalJSON decodes the Error schema definition's JSON into v.
 func (v *Error) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "Error", "code", "message")
 	if err != nil {
@@ -5501,14 +5667,41 @@ func (v *Error) UnmarshalJSON(b []byte) error {
 type ErrorCode int32
 
 const (
-	ErrorCodeParseError             ErrorCode = -32700
-	ErrorCodeInvalidRequest         ErrorCode = -32600
-	ErrorCodeMethodNotFound         ErrorCode = -32601
-	ErrorCodeInvalidParams          ErrorCode = -32602
-	ErrorCodeInternalError          ErrorCode = -32603
-	ErrorCodeRequestCancelled       ErrorCode = -32800
+	// ErrorCodeParseError is the -32700 value.
+	//
+	// **Parse error**: Invalid JSON was received by the server.
+	// An error occurred on the server while parsing the JSON text.
+	ErrorCodeParseError ErrorCode = -32700
+	// ErrorCodeInvalidRequest is the -32600 value.
+	//
+	// **Invalid request**: The JSON sent is not a valid Request object.
+	ErrorCodeInvalidRequest ErrorCode = -32600
+	// ErrorCodeMethodNotFound is the -32601 value.
+	//
+	// **Method not found**: The method does not exist or is not available.
+	ErrorCodeMethodNotFound ErrorCode = -32601
+	// ErrorCodeInvalidParams is the -32602 value.
+	//
+	// **Invalid params**: Invalid method parameter(s).
+	ErrorCodeInvalidParams ErrorCode = -32602
+	// ErrorCodeInternalError is the -32603 value.
+	//
+	// **Internal error**: Internal JSON-RPC error.
+	// Reserved for implementation-defined server errors.
+	ErrorCodeInternalError ErrorCode = -32603
+	// ErrorCodeRequestCancelled is the -32800 value.
+	//
+	// **Request cancelled**: Execution of the method was aborted either due to a cancellation request from the caller or
+	// because of resource constraints or shutdown.
+	ErrorCodeRequestCancelled ErrorCode = -32800
+	// ErrorCodeAuthenticationRequired is the -32000 value.
+	//
+	// **Authentication required**: Authentication is required before this operation can be performed.
 	ErrorCodeAuthenticationRequired ErrorCode = -32000
-	ErrorCodeResourceNotFound       ErrorCode = -32002
+	// ErrorCodeResourceNotFound is the -32002 value.
+	//
+	// **Resource not found**: A given resource, such as a file, was not found.
+	ErrorCodeResourceNotFound ErrorCode = -32002
 )
 
 // **UNSTABLE**
@@ -5524,6 +5717,7 @@ type ErrorStopReason struct {
 	Error *Error `json:"error,omitempty"`
 }
 
+// UnmarshalJSON decodes the ErrorStopReason schema definition's JSON into v.
 func (v *ErrorStopReason) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ErrorStopReason")
 	if err != nil {
@@ -5584,6 +5778,7 @@ type FileSystemCapabilities struct {
 	WriteTextFile bool `json:"writeTextFile,omitempty"`
 }
 
+// UnmarshalJSON decodes the FileSystemCapabilities schema definition's JSON into v.
 func (v *FileSystemCapabilities) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "FileSystemCapabilities")
 	if err != nil {
@@ -5634,6 +5829,7 @@ type HttpHeader struct {
 	Value string `json:"value"`
 }
 
+// UnmarshalJSON decodes the HttpHeader schema definition's JSON into v.
 func (v *HttpHeader) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "HttpHeader", "name", "value")
 	if err != nil {
@@ -5666,6 +5862,7 @@ type IdleStateUpdateEndTurn struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+// UnmarshalJSON decodes the "end_turn" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateEndTurn) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "IdleStateUpdateEndTurn")
 	if err != nil {
@@ -5700,6 +5897,7 @@ type IdleStateUpdateMaxTokens struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+// UnmarshalJSON decodes the "max_tokens" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateMaxTokens) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "IdleStateUpdateMaxTokens")
 	if err != nil {
@@ -5735,6 +5933,7 @@ type IdleStateUpdateMaxTurnRequests struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+// UnmarshalJSON decodes the "max_turn_requests" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateMaxTurnRequests) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "IdleStateUpdateMaxTurnRequests")
 	if err != nil {
@@ -5769,6 +5968,7 @@ type IdleStateUpdateRefusal struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+// UnmarshalJSON decodes the "refusal" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateRefusal) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "IdleStateUpdateRefusal")
 	if err != nil {
@@ -5803,6 +6003,7 @@ type IdleStateUpdateCancelled struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+// UnmarshalJSON decodes the "cancelled" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateCancelled) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "IdleStateUpdateCancelled")
 	if err != nil {
@@ -5842,6 +6043,7 @@ type IdleStateUpdateError struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+// UnmarshalJSON decodes the "error" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateError) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "IdleStateUpdateError")
 	if err != nil {
@@ -5885,6 +6087,7 @@ type IdleStateUpdateOther struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
+// MarshalJSON encodes v as the Other variant of the IdleStateUpdate schema definition's JSON.
 func (v IdleStateUpdateOther) MarshalJSON() ([]byte, error) {
 	type Alias IdleStateUpdateOther
 	var a Alias
@@ -5905,6 +6108,7 @@ func (v IdleStateUpdateOther) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// UnmarshalJSON decodes the Other variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateOther) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "IdleStateUpdateOther")
 	if err != nil {
@@ -5950,6 +6154,7 @@ type IdleStateUpdateNone struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+// UnmarshalJSON decodes the None variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateNone) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "IdleStateUpdateNone")
 	if err != nil {
@@ -6002,6 +6207,7 @@ type IdleStateUpdate struct {
 	None *IdleStateUpdateNone `json:"-"`
 }
 
+// UnmarshalJSON decodes the IdleStateUpdate schema definition's JSON into u.
 func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -6078,6 +6284,7 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes u as the IdleStateUpdate schema definition's JSON.
 func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 	if u.EndTurn != nil {
 		_b, _e := json.Marshal(*u.EndTurn)
@@ -6176,6 +6383,7 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("IdleStateUpdate: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the IdleStateUpdate schema definition.
 func (u *IdleStateUpdate) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -6246,6 +6454,7 @@ type ImageContent struct {
 	Uri *string `json:"uri,omitempty"`
 }
 
+// UnmarshalJSON decodes the ImageContent schema definition's JSON into v.
 func (v *ImageContent) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ImageContent", "data", "mimeType")
 	if err != nil {
@@ -6292,6 +6501,7 @@ type Implementation struct {
 	Version string `json:"version"`
 }
 
+// UnmarshalJSON decodes the Implementation schema definition's JSON into v.
 func (v *Implementation) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "Implementation", "name", "version")
 	if err != nil {
@@ -6337,6 +6547,7 @@ type InitializeRequest struct {
 	ProtocolVersion ProtocolVersion `json:"protocolVersion"`
 }
 
+// UnmarshalJSON decodes the InitializeRequest schema definition's JSON into v.
 func (v *InitializeRequest) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "InitializeRequest", "protocolVersion")
 	if err != nil {
@@ -6367,6 +6578,7 @@ func (v *InitializeRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the InitializeRequest schema definition.
 func (v *InitializeRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -6406,6 +6618,7 @@ type InitializeResponse struct {
 	ProtocolVersion ProtocolVersion `json:"protocolVersion"`
 }
 
+// MarshalJSON encodes v as the InitializeResponse schema definition's JSON.
 func (v InitializeResponse) MarshalJSON() ([]byte, error) {
 	type Alias InitializeResponse
 	var a Alias
@@ -6416,6 +6629,7 @@ func (v InitializeResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the InitializeResponse schema definition's JSON into v.
 func (v *InitializeResponse) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "InitializeResponse", "protocolVersion")
 	if err != nil {
@@ -6458,6 +6672,7 @@ func (v *InitializeResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the InitializeResponse schema definition.
 func (v *InitializeResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -6503,6 +6718,7 @@ type IntegerPropertySchema struct {
 	Title *string `json:"title,omitempty"`
 }
 
+// UnmarshalJSON decodes the IntegerPropertySchema schema definition's JSON into v.
 func (v *IntegerPropertySchema) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "IntegerPropertySchema")
 	if err != nil {
@@ -6542,6 +6758,7 @@ type KillTerminalRequest struct {
 	TerminalId TerminalId `json:"terminalId"`
 }
 
+// UnmarshalJSON decodes the KillTerminalRequest schema definition's JSON into v.
 func (v *KillTerminalRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "KillTerminalRequest", "sessionId", "terminalId")
 	if err != nil {
@@ -6561,6 +6778,7 @@ func (v *KillTerminalRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the KillTerminalRequest schema definition.
 func (v *KillTerminalRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -6579,6 +6797,7 @@ type KillTerminalResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the KillTerminalResponse schema definition's JSON into v.
 func (v *KillTerminalResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "KillTerminalResponse")
 	if err != nil {
@@ -6598,6 +6817,7 @@ func (v *KillTerminalResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the KillTerminalResponse schema definition.
 func (v *KillTerminalResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -6622,6 +6842,7 @@ type ListSessionsRequest struct {
 	Cwd *string `json:"cwd,omitempty"`
 }
 
+// UnmarshalJSON decodes the ListSessionsRequest schema definition's JSON into v.
 func (v *ListSessionsRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ListSessionsRequest")
 	if err != nil {
@@ -6641,6 +6862,7 @@ func (v *ListSessionsRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ListSessionsRequest schema definition.
 func (v *ListSessionsRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -6673,6 +6895,7 @@ type ListSessionsResponse struct {
 	Sessions []SessionInfo `json:"sessions"`
 }
 
+// MarshalJSON encodes v as the ListSessionsResponse schema definition's JSON.
 func (v ListSessionsResponse) MarshalJSON() ([]byte, error) {
 	type Alias ListSessionsResponse
 	var a Alias
@@ -6683,6 +6906,7 @@ func (v ListSessionsResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the ListSessionsResponse schema definition's JSON into v.
 func (v *ListSessionsResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ListSessionsResponse", "sessions")
 	if err != nil {
@@ -6708,6 +6932,7 @@ func (v *ListSessionsResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ListSessionsResponse schema definition.
 func (v *ListSessionsResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -6748,6 +6973,7 @@ type LoadSessionRequest struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// MarshalJSON encodes v as the LoadSessionRequest schema definition's JSON.
 func (v LoadSessionRequest) MarshalJSON() ([]byte, error) {
 	type Alias LoadSessionRequest
 	var a Alias
@@ -6758,6 +6984,7 @@ func (v LoadSessionRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the LoadSessionRequest schema definition's JSON into v.
 func (v *LoadSessionRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "LoadSessionRequest", "cwd", "mcpServers", "sessionId")
 	if err != nil {
@@ -6777,6 +7004,7 @@ func (v *LoadSessionRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the LoadSessionRequest schema definition.
 func (v *LoadSessionRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -6826,6 +7054,7 @@ type LoadSessionResponse struct {
 	Modes *SessionModeState `json:"modes,omitempty"`
 }
 
+// UnmarshalJSON decodes the LoadSessionResponse schema definition's JSON into v.
 func (v *LoadSessionResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "LoadSessionResponse")
 	if err != nil {
@@ -6851,6 +7080,7 @@ func (v *LoadSessionResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the LoadSessionResponse schema definition.
 func (v *LoadSessionResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -6876,6 +7106,7 @@ type LogoutCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the LogoutCapabilities schema definition's JSON into v.
 func (v *LogoutCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "LogoutCapabilities")
 	if err != nil {
@@ -6907,6 +7138,7 @@ type LogoutRequest struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the LogoutRequest schema definition's JSON into v.
 func (v *LogoutRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "LogoutRequest")
 	if err != nil {
@@ -6926,6 +7158,7 @@ func (v *LogoutRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the LogoutRequest schema definition.
 func (v *LogoutRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -6944,6 +7177,7 @@ type LogoutResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the LogoutResponse schema definition's JSON into v.
 func (v *LogoutResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "LogoutResponse")
 	if err != nil {
@@ -6963,6 +7197,7 @@ func (v *LogoutResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the LogoutResponse schema definition.
 func (v *LogoutResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -6997,6 +7232,7 @@ type McpCapabilities struct {
 	Sse bool `json:"sse,omitempty"`
 }
 
+// UnmarshalJSON decodes the McpCapabilities schema definition's JSON into v.
 func (v *McpCapabilities) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "McpCapabilities")
 	if err != nil {
@@ -7060,6 +7296,7 @@ type McpServerHttpInline struct {
 	Url string `json:"url"`
 }
 
+// MarshalJSON encodes v as the "http" variant of the McpServer schema definition's JSON.
 func (v McpServerHttpInline) MarshalJSON() ([]byte, error) {
 	type Alias McpServerHttpInline
 	var a Alias
@@ -7070,6 +7307,7 @@ func (v McpServerHttpInline) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the "http" variant of the McpServer schema definition's JSON into v.
 func (v *McpServerHttpInline) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "McpServerHttpInline", "headers", "name", "url")
 	if err != nil {
@@ -7108,6 +7346,7 @@ type McpServerSseInline struct {
 	Url string `json:"url"`
 }
 
+// MarshalJSON encodes v as the "sse" variant of the McpServer schema definition's JSON.
 func (v McpServerSseInline) MarshalJSON() ([]byte, error) {
 	type Alias McpServerSseInline
 	var a Alias
@@ -7118,6 +7357,7 @@ func (v McpServerSseInline) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the "sse" variant of the McpServer schema definition's JSON into v.
 func (v *McpServerSseInline) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "McpServerSseInline", "headers", "name", "url")
 	if err != nil {
@@ -7162,6 +7402,7 @@ type McpServerAcpInline struct {
 	Type     string         `json:"type"`
 }
 
+// UnmarshalJSON decodes the "acp" variant of the McpServer schema definition's JSON into v.
 func (v *McpServerAcpInline) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "McpServerAcpInline", "name", "serverId")
 	if err != nil {
@@ -7214,6 +7455,7 @@ type McpServer struct {
 	Unknown json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes the McpServer schema definition's JSON into u.
 func (u *McpServer) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -7290,6 +7532,7 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 	return errors.New("McpServer: missing discriminator \"type\"")
 }
 
+// MarshalJSON encodes u as the McpServer schema definition's JSON.
 func (u McpServer) MarshalJSON() ([]byte, error) {
 	if u.Http != nil {
 		_b, _e := json.Marshal(*u.Http)
@@ -7344,6 +7587,7 @@ func (u McpServer) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("McpServer: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the McpServer schema definition.
 func (u *McpServer) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -7404,6 +7648,7 @@ type McpServerAcp struct {
 	ServerId McpServerAcpId `json:"serverId"`
 }
 
+// UnmarshalJSON decodes the McpServerAcp schema definition's JSON into v.
 func (v *McpServerAcp) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "McpServerAcp", "name", "serverId")
 	if err != nil {
@@ -7449,6 +7694,7 @@ type McpServerHttp struct {
 	Url string `json:"url"`
 }
 
+// MarshalJSON encodes v as the McpServerHttp schema definition's JSON.
 func (v McpServerHttp) MarshalJSON() ([]byte, error) {
 	type Alias McpServerHttp
 	var a Alias
@@ -7459,6 +7705,7 @@ func (v McpServerHttp) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the McpServerHttp schema definition's JSON into v.
 func (v *McpServerHttp) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "McpServerHttp", "headers", "name", "url")
 	if err != nil {
@@ -7494,6 +7741,7 @@ type McpServerSse struct {
 	Url string `json:"url"`
 }
 
+// MarshalJSON encodes v as the McpServerSse schema definition's JSON.
 func (v McpServerSse) MarshalJSON() ([]byte, error) {
 	type Alias McpServerSse
 	var a Alias
@@ -7504,6 +7752,7 @@ func (v McpServerSse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the McpServerSse schema definition's JSON into v.
 func (v *McpServerSse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "McpServerSse", "headers", "name", "url")
 	if err != nil {
@@ -7541,6 +7790,7 @@ type McpServerStdio struct {
 	Name string `json:"name"`
 }
 
+// MarshalJSON encodes v as the McpServerStdio schema definition's JSON.
 func (v McpServerStdio) MarshalJSON() ([]byte, error) {
 	type Alias McpServerStdio
 	var a Alias
@@ -7554,6 +7804,7 @@ func (v McpServerStdio) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the McpServerStdio schema definition's JSON into v.
 func (v *McpServerStdio) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "McpServerStdio", "args", "command", "env", "name")
 	if err != nil {
@@ -7573,6 +7824,7 @@ func (v *McpServerStdio) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the McpServerStdio schema definition.
 func (v *McpServerStdio) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -7608,6 +7860,7 @@ type MultiSelectItemsString struct {
 	Type string   `json:"type"`
 }
 
+// MarshalJSON encodes v as the "string" variant of the MultiSelectItems schema definition's JSON.
 func (v MultiSelectItemsString) MarshalJSON() ([]byte, error) {
 	type Alias MultiSelectItemsString
 	var a Alias
@@ -7618,6 +7871,7 @@ func (v MultiSelectItemsString) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the "string" variant of the MultiSelectItems schema definition's JSON into v.
 func (v *MultiSelectItemsString) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "MultiSelectItemsString", "enum")
 	if err != nil {
@@ -7650,6 +7904,7 @@ type MultiSelectItemsOther struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
+// MarshalJSON encodes v as the Other variant of the MultiSelectItems schema definition's JSON.
 func (v MultiSelectItemsOther) MarshalJSON() ([]byte, error) {
 	type Alias MultiSelectItemsOther
 	var a Alias
@@ -7670,6 +7925,7 @@ func (v MultiSelectItemsOther) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// UnmarshalJSON decodes the Other variant of the MultiSelectItems schema definition's JSON into v.
 func (v *MultiSelectItemsOther) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "MultiSelectItemsOther")
 	if err != nil {
@@ -7701,6 +7957,7 @@ type MultiSelectItems struct {
 	Titled *TitledMultiSelectItems `json:"-"`
 }
 
+// UnmarshalJSON decodes the MultiSelectItems schema definition's JSON into u.
 func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -7758,6 +8015,7 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 	return errors.New("MultiSelectItems: missing discriminator \"type\"")
 }
 
+// MarshalJSON encodes u as the MultiSelectItems schema definition's JSON.
 func (u MultiSelectItems) MarshalJSON() ([]byte, error) {
 	if u.String != nil {
 		_b, _e := json.Marshal(*u.String)
@@ -7796,6 +8054,7 @@ func (u MultiSelectItems) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("MultiSelectItems: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the MultiSelectItems schema definition.
 func (u *MultiSelectItems) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -7867,6 +8126,7 @@ type MultiSelectPropertySchema struct {
 	Title *string `json:"title,omitempty"`
 }
 
+// UnmarshalJSON decodes the MultiSelectPropertySchema schema definition's JSON into v.
 func (v *MultiSelectPropertySchema) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "MultiSelectPropertySchema", "items")
 	if err != nil {
@@ -7894,6 +8154,7 @@ func (v *MultiSelectPropertySchema) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the MultiSelectPropertySchema schema definition.
 func (v *MultiSelectPropertySchema) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -7923,6 +8184,7 @@ type NesCapabilities struct {
 	Events *NesEventCapabilities `json:"events,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesCapabilities schema definition's JSON into v.
 func (v *NesCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesCapabilities")
 	if err != nil {
@@ -7972,6 +8234,7 @@ type NesContextCapabilities struct {
 	UserActions *NesUserActionsCapabilities `json:"userActions,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesContextCapabilities schema definition's JSON into v.
 func (v *NesContextCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesContextCapabilities")
 	if err != nil {
@@ -8017,6 +8280,7 @@ type NesDiagnosticsCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesDiagnosticsCapabilities schema definition's JSON into v.
 func (v *NesDiagnosticsCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesDiagnosticsCapabilities")
 	if err != nil {
@@ -8052,6 +8316,7 @@ type NesDocumentDidChangeCapabilities struct {
 	SyncKind TextDocumentSyncKind `json:"syncKind"`
 }
 
+// UnmarshalJSON decodes the NesDocumentDidChangeCapabilities schema definition's JSON into v.
 func (v *NesDocumentDidChangeCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesDocumentDidChangeCapabilities", "syncKind")
 	if err != nil {
@@ -8085,6 +8350,7 @@ type NesDocumentDidCloseCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesDocumentDidCloseCapabilities schema definition's JSON into v.
 func (v *NesDocumentDidCloseCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesDocumentDidCloseCapabilities")
 	if err != nil {
@@ -8118,6 +8384,7 @@ type NesDocumentDidFocusCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesDocumentDidFocusCapabilities schema definition's JSON into v.
 func (v *NesDocumentDidFocusCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesDocumentDidFocusCapabilities")
 	if err != nil {
@@ -8151,6 +8418,7 @@ type NesDocumentDidOpenCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesDocumentDidOpenCapabilities schema definition's JSON into v.
 func (v *NesDocumentDidOpenCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesDocumentDidOpenCapabilities")
 	if err != nil {
@@ -8184,6 +8452,7 @@ type NesDocumentDidSaveCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesDocumentDidSaveCapabilities schema definition's JSON into v.
 func (v *NesDocumentDidSaveCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesDocumentDidSaveCapabilities")
 	if err != nil {
@@ -8227,6 +8496,7 @@ type NesDocumentEventCapabilities struct {
 	DidSave *NesDocumentDidSaveCapabilities `json:"didSave,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesDocumentEventCapabilities schema definition's JSON into v.
 func (v *NesDocumentEventCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesDocumentEventCapabilities")
 	if err != nil {
@@ -8272,6 +8542,7 @@ type NesEditHistoryCapabilities struct {
 	MaxCount *uint32 `json:"maxCount,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesEditHistoryCapabilities schema definition's JSON into v.
 func (v *NesEditHistoryCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesEditHistoryCapabilities")
 	if err != nil {
@@ -8309,6 +8580,7 @@ type NesEventCapabilities struct {
 	Document *NesDocumentEventCapabilities `json:"document,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesEventCapabilities schema definition's JSON into v.
 func (v *NesEventCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesEventCapabilities")
 	if err != nil {
@@ -8344,6 +8616,7 @@ type NesJumpCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesJumpCapabilities schema definition's JSON into v.
 func (v *NesJumpCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesJumpCapabilities")
 	if err != nil {
@@ -8377,6 +8650,7 @@ type NesOpenFilesCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesOpenFilesCapabilities schema definition's JSON into v.
 func (v *NesOpenFilesCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesOpenFilesCapabilities")
 	if err != nil {
@@ -8412,6 +8686,7 @@ type NesRecentFilesCapabilities struct {
 	MaxCount *uint32 `json:"maxCount,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesRecentFilesCapabilities schema definition's JSON into v.
 func (v *NesRecentFilesCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesRecentFilesCapabilities")
 	if err != nil {
@@ -8447,6 +8722,7 @@ type NesRelatedSnippetsCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesRelatedSnippetsCapabilities schema definition's JSON into v.
 func (v *NesRelatedSnippetsCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesRelatedSnippetsCapabilities")
 	if err != nil {
@@ -8480,6 +8756,7 @@ type NesRenameCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesRenameCapabilities schema definition's JSON into v.
 func (v *NesRenameCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesRenameCapabilities")
 	if err != nil {
@@ -8513,6 +8790,7 @@ type NesSearchAndReplaceCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesSearchAndReplaceCapabilities schema definition's JSON into v.
 func (v *NesSearchAndReplaceCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesSearchAndReplaceCapabilities")
 	if err != nil {
@@ -8548,6 +8826,7 @@ type NesUserActionsCapabilities struct {
 	MaxCount *uint32 `json:"maxCount,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesUserActionsCapabilities schema definition's JSON into v.
 func (v *NesUserActionsCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NesUserActionsCapabilities")
 	if err != nil {
@@ -8591,6 +8870,7 @@ type NewSessionRequest struct {
 	McpServers []McpServer `json:"mcpServers"`
 }
 
+// MarshalJSON encodes v as the NewSessionRequest schema definition's JSON.
 func (v NewSessionRequest) MarshalJSON() ([]byte, error) {
 	type Alias NewSessionRequest
 	var a Alias
@@ -8601,6 +8881,7 @@ func (v NewSessionRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the NewSessionRequest schema definition's JSON into v.
 func (v *NewSessionRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NewSessionRequest", "cwd", "mcpServers")
 	if err != nil {
@@ -8620,6 +8901,7 @@ func (v *NewSessionRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the NewSessionRequest schema definition.
 func (v *NewSessionRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -8675,6 +8957,7 @@ type NewSessionResponse struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the NewSessionResponse schema definition's JSON into v.
 func (v *NewSessionResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NewSessionResponse", "sessionId")
 	if err != nil {
@@ -8700,6 +8983,7 @@ func (v *NewSessionResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the NewSessionResponse schema definition.
 func (v *NewSessionResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -8737,6 +9021,7 @@ type Notice struct {
 	Title string `json:"title"`
 }
 
+// UnmarshalJSON decodes the Notice schema definition's JSON into v.
 func (v *Notice) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "Notice", "severity", "title")
 	if err != nil {
@@ -8758,6 +9043,7 @@ func (v *Notice) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the Notice schema definition.
 func (v *Notice) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -8782,9 +9068,18 @@ type NoticeCapabilities struct{}
 type NoticeSeverity string
 
 const (
-	NoticeSeverityInfo    NoticeSeverity = "info"
+	// NoticeSeverityInfo is the "info" value.
+	//
+	// Informational notice.
+	NoticeSeverityInfo NoticeSeverity = "info"
+	// NoticeSeverityWarning is the "warning" value.
+	//
+	// Warning notice.
 	NoticeSeverityWarning NoticeSeverity = "warning"
-	NoticeSeverityError   NoticeSeverity = "error"
+	// NoticeSeverityError is the "error" value.
+	//
+	// Error notice.
+	NoticeSeverityError NoticeSeverity = "error"
 )
 
 // Schema for number (floating-point) properties in an elicitation form.
@@ -8819,6 +9114,7 @@ type NumberPropertySchema struct {
 	Title *string `json:"title,omitempty"`
 }
 
+// UnmarshalJSON decodes the NumberPropertySchema schema definition's JSON into v.
 func (v *NumberPropertySchema) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "NumberPropertySchema")
 	if err != nil {
@@ -8860,6 +9156,7 @@ type PermissionOption struct {
 	OptionId PermissionOptionId `json:"optionId"`
 }
 
+// UnmarshalJSON decodes the PermissionOption schema definition's JSON into v.
 func (v *PermissionOption) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PermissionOption", "kind", "name", "optionId")
 	if err != nil {
@@ -8888,9 +9185,21 @@ type PermissionOptionId string
 type PermissionOptionKind string
 
 const (
-	PermissionOptionKindAllowOnce    PermissionOptionKind = "allow_once"
-	PermissionOptionKindAllowAlways  PermissionOptionKind = "allow_always"
-	PermissionOptionKindRejectOnce   PermissionOptionKind = "reject_once"
+	// PermissionOptionKindAllowOnce is the "allow_once" value.
+	//
+	// Allow this operation only this time.
+	PermissionOptionKindAllowOnce PermissionOptionKind = "allow_once"
+	// PermissionOptionKindAllowAlways is the "allow_always" value.
+	//
+	// Allow this operation and remember the choice.
+	PermissionOptionKindAllowAlways PermissionOptionKind = "allow_always"
+	// PermissionOptionKindRejectOnce is the "reject_once" value.
+	//
+	// Reject this operation only this time.
+	PermissionOptionKindRejectOnce PermissionOptionKind = "reject_once"
+	// PermissionOptionKindRejectAlways is the "reject_always" value.
+	//
+	// Reject this operation and remember the choice.
 	PermissionOptionKindRejectAlways PermissionOptionKind = "reject_always"
 )
 
@@ -8915,6 +9224,7 @@ type Plan struct {
 	Entries []PlanEntry `json:"entries"`
 }
 
+// MarshalJSON encodes v as the Plan schema definition's JSON.
 func (v Plan) MarshalJSON() ([]byte, error) {
 	type Alias Plan
 	var a Alias
@@ -8925,6 +9235,7 @@ func (v Plan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the Plan schema definition's JSON into v.
 func (v *Plan) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "Plan", "entries")
 	if err != nil {
@@ -8962,6 +9273,7 @@ type PlanCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the PlanCapabilities schema definition's JSON into v.
 func (v *PlanCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PlanCapabilities")
 	if err != nil {
@@ -9002,6 +9314,7 @@ type PlanEntry struct {
 	Status PlanEntryStatus `json:"status"`
 }
 
+// UnmarshalJSON decodes the PlanEntry schema definition's JSON into v.
 func (v *PlanEntry) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PlanEntry", "content", "priority", "status")
 	if err != nil {
@@ -9029,9 +9342,18 @@ func (v *PlanEntry) UnmarshalJSON(b []byte) error {
 type PlanEntryPriority string
 
 const (
-	PlanEntryPriorityHigh   PlanEntryPriority = "high"
+	// PlanEntryPriorityHigh is the "high" value.
+	//
+	// High priority task - critical to the overall goal.
+	PlanEntryPriorityHigh PlanEntryPriority = "high"
+	// PlanEntryPriorityMedium is the "medium" value.
+	//
+	// Medium priority task - important but not critical.
 	PlanEntryPriorityMedium PlanEntryPriority = "medium"
-	PlanEntryPriorityLow    PlanEntryPriority = "low"
+	// PlanEntryPriorityLow is the "low" value.
+	//
+	// Low priority task - nice to have but not essential.
+	PlanEntryPriorityLow PlanEntryPriority = "low"
 )
 
 // Status of a plan entry in the execution flow.
@@ -9041,9 +9363,18 @@ const (
 type PlanEntryStatus string
 
 const (
-	PlanEntryStatusPending    PlanEntryStatus = "pending"
+	// PlanEntryStatusPending is the "pending" value.
+	//
+	// The task has not started yet.
+	PlanEntryStatusPending PlanEntryStatus = "pending"
+	// PlanEntryStatusInProgress is the "in_progress" value.
+	//
+	// The task is currently being worked on.
 	PlanEntryStatusInProgress PlanEntryStatus = "in_progress"
-	PlanEntryStatusCompleted  PlanEntryStatus = "completed"
+	// PlanEntryStatusCompleted is the "completed" value.
+	//
+	// The task has been successfully completed.
+	PlanEntryStatusCompleted PlanEntryStatus = "completed"
 )
 
 // **UNSTABLE**
@@ -9064,6 +9395,7 @@ type PlanFile struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the PlanFile schema definition's JSON into v.
 func (v *PlanFile) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PlanFile", "planId", "uri")
 	if err != nil {
@@ -9111,6 +9443,7 @@ type PlanItems struct {
 	PlanId PlanId `json:"planId"`
 }
 
+// MarshalJSON encodes v as the PlanItems schema definition's JSON.
 func (v PlanItems) MarshalJSON() ([]byte, error) {
 	type Alias PlanItems
 	var a Alias
@@ -9121,6 +9454,7 @@ func (v PlanItems) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the PlanItems schema definition's JSON into v.
 func (v *PlanItems) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PlanItems", "entries", "planId")
 	if err != nil {
@@ -9162,6 +9496,7 @@ type PlanMarkdown struct {
 	PlanId PlanId `json:"planId"`
 }
 
+// UnmarshalJSON decodes the PlanMarkdown schema definition's JSON into v.
 func (v *PlanMarkdown) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PlanMarkdown", "content", "planId")
 	if err != nil {
@@ -9197,6 +9532,7 @@ type PlanRemoved struct {
 	PlanId PlanId `json:"planId"`
 }
 
+// UnmarshalJSON decodes the PlanRemoved schema definition's JSON into v.
 func (v *PlanRemoved) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PlanRemoved", "planId")
 	if err != nil {
@@ -9232,6 +9568,7 @@ type PlanUpdate struct {
 	Plan PlanUpdateContent `json:"plan"`
 }
 
+// UnmarshalJSON decodes the PlanUpdate schema definition's JSON into v.
 func (v *PlanUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PlanUpdate", "plan")
 	if err != nil {
@@ -9251,6 +9588,7 @@ func (v *PlanUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the PlanUpdate schema definition.
 func (v *PlanUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -9280,6 +9618,7 @@ type PlanUpdateContentItems struct {
 	Type   string `json:"type"`
 }
 
+// MarshalJSON encodes v as the "items" variant of the PlanUpdateContent schema definition's JSON.
 func (v PlanUpdateContentItems) MarshalJSON() ([]byte, error) {
 	type Alias PlanUpdateContentItems
 	var a Alias
@@ -9290,6 +9629,7 @@ func (v PlanUpdateContentItems) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the "items" variant of the PlanUpdateContent schema definition's JSON into v.
 func (v *PlanUpdateContentItems) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PlanUpdateContentItems", "entries", "planId")
 	if err != nil {
@@ -9328,6 +9668,7 @@ type PlanUpdateContentFile struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the "file" variant of the PlanUpdateContent schema definition's JSON into v.
 func (v *PlanUpdateContentFile) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PlanUpdateContentFile", "planId", "uri")
 	if err != nil {
@@ -9362,6 +9703,7 @@ type PlanUpdateContentMarkdown struct {
 	Type   string `json:"type"`
 }
 
+// UnmarshalJSON decodes the "markdown" variant of the PlanUpdateContent schema definition's JSON into v.
 func (v *PlanUpdateContentMarkdown) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PlanUpdateContentMarkdown", "content", "planId")
 	if err != nil {
@@ -9398,6 +9740,7 @@ type PlanUpdateContent struct {
 	Unknown json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes the PlanUpdateContent schema definition's JSON into u.
 func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -9507,6 +9850,7 @@ func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes u as the PlanUpdateContent schema definition's JSON.
 func (u PlanUpdateContent) MarshalJSON() ([]byte, error) {
 	if u.Items != nil {
 		_b, _e := json.Marshal(*u.Items)
@@ -9550,6 +9894,7 @@ func (u PlanUpdateContent) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("PlanUpdateContent: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the PlanUpdateContent schema definition.
 func (u *PlanUpdateContent) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -9588,9 +9933,18 @@ func (u *PlanUpdateContent) validate(abs func(string) bool) error {
 type PositionEncodingKind string
 
 const (
+	// PositionEncodingKindUtf16 is the "utf-16" value.
+	//
+	// Character offsets count UTF-16 code units. This is the default.
 	PositionEncodingKindUtf16 PositionEncodingKind = "utf-16"
+	// PositionEncodingKindUtf32 is the "utf-32" value.
+	//
+	// Character offsets count Unicode code points.
 	PositionEncodingKindUtf32 PositionEncodingKind = "utf-32"
-	PositionEncodingKindUtf8  PositionEncodingKind = "utf-8"
+	// PositionEncodingKindUtf8 is the "utf-8" value.
+	//
+	// Character offsets count UTF-8 code units (bytes).
+	PositionEncodingKindUtf8 PositionEncodingKind = "utf-8"
 )
 
 // Prompt capabilities supported by the agent in 'session/prompt' requests.
@@ -9629,6 +9983,7 @@ type PromptCapabilities struct {
 	Image bool `json:"image,omitempty"`
 }
 
+// UnmarshalJSON decodes the PromptCapabilities schema definition's JSON into v.
 func (v *PromptCapabilities) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "PromptCapabilities")
 	if err != nil {
@@ -9703,6 +10058,7 @@ type PromptRequest struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// MarshalJSON encodes v as the PromptRequest schema definition's JSON.
 func (v PromptRequest) MarshalJSON() ([]byte, error) {
 	type Alias PromptRequest
 	var a Alias
@@ -9713,6 +10069,7 @@ func (v PromptRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the PromptRequest schema definition's JSON into v.
 func (v *PromptRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PromptRequest", "prompt", "sessionId")
 	if err != nil {
@@ -9732,6 +10089,7 @@ func (v *PromptRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the PromptRequest schema definition.
 func (v *PromptRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -9765,6 +10123,7 @@ type PromptResponse struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+// UnmarshalJSON decodes the PromptResponse schema definition's JSON into v.
 func (v *PromptResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "PromptResponse", "stopReason")
 	if err != nil {
@@ -9786,6 +10145,7 @@ func (v *PromptResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the PromptResponse schema definition.
 func (v *PromptResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -9816,6 +10176,7 @@ type ProvidersCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the ProvidersCapabilities schema definition's JSON into v.
 func (v *ProvidersCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ProvidersCapabilities")
 	if err != nil {
@@ -9855,6 +10216,7 @@ type ReadTextFileRequest struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the ReadTextFileRequest schema definition's JSON into v.
 func (v *ReadTextFileRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ReadTextFileRequest", "path", "sessionId")
 	if err != nil {
@@ -9874,6 +10236,7 @@ func (v *ReadTextFileRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ReadTextFileRequest schema definition.
 func (v *ReadTextFileRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -9903,6 +10266,7 @@ type ReadTextFileResponse struct {
 	Content string `json:"content"`
 }
 
+// UnmarshalJSON decodes the ReadTextFileResponse schema definition's JSON into v.
 func (v *ReadTextFileResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ReadTextFileResponse", "content")
 	if err != nil {
@@ -9922,6 +10286,7 @@ func (v *ReadTextFileResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ReadTextFileResponse schema definition.
 func (v *ReadTextFileResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -9944,6 +10309,7 @@ type ReleaseTerminalRequest struct {
 	TerminalId TerminalId `json:"terminalId"`
 }
 
+// UnmarshalJSON decodes the ReleaseTerminalRequest schema definition's JSON into v.
 func (v *ReleaseTerminalRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ReleaseTerminalRequest", "sessionId", "terminalId")
 	if err != nil {
@@ -9963,6 +10329,7 @@ func (v *ReleaseTerminalRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ReleaseTerminalRequest schema definition.
 func (v *ReleaseTerminalRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -9981,6 +10348,7 @@ type ReleaseTerminalResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the ReleaseTerminalResponse schema definition's JSON into v.
 func (v *ReleaseTerminalResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ReleaseTerminalResponse")
 	if err != nil {
@@ -10000,6 +10368,7 @@ func (v *ReleaseTerminalResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ReleaseTerminalResponse schema definition.
 func (v *ReleaseTerminalResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -10008,6 +10377,7 @@ func (v *ReleaseTerminalResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// The JSON-RPC 'null' request id.
 type RequestIdNull struct{}
 
 // A numeric JSON-RPC request id.
@@ -10034,6 +10404,7 @@ type RequestId struct {
 	Str *RequestIdStr `json:"-"`
 }
 
+// UnmarshalJSON decodes the RequestId schema definition's JSON into u.
 func (u *RequestId) UnmarshalJSON(b []byte) error {
 	*u = RequestId{}
 	if string(b) == "null" {
@@ -10075,6 +10446,7 @@ func (u *RequestId) UnmarshalJSON(b []byte) error {
 	return errors.New("RequestId: no variant matches")
 }
 
+// MarshalJSON encodes u as the RequestId schema definition's JSON.
 func (u RequestId) MarshalJSON() ([]byte, error) {
 	if u.Null != nil {
 		return json.Marshal(nil)
@@ -10096,6 +10468,7 @@ func (u RequestId) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("RequestId: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the RequestId schema definition.
 func (u *RequestId) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -10145,6 +10518,7 @@ type RequestPermissionOutcomeSelected struct {
 	Outcome  string             `json:"outcome"`
 }
 
+// UnmarshalJSON decodes the "selected" variant of the RequestPermissionOutcome schema definition's JSON into v.
 func (v *RequestPermissionOutcomeSelected) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "RequestPermissionOutcomeSelected", "optionId")
 	if err != nil {
@@ -10181,6 +10555,7 @@ type RequestPermissionOutcome struct {
 	Unknown json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes the RequestPermissionOutcome schema definition's JSON into u.
 func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -10250,6 +10625,7 @@ func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes u as the RequestPermissionOutcome schema definition's JSON.
 func (u RequestPermissionOutcome) MarshalJSON() ([]byte, error) {
 	if u.Cancelled != nil {
 		_b, _e := json.Marshal(*u.Cancelled)
@@ -10281,6 +10657,7 @@ func (u RequestPermissionOutcome) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("RequestPermissionOutcome: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the RequestPermissionOutcome schema definition.
 func (u *RequestPermissionOutcome) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -10326,6 +10703,7 @@ type RequestPermissionRequest struct {
 	ToolCall ToolCallUpdate `json:"toolCall"`
 }
 
+// MarshalJSON encodes v as the RequestPermissionRequest schema definition's JSON.
 func (v RequestPermissionRequest) MarshalJSON() ([]byte, error) {
 	type Alias RequestPermissionRequest
 	var a Alias
@@ -10336,6 +10714,7 @@ func (v RequestPermissionRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the RequestPermissionRequest schema definition's JSON into v.
 func (v *RequestPermissionRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "RequestPermissionRequest", "options", "sessionId", "toolCall")
 	if err != nil {
@@ -10355,6 +10734,7 @@ func (v *RequestPermissionRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the RequestPermissionRequest schema definition.
 func (v *RequestPermissionRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -10378,6 +10758,7 @@ type RequestPermissionResponse struct {
 	Outcome RequestPermissionOutcome `json:"outcome"`
 }
 
+// UnmarshalJSON decodes the RequestPermissionResponse schema definition's JSON into v.
 func (v *RequestPermissionResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "RequestPermissionResponse", "outcome")
 	if err != nil {
@@ -10397,6 +10778,7 @@ func (v *RequestPermissionResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the RequestPermissionResponse schema definition.
 func (v *RequestPermissionResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -10420,6 +10802,7 @@ type RequiresActionStateUpdate struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the RequiresActionStateUpdate schema definition's JSON into v.
 func (v *RequiresActionStateUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "RequiresActionStateUpdate")
 	if err != nil {
@@ -10463,6 +10846,7 @@ type ResourceLink struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the ResourceLink schema definition's JSON into v.
 func (v *ResourceLink) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ResourceLink", "name", "uri")
 	if err != nil {
@@ -10520,6 +10904,7 @@ type ResumeSessionRequest struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the ResumeSessionRequest schema definition's JSON into v.
 func (v *ResumeSessionRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ResumeSessionRequest", "cwd", "sessionId")
 	if err != nil {
@@ -10539,6 +10924,7 @@ func (v *ResumeSessionRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ResumeSessionRequest schema definition.
 func (v *ResumeSessionRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -10588,6 +10974,7 @@ type ResumeSessionResponse struct {
 	Modes *SessionModeState `json:"modes,omitempty"`
 }
 
+// UnmarshalJSON decodes the ResumeSessionResponse schema definition's JSON into v.
 func (v *ResumeSessionResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ResumeSessionResponse")
 	if err != nil {
@@ -10613,6 +11000,7 @@ func (v *ResumeSessionResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ResumeSessionResponse schema definition.
 func (v *ResumeSessionResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -10630,8 +11018,14 @@ func (v *ResumeSessionResponse) validate(abs func(string) bool) error {
 type Role string
 
 const (
+	// RoleAssistant is the "assistant" value.
+	//
+	// The assistant side of a conversation.
 	RoleAssistant Role = "assistant"
-	RoleUser      Role = "user"
+	// RoleUser is the "user" value.
+	//
+	// The user side of a conversation.
+	RoleUser Role = "user"
 )
 
 // **UNSTABLE**
@@ -10646,6 +11040,7 @@ type RunningStateUpdate struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the RunningStateUpdate schema definition's JSON into v.
 func (v *RunningStateUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "RunningStateUpdate")
 	if err != nil {
@@ -10677,6 +11072,7 @@ type SelectedPermissionOutcome struct {
 	OptionId PermissionOptionId `json:"optionId"`
 }
 
+// UnmarshalJSON decodes the SelectedPermissionOutcome schema definition's JSON into v.
 func (v *SelectedPermissionOutcome) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SelectedPermissionOutcome", "optionId")
 	if err != nil {
@@ -10711,6 +11107,7 @@ type SessionAdditionalDirectoriesCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionAdditionalDirectoriesCapabilities schema definition's JSON into v.
 func (v *SessionAdditionalDirectoriesCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionAdditionalDirectoriesCapabilities")
 	if err != nil {
@@ -10746,6 +11143,7 @@ type SessionCancelCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionCancelCapabilities schema definition's JSON into v.
 func (v *SessionCancelCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionCancelCapabilities")
 	if err != nil {
@@ -10822,6 +11220,7 @@ type SessionCapabilities struct {
 	Resume *SessionResumeCapabilities `json:"resume,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionCapabilities schema definition's JSON into v.
 func (v *SessionCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionCapabilities")
 	if err != nil {
@@ -10865,6 +11264,7 @@ type SessionCloseCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionCloseCapabilities schema definition's JSON into v.
 func (v *SessionCloseCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionCloseCapabilities")
 	if err != nil {
@@ -10890,6 +11290,7 @@ type SessionConfigBoolean struct {
 	CurrentValue bool `json:"currentValue"`
 }
 
+// UnmarshalJSON decodes the SessionConfigBoolean schema definition's JSON into v.
 func (v *SessionConfigBoolean) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionConfigBoolean", "currentValue")
 	if err != nil {
@@ -10933,6 +11334,7 @@ type SessionConfigOptionSelect struct {
 	Type    string                     `json:"type"`
 }
 
+// UnmarshalJSON decodes the "select" variant of the SessionConfigOption schema definition's JSON into v.
 func (v *SessionConfigOptionSelect) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionConfigOptionSelect", "currentValue", "id", "name", "options")
 	if err != nil {
@@ -10956,6 +11358,7 @@ func (v *SessionConfigOptionSelect) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "select" variant of the SessionConfigOption schema definition.
 func (v *SessionConfigOptionSelect) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -10988,6 +11391,7 @@ type SessionConfigOptionBoolean struct {
 	Type string `json:"type"`
 }
 
+// UnmarshalJSON decodes the "boolean" variant of the SessionConfigOption schema definition's JSON into v.
 func (v *SessionConfigOptionBoolean) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionConfigOptionBoolean", "currentValue", "id", "name")
 	if err != nil {
@@ -11022,6 +11426,7 @@ type SessionConfigOption struct {
 	Unknown json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes the SessionConfigOption schema definition's JSON into u.
 func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -11102,6 +11507,7 @@ func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes u as the SessionConfigOption schema definition's JSON.
 func (u SessionConfigOption) MarshalJSON() ([]byte, error) {
 	if u.Select != nil {
 		_b, _e := json.Marshal(*u.Select)
@@ -11133,6 +11539,7 @@ func (u SessionConfigOption) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("SessionConfigOption: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the SessionConfigOption schema definition.
 func (u *SessionConfigOption) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -11175,9 +11582,21 @@ func (u *SessionConfigOption) validate(abs func(string) bool) error {
 type SessionConfigOptionCategory string
 
 const (
-	SessionConfigOptionCategoryMode         SessionConfigOptionCategory = "mode"
-	SessionConfigOptionCategoryModel        SessionConfigOptionCategory = "model"
-	SessionConfigOptionCategoryModelConfig  SessionConfigOptionCategory = "model_config"
+	// SessionConfigOptionCategoryMode is the "mode" value.
+	//
+	// Session mode selector.
+	SessionConfigOptionCategoryMode SessionConfigOptionCategory = "mode"
+	// SessionConfigOptionCategoryModel is the "model" value.
+	//
+	// Model selector.
+	SessionConfigOptionCategoryModel SessionConfigOptionCategory = "model"
+	// SessionConfigOptionCategoryModelConfig is the "model_config" value.
+	//
+	// Model-related configuration parameter.
+	SessionConfigOptionCategoryModelConfig SessionConfigOptionCategory = "model_config"
+	// SessionConfigOptionCategoryThoughtLevel is the "thought_level" value.
+	//
+	// Thought/reasoning level selector.
 	SessionConfigOptionCategoryThoughtLevel SessionConfigOptionCategory = "thought_level"
 )
 
@@ -11198,6 +11617,7 @@ type SessionConfigOptionsCapabilities struct {
 	Boolean *BooleanConfigOptionCapabilities `json:"boolean,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionConfigOptionsCapabilities schema definition's JSON into v.
 func (v *SessionConfigOptionsCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionConfigOptionsCapabilities")
 	if err != nil {
@@ -11227,6 +11647,7 @@ type SessionConfigSelect struct {
 	Options SessionConfigSelectOptions `json:"options"`
 }
 
+// UnmarshalJSON decodes the SessionConfigSelect schema definition's JSON into v.
 func (v *SessionConfigSelect) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionConfigSelect", "currentValue", "options")
 	if err != nil {
@@ -11241,6 +11662,7 @@ func (v *SessionConfigSelect) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SessionConfigSelect schema definition.
 func (v *SessionConfigSelect) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -11268,6 +11690,7 @@ type SessionConfigSelectGroup struct {
 	Options []SessionConfigSelectOption `json:"options"`
 }
 
+// MarshalJSON encodes v as the SessionConfigSelectGroup schema definition's JSON.
 func (v SessionConfigSelectGroup) MarshalJSON() ([]byte, error) {
 	type Alias SessionConfigSelectGroup
 	var a Alias
@@ -11278,6 +11701,7 @@ func (v SessionConfigSelectGroup) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the SessionConfigSelectGroup schema definition's JSON into v.
 func (v *SessionConfigSelectGroup) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionConfigSelectGroup", "group", "name", "options")
 	if err != nil {
@@ -11317,6 +11741,7 @@ type SessionConfigSelectOption struct {
 	Value SessionConfigValueId `json:"value"`
 }
 
+// UnmarshalJSON decodes the SessionConfigSelectOption schema definition's JSON into v.
 func (v *SessionConfigSelectOption) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionConfigSelectOption", "name", "value")
 	if err != nil {
@@ -11352,6 +11777,7 @@ type SessionConfigSelectOptions struct {
 	Grouped *SessionConfigSelectOptionsGrouped `json:"-"`
 }
 
+// UnmarshalJSON decodes the SessionConfigSelectOptions schema definition's JSON into u.
 func (u *SessionConfigSelectOptions) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -11437,6 +11863,7 @@ func (u *SessionConfigSelectOptions) UnmarshalJSON(b []byte) error {
 	return errors.New("SessionConfigSelectOptions: no variant matches")
 }
 
+// MarshalJSON encodes u as the SessionConfigSelectOptions schema definition's JSON.
 func (u SessionConfigSelectOptions) MarshalJSON() ([]byte, error) {
 	if u.Ungrouped != nil {
 		if *u.Ungrouped == nil {
@@ -11461,6 +11888,7 @@ func (u SessionConfigSelectOptions) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("SessionConfigSelectOptions: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the SessionConfigSelectOptions schema definition.
 func (u *SessionConfigSelectOptions) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -11498,6 +11926,7 @@ type SessionDeleteCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionDeleteCapabilities schema definition's JSON into v.
 func (v *SessionDeleteCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionDeleteCapabilities")
 	if err != nil {
@@ -11533,6 +11962,7 @@ type SessionForkCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionForkCapabilities schema definition's JSON into v.
 func (v *SessionForkCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionForkCapabilities")
 	if err != nil {
@@ -11584,6 +12014,7 @@ type SessionInfo struct {
 	UpdatedAt *string `json:"updatedAt,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionInfo schema definition's JSON into v.
 func (v *SessionInfo) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionInfo", "cwd", "sessionId")
 	if err != nil {
@@ -11611,6 +12042,7 @@ func (v *SessionInfo) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SessionInfo schema definition.
 func (v *SessionInfo) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -11656,6 +12088,7 @@ type SessionInfoUpdate struct {
 	UpdatedAt Patch[string] `json:"updatedAt,omitzero"`
 }
 
+// UnmarshalJSON decodes the SessionInfoUpdate schema definition's JSON into v.
 func (v *SessionInfoUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionInfoUpdate")
 	if err != nil {
@@ -11691,6 +12124,7 @@ type SessionListCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionListCapabilities schema definition's JSON into v.
 func (v *SessionListCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionListCapabilities")
 	if err != nil {
@@ -11731,6 +12165,7 @@ type SessionMessage struct {
 	SenderSessionId *SessionId `json:"senderSessionId,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionMessage schema definition's JSON into v.
 func (v *SessionMessage) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionMessage", "messageId")
 	if err != nil {
@@ -11756,6 +12191,7 @@ func (v *SessionMessage) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SessionMessage schema definition.
 func (v *SessionMessage) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -11791,6 +12227,7 @@ type SessionMessageChunk struct {
 	SenderSessionId *SessionId `json:"senderSessionId,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionMessageChunk schema definition's JSON into v.
 func (v *SessionMessageChunk) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionMessageChunk", "content", "messageId")
 	if err != nil {
@@ -11814,6 +12251,7 @@ func (v *SessionMessageChunk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SessionMessageChunk schema definition.
 func (v *SessionMessageChunk) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -11843,6 +12281,7 @@ type SessionMode struct {
 	Name string `json:"name"`
 }
 
+// UnmarshalJSON decodes the SessionMode schema definition's JSON into v.
 func (v *SessionMode) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionMode", "id", "name")
 	if err != nil {
@@ -11881,6 +12320,7 @@ type SessionModeState struct {
 	CurrentModeId SessionModeId `json:"currentModeId"`
 }
 
+// MarshalJSON encodes v as the SessionModeState schema definition's JSON.
 func (v SessionModeState) MarshalJSON() ([]byte, error) {
 	type Alias SessionModeState
 	var a Alias
@@ -11891,6 +12331,7 @@ func (v SessionModeState) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the SessionModeState schema definition's JSON into v.
 func (v *SessionModeState) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionModeState", "availableModes", "currentModeId")
 	if err != nil {
@@ -11932,6 +12373,7 @@ type SessionNotification struct {
 	Update SessionUpdate `json:"update"`
 }
 
+// UnmarshalJSON decodes the SessionNotification schema definition's JSON into v.
 func (v *SessionNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionNotification", "sessionId", "update")
 	if err != nil {
@@ -11951,6 +12393,7 @@ func (v *SessionNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SessionNotification schema definition.
 func (v *SessionNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -11974,6 +12417,7 @@ type SessionResumeCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the SessionResumeCapabilities schema definition's JSON into v.
 func (v *SessionResumeCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionResumeCapabilities")
 	if err != nil {
@@ -12011,6 +12455,7 @@ type SessionUpdateUserMessageChunk struct {
 	SessionUpdate string     `json:"sessionUpdate"`
 }
 
+// UnmarshalJSON decodes the "user_message_chunk" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateUserMessageChunk) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionUpdateUserMessageChunk", "content")
 	if err != nil {
@@ -12032,6 +12477,7 @@ func (v *SessionUpdateUserMessageChunk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "user_message_chunk" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateUserMessageChunk) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12061,6 +12507,7 @@ type SessionUpdateAgentMessageChunk struct {
 	SessionUpdate string     `json:"sessionUpdate"`
 }
 
+// UnmarshalJSON decodes the "agent_message_chunk" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateAgentMessageChunk) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionUpdateAgentMessageChunk", "content")
 	if err != nil {
@@ -12082,6 +12529,7 @@ func (v *SessionUpdateAgentMessageChunk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "agent_message_chunk" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateAgentMessageChunk) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12111,6 +12559,7 @@ type SessionUpdateAgentThoughtChunk struct {
 	SessionUpdate string     `json:"sessionUpdate"`
 }
 
+// UnmarshalJSON decodes the "agent_thought_chunk" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateAgentThoughtChunk) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionUpdateAgentThoughtChunk", "content")
 	if err != nil {
@@ -12132,6 +12581,7 @@ func (v *SessionUpdateAgentThoughtChunk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "agent_thought_chunk" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateAgentThoughtChunk) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12177,6 +12627,7 @@ type SessionUpdateToolCall struct {
 	ToolCallId ToolCallId `json:"toolCallId"`
 }
 
+// UnmarshalJSON decodes the "tool_call" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateToolCall) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionUpdateToolCall", "title", "toolCallId")
 	if err != nil {
@@ -12216,6 +12667,7 @@ func (v *SessionUpdateToolCall) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "tool_call" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateToolCall) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12266,6 +12718,7 @@ type SessionToolCallUpdate struct {
 	ToolCallId ToolCallId `json:"toolCallId"`
 }
 
+// UnmarshalJSON decodes the "tool_call_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionToolCallUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionToolCallUpdate", "toolCallId")
 	if err != nil {
@@ -12307,6 +12760,7 @@ func (v *SessionToolCallUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "tool_call_update" variant of the SessionUpdate schema definition.
 func (v *SessionToolCallUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12342,6 +12796,7 @@ type SessionUpdatePlan struct {
 	SessionUpdate string      `json:"sessionUpdate"`
 }
 
+// MarshalJSON encodes v as the "plan" variant of the SessionUpdate schema definition's JSON.
 func (v SessionUpdatePlan) MarshalJSON() ([]byte, error) {
 	type Alias SessionUpdatePlan
 	var a Alias
@@ -12352,6 +12807,7 @@ func (v SessionUpdatePlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the "plan" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdatePlan) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionUpdatePlan", "entries")
 	if err != nil {
@@ -12392,6 +12848,7 @@ type SessionPlanUpdate struct {
 	SessionUpdate string            `json:"sessionUpdate"`
 }
 
+// UnmarshalJSON decodes the "plan_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionPlanUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionPlanUpdate", "plan")
 	if err != nil {
@@ -12411,6 +12868,7 @@ func (v *SessionPlanUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "plan_update" variant of the SessionUpdate schema definition.
 func (v *SessionPlanUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12439,6 +12897,7 @@ type SessionUpdatePlanRemoved struct {
 	SessionUpdate string `json:"sessionUpdate"`
 }
 
+// UnmarshalJSON decodes the "plan_removed" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdatePlanRemoved) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionUpdatePlanRemoved", "planId")
 	if err != nil {
@@ -12471,6 +12930,7 @@ type SessionAvailableCommandsUpdate struct {
 	SessionUpdate     string             `json:"sessionUpdate"`
 }
 
+// MarshalJSON encodes v as the "available_commands_update" variant of the SessionUpdate schema definition's JSON.
 func (v SessionAvailableCommandsUpdate) MarshalJSON() ([]byte, error) {
 	type Alias SessionAvailableCommandsUpdate
 	var a Alias
@@ -12481,6 +12941,7 @@ func (v SessionAvailableCommandsUpdate) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the "available_commands_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionAvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionAvailableCommandsUpdate", "availableCommands")
 	if err != nil {
@@ -12504,6 +12965,7 @@ func (v *SessionAvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "available_commands_update" variant of the SessionUpdate schema definition.
 func (v *SessionAvailableCommandsUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12532,6 +12994,7 @@ type SessionCurrentModeUpdate struct {
 	SessionUpdate string        `json:"sessionUpdate"`
 }
 
+// UnmarshalJSON decodes the "current_mode_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionCurrentModeUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionCurrentModeUpdate", "currentModeId")
 	if err != nil {
@@ -12564,6 +13027,7 @@ type SessionConfigOptionUpdate struct {
 	SessionUpdate string                `json:"sessionUpdate"`
 }
 
+// MarshalJSON encodes v as the "config_option_update" variant of the SessionUpdate schema definition's JSON.
 func (v SessionConfigOptionUpdate) MarshalJSON() ([]byte, error) {
 	type Alias SessionConfigOptionUpdate
 	var a Alias
@@ -12574,6 +13038,7 @@ func (v SessionConfigOptionUpdate) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the "config_option_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionConfigOptionUpdate", "configOptions")
 	if err != nil {
@@ -12597,6 +13062,7 @@ func (v *SessionConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "config_option_update" variant of the SessionUpdate schema definition.
 func (v *SessionConfigOptionUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12625,6 +13091,7 @@ type SessionSessionInfoUpdate struct {
 	UpdatedAt Patch[string] `json:"updatedAt,omitzero"`
 }
 
+// UnmarshalJSON decodes the "session_info_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionSessionInfoUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionSessionInfoUpdate")
 	if err != nil {
@@ -12665,6 +13132,7 @@ type SessionUsageUpdate struct {
 	Used uint64 `json:"used"`
 }
 
+// UnmarshalJSON decodes the "usage_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUsageUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionUsageUpdate", "size", "used")
 	if err != nil {
@@ -12706,6 +13174,7 @@ type SessionUpdateNotice struct {
 	Title string `json:"title"`
 }
 
+// UnmarshalJSON decodes the "notice" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateNotice) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionUpdateNotice", "severity", "title")
 	if err != nil {
@@ -12727,6 +13196,7 @@ func (v *SessionUpdateNotice) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "notice" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateNotice) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12762,6 +13232,7 @@ type SessionCompactionUpdate struct {
 	Summary Patch[[]ContentBlock] `json:"summary,omitzero"`
 }
 
+// UnmarshalJSON decodes the "compaction_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionCompactionUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionCompactionUpdate", "compactionId", "status")
 	if err != nil {
@@ -12785,6 +13256,7 @@ func (v *SessionCompactionUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "compaction_update" variant of the SessionUpdate schema definition.
 func (v *SessionCompactionUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12814,6 +13286,7 @@ type SessionUpdateCompactionSummaryChunk struct {
 	SessionUpdate string       `json:"sessionUpdate"`
 }
 
+// UnmarshalJSON decodes the "compaction_summary_chunk" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateCompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionUpdateCompactionSummaryChunk", "compactionId", "content")
 	if err != nil {
@@ -12833,6 +13306,7 @@ func (v *SessionUpdateCompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "compaction_summary_chunk" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateCompactionSummaryChunk) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12888,6 +13362,7 @@ type SessionSubagentUpdate struct {
 	Title Patch[string] `json:"title,omitzero"`
 }
 
+// UnmarshalJSON decodes the "subagent_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionSubagentUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionSubagentUpdate", "sessionId")
 	if err != nil {
@@ -12915,6 +13390,7 @@ func (v *SessionSubagentUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "subagent_update" variant of the SessionUpdate schema definition.
 func (v *SessionSubagentUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -12951,6 +13427,7 @@ type SessionUpdateSessionMessage struct {
 	SessionUpdate   string     `json:"sessionUpdate"`
 }
 
+// UnmarshalJSON decodes the "session_message" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateSessionMessage) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionUpdateSessionMessage", "messageId")
 	if err != nil {
@@ -12976,6 +13453,7 @@ func (v *SessionUpdateSessionMessage) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "session_message" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateSessionMessage) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -13012,6 +13490,7 @@ type SessionUpdateSessionMessageChunk struct {
 	SessionUpdate   string     `json:"sessionUpdate"`
 }
 
+// UnmarshalJSON decodes the "session_message_chunk" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateSessionMessageChunk) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SessionUpdateSessionMessageChunk", "content", "messageId")
 	if err != nil {
@@ -13035,6 +13514,7 @@ func (v *SessionUpdateSessionMessageChunk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "session_message_chunk" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateSessionMessageChunk) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -13129,6 +13609,7 @@ type SessionUpdate struct {
 	Unknown json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes the SessionUpdate schema definition's JSON into u.
 func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -13607,6 +14088,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes u as the SessionUpdate schema definition's JSON.
 func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 	if u.UserMessageChunk != nil {
 		_b, _e := json.Marshal(*u.UserMessageChunk)
@@ -13842,6 +14324,7 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("SessionUpdate: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the SessionUpdate schema definition.
 func (u *SessionUpdate) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -14005,6 +14488,7 @@ type SetSessionConfigOptionBoolean struct {
 	Value bool `json:"value"`
 }
 
+// UnmarshalJSON decodes the "boolean" variant of the SetSessionConfigOptionRequest schema definition's JSON into v.
 func (v *SetSessionConfigOptionBoolean) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SetSessionConfigOptionBoolean", "configId", "sessionId", "value")
 	if err != nil {
@@ -14044,6 +14528,7 @@ type SetSessionConfigOptionValueId struct {
 	Value SessionConfigValueId `json:"value"`
 }
 
+// UnmarshalJSON decodes the ValueId variant of the SetSessionConfigOptionRequest schema definition's JSON into v.
 func (v *SetSessionConfigOptionValueId) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SetSessionConfigOptionValueId", "configId", "sessionId", "value")
 	if err != nil {
@@ -14078,6 +14563,7 @@ type SetSessionConfigOptionRequest struct {
 	Unknown json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes the SetSessionConfigOptionRequest schema definition's JSON into u.
 func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -14131,6 +14617,7 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 	return errors.New("SetSessionConfigOptionRequest: missing discriminator \"type\"")
 }
 
+// MarshalJSON encodes u as the SetSessionConfigOptionRequest schema definition's JSON.
 func (u SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
 	if u.Boolean != nil {
 		_b, _e := json.Marshal(*u.Boolean)
@@ -14161,6 +14648,7 @@ func (u SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("SetSessionConfigOptionRequest: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the SetSessionConfigOptionRequest schema definition.
 func (u *SetSessionConfigOptionRequest) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -14198,6 +14686,7 @@ type SetSessionConfigOptionResponse struct {
 	ConfigOptions []SessionConfigOption `json:"configOptions"`
 }
 
+// MarshalJSON encodes v as the SetSessionConfigOptionResponse schema definition's JSON.
 func (v SetSessionConfigOptionResponse) MarshalJSON() ([]byte, error) {
 	type Alias SetSessionConfigOptionResponse
 	var a Alias
@@ -14208,6 +14697,7 @@ func (v SetSessionConfigOptionResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the SetSessionConfigOptionResponse schema definition's JSON into v.
 func (v *SetSessionConfigOptionResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SetSessionConfigOptionResponse", "configOptions")
 	if err != nil {
@@ -14231,6 +14721,7 @@ func (v *SetSessionConfigOptionResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SetSessionConfigOptionResponse schema definition.
 func (v *SetSessionConfigOptionResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -14258,6 +14749,7 @@ type SetSessionModeRequest struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the SetSessionModeRequest schema definition's JSON into v.
 func (v *SetSessionModeRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SetSessionModeRequest", "modeId", "sessionId")
 	if err != nil {
@@ -14277,6 +14769,7 @@ func (v *SetSessionModeRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SetSessionModeRequest schema definition.
 func (v *SetSessionModeRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -14295,6 +14788,7 @@ type SetSessionModeResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the SetSessionModeResponse schema definition's JSON into v.
 func (v *SetSessionModeResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SetSessionModeResponse")
 	if err != nil {
@@ -14314,6 +14808,7 @@ func (v *SetSessionModeResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SetSessionModeResponse schema definition.
 func (v *SetSessionModeResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -14331,6 +14826,7 @@ type StateUpdateRunning struct {
 	State string         `json:"state"`
 }
 
+// UnmarshalJSON decodes the "running" variant of the StateUpdate schema definition's JSON into v.
 func (v *StateUpdateRunning) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "StateUpdateRunning")
 	if err != nil {
@@ -14369,6 +14865,7 @@ type StateUpdateIdle struct {
 	Usage *Usage `json:"usage,omitempty"`
 }
 
+// UnmarshalJSON decodes the "idle" variant of the StateUpdate schema definition's JSON into v.
 func (v *StateUpdateIdle) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "StateUpdateIdle")
 	if err != nil {
@@ -14401,6 +14898,7 @@ type StateUpdateRequiresAction struct {
 	State string         `json:"state"`
 }
 
+// UnmarshalJSON decodes the "requires_action" variant of the StateUpdate schema definition's JSON into v.
 func (v *StateUpdateRequiresAction) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "StateUpdateRequiresAction")
 	if err != nil {
@@ -14431,6 +14929,7 @@ type StateUpdateUnknown struct {
 	State string         `json:"state"`
 }
 
+// UnmarshalJSON decodes the "unknown" variant of the StateUpdate schema definition's JSON into v.
 func (v *StateUpdateUnknown) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "StateUpdateUnknown")
 	if err != nil {
@@ -14462,6 +14961,7 @@ type StateUpdateOther struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
+// MarshalJSON encodes v as the Other variant of the StateUpdate schema definition's JSON.
 func (v StateUpdateOther) MarshalJSON() ([]byte, error) {
 	type Alias StateUpdateOther
 	var a Alias
@@ -14482,6 +14982,7 @@ func (v StateUpdateOther) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// UnmarshalJSON decodes the Other variant of the StateUpdate schema definition's JSON into v.
 func (v *StateUpdateOther) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "StateUpdateOther")
 	if err != nil {
@@ -14530,6 +15031,7 @@ type StateUpdate struct {
 	Other *StateUpdateOther `json:"-"`
 }
 
+// UnmarshalJSON decodes the StateUpdate schema definition's JSON into u.
 func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -14624,6 +15126,7 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 	return errors.New("StateUpdate: missing discriminator \"state\"")
 }
 
+// MarshalJSON encodes u as the StateUpdate schema definition's JSON.
 func (u StateUpdate) MarshalJSON() ([]byte, error) {
 	if u.Running != nil {
 		_b, _e := json.Marshal(*u.Running)
@@ -14687,6 +15190,7 @@ func (u StateUpdate) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("StateUpdate: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the StateUpdate schema definition.
 func (u *StateUpdate) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -14736,20 +15240,55 @@ func (u *StateUpdate) validate(abs func(string) bool) error {
 type StopReason string
 
 const (
-	StopReasonEndTurn         StopReason = "end_turn"
-	StopReasonMaxTokens       StopReason = "max_tokens"
+	// StopReasonEndTurn is the "end_turn" value.
+	//
+	// The turn ended successfully.
+	StopReasonEndTurn StopReason = "end_turn"
+	// StopReasonMaxTokens is the "max_tokens" value.
+	//
+	// The turn ended because the agent reached the maximum number of tokens.
+	StopReasonMaxTokens StopReason = "max_tokens"
+	// StopReasonMaxTurnRequests is the "max_turn_requests" value.
+	//
+	// The turn ended because the agent reached the maximum number of allowed
+	// agent requests between user turns.
 	StopReasonMaxTurnRequests StopReason = "max_turn_requests"
-	StopReasonRefusal         StopReason = "refusal"
-	StopReasonCancelled       StopReason = "cancelled"
+	// StopReasonRefusal is the "refusal" value.
+	//
+	// The turn ended because the agent refused to continue. The user prompt
+	// and everything that comes after it won't be included in the next
+	// prompt, so this should be reflected in the UI.
+	StopReasonRefusal StopReason = "refusal"
+	// StopReasonCancelled is the "cancelled" value.
+	//
+	// The turn was cancelled by the client via 'session/cancel'.
+	//
+	// This stop reason MUST be returned when the client sends a 'session/cancel'
+	// notification, even if the cancellation causes exceptions in underlying operations.
+	// Agents should catch these exceptions and return this semantically meaningful
+	// response to confirm successful cancellation.
+	StopReasonCancelled StopReason = "cancelled"
 )
 
 // String format types for string properties in elicitation schemas.
 type StringFormat string
 
 const (
-	StringFormatEmail    StringFormat = "email"
-	StringFormatUri      StringFormat = "uri"
-	StringFormatDate     StringFormat = "date"
+	// StringFormatEmail is the "email" value.
+	//
+	// Email address format.
+	StringFormatEmail StringFormat = "email"
+	// StringFormatUri is the "uri" value.
+	//
+	// URI format.
+	StringFormatUri StringFormat = "uri"
+	// StringFormatDate is the "date" value.
+	//
+	// Date format (YYYY-MM-DD).
+	StringFormatDate StringFormat = "date"
+	// StringFormatDateTime is the "date-time" value.
+	//
+	// Date-time format (ISO 8601).
 	StringFormatDateTime StringFormat = "date-time"
 )
 
@@ -14767,6 +15306,7 @@ type StringMultiSelectItems struct {
 	Enum []string `json:"enum"`
 }
 
+// MarshalJSON encodes v as the StringMultiSelectItems schema definition's JSON.
 func (v StringMultiSelectItems) MarshalJSON() ([]byte, error) {
 	type Alias StringMultiSelectItems
 	var a Alias
@@ -14777,6 +15317,7 @@ func (v StringMultiSelectItems) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the StringMultiSelectItems schema definition's JSON into v.
 func (v *StringMultiSelectItems) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "StringMultiSelectItems", "enum")
 	if err != nil {
@@ -14847,6 +15388,7 @@ type StringPropertySchema struct {
 	Title *string `json:"title,omitempty"`
 }
 
+// UnmarshalJSON decodes the StringPropertySchema schema definition's JSON into v.
 func (v *StringPropertySchema) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "StringPropertySchema")
 	if err != nil {
@@ -14889,6 +15431,7 @@ type SubagentCapabilities struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the SubagentCapabilities schema definition's JSON into v.
 func (v *SubagentCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SubagentCapabilities")
 	if err != nil {
@@ -14927,6 +15470,7 @@ type SubagentSessionCapabilities struct {
 	Cancel *SessionCancelCapabilities `json:"cancel,omitempty"`
 }
 
+// UnmarshalJSON decodes the SubagentSessionCapabilities schema definition's JSON into v.
 func (v *SubagentSessionCapabilities) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SubagentSessionCapabilities")
 	if err != nil {
@@ -15008,6 +15552,7 @@ type SubagentUpdate struct {
 	Title Patch[string] `json:"title,omitzero"`
 }
 
+// UnmarshalJSON decodes the SubagentUpdate schema definition's JSON into v.
 func (v *SubagentUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "SubagentUpdate", "sessionId")
 	if err != nil {
@@ -15035,6 +15580,7 @@ func (v *SubagentUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SubagentUpdate schema definition.
 func (v *SubagentUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -15064,6 +15610,7 @@ type Terminal struct {
 	TerminalId TerminalId `json:"terminalId"`
 }
 
+// UnmarshalJSON decodes the Terminal schema definition's JSON into v.
 func (v *Terminal) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "Terminal", "terminalId")
 	if err != nil {
@@ -15097,6 +15644,7 @@ type TerminalExitStatus struct {
 	Signal *string `json:"signal,omitempty"`
 }
 
+// UnmarshalJSON decodes the TerminalExitStatus schema definition's JSON into v.
 func (v *TerminalExitStatus) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "TerminalExitStatus")
 	if err != nil {
@@ -15137,6 +15685,7 @@ type TerminalOutputRequest struct {
 	TerminalId TerminalId `json:"terminalId"`
 }
 
+// UnmarshalJSON decodes the TerminalOutputRequest schema definition's JSON into v.
 func (v *TerminalOutputRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "TerminalOutputRequest", "sessionId", "terminalId")
 	if err != nil {
@@ -15156,6 +15705,7 @@ func (v *TerminalOutputRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the TerminalOutputRequest schema definition.
 func (v *TerminalOutputRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -15180,6 +15730,7 @@ type TerminalOutputResponse struct {
 	Truncated bool `json:"truncated"`
 }
 
+// UnmarshalJSON decodes the TerminalOutputResponse schema definition's JSON into v.
 func (v *TerminalOutputResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "TerminalOutputResponse", "output", "truncated")
 	if err != nil {
@@ -15201,6 +15752,7 @@ func (v *TerminalOutputResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the TerminalOutputResponse schema definition.
 func (v *TerminalOutputResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -15223,6 +15775,7 @@ type TextContent struct {
 	Text string `json:"text"`
 }
 
+// UnmarshalJSON decodes the TextContent schema definition's JSON into v.
 func (v *TextContent) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "TextContent", "text")
 	if err != nil {
@@ -15252,7 +15805,13 @@ func (v *TextContent) UnmarshalJSON(b []byte) error {
 type TextDocumentSyncKind string
 
 const (
-	TextDocumentSyncKindFull        TextDocumentSyncKind = "full"
+	// TextDocumentSyncKindFull is the "full" value.
+	//
+	// Client sends the entire file content on each change.
+	TextDocumentSyncKindFull TextDocumentSyncKind = "full"
+	// TextDocumentSyncKindIncremental is the "incremental" value.
+	//
+	// Client sends only the changed ranges.
 	TextDocumentSyncKindIncremental TextDocumentSyncKind = "incremental"
 )
 
@@ -15272,6 +15831,7 @@ type TextResourceContents struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the TextResourceContents schema definition's JSON into v.
 func (v *TextResourceContents) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "TextResourceContents", "text", "uri")
 	if err != nil {
@@ -15307,6 +15867,7 @@ type TitledMultiSelectItems struct {
 	AnyOf []EnumOption `json:"anyOf"`
 }
 
+// MarshalJSON encodes v as the TitledMultiSelectItems schema definition's JSON.
 func (v TitledMultiSelectItems) MarshalJSON() ([]byte, error) {
 	type Alias TitledMultiSelectItems
 	var a Alias
@@ -15317,6 +15878,7 @@ func (v TitledMultiSelectItems) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the TitledMultiSelectItems schema definition's JSON into v.
 func (v *TitledMultiSelectItems) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "TitledMultiSelectItems", "anyOf")
 	if err != nil {
@@ -15374,6 +15936,7 @@ type ToolCall struct {
 	ToolCallId ToolCallId `json:"toolCallId"`
 }
 
+// UnmarshalJSON decodes the ToolCall schema definition's JSON into v.
 func (v *ToolCall) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ToolCall", "title", "toolCallId")
 	if err != nil {
@@ -15413,6 +15976,7 @@ func (v *ToolCall) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ToolCall schema definition.
 func (v *ToolCall) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -15444,6 +16008,7 @@ type ToolCallContentContent struct {
 	Type    string       `json:"type"`
 }
 
+// UnmarshalJSON decodes the "content" variant of the ToolCallContent schema definition's JSON into v.
 func (v *ToolCallContentContent) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ToolCallContentContent", "content")
 	if err != nil {
@@ -15463,6 +16028,7 @@ func (v *ToolCallContentContent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "content" variant of the ToolCallContent schema definition.
 func (v *ToolCallContentContent) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -15491,6 +16057,7 @@ type ToolCallContentDiff struct {
 	Type string `json:"type"`
 }
 
+// UnmarshalJSON decodes the "diff" variant of the ToolCallContent schema definition's JSON into v.
 func (v *ToolCallContentDiff) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ToolCallContentDiff", "newText", "path")
 	if err != nil {
@@ -15512,6 +16079,7 @@ func (v *ToolCallContentDiff) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "diff" variant of the ToolCallContent schema definition.
 func (v *ToolCallContentDiff) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -15546,6 +16114,7 @@ type ToolCallContentTerminal struct {
 	Type       string     `json:"type"`
 }
 
+// UnmarshalJSON decodes the "terminal" variant of the ToolCallContent schema definition's JSON into v.
 func (v *ToolCallContentTerminal) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ToolCallContentTerminal", "terminalId")
 	if err != nil {
@@ -15587,6 +16156,7 @@ type ToolCallContent struct {
 	Unknown json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes the ToolCallContent schema definition's JSON into u.
 func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -15690,6 +16260,7 @@ func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes u as the ToolCallContent schema definition's JSON.
 func (u ToolCallContent) MarshalJSON() ([]byte, error) {
 	if u.Content != nil {
 		_b, _e := json.Marshal(*u.Content)
@@ -15733,6 +16304,7 @@ func (u ToolCallContent) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("ToolCallContent: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the ToolCallContent schema definition.
 func (u *ToolCallContent) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -15793,6 +16365,7 @@ type ToolCallLocation struct {
 	Path string `json:"path"`
 }
 
+// UnmarshalJSON decodes the ToolCallLocation schema definition's JSON into v.
 func (v *ToolCallLocation) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ToolCallLocation", "path")
 	if err != nil {
@@ -15814,6 +16387,7 @@ func (v *ToolCallLocation) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ToolCallLocation schema definition.
 func (v *ToolCallLocation) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -15839,10 +16413,23 @@ func (v *ToolCallLocation) validate(abs func(string) bool) error {
 type ToolCallStatus string
 
 const (
-	ToolCallStatusPending    ToolCallStatus = "pending"
+	// ToolCallStatusPending is the "pending" value.
+	//
+	// The tool call hasn't started running yet because the input is either
+	// streaming or we're awaiting approval.
+	ToolCallStatusPending ToolCallStatus = "pending"
+	// ToolCallStatusInProgress is the "in_progress" value.
+	//
+	// The tool call is currently running.
 	ToolCallStatusInProgress ToolCallStatus = "in_progress"
-	ToolCallStatusCompleted  ToolCallStatus = "completed"
-	ToolCallStatusFailed     ToolCallStatus = "failed"
+	// ToolCallStatusCompleted is the "completed" value.
+	//
+	// The tool call completed successfully.
+	ToolCallStatusCompleted ToolCallStatus = "completed"
+	// ToolCallStatusFailed is the "failed" value.
+	//
+	// The tool call failed with an error.
+	ToolCallStatusFailed ToolCallStatus = "failed"
 )
 
 // An update to an existing tool call.
@@ -15881,6 +16468,7 @@ type ToolCallUpdate struct {
 	ToolCallId ToolCallId `json:"toolCallId"`
 }
 
+// UnmarshalJSON decodes the ToolCallUpdate schema definition's JSON into v.
 func (v *ToolCallUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "ToolCallUpdate", "toolCallId")
 	if err != nil {
@@ -15922,6 +16510,7 @@ func (v *ToolCallUpdate) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ToolCallUpdate schema definition.
 func (v *ToolCallUpdate) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -15949,16 +16538,46 @@ func (v *ToolCallUpdate) validate(abs func(string) bool) error {
 type ToolKind string
 
 const (
-	ToolKindRead       ToolKind = "read"
-	ToolKindEdit       ToolKind = "edit"
-	ToolKindDelete     ToolKind = "delete"
-	ToolKindMove       ToolKind = "move"
-	ToolKindSearch     ToolKind = "search"
-	ToolKindExecute    ToolKind = "execute"
-	ToolKindThink      ToolKind = "think"
-	ToolKindFetch      ToolKind = "fetch"
+	// ToolKindRead is the "read" value.
+	//
+	// Reading files or data.
+	ToolKindRead ToolKind = "read"
+	// ToolKindEdit is the "edit" value.
+	//
+	// Modifying files or content.
+	ToolKindEdit ToolKind = "edit"
+	// ToolKindDelete is the "delete" value.
+	//
+	// Removing files or data.
+	ToolKindDelete ToolKind = "delete"
+	// ToolKindMove is the "move" value.
+	//
+	// Moving or renaming files.
+	ToolKindMove ToolKind = "move"
+	// ToolKindSearch is the "search" value.
+	//
+	// Searching for information.
+	ToolKindSearch ToolKind = "search"
+	// ToolKindExecute is the "execute" value.
+	//
+	// Running commands or code.
+	ToolKindExecute ToolKind = "execute"
+	// ToolKindThink is the "think" value.
+	//
+	// Internal reasoning or planning.
+	ToolKindThink ToolKind = "think"
+	// ToolKindFetch is the "fetch" value.
+	//
+	// Retrieving external data.
+	ToolKindFetch ToolKind = "fetch"
+	// ToolKindSwitchMode is the "switch_mode" value.
+	//
+	// Switching the current session mode.
 	ToolKindSwitchMode ToolKind = "switch_mode"
-	ToolKindOther      ToolKind = "other"
+	// ToolKindOther is the "other" value.
+	//
+	// Other tool types (default).
+	ToolKindOther ToolKind = "other"
 )
 
 // **UNSTABLE**
@@ -15981,6 +16600,7 @@ type UnknownStateUpdate struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the UnknownStateUpdate schema definition's JSON into v.
 func (v *UnknownStateUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnknownStateUpdate")
 	if err != nil {
@@ -16018,6 +16638,7 @@ type UnstableAcceptNesNotification struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the AcceptNesNotification schema definition's JSON into v.
 func (v *UnstableAcceptNesNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableAcceptNesNotification", "id", "sessionId")
 	if err != nil {
@@ -16037,6 +16658,7 @@ func (v *UnstableAcceptNesNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the AcceptNesNotification schema definition.
 func (v *UnstableAcceptNesNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16064,6 +16686,7 @@ type UnstableCloseNesRequest struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the CloseNesRequest schema definition's JSON into v.
 func (v *UnstableCloseNesRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableCloseNesRequest", "sessionId")
 	if err != nil {
@@ -16083,6 +16706,7 @@ func (v *UnstableCloseNesRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the CloseNesRequest schema definition.
 func (v *UnstableCloseNesRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16105,6 +16729,7 @@ type UnstableCloseNesResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the CloseNesResponse schema definition's JSON into v.
 func (v *UnstableCloseNesResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableCloseNesResponse")
 	if err != nil {
@@ -16124,6 +16749,7 @@ func (v *UnstableCloseNesResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the CloseNesResponse schema definition.
 func (v *UnstableCloseNesResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16154,6 +16780,7 @@ type UnstableDidChangeDocumentNotification struct {
 	Version int64 `json:"version"`
 }
 
+// MarshalJSON encodes v as the DidChangeDocumentNotification schema definition's JSON.
 func (v UnstableDidChangeDocumentNotification) MarshalJSON() ([]byte, error) {
 	type Alias UnstableDidChangeDocumentNotification
 	var a Alias
@@ -16164,6 +16791,7 @@ func (v UnstableDidChangeDocumentNotification) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the DidChangeDocumentNotification schema definition's JSON into v.
 func (v *UnstableDidChangeDocumentNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableDidChangeDocumentNotification", "contentChanges", "sessionId", "uri", "version")
 	if err != nil {
@@ -16183,6 +16811,7 @@ func (v *UnstableDidChangeDocumentNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the DidChangeDocumentNotification schema definition.
 func (v *UnstableDidChangeDocumentNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16209,6 +16838,7 @@ type UnstableDidCloseDocumentNotification struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the DidCloseDocumentNotification schema definition's JSON into v.
 func (v *UnstableDidCloseDocumentNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableDidCloseDocumentNotification", "sessionId", "uri")
 	if err != nil {
@@ -16228,6 +16858,7 @@ func (v *UnstableDidCloseDocumentNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the DidCloseDocumentNotification schema definition.
 func (v *UnstableDidCloseDocumentNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16260,6 +16891,7 @@ type UnstableDidFocusDocumentNotification struct {
 	VisibleRange UnstableRange `json:"visibleRange"`
 }
 
+// UnmarshalJSON decodes the DidFocusDocumentNotification schema definition's JSON into v.
 func (v *UnstableDidFocusDocumentNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableDidFocusDocumentNotification", "position", "sessionId", "uri", "version", "visibleRange")
 	if err != nil {
@@ -16279,6 +16911,7 @@ func (v *UnstableDidFocusDocumentNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the DidFocusDocumentNotification schema definition.
 func (v *UnstableDidFocusDocumentNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16311,6 +16944,7 @@ type UnstableDidOpenDocumentNotification struct {
 	Version int64 `json:"version"`
 }
 
+// UnmarshalJSON decodes the DidOpenDocumentNotification schema definition's JSON into v.
 func (v *UnstableDidOpenDocumentNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableDidOpenDocumentNotification", "languageId", "sessionId", "text", "uri", "version")
 	if err != nil {
@@ -16330,6 +16964,7 @@ func (v *UnstableDidOpenDocumentNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the DidOpenDocumentNotification schema definition.
 func (v *UnstableDidOpenDocumentNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16356,6 +16991,7 @@ type UnstableDidSaveDocumentNotification struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the DidSaveDocumentNotification schema definition's JSON into v.
 func (v *UnstableDidSaveDocumentNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableDidSaveDocumentNotification", "sessionId", "uri")
 	if err != nil {
@@ -16375,6 +17011,7 @@ func (v *UnstableDidSaveDocumentNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the DidSaveDocumentNotification schema definition.
 func (v *UnstableDidSaveDocumentNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16399,6 +17036,7 @@ type UnstableDisableProviderRequest struct {
 	ProviderId UnstableProviderId `json:"providerId"`
 }
 
+// UnmarshalJSON decodes the DisableProviderRequest schema definition's JSON into v.
 func (v *UnstableDisableProviderRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableDisableProviderRequest", "providerId")
 	if err != nil {
@@ -16418,6 +17056,7 @@ func (v *UnstableDisableProviderRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the DisableProviderRequest schema definition.
 func (v *UnstableDisableProviderRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16440,6 +17079,7 @@ type UnstableDisableProviderResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the DisableProviderResponse schema definition's JSON into v.
 func (v *UnstableDisableProviderResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableDisableProviderResponse")
 	if err != nil {
@@ -16459,6 +17099,7 @@ func (v *UnstableDisableProviderResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the DisableProviderResponse schema definition.
 func (v *UnstableDisableProviderResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16498,6 +17139,7 @@ type UnstableForkSessionRequest struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the ForkSessionRequest schema definition's JSON into v.
 func (v *UnstableForkSessionRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableForkSessionRequest", "cwd", "sessionId")
 	if err != nil {
@@ -16517,6 +17159,7 @@ func (v *UnstableForkSessionRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ForkSessionRequest schema definition.
 func (v *UnstableForkSessionRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16572,6 +17215,7 @@ type UnstableForkSessionResponse struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the ForkSessionResponse schema definition's JSON into v.
 func (v *UnstableForkSessionResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableForkSessionResponse", "sessionId")
 	if err != nil {
@@ -16597,6 +17241,7 @@ func (v *UnstableForkSessionResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ForkSessionResponse schema definition.
 func (v *UnstableForkSessionResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16624,6 +17269,7 @@ type UnstableListProvidersRequest struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the ListProvidersRequest schema definition's JSON into v.
 func (v *UnstableListProvidersRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableListProvidersRequest")
 	if err != nil {
@@ -16643,6 +17289,7 @@ func (v *UnstableListProvidersRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ListProvidersRequest schema definition.
 func (v *UnstableListProvidersRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16667,6 +17314,7 @@ type UnstableListProvidersResponse struct {
 	Providers []UnstableProviderInfo `json:"providers"`
 }
 
+// MarshalJSON encodes v as the ListProvidersResponse schema definition's JSON.
 func (v UnstableListProvidersResponse) MarshalJSON() ([]byte, error) {
 	type Alias UnstableListProvidersResponse
 	var a Alias
@@ -16677,6 +17325,7 @@ func (v UnstableListProvidersResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the ListProvidersResponse schema definition's JSON into v.
 func (v *UnstableListProvidersResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableListProvidersResponse", "providers")
 	if err != nil {
@@ -16696,6 +17345,7 @@ func (v *UnstableListProvidersResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ListProvidersResponse schema definition.
 func (v *UnstableListProvidersResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -16717,11 +17367,26 @@ func (v *UnstableListProvidersResponse) validate(abs func(string) bool) error {
 type UnstableLlmProtocol string
 
 const (
+	// UnstableLlmProtocolAnthropic is the "anthropic" value.
+	//
+	// Anthropic API protocol.
 	UnstableLlmProtocolAnthropic UnstableLlmProtocol = "anthropic"
-	UnstableLlmProtocolOpenai    UnstableLlmProtocol = "openai"
-	UnstableLlmProtocolAzure     UnstableLlmProtocol = "azure"
-	UnstableLlmProtocolVertex    UnstableLlmProtocol = "vertex"
-	UnstableLlmProtocolBedrock   UnstableLlmProtocol = "bedrock"
+	// UnstableLlmProtocolOpenai is the "openai" value.
+	//
+	// OpenAI API protocol.
+	UnstableLlmProtocolOpenai UnstableLlmProtocol = "openai"
+	// UnstableLlmProtocolAzure is the "azure" value.
+	//
+	// Azure OpenAI API protocol.
+	UnstableLlmProtocolAzure UnstableLlmProtocol = "azure"
+	// UnstableLlmProtocolVertex is the "vertex" value.
+	//
+	// Google Vertex AI API protocol.
+	UnstableLlmProtocolVertex UnstableLlmProtocol = "vertex"
+	// UnstableLlmProtocolBedrock is the "bedrock" value.
+	//
+	// AWS Bedrock API protocol.
+	UnstableLlmProtocolBedrock UnstableLlmProtocol = "bedrock"
 )
 
 // **UNSTABLE**
@@ -16742,6 +17407,7 @@ type UnstableMcpError struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
+// MarshalJSON encodes v as the McpError schema definition's JSON.
 func (v UnstableMcpError) MarshalJSON() ([]byte, error) {
 	type Alias UnstableMcpError
 	var a Alias
@@ -16762,6 +17428,7 @@ func (v UnstableMcpError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// UnmarshalJSON decodes the McpError schema definition's JSON into v.
 func (v *UnstableMcpError) UnmarshalJSON(b []byte) error {
 	m, err := objectKeys(b, "UnstableMcpError", "code", "message")
 	if err != nil {
@@ -16816,6 +17483,7 @@ type UnstableMcpServerHttp struct {
 	Url string `json:"url"`
 }
 
+// MarshalJSON encodes v as the "http" variant of the McpServer schema definition's JSON.
 func (v UnstableMcpServerHttp) MarshalJSON() ([]byte, error) {
 	type Alias UnstableMcpServerHttp
 	var a Alias
@@ -16826,6 +17494,7 @@ func (v UnstableMcpServerHttp) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the "http" variant of the McpServer schema definition's JSON into v.
 func (v *UnstableMcpServerHttp) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableMcpServerHttp", "headers", "name", "url")
 	if err != nil {
@@ -16864,6 +17533,7 @@ type UnstableMcpServerSse struct {
 	Url string `json:"url"`
 }
 
+// MarshalJSON encodes v as the "sse" variant of the McpServer schema definition's JSON.
 func (v UnstableMcpServerSse) MarshalJSON() ([]byte, error) {
 	type Alias UnstableMcpServerSse
 	var a Alias
@@ -16874,6 +17544,7 @@ func (v UnstableMcpServerSse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the "sse" variant of the McpServer schema definition's JSON into v.
 func (v *UnstableMcpServerSse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableMcpServerSse", "headers", "name", "url")
 	if err != nil {
@@ -16918,6 +17589,7 @@ type UnstableMcpServerAcpInline struct {
 	Type     string                 `json:"type"`
 }
 
+// UnmarshalJSON decodes the "acp" variant of the McpServer schema definition's JSON into v.
 func (v *UnstableMcpServerAcpInline) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableMcpServerAcpInline", "name", "serverId")
 	if err != nil {
@@ -16974,6 +17646,7 @@ type UnstableMcpServer struct {
 	Unknown json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes the McpServer schema definition's JSON into u.
 func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -17050,6 +17723,7 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 	return errors.New("UnstableMcpServer: missing discriminator \"type\"")
 }
 
+// MarshalJSON encodes u as the McpServer schema definition's JSON.
 func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 	if u.Http != nil {
 		_b, _e := json.Marshal(*u.Http)
@@ -17104,6 +17778,7 @@ func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("UnstableMcpServer: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the McpServer schema definition.
 func (u *UnstableMcpServer) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -17164,6 +17839,7 @@ type UnstableMcpServerAcp struct {
 	ServerId UnstableMcpServerAcpId `json:"serverId"`
 }
 
+// UnmarshalJSON decodes the McpServerAcp schema definition's JSON into v.
 func (v *UnstableMcpServerAcp) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableMcpServerAcp", "name", "serverId")
 	if err != nil {
@@ -17220,6 +17896,7 @@ type UnstableMessageMcpNotification struct {
 	ServerId UnstableMcpServerAcpId `json:"serverId"`
 }
 
+// UnmarshalJSON decodes the MessageMcpNotification schema definition's JSON into v.
 func (v *UnstableMessageMcpNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableMessageMcpNotification", "method", "requestId", "serverId")
 	if err != nil {
@@ -17239,6 +17916,7 @@ func (v *UnstableMessageMcpNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the MessageMcpNotification schema definition.
 func (v *UnstableMessageMcpNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -17271,6 +17949,7 @@ type UnstableMessageMcpRequest struct {
 	ServerId UnstableMcpServerAcpId `json:"serverId"`
 }
 
+// UnmarshalJSON decodes the MessageMcpRequest schema definition's JSON into v.
 func (v *UnstableMessageMcpRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableMessageMcpRequest", "method", "requestId", "serverId")
 	if err != nil {
@@ -17290,6 +17969,7 @@ func (v *UnstableMessageMcpRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the MessageMcpRequest schema definition.
 func (v *UnstableMessageMcpRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -17306,6 +17986,7 @@ type UnstableMessageMcpResult struct {
 	Result json.RawMessage `json:"result"`
 }
 
+// UnmarshalJSON decodes the Result variant of the MessageMcpResponse schema definition's JSON into v.
 func (v *UnstableMessageMcpResult) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableMessageMcpResult", "result")
 	if err != nil {
@@ -17333,6 +18014,7 @@ type UnstableMessageMcpError struct {
 	Error UnstableMcpError `json:"error"`
 }
 
+// UnmarshalJSON decodes the Error variant of the MessageMcpResponse schema definition's JSON into v.
 func (v *UnstableMessageMcpError) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableMessageMcpError", "error")
 	if err != nil {
@@ -17369,6 +18051,7 @@ type UnstableMessageMcpResponse struct {
 	Error *UnstableMessageMcpError `json:"-"`
 }
 
+// UnmarshalJSON decodes the MessageMcpResponse schema definition's JSON into u.
 func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -17430,6 +18113,7 @@ func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
 	return errors.New("UnstableMessageMcpResponse: no variant matches")
 }
 
+// MarshalJSON encodes u as the MessageMcpResponse schema definition's JSON.
 func (u UnstableMessageMcpResponse) MarshalJSON() ([]byte, error) {
 	if u.Result != nil {
 		_b, _e := json.Marshal(*u.Result)
@@ -17456,6 +18140,7 @@ func (u UnstableMessageMcpResponse) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("UnstableMessageMcpResponse: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the MessageMcpResponse schema definition.
 func (u *UnstableMessageMcpResponse) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -17500,6 +18185,7 @@ type UnstableNesDiagnostic struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the NesDiagnostic schema definition's JSON into v.
 func (v *UnstableNesDiagnostic) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesDiagnostic", "message", "range", "severity", "uri")
 	if err != nil {
@@ -17527,10 +18213,22 @@ func (v *UnstableNesDiagnostic) UnmarshalJSON(b []byte) error {
 type UnstableNesDiagnosticSeverity string
 
 const (
-	UnstableNesDiagnosticSeverityError       UnstableNesDiagnosticSeverity = "error"
-	UnstableNesDiagnosticSeverityWarning     UnstableNesDiagnosticSeverity = "warning"
+	// UnstableNesDiagnosticSeverityError is the "error" value.
+	//
+	// An error.
+	UnstableNesDiagnosticSeverityError UnstableNesDiagnosticSeverity = "error"
+	// UnstableNesDiagnosticSeverityWarning is the "warning" value.
+	//
+	// A warning.
+	UnstableNesDiagnosticSeverityWarning UnstableNesDiagnosticSeverity = "warning"
+	// UnstableNesDiagnosticSeverityInformation is the "information" value.
+	//
+	// An informational message.
 	UnstableNesDiagnosticSeverityInformation UnstableNesDiagnosticSeverity = "information"
-	UnstableNesDiagnosticSeverityHint        UnstableNesDiagnosticSeverity = "hint"
+	// UnstableNesDiagnosticSeverityHint is the "hint" value.
+	//
+	// A hint.
+	UnstableNesDiagnosticSeverityHint UnstableNesDiagnosticSeverity = "hint"
 )
 
 // **UNSTABLE**
@@ -17551,6 +18249,7 @@ type UnstableNesEditHistoryEntry struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the NesEditHistoryEntry schema definition's JSON into v.
 func (v *UnstableNesEditHistoryEntry) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesEditHistoryEntry", "diff", "uri")
 	if err != nil {
@@ -17592,6 +18291,7 @@ type UnstableNesEditSuggestion struct {
 	Uri string `json:"uri"`
 }
 
+// MarshalJSON encodes v as the NesEditSuggestion schema definition's JSON.
 func (v UnstableNesEditSuggestion) MarshalJSON() ([]byte, error) {
 	type Alias UnstableNesEditSuggestion
 	var a Alias
@@ -17602,6 +18302,7 @@ func (v UnstableNesEditSuggestion) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the NesEditSuggestion schema definition's JSON into v.
 func (v *UnstableNesEditSuggestion) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesEditSuggestion", "edits", "id", "uri")
 	if err != nil {
@@ -17643,6 +18344,7 @@ type UnstableNesExcerpt struct {
 	Text string `json:"text"`
 }
 
+// UnmarshalJSON decodes the NesExcerpt schema definition's JSON into v.
 func (v *UnstableNesExcerpt) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesExcerpt", "endLine", "startLine", "text")
 	if err != nil {
@@ -17682,6 +18384,7 @@ type UnstableNesJumpSuggestion struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the NesJumpSuggestion schema definition's JSON into v.
 func (v *UnstableNesJumpSuggestion) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesJumpSuggestion", "id", "position", "uri")
 	if err != nil {
@@ -17723,6 +18426,7 @@ type UnstableNesOpenFile struct {
 	VisibleRange *UnstableRange `json:"visibleRange,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesOpenFile schema definition's JSON into v.
 func (v *UnstableNesOpenFile) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesOpenFile", "languageId", "uri")
 	if err != nil {
@@ -17766,6 +18470,7 @@ type UnstableNesRecentFile struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the NesRecentFile schema definition's JSON into v.
 func (v *UnstableNesRecentFile) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesRecentFile", "languageId", "text", "uri")
 	if err != nil {
@@ -17793,9 +18498,21 @@ func (v *UnstableNesRecentFile) UnmarshalJSON(b []byte) error {
 type UnstableNesRejectReason string
 
 const (
-	UnstableNesRejectReasonRejected  UnstableNesRejectReason = "rejected"
-	UnstableNesRejectReasonIgnored   UnstableNesRejectReason = "ignored"
-	UnstableNesRejectReasonReplaced  UnstableNesRejectReason = "replaced"
+	// UnstableNesRejectReasonRejected is the "rejected" value.
+	//
+	// The user explicitly dismissed the suggestion.
+	UnstableNesRejectReasonRejected UnstableNesRejectReason = "rejected"
+	// UnstableNesRejectReasonIgnored is the "ignored" value.
+	//
+	// The suggestion was shown but the user continued editing without interacting.
+	UnstableNesRejectReasonIgnored UnstableNesRejectReason = "ignored"
+	// UnstableNesRejectReasonReplaced is the "replaced" value.
+	//
+	// The suggestion was superseded by a newer suggestion.
+	UnstableNesRejectReasonReplaced UnstableNesRejectReason = "replaced"
+	// UnstableNesRejectReasonCancelled is the "cancelled" value.
+	//
+	// The request was cancelled before the agent returned a response.
 	UnstableNesRejectReasonCancelled UnstableNesRejectReason = "cancelled"
 )
 
@@ -17817,6 +18534,7 @@ type UnstableNesRelatedSnippet struct {
 	Uri string `json:"uri"`
 }
 
+// MarshalJSON encodes v as the NesRelatedSnippet schema definition's JSON.
 func (v UnstableNesRelatedSnippet) MarshalJSON() ([]byte, error) {
 	type Alias UnstableNesRelatedSnippet
 	var a Alias
@@ -17827,6 +18545,7 @@ func (v UnstableNesRelatedSnippet) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the NesRelatedSnippet schema definition's JSON into v.
 func (v *UnstableNesRelatedSnippet) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesRelatedSnippet", "excerpts", "uri")
 	if err != nil {
@@ -17868,6 +18587,7 @@ type UnstableNesRenameSuggestion struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the NesRenameSuggestion schema definition's JSON into v.
 func (v *UnstableNesRenameSuggestion) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesRenameSuggestion", "id", "newName", "position", "uri")
 	if err != nil {
@@ -17907,6 +18627,7 @@ type UnstableNesRepository struct {
 	RemoteUrl string `json:"remoteUrl"`
 }
 
+// UnmarshalJSON decodes the NesRepository schema definition's JSON into v.
 func (v *UnstableNesRepository) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesRepository", "name", "owner", "remoteUrl")
 	if err != nil {
@@ -17950,6 +18671,7 @@ type UnstableNesSearchAndReplaceSuggestion struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the NesSearchAndReplaceSuggestion schema definition's JSON into v.
 func (v *UnstableNesSearchAndReplaceSuggestion) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesSearchAndReplaceSuggestion", "id", "replace", "search", "uri")
 	if err != nil {
@@ -17995,6 +18717,7 @@ type UnstableNesSuggestContext struct {
 	UserActions []UnstableNesUserAction `json:"userActions,omitempty"`
 }
 
+// UnmarshalJSON decodes the NesSuggestContext schema definition's JSON into v.
 func (v *UnstableNesSuggestContext) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesSuggestContext")
 	if err != nil {
@@ -18033,6 +18756,7 @@ type UnstableNesSuggestionEdit struct {
 	Uri string `json:"uri"`
 }
 
+// MarshalJSON encodes v as the "edit" variant of the NesSuggestion schema definition's JSON.
 func (v UnstableNesSuggestionEdit) MarshalJSON() ([]byte, error) {
 	type Alias UnstableNesSuggestionEdit
 	var a Alias
@@ -18043,6 +18767,7 @@ func (v UnstableNesSuggestionEdit) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the "edit" variant of the NesSuggestion schema definition's JSON into v.
 func (v *UnstableNesSuggestionEdit) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesSuggestionEdit", "edits", "id", "uri")
 	if err != nil {
@@ -18081,6 +18806,7 @@ type UnstableNesSuggestionJump struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the "jump" variant of the NesSuggestion schema definition's JSON into v.
 func (v *UnstableNesSuggestionJump) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesSuggestionJump", "id", "position", "uri")
 	if err != nil {
@@ -18119,6 +18845,7 @@ type UnstableNesSuggestionRename struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the "rename" variant of the NesSuggestion schema definition's JSON into v.
 func (v *UnstableNesSuggestionRename) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesSuggestionRename", "id", "newName", "position", "uri")
 	if err != nil {
@@ -18159,6 +18886,7 @@ type UnstableNesSuggestionSearchAndReplace struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the "searchAndReplace" variant of the NesSuggestion schema definition's JSON into v.
 func (v *UnstableNesSuggestionSearchAndReplace) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesSuggestionSearchAndReplace", "id", "replace", "search", "uri")
 	if err != nil {
@@ -18197,6 +18925,7 @@ type UnstableNesSuggestion struct {
 	Unknown json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes the NesSuggestion schema definition's JSON into u.
 func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		return nil
@@ -18350,6 +19079,7 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes u as the NesSuggestion schema definition's JSON.
 func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {
 	if u.Edit != nil {
 		_b, _e := json.Marshal(*u.Edit)
@@ -18405,6 +19135,7 @@ func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("UnstableNesSuggestion: no variant set")
 }
 
+// Validate returns an error if u does not satisfy the NesSuggestion schema definition.
 func (u *UnstableNesSuggestion) Validate() error {
 	return u.validate(filepath.IsAbs)
 }
@@ -18461,6 +19192,7 @@ type UnstableNesTextEdit struct {
 	Range UnstableRange `json:"range"`
 }
 
+// UnmarshalJSON decodes the NesTextEdit schema definition's JSON into v.
 func (v *UnstableNesTextEdit) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesTextEdit", "newText", "range")
 	if err != nil {
@@ -18488,9 +19220,18 @@ func (v *UnstableNesTextEdit) UnmarshalJSON(b []byte) error {
 type UnstableNesTriggerKind string
 
 const (
-	UnstableNesTriggerKindAutomatic  UnstableNesTriggerKind = "automatic"
+	// UnstableNesTriggerKindAutomatic is the "automatic" value.
+	//
+	// Triggered by user typing or cursor movement.
+	UnstableNesTriggerKindAutomatic UnstableNesTriggerKind = "automatic"
+	// UnstableNesTriggerKindDiagnostic is the "diagnostic" value.
+	//
+	// Triggered by a diagnostic appearing at or near the cursor.
 	UnstableNesTriggerKindDiagnostic UnstableNesTriggerKind = "diagnostic"
-	UnstableNesTriggerKindManual     UnstableNesTriggerKind = "manual"
+	// UnstableNesTriggerKindManual is the "manual" value.
+	//
+	// Triggered by an explicit user action (keyboard shortcut).
+	UnstableNesTriggerKindManual UnstableNesTriggerKind = "manual"
 )
 
 // **UNSTABLE**
@@ -18515,6 +19256,7 @@ type UnstableNesUserAction struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the NesUserAction schema definition's JSON into v.
 func (v *UnstableNesUserAction) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableNesUserAction", "action", "position", "timestampMs", "uri")
 	if err != nil {
@@ -18554,6 +19296,7 @@ type UnstablePosition struct {
 	Line uint32 `json:"line"`
 }
 
+// UnmarshalJSON decodes the Position schema definition's JSON into v.
 func (v *UnstablePosition) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstablePosition", "character", "line")
 	if err != nil {
@@ -18591,6 +19334,7 @@ type UnstableProviderCurrentConfig struct {
 	BaseUrl string `json:"baseUrl"`
 }
 
+// UnmarshalJSON decodes the ProviderCurrentConfig schema definition's JSON into v.
 func (v *UnstableProviderCurrentConfig) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableProviderCurrentConfig", "apiType", "baseUrl")
 	if err != nil {
@@ -18641,6 +19385,7 @@ type UnstableProviderInfo struct {
 	Supported []UnstableLlmProtocol `json:"supported"`
 }
 
+// MarshalJSON encodes v as the ProviderInfo schema definition's JSON.
 func (v UnstableProviderInfo) MarshalJSON() ([]byte, error) {
 	type Alias UnstableProviderInfo
 	var a Alias
@@ -18651,6 +19396,7 @@ func (v UnstableProviderInfo) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the ProviderInfo schema definition's JSON into v.
 func (v *UnstableProviderInfo) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableProviderInfo", "providerId", "required", "supported")
 	if err != nil {
@@ -18692,6 +19438,7 @@ type UnstableRange struct {
 	Start UnstablePosition `json:"start"`
 }
 
+// UnmarshalJSON decodes the Range schema definition's JSON into v.
 func (v *UnstableRange) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableRange", "end", "start")
 	if err != nil {
@@ -18731,6 +19478,7 @@ type UnstableRejectNesNotification struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the RejectNesNotification schema definition's JSON into v.
 func (v *UnstableRejectNesNotification) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableRejectNesNotification", "id", "sessionId")
 	if err != nil {
@@ -18752,6 +19500,7 @@ func (v *UnstableRejectNesNotification) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the RejectNesNotification schema definition.
 func (v *UnstableRejectNesNotification) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -18785,6 +19534,7 @@ type UnstableSetProviderRequest struct {
 	ProviderId UnstableProviderId `json:"providerId"`
 }
 
+// UnmarshalJSON decodes the SetProviderRequest schema definition's JSON into v.
 func (v *UnstableSetProviderRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableSetProviderRequest", "apiType", "baseUrl", "providerId")
 	if err != nil {
@@ -18804,6 +19554,7 @@ func (v *UnstableSetProviderRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SetProviderRequest schema definition.
 func (v *UnstableSetProviderRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -18826,6 +19577,7 @@ type UnstableSetProviderResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the SetProviderResponse schema definition's JSON into v.
 func (v *UnstableSetProviderResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableSetProviderResponse")
 	if err != nil {
@@ -18845,6 +19597,7 @@ func (v *UnstableSetProviderResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SetProviderResponse schema definition.
 func (v *UnstableSetProviderResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -18873,6 +19626,7 @@ type UnstableStartNesRequest struct {
 	WorkspaceUri *string `json:"workspaceUri,omitempty"`
 }
 
+// UnmarshalJSON decodes the StartNesRequest schema definition's JSON into v.
 func (v *UnstableStartNesRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableStartNesRequest")
 	if err != nil {
@@ -18896,6 +19650,7 @@ func (v *UnstableStartNesRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the StartNesRequest schema definition.
 func (v *UnstableStartNesRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -18920,6 +19675,7 @@ type UnstableStartNesResponse struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the StartNesResponse schema definition's JSON into v.
 func (v *UnstableStartNesResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableStartNesResponse", "sessionId")
 	if err != nil {
@@ -18939,6 +19695,7 @@ func (v *UnstableStartNesResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the StartNesResponse schema definition.
 func (v *UnstableStartNesResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -18975,6 +19732,7 @@ type UnstableSuggestNesRequest struct {
 	Version int64 `json:"version"`
 }
 
+// UnmarshalJSON decodes the SuggestNesRequest schema definition's JSON into v.
 func (v *UnstableSuggestNesRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableSuggestNesRequest", "position", "sessionId", "triggerKind", "uri", "version")
 	if err != nil {
@@ -18994,6 +19752,7 @@ func (v *UnstableSuggestNesRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SuggestNesRequest schema definition.
 func (v *UnstableSuggestNesRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -19018,6 +19777,7 @@ type UnstableSuggestNesResponse struct {
 	Suggestions []UnstableNesSuggestion `json:"suggestions"`
 }
 
+// MarshalJSON encodes v as the SuggestNesResponse schema definition's JSON.
 func (v UnstableSuggestNesResponse) MarshalJSON() ([]byte, error) {
 	type Alias UnstableSuggestNesResponse
 	var a Alias
@@ -19028,6 +19788,7 @@ func (v UnstableSuggestNesResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a)
 }
 
+// UnmarshalJSON decodes the SuggestNesResponse schema definition's JSON into v.
 func (v *UnstableSuggestNesResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableSuggestNesResponse", "suggestions")
 	if err != nil {
@@ -19047,6 +19808,7 @@ func (v *UnstableSuggestNesResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the SuggestNesResponse schema definition.
 func (v *UnstableSuggestNesResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -19081,6 +19843,7 @@ type UnstableTextDocumentContentChangeEvent struct {
 	Text string `json:"text"`
 }
 
+// UnmarshalJSON decodes the TextDocumentContentChangeEvent schema definition's JSON into v.
 func (v *UnstableTextDocumentContentChangeEvent) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableTextDocumentContentChangeEvent", "text")
 	if err != nil {
@@ -19118,6 +19881,7 @@ type UnstableWorkspaceFolder struct {
 	Uri string `json:"uri"`
 }
 
+// UnmarshalJSON decodes the WorkspaceFolder schema definition's JSON into v.
 func (v *UnstableWorkspaceFolder) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstableWorkspaceFolder", "name", "uri")
 	if err != nil {
@@ -19149,6 +19913,7 @@ type UnstructuredCommandInput struct {
 	Hint string `json:"hint"`
 }
 
+// UnmarshalJSON decodes the UnstructuredCommandInput schema definition's JSON into v.
 func (v *UnstructuredCommandInput) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UnstructuredCommandInput", "hint")
 	if err != nil {
@@ -19194,6 +19959,7 @@ type Usage struct {
 	TotalTokens uint64 `json:"totalTokens"`
 }
 
+// UnmarshalJSON decodes the Usage schema definition's JSON into v.
 func (v *Usage) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "Usage", "inputTokens", "outputTokens", "totalTokens")
 	if err != nil {
@@ -19235,6 +20001,7 @@ type UsageUpdate struct {
 	Used uint64 `json:"used"`
 }
 
+// UnmarshalJSON decodes the UsageUpdate schema definition's JSON into v.
 func (v *UsageUpdate) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "UsageUpdate", "size", "used")
 	if err != nil {
@@ -19270,6 +20037,7 @@ type WaitForTerminalExitRequest struct {
 	TerminalId TerminalId `json:"terminalId"`
 }
 
+// UnmarshalJSON decodes the WaitForTerminalExitRequest schema definition's JSON into v.
 func (v *WaitForTerminalExitRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "WaitForTerminalExitRequest", "sessionId", "terminalId")
 	if err != nil {
@@ -19289,6 +20057,7 @@ func (v *WaitForTerminalExitRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the WaitForTerminalExitRequest schema definition.
 func (v *WaitForTerminalExitRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -19311,6 +20080,7 @@ type WaitForTerminalExitResponse struct {
 	Signal *string `json:"signal,omitempty"`
 }
 
+// UnmarshalJSON decodes the WaitForTerminalExitResponse schema definition's JSON into v.
 func (v *WaitForTerminalExitResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "WaitForTerminalExitResponse")
 	if err != nil {
@@ -19334,6 +20104,7 @@ func (v *WaitForTerminalExitResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the WaitForTerminalExitResponse schema definition.
 func (v *WaitForTerminalExitResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -19360,6 +20131,7 @@ type WriteTextFileRequest struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+// UnmarshalJSON decodes the WriteTextFileRequest schema definition's JSON into v.
 func (v *WriteTextFileRequest) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "WriteTextFileRequest", "content", "path", "sessionId")
 	if err != nil {
@@ -19379,6 +20151,7 @@ func (v *WriteTextFileRequest) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the WriteTextFileRequest schema definition.
 func (v *WriteTextFileRequest) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -19406,6 +20179,7 @@ type WriteTextFileResponse struct {
 	Meta map[string]any `json:"_meta,omitempty"`
 }
 
+// UnmarshalJSON decodes the WriteTextFileResponse schema definition's JSON into v.
 func (v *WriteTextFileResponse) UnmarshalJSON(b []byte) error {
 	_, err := objectKeys(b, "WriteTextFileResponse")
 	if err != nil {
@@ -19425,6 +20199,7 @@ func (v *WriteTextFileResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the WriteTextFileResponse schema definition.
 func (v *WriteTextFileResponse) Validate() error {
 	return v.validate(filepath.IsAbs)
 }
@@ -19433,6 +20208,10 @@ func (v *WriteTextFileResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// Agent is implemented by an agent: one method for each stable agent method of the
+// protocol that every agent handles, the requests and notifications a client sends it.
+// NewAgentSideConnection serves it. AgentExperimental adds the unstable methods, and the
+// optional interfaces the methods an agent may leave out.
 type Agent interface {
 	// Request parameters for the authenticate method.
 	//
@@ -19607,6 +20386,10 @@ type AgentExperimental interface {
 	// Only available if the Agent supports the 'session.fork' capability.
 	UnstableForkSession(ctx context.Context, params UnstableForkSessionRequest) (UnstableForkSessionResponse, error)
 }
+
+// Client is implemented by a client: one method for each stable client method of the
+// protocol, the requests and notifications an agent sends it. NewClientSideConnection
+// serves it. ClientExperimental adds the unstable methods.
 type Client interface {
 	// Notification sent by the agent when a URL-based elicitation is complete.
 	CompleteElicitation(ctx context.Context, params CompleteElicitationNotification) error

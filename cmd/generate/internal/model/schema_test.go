@@ -1,6 +1,7 @@
 package model
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -121,11 +122,16 @@ func itoa(i int) string {
 	return itoa(i/10) + string(rune('0'+i%10))
 }
 
+// TestEnumValueKinds requires each enum kind's values, their constants, and
+// the schema description of a value that has one as its Doc
+// (0019-PLAN-examples-docs-tests-tooling.md, I12).
 func TestEnumValueKinds(t *testing.T) {
 	t.Parallel()
 	m, err := Build(Input{Meta: &load.Meta{}, Schema: schemaOf(t, `{
-		"Consts":{"oneOf":[{"const":"a-b"},{"const":"c"}]},
-		"Open":{"anyOf":[{"type":"string","const":"known"},{"type":"string"}]}}`)})
+		"Consts":{"oneOf":[{"const":"a-b","description":"The first value."},{"const":"c"}]},
+		"Open":{"anyOf":[{"type":"string","const":"known","description":"A known value."},{"type":"string"}]},
+		"Plain":{"type":"string","enum":["p"]},
+		"Codes":{"anyOf":[{"type":"integer","format":"int32","const":-1,"title":"Minus one","description":"Below zero."}]}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,11 +140,16 @@ func TestEnumValueKinds(t *testing.T) {
 		kind Kind
 		want []EnumValue
 	}{
-		{"Consts", KindStringConstUnion, []EnumValue{{"a-b", "ConstsAB"}, {"c", "ConstsC"}}},
-		{"Open", KindOpenEnum, []EnumValue{{"known", "OpenKnown"}}},
+		{"Consts", KindStringConstUnion, []EnumValue{
+			{Value: "a-b", Const: "ConstsAB", Doc: []string{"The first value."}},
+			{Value: "c", Const: "ConstsC"},
+		}},
+		{"Open", KindOpenEnum, []EnumValue{{Value: "known", Const: "OpenKnown", Doc: []string{"A known value."}}}},
+		{"Plain", KindEnum, []EnumValue{{Value: "p", Const: "PlainP"}}},
+		{"Codes", KindIntegerEnum, []EnumValue{{Value: "-1", Const: "CodesMinusOne", Doc: []string{"Below zero."}}}},
 	} {
 		ty := m.Type(tt.name)
-		if ty.Kind != tt.kind || !slices.Equal(ty.Enum, tt.want) {
+		if ty.Kind != tt.kind || !reflect.DeepEqual(ty.Enum, tt.want) {
 			t.Errorf("%s: kind %v enum %v, want %v %v", tt.name, ty.Kind, ty.Enum, tt.kind, tt.want)
 		}
 	}

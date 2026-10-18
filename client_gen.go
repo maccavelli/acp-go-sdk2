@@ -312,6 +312,11 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 	}
 }
 
+// Authenticate sends the authenticate request to the agent and returns its response.
+//
+// Request parameters for the authenticate method.
+//
+// Specifies which authentication method to use.
 func (c *ClientSideConnection) Authenticate(ctx context.Context, params AuthenticateRequest) (AuthenticateResponse, error) {
 	if err := c.gate(AgentMethodAuthenticate, &params); err != nil {
 		return AuthenticateResponse{}, err
@@ -320,6 +325,13 @@ func (c *ClientSideConnection) Authenticate(ctx context.Context, params Authenti
 	return resp, err
 }
 
+// UnstableDidChangeDocument sends the document/didChange notification to the agent.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Notification sent when a file is edited.
 func (c *ClientSideConnection) UnstableDidChangeDocument(ctx context.Context, params UnstableDidChangeDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidChange, &params); err != nil {
 		return err
@@ -327,6 +339,13 @@ func (c *ClientSideConnection) UnstableDidChangeDocument(ctx context.Context, pa
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidChange, params)
 }
 
+// UnstableDidCloseDocument sends the document/didClose notification to the agent.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Notification sent when a file is closed.
 func (c *ClientSideConnection) UnstableDidCloseDocument(ctx context.Context, params UnstableDidCloseDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidClose, &params); err != nil {
 		return err
@@ -334,6 +353,13 @@ func (c *ClientSideConnection) UnstableDidCloseDocument(ctx context.Context, par
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidClose, params)
 }
 
+// UnstableDidFocusDocument sends the document/didFocus notification to the agent.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Notification sent when a file becomes the active editor tab.
 func (c *ClientSideConnection) UnstableDidFocusDocument(ctx context.Context, params UnstableDidFocusDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidFocus, &params); err != nil {
 		return err
@@ -341,6 +367,13 @@ func (c *ClientSideConnection) UnstableDidFocusDocument(ctx context.Context, par
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidFocus, params)
 }
 
+// UnstableDidOpenDocument sends the document/didOpen notification to the agent.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Notification sent when a file is opened in the editor.
 func (c *ClientSideConnection) UnstableDidOpenDocument(ctx context.Context, params UnstableDidOpenDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidOpen, &params); err != nil {
 		return err
@@ -348,6 +381,13 @@ func (c *ClientSideConnection) UnstableDidOpenDocument(ctx context.Context, para
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidOpen, params)
 }
 
+// UnstableDidSaveDocument sends the document/didSave notification to the agent.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Notification sent when a file is saved.
 func (c *ClientSideConnection) UnstableDidSaveDocument(ctx context.Context, params UnstableDidSaveDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidSave, &params); err != nil {
 		return err
@@ -355,6 +395,13 @@ func (c *ClientSideConnection) UnstableDidSaveDocument(ctx context.Context, para
 	return c.conn.SendNotification(ctx, AgentMethodDocumentDidSave, params)
 }
 
+// Initialize sends the initialize request to the agent and returns its response.
+//
+// Request parameters for the initialize method.
+//
+// Sent by the client to establish connection and negotiate capabilities.
+//
+// See protocol docs: [Initialization](https://agentclientprotocol.com/protocol/initialization)
 func (c *ClientSideConnection) Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error) {
 	if params.ProtocolVersion == 0 {
 		params.ProtocolVersion = ProtocolVersionNumber
@@ -388,6 +435,11 @@ func (c *ClientSideConnection) Initialize(ctx context.Context, params Initialize
 	return resp, nil
 }
 
+// Logout sends the logout request to the agent and returns its response.
+//
+// Request parameters for the logout method.
+//
+// Terminates the current authenticated session.
 func (c *ClientSideConnection) Logout(ctx context.Context, params LogoutRequest) (LogoutResponse, error) {
 	if err := c.gate(AgentMethodLogout, &params); err != nil {
 		return LogoutResponse{}, err
@@ -396,6 +448,16 @@ func (c *ClientSideConnection) Logout(ctx context.Context, params LogoutRequest)
 	return resp, err
 }
 
+// UnstableMessageMcp sends the mcp/message notification to the agent.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Notification parameters for 'mcp/message'.
+//
+// Sent by the provider to the consumer for an active request (including
+// subscription acknowledgements and updates); the outer envelope has no 'id'.
 func (c *ClientSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpNotification) error {
 	if err := c.gate(AgentMethodMcpMessage, &params); err != nil {
 		return err
@@ -403,6 +465,13 @@ func (c *ClientSideConnection) UnstableMessageMcp(ctx context.Context, params Un
 	return c.conn.SendNotification(ctx, AgentMethodMcpMessage, params)
 }
 
+// UnstableAcceptNes sends the nes/accept notification to the agent.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Notification sent when a suggestion is accepted.
 func (c *ClientSideConnection) UnstableAcceptNes(ctx context.Context, params UnstableAcceptNesNotification) error {
 	if err := c.gate(AgentMethodNesAccept, &params); err != nil {
 		return err
@@ -410,6 +479,16 @@ func (c *ClientSideConnection) UnstableAcceptNes(ctx context.Context, params Uns
 	return c.conn.SendNotification(ctx, AgentMethodNesAccept, params)
 }
 
+// UnstableCloseNes sends the nes/close request to the agent and returns its response.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Request to close an NES session.
+//
+// The agent **must** cancel any ongoing work related to the NES session
+// and then free up any resources associated with the session.
 func (c *ClientSideConnection) UnstableCloseNes(ctx context.Context, params UnstableCloseNesRequest) (UnstableCloseNesResponse, error) {
 	if err := c.gate(AgentMethodNesClose, &params); err != nil {
 		return UnstableCloseNesResponse{}, err
@@ -418,6 +497,13 @@ func (c *ClientSideConnection) UnstableCloseNes(ctx context.Context, params Unst
 	return resp, err
 }
 
+// UnstableRejectNes sends the nes/reject notification to the agent.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Notification sent when a suggestion is rejected.
 func (c *ClientSideConnection) UnstableRejectNes(ctx context.Context, params UnstableRejectNesNotification) error {
 	if err := c.gate(AgentMethodNesReject, &params); err != nil {
 		return err
@@ -425,6 +511,13 @@ func (c *ClientSideConnection) UnstableRejectNes(ctx context.Context, params Uns
 	return c.conn.SendNotification(ctx, AgentMethodNesReject, params)
 }
 
+// UnstableStartNes sends the nes/start request to the agent and returns its response.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Request to start an NES session.
 func (c *ClientSideConnection) UnstableStartNes(ctx context.Context, params UnstableStartNesRequest) (UnstableStartNesResponse, error) {
 	if err := c.gate(AgentMethodNesStart, &params); err != nil {
 		return UnstableStartNesResponse{}, err
@@ -433,6 +526,13 @@ func (c *ClientSideConnection) UnstableStartNes(ctx context.Context, params Unst
 	return resp, err
 }
 
+// UnstableSuggestNes sends the nes/suggest request to the agent and returns its response.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Request for a code suggestion.
 func (c *ClientSideConnection) UnstableSuggestNes(ctx context.Context, params UnstableSuggestNesRequest) (UnstableSuggestNesResponse, error) {
 	if err := c.gate(AgentMethodNesSuggest, &params); err != nil {
 		return UnstableSuggestNesResponse{}, err
@@ -441,6 +541,13 @@ func (c *ClientSideConnection) UnstableSuggestNes(ctx context.Context, params Un
 	return resp, err
 }
 
+// UnstableDisableProvider sends the providers/disable request to the agent and returns its response.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Request parameters for 'providers/disable'.
 func (c *ClientSideConnection) UnstableDisableProvider(ctx context.Context, params UnstableDisableProviderRequest) (UnstableDisableProviderResponse, error) {
 	if err := c.gate(AgentMethodProvidersDisable, &params); err != nil {
 		return UnstableDisableProviderResponse{}, err
@@ -449,6 +556,13 @@ func (c *ClientSideConnection) UnstableDisableProvider(ctx context.Context, para
 	return resp, err
 }
 
+// UnstableListProviders sends the providers/list request to the agent and returns its response.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Request parameters for 'providers/list'.
 func (c *ClientSideConnection) UnstableListProviders(ctx context.Context, params UnstableListProvidersRequest) (UnstableListProvidersResponse, error) {
 	if err := c.gate(AgentMethodProvidersList, &params); err != nil {
 		return UnstableListProvidersResponse{}, err
@@ -457,6 +571,15 @@ func (c *ClientSideConnection) UnstableListProviders(ctx context.Context, params
 	return resp, err
 }
 
+// UnstableSetProvider sends the providers/set request to the agent and returns its response.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Request parameters for 'providers/set'.
+//
+// Replaces the full configuration for one provider ID.
 func (c *ClientSideConnection) UnstableSetProvider(ctx context.Context, params UnstableSetProviderRequest) (UnstableSetProviderResponse, error) {
 	if err := c.gate(AgentMethodProvidersSet, &params); err != nil {
 		return UnstableSetProviderResponse{}, err
@@ -465,6 +588,11 @@ func (c *ClientSideConnection) UnstableSetProvider(ctx context.Context, params U
 	return resp, err
 }
 
+// Cancel sends the session/cancel notification to the agent.
+//
+// Notification to cancel ongoing operations for a session.
+//
+// See protocol docs: [Cancellation](https://agentclientprotocol.com/protocol/prompt-turn#cancellation)
 func (c *ClientSideConnection) Cancel(ctx context.Context, params CancelNotification) error {
 	if err := c.gate(AgentMethodSessionCancel, &params); err != nil {
 		return err
@@ -474,6 +602,15 @@ func (c *ClientSideConnection) Cancel(ctx context.Context, params CancelNotifica
 	return err
 }
 
+// CloseSession sends the session/close request to the agent and returns its response.
+//
+// Request parameters for closing an active session.
+//
+// If supported, the agent **must** cancel any ongoing work related to the session
+// (treat it as if 'session/cancel' was called) and then free up any resources
+// associated with the session.
+//
+// Only available if the Agent supports the 'sessionCapabilities.close' capability.
 func (c *ClientSideConnection) CloseSession(ctx context.Context, params CloseSessionRequest) (CloseSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionClose, &params); err != nil {
 		return CloseSessionResponse{}, err
@@ -485,6 +622,11 @@ func (c *ClientSideConnection) CloseSession(ctx context.Context, params CloseSes
 	return resp, err
 }
 
+// DeleteSession sends the session/delete request to the agent and returns its response.
+//
+// Request parameters for deleting an existing session from 'session/list'.
+//
+// Only available if the Agent supports the 'sessionCapabilities.delete' capability.
 func (c *ClientSideConnection) DeleteSession(ctx context.Context, params DeleteSessionRequest) (DeleteSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionDelete, &params); err != nil {
 		return DeleteSessionResponse{}, err
@@ -493,6 +635,18 @@ func (c *ClientSideConnection) DeleteSession(ctx context.Context, params DeleteS
 	return resp, err
 }
 
+// UnstableForkSession sends the session/fork request to the agent and returns its response.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Request parameters for forking an existing session.
+//
+// Creates a new session based on the context of an existing one, allowing
+// operations like generating summaries without affecting the original session's history.
+//
+// Only available if the Agent supports the 'session.fork' capability.
 func (c *ClientSideConnection) UnstableForkSession(ctx context.Context, params UnstableForkSessionRequest) (UnstableForkSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionFork, &params); err != nil {
 		return UnstableForkSessionResponse{}, err
@@ -501,6 +655,11 @@ func (c *ClientSideConnection) UnstableForkSession(ctx context.Context, params U
 	return resp, err
 }
 
+// ListSessions sends the session/list request to the agent and returns its response.
+//
+// Request parameters for listing existing sessions.
+//
+// Only available if the Agent supports the 'sessionCapabilities.list' capability.
 func (c *ClientSideConnection) ListSessions(ctx context.Context, params ListSessionsRequest) (ListSessionsResponse, error) {
 	if err := c.gate(AgentMethodSessionList, &params); err != nil {
 		return ListSessionsResponse{}, err
@@ -509,6 +668,13 @@ func (c *ClientSideConnection) ListSessions(ctx context.Context, params ListSess
 	return resp, err
 }
 
+// LoadSession sends the session/load request to the agent and returns its response.
+//
+// Request parameters for loading an existing session.
+//
+// Only available if the Agent supports the 'loadSession' capability.
+//
+// See protocol docs: [Loading Sessions](https://agentclientprotocol.com/protocol/session-setup#loading-sessions)
 func (c *ClientSideConnection) LoadSession(ctx context.Context, params LoadSessionRequest) (LoadSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionLoad, &params); err != nil {
 		return LoadSessionResponse{}, err
@@ -517,6 +683,11 @@ func (c *ClientSideConnection) LoadSession(ctx context.Context, params LoadSessi
 	return resp, err
 }
 
+// NewSession sends the session/new request to the agent and returns its response.
+//
+// Request parameters for creating a new session.
+//
+// See protocol docs: [Creating a Session](https://agentclientprotocol.com/protocol/session-setup#creating-a-session)
 func (c *ClientSideConnection) NewSession(ctx context.Context, params NewSessionRequest) (NewSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionNew, &params); err != nil {
 		return NewSessionResponse{}, err
@@ -525,6 +696,13 @@ func (c *ClientSideConnection) NewSession(ctx context.Context, params NewSession
 	return resp, err
 }
 
+// Prompt sends the session/prompt request to the agent and returns its response.
+//
+// Request parameters for sending a user prompt to the agent.
+//
+// Contains the user's message and any additional context.
+//
+// See protocol docs: [User Message](https://agentclientprotocol.com/protocol/prompt-turn#1-user-message)
 func (c *ClientSideConnection) Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error) {
 	if err := c.gate(AgentMethodSessionPrompt, &params); err != nil {
 		return PromptResponse{}, err
@@ -538,6 +716,14 @@ func (c *ClientSideConnection) Prompt(ctx context.Context, params PromptRequest)
 	return resp, err
 }
 
+// ResumeSession sends the session/resume request to the agent and returns its response.
+//
+// Request parameters for resuming an existing session.
+//
+// Resumes an existing session without returning previous messages (unlike 'session/load').
+// This is useful for agents that can resume sessions but don't implement full session loading.
+//
+// Only available if the Agent supports the 'sessionCapabilities.resume' capability.
 func (c *ClientSideConnection) ResumeSession(ctx context.Context, params ResumeSessionRequest) (ResumeSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionResume, &params); err != nil {
 		return ResumeSessionResponse{}, err
@@ -546,6 +732,9 @@ func (c *ClientSideConnection) ResumeSession(ctx context.Context, params ResumeS
 	return resp, err
 }
 
+// SetSessionConfigOption sends the session/set_config_option request to the agent and returns its response.
+//
+// Request parameters for setting a session configuration option.
 func (c *ClientSideConnection) SetSessionConfigOption(ctx context.Context, params SetSessionConfigOptionRequest) (SetSessionConfigOptionResponse, error) {
 	if err := c.gate(AgentMethodSessionSetConfigOption, &params); err != nil {
 		return SetSessionConfigOptionResponse{}, err
@@ -554,6 +743,9 @@ func (c *ClientSideConnection) SetSessionConfigOption(ctx context.Context, param
 	return resp, err
 }
 
+// SetSessionMode sends the session/set_mode request to the agent and returns its response.
+//
+// Request parameters for setting a session mode.
 func (c *ClientSideConnection) SetSessionMode(ctx context.Context, params SetSessionModeRequest) (SetSessionModeResponse, error) {
 	if err := c.gate(AgentMethodSessionSetMode, &params); err != nil {
 		return SetSessionModeResponse{}, err

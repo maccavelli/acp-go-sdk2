@@ -171,10 +171,19 @@ type MethodRule struct {
 
 // sdkInterfaces are the interfaces every generated SDK has.
 var sdkInterfaces = []Interface{
-	{Binding: BindAgent, Name: "Agent"},
+	{Binding: BindAgent, Name: "Agent", Doc: []string{
+		"Agent is implemented by an agent: one method for each stable agent method of the",
+		"protocol that every agent handles, the requests and notifications a client sends it.",
+		"NewAgentSideConnection serves it. AgentExperimental adds the unstable methods, and the",
+		"optional interfaces the methods an agent may leave out.",
+	}},
 	{Binding: BindAgentExperimental, Name: "AgentExperimental", Var: "exp",
 		Doc: []string{"AgentExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice."}},
-	{Binding: BindClient, Name: "Client"},
+	{Binding: BindClient, Name: "Client", Doc: []string{
+		"Client is implemented by a client: one method for each stable client method of the",
+		"protocol, the requests and notifications an agent sends it. NewClientSideConnection",
+		"serves it. ClientExperimental adds the unstable methods.",
+	}},
 	{Binding: BindClientExperimental, Name: "ClientExperimental", Var: "exp",
 		Doc: []string{"ClientExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice."}},
 }

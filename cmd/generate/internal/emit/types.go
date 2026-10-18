@@ -130,9 +130,37 @@ func enumConsts(f *goFile, name string, values []model.EnumValue) {
 	}
 	var specs []*ast.ValueSpec
 	for _, v := range values {
-		specs = append(specs, constSpec(v.Const, id(name), str(v.Value)))
+		specs = append(specs, enumSpec(v, id(name), str(v.Value), strconv.Quote(v.Value)))
 	}
 	f.add(constDecl(true, specs...))
+}
+
+// enumSpec is <Const> typ = value, documented as the value shown, then the
+// value's schema description (0019-PLAN-examples-docs-tests-tooling.md, I12).
+func enumSpec(v model.EnumValue, typ, value ast.Expr, shown string) *ast.ValueSpec {
+	s := constSpec(v.Const, typ, value)
+	lines := []string{v.Const + " is the " + shown + " value."}
+	if len(v.Doc) > 0 {
+		lines = append(append(lines, ""), v.Doc...)
+	}
+	s.Doc = docLines(lines...)
+	return s
+}
+
+// defPlace names the schema definition t was built from, by its own key, in
+// the docs of the methods emitted for it; a variant or a nested struct is
+// named by where it sits in it (0019-PLAN-examples-docs-tests-tooling.md,
+// I12, and its deviation of 2026-10-17).
+func defPlace(t *model.Type) string { return "the " + t.Origin.Key + " schema definition" }
+
+// schemaVariantPlace names variant vi of union t: by its discriminator value,
+// else by its field name.
+func schemaVariantPlace(t *model.Type, vi *model.Variant) string {
+	which := vi.FieldName
+	if vi.DiscValue != "" {
+		which = strconv.Quote(vi.DiscValue)
+	}
+	return "the " + which + " variant of " + defPlace(t)
 }
 
 func emitSchemaDef(f *goFile, t *model.Type) {
@@ -165,7 +193,7 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 		f.add(typeDecl(name, typeAST(f, *t.Underlying)))
 		var specs []*ast.ValueSpec
 		for _, v := range t.Enum {
-			specs = append(specs, constSpec(v.Const, id(name), integerLit(v.Value)))
+			specs = append(specs, enumSpec(v, id(name), integerLit(v.Value), v.Value))
 		}
 		f.add(constDecl(true, specs...))
 		f.line()
@@ -175,7 +203,7 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 		f.add(typeDecl(name, &ast.StructType{Fields: fields()}))
 		f.line()
 		if t.Validation != nil {
-			emitValidate(f, name, t.Validation)
+			emitValidate(f, name, defPlace(t), t.Validation)
 		}
 	default:
 		// A definition the model gives no Go type is raw JSON, kept byte for
@@ -190,15 +218,16 @@ func emitObjectSchema(f *goFile, t *model.Type) {
 	// Nested struct types for inline object properties come first.
 	for _, ns := range t.NestedStructs {
 		f.comment(ns.Doc...)
-		emitStruct(f, ns.Name, ns.Fields, nil, false, nil, "", ns.Validation)
+		emitStruct(f, ns.Name, fmt.Sprintf("the %q property of %s", ns.Key, defPlace(t)), ns.Fields, nil, false, nil, "", ns.Validation)
 	}
-	emitStruct(f, t.Name, t.Fields, t.Members, t.KeepExtra, t.KeyOrders, "", t.Validation)
+	emitStruct(f, t.Name, defPlace(t), t.Fields, t.Members, t.KeepExtra, t.KeyOrders, "", t.Validation)
 }
 
 // emitStruct emits type name struct { fields } and the methods its required
 // keys, defaults, fills, flattened members, kept keys, key orders, and
-// validation need; exempt is a required key decoding does not check.
-func emitStruct(f *goFile, name string, fields []*model.Field, members []*model.Member, keepExtra bool, orders []*model.KeyOrder,
+// validation need; exempt is a required key decoding does not check. place
+// names where the struct's schema sits, for its methods' docs.
+func emitStruct(f *goFile, name, place string, fields []*model.Field, members []*model.Member, keepExtra bool, orders []*model.KeyOrder,
 	exempt string, val *model.Validation) {
 	var st fieldSet
 	for _, fld := range fields {
@@ -226,9 +255,9 @@ func emitStruct(f *goFile, name string, fields []*model.Field, members []*model.
 	}
 	f.add(typeDecl(name, st.structType(f)))
 	f.line()
-	emitObjectCodec(f, name, fields, members, keepExtra, orders, exempt)
+	emitObjectCodec(f, name, place, fields, members, keepExtra, orders, exempt)
 	if val != nil {
-		emitValidate(f, name, val)
+		emitValidate(f, name, place, val)
 	}
 }
 
@@ -258,7 +287,7 @@ func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 // flattened members, and UnmarshalJSON for structs with required keys,
 // defaults, lenient fields, optional raw fields, flattened members, or an
 // Extra.
-func emitObjectCodec(f *goFile, name string, fields []*model.Field, members []*model.Member, keepExtra bool, orders []*model.KeyOrder,
+func emitObjectCodec(f *goFile, name, place string, fields []*model.Field, members []*model.Member, keepExtra bool, orders []*model.KeyOrder,
 	exempt string) {
 	var defaults, fills, lenient, absent []*model.Field
 	var required []string
@@ -283,11 +312,21 @@ func emitObjectCodec(f *goFile, name string, fields []*model.Field, members []*m
 	// A MarshalJSON that would only copy into an alias and encode it is not
 	// emitted (0019-PLAN-api-decisions.md, I8).
 	if slices.ContainsFunc(defaults, injectsDefault) || len(fills) > 0 || keepExtra || len(members) > 0 || len(orders) > 0 {
-		emitObjectMarshal(f, name, defaults, fills, members, keepExtra, orders)
+		emitObjectMarshal(f, name, place, defaults, fills, members, keepExtra, orders)
 	}
 	if len(defaults) > 0 || keepExtra || len(required) > 0 || len(lenient) > 0 || len(absent) > 0 || len(members) > 0 || len(orders) > 0 {
-		emitObjectUnmarshal(f, name, fields, defaults, lenient, absent, members, required, keepExtra, orders)
+		emitObjectUnmarshal(f, name, place, fields, defaults, lenient, absent, members, required, keepExtra, orders)
 	}
+}
+
+// marshalDoc and unmarshalDoc are the docs of a codec whose receiver is recv,
+// for a type whose schema sits at place.
+func marshalDoc(recv, place string) string {
+	return "MarshalJSON encodes " + recv + " as " + place + "'s JSON."
+}
+
+func unmarshalDoc(recv, place string) string {
+	return "UnmarshalJSON decodes " + place + "'s JSON into " + recv + "."
 }
 
 // injectsDefault reports whether MarshalJSON writes fld's default into a nil
@@ -303,7 +342,7 @@ func injectsDefault(fld *model.Field) bool {
 // writes back an Extra, writes the set member's keys, and writes a map in the
 // order its key order names (the model refuses an order beside an Extra or
 // members).
-func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, members []*model.Member, keepExtra bool,
+func emitObjectMarshal(f *goFile, name, place string, defaults, fills []*model.Field, members []*model.Member, keepExtra bool,
 	orders []*model.KeyOrder) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	marshal := func(x ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Marshal"), x) }
@@ -358,6 +397,7 @@ func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, m
 	} else {
 		body = append(body, ret(marshal(id("a"))))
 	}
+	f.comment(marshalDoc("v", place))
 	f.add(method(param("v", id(name)), "MarshalJSON",
 		funcType(nil, param("", byteSlice()), param("", id("error"))), body...))
 	f.line()
@@ -368,7 +408,7 @@ func emitObjectMarshal(f *goFile, name string, defaults, fills []*model.Field, m
 // empties each optional raw field that holds null, applies defaults when a
 // field is missing, or null when the schema does not allow null, and keeps a
 // catch-all's undeclared keys.
-func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, absent []*model.Field, members []*model.Member, required []string,
+func emitObjectUnmarshal(f *goFile, name, place string, fields, defaults, lenient, absent []*model.Field, members []*model.Member, required []string,
 	keepExtra bool, orders []*model.KeyOrder) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	f.uses[helperObjectKeys] = true
@@ -454,6 +494,7 @@ func emitObjectUnmarshal(f *goFile, name string, fields, defaults, lenient, abse
 		assign(exprs(star(id("v"))), call(id(name), id("a"))),
 		ret(nilExpr()),
 	)
+	f.comment(unmarshalDoc("v", place))
 	f.add(method(param("v", star(id(name))), "UnmarshalJSON",
 		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))), body...))
 	f.line()
@@ -583,14 +624,14 @@ func lenientDecode(f *goFile, name string, lenient []*model.Field, wrap func() a
 
 // emitInlineVariant emits the type the model gives a union variant without a
 // $ref, if any.
-func emitInlineVariant(f *goFile, tname string, in *model.Inline) {
+func emitInlineVariant(f *goFile, tname, place string, in *model.Inline) {
 	if in == nil {
 		return
 	}
 	f.comment(in.Doc...)
 	switch in.Kind {
 	case model.InlineStruct:
-		emitStruct(f, tname, in.Fields, in.Members, in.KeepExtra, nil, in.Exempt, in.Validation)
+		emitStruct(f, tname, place, in.Fields, in.Members, in.KeepExtra, nil, in.Exempt, in.Validation)
 	case model.InlineNamed:
 		// Non-object title-only variants can still carry payloads (e.g. arrays).
 		f.add(typeDecl(tname, typeAST(f, in.Type)))
@@ -956,8 +997,10 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 // addValidate adds Validate, which checks with the receiving host's rule for
 // absolute paths, and validate, which takes the rule and holds the body, so
 // the SDK can check what it sends with the portable rule
-// (0015-MADR-validate-absolute-protocol-paths.md, A4).
-func addValidate(f *goFile, recv, name string, body ...ast.Stmt) {
+// (0015-MADR-validate-absolute-protocol-paths.md, A4). place names where
+// the type's schema sits, for Validate's doc.
+func addValidate(f *goFile, recv, name, place string, body ...ast.Stmt) {
+	f.comment("Validate returns an error if " + recv + " does not satisfy " + place + ".")
 	f.add(method(param(recv, star(id(name))), "Validate", funcType(nil, param("", id("error"))),
 		ret(call(sel(id(recv), "validate"), f.qual("path/filepath", "IsAbs")))))
 	f.line()
@@ -973,7 +1016,7 @@ func validateCall(f *goFile, x ast.Expr, format string, args ...ast.Expr) ast.St
 
 // emitValidate emits Validate for a struct from the checks of val, in field
 // order (0012-MADR-schema-fidelity-framework.md).
-func emitValidate(f *goFile, name string, val *model.Validation) {
+func emitValidate(f *goFile, name, place string, val *model.Validation) {
 	var body []ast.Stmt
 	for _, c := range val.Checks {
 		body = append(body, checkStmt(f, name, c))
@@ -992,7 +1035,7 @@ func emitValidate(f *goFile, name string, val *model.Validation) {
 			}
 		}
 	}
-	addValidate(f, "v", name, append(body, ret(nilExpr()))...)
+	addValidate(f, "v", name, place, append(body, ret(nilExpr()))...)
 	f.line()
 }
 
@@ -1125,7 +1168,7 @@ func emitUnion(f *goFile, t *model.Type) {
 		if vi.Skip {
 			continue
 		}
-		emitInlineVariant(f, vi.TypeName, vi.Inline)
+		emitInlineVariant(f, vi.TypeName, schemaVariantPlace(t, vi), vi.Inline)
 		variants = append(variants, vi)
 	}
 
@@ -1146,16 +1189,18 @@ func emitUnion(f *goFile, t *model.Type) {
 	f.comment(t.Doc...)
 	f.add(typeDecl(name, st.structType(f)))
 	f.line()
+	f.comment(unmarshalDoc("u", defPlace(t)))
 	f.add(method(param("u", star(id(name))), "UnmarshalJSON",
 		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))),
 		unionUnmarshalBody(f, name, variants, t.DiscKey, t.HasUnknown, catchAllOf(t))...))
 	f.line()
+	f.comment(marshalDoc("u", defPlace(t)))
 	f.add(method(param("u", id(name)), "MarshalJSON",
 		funcType(nil, param("", byteSlice()), param("", id("error"))),
 		unionMarshalBody(f, name, variants, t.HasUnknown)...))
 	f.line()
 
 	// Every union has exactly one variant set, which validates when it can.
-	addValidate(f, "u", name, unionValidateBody(f, t, variants)...)
+	addValidate(f, "u", name, defPlace(t), unionValidateBody(f, t, variants)...)
 	f.line()
 }

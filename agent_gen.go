@@ -809,6 +809,9 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 	}
 }
 
+// CompleteElicitation sends the elicitation/complete notification to the client.
+//
+// Notification sent by the agent when a URL-based elicitation is complete.
 func (c *AgentSideConnection) CompleteElicitation(ctx context.Context, params CompleteElicitationNotification) error {
 	if err := c.gate(ClientMethodElicitationComplete, &params); err != nil {
 		return err
@@ -816,6 +819,13 @@ func (c *AgentSideConnection) CompleteElicitation(ctx context.Context, params Co
 	return c.conn.SendNotification(ctx, ClientMethodElicitationComplete, params)
 }
 
+// CreateElicitation sends the elicitation/create request to the client and returns its response.
+//
+// Request from the agent to elicit structured user input.
+//
+// The agent sends this to the client to request information from the user,
+// either via a form or by directing them to a URL.
+// Elicitations are tied to a session (optionally a tool call) or a request.
 func (c *AgentSideConnection) CreateElicitation(ctx context.Context, params CreateElicitationRequest) (CreateElicitationResponse, error) {
 	if err := c.gate(ClientMethodElicitationCreate, &params); err != nil {
 		return CreateElicitationResponse{}, err
@@ -824,6 +834,11 @@ func (c *AgentSideConnection) CreateElicitation(ctx context.Context, params Crea
 	return resp, err
 }
 
+// ReadTextFile sends the fs/read_text_file request to the client and returns its response.
+//
+// Request to read content from a text file.
+//
+// Only available if the client supports the 'fs.readTextFile' capability.
 func (c *AgentSideConnection) ReadTextFile(ctx context.Context, params ReadTextFileRequest) (ReadTextFileResponse, error) {
 	if err := c.gate(ClientMethodFsReadTextFile, &params); err != nil {
 		return ReadTextFileResponse{}, err
@@ -832,6 +847,11 @@ func (c *AgentSideConnection) ReadTextFile(ctx context.Context, params ReadTextF
 	return resp, err
 }
 
+// WriteTextFile sends the fs/write_text_file request to the client and returns its response.
+//
+// Request to write content to a text file.
+//
+// Only available if the client supports the 'fs.writeTextFile' capability.
 func (c *AgentSideConnection) WriteTextFile(ctx context.Context, params WriteTextFileRequest) (WriteTextFileResponse, error) {
 	if err := c.gate(ClientMethodFsWriteTextFile, &params); err != nil {
 		return WriteTextFileResponse{}, err
@@ -840,6 +860,13 @@ func (c *AgentSideConnection) WriteTextFile(ctx context.Context, params WriteTex
 	return resp, err
 }
 
+// UnstableMessageMcp sends the mcp/message request to the client and returns its response.
+//
+// **UNSTABLE**
+//
+// This capability is not part of the spec yet, and may be removed or changed at any point.
+//
+// Request parameters for 'mcp/message'.
 func (c *AgentSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error) {
 	if err := c.gate(ClientMethodMcpMessage, &params); err != nil {
 		return UnstableMessageMcpResponse{}, err
@@ -848,6 +875,13 @@ func (c *AgentSideConnection) UnstableMessageMcp(ctx context.Context, params Uns
 	return resp, err
 }
 
+// RequestPermission sends the session/request_permission request to the client and returns its response.
+//
+// Request for user permission to execute a tool call.
+//
+// Sent when the agent needs authorization before performing a sensitive operation.
+//
+// See protocol docs: [Requesting Permission](https://agentclientprotocol.com/protocol/tool-calls#requesting-permission)
 func (c *AgentSideConnection) RequestPermission(ctx context.Context, params RequestPermissionRequest) (RequestPermissionResponse, error) {
 	if err := c.gate(ClientMethodSessionRequestPermission, &params); err != nil {
 		return RequestPermissionResponse{}, err
@@ -856,6 +890,13 @@ func (c *AgentSideConnection) RequestPermission(ctx context.Context, params Requ
 	return resp, err
 }
 
+// SessionUpdate sends the session/update notification to the client.
+//
+// Notification containing a session update from the agent.
+//
+// Used to stream real-time progress and results during prompt processing.
+//
+// See protocol docs: [Agent Reports Output](https://agentclientprotocol.com/protocol/prompt-turn#3-agent-reports-output)
 func (c *AgentSideConnection) SessionUpdate(ctx context.Context, params SessionNotification) error {
 	if err := c.gate(ClientMethodSessionUpdate, &params); err != nil {
 		return err
@@ -863,6 +904,9 @@ func (c *AgentSideConnection) SessionUpdate(ctx context.Context, params SessionN
 	return c.conn.SendNotification(ctx, ClientMethodSessionUpdate, params)
 }
 
+// CreateTerminal sends the terminal/create request to the client and returns its response.
+//
+// Request to create a new terminal and execute a command.
 func (c *AgentSideConnection) CreateTerminal(ctx context.Context, params CreateTerminalRequest) (CreateTerminalResponse, error) {
 	if err := c.gate(ClientMethodTerminalCreate, &params); err != nil {
 		return CreateTerminalResponse{}, err
@@ -871,6 +915,9 @@ func (c *AgentSideConnection) CreateTerminal(ctx context.Context, params CreateT
 	return resp, err
 }
 
+// KillTerminal sends the terminal/kill request to the client and returns its response.
+//
+// Request to kill a terminal without releasing it.
 func (c *AgentSideConnection) KillTerminal(ctx context.Context, params KillTerminalRequest) (KillTerminalResponse, error) {
 	if err := c.gate(ClientMethodTerminalKill, &params); err != nil {
 		return KillTerminalResponse{}, err
@@ -879,6 +926,9 @@ func (c *AgentSideConnection) KillTerminal(ctx context.Context, params KillTermi
 	return resp, err
 }
 
+// TerminalOutput sends the terminal/output request to the client and returns its response.
+//
+// Request to get the current output and status of a terminal.
 func (c *AgentSideConnection) TerminalOutput(ctx context.Context, params TerminalOutputRequest) (TerminalOutputResponse, error) {
 	if err := c.gate(ClientMethodTerminalOutput, &params); err != nil {
 		return TerminalOutputResponse{}, err
@@ -887,6 +937,9 @@ func (c *AgentSideConnection) TerminalOutput(ctx context.Context, params Termina
 	return resp, err
 }
 
+// ReleaseTerminal sends the terminal/release request to the client and returns its response.
+//
+// Request to release a terminal and free its resources.
 func (c *AgentSideConnection) ReleaseTerminal(ctx context.Context, params ReleaseTerminalRequest) (ReleaseTerminalResponse, error) {
 	if err := c.gate(ClientMethodTerminalRelease, &params); err != nil {
 		return ReleaseTerminalResponse{}, err
@@ -895,6 +948,9 @@ func (c *AgentSideConnection) ReleaseTerminal(ctx context.Context, params Releas
 	return resp, err
 }
 
+// WaitForTerminalExit sends the terminal/wait_for_exit request to the client and returns its response.
+//
+// Request to wait for a terminal command to exit.
 func (c *AgentSideConnection) WaitForTerminalExit(ctx context.Context, params WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
 	if err := c.gate(ClientMethodTerminalWaitForExit, &params); err != nil {
 		return WaitForTerminalExitResponse{}, err
