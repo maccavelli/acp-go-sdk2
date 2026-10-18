@@ -1,6 +1,6 @@
 ---
 status: in-progress
-date: 2026-10-17
+date: 2026-10-18
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
 
@@ -630,3 +630,35 @@ Gates, through the Python runner, on the tree:
 
 The first full run failed `make markdownlint` on `docs/architecture.md`: MD004, the new list's `*` in a file whose lists use `-`. After
 the markers were changed, the records, Markdown and identifier gates passed again; no other file changed.
+
+The owner committed step 7's record as `9a70c6a`.
+
+### Step 8, release notes, 2026-10-18
+
+What changed, on `9a70c6a`:
+
+- [0019-REPORT-release-notes-v1-15-1.md](../reports/0019-REPORT-release-notes-v1-15-1.md), new: the text of the GitHub release for
+  `v1.15.1` and the sources behind it, in the form of the `v1.15.0` notes.
+- Its row in `docs/README.md`.
+
+The release text has three sections.
+
+- **Documentation:** I12, E8, E14.
+- **Example programs:** E5, E6, E7, E12, E14. These change behaviour, as "Rollout and Rollback" says the notes must name.
+- **For contributors:** E9 to E11, E13, E15 to E17.
+
+Each statement cites its commit and finding.
+
+Facts it rests on, re-read for this step:
+
+- `git log v1.15.0..HEAD`: nine commits.
+- `git log v1.15.0..HEAD -- '*.go' ':!cmd/generate'`: `fdbdff6`, `4da5878`, `d13d2d5`, `9a70c6a`.
+- `git diff --stat v1.15.0 HEAD` over the non-test, non-example Go files of the root: `agent_gen.go`, `client_gen.go`,
+  `errors.go` and `types_gen.go`, 1091 lines added and 56 removed.
+- `git diff v1.15.0 -- schema/`: empty.
+- The API listing: 0 removed, 0 added (step 7's gates).
+
+Decision 12 of the MADR, read at its line 208, says phases 3 to 5 ride the release after each lands.
+
+Gates on the tree: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file changed in this
+step.

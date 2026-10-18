@@ -58,6 +58,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0019 | PLAN | [Implement phase 4 of 0019: examples, documentation, tests and tooling](decisions/0019-PLAN-examples-docs-tests-tooling.md) | in-progress |
 | 0019 | REPORT | [Release notes for v1.14.0, against v0.17.1](reports/0019-REPORT-release-notes-v0-18-0.md) | observed |
 | 0019 | REPORT | [Release notes for v1.15.0, against v1.14.0](reports/0019-REPORT-release-notes-v1-15-0.md) | observed |
+| 0019 | REPORT | [Release notes for v1.15.1, against v1.15.0](reports/0019-REPORT-release-notes-v1-15-1.md) | observed |
 | 0020 | MADR | [Release phases 1 and 2 of 0019 as v1.14.0, retracting the accidental v1.13.0](decisions/0020-MADR-retract-accidental-v1-tag.md) | accepted |
 | 0020 | PLAN | [Implement the v1.14.0 release and the retraction of v1.13.0](decisions/0020-PLAN-retract-accidental-v1-tag.md) | complete |
 | 0021 | MADR | [Resolve issues #4 and #5 before v1.14.0: a prompt-overlap policy option and a three-state Patch[T] for patch fields](decisions/0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md) | accepted |
