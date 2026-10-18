@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-18
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
@@ -783,3 +783,35 @@ throwaway deny list with one entry is passed to the guard through `DISCLOSURE_DE
 
 On the tree, `make push-guard` after a fetch: 0 outgoing commits, `e4707cb..e4707cb`, the guard passed. The 9 commits were already
 pushed, as the deviation records.
+
+The owner committed the push guard's record as `4438b03`.
+
+### Close, 2026-10-18
+
+The guard ran through `make push-guard` over the one unpushed commit, `e4707cb..4438b03`, after a fetch: it passed, exit 0. The owner
+pushed `4438b03`.
+
+CI run `39129542315` on `4438b03` concluded `success` on its first attempt. The jobs `validate (ubuntu-24.04)`, `validate (macos-15)`
+and `validate (windows-2025)` all passed. Its one annotation is GitHub's notice of longer queue times for macOS runners. The phase's
+other commits passed CI before it: run `39129122998` on `e4707cb` succeeded on all three runners.
+
+`4438b03` changes only the push guard, its target, `AGENTS.md` and records since step 9's verification, and its gates passed.
+
+Every acceptance criterion in "Verification" is met:
+
+- each step's checks passed and its record is written;
+- each finding's re-check shows it fixed;
+- root coverage rose from 88.8% to 89.3%, and the profile runs each branch E9 lists;
+- `TestExportedDeclarationsDocumented` passes with 0 undocumented;
+- `go test -list Example .` lists `Example_agent` and `Example_client`;
+- lint over the examples is clean;
+- CI passed on the pushed commits.
+
+This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`, with phase 5 to come.
+
+Left to the owner:
+
+- **Tag:** `v1.15.1` on `4438b03`, an annotated tag as `v1.15.0` is.
+- **Release:** published from the release text of
+  [0019-REPORT-release-notes-v1-15-1.md](../reports/0019-REPORT-release-notes-v1-15-1.md), with its relative links rewritten to
+  links at the tag, as for `v1.15.0`.
