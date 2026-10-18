@@ -299,3 +299,62 @@ Gates, through the Python runner, on the tree:
 - the identifier scan finds nothing;
 - Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`;
 - the API listing: 2429 lines at `v1.15.1` and in the tree; 0 removed, 0 added.
+
+The owner committed step 2's record as `ef08400`.
+
+### Step 3, B22 and I10, a cancel only for a prompt that was written, 2026-10-18
+
+What changed, on `ef08400`:
+
+- **`connection.go`:** `sendMessage` keeps its signature and calls a new `sendMessageSent`. It reports whether the message was handed
+  to the writer goroutine:
+  - false on every return before the hand-over: the connection had ended, the message did not encode, or the context ended first;
+  - true after it, whatever the error, since the write then runs to its end.
+
+  `sendRequest` keeps its signature and calls a new generic `sendRequestSent`, which reports the same: false for a context already
+  ended (B9) or a request that did not prepare; `sendMessageSent`'s answer for the write; true once the request was handed over. The
+  exported `SendRequest` and the typed methods are unchanged.
+- **The generator** (`emit/dispatch.go`): a prompt-turn method with a canceller calls `sendRequestSent` and sends its cancel only
+  when `sent && ctx.Err() != nil`, under `context.WithoutCancel(ctx)` (I10), where it sent it under `context.Background()` whenever
+  `ctx.Err() != nil`. Other methods still call `sendRequest`.
+- **`client_gen.go`**, regenerated: `Prompt`'s call and its cancel, three changed lines.
+- **Tests:**
+  - `TestPromptWithEndedContextWritesNothing` (`connection_cancel_test.go`) is issue #7's probe as a test: with an ended context,
+    `Prompt` returns `-32800` and writes nothing, and a marker sent after it is the first line written.
+  - `TestPromptEndedBeforeHandOverSendsNoCancel` is added for the race B22 is about: in a `synctest` bubble, a peer that stopped
+    reading holds the writer, and `Prompt`'s context ends while its request waits for the hand-over. `Prompt` returns `-32800`.
+    Before the fix it sent the cancel and blocked on the same writer.
+  - The existing `TestPromptCancellationSendsCancelAndAllowsNewSession` still requires the cancel after a written prompt.
+  - `TestDispatchFollowsTheModel` pins the emitted `sendRequestSent` call and the cancel under `context.WithoutCancel(ctx)`.
+
+The second test is in addition to the one "Implementation Steps" names. It covers the hand-over path the first does not reach.
+
+Issue #7's probe, from the MADR's evaluation, run on scratch copies:
+
+- **The fix:** it passes.
+- **`ef08400`:** it fails: "the first line written is \"session/cancel\"".
+
+Planted breaks, each in a fresh scratch copy; the emitter's regenerates in the copy (4 of 4 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| `sendRequestSent` reports `sent` for a context already ended | `TestPromptWithEndedContextWritesNothing`: wrote "session/cancel" |
+| `sendMessageSent` reports `sent` when the context ends before the hand-over | `TestPromptEndedBeforeHandOverSendsNoCancel`: "deadlock: all goroutines in bubble are blocked" |
+| the emitted cancel never sent (`sent && false`) | `TestPromptCancellationSendsCancelAndAllowsNewSession`: timeout waiting for session/cancel |
+| the cancel under `context.Background()` | `TestDispatchFollowsTheModel`: `client_gen.go` lacks the `context.WithoutCancel(ctx)` line |
+
+`TestPromptEndedBeforeHandOverSendsNoCancel` was also run on a scratch copy with `connection.go` and `client_gen.go` as at
+`ef08400`. It failed with the same deadlock.
+
+`go test -race -count=50` over the three tests of the cancel: 50 PASS each.
+
+Gates, through the Python runner, on the tree:
+
+- regenerating changes no generated file;
+- `make pre-add-check` exit 0;
+- `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+- `GOOS=windows go vet` exit 0 in both modules;
+- `make check-records` and `make markdownlint` exit 0;
+- the identifier scan finds nothing;
+- Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`;
+- the API listing: 2429 lines at `v1.15.1` and in the tree; 0 removed, 0 added.

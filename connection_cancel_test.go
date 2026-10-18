@@ -699,6 +699,73 @@ func testRequestWithEndedContextWritesNothing(t *testing.T) {
 	}
 }
 
+// TestPromptWithEndedContextWritesNothing requires Prompt, called with a
+// context that has already ended, to write neither session/prompt nor a
+// session/cancel for it: the agent got no turn to cancel
+// (0019-PLAN-issue-fixes.md, B22).
+func TestPromptWithEndedContextWritesNothing(t *testing.T) {
+	t.Parallel()
+	var csc *ClientSideConnection
+	p := rawWire(t, func(w io.Writer, r io.Reader) {
+		csc = NewClientSideConnection(&clientFuncs{}, w, r)
+		negotiate(t, csc, allAdvertised())
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err := csc.Prompt(ctx, PromptRequest{SessionId: "s1", Prompt: []ContentBlock{TextBlock("hi")}})
+	if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != -32800 {
+		t.Fatalf("Prompt with an ended context = %v, want -32800", err)
+	}
+	// A marker sent after Prompt returned is the first line written.
+	if err := csc.NotifyExtension(t.Context(), "_marker", map[string]any{}); err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Method string `json:"method"`
+	}
+	if err := json.Unmarshal([]byte(within(t, p.lines, "the first line")), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Method != "_marker" {
+		t.Errorf("Prompt with an ended context wrote %q, want nothing", m.Method)
+	}
+}
+
+// TestPromptEndedBeforeHandOverSendsNoCancel requires Prompt whose context
+// ends while its request waits for the writer, which a peer that stopped
+// reading holds, to return without sending session/cancel: the request was
+// never handed over, so nothing reached the agent. Before B22 Prompt sent the
+// cancel and blocked on the same writer. It runs in a synctest bubble, so the
+// context ends once the request waits (0019-PLAN-issue-fixes.md, B22).
+func TestPromptEndedBeforeHandOverSendsNoCancel(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		outR, outW := io.Pipe() // never read: the first write blocks
+		inR, inW := io.Pipe()
+		t.Cleanup(func() {
+			_ = outR.CloseWithError(errors.New("test over"))
+			_ = inW.Close()
+		})
+		csc := NewClientSideConnection(&clientFuncs{}, outW, inR)
+		negotiate(t, csc, allAdvertised())
+		go func() { _ = csc.NotifyExtension(context.WithoutCancel(t.Context()), "_stall", map[string]any{}) }()
+		synctest.Wait() // the writer is blocked on the unread pipe
+
+		ctx, cancel := context.WithCancel(t.Context())
+		returned := make(chan error, 1)
+		go func() {
+			_, err := csc.Prompt(ctx, PromptRequest{SessionId: "s1", Prompt: []ContentBlock{TextBlock("hi")}})
+			returned <- err
+		}()
+		synctest.Wait() // Prompt waits for the writer to take its request
+		cancel()
+		err := <-returned
+		if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != -32800 {
+			t.Errorf("Prompt = %v, want -32800", err)
+		}
+	})
+}
+
 // TestDuplicateInflightIDKeepsLaterCancel requires a request that reuses the id
 // of one still in flight to stay reachable by $/cancel_request after the first
 // returns (0019-PLAN-behaviour-fixes.md, B11).

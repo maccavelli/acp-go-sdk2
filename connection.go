@@ -1514,35 +1514,44 @@ func (c *Connection) handleInbound(ctx context.Context, req *anyMessage, handled
 // to its end, so the message may still reach the peer
 // (0019-PLAN-api-decisions.md, B16 and B17).
 func (c *Connection) sendMessage(ctx context.Context, msg anyMessage) error {
+	_, err := c.sendMessageSent(ctx, msg)
+	return err
+}
+
+// sendMessageSent is sendMessage, and also reports whether msg was handed to
+// the writer goroutine: when it was not, nothing was written; when it was,
+// the write runs to its end, so msg may have reached the peer whatever the
+// error (0019-PLAN-issue-fixes.md, B22).
+func (c *Connection) sendMessageSent(ctx context.Context, msg anyMessage) (sent bool, err error) {
 	select {
 	case <-c.ctx.Done():
-		return c.endError()
+		return false, c.endError()
 	default:
 	}
 	msg.JSONRPC = jsonRPCVersion
 	b, err := json.Marshal(msg)
 	if err != nil {
-		return err
+		return false, err
 	}
 	req := writeRequest{b: append(b, '\n'), done: make(chan error, 1)}
 	select {
 	case c.writes <- req:
 	case <-ctx.Done():
-		return context.Cause(ctx)
+		return false, context.Cause(ctx)
 	case <-c.ctx.Done():
-		return c.endError()
+		return false, c.endError()
 	}
 	select {
 	case err := <-req.done:
-		return err
+		return true, err
 	case <-ctx.Done():
 		// A write that finished as the context ended is reported, not the
 		// context's cause, which select may pick when both are ready.
 		select {
 		case err := <-req.done:
-			return err
+			return true, err
 		default:
-			return context.Cause(ctx)
+			return true, context.Cause(ctx)
 		}
 	}
 }
@@ -1564,16 +1573,23 @@ type gateFunc func(method string, params any) error
 // sendRequest is SendRequest with the gate its result is checked by, nil for
 // none.
 func sendRequest[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
-	var result T
+	result, _, err := sendRequestSent[T](c, ctx, method, params, gate)
+	return result, err
+}
+
+// sendRequestSent is sendRequest, and also reports whether the request was
+// handed to the writer goroutine, so that it may have reached the peer
+// (0019-PLAN-issue-fixes.md, B22).
+func sendRequestSent[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc) (result T, sent bool, err error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
 	// A request whose context has already ended is not written
 	// (0019-PLAN-behaviour-fixes.md, B9).
 	if ctx.Err() != nil {
-		return result, toReqErr(context.Cause(ctx))
+		return result, false, toReqErr(context.Cause(ctx))
 	}
 
 	msg, idKey, err := c.prepareRequest(method, params)
 	if err != nil {
-		return result, err
+		return result, false, err
 	}
 
 	pr := &pendingResponse{ch: make(chan responseEnvelope, 1)}
@@ -1581,36 +1597,37 @@ func sendRequest[T any](c *Connection, ctx context.Context, method string, param
 	c.pending[idKey] = pr
 	c.mu.Unlock()
 
-	if err := c.sendMessage(ctx, msg); err != nil {
+	sent, err = c.sendMessageSent(ctx, msg)
+	if err != nil {
 		c.cleanupPending(idKey)
 		if ctx.Err() != nil {
 			c.sendCancelRequest(idKey)
 		}
-		return result, toReqErr(err)
+		return result, sent, toReqErr(err)
 	}
 
 	resp, err := c.waitForResponse(ctx, pr, idKey)
 	if err != nil {
-		return result, err
+		return result, true, err
 	}
 	if err := c.waitNotificationsUpTo(ctx, resp.notificationWatermark); err != nil {
-		return result, err
+		return result, true, err
 	}
 
 	if resp.msg.Error != nil {
-		return result, resp.msg.Error
+		return result, true, resp.msg.Error
 	}
 
 	if len(resp.msg.Result) > 0 {
 		if err := json.Unmarshal(resp.msg.Result, &result); err != nil {
-			return result, NewInternalError(map[string]any{jsonErrorField: err.Error()})
+			return result, true, NewInternalError(map[string]any{jsonErrorField: err.Error()})
 		}
 		if err := c.checkInbound(ctx, method, &result, gate); err != nil {
 			var zero T
-			return zero, fmt.Errorf("%s response: %w", method, err)
+			return zero, true, fmt.Errorf("%s response: %w", method, err)
 		}
 	}
-	return result, nil
+	return result, true, nil
 }
 
 func (c *Connection) prepareRequest(method string, params any) (anyMessage, string, error) {

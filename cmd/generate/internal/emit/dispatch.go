@@ -730,9 +730,20 @@ func emitOutbound(f *goFile, recvType, peer string, methods []*model.Method, gat
 				initializeWrapper(mi)...))
 			continue
 		}
+		// A prompt turn learns whether its request was handed to the writer,
+		// so it cancels only a turn the peer may have received
+		// (0019-PLAN-issue-fixes.md, B22).
+		canceller := mi.Canceller
+		if !mi.PromptTurn {
+			canceller = nil
+		}
+		send, results := "sendRequest", exprs(id("resp"), id("err"))
+		if canceller != nil {
+			send, results = "sendRequestSent", exprs(id("resp"), id("sent"), id("err"))
+		}
 		body := append(gateFirst(mi, composite(id(mi.Resp))),
-			define(exprs(id("resp"), id("err")),
-				call(index(id("sendRequest"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), id("params"), resultArg())),
+			define(results,
+				call(index(id(send), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), id("params"), resultArg())),
 		)
 		// A session close the agent accepted has ended the session's turn, so
 		// its pending requests are answered as on the prompt-turn cancel
@@ -741,12 +752,14 @@ func emitOutbound(f *goFile, recvType, peer string, methods []*model.Method, gat
 			body = append(body, ifStmt(nil, binary(id("err"), token.EQL, nilExpr()),
 				exprStmt(call(dot("c", "pending", "cancel"), call(id("string"), dot("params", mi.SessionField))))))
 		}
-		// A prompt turn whose context ended sends its cancel, best effort.
-		if c := mi.Canceller; mi.PromptTurn && c != nil {
+		// A prompt turn whose context ended after its request was handed to
+		// the writer sends its cancel, best effort, under a context that keeps
+		// the caller's values without its end (I10).
+		if c := canceller; c != nil {
 			body = append(body, ifStmt(nil, errNotNil(),
-				ifStmt(nil, binary(call(dot("ctx", "Err")), token.NEQ, nilExpr()),
+				ifStmt(nil, binary(id("sent"), token.LAND, binary(call(dot("ctx", "Err")), token.NEQ, nilExpr())),
 					assign(exprs(id("_")), call(dot("c", c.GoName),
-						call(f.qual(pkgContext, "Background")),
+						call(f.qual(pkgContext, "WithoutCancel"), id("ctx")),
 						composite(id(c.Notif), kv(id(c.SessionField), dot("params", mi.SessionField))),
 					)),
 				),

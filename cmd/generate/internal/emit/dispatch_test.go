@@ -121,7 +121,7 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"result, rerr := a.conn.checkResult(method, resp, func(method string, result any) error {\n\t\t\treturn gateResult(&Negotiation{",
 		},
 		"client_gen.go": {
-			"_ = c.Stop(context.Background(), StopNotification{ConversationId: params.ConversationId})",
+			"if sent && ctx.Err() != nil {\n\t\t\t_ = c.Stop(context.WithoutCancel(ctx), StopNotification{ConversationId: params.ConversationId})",
 			"pctx, done := c.pending.track(ctx, string(p.ConversationId))",
 			"if params.Rev == 0 {\n\t\tparams.Rev = ProtocolVersionNumber",
 			"return HelloResponse{}, &ProtocolVersionError{Requested: int(params.Rev)}",
@@ -133,7 +133,7 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"err := c.conn.SendNotification(ctx, AgentMethodStop, params)\n\tc.pending.cancel(string(params.ConversationId))",
 			"func (c *ClientSideConnection) gate(method string, params any) error {",
 			"if err := c.gate(AgentMethodSend, &params); err != nil {\n\t\treturn SendResponse{}, err",
-			"sendRequest[SendResponse](c.conn, ctx, AgentMethodSend, params, c.resultGate)",
+			"resp, sent, err := sendRequestSent[SendResponse](c.conn, ctx, AgentMethodSend, params, c.resultGate)",
 			"sendRequest[HelloResponse](c.conn, ctx, AgentMethodHello, params, func(method string, result any) error {",
 			"Response: *result.(*HelloResponse),",
 			"if err := c.gate(AgentMethodStop, &params); err != nil {\n\t\treturn err",

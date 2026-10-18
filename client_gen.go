@@ -707,10 +707,10 @@ func (c *ClientSideConnection) Prompt(ctx context.Context, params PromptRequest)
 	if err := c.gate(AgentMethodSessionPrompt, &params); err != nil {
 		return PromptResponse{}, err
 	}
-	resp, err := sendRequest[PromptResponse](c.conn, ctx, AgentMethodSessionPrompt, params, c.resultGate)
+	resp, sent, err := sendRequestSent[PromptResponse](c.conn, ctx, AgentMethodSessionPrompt, params, c.resultGate)
 	if err != nil {
-		if ctx.Err() != nil {
-			_ = c.Cancel(context.Background(), CancelNotification{SessionId: params.SessionId})
+		if sent && ctx.Err() != nil {
+			_ = c.Cancel(context.WithoutCancel(ctx), CancelNotification{SessionId: params.SessionId})
 		}
 	}
 	return resp, err
