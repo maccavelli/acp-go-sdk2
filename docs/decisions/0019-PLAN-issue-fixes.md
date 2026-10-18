@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-18
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
@@ -534,3 +534,29 @@ PLAN and its `docs/README.md` row become `complete`. The owner then tags `v1.15.
 
 The pre-push disclosure guard runs through `make push-guard` over the commits not yet pushed, `3765e19` to this record's commit, when
 the owner is asked to push.
+
+The owner committed step 7's record as `e084599`.
+
+### Close, 2026-10-18
+
+**The push.** `make push-guard` ran over the eight commits not yet pushed, `7c48c95..e084599`, after a fetch, and passed, exit 0. The
+owner pushed `e084599`. CI run `39175000805` on it concluded `success` on its first attempt, on `validate (ubuntu-24.04)`, `validate
+(macos-15)` and `validate (windows-2025)`.
+
+**Acceptance.** Every criterion in "Verification" is met:
+
+- each step's checks passed and its record is written;
+- the three issue probes pass on the tree and fail on `v1.15.1`, as step 7 records;
+- the root suite passes; the one changed test keeps its intent for a broken input;
+- CI passed on the pushed commits.
+
+This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`, with phase 5 to come.
+
+**Left to the owner.**
+
+- Tag `v1.15.2`, an annotated tag as the earlier ones are, on this close commit once its CI passes. That is where `v1.15.1`'s tag went,
+  and the code is the same as at `e084599`.
+- Publish its release from the release text of
+  [0019-REPORT-release-notes-v1-15-2.md](../reports/0019-REPORT-release-notes-v1-15-2.md), with its relative link rewritten to the
+  tag.
+- Close issues #7, #8 and #9, naming `2cdc39a`, `5763a36` and `ef08400`.
