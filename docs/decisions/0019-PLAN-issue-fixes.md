@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-18
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
@@ -43,8 +43,8 @@ before any code changes.
 
 | Finding | The code as it is | Re-check on `7c48c95` |
 | :--- | :--- | :--- |
-| B22, I10 | `ClientSideConnection.Prompt` (`client_gen.go:706-717`) calls `sendRequest`, and on an error with an ended context sends `c.Cancel(context.Background(), …)`. `sendRequest` (`connection.go:1566`) writes nothing when the context has already ended (`:1569-1572`, B9). `sendMessage` (`:1515`) returns the context's cause either before the writer goroutine takes the message, when nothing is written, or after, when the write runs to its end. The generator emits the cancel at `cmd/generate/internal/emit/dispatch.go:744-754`, and `TestDispatchFollowsTheModel` pins its text. | Probe: with an ended context, `session/cancel` is the first line written. |
-| B23 | `receive` (`connection.go:1014`) calls `shutdownReceive` at the end of input. It cancels the connection's context first (`:1354`), and a request handler's context derives from it (`:1161`), so the handler sees it ended and its reply is refused by `sendMessage` (`:1517-1518`). A notification handler runs under `inboundCtx`, cancelled after the queue drains or `notificationQueueDrainTimeout` (5 s, `:22`) passes (`:1369-1373`). `Done`'s doc (`:1996-1999`) says every send fails once it is closed. | Probe: 0 of 50 requests answered. A prototype in a scratch copy answered 50 of 50: a channel closed at clean end of input fails pending requests in `waitForResponse`, and the inbound requests in flight are waited for, bounded by `notificationQueueDrainTimeout`, before `shutdownReceive`. Under `-race`, one root test failed, `TestConnectionCancelsRequestHandlersOnDisconnectEvenWithNotificationBacklog`, which pins today's end at a clean close; no other test failed or slowed by more than a second (the package took 13.2 s, where it took 12.3 s). |
+| B22, I10 | `ClientSideConnection.Prompt` (`client_gen.go:706-717`) calls `sendRequest`, and on an error with an ended context sends `c.Cancel(context.Background(), …)`. `sendRequest` (`connection.go:1566`) writes nothing when the context has already ended (`:1569-1572`, B9). `sendMessage` (`:1516`) returns the context's cause either before the writer goroutine takes the message, when nothing is written, or after, when the write runs to its end. The generator emits the cancel at `cmd/generate/internal/emit/dispatch.go:744-754`, and `TestDispatchFollowsTheModel` pins its text. | Probe: with an ended context, `session/cancel` is the first line written. |
+| B23 | `receive` (`connection.go:1014`) calls `shutdownReceive` at the end of input. It cancels the connection's context first (`:1354`), and a request handler's context derives from it (`:1162`), so the handler sees it ended and its reply is refused by `sendMessage` (`:1518-1519`). A notification handler runs under `inboundCtx`, cancelled after the queue drains or `notificationQueueDrainTimeout` (5 s, `:22`) passes (`:1369-1373`). `Done`'s doc (`:1996-1999`) says every send fails once it is closed. | Probe: 0 of 50 requests answered. A prototype in a scratch copy answered 50 of 50: a channel closed at clean end of input fails pending requests in `waitForResponse`, and the inbound requests in flight are waited for, bounded by `notificationQueueDrainTimeout`, before `shutdownReceive`. Under `-race`, one root test failed, `TestConnectionCancelsRequestHandlersOnDisconnectEvenWithNotificationBacklog`, which pins today's end at a clean close; no other test failed or slowed by more than a second (the package took 13.2 s, where it took 12.3 s). |
 | B24 | `SessionUpdate`'s variant gates are rules at `cmd/generate/internal/model/acp.go:153-155`, with their schema sentence in `srcSessionUpdate` (`:233-234`). `gates_test.go:499-501` tests `notice` and the compaction variants. `README.md:404-406` lists `subagents` among the unchecked features. | Probe: all three variants sent to a client without `subagents`; a received `session_message_chunk` reached the client's handler. |
 | E18 | `example/client/main.go:84`, `example/claude-code/main.go:108` and `example/gemini/main.go:108` print `u.ToolCallUpdate.Status`, a `*acp.ToolCallStatus`, with `%v`. | Read; phase 4's step 4 record shows `updated: 0x…`. |
 
@@ -194,3 +194,26 @@ An application that relied on its handlers being cancelled at once by a clean en
 B23 restores that.
 
 ## Execution record
+
+### Step 1, records, 2026-10-18
+
+The owner committed this PLAN, its `docs/README.md` row and the MADR's amendment of 2026-10-18 as `3765e19`, and approved the PLAN.
+This PLAN and its row are now `in-progress`.
+
+Each code fact the table "Facts this plan rests on" cites was re-asserted on `3765e19`. A script outside the tree checks that each
+cited line holds its snippet: 31 facts. On the first run, 27 held; four citations were one line early:
+
+| Citation | Correct line |
+| :--- | :--- |
+| `sendMessage` at `connection.go:1515` | `:1516` |
+| its refusal at `:1517-1518` | `:1518-1519` |
+| a request's context at `:1161` | `:1162` |
+
+The last of these also appears in the MADR's "Evaluated and decided with the owner, 2026-10-18". Each was corrected in place, in both
+records, and the second run found 31 of 31 holding.
+
+The script was seen to fail on a planted break: run on the `v1.15.0` tree, whose lines differ, it held 21 of 31 and exited 1.
+
+The issue probes of the MADR's evaluation, rerun when step 7 verifies, are kept outside the tree with the probe of step 4's prototype.
+
+Gates on the tree: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file changed.

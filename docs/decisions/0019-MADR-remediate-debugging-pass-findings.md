@@ -408,7 +408,7 @@ The owner asked for the pending issues to be evaluated and brought into scope, a
 - **B22:** `sendRequest` already writes nothing for an ended context (`connection.go:1569-1572`). The cancel in
   `ClientSideConnection.Prompt` does not know whether the request was written, so the fix needs that fact from `sendRequest`. A write
   that ended with the context may still have reached the peer, so a cancel stays right there.
-- **B23:** a request's handler runs under the connection's context (`connection.go:1161`), which end of input cancels first
+- **B23:** a request's handler runs under the connection's context (`connection.go:1162`), which end of input cancels first
   (`shutdownReceive`, `:1354`). A notification's handler runs under `inboundCtx`, which is cancelled only after the queue drains or
   `notificationQueueDrainTimeout` passes (`:1369-1373`). End of input already drains notifications, then, but not requests.
 - **B24:** three variant rules in the protocol table beside `notice` and the compaction variants
