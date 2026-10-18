@@ -662,3 +662,31 @@ This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`
   [0019-REPORT-release-notes-v1-15-2.md](../reports/0019-REPORT-release-notes-v1-15-2.md), extracted with its relative link rewritten to
   the tag.
 - Close issues #7, #8 and #9, naming `2cdc39a`, `5763a36` with `3fb248d`, and `ef08400`.
+
+### Publication, 2026-10-18
+
+**The close.** The owner committed the close as `f7defb4` and pushed it. Git's pre-push hook ran the disclosure guard on the push. CI
+run `39177055258` on it concluded `success` on its first attempt, on all three runners.
+
+**What was published.** The owner tagged `f7defb4` `v1.15.2`, an annotated tag, and pushed the tag. CI run `39177390304`, started by the
+tag, concluded `success` on its first attempt, on `validate (ubuntu-24.04)`, `validate (macos-15)` and `validate (windows-2025)`. The
+owner published the GitHub release `v1.15.2`, marked latest, from the release text of
+[0019-REPORT-release-notes-v1-15-2.md](../reports/0019-REPORT-release-notes-v1-15-2.md), extracted with its one relative link
+rewritten to the tag.
+
+**Checks.** A Python script outside the tree, the `v1.15.1` check with its tag and commit changed, checked the publication. It used a
+scratch consumer, `GOPROXY` the default `https://proxy.golang.org,direct`, a scratch `GOMODCACHE` and `GOPATH`, and the checksum
+database on. 9 of 9 checks hold:
+
+- the release is not a draft or a prerelease, its body is the extracted text, and it is GitHub's latest;
+- the tag is annotated and names `f7defb4`;
+- `main` on GitHub is the local `main`, and CI on it succeeded;
+- the proxy's `@v/v1.15.2.info` gives the origin `refs/tags/v1.15.2` at `f7defb4`;
+- `go list -m github.com/maccavelli/acp-go-sdk2@latest` gives `v1.15.2`;
+- `go mod download` of `v1.15.2` exits 0.
+
+**Seen to fail.** Its first run held 8 of 9 and exited 1. The latest CI run on `f7defb4`, the one the tag started, was still in
+progress, and it passed once that run concluded.
+
+**The issues.** Issues #7, #8 and #9 were still open when this was checked. The owner then closed them, each naming its fix: #7
+`2cdc39a`; #8 `5763a36` and `3fb248d`; #9 `ef08400`. Nothing of this PLAN is left open.
