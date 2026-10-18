@@ -815,3 +815,32 @@ Left to the owner:
 - **Release:** published from the release text of
   [0019-REPORT-release-notes-v1-15-1.md](../reports/0019-REPORT-release-notes-v1-15-1.md), with its relative links rewritten to
   links at the tag, as for `v1.15.0`.
+
+### Publication, 2026-10-18
+
+The owner pushed the close commit `a9b4fe3`. CI run `39130872521` on it concluded `success` on its first attempt. The jobs
+`validate (ubuntu-24.04)`, `validate (macos-15)` and `validate (windows-2025)` all passed.
+
+**What was published.** The owner tagged `v1.15.1` as an annotated tag, as `v1.15.0` is, pushed it, and published the GitHub release
+`v1.15.1`, marked latest. The release text is that of
+[0019-REPORT-release-notes-v1-15-1.md](../reports/0019-REPORT-release-notes-v1-15-1.md), with its one relative link rewritten to the
+tag.
+
+**The tag's commit.** The tag names the close commit `a9b4fe3`, not `4438b03` as the close entry above says. The two differ only in
+records: this PLAN's close entry and its `docs/README.md` row, 34 lines added and 2 removed. So the module's code, tests and tooling
+at the tag are those verified at step 9 and passed by CI on `4438b03`. The Go proxy and the checksum database have recorded
+`v1.15.1` at `a9b4fe3`, so the tag stays where it is: moving it would fail the checksum check for anyone who has fetched it. The
+close entry is left as written; this entry supersedes its line about the tag.
+
+**Checks.** A Python script outside the tree checked the publication. It used a scratch consumer, `GOPROXY` the default
+`https://proxy.golang.org,direct`, a scratch `GOMODCACHE` and `GOPATH`, and the checksum database on. 9 of 9 checks hold:
+
+- the release is not a draft or a prerelease, its body is the extracted text, and it is GitHub's latest;
+- the tag is annotated and names `a9b4fe3`;
+- `main` on GitHub is the local `main`, and CI on it succeeded;
+- the proxy's `@v/v1.15.1.info` gives the origin `refs/tags/v1.15.1` at `a9b4fe3`;
+- `go list -m github.com/maccavelli/acp-go-sdk2@latest` gives `v1.15.1`;
+- `go mod download` of `v1.15.1` exits 0.
+
+**Seen to fail.** The script's first run expected `4438b03` as the tagged commit, as the close entry had it. It reported the tag and
+the proxy's origin at `a9b4fe3` as misses, and CI on `a9b4fe3` as not yet complete, and exited 1 with 6 of 9 holding.
