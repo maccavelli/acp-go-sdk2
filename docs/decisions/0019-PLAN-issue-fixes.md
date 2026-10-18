@@ -472,3 +472,33 @@ Gates, through the Python runner, on the tree:
 - the identifier scan finds nothing;
 - Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root, the example packages included, and in `cmd/generate`;
 - the API listing: 2429 lines at `v1.15.1` and in the tree; 0 removed, 0 added.
+
+The owner committed step 5's record as `f260ac8`.
+
+### Step 6, release notes, 2026-10-18
+
+What changed, on `f260ac8`:
+
+- [0019-REPORT-release-notes-v1-15-2.md](../reports/0019-REPORT-release-notes-v1-15-2.md), new: the text of the GitHub release for
+  `v1.15.2` and the sources behind it, in the form of the `v1.15.1` notes.
+- Its row in `docs/README.md`.
+
+The release text has three sections:
+
+- **Behaviour changes:** B23's drain at the end of input, and B24's gates. "Rollout and Rollback" says the notes must name both.
+- **Fixes:** B22 with I10, and E18.
+- **For contributors:** the source guard of step 2.
+
+Each statement cites its commit and finding.
+
+Facts re-read for this step:
+
+- `git log v1.15.1..HEAD`: seven commits.
+- `git log v1.15.1..HEAD -- '*.go' ':!cmd/generate'`: `ef08400`, `2cdc39a`, `5763a36`, `f260ac8`.
+- `git diff --stat v1.15.1 HEAD` over the root's non-test, non-example Go files: `client_gen.go`, `connection.go` and `types_gen.go`,
+  139 lines added and 22 removed.
+- `git diff v1.15.1 -- schema/`: empty.
+- The API listing: 0 removed, 0 added (step 5's gates).
+
+Gates on the tree: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file changed in this
+step.
