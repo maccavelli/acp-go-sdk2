@@ -119,12 +119,10 @@ real-machine absolute path. Use placeholders (`<user>`, `/home/<user>/...`).
   scanned for ("the local account name", "the hostname domain"); never quote
   it.
 - Pushes to GitHub pass through a global pre-push disclosure guard. Before
-  asking the owner to push, run the guard itself over the outgoing commits:
-
-  ```bash
-  echo "refs/heads/main $(git rev-parse HEAD) refs/heads/main $(git rev-parse origin/main)" |
-    python3 ~/.global-git-hooks/github-disclosure.py pre-push origin "$(git remote get-url origin)"
-  ```
+  asking the owner to push, fetch, then run the guard itself over the outgoing
+  commits with `make push-guard` (`python3 scripts/push_guard.py`; `--remote`
+  and `--branch` default to `origin` and `main`). It exits with the guard's
+  status, and 1 when the guard is missing.
 
 - Never bypass it with `--no-verify`.
 

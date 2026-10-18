@@ -57,7 +57,8 @@ code fact, snippet at line, before any code changes.
 In scope: the examples under `example/` and the three `Example` files; root tests; the generator (`cmd/generate/internal/model`,
 `internal/emit`) for doc comments only, and the regenerated files; `scripts/check_records.py` and its template; `scripts/go-precheck.sh`;
 `Makefile`; `.golangci.yml`; `.github/workflows/ci.yml`; `mise.lock`; `README.md`, `docs/architecture.md`; the release notes for
-`v1.15.1`; these records.
+`v1.15.1`; these records. Amended 2026-10-18: and `scripts/push_guard.py`, its `make push-guard` target, and `AGENTS.md`'s paragraph
+on the disclosure guard ("Deviation, 2026-10-18, after step 9").
 
 Outside the repository, by decision 11: the workspace template's `templates/scripts/check_records.py` and its `references/gates.md`, in
 the `workspace-scaffolding` skill. That directory is not under version control; step 2 saves both files before changing them.
@@ -728,3 +729,57 @@ Every acceptance criterion in "Verification" is met on the tree, apart from CI o
 [0019-REPORT-release-notes-v1-15-1.md](../reports/0019-REPORT-release-notes-v1-15-1.md).
 
 The pre-push disclosure guard runs over the commits not yet pushed, `2906c21` to this record's commit, when the owner is asked to push.
+
+The owner committed step 9's record as `e4707cb`.
+
+### Deviation, 2026-10-18, after step 9
+
+**Found.** `AGENTS.md` has agents run the global pre-push disclosure guard over the outgoing commits before asking the owner to push.
+It says to do this with a shell pipeline, and agents have kept a wrapper for it outside the tree. That wrapper and other scratch
+tools were lost overnight to a cleanup of the host's temporary directory, as step 9 records. The guard run was rebuilt for step 9, and
+it passed over `0acc8e1..e4707cb`, 9 commits, exit 0. The owner then pushed `e4707cb`. CI run `39129122998` on it passed on
+`validate (ubuntu-24.04)`, `validate (macos-15)` and `validate (windows-2025)`.
+
+**Decision (owner, 2026-10-18).** The wrapper lives in the repository, as this phase's last change, before its close:
+
+- `scripts/push_guard.py`: standard library only, with paths relative to the repository and no machine paths. Remote and branch
+  default to `origin` and `main`.
+- `make push-guard`, which runs it.
+- `AGENTS.md`'s paragraph on the guard points at it in place of the pipeline.
+- A line in the release notes' list for contributors.
+
+These files join "Scope", which is annotated to say so. The script is seen to fail on a planted disclosure in a scratch clone. The
+gates run again, then the guard runs through the new script over the one unpushed commit, this one. The close waits on CI for that
+commit. No decision or fact of the MADR changes.
+
+The workspace template's `AGENTS.md` keeps the pipeline. Its other repositories have no such script, and decision 11 changes only the
+records script there. So this repository's paragraph is a named difference from the template.
+
+### The push guard, as the deviation of 2026-10-18 decides
+
+What changed, on `e4707cb`:
+
+- **`scripts/push_guard.py`, new.**
+  - It gives the global guard the line git's pre-push hook would, for `--branch` (default `main`) against `--remote`'s
+    remote-tracking ref (default `origin`), and exits with the guard's status.
+  - It exits 1, saying that nothing was checked, when the guard is missing; and 1 when the branch or the ref does not exist.
+  - It says when the remote is not on github.com, since the guard then checks nothing.
+  - It uses the standard library only and runs under the system `python3` too.
+  - The repository's Python ignore rules already cover `scripts/`.
+- **`make push-guard`**, with its help line.
+- **`AGENTS.md`'s guard paragraph** names `make push-guard` in place of the pipeline.
+- **The release notes** gain a line under "For contributors".
+
+Planted breaks, each in a fresh scratch clone with one commit on `e4707cb`. Each commit is built with plumbing, so no hook ran, and a
+throwaway deny list with one entry is passed to the guard through `DISCLOSURE_DENY`. All five ran as expected:
+
+| Case | Result |
+| :--- | :--- |
+| the commit carries the deny list's entry | exit 1, "REFUSED the push" |
+| the commit is clean | exit 0, "the guard passed" |
+| `--guard` names a missing file | exit 1, "is missing; nothing was checked" |
+| the remote is not on github.com | exit 0, "is not on github.com" |
+| the wrapper broken to send the local commit as the remote's, so no commit is outgoing | exit 0: the planted entry passes, which the first case refuses |
+
+On the tree, `make push-guard` after a fetch: 0 outgoing commits, `e4707cb..e4707cb`, the guard passed. The 9 commits were already
+pushed, as the deviation records.

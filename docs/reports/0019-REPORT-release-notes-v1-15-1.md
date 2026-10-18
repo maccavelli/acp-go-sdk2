@@ -73,6 +73,8 @@ These change no file of the module a consumer builds:
 - **Removed file.** `mise.lock`, which no configuration read, is gone. (`394572f`; E17.)
 - **Records checker.** `scripts/check_records.py` refuses a malformed record and checks the anchor of a link as well as its file.
   (`ca166fb`; E11.)
+- **Push guard.** `make push-guard` (`scripts/push_guard.py`) runs the global pre-push disclosure guard over the commits a push
+  would send. `AGENTS.md` names it in place of a shell pipeline. (The PLAN's deviation of 2026-10-18.)
 
 ## Sources not in the release text
 

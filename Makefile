@@ -27,7 +27,7 @@ GOLANGCI_LINT ?= $(GOPATH_BIN)/golangci-lint
 GOVULNCHECK_PIN := $(shell grep -oE 'golang.org/x/vuln/cmd/govulncheck@v[0-9][0-9.]*' .github/workflows/ci.yml | head -1)
 FLEET_LINT_CFG := .golangci.yml
 
-.PHONY: all help test fmt vet lint tidy vuln pre-add-check
+.PHONY: all help test fmt vet lint tidy vuln pre-add-check push-guard
 
 all: help
 
@@ -99,6 +99,9 @@ mutation-generated: ## Runs mutants of the generated SDK files against the root'
 FILES ?=
 pre-add-check: ## Runs the pre-add checks
 	@./scripts/go-precheck.sh $(FILES)
+
+push-guard: ## Runs the pre-push disclosure guard over the commits a push of main to origin would send
+	python3 scripts/push_guard.py
 
 help: ## Displays this help message
 	@echo "Usage: make [target]"
