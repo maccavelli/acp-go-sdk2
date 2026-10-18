@@ -662,3 +662,69 @@ Decision 12 of the MADR, read at its line 208, says phases 3 to 5 ride the relea
 
 Gates on the tree: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file changed in this
 step.
+
+The owner committed step 8's record as `93655d1`.
+
+### Step 9, verification, 2026-10-18
+
+Run over the finished tree at `93655d1`, with a clean working tree, through the Python runner.
+
+#### Gates
+
+- regenerating changes no generated file;
+- `make pre-add-check` exit 0;
+- `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+- `GOOS=windows go vet` exit 0 in both modules;
+- `make check-records` and `make markdownlint` exit 0;
+- the identifier scan finds nothing;
+- Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+
+The exported API listing has 2429 lines at `v1.15.0` and at `93655d1`: 0 removed and 0 added, exactly "Verification"'s expectation.
+
+#### Each finding re-checked
+
+A script outside the tree (`recheck.py`) re-runs each finding's re-check on the tree. 21 of 21 checks hold:
+
+| Finding | Re-check | Result |
+| :--- | :--- | :--- |
+| E5 | `example/claude-code` runs `@agentclientprotocol/claude-agent-acp@latest`; `--acp` in `example/gemini`; no `experimental-acp` in the examples, `Example_gemini` or the README | fixed |
+| E6 | the agent's `Prompt` takes the SDK's context and its session holds no cancel; `TestExamplePair` passes (`end_turn` and `cancelled`) | fixed |
+| E7 | no example advertises `Terminal: true`; `TestWriteTextFileStaysInCwd` and `TestTerminalMethodsNotFound` pass in all three clients | fixed |
+| E8 | `go test -list Example .` lists `Example_agent` and `Example_client`; the three files are `package acp_test`, with no `testAbsPath`, and two `// Output:` blocks | fixed |
+| E9 | root coverage 89.3% (88.8% before); every range the facts table names runs, apart from the two step 6 names as run in part | fixed |
+| E10 | the three fixed sleeps gone, `synctest.Wait()` in their place; `TestConformanceConstructors` runs 67 subtests, none skipped | fixed |
+| E11 | `scripts/check_records.py` against step 2's probes: every case as expected | fixed |
+| E12 | `.golangci.yml` no longer excludes `^example/`; the examples are linted by the precheck above | fixed |
+| E13 | `make release` no longer says "then tag v$(VERSION)" | fixed |
+| E14 | `docs/architecture.md` classifies a response as the code does; the README says what the client starts and that it prints the stop reason | fixed |
+| E15 | step 3's two cases: the precheck names the skip and its reason, for `GO_PRECHECK_SKIP_VULN=1` and offline | fixed |
+| E16 | `ci.yml` runs `govulncheck@v1.9.0` in both modules | fixed |
+| E17 | `mise.lock` is gone | fixed |
+| I12 | `TestExportedDeclarationsDocumented` passes: 0 undocumented | fixed |
+
+**E9's line numbers.** Step 7 added `(*RequestError).Error`'s four-line doc above three of the `errors.go` ranges, so step 6's line list
+was shifted by four for those ranges. The first run used the unshifted list and reported 19 of 22 ranges run; the shifted list gives
+step 6's 20 of 22.
+
+**The re-check, broken on purpose.** It was seen to fail on planted breaks in a scratch copy:
+
+- `mise.lock` restored;
+- `Terminal: true` advertised by `example/client`;
+- `^example/` excluded again;
+- the old `make release` message;
+- `Example_client`'s `// Output:` removed.
+
+Each break missed its check. The last also missed the listing check, since an example without output is not runnable. The script
+exited 1 with 15 of 21 holding.
+
+**Scratch tools.** Between steps 8 and 9, a cleanup of the host's temporary directory removed some of the scratch tools these records
+name. `scratch_copy.py` was rewritten to the same behaviour for this step. `plant.py`, the push guard script and the CI watcher are
+not used here.
+
+#### Acceptance
+
+Every acceptance criterion in "Verification" is met on the tree, apart from CI on the pushed commits. After the push, this PLAN and its
+`docs/README.md` row become `complete`, and the owner tags `v1.15.1` and publishes its release from
+[0019-REPORT-release-notes-v1-15-1.md](../reports/0019-REPORT-release-notes-v1-15-1.md).
+
+The pre-push disclosure guard runs over the commits not yet pushed, `2906c21` to this record's commit, when the owner is asked to push.
