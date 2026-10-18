@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 date: 2026-10-18
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
@@ -424,7 +424,8 @@ closed" log line. It then failed on the break.
 
 **What no test pins.** Preferring an answer already read over the end of input cannot be told apart by a test. A caller parked in
 `waitForResponse` is woken by whichever arrives first, and the answer is read before the end of file, so the preference only matters
-for a caller not yet parked.
+for a caller not yet parked. Amended 2026-10-18: the caller is not always parked, as CI showed. `TestPendingRequestAtEndOfInput`
+then fails, rarely: about 1 run in 2000 without the preference on `Done` ("Deviation, 2026-10-18, after the close").
 
 **Repeat runs.** `go test -race -count=50` over the five new tests and the changed one: 50 PASS each. The root package under `-race`
 took 11.5 s; the prototype's comparison is in "Facts".
@@ -550,7 +551,8 @@ owner pushed `e084599`. CI run `39175000805` on it concluded `success` on its fi
 - the root suite passes; the one changed test keeps its intent for a broken input;
 - CI passed on the pushed commits.
 
-This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`, with phase 5 to come.
+This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`, with phase 5 to come. Superseded: CI on this
+close failed, and the PLAN reopened ("Deviation, 2026-10-18, after the close").
 
 **Left to the owner.**
 
@@ -560,3 +562,72 @@ This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`
   [0019-REPORT-release-notes-v1-15-2.md](../reports/0019-REPORT-release-notes-v1-15-2.md), with its relative link rewritten to the
   tag.
 - Close issues #7, #8 and #9, naming `2cdc39a`, `5763a36` and `ef08400`.
+
+The owner committed the close as `63eb624` and pushed it.
+
+### Deviation, 2026-10-18, after the close
+
+**Found.** CI run `39175773059` on `63eb624` failed on its first attempt:
+
+- **The failure:** `validate (ubuntu-24.04)`, step "race detector". `TestPendingRequestAtEndOfInput` (`end_of_input_test.go:91`) reported
+  "error data map[error:connection ended before response], want the end of input". `validate (macos-15)` and `validate (windows-2025)`
+  passed.
+- **Not transient:** `go test -race -count=500 -run '^TestPendingRequestAtEndOfInput$'` fails 28 times in 500 on the tree, about one
+  run in 18. Step 4's 50 runs all passed, which at that rate happens about one time in twenty.
+
+**The cause** is in step 4's code:
+
+- At a clean end of input with no request received in flight, `drainInput` returns at once, and `shutdownReceive` then ends the
+  connection's context.
+- A caller still in `waitForResponse` can find both `inputDone` and `Done` closed. Go's `select` picks between ready cases at random, so
+  it sometimes returns the connection's end ("connection ended before response") rather than the end of input.
+- Both are `-32603` wrapping `ErrPeerDisconnected`, so the documented contract held. The error data the release notes describe did not.
+
+**Decision (owner, 2026-10-18).** `waitForResponse` reports the end of input whenever the input has ended, whichever signal it sees.
+No test is loosened. The close above is superseded: this PLAN and its row go back to `in-progress`, and a new close follows once CI
+passes on the fix. The owner had not tagged `v1.15.2`. No decision or fact of the MADR changes.
+
+### The fix of the deviation after the close, 2026-10-18
+
+What changed, on `63eb624`: `waitForResponse` (`connection.go`) has two changes.
+
+- **The end of input reported.** Its `ended` error, which the connection-end branches return, is `inputEndedError()` whenever the input
+  has ended. A request pending at the end of input then gets the end-of-input error, whichever of `inputDone` and `Done` the select
+  takes.
+- **An answer already read preferred.** The `inputDone` branch and the `Done` branch first take an answer already read, through a
+  shared `answered` check. Step 4 did that in the `inputDone` branch only.
+
+**Found while fixing.** With the first change alone, `go test -race -count=2000` still failed 6 times in 2000. The test's other case was
+losing an answer read before the end of input, when the select took `Done`. That is the same race, against the design step 4 already
+states ("an answer read before the end of input is delivered"), so it was fixed under the same decision.
+
+**Seen to fail.** Run on scratch copies of the tree with one half of the fix undone, `go test -race -count=2000 -run
+'^TestPendingRequestAtEndOfInput$'`:
+
+| Undone | Failures |
+| :--- | :--- |
+| the end of input reported on `Done` | 46 of 2000: "error data map[error:connection ended before response], want the end of input" |
+| an answer preferred on `Done` | 1 of 2000: "answered before the end of input: … input ended before a response …, want the answer" |
+
+The tree before the fix failed 28 of 500.
+
+**With the fix:**
+
+- `TestPendingRequestAtEndOfInput`, three runs of `-count=2000`: 6000 PASS.
+- Every test this PLAN added or changed, `-count=1000 -race`: all pass. These are the five of step 4 and the changed one, the three
+  of step 3, and `TestValueGates`, whose new gates are step 2's.
+- The root package, `-count=10 -race`: all pass.
+
+Gates, through the Python runner, on the tree:
+
+- regenerating changes no generated file;
+- `make pre-add-check` exit 0;
+- `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+- `GOOS=windows go vet` exit 0 in both modules;
+- `make check-records` and `make markdownlint` exit 0;
+- the identifier scan finds nothing;
+- Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`;
+- the API listing: 2429 lines at `v1.15.1` and in the tree; 0 removed, 0 added.
+
+The release notes are unchanged: they describe the behaviour this fix makes deterministic. The new close follows CI on the pushed
+fix.

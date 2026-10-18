@@ -1788,18 +1788,33 @@ func (c *Connection) sendCancelRequest(idKey string) {
 
 func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, idKey string) (responseEnvelope, error) {
 	ended := func() *RequestError {
+		// A connection that ends after its input ended reports the end of
+		// input, which select may otherwise lose to Done when both are
+		// ready (0019-PLAN-issue-fixes.md, deviation after the close).
+		if c.inputEnded() {
+			return inputEndedError()
+		}
 		return NewInternalError(map[string]any{jsonErrorField: "connection ended before response"}).withCause(c.endError())
+	}
+
+	// answered returns an answer already read, which is delivered in
+	// preference to the end of input or of the connection that select may
+	// pick when both are ready (0019-PLAN-issue-fixes.md, B23).
+	answered := func() (responseEnvelope, bool) {
+		select {
+		case resp := <-pr.ch:
+			return resp, true
+		default:
+			return responseEnvelope{}, false
+		}
 	}
 
 	select {
 	case resp := <-pr.ch:
 		return resp, nil
 	case <-c.inputDone:
-		// An answer read before the end of input is delivered.
-		select {
-		case resp := <-pr.ch:
+		if resp, ok := answered(); ok {
 			return resp, nil
-		default:
 		}
 		c.cleanupPending(idKey)
 		return responseEnvelope{}, inputEndedError()
@@ -1825,6 +1840,9 @@ func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, i
 		}
 		return responseEnvelope{}, NewInternalError(map[string]any{jsonErrorField: "request context ended without cause"})
 	case <-c.Done():
+		if resp, ok := answered(); ok {
+			return resp, nil
+		}
 		c.cleanupPending(idKey)
 		return responseEnvelope{}, ended()
 	}

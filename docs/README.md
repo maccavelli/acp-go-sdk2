@@ -56,7 +56,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0019 | PLAN | [Implement phase 2 of 0019: the API and behaviour decisions, released with phase 1 as v0.18.0](decisions/0019-PLAN-api-decisions.md) | complete |
 | 0019 | PLAN | [Implement phase 3 of 0019: generator hardening](decisions/0019-PLAN-generator-hardening.md) | complete |
 | 0019 | PLAN | [Implement phase 4 of 0019: examples, documentation, tests and tooling](decisions/0019-PLAN-examples-docs-tests-tooling.md) | complete |
-| 0019 | PLAN | [Implement the fixes for issues #7 to #9 under 0019, before phase 5](decisions/0019-PLAN-issue-fixes.md) | complete |
+| 0019 | PLAN | [Implement the fixes for issues #7 to #9 under 0019, before phase 5](decisions/0019-PLAN-issue-fixes.md) | in-progress |
 | 0019 | REPORT | [Release notes for v1.14.0, against v0.17.1](reports/0019-REPORT-release-notes-v0-18-0.md) | observed |
 | 0019 | REPORT | [Release notes for v1.15.0, against v1.14.0](reports/0019-REPORT-release-notes-v1-15-0.md) | observed |
 | 0019 | REPORT | [Release notes for v1.15.1, against v1.15.0](reports/0019-REPORT-release-notes-v1-15-1.md) | observed |
