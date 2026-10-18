@@ -502,3 +502,35 @@ Facts re-read for this step:
 
 Gates on the tree: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file changed in this
 step.
+
+The owner committed step 6's record as `771a67f`.
+
+### Step 7, verification, 2026-10-18
+
+Run over the finished tree at `771a67f`, with a clean working tree, through the Python runner.
+
+- **Gates:**
+  - regenerating changes no generated file;
+  - `make pre-add-check` exit 0;
+  - `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+  - `GOOS=windows go vet` exit 0 in both modules;
+  - `make check-records` and `make markdownlint` exit 0;
+  - the identifier scan finds nothing;
+  - Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`.
+- **API listing:** 2429 lines at `v1.15.1` and at `771a67f`; 0 removed and 0 added, exactly "Verification"'s expectation.
+- **The issues' probes:** the three probes of the MADR's evaluation, run on `git archive` of each commit with the probe file added:
+
+  | Probe | `771a67f` | `v1.15.1` |
+  | :--- | :--- | :--- |
+  | #7, `Prompt` with an ended context writes nothing | PASS | FAIL |
+  | #8, requests before the end of input answered | PASS | FAIL |
+  | #9, the subagent updates gated both ways | PASS | FAIL |
+
+  Since step 2, the #9 probe names its record without `subagents` itself, as that step records.
+
+Every acceptance criterion in "Verification" is met on the tree, apart from CI on the pushed commits. After the push and CI, this
+PLAN and its `docs/README.md` row become `complete`. The owner then tags `v1.15.2`, publishes its release from
+[0019-REPORT-release-notes-v1-15-2.md](../reports/0019-REPORT-release-notes-v1-15-2.md), and closes issues #7 to #9.
+
+The pre-push disclosure guard runs through `make push-guard` over the commits not yet pushed, `3765e19` to this record's commit, when
+the owner is asked to push.
