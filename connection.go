@@ -331,6 +331,12 @@ type Connection struct {
 	inboundCtx    context.Context
 	inboundCancel context.CancelCauseFunc
 
+	// inputDone is closed when the input ends cleanly, at end of file; the
+	// requests received before it, which inboundRequests counts, are then
+	// answered before the connection ends (0019-PLAN-issue-fixes.md, B23).
+	inputDone       chan struct{}
+	inboundRequests sync.WaitGroup
+
 	// logger is read by the connection's goroutines, which start starts,
 	// so it is set atomically: by WithLogger before they start, or by SetLogger
 	// at any time.
@@ -611,6 +617,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		cancel:              cancel,
 		inboundCtx:          inboundCtx,
 		inboundCancel:       inboundCancel,
+		inputDone:           make(chan struct{}),
 		notificationQueue:   make(chan queuedNotification, cfg.maxQueuedNotifications),
 		maxMessageSize:      cfg.maxMessageSize,
 
@@ -1027,13 +1034,59 @@ func (c *Connection) receive() {
 			}
 		}
 		if err != nil {
-			if !errors.Is(err, io.EOF) {
+			if errors.Is(err, io.EOF) {
+				c.drainInput()
+			} else {
 				cause = err
 			}
 			break
 		}
 	}
 	c.shutdownReceive(cause)
+}
+
+// drainInput ends the connection's input cleanly: the requests it is
+// waiting on fail at once, as do any it sends later, since no answer can
+// arrive, while the requests already received run, under contexts that stay
+// live, and their answers are written. It returns when they have, after
+// notificationQueueDrainTimeout, or when Close ends the connection; the
+// handlers still running are then cancelled as the connection ends
+// (0019-PLAN-issue-fixes.md, B23).
+func (c *Connection) drainInput() {
+	close(c.inputDone)
+	answered := make(chan struct{})
+	go func() {
+		c.inboundRequests.Wait()
+		close(answered)
+	}()
+	bound := time.NewTimer(notificationQueueDrainTimeout)
+	defer bound.Stop()
+	select {
+	case <-answered:
+	case <-bound.C:
+		c.loggerOrDefault().Debug("requests still running when the input's drain ended", "timeout", notificationQueueDrainTimeout)
+	case <-c.ctx.Done():
+	}
+}
+
+// errInputEnded is the cause of the error a request meets when the
+// connection's input has ended, so no answer can arrive
+// (0019-PLAN-issue-fixes.md, B23).
+var errInputEnded = fmt.Errorf("%w: end of input", ErrPeerDisconnected)
+
+// inputEndedError is the error such a request returns.
+func inputEndedError() *RequestError {
+	return NewInternalError(map[string]any{jsonErrorField: "input ended before a response"}).withCause(errInputEnded)
+}
+
+// inputEnded reports whether the connection's input has ended cleanly.
+func (c *Connection) inputEnded() bool {
+	select {
+	case <-c.inputDone:
+		return true
+	default:
+		return false
+	}
 }
 
 // envelope is a received JSON-RPC object's members, raw: an absent member is
@@ -1187,7 +1240,9 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		}
 
 		m := msg
+		c.inboundRequests.Add(1)
 		go func(m *anyMessage, idKey string, reqCtx context.Context, own *inflightRequest) {
+			defer c.inboundRequests.Done()
 			release := func() {}
 			if c.requestSlots != nil {
 				release = sync.OnceFunc(func() { <-c.requestSlots })
@@ -1586,6 +1641,10 @@ func sendRequestSent[T any](c *Connection, ctx context.Context, method string, p
 	if ctx.Err() != nil {
 		return result, false, toReqErr(context.Cause(ctx))
 	}
+	// No answer can arrive once the input has ended.
+	if c.inputEnded() {
+		return result, false, inputEndedError()
+	}
 
 	msg, idKey, err := c.prepareRequest(method, params)
 	if err != nil {
@@ -1735,6 +1794,15 @@ func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, i
 	select {
 	case resp := <-pr.ch:
 		return resp, nil
+	case <-c.inputDone:
+		// An answer read before the end of input is delivered.
+		select {
+		case resp := <-pr.ch:
+			return resp, nil
+		default:
+		}
+		c.cleanupPending(idKey)
+		return responseEnvelope{}, inputEndedError()
 	case <-ctx.Done():
 		// If the connection dropped at the same time, prefer reporting peer disconnect
 		// and avoid queueing a best-effort cancel notification to a dead peer.
@@ -1881,6 +1949,9 @@ func (c *Connection) SendRequestNoResult(ctx context.Context, method string, par
 	if ctx.Err() != nil {
 		return toReqErr(context.Cause(ctx))
 	}
+	if c.inputEnded() {
+		return inputEndedError()
+	}
 	msg, idKey, err := c.prepareRequest(method, params)
 	if err != nil {
 		return err
@@ -2014,6 +2085,14 @@ func (c *Connection) prepareNotification(method string, params any) (anyMessage,
 // peer disconnects or the input stream is closed, when Close is called, or
 // when OverflowCloseConnection closes it. Once it is closed every send fails
 // without writing.
+//
+// When the input ends cleanly, at end of file, the requests already received
+// are answered first: the requests this side is waiting on fail at once, as
+// do any it sends later, wrapping ErrPeerDisconnected; the handlers already
+// running keep their contexts and their answers are written, for at most
+// five seconds, after which they are cancelled; then Done is closed. A read
+// that fails otherwise ends the connection at once
+// (0019-PLAN-issue-fixes.md, B23).
 func (c *Connection) Done() <-chan struct{} {
 	return c.ctx.Done()
 }

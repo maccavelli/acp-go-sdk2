@@ -837,6 +837,10 @@ func TestConnectionDoesNotCancelInboundContextBeforeDrainingNotificationsOnDisco
 	}
 }
 
+// TestConnectionCancelsRequestHandlersOnDisconnectEvenWithNotificationBacklog
+// requires a request's handler to be cancelled promptly when the input fails,
+// even with notifications queued. A clean end of input lets it finish instead
+// (0019-PLAN-issue-fixes.md, B23), so the input here fails with an error.
 func TestConnectionCancelsRequestHandlersOnDisconnectEvenWithNotificationBacklog(t *testing.T) {
 	const numNotifications = 200
 
@@ -868,7 +872,7 @@ func TestConnectionCancelsRequestHandlersOnDisconnectEvenWithNotificationBacklog
 	if _, err := io.WriteString(incomingW, `{"jsonrpc":"2.0","id":1,"method":"test/request","params":{}}`+"\n"); err != nil {
 		t.Fatalf("write request: %v", err)
 	}
-	_ = incomingW.Close()
+	_ = incomingW.CloseWithError(errors.New("input broken"))
 
 	// Disconnect should be observed quickly.
 	select {

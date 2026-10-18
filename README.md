@@ -485,6 +485,14 @@ When the peer ends the connection, the same holds, but for the transport,
 which is the application's to close. The default overflow policy,
 `acp.OverflowCloseConnection`, closes the connection as `Close` does.
 
+When the input ends cleanly, at end of file, as when a script closes a stdio
+agent's standard input after writing its requests, the requests already received
+are answered first. The requests this side is waiting on fail at once, as do any
+it sends later, `-32603` wrapping `acp.ErrPeerDisconnected`, since no answer can
+arrive. The handlers already running keep their contexts and their answers are
+written, for at most five seconds, after which their contexts are cancelled and
+`Done()` closes. A read that fails otherwise ends the connection at once.
+
 Every send returns when its context ends, even while the peer does not read.
 A message whose write has begun may still reach the peer.
 

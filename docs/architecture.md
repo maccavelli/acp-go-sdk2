@@ -313,6 +313,16 @@ implement `io.Closer`. A `*RequestError` the connection makes for a local
 failure keeps that failure as its cause, which `Unwrap` returns; one a peer
 answered has none.
 
+At a clean end of input (`io.EOF`), `receive` drains before it shuts down: it
+closes `inputDone`, so a request waiting in `waitForResponse` returns at once
+unless its answer was read first, and `sendRequestSent` and
+`SendRequestNoResult` refuse a new request without writing it; then it waits for
+the requests already received, which `inboundRequests` counts until their
+answers are written, at most `notificationQueueDrainTimeout` or until `Close`.
+Only then does `shutdownReceive` end the connection's context, which cancels
+the handlers still running. A read that fails otherwise shuts down at once
+(0019-PLAN-issue-fixes.md, B23).
+
 Checks that guard this:
 
 - `TestGeneratedFilesUpToDate` in `cmd/generate` fails when the committed

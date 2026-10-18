@@ -358,3 +358,84 @@ Gates, through the Python runner, on the tree:
 - the identifier scan finds nothing;
 - Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`;
 - the API listing: 2429 lines at `v1.15.1` and in the tree; 0 removed, 0 added.
+
+The owner committed step 3's record as `2cdc39a`.
+
+### Step 4, B23, the requests received before the end of input answered, 2026-10-18
+
+What changed, on `2cdc39a`, as "Design", B23, sets it. The design was implemented as prototyped, with three additions the prototype
+lacked: an answer read before the end of input is still delivered; a request sent after it is refused unwritten; and the bound's timer
+is stopped.
+
+**`connection.go`.**
+
+- `Connection` gains `inputDone`, closed at a clean end of input, and `inboundRequests`, which counts each received request from its
+  dispatch until its answer is written.
+- At `io.EOF`, `receive` calls a new `drainInput` before `shutdownReceive`:
+  1. It closes `inputDone`.
+  2. It waits for `inboundRequests`, bounded by `notificationQueueDrainTimeout` (5 s) with a stopped timer, or until `Close` ends the
+     connection.
+  3. If it reaches the bound, it logs at Debug that requests were still running.
+- A read error other than `io.EOF` shuts down at once, as before.
+- **Pending requests:** `waitForResponse` returns at once when `inputDone` closes, with `inputEndedError()`: `-32603`, data
+  `{"error": "input ended before a response"}`, whose cause `errInputEnded` wraps `ErrPeerDisconnected` with "end of input". An answer
+  already read is preferred over it.
+- **New requests:** `sendRequestSent` and `SendRequestNoResult` return the same error after the end of input, before writing anything.
+- **Handlers:** request handlers keep the connection's context through the drain. `shutdownReceive` then cancels the ones still
+  running, as before. Their contexts end with the connection's own cause, "peer connection closed", unchanged.
+- **`Done`'s doc** states the new order.
+
+**Tests** (`end_of_input_test.go`, new):
+
+| Test | What it requires |
+| :--- | :--- |
+| `TestRequestAnsweredAtEndOfInput` | 20 runs of a request followed by end of input: each answered before `Done`, its handler under a live context. |
+| `TestPendingRequestAtEndOfInput` | A pending request fails with the end-of-input error; one answered before the end returns its answer. |
+| `TestRequestAfterEndOfInputNotWritten` | In a `synctest` bubble, a handler still running sends `SendRequest` and `SendRequestNoResult` after the end: both fail at once, unwritten, and its own answer is the only line. |
+| `TestEndOfInputDrainIsBounded` | In a bubble, a handler that never returns holds the connection for the bound only, then its context is cancelled and its answer not written. |
+| `TestCloseEndsEndOfInputDrain` | In a bubble, `Close` during the drain ends it at once, the reader's shutdown included, even with a handler that ignores its context. |
+
+**The changed test.** `TestConnectionCancelsRequestHandlersOnDisconnectEvenWithNotificationBacklog` closed its input cleanly and
+required the handlers cancelled within two seconds, today's end, which B23 changes, as "Facts" found. It now closes its input with an
+error, so it still pins the prompt cancel on a broken input. Its doc says why.
+
+**Docs.** `README.md` ("Closing and limits") and `docs/architecture.md` state the drain.
+
+**Issue #8's probe**, from the MADR's evaluation, run on scratch copies:
+
+- **The fix:** it passes, answering 50 of 50.
+- **`2cdc39a`:** it fails: "0 of 50 requests answered when input ended after them; 50 handlers saw their context done".
+
+Planted breaks, each in a fresh scratch copy (7 of 7 seen to fail):
+
+| Break | What failed |
+| :--- | :--- |
+| the end of input ending the connection at once, as before | `TestRequestAnsweredAtEndOfInput`: the handler ran under an ended context |
+| the count of received requests not kept | `TestRequestAnsweredAtEndOfInput`, the same |
+| a pending request left waiting at the end of input | `TestPendingRequestAtEndOfInput`: it failed later, as the connection's end ("connection ended before response") |
+| `SendRequest` after the end of input written | `TestRequestAfterEndOfInputNotWritten`: the first line written was that request |
+| `SendRequestNoResult` after the end of input written | `TestRequestAfterEndOfInputNotWritten`, the same |
+| the drain unbounded | `TestEndOfInputDrainIsBounded`: the bubble deadlocked |
+| `Close` not ending the drain | `TestCloseEndsEndOfInputDrain`: "the reader had not shut down after Close" |
+
+**The first form of `TestCloseEndsEndOfInputDrain`** passed the last break. Its handler waited on its context, which `Close` cancels,
+so the drain ended either way. It was reworked so the handler ignores its context, and the test reads the shutdown's "connection
+closed" log line. It then failed on the break.
+
+**What no test pins.** Preferring an answer already read over the end of input cannot be told apart by a test. A caller parked in
+`waitForResponse` is woken by whichever arrives first, and the answer is read before the end of file, so the preference only matters
+for a caller not yet parked.
+
+**Repeat runs.** `go test -race -count=50` over the five new tests and the changed one: 50 PASS each. The root package under `-race`
+took 11.5 s; the prototype's comparison is in "Facts".
+
+**Gates**, through the Python runner, on the tree:
+
+- regenerating changes no generated file;
+- `make pre-add-check` exit 0, and `scripts/go-precheck.sh` on the new file exit 0;
+- `GOEXPERIMENT=nojsonv2 go test ./...` exit 0;
+- `GOOS=windows go vet` exit 0 in both modules;
+- `make check-records` and `make markdownlint` exit 0;
+- the identifier scan finds nothing;
+- Windows `go test -count=1 -shuffle=on ./...` exit 0 at the root and in `cmd/generate`;
+- the API listing: 2429 lines at `v1.15.1` and in the tree; 0 removed, 0 added.
