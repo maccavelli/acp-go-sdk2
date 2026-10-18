@@ -1,0 +1,196 @@
+---
+status: proposed
+date: 2026-10-18
+associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
+---
+
+# Implement the fixes for issues #7 to #9 under 0019, before phase 5
+
+Associated MADR: [0019-MADR-remediate-debugging-pass-findings.md](0019-MADR-remediate-debugging-pass-findings.md)
+
+## Goal
+
+Implement what the MADR's "Evaluated and decided with the owner, 2026-10-18" sets before phase 5:
+
+| Finding | Issue | What it fixes |
+| :--- | :--- | :--- |
+| B22 | [#7](https://github.com/maccavelli/acp-go-sdk2/issues/7) | `Prompt` cancels only a prompt it wrote. |
+| B23 | [#8](https://github.com/maccavelli/acp-go-sdk2/issues/8) | Requests received before the end of input are answered. |
+| B24 | [#9](https://github.com/maccavelli/acp-go-sdk2/issues/9) | The subagent updates are gated on `subagents`. |
+| E18 | | The example clients print a tool call's status, not its pointer. |
+| I10 | | `Prompt`'s best-effort cancel keeps the caller's values. |
+
+- **Tests:** each change has a test seen to fail on a planted break first.
+- **API:** no exported API changes.
+- **Behaviour:** B23 changes behaviour at the end of input, and B24 for the three variants. The release notes name both.
+- **Release:** it is released after it lands, before phase 5, as a patch, `v1.15.2`, which the owner confirms at the tag.
+
+Phases 1 to 4 are complete and released as `v1.14.0`, `v1.15.0` and `v1.15.1`. The schema stays at `1.25.0` (the MADR, question 16).
+
+## Standards this plan follows
+
+| Id | Source | Text | Bears on |
+| :--- | :--- | :--- | :--- |
+| Q1 | `schema/schema.unstable.json`, `SubagentCapabilities` | "The client must advertise this capability before the agent sends subagent updates or session-directed messages." | B24 |
+| Q2 | [0017-MADR-remediate-acp-v1-conformance-violations.md](0017-MADR-remediate-acp-v1-conformance-violations.md), step 4 of its PLAN | Unstable features whose gates the table does not state are not gated by that record; a gate the table can cite belongs in it. | B24 |
+| Q3 | `agentclientprotocol/rust-sdk` at `d5e8bf4d`, `src/agent-client-protocol/src/jsonrpc.rs:1775-1777` | "On clean EOF, messages already accepted by the outgoing queue—including handler responses …—are drained". Pending outbound requests fail with "Incoming transport closed" (`:2363-2372`). | B23 |
+| Q4 | the MADR, decision 12 | Phases ride the release after each lands; the version is confirmed at the tag. | release |
+
+## Facts this plan rests on
+
+Each was checked on `7c48c95` on 2026-10-18, read-only, with probes in scratch copies of the tree. Step 1 re-asserts each code fact
+before any code changes.
+
+| Finding | The code as it is | Re-check on `7c48c95` |
+| :--- | :--- | :--- |
+| B22, I10 | `ClientSideConnection.Prompt` (`client_gen.go:706-717`) calls `sendRequest`, and on an error with an ended context sends `c.Cancel(context.Background(), …)`. `sendRequest` (`connection.go:1566`) writes nothing when the context has already ended (`:1569-1572`, B9). `sendMessage` (`:1515`) returns the context's cause either before the writer goroutine takes the message, when nothing is written, or after, when the write runs to its end. The generator emits the cancel at `cmd/generate/internal/emit/dispatch.go:744-754`, and `TestDispatchFollowsTheModel` pins its text. | Probe: with an ended context, `session/cancel` is the first line written. |
+| B23 | `receive` (`connection.go:1014`) calls `shutdownReceive` at the end of input. It cancels the connection's context first (`:1354`), and a request handler's context derives from it (`:1161`), so the handler sees it ended and its reply is refused by `sendMessage` (`:1517-1518`). A notification handler runs under `inboundCtx`, cancelled after the queue drains or `notificationQueueDrainTimeout` (5 s, `:22`) passes (`:1369-1373`). `Done`'s doc (`:1996-1999`) says every send fails once it is closed. | Probe: 0 of 50 requests answered. A prototype in a scratch copy answered 50 of 50: a channel closed at clean end of input fails pending requests in `waitForResponse`, and the inbound requests in flight are waited for, bounded by `notificationQueueDrainTimeout`, before `shutdownReceive`. Under `-race`, one root test failed, `TestConnectionCancelsRequestHandlersOnDisconnectEvenWithNotificationBacklog`, which pins today's end at a clean close; no other test failed or slowed by more than a second (the package took 13.2 s, where it took 12.3 s). |
+| B24 | `SessionUpdate`'s variant gates are rules at `cmd/generate/internal/model/acp.go:153-155`, with their schema sentence in `srcSessionUpdate` (`:233-234`). `gates_test.go:499-501` tests `notice` and the compaction variants. `README.md:404-406` lists `subagents` among the unchecked features. | Probe: all three variants sent to a client without `subagents`; a received `session_message_chunk` reached the client's handler. |
+| E18 | `example/client/main.go:84`, `example/claude-code/main.go:108` and `example/gemini/main.go:108` print `u.ToolCallUpdate.Status`, a `*acp.ToolCallStatus`, with `%v`. | Read; phase 4's step 4 record shows `updated: 0x…`. |
+
+## Scope
+
+In scope:
+
+- `connection.go` and `client_gen.go`, the latter through the generator;
+- the generator's `emit/dispatch.go` and `model/acp.go`, and the regenerated files;
+- root tests, and `cmd/generate` tests that pin the changed output;
+- the three example clients and their tests;
+- `README.md` and `docs/architecture.md`;
+- the release notes for `v1.15.2`;
+- these records.
+
+Out of scope:
+
+- **Phase 5:** I1 to I7, I9, I11, I13 to I16 and E16's linters.
+- **The schema:** `1.26.0` is not pinned (question 16).
+- **Ending on a read error:** a read that ends with an error other than `io.EOF` still ends the connection at once. The output is then
+  likely broken, and the decision names the end of input.
+- **Closing issues #7 to #9:** left to the owner.
+
+## Design
+
+### B22 and I10: cancel only a prompt that was written
+
+`sendMessage` reports whether it handed the message to the writer goroutine, and `sendRequest` carries that out through an
+unexported variant, so the exported `SendRequest` and the typed methods keep their signatures:
+
+- **Not written:** the request was not handed over when the context ended before the hand-over, when the request did not prepare, or
+  when the connection had ended. Nothing was written.
+- **Possibly written:** once it was handed over, the write runs to its end and may reach the peer.
+
+The generated `Prompt` sends `session/cancel` only when the request may have been written and the call failed with an ended context.
+It sends it under `context.WithoutCancel(ctx)`, which keeps the caller's values without its end, where `context.Background()` kept
+neither (I10). The cancel's own write is still best effort.
+
+### B23: answer the requests received before the end of input
+
+At a clean end of input (`io.EOF`), the connection:
+
+1. **Ends input.** It closes an unexported channel. A request waiting for its response then returns at once, with an error that keeps
+   its code (`-32603`) and wraps `ErrPeerDisconnected` with "end of input". A request sent after that point is refused the same way
+   and not written: no answer could arrive.
+2. **Drains.** It lets the inbound requests already received run, under contexts that stay live, and writes their answers.
+   Notifications sent meanwhile are written, and the notification queue drains as it does today.
+3. **Bounds the drain.** It waits for those requests, bounded by `notificationQueueDrainTimeout`, the bound the notification drain
+   already uses.
+4. **Shuts down.** It runs `shutdownReceive` as today. That ends the connection's context, closes `Done`, and cancels the handlers still
+   running, whose answers are then not written, as today.
+
+`Close` during the drain ends the connection at once, as it does now. A read that ends with another error ends the connection at once,
+as today. `Done`'s doc, the README's paragraph on how a connection's errors wrap their cause, and `docs/architecture.md`'s account of
+the writer and the end of a connection state the new order.
+
+The existing test that pins the old end at a clean close keeps its intent for a broken input: it closes the pipe with an error, which
+still cancels the handlers at once. The clean close gets tests of its own, run in a `testing/synctest` bubble so the bound costs no
+wall time:
+
+- a request answered;
+- a pending request failed at once;
+- a new request refused unwritten;
+- a stuck handler cancelled at the bound, its answer not written;
+- `Close` during the drain.
+
+### B24: gate the subagent updates
+
+The protocol table gains three variant rules on `subagents`, beside `notice` and the compaction variants: `subagent_update`,
+`session_message` and `session_message_chunk`. A new source constant holds Q1's sentence, and the generator's existing guard requires
+it to be found in the schema.
+
+Each follows 0017's rules:
+
+- **Sending:** a `*CapabilityError` naming `subagents` and the variant.
+- **Receiving:** the notification is dropped and logged, which `WithInboundValidation` can override.
+
+`gates_test.go` gains the three as value gates, both ways. The README's list of unchecked unstable features drops `subagents`.
+
+### E18: print the status
+
+Each example client prints the status's value, and nothing when it is absent, through a small function its test calls with a set
+status and with none.
+
+## Implementation Steps
+
+Each step ends with its gates and an execution record, and the owner commits it; agents do not commit on `main`. Every new test is
+seen to fail on a planted break in a scratch copy, never in the tree, before it is relied on.
+
+1. **Records.** This PLAN and its `docs/README.md` row, with the MADR's amendment of 2026-10-18. The facts above are re-asserted on the
+   tree.
+2. **B24.** The rules and their source; regeneration; the gate tests; the README.
+3. **B22 and I10.** `sendMessage` and `sendRequest`, then the generator's cancel and regeneration. `TestPromptWithEndedContextWritesNothing`
+   uses the probe's marker. The existing `TestPromptCancellationSendsCancelAndAllowsNewSession` still requires the cancel after a
+   written prompt. `TestDispatchFollowsTheModel` pins the new emitted line.
+4. **B23.** The end of input as "Design" sets it; its tests; the changed test; `Done`'s doc, the README and `docs/architecture.md`.
+   The design was prototyped (see "Facts"). If the implementation finds it does not hold, the step stops as a deviation.
+5. **E18.** The three example clients and their tests.
+6. **Release notes.** `docs/reports/0019-REPORT-release-notes-v1-15-2.md` and its `docs/README.md` row: B23's behaviour change, B24's
+   gates, B22, and the examples; no exported API changes.
+7. **Verification and close.** The gates over the tree; each issue's probe re-run, each passing; the API listing against `v1.15.1`,
+   unchanged; Windows. The pre-push guard runs (`make push-guard`), and the owner pushes. After CI passes on the pushed commits, this
+   PLAN and its row become `complete`. The owner tags `v1.15.2`, publishes its release from the report, and closes issues #7 to #9.
+
+## Verification
+
+Per code step, through the Python runner outside the tree:
+
+- regeneration: the generated files' diff is exactly the step's;
+- `make pre-add-check`, and `scripts/go-precheck.sh` on each new `.go` file;
+- `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+- each new test seen to fail on its planted break in a scratch copy;
+- `make check-records`, `make markdownlint` and the identifier scan;
+- Windows `go test -count=1 -shuffle=on ./...` in both modules;
+- the API listing against `v1.15.1`.
+
+The tests that use a context or a bubble also run `-count=50 -race`.
+
+Planted breaks, at least:
+
+| Finding | Break |
+| :--- | :--- |
+| B22 | the cancel sent whatever was written; the cancel sent under `context.Background()` (seen by `TestDispatchFollowsTheModel`) |
+| B23 | the end of input cancelling the handlers at once, as now; pending requests left waiting; a new request written after the end of input; the drain unbounded |
+| B24 | each variant's rule removed; the source sentence altered (refused by the generator's guard) |
+| E18 | the status printed as its pointer |
+
+Expected API listing difference against `v1.15.1`: none.
+
+Acceptance:
+
+- every step's checks pass and its record is written;
+- the three issue probes pass on the tree, unchanged from the MADR's evaluation;
+- the root suite passes with the changed test and no other change in what it asserts;
+- CI passes on the pushed commits.
+
+## Rollout and Rollback
+
+Each step is one commit, reverted by reverting it.
+
+The release is a patch: no exported API changes. Two behaviours change, and the release notes name them:
+
+- **End of input:** a request received before it is answered, and a pending request fails at once.
+- **Subagent updates:** they are refused or dropped without `subagents`.
+
+An application that relied on its handlers being cancelled at once by a clean end of input sees them run up to the bound. Reverting
+B23 restores that.
+
+## Execution record

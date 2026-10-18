@@ -284,6 +284,159 @@ The owner decided on 2026-10-16, each as recommended:
   sleep (`connection_cancel_test.go:688`), and `TestConformanceConstructors` still skips four subtests. The examples give 50 lint
   issues, where E12 counted 55.
 
+### Amended while assessing phase 5, 2026-10-18
+
+The owner asked on 2026-10-18 for phase 5 to be re-assessed against the codebase, and for pending issues to be found.
+
+**Where the program stands.** Phases 1 to 4 are complete:
+
+| Phases | PLAN | Release |
+| :--- | :--- | :--- |
+| 1 and 2 | [0019-PLAN-behaviour-fixes.md](0019-PLAN-behaviour-fixes.md) and [0019-PLAN-api-decisions.md](0019-PLAN-api-decisions.md) | `v1.14.0` |
+| 3 | [0019-PLAN-generator-hardening.md](0019-PLAN-generator-hardening.md) | `v1.15.0` |
+| 4 | [0019-PLAN-examples-docs-tests-tooling.md](0019-PLAN-examples-docs-tests-tooling.md) | `v1.15.1` |
+
+Phase 5 has no PLAN yet.
+
+**How it was re-checked.** Everything was re-checked on `7c48c95`, read-only:
+
+- a pattern count of each finding's code;
+- `go fix -diff` in both modules;
+- the lint probe of phase 4's planning, re-run on a scratch copy;
+- the open GitHub issues and pull requests;
+- the records' open items;
+- the upstream schema releases.
+
+#### Phase 5's findings on `7c48c95`
+
+The table gives each finding's state, with the line numbers as of `7c48c95`; those the finding gives date from `c77f25a`.
+
+| Id | On `7c48c95` |
+| :--- | :--- |
+| I1 | Holds: 88 union `MarshalJSON` sites still marshal, decode into a map, set the discriminator and marshal again (first at `types_gen.go:406`). No benchmark is committed (`func Benchmark` appears nowhere), so the pass's measurements are the only ones. |
+| I2 | Holds: `canonicalJSONRPCIDKey` (`connection.go:771`) builds a decoder for every id (`:777`). |
+| I3 | Holds: `validateOutbound` (`connection.go:165`) copies a value through `reflect.New` (`:176-177`) and asserts `ptr.Interface().(validator)` (`:178`); `checkResult` is at `:1922`. |
+| I4 | Narrowed: `orDefault` (`types_gen.go:20580`) now returns a present value without decoding the default, but still decodes the default's string on every absent field. |
+| I5 | Narrowed: the disconnect errors are built lazily now (`connection.go:1714`, `:1753`). The `fmt.Errorf` of the superseded cause still runs on every prompt under the default overlap policy (`agent_gen.go:149`). |
+| I6 | Holds: 291 `objectKeys` calls in the generated decoders. It still needs design. |
+| I7 | Holds: 7 sites (first at `types_gen.go:378`). |
+| I9 | Narrowed. The examples' assertions are gone (phase 4). Left: 2 `errors.As` in hand-written code (`connection.go:1973`, `:1980`); 2 in the generator (`output/check.go:86`, `:147`); 31 in root tests; and 8 `err.(*json.UnmarshalTypeError)` in generated code (first at `types_gen.go:374`), the 8 `errorlint` issues below. |
+| I10 | Holds, at `client_gen.go:713`, the same lines issue #7 names (B22 below). |
+| I11 | Holds: wake goroutines with stop channels at `connection.go:1756` and `:1824`, and the end-of-connection broadcast at `:636`. The dead nil-cause branches are at `:1735` and `:1801`. Phase 4's step 6 named `:1802-1803` and `:1807` as never run, since a done context always has a cause. |
+| I13 | Holds: 97 `_b, _e` and `return []byte{}, _e`; 46 `var a Alias; a = Alias(v)` (52 before); 26 `resp, err := …; return resp, err` (27); 8 `else { if`. |
+| I14 | Holds: `fmt.Errorf` without a verb at `extensions.go:32` and 21 times in the generator (20 before); the view struct at `errors.go:52`; the index loop at `connection.go:917`. `go fix -diff` now proposes 5 changes at the root and 6 in the generator, where it proposed 6 and 4. They are `errors.AsType`, `strings.SplitSeq` and `strings.FieldsSeq`, `slices.Backward`, `reflect.Type.Fields`, `maps.Copy` and an embedded-literal simplification. |
+| I15 | Holds: 3 `wg.Add`, 50 `context.Background()`, 1 `slog.NewTextHandler(io.Discard, …)` and 3 `fmt.Sprintf("%d", …)` in tests. Missing `t.Helper()` was not recounted. |
+| I16 | Holds: the mutation tool has no signal handling, so its deferred `os.RemoveAll` (`cmd/generate/internal/mutate/main.go:112`) does not run on Ctrl-C. `exec.Command` without a context is at `:166`. |
+
+**E16's linters.** The probe adds `modernize`, `intrange`, `copyloopvar`, `perfsprint` and `usestdlibvars`, and lints the generated
+files. It finds the same counts for `darwin` and `windows`:
+
+- **At the root:** 127 issues, one more than phase 4's planning counted. The new one is `perfsprint` in `example/agent/main.go`, which
+  lint now covers. 20 are in hand-written code: `modernize` 13, `perfsprint` 6, `intrange` 1. 107 are in generated code, all from
+  linters the repository already enables: `goconst` 57, `errcheck` 26, `errorlint` 8, `gocritic` 7, `gocognit` 5, `gocyclo` 2 and
+  `unconvert` 2.
+- **In `cmd/generate`:** 28 issues, all in hand-written code: `perfsprint` 22 and `modernize` 6.
+
+Outcome item 5 names I9, I13 and I14 for these. But turning on lint over generated code brings in `goconst`, `gocognit`, `gocyclo`,
+`errcheck`, `gocritic` and `unconvert`, which no finding names (question 15).
+
+#### New findings
+
+Three issues opened after `v1.14.0` and `v1.15.0` are defects in phases 1, 2 and 0017's gates. No record tracks them. Each still
+reproduces on `7c48c95` by its quoted code, unchanged since its report.
+
+| Id | Severity | Finding | Evidence | Fix in |
+| :--- | :--- | :--- | :--- | :--- |
+| B22 | low | `ClientSideConnection.Prompt` sends `session/cancel` whenever the call fails with an ended context, including when `sendRequest` refused to write the request (B9), so the agent receives a cancel for a turn it never got. Under `PromptOverlapConcurrent`, it can end another turn of the session. | Issue [#7](https://github.com/maccavelli/acp-go-sdk2/issues/7), reproduced on `v1.14.0`; the code is unchanged at `client_gen.go:710-715`. | gen |
+| B23 | medium | An agent never answers a request received just before its input reaches end of file. `shutdownReceive` cancels the connection's context first (`connection.go:1354`). The handler then runs under an ended context, and its reply is dropped, because every send fails once the connection has ended (B17). A script that pipes requests into a stdio agent and closes its input gets no reply. | Issue [#8](https://github.com/maccavelli/acp-go-sdk2/issues/8): 0 of 100 runs answered on `v1.15.0` and `v1.14.0`. A downstream consumer serving ACP over stdio meets it. | rt |
+| B24 | gap | `subagent_update`, `session_message` and `session_message_chunk` are not gated on `subagents`, though the unstable schema's `SubagentCapabilities` says "The client must advertise this capability before the agent sends subagent updates or session-directed messages". `SessionUpdate.gates` checks `session.notices` and `session.compaction` only. 0017 left `subagents` ungated because no gate was stated then; one is now. | Issue [#9](https://github.com/maccavelli/acp-go-sdk2/issues/9); `SessionUpdate.gates` in `types_gen.go`. | gen |
+| E18 | low | The example clients print a tool call update's status with `%v` of its pointer (`updated: 0x…`). | Phase 4's step 4 record; named in the `v1.15.1` release notes. | ex |
+
+#### Pending items outside the program
+
+- **The schema.** ACP published `schema-v1.26.0` on 2026-10-16; this SDK pins `1.25.0` (`schema/version`). The stable `schema.json`
+  and `meta.json` are byte-identical. The unstable schema removes 10 methods (`nes/*` and `document/*`) and 57 definitions, adds 5
+  (a system-prompt capability), and changes 10.
+  - Regenerated, 323 of the 2429 lines of the exported API listing would go, 11 methods among them, with fields of stable types such as
+    `AgentCapabilities.Nes` and `ClientCapabilities.PositionEncodings`.
+  - That is a removal from a `v1` module, which no record decides (question 16).
+- **Pull request #1.** It is Dependabot's, opened 2026-10-08. It edits `.github/workflows/ci.yaml` and `release-notes.yaml`, which
+  `9fb9ae5` deleted, and bumps `jdx/mise-action`, which nothing uses. Its `actions/checkout` v7.0.1 is already the pin in `ci.yml`. It
+  is obsolete.
+- **Windows symbolic links.** Whether the Windows host ran the example clients' symbolic-link check is not established (phase 4's
+  step 4 record).
+
+#### Questions for the owner
+
+Each has a recommended answer.
+
+14. **Where B22 to B24 and E18 go.** Recommended: a PLAN under this record, `0019-PLAN-issue-fixes.md`, executed before phase 5,
+    because the program is ordered by severity and B23 is medium. Each fix gets a test seen to fail first, and they are released
+    together after it lands, the version confirmed at the tag. B22 is fixed by cancelling only a written request, and I10's
+    `context.WithoutCancel` lands with it at the same lines. B24 adds three variant gates to the protocol table, citing the
+    schema's sentence.
+    - B23 needs its own design. Recommended: at end of input, requests already received finish and their replies are written before
+      the connection ends, with the wait bounded. The agent's own pending requests fail at once with the end-of-input cause. This is
+      the default, and the release notes name it as a behaviour change, since `Done`'s doc describes today's behaviour.
+    - What the Rust and TypeScript SDKs do at end of input is checked while planning.
+    - Alternative: a `ConnectionOption`, off by default.
+15. **Lint over generated code (E16).** Recommended:
+    - every linter the configuration enables also runs over the generated files;
+    - each finding is fixed in the generator: `errcheck`, `errorlint`, `gocritic`, `unconvert` and the modernizers;
+    - except `goconst`, `gocognit` and `gocyclo`, excluded for `_gen.go` files with their reason in `.golangci.yml`: the repeated
+      strings are schema literals, and the dispatch and decoders are long by construction.
+
+    Alternative: fix every finding, `goconst`'s 57 included.
+16. **Schema 1.26.0.** Recommended: a new record decides the bump and the policy for removing unstable exported API under `v1`. It is
+    not part of this program, so phase 5 runs on schema `1.25.0`, and its benchmarks compare like with like.
+17. **Pull request #1.** Recommended: the owner closes it as obsolete, naming `9fb9ae5`. No change to the tree.
+
+#### Evaluated and decided with the owner, 2026-10-18
+
+The owner asked for the pending issues to be evaluated and brought into scope, and for the latest schema not to be pinned yet.
+
+**Probes.** Probe tests in a scratch copy of `7c48c95` reproduce each issue:
+
+- **B22:** `Prompt` with an ended context writes `session/cancel` as its first line, where nothing should be written.
+- **B23:** of 50 requests received just before end of input, none was answered, and all 50 handlers saw their context already ended.
+- **B24, sending:** all three variants were sent to a client that advertised no `subagents`, with no `*CapabilityError`.
+- **B24, receiving:** the client handed `session_message_chunk` to its `SessionUpdate`. An ungated notification sent after it shows the
+  order, since notifications are handled one at a time.
+
+**What each fix touches.**
+
+- **B22:** `sendRequest` already writes nothing for an ended context (`connection.go:1569-1572`). The cancel in
+  `ClientSideConnection.Prompt` does not know whether the request was written, so the fix needs that fact from `sendRequest`. A write
+  that ended with the context may still have reached the peer, so a cancel stays right there.
+- **B23:** a request's handler runs under the connection's context (`connection.go:1161`), which end of input cancels first
+  (`shutdownReceive`, `:1354`). A notification's handler runs under `inboundCtx`, which is cancelled only after the queue drains or
+  `notificationQueueDrainTimeout` passes (`:1369-1373`). End of input already drains notifications, then, but not requests.
+- **B24:** three variant rules in the protocol table beside `notice` and the compaction variants
+  (`cmd/generate/internal/model/acp.go:153-155`). `README.md:404-406`, which lists `subagents` among the unchecked features, changes
+  with them.
+
+**What the reference SDKs do at end of input.** Read, not run:
+
+| SDK | Replies of handlers running | Own pending outbound requests | Bound |
+| :--- | :--- | :--- | :--- |
+| TypeScript, `agentclientprotocol/typescript-sdk` at `1726f28f`, `src/jsonrpc.ts` | Dropped, as here: the receive loop closes the connection (`:1226`, `:1241`), which aborts every handler (`:1165`, `:1172`); `sendWireMessage` refuses once aborted (`:1533-1534`). | Rejected at once (`:1168`). | None. |
+| Rust, `agentclientprotocol/rust-sdk` at `d5e8bf4d` | Written: end of input is handled after the running handler returns, and the outgoing queue drains before output closes (`jsonrpc.rs:1775-1777`, `:2102-2105`). Work a handler moved to a spawned task is dropped. | Fail at once, with "Incoming transport closed" (`jsonrpc.rs:2363-2372`, `:3747`). | None. |
+| Python, `agentclientprotocol/python-sdk` at `11f8a4c8` | Written by `Connection` (`connection.py:251`). Cancelled under `run_agent` (`core.py:73-76`), which closes the connection when its input ends. | Rejected at once (`connection.py:335-340`). | Reads only. |
+
+**The Windows host.** The example clients' symbolic-link case does run there. `go test -v -run TestWriteTextFileStaysInCwd` over
+the three example clients, on a Windows host reached over SSH, logged no "no symbolic link on this host" line, and all three passed.
+Phase 4's open question is closed.
+
+**Decisions.** The owner decided on 2026-10-18:
+
+| Question | Answer |
+| :--- | :--- |
+| 14. Where B22 to B24 and E18 go | A PLAN under this record, `0019-PLAN-issue-fixes.md`, executed and released before phase 5, as recommended. I10 moves into it, since it changes B22's lines. |
+| 14. B23 at end of input | **Drain by default, bounded**, as recommended and as the Rust SDK does. Requests already received keep running, and their replies are written. The connection's own pending requests fail at once, with an end-of-input cause that wraps `ErrPeerDisconnected`, so no exported API is added. `Done` closes after the drain. The wait is bounded, as the notification drain is, so a stuck handler cannot hold the connection open. It is a behaviour change: `Done`'s doc changes, and the release notes name it. |
+| 15. Lint over generated code | As recommended: every enabled linter also runs over the generated files, and each finding is fixed in the generator. The exceptions are `goconst`, `gocognit` and `gocyclo`, excluded for `_gen.go` files with the reason in `.golangci.yml`. |
+| 16. Schema 1.26.0 | **Not pinned yet.** The program stays on schema `1.25.0`, and no record decides the bump now. |
+| 17. Pull request #1 | Closed by the agent at the owner's request, on 2026-10-18, with a comment naming `9fb9ae5`. |
+
 ## Decision Drivers
 
 * An SDK user must not meet a deadlock, a lost cancel or a refused valid request in ordinary use (B1 to B5).
@@ -323,7 +476,11 @@ The phases, each a `0019-PLAN-<scope>.md` beside this record, written and approv
    Amended 2026-10-16: E16's linters move to phase 5, I12 covers every exported identifier, and E17 joins ("Amended
    while planning phase 4, 2026-10-16").
 5. **Idioms and performance**: I1 to I7, I9 to I11, I13 to I16, with benchmarks committed so the gains are measured, not asserted.
-   Amended 2026-10-16: and E16's linters, with lint over generated code.
+   Amended 2026-10-16: and E16's linters, with lint over generated code. Amended 2026-10-18: re-checked on `7c48c95` ("Amended while
+   assessing phase 5, 2026-10-18"). I4, I5 and I9 have narrowed. Questions 14 to 17 are open: issues #7 to #9 as B22 to B24, E18, the
+   scope of lint over generated code, and schema 1.26.0. Decided the same day ("Evaluated and decided with the owner, 2026-10-18"):
+   before phase 5, `0019-PLAN-issue-fixes.md` takes B22 to B24, E18 and I10; phase 5 lints the generated code except for `goconst`,
+   `gocognit` and `gocyclo`; and the schema stays at `1.25.0`.
 
 Phases 3 to 5 ride the release after each lands (decision 12).
 
@@ -394,4 +551,6 @@ Phases 3 to 5 ride the release after each lands (decision 12).
 * Not findings, by decision: the client's `Prompt` returning at once when its context ends (0017); the initialisms (`Url`, `Uri`,
   `Id`) kept for API stability; `encoding/json` v1 (0007); nojsonv2 and `-race` on Linux only (0011, 0018).
 * Not checked: whether gemini's `--experimental-acp` flag is current; the four conformance variants E10 names may be covered by the
-  instance tests.
+  instance tests. Both were settled later. The flag is deprecated for `--acp` ("Amended while planning phase 4, 2026-10-16"). The four
+  variants were not covered elsewhere, and now run with their empty unions filled
+  ([0019-PLAN-examples-docs-tests-tooling.md](0019-PLAN-examples-docs-tests-tooling.md), step 6).
