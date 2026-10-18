@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-18
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
@@ -631,3 +631,34 @@ Gates, through the Python runner, on the tree:
 
 The release notes are unchanged: they describe the behaviour this fix makes deterministic. The new close follows CI on the pushed
 fix.
+
+The owner committed the fix as `3fb248d`.
+
+### Close, after the fix, 2026-10-18
+
+**The CI runs.**
+
+- **On `63eb624`:** the owner re-ran the failed job. Attempt 2 of run `39175773059` passed on all three runners, as a race that fails
+  about one run in 18 lets it. It is not taken as evidence of a fix.
+- **The push of the fix:** `make push-guard` ran over the one commit not yet pushed, `63eb624..3fb248d`, and passed, exit 0. The owner
+  pushed `3fb248d`.
+- **On `3fb248d`:** CI run `39176657417` concluded `success` on its first attempt, on `validate (ubuntu-24.04)`, `validate (macos-15)`
+  and `validate (windows-2025)`.
+
+**Acceptance.** Every criterion in "Verification" is met:
+
+- each step's checks passed and its record is written, the fix of the deviation after the close included;
+- the three issue probes pass on the tree and fail on `v1.15.1` (step 7); the fix changes only `waitForResponse`, under the end-of-input
+  tests' 6000 runs;
+- the root suite passes, 10 runs under `-race`;
+- CI passed on the pushed commits.
+
+This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`, with phase 5 to come.
+
+**Left to the owner.**
+
+- Tag `v1.15.2`, an annotated tag, on this close commit once its CI passes.
+- Publish its release from the release text of
+  [0019-REPORT-release-notes-v1-15-2.md](../reports/0019-REPORT-release-notes-v1-15-2.md), extracted with its relative link rewritten to
+  the tag.
+- Close issues #7, #8 and #9, naming `2cdc39a`, `5763a36` with `3fb248d`, and `ef08400`.
