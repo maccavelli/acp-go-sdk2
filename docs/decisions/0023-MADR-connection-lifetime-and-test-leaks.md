@@ -221,6 +221,12 @@ In detail:
   * The 10 tests close their connections through `t.Cleanup` calling `Close` on both sides.
   * The guard is a root `TestMain`. After `m.Run`, it polls `pprof.Lookup("goroutineleak")` until the count is 0, for at most the
     drain bound and a margin. It then fails the run and prints the profile's stacks if any leaked goroutine is left.
+
+    Amended after the close of [0023-PLAN-connection-lifetime-and-test-leaks.md](0023-PLAN-connection-lifetime-and-test-leaks.md),
+    2026-10-19: stopping at the first zero read misses a leak made by the last test to run. Its goroutines may not have blocked yet.
+    A planted leak in a test run alone was missed 18 times in 30. The guard reports clean only after the count has stayed 0 for a
+    settle window of 500 ms. In 400 measured runs the leak showed within 10.951 ms. The PLAN's deviation of that date holds the
+    measurements.
   * The guard runs on every `go test` of the root package, CI's included.
 
 ### Decided with the owner, 2026-10-19

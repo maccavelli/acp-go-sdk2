@@ -22,24 +22,37 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// waitForLeaks polls the goroutineleak profile until it counts none, and
-// returns "". A connection whose input has ended may still be draining, for
-// at most notificationQueueDrainTimeout, so the profile is read until bound
-// has passed; then it returns the profile, its identical stacks grouped with
-// their counts.
+// settleWindow is how long the goroutineleak profile must count none before
+// the guard reports clean. The profile counts a goroutine only once it has
+// blocked, and a goroutine the last test leaked may not have blocked yet when
+// the tests return: measured, it was counted within 11 ms
+// (0023-PLAN-connection-lifetime-and-test-leaks.md, step 6).
+const settleWindow = 500 * time.Millisecond
+
+// waitForLeaks polls the goroutineleak profile, and returns "" once every
+// read for settleWindow has counted none. While it counts some, it polls
+// until bound has passed, and then returns the profile, its identical stacks
+// grouped with their counts.
 func waitForLeaks(bound time.Duration) string {
 	p := pprof.Lookup("goroutineleak")
-	deadline := time.Now().Add(bound)
+	start := time.Now()
+	var clean time.Time // when the reads began to count none; zero while they count some
 	for {
 		var buf bytes.Buffer
 		if err := p.WriteTo(&buf, 1); err != nil {
 			return fmt.Sprintf("reading the goroutineleak profile: %v\n", err)
 		}
-		if p.Count() == 0 {
+		now := time.Now()
+		switch {
+		case p.Count() != 0:
+			clean = time.Time{}
+			if now.Sub(start) >= bound {
+				return buf.String()
+			}
+		case clean.IsZero():
+			clean = now
+		case now.Sub(clean) >= settleWindow:
 			return ""
-		}
-		if time.Now().After(deadline) {
-			return buf.String()
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 date: 2026-10-19
 associated-madr: "0023-MADR-connection-lifetime-and-test-leaks.md"
 ---
@@ -390,3 +390,71 @@ The check was seen to fail when `v1.15.2` was published: it held 8 of 9 while th
 ([0019-PLAN-issue-fixes.md](0019-PLAN-issue-fixes.md), "Publication, 2026-10-18").
 
 Nothing of this PLAN is left open.
+
+### Deviation, 2026-10-19, after the close
+
+**Found.** While assessing the Go 1.26.9 floor for
+[0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md](0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md), the guard was seen
+to miss a leak.
+
+* **The cause.** `waitForLeaks` returned as soon as the profile counted 0. When the only leaking test is the last to run, its goroutines
+  may not yet have blocked at the first read. The profile counts a goroutine as leaked only once it is blocked on something no running
+  goroutine can reach.
+* **Missed.** A planted test that builds a pair over `io.Pipe`s and closes nothing was run alone 30 times on go1.27.2, `v1.16.1`'s code:
+  caught 12 times, missed 18.
+* **Never missed for good, and how late.** The same plant ran 200 times without `-race` and 200 times with it. A `TestMain` polled the
+  profile every millisecond after `m.Run`, up to 3 s. Every run saw the leak:
+
+  | Build | Runs | Never seen | First seen: median | p99 | max |
+  | :--- | ---: | ---: | ---: | ---: | ---: |
+  | plain | 200 | 0 | 1.959 ms | 2.622 ms | 2.951 ms |
+  | `-race` | 200 | 0 | 0.924 ms | 9.250 ms | 10.951 ms |
+
+* **Why step 2 did not show it.** Its planted breaks each ran once:
+  * the planted leaking test ran alone, and happened to be caught;
+  * the removed cleanup's test ran alone, and was caught;
+  * "the guard without polling" passed, as recorded, but measured the opposite risk: a connection still draining.
+* **What it means for the reports so far.** Every root run in CI and in the pre-add check ran many tests before the guard. So leaks from
+  earlier tests had settled, and the guard's reports so far are sound. A leak in the last test to run, or in a run of one test, could
+  pass.
+
+**Decision (owner, 2026-10-19).** Amend this record first, before 0024's phase 1, which changes the same function. Step 6, below,
+gives `waitForLeaks` a settle window. The MADR's T2 is annotated. The PLAN reopens, `in-progress`, until step 6's CI passes.
+
+### Step 6, the guard's settle window, 2026-10-19
+
+What changed, on `805d997`, in `leak_test.go` only:
+
+* **`settleWindow`, 500 ms.** `waitForLeaks` returns "" only once every read for `settleWindow` has counted none. A non-zero read starts
+  the window again.
+* **The bound.** While the reads count some, it polls until the existing bound, `notificationQueueDrainTimeout + 2*time.Second`, and
+  then returns the profile. A goroutine the profile counts as leaked cannot be woken, so the bound is a margin only, as step 2 recorded.
+* **The cost.** At least 500 ms per run of the root package when nothing leaked. When something has, the bound's 7 s, as before.
+* **No SDK code changes,** so no release of its own. The next release, 0024's `v1.16.2`, carries it.
+
+Planted breaks, each in a fresh scratch copy with a planted test that leaks one pair and closes nothing, run alone, and counted
+"caught" when the run exits 1 with "goroutines leaked":
+
+| `leak_test.go` | Plain | `-race` |
+| :--- | :--- | :--- |
+| step 6, as committed | caught 200 of 200 | caught 200 of 200 |
+| the first zero read returning "", the guard before step 6 | caught 18 of 50 | caught 49 of 50 |
+| `settleWindow = 0` | caught 50 of 50 | caught 50 of 50 |
+
+**What the fix rests on: the second read, not the window's length.**
+
+* With `settleWindow = 0` the guard still reads twice, 50 ms apart, before it returns. The measured first sighting was at most
+  10.951 ms, so the second read catches every leak in these runs.
+* The window is kept at 500 ms as a margin, for hosts slower than this one, such as CI's runners. Like the bound, no plant here shows it
+  needed.
+* The first 200-run pass was stopped after the fix's two builds. Each caught run waits out the 7 s bound, so it was slow. The two
+  variants were then run 50 times per build.
+
+Gates, with the API listing against `v1.16.1`, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`, whose root tests ran the new guard;
+* `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint`, and the identifier scan;
+* the API listing: 2429 lines at `v1.16.1` and in the tree, 0 removed, 0 added;
+* Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
