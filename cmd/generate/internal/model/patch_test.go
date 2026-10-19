@@ -203,6 +203,105 @@ func checkCommittedKeyOrders(t *testing.T, m *Model) {
 	}
 }
 
+// TestDocNotes requires a doc note's lines after its type's description and a
+// blank line, or alone when the type has no description; a note on a union
+// to reach its inline variants' types, and not its wrapper fields; a note
+// whose definition the schema lacks to apply nothing; and the table's checks
+// to refuse a note they cannot use (0024-PLAN-documentation.md, A11).
+func TestDocNotes(t *testing.T) {
+	t.Parallel()
+	defs := strings.Replace(protocolDefs, `"Update":`, `"Noted":{"type":"object","description":"Said by the schema."},
+		"NotedUnion":{"description":"A union.","oneOf":[
+			{"title":"Inline","type":"object","description":"An inline variant.","required":["a"],"properties":{"a":{"type":"string"}}},
+			{"$ref":"#/$defs/ListCaps"}]},"Update":`, 1)
+	build := func(notes ...DocNote) (*Model, error) {
+		p := testProtocol()
+		p.DocNotes = notes
+		return Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, defs), Protocol: p})
+	}
+	plain, err := build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := build(DocNote{"Noted", []string{"First.", "Second."}}, DocNote{"Update", []string{"Only."}},
+		DocNote{"Nope", []string{"Absent."}}, DocNote{"NotedUnion", []string{"Both."}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Type("Noted").Doc; !slices.Equal(got, []string{"Said by the schema.", "", "First.", "Second."}) {
+		t.Errorf("Noted.Doc = %q", got)
+	}
+	if got := m.Type("Update").Doc; !slices.Equal(got, []string{"Only."}) {
+		t.Errorf("Update.Doc = %q", got)
+	}
+	u := m.Type("NotedUnion")
+	if !slices.Equal(u.Doc, []string{"A union.", "", "Both."}) {
+		t.Errorf("NotedUnion.Doc = %q", u.Doc)
+	}
+	if len(u.Variants) != 2 || u.Variants[0].Inline == nil || u.Variants[1].Inline != nil {
+		t.Fatalf("NotedUnion's variants: %+v", u.Variants)
+	}
+	if got := u.Variants[0].Inline.Doc; !slices.Equal(got, []string{"An inline variant.", "", "Both."}) {
+		t.Errorf("the inline variant's Doc = %q", got)
+	}
+	if got := u.Variants[0].Doc; !slices.Equal(got, []string{"An inline variant."}) {
+		t.Errorf("the inline variant's wrapper field Doc = %q, want it unchanged", got)
+	}
+	for _, ty := range m.Types {
+		if ty.Name != "Noted" && ty.Name != "Update" && ty.Name != "NotedUnion" && !slices.Equal(ty.Doc, plain.Type(ty.Name).Doc) {
+			t.Errorf("%s.Doc = %q, want it unchanged: %q", ty.Name, ty.Doc, plain.Type(ty.Name).Doc)
+		}
+	}
+	for _, tt := range []struct {
+		name  string
+		notes []DocNote
+		want  string
+	}{
+		{"no definition", []DocNote{{"", []string{"x"}}}, `doc note "": it needs a definition and lines`},
+		{"no lines", []DocNote{{"Noted", nil}}, `doc note "Noted": it needs a definition and lines`},
+		{"two notes", []DocNote{{"Noted", []string{"a"}}, {"Noted", []string{"b"}}}, "doc note Noted: two notes"},
+	} {
+		if _, err := build(tt.notes...); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: Build = %v, want an error containing %q", tt.name, err, tt.want)
+		}
+	}
+}
+
+// checkCommittedDocNotes requires every doc note of ACP to name a committed
+// definition with a description, and to end that type's doc comment, and its
+// inline variants', after a blank line: the ten envelope types among them.
+func checkCommittedDocNotes(t *testing.T, m *Model) {
+	t.Helper()
+	if len(ACP.DocNotes) != 9 {
+		t.Errorf("%d doc notes, want 9", len(ACP.DocNotes))
+	}
+	var variants []string
+	for _, note := range ACP.DocNotes {
+		ty := m.Type(note.Definition)
+		if ty == nil {
+			t.Errorf("doc note %s: no such type", note.Definition)
+			continue
+		}
+		ends := func(what string, doc []string) {
+			n := len(doc) - len(note.Lines)
+			if n < 2 || doc[n-1] != "" || !slices.Equal(doc[n:], note.Lines) {
+				t.Errorf("%s.Doc = %q, want a description, a blank line, and %q", what, doc, note.Lines)
+			}
+		}
+		ends(ty.Name, ty.Doc)
+		for _, v := range ty.Variants {
+			if v.Inline != nil {
+				ends(v.TypeName, v.Inline.Doc)
+				variants = append(variants, v.TypeName)
+			}
+		}
+	}
+	slices.Sort(variants)
+	if want := []string{"AgentError", "AgentResult", "ClientError", "ClientResult"}; !slices.Equal(variants, want) {
+		t.Errorf("noted variants %v, want %v", variants, want)
+	}
+}
+
 // retainedWording is how the schema says that an explicit null is kept apart
 // from omission (0019-PLAN-generator-hardening.md, G3).
 var retainedWording = regexp.MustCompile("(?i)explicit [`']?null[`']? is (retained|preserved)")

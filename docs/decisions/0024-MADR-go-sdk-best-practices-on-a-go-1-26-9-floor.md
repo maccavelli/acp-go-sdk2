@@ -159,6 +159,9 @@ The phases, each subject to the questions below:
 2. **Documentation (A5 to A8, A10, A11, V4).**
    * A concurrency contract on the five main types.
    * One generated paragraph per typed method naming the errors it returns.
+     Amended while executing [0024-PLAN-documentation.md](0024-PLAN-documentation.md), during step 2, 2026-10-19: the four
+     extension methods, `CallExtension` and `NotifyExtension` of each side, gain a hand-written paragraph naming theirs. They send
+     before initialize, so it does not name `ErrNotInitialized`.
    * A package overview with a happy path in `doc.go`, a short Go quickstart in the README, and per-symbol `Example` functions with
      `// Output:`.
    * The option semantics.

@@ -59,7 +59,8 @@ func TestNonStringDiscriminatorFailsByName(t *testing.T) {
 }
 
 // TestUnionDocAboveWrapper requires a union's description on the wrapper
-// type, not on its first variant.
+// type, after the line that names it, not on its first variant
+// (0024-PLAN-documentation.md, A7).
 func TestUnionDocAboveWrapper(t *testing.T) {
 	t.Parallel()
 	file, err := parser.ParseFile(token.NewFileSet(), "types_gen.go", nil, parser.ParseComments)
@@ -73,8 +74,8 @@ func TestUnionDocAboveWrapper(t *testing.T) {
 		}
 	}
 	const union = "Content blocks represent displayable information"
-	if !strings.HasPrefix(docs["ContentBlock"], union) {
-		t.Errorf("ContentBlock doc = %q, want it to start with %q", docs["ContentBlock"], union)
+	if want := "ContentBlock is the ContentBlock schema definition.\n\n" + union; !strings.HasPrefix(docs["ContentBlock"], want) {
+		t.Errorf("ContentBlock doc = %q, want it to start with %q", docs["ContentBlock"], want)
 	}
 	if strings.Contains(docs["ContentBlockText"], union) {
 		t.Errorf("ContentBlockText doc carries the union's description: %q", docs["ContentBlockText"])

@@ -3,6 +3,13 @@ package model
 // capTerminal gates every terminal/* method.
 const capTerminal = "terminal"
 
+// envelopeNote is the doc note of the JSON-RPC envelope's types, which the
+// runtime does not use (0024-PLAN-documentation.md, A11).
+var envelopeNote = []string{
+	"A message of the JSON-RPC envelope. Connection reads and writes the",
+	"envelope itself and does not use this type.",
+}
+
 // ACP is the protocol table the generator uses: the behaviour of the Agent
 // Client Protocol that its schema does not express. Each rule names the
 // specification it follows; Build checks every rule against the schema it
@@ -108,6 +115,26 @@ var ACP = Protocol{
 	},
 	// helpers.go builds these with TextBlock, ToolContent, and the like.
 	HandWrittenHelpers: []string{"ContentBlock", defSessionUpdate, "ToolCallContent"},
+	// Wire-schema types the runtime does not use, and the error code's
+	// relation to RequestError (0024-PLAN-documentation.md, A11). A note on
+	// AgentResponse or ClientResponse also reaches its Result and Error
+	// variants' types.
+	DocNotes: []DocNote{
+		{Definition: "AgentRequest", Lines: envelopeNote},
+		{Definition: "AgentNotification", Lines: envelopeNote},
+		{Definition: "AgentResponse", Lines: envelopeNote},
+		{Definition: "ClientRequest", Lines: envelopeNote},
+		{Definition: "ClientNotification", Lines: envelopeNote},
+		{Definition: "ClientResponse", Lines: envelopeNote},
+		{Definition: "Error", Lines: []string{"Connection reports an error as a *RequestError, not as this type."}},
+		{Definition: "ErrorCode", Lines: []string{
+			"RequestError.Code is an int: compare it with int(ErrorCodeInternalError),",
+			"for example.",
+		}},
+		{Definition: "CancelRequestNotification", Lines: []string{
+			"Connection sends $/cancel_request itself when a call's context ends.",
+		}},
+	},
 	// The properties the protocol requires to be absolute paths, which the
 	// schema states only in prose (0015-MADR-validate-absolute-protocol-paths.md).
 	AbsolutePaths: []PathRule{

@@ -154,6 +154,20 @@ func enumSpec(v model.EnumValue, typ, value ast.Expr, shown string) *ast.ValueSp
 // I12, and its deviation of 2026-10-17).
 func defPlace(t *model.Type) string { return "the " + t.Origin.Key + " schema definition" }
 
+// typeDoc is a generated type's doc comment: "<name> is <place>.", then the
+// schema's description after a blank line, unless the description already
+// starts with the name (0024-PLAN-documentation.md, A7).
+func typeDoc(name, place string, doc []string) []string {
+	if len(doc) > 0 && strings.HasPrefix(doc[0], name+" ") {
+		return doc
+	}
+	lines := []string{name + " is " + place + "."}
+	if len(doc) > 0 {
+		lines = append(append(lines, ""), doc...)
+	}
+	return lines
+}
+
 // schemaVariantPlace names variant vi of union t: by its discriminator value,
 // else by its field name.
 func schemaVariantPlace(t *model.Type, vi *model.Variant) string {
@@ -173,7 +187,7 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 	// A union emits its variant types first, so emitUnion places its
 	// description; every other case starts with the type it documents.
 	if t.Kind != model.KindUnion {
-		f.comment(t.Doc...)
+		f.comment(typeDoc(name, defPlace(t), t.Doc)...)
 	}
 
 	switch t.Kind {
@@ -218,8 +232,9 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 func emitObjectSchema(f *goFile, t *model.Type) {
 	// Nested struct types for inline object properties come first.
 	for _, ns := range t.NestedStructs {
-		f.comment(ns.Doc...)
-		emitStruct(f, ns.Name, fmt.Sprintf("the %q property of %s", ns.Key, defPlace(t)), ns.Fields, nil, false, nil, "", ns.Validation)
+		place := fmt.Sprintf("the %q property of %s", ns.Key, defPlace(t))
+		f.comment(typeDoc(ns.Name, place, ns.Doc)...)
+		emitStruct(f, ns.Name, place, ns.Fields, nil, false, nil, "", ns.Validation)
 	}
 	emitStruct(f, t.Name, defPlace(t), t.Fields, t.Members, t.KeepExtra, t.KeyOrders, "", t.Validation)
 }
@@ -688,7 +703,7 @@ func emitInlineVariant(f *goFile, tname, place string, in *model.Inline) {
 	if in == nil {
 		return
 	}
-	f.comment(in.Doc...)
+	f.comment(typeDoc(tname, place, in.Doc)...)
 	switch in.Kind {
 	case model.InlineStruct:
 		emitStruct(f, tname, place, in.Fields, in.Members, in.KeepExtra, nil, in.Exempt, in.Validation)
@@ -1274,7 +1289,7 @@ func emitUnion(f *goFile, t *model.Type) {
 		st.add(structField(unknownField, f.qual(pkgJSON, "RawMessage"), "-"))
 	}
 	// The union's description belongs on the wrapper, after the variant types.
-	f.comment(t.Doc...)
+	f.comment(typeDoc(name, defPlace(t), t.Doc)...)
 	f.add(typeDecl(name, st.structType(f)))
 	f.line()
 	f.comment(unmarshalDoc("u", defPlace(t)))

@@ -117,6 +117,11 @@ the schema or what initialize agreed.
 
 * **A notification** has no response. Its paragraph keeps the first sentence, and says the second only of the context and the
   connection.
+
+Annotated during step 2, 2026-10-19: the paragraph as built differs from the sample above in three places, each a correction to what
+the code does. A context's end wraps `context.Cause(ctx)`, which is `context.Canceled` or `context.DeadlineExceeded` only when no
+cause was given. Two claims are added: the write's error when writing fails, and a `*RequestError` for a response that does not
+decode. The clauses of each list are joined with semicolons, as some hold an "or" of their own.
 * **`Initialize`** does not wrap `ErrNotInitialized`. It also returns a `*ProtocolVersionError` for a version this SDK does not speak,
   asked or answered.
 * **The client's `Authenticate`** names `ErrTerminalAuthMethod`.
@@ -128,6 +133,9 @@ the schema or what initialize agreed.
 * **The emitter's pins** (`emit/dispatch_test.go`) are updated.
 * **A root test, `TestTypedMethodDocsNameErrors`,** requires every exported method of the two side connections that takes a
   `context.Context` to name `ErrNotInitialized`, unless it initializes, and `*RequestError`.
+  Annotated during step 2, 2026-10-19 (see "Deviation, 2026-10-19, during step 2: the extension methods"): the four
+  extension methods also take one and never return `ErrNotInitialized`. Their docs gain a paragraph of their own; the test
+  requires `*RequestError` in it and refuses `ErrNotInitialized`.
 * **Each sentence's claim is mapped** in step 2's record to the existing test that exercises it. A claim with no test gets one in that
   step.
 
@@ -180,7 +188,13 @@ the schema or what initialize agreed.
 ### A11: wire-schema types
 
 **The table.** The protocol table gains `DocNotes []DocNote`, each a definition name and doc lines. `Build` appends them to the
-definition's doc, and refuses a note on a definition the schema lacks, naming it. The notes:
+definition's doc, ~~and refuses a note on a definition the schema lacks, naming it~~. The notes:
+
+Annotated during step 2, 2026-10-19 (see "Deviation, 2026-10-19, during step 2: a note on an absent definition"): a note on a
+definition the schema lacks applies nothing, as every rule of the table does; the committed schema's check refuses one.
+
+Annotated during step 2, 2026-10-19 (see "Deviation, 2026-10-19, during step 2: the envelope's variant types"): a note on a
+union also reaches its inline variants' types, so the six envelope definitions' notes reach the ten types.
 
 | Definitions | Note |
 | :--- | :--- |
@@ -189,8 +203,12 @@ definition's doc, and refuses a note on a definition the schema lacks, naming it
 | `ErrorCode` | "RequestError.Code is an int: compare it with int(ErrorCodeInternalError), for example." |
 | `CancelRequestNotification` | "Connection sends $/cancel_request itself when a call's context ends." |
 
-**The checks.** `TestProtocolTableRefuses` gains a row for a note on an unknown definition. `TestProtocolTableAppliesToCommittedSchema`
-covers the notes on the committed schema.
+**The checks.** ~~`TestProtocolTableRefuses` gains a row for a note on an unknown definition.~~
+`TestProtocolTableAppliesToCommittedSchema` covers the notes on the committed schema.
+
+Annotated during step 2, 2026-10-19 (see "Deviation, 2026-10-19, during step 2: a note on an absent definition"):
+`TestDocNotes` holds the refusals, and `checkCommittedDocNotes`, called from `TestProtocolTableAppliesToCommittedSchema`, refuses a
+note whose definition the committed schema lacks.
 
 ### V4: `RELEASING.md`
 
@@ -236,6 +254,7 @@ Per code step:
 * **the comments-only check.** A script outside the tree parses each changed non-test `.go` file before and after the step. It
   compares the syntax trees with comments and positions dropped, and requires them equal. Phase 4 of 0019 used the same check for its
   documentation (I12).
+  Annotated during step 2, 2026-10-19: it covers the SDK package's files. Step 2's changes to the generator are its code change.
 
 Planted breaks, at least. Each must be seen to fail on the check named.
 
@@ -246,7 +265,7 @@ Planted breaks, at least. Each must be seen to fail on the check named.
 | A5 | `SetLogger` storing without its atomic | `TestConcurrentUse` under `-race` |
 | A8 | one line of the README's quickstart changed | `TestReadmeQuickstartIsTheExample` |
 | A8 | one example's printed line changed | that example under `go test` |
-| A11 | a note naming a definition the schema lacks | `TestProtocolTableRefuses`'s new row; `Build` refuses it |
+| A11 | ~~a note naming a definition the schema lacks~~ a note naming a definition the committed schema lacks (step 2) | ~~`TestProtocolTableRefuses`'s new row; `Build` refuses it~~ `checkCommittedDocNotes` |
 | — | a code token changed in a regenerated file | the comments-only check |
 
 Expected API listing difference against `v1.16.2`: none.
@@ -287,3 +306,164 @@ Both rows are annotated. The counts hold: 378 exported types in `types_gen.go`, 
 with no method that names their place.
 
 Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
+
+### Deviation, 2026-10-19, during step 2: a note on an absent definition
+
+**Found.** A11's design has `Build` refuse a doc note on a definition the schema lacks. Every other rule of the protocol table applies
+nothing to an absent subject, and `TestProtocolTableSkipsAbsentSubjects` requires it: a table outlives a schema that drops a
+definition.
+
+**Decision (owner, 2026-10-19).** Follow the table's convention. A note on an absent definition applies nothing. The committed schema's
+check, `checkCommittedDocNotes` in `TestProtocolTableAppliesToCommittedSchema`, refuses a note whose definition it lacks, so a typo in
+`ACP` still fails. `TestDocNotes` holds `Build`'s refusals: a note with no definition or no lines, and two notes on one definition.
+
+"A11: wire-schema types" and the verification table are annotated.
+
+**Files added to step 2's scope:** none.
+
+### Deviation, 2026-10-19, during step 2: the extension methods
+
+**Found.** `TestTypedMethodDocsNameErrors`, as A6 words it, covers every exported method of the side connections that takes a
+`context.Context`. Four hand-written methods match: `CallExtension` and `NotifyExtension` of both sides (`extensions.go`). They send
+before initialize, through `SendRequest` and `SendNotification`, which do not check what initialize agreed
+([0017-MADR-remediate-acp-v1-conformance-violations.md](0017-MADR-remediate-acp-v1-conformance-violations.md), G1). They never
+return `ErrNotInitialized`, so the test as written passes only if their docs say something false.
+
+**Decision (owner, 2026-10-19).** Keep the test over all 44 methods.
+
+* **The 40 typed methods** must name `ErrNotInitialized`, unless the method is `Initialize`.
+* **The four extension methods,** whose params are `any`, must not name it.
+* **Every one** must name `*RequestError`.
+* **The extension methods' docs** gain a hand-written paragraph naming what they return:
+  * an error for a method that does not start with `_`;
+  * a `*ValidationError` for params of this package's types that break the schema;
+  * a `*RequestError` for params that do not encode, or that encode as neither null nor an object or an array;
+  * then the context, connection and write errors, and the peer's error answer, as the typed methods' docs name them.
+
+The MADR is amended under its phase 2. The A6 design is annotated.
+
+**Files added to step 2's scope:** `extensions.go`, comments only.
+
+### Deviation, 2026-10-19, during step 2: the envelope's variant types
+
+**Found.** A11's table puts the envelope note on "the ten envelope types". Six are schema definitions: `AgentRequest`,
+`AgentNotification`, `AgentResponse`, `ClientRequest`, `ClientNotification` and `ClientResponse`. The other four, `AgentResult`,
+`AgentError`, `ClientResult` and `ClientError`, are types built from inline variants of the two response unions. A note names a
+definition, so it reached only the six.
+
+**Decision (owner, 2026-10-19).** A note on a union also reaches the types of its inline variants. It does not reach their wrapper
+fields' docs. All ten types carry the note. `TestDocNotes` covers it on a test union with an inline variant and a `$ref` one.
+`checkCommittedDocNotes` requires exactly those four variant types to carry it.
+
+"A11: wire-schema types" is annotated.
+
+**Files added to step 2's scope:** none.
+
+### Step 2, generated docs, 2026-10-19
+
+What changed, on `cd7c254`:
+
+* **A7, the emitter** (`emit/types.go`):
+  * `typeDoc` opens each generated type's doc with `<Name> is <place>.`, then a blank line and the description;
+  * a description that already starts with the name and a space is kept as it is;
+  * it covers schema definitions, nested structs, union wrappers and inline variants;
+  * a union's interface keeps its comment.
+* **A6, the emitter** (`emit/dispatch.go`):
+  * `outboundErrors` appends the errors paragraph to each typed method;
+  * the model drives its variations: `Initializes`, and the terminal-auth gates of `m.Gated`;
+  * the emitter names no method;
+  * `listOf` joins clauses with semicolons, and `wrapDoc` wraps at 76 characters.
+* **A5:** the side connections' docs and the `Agent` and `Client` interfaces' docs carry the concurrency sentences. The side
+  connections' come from the emitter, the interfaces' from the protocol table.
+* **A11:** `DocNotes` in `Protocol`, checked by `checkDocNotes` and applied by `applyDocNotes`, after `checkTypeRules`. The nine notes
+  are in `ACP`; the six envelope definitions share `envelopeNote`.
+  * A note opens a doc that has no description, with no blank line before it.
+  * A note on a union reaches its inline variants (deviation above).
+* **Regenerated:** `types_gen.go`, `agent_gen.go`, `client_gen.go`.
+* **Hand-written:** `extensions.go`'s four paragraphs (deviation above).
+* **Tests:**
+  * `docs_test.go`: `TestExportedTypeDocsStartWithName` (over every exported type of the package, at least 378) and
+    `TestTypedMethodDocsNameErrors` (40 typed methods and 4 extension methods);
+  * `method_errors_test.go`: `TestMethodErrorsAsDocumented`, for the claims below that had no test through the side connections;
+  * `emit/docs_test.go`: `TestTypeDoc`, `TestOutboundErrors`, `TestListOf`, `TestWrapDoc`;
+  * `model/patch_test.go`: `TestDocNotes` and `checkCommittedDocNotes`;
+  * two pins updated: `emit/dispatch_test.go` (the side connections' concurrency sentences) and `generated_output_test.go`
+    (`TestUnionDocAboveWrapper`).
+* **Lint:** the first gate run reported four issues in the new generator code. They are fixed:
+  * `goconst`: the repeated envelope note became `envelopeNote`;
+  * `gocyclo`: `newRules` reached 41, so the notes' checks moved to `checkDocNotes`;
+  * `modernize`: `wrapDoc` ranges over `strings.FieldsSeq`.
+
+**A6's claims, each mapped to a test that makes it.** "New" is `TestMethodErrorsAsDocumented`, through the side connections.
+
+| Claim | Test |
+| :--- | :--- |
+| `ErrNotInitialized` until initialize completes | `TestNotInitialized` (`gates_test.go`): every typed method but `Initialize`, by reflection |
+| a `*CapabilityError` for the method | `TestMethodGates`: each of the 15 method gates |
+| a `*CapabilityError` for a property or variant of params | `TestValueGates`: each capability rule |
+| `ErrTerminalAuthMethod` | `TestTerminalAuthMethod` |
+| a `*ProtocolVersionError`, asked and answered | `TestProtocolVersion` (`negotiation_test.go`): `Requested: 2`; `Requested: 1, Answered: 2` |
+| a `*ValidationError` for params | new, "params that break the schema"; `TestSendRefusesRelativePaths` through `Connection` |
+| a `*RequestError` wrapping `context.Cause(ctx)` | new, before the send (a request and a notification) and while waiting (in a synctest bubble) |
+| `ErrConnectionClosed` or `ErrPeerDisconnected` | new, "the connection's end"; `TestCloseEndsConnection`, `TestSendAfterPeerEndFails` through `Connection` |
+| the write's error | new, "a write's error" |
+| the peer's error answer as a `*RequestError` | new, "the peer's error answer" |
+| a response that breaks the schema: a `*ValidationError` | `TestReceiveRefusesRelativePaths`, its response route through `ListSessions` |
+| a response that breaks what initialize agreed: a `*CapabilityError` | `TestResultGates`, through `NewSession` |
+| a response that does not decode: a `*RequestError` | new, "a response that does not decode" |
+| extension: a method that does not start with `_` | `TestNotifyExtensionNames`; `TestClientSideConnection_ConnectionReachesThePeer` and the agent's, for `CallExtension` |
+| extension: params that do not encode, or encode as neither null nor an object nor an array | new; `TestParamsNeverSentAsNull` for null, through `Connection` |
+| extension: params of this package's types that break the schema | new |
+| extension: the context, connection, write and answer errors | new, in each of those subtests |
+
+"While waiting" runs in a synctest bubble. Run plainly, a cancel can land before the writer reports the write done. `sendMessageSent`
+then returns the cause (`connection.go:1644`), and the plant on `waitForResponse` passed once. In the bubble it fails every time.
+
+**The comments-only check.** A script outside the tree compares each changed non-test `.go` file of the SDK package with `HEAD`,
+with comments and positions dropped. `agent_gen.go`, `client_gen.go`, `extensions.go` and `types_gen.go` are each the same tree;
+exit 0. Against the tree before the variant deviation, regeneration changed only the four variant types' docs.
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree, never in the tree. All 19 failed the check named, with the
+text named, after their expected texts were corrected:
+
+| Break | The check that failed |
+| :--- | :--- |
+| A7: `typeDoc` keeps the description first, regenerated | `TestExportedTypeDocsStartWithName`: "'s doc starts" |
+| A7: `typeDoc` keeps a doc that starts with a longer name | `TestTypeDoc`, "a longer name" |
+| A6: `NewSession`'s errors paragraph dropped from `client_gen.go` | `TestTypedMethodDocsNameErrors`: "does not name *RequestError" |
+| A6: an extension method's doc naming `ErrNotInitialized` | `TestTypedMethodDocsNameErrors`: "extension method NotifyExtension's doc names ErrNotInitialized" |
+| A6: the emitter's terminal-auth clause dropped | `TestOutboundErrors`, "a terminal-auth request" |
+| A6: a context's cause dropped before the send | `TestMethodErrorsAsDocumented`, all four calls |
+| A6: a context's cause dropped in `waitForResponse` | `TestMethodErrorsAsDocumented`, "while waiting" |
+| A6: params not validated | `TestMethodErrorsAsDocumented`: ", want a *ValidationError" |
+| A6: a connection closed here reported as the peer's end | `TestMethodErrorsAsDocumented`: "wrapping acp: connection closed" |
+| A6: the write's error replaced | `TestMethodErrorsAsDocumented`: "wrapping the disk is full" |
+| A6: the peer's error answer replaced | `TestMethodErrorsAsDocumented`: "want the peer's *RequestError, -32042" |
+| A6: a response that does not decode returned as the decoder's error | `TestMethodErrorsAsDocumented`, "does not decode" |
+| A6: params of another shape sent | `TestMethodErrorsAsDocumented`: "CallExtension(string)" |
+| A6: params that do not encode returned as the encoder's error | `TestMethodErrorsAsDocumented`: "json: unsupported type" |
+| A11: a note on `ErrorCodes`, which the schema lacks | `TestProtocolTableAppliesToCommittedSchema`: "doc note ErrorCodes: no such type" |
+| A11: two notes on one definition accepted | `TestDocNotes`: "two notes: Build = <nil>" |
+| A11: a blank line before a note on a type with no description | `TestDocNotes`: `Update.Doc = ["" "Only."]` |
+| A11: a union's note kept from its variants | `TestDocNotes` and `TestProtocolTableAppliesToCommittedSchema`: "AgentResult.Doc" |
+| a code token changed in `types_gen.go` | the comments-only check: "DIFFERS:", exit 1 |
+
+Two plants hung to the test timeout on their first run. A send that should have been refused was written to a peer that never answers.
+The refusal subtests now bound such calls with a five-second context, and every plant fails in seconds.
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* `go run .` in `cmd/generate`: generated files unchanged by regeneration;
+* `make pre-add-check`: "136 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `scripts/go-precheck.sh` on the two new `_test.go` files, `method_errors_test.go` and `emit/docs_test.go`;
+* `GOEXPERIMENT=nojsonv2 go test ./...`;
+* `GOOS=windows go vet ./...` in both modules;
+* the identifier scan of the changed files;
+* the API listing against `v1.16.2`: 2429 lines at the tag and in the tree, 0 removed, 0 added;
+* `go fix -diff ./...` in both modules: no output.
+
+**The go1.26.9 gate**, with `GOTOOLCHAIN=go1.26.9` and scratch caches: `go version` reports go1.26.9; `go vet ./...` and
+`go test -race -count=1 ./...` pass in both modules. The root's tests ran with `GOEXPERIMENT=goroutineleakprofile`, so the leak guard
+ran.
+
+`TestMethodErrorsAsDocumented` passed 20 runs of 20 under `-race`.

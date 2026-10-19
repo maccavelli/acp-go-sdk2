@@ -378,6 +378,7 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		func() error { return m.checkCapabilities(r) },
 		func() error { return m.resolveGates(r) },
 		func() error { return m.checkTypeRules(r) },
+		func() error { m.applyDocNotes(r); return nil },
 		func() error { return m.buildInterfaces(n, r) },
 	} {
 		if err := step(); err != nil {

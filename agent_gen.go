@@ -13,6 +13,10 @@ import (
 )
 
 // AgentSideConnection represents the agent's view of a connection to a client.
+//
+// Its methods are safe for concurrent use. Messages sent from several
+// goroutines are written whole, one at a time, in the order they reach the
+// connection's writer (0024-PLAN-documentation.md, A5).
 type AgentSideConnection struct {
 	conn           *Connection
 	agent          Agent
@@ -815,6 +819,14 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 // CompleteElicitation sends the elicitation/complete notification to the client.
 //
 // Notification sent by the agent when a URL-based elicitation is complete.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails.
 func (a *AgentSideConnection) CompleteElicitation(ctx context.Context, params CompleteElicitationNotification) error {
 	if err := a.gate(ClientMethodElicitationComplete, &params); err != nil {
 		return err
@@ -829,6 +841,17 @@ func (a *AgentSideConnection) CompleteElicitation(ctx context.Context, params Co
 // The agent sends this to the client to request information from the user,
 // either via a form or by directing them to a URL.
 // Elicitations are tied to a session (optionally a tool call) or a request.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (a *AgentSideConnection) CreateElicitation(ctx context.Context, params CreateElicitationRequest) (CreateElicitationResponse, error) {
 	if err := a.gate(ClientMethodElicitationCreate, &params); err != nil {
 		return CreateElicitationResponse{}, err
@@ -841,6 +864,17 @@ func (a *AgentSideConnection) CreateElicitation(ctx context.Context, params Crea
 // Request to read content from a text file.
 //
 // Only available if the client supports the 'fs.readTextFile' capability.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (a *AgentSideConnection) ReadTextFile(ctx context.Context, params ReadTextFileRequest) (ReadTextFileResponse, error) {
 	if err := a.gate(ClientMethodFsReadTextFile, &params); err != nil {
 		return ReadTextFileResponse{}, err
@@ -853,6 +887,17 @@ func (a *AgentSideConnection) ReadTextFile(ctx context.Context, params ReadTextF
 // Request to write content to a text file.
 //
 // Only available if the client supports the 'fs.writeTextFile' capability.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (a *AgentSideConnection) WriteTextFile(ctx context.Context, params WriteTextFileRequest) (WriteTextFileResponse, error) {
 	if err := a.gate(ClientMethodFsWriteTextFile, &params); err != nil {
 		return WriteTextFileResponse{}, err
@@ -867,6 +912,17 @@ func (a *AgentSideConnection) WriteTextFile(ctx context.Context, params WriteTex
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Request parameters for 'mcp/message'.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (a *AgentSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error) {
 	if err := a.gate(ClientMethodMcpMessage, &params); err != nil {
 		return UnstableMessageMcpResponse{}, err
@@ -881,6 +937,17 @@ func (a *AgentSideConnection) UnstableMessageMcp(ctx context.Context, params Uns
 // Sent when the agent needs authorization before performing a sensitive operation.
 //
 // See protocol docs: [Requesting Permission](https://agentclientprotocol.com/protocol/tool-calls#requesting-permission)
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (a *AgentSideConnection) RequestPermission(ctx context.Context, params RequestPermissionRequest) (RequestPermissionResponse, error) {
 	if err := a.gate(ClientMethodSessionRequestPermission, &params); err != nil {
 		return RequestPermissionResponse{}, err
@@ -895,6 +962,14 @@ func (a *AgentSideConnection) RequestPermission(ctx context.Context, params Requ
 // Used to stream real-time progress and results during prompt processing.
 //
 // See protocol docs: [Agent Reports Output](https://agentclientprotocol.com/protocol/prompt-turn#3-agent-reports-output)
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails.
 func (a *AgentSideConnection) SessionUpdate(ctx context.Context, params SessionNotification) error {
 	if err := a.gate(ClientMethodSessionUpdate, &params); err != nil {
 		return err
@@ -905,6 +980,17 @@ func (a *AgentSideConnection) SessionUpdate(ctx context.Context, params SessionN
 // CreateTerminal sends the terminal/create request to the client and returns its response.
 //
 // Request to create a new terminal and execute a command.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (a *AgentSideConnection) CreateTerminal(ctx context.Context, params CreateTerminalRequest) (CreateTerminalResponse, error) {
 	if err := a.gate(ClientMethodTerminalCreate, &params); err != nil {
 		return CreateTerminalResponse{}, err
@@ -915,6 +1001,17 @@ func (a *AgentSideConnection) CreateTerminal(ctx context.Context, params CreateT
 // KillTerminal sends the terminal/kill request to the client and returns its response.
 //
 // Request to kill a terminal without releasing it.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (a *AgentSideConnection) KillTerminal(ctx context.Context, params KillTerminalRequest) (KillTerminalResponse, error) {
 	if err := a.gate(ClientMethodTerminalKill, &params); err != nil {
 		return KillTerminalResponse{}, err
@@ -925,6 +1022,17 @@ func (a *AgentSideConnection) KillTerminal(ctx context.Context, params KillTermi
 // TerminalOutput sends the terminal/output request to the client and returns its response.
 //
 // Request to get the current output and status of a terminal.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (a *AgentSideConnection) TerminalOutput(ctx context.Context, params TerminalOutputRequest) (TerminalOutputResponse, error) {
 	if err := a.gate(ClientMethodTerminalOutput, &params); err != nil {
 		return TerminalOutputResponse{}, err
@@ -935,6 +1043,17 @@ func (a *AgentSideConnection) TerminalOutput(ctx context.Context, params Termina
 // ReleaseTerminal sends the terminal/release request to the client and returns its response.
 //
 // Request to release a terminal and free its resources.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (a *AgentSideConnection) ReleaseTerminal(ctx context.Context, params ReleaseTerminalRequest) (ReleaseTerminalResponse, error) {
 	if err := a.gate(ClientMethodTerminalRelease, &params); err != nil {
 		return ReleaseTerminalResponse{}, err
@@ -945,6 +1064,17 @@ func (a *AgentSideConnection) ReleaseTerminal(ctx context.Context, params Releas
 // WaitForTerminalExit sends the terminal/wait_for_exit request to the client and returns its response.
 //
 // Request to wait for a terminal command to exit.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (a *AgentSideConnection) WaitForTerminalExit(ctx context.Context, params WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
 	if err := a.gate(ClientMethodTerminalWaitForExit, &params); err != nil {
 		return WaitForTerminalExitResponse{}, err

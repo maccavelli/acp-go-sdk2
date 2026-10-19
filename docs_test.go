@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"slices"
@@ -44,6 +45,109 @@ func TestExportedDeclarationsDocumented(t *testing.T) {
 	}
 	if len(missing) > 0 {
 		t.Errorf("%d exported declarations have no doc comment", len(missing))
+	}
+}
+
+// parsePackage parses the package's non-test files, with their comments.
+func parsePackage(t *testing.T) (*token.FileSet, []*ast.File) {
+	t.Helper()
+	names, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	var files []*ast.File
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, parser.ParseComments)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, f)
+	}
+	return fset, files
+}
+
+// TestExportedTypeDocsStartWithName requires each exported type's doc
+// comment, generated or hand-written, to start with the type's name and a
+// space (0024-PLAN-documentation.md, A7).
+func TestExportedTypeDocsStartWithName(t *testing.T) {
+	t.Parallel()
+	fset, files := parsePackage(t)
+	n := 0
+	for _, f := range files {
+		for _, d := range f.Decls {
+			g, ok := d.(*ast.GenDecl)
+			if !ok || g.Tok != token.TYPE {
+				continue
+			}
+			for _, s := range g.Specs {
+				s := s.(*ast.TypeSpec)
+				if !s.Name.IsExported() {
+					continue
+				}
+				n++
+				doc := s.Doc
+				if doc == nil && !g.Lparen.IsValid() {
+					doc = g.Doc
+				}
+				if text := doc.Text(); !strings.HasPrefix(text, s.Name.Name+" ") {
+					first, _, _ := strings.Cut(text, "\n")
+					t.Errorf("%s: %s's doc starts %q", fset.Position(s.Pos()), s.Name.Name, first)
+				}
+			}
+		}
+	}
+	if n < 378 {
+		t.Errorf("%d exported types, want at least the 378 of types_gen.go", n)
+	}
+}
+
+// TestTypedMethodDocsNameErrors requires the doc of each exported method of
+// the side connections that takes a context.Context to name *RequestError.
+// A typed method's must also name ErrNotInitialized, unless the method is
+// Initialize; an extension method's, whose params are any, must not, as it
+// sends before initialize too (0024-PLAN-documentation.md, A6, and its
+// step 2 deviation).
+func TestTypedMethodDocsNameErrors(t *testing.T) {
+	t.Parallel()
+	fset, files := parsePackage(t)
+	typed, untyped := 0, 0
+	for _, f := range files {
+		for _, d := range f.Decls {
+			fn, ok := d.(*ast.FuncDecl)
+			if !ok || fn.Recv == nil || !fn.Name.IsExported() {
+				continue
+			}
+			if recv := receiverName(fn.Recv.List[0].Type); recv != "AgentSideConnection" && recv != "ClientSideConnection" {
+				continue
+			}
+			if p := fn.Type.Params.List; len(p) == 0 || types.ExprString(p[0].Type) != "context.Context" {
+				continue
+			}
+			text := fn.Doc.Text()
+			if !strings.Contains(text, "*RequestError") {
+				t.Errorf("%s: %s's doc does not name *RequestError", fset.Position(fn.Pos()), fn.Name.Name)
+			}
+			names := strings.Contains(text, "ErrNotInitialized")
+			switch p := fn.Type.Params.List; {
+			case types.ExprString(p[len(p)-1].Type) == "any":
+				untyped++
+				if names {
+					t.Errorf("%s: extension method %s's doc names ErrNotInitialized", fset.Position(fn.Pos()), fn.Name.Name)
+				}
+			default:
+				typed++
+				if !names && fn.Name.Name != "Initialize" {
+					t.Errorf("%s: %s's doc does not name ErrNotInitialized", fset.Position(fn.Pos()), fn.Name.Name)
+				}
+			}
+		}
+	}
+	if typed != 40 || untyped != 4 {
+		t.Errorf("%d typed and %d extension methods, want the 40 of agent_gen.go and client_gen.go and the 4 of extensions.go", typed, untyped)
 	}
 }
 

@@ -11,6 +11,10 @@ import (
 )
 
 // ClientSideConnection provides the client's view of the connection and implements Agent calls.
+//
+// Its methods are safe for concurrent use. Messages sent from several
+// goroutines are written whole, one at a time, in the order they reach the
+// connection's writer (0024-PLAN-documentation.md, A5).
 type ClientSideConnection struct {
 	conn        *Connection
 	client      Client
@@ -317,6 +321,18 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 // Request parameters for the authenticate method.
 //
 // Specifies which authentication method to use.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; an error
+// wrapping ErrTerminalAuthMethod when params name a terminal auth method of
+// the agent's initialize answer; and a *ValidationError when params break the
+// schema. It returns a *RequestError wrapping context.Cause(ctx) when ctx
+// ends, ErrPeerDisconnected or ErrConnectionClosed when the connection ends,
+// or the write's error when writing fails; and the peer's error answer as a
+// *RequestError. A response that breaks the schema or what initialize agreed
+// returns an error wrapping *ValidationError or *CapabilityError, and one that
+// does not decode a *RequestError.
 func (c *ClientSideConnection) Authenticate(ctx context.Context, params AuthenticateRequest) (AuthenticateResponse, error) {
 	if err := c.gate(AgentMethodAuthenticate, &params); err != nil {
 		return AuthenticateResponse{}, err
@@ -331,6 +347,14 @@ func (c *ClientSideConnection) Authenticate(ctx context.Context, params Authenti
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a file is edited.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails.
 func (c *ClientSideConnection) UnstableDidChangeDocument(ctx context.Context, params UnstableDidChangeDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidChange, &params); err != nil {
 		return err
@@ -345,6 +369,14 @@ func (c *ClientSideConnection) UnstableDidChangeDocument(ctx context.Context, pa
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a file is closed.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails.
 func (c *ClientSideConnection) UnstableDidCloseDocument(ctx context.Context, params UnstableDidCloseDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidClose, &params); err != nil {
 		return err
@@ -359,6 +391,14 @@ func (c *ClientSideConnection) UnstableDidCloseDocument(ctx context.Context, par
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a file becomes the active editor tab.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails.
 func (c *ClientSideConnection) UnstableDidFocusDocument(ctx context.Context, params UnstableDidFocusDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidFocus, &params); err != nil {
 		return err
@@ -373,6 +413,14 @@ func (c *ClientSideConnection) UnstableDidFocusDocument(ctx context.Context, par
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a file is opened in the editor.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails.
 func (c *ClientSideConnection) UnstableDidOpenDocument(ctx context.Context, params UnstableDidOpenDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidOpen, &params); err != nil {
 		return err
@@ -387,6 +435,14 @@ func (c *ClientSideConnection) UnstableDidOpenDocument(ctx context.Context, para
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a file is saved.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails.
 func (c *ClientSideConnection) UnstableDidSaveDocument(ctx context.Context, params UnstableDidSaveDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidSave, &params); err != nil {
 		return err
@@ -401,6 +457,16 @@ func (c *ClientSideConnection) UnstableDidSaveDocument(ctx context.Context, para
 // Sent by the client to establish connection and negotiate capabilities.
 //
 // See protocol docs: [Initialization](https://agentclientprotocol.com/protocol/initialization)
+//
+// Before anything is sent, it returns a *ProtocolVersionError when params ask
+// for a version this SDK does not speak; and a *ValidationError when params
+// break the schema. It returns a *RequestError wrapping context.Cause(ctx)
+// when ctx ends, ErrPeerDisconnected or ErrConnectionClosed when the
+// connection ends, or the write's error when writing fails; and the peer's
+// error answer as a *RequestError. A response that breaks the schema or what
+// initialize agreed returns an error wrapping *ValidationError or
+// *CapabilityError, and one that does not decode a *RequestError. An answer
+// with another protocol version returns a *ProtocolVersionError.
 func (c *ClientSideConnection) Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error) {
 	if params.ProtocolVersion == 0 {
 		params.ProtocolVersion = ProtocolVersionNumber
@@ -439,6 +505,17 @@ func (c *ClientSideConnection) Initialize(ctx context.Context, params Initialize
 // Request parameters for the logout method.
 //
 // Terminates the current authenticated session.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) Logout(ctx context.Context, params LogoutRequest) (LogoutResponse, error) {
 	if err := c.gate(AgentMethodLogout, &params); err != nil {
 		return LogoutResponse{}, err
@@ -456,6 +533,14 @@ func (c *ClientSideConnection) Logout(ctx context.Context, params LogoutRequest)
 //
 // Sent by the provider to the consumer for an active request (including
 // subscription acknowledgements and updates); the outer envelope has no 'id'.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails.
 func (c *ClientSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpNotification) error {
 	if err := c.gate(AgentMethodMcpMessage, &params); err != nil {
 		return err
@@ -470,6 +555,14 @@ func (c *ClientSideConnection) UnstableMessageMcp(ctx context.Context, params Un
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a suggestion is accepted.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails.
 func (c *ClientSideConnection) UnstableAcceptNes(ctx context.Context, params UnstableAcceptNesNotification) error {
 	if err := c.gate(AgentMethodNesAccept, &params); err != nil {
 		return err
@@ -487,6 +580,17 @@ func (c *ClientSideConnection) UnstableAcceptNes(ctx context.Context, params Uns
 //
 // The agent **must** cancel any ongoing work related to the NES session
 // and then free up any resources associated with the session.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) UnstableCloseNes(ctx context.Context, params UnstableCloseNesRequest) (UnstableCloseNesResponse, error) {
 	if err := c.gate(AgentMethodNesClose, &params); err != nil {
 		return UnstableCloseNesResponse{}, err
@@ -501,6 +605,14 @@ func (c *ClientSideConnection) UnstableCloseNes(ctx context.Context, params Unst
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a suggestion is rejected.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails.
 func (c *ClientSideConnection) UnstableRejectNes(ctx context.Context, params UnstableRejectNesNotification) error {
 	if err := c.gate(AgentMethodNesReject, &params); err != nil {
 		return err
@@ -515,6 +627,17 @@ func (c *ClientSideConnection) UnstableRejectNes(ctx context.Context, params Uns
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Request to start an NES session.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) UnstableStartNes(ctx context.Context, params UnstableStartNesRequest) (UnstableStartNesResponse, error) {
 	if err := c.gate(AgentMethodNesStart, &params); err != nil {
 		return UnstableStartNesResponse{}, err
@@ -529,6 +652,17 @@ func (c *ClientSideConnection) UnstableStartNes(ctx context.Context, params Unst
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Request for a code suggestion.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) UnstableSuggestNes(ctx context.Context, params UnstableSuggestNesRequest) (UnstableSuggestNesResponse, error) {
 	if err := c.gate(AgentMethodNesSuggest, &params); err != nil {
 		return UnstableSuggestNesResponse{}, err
@@ -543,6 +677,17 @@ func (c *ClientSideConnection) UnstableSuggestNes(ctx context.Context, params Un
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Request parameters for 'providers/disable'.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) UnstableDisableProvider(ctx context.Context, params UnstableDisableProviderRequest) (UnstableDisableProviderResponse, error) {
 	if err := c.gate(AgentMethodProvidersDisable, &params); err != nil {
 		return UnstableDisableProviderResponse{}, err
@@ -557,6 +702,17 @@ func (c *ClientSideConnection) UnstableDisableProvider(ctx context.Context, para
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Request parameters for 'providers/list'.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) UnstableListProviders(ctx context.Context, params UnstableListProvidersRequest) (UnstableListProvidersResponse, error) {
 	if err := c.gate(AgentMethodProvidersList, &params); err != nil {
 		return UnstableListProvidersResponse{}, err
@@ -573,6 +729,17 @@ func (c *ClientSideConnection) UnstableListProviders(ctx context.Context, params
 // Request parameters for 'providers/set'.
 //
 // Replaces the full configuration for one provider ID.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) UnstableSetProvider(ctx context.Context, params UnstableSetProviderRequest) (UnstableSetProviderResponse, error) {
 	if err := c.gate(AgentMethodProvidersSet, &params); err != nil {
 		return UnstableSetProviderResponse{}, err
@@ -585,6 +752,14 @@ func (c *ClientSideConnection) UnstableSetProvider(ctx context.Context, params U
 // Notification to cancel ongoing operations for a session.
 //
 // See protocol docs: [Cancellation](https://agentclientprotocol.com/protocol/prompt-turn#cancellation)
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails.
 func (c *ClientSideConnection) Cancel(ctx context.Context, params CancelNotification) error {
 	if err := c.gate(AgentMethodSessionCancel, &params); err != nil {
 		return err
@@ -603,6 +778,17 @@ func (c *ClientSideConnection) Cancel(ctx context.Context, params CancelNotifica
 // associated with the session.
 //
 // Only available if the Agent supports the 'sessionCapabilities.close' capability.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) CloseSession(ctx context.Context, params CloseSessionRequest) (CloseSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionClose, &params); err != nil {
 		return CloseSessionResponse{}, err
@@ -619,6 +805,17 @@ func (c *ClientSideConnection) CloseSession(ctx context.Context, params CloseSes
 // Request parameters for deleting an existing session from 'session/list'.
 //
 // Only available if the Agent supports the 'sessionCapabilities.delete' capability.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) DeleteSession(ctx context.Context, params DeleteSessionRequest) (DeleteSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionDelete, &params); err != nil {
 		return DeleteSessionResponse{}, err
@@ -638,6 +835,17 @@ func (c *ClientSideConnection) DeleteSession(ctx context.Context, params DeleteS
 // operations like generating summaries without affecting the original session's history.
 //
 // Only available if the Agent supports the 'session.fork' capability.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) UnstableForkSession(ctx context.Context, params UnstableForkSessionRequest) (UnstableForkSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionFork, &params); err != nil {
 		return UnstableForkSessionResponse{}, err
@@ -650,6 +858,17 @@ func (c *ClientSideConnection) UnstableForkSession(ctx context.Context, params U
 // Request parameters for listing existing sessions.
 //
 // Only available if the Agent supports the 'sessionCapabilities.list' capability.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) ListSessions(ctx context.Context, params ListSessionsRequest) (ListSessionsResponse, error) {
 	if err := c.gate(AgentMethodSessionList, &params); err != nil {
 		return ListSessionsResponse{}, err
@@ -664,6 +883,17 @@ func (c *ClientSideConnection) ListSessions(ctx context.Context, params ListSess
 // Only available if the Agent supports the 'loadSession' capability.
 //
 // See protocol docs: [Loading Sessions](https://agentclientprotocol.com/protocol/session-setup#loading-sessions)
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) LoadSession(ctx context.Context, params LoadSessionRequest) (LoadSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionLoad, &params); err != nil {
 		return LoadSessionResponse{}, err
@@ -676,6 +906,17 @@ func (c *ClientSideConnection) LoadSession(ctx context.Context, params LoadSessi
 // Request parameters for creating a new session.
 //
 // See protocol docs: [Creating a Session](https://agentclientprotocol.com/protocol/session-setup#creating-a-session)
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) NewSession(ctx context.Context, params NewSessionRequest) (NewSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionNew, &params); err != nil {
 		return NewSessionResponse{}, err
@@ -690,6 +931,17 @@ func (c *ClientSideConnection) NewSession(ctx context.Context, params NewSession
 // Contains the user's message and any additional context.
 //
 // See protocol docs: [User Message](https://agentclientprotocol.com/protocol/prompt-turn#1-user-message)
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error) {
 	if err := c.gate(AgentMethodSessionPrompt, &params); err != nil {
 		return PromptResponse{}, err
@@ -713,6 +965,17 @@ func (c *ClientSideConnection) Prompt(ctx context.Context, params PromptRequest)
 // This is useful for agents that can resume sessions but don't implement full session loading.
 //
 // Only available if the Agent supports the 'sessionCapabilities.resume' capability.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) ResumeSession(ctx context.Context, params ResumeSessionRequest) (ResumeSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionResume, &params); err != nil {
 		return ResumeSessionResponse{}, err
@@ -723,6 +986,17 @@ func (c *ClientSideConnection) ResumeSession(ctx context.Context, params ResumeS
 // SetSessionConfigOption sends the session/set_config_option request to the agent and returns its response.
 //
 // Request parameters for setting a session configuration option.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) SetSessionConfigOption(ctx context.Context, params SetSessionConfigOptionRequest) (SetSessionConfigOptionResponse, error) {
 	if err := c.gate(AgentMethodSessionSetConfigOption, &params); err != nil {
 		return SetSessionConfigOptionResponse{}, err
@@ -733,6 +1007,17 @@ func (c *ClientSideConnection) SetSessionConfigOption(ctx context.Context, param
 // SetSessionMode sends the session/set_mode request to the agent and returns its response.
 //
 // Request parameters for setting a session mode.
+//
+// Before anything is sent, it returns an error wrapping ErrNotInitialized
+// until initialize completes; a *CapabilityError when what initialize agreed
+// does not allow the method or a property or variant of params; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) SetSessionMode(ctx context.Context, params SetSessionModeRequest) (SetSessionModeResponse, error) {
 	if err := c.gate(AgentMethodSessionSetMode, &params); err != nil {
 		return SetSessionModeResponse{}, err

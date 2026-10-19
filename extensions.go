@@ -80,6 +80,15 @@ func handleExtension(ctx context.Context, conn *Connection, gate gateFunc, value
 
 // CallExtension sends an ACP extension-method request (method names starting with "_")
 // from an agent to its client. It does not check what initialize negotiated.
+//
+// Before anything is sent, it returns an error when method does not start
+// with "_"; a *ValidationError when params are of a type of this package and
+// break the schema; and a *RequestError when params do not encode, or encode
+// as neither null nor a JSON object or array. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError
+// (0024-PLAN-documentation.md, A6).
 func (a *AgentSideConnection) CallExtension(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	if err := validateExtensionMethodName(method); err != nil {
 		return nil, err
@@ -89,6 +98,14 @@ func (a *AgentSideConnection) CallExtension(ctx context.Context, method string, 
 
 // NotifyExtension sends an ACP extension-method notification (method names starting with "_")
 // from an agent to its client. It does not check what initialize negotiated.
+//
+// Before anything is sent, it returns an error when method does not start
+// with "_"; a *ValidationError when params are of a type of this package and
+// break the schema; and a *RequestError when params do not encode, or encode
+// as neither null nor a JSON object or array. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails (0024-PLAN-documentation.md, A6).
 func (a *AgentSideConnection) NotifyExtension(ctx context.Context, method string, params any) error {
 	if err := validateExtensionMethodName(method); err != nil {
 		return err
@@ -98,6 +115,15 @@ func (a *AgentSideConnection) NotifyExtension(ctx context.Context, method string
 
 // CallExtension sends an ACP extension-method request (method names starting with "_")
 // from a client to its agent. It does not check what initialize negotiated.
+//
+// Before anything is sent, it returns an error when method does not start
+// with "_"; a *ValidationError when params are of a type of this package and
+// break the schema; and a *RequestError when params do not encode, or encode
+// as neither null nor a JSON object or array. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError
+// (0024-PLAN-documentation.md, A6).
 func (c *ClientSideConnection) CallExtension(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	if err := validateExtensionMethodName(method); err != nil {
 		return nil, err
@@ -107,6 +133,14 @@ func (c *ClientSideConnection) CallExtension(ctx context.Context, method string,
 
 // NotifyExtension sends an ACP extension-method notification (method names starting with "_")
 // from a client to its agent. It does not check what initialize negotiated.
+//
+// Before anything is sent, it returns an error when method does not start
+// with "_"; a *ValidationError when params are of a type of this package and
+// break the schema; and a *RequestError when params do not encode, or encode
+// as neither null nor a JSON object or array. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails (0024-PLAN-documentation.md, A6).
 func (c *ClientSideConnection) NotifyExtension(ctx context.Context, method string, params any) error {
 	if err := validateExtensionMethodName(method); err != nil {
 		return err

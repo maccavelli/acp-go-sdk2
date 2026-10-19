@@ -44,6 +44,11 @@ type Protocol struct {
 	// Field, the order of the map's keys, read when decoded and written when
 	// encoded (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
 	KeyOrders []OrderRule
+	// DocNotes adds lines to the doc comment of the type a definition becomes,
+	// and of its inline variants' types when it is a union, for what its schema
+	// description cannot say, such as a wire type the runtime does not use
+	// (0024-PLAN-documentation.md, A11).
+	DocNotes []DocNote
 }
 
 // OrderRule names a typed map property whose key order is kept, by the
@@ -51,6 +56,15 @@ type Protocol struct {
 // name of the field that holds the order, and Source the reason.
 type OrderRule struct {
 	Definition, Property, Field, Source string
+}
+
+// DocNote is lines added, after a blank line, to the doc comment of the type
+// built from Definition, as the merged schema names it, and of each type
+// built from an inline variant of it. A note on a definition the schema
+// lacks applies nothing, as every rule's does.
+type DocNote struct {
+	Definition string
+	Lines      []string
 }
 
 // PathRule names a property the protocol requires to be an absolute path,
@@ -177,6 +191,11 @@ var sdkInterfaces = []Interface{
 		"protocol that every agent handles, the requests and notifications a client sends it.",
 		"NewAgentSideConnection serves it. AgentExperimental adds the unstable methods, and the",
 		"optional interfaces the methods an agent may leave out.",
+		"",
+		"The connection calls a request's method on a goroutine of its own, so the",
+		"methods for requests run concurrently. It calls the methods for",
+		"notifications one at a time, in the order they arrive",
+		"(0024-PLAN-documentation.md, A5).",
 	}},
 	{Binding: BindAgentExperimental, Name: "AgentExperimental", Var: "exp",
 		Doc: []string{"AgentExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice."}},
@@ -184,6 +203,11 @@ var sdkInterfaces = []Interface{
 		"Client is implemented by a client: one method for each stable client method of the",
 		"protocol, the requests and notifications an agent sends it. NewClientSideConnection",
 		"serves it. ClientExperimental adds the unstable methods.",
+		"",
+		"The connection calls a request's method on a goroutine of its own, so the",
+		"methods for requests run concurrently. It calls the methods for",
+		"notifications one at a time, in the order they arrive",
+		"(0024-PLAN-documentation.md, A5).",
 	}},
 	{Binding: BindClientExperimental, Name: "ClientExperimental", Var: "exp",
 		Doc: []string{"ClientExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice."}},
@@ -311,10 +335,29 @@ func newRules(p *Protocol) (*rules, error) {
 		}
 		ordered[k] = true
 	}
+	if err := checkDocNotes(p.DocNotes); err != nil {
+		return nil, err
+	}
 	if err := checkCapabilityRules(p.CapabilityRules); err != nil {
 		return nil, err
 	}
 	return r, nil
+}
+
+// checkDocNotes refuses a doc note without a definition or lines, and two
+// notes on one definition.
+func checkDocNotes(notes []DocNote) error {
+	noted := map[string]bool{}
+	for _, note := range notes {
+		switch {
+		case note.Definition == "" || len(note.Lines) == 0:
+			return fmt.Errorf("doc note %q: it needs a definition and lines", note.Definition)
+		case noted[note.Definition]:
+			return fmt.Errorf("doc note %s: two notes", note.Definition)
+		}
+		noted[note.Definition] = true
+	}
+	return nil
 }
 
 // checkCapabilityRules checks what each capability rule needs for its kind,
@@ -758,6 +801,34 @@ func (m *Model) capabilitySteps(side, capability string) ([]CapabilityStep, erro
 		typeName = ref.Name
 	}
 	return steps, nil
+}
+
+// applyDocNotes adds each doc note's lines to its type's doc comment, and to
+// its inline variants' when it is a union, after a blank line when the
+// comment has lines; a note on a definition the schema lacks applies
+// nothing.
+func (m *Model) applyDocNotes(r *rules) {
+	if r.table == nil {
+		return
+	}
+	add := func(doc, lines []string) []string {
+		if len(doc) > 0 {
+			doc = append(doc, "")
+		}
+		return append(doc, lines...)
+	}
+	for _, note := range r.table.DocNotes {
+		t := m.Type(note.Definition)
+		if t == nil {
+			continue
+		}
+		t.Doc = add(t.Doc, note.Lines)
+		for _, v := range t.Variants {
+			if v.Inline != nil {
+				v.Inline.Doc = add(v.Inline.Doc, note.Lines)
+			}
+		}
+	}
 }
 
 // checkTypeRules refuses a hand-written-helpers type that is not a union; a

@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 	"slices"
+	"strings"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
@@ -111,7 +112,12 @@ func agentSide(m *model.Model) side {
 	return side{
 		typeName: "AgentSideConnection", ctor: "NewAgentSideConnection", local: "asc", field: "agent", recv: "a",
 		iface: m.InterfaceOf(model.BindAgent).Name, aware: "AgentConnAware", setter: "SetAgentConnection",
-		doc: []string{"AgentSideConnection represents the agent's view of a connection to a client."},
+		doc: []string{"AgentSideConnection represents the agent's view of a connection to a client.",
+			"",
+			"Its methods are safe for concurrent use. Messages sent from several",
+			"goroutines are written whole, one at a time, in the order they reach the",
+			"connection's writer (0024-PLAN-documentation.md, A5).",
+		},
 		ctorDoc: []string{
 			"NewAgentSideConnection creates a new agent-side connection bound to the",
 			"provided Agent implementation. Optional ConnectionOption values configure",
@@ -129,7 +135,12 @@ func clientSide(m *model.Model) side {
 	return side{
 		typeName: "ClientSideConnection", ctor: "NewClientSideConnection", local: "csc", field: "client", recv: "c",
 		iface: m.InterfaceOf(model.BindClient).Name, aware: "ClientConnAware", setter: "SetClientConnection",
-		doc: []string{"ClientSideConnection provides the client's view of the connection and implements Agent calls."},
+		doc: []string{"ClientSideConnection provides the client's view of the connection and implements Agent calls.",
+			"",
+			"Its methods are safe for concurrent use. Messages sent from several",
+			"goroutines are written whole, one at a time, in the order they reach the",
+			"connection's writer (0024-PLAN-documentation.md, A5).",
+		},
 		ctorDoc: []string{
 			"NewClientSideConnection creates a new client-side connection bound to the",
 			"provided Client implementation. Optional ConnectionOption values configure",
@@ -523,7 +534,7 @@ func agentFile(m *model.Model) *goFile {
 	f.add(handleFunc(f, "a", "AgentSideConnection", cases))
 
 	// Agent outbound wrappers (agent -> client).
-	emitOutbound(f, agentSide(m), m.ClientMethods, m.Initialize != nil)
+	emitOutbound(f, agentSide(m), m.ClientMethods, m.Initialize != nil, terminalAuthTypes(m))
 
 	return f
 }
@@ -562,7 +573,7 @@ func clientFile(m *model.Model) *goFile {
 	f.add(handleFunc(f, "c", "ClientSideConnection", cases))
 
 	// Client outbound wrappers (client -> agent).
-	emitOutbound(f, clientSide(m), m.AgentMethods, m.Initialize != nil)
+	emitOutbound(f, clientSide(m), m.AgentMethods, m.Initialize != nil, terminalAuthTypes(m))
 
 	return f
 }
@@ -661,8 +672,9 @@ func initializeWrapper(mi *model.Method) []ast.Stmt {
 }
 
 // outboundDoc is a typed outbound method's doc: what it sends to peer, then
-// the interface method's doc (0019-PLAN-examples-docs-tests-tooling.md, I12).
-func outboundDoc(mi *model.Method, peer string) []string {
+// the interface method's doc (0019-PLAN-examples-docs-tests-tooling.md, I12),
+// then the errors it returns (0024-PLAN-documentation.md, A6).
+func outboundDoc(mi *model.Method, peer string, gated, terminalAuth bool) []string {
 	first := mi.GoName + " sends the " + mi.Wire + " request to the " + peer + " and returns its response."
 	switch {
 	case mi.Notif != "":
@@ -670,15 +682,97 @@ func outboundDoc(mi *model.Method, peer string) []string {
 	case !mi.HasResult:
 		first = mi.GoName + " sends the " + mi.Wire + " request to the " + peer + " and returns the error it is answered with, or nil."
 	}
-	if len(mi.Doc) == 0 {
-		return []string{first}
+	lines := []string{first}
+	if len(mi.Doc) > 0 {
+		lines = append(append(lines, ""), mi.Doc...)
 	}
-	return append([]string{first, ""}, mi.Doc...)
+	return append(append(lines, ""), outboundErrors(mi, gated, terminalAuth)...)
+}
+
+// outboundErrors is the paragraph of a typed outbound method's doc that names
+// the errors it returns, as sendRequest, SendNotification, the gates and the
+// checks of a response return them (0024-PLAN-documentation.md, A6). gated is
+// false for a protocol with no initialize, whose messages nothing gates;
+// terminalAuth marks a method whose params a terminal-auth gate checks.
+func outboundErrors(mi *model.Method, gated, terminalAuth bool) []string {
+	var before []string
+	if gated && !mi.Initializes {
+		before = append(before, "an error wrapping ErrNotInitialized until initialize completes",
+			"a *CapabilityError when what initialize agreed does not allow the method or a property or variant of params")
+	}
+	if terminalAuth {
+		before = append(before, "an error wrapping ErrTerminalAuthMethod when params name a terminal auth method of the agent's initialize answer")
+	}
+	if mi.Initializes {
+		before = append(before, "a *ProtocolVersionError when params ask for a version this SDK does not speak")
+	}
+	before = append(before, "a *ValidationError when params break the schema")
+	text := "Before anything is sent, it returns " + listOf(before) + ". It returns a *RequestError " +
+		"wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or ErrConnectionClosed when the " +
+		"connection ends, or the write's error when writing fails"
+	if mi.Notif != "" {
+		return wrapDoc(text + ".")
+	}
+	text += "; and the peer's error answer as a *RequestError."
+	if mi.HasResult {
+		if gated {
+			text += " A response that breaks the schema or what initialize agreed returns an error wrapping " +
+				"*ValidationError or *CapabilityError"
+		} else {
+			text += " A response that breaks the schema returns an error wrapping *ValidationError"
+		}
+		text += ", and one that does not decode a *RequestError."
+	}
+	if mi.Initializes {
+		text += " An answer with another protocol version returns a *ProtocolVersionError."
+	}
+	return wrapDoc(text)
+}
+
+// listOf joins items as "a", "a; and b" or "a; b; and c": the clauses are
+// long, and some hold an "or" of their own.
+func listOf(items []string) string {
+	if len(items) == 1 {
+		return items[0]
+	}
+	return strings.Join(items[:len(items)-1], "; ") + "; and " + items[len(items)-1]
+}
+
+// wrapDoc splits text into doc-comment lines of at most 76 characters,
+// between words.
+func wrapDoc(text string) []string {
+	var lines []string
+	line := ""
+	for w := range strings.FieldsSeq(text) {
+		if line != "" && len(line)+1+len(w) > 76 {
+			lines = append(lines, line)
+			line = ""
+		}
+		if line != "" {
+			line += " "
+		}
+		line += w
+	}
+	return append(lines, line)
+}
+
+// terminalAuthTypes is the set of request types of m whose params a
+// terminal-auth gate checks.
+func terminalAuthTypes(m *model.Model) map[string]bool {
+	set := map[string]bool{}
+	for _, g := range m.Gated {
+		for _, c := range g.Checks {
+			if c.Kind == model.GateCheckTerminalAuth {
+				set[g.Type] = true
+			}
+		}
+	}
+	return set
 }
 
 // emitOutbound emits one method per peer method on recvType that sends the
 // request or notification over c.conn to peer.
-func emitOutbound(f *goFile, s side, methods []*model.Method, gated bool) {
+func emitOutbound(f *goFile, s side, methods []*model.Method, gated bool, terminalAuth map[string]bool) {
 	recv := func() *ast.Field { return param(s.recv, star(id(s.typeName))) }
 	params := func(typeName string) []*ast.Field {
 		return []*ast.Field{param("ctx", f.qual(pkgContext, "Context")), param("params", id(typeName))}
@@ -707,7 +801,7 @@ func emitOutbound(f *goFile, s side, methods []*model.Method, gated bool) {
 	for _, mi := range methods {
 		// A blank line separates each wrapper from the declaration before it.
 		f.line()
-		f.comment(outboundDoc(mi, s.peer)...)
+		f.comment(outboundDoc(mi, s.peer, gated, terminalAuth[mi.Req])...)
 		if mi.Notif != "" && mi.CancelsPending {
 			// The cancel is written before the pending requests are answered
 			// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).

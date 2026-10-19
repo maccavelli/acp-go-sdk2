@@ -15,6 +15,8 @@ import (
 	"unicode/utf8"
 )
 
+// AgentAuthCapabilities is the AgentAuthCapabilities schema definition.
+//
 // Authentication-related capabilities supported by the agent.
 type AgentAuthCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -58,6 +60,8 @@ func (v *AgentAuthCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessag
 	return nil
 }
 
+// AgentCapabilities is the AgentCapabilities schema definition.
+//
 // Capabilities supported by the agent.
 //
 // Advertised during initialization to inform the client about
@@ -159,7 +163,12 @@ func (v *AgentCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) e
 	return nil
 }
 
+// AgentNotification is the AgentNotification schema definition.
+//
 // A JSON-RPC notification object.
+//
+// A message of the JSON-RPC envelope. Connection reads and writes the
+// envelope itself and does not use this type.
 type AgentNotification struct {
 	// The notification method name.
 	Method string `json:"method"`
@@ -201,7 +210,12 @@ func (v *AgentNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
+// AgentRequest is the AgentRequest schema definition.
+//
 // A JSON-RPC request object.
+//
+// A message of the JSON-RPC envelope. Connection reads and writes the
+// envelope itself and does not use this type.
 type AgentRequest struct {
 	// The request id used to correlate the matching response.
 	Id RequestId `json:"id"`
@@ -248,7 +262,12 @@ func (v *AgentRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// AgentResult is the Result variant of the AgentResponse schema definition.
+//
 // A successful JSON-RPC response.
+//
+// A message of the JSON-RPC envelope. Connection reads and writes the
+// envelope itself and does not use this type.
 type AgentResult struct {
 	// The id of the request this response answers.
 	Id RequestId `json:"id"`
@@ -292,7 +311,12 @@ func (v *AgentResult) validate(abs func(string) bool) error {
 	return nil
 }
 
+// AgentError is the Error variant of the AgentResponse schema definition.
+//
 // A failed JSON-RPC response.
+//
+// A message of the JSON-RPC envelope. Connection reads and writes the
+// envelope itself and does not use this type.
 type AgentError struct {
 	// Method-specific error data.
 	Error Error `json:"error"`
@@ -336,7 +360,12 @@ func (v *AgentError) validate(abs func(string) bool) error {
 	return nil
 }
 
+// AgentResponse is the AgentResponse schema definition.
+//
 // A JSON-RPC response object.
+//
+// A message of the JSON-RPC envelope. Connection reads and writes the
+// envelope itself and does not use this type.
 type AgentResponse struct {
 	// A successful JSON-RPC response.
 	Result *AgentResult `json:"-"`
@@ -451,6 +480,8 @@ func (u *AgentResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// Annotations is the Annotations schema definition.
+//
 // Optional annotations for the client. The client can use annotations to inform how objects are used or displayed
 type Annotations struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -501,6 +532,8 @@ func (v *Annotations) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	return nil
 }
 
+// AudioContent is the AudioContent schema definition.
+//
 // Audio provided to or from an LLM.
 type AudioContent struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -548,6 +581,8 @@ func (v *AudioContent) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 	return nil
 }
 
+// AuthCapabilities is the AuthCapabilities schema definition.
+//
 // Authentication capabilities supported by the client.
 //
 // Advertised during initialization to inform the agent which authentication
@@ -598,6 +633,8 @@ func (v *AuthCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) er
 	return nil
 }
 
+// AuthMethodTerminalInline is the "terminal" variant of the AuthMethod schema definition.
+//
 // Client runs the configured agent program as a separate interactive
 // process, without passing this method to 'authenticate'.
 type AuthMethodTerminalInline struct {
@@ -652,6 +689,8 @@ func (v *AuthMethodTerminalInline) decodeKeys(b []byte, m map[string]json.RawMes
 	return nil
 }
 
+// AuthMethod is the AuthMethod schema definition.
+//
 // Describes an available authentication method.
 //
 // The 'type' field acts as the discriminator in the serialized JSON form.
@@ -767,6 +806,8 @@ func (u *AuthMethod) validate(abs func(string) bool) error {
 	return nil
 }
 
+// AuthMethodAgent is the AuthMethodAgent schema definition.
+//
 // Agent handles authentication itself through 'authenticate'.
 //
 // This is the default authentication method type.
@@ -816,9 +857,13 @@ func (v *AuthMethodAgent) decodeKeys(b []byte, m map[string]json.RawMessage) err
 	return nil
 }
 
+// AuthMethodId is the AuthMethodId schema definition.
+//
 // Typed identifier used for auth method values on the wire.
 type AuthMethodId string
 
+// AuthMethodTerminal is the AuthMethodTerminal schema definition.
+//
 // Terminal-based authentication method.
 //
 // The client runs the configured agent program as a separate interactive
@@ -877,6 +922,8 @@ func (v *AuthMethodTerminal) decodeKeys(b []byte, m map[string]json.RawMessage) 
 	return nil
 }
 
+// AuthenticateRequest is the AuthenticateRequest schema definition.
+//
 // Request parameters for the authenticate method.
 //
 // Specifies which authentication method to use.
@@ -930,6 +977,8 @@ func (v *AuthenticateRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// AuthenticateResponse is the AuthenticateResponse schema definition.
+//
 // Response to the 'authenticate' method.
 type AuthenticateResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -975,6 +1024,8 @@ func (v *AuthenticateResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// AvailableCommand is the AvailableCommand schema definition.
+//
 // Information about a command.
 type AvailableCommand struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -1036,6 +1087,8 @@ func (v *AvailableCommand) validate(abs func(string) bool) error {
 	return nil
 }
 
+// AvailableCommandInput is the AvailableCommandInput schema definition.
+//
 // The input specification for a command.
 type AvailableCommandInput struct {
 	// All text that was typed after the command name is provided as input.
@@ -1106,6 +1159,8 @@ func (u *AvailableCommandInput) validate(abs func(string) bool) error {
 	return nil
 }
 
+// AvailableCommandsUpdate is the AvailableCommandsUpdate schema definition.
+//
 // Available commands are ready or have changed
 type AvailableCommandsUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -1175,6 +1230,8 @@ func (v *AvailableCommandsUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// BlobResourceContents is the BlobResourceContents schema definition.
+//
 // Binary resource contents.
 type BlobResourceContents struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -1222,6 +1279,8 @@ func (v *BlobResourceContents) decodeKeys(b []byte, m map[string]json.RawMessage
 	return nil
 }
 
+// BooleanConfigOptionCapabilities is the BooleanConfigOptionCapabilities schema definition.
+//
 // Capabilities for boolean session configuration options.
 //
 // Supplying '{}' means the client supports boolean session configuration options.
@@ -1260,6 +1319,8 @@ func (v *BooleanConfigOptionCapabilities) decodeKeys(b []byte, _ map[string]json
 	return nil
 }
 
+// BooleanPropertySchema is the BooleanPropertySchema schema definition.
+//
 // Schema for boolean properties in an elicitation form.
 type BooleanPropertySchema struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -1316,6 +1377,8 @@ func (v *BooleanPropertySchema) decodeKeys(b []byte, _ map[string]json.RawMessag
 	return nil
 }
 
+// CancelNotification is the CancelNotification schema definition.
+//
 // Notification to cancel ongoing operations for a session.
 //
 // See protocol docs: [Cancellation](https://agentclientprotocol.com/protocol/prompt-turn#cancellation)
@@ -1368,9 +1431,13 @@ func (v *CancelNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
+// CancelRequestNotification is the CancelRequestNotification schema definition.
+//
 // Notification to cancel an ongoing request.
 //
 // See protocol docs: [Cancellation](https://agentclientprotocol.com/protocol/cancellation)
+//
+// Connection sends $/cancel_request itself when a call's context ends.
 type CancelRequestNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -1423,6 +1490,8 @@ func (v *CancelRequestNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ClientCapabilities is the ClientCapabilities schema definition.
+//
 // Capabilities supported by the client.
 //
 // Advertised during initialization to inform the agent about
@@ -1545,6 +1614,8 @@ func (v *ClientCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 	return nil
 }
 
+// ClientNesCapabilities is the ClientNesCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -1597,7 +1668,12 @@ func (v *ClientNesCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessag
 	return nil
 }
 
+// ClientNotification is the ClientNotification schema definition.
+//
 // A JSON-RPC notification object.
+//
+// A message of the JSON-RPC envelope. Connection reads and writes the
+// envelope itself and does not use this type.
 type ClientNotification struct {
 	// The notification method name.
 	Method string `json:"method"`
@@ -1639,7 +1715,12 @@ func (v *ClientNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ClientRequest is the ClientRequest schema definition.
+//
 // A JSON-RPC request object.
+//
+// A message of the JSON-RPC envelope. Connection reads and writes the
+// envelope itself and does not use this type.
 type ClientRequest struct {
 	// The request id used to correlate the matching response.
 	Id RequestId `json:"id"`
@@ -1686,7 +1767,12 @@ func (v *ClientRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ClientResult is the Result variant of the ClientResponse schema definition.
+//
 // A successful JSON-RPC response.
+//
+// A message of the JSON-RPC envelope. Connection reads and writes the
+// envelope itself and does not use this type.
 type ClientResult struct {
 	// The id of the request this response answers.
 	Id RequestId `json:"id"`
@@ -1730,7 +1816,12 @@ func (v *ClientResult) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ClientError is the Error variant of the ClientResponse schema definition.
+//
 // A failed JSON-RPC response.
+//
+// A message of the JSON-RPC envelope. Connection reads and writes the
+// envelope itself and does not use this type.
 type ClientError struct {
 	// Method-specific error data.
 	Error Error `json:"error"`
@@ -1774,7 +1865,12 @@ func (v *ClientError) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ClientResponse is the ClientResponse schema definition.
+//
 // A JSON-RPC response object.
+//
+// A message of the JSON-RPC envelope. Connection reads and writes the
+// envelope itself and does not use this type.
 type ClientResponse struct {
 	// A successful JSON-RPC response.
 	Result *ClientResult `json:"-"`
@@ -1889,6 +1985,8 @@ func (u *ClientResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ClientSessionCapabilities is the ClientSessionCapabilities schema definition.
+//
 // Session-related capabilities supported by the client.
 type ClientSessionCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -1944,6 +2042,8 @@ func (v *ClientSessionCapabilities) decodeKeys(b []byte, _ map[string]json.RawMe
 	return nil
 }
 
+// CloseSessionRequest is the CloseSessionRequest schema definition.
+//
 // Request parameters for closing an active session.
 //
 // If supported, the agent **must** cancel any ongoing work related to the session
@@ -2000,6 +2100,8 @@ func (v *CloseSessionRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// CloseSessionResponse is the CloseSessionResponse schema definition.
+//
 // Response from closing a session.
 type CloseSessionResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -2045,12 +2147,18 @@ func (v *CloseSessionResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// CompactionCapabilities is the CompactionCapabilities schema definition.
+//
 // Client support for ID-addressed context compaction updates.
 type CompactionCapabilities struct{}
 
+// CompactionId is the CompactionId schema definition.
+//
 // Unique identifier for a context compaction within a session.
 type CompactionId string
 
+// CompactionStatus is the CompactionStatus schema definition.
+//
 // Lifecycle state of a context compaction.
 type CompactionStatus string
 
@@ -2073,6 +2181,8 @@ const (
 	CompactionStatusCancelled CompactionStatus = "cancelled"
 )
 
+// CompactionSummaryChunk is the CompactionSummaryChunk schema definition.
+//
 // A content block appended to a compaction's summary. A first-seen ID creates
 // an in-progress compaction. Chunks append in receive order.
 // Agents MUST only send this update when the Client advertised
@@ -2127,6 +2237,8 @@ func (v *CompactionSummaryChunk) validate(abs func(string) bool) error {
 	return nil
 }
 
+// CompactionUpdate is the CompactionUpdate schema definition.
+//
 // A context compaction upsert. The first notification fixes the compaction's
 // timeline position. Later updates with the same ID patch that entity in place.
 // Agents MUST only send this update when the Client advertised
@@ -2197,6 +2309,8 @@ func (v *CompactionUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// CompleteElicitationNotification is the CompleteElicitationNotification schema definition.
+//
 // Notification sent by the agent when a URL-based elicitation is complete.
 type CompleteElicitationNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -2249,6 +2363,8 @@ func (v *CompleteElicitationNotification) validate(abs func(string) bool) error 
 	return nil
 }
 
+// ConfigOptionUpdate is the ConfigOptionUpdate schema definition.
+//
 // Session configuration options have been updated.
 type ConfigOptionUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -2318,6 +2434,8 @@ func (v *ConfigOptionUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// Content is the Content schema definition.
+//
 // Standard content block (text, images, resources).
 type Content struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -2371,6 +2489,8 @@ func (v *Content) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ContentBlockText is the "text" variant of the ContentBlock schema definition.
+//
 // Text content. May be plain text or formatted with Markdown.
 //
 // All agents MUST support text content blocks in prompts.
@@ -2420,6 +2540,8 @@ func (v *ContentBlockText) decodeKeys(b []byte, m map[string]json.RawMessage) er
 	return nil
 }
 
+// ContentBlockImage is the "image" variant of the ContentBlock schema definition.
+//
 // Images for visual context or analysis.
 //
 // Requires the 'image' prompt capability when included in prompts.
@@ -2474,6 +2596,8 @@ func (v *ContentBlockImage) decodeKeys(b []byte, m map[string]json.RawMessage) e
 	return nil
 }
 
+// ContentBlockAudio is the "audio" variant of the ContentBlock schema definition.
+//
 // Audio data for transcription or analysis.
 //
 // Requires the 'audio' prompt capability when included in prompts.
@@ -2524,6 +2648,8 @@ func (v *ContentBlockAudio) decodeKeys(b []byte, m map[string]json.RawMessage) e
 	return nil
 }
 
+// ContentBlockResourceLink is the "resource_link" variant of the ContentBlock schema definition.
+//
 // References to resources that the agent can access.
 //
 // All agents MUST support resource links in prompts.
@@ -2590,6 +2716,8 @@ func (v *ContentBlockResourceLink) decodeKeys(b []byte, m map[string]json.RawMes
 	return nil
 }
 
+// ContentBlockResource is the "resource" variant of the ContentBlock schema definition.
+//
 // Complete resource contents embedded directly in the message.
 //
 // Preferred for including context as it avoids extra round-trips.
@@ -2652,6 +2780,8 @@ func (v *ContentBlockResource) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ContentBlock is the ContentBlock schema definition.
+//
 // Content blocks represent displayable information in the Agent Client Protocol.
 //
 // They provide a structured way to handle various types of user-facing content—whether
@@ -2924,6 +3054,8 @@ func (u *ContentBlock) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ContentChunk is the ContentChunk schema definition.
+//
 // A streamed item of content
 type ContentChunk struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3027,6 +3159,8 @@ func (v *Cost) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// CreateElicitationForm is the "form" variant of the CreateElicitationRequest schema definition.
+//
 // Form-based elicitation where the client renders a form from the provided schema.
 type CreateElicitationForm struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3147,6 +3281,8 @@ func (v *CreateElicitationForm) validate(abs func(string) bool) error {
 	return nil
 }
 
+// CreateElicitationUrl is the "url" variant of the CreateElicitationRequest schema definition.
+//
 // URL-based elicitation where the client directs the user to a URL.
 type CreateElicitationUrl struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3266,6 +3402,8 @@ func (v *CreateElicitationUrl) validate(abs func(string) bool) error {
 	return nil
 }
 
+// CreateElicitationOther is the Other variant of the CreateElicitationRequest schema definition.
+//
 // Custom or future elicitation mode.
 //
 // Values beginning with '_' are reserved for implementation-specific
@@ -3357,6 +3495,8 @@ func (v *CreateElicitationOther) decodeKeys(b []byte, m map[string]json.RawMessa
 	return nil
 }
 
+// CreateElicitationRequest is the CreateElicitationRequest schema definition.
+//
 // Request from the agent to elicit structured user input.
 //
 // The agent sends this to the client to request information from the user,
@@ -3529,6 +3669,8 @@ func (u *CreateElicitationRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// CreateElicitationAccept is the "accept" variant of the CreateElicitationResponse schema definition.
+//
 // The user accepted and provided content.
 type CreateElicitationAccept struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3585,6 +3727,8 @@ func (v *CreateElicitationAccept) validate(abs func(string) bool) error {
 	return nil
 }
 
+// CreateElicitationDecline is the "decline" variant of the CreateElicitationResponse schema definition.
+//
 // The user declined the elicitation.
 type CreateElicitationDecline struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3624,6 +3768,8 @@ func (v *CreateElicitationDecline) decodeKeys(b []byte, _ map[string]json.RawMes
 	return nil
 }
 
+// CreateElicitationCancel is the "cancel" variant of the CreateElicitationResponse schema definition.
+//
 // The elicitation was cancelled.
 type CreateElicitationCancel struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3663,6 +3809,8 @@ func (v *CreateElicitationCancel) decodeKeys(b []byte, _ map[string]json.RawMess
 	return nil
 }
 
+// CreateElicitationResponseOther is the Other variant of the CreateElicitationResponse schema definition.
+//
 // Custom or future elicitation action.
 //
 // Values beginning with '_' are reserved for implementation-specific
@@ -3748,6 +3896,8 @@ func (v *CreateElicitationResponseOther) decodeKeys(b []byte, m map[string]json.
 	return nil
 }
 
+// CreateElicitationResponse is the CreateElicitationResponse schema definition.
+//
 // Response from the client to an elicitation request.
 type CreateElicitationResponse struct {
 	// The user accepted and provided content.
@@ -3918,6 +4068,8 @@ func (u *CreateElicitationResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// CreateTerminalRequest is the CreateTerminalRequest schema definition.
+//
 // Request to create a new terminal and execute a command.
 type CreateTerminalRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3994,6 +4146,8 @@ func (v *CreateTerminalRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// CreateTerminalResponse is the CreateTerminalResponse schema definition.
+//
 // Response containing the ID of the created terminal.
 type CreateTerminalResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -4044,7 +4198,9 @@ func (v *CreateTerminalResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
-// The current mode of the session has changed
+// CurrentModeUpdate is the CurrentModeUpdate schema definition.
+//
+// # The current mode of the session has changed
 //
 // See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/session-modes)
 type CurrentModeUpdate struct {
@@ -4087,6 +4243,8 @@ func (v *CurrentModeUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) e
 	return nil
 }
 
+// DeleteSessionRequest is the DeleteSessionRequest schema definition.
+//
 // Request parameters for deleting an existing session from 'session/list'.
 //
 // Only available if the Agent supports the 'sessionCapabilities.delete' capability.
@@ -4139,6 +4297,8 @@ func (v *DeleteSessionRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// DeleteSessionResponse is the DeleteSessionResponse schema definition.
+//
 // Response from deleting a session.
 type DeleteSessionResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -4184,6 +4344,8 @@ func (v *DeleteSessionResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// Diff is the Diff schema definition.
+//
 // A diff representing file modifications.
 //
 // Shows changes to files in a format suitable for display in the client UI.
@@ -4253,6 +4415,8 @@ func (v *Diff) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ElicitationAcceptAction is the ElicitationAcceptAction schema definition.
+//
 // The user accepted the elicitation and provided content.
 type ElicitationAcceptAction struct {
 	// The user-provided content, if any, as an object matching the requested schema.
@@ -4274,6 +4438,8 @@ func (v *ElicitationAcceptAction) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ElicitationCapabilities is the ElicitationCapabilities schema definition.
+//
 // Elicitation capabilities supported by the client.
 type ElicitationCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -4326,21 +4492,33 @@ func (v *ElicitationCapabilities) decodeKeys(b []byte, _ map[string]json.RawMess
 	return nil
 }
 
+// ElicitationContentValueString is the String variant of the ElicitationContentValue schema definition.
+//
 // String value accepted in elicitation response content.
 type ElicitationContentValueString string
 
+// ElicitationContentValueInteger is the Integer variant of the ElicitationContentValue schema definition.
+//
 // Integer value accepted in elicitation response content.
 type ElicitationContentValueInteger int64
 
+// ElicitationContentValueNumber is the Number variant of the ElicitationContentValue schema definition.
+//
 // Number value accepted in elicitation response content.
 type ElicitationContentValueNumber float64
 
+// ElicitationContentValueBoolean is the Boolean variant of the ElicitationContentValue schema definition.
+//
 // Boolean value accepted in elicitation response content.
 type ElicitationContentValueBoolean bool
 
+// ElicitationContentValueStringArray is the StringArray variant of the ElicitationContentValue schema definition.
+//
 // String array value accepted in elicitation response content.
 type ElicitationContentValueStringArray []string
 
+// ElicitationContentValue is the ElicitationContentValue schema definition.
+//
 // Allowed wire representations for ['ElicitationContentValue'].
 type ElicitationContentValue struct {
 	// String value accepted in elicitation response content.
@@ -4459,6 +4637,8 @@ func (u *ElicitationContentValue) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ElicitationFormCapabilities is the ElicitationFormCapabilities schema definition.
+//
 // Form-based elicitation capabilities.
 //
 // Supplying '{}' means the client supports form-based elicitation.
@@ -4499,6 +4679,8 @@ func (v *ElicitationFormCapabilities) decodeKeys(b []byte, _ map[string]json.Raw
 	return nil
 }
 
+// ElicitationFormMode is the ElicitationFormMode schema definition.
+//
 // Form-based elicitation mode where the client renders a form from the provided schema.
 type ElicitationFormMode struct {
 	// A JSON Schema describing the form fields to present to the user.
@@ -4603,9 +4785,13 @@ func (v *ElicitationFormMode) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ElicitationId is the ElicitationId schema definition.
+//
 // Unique identifier for an elicitation.
 type ElicitationId string
 
+// ElicitationPropertySchemaString is the "string" variant of the ElicitationPropertySchema schema definition.
+//
 // String property (or single-select enum when 'enum'/'oneOf' is set).
 type ElicitationPropertySchemaString struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -4687,6 +4873,8 @@ func (v *ElicitationPropertySchemaString) decodeKeys(b []byte, _ map[string]json
 	return nil
 }
 
+// ElicitationPropertySchemaNumber is the "number" variant of the ElicitationPropertySchema schema definition.
+//
 // Number (floating-point) property.
 type ElicitationPropertySchemaNumber struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -4752,6 +4940,8 @@ func (v *ElicitationPropertySchemaNumber) decodeKeys(b []byte, _ map[string]json
 	return nil
 }
 
+// ElicitationPropertySchemaInteger is the "integer" variant of the ElicitationPropertySchema schema definition.
+//
 // Integer property.
 type ElicitationPropertySchemaInteger struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -4817,6 +5007,8 @@ func (v *ElicitationPropertySchemaInteger) decodeKeys(b []byte, _ map[string]jso
 	return nil
 }
 
+// ElicitationPropertySchemaBoolean is the "boolean" variant of the ElicitationPropertySchema schema definition.
+//
 // Boolean property.
 type ElicitationPropertySchemaBoolean struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -4874,6 +5066,8 @@ func (v *ElicitationPropertySchemaBoolean) decodeKeys(b []byte, _ map[string]jso
 	return nil
 }
 
+// ElicitationPropertySchemaArray is the "array" variant of the ElicitationPropertySchema schema definition.
+//
 // Multi-select array property.
 type ElicitationPropertySchemaArray struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -4958,6 +5152,8 @@ func (v *ElicitationPropertySchemaArray) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ElicitationPropertySchemaOther is the Other variant of the ElicitationPropertySchema schema definition.
+//
 // Custom or future elicitation property schema.
 //
 // Values beginning with '_' are reserved for implementation-specific
@@ -5027,6 +5223,8 @@ func (v *ElicitationPropertySchemaOther) decodeKeys(b []byte, m map[string]json.
 	return nil
 }
 
+// ElicitationPropertySchema is the ElicitationPropertySchema schema definition.
+//
 // Property schema for elicitation form fields.
 //
 // Each variant corresponds to a JSON Schema '"type"' value.
@@ -5259,6 +5457,8 @@ func (u *ElicitationPropertySchema) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ElicitationRequestScope is the ElicitationRequestScope schema definition.
+//
 // Request-scoped elicitation, tied to a specific JSON-RPC request outside of a session
 // (e.g., during auth/configuration phases before any session is started).
 type ElicitationRequestScope struct {
@@ -5302,6 +5502,8 @@ func (v *ElicitationRequestScope) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ElicitationSchema is the ElicitationSchema schema definition.
+//
 // Type-safe elicitation schema for requesting structured user input.
 //
 // This represents a JSON Schema object with primitive-typed properties,
@@ -5430,6 +5632,8 @@ func (v *ElicitationSchema) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ElicitationSchemaType is the ElicitationSchemaType schema definition.
+//
 // Type discriminator for elicitation schemas.
 type ElicitationSchemaType string
 
@@ -5440,6 +5644,8 @@ const (
 	ElicitationSchemaTypeObject ElicitationSchemaType = "object"
 )
 
+// ElicitationSessionScope is the ElicitationSessionScope schema definition.
+//
 // Session-scoped elicitation, optionally tied to a specific tool call.
 //
 // When 'tool_call_id' is set, the elicitation is tied to a specific tool call.
@@ -5484,6 +5690,8 @@ func (v *ElicitationSessionScope) decodeKeys(b []byte, m map[string]json.RawMess
 	return nil
 }
 
+// ElicitationUrlCapabilities is the ElicitationUrlCapabilities schema definition.
+//
 // URL-based elicitation capabilities.
 //
 // Supplying '{}' means the client supports URL-based elicitation.
@@ -5524,6 +5732,8 @@ func (v *ElicitationUrlCapabilities) decodeKeys(b []byte, _ map[string]json.RawM
 	return nil
 }
 
+// ElicitationUrlMode is the ElicitationUrlMode schema definition.
+//
 // URL-based elicitation mode where the client directs the user to a URL.
 type ElicitationUrlMode struct {
 	// The unique identifier for this elicitation.
@@ -5627,6 +5837,8 @@ func (v *ElicitationUrlMode) validate(abs func(string) bool) error {
 	return nil
 }
 
+// EmbeddedResource is the EmbeddedResource schema definition.
+//
 // The contents of a resource, embedded into a prompt or tool call result.
 type EmbeddedResource struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5684,6 +5896,8 @@ func (v *EmbeddedResource) validate(abs func(string) bool) error {
 	return nil
 }
 
+// EmbeddedResourceResource is the EmbeddedResourceResource schema definition.
+//
 // Resource content that can be embedded in a message.
 type EmbeddedResourceResource struct {
 	// Text resource contents embedded directly in the message.
@@ -5789,6 +6003,8 @@ func (u *EmbeddedResourceResource) validate(abs func(string) bool) error {
 	return nil
 }
 
+// EnumOption is the EnumOption schema definition.
+//
 // A titled enum option with a const value, human-readable title, and optional description.
 type EnumOption struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5840,6 +6056,8 @@ func (v *EnumOption) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// EnvVariable is the EnvVariable schema definition.
+//
 // An environment variable to set when launching an MCP server.
 type EnvVariable struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5883,12 +6101,16 @@ func (v *EnvVariable) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// Error is the Error schema definition.
+//
 // JSON-RPC error object.
 //
 // Represents an error that occurred during method execution, following the
 // JSON-RPC 2.0 error object specification with optional additional data.
 //
 // See protocol docs: [JSON-RPC Error Object](https://www.jsonrpc.org/specification#error_object)
+//
+// Connection reports an error as a *RequestError, not as this type.
 type Error struct {
 	// A number indicating the error type that occurred.
 	// This must be an integer as defined in the JSON-RPC specification.
@@ -5931,10 +6153,15 @@ func (v *Error) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// ErrorCode is the ErrorCode schema definition.
+//
 // Predefined error codes for common JSON-RPC and ACP-specific errors.
 //
 // These codes follow the JSON-RPC 2.0 specification for standard errors
 // and use the reserved range (-32000 to -32099) for protocol-specific errors.
+//
+// RequestError.Code is an int: compare it with int(ErrorCodeInternalError),
+// for example.
 type ErrorCode int32
 
 const (
@@ -5975,6 +6202,8 @@ const (
 	ErrorCodeResourceNotFound ErrorCode = -32002
 )
 
+// ErrorStopReason is the ErrorStopReason schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -6014,6 +6243,8 @@ func (v *ErrorStopReason) decodeKeys(b []byte, _ map[string]json.RawMessage) err
 	return nil
 }
 
+// ExtNotification is the ExtNotification schema definition.
+//
 // Allows the Agent to send an arbitrary notification that is not part of the ACP spec.
 // Extension notifications provide a way to send one-way messages for custom functionality
 // while maintaining protocol compatibility.
@@ -6021,6 +6252,8 @@ func (v *ErrorStopReason) decodeKeys(b []byte, _ map[string]json.RawMessage) err
 // See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 type ExtNotification = json.RawMessage
 
+// ExtRequest is the ExtRequest schema definition.
+//
 // Allows for sending an arbitrary request that is not part of the ACP spec.
 // Extension methods provide a way to add custom functionality while maintaining
 // protocol compatibility.
@@ -6028,6 +6261,8 @@ type ExtNotification = json.RawMessage
 // See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 type ExtRequest = json.RawMessage
 
+// ExtResponse is the ExtResponse schema definition.
+//
 // Allows for sending an arbitrary response to an ['ExtRequest'] that is not part of the ACP spec.
 // Extension methods provide a way to add custom functionality while maintaining
 // protocol compatibility.
@@ -6035,6 +6270,8 @@ type ExtRequest = json.RawMessage
 // See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 type ExtResponse = json.RawMessage
 
+// FileSystemCapabilities is the FileSystemCapabilities schema definition.
+//
 // File system capabilities that a client may support.
 //
 // See protocol docs: [FileSystem](https://agentclientprotocol.com/protocol/initialization#filesystem)
@@ -6085,6 +6322,8 @@ func (v *FileSystemCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessa
 	return nil
 }
 
+// HttpHeader is the HttpHeader schema definition.
+//
 // An HTTP header to set when making requests to the MCP server.
 type HttpHeader struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -6128,6 +6367,8 @@ func (v *HttpHeader) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// IdleStateUpdateEndTurn is the "end_turn" variant of the IdleStateUpdate schema definition.
+//
 // The work ended successfully.
 type IdleStateUpdateEndTurn struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -6169,6 +6410,8 @@ func (v *IdleStateUpdateEndTurn) decodeKeys(b []byte, _ map[string]json.RawMessa
 	return nil
 }
 
+// IdleStateUpdateMaxTokens is the "max_tokens" variant of the IdleStateUpdate schema definition.
+//
 // The work ended because the agent reached the maximum number of tokens.
 type IdleStateUpdateMaxTokens struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -6210,6 +6453,8 @@ func (v *IdleStateUpdateMaxTokens) decodeKeys(b []byte, _ map[string]json.RawMes
 	return nil
 }
 
+// IdleStateUpdateMaxTurnRequests is the "max_turn_requests" variant of the IdleStateUpdate schema definition.
+//
 // The work ended because the agent reached the maximum number of allowed
 // agent requests.
 type IdleStateUpdateMaxTurnRequests struct {
@@ -6252,6 +6497,8 @@ func (v *IdleStateUpdateMaxTurnRequests) decodeKeys(b []byte, _ map[string]json.
 	return nil
 }
 
+// IdleStateUpdateRefusal is the "refusal" variant of the IdleStateUpdate schema definition.
+//
 // The work ended because the agent refused to continue.
 type IdleStateUpdateRefusal struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -6293,6 +6540,8 @@ func (v *IdleStateUpdateRefusal) decodeKeys(b []byte, _ map[string]json.RawMessa
 	return nil
 }
 
+// IdleStateUpdateCancelled is the "cancelled" variant of the IdleStateUpdate schema definition.
+//
 // The work was cancelled.
 type IdleStateUpdateCancelled struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -6334,6 +6583,8 @@ func (v *IdleStateUpdateCancelled) decodeKeys(b []byte, _ map[string]json.RawMes
 	return nil
 }
 
+// IdleStateUpdateError is the "error" variant of the IdleStateUpdate schema definition.
+//
 // The work ended because something failed.
 type IdleStateUpdateError struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -6382,6 +6633,8 @@ func (v *IdleStateUpdateError) decodeKeys(b []byte, _ map[string]json.RawMessage
 	return nil
 }
 
+// IdleStateUpdateOther is the Other variant of the IdleStateUpdate schema definition.
+//
 // Custom or future stop reason.
 //
 // Values beginning with '_' are reserved for implementation-specific
@@ -6461,6 +6714,8 @@ func (v *IdleStateUpdateOther) decodeKeys(b []byte, m map[string]json.RawMessage
 	return nil
 }
 
+// IdleStateUpdateNone is the None variant of the IdleStateUpdate schema definition.
+//
 // No stop reason: 'stopReason' is omitted or 'null'.
 type IdleStateUpdateNone struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -6503,6 +6758,8 @@ func (v *IdleStateUpdateNone) decodeKeys(b []byte, _ map[string]json.RawMessage)
 	return nil
 }
 
+// IdleStateUpdate is the IdleStateUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -6704,6 +6961,8 @@ func (u *IdleStateUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ImageContent is the ImageContent schema definition.
+//
 // An image provided to or from an LLM.
 type ImageContent struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -6755,6 +7014,8 @@ func (v *ImageContent) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 	return nil
 }
 
+// Implementation is the Implementation schema definition.
+//
 // Metadata about the implementation of the client or agent.
 // Describes the name and version of an ACP implementation, with an optional
 // title for UI representation.
@@ -6809,6 +7070,8 @@ func (v *Implementation) decodeKeys(b []byte, m map[string]json.RawMessage) erro
 	return nil
 }
 
+// InitializeRequest is the InitializeRequest schema definition.
+//
 // Request parameters for the initialize method.
 //
 // Sent by the client to establish connection and negotiate capabilities.
@@ -6875,6 +7138,8 @@ func (v *InitializeRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// InitializeResponse is the InitializeResponse schema definition.
+//
 // Response to the 'initialize' method.
 //
 // Contains the negotiated protocol version and agent capabilities.
@@ -6976,6 +7241,8 @@ func (v *InitializeResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// IntegerPropertySchema is the IntegerPropertySchema schema definition.
+//
 // Schema for integer properties in an elicitation form.
 type IntegerPropertySchema struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -7040,6 +7307,8 @@ func (v *IntegerPropertySchema) decodeKeys(b []byte, _ map[string]json.RawMessag
 	return nil
 }
 
+// KillTerminalRequest is the KillTerminalRequest schema definition.
+//
 // Request to kill a terminal without releasing it.
 type KillTerminalRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -7092,6 +7361,8 @@ func (v *KillTerminalRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// KillTerminalResponse is the KillTerminalResponse schema definition.
+//
 // Response to 'terminal/kill' method
 type KillTerminalResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -7137,6 +7408,8 @@ func (v *KillTerminalResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ListSessionsRequest is the ListSessionsRequest schema definition.
+//
 // Request parameters for listing existing sessions.
 //
 // Only available if the Agent supports the 'sessionCapabilities.list' capability.
@@ -7197,6 +7470,8 @@ func (v *ListSessionsRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ListSessionsResponse is the ListSessionsResponse schema definition.
+//
 // Response from listing sessions.
 type ListSessionsResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -7271,6 +7546,8 @@ func (v *ListSessionsResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// LoadSessionRequest is the LoadSessionRequest schema definition.
+//
 // Request parameters for loading an existing session.
 //
 // Only available if the Agent supports the 'loadSession' capability.
@@ -7371,6 +7648,8 @@ func (v *LoadSessionRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// LoadSessionResponse is the LoadSessionResponse schema definition.
+//
 // Response from loading an existing session.
 type LoadSessionResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -7433,6 +7712,8 @@ func (v *LoadSessionResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// LogoutCapabilities is the LogoutCapabilities schema definition.
+//
 // Logout capabilities supported by the agent.
 //
 // Supplying '{}' means the agent supports the logout method.
@@ -7471,6 +7752,8 @@ func (v *LogoutCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 	return nil
 }
 
+// LogoutRequest is the LogoutRequest schema definition.
+//
 // Request parameters for the logout method.
 //
 // Terminates the current authenticated session.
@@ -7518,6 +7801,8 @@ func (v *LogoutRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// LogoutResponse is the LogoutResponse schema definition.
+//
 // Response to the 'logout' method.
 type LogoutResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -7563,6 +7848,8 @@ func (v *LogoutResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// McpCapabilities is the McpCapabilities schema definition.
+//
 // MCP capabilities supported by the agent
 type McpCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -7621,7 +7908,9 @@ func (v *McpCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) err
 	return nil
 }
 
-// HTTP transport configuration
+// McpServerHttpInline is the "http" variant of the McpServer schema definition.
+//
+// # HTTP transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.http' is 'true'.
 type McpServerHttpInline struct {
@@ -7679,7 +7968,9 @@ func (v *McpServerHttpInline) decodeKeys(b []byte, m map[string]json.RawMessage)
 	return nil
 }
 
-// SSE transport configuration
+// McpServerSseInline is the "sse" variant of the McpServer schema definition.
+//
+// # SSE transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.sse' is 'true'.
 type McpServerSseInline struct {
@@ -7737,6 +8028,8 @@ func (v *McpServerSseInline) decodeKeys(b []byte, m map[string]json.RawMessage) 
 	return nil
 }
 
+// McpServerAcpInline is the "acp" variant of the McpServer schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -7791,6 +8084,8 @@ func (v *McpServerAcpInline) decodeKeys(b []byte, m map[string]json.RawMessage) 
 	return nil
 }
 
+// McpServer is the McpServer schema definition.
+//
 // Configuration for connecting to an MCP (Model Context Protocol) server.
 //
 // MCP servers provide tools and context that the agent can use when
@@ -7964,6 +8259,8 @@ func (u *McpServer) validate(abs func(string) bool) error {
 	return nil
 }
 
+// McpServerAcp is the McpServerAcp schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8017,6 +8314,8 @@ func (v *McpServerAcp) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 	return nil
 }
 
+// McpServerAcpId is the McpServerAcpId schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8027,6 +8326,8 @@ func (v *McpServerAcp) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 // used by 'mcp/message' to route requests to the component that declared the server.
 type McpServerAcpId string
 
+// McpServerHttp is the McpServerHttp schema definition.
+//
 // HTTP transport configuration for MCP.
 type McpServerHttp struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -8082,6 +8383,8 @@ func (v *McpServerHttp) decodeKeys(b []byte, m map[string]json.RawMessage) error
 	return nil
 }
 
+// McpServerSse is the McpServerSse schema definition.
+//
 // SSE transport configuration for MCP.
 type McpServerSse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -8137,6 +8440,8 @@ func (v *McpServerSse) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 	return nil
 }
 
+// McpServerStdio is the McpServerStdio schema definition.
+//
 // Stdio transport configuration for MCP.
 type McpServerStdio struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -8215,9 +8520,13 @@ func (v *McpServerStdio) validate(abs func(string) bool) error {
 	return nil
 }
 
+// MessageId is the MessageId schema definition.
+//
 // Unique identifier for a message within a session.
 type MessageId string
 
+// MultiSelectItemsString is the "string" variant of the MultiSelectItems schema definition.
+//
 // Multi-select string items with plain string values.
 type MultiSelectItemsString struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -8272,6 +8581,8 @@ func (v *MultiSelectItemsString) decodeKeys(b []byte, m map[string]json.RawMessa
 	return nil
 }
 
+// MultiSelectItemsOther is the Other variant of the MultiSelectItems schema definition.
+//
 // Custom or future typed multi-select items.
 type MultiSelectItemsOther struct {
 	// Custom or future multi-select item type.
@@ -8333,6 +8644,8 @@ func (v *MultiSelectItemsOther) decodeKeys(b []byte, m map[string]json.RawMessag
 	return nil
 }
 
+// MultiSelectItems is the MultiSelectItems schema definition.
+//
 // Items for a multi-select (array) property schema.
 type MultiSelectItems struct {
 	// Multi-select string items with plain string values.
@@ -8453,6 +8766,8 @@ func (u *MultiSelectItems) validate(abs func(string) bool) error {
 	return nil
 }
 
+// MultiSelectPropertySchema is the MultiSelectPropertySchema schema definition.
+//
 // Schema for multi-select (array) properties in an elicitation form.
 type MultiSelectPropertySchema struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -8536,6 +8851,8 @@ func (v *MultiSelectPropertySchema) validate(abs func(string) bool) error {
 	return nil
 }
 
+// NesCapabilities is the NesCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8584,6 +8901,8 @@ func (v *NesCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) err
 	return nil
 }
 
+// NesContextCapabilities is the NesContextCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8648,6 +8967,8 @@ func (v *NesContextCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessa
 	return nil
 }
 
+// NesDiagnosticsCapabilities is the NesDiagnosticsCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8688,6 +9009,8 @@ func (v *NesDiagnosticsCapabilities) decodeKeys(b []byte, _ map[string]json.RawM
 	return nil
 }
 
+// NesDocumentDidChangeCapabilities is the NesDocumentDidChangeCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8733,6 +9056,8 @@ func (v *NesDocumentDidChangeCapabilities) decodeKeys(b []byte, m map[string]jso
 	return nil
 }
 
+// NesDocumentDidCloseCapabilities is the NesDocumentDidCloseCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8773,6 +9098,8 @@ func (v *NesDocumentDidCloseCapabilities) decodeKeys(b []byte, _ map[string]json
 	return nil
 }
 
+// NesDocumentDidFocusCapabilities is the NesDocumentDidFocusCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8813,6 +9140,8 @@ func (v *NesDocumentDidFocusCapabilities) decodeKeys(b []byte, _ map[string]json
 	return nil
 }
 
+// NesDocumentDidOpenCapabilities is the NesDocumentDidOpenCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8853,6 +9182,8 @@ func (v *NesDocumentDidOpenCapabilities) decodeKeys(b []byte, _ map[string]json.
 	return nil
 }
 
+// NesDocumentDidSaveCapabilities is the NesDocumentDidSaveCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8893,6 +9224,8 @@ func (v *NesDocumentDidSaveCapabilities) decodeKeys(b []byte, _ map[string]json.
 	return nil
 }
 
+// NesDocumentEventCapabilities is the NesDocumentEventCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8953,6 +9286,8 @@ func (v *NesDocumentEventCapabilities) decodeKeys(b []byte, _ map[string]json.Ra
 	return nil
 }
 
+// NesEditHistoryCapabilities is the NesEditHistoryCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -8997,6 +9332,8 @@ func (v *NesEditHistoryCapabilities) decodeKeys(b []byte, _ map[string]json.RawM
 	return nil
 }
 
+// NesEventCapabilities is the NesEventCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -9041,6 +9378,8 @@ func (v *NesEventCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage
 	return nil
 }
 
+// NesJumpCapabilities is the NesJumpCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -9081,6 +9420,8 @@ func (v *NesJumpCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage)
 	return nil
 }
 
+// NesOpenFilesCapabilities is the NesOpenFilesCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -9121,6 +9462,8 @@ func (v *NesOpenFilesCapabilities) decodeKeys(b []byte, _ map[string]json.RawMes
 	return nil
 }
 
+// NesRecentFilesCapabilities is the NesRecentFilesCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -9165,6 +9508,8 @@ func (v *NesRecentFilesCapabilities) decodeKeys(b []byte, _ map[string]json.RawM
 	return nil
 }
 
+// NesRelatedSnippetsCapabilities is the NesRelatedSnippetsCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -9205,6 +9550,8 @@ func (v *NesRelatedSnippetsCapabilities) decodeKeys(b []byte, _ map[string]json.
 	return nil
 }
 
+// NesRenameCapabilities is the NesRenameCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -9245,6 +9592,8 @@ func (v *NesRenameCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessag
 	return nil
 }
 
+// NesSearchAndReplaceCapabilities is the NesSearchAndReplaceCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -9285,6 +9634,8 @@ func (v *NesSearchAndReplaceCapabilities) decodeKeys(b []byte, _ map[string]json
 	return nil
 }
 
+// NesUserActionsCapabilities is the NesUserActionsCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -9329,6 +9680,8 @@ func (v *NesUserActionsCapabilities) decodeKeys(b []byte, _ map[string]json.RawM
 	return nil
 }
 
+// NewSessionRequest is the NewSessionRequest schema definition.
+//
 // Request parameters for creating a new session.
 //
 // See protocol docs: [Creating a Session](https://agentclientprotocol.com/protocol/session-setup#creating-a-session)
@@ -9424,6 +9777,8 @@ func (v *NewSessionRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// NewSessionResponse is the NewSessionResponse schema definition.
+//
 // Response from creating a new session.
 //
 // See protocol docs: [Creating a Session](https://agentclientprotocol.com/protocol/session-setup#creating-a-session)
@@ -9495,6 +9850,8 @@ func (v *NewSessionResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// Notice is the Notice schema definition.
+//
 // Fire-and-forget information for the user.
 //
 // Notices are live events rather than session history. Agents must not rely on
@@ -9568,9 +9925,13 @@ func (v *Notice) validate(abs func(string) bool) error {
 	return nil
 }
 
+// NoticeCapabilities is the NoticeCapabilities schema definition.
+//
 // Client support for presenting live notices to the user.
 type NoticeCapabilities struct{}
 
+// NoticeSeverity is the NoticeSeverity schema definition.
+//
 // Severity hint for a session notice.
 type NoticeSeverity string
 
@@ -9589,6 +9950,8 @@ const (
 	NoticeSeverityError NoticeSeverity = "error"
 )
 
+// NumberPropertySchema is the NumberPropertySchema schema definition.
+//
 // Schema for number (floating-point) properties in an elicitation form.
 type NumberPropertySchema struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -9653,6 +10016,8 @@ func (v *NumberPropertySchema) decodeKeys(b []byte, _ map[string]json.RawMessage
 	return nil
 }
 
+// PermissionOption is the PermissionOption schema definition.
+//
 // An option presented to the user when requesting permission.
 type PermissionOption struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -9698,9 +10063,13 @@ func (v *PermissionOption) decodeKeys(b []byte, m map[string]json.RawMessage) er
 	return nil
 }
 
+// PermissionOptionId is the PermissionOptionId schema definition.
+//
 // Unique identifier for a permission option.
 type PermissionOptionId string
 
+// PermissionOptionKind is the PermissionOptionKind schema definition.
+//
 // The type of permission option being presented to the user.
 //
 // Helps clients choose appropriate icons and UI treatment.
@@ -9725,6 +10094,8 @@ const (
 	PermissionOptionKindRejectAlways PermissionOptionKind = "reject_always"
 )
 
+// Plan is the Plan schema definition.
+//
 // An execution plan for accomplishing complex tasks.
 //
 // Plans consist of multiple entries representing individual tasks or goals.
@@ -9789,6 +10160,8 @@ func (v *Plan) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// PlanCapabilities is the PlanCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -9829,6 +10202,8 @@ func (v *PlanCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) er
 	return nil
 }
 
+// PlanEntry is the PlanEntry schema definition.
+//
 // A single entry in the execution plan.
 //
 // Represents a task or goal that the assistant intends to accomplish
@@ -9879,6 +10254,8 @@ func (v *PlanEntry) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// PlanEntryPriority is the PlanEntryPriority schema definition.
+//
 // Priority levels for plan entries.
 //
 // Used to indicate the relative importance or urgency of different
@@ -9901,6 +10278,8 @@ const (
 	PlanEntryPriorityLow PlanEntryPriority = "low"
 )
 
+// PlanEntryStatus is the PlanEntryStatus schema definition.
+//
 // Status of a plan entry in the execution flow.
 //
 // Tracks the lifecycle of each task from planning through completion.
@@ -9922,6 +10301,8 @@ const (
 	PlanEntryStatusCompleted PlanEntryStatus = "completed"
 )
 
+// PlanFile is the PlanFile schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -9969,6 +10350,8 @@ func (v *PlanFile) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// PlanId is the PlanId schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -9976,6 +10359,8 @@ func (v *PlanFile) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 // Unique identifier for a plan within a session.
 type PlanId string
 
+// PlanItems is the PlanItems schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -10040,6 +10425,8 @@ func (v *PlanItems) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// PlanMarkdown is the PlanMarkdown schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -10087,6 +10474,8 @@ func (v *PlanMarkdown) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 	return nil
 }
 
+// PlanRemoved is the PlanRemoved schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -10132,6 +10521,8 @@ func (v *PlanRemoved) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// PlanUpdate is the PlanUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -10189,6 +10580,8 @@ func (v *PlanUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// PlanUpdateContentItems is the "items" variant of the PlanUpdateContent schema definition.
+//
 // Structured plan entries.
 type PlanUpdateContentItems struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10250,6 +10643,8 @@ func (v *PlanUpdateContentItems) decodeKeys(b []byte, m map[string]json.RawMessa
 	return nil
 }
 
+// PlanUpdateContentFile is the "file" variant of the PlanUpdateContent schema definition.
+//
 // A URI pointing to a file containing the plan.
 type PlanUpdateContentFile struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10294,6 +10689,8 @@ func (v *PlanUpdateContentFile) decodeKeys(b []byte, m map[string]json.RawMessag
 	return nil
 }
 
+// PlanUpdateContentMarkdown is the "markdown" variant of the PlanUpdateContent schema definition.
+//
 // Raw markdown content for the plan.
 type PlanUpdateContentMarkdown struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10338,6 +10735,8 @@ func (v *PlanUpdateContentMarkdown) decodeKeys(b []byte, m map[string]json.RawMe
 	return nil
 }
 
+// PlanUpdateContent is the PlanUpdateContent schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -10517,6 +10916,8 @@ func (u *PlanUpdateContent) validate(abs func(string) bool) error {
 	return nil
 }
 
+// PositionEncodingKind is the PositionEncodingKind schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -10541,6 +10942,8 @@ const (
 	PositionEncodingKindUtf8 PositionEncodingKind = "utf-8"
 )
 
+// PromptCapabilities is the PromptCapabilities schema definition.
+//
 // Prompt capabilities supported by the agent in 'session/prompt' requests.
 //
 // Baseline agent functionality requires support for ['ContentBlock::Text']
@@ -10609,6 +11012,8 @@ func (v *PromptCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 	return nil
 }
 
+// PromptRequest is the PromptRequest schema definition.
+//
 // Request parameters for sending a user prompt to the agent.
 //
 // Contains the user's message and any additional context.
@@ -10692,6 +11097,8 @@ func (v *PromptRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// PromptResponse is the PromptResponse schema definition.
+//
 // Response from processing a user prompt.
 //
 // See protocol docs: [Check for Completion](https://agentclientprotocol.com/protocol/prompt-turn#4-check-for-completion)
@@ -10752,12 +11159,16 @@ func (v *PromptResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ProtocolVersion is the ProtocolVersion schema definition.
+//
 // Protocol version identifier.
 //
 // This version is only bumped for breaking changes.
 // Non-breaking changes should be introduced via capabilities.
 type ProtocolVersion uint16
 
+// ProvidersCapabilities is the ProvidersCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -10800,6 +11211,8 @@ func (v *ProvidersCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessag
 	return nil
 }
 
+// ReadTextFileRequest is the ReadTextFileRequest schema definition.
+//
 // Request to read content from a text file.
 //
 // Only available if the client supports the 'fs.readTextFile' capability.
@@ -10867,6 +11280,8 @@ func (v *ReadTextFileRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ReadTextFileResponse is the ReadTextFileResponse schema definition.
+//
 // Response containing the contents of a text file.
 type ReadTextFileResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10917,6 +11332,8 @@ func (v *ReadTextFileResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ReleaseTerminalRequest is the ReleaseTerminalRequest schema definition.
+//
 // Request to release a terminal and free its resources.
 type ReleaseTerminalRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -10969,6 +11386,8 @@ func (v *ReleaseTerminalRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ReleaseTerminalResponse is the ReleaseTerminalResponse schema definition.
+//
 // Response to terminal/release method
 type ReleaseTerminalResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11014,16 +11433,24 @@ func (v *ReleaseTerminalResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// RequestIdNull is the Null variant of the RequestId schema definition.
+//
 // The JSON-RPC 'null' request id.
 type RequestIdNull struct{}
 
+// RequestIdNumber is the Number variant of the RequestId schema definition.
+//
 // A numeric JSON-RPC request id.
 type RequestIdNumber int64
 
+// RequestIdStr is the Str variant of the RequestId schema definition.
+//
 // A string JSON-RPC request id.
 type RequestIdStr string
 
-// JSON RPC Request Id
+// RequestId is the RequestId schema definition.
+//
+// # JSON RPC Request Id
 //
 // An identifier established by the Client that MUST contain a String, Number, or NULL value if included. If it is not included it is assumed to be a notification. The value SHOULD normally not be Null \[1\] and Numbers SHOULD NOT contain fractional parts \[2\]
 //
@@ -11118,6 +11545,8 @@ func (u *RequestId) validate(abs func(string) bool) error {
 	return nil
 }
 
+// RequestPermissionOutcomeCancelled is the "cancelled" variant of the RequestPermissionOutcome schema definition.
+//
 // The prompt turn was cancelled before the user responded.
 //
 // When a client sends a 'session/cancel' notification to cancel an ongoing
@@ -11129,6 +11558,8 @@ type RequestPermissionOutcomeCancelled struct {
 	Outcome string `json:"outcome"`
 }
 
+// RequestPermissionOutcomeSelected is the "selected" variant of the RequestPermissionOutcome schema definition.
+//
 // The user selected one of the provided options.
 type RequestPermissionOutcomeSelected struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11171,6 +11602,8 @@ func (v *RequestPermissionOutcomeSelected) decodeKeys(b []byte, m map[string]jso
 	return nil
 }
 
+// RequestPermissionOutcome is the RequestPermissionOutcome schema definition.
+//
 // The outcome of a permission request.
 type RequestPermissionOutcome struct {
 	// The prompt turn was cancelled before the user responded.
@@ -11301,6 +11734,8 @@ func (u *RequestPermissionOutcome) validate(abs func(string) bool) error {
 	return nil
 }
 
+// RequestPermissionRequest is the RequestPermissionRequest schema definition.
+//
 // Request for user permission to execute a tool call.
 //
 // Sent when the agent needs authorization before performing a sensitive operation.
@@ -11372,6 +11807,8 @@ func (v *RequestPermissionRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// RequestPermissionResponse is the RequestPermissionResponse schema definition.
+//
 // Response to a permission request.
 type RequestPermissionResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11425,6 +11862,8 @@ func (v *RequestPermissionResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// RequiresActionStateUpdate is the RequiresActionStateUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -11463,6 +11902,8 @@ func (v *RequiresActionStateUpdate) decodeKeys(b []byte, _ map[string]json.RawMe
 	return nil
 }
 
+// ResourceLink is the ResourceLink schema definition.
+//
 // A resource that the server is capable of reading, included in a prompt or tool call result.
 type ResourceLink struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11526,6 +11967,8 @@ func (v *ResourceLink) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 	return nil
 }
 
+// ResumeSessionRequest is the ResumeSessionRequest schema definition.
+//
 // Request parameters for resuming an existing session.
 //
 // Resumes an existing session without returning previous messages (unlike 'session/load').
@@ -11617,6 +12060,8 @@ func (v *ResumeSessionRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ResumeSessionResponse is the ResumeSessionResponse schema definition.
+//
 // Response from resuming an existing session.
 type ResumeSessionResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11679,6 +12124,8 @@ func (v *ResumeSessionResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// Role is the Role schema definition.
+//
 // The sender or recipient of messages and data in a conversation.
 type Role string
 
@@ -11693,6 +12140,8 @@ const (
 	RoleUser Role = "user"
 )
 
+// RunningStateUpdate is the RunningStateUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -11731,6 +12180,8 @@ func (v *RunningStateUpdate) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 	return nil
 }
 
+// SelectedPermissionOutcome is the SelectedPermissionOutcome schema definition.
+//
 // The user selected one of the provided options.
 type SelectedPermissionOutcome struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -11772,6 +12223,8 @@ func (v *SelectedPermissionOutcome) decodeKeys(b []byte, m map[string]json.RawMe
 	return nil
 }
 
+// SessionAdditionalDirectoriesCapabilities is the SessionAdditionalDirectoriesCapabilities schema definition.
+//
 // Capabilities for additional session directories support.
 //
 // Supplying '{}' means the agent supports the 'additionalDirectories' field on
@@ -11813,6 +12266,8 @@ func (v *SessionAdditionalDirectoriesCapabilities) decodeKeys(b []byte, _ map[st
 	return nil
 }
 
+// SessionCancelCapabilities is the SessionCancelCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -11855,6 +12310,8 @@ func (v *SessionCancelCapabilities) decodeKeys(b []byte, _ map[string]json.RawMe
 	return nil
 }
 
+// SessionCapabilities is the SessionCapabilities schema definition.
+//
 // Session capabilities supported by the agent.
 //
 // As a baseline, all Agents **MUST** support 'session/new', 'session/prompt', 'session/cancel', and 'session/update'.
@@ -11950,6 +12407,8 @@ func (v *SessionCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage)
 	return nil
 }
 
+// SessionCloseCapabilities is the SessionCloseCapabilities schema definition.
+//
 // Capabilities for the 'session/close' method.
 //
 // Supplying '{}' means the agent supports closing sessions.
@@ -11988,6 +12447,8 @@ func (v *SessionCloseCapabilities) decodeKeys(b []byte, _ map[string]json.RawMes
 	return nil
 }
 
+// SessionConfigBoolean is the SessionConfigBoolean schema definition.
+//
 // A boolean on/off toggle session configuration option payload.
 type SessionConfigBoolean struct {
 	// The current value of the boolean option.
@@ -12018,12 +12479,18 @@ func (v *SessionConfigBoolean) decodeKeys(b []byte, m map[string]json.RawMessage
 	return nil
 }
 
+// SessionConfigGroupId is the SessionConfigGroupId schema definition.
+//
 // Unique identifier for a session configuration option value group.
 type SessionConfigGroupId string
 
+// SessionConfigId is the SessionConfigId schema definition.
+//
 // Unique identifier for a session configuration option.
 type SessionConfigId string
 
+// SessionConfigOptionSelect is the "select" variant of the SessionConfigOption schema definition.
+//
 // Single-value selector (dropdown).
 type SessionConfigOptionSelect struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12092,6 +12559,8 @@ func (v *SessionConfigOptionSelect) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionConfigOptionBoolean is the "boolean" variant of the SessionConfigOption schema definition.
+//
 // Boolean on/off toggle.
 type SessionConfigOptionBoolean struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12146,6 +12615,8 @@ func (v *SessionConfigOptionBoolean) decodeKeys(b []byte, m map[string]json.RawM
 	return nil
 }
 
+// SessionConfigOption is the SessionConfigOption schema definition.
+//
 // A session configuration option selector and its current state.
 type SessionConfigOption struct {
 	// Single-value selector (dropdown).
@@ -12287,6 +12758,8 @@ func (u *SessionConfigOption) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionConfigOptionCategory is the SessionConfigOptionCategory schema definition.
+//
 // Semantic category for a session configuration option.
 //
 // This is intended to help Clients distinguish broadly common selectors (e.g. model selector vs
@@ -12317,6 +12790,8 @@ const (
 	SessionConfigOptionCategoryThoughtLevel SessionConfigOptionCategory = "thought_level"
 )
 
+// SessionConfigOptionsCapabilities is the SessionConfigOptionsCapabilities schema definition.
+//
 // Session configuration option capabilities supported by the client.
 type SessionConfigOptionsCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12362,6 +12837,8 @@ func (v *SessionConfigOptionsCapabilities) decodeKeys(b []byte, _ map[string]jso
 	return nil
 }
 
+// SessionConfigSelect is the SessionConfigSelect schema definition.
+//
 // A single-value selector (dropdown) session configuration option payload.
 type SessionConfigSelect struct {
 	// The currently selected value.
@@ -12406,6 +12883,8 @@ func (v *SessionConfigSelect) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionConfigSelectGroup is the SessionConfigSelectGroup schema definition.
+//
 // A group of possible values for a session configuration option.
 type SessionConfigSelectGroup struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12465,6 +12944,8 @@ func (v *SessionConfigSelectGroup) decodeKeys(b []byte, m map[string]json.RawMes
 	return nil
 }
 
+// SessionConfigSelectOption is the SessionConfigSelectOption schema definition.
+//
 // A possible value for a session configuration option.
 type SessionConfigSelectOption struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12512,12 +12993,18 @@ func (v *SessionConfigSelectOption) decodeKeys(b []byte, m map[string]json.RawMe
 	return nil
 }
 
+// SessionConfigSelectOptionsUngrouped is the Ungrouped variant of the SessionConfigSelectOptions schema definition.
+//
 // A flat list of options with no grouping.
 type SessionConfigSelectOptionsUngrouped []SessionConfigSelectOption
 
+// SessionConfigSelectOptionsGrouped is the Grouped variant of the SessionConfigSelectOptions schema definition.
+//
 // A list of options grouped under headers.
 type SessionConfigSelectOptionsGrouped []SessionConfigSelectGroup
 
+// SessionConfigSelectOptions is the SessionConfigSelectOptions schema definition.
+//
 // Possible values for a session configuration option.
 type SessionConfigSelectOptions struct {
 	// A flat list of options with no grouping.
@@ -12650,9 +13137,13 @@ func (u *SessionConfigSelectOptions) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionConfigValueId is the SessionConfigValueId schema definition.
+//
 // Unique identifier for a session configuration option value.
 type SessionConfigValueId string
 
+// SessionDeleteCapabilities is the SessionDeleteCapabilities schema definition.
+//
 // Capabilities for the 'session/delete' method.
 //
 // Supplying '{}' means the agent supports deleting sessions from 'session/list'.
@@ -12691,6 +13182,8 @@ func (v *SessionDeleteCapabilities) decodeKeys(b []byte, _ map[string]json.RawMe
 	return nil
 }
 
+// SessionForkCapabilities is the SessionForkCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -12733,6 +13226,8 @@ func (v *SessionForkCapabilities) decodeKeys(b []byte, _ map[string]json.RawMess
 	return nil
 }
 
+// SessionId is the SessionId schema definition.
+//
 // A unique identifier for a conversation session between a client and agent.
 //
 // Sessions maintain their own context, conversation history, and state,
@@ -12741,6 +13236,8 @@ func (v *SessionForkCapabilities) decodeKeys(b []byte, _ map[string]json.RawMess
 // See protocol docs: [Session ID](https://agentclientprotocol.com/protocol/session-setup#session-id)
 type SessionId string
 
+// SessionInfo is the SessionInfo schema definition.
+//
 // Information about a session returned by session/list
 type SessionInfo struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -12831,6 +13328,8 @@ func (v *SessionInfo) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionInfoUpdate is the SessionInfoUpdate schema definition.
+//
 // Update to session metadata. All fields are optional to support partial updates.
 //
 // Agents send this notification to update session information like title or custom metadata.
@@ -12878,6 +13377,8 @@ func (v *SessionInfoUpdate) decodeKeys(b []byte, _ map[string]json.RawMessage) e
 	return nil
 }
 
+// SessionListCapabilities is the SessionListCapabilities schema definition.
+//
 // Capabilities for the 'session/list' method.
 //
 // Supplying '{}' means the agent supports listing sessions.
@@ -12916,6 +13417,8 @@ func (v *SessionListCapabilities) decodeKeys(b []byte, _ map[string]json.RawMess
 	return nil
 }
 
+// SessionMessage is the SessionMessage schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -12988,6 +13491,8 @@ func (v *SessionMessage) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionMessageChunk is the SessionMessageChunk schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -13053,6 +13558,8 @@ func (v *SessionMessageChunk) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionMode is the SessionMode schema definition.
+//
 // A mode the agent can operate in.
 //
 // See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/session-modes)
@@ -13102,9 +13609,13 @@ func (v *SessionMode) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// SessionModeId is the SessionModeId schema definition.
+//
 // Unique identifier for a Session Mode.
 type SessionModeId string
 
+// SessionModeState is the SessionModeState schema definition.
+//
 // The set of modes and the one currently active.
 type SessionModeState struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -13162,6 +13673,8 @@ func (v *SessionModeState) decodeKeys(b []byte, m map[string]json.RawMessage) er
 	return nil
 }
 
+// SessionNotification is the SessionNotification schema definition.
+//
 // Notification containing a session update from the agent.
 //
 // Used to stream real-time progress and results during prompt processing.
@@ -13221,6 +13734,8 @@ func (v *SessionNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionResumeCapabilities is the SessionResumeCapabilities schema definition.
+//
 // Capabilities for the 'session/resume' method.
 //
 // Supplying '{}' means the agent supports resuming sessions.
@@ -13259,6 +13774,8 @@ func (v *SessionResumeCapabilities) decodeKeys(b []byte, _ map[string]json.RawMe
 	return nil
 }
 
+// SessionUpdateUserMessageChunk is the "user_message_chunk" variant of the SessionUpdate schema definition.
+//
 // A chunk of the user's message being streamed.
 type SessionUpdateUserMessageChunk struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -13320,6 +13837,8 @@ func (v *SessionUpdateUserMessageChunk) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionUpdateAgentMessageChunk is the "agent_message_chunk" variant of the SessionUpdate schema definition.
+//
 // A chunk of the agent's response being streamed.
 type SessionUpdateAgentMessageChunk struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -13381,6 +13900,8 @@ func (v *SessionUpdateAgentMessageChunk) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionUpdateAgentThoughtChunk is the "agent_thought_chunk" variant of the SessionUpdate schema definition.
+//
 // A chunk of the agent's internal reasoning being streamed.
 type SessionUpdateAgentThoughtChunk struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -13442,6 +13963,8 @@ func (v *SessionUpdateAgentThoughtChunk) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionUpdateToolCall is the "tool_call" variant of the SessionUpdate schema definition.
+//
 // Notification that a new tool call has been initiated.
 type SessionUpdateToolCall struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -13544,6 +14067,8 @@ func (v *SessionUpdateToolCall) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionToolCallUpdate is the "tool_call_update" variant of the SessionUpdate schema definition.
+//
 // Update on the status or results of a tool call.
 type SessionToolCallUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -13646,6 +14171,8 @@ func (v *SessionToolCallUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionUpdatePlan is the "plan" variant of the SessionUpdate schema definition.
+//
 // The agent's execution plan for complex tasks.
 // See protocol docs: [Agent Plan](https://agentclientprotocol.com/protocol/agent-plan)
 type SessionUpdatePlan struct {
@@ -13706,6 +14233,8 @@ func (v *SessionUpdatePlan) decodeKeys(b []byte, m map[string]json.RawMessage) e
 	return nil
 }
 
+// SessionPlanUpdate is the "plan_update" variant of the SessionUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -13764,6 +14293,8 @@ func (v *SessionPlanUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionUpdatePlanRemoved is the "plan_removed" variant of the SessionUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -13810,6 +14341,8 @@ func (v *SessionUpdatePlanRemoved) decodeKeys(b []byte, m map[string]json.RawMes
 	return nil
 }
 
+// SessionAvailableCommandsUpdate is the "available_commands_update" variant of the SessionUpdate schema definition.
+//
 // Available commands are ready or have changed
 type SessionAvailableCommandsUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -13880,7 +14413,9 @@ func (v *SessionAvailableCommandsUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
-// The current mode of the session has changed
+// SessionCurrentModeUpdate is the "current_mode_update" variant of the SessionUpdate schema definition.
+//
+// # The current mode of the session has changed
 //
 // See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/session-modes)
 type SessionCurrentModeUpdate struct {
@@ -13924,6 +14459,8 @@ func (v *SessionCurrentModeUpdate) decodeKeys(b []byte, m map[string]json.RawMes
 	return nil
 }
 
+// SessionConfigOptionUpdate is the "config_option_update" variant of the SessionUpdate schema definition.
+//
 // Session configuration options have been updated.
 type SessionConfigOptionUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -13994,6 +14531,8 @@ func (v *SessionConfigOptionUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionSessionInfoUpdate is the "session_info_update" variant of the SessionUpdate schema definition.
+//
 // Session metadata has been updated (title, timestamps, custom metadata)
 type SessionSessionInfoUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -14039,6 +14578,8 @@ func (v *SessionSessionInfoUpdate) decodeKeys(b []byte, _ map[string]json.RawMes
 	return nil
 }
 
+// SessionUsageUpdate is the "usage_update" variant of the SessionUpdate schema definition.
+//
 // Context window and cost update for the session.
 type SessionUsageUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -14087,6 +14628,8 @@ func (v *SessionUsageUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) 
 	return nil
 }
 
+// SessionUpdateNotice is the "notice" variant of the SessionUpdate schema definition.
+//
 // Information for the user that is not part of session history.
 //
 // Agents MUST only send this update when the Client advertised
@@ -14156,6 +14699,8 @@ func (v *SessionUpdateNotice) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionCompactionUpdate is the "compaction_update" variant of the SessionUpdate schema definition.
+//
 // A context compaction has been created or updated.
 //
 // Agents MUST only send this update when the Client advertised
@@ -14223,6 +14768,8 @@ func (v *SessionCompactionUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionUpdateCompactionSummaryChunk is the "compaction_summary_chunk" variant of the SessionUpdate schema definition.
+//
 // A content block appended to a context compaction's retained summary.
 //
 // Agents MUST only send this update when the Client advertised
@@ -14278,6 +14825,8 @@ func (v *SessionUpdateCompactionSummaryChunk) validate(abs func(string) bool) er
 	return nil
 }
 
+// SessionSubagentUpdate is the "subagent_update" variant of the SessionUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -14373,6 +14922,8 @@ func (v *SessionSubagentUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionUpdateSessionMessage is the "session_message" variant of the SessionUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -14447,6 +14998,8 @@ func (v *SessionUpdateSessionMessage) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SessionUpdateSessionMessageChunk is the "session_message_chunk" variant of the SessionUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -14513,6 +15066,8 @@ func (v *SessionUpdateSessionMessageChunk) validate(abs func(string) bool) error
 	return nil
 }
 
+// SessionUpdate is the SessionUpdate schema definition.
+//
 // Different types of updates that can be sent during session processing.
 //
 // These updates provide real-time feedback about the agent's progress.
@@ -15324,6 +15879,8 @@ func (u *SessionUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SetSessionConfigOptionBoolean is the "boolean" variant of the SetSessionConfigOptionRequest schema definition.
+//
 // A boolean value ('type: "boolean"').
 type SetSessionConfigOptionBoolean struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -15370,6 +15927,8 @@ func (v *SetSessionConfigOptionBoolean) decodeKeys(b []byte, m map[string]json.R
 	return nil
 }
 
+// SetSessionConfigOptionValueId is the ValueId variant of the SetSessionConfigOptionRequest schema definition.
+//
 // A ['SessionConfigValueId'] string value.
 //
 // This is the default when 'type' is absent on the wire. Unknown 'type'
@@ -15419,6 +15978,8 @@ func (v *SetSessionConfigOptionValueId) decodeKeys(b []byte, m map[string]json.R
 	return nil
 }
 
+// SetSessionConfigOptionRequest is the SetSessionConfigOptionRequest schema definition.
+//
 // Request parameters for setting a session configuration option.
 type SetSessionConfigOptionRequest struct {
 	// A boolean value ('type: "boolean"').
@@ -15529,6 +16090,8 @@ func (u *SetSessionConfigOptionRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SetSessionConfigOptionResponse is the SetSessionConfigOptionResponse schema definition.
+//
 // Response to 'session/set_config_option' method.
 type SetSessionConfigOptionResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -15598,6 +16161,8 @@ func (v *SetSessionConfigOptionResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SetSessionModeRequest is the SetSessionModeRequest schema definition.
+//
 // Request parameters for setting a session mode.
 type SetSessionModeRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -15650,6 +16215,8 @@ func (v *SetSessionModeRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// SetSessionModeResponse is the SetSessionModeResponse schema definition.
+//
 // Response to 'session/set_mode' method.
 type SetSessionModeResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -15695,6 +16262,8 @@ func (v *SetSessionModeResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// StateUpdateRunning is the "running" variant of the StateUpdate schema definition.
+//
 // Foreground work is in progress.
 type StateUpdateRunning struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -15730,6 +16299,8 @@ func (v *StateUpdateRunning) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 	return nil
 }
 
+// StateUpdateIdle is the "idle" variant of the StateUpdate schema definition.
+//
 // The child is ready to process another prompt.
 type StateUpdateIdle struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -15779,6 +16350,8 @@ func (v *StateUpdateIdle) decodeKeys(b []byte, _ map[string]json.RawMessage) err
 	return nil
 }
 
+// StateUpdateRequiresAction is the "requires_action" variant of the StateUpdate schema definition.
+//
 // Foreground work is blocked on user action.
 type StateUpdateRequiresAction struct {
 	// The _meta property is reserved by ACP for additional metadata.
@@ -15814,6 +16387,8 @@ func (v *StateUpdateRequiresAction) decodeKeys(b []byte, _ map[string]json.RawMe
 	return nil
 }
 
+// StateUpdateUnknown is the "unknown" variant of the StateUpdate schema definition.
+//
 // The Agent cannot currently determine foreground activity.
 //
 // This replaces previously confirmed activity without ending the work or session.
@@ -15851,6 +16426,8 @@ func (v *StateUpdateUnknown) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 	return nil
 }
 
+// StateUpdateOther is the Other variant of the StateUpdate schema definition.
+//
 // Custom or future state.
 //
 // Values beginning with '_' are reserved for implementation-specific
@@ -15911,6 +16488,8 @@ func (v *StateUpdateOther) decodeKeys(b []byte, m map[string]json.RawMessage) er
 	return nil
 }
 
+// StateUpdate is the StateUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -16106,6 +16685,8 @@ func (u *StateUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// StopReason is the StopReason schema definition.
+//
 // Reasons why an agent stops processing a prompt turn.
 //
 // See protocol docs: [Stop Reasons](https://agentclientprotocol.com/protocol/prompt-turn#stop-reasons)
@@ -16142,6 +16723,8 @@ const (
 	StopReasonCancelled StopReason = "cancelled"
 )
 
+// StringFormat is the StringFormat schema definition.
+//
 // String format types for string properties in elicitation schemas.
 type StringFormat string
 
@@ -16164,6 +16747,8 @@ const (
 	StringFormatDateTime StringFormat = "date-time"
 )
 
+// StringMultiSelectItems is the StringMultiSelectItems schema definition.
+//
 // String item schema for multi-select enum properties.
 type StringMultiSelectItems struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -16217,6 +16802,8 @@ func (v *StringMultiSelectItems) decodeKeys(b []byte, m map[string]json.RawMessa
 	return nil
 }
 
+// StringPropertySchema is the StringPropertySchema schema definition.
+//
 // Schema for string properties in an elicitation form.
 //
 // When 'enum' or 'oneOf' is set, this represents a single-select enum
@@ -16300,6 +16887,8 @@ func (v *StringPropertySchema) decodeKeys(b []byte, _ map[string]json.RawMessage
 	return nil
 }
 
+// SubagentCapabilities is the SubagentCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -16343,6 +16932,8 @@ func (v *SubagentCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage
 	return nil
 }
 
+// SubagentSessionCapabilities is the SubagentSessionCapabilities schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -16390,6 +16981,8 @@ func (v *SubagentSessionCapabilities) decodeKeys(b []byte, _ map[string]json.Raw
 	return nil
 }
 
+// SubagentUpdate is the SubagentUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -16501,6 +17094,8 @@ func (v *SubagentUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// Terminal is the Terminal schema definition.
+//
 // Embed a terminal created with 'terminal/create' by its id.
 //
 // The terminal must be added before calling 'terminal/release'.
@@ -16546,6 +17141,8 @@ func (v *Terminal) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// TerminalExitStatus is the TerminalExitStatus schema definition.
+//
 // Exit status of a terminal command.
 type TerminalExitStatus struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -16590,9 +17187,13 @@ func (v *TerminalExitStatus) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 	return nil
 }
 
+// TerminalId is the TerminalId schema definition.
+//
 // Typed identifier used for terminal values on the wire.
 type TerminalId string
 
+// TerminalOutputRequest is the TerminalOutputRequest schema definition.
+//
 // Request to get the current output and status of a terminal.
 type TerminalOutputRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -16645,6 +17246,8 @@ func (v *TerminalOutputRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// TerminalOutputResponse is the TerminalOutputResponse schema definition.
+//
 // Response containing the terminal output and exit status.
 type TerminalOutputResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -16701,6 +17304,8 @@ func (v *TerminalOutputResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// TextContent is the TextContent schema definition.
+//
 // Text provided to or from an LLM.
 type TextContent struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -16746,6 +17351,8 @@ func (v *TextContent) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// TextDocumentSyncKind is the TextDocumentSyncKind schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -16764,6 +17371,8 @@ const (
 	TextDocumentSyncKindIncremental TextDocumentSyncKind = "incremental"
 )
 
+// TextResourceContents is the TextResourceContents schema definition.
+//
 // Text-based resource contents.
 type TextResourceContents struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -16811,6 +17420,8 @@ func (v *TextResourceContents) decodeKeys(b []byte, m map[string]json.RawMessage
 	return nil
 }
 
+// TitledMultiSelectItems is the TitledMultiSelectItems schema definition.
+//
 // Items definition for titled multi-select enum properties.
 type TitledMultiSelectItems struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -16864,6 +17475,8 @@ func (v *TitledMultiSelectItems) decodeKeys(b []byte, m map[string]json.RawMessa
 	return nil
 }
 
+// ToolCall is the ToolCall schema definition.
+//
 // Represents a tool call that the language model has requested.
 //
 // Tool calls are actions that the agent executes on behalf of the language model,
@@ -16970,6 +17583,8 @@ func (v *ToolCall) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ToolCallContentContent is the "content" variant of the ToolCallContent schema definition.
+//
 // Standard content block (text, images, resources).
 type ToolCallContentContent struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -17024,6 +17639,8 @@ func (v *ToolCallContentContent) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ToolCallContentDiff is the "diff" variant of the ToolCallContent schema definition.
+//
 // File modification shown as a diff.
 type ToolCallContentDiff struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -17090,6 +17707,8 @@ func (v *ToolCallContentDiff) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ToolCallContentTerminal is the "terminal" variant of the ToolCallContent schema definition.
+//
 // Embed a terminal created with 'terminal/create' by its id.
 //
 // The terminal must be added before calling 'terminal/release'.
@@ -17136,6 +17755,8 @@ func (v *ToolCallContentTerminal) decodeKeys(b []byte, m map[string]json.RawMess
 	return nil
 }
 
+// ToolCallContent is the ToolCallContent schema definition.
+//
 // Content produced by a tool call.
 //
 // Tool calls can produce different types of content including
@@ -17324,9 +17945,13 @@ func (u *ToolCallContent) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ToolCallId is the ToolCallId schema definition.
+//
 // Unique identifier for a tool call within a session.
 type ToolCallId string
 
+// ToolCallLocation is the ToolCallLocation schema definition.
+//
 // A file location being accessed or modified by a tool.
 //
 // Enables clients to implement "follow-along" features that track
@@ -17395,6 +18020,8 @@ func (v *ToolCallLocation) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ToolCallStatus is the ToolCallStatus schema definition.
+//
 // Execution status of a tool call.
 //
 // Tool calls progress through different statuses during their lifecycle.
@@ -17422,6 +18049,8 @@ const (
 	ToolCallStatusFailed ToolCallStatus = "failed"
 )
 
+// ToolCallUpdate is the ToolCallUpdate schema definition.
+//
 // An update to an existing tool call.
 //
 // Used to report progress and results as tools execute. All fields except
@@ -17528,6 +18157,8 @@ func (v *ToolCallUpdate) validate(abs func(string) bool) error {
 	return nil
 }
 
+// ToolKind is the ToolKind schema definition.
+//
 // Categories of tools that can be invoked.
 //
 // Tool kinds help clients choose appropriate icons and optimize how they
@@ -17579,6 +18210,8 @@ const (
 	ToolKindOther ToolKind = "other"
 )
 
+// UnknownStateUpdate is the UnknownStateUpdate schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -17625,6 +18258,8 @@ func (v *UnknownStateUpdate) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 	return nil
 }
 
+// UnstableAcceptNesNotification is the AcceptNesNotification schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -17681,6 +18316,8 @@ func (v *UnstableAcceptNesNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableCloseNesRequest is the CloseNesRequest schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -17738,6 +18375,8 @@ func (v *UnstableCloseNesRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableCloseNesResponse is the CloseNesResponse schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -17787,6 +18426,8 @@ func (v *UnstableCloseNesResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableDidChangeDocumentNotification is the DidChangeDocumentNotification schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -17857,6 +18498,8 @@ func (v *UnstableDidChangeDocumentNotification) validate(abs func(string) bool) 
 	return nil
 }
 
+// UnstableDidCloseDocumentNotification is the DidCloseDocumentNotification schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -17913,6 +18556,8 @@ func (v *UnstableDidCloseDocumentNotification) validate(abs func(string) bool) e
 	return nil
 }
 
+// UnstableDidFocusDocumentNotification is the DidFocusDocumentNotification schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -17975,6 +18620,8 @@ func (v *UnstableDidFocusDocumentNotification) validate(abs func(string) bool) e
 	return nil
 }
 
+// UnstableDidOpenDocumentNotification is the DidOpenDocumentNotification schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18037,6 +18684,8 @@ func (v *UnstableDidOpenDocumentNotification) validate(abs func(string) bool) er
 	return nil
 }
 
+// UnstableDidSaveDocumentNotification is the DidSaveDocumentNotification schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18093,6 +18742,8 @@ func (v *UnstableDidSaveDocumentNotification) validate(abs func(string) bool) er
 	return nil
 }
 
+// UnstableDisableProviderRequest is the DisableProviderRequest schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18147,6 +18798,8 @@ func (v *UnstableDisableProviderRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableDisableProviderResponse is the DisableProviderResponse schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18196,6 +18849,8 @@ func (v *UnstableDisableProviderResponse) validate(abs func(string) bool) error 
 	return nil
 }
 
+// UnstableForkSessionRequest is the ForkSessionRequest schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18290,6 +18945,8 @@ func (v *UnstableForkSessionRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableForkSessionResponse is the ForkSessionResponse schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18361,6 +19018,8 @@ func (v *UnstableForkSessionResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableListProvidersRequest is the ListProvidersRequest schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18410,6 +19069,8 @@ func (v *UnstableListProvidersRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableListProvidersResponse is the ListProvidersResponse schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18474,6 +19135,8 @@ func (v *UnstableListProvidersResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableLlmProtocol is the LlmProtocol schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18509,6 +19172,8 @@ const (
 	UnstableLlmProtocolBedrock UnstableLlmProtocol = "bedrock"
 )
 
+// UnstableMcpError is the McpError schema definition.
+//
 // **UNSTABLE**
 //
 // An inner MCP error, distinct from an outer ACP binding or runtime error.
@@ -18582,6 +19247,8 @@ func (v *UnstableMcpError) decodeKeys(b []byte, m map[string]json.RawMessage) er
 	return nil
 }
 
+// UnstableMcpRequestId is the McpRequestId schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18592,7 +19259,9 @@ func (v *UnstableMcpError) decodeKeys(b []byte, m map[string]json.RawMessage) er
 // from the outer ACP JSON-RPC request ID.
 type UnstableMcpRequestId string
 
-// HTTP transport configuration
+// UnstableMcpServerHttp is the "http" variant of the McpServer schema definition.
+//
+// # HTTP transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.http' is 'true'.
 type UnstableMcpServerHttp struct {
@@ -18650,7 +19319,9 @@ func (v *UnstableMcpServerHttp) decodeKeys(b []byte, m map[string]json.RawMessag
 	return nil
 }
 
-// SSE transport configuration
+// UnstableMcpServerSse is the "sse" variant of the McpServer schema definition.
+//
+// # SSE transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.sse' is 'true'.
 type UnstableMcpServerSse struct {
@@ -18708,6 +19379,8 @@ func (v *UnstableMcpServerSse) decodeKeys(b []byte, m map[string]json.RawMessage
 	return nil
 }
 
+// UnstableMcpServerAcpInline is the "acp" variant of the McpServer schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18762,6 +19435,8 @@ func (v *UnstableMcpServerAcpInline) decodeKeys(b []byte, m map[string]json.RawM
 	return nil
 }
 
+// UnstableMcpServer is the McpServer schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18939,6 +19614,8 @@ func (u *UnstableMcpServer) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableMcpServerAcp is the McpServerAcp schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -18992,6 +19669,8 @@ func (v *UnstableMcpServerAcp) decodeKeys(b []byte, m map[string]json.RawMessage
 	return nil
 }
 
+// UnstableMcpServerAcpId is the McpServerAcpId schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19002,6 +19681,8 @@ func (v *UnstableMcpServerAcp) decodeKeys(b []byte, m map[string]json.RawMessage
 // used by 'mcp/message' to route requests to the component that declared the server.
 type UnstableMcpServerAcpId string
 
+// UnstableMessageMcpNotification is the MessageMcpNotification schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19067,6 +19748,8 @@ func (v *UnstableMessageMcpNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableMessageMcpRequest is the MessageMcpRequest schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19129,6 +19812,8 @@ func (v *UnstableMessageMcpRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableMessageMcpResult is the Result variant of the MessageMcpResponse schema definition.
+//
 // An opaque inner MCP result.
 type UnstableMessageMcpResult struct {
 	// Optional ACP carrier metadata.
@@ -19166,6 +19851,8 @@ func (v *UnstableMessageMcpResult) decodeKeys(b []byte, m map[string]json.RawMes
 	return nil
 }
 
+// UnstableMessageMcpError is the Error variant of the MessageMcpResponse schema definition.
+//
 // A structured inner MCP error.
 type UnstableMessageMcpError struct {
 	// Optional ACP carrier metadata.
@@ -19203,6 +19890,8 @@ func (v *UnstableMessageMcpError) decodeKeys(b []byte, m map[string]json.RawMess
 	return nil
 }
 
+// UnstableMessageMcpResponse is the MessageMcpResponse schema definition.
+//
 // **UNSTABLE**
 //
 // The successful outer ACP 'mcp/message' response carries exactly one
@@ -19311,6 +20000,8 @@ func (u *UnstableMessageMcpResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableNesDiagnostic is the NesDiagnostic schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19362,6 +20053,8 @@ func (v *UnstableNesDiagnostic) decodeKeys(b []byte, m map[string]json.RawMessag
 	return nil
 }
 
+// UnstableNesDiagnosticSeverity is the NesDiagnosticSeverity schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19388,6 +20081,8 @@ const (
 	UnstableNesDiagnosticSeverityHint UnstableNesDiagnosticSeverity = "hint"
 )
 
+// UnstableNesEditHistoryEntry is the NesEditHistoryEntry schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19435,6 +20130,8 @@ func (v *UnstableNesEditHistoryEntry) decodeKeys(b []byte, m map[string]json.Raw
 	return nil
 }
 
+// UnstableNesEditSuggestion is the NesEditSuggestion schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19498,6 +20195,8 @@ func (v *UnstableNesEditSuggestion) decodeKeys(b []byte, m map[string]json.RawMe
 	return nil
 }
 
+// UnstableNesExcerpt is the NesExcerpt schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19547,6 +20246,8 @@ func (v *UnstableNesExcerpt) decodeKeys(b []byte, m map[string]json.RawMessage) 
 	return nil
 }
 
+// UnstableNesJumpSuggestion is the NesJumpSuggestion schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19596,6 +20297,8 @@ func (v *UnstableNesJumpSuggestion) decodeKeys(b []byte, m map[string]json.RawMe
 	return nil
 }
 
+// UnstableNesOpenFile is the NesOpenFile schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19651,6 +20354,8 @@ func (v *UnstableNesOpenFile) decodeKeys(b []byte, m map[string]json.RawMessage)
 	return nil
 }
 
+// UnstableNesRecentFile is the NesRecentFile schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19700,6 +20405,8 @@ func (v *UnstableNesRecentFile) decodeKeys(b []byte, m map[string]json.RawMessag
 	return nil
 }
 
+// UnstableNesRejectReason is the NesRejectReason schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19726,6 +20433,8 @@ const (
 	UnstableNesRejectReasonCancelled UnstableNesRejectReason = "cancelled"
 )
 
+// UnstableNesRelatedSnippet is the NesRelatedSnippet schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19783,6 +20492,8 @@ func (v *UnstableNesRelatedSnippet) decodeKeys(b []byte, m map[string]json.RawMe
 	return nil
 }
 
+// UnstableNesRenameSuggestion is the NesRenameSuggestion schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19834,6 +20545,8 @@ func (v *UnstableNesRenameSuggestion) decodeKeys(b []byte, m map[string]json.Raw
 	return nil
 }
 
+// UnstableNesRepository is the NesRepository schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19883,6 +20596,8 @@ func (v *UnstableNesRepository) decodeKeys(b []byte, m map[string]json.RawMessag
 	return nil
 }
 
+// UnstableNesSearchAndReplaceSuggestion is the NesSearchAndReplaceSuggestion schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19936,6 +20651,8 @@ func (v *UnstableNesSearchAndReplaceSuggestion) decodeKeys(b []byte, m map[strin
 	return nil
 }
 
+// UnstableNesSuggestContext is the NesSuggestContext schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -19988,6 +20705,8 @@ func (v *UnstableNesSuggestContext) decodeKeys(b []byte, _ map[string]json.RawMe
 	return nil
 }
 
+// UnstableNesSuggestionEdit is the "edit" variant of the NesSuggestion schema definition.
+//
 // A text edit suggestion.
 type UnstableNesSuggestionEdit struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -20048,6 +20767,8 @@ func (v *UnstableNesSuggestionEdit) decodeKeys(b []byte, m map[string]json.RawMe
 	return nil
 }
 
+// UnstableNesSuggestionJump is the "jump" variant of the NesSuggestion schema definition.
+//
 // A jump-to-location suggestion.
 type UnstableNesSuggestionJump struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -20094,6 +20815,8 @@ func (v *UnstableNesSuggestionJump) decodeKeys(b []byte, m map[string]json.RawMe
 	return nil
 }
 
+// UnstableNesSuggestionRename is the "rename" variant of the NesSuggestion schema definition.
+//
 // A rename symbol suggestion.
 type UnstableNesSuggestionRename struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -20142,6 +20865,8 @@ func (v *UnstableNesSuggestionRename) decodeKeys(b []byte, m map[string]json.Raw
 	return nil
 }
 
+// UnstableNesSuggestionSearchAndReplace is the "searchAndReplace" variant of the NesSuggestion schema definition.
+//
 // A search-and-replace suggestion.
 type UnstableNesSuggestionSearchAndReplace struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -20192,6 +20917,8 @@ func (v *UnstableNesSuggestionSearchAndReplace) decodeKeys(b []byte, m map[strin
 	return nil
 }
 
+// UnstableNesSuggestion is the NesSuggestion schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20425,6 +21152,8 @@ func (u *UnstableNesSuggestion) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableNesSuggestionId is the NesSuggestionId schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20432,6 +21161,8 @@ func (u *UnstableNesSuggestion) validate(abs func(string) bool) error {
 // Unique identifier for a next edit suggestion.
 type UnstableNesSuggestionId string
 
+// UnstableNesTextEdit is the NesTextEdit schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20479,6 +21210,8 @@ func (v *UnstableNesTextEdit) decodeKeys(b []byte, m map[string]json.RawMessage)
 	return nil
 }
 
+// UnstableNesTriggerKind is the NesTriggerKind schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20501,6 +21234,8 @@ const (
 	UnstableNesTriggerKindManual UnstableNesTriggerKind = "manual"
 )
 
+// UnstableNesUserAction is the NesUserAction schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20552,6 +21287,8 @@ func (v *UnstableNesUserAction) decodeKeys(b []byte, m map[string]json.RawMessag
 	return nil
 }
 
+// UnstablePosition is the Position schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20601,6 +21338,8 @@ func (v *UnstablePosition) decodeKeys(b []byte, m map[string]json.RawMessage) er
 	return nil
 }
 
+// UnstableProviderCurrentConfig is the ProviderCurrentConfig schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20648,6 +21387,8 @@ func (v *UnstableProviderCurrentConfig) decodeKeys(b []byte, m map[string]json.R
 	return nil
 }
 
+// UnstableProviderId is the ProviderId schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20655,6 +21396,8 @@ func (v *UnstableProviderCurrentConfig) decodeKeys(b []byte, m map[string]json.R
 // Unique identifier for a configurable LLM provider.
 type UnstableProviderId string
 
+// UnstableProviderInfo is the ProviderInfo schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20722,6 +21465,8 @@ func (v *UnstableProviderInfo) decodeKeys(b []byte, m map[string]json.RawMessage
 	return nil
 }
 
+// UnstableRange is the Range schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20769,6 +21514,8 @@ func (v *UnstableRange) decodeKeys(b []byte, m map[string]json.RawMessage) error
 	return nil
 }
 
+// UnstableRejectNesNotification is the RejectNesNotification schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20829,6 +21576,8 @@ func (v *UnstableRejectNesNotification) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableSetProviderRequest is the SetProviderRequest schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20892,6 +21641,8 @@ func (v *UnstableSetProviderRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableSetProviderResponse is the SetProviderResponse schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -20941,6 +21692,8 @@ func (v *UnstableSetProviderResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableStartNesRequest is the StartNesRequest schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -21000,6 +21753,8 @@ func (v *UnstableStartNesRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableStartNesResponse is the StartNesResponse schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -21054,6 +21809,8 @@ func (v *UnstableStartNesResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableSuggestNesRequest is the SuggestNesRequest schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -21120,6 +21877,8 @@ func (v *UnstableSuggestNesRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableSuggestNesResponse is the SuggestNesResponse schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -21189,6 +21948,8 @@ func (v *UnstableSuggestNesResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// UnstableTextDocumentContentChangeEvent is the TextDocumentContentChangeEvent schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -21239,6 +22000,8 @@ func (v *UnstableTextDocumentContentChangeEvent) decodeKeys(b []byte, m map[stri
 	return nil
 }
 
+// UnstableWorkspaceFolder is the WorkspaceFolder schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -21286,6 +22049,8 @@ func (v *UnstableWorkspaceFolder) decodeKeys(b []byte, m map[string]json.RawMess
 	return nil
 }
 
+// UnstructuredCommandInput is the UnstructuredCommandInput schema definition.
+//
 // All text that was typed after the command name is provided as input.
 type UnstructuredCommandInput struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -21327,6 +22092,8 @@ func (v *UnstructuredCommandInput) decodeKeys(b []byte, m map[string]json.RawMes
 	return nil
 }
 
+// Usage is the Usage schema definition.
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -21388,6 +22155,8 @@ func (v *Usage) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// UsageUpdate is the UsageUpdate schema definition.
+//
 // Context window and cost update for a session.
 type UsageUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -21435,6 +22204,8 @@ func (v *UsageUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// WaitForTerminalExitRequest is the WaitForTerminalExitRequest schema definition.
+//
 // Request to wait for a terminal command to exit.
 type WaitForTerminalExitRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -21487,6 +22258,8 @@ func (v *WaitForTerminalExitRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// WaitForTerminalExitResponse is the WaitForTerminalExitResponse schema definition.
+//
 // Response containing the exit status of a terminal command.
 type WaitForTerminalExitResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -21540,6 +22313,8 @@ func (v *WaitForTerminalExitResponse) validate(abs func(string) bool) error {
 	return nil
 }
 
+// WriteTextFileRequest is the WriteTextFileRequest schema definition.
+//
 // Request to write content to a text file.
 //
 // Only available if the client supports the 'fs.writeTextFile' capability.
@@ -21605,6 +22380,8 @@ func (v *WriteTextFileRequest) validate(abs func(string) bool) error {
 	return nil
 }
 
+// WriteTextFileResponse is the WriteTextFileResponse schema definition.
+//
 // Response to 'fs/write_text_file'
 type WriteTextFileResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -21654,6 +22431,11 @@ func (v *WriteTextFileResponse) validate(abs func(string) bool) error {
 // protocol that every agent handles, the requests and notifications a client sends it.
 // NewAgentSideConnection serves it. AgentExperimental adds the unstable methods, and the
 // optional interfaces the methods an agent may leave out.
+//
+// The connection calls a request's method on a goroutine of its own, so the
+// methods for requests run concurrently. It calls the methods for
+// notifications one at a time, in the order they arrive
+// (0024-PLAN-documentation.md, A5).
 type Agent interface {
 	// Request parameters for the authenticate method.
 	//
@@ -21832,6 +22614,11 @@ type AgentExperimental interface {
 // Client is implemented by a client: one method for each stable client method of the
 // protocol, the requests and notifications an agent sends it. NewClientSideConnection
 // serves it. ClientExperimental adds the unstable methods.
+//
+// The connection calls a request's method on a goroutine of its own, so the
+// methods for requests run concurrently. It calls the methods for
+// notifications one at a time, in the order they arrive
+// (0024-PLAN-documentation.md, A5).
 type Client interface {
 	// Notification sent by the agent when a URL-based elicitation is complete.
 	CompleteElicitation(ctx context.Context, params CompleteElicitationNotification) error
