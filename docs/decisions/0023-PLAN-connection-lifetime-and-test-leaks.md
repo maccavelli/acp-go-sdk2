@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-19
 associated-madr: "0023-MADR-connection-lifetime-and-test-leaks.md"
 ---
@@ -316,3 +316,46 @@ The first `make markdownlint` failed on the new report: MD004, the file's lists 
 use `-`. The markers were changed, 29 of them, and it passed.
 
 Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0. The step changes no Go file.
+
+### Step 5, verification and close, 2026-10-19
+
+**The push.** `make push-guard` ran after a fetch over the six commits not yet pushed, `d004e9a..0a33f4f`, and passed, exit 0. The six
+are the MADR and this PLAN, and steps 1 to 4. The owner pushed `0a33f4f`. CI run `39290154750` on it concluded `success` on its first attempt, on
+`validate (ubuntu-24.04)`, `validate (macos-15)` and `validate (windows-2025)`.
+
+**The gates over the tree**, on `0a33f4f`, with the API listing against `v1.16.0`, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`, whose tests run with the guard;
+* `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint`, and the identifier scan;
+* the API listing: 2429 lines at `v1.16.0` and in the tree, 0 removed, 0 added;
+* Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+**Acceptance.** Every criterion in "Verification" is met:
+
+* **Each step's checks** passed, and its record is written.
+* **The guard reports nothing on the root suite:**
+  * without `-race`: step 2's `go test -count=1 .`;
+  * with `-race`: `make pre-add-check`;
+  * with `-count` above 1: steps 2 and 3's 1,000-run passes;
+  * on Windows: the Windows gate.
+* **A `Close` ends a blocked notification handler's context at once**, with a reader that is an `io.Closer` and with one that is not:
+  `TestCloseEndsNotificationHandlers`, step 3.
+* **The end-of-input tests pass unchanged.** No commit of this PLAN touches `end_of_input_test.go`: its last change is `95d66e3`, in
+  [0019-PLAN-idioms-performance.md](0019-PLAN-idioms-performance.md). Its tests ran 1,000 times in step 3.
+* **The API listing** against `v1.16.0` shows no difference.
+* **CI** passed on the pushed commits.
+
+Not done, as the MADR decided: an SDK timer or keepalive, `Err()`, `Wait()`, and an agent-process helper. Each is left to a record of
+its own.
+
+This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`.
+
+**Left to the owner.**
+
+* Tag `v1.16.1`, an annotated tag whose message is its name, as `v1.16.0` is, on this close commit once its CI passes. Its code is the
+  same as at `4a769a5`.
+* Publish its release from the release text of
+  [0023-REPORT-release-notes-v1-16-1.md](../reports/0023-REPORT-release-notes-v1-16-1.md), with its relative links rewritten to the
+  tag.
