@@ -1,0 +1,194 @@
+---
+status: proposed
+date: 2026-10-19
+associated-madr: "0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md"
+---
+
+# Implement phase 1 of 0024: the Go 1.26.9 floor
+
+Associated MADR: [0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md](0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md)
+
+## Goal
+
+Implement phase 1 of the MADR's outcome, findings G1 to G9, as the owner decided questions 2 and 8 on 2026-10-19:
+
+* both `go` lines become `1.26.9`;
+* the tests build and pass on go1.26.9 and go1.27.2;
+* the leak guard runs on both versions, and fails with an instruction, not a panic, when the profile is absent;
+* CI tests a matrix of go1.26.9 and a pinned go1.27.2 on its three runners, and checks the matrix's floor against the `go` line;
+* the README states the minimum Go version;
+* 0002's and 0004's Go 1.27.2 floor is marked superseded.
+
+The exported API, the wire bytes and the SDK's behaviour do not change. The release is proposed as the patch `v1.16.2`, which the owner
+confirms at the tag.
+
+## Facts this plan rests on
+
+Each was measured or read on `c4777ff`, in the tree or in a scratch copy, on 2026-10-19 (the MADR's "How the assessment was made").
+Step 1 re-asserts the code facts with a script.
+
+| For | The tree as it is |
+| :--- | :--- |
+| G1 | `go.mod:3` and `cmd/generate/go.mod:3` read `go 1.27.2`. At `1.26.9`, both modules build on go1.26.9, and go1.27.2's `vet` reports no newer API once G2 is fixed. `make lint` reports 0 issues and `go fix -diff` prints nothing at that line. |
+| G2 | `gates_test.go:440`, `:444`, `:449`, `:454`, `:461`: `return valueGate{wire: …` sets fields of the embedded `gatedMethod`, a Go 1.27 language feature. |
+| G3 | `TestCheckAcceptsRepository` (`cmd/generate/main_test.go:315`) fails on go1.26.9 through G2 only. |
+| G4 | `cmd/generate/internal/mutate/mutate_test.go:92` and `:287` write `go 1.27.2` into fixture modules. |
+| G5 | `leak_test.go:35`, `p.WriteTo(&buf, 1)`, with `p := pprof.Lookup("goroutineleak")`, panics on go1.26.9 unless `GOEXPERIMENT=goroutineleakprofile` is set. go1.27.2 rejects that setting: "go: unknown GOEXPERIMENT goroutineleakprofile". |
+| G6 | go1.27.2 builds with `goexperiment.jsonv2` by default, go1.26.9 without. |
+| G7 | `ci.yml:32-34`: `actions/setup-go` with `go-version-file: go.mod`; the matrix is `os` only (`ci.yml:21-23`). |
+| G9 | The README's "Installation" (`README.md:12-18`) gives `go get` with no Go version. |
+| — | `README.md:146` says an empty `json.RawMessage` "prints as `null` under Go 1.27's default build". What it prints under go1.26.9 is not yet measured. |
+| — | The Makefile's `test`, `fuzz`, `bench` and `mutation-*` targets and `scripts/go-precheck.sh` (`:132`) run `go test` with the environment they are given. |
+
+## Scope
+
+In scope:
+
+* both `go.mod` files;
+* `gates_test.go`, `leak_test.go` and `cmd/generate/internal/mutate/mutate_test.go`;
+* `Makefile` and `scripts/go-precheck.sh`, which set the experiment on Go 1.26;
+* `.github/workflows/ci.yml`;
+* `README.md`: the minimum Go version and the raw-value note;
+* the records:
+  * 0002's and 0004's annotation;
+  * this PLAN and its row;
+  * the release notes `docs/reports/0024-REPORT-release-notes-v1-16-2.md` and their row.
+
+Out of scope:
+
+* phases 2 to 4 of the MADR;
+* the 0023 leak guard's false negative, which amends [0023-PLAN-connection-lifetime-and-test-leaks.md](0023-PLAN-connection-lifetime-and-test-leaks.md);
+* any `toolchain` directive.
+
+## Design
+
+### The floor (G1 to G4, G9)
+
+* **The `go` lines.** `go 1.27.2` becomes `go 1.26.9` in both modules. No `toolchain` line is added: the matrix pins the versions CI
+  runs, and a developer's own Go, 1.26.9 or newer, builds the module.
+* **G2.** Each of the five literals names the embedded struct, as before `95d66e3`:
+  `valueGate{gatedMethod: gatedMethod{wire: …, advertise: advertise}, field: …, variant: variant}`. `go fix` at the `1.26.9` line does
+  not propose the flattened form again; the MADR's G1 measured `go fix -diff` empty there.
+* **G4.** The two fixture modules write `go 1.26.9`.
+* **G9.** "Installation" states: "Requires Go 1.26.9 or newer, the `go` line of `go.mod`."
+* **The raw-value note.** Step 2 measures what an empty `json.RawMessage` prints under go1.26.9's default build, with `%v`, `%s` and
+  `fmt.Sprint`. The README then states each version's result as measured.
+
+### The leak guard without the profile (G5, question 2)
+
+`waitForLeaks` checks `p == nil` before using `p`. When it is nil, `waitForLeaks` returns a message, and `TestMain` prints it and exits 1:
+
+```text
+the goroutineleak profile is not available: on Go 1.26, set GOEXPERIMENT=goroutineleakprofile
+(0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md, question 2)
+```
+
+The rest of `waitForLeaks` is unchanged by this PLAN.
+
+**Setting the experiment on Go 1.26:**
+
+* The `Makefile`, at its top, appends `goroutineleakprofile` to `GOEXPERIMENT`, and exports it, when `go env GOVERSION` starts with
+  `go1.26`. A `GOEXPERIMENT` already set, such as `nojsonv2`, keeps its value, joined with a comma.
+* `scripts/go-precheck.sh` does the same before its tests, so the pre-add check runs the guard on either version.
+* A bare `go test` on Go 1.26 without the setting fails with the message above, as decided.
+
+### CI (G7, question 8)
+
+`validate`'s matrix becomes `os` × `go`, with the experiment carried in the matrix:
+
+```yaml
+matrix:
+  os: [ubuntu-24.04, macos-15, windows-2025]
+  go: ['1.26.9', '1.27.2']
+  include:
+    - go: '1.26.9'
+      floor: true
+      experiment: goroutineleakprofile
+```
+
+* **The Go version.** `actions/setup-go` takes `go-version: ${{ matrix.go }}`. The job sets `GOTOOLCHAIN: local`, so the `go` command
+  runs the version installed, never a download.
+* **The experiment.** The job's `GOEXPERIMENT` is `${{ matrix.experiment }}`, empty on 1.27.2.
+* **The floor check,** on the floor's Linux job:
+  `test "$(go list -m -f '{{.GoVersion}}')" = "${{ matrix.go }}"`, run in both modules. It fails when the `go` line and the matrix's
+  floor differ.
+* **Which steps run where:**
+  * the test steps run in all six jobs;
+  * the race detector and `govulncheck` run on Linux for both versions, since the standard library they check differs;
+  * the `GOEXPERIMENT=nojsonv2` step runs on Linux for 1.27.2 only. 1.26.9's default build already uses the v1 backend, and its job
+    tests it.
+  * lint, formatting, tidiness and the docs checks run on Linux for 1.27.2 only, as now.
+
+## Implementation Steps
+
+Each step ends with its gates and an execution record. The owner commits it; agents do not commit on `main`. Every new check is seen to
+fail on a planted break in a scratch copy, never in the tree, before it is relied on.
+
+1. **Records.**
+   * This PLAN and its `docs/README.md` row.
+   * 0002 and 0004 each gain a dated annotation: their Go 1.27.2 floor is superseded by the 0024 MADR. Neither is rewritten.
+   * The facts above re-asserted on the tree by a script.
+2. **The floor:**
+   * both `go` lines;
+   * G2's literals and G4's fixtures;
+   * the leak guard's `nil` check;
+   * the `Makefile` and `scripts/go-precheck.sh`;
+   * the README: the minimum Go version, and the raw-value note as measured.
+3. **CI.** The matrix, `GOTOOLCHAIN: local`, the experiment, the floor check, and the steps' placement. `actionlint` passes.
+4. **Release notes.** `docs/reports/0024-REPORT-release-notes-v1-16-2.md` and its `docs/README.md` row.
+5. **Verification and close.**
+   * The gates over the tree.
+   * `make push-guard`.
+   * After CI passes on the pushed commits, in all six jobs, this PLAN and its row become `complete`.
+   * The owner tags `v1.16.2` and publishes its release from the report.
+
+## Verification
+
+Per code step, through the Python runner outside the tree:
+
+* **The existing gates on go1.27.2:**
+  * regeneration;
+  * `make pre-add-check`;
+  * `GOEXPERIMENT=nojsonv2 go test ./...`;
+  * `GOOS=windows go vet ./...` in both modules;
+  * `make check-records`, `make markdownlint` and the identifier scan;
+  * the API listing against `v1.16.1`;
+  * Windows `go test -count=1 -shuffle=on ./...` in both modules.
+* **A new gate on go1.26.9.** `go build`, `go vet` and `go test -count=1 ./...` in both modules, with `GOTOOLCHAIN=go1.26.9` and
+  `GOEXPERIMENT=goroutineleakprofile`. The toolchain and its caches stay in the session's scratch directory, as the MADR's measurement
+  kept them.
+* **CI's six jobs** after the push, in step 5.
+
+Planted breaks, at least. Each must be seen to fail on the check named. A break that is not seen to fail stops its step, and the step
+adds a check that fails on it.
+
+| For | Break | The check that must fail |
+| :--- | :--- | :--- |
+| G2 | one literal flattened again | go1.27.2's `go vet` at the `1.26.9` line ("requires go1.27 or later"), and the go1.26.9 gate's build of the tests |
+| G4 | one fixture back at `go 1.27.2` | the go1.26.9 gate's `cmd/generate/internal/mutate` tests |
+| G5 | the `nil` check removed | the go1.26.9 suite without the experiment panics instead of printing the instruction |
+| G5 | a planted leaking test | the guard, on go1.27.2 and on go1.26.9 with the experiment |
+| G5 | the `Makefile`'s condition reversed, setting the experiment on 1.27 | `make test` on go1.27.2: "unknown GOEXPERIMENT goroutineleakprofile" |
+| G7 | the matrix floor set to `1.26.8` while the `go` line reads `1.26.9` | the floor check's command, run locally with that value |
+
+Expected API listing difference against `v1.16.1`: none.
+
+Acceptance:
+
+* every step's checks pass and its record is written;
+* the root suite and the generator's pass on go1.26.9 with the experiment, and on go1.27.2 without it;
+* the guard reports the planted leak on both versions;
+* CI's six jobs pass on the pushed commits;
+* `make lint` reports 0 issues and `go fix -diff` prints nothing at the `1.26.9` line;
+* the API listing against `v1.16.1` shows no difference.
+
+## Rollout and Rollback
+
+Each step is one commit, reverted by reverting it.
+
+* Reverting step 2 restores `go 1.27.2`. It needs step 3 reverted too, since the floor check would then fail.
+* For consumers, the change only widens the Go versions the module accepts.
+
+The release is the patch `v1.16.2`, which the owner confirms at the tag.
+
+## Execution record

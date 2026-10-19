@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-19
 decision-makers: Repository owner
 ---
@@ -25,7 +25,8 @@ Comments, Google's Go Style Guide, the module compatibility rules and community 
 The owner asked for the codebase to be assessed against it, and for a record of how to improve its compliance. The owner also set the
 language floor: **the `go` line becomes 1.26.9**.
 
-This record holds the findings and the decisions they need. It decides nothing yet. Each question has a recommended answer for the owner.
+This record holds the findings and the decisions they need. Each question had a recommended answer, and the owner decided them on
+2026-10-19 (see "Decided with the owner, 2026-10-19").
 
 ### How the assessment was made
 
@@ -134,7 +135,7 @@ This record holds the findings and the decisions they need. It decides nothing y
 
 ## Decision Outcome
 
-Chosen option: "P1", proposed for the owner's decision.
+Chosen option: "P1", decided by the owner on 2026-10-19.
 
 * It applies the floor the owner set, and the fixes the practices call for, without breaking v1.
 * P2 leaves the crash on a nil argument (A1) and the raw peer bytes in logs (A3) in place.
@@ -147,7 +148,8 @@ The phases, each subject to the questions below:
    * Both `go` lines become `1.26.9`.
    * The five literals of G2 name `gatedMethod:`. The two fixtures of G4 write the floor.
    * CI runs a matrix of the floor, `1.26.9`, and the latest stable release. It keeps `GOEXPERIMENT=nojsonv2` on the latest and sets
-     `GOEXPERIMENT=goroutineleakprofile` on the floor.
+     `GOEXPERIMENT=goroutineleakprofile` on the floor. Decided under question 8: the newest version is pinned, `1.27.2`, and a CI
+     step checks that the matrix's floor equals the `go` line.
    * The leak guard handles an absent profile (question 2).
    * The README states the minimum Go version.
    * 0002's `go 1.27.2` is superseded by this record. Its schema decision stands.
@@ -162,7 +164,7 @@ The phases, each subject to the questions below:
    * Question 4 decides the generated type comments.
 3. **Behaviour (A1 to A4, A14).** As questions 1, 3 and 5 decide.
 4. **Process (V2, V3).** An API-compatibility gate in CI from the existing listing, and the generator's path to `// Deprecated:`, as
-   questions 6 and 7 decide.
+   questions 6 and 7 decide. Decided under question 6: the gate is `gorelease`, not the existing listing.
 
 V1, the unstable API's policy, stays with the record question 16 of 0019 calls for, which a schema `1.26.0` update will need. A9, A12
 and A13 stay as recorded.
@@ -236,6 +238,43 @@ Each has a recommended answer.
    * Recommended: `1.26.9` and the latest stable release, through `go-version` in a matrix rather than `go-version-file`.
    * Alternative: `go-version-file` plus `check-latest`, which tests one version.
 
+#### Decided with the owner, 2026-10-19
+
+| Question | Answer |
+| :--- | :--- |
+| 1. Nil arguments and handler panics | As recommended: the three constructors panic on a nil agent, client, reader or writer; a panicking handler keeps ending the process, documented. |
+| 2. The leak guard without the profile | As recommended: the guard fails with the instruction to set `GOEXPERIMENT=goroutineleakprofile`; the Makefile and CI's floor job set it on Go 1.26. |
+| 3. A handler's error text on the wire | As recommended: documented. |
+| 4. Generated type comments | As recommended: the generator writes `// <Name> is …` before the description. This amends 0012's mapping. |
+| 5. Logs | As recommended: A3's lines log the size; peer-caused faults at Warn; a connection's end at Debug; A14 documented. |
+| 6. An API-compatibility gate | **Not the recommendation:** `gorelease`, from `golang.org/x/exp`, pinned to a pseudo-version, in CI and a `make api` target, on the root module. |
+| 7. Deprecation | As recommended: the generator path to `// Deprecated:` now, with an engine case. |
+| 8. The CI matrix | **Refined from the recommendation:** `1.26.9` and a pinned `1.27.2`, with a step that fails when the matrix's floor differs from the `go` line. |
+
+On question 8, the owner asked for the matrix's pros and cons before deciding:
+
+* For it: it tests both supported Go releases, so a construct like G2 fails CI at once, and each version's default JSON backend.
+* Against it:
+  * about twice the CI minutes;
+  * a floating "latest" can turn CI red with no change here;
+  * the floor in two places can drift.
+
+Pinning `1.27.2` and checking the floor against the `go` line answer the second and third.
+
+On question 6, the two tools were run on 2026-10-19 on scratch clones, at `golang.org/x/exp@v0.0.0-20261014143641-f0251eb4aa3e`, the
+module's latest; it has no tagged version.
+
+* **The tree against `v1.16.1`:** `gorelease -base=v1.16.1` exited 0 and suggested `v1.16.2`; `apidiff -m -incompatible` printed
+  nothing.
+* **With `ExtRequest` removed, committed in a scratch clone:**
+  * `gorelease` printed "ExtRequest: removed" and "Incompatible changes were detected", and exited 1;
+  * `apidiff -m -incompatible` printed "- ExtRequest: removed" and **exited 0**, so a gate on it would have to parse its output.
+* **What gorelease needs:** a clean working tree ("repo … has uncommitted changes" otherwise) and the base version from the module
+  proxy.
+
+Both run as `go run <path>@<version>`, as `govulncheck` does, so neither changes a `go.mod`. This record names `gorelease` as a tool
+dependency, as `AGENTS.md`, "Dependencies", requires. It describes itself as "an experimental tool".
+
 ## Pros and Cons of the Options
 
 ### P1. A phased program under this record
@@ -264,6 +303,8 @@ Each has a recommended answer.
   (`AuthenticateRequest`, `types_gen.go:883-892`).
 * **Measurements outside the tree:** the floor's scratch copy, the probes for A1, the leak-guard repetition and the coverage profiles
   were all made under the session's scratch directory, like this repository's other measurements.
+* **The PLANs:** [0024-PLAN-go-1-26-9-floor.md](0024-PLAN-go-1-26-9-floor.md) implements phase 1. Phases 2 to 4 each get a
+  PLAN of their own under this number.
 * **Related records:**
   * [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md): its Go pin, superseded if
     this record is accepted;
