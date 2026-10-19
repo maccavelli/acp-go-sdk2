@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-19
 associated-madr: "0023-MADR-connection-lifetime-and-test-leaks.md"
 ---
@@ -167,3 +167,22 @@ documentation; reverting it restores the drain-bound end of notification handler
 which the owner confirms at the tag.
 
 ## Execution record
+
+### Step 1, records, 2026-10-19
+
+The owner committed the proposed MADR as `88a08ec`, and the decided MADR with this PLAN as `6f49e13`. This step marks the PLAN and its
+`docs/README.md` row `in-progress`.
+
+A script outside the tree re-asserted every fact of "Facts this plan rests on" on `6f49e13`, each snippet at its line. All 27 hold.
+
+One check changed while it ran. "`cmd/generate` builds no `Connection`" was first checked as a search for the constructors' names in
+its Go files. That found three matches, none a connection built:
+
+* two are expected output in `cmd/generate/internal/emit/dispatch_test.go:199` and `:211`;
+* one is a stub declaration, `func NewConnection(…) *Connection { return nil }`, inside the source text of a fixture,
+  `cmd/generate/main_test.go:171`.
+
+The fact is checked instead by `go list -deps -test ./...` in `cmd/generate`. Of its 192 packages, none is
+`github.com/maccavelli/acp-go-sdk2`: the module cannot build a connection, tests included.
+
+Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
