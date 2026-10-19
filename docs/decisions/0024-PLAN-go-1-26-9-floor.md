@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-19
 associated-madr: "0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md"
 ---
@@ -33,9 +33,9 @@ Step 1 re-asserts the code facts with a script.
 | G2 | `gates_test.go:440`, `:444`, `:449`, `:454`, `:461`: `return valueGate{wire: …` sets fields of the embedded `gatedMethod`, a Go 1.27 language feature. |
 | G3 | `TestCheckAcceptsRepository` (`cmd/generate/main_test.go:315`) fails on go1.26.9 through G2 only. |
 | G4 | `cmd/generate/internal/mutate/mutate_test.go:92` and `:287` write `go 1.27.2` into fixture modules. |
-| G5 | `leak_test.go:35`, `p.WriteTo(&buf, 1)`, with `p := pprof.Lookup("goroutineleak")`, panics on go1.26.9 unless `GOEXPERIMENT=goroutineleakprofile` is set. go1.27.2 rejects that setting: "go: unknown GOEXPERIMENT goroutineleakprofile". |
+| G5 | `leak_test.go:35`, `p.WriteTo(&buf, 1)`, with `p := pprof.Lookup("goroutineleak")`, panics on go1.26.9 unless `GOEXPERIMENT=goroutineleakprofile` is set. go1.27.2 rejects that setting: "go: unknown GOEXPERIMENT goroutineleakprofile". Annotated in step 1: 0023's step 6 (`85ac115`) moved them; `p := pprof.Lookup("goroutineleak")` is at `:37` and `p.WriteTo(&buf, 1)` at `:42`. |
 | G6 | go1.27.2 builds with `goexperiment.jsonv2` by default, go1.26.9 without. |
-| G7 | `ci.yml:32-34`: `actions/setup-go` with `go-version-file: go.mod`; the matrix is `os` only (`ci.yml:21-23`). |
+| G7 | `ci.yml:32-34`: `actions/setup-go` with `go-version-file: go.mod`; the matrix is `os` only (`ci.yml:21-24`; corrected in step 1 from `21-23`). |
 | G9 | The README's "Installation" (`README.md:12-18`) gives `go get` with no Go version. |
 | — | `README.md:146` says an empty `json.RawMessage` "prints as `null` under Go 1.27's default build". What it prints under go1.26.9 is not yet measured. |
 | — | The Makefile's `test`, `fuzz`, `bench` and `mutation-*` targets and `scripts/go-precheck.sh` (`:132`) run `go test` with the environment they are given. |
@@ -58,7 +58,7 @@ Out of scope:
 
 * phases 2 to 4 of the MADR;
 * the 0023 leak guard's false negative, which amends [0023-PLAN-connection-lifetime-and-test-leaks.md](0023-PLAN-connection-lifetime-and-test-leaks.md);
-* any `toolchain` directive.
+* ~~any `toolchain` directive.~~ Annotated before step 2, 2026-10-19 (see "Deviation, 2026-10-19, before step 2"): both modules gain `toolchain go1.27.2`.
 
 ## Design
 
@@ -66,6 +66,9 @@ Out of scope:
 
 * **The `go` lines.** `go 1.27.2` becomes `go 1.26.9` in both modules. No `toolchain` line is added: the matrix pins the versions CI
   runs, and a developer's own Go, 1.26.9 or newer, builds the module.
+
+  Annotated before step 2, 2026-10-19 (see "Deviation, 2026-10-19, before step 2"): both modules gain `toolchain go1.27.2` after the `go` line. In this repository the
+  `go` command then runs go1.27.2. CI's `GOTOOLCHAIN: local` and the floor gate's `GOTOOLCHAIN=go1.26.9` keep their versions.
 * **G2.** Each of the five literals names the embedded struct, as before `95d66e3`:
   `valueGate{gatedMethod: gatedMethod{wire: …, advertise: advertise}, field: …, variant: variant}`. `go fix` at the `1.26.9` line does
   not propose the flattened form again; the MADR's G1 measured `go fix -diff` empty there.
@@ -192,3 +195,58 @@ Each step is one commit, reverted by reverting it.
 The release is the patch `v1.16.2`, which the owner confirms at the tag.
 
 ## Execution record
+
+### Step 1, records, 2026-10-19
+
+The owner committed the decided MADR with this PLAN as `805d997`. At the owner's direction, [0023-PLAN-connection-lifetime-and-test-leaks.md](0023-PLAN-connection-lifetime-and-test-leaks.md)'s
+leak-guard fix landed first, as its step 6, `85ac115`, closed in `11c50df`.
+
+This step:
+
+* marks this PLAN and its `docs/README.md` row `in-progress`;
+* annotates [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md) and
+  [0004-MADR-pin-acp-schema-1-25-0.md](0004-MADR-pin-acp-schema-1-25-0.md), under their decision. Their Go 1.27.2 floor is superseded
+  by a `go 1.26.9` line once step 2 lands, and their reason still holds at the new floor. Neither is otherwise rewritten.
+
+A script outside the tree re-asserted "Facts this plan rests on" on `11c50df`, each snippet at its line: 19 facts, all hold, after two
+corrections:
+
+* **G5.** 0023's step 6 moved `leak_test.go`'s lines. `p := pprof.Lookup("goroutineleak")` is at `:37`, and `p.WriteTo(&buf, 1)` at
+  `:42`, not `:35`. The fact's row is annotated.
+* **G7.** The matrix block is `ci.yml:21-24`, not `21-23`. The row is corrected, and says so.
+
+`cmd/generate/main_test.go:315` is the `t.Fatal(err)` of `TestCheckAcceptsRepository` (`:300`), which G3's failure printed. The script's
+first expectation of that line was wrong; the fact holds.
+
+Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
+
+### Deviation, 2026-10-19, before step 2
+
+**Found.** The owner asked whether CI would cover both 1.26.9 and 1.27.2, with 1.27.2 preferred.
+
+* CI covers both once step 3 lands. Today it covers 1.27.2 only, through `go-version-file: go.mod`.
+* Nothing in the design made 1.27.2 the version of development. With no `toolchain` line, the `go` command in this repository runs
+  whatever Go a developer has, from 1.26.9 up. "Scope" excluded "any `toolchain` directive".
+
+**Decision (owner, 2026-10-19).** Add `toolchain go1.27.2` to both `go.mod` files, after `go 1.26.9`.
+
+**Checked first, in a scratch copy with `go 1.26.9` and `toolchain go1.27.2` in both modules:**
+
+| In each module | Result |
+| :--- | :--- |
+| `go mod tidy -diff`, go1.27.2 | exit 0, no output |
+| `go env GOVERSION`, `GOTOOLCHAIN=local` (as CI's jobs) | `go1.27.2` |
+| `go env GOVERSION`, `GOTOOLCHAIN=go1.26.9+auto` (a developer on go1.26.9) | `go1.27.2`: the `toolchain` line switches it |
+| `go env GOVERSION`, `GOTOOLCHAIN=go1.26.9` (the floor gate) | `go1.26.9` |
+
+**What it changes, and what it does not:**
+
+* **Users of the module are not affected.** go.dev/doc/toolchain: "The choice of Go toolchain being used depends on the GOTOOLCHAIN
+  environment setting and the go and toolchain lines in the main module's go.mod". A dependency is never the main module. So a consumer
+  still needs only 1.26.9.
+* **The `Makefile`'s experiment condition** reads `go env GOVERSION`, which reports the switched toolchain. A developer on go1.26.9 is
+  switched to 1.27.2 and so does not get the experiment, which 1.27.2 would reject. Step 2's planted break of that condition covers it.
+
+**Files added to step 2's scope:** none; both `go.mod` files were in it.
+
+"Scope" and "Design", "The floor", are annotated. The MADR's phase 1 gains an amendment.

@@ -34,6 +34,10 @@ Chosen option: "Pin stable schema `schema-v1.25.0` and apply the accepted Go 1.2
 
 This record supersedes the schema stamp in 0002. It does not supersede the Go 1.27.2 choice. `schema/version` becomes `1.25.0`. Fetch URLs gain the `schema-v` tag prefix. Both `go` lines become `1.27.2`.
 
+Annotated 2026-10-19 by [0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md](0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md): the Go 1.27.2 floor is superseded by a `go 1.26.9` line, once that
+record's [0024-PLAN-go-1-26-9-floor.md](0024-PLAN-go-1-26-9-floor.md) step 2 lands. go1.26.9 was released the same day as
+go1.27.2, with the same security fixes, so the reason given here still holds at the new floor. The schema `1.25.0` stamp stands.
+
 `schema-v2.0.0-alpha.8` stays out. The release notes for `schema-v1.25.0` say that release stabilizes session notices and session compaction, adds an unstable error stop reason after prompt insertion, and rejects malformed values that receivers act on. Stable `meta.json` for that tag reports `version` 1 and includes `session_delete`, `elicitation_create`, and `elicitation_complete`. Stable `schema.json` defines `Notice`, `NoticeCapabilities`, `NoticeSeverity`, `CompactionCapabilities`, `CompactionId`, `CompactionStatus`, `CompactionSummaryChunk`, and `CompactionUpdate`.
 
 ### Consequences

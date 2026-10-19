@@ -73,7 +73,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0023 | PLAN | [Implement 0023: Close ends every handler, the leaking tests close their connections, and a leak guard](decisions/0023-PLAN-connection-lifetime-and-test-leaks.md) | complete |
 | 0023 | REPORT | [Release notes for v1.16.1, against v1.16.0](reports/0023-REPORT-release-notes-v1-16-1.md) | observed |
 | 0024 | MADR | [Bring the SDK in line with Go SDK best practices, on a Go 1.26.9 floor](decisions/0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md) | accepted |
-| 0024 | PLAN | [Implement phase 1 of 0024: the Go 1.26.9 floor](decisions/0024-PLAN-go-1-26-9-floor.md) | proposed |
+| 0024 | PLAN | [Implement phase 1 of 0024: the Go 1.26.9 floor](decisions/0024-PLAN-go-1-26-9-floor.md) | in-progress |
 
 ## I want to…
 

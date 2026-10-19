@@ -146,6 +146,9 @@ The phases, each subject to the questions below:
 
 1. **The floor (G1 to G9).**
    * Both `go` lines become `1.26.9`.
+     Amended while executing [0024-PLAN-go-1-26-9-floor.md](0024-PLAN-go-1-26-9-floor.md), before step 2, 2026-10-19: both
+     modules also gain `toolchain go1.27.2`, the owner's preferred version. It applies only where this module is the main
+     module. Consumers still need 1.26.9.
    * The five literals of G2 name `gatedMethod:`. The two fixtures of G4 write the floor.
    * CI runs a matrix of the floor, `1.26.9`, and the latest stable release. It keeps `GOEXPERIMENT=nojsonv2` on the latest and sets
      `GOEXPERIMENT=goroutineleakprofile` on the floor. Decided under question 8: the newest version is pinned, `1.27.2`, and a CI

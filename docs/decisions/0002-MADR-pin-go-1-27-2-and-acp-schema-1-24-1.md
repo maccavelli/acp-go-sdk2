@@ -34,6 +34,10 @@ Chosen option: "Pin Go 1.27.2 and stable schema `schema-v1.24.1`", because the o
 
 `schema/version` becomes `1.24.1`. Fetch URLs gain the `schema-v` tag prefix so `make version` downloads that release. Both `go` lines become `1.27.2`.
 
+Annotated 2026-10-19 by [0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md](0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md): the Go 1.27.2 floor is superseded by a `go 1.26.9` line, once that
+record's [0024-PLAN-go-1-26-9-floor.md](0024-PLAN-go-1-26-9-floor.md) step 2 lands. go1.26.9 was released the same day as
+go1.27.2, with the same security fixes, so the reason given here still holds at the new floor. The schema stamp was already superseded by 0004.
+
 ~~Both `go` lines and the mise Go pin become `1.27.2`. Editor tools in `mise.toml` that cannot load a Go 1.27 module move to a release that can: `golangci-lint` 2.14.0 and `gofumpt` 0.12.0. `gopls` moves to the newest stable release that loads Go 1.27.2.~~ The mise, gofumpt, and gopls sentences are withdrawn by the amendment below. `golangci-lint` v2.14.0 remains the linter version.
 
 Protocol v2 draft `schema-v2.0.0-alpha.7` stays out of this pin. It is a prerelease, and its migration guide keeps `protocolVersion: 1` as the deployed protocol.
