@@ -72,6 +72,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0023 | MADR | [Leave a connection's lifetime to the application, make Close end every handler, and fail the tests on a leaked connection](decisions/0023-MADR-connection-lifetime-and-test-leaks.md) | accepted |
 | 0023 | PLAN | [Implement 0023: Close ends every handler, the leaking tests close their connections, and a leak guard](decisions/0023-PLAN-connection-lifetime-and-test-leaks.md) | complete |
 | 0023 | REPORT | [Release notes for v1.16.1, against v1.16.0](reports/0023-REPORT-release-notes-v1-16-1.md) | observed |
+| 0024 | MADR | [Bring the SDK in line with Go SDK best practices, on a Go 1.26.9 floor](decisions/0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md) | proposed |
 
 ## I want to…
 
