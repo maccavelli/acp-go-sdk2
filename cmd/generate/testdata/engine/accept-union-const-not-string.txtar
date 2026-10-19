@@ -1,0 +1,89 @@
+A union whose variants carry, beside the discriminator, a constant in a field
+that is not a string: a nullable constant is a *string, an untyped one a
+json.RawMessage. Those arms encode the variant, then set the constants on the
+encoded object; the arm whose constants are strings sets them on a copy and
+encodes once (0019-PLAN-idioms-performance.md, D1). The discriminator is a
+string in every variant, as the union's constructors write it. The meta
+declares $/cancel_request and the schema its smallest definition, which the
+runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"oneOf": [
+    {"title": "Nullable", "type": "object", "properties": {"kind": {"type": "string", "const": "a"}, "tag": {"type": ["string", "null"], "const": "t"}, "x": {"type": "string"}}, "required": ["kind", "x"]},
+    {"title": "Untyped", "type": "object", "properties": {"kind": {"type": "string", "const": "b"}, "tag": {"const": "u"}, "y": {"type": "string"}}, "required": ["kind", "y"]},
+    {"title": "Plain", "type": "object", "properties": {"kind": {"type": "string", "const": "c"}, "tag": {"type": "string", "const": "v"}, "z": {"type": "string"}}, "required": ["kind", "tag", "z"]}
+  ], "discriminator": {"propertyName": "kind"}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewUA(x string) U
+func NewUB(y string) U
+func NewUC(tag string, z string) U
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type U struct{A *UNullable "json:\"-\""; B *UUntyped "json:\"-\""; C *UPlain "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type UNullable struct{Kind string "json:\"kind\""; Tag *string "json:\"tag,omitempty\""; X string "json:\"x\""}
+type UPlain struct{Kind string "json:\"kind\""; Tag string "json:\"tag\""; Z string "json:\"z\""}
+type UUntyped struct{Kind string "json:\"kind\""; Tag json.RawMessage "json:\"tag,omitempty\""; Y string "json:\"y\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (U).MarshalJSON() ([]byte, error)
+func (*U).UnmarshalJSON(b []byte) error
+func (*U).Validate() error
+func (*UNullable).UnmarshalJSON(b []byte) error
+func (*UPlain).UnmarshalJSON(b []byte) error
+func (*UUntyped).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Each variant encodes with its constants, whatever its fields hold, and
+// decodes back to the same variant.
+func TestUnionConstNotString(t *testing.T) {
+	for _, tt := range []struct {
+		u    U
+		want string
+	}{
+		{U{A: &UNullable{X: "1"}}, `{"kind":"a","tag":"t","x":"1"}`},
+		{U{B: &UUntyped{Y: "2"}}, `{"kind":"b","tag":"u","y":"2"}`},
+		{U{C: &UPlain{Z: "3"}}, `{"kind":"c","tag":"v","z":"3"}`},
+	} {
+		b, err := json.Marshal(tt.u)
+		if err != nil || string(b) != tt.want {
+			t.Errorf("%+v encoded as %s, %v; want %s", tt.u, b, err, tt.want)
+			continue
+		}
+		var back U
+		if err := json.Unmarshal(b, &back); err != nil {
+			t.Errorf("%s does not decode: %v", b, err)
+		}
+		if (back.A != nil) != (tt.u.A != nil) || (back.B != nil) != (tt.u.B != nil) || (back.C != nil) != (tt.u.C != nil) {
+			t.Errorf("%s decoded as %+v", b, back)
+		}
+	}
+}

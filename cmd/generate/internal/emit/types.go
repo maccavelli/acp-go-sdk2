@@ -775,15 +775,14 @@ func arrayMatch(f *goFile, name string, variants []*model.Variant) []ast.Stmt {
 			ifStmt(nil, id("match"), decodeStrict(f, vi, variantPlace(name, vi))...),
 		))
 	}
-	// Without array variants to match, the items stay maps, as before folding.
-	items := ast.Expr(rawMap(f.qual(pkgJSON, "RawMessage")))
+	// Without an array variant to match, nothing reads the payload as an
+	// array (0019-PLAN-idioms-performance.md, D4).
 	if len(array) > 0 {
-		items = f.qual(pkgJSON, "RawMessage")
+		body = append(body,
+			varStmt("arr", sliceOf(f.qual(pkgJSON, "RawMessage"))),
+			ifStmt(nil, binary(unmarshal(id("b"), addr(id("arr"))), token.EQL, nilExpr()), array...),
+		)
 	}
-	body = append(body,
-		varStmt("arr", sliceOf(items)),
-		ifStmt(nil, binary(unmarshal(id("b"), addr(id("arr"))), token.EQL, nilExpr()), array...),
-	)
 
 	// Fallback: try each variant in turn.
 	for _, vi := range variants {
@@ -942,7 +941,20 @@ func unionMarshalBody(f *goFile, name string, variants []*model.Variant, hasUnkn
 				then = append(then, ifStmt(nil, binary(star(dot("u", vi.FieldName)), token.EQL, nilExpr()), ret(bytesOf("[]"), nilExpr())))
 			}
 			then = append(then, ret(marshal(star(dot("u", vi.FieldName)))))
+		case len(vi.ConstPairs) == 0:
+			// An object with no constant to set encodes as it is
+			// (0019-PLAN-idioms-performance.md, D1).
+			then = []ast.Stmt{ret(marshal(star(dot("u", vi.FieldName))))}
+		case vi.ConstFields != nil:
+			// The constants are set on a copy, which encodes once.
+			then = []ast.Stmt{define(exprs(id("v")), star(dot("u", vi.FieldName)))}
+			for i, kv := range vi.ConstPairs {
+				then = append(then, assign(exprs(dot("v", vi.ConstFields[i])), str(kv[1])))
+			}
+			then = append(then, ret(marshal(id("v"))))
 		default:
+			// A constant without a string field to hold it is set on the
+			// encoded object.
 			then = []ast.Stmt{
 				define(exprs(id("_b"), id("_e")), marshal(star(dot("u", vi.FieldName)))),
 				ifStmt(nil, binary(id("_e"), token.NEQ, nilExpr()), ret(emptyBytes(), id("_e"))),

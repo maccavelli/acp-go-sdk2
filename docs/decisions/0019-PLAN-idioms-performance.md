@@ -621,3 +621,86 @@ Gates, with the API listing against `v1.15.2`, each exit 0:
 - `make check-records`, `make markdownlint`, and the identifier scan;
 - the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
 - Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+### Step 5, D1 and D4, 2026-10-18
+
+**The map path's reachability, first.** "Design", D1 had step 5 begin with a variant that refers to a definition and declares a
+constant beside the reference, expecting it might leave a constant with no field. A probe outside the tree built that shape and
+others with the model, and listed, for each constant pair, the Go type of the field it names. The pair never lacks a field:
+
+- **A direct `$ref`.** The variant takes its facts from the definition it names alone (`cmd/generate/internal/model/model.go:905-911`
+  on this step's tree). A constant beside the reference is not a pair.
+- **An `allOf` of one reference with properties beside it.** This is not the single-reference form (`schema.go:106`), so the
+  variant is an inline struct built from the merged properties, and it has the field.
+
+The probe found the map path reached another way. D1's direct form needs a string field, and a constant can sit in a field that
+is not one: `*string` for a nullable constant, `json.RawMessage` for an untyped one. The union's constructors write the
+discriminator's constant into its field (`model.go:780-797`), so a discriminator in such a field does not compile, and the
+generator refuses it at its type check. A second constant, beside the discriminator, does compile, and takes the map path. The
+committed schemas have only string fields: in the generated code, 67 arms set a constant, all on a string field. As D1 says for a
+generator that accepts the shape, an engine case pins the map path: `accept-union-const-not-string.txtar`.
+
+What changed, on `d494964`:
+
+- **`cmd/generate/internal/model/consts.go`** (new): `resolveConstFields` runs in `Build` after `renderDefaults` and sets each
+  object variant's new `ConstFields`. That is the Go field of each of its `ConstPairs`, when every one is a string field: `string`,
+  an enum kind, or a primitive over `string`. It is nil when one is not, or when an empty constant's field omits empty values.
+- **`cmd/generate/internal/model/model.go`:** `Variant.ConstFields`, and the call.
+- **`cmd/generate/internal/emit/types.go`:**
+  - D1: an object arm with no constant is `return json.Marshal(*u.X)`. One whose constants have fields is
+    `v := *u.X; v.F = "c" …; return json.Marshal(v)`. Any other keeps the map path, the only place `_b, _e` and the map are left.
+  - D4: the array match decodes into `arr` only when the union has an array variant to match.
+- **Tests:** new `cmd/generate/internal/model/consts_test.go`, `TestConstFields`, and the engine case
+  `accept-union-const-not-string.txtar` with a behaviour test.
+- **Regenerated:** `types_gen.go`, 20976 lines to 20318.
+
+The shapes of `types_gen.go`, counted by a script outside the tree on `d494964` and on the tree:
+
+| Shape | `d494964` | Tree |
+| :--- | ---: | ---: |
+| `_b, _e :=` arms | 88 | 0 |
+| a constant assigned into the map | 67 | 0 |
+| `v := *u.X` copies | 0 | 67 |
+| `return json.Marshal(*u.X)` | 9 | 30 |
+| `var arr []map[string]json.RawMessage` | 7 | 0 |
+| `var arr []json.RawMessage` | 1 | 1 |
+
+`TestEncodingsUnchanged` passes, under `encoding/json` v2 and with `GOEXPERIMENT=nojsonv2`. The wire bytes are unchanged. No
+generator test pinned the old union arms, so none changed.
+
+The benchmarks, medians of six runs with `make bench`, before on `d494964` and after on the tree:
+
+| Benchmark | ns/op before | ns/op after | allocs/op before | allocs/op after |
+| :--- | ---: | ---: | ---: | ---: |
+| SessionUpdateMarshal | 4,924 | 1,060 | 37 | 9 |
+| SessionUpdateUnmarshal | 6,256 | 6,371 | 41 | 41 |
+| SessionNotificationUnmarshal | 8,087 | 8,254 | 53 | 53 |
+| CanonicalIDKey | 491 | 544 | 10 | 10 |
+| ValidateOutboundValue | 78 | 58 | 2 | 2 |
+| PromptRoundTrip | 69,472 | 33,209 | 142 | 128 |
+| SessionUpdateNotify | 35,283 | 18,513 | 110 | 81 |
+
+Before this step, steps 3 and 4 had already moved three of step 2's baseline medians: SessionUpdateUnmarshal 45 to 41,
+SessionNotificationUnmarshal 58 to 53, and PromptRoundTrip 149 to 142. SessionUpdateNotify's six runs gave 109 and 110 before
+this step and 81 in all six after. The ns/op medians are recorded, not gated.
+
+Planted breaks, each in a scratch copy of the tree:
+
+| Break | Result |
+| :--- | :--- |
+| a constant written with the wrong value | `TestEncodingsUnchanged` fails: "line 28", "265 lines differ" |
+| the map-path engine case's variant given the field, every type counted a string | `TestEngineCases/accept-union-const-not-string` fails: "generated code does not type-check" |
+| the map path setting its constants under other keys | `TestEngineBehaviour/accept-union-const-not-string` fails: encoded as `{"kind":"","kind_":"a","tag_":"t","x":"1"}` |
+| the array decode emitted with no array variant | `TestGeneratedFilesUpToDate` fails: "types_gen.go is out of date … line 345" |
+| the empty-constant guard dropped | `TestConstFields` fails: "variant eo … ConstFields [Kind Tag], want []" |
+| an enum kind not counted a string | `TestConstFields` fails: "variant enum … ConstFields [], want [Kind Tag]" |
+| a primitive over `string` not counted a string | `TestConstFields` fails: "variant prim … ConstFields [], want [Kind Tag]" |
+
+Gates, with the API listing against `v1.15.2`, each exit 0:
+
+- regeneration: the generated files unchanged by a second run;
+- `make pre-add-check`, and `scripts/go-precheck.sh` on the two new `.go` files;
+- `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+- `make check-records`, `make markdownlint`, and the identifier scan;
+- the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
+- Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.

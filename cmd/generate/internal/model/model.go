@@ -196,6 +196,10 @@ type Variant struct {
 	ArrayItemRequired []string
 	// ConstPairs holds the variant's string const properties, sorted by key.
 	ConstPairs [][2]string
+	// ConstFields holds the Go field of each of ConstPairs, when each is a
+	// string field of the variant's struct; nil when one is not
+	// (0019-PLAN-idioms-performance.md, D1).
+	ConstFields []string
 	// HasSharedFields is true for an inline object variant, which carries
 	// the union's own properties.
 	HasSharedFields bool
@@ -340,6 +344,7 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 	if err := m.renderDefaults(); err != nil {
 		return nil, err
 	}
+	m.resolveConstFields()
 	if err := m.buildValidations(); err != nil {
 		return nil, err
 	}

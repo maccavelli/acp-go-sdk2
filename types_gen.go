@@ -342,9 +342,6 @@ func (u *AgentResponse) UnmarshalJSON(b []byte) error {
 	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
 		return err
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
 	{
 		var v AgentResult
 		if json.Unmarshal(b, &v) == nil {
@@ -365,26 +362,10 @@ func (u *AgentResponse) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the AgentResponse schema definition's JSON.
 func (u AgentResponse) MarshalJSON() ([]byte, error) {
 	if u.Result != nil {
-		_b, _e := json.Marshal(*u.Result)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("AgentResponse: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Result)
 	}
 	if u.Error != nil {
-		_b, _e := json.Marshal(*u.Error)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("AgentResponse: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Error)
 	}
 	return nil, errors.New("AgentResponse: no variant set")
 }
@@ -669,27 +650,12 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the AuthMethod schema definition's JSON.
 func (u AuthMethod) MarshalJSON() ([]byte, error) {
 	if u.Terminal != nil {
-		_b, _e := json.Marshal(*u.Terminal)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("AuthMethod: %w", err)
-		}
-		m["type"] = json.RawMessage("\"terminal\"")
-		return json.Marshal(m)
+		v := *u.Terminal
+		v.Type = "terminal"
+		return json.Marshal(v)
 	}
 	if u.Agent != nil {
-		_b, _e := json.Marshal(*u.Agent)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("AuthMethod: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Agent)
 	}
 	if u.Unknown != nil {
 		return u.Unknown, nil
@@ -982,9 +948,6 @@ func (u *AvailableCommandInput) UnmarshalJSON(b []byte) error {
 	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
 		return err
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
 	{
 		var v UnstructuredCommandInput
 		if json.Unmarshal(b, &v) == nil {
@@ -998,15 +961,7 @@ func (u *AvailableCommandInput) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the AvailableCommandInput schema definition's JSON.
 func (u AvailableCommandInput) MarshalJSON() ([]byte, error) {
 	if u.Unstructured != nil {
-		_b, _e := json.Marshal(*u.Unstructured)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("AvailableCommandInput: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Unstructured)
 	}
 	return nil, errors.New("AvailableCommandInput: no variant set")
 }
@@ -1657,9 +1612,6 @@ func (u *ClientResponse) UnmarshalJSON(b []byte) error {
 	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
 		return err
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
 	{
 		var v ClientResult
 		if json.Unmarshal(b, &v) == nil {
@@ -1680,26 +1632,10 @@ func (u *ClientResponse) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the ClientResponse schema definition's JSON.
 func (u ClientResponse) MarshalJSON() ([]byte, error) {
 	if u.Result != nil {
-		_b, _e := json.Marshal(*u.Result)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ClientResponse: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Result)
 	}
 	if u.Error != nil {
-		_b, _e := json.Marshal(*u.Error)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ClientResponse: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Error)
 	}
 	return nil, errors.New("ClientResponse: no variant set")
 }
@@ -2591,64 +2527,29 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the ContentBlock schema definition's JSON.
 func (u ContentBlock) MarshalJSON() ([]byte, error) {
 	if u.Text != nil {
-		_b, _e := json.Marshal(*u.Text)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ContentBlock: %w", err)
-		}
-		m["type"] = json.RawMessage("\"text\"")
-		return json.Marshal(m)
+		v := *u.Text
+		v.Type = "text"
+		return json.Marshal(v)
 	}
 	if u.Image != nil {
-		_b, _e := json.Marshal(*u.Image)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ContentBlock: %w", err)
-		}
-		m["type"] = json.RawMessage("\"image\"")
-		return json.Marshal(m)
+		v := *u.Image
+		v.Type = "image"
+		return json.Marshal(v)
 	}
 	if u.Audio != nil {
-		_b, _e := json.Marshal(*u.Audio)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ContentBlock: %w", err)
-		}
-		m["type"] = json.RawMessage("\"audio\"")
-		return json.Marshal(m)
+		v := *u.Audio
+		v.Type = "audio"
+		return json.Marshal(v)
 	}
 	if u.ResourceLink != nil {
-		_b, _e := json.Marshal(*u.ResourceLink)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ContentBlock: %w", err)
-		}
-		m["type"] = json.RawMessage("\"resource_link\"")
-		return json.Marshal(m)
+		v := *u.ResourceLink
+		v.Type = "resource_link"
+		return json.Marshal(v)
 	}
 	if u.Resource != nil {
-		_b, _e := json.Marshal(*u.Resource)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ContentBlock: %w", err)
-		}
-		m["type"] = json.RawMessage("\"resource\"")
-		return json.Marshal(m)
+		v := *u.Resource
+		v.Type = "resource"
+		return json.Marshal(v)
 	}
 	if u.Unknown != nil {
 		return u.Unknown, nil
@@ -3193,39 +3094,17 @@ func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the CreateElicitationRequest schema definition's JSON.
 func (u CreateElicitationRequest) MarshalJSON() ([]byte, error) {
 	if u.Form != nil {
-		_b, _e := json.Marshal(*u.Form)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("CreateElicitationRequest: %w", err)
-		}
-		m["mode"] = json.RawMessage("\"form\"")
-		return json.Marshal(m)
+		v := *u.Form
+		v.Mode = "form"
+		return json.Marshal(v)
 	}
 	if u.Url != nil {
-		_b, _e := json.Marshal(*u.Url)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("CreateElicitationRequest: %w", err)
-		}
-		m["mode"] = json.RawMessage("\"url\"")
-		return json.Marshal(m)
+		v := *u.Url
+		v.Mode = "url"
+		return json.Marshal(v)
 	}
 	if u.Other != nil {
-		_b, _e := json.Marshal(*u.Other)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("CreateElicitationRequest: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Other)
 	}
 	return nil, errors.New("CreateElicitationRequest: no variant set")
 }
@@ -3577,51 +3456,22 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the CreateElicitationResponse schema definition's JSON.
 func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
 	if u.Accept != nil {
-		_b, _e := json.Marshal(*u.Accept)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("CreateElicitationResponse: %w", err)
-		}
-		m["action"] = json.RawMessage("\"accept\"")
-		return json.Marshal(m)
+		v := *u.Accept
+		v.Action = "accept"
+		return json.Marshal(v)
 	}
 	if u.Decline != nil {
-		_b, _e := json.Marshal(*u.Decline)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("CreateElicitationResponse: %w", err)
-		}
-		m["action"] = json.RawMessage("\"decline\"")
-		return json.Marshal(m)
+		v := *u.Decline
+		v.Action = "decline"
+		return json.Marshal(v)
 	}
 	if u.Cancel != nil {
-		_b, _e := json.Marshal(*u.Cancel)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("CreateElicitationResponse: %w", err)
-		}
-		m["action"] = json.RawMessage("\"cancel\"")
-		return json.Marshal(m)
+		v := *u.Cancel
+		v.Action = "cancel"
+		return json.Marshal(v)
 	}
 	if u.Other != nil {
-		_b, _e := json.Marshal(*u.Other)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("CreateElicitationResponse: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Other)
 	}
 	return nil, errors.New("CreateElicitationResponse: no variant set")
 }
@@ -4062,9 +3912,6 @@ func (u *ElicitationContentValue) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err == nil {
 	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
 		return err
-	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
 	}
 	{
 		var v ElicitationContentValueString
@@ -4823,75 +4670,32 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the ElicitationPropertySchema schema definition's JSON.
 func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 	if u.String != nil {
-		_b, _e := json.Marshal(*u.String)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
-		}
-		m["type"] = json.RawMessage("\"string\"")
-		return json.Marshal(m)
+		v := *u.String
+		v.Type = "string"
+		return json.Marshal(v)
 	}
 	if u.Number != nil {
-		_b, _e := json.Marshal(*u.Number)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
-		}
-		m["type"] = json.RawMessage("\"number\"")
-		return json.Marshal(m)
+		v := *u.Number
+		v.Type = "number"
+		return json.Marshal(v)
 	}
 	if u.Integer != nil {
-		_b, _e := json.Marshal(*u.Integer)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
-		}
-		m["type"] = json.RawMessage("\"integer\"")
-		return json.Marshal(m)
+		v := *u.Integer
+		v.Type = "integer"
+		return json.Marshal(v)
 	}
 	if u.Boolean != nil {
-		_b, _e := json.Marshal(*u.Boolean)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
-		}
-		m["type"] = json.RawMessage("\"boolean\"")
-		return json.Marshal(m)
+		v := *u.Boolean
+		v.Type = "boolean"
+		return json.Marshal(v)
 	}
 	if u.Array != nil {
-		_b, _e := json.Marshal(*u.Array)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
-		}
-		m["type"] = json.RawMessage("\"array\"")
-		return json.Marshal(m)
+		v := *u.Array
+		v.Type = "array"
+		return json.Marshal(v)
 	}
 	if u.Other != nil {
-		_b, _e := json.Marshal(*u.Other)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ElicitationPropertySchema: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Other)
 	}
 	return nil, errors.New("ElicitationPropertySchema: no variant set")
 }
@@ -5379,9 +5183,6 @@ func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
 	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
 		return err
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
 	{
 		var v TextResourceContents
 		if json.Unmarshal(b, &v) == nil {
@@ -5402,26 +5203,10 @@ func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the EmbeddedResourceResource schema definition's JSON.
 func (u EmbeddedResourceResource) MarshalJSON() ([]byte, error) {
 	if u.TextResourceContents != nil {
-		_b, _e := json.Marshal(*u.TextResourceContents)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("EmbeddedResourceResource: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.TextResourceContents)
 	}
 	if u.BlobResourceContents != nil {
-		_b, _e := json.Marshal(*u.BlobResourceContents)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("EmbeddedResourceResource: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.BlobResourceContents)
 	}
 	return nil, errors.New("EmbeddedResourceResource: no variant set")
 }
@@ -6177,98 +5962,40 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the IdleStateUpdate schema definition's JSON.
 func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 	if u.EndTurn != nil {
-		_b, _e := json.Marshal(*u.EndTurn)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
-		}
-		m["stopReason"] = json.RawMessage("\"end_turn\"")
-		return json.Marshal(m)
+		v := *u.EndTurn
+		v.StopReason = "end_turn"
+		return json.Marshal(v)
 	}
 	if u.MaxTokens != nil {
-		_b, _e := json.Marshal(*u.MaxTokens)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
-		}
-		m["stopReason"] = json.RawMessage("\"max_tokens\"")
-		return json.Marshal(m)
+		v := *u.MaxTokens
+		v.StopReason = "max_tokens"
+		return json.Marshal(v)
 	}
 	if u.MaxTurnRequests != nil {
-		_b, _e := json.Marshal(*u.MaxTurnRequests)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
-		}
-		m["stopReason"] = json.RawMessage("\"max_turn_requests\"")
-		return json.Marshal(m)
+		v := *u.MaxTurnRequests
+		v.StopReason = "max_turn_requests"
+		return json.Marshal(v)
 	}
 	if u.Refusal != nil {
-		_b, _e := json.Marshal(*u.Refusal)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
-		}
-		m["stopReason"] = json.RawMessage("\"refusal\"")
-		return json.Marshal(m)
+		v := *u.Refusal
+		v.StopReason = "refusal"
+		return json.Marshal(v)
 	}
 	if u.Cancelled != nil {
-		_b, _e := json.Marshal(*u.Cancelled)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
-		}
-		m["stopReason"] = json.RawMessage("\"cancelled\"")
-		return json.Marshal(m)
+		v := *u.Cancelled
+		v.StopReason = "cancelled"
+		return json.Marshal(v)
 	}
 	if u.Error != nil {
-		_b, _e := json.Marshal(*u.Error)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
-		}
-		m["stopReason"] = json.RawMessage("\"error\"")
-		return json.Marshal(m)
+		v := *u.Error
+		v.StopReason = "error"
+		return json.Marshal(v)
 	}
 	if u.Other != nil {
-		_b, _e := json.Marshal(*u.Other)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Other)
 	}
 	if u.None != nil {
-		_b, _e := json.Marshal(*u.None)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("IdleStateUpdate: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.None)
 	}
 	return nil, errors.New("IdleStateUpdate: no variant set")
 }
@@ -7388,51 +7115,22 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the McpServer schema definition's JSON.
 func (u McpServer) MarshalJSON() ([]byte, error) {
 	if u.Http != nil {
-		_b, _e := json.Marshal(*u.Http)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("McpServer: %w", err)
-		}
-		m["type"] = json.RawMessage("\"http\"")
-		return json.Marshal(m)
+		v := *u.Http
+		v.Type = "http"
+		return json.Marshal(v)
 	}
 	if u.Sse != nil {
-		_b, _e := json.Marshal(*u.Sse)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("McpServer: %w", err)
-		}
-		m["type"] = json.RawMessage("\"sse\"")
-		return json.Marshal(m)
+		v := *u.Sse
+		v.Type = "sse"
+		return json.Marshal(v)
 	}
 	if u.Acp != nil {
-		_b, _e := json.Marshal(*u.Acp)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("McpServer: %w", err)
-		}
-		m["type"] = json.RawMessage("\"acp\"")
-		return json.Marshal(m)
+		v := *u.Acp
+		v.Type = "acp"
+		return json.Marshal(v)
 	}
 	if u.Stdio != nil {
-		_b, _e := json.Marshal(*u.Stdio)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("McpServer: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Stdio)
 	}
 	if u.Unknown != nil {
 		return u.Unknown, nil
@@ -7865,38 +7563,15 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the MultiSelectItems schema definition's JSON.
 func (u MultiSelectItems) MarshalJSON() ([]byte, error) {
 	if u.String != nil {
-		_b, _e := json.Marshal(*u.String)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("MultiSelectItems: %w", err)
-		}
-		m["type"] = json.RawMessage("\"string\"")
-		return json.Marshal(m)
+		v := *u.String
+		v.Type = "string"
+		return json.Marshal(v)
 	}
 	if u.Other != nil {
-		_b, _e := json.Marshal(*u.Other)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("MultiSelectItems: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Other)
 	}
 	if u.Titled != nil {
-		_b, _e := json.Marshal(*u.Titled)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("MultiSelectItems: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Titled)
 	}
 	return nil, errors.New("MultiSelectItems: no variant set")
 }
@@ -9695,40 +9370,19 @@ func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the PlanUpdateContent schema definition's JSON.
 func (u PlanUpdateContent) MarshalJSON() ([]byte, error) {
 	if u.Items != nil {
-		_b, _e := json.Marshal(*u.Items)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("PlanUpdateContent: %w", err)
-		}
-		m["type"] = json.RawMessage("\"items\"")
-		return json.Marshal(m)
+		v := *u.Items
+		v.Type = "items"
+		return json.Marshal(v)
 	}
 	if u.File != nil {
-		_b, _e := json.Marshal(*u.File)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("PlanUpdateContent: %w", err)
-		}
-		m["type"] = json.RawMessage("\"file\"")
-		return json.Marshal(m)
+		v := *u.File
+		v.Type = "file"
+		return json.Marshal(v)
 	}
 	if u.Markdown != nil {
-		_b, _e := json.Marshal(*u.Markdown)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("PlanUpdateContent: %w", err)
-		}
-		m["type"] = json.RawMessage("\"markdown\"")
-		return json.Marshal(m)
+		v := *u.Markdown
+		v.Type = "markdown"
+		return json.Marshal(v)
 	}
 	if u.Unknown != nil {
 		return u.Unknown, nil
@@ -10239,9 +9893,6 @@ func (u *RequestId) UnmarshalJSON(b []byte) error {
 	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
 		return err
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
 	{
 		var v RequestIdNull
 		if json.Unmarshal(b, &v) == nil {
@@ -10439,28 +10090,14 @@ func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the RequestPermissionOutcome schema definition's JSON.
 func (u RequestPermissionOutcome) MarshalJSON() ([]byte, error) {
 	if u.Cancelled != nil {
-		_b, _e := json.Marshal(*u.Cancelled)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("RequestPermissionOutcome: %w", err)
-		}
-		m["outcome"] = json.RawMessage("\"cancelled\"")
-		return json.Marshal(m)
+		v := *u.Cancelled
+		v.Outcome = "cancelled"
+		return json.Marshal(v)
 	}
 	if u.Selected != nil {
-		_b, _e := json.Marshal(*u.Selected)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("RequestPermissionOutcome: %w", err)
-		}
-		m["outcome"] = json.RawMessage("\"selected\"")
-		return json.Marshal(m)
+		v := *u.Selected
+		v.Outcome = "selected"
+		return json.Marshal(v)
 	}
 	if u.Unknown != nil {
 		return u.Unknown, nil
@@ -11320,28 +10957,14 @@ func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the SessionConfigOption schema definition's JSON.
 func (u SessionConfigOption) MarshalJSON() ([]byte, error) {
 	if u.Select != nil {
-		_b, _e := json.Marshal(*u.Select)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionConfigOption: %w", err)
-		}
-		m["type"] = json.RawMessage("\"select\"")
-		return json.Marshal(m)
+		v := *u.Select
+		v.Type = "select"
+		return json.Marshal(v)
 	}
 	if u.Boolean != nil {
-		_b, _e := json.Marshal(*u.Boolean)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionConfigOption: %w", err)
-		}
-		m["type"] = json.RawMessage("\"boolean\"")
-		return json.Marshal(m)
+		v := *u.Boolean
+		v.Type = "boolean"
+		return json.Marshal(v)
 	}
 	if u.Unknown != nil {
 		return u.Unknown, nil
@@ -13885,232 +13508,99 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the SessionUpdate schema definition's JSON.
 func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 	if u.UserMessageChunk != nil {
-		_b, _e := json.Marshal(*u.UserMessageChunk)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"user_message_chunk\"")
-		return json.Marshal(m)
+		v := *u.UserMessageChunk
+		v.SessionUpdate = "user_message_chunk"
+		return json.Marshal(v)
 	}
 	if u.AgentMessageChunk != nil {
-		_b, _e := json.Marshal(*u.AgentMessageChunk)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"agent_message_chunk\"")
-		return json.Marshal(m)
+		v := *u.AgentMessageChunk
+		v.SessionUpdate = "agent_message_chunk"
+		return json.Marshal(v)
 	}
 	if u.AgentThoughtChunk != nil {
-		_b, _e := json.Marshal(*u.AgentThoughtChunk)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"agent_thought_chunk\"")
-		return json.Marshal(m)
+		v := *u.AgentThoughtChunk
+		v.SessionUpdate = "agent_thought_chunk"
+		return json.Marshal(v)
 	}
 	if u.ToolCall != nil {
-		_b, _e := json.Marshal(*u.ToolCall)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"tool_call\"")
-		return json.Marshal(m)
+		v := *u.ToolCall
+		v.SessionUpdate = "tool_call"
+		return json.Marshal(v)
 	}
 	if u.ToolCallUpdate != nil {
-		_b, _e := json.Marshal(*u.ToolCallUpdate)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"tool_call_update\"")
-		return json.Marshal(m)
+		v := *u.ToolCallUpdate
+		v.SessionUpdate = "tool_call_update"
+		return json.Marshal(v)
 	}
 	if u.Plan != nil {
-		_b, _e := json.Marshal(*u.Plan)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"plan\"")
-		return json.Marshal(m)
+		v := *u.Plan
+		v.SessionUpdate = "plan"
+		return json.Marshal(v)
 	}
 	if u.PlanUpdate != nil {
-		_b, _e := json.Marshal(*u.PlanUpdate)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"plan_update\"")
-		return json.Marshal(m)
+		v := *u.PlanUpdate
+		v.SessionUpdate = "plan_update"
+		return json.Marshal(v)
 	}
 	if u.PlanRemoved != nil {
-		_b, _e := json.Marshal(*u.PlanRemoved)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"plan_removed\"")
-		return json.Marshal(m)
+		v := *u.PlanRemoved
+		v.SessionUpdate = "plan_removed"
+		return json.Marshal(v)
 	}
 	if u.AvailableCommandsUpdate != nil {
-		_b, _e := json.Marshal(*u.AvailableCommandsUpdate)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"available_commands_update\"")
-		return json.Marshal(m)
+		v := *u.AvailableCommandsUpdate
+		v.SessionUpdate = "available_commands_update"
+		return json.Marshal(v)
 	}
 	if u.CurrentModeUpdate != nil {
-		_b, _e := json.Marshal(*u.CurrentModeUpdate)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"current_mode_update\"")
-		return json.Marshal(m)
+		v := *u.CurrentModeUpdate
+		v.SessionUpdate = "current_mode_update"
+		return json.Marshal(v)
 	}
 	if u.ConfigOptionUpdate != nil {
-		_b, _e := json.Marshal(*u.ConfigOptionUpdate)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"config_option_update\"")
-		return json.Marshal(m)
+		v := *u.ConfigOptionUpdate
+		v.SessionUpdate = "config_option_update"
+		return json.Marshal(v)
 	}
 	if u.SessionInfoUpdate != nil {
-		_b, _e := json.Marshal(*u.SessionInfoUpdate)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"session_info_update\"")
-		return json.Marshal(m)
+		v := *u.SessionInfoUpdate
+		v.SessionUpdate = "session_info_update"
+		return json.Marshal(v)
 	}
 	if u.UsageUpdate != nil {
-		_b, _e := json.Marshal(*u.UsageUpdate)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"usage_update\"")
-		return json.Marshal(m)
+		v := *u.UsageUpdate
+		v.SessionUpdate = "usage_update"
+		return json.Marshal(v)
 	}
 	if u.Notice != nil {
-		_b, _e := json.Marshal(*u.Notice)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"notice\"")
-		return json.Marshal(m)
+		v := *u.Notice
+		v.SessionUpdate = "notice"
+		return json.Marshal(v)
 	}
 	if u.CompactionUpdate != nil {
-		_b, _e := json.Marshal(*u.CompactionUpdate)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"compaction_update\"")
-		return json.Marshal(m)
+		v := *u.CompactionUpdate
+		v.SessionUpdate = "compaction_update"
+		return json.Marshal(v)
 	}
 	if u.CompactionSummaryChunk != nil {
-		_b, _e := json.Marshal(*u.CompactionSummaryChunk)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"compaction_summary_chunk\"")
-		return json.Marshal(m)
+		v := *u.CompactionSummaryChunk
+		v.SessionUpdate = "compaction_summary_chunk"
+		return json.Marshal(v)
 	}
 	if u.SubagentUpdate != nil {
-		_b, _e := json.Marshal(*u.SubagentUpdate)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"subagent_update\"")
-		return json.Marshal(m)
+		v := *u.SubagentUpdate
+		v.SessionUpdate = "subagent_update"
+		return json.Marshal(v)
 	}
 	if u.SessionMessage != nil {
-		_b, _e := json.Marshal(*u.SessionMessage)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"session_message\"")
-		return json.Marshal(m)
+		v := *u.SessionMessage
+		v.SessionUpdate = "session_message"
+		return json.Marshal(v)
 	}
 	if u.SessionMessageChunk != nil {
-		_b, _e := json.Marshal(*u.SessionMessageChunk)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SessionUpdate: %w", err)
-		}
-		m["sessionUpdate"] = json.RawMessage("\"session_message_chunk\"")
-		return json.Marshal(m)
+		v := *u.SessionMessageChunk
+		v.SessionUpdate = "session_message_chunk"
+		return json.Marshal(v)
 	}
 	if u.Unknown != nil {
 		return u.Unknown, nil
@@ -14413,27 +13903,12 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the SetSessionConfigOptionRequest schema definition's JSON.
 func (u SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
 	if u.Boolean != nil {
-		_b, _e := json.Marshal(*u.Boolean)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SetSessionConfigOptionRequest: %w", err)
-		}
-		m["type"] = json.RawMessage("\"boolean\"")
-		return json.Marshal(m)
+		v := *u.Boolean
+		v.Type = "boolean"
+		return json.Marshal(v)
 	}
 	if u.ValueId != nil {
-		_b, _e := json.Marshal(*u.ValueId)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("SetSessionConfigOptionRequest: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.ValueId)
 	}
 	if u.Unknown != nil {
 		return u.Unknown, nil
@@ -14921,63 +14396,27 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the StateUpdate schema definition's JSON.
 func (u StateUpdate) MarshalJSON() ([]byte, error) {
 	if u.Running != nil {
-		_b, _e := json.Marshal(*u.Running)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("StateUpdate: %w", err)
-		}
-		m["state"] = json.RawMessage("\"running\"")
-		return json.Marshal(m)
+		v := *u.Running
+		v.State = "running"
+		return json.Marshal(v)
 	}
 	if u.Idle != nil {
-		_b, _e := json.Marshal(*u.Idle)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("StateUpdate: %w", err)
-		}
-		m["state"] = json.RawMessage("\"idle\"")
-		return json.Marshal(m)
+		v := *u.Idle
+		v.State = "idle"
+		return json.Marshal(v)
 	}
 	if u.RequiresAction != nil {
-		_b, _e := json.Marshal(*u.RequiresAction)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("StateUpdate: %w", err)
-		}
-		m["state"] = json.RawMessage("\"requires_action\"")
-		return json.Marshal(m)
+		v := *u.RequiresAction
+		v.State = "requires_action"
+		return json.Marshal(v)
 	}
 	if u.Unknown != nil {
-		_b, _e := json.Marshal(*u.Unknown)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("StateUpdate: %w", err)
-		}
-		m["state"] = json.RawMessage("\"unknown\"")
-		return json.Marshal(m)
+		v := *u.Unknown
+		v.State = "unknown"
+		return json.Marshal(v)
 	}
 	if u.Other != nil {
-		_b, _e := json.Marshal(*u.Other)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("StateUpdate: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Other)
 	}
 	return nil, errors.New("StateUpdate: no variant set")
 }
@@ -16053,40 +15492,19 @@ func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the ToolCallContent schema definition's JSON.
 func (u ToolCallContent) MarshalJSON() ([]byte, error) {
 	if u.Content != nil {
-		_b, _e := json.Marshal(*u.Content)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ToolCallContent: %w", err)
-		}
-		m["type"] = json.RawMessage("\"content\"")
-		return json.Marshal(m)
+		v := *u.Content
+		v.Type = "content"
+		return json.Marshal(v)
 	}
 	if u.Diff != nil {
-		_b, _e := json.Marshal(*u.Diff)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ToolCallContent: %w", err)
-		}
-		m["type"] = json.RawMessage("\"diff\"")
-		return json.Marshal(m)
+		v := *u.Diff
+		v.Type = "diff"
+		return json.Marshal(v)
 	}
 	if u.Terminal != nil {
-		_b, _e := json.Marshal(*u.Terminal)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("ToolCallContent: %w", err)
-		}
-		m["type"] = json.RawMessage("\"terminal\"")
-		return json.Marshal(m)
+		v := *u.Terminal
+		v.Type = "terminal"
+		return json.Marshal(v)
 	}
 	if u.Unknown != nil {
 		return u.Unknown, nil
@@ -17511,51 +16929,22 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the McpServer schema definition's JSON.
 func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 	if u.Http != nil {
-		_b, _e := json.Marshal(*u.Http)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("UnstableMcpServer: %w", err)
-		}
-		m["type"] = json.RawMessage("\"http\"")
-		return json.Marshal(m)
+		v := *u.Http
+		v.Type = "http"
+		return json.Marshal(v)
 	}
 	if u.Sse != nil {
-		_b, _e := json.Marshal(*u.Sse)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("UnstableMcpServer: %w", err)
-		}
-		m["type"] = json.RawMessage("\"sse\"")
-		return json.Marshal(m)
+		v := *u.Sse
+		v.Type = "sse"
+		return json.Marshal(v)
 	}
 	if u.Acp != nil {
-		_b, _e := json.Marshal(*u.Acp)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("UnstableMcpServer: %w", err)
-		}
-		m["type"] = json.RawMessage("\"acp\"")
-		return json.Marshal(m)
+		v := *u.Acp
+		v.Type = "acp"
+		return json.Marshal(v)
 	}
 	if u.Stdio != nil {
-		_b, _e := json.Marshal(*u.Stdio)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("UnstableMcpServer: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Stdio)
 	}
 	if u.Unknown != nil {
 		return u.Unknown, nil
@@ -17876,9 +17265,6 @@ func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
 	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
 		return err
 	}
-	var arr []map[string]json.RawMessage
-	if json.Unmarshal(b, &arr) == nil {
-	}
 	{
 		var v UnstableMessageMcpResult
 		if json.Unmarshal(b, &v) == nil {
@@ -17899,26 +17285,10 @@ func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the MessageMcpResponse schema definition's JSON.
 func (u UnstableMessageMcpResponse) MarshalJSON() ([]byte, error) {
 	if u.Result != nil {
-		_b, _e := json.Marshal(*u.Result)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("UnstableMessageMcpResponse: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Result)
 	}
 	if u.Error != nil {
-		_b, _e := json.Marshal(*u.Error)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("UnstableMessageMcpResponse: %w", err)
-		}
-		return json.Marshal(m)
+		return json.Marshal(*u.Error)
 	}
 	return nil, errors.New("UnstableMessageMcpResponse: no variant set")
 }
@@ -18862,52 +18232,24 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the NesSuggestion schema definition's JSON.
 func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {
 	if u.Edit != nil {
-		_b, _e := json.Marshal(*u.Edit)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("UnstableNesSuggestion: %w", err)
-		}
-		m["kind"] = json.RawMessage("\"edit\"")
-		return json.Marshal(m)
+		v := *u.Edit
+		v.Kind = "edit"
+		return json.Marshal(v)
 	}
 	if u.Jump != nil {
-		_b, _e := json.Marshal(*u.Jump)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("UnstableNesSuggestion: %w", err)
-		}
-		m["kind"] = json.RawMessage("\"jump\"")
-		return json.Marshal(m)
+		v := *u.Jump
+		v.Kind = "jump"
+		return json.Marshal(v)
 	}
 	if u.Rename != nil {
-		_b, _e := json.Marshal(*u.Rename)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("UnstableNesSuggestion: %w", err)
-		}
-		m["kind"] = json.RawMessage("\"rename\"")
-		return json.Marshal(m)
+		v := *u.Rename
+		v.Kind = "rename"
+		return json.Marshal(v)
 	}
 	if u.SearchAndReplace != nil {
-		_b, _e := json.Marshal(*u.SearchAndReplace)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(_b, &m); err != nil {
-			return nil, fmt.Errorf("UnstableNesSuggestion: %w", err)
-		}
-		m["kind"] = json.RawMessage("\"searchAndReplace\"")
-		return json.Marshal(m)
+		v := *u.SearchAndReplace
+		v.Kind = "searchAndReplace"
+		return json.Marshal(v)
 	}
 	if u.Unknown != nil {
 		return u.Unknown, nil
