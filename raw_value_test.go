@@ -35,6 +35,7 @@ func TestRawToolInputNullIsAbsent(t *testing.T) {
 		decode     func(t *testing.T, b []byte) (raw, []byte)
 	}{
 		{"ToolCall", `{"toolCallId":"1","title":"t"`, func(t *testing.T, b []byte) (raw, []byte) {
+			t.Helper()
 			var v ToolCall
 			if err := json.Unmarshal(b, &v); err != nil {
 				t.Fatal(err)
@@ -46,6 +47,7 @@ func TestRawToolInputNullIsAbsent(t *testing.T) {
 			return raw{v.RawInput, v.RawOutput}, out
 		}},
 		{"ToolCallUpdate", `{"toolCallId":"1"`, func(t *testing.T, b []byte) (raw, []byte) {
+			t.Helper()
 			var v ToolCallUpdate
 			if err := json.Unmarshal(b, &v); err != nil {
 				t.Fatal(err)
@@ -57,6 +59,7 @@ func TestRawToolInputNullIsAbsent(t *testing.T) {
 			return raw{v.RawInput, v.RawOutput}, out
 		}},
 		{"tool_call", `{"sessionUpdate":"tool_call","toolCallId":"1","title":"t"`, func(t *testing.T, b []byte) (raw, []byte) {
+			t.Helper()
 			var u SessionUpdate
 			if err := json.Unmarshal(b, &u); err != nil {
 				t.Fatal(err)
@@ -68,6 +71,7 @@ func TestRawToolInputNullIsAbsent(t *testing.T) {
 			return raw{u.ToolCall.RawInput, u.ToolCall.RawOutput}, out
 		}},
 		{"tool_call_update", `{"sessionUpdate":"tool_call_update","toolCallId":"1"`, func(t *testing.T, b []byte) (raw, []byte) {
+			t.Helper()
 			var u SessionUpdate
 			if err := json.Unmarshal(b, &u); err != nil {
 				t.Fatal(err)
@@ -123,31 +127,37 @@ func TestOptionalRawFieldsNullIsAbsent(t *testing.T) {
 		get        func(t *testing.T, b []byte) json.RawMessage
 	}{
 		{"Error.data", `{"code":1,"message":"m","data":`, func(t *testing.T, b []byte) json.RawMessage {
+			t.Helper()
 			var v Error
 			mustDecode(t, b, &v)
 			return v.Data
 		}},
 		{"AgentNotification.params", `{"method":"m","params":`, func(t *testing.T, b []byte) json.RawMessage {
+			t.Helper()
 			var v AgentNotification
 			mustDecode(t, b, &v)
 			return v.Params
 		}},
 		{"AgentRequest.params", `{"id":1,"method":"m","params":`, func(t *testing.T, b []byte) json.RawMessage {
+			t.Helper()
 			var v AgentRequest
 			mustDecode(t, b, &v)
 			return v.Params
 		}},
 		{"ClientNotification.params", `{"method":"m","params":`, func(t *testing.T, b []byte) json.RawMessage {
+			t.Helper()
 			var v ClientNotification
 			mustDecode(t, b, &v)
 			return v.Params
 		}},
 		{"ClientRequest.params", `{"id":1,"method":"m","params":`, func(t *testing.T, b []byte) json.RawMessage {
+			t.Helper()
 			var v ClientRequest
 			mustDecode(t, b, &v)
 			return v.Params
 		}},
 		{"IdleStateUpdateNone.stopReason", `{"stopReason":`, func(t *testing.T, b []byte) json.RawMessage {
+			t.Helper()
 			var v IdleStateUpdateNone
 			mustDecode(t, b, &v)
 			return v.StopReason

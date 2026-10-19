@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -356,9 +357,9 @@ func checkCapabilityRules(rules []CapabilityRule) error {
 func checkRule(rule *MethodRule, r *rules) error {
 	switch {
 	case rule.Side != sideAgent && rule.Side != sideClient:
-		return fmt.Errorf(`its side must be "agent" or "client"`)
+		return errors.New(`its side must be "agent" or "client"`)
 	case rule.Binding != optionalNone && r.interfaces[rule.Binding].Name == "":
-		return fmt.Errorf("no interface of the table has its binding")
+		return errors.New("no interface of the table has its binding")
 	case rule.Binding != optionalNone && sideOf(rule.Binding) != rule.Side:
 		return fmt.Errorf("it binds to an %s interface", sideOf(rule.Binding))
 	}
@@ -391,19 +392,19 @@ func checkRoles(rule *MethodRule) error {
 func checkSessionRoles(rule *MethodRule) error {
 	switch {
 	case (rule.PromptTurn || rule.CancelsPromptTurn) && rule.Side != sideAgent:
-		return fmt.Errorf("only agent methods are a prompt turn or its cancel")
+		return errors.New("only agent methods are a prompt turn or its cancel")
 	case rule.CancelledByPromptCancel && rule.Side != sideClient:
-		return fmt.Errorf("only client methods are answered on a prompt-turn cancel")
+		return errors.New("only client methods are answered on a prompt-turn cancel")
 	case rule.PromptTurn && rule.CancelsPromptTurn:
-		return fmt.Errorf("it cannot be both a prompt turn and its cancel")
+		return errors.New("it cannot be both a prompt turn and its cancel")
 	case rule.ClosesSession && rule.Side != sideAgent:
-		return fmt.Errorf("only an agent method closes a session")
+		return errors.New("only an agent method closes a session")
 	case rule.ClosesSession && (rule.PromptTurn || rule.CancelsPromptTurn):
-		return fmt.Errorf("a session close cannot be a prompt turn or its cancel")
+		return errors.New("a session close cannot be a prompt turn or its cancel")
 	case (rule.PromptTurn || rule.CancelsPromptTurn || rule.CancelledByPromptCancel || rule.ClosesSession) && rule.SessionKey == "":
-		return fmt.Errorf("a prompt-turn role needs a session key")
+		return errors.New("a prompt-turn role needs a session key")
 	case !rule.PromptTurn && !rule.CancelsPromptTurn && !rule.CancelledByPromptCancel && !rule.ClosesSession && rule.SessionKey != "":
-		return fmt.Errorf("a session key without a prompt-turn role")
+		return errors.New("a session key without a prompt-turn role")
 	}
 	return nil
 }
@@ -413,19 +414,19 @@ func checkSessionRoles(rule *MethodRule) error {
 func checkRoleKeys(rule *MethodRule) error {
 	switch {
 	case rule.CancelledByPromptCancel && (rule.CancelledKey == "" || rule.CancelledVariant == ""):
-		return fmt.Errorf("a request answered on a prompt-turn cancel needs its result key and variant")
+		return errors.New("a request answered on a prompt-turn cancel needs its result key and variant")
 	case !rule.CancelledByPromptCancel && (rule.CancelledKey != "" || rule.CancelledVariant != ""):
-		return fmt.Errorf("a cancelled key without a request answered on a prompt-turn cancel")
+		return errors.New("a cancelled key without a request answered on a prompt-turn cancel")
 	case rule.Initializes && rule.Side != sideAgent:
-		return fmt.Errorf("only an agent method initializes the connection")
+		return errors.New("only an agent method initializes the connection")
 	case rule.Initializes && (rule.VersionKey == "" || rule.RequestCapabilities == "" || rule.ResponseCapabilities == ""):
-		return fmt.Errorf("an initialize rule needs its version key and both capabilities keys")
+		return errors.New("an initialize rule needs its version key and both capabilities keys")
 	case !rule.Initializes && (rule.VersionKey != "" || rule.RequestCapabilities != "" || rule.ResponseCapabilities != ""):
-		return fmt.Errorf("a version or capabilities key without an initialize rule")
+		return errors.New("a version or capabilities key without an initialize rule")
 	case rule.PromptTurn && (rule.StopKey == "" || rule.StopCancelled == ""):
-		return fmt.Errorf("a prompt turn needs its stop key and cancelled value")
+		return errors.New("a prompt turn needs its stop key and cancelled value")
 	case !rule.PromptTurn && (rule.StopKey != "" || rule.StopCancelled != ""):
-		return fmt.Errorf("a stop key without a prompt turn")
+		return errors.New("a stop key without a prompt turn")
 	}
 	return nil
 }

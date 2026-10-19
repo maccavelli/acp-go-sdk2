@@ -78,7 +78,7 @@ func TestCatchAllExtraKeepsSpelling(t *testing.T) {
 			t.Errorf("%s: %s did not decode into %s", tt.union, tt.payload, tt.field)
 			continue
 		}
-		extra, _ := other.Elem().FieldByName("Extra").Interface().(map[string]json.RawMessage)
+		extra, _ := reflect.TypeAssert[map[string]json.RawMessage](other.Elem().FieldByName("Extra"))
 		if got, ok := extra[tt.key]; !ok || string(got) != tt.value {
 			t.Errorf("%s: %s kept Extra %v, want %q holding %s as received", tt.union, tt.payload, extra, tt.key, tt.value)
 		}

@@ -43,7 +43,7 @@ func newAccessorPipes(t *testing.T) (localR *io.PipeReader, localW *io.PipeWrite
 // came back.
 func assertRequestReachesPeer(t *testing.T, conn *Connection, calls <-chan accessorCall, method string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	params := map[string]string{"sessionId": "sess-1", "value": "v"}
@@ -88,7 +88,7 @@ func TestClientSideConnection_ConnectionReachesThePeer(t *testing.T) {
 	// The case the accessor exists for: a method without the "_" prefix,
 	// which CallExtension refuses.
 	const method = "session/set_model"
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	if _, err := c.CallExtension(ctx, method, nil); err == nil {
 		t.Fatalf("CallExtension(%q) succeeded; expected it to refuse a non-extension method", method)
@@ -111,7 +111,7 @@ func TestAgentSideConnection_ConnectionReachesThePeer(t *testing.T) {
 	}
 
 	const method = "client/unmodelled_method"
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	if _, err := a.CallExtension(ctx, method, nil); err == nil {
 		t.Fatalf("CallExtension(%q) succeeded; expected it to refuse a non-extension method", method)

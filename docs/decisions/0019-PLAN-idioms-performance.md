@@ -1,6 +1,6 @@
 ---
 status: in-progress
-date: 2026-10-18
+date: 2026-10-19
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
 
@@ -233,10 +233,13 @@ The check:
 
 - **D10, the tests:**
   - `t.Context()` where a test's context fits;
-  - `wg.Go` for the three `wg.Add`;
+  - `wg.Go` for the three `wg.Add`; annotated during step 8, 2026-10-19 (see "Deviation, 2026-10-19, during step 8"): for the one
+    that starts a goroutine, `acp_test.go:573`; the other two count handler calls;
   - `slog.DiscardHandler`;
   - `strconv.Itoa`;
   - `t.Helper()` for the 20 `thelper` findings.
+  - Annotated during step 8, 2026-10-19 (see "Deviation, 2026-10-19, during step 8"): also `reflect.TypeAssert` at the three
+    `Interface().(T)` assertions in root tests, and `errors.New` at the two verbless `fmt.Errorf` calls "Facts" left out.
 - **D11, the mutation tool:** `main` runs under `signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)`;
   `syscall.SIGTERM` is defined for Windows too (`GOOS=windows go doc syscall.SIGTERM`). It passes that context to `runAll`, each `runMutant` and `listFiles`'s
   `exec.CommandContext`. An interrupt then ends the running `go test`, `runAll` stops scheduling, and `main` returns, so the deferred
@@ -247,6 +250,11 @@ The check:
   - it adds one exclusion rule for `goconst`, `gocognit` and `gocyclo` on `_gen\.go$`, with a comment giving question 15's reason;
   - the formatters keep their exclusions;
   - `make lint` and the pre-add check must report 0 issues for `darwin` and `windows`, in both modules.
+  - Annotated during step 8, 2026-10-19 (see "Deviation, 2026-10-19, during step 8"):
+    - `errcheck` sets `exclude-functions: [errors.AsType]`, with its reason, for the 8 `check-blank` issues of the array match;
+      it lands in step 8, as the third decision there records;
+    - a hand-written `typedGate` in `connection.go` carries `Initialize`'s gate, with a root test of its failed assertion, for the
+      unchecked type assertion in `client_gen.go`.
 
 ## Implementation Steps
 
@@ -910,3 +918,148 @@ Gates, with the API listing against `v1.15.2`, each exit 0:
 - `make check-records`, `make markdownlint`, and the identifier scan;
 - the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
 - Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+### Deviation, 2026-10-19, during step 8
+
+**Found.** Before step 8's edits, `.golangci.yml` was linted with D12's six linters added and `exclusions.generated: disable`,
+through a copy of the file outside the tree, on `95d66e3`, for both `GOOS` values in both modules. Leaving aside `goconst`, `gocognit`
+and `gocyclo` on `_gen.go` files, which step 9 excludes, it reports 65 issues, the same for `darwin` and `windows`. 51 are the sites
+"Facts" names for D9 and D10. 14 are not in "Facts":
+
+| Issues | Where | Since |
+| :--- | :--- | :--- |
+| `modernize` `reflecttypeassert`, 3 | `gates_test.go:301`, `patch_test.go:138`, `catchall_extra_test.go:81` | the first two on `f67c9c1`; the third added by step 6 |
+| `perfsprint` `error-format`, 2 | `connection_notification_barrier_test.go:470`, `example/agent/main.go:354` | `f67c9c1` |
+| `errcheck`, 8 | `types_gen.go`, the array match's `_, ok := errors.AsType[*json.UnmarshalTypeError](err)` | step 3 |
+| `errcheck`, 1 | `client_gen.go:414`, `Response: *result.(*InitializeResponse)` in `Initialize`'s gate | `f67c9c1` |
+
+- The MADR's count of E16's hand-written issues includes the first five ("Hand-written code: 20 (`modernize` 13, `perfsprint` 6,
+  `intrange` 1)"). "Facts" left them out. D9's design already covers the two `error-format` sites: "`errors.New` for each `fmt.Errorf`
+  without a verb".
+- The 8 `errcheck` issues come from `check-blank`, because `errors.AsType`'s first result has an error type. They took the place of the
+  8 `errorlint` issues that step 3 cleared, as "Design", D9 planned.
+- The MADR counts the type assertion among the generated `errcheck` issues ("and one type assertion"). No design fixes it. The gate
+  must stay a `gateFunc`, because `checkInbound` passes the gate's error to the inbound hook. The emitter cannot print a `//nolint`
+  inside a function body, which step 3's deviation found.
+- Without a resolution, step 9 cannot report 0 issues.
+
+An `exclude-functions: [errors.AsType]` setting for `errcheck` was tried in the same copy, outside the tree. It left exactly the type
+assertion: `errors.AsType`'s 8 issues were gone and nothing else changed. The setting spelled
+`errors.AsType[*encoding/json.UnmarshalTypeError]` left all 9.
+
+**Decision (owner, 2026-10-19).**
+
+- The five hand-written sites are fixed in step 8: `reflect.TypeAssert`, as D6 applies it, and `errors.New`.
+- Step 9's `.golangci.yml` excludes `errors.AsType` from `errcheck`, with a comment giving the reason: its first result is the match,
+  not a failure to handle. The generated code stays as it is.
+- Step 9 adds a hand-written `typedGate[T any](func(method string, result *T) error) gateFunc` to `connection.go`. It asserts the
+  result's type, and returns an error naming both types if the assertion fails. The emitter passes `Initialize`'s gate through it.
+  A root test drives the failed assertion.
+
+"Design", D10 and D12 are annotated. The MADR's D12 is amended.
+
+**Found, second.** "Design", D10 asks for "`wg.Go` for the three `wg.Add`". Only `acp_test.go:573` starts a goroutine. At
+`acp_test.go:796` (`wg.Add(n)`) and `:1154` (`wg.Add(1)`), the `WaitGroup` counts the handler calls the connection makes:
+`wg.Done` runs in the handler, and the test starts no goroutine. `wg.Go(f)` runs `f` on a new goroutine, so it cannot express them.
+
+**Decision (owner, 2026-10-19).** `wg.Go` at `acp_test.go:573` only. The two handler counters keep `wg.Add` and `wg.Done`.
+"Design", D10 is annotated.
+
+**Found, third.** `make pre-add-check` failed on step 8's tree, with one `errcheck` issue at
+`cmd/generate/internal/output/check.go:146:5`: "Error return value of `errors.AsType` is not checked". That line is `go fix`'s
+rewrite, `if _, ok := errors.AsType[*build.NoGoError](err); ok`, which D9 requires. It is the `check-blank` issue of the first
+decision, in hand-written code, which the configuration lints today.
+
+**Decision (owner, 2026-10-19).** The `errcheck` exclusion of `errors.AsType` lands in step 8 rather than step 9. Step 9 keeps the
+rest of D12.
+
+### Step 8, D10, D11 and the generator's D9, 2026-10-19
+
+What changed, on `95d66e3`, with the decisions of "Deviation, 2026-10-19, during step 8":
+
+- **D10, root tests:**
+  - `t.Context()` replaces `context.Background()` at all 46 sites in root tests, in 8 files. The three examples keep theirs: an
+    example has no `t`.
+    - `t.Context()` ends as its test returns, which matters only for a goroutine that can outlive the test. Nine of the 46 sites are
+      on a goroutine the test starts. Seven of them call no `t` method.
+    - The other two are `prompt` and `askPermission` (`cancel_test.go`), which report a failed call with `t.Errorf`. A script outside
+      the tree found each of their 20 answers received before the test returns: directly, through `within`, or from a literal that is
+      ranged and received from.
+    - Six of the 46 are in `acp_test.go`'s two functions run through `synctest.Test`, where `t` is the bubble's.
+  - `wg.Go` at `acp_test.go:573`, the one `wg.Add` that starts a goroutine, as decided.
+  - `slog.DiscardHandler` (`connection_logger_test.go`), and `strconv.Itoa` at the three `fmt.Sprintf("%d", …)`
+    (`connection_cancel_test.go`).
+  - `t.Helper()` first in `raw_value_test.go`'s ten decoding literals.
+- **The deviation's five sites:** `reflect.TypeAssert` in `gates_test.go`, `patch_test.go` and `catchall_extra_test.go`; `errors.New`
+  in `connection_notification_barrier_test.go` and `example/agent/main.go`.
+- **D9 in `cmd/generate`:**
+  - `errors.New` for the 22 verbless `fmt.Errorf` calls: 6 in `internal/load/merge.go`, 16 in `internal/model/protocol.go`.
+  - `errors.AsType` at both `errors.As` calls of `internal/output/check.go`: `:86` by hand, `:147` by `go fix`.
+  - `go fix ./...` applied its 6 proposals, in `mutate/main.go` (3), `mutate/sites.go`, `model/keywords_test.go` and `output/check.go`.
+    `go fix -diff ./...` then reports nothing.
+  - `thelper`: `engineCases`'s `testing.TB` parameter is `tb`, and `output/check_test.go`'s nine directory makers call `t.Helper()`
+    first.
+- **D11, `cmd/generate/internal/mutate`:**
+  - `main` runs `run` under `signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)`.
+  - `run`, `listFiles` and `runAll` take the context. `listFiles` runs `go list` through `exec.CommandContext`, and `runAll` passes
+    the context to each `runMutant`.
+  - `runAll` hands out no mutant once the context has ended. A mutant it did not start keeps a zero result.
+  - Once the context has ended, `run` returns `stopped: <cause>` and writes no report. Its deferred `os.RemoveAll` of the temporary
+    directory runs as it returns. The package comment says so.
+- **`.golangci.yml`, by the third decision:** `errcheck` sets `exclude-functions: [errors.AsType]`, with its reason in a comment.
+  The rest of D12 stays in step 9.
+
+**The D11 check, strengthened.** "Design", D11 names a test that calls `runAll` with a context already ended and requires that no
+mutant runs, and the planted-break table names it for "the context not passed to `runMutant`". That break passed it: `runAll` starts
+no mutant once the context has ended, so `runMutant`'s context is never used. As "Verification" requires of such a break, the step adds
+a check that fails on it:
+
+- **`TestRunAllEndedContext`** is the named test. It also requires `run`, under an ended context, to return the context's cause and
+  write no report.
+- **`TestRunAllInterrupted`** ends the context while a mutant's `go test` runs. Its fixture module has one mutant, and that mutant's
+  test writes a file and waits until the file is removed. The test requires `runAll` to return within 30 seconds of the context
+  ending, and the second mutant, chosen after it, not to start. It then removes the file, so the mutant's test ends either way.
+
+What an interrupt ends, read from `go doc os/exec.CommandContext` and `cmd/go`'s source at `go1.27.2`:
+
+- `exec.CommandContext` kills the `go` command. The test binary that command runs is its child, not the tool's.
+- `cmd/go` reads an interrupt only to start no further work (`internal/test/test.go:1459`, `internal/work/exec.go:244`). So a test
+  binary already running is left to end by itself. In `TestRunAllInterrupted` it ends because its file is removed.
+- An interrupt from a terminal reaches its whole process group, the tool, the `go` command and the test binaries alike. A `SIGTERM`
+  sent to the tool alone leaves a running test binary to its own `-timeout`, the tool's `-timeout` flag.
+
+Planted breaks, each in a scratch copy of the tree:
+
+| Break | Result |
+| :--- | :--- |
+| the context not passed to `runMutant` | `TestRunAllInterrupted` fails: "runAll was still running 30s after its context ended"; `TestRunAllEndedContext` passes, as above |
+| `runAll` handing out mutants after the context ends | `TestRunAllEndedContext` fails on each mutant: "mutant 0 ran after the context ended: {File:m.go … Outcome:invalid …}" |
+| `run` writing its report after the context ends | `TestRunAllEndedContext` fails: "run = <nil>, want the context's cause" and "run wrote a report after the context ended" |
+| `errcheck` without the `errors.AsType` exclusion | a file planted in the copy, `_, ok := errors.AsType[*RequestError](err)` and `_ = os.Remove(…)`: with the exclusion, `errcheck` reports the `os.Remove` line only; without it, both lines |
+
+The other changes keep their tests' behaviour and add no check: the suites that ran before run unchanged.
+
+Run with `-race -count=1000 -timeout 0`, each exit 0:
+
+- the 49 root tests whose code the step changed, found by a script outside the tree, including the tests that call a changed
+  helper: 1,436 seconds;
+- `TestRunAllEndedContext`: 4 seconds;
+- `TestRunAllInterrupted`: 830 seconds. Each iteration runs the fixture's `go test`, and no fixture test binary was left running
+  afterwards.
+
+Gates, with the API listing against `v1.15.2`, each exit 0:
+
+- regeneration: the generated files unchanged by a second run;
+- `make pre-add-check`. Its first run, before the exclusion, failed only on `output/check.go:146`, as the third decision records;
+- `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+- `make check-records`, `make markdownlint`, and the identifier scan;
+- the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
+- Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+What step 9 is left with. The deviation's probe was run again on this step's tree: the tree's `.golangci.yml`, D12's six linters
+added, and `exclusions.generated: disable`, from a copy outside the tree. It gives the same issues for `darwin` and `windows`:
+
+- **`cmd/generate`:** 0.
+- **The root:** 93.
+  - 92 are `goconst` (86), `gocognit` (4) and `gocyclo` (2), all in `_gen.go` files, which step 9's exclusion covers.
+  - 1 is `errcheck` at `client_gen.go:414`, `Initialize`'s type assertion, which step 9's `typedGate` removes.

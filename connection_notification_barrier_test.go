@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -144,7 +145,7 @@ func TestSendRequest_WaitsForPreResponseNotification(t *testing.T) {
 
 	resultCh := make(chan error, 1)
 	go func() {
-		_, err := clientConn.LoadSession(context.Background(), testLoadSessionRequest("pre-response"))
+		_, err := clientConn.LoadSession(t.Context(), testLoadSessionRequest("pre-response"))
 		resultCh <- err
 	}()
 
@@ -201,7 +202,7 @@ func TestSendRequest_DoesNotWaitForPostResponseNotification(t *testing.T) {
 		LoadSessionFunc: func(context.Context, LoadSessionRequest) (LoadSessionResponse, error) {
 			go func() {
 				time.Sleep(25 * time.Millisecond)
-				notificationErrCh <- agentConn.SessionUpdate(context.Background(), testSessionUpdate(SessionId("post-response"), 1))
+				notificationErrCh <- agentConn.SessionUpdate(t.Context(), testSessionUpdate(SessionId("post-response"), 1))
 			}()
 			return LoadSessionResponse{}, nil
 		},
@@ -212,7 +213,7 @@ func TestSendRequest_DoesNotWaitForPostResponseNotification(t *testing.T) {
 
 	resultCh := make(chan error, 1)
 	go func() {
-		_, err := clientConn.LoadSession(context.Background(), testLoadSessionRequest("post-response"))
+		_, err := clientConn.LoadSession(t.Context(), testLoadSessionRequest("post-response"))
 		resultCh <- err
 	}()
 
@@ -298,7 +299,7 @@ func TestSendRequest_ConcurrentRequestsDoNotPanic(t *testing.T) {
 		wg.Go(func() {
 			<-start
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 
 			_, err := clientConn.LoadSession(ctx, testLoadSessionRequest(fmt.Sprintf("concurrent-%d", i)))
@@ -349,7 +350,7 @@ func TestLoadSession_NotificationReplayOrdering(t *testing.T) {
 	clientConn, createdAgentConn := newNotificationBarrierTestPair(t, client, agent)
 	agentConn = createdAgentConn
 
-	if _, err := clientConn.LoadSession(context.Background(), testLoadSessionRequest("replay-order")); err != nil {
+	if _, err := clientConn.LoadSession(t.Context(), testLoadSessionRequest("replay-order")); err != nil {
 		t.Fatalf("LoadSession returned error: %v", err)
 	}
 
@@ -382,7 +383,7 @@ func TestShutdownDrainsNotifications_WithBarrier(t *testing.T) {
 
 	clientConn, agentConn := newNotificationBarrierTestPair(t, client, agentFuncs{})
 
-	if err := agentConn.SessionUpdate(context.Background(), testSessionUpdate(SessionId("shutdown"), 1)); err != nil {
+	if err := agentConn.SessionUpdate(t.Context(), testSessionUpdate(SessionId("shutdown"), 1)); err != nil {
 		t.Fatalf("SessionUpdate returned error: %v", err)
 	}
 
@@ -467,7 +468,7 @@ func TestBarrierAfterOwnNotification(t *testing.T) {
 						break
 					}
 					if time.Now().After(deadline) {
-						result <- fmt.Errorf("the first notification did not complete")
+						result <- errors.New("the first notification did not complete")
 						return
 					}
 					time.Sleep(time.Millisecond)

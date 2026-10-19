@@ -58,7 +58,7 @@ func TestSetLoggerWhileReading(t *testing.T) {
 		r, w := io.Pipe()
 		c := NewConnection(noopHandler, io.Discard, r)
 		_ = w.Close()
-		c.SetLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))
+		c.SetLogger(slog.New(slog.DiscardHandler))
 		<-c.Done()
 	}
 }

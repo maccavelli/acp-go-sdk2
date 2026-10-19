@@ -1,6 +1,7 @@
 package load
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"reflect"
@@ -49,16 +50,16 @@ const (
 // the stable inputs.
 func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta *Meta, unstableSchema *Schema) (*Meta, *Schema, *Provenance, error) {
 	if stableMeta == nil {
-		return nil, nil, nil, fmt.Errorf("stable meta is nil")
+		return nil, nil, nil, errors.New("stable meta is nil")
 	}
 	if stableSchema == nil {
-		return nil, nil, nil, fmt.Errorf("stable schema is nil")
+		return nil, nil, nil, errors.New("stable schema is nil")
 	}
 	if unstableMeta == nil {
-		return nil, nil, nil, fmt.Errorf("unstable meta is nil")
+		return nil, nil, nil, errors.New("unstable meta is nil")
 	}
 	if unstableSchema == nil {
-		return nil, nil, nil, fmt.Errorf("unstable schema is nil")
+		return nil, nil, nil, errors.New("unstable schema is nil")
 	}
 
 	// Defensive: schema versions should match.
@@ -197,10 +198,10 @@ func mergeUnstableOnlyMethods(dst map[string]string, src map[string]string, stab
 
 func buildUnstableDuplicateSet(stableSchema *Schema, unstableSchema *Schema, unstableOnlyWires map[string]struct{}) (map[string]struct{}, error) {
 	if stableSchema == nil {
-		return nil, fmt.Errorf("stable schema is nil")
+		return nil, errors.New("stable schema is nil")
 	}
 	if unstableSchema == nil {
-		return nil, fmt.Errorf("unstable schema is nil")
+		return nil, errors.New("unstable schema is nil")
 	}
 
 	// newOrChanged tracks types that are new in unstable, or differ from stable.

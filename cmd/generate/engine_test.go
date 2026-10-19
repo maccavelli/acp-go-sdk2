@@ -17,14 +17,14 @@ import (
 var update = flag.Bool("update", false, "rewrite the want.api of the engine cases")
 
 // engineCases returns the paths of the engine cases, 0011-PLAN-engine-tests.md, D1.
-func engineCases(t testing.TB) []string {
-	t.Helper()
+func engineCases(tb testing.TB) []string {
+	tb.Helper()
 	paths, err := filepath.Glob(filepath.Join("testdata", "engine", "*.txtar"))
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	if len(paths) == 0 {
-		t.Fatal("no engine cases in testdata/engine")
+		tb.Fatal("no engine cases in testdata/engine")
 	}
 	return paths
 }

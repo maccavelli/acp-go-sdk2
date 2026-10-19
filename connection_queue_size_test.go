@@ -135,7 +135,7 @@ func TestLargerQueue_SurvivesNotificationBurst(t *testing.T) {
 	negotiate(t, agentConn, allAdvertised())
 
 	for i := range burstSize {
-		if err := agentConn.SessionUpdate(context.Background(), testSessionUpdate("burst", i)); err != nil {
+		if err := agentConn.SessionUpdate(t.Context(), testSessionUpdate("burst", i)); err != nil {
 			t.Fatalf("SessionUpdate %d failed: %v", i, err)
 		}
 	}

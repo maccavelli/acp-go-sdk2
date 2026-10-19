@@ -43,27 +43,38 @@ func TestCheckRefuses(t *testing.T) {
 		files []emit.File
 		want  []string
 	}{
-		{"an empty directory", func(t *testing.T) string { return t.TempDir() }, uses,
+		{"an empty directory", func(t *testing.T) string {
+			t.Helper()
+			return t.TempDir()
+		}, uses,
 			[]string{"does not type-check", "types_gen.go:5:", "undefined: RequestError"}},
-		{"a missing directory", func(t *testing.T) string { return filepath.Join(t.TempDir(), "missing") }, uses,
+		{"a missing directory", func(t *testing.T) string {
+			t.Helper()
+			return filepath.Join(t.TempDir(), "missing")
+		}, uses,
 			[]string{"output directory", "missing: does not exist"}},
 		{"a hand-written file that redeclares a generated type", func(t *testing.T) string {
+			t.Helper()
 			return dirWith(t, map[string]string{"hand.go": stub + "\ntype U int\n"})
 		}, uses, []string{"redeclared"}},
 		{"a feature newer than the go line of go.mod", func(t *testing.T) string {
+			t.Helper()
 			return dirWith(t, map[string]string{
 				"go.mod":  "module example.com/acp\n\ngo 1.21\n",
 				"hand.go": stub + "\nfunc loop() {\n\tfor range 3 {\n\t}\n}\n",
 			})
 		}, uses, []string{"requires go1.22"}},
 		{"a file of another package", func(t *testing.T) string {
+			t.Helper()
 			return dirWith(t, map[string]string{"hand.go": stub, "stray.go": "package other\n"})
 		}, uses, []string{"output directory", "other"}},
 		{"a cgo file", func(t *testing.T) string {
+			t.Helper()
 			return dirWith(t, map[string]string{"hand.go": stub, "c.go": "package acp\n\nimport \"C\"\n"})
 		}, uses, []string{"cgo file c.go"}},
 		// The sites below no test ran (0019-PLAN-generator-hardening.md, G19).
 		{"a go.mod that cannot be read", func(t *testing.T) string {
+			t.Helper()
 			dir := dirWith(t, map[string]string{"hand.go": stub})
 			if err := os.Mkdir(filepath.Join(dir, "go.mod"), 0o700); err != nil {
 				t.Fatal(err)
@@ -71,9 +82,11 @@ func TestCheckRefuses(t *testing.T) {
 			return dir
 		}, uses, []string{"go.mod"}},
 		{"a hand-written file that does not parse", func(t *testing.T) string {
+			t.Helper()
 			return dirWith(t, map[string]string{"hand.go": stub, "broken.go": "package acp\n\nfunc {\n"})
 		}, uses, []string{"broken.go:3:"}},
 		{"a generated file that does not parse", func(t *testing.T) string {
+			t.Helper()
 			return dirWith(t, map[string]string{"hand.go": stub})
 		}, []emit.File{{Name: "types_gen.go", Src: []byte("package acp\n\nfunc {\n")}}, []string{"types_gen.go:3:"}},
 	}

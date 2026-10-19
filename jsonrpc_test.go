@@ -162,7 +162,7 @@ func TestMalformedResponseFailsCall(t *testing.T) {
 			negotiate(t, c, allAdvertised())
 			done := make(chan error, 1)
 			go func() {
-				_, err := c.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath()})
+				_, err := c.NewSession(t.Context(), NewSessionRequest{Cwd: testAbsPath()})
 				done <- err
 			}()
 			req := p.next("the request")

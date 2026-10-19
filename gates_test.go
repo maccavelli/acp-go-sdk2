@@ -298,7 +298,7 @@ func TestNotInitialized(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 			out := v.Method(i).Call([]reflect.Value{reflect.ValueOf(ctx), reflect.New(mt.In(1)).Elem()})
 			cancel()
-			err, _ := out[len(out)-1].Interface().(error)
+			err, _ := reflect.TypeAssert[error](out[len(out)-1])
 			if !errors.Is(err, ErrNotInitialized) {
 				t.Errorf("%T.%s = %v, want an error wrapping ErrNotInitialized", side, name, err)
 			}

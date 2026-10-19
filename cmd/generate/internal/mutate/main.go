@@ -3,6 +3,10 @@
 // is never written, and reports which mutants the tests kill
 // (0011-PLAN-engine-tests.md, D5). It reports and never gates.
 //
+// An interrupt or SIGTERM stops a run: the go commands running are ended, no
+// other mutant runs, the temporary files are removed, and no report is written
+// (0019-PLAN-idioms-performance.md, D11).
+//
 // Usage, in cmd/generate:
 //
 //	go run ./internal/mutate [-dir module] [-files glob,...] [-pkgs pattern] [-skip regexp] [-only file:line:col,...] [-n count] [-seed n] [-j count] [-timeout d] [-o report.json]
@@ -19,11 +23,13 @@ import (
 	"math/rand/v2"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -67,21 +73,25 @@ func main() {
 	flag.StringVar(&cfg.timeout, "timeout", "3m", "go test -timeout for each mutant")
 	flag.StringVar(&cfg.out, "o", "", "the JSON report; default a new file in the temporary directory")
 	flag.Parse()
-	if _, err := run(cfg, os.Stdout); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	_, err := run(ctx, cfg, os.Stdout)
+	stop()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "mutate:", err)
 		os.Exit(1)
 	}
 }
 
 // run mutates the files of cfg, runs each mutant, writes the report, and
-// prints a summary that lists each survivor to w.
-func run(cfg config, w io.Writer) (*report, error) {
+// prints a summary that lists each survivor to w. Once ctx ends it runs no
+// more mutants and returns its cause.
+func run(ctx context.Context, cfg config, w io.Writer) (*report, error) {
 	wait, err := time.ParseDuration(cfg.timeout)
 	if err != nil {
 		return nil, fmt.Errorf("-timeout: %w", err)
 	}
 	cfg.wait = wait
-	files, err := listFiles(cfg)
+	files, err := listFiles(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +121,10 @@ func run(cfg config, w io.Writer) (*report, error) {
 	}
 	defer os.RemoveAll(work) //nolint:errcheck // a temporary directory.
 	rep := &report{Dir: cfg.dir, Pkgs: cfg.pkgs, Skip: cfg.skip, Sites: len(all), Seed: cfg.seed, Counts: map[string]map[string]int{}}
-	rep.Mutants = runAll(cfg, work, chosen, srcs)
+	rep.Mutants = runAll(ctx, cfg, work, chosen, srcs)
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("stopped: %w", context.Cause(ctx))
+	}
 	for _, r := range rep.Mutants {
 		pkg := path.Dir(r.File)
 		if rep.Counts[pkg] == nil {
@@ -130,8 +143,9 @@ func run(cfg config, w io.Writer) (*report, error) {
 
 // runAll runs the mutants of chosen, cfg.jobs at a time, and returns their
 // results in the order of chosen. Each mutant has its own file and overlay in
-// work, so mutants run at once do not meet.
-func runAll(cfg config, work string, chosen []site, srcs map[string][]byte) []result {
+// work, so mutants run at once do not meet. Once ctx ends, the mutants running
+// are ended and no other starts; a mutant not started keeps a zero result.
+func runAll(ctx context.Context, cfg config, work string, chosen []site, srcs map[string][]byte) []result {
 	out := make([]result, len(chosen))
 	next := make(chan int)
 	var mu sync.Mutex
@@ -141,7 +155,7 @@ func runAll(cfg config, work string, chosen []site, srcs map[string][]byte) []re
 		wg.Go(func() {
 			for i := range next {
 				s := chosen[i]
-				r := runMutant(context.Background(), cfg, work, i, s, srcs[s.File])
+				r := runMutant(ctx, cfg, work, i, s, srcs[s.File])
 				out[i] = r
 				mu.Lock()
 				done++
@@ -151,7 +165,13 @@ func runAll(cfg config, work string, chosen []site, srcs map[string][]byte) []re
 		})
 	}
 	for i := range chosen {
-		next <- i
+		if ctx.Err() != nil {
+			break
+		}
+		select {
+		case next <- i:
+		case <-ctx.Done():
+		}
 	}
 	close(next)
 	wg.Wait()
@@ -160,10 +180,10 @@ func runAll(cfg config, work string, chosen []site, srcs map[string][]byte) []re
 
 // listFiles returns the files to mutate, relative to cfg.dir with forward
 // slashes: the matches of cfg.files, or every non-test Go file of cfg.pkgs.
-func listFiles(cfg config) ([]string, error) {
+func listFiles(ctx context.Context, cfg config) ([]string, error) {
 	var out []string
 	if cfg.files == "" {
-		cmd := exec.Command("go", append([]string{"list", "-f", `{{$d := .Dir}}{{range .GoFiles}}{{$d}}/{{.}}{{"\n"}}{{end}}`}, strings.Fields(cfg.pkgs)...)...) //nolint:gosec // G204: the go command.
+		cmd := exec.CommandContext(ctx, "go", append([]string{"list", "-f", `{{$d := .Dir}}{{range .GoFiles}}{{$d}}/{{.}}{{"\n"}}{{end}}`}, strings.Fields(cfg.pkgs)...)...) //nolint:gosec // G204: the go command.
 		cmd.Dir = cfg.dir
 		b, err := cmd.Output()
 		if err != nil {
@@ -173,7 +193,7 @@ func listFiles(cfg config) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, p := range strings.Fields(string(b)) {
+		for p := range strings.FieldsSeq(string(b)) {
 			rel, err := filepath.Rel(root, p)
 			if err != nil {
 				return nil, err
@@ -181,7 +201,7 @@ func listFiles(cfg config) ([]string, error) {
 			out = append(out, filepath.ToSlash(rel))
 		}
 	}
-	for _, g := range strings.Split(cfg.files, ",") {
+	for g := range strings.SplitSeq(cfg.files, ",") {
 		if g = strings.TrimSpace(g); g == "" {
 			continue
 		}
@@ -225,7 +245,7 @@ func sample(all []site, n int, seed uint64) []site {
 // order, or an error naming one that is not a site.
 func pick(all []site, only string) ([]site, error) {
 	want := map[string]bool{}
-	for _, s := range strings.Split(only, ",") {
+	for s := range strings.SplitSeq(only, ",") {
 		if s = strings.TrimSpace(s); s != "" {
 			want[s] = true
 		}

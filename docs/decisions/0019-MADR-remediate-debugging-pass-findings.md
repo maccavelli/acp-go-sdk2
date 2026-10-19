@@ -587,6 +587,14 @@ benchmark measures each performance item.
   - `.golangci.yml` enables `modernize`, `intrange`, `copyloopvar`, `perfsprint` and `usestdlibvars`, and `thelper` (question 20).
   - It lints the generated files, excluding `goconst`, `gocognit` and `gocyclo` for `_gen.go` with the reason, as question 15 decided.
   - The lint over generated code runs in `make pre-add-check` and CI, as the rest does.
+
+  Amended while executing [0019-PLAN-idioms-performance.md](0019-PLAN-idioms-performance.md), step 8, 2026-10-19: two of the
+  generated `errcheck` issues needed a design.
+
+  - **The array match.** D9's `_, ok := errors.AsType[*json.UnmarshalTypeError](err)` gives 8 `check-blank` issues, because the
+    first result has an error type. `errcheck` excludes `errors.AsType`, whose first result is the match, not a failure to handle.
+  - **`Initialize`'s gate.** It asserts its result's type unchecked: the "one type assertion" counted above. A hand-written
+    `typedGate` checks the assertion and returns an error if it fails.
 - **D13, benchmarks committed:**
   - A root `bench_test.go` holds the seven benchmarks above, written with `testing.B.Loop`, and `make bench` runs them.
   - CI does not run them: a benchmark measures, and has nothing to fail on.

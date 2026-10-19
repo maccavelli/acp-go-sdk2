@@ -30,6 +30,11 @@ linters:
     errcheck:
       check-type-assertions: true
       check-blank: true
+      # errors.AsType's first result is the match, not an error to handle,
+      # so `_, ok := errors.AsType[T](err)` discards nothing
+      # (0019-PLAN-idioms-performance.md, D12).
+      exclude-functions:
+        - errors.AsType
     gocognit:
       min-complexity: 50
     gocritic:

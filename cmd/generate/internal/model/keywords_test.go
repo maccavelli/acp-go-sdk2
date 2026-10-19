@@ -19,8 +19,8 @@ func TestKeywordRegistryMatchesLoader(t *testing.T) {
 	t.Parallel()
 	var declared []string
 	rt := reflect.TypeFor[load.Definition]()
-	for i := range rt.NumField() {
-		name, _, _ := strings.Cut(rt.Field(i).Tag.Get("json"), ",")
+	for field := range rt.Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if name != "" && name != "-" {
 			declared = append(declared, name)
 		}

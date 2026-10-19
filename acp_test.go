@@ -451,7 +451,7 @@ func TestAgentDispatch_AllowsPartialUnstableMethodImplementation(t *testing.T) {
 		t.Fatalf("marshal request params: %v", err)
 	}
 
-	result, reqErr := conn.handle(context.Background(), AgentMethodSessionFork, params)
+	result, reqErr := conn.handle(t.Context(), AgentMethodSessionFork, params)
 	if reqErr != nil {
 		t.Fatalf("unexpected request error: %+v", reqErr)
 	}
@@ -470,7 +470,7 @@ func TestAgentDispatch_AllowsPartialUnstableMethodImplementation(t *testing.T) {
 
 // Test bidirectional error handling similar to typescript/acp.test.ts
 func TestConnectionHandlesErrorsBidirectional(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	c2aR, c2aW := io.Pipe()
 	a2cR, a2cW := io.Pipe()
 
@@ -570,13 +570,9 @@ func TestConnectionHandlesConcurrentRequests(t *testing.T) {
 		{Path: testAbsPath("file2.txt"), Content: "content2", SessionId: "session1"},
 		{Path: testAbsPath("file3.txt"), Content: "content3", SessionId: "session1"},
 	} {
-		wg.Add(1)
-		idx := i
-		req := p
-		go func() {
-			defer wg.Done()
-			_, errs[idx] = agentConn.WriteTextFile(context.Background(), req)
-		}()
+		wg.Go(func() {
+			_, errs[i] = agentConn.WriteTextFile(t.Context(), p)
+		})
 	}
 	wg.Wait()
 	for i, err := range errs {
@@ -648,16 +644,16 @@ func TestConnectionHandlesMessageOrdering(t *testing.T) {
 	negotiate(t, cs, allAdvertised())
 	negotiate(t, as, allAdvertised())
 
-	if _, err := cs.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath("test"), McpServers: []McpServer{}}); err != nil {
+	if _, err := cs.NewSession(t.Context(), NewSessionRequest{Cwd: testAbsPath("test"), McpServers: []McpServer{}}); err != nil {
 		t.Fatalf("newSession error: %v", err)
 	}
-	if _, err := as.WriteTextFile(context.Background(), WriteTextFileRequest{Path: testAbsPath("test.txt"), Content: "test", SessionId: "test-session"}); err != nil {
+	if _, err := as.WriteTextFile(t.Context(), WriteTextFileRequest{Path: testAbsPath("test.txt"), Content: "test", SessionId: "test-session"}); err != nil {
 		t.Fatalf("writeTextFile error: %v", err)
 	}
-	if _, err := as.ReadTextFile(context.Background(), ReadTextFileRequest{Path: testAbsPath("test.txt"), SessionId: "test-session"}); err != nil {
+	if _, err := as.ReadTextFile(t.Context(), ReadTextFileRequest{Path: testAbsPath("test.txt"), SessionId: "test-session"}); err != nil {
 		t.Fatalf("readTextFile error: %v", err)
 	}
-	if _, err := as.RequestPermission(context.Background(), RequestPermissionRequest{
+	if _, err := as.RequestPermission(t.Context(), RequestPermissionRequest{
 		SessionId: "test-session",
 		ToolCall: ToolCallUpdate{
 			Title:      new("Execute command"),
@@ -758,7 +754,7 @@ func testConnectionHandlesNotifications(t *testing.T) {
 	negotiate(t, clientSide, allAdvertised())
 	negotiate(t, agentSide, allAdvertised())
 
-	if err := agentSide.SessionUpdate(context.Background(), SessionNotification{
+	if err := agentSide.SessionUpdate(t.Context(), SessionNotification{
 		SessionId: "test-session",
 		Update: SessionUpdate{
 			AgentMessageChunk: &SessionUpdateAgentMessageChunk{
@@ -769,7 +765,7 @@ func testConnectionHandlesNotifications(t *testing.T) {
 		t.Fatalf("sessionUpdate error: %v", err)
 	}
 
-	if err := clientSide.Cancel(context.Background(), CancelNotification{SessionId: "test-session"}); err != nil {
+	if err := clientSide.Cancel(t.Context(), CancelNotification{SessionId: "test-session"}); err != nil {
 		t.Fatalf("cancel error: %v", err)
 	}
 
@@ -987,7 +983,7 @@ func TestConnectionHandlesInitialize(t *testing.T) {
 		CancelFunc: func(context.Context, CancelNotification) error { return nil },
 	}, a2cW, c2aR)
 
-	resp, err := agentConn.Initialize(context.Background(), InitializeRequest{
+	resp, err := agentConn.Initialize(t.Context(), InitializeRequest{
 		ProtocolVersion:    ProtocolVersionNumber,
 		ClientCapabilities: ClientCapabilities{Fs: FileSystemCapabilities{ReadTextFile: false, WriteTextFile: false}},
 	})
@@ -1069,16 +1065,16 @@ func testPromptCancellationSendsCancelAndAllowsNewSession(t *testing.T) {
 	}, c2aW, a2cR)
 
 	// Initialize and create a session
-	if _, err := cs.Initialize(context.Background(), InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
+	if _, err := cs.Initialize(t.Context(), InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
-	sess, err := cs.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
+	sess, err := cs.NewSession(t.Context(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
 	if err != nil {
 		t.Fatalf("newSession: %v", err)
 	}
 
 	// Start a prompt with a cancelable context, then cancel it
-	turnCtx, cancel := context.WithCancel(context.Background())
+	turnCtx, cancel := context.WithCancel(t.Context())
 	errCh := make(chan error, 1)
 	go func() {
 		_, err := cs.Prompt(turnCtx, PromptRequest{SessionId: sess.SessionId, Prompt: []ContentBlock{TextBlock("hello")}})
@@ -1107,7 +1103,7 @@ func testPromptCancellationSendsCancelAndAllowsNewSession(t *testing.T) {
 	}
 
 	// Connection remains usable: create another session
-	if _, err := cs.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}}); err != nil {
+	if _, err := cs.NewSession(t.Context(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}}); err != nil {
 		t.Fatalf("newSession after cancel: %v", err)
 	}
 }
@@ -1191,15 +1187,15 @@ func TestPromptWaitsForSessionUpdatesComplete(t *testing.T) {
 		CancelFunc: func(context.Context, CancelNotification) error { return nil },
 	}, a2cW, c2aR)
 
-	if _, err := c.Initialize(context.Background(), InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
+	if _, err := c.Initialize(t.Context(), InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
-	sess, err := c.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
+	sess, err := c.NewSession(t.Context(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
 	if err != nil {
 		t.Fatalf("newSession: %v", err)
 	}
 
-	_, err = c.Prompt(context.Background(), PromptRequest{
+	_, err = c.Prompt(t.Context(), PromptRequest{
 		SessionId: sess.SessionId,
 		Prompt:    []ContentBlock{TextBlock("test")},
 	})
@@ -1278,15 +1274,15 @@ func TestRequestHandlerCanMakeNestedRequest(t *testing.T) {
 		CancelFunc: func(context.Context, CancelNotification) error { return nil },
 	}, a2cW, c2aR)
 
-	if _, err := c.Initialize(context.Background(), InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
+	if _, err := c.Initialize(t.Context(), InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
-	sess, err := c.NewSession(context.Background(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
+	sess, err := c.NewSession(t.Context(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
 	if err != nil {
 		t.Fatalf("newSession: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 
 	if _, err := c.Prompt(ctx, PromptRequest{
@@ -1376,7 +1372,7 @@ func TestExtensionMethods_ClientToAgentRequest(t *testing.T) {
 
 	c := NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()
 
 	if _, err := c.Initialize(ctx, InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
@@ -1403,7 +1399,7 @@ func TestExtensionMethods_UnknownRequest_ReturnsMethodNotFound(t *testing.T) {
 	NewAgentSideConnection(agentNoExtensions{}, a2cW, c2aR)
 	c := NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()
 
 	if _, err := c.Initialize(ctx, InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
@@ -1441,7 +1437,7 @@ func TestExtensionMethods_UnknownNotification_DoesNotLog(t *testing.T) {
 
 	c := NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()
 
 	if _, err := c.Initialize(ctx, InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
@@ -1485,7 +1481,7 @@ func TestExtensionMethods_AgentToClientRequest(t *testing.T) {
 
 	ag := NewAgentSideConnection(agentFuncs{}, a2cW, c2aR)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()
 
 	if _, err := cl.Initialize(ctx, InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {

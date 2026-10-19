@@ -82,8 +82,8 @@ func checkPackage(dir, version string, hand []string, files []emit.File) error {
 		GoVersion: version,
 		Importer:  imp,
 		Error: func(err error) {
-			var te types.Error
-			if !errors.As(err, &te) {
+			te, ok := errors.AsType[types.Error](err)
+			if !ok {
 				te = types.Error{Fset: fset, Msg: err.Error()}
 			}
 			errs = append(errs, te)
@@ -143,8 +143,7 @@ func handWritten(dir string, files []emit.File) (hand, tests []string, err error
 	ctxt := build.Default
 	ctxt.CgoEnabled = true
 	bp, err := ctxt.ImportDir(dir, 0)
-	var noGo *build.NoGoError
-	if errors.As(err, &noGo) {
+	if _, ok := errors.AsType[*build.NoGoError](err); ok {
 		return nil, nil, nil
 	}
 	if err != nil {

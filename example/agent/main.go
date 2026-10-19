@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -351,7 +352,7 @@ func (a *exampleAgent) simulateTurn(ctx context.Context, sid string) (acp.StopRe
 		return acp.StopReasonCancelled, nil
 	}
 	if permResp.Outcome.Selected == nil {
-		return "", fmt.Errorf("unexpected permission outcome")
+		return "", errors.New("unexpected permission outcome")
 	}
 	switch string(permResp.Outcome.Selected.OptionId) {
 	case "allow":

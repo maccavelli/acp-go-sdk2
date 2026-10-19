@@ -166,9 +166,9 @@ func returnSite(n *ast.ReturnStmt, stack []ast.Node) (candidate, bool) {
 // returnsError reports whether the innermost function on stack has error as
 // its last result.
 func returnsError(stack []ast.Node) bool {
-	for i := len(stack) - 1; i >= 0; i-- {
+	for _, s := range slices.Backward(stack) {
 		var ft *ast.FuncType
-		switch fn := stack[i].(type) {
+		switch fn := s.(type) {
 		case *ast.FuncDecl:
 			ft = fn.Type
 		case *ast.FuncLit:

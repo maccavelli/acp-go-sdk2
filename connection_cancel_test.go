@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -315,7 +316,7 @@ func TestConnectionResponseID_CanonicalizesEquivalentNumericRepresentations(t *t
 		responderErr <- nil
 	}()
 
-	result, err := SendRequest[map[string]bool](c, context.Background(), "test/method", map[string]any{"x": 1})
+	result, err := SendRequest[map[string]bool](c, t.Context(), "test/method", map[string]any{"x": 1})
 	if err != nil {
 		t.Fatalf("SendRequest returned error: %v", err)
 	}
@@ -378,7 +379,7 @@ func TestConnectionInboundCancelRequest_ImmediateCancelNoRace(t *testing.T) {
 		if msg.ID == nil {
 			t.Fatalf("response missing id on iteration %d: %s", i, string(raw))
 		}
-		if got := string(*msg.ID); got != fmt.Sprintf("%d", i) {
+		if got := string(*msg.ID); got != strconv.Itoa(i) {
 			t.Fatalf("unexpected response id on iteration %d: got %q", i, got)
 		}
 		if msg.Error == nil {
@@ -412,7 +413,7 @@ func TestConnectionOutboundCancelRequest_SendsNotification(t *testing.T) {
 		close(lines)
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	errCh := make(chan error, 1)
@@ -496,7 +497,7 @@ func TestConnectionOutboundRequestTimeout_ReturnsInternalError(t *testing.T) {
 
 	c := NewConnection(nil, io.Discard, inR)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 
 	_, err := SendRequest[json.RawMessage](c, ctx, "test/method", map[string]any{"x": 1})
@@ -543,7 +544,7 @@ func TestConnectionOutboundCancelRequest_DoesNotBlockWhenPeerStopsReading(t *tes
 		// Intentionally stop reading after the first request line.
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	errCh := make(chan error, 1)
@@ -592,7 +593,7 @@ func TestConnectionOutboundCancelRequest_DoesNotBlockWhenPeerStopsReading(t *tes
 }
 
 func TestConnectionSendCancelRequest_BoundsPendingQueue(t *testing.T) {
-	baseCtx, baseCancel := context.WithCancelCause(context.Background())
+	baseCtx, baseCancel := context.WithCancelCause(t.Context())
 	defer baseCancel(nil)
 
 	c := &Connection{
@@ -604,7 +605,7 @@ func TestConnectionSendCancelRequest_BoundsPendingQueue(t *testing.T) {
 	}
 
 	for i := range maxPendingCancelRequests + 128 {
-		c.sendCancelRequest(fmt.Sprintf("%d", i))
+		c.sendCancelRequest(strconv.Itoa(i))
 	}
 
 	c.mu.Lock()
@@ -618,7 +619,7 @@ func TestConnectionSendCancelRequest_BoundsPendingQueue(t *testing.T) {
 		t.Fatalf("expected queue to retain earliest id when full, got first id %q", got)
 	}
 
-	expectedLast := fmt.Sprintf("%d", maxPendingCancelRequests-1)
+	expectedLast := strconv.Itoa(maxPendingCancelRequests - 1)
 	if got := c.pendingCancelRequest[len(c.pendingCancelRequest)-1]; got != expectedLast {
 		t.Fatalf("expected queue to drop ids beyond capacity, got last id %q want %q", got, expectedLast)
 	}
@@ -628,7 +629,7 @@ func TestConnectionWaitForResponse_PeerDisconnectWinsOverDerivedContextCancel(t 
 	const iterations = 64
 
 	for i := range iterations {
-		baseCtx, baseCancel := context.WithCancelCause(context.Background())
+		baseCtx, baseCancel := context.WithCancelCause(t.Context())
 		c := &Connection{
 			pending: make(map[string]*pendingResponse),
 			ctx:     baseCtx,

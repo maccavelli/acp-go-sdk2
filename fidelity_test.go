@@ -1,7 +1,6 @@
 package acp
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -195,7 +194,7 @@ func TestRequiredKeysOnDecode(t *testing.T) {
 	reqErr, panicked := func() (e *RequestError, p any) {
 		defer func() { p = recover() }()
 		a := &AgentSideConnection{sessionCancels: map[string][]*promptTurn{}}
-		_, e = a.handle(context.Background(), AgentMethodSessionPrompt, json.RawMessage(`{"prompt":[]}`))
+		_, e = a.handle(t.Context(), AgentMethodSessionPrompt, json.RawMessage(`{"prompt":[]}`))
 		return e, nil
 	}()
 	data, _ := reqErr.dataMap()

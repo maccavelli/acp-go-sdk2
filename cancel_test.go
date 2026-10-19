@@ -47,7 +47,7 @@ func prompt(t *testing.T, c *ClientSideConnection, s SessionId) <-chan PromptRes
 	t.Helper()
 	done := make(chan PromptResponse, 1)
 	go func() {
-		resp, err := c.Prompt(context.Background(), PromptRequest{SessionId: s})
+		resp, err := c.Prompt(t.Context(), PromptRequest{SessionId: s})
 		if err != nil {
 			t.Errorf("Prompt(%s): %v", s, err)
 		}
@@ -303,7 +303,7 @@ func askPermission(t *testing.T, asc *AgentSideConnection, s SessionId, id ToolC
 	t.Helper()
 	answer := make(chan RequestPermissionResponse, 1)
 	go func() {
-		resp, err := asc.RequestPermission(context.Background(), RequestPermissionRequest{SessionId: s, ToolCall: ToolCallUpdate{ToolCallId: id}})
+		resp, err := asc.RequestPermission(t.Context(), RequestPermissionRequest{SessionId: s, ToolCall: ToolCallUpdate{ToolCallId: id}})
 		if err != nil {
 			t.Errorf("RequestPermission(%s, %s): %v", s, id, err)
 		}
@@ -369,7 +369,7 @@ func TestPromptCancelAnswersPendingPermissions(t *testing.T) {
 	release := make(chan struct{})
 	t.Cleanup(func() { close(release) })
 	asc, c := permissionPair(t, agentFuncs{PromptFunc: func(ctx context.Context, p PromptRequest) (PromptResponse, error) {
-		resp, err := asc.RequestPermission(context.Background(), RequestPermissionRequest{SessionId: p.SessionId, ToolCall: ToolCallUpdate{ToolCallId: "t1"}})
+		resp, err := asc.RequestPermission(t.Context(), RequestPermissionRequest{SessionId: p.SessionId, ToolCall: ToolCallUpdate{ToolCallId: "t1"}})
 		if err != nil {
 			t.Errorf("RequestPermission: %v", err)
 		}
@@ -381,7 +381,7 @@ func TestPromptCancelAnswersPendingPermissions(t *testing.T) {
 		<-release
 		return RequestPermissionResponse{Outcome: NewRequestPermissionOutcomeSelected("allow")}, nil
 	})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	go func() { _, _ = c.Prompt(ctx, PromptRequest{SessionId: "s"}) }()
 	within(t, asked, "the permission request")
 	cancel()

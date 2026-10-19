@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestSites lists the operator sites of a fixture and checks each mutant's
@@ -195,7 +199,7 @@ func TestOnly(t *testing.T) {
 	cfg := config{dir: dir, files: "m.go", pkgs: "./...", timeout: "5s", jobs: 1, only: "m.go:13:36,m.go:6:16"}
 	checkRun(t, cfg, map[string]string{"6 boundary": "killed TestSum", "13 eq-neq": "survived "})
 	cfg.only = "m.go:13:35"
-	if _, err := run(cfg, io.Discard); err == nil || !strings.Contains(err.Error(), "m.go:13:35") {
+	if _, err := run(t.Context(), cfg, io.Discard); err == nil || !strings.Contains(err.Error(), "m.go:13:35") {
 		t.Errorf("-only of no site: %v", err)
 	}
 }
@@ -205,7 +209,7 @@ func TestOnly(t *testing.T) {
 func checkRun(t *testing.T, cfg config, want map[string]string) *report {
 	t.Helper()
 	cfg.out = filepath.Join(t.TempDir(), "report.json")
-	rep, err := run(cfg, os.Stdout)
+	rep, err := run(t.Context(), cfg, os.Stdout)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,4 +245,135 @@ func snapshot(t *testing.T, dir string) map[string]string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+// TestRunAllEndedContext requires runAll to start no mutant once its context
+// has ended (0019-PLAN-idioms-performance.md, D11).
+func TestRunAllEndedContext(t *testing.T) {
+	t.Parallel()
+	src := []byte(moduleFiles["m.go"])
+	all, err := sites("m.go", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	cfg := config{dir: t.TempDir(), pkgs: "./...", timeout: "5s", wait: 5 * time.Second, jobs: 2}
+	out := runAll(ctx, cfg, t.TempDir(), all, map[string][]byte{"m.go": src})
+	if len(out) != len(all) {
+		t.Fatalf("%d results for %d mutants", len(out), len(all))
+	}
+	for i, r := range out {
+		if r.File != "" {
+			t.Errorf("mutant %d ran after the context ended: %+v", i, r)
+		}
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "m.go"), src, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg = config{dir: dir, files: "m.go", pkgs: "./...", timeout: "5s", jobs: 1, out: filepath.Join(t.TempDir(), "report.json")}
+	if _, err := run(ctx, cfg, io.Discard); !errors.Is(err, context.Canceled) {
+		t.Errorf("run = %v, want the context's cause", err)
+	}
+	if _, err := os.Stat(cfg.out); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("run wrote a report after the context ended: %v", err)
+	}
+}
+
+// blockFiles is a module with one mutant, Ready's > made >=. Its test then
+// writes the file started and waits until that file is removed.
+var blockFiles = map[string]string{
+	"go.mod": "module example.com/b\n\ngo 1.27.2\n",
+	"b.go": `package b
+
+// Ready reports whether n is positive.
+func Ready(n int) bool { return n > 0 }
+`,
+	"b_test.go": `package b
+
+import (
+	"os"
+	"testing"
+	"time"
+)
+
+func TestReady(t *testing.T) {
+	if !Ready(0) {
+		return
+	}
+	if err := os.WriteFile("started", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat("started"); err != nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+`,
+}
+
+// TestRunAllInterrupted ends runAll's context while a mutant's go test runs,
+// and requires runAll to return without waiting for that test, and without
+// starting the next mutant (0019-PLAN-idioms-performance.md, D11).
+func TestRunAllInterrupted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs go test for a mutant")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Fatalf("the go command is needed: %v", err)
+	}
+	t.Parallel()
+	dir, work := t.TempDir(), t.TempDir()
+	for name, body := range blockFiles {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	src := []byte(blockFiles["b.go"])
+	all, err := sites("b.go", src)
+	if err != nil || len(all) != 1 {
+		t.Fatalf("sites = %v, %v; want one", all, err)
+	}
+	// The second mutant, the same site again, is the one that must not start.
+	chosen := []site{all[0], all[0]}
+	cfg := config{dir: dir, pkgs: "./...", timeout: "2m", wait: 2 * time.Minute, jobs: 1}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan []result, 1)
+	go func() { done <- runAll(ctx, cfg, work, chosen, map[string][]byte{"b.go": src}) }()
+	started := filepath.Join(dir, "started")
+	for deadline := time.Now().Add(2 * time.Minute); ; time.Sleep(10 * time.Millisecond) {
+		if _, err := os.Stat(started); err == nil {
+			break
+		}
+		select {
+		case out := <-done:
+			t.Fatalf("runAll returned before the mutant's test started: %+v", out)
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the mutant's test did not start within two minutes")
+		}
+	}
+	cancel()
+	var out []result
+	select {
+	case out = <-done:
+	case <-time.After(30 * time.Second):
+		t.Error("runAll was still running 30s after its context ended")
+	}
+	// The mutant's test ends once started is gone, whether or not its go
+	// command was ended.
+	if err := os.Remove(started); err != nil {
+		t.Error(err)
+	}
+	if out == nil {
+		out = <-done
+	}
+	if out[1].File != "" {
+		t.Errorf("the second mutant ran after the context ended: %+v", out[1])
+	}
 }

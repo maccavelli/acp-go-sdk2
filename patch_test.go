@@ -135,7 +135,7 @@ func TestPatchFields(t *testing.T) {
 					t.Errorf("%s.%s %s: %s did not decode: %v", ty.name, fl.key, c.state, in, err)
 					continue
 				}
-				p, ok := reflect.ValueOf(v).Elem().FieldByName(fl.name).Interface().(patchState)
+				p, ok := reflect.TypeAssert[patchState](reflect.ValueOf(v).Elem().FieldByName(fl.name))
 				if !ok {
 					t.Errorf("%s.%s: %s is not a Patch", ty.name, fl.key, reflect.ValueOf(v).Elem().FieldByName(fl.name).Type())
 					continue
