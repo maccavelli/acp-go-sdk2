@@ -94,8 +94,9 @@ func TestDefaultedNullablePropertyCompiles(t *testing.T) {
 }
 
 // TestRequiredKeysDecoder requires a struct with required keys to decode
-// through objectKeys with those keys in sorted order, and the output, with its
-// helper, to compile.
+// through objectKeys and its decodeKeys, which requires those keys in sorted
+// order (0019-PLAN-idioms-performance.md, D2), and the output, with its
+// helpers, to compile.
 func TestRequiredKeysDecoder(t *testing.T) {
 	t.Parallel()
 	schema := &load.Schema{Defs: map[string]*load.Definition{"Options": {
@@ -127,10 +128,12 @@ func TestRequiredKeysDecoder(t *testing.T) {
 	emitDecodeHelpers(f)
 	src := mustRender(t, f)
 	for _, want := range []string{
-		"func (v *Options) UnmarshalJSON(b []byte) error {",
-		`_, err := objectKeys(b, "` + variant + `", "text")`,
-		`_, err := objectKeys(b, "Options", "alpha", "zeta")`,
-		"func objectKeys(b []byte, typ string, required ...string) (map[string]json.RawMessage, error) {",
+		"func (v *Options) UnmarshalJSON(b []byte) error {\n\tm, err := objectKeys(b, \"Options\")\n\tif err != nil {\n\t\treturn err\n\t}\n\treturn v.decodeKeys(b, m)\n}",
+		"func (v *Options) decodeKeys(b []byte, m map[string]json.RawMessage) error {",
+		`if err := requireKeys(b, m, "` + variant + `", "text"); err != nil {`,
+		`if err := requireKeys(b, m, "Options", "alpha", "zeta"); err != nil {`,
+		"func objectKeys(b []byte, typ string) (map[string]json.RawMessage, error) {",
+		"func requireKeys(b []byte, m map[string]json.RawMessage, typ string, required ...string) error {",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("output lacks %q:\n%s", want, src)

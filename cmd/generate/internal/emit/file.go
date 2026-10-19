@@ -35,6 +35,10 @@ type goFile struct {
 	// uses records the unexported helpers the file's code calls, so the
 	// file emits each once.
 	uses map[string]bool
+	// keyDecoders holds the types whose decoder starts with objectKeys and
+	// keeps no Extra: a union decodes such a variant from the keys it holds
+	// (0019-PLAN-idioms-performance.md, D2).
+	keyDecoders map[string]bool
 	// err is the first failure recorded while the file was built.
 	err error
 }

@@ -32,10 +32,16 @@ type AgentAuthCapabilities struct {
 
 // UnmarshalJSON decodes the AgentAuthCapabilities schema definition's JSON into v.
 func (v *AgentAuthCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AgentAuthCapabilities")
+	m, err := objectKeys(b, "AgentAuthCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AgentAuthCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias AgentAuthCapabilities
 	var s struct {
 		Alias
@@ -113,10 +119,16 @@ type AgentCapabilities struct {
 
 // UnmarshalJSON decodes the AgentCapabilities schema definition's JSON into v.
 func (v *AgentCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AgentCapabilities")
+	m, err := objectKeys(b, "AgentCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AgentCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias AgentCapabilities
 	var s struct {
 		Alias
@@ -157,8 +169,17 @@ type AgentNotification struct {
 
 // UnmarshalJSON decodes the AgentNotification schema definition's JSON into v.
 func (v *AgentNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AgentNotification", "method")
+	m, err := objectKeys(b, "AgentNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AgentNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "AgentNotification", "method"); err != nil {
 		return err
 	}
 	type Alias AgentNotification
@@ -192,8 +213,17 @@ type AgentRequest struct {
 
 // UnmarshalJSON decodes the AgentRequest schema definition's JSON into v.
 func (v *AgentRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AgentRequest", "id", "method")
+	m, err := objectKeys(b, "AgentRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AgentRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "AgentRequest", "id", "method"); err != nil {
 		return err
 	}
 	type Alias AgentRequest
@@ -228,8 +258,17 @@ type AgentResult struct {
 
 // UnmarshalJSON decodes the Result variant of the AgentResponse schema definition's JSON into v.
 func (v *AgentResult) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AgentResult", "id", "result")
+	m, err := objectKeys(b, "AgentResult")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AgentResult) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "AgentResult", "id", "result"); err != nil {
 		return err
 	}
 	type Alias AgentResult
@@ -263,8 +302,17 @@ type AgentError struct {
 
 // UnmarshalJSON decodes the Error variant of the AgentResponse schema definition's JSON into v.
 func (v *AgentError) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AgentError", "error", "id")
+	m, err := objectKeys(b, "AgentError")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AgentError) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "AgentError", "error", "id"); err != nil {
 		return err
 	}
 	type Alias AgentError
@@ -315,7 +363,7 @@ func (u *AgentResponse) UnmarshalJSON(b []byte) error {
 				match = false
 			}
 			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
+				if err := v.decodeKeys(b, m); err != nil {
 					return fmt.Errorf("AgentResponse: variant Result: %w", err)
 				}
 				u.Result = &v
@@ -332,7 +380,7 @@ func (u *AgentResponse) UnmarshalJSON(b []byte) error {
 				match = false
 			}
 			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
+				if err := v.decodeKeys(b, m); err != nil {
 					return fmt.Errorf("AgentResponse: variant Error: %w", err)
 				}
 				u.Error = &v
@@ -421,10 +469,16 @@ type Annotations struct {
 
 // UnmarshalJSON decodes the Annotations schema definition's JSON into v.
 func (v *Annotations) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "Annotations")
+	m, err := objectKeys(b, "Annotations")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *Annotations) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias Annotations
 	var s struct {
 		Alias
@@ -465,8 +519,17 @@ type AudioContent struct {
 
 // UnmarshalJSON decodes the AudioContent schema definition's JSON into v.
 func (v *AudioContent) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AudioContent", "data", "mimeType")
+	m, err := objectKeys(b, "AudioContent")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AudioContent) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "AudioContent", "data", "mimeType"); err != nil {
 		return err
 	}
 	type Alias AudioContent
@@ -509,10 +572,16 @@ type AuthCapabilities struct {
 
 // UnmarshalJSON decodes the AuthCapabilities schema definition's JSON into v.
 func (v *AuthCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AuthCapabilities")
+	m, err := objectKeys(b, "AuthCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AuthCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias AuthCapabilities
 	var s struct {
 		Alias
@@ -554,8 +623,17 @@ type AuthMethodTerminalInline struct {
 
 // UnmarshalJSON decodes the "terminal" variant of the AuthMethod schema definition's JSON into v.
 func (v *AuthMethodTerminalInline) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AuthMethodTerminalInline", "id", "name")
+	m, err := objectKeys(b, "AuthMethodTerminalInline")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AuthMethodTerminalInline) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "AuthMethodTerminalInline", "id", "name"); err != nil {
 		return err
 	}
 	type Alias AuthMethodTerminalInline
@@ -610,7 +688,7 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 	}
 	if disc == "terminal" {
 		var v AuthMethodTerminalInline
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("AuthMethod: type \"terminal\": %w", err)
 		}
 		u.Terminal = &v
@@ -630,7 +708,7 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 			match = false
 		}
 		if match {
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("AuthMethod: variant Agent: %w", err)
 			}
 			u.Agent = &v
@@ -709,8 +787,17 @@ type AuthMethodAgent struct {
 
 // UnmarshalJSON decodes the AuthMethodAgent schema definition's JSON into v.
 func (v *AuthMethodAgent) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AuthMethodAgent", "id", "name")
+	m, err := objectKeys(b, "AuthMethodAgent")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AuthMethodAgent) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "AuthMethodAgent", "id", "name"); err != nil {
 		return err
 	}
 	type Alias AuthMethodAgent
@@ -761,8 +848,17 @@ type AuthMethodTerminal struct {
 
 // UnmarshalJSON decodes the AuthMethodTerminal schema definition's JSON into v.
 func (v *AuthMethodTerminal) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AuthMethodTerminal", "id", "name")
+	m, err := objectKeys(b, "AuthMethodTerminal")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AuthMethodTerminal) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "AuthMethodTerminal", "id", "name"); err != nil {
 		return err
 	}
 	type Alias AuthMethodTerminal
@@ -798,8 +894,17 @@ type AuthenticateRequest struct {
 
 // UnmarshalJSON decodes the AuthenticateRequest schema definition's JSON into v.
 func (v *AuthenticateRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AuthenticateRequest", "methodId")
+	m, err := objectKeys(b, "AuthenticateRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AuthenticateRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "AuthenticateRequest", "methodId"); err != nil {
 		return err
 	}
 	type Alias AuthenticateRequest
@@ -837,10 +942,16 @@ type AuthenticateResponse struct {
 
 // UnmarshalJSON decodes the AuthenticateResponse schema definition's JSON into v.
 func (v *AuthenticateResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AuthenticateResponse")
+	m, err := objectKeys(b, "AuthenticateResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AuthenticateResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias AuthenticateResponse
 	var s struct {
 		Alias
@@ -882,8 +993,17 @@ type AvailableCommand struct {
 
 // UnmarshalJSON decodes the AvailableCommand schema definition's JSON into v.
 func (v *AvailableCommand) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AvailableCommand", "description", "name")
+	m, err := objectKeys(b, "AvailableCommand")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AvailableCommand) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "AvailableCommand", "description", "name"); err != nil {
 		return err
 	}
 	type Alias AvailableCommand
@@ -938,7 +1058,7 @@ func (u *AvailableCommandInput) UnmarshalJSON(b []byte) error {
 				match = false
 			}
 			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
+				if err := v.decodeKeys(b, m); err != nil {
 					return fmt.Errorf("AvailableCommandInput: variant Unstructured: %w", err)
 				}
 				u.Unstructured = &v
@@ -1010,8 +1130,17 @@ func (v AvailableCommandsUpdate) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the AvailableCommandsUpdate schema definition's JSON into v.
 func (v *AvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "AvailableCommandsUpdate", "availableCommands")
+	m, err := objectKeys(b, "AvailableCommandsUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *AvailableCommandsUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "AvailableCommandsUpdate", "availableCommands"); err != nil {
 		return err
 	}
 	type Alias AvailableCommandsUpdate
@@ -1064,8 +1193,17 @@ type BlobResourceContents struct {
 
 // UnmarshalJSON decodes the BlobResourceContents schema definition's JSON into v.
 func (v *BlobResourceContents) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "BlobResourceContents", "blob", "uri")
+	m, err := objectKeys(b, "BlobResourceContents")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *BlobResourceContents) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "BlobResourceContents", "blob", "uri"); err != nil {
 		return err
 	}
 	type Alias BlobResourceContents
@@ -1098,10 +1236,16 @@ type BooleanConfigOptionCapabilities struct {
 
 // UnmarshalJSON decodes the BooleanConfigOptionCapabilities schema definition's JSON into v.
 func (v *BooleanConfigOptionCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "BooleanConfigOptionCapabilities")
+	m, err := objectKeys(b, "BooleanConfigOptionCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *BooleanConfigOptionCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias BooleanConfigOptionCapabilities
 	var s struct {
 		Alias
@@ -1142,10 +1286,16 @@ type BooleanPropertySchema struct {
 
 // UnmarshalJSON decodes the BooleanPropertySchema schema definition's JSON into v.
 func (v *BooleanPropertySchema) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "BooleanPropertySchema")
+	m, err := objectKeys(b, "BooleanPropertySchema")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *BooleanPropertySchema) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias BooleanPropertySchema
 	var s struct {
 		Alias
@@ -1182,8 +1332,17 @@ type CancelNotification struct {
 
 // UnmarshalJSON decodes the CancelNotification schema definition's JSON into v.
 func (v *CancelNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CancelNotification", "sessionId")
+	m, err := objectKeys(b, "CancelNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CancelNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CancelNotification", "sessionId"); err != nil {
 		return err
 	}
 	type Alias CancelNotification
@@ -1225,8 +1384,17 @@ type CancelRequestNotification struct {
 
 // UnmarshalJSON decodes the CancelRequestNotification schema definition's JSON into v.
 func (v *CancelRequestNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CancelRequestNotification", "requestId")
+	m, err := objectKeys(b, "CancelRequestNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CancelRequestNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CancelRequestNotification", "requestId"); err != nil {
 		return err
 	}
 	type Alias CancelRequestNotification
@@ -1333,10 +1501,16 @@ type ClientCapabilities struct {
 
 // UnmarshalJSON decodes the ClientCapabilities schema definition's JSON into v.
 func (v *ClientCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ClientCapabilities")
+	m, err := objectKeys(b, "ClientCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ClientCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ClientCapabilities
 	var s struct {
 		Alias
@@ -1393,10 +1567,16 @@ type ClientNesCapabilities struct {
 
 // UnmarshalJSON decodes the ClientNesCapabilities schema definition's JSON into v.
 func (v *ClientNesCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ClientNesCapabilities")
+	m, err := objectKeys(b, "ClientNesCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ClientNesCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ClientNesCapabilities
 	var s struct {
 		Alias
@@ -1427,8 +1607,17 @@ type ClientNotification struct {
 
 // UnmarshalJSON decodes the ClientNotification schema definition's JSON into v.
 func (v *ClientNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ClientNotification", "method")
+	m, err := objectKeys(b, "ClientNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ClientNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ClientNotification", "method"); err != nil {
 		return err
 	}
 	type Alias ClientNotification
@@ -1462,8 +1651,17 @@ type ClientRequest struct {
 
 // UnmarshalJSON decodes the ClientRequest schema definition's JSON into v.
 func (v *ClientRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ClientRequest", "id", "method")
+	m, err := objectKeys(b, "ClientRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ClientRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ClientRequest", "id", "method"); err != nil {
 		return err
 	}
 	type Alias ClientRequest
@@ -1498,8 +1696,17 @@ type ClientResult struct {
 
 // UnmarshalJSON decodes the Result variant of the ClientResponse schema definition's JSON into v.
 func (v *ClientResult) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ClientResult", "id", "result")
+	m, err := objectKeys(b, "ClientResult")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ClientResult) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ClientResult", "id", "result"); err != nil {
 		return err
 	}
 	type Alias ClientResult
@@ -1533,8 +1740,17 @@ type ClientError struct {
 
 // UnmarshalJSON decodes the Error variant of the ClientResponse schema definition's JSON into v.
 func (v *ClientError) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ClientError", "error", "id")
+	m, err := objectKeys(b, "ClientError")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ClientError) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ClientError", "error", "id"); err != nil {
 		return err
 	}
 	type Alias ClientError
@@ -1585,7 +1801,7 @@ func (u *ClientResponse) UnmarshalJSON(b []byte) error {
 				match = false
 			}
 			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
+				if err := v.decodeKeys(b, m); err != nil {
 					return fmt.Errorf("ClientResponse: variant Result: %w", err)
 				}
 				u.Result = &v
@@ -1602,7 +1818,7 @@ func (u *ClientResponse) UnmarshalJSON(b []byte) error {
 				match = false
 			}
 			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
+				if err := v.decodeKeys(b, m); err != nil {
 					return fmt.Errorf("ClientResponse: variant Error: %w", err)
 				}
 				u.Error = &v
@@ -1698,10 +1914,16 @@ type ClientSessionCapabilities struct {
 
 // UnmarshalJSON decodes the ClientSessionCapabilities schema definition's JSON into v.
 func (v *ClientSessionCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ClientSessionCapabilities")
+	m, err := objectKeys(b, "ClientSessionCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ClientSessionCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ClientSessionCapabilities
 	var s struct {
 		Alias
@@ -1742,8 +1964,17 @@ type CloseSessionRequest struct {
 
 // UnmarshalJSON decodes the CloseSessionRequest schema definition's JSON into v.
 func (v *CloseSessionRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CloseSessionRequest", "sessionId")
+	m, err := objectKeys(b, "CloseSessionRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CloseSessionRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CloseSessionRequest", "sessionId"); err != nil {
 		return err
 	}
 	type Alias CloseSessionRequest
@@ -1781,10 +2012,16 @@ type CloseSessionResponse struct {
 
 // UnmarshalJSON decodes the CloseSessionResponse schema definition's JSON into v.
 func (v *CloseSessionResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CloseSessionResponse")
+	m, err := objectKeys(b, "CloseSessionResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CloseSessionResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias CloseSessionResponse
 	var s struct {
 		Alias
@@ -1851,8 +2088,17 @@ type CompactionSummaryChunk struct {
 
 // UnmarshalJSON decodes the CompactionSummaryChunk schema definition's JSON into v.
 func (v *CompactionSummaryChunk) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CompactionSummaryChunk", "compactionId", "content")
+	m, err := objectKeys(b, "CompactionSummaryChunk")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CompactionSummaryChunk) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CompactionSummaryChunk", "compactionId", "content"); err != nil {
 		return err
 	}
 	type Alias CompactionSummaryChunk
@@ -1904,8 +2150,17 @@ type CompactionUpdate struct {
 
 // UnmarshalJSON decodes the CompactionUpdate schema definition's JSON into v.
 func (v *CompactionUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CompactionUpdate", "compactionId", "status")
+	m, err := objectKeys(b, "CompactionUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CompactionUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CompactionUpdate", "compactionId", "status"); err != nil {
 		return err
 	}
 	type Alias CompactionUpdate
@@ -1958,8 +2213,17 @@ type CompleteElicitationNotification struct {
 
 // UnmarshalJSON decodes the CompleteElicitationNotification schema definition's JSON into v.
 func (v *CompleteElicitationNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CompleteElicitationNotification", "elicitationId")
+	m, err := objectKeys(b, "CompleteElicitationNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CompleteElicitationNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CompleteElicitationNotification", "elicitationId"); err != nil {
 		return err
 	}
 	type Alias CompleteElicitationNotification
@@ -2009,8 +2273,17 @@ func (v ConfigOptionUpdate) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the ConfigOptionUpdate schema definition's JSON into v.
 func (v *ConfigOptionUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ConfigOptionUpdate", "configOptions")
+	m, err := objectKeys(b, "ConfigOptionUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ConfigOptionUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ConfigOptionUpdate", "configOptions"); err != nil {
 		return err
 	}
 	type Alias ConfigOptionUpdate
@@ -2059,8 +2332,17 @@ type Content struct {
 
 // UnmarshalJSON decodes the Content schema definition's JSON into v.
 func (v *Content) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "Content", "content")
+	m, err := objectKeys(b, "Content")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *Content) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "Content", "content"); err != nil {
 		return err
 	}
 	type Alias Content
@@ -2109,8 +2391,17 @@ type ContentBlockText struct {
 
 // UnmarshalJSON decodes the "text" variant of the ContentBlock schema definition's JSON into v.
 func (v *ContentBlockText) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ContentBlockText", "text")
+	m, err := objectKeys(b, "ContentBlockText")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ContentBlockText) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ContentBlockText", "text"); err != nil {
 		return err
 	}
 	type Alias ContentBlockText
@@ -2152,8 +2443,17 @@ type ContentBlockImage struct {
 
 // UnmarshalJSON decodes the "image" variant of the ContentBlock schema definition's JSON into v.
 func (v *ContentBlockImage) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ContentBlockImage", "data", "mimeType")
+	m, err := objectKeys(b, "ContentBlockImage")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ContentBlockImage) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ContentBlockImage", "data", "mimeType"); err != nil {
 		return err
 	}
 	type Alias ContentBlockImage
@@ -2195,8 +2495,17 @@ type ContentBlockAudio struct {
 
 // UnmarshalJSON decodes the "audio" variant of the ContentBlock schema definition's JSON into v.
 func (v *ContentBlockAudio) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ContentBlockAudio", "data", "mimeType")
+	m, err := objectKeys(b, "ContentBlockAudio")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ContentBlockAudio) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ContentBlockAudio", "data", "mimeType"); err != nil {
 		return err
 	}
 	type Alias ContentBlockAudio
@@ -2244,8 +2553,17 @@ type ContentBlockResourceLink struct {
 
 // UnmarshalJSON decodes the "resource_link" variant of the ContentBlock schema definition's JSON into v.
 func (v *ContentBlockResourceLink) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ContentBlockResourceLink", "name", "uri")
+	m, err := objectKeys(b, "ContentBlockResourceLink")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ContentBlockResourceLink) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ContentBlockResourceLink", "name", "uri"); err != nil {
 		return err
 	}
 	type Alias ContentBlockResourceLink
@@ -2293,8 +2611,17 @@ type ContentBlockResource struct {
 
 // UnmarshalJSON decodes the "resource" variant of the ContentBlock schema definition's JSON into v.
 func (v *ContentBlockResource) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ContentBlockResource", "resource")
+	m, err := objectKeys(b, "ContentBlockResource")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ContentBlockResource) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ContentBlockResource", "resource"); err != nil {
 		return err
 	}
 	type Alias ContentBlockResource
@@ -2388,35 +2715,35 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "text":
 		var v ContentBlockText
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ContentBlock: type \"text\": %w", err)
 		}
 		u.Text = &v
 		return nil
 	case "image":
 		var v ContentBlockImage
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ContentBlock: type \"image\": %w", err)
 		}
 		u.Image = &v
 		return nil
 	case "audio":
 		var v ContentBlockAudio
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ContentBlock: type \"audio\": %w", err)
 		}
 		u.Audio = &v
 		return nil
 	case "resource_link":
 		var v ContentBlockResourceLink
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ContentBlock: type \"resource_link\": %w", err)
 		}
 		u.ResourceLink = &v
 		return nil
 	case "resource":
 		var v ContentBlockResource
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ContentBlock: type \"resource\": %w", err)
 		}
 		u.Resource = &v
@@ -2485,35 +2812,35 @@ func (u *ContentBlock) UnmarshalJSON(b []byte) error {
 		switch fit[0] {
 		case "Text":
 			var v ContentBlockText
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ContentBlock: variant Text: %w", err)
 			}
 			u.Text = &v
 			return nil
 		case "Image":
 			var v ContentBlockImage
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ContentBlock: variant Image: %w", err)
 			}
 			u.Image = &v
 			return nil
 		case "Audio":
 			var v ContentBlockAudio
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ContentBlock: variant Audio: %w", err)
 			}
 			u.Audio = &v
 			return nil
 		case "ResourceLink":
 			var v ContentBlockResourceLink
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ContentBlock: variant ResourceLink: %w", err)
 			}
 			u.ResourceLink = &v
 			return nil
 		case "Resource":
 			var v ContentBlockResource
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ContentBlock: variant Resource: %w", err)
 			}
 			u.Resource = &v
@@ -2616,8 +2943,17 @@ type ContentChunk struct {
 
 // UnmarshalJSON decodes the ContentChunk schema definition's JSON into v.
 func (v *ContentChunk) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ContentChunk", "content")
+	m, err := objectKeys(b, "ContentChunk")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ContentChunk) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ContentChunk", "content"); err != nil {
 		return err
 	}
 	type Alias ContentChunk
@@ -2664,8 +3000,17 @@ type Cost struct {
 
 // UnmarshalJSON decodes the Cost schema definition's JSON into v.
 func (v *Cost) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "Cost", "amount", "currency")
+	m, err := objectKeys(b, "Cost")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *Cost) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "Cost", "amount", "currency"); err != nil {
 		return err
 	}
 	type Alias Cost
@@ -2727,8 +3072,17 @@ func (v CreateElicitationForm) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "form" variant of the CreateElicitationRequest schema definition's JSON into v.
 func (v *CreateElicitationForm) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "CreateElicitationForm", "message", "requestedSchema")
+	m, err := objectKeys(b, "CreateElicitationForm")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CreateElicitationForm) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CreateElicitationForm", "message", "requestedSchema"); err != nil {
 		return err
 	}
 	foldKeys(b, m, "sessionId", "requestId")
@@ -2840,8 +3194,17 @@ func (v CreateElicitationUrl) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "url" variant of the CreateElicitationRequest schema definition's JSON into v.
 func (v *CreateElicitationUrl) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "CreateElicitationUrl", "elicitationId", "message", "url")
+	m, err := objectKeys(b, "CreateElicitationUrl")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CreateElicitationUrl) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CreateElicitationUrl", "elicitationId", "message", "url"); err != nil {
 		return err
 	}
 	foldKeys(b, m, "sessionId", "requestId")
@@ -2956,8 +3319,17 @@ func (v CreateElicitationOther) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the Other variant of the CreateElicitationRequest schema definition's JSON into v.
 func (v *CreateElicitationOther) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "CreateElicitationOther", "message")
+	m, err := objectKeys(b, "CreateElicitationOther")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CreateElicitationOther) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CreateElicitationOther", "message"); err != nil {
 		return err
 	}
 	foldKeys(b, m, "_meta", "mode")
@@ -3027,14 +3399,14 @@ func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "form":
 		var v CreateElicitationForm
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("CreateElicitationRequest: mode \"form\": %w", err)
 		}
 		u.Form = &v
 		return nil
 	case "url":
 		var v CreateElicitationUrl
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("CreateElicitationRequest: mode \"url\": %w", err)
 		}
 		u.Url = &v
@@ -3074,14 +3446,14 @@ func (u *CreateElicitationRequest) UnmarshalJSON(b []byte) error {
 		switch fit[0] {
 		case "Form":
 			var v CreateElicitationForm
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("CreateElicitationRequest: variant Form: %w", err)
 			}
 			u.Form = &v
 			return nil
 		case "Url":
 			var v CreateElicitationUrl
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("CreateElicitationRequest: variant Url: %w", err)
 			}
 			u.Url = &v
@@ -3174,10 +3546,16 @@ type CreateElicitationAccept struct {
 
 // UnmarshalJSON decodes the "accept" variant of the CreateElicitationResponse schema definition's JSON into v.
 func (v *CreateElicitationAccept) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CreateElicitationAccept")
+	m, err := objectKeys(b, "CreateElicitationAccept")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CreateElicitationAccept) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias CreateElicitationAccept
 	var s struct {
 		Alias
@@ -3222,10 +3600,16 @@ type CreateElicitationDecline struct {
 
 // UnmarshalJSON decodes the "decline" variant of the CreateElicitationResponse schema definition's JSON into v.
 func (v *CreateElicitationDecline) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CreateElicitationDecline")
+	m, err := objectKeys(b, "CreateElicitationDecline")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CreateElicitationDecline) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias CreateElicitationDecline
 	var s struct {
 		Alias
@@ -3255,10 +3639,16 @@ type CreateElicitationCancel struct {
 
 // UnmarshalJSON decodes the "cancel" variant of the CreateElicitationResponse schema definition's JSON into v.
 func (v *CreateElicitationCancel) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CreateElicitationCancel")
+	m, err := objectKeys(b, "CreateElicitationCancel")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CreateElicitationCancel) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias CreateElicitationCancel
 	var s struct {
 		Alias
@@ -3328,6 +3718,12 @@ func (v *CreateElicitationResponseOther) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CreateElicitationResponseOther) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	foldKeys(b, m, "_meta", "action")
 	type Alias CreateElicitationResponseOther
 	var s struct {
@@ -3392,21 +3788,21 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "accept":
 		var v CreateElicitationAccept
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("CreateElicitationResponse: action \"accept\": %w", err)
 		}
 		u.Accept = &v
 		return nil
 	case "decline":
 		var v CreateElicitationDecline
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("CreateElicitationResponse: action \"decline\": %w", err)
 		}
 		u.Decline = &v
 		return nil
 	case "cancel":
 		var v CreateElicitationCancel
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("CreateElicitationResponse: action \"cancel\": %w", err)
 		}
 		u.Cancel = &v
@@ -3429,21 +3825,21 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 		switch fit[0] {
 		case "Accept":
 			var v CreateElicitationAccept
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("CreateElicitationResponse: variant Accept: %w", err)
 			}
 			u.Accept = &v
 			return nil
 		case "Decline":
 			var v CreateElicitationDecline
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("CreateElicitationResponse: variant Decline: %w", err)
 			}
 			u.Decline = &v
 			return nil
 		case "Cancel":
 			var v CreateElicitationCancel
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("CreateElicitationResponse: variant Cancel: %w", err)
 			}
 			u.Cancel = &v
@@ -3553,8 +3949,17 @@ type CreateTerminalRequest struct {
 
 // UnmarshalJSON decodes the CreateTerminalRequest schema definition's JSON into v.
 func (v *CreateTerminalRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CreateTerminalRequest", "command", "sessionId")
+	m, err := objectKeys(b, "CreateTerminalRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CreateTerminalRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CreateTerminalRequest", "command", "sessionId"); err != nil {
 		return err
 	}
 	type Alias CreateTerminalRequest
@@ -3603,8 +4008,17 @@ type CreateTerminalResponse struct {
 
 // UnmarshalJSON decodes the CreateTerminalResponse schema definition's JSON into v.
 func (v *CreateTerminalResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CreateTerminalResponse", "terminalId")
+	m, err := objectKeys(b, "CreateTerminalResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CreateTerminalResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CreateTerminalResponse", "terminalId"); err != nil {
 		return err
 	}
 	type Alias CreateTerminalResponse
@@ -3646,8 +4060,17 @@ type CurrentModeUpdate struct {
 
 // UnmarshalJSON decodes the CurrentModeUpdate schema definition's JSON into v.
 func (v *CurrentModeUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "CurrentModeUpdate", "currentModeId")
+	m, err := objectKeys(b, "CurrentModeUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *CurrentModeUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "CurrentModeUpdate", "currentModeId"); err != nil {
 		return err
 	}
 	type Alias CurrentModeUpdate
@@ -3680,8 +4103,17 @@ type DeleteSessionRequest struct {
 
 // UnmarshalJSON decodes the DeleteSessionRequest schema definition's JSON into v.
 func (v *DeleteSessionRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "DeleteSessionRequest", "sessionId")
+	m, err := objectKeys(b, "DeleteSessionRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *DeleteSessionRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "DeleteSessionRequest", "sessionId"); err != nil {
 		return err
 	}
 	type Alias DeleteSessionRequest
@@ -3719,10 +4151,16 @@ type DeleteSessionResponse struct {
 
 // UnmarshalJSON decodes the DeleteSessionResponse schema definition's JSON into v.
 func (v *DeleteSessionResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "DeleteSessionResponse")
+	m, err := objectKeys(b, "DeleteSessionResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *DeleteSessionResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias DeleteSessionResponse
 	var s struct {
 		Alias
@@ -3768,8 +4206,17 @@ type Diff struct {
 
 // UnmarshalJSON decodes the Diff schema definition's JSON into v.
 func (v *Diff) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "Diff", "newText", "path")
+	m, err := objectKeys(b, "Diff")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *Diff) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "Diff", "newText", "path"); err != nil {
 		return err
 	}
 	type Alias Diff
@@ -3851,10 +4298,16 @@ type ElicitationCapabilities struct {
 
 // UnmarshalJSON decodes the ElicitationCapabilities schema definition's JSON into v.
 func (v *ElicitationCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ElicitationCapabilities")
+	m, err := objectKeys(b, "ElicitationCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ElicitationCapabilities
 	var s struct {
 		Alias
@@ -4022,10 +4475,16 @@ type ElicitationFormCapabilities struct {
 
 // UnmarshalJSON decodes the ElicitationFormCapabilities schema definition's JSON into v.
 func (v *ElicitationFormCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ElicitationFormCapabilities")
+	m, err := objectKeys(b, "ElicitationFormCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationFormCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ElicitationFormCapabilities
 	var s struct {
 		Alias
@@ -4074,8 +4533,17 @@ func (v ElicitationFormMode) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the ElicitationFormMode schema definition's JSON into v.
 func (v *ElicitationFormMode) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "ElicitationFormMode", "requestedSchema")
+	m, err := objectKeys(b, "ElicitationFormMode")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationFormMode) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ElicitationFormMode", "requestedSchema"); err != nil {
 		return err
 	}
 	foldKeys(b, m, "sessionId", "requestId")
@@ -4189,10 +4657,16 @@ type ElicitationPropertySchemaString struct {
 
 // UnmarshalJSON decodes the "string" variant of the ElicitationPropertySchema schema definition's JSON into v.
 func (v *ElicitationPropertySchemaString) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ElicitationPropertySchemaString")
+	m, err := objectKeys(b, "ElicitationPropertySchemaString")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationPropertySchemaString) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ElicitationPropertySchemaString
 	var s struct {
 		Alias
@@ -4248,10 +4722,16 @@ type ElicitationPropertySchemaNumber struct {
 
 // UnmarshalJSON decodes the "number" variant of the ElicitationPropertySchema schema definition's JSON into v.
 func (v *ElicitationPropertySchemaNumber) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ElicitationPropertySchemaNumber")
+	m, err := objectKeys(b, "ElicitationPropertySchemaNumber")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationPropertySchemaNumber) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ElicitationPropertySchemaNumber
 	var s struct {
 		Alias
@@ -4307,10 +4787,16 @@ type ElicitationPropertySchemaInteger struct {
 
 // UnmarshalJSON decodes the "integer" variant of the ElicitationPropertySchema schema definition's JSON into v.
 func (v *ElicitationPropertySchemaInteger) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ElicitationPropertySchemaInteger")
+	m, err := objectKeys(b, "ElicitationPropertySchemaInteger")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationPropertySchemaInteger) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ElicitationPropertySchemaInteger
 	var s struct {
 		Alias
@@ -4358,10 +4844,16 @@ type ElicitationPropertySchemaBoolean struct {
 
 // UnmarshalJSON decodes the "boolean" variant of the ElicitationPropertySchema schema definition's JSON into v.
 func (v *ElicitationPropertySchemaBoolean) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ElicitationPropertySchemaBoolean")
+	m, err := objectKeys(b, "ElicitationPropertySchemaBoolean")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationPropertySchemaBoolean) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ElicitationPropertySchemaBoolean
 	var s struct {
 		Alias
@@ -4419,8 +4911,17 @@ type ElicitationPropertySchemaArray struct {
 
 // UnmarshalJSON decodes the "array" variant of the ElicitationPropertySchema schema definition's JSON into v.
 func (v *ElicitationPropertySchemaArray) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ElicitationPropertySchemaArray", "items")
+	m, err := objectKeys(b, "ElicitationPropertySchemaArray")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationPropertySchemaArray) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ElicitationPropertySchemaArray", "items"); err != nil {
 		return err
 	}
 	type Alias ElicitationPropertySchemaArray
@@ -4504,6 +5005,12 @@ func (v *ElicitationPropertySchemaOther) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationPropertySchemaOther) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	foldKeys(b, m, "type")
 	type Alias ElicitationPropertySchemaOther
 	var a Alias
@@ -4568,35 +5075,35 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "string":
 		var v ElicitationPropertySchemaString
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ElicitationPropertySchema: type \"string\": %w", err)
 		}
 		u.String = &v
 		return nil
 	case "number":
 		var v ElicitationPropertySchemaNumber
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ElicitationPropertySchema: type \"number\": %w", err)
 		}
 		u.Number = &v
 		return nil
 	case "integer":
 		var v ElicitationPropertySchemaInteger
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ElicitationPropertySchema: type \"integer\": %w", err)
 		}
 		u.Integer = &v
 		return nil
 	case "boolean":
 		var v ElicitationPropertySchemaBoolean
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ElicitationPropertySchema: type \"boolean\": %w", err)
 		}
 		u.Boolean = &v
 		return nil
 	case "array":
 		var v ElicitationPropertySchemaArray
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ElicitationPropertySchema: type \"array\": %w", err)
 		}
 		u.Array = &v
@@ -4629,35 +5136,35 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 		switch fit[0] {
 		case "String":
 			var v ElicitationPropertySchemaString
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ElicitationPropertySchema: variant String: %w", err)
 			}
 			u.String = &v
 			return nil
 		case "Number":
 			var v ElicitationPropertySchemaNumber
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ElicitationPropertySchema: variant Number: %w", err)
 			}
 			u.Number = &v
 			return nil
 		case "Integer":
 			var v ElicitationPropertySchemaInteger
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ElicitationPropertySchema: variant Integer: %w", err)
 			}
 			u.Integer = &v
 			return nil
 		case "Boolean":
 			var v ElicitationPropertySchemaBoolean
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ElicitationPropertySchema: variant Boolean: %w", err)
 			}
 			u.Boolean = &v
 			return nil
 		case "Array":
 			var v ElicitationPropertySchemaArray
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ElicitationPropertySchema: variant Array: %w", err)
 			}
 			u.Array = &v
@@ -4761,8 +5268,17 @@ type ElicitationRequestScope struct {
 
 // UnmarshalJSON decodes the ElicitationRequestScope schema definition's JSON into v.
 func (v *ElicitationRequestScope) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ElicitationRequestScope", "requestId")
+	m, err := objectKeys(b, "ElicitationRequestScope")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationRequestScope) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ElicitationRequestScope", "requestId"); err != nil {
 		return err
 	}
 	type Alias ElicitationRequestScope
@@ -4859,6 +5375,12 @@ func (v *ElicitationSchema) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationSchema) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	foldKeys(b, m, "properties", "type")
 	type Alias ElicitationSchema
 	var s struct {
@@ -4935,8 +5457,17 @@ type ElicitationSessionScope struct {
 
 // UnmarshalJSON decodes the ElicitationSessionScope schema definition's JSON into v.
 func (v *ElicitationSessionScope) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ElicitationSessionScope", "sessionId")
+	m, err := objectKeys(b, "ElicitationSessionScope")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationSessionScope) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ElicitationSessionScope", "sessionId"); err != nil {
 		return err
 	}
 	type Alias ElicitationSessionScope
@@ -4969,10 +5500,16 @@ type ElicitationUrlCapabilities struct {
 
 // UnmarshalJSON decodes the ElicitationUrlCapabilities schema definition's JSON into v.
 func (v *ElicitationUrlCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ElicitationUrlCapabilities")
+	m, err := objectKeys(b, "ElicitationUrlCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationUrlCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ElicitationUrlCapabilities
 	var s struct {
 		Alias
@@ -5023,8 +5560,17 @@ func (v ElicitationUrlMode) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the ElicitationUrlMode schema definition's JSON into v.
 func (v *ElicitationUrlMode) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "ElicitationUrlMode", "elicitationId", "url")
+	m, err := objectKeys(b, "ElicitationUrlMode")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ElicitationUrlMode) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ElicitationUrlMode", "elicitationId", "url"); err != nil {
 		return err
 	}
 	foldKeys(b, m, "sessionId", "requestId")
@@ -5097,8 +5643,17 @@ type EmbeddedResource struct {
 
 // UnmarshalJSON decodes the EmbeddedResource schema definition's JSON into v.
 func (v *EmbeddedResource) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "EmbeddedResource", "resource")
+	m, err := objectKeys(b, "EmbeddedResource")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *EmbeddedResource) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "EmbeddedResource", "resource"); err != nil {
 		return err
 	}
 	type Alias EmbeddedResource
@@ -5156,7 +5711,7 @@ func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
 				match = false
 			}
 			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
+				if err := v.decodeKeys(b, m); err != nil {
 					return fmt.Errorf("EmbeddedResourceResource: variant TextResourceContents: %w", err)
 				}
 				u.TextResourceContents = &v
@@ -5173,7 +5728,7 @@ func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
 				match = false
 			}
 			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
+				if err := v.decodeKeys(b, m); err != nil {
 					return fmt.Errorf("EmbeddedResourceResource: variant BlobResourceContents: %w", err)
 				}
 				u.BlobResourceContents = &v
@@ -5256,8 +5811,17 @@ type EnumOption struct {
 
 // UnmarshalJSON decodes the EnumOption schema definition's JSON into v.
 func (v *EnumOption) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "EnumOption", "const", "title")
+	m, err := objectKeys(b, "EnumOption")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *EnumOption) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "EnumOption", "const", "title"); err != nil {
 		return err
 	}
 	type Alias EnumOption
@@ -5292,8 +5856,17 @@ type EnvVariable struct {
 
 // UnmarshalJSON decodes the EnvVariable schema definition's JSON into v.
 func (v *EnvVariable) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "EnvVariable", "name", "value")
+	m, err := objectKeys(b, "EnvVariable")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *EnvVariable) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "EnvVariable", "name", "value"); err != nil {
 		return err
 	}
 	type Alias EnvVariable
@@ -5330,8 +5903,17 @@ type Error struct {
 
 // UnmarshalJSON decodes the Error schema definition's JSON into v.
 func (v *Error) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "Error", "code", "message")
+	m, err := objectKeys(b, "Error")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *Error) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "Error", "code", "message"); err != nil {
 		return err
 	}
 	type Alias Error
@@ -5408,10 +5990,16 @@ type ErrorStopReason struct {
 
 // UnmarshalJSON decodes the ErrorStopReason schema definition's JSON into v.
 func (v *ErrorStopReason) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ErrorStopReason")
+	m, err := objectKeys(b, "ErrorStopReason")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ErrorStopReason) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ErrorStopReason
 	var s struct {
 		Alias
@@ -5469,10 +6057,16 @@ type FileSystemCapabilities struct {
 
 // UnmarshalJSON decodes the FileSystemCapabilities schema definition's JSON into v.
 func (v *FileSystemCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "FileSystemCapabilities")
+	m, err := objectKeys(b, "FileSystemCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *FileSystemCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias FileSystemCapabilities
 	var s struct {
 		Alias
@@ -5507,8 +6101,17 @@ type HttpHeader struct {
 
 // UnmarshalJSON decodes the HttpHeader schema definition's JSON into v.
 func (v *HttpHeader) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "HttpHeader", "name", "value")
+	m, err := objectKeys(b, "HttpHeader")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *HttpHeader) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "HttpHeader", "name", "value"); err != nil {
 		return err
 	}
 	type Alias HttpHeader
@@ -5540,10 +6143,16 @@ type IdleStateUpdateEndTurn struct {
 
 // UnmarshalJSON decodes the "end_turn" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateEndTurn) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "IdleStateUpdateEndTurn")
+	m, err := objectKeys(b, "IdleStateUpdateEndTurn")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *IdleStateUpdateEndTurn) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias IdleStateUpdateEndTurn
 	var s struct {
 		Alias
@@ -5575,10 +6184,16 @@ type IdleStateUpdateMaxTokens struct {
 
 // UnmarshalJSON decodes the "max_tokens" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateMaxTokens) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "IdleStateUpdateMaxTokens")
+	m, err := objectKeys(b, "IdleStateUpdateMaxTokens")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *IdleStateUpdateMaxTokens) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias IdleStateUpdateMaxTokens
 	var s struct {
 		Alias
@@ -5611,10 +6226,16 @@ type IdleStateUpdateMaxTurnRequests struct {
 
 // UnmarshalJSON decodes the "max_turn_requests" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateMaxTurnRequests) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "IdleStateUpdateMaxTurnRequests")
+	m, err := objectKeys(b, "IdleStateUpdateMaxTurnRequests")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *IdleStateUpdateMaxTurnRequests) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias IdleStateUpdateMaxTurnRequests
 	var s struct {
 		Alias
@@ -5646,10 +6267,16 @@ type IdleStateUpdateRefusal struct {
 
 // UnmarshalJSON decodes the "refusal" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateRefusal) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "IdleStateUpdateRefusal")
+	m, err := objectKeys(b, "IdleStateUpdateRefusal")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *IdleStateUpdateRefusal) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias IdleStateUpdateRefusal
 	var s struct {
 		Alias
@@ -5681,10 +6308,16 @@ type IdleStateUpdateCancelled struct {
 
 // UnmarshalJSON decodes the "cancelled" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateCancelled) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "IdleStateUpdateCancelled")
+	m, err := objectKeys(b, "IdleStateUpdateCancelled")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *IdleStateUpdateCancelled) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias IdleStateUpdateCancelled
 	var s struct {
 		Alias
@@ -5721,10 +6354,16 @@ type IdleStateUpdateError struct {
 
 // UnmarshalJSON decodes the "error" variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateError) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "IdleStateUpdateError")
+	m, err := objectKeys(b, "IdleStateUpdateError")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *IdleStateUpdateError) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias IdleStateUpdateError
 	var s struct {
 		Alias
@@ -5789,6 +6428,12 @@ func (v *IdleStateUpdateOther) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *IdleStateUpdateOther) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	foldKeys(b, m, "_meta", "stopReason", "usage")
 	type Alias IdleStateUpdateOther
 	var s struct {
@@ -5831,10 +6476,16 @@ type IdleStateUpdateNone struct {
 
 // UnmarshalJSON decodes the None variant of the IdleStateUpdate schema definition's JSON into v.
 func (v *IdleStateUpdateNone) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "IdleStateUpdateNone")
+	m, err := objectKeys(b, "IdleStateUpdateNone")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *IdleStateUpdateNone) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias IdleStateUpdateNone
 	var s struct {
 		Alias
@@ -5902,42 +6553,42 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "end_turn":
 		var v IdleStateUpdateEndTurn
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("IdleStateUpdate: stopReason \"end_turn\": %w", err)
 		}
 		u.EndTurn = &v
 		return nil
 	case "max_tokens":
 		var v IdleStateUpdateMaxTokens
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("IdleStateUpdate: stopReason \"max_tokens\": %w", err)
 		}
 		u.MaxTokens = &v
 		return nil
 	case "max_turn_requests":
 		var v IdleStateUpdateMaxTurnRequests
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("IdleStateUpdate: stopReason \"max_turn_requests\": %w", err)
 		}
 		u.MaxTurnRequests = &v
 		return nil
 	case "refusal":
 		var v IdleStateUpdateRefusal
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("IdleStateUpdate: stopReason \"refusal\": %w", err)
 		}
 		u.Refusal = &v
 		return nil
 	case "cancelled":
 		var v IdleStateUpdateCancelled
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("IdleStateUpdate: stopReason \"cancelled\": %w", err)
 		}
 		u.Cancelled = &v
 		return nil
 	case "error":
 		var v IdleStateUpdateError
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("IdleStateUpdate: stopReason \"error\": %w", err)
 		}
 		u.Error = &v
@@ -5952,7 +6603,7 @@ func (u *IdleStateUpdate) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 	var v IdleStateUpdateNone
-	if err := json.Unmarshal(b, &v); err != nil {
+	if err := v.decodeKeys(b, m); err != nil {
 		return fmt.Errorf("IdleStateUpdate: variant None: %w", err)
 	}
 	u.None = &v
@@ -6073,8 +6724,17 @@ type ImageContent struct {
 
 // UnmarshalJSON decodes the ImageContent schema definition's JSON into v.
 func (v *ImageContent) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ImageContent", "data", "mimeType")
+	m, err := objectKeys(b, "ImageContent")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ImageContent) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ImageContent", "data", "mimeType"); err != nil {
 		return err
 	}
 	type Alias ImageContent
@@ -6120,8 +6780,17 @@ type Implementation struct {
 
 // UnmarshalJSON decodes the Implementation schema definition's JSON into v.
 func (v *Implementation) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "Implementation", "name", "version")
+	m, err := objectKeys(b, "Implementation")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *Implementation) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "Implementation", "name", "version"); err != nil {
 		return err
 	}
 	type Alias Implementation
@@ -6166,8 +6835,17 @@ type InitializeRequest struct {
 
 // UnmarshalJSON decodes the InitializeRequest schema definition's JSON into v.
 func (v *InitializeRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "InitializeRequest", "protocolVersion")
+	m, err := objectKeys(b, "InitializeRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *InitializeRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "InitializeRequest", "protocolVersion"); err != nil {
 		return err
 	}
 	type Alias InitializeRequest
@@ -6240,8 +6918,17 @@ func (v InitializeResponse) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the InitializeResponse schema definition's JSON into v.
 func (v *InitializeResponse) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "InitializeResponse", "protocolVersion")
+	m, err := objectKeys(b, "InitializeResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *InitializeResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "InitializeResponse", "protocolVersion"); err != nil {
 		return err
 	}
 	foldKeys(b, m, "authMethods")
@@ -6323,10 +7010,16 @@ type IntegerPropertySchema struct {
 
 // UnmarshalJSON decodes the IntegerPropertySchema schema definition's JSON into v.
 func (v *IntegerPropertySchema) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "IntegerPropertySchema")
+	m, err := objectKeys(b, "IntegerPropertySchema")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *IntegerPropertySchema) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias IntegerPropertySchema
 	var s struct {
 		Alias
@@ -6363,8 +7056,17 @@ type KillTerminalRequest struct {
 
 // UnmarshalJSON decodes the KillTerminalRequest schema definition's JSON into v.
 func (v *KillTerminalRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "KillTerminalRequest", "sessionId", "terminalId")
+	m, err := objectKeys(b, "KillTerminalRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *KillTerminalRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "KillTerminalRequest", "sessionId", "terminalId"); err != nil {
 		return err
 	}
 	type Alias KillTerminalRequest
@@ -6402,10 +7104,16 @@ type KillTerminalResponse struct {
 
 // UnmarshalJSON decodes the KillTerminalResponse schema definition's JSON into v.
 func (v *KillTerminalResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "KillTerminalResponse")
+	m, err := objectKeys(b, "KillTerminalResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *KillTerminalResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias KillTerminalResponse
 	var s struct {
 		Alias
@@ -6447,10 +7155,16 @@ type ListSessionsRequest struct {
 
 // UnmarshalJSON decodes the ListSessionsRequest schema definition's JSON into v.
 func (v *ListSessionsRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ListSessionsRequest")
+	m, err := objectKeys(b, "ListSessionsRequest")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ListSessionsRequest) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ListSessionsRequest
 	var s struct {
 		Alias
@@ -6510,8 +7224,17 @@ func (v ListSessionsResponse) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the ListSessionsResponse schema definition's JSON into v.
 func (v *ListSessionsResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ListSessionsResponse", "sessions")
+	m, err := objectKeys(b, "ListSessionsResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ListSessionsResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ListSessionsResponse", "sessions"); err != nil {
 		return err
 	}
 	type Alias ListSessionsResponse
@@ -6587,8 +7310,17 @@ func (v LoadSessionRequest) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the LoadSessionRequest schema definition's JSON into v.
 func (v *LoadSessionRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "LoadSessionRequest", "cwd", "mcpServers", "sessionId")
+	m, err := objectKeys(b, "LoadSessionRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *LoadSessionRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "LoadSessionRequest", "cwd", "mcpServers", "sessionId"); err != nil {
 		return err
 	}
 	type Alias LoadSessionRequest
@@ -6657,10 +7389,16 @@ type LoadSessionResponse struct {
 
 // UnmarshalJSON decodes the LoadSessionResponse schema definition's JSON into v.
 func (v *LoadSessionResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "LoadSessionResponse")
+	m, err := objectKeys(b, "LoadSessionResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *LoadSessionResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias LoadSessionResponse
 	var s struct {
 		Alias
@@ -6709,10 +7447,16 @@ type LogoutCapabilities struct {
 
 // UnmarshalJSON decodes the LogoutCapabilities schema definition's JSON into v.
 func (v *LogoutCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "LogoutCapabilities")
+	m, err := objectKeys(b, "LogoutCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *LogoutCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias LogoutCapabilities
 	var s struct {
 		Alias
@@ -6741,10 +7485,16 @@ type LogoutRequest struct {
 
 // UnmarshalJSON decodes the LogoutRequest schema definition's JSON into v.
 func (v *LogoutRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "LogoutRequest")
+	m, err := objectKeys(b, "LogoutRequest")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *LogoutRequest) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias LogoutRequest
 	var s struct {
 		Alias
@@ -6780,10 +7530,16 @@ type LogoutResponse struct {
 
 // UnmarshalJSON decodes the LogoutResponse schema definition's JSON into v.
 func (v *LogoutResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "LogoutResponse")
+	m, err := objectKeys(b, "LogoutResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *LogoutResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias LogoutResponse
 	var s struct {
 		Alias
@@ -6835,10 +7591,16 @@ type McpCapabilities struct {
 
 // UnmarshalJSON decodes the McpCapabilities schema definition's JSON into v.
 func (v *McpCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "McpCapabilities")
+	m, err := objectKeys(b, "McpCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *McpCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias McpCapabilities
 	var s struct {
 		Alias
@@ -6890,8 +7652,17 @@ func (v McpServerHttpInline) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "http" variant of the McpServer schema definition's JSON into v.
 func (v *McpServerHttpInline) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "McpServerHttpInline", "headers", "name", "url")
+	m, err := objectKeys(b, "McpServerHttpInline")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *McpServerHttpInline) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "McpServerHttpInline", "headers", "name", "url"); err != nil {
 		return err
 	}
 	type Alias McpServerHttpInline
@@ -6939,8 +7710,17 @@ func (v McpServerSseInline) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "sse" variant of the McpServer schema definition's JSON into v.
 func (v *McpServerSseInline) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "McpServerSseInline", "headers", "name", "url")
+	m, err := objectKeys(b, "McpServerSseInline")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *McpServerSseInline) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "McpServerSseInline", "headers", "name", "url"); err != nil {
 		return err
 	}
 	type Alias McpServerSseInline
@@ -6984,8 +7764,17 @@ type McpServerAcpInline struct {
 
 // UnmarshalJSON decodes the "acp" variant of the McpServer schema definition's JSON into v.
 func (v *McpServerAcpInline) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "McpServerAcpInline", "name", "serverId")
+	m, err := objectKeys(b, "McpServerAcpInline")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *McpServerAcpInline) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "McpServerAcpInline", "name", "serverId"); err != nil {
 		return err
 	}
 	type Alias McpServerAcpInline
@@ -7055,21 +7844,21 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "http":
 		var v McpServerHttpInline
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("McpServer: type \"http\": %w", err)
 		}
 		u.Http = &v
 		return nil
 	case "sse":
 		var v McpServerSseInline
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("McpServer: type \"sse\": %w", err)
 		}
 		u.Sse = &v
 		return nil
 	case "acp":
 		var v McpServerAcpInline
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("McpServer: type \"acp\": %w", err)
 		}
 		u.Acp = &v
@@ -7095,7 +7884,7 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 			match = false
 		}
 		if match {
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("McpServer: variant Stdio: %w", err)
 			}
 			u.Stdio = &v
@@ -7201,8 +7990,17 @@ type McpServerAcp struct {
 
 // UnmarshalJSON decodes the McpServerAcp schema definition's JSON into v.
 func (v *McpServerAcp) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "McpServerAcp", "name", "serverId")
+	m, err := objectKeys(b, "McpServerAcp")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *McpServerAcp) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "McpServerAcp", "name", "serverId"); err != nil {
 		return err
 	}
 	type Alias McpServerAcp
@@ -7257,8 +8055,17 @@ func (v McpServerHttp) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the McpServerHttp schema definition's JSON into v.
 func (v *McpServerHttp) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "McpServerHttp", "headers", "name", "url")
+	m, err := objectKeys(b, "McpServerHttp")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *McpServerHttp) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "McpServerHttp", "headers", "name", "url"); err != nil {
 		return err
 	}
 	type Alias McpServerHttp
@@ -7303,8 +8110,17 @@ func (v McpServerSse) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the McpServerSse schema definition's JSON into v.
 func (v *McpServerSse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "McpServerSse", "headers", "name", "url")
+	m, err := objectKeys(b, "McpServerSse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *McpServerSse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "McpServerSse", "headers", "name", "url"); err != nil {
 		return err
 	}
 	type Alias McpServerSse
@@ -7354,8 +8170,17 @@ func (v McpServerStdio) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the McpServerStdio schema definition's JSON into v.
 func (v *McpServerStdio) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "McpServerStdio", "args", "command", "env", "name")
+	m, err := objectKeys(b, "McpServerStdio")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *McpServerStdio) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "McpServerStdio", "args", "command", "env", "name"); err != nil {
 		return err
 	}
 	type Alias McpServerStdio
@@ -7420,8 +8245,17 @@ func (v MultiSelectItemsString) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "string" variant of the MultiSelectItems schema definition's JSON into v.
 func (v *MultiSelectItemsString) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "MultiSelectItemsString", "enum")
+	m, err := objectKeys(b, "MultiSelectItemsString")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *MultiSelectItemsString) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "MultiSelectItemsString", "enum"); err != nil {
 		return err
 	}
 	type Alias MultiSelectItemsString
@@ -7477,6 +8311,12 @@ func (v *MultiSelectItemsOther) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *MultiSelectItemsOther) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	foldKeys(b, m, "type")
 	type Alias MultiSelectItemsOther
 	var a Alias
@@ -7522,7 +8362,7 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 	}
 	if disc == "string" {
 		var v MultiSelectItemsString
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("MultiSelectItems: type \"string\": %w", err)
 		}
 		u.String = &v
@@ -7543,7 +8383,7 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 			match = false
 		}
 		if match {
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("MultiSelectItems: variant Titled: %w", err)
 			}
 			u.Titled = &v
@@ -7649,8 +8489,17 @@ type MultiSelectPropertySchema struct {
 
 // UnmarshalJSON decodes the MultiSelectPropertySchema schema definition's JSON into v.
 func (v *MultiSelectPropertySchema) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "MultiSelectPropertySchema", "items")
+	m, err := objectKeys(b, "MultiSelectPropertySchema")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *MultiSelectPropertySchema) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "MultiSelectPropertySchema", "items"); err != nil {
 		return err
 	}
 	type Alias MultiSelectPropertySchema
@@ -7707,10 +8556,16 @@ type NesCapabilities struct {
 
 // UnmarshalJSON decodes the NesCapabilities schema definition's JSON into v.
 func (v *NesCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesCapabilities")
+	m, err := objectKeys(b, "NesCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesCapabilities
 	var s struct {
 		Alias
@@ -7757,10 +8612,16 @@ type NesContextCapabilities struct {
 
 // UnmarshalJSON decodes the NesContextCapabilities schema definition's JSON into v.
 func (v *NesContextCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesContextCapabilities")
+	m, err := objectKeys(b, "NesContextCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesContextCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesContextCapabilities
 	var s struct {
 		Alias
@@ -7803,10 +8664,16 @@ type NesDiagnosticsCapabilities struct {
 
 // UnmarshalJSON decodes the NesDiagnosticsCapabilities schema definition's JSON into v.
 func (v *NesDiagnosticsCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesDiagnosticsCapabilities")
+	m, err := objectKeys(b, "NesDiagnosticsCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesDiagnosticsCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesDiagnosticsCapabilities
 	var s struct {
 		Alias
@@ -7839,8 +8706,17 @@ type NesDocumentDidChangeCapabilities struct {
 
 // UnmarshalJSON decodes the NesDocumentDidChangeCapabilities schema definition's JSON into v.
 func (v *NesDocumentDidChangeCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesDocumentDidChangeCapabilities", "syncKind")
+	m, err := objectKeys(b, "NesDocumentDidChangeCapabilities")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesDocumentDidChangeCapabilities) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "NesDocumentDidChangeCapabilities", "syncKind"); err != nil {
 		return err
 	}
 	type Alias NesDocumentDidChangeCapabilities
@@ -7873,10 +8749,16 @@ type NesDocumentDidCloseCapabilities struct {
 
 // UnmarshalJSON decodes the NesDocumentDidCloseCapabilities schema definition's JSON into v.
 func (v *NesDocumentDidCloseCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesDocumentDidCloseCapabilities")
+	m, err := objectKeys(b, "NesDocumentDidCloseCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesDocumentDidCloseCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesDocumentDidCloseCapabilities
 	var s struct {
 		Alias
@@ -7907,10 +8789,16 @@ type NesDocumentDidFocusCapabilities struct {
 
 // UnmarshalJSON decodes the NesDocumentDidFocusCapabilities schema definition's JSON into v.
 func (v *NesDocumentDidFocusCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesDocumentDidFocusCapabilities")
+	m, err := objectKeys(b, "NesDocumentDidFocusCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesDocumentDidFocusCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesDocumentDidFocusCapabilities
 	var s struct {
 		Alias
@@ -7941,10 +8829,16 @@ type NesDocumentDidOpenCapabilities struct {
 
 // UnmarshalJSON decodes the NesDocumentDidOpenCapabilities schema definition's JSON into v.
 func (v *NesDocumentDidOpenCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesDocumentDidOpenCapabilities")
+	m, err := objectKeys(b, "NesDocumentDidOpenCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesDocumentDidOpenCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesDocumentDidOpenCapabilities
 	var s struct {
 		Alias
@@ -7975,10 +8869,16 @@ type NesDocumentDidSaveCapabilities struct {
 
 // UnmarshalJSON decodes the NesDocumentDidSaveCapabilities schema definition's JSON into v.
 func (v *NesDocumentDidSaveCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesDocumentDidSaveCapabilities")
+	m, err := objectKeys(b, "NesDocumentDidSaveCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesDocumentDidSaveCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesDocumentDidSaveCapabilities
 	var s struct {
 		Alias
@@ -8019,10 +8919,16 @@ type NesDocumentEventCapabilities struct {
 
 // UnmarshalJSON decodes the NesDocumentEventCapabilities schema definition's JSON into v.
 func (v *NesDocumentEventCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesDocumentEventCapabilities")
+	m, err := objectKeys(b, "NesDocumentEventCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesDocumentEventCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesDocumentEventCapabilities
 	var s struct {
 		Alias
@@ -8065,10 +8971,16 @@ type NesEditHistoryCapabilities struct {
 
 // UnmarshalJSON decodes the NesEditHistoryCapabilities schema definition's JSON into v.
 func (v *NesEditHistoryCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesEditHistoryCapabilities")
+	m, err := objectKeys(b, "NesEditHistoryCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesEditHistoryCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesEditHistoryCapabilities
 	var s struct {
 		Alias
@@ -8103,10 +9015,16 @@ type NesEventCapabilities struct {
 
 // UnmarshalJSON decodes the NesEventCapabilities schema definition's JSON into v.
 func (v *NesEventCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesEventCapabilities")
+	m, err := objectKeys(b, "NesEventCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesEventCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesEventCapabilities
 	var s struct {
 		Alias
@@ -8139,10 +9057,16 @@ type NesJumpCapabilities struct {
 
 // UnmarshalJSON decodes the NesJumpCapabilities schema definition's JSON into v.
 func (v *NesJumpCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesJumpCapabilities")
+	m, err := objectKeys(b, "NesJumpCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesJumpCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesJumpCapabilities
 	var s struct {
 		Alias
@@ -8173,10 +9097,16 @@ type NesOpenFilesCapabilities struct {
 
 // UnmarshalJSON decodes the NesOpenFilesCapabilities schema definition's JSON into v.
 func (v *NesOpenFilesCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesOpenFilesCapabilities")
+	m, err := objectKeys(b, "NesOpenFilesCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesOpenFilesCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesOpenFilesCapabilities
 	var s struct {
 		Alias
@@ -8209,10 +9139,16 @@ type NesRecentFilesCapabilities struct {
 
 // UnmarshalJSON decodes the NesRecentFilesCapabilities schema definition's JSON into v.
 func (v *NesRecentFilesCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesRecentFilesCapabilities")
+	m, err := objectKeys(b, "NesRecentFilesCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesRecentFilesCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesRecentFilesCapabilities
 	var s struct {
 		Alias
@@ -8245,10 +9181,16 @@ type NesRelatedSnippetsCapabilities struct {
 
 // UnmarshalJSON decodes the NesRelatedSnippetsCapabilities schema definition's JSON into v.
 func (v *NesRelatedSnippetsCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesRelatedSnippetsCapabilities")
+	m, err := objectKeys(b, "NesRelatedSnippetsCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesRelatedSnippetsCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesRelatedSnippetsCapabilities
 	var s struct {
 		Alias
@@ -8279,10 +9221,16 @@ type NesRenameCapabilities struct {
 
 // UnmarshalJSON decodes the NesRenameCapabilities schema definition's JSON into v.
 func (v *NesRenameCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesRenameCapabilities")
+	m, err := objectKeys(b, "NesRenameCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesRenameCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesRenameCapabilities
 	var s struct {
 		Alias
@@ -8313,10 +9261,16 @@ type NesSearchAndReplaceCapabilities struct {
 
 // UnmarshalJSON decodes the NesSearchAndReplaceCapabilities schema definition's JSON into v.
 func (v *NesSearchAndReplaceCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesSearchAndReplaceCapabilities")
+	m, err := objectKeys(b, "NesSearchAndReplaceCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesSearchAndReplaceCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesSearchAndReplaceCapabilities
 	var s struct {
 		Alias
@@ -8349,10 +9303,16 @@ type NesUserActionsCapabilities struct {
 
 // UnmarshalJSON decodes the NesUserActionsCapabilities schema definition's JSON into v.
 func (v *NesUserActionsCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NesUserActionsCapabilities")
+	m, err := objectKeys(b, "NesUserActionsCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NesUserActionsCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NesUserActionsCapabilities
 	var s struct {
 		Alias
@@ -8403,8 +9363,17 @@ func (v NewSessionRequest) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the NewSessionRequest schema definition's JSON into v.
 func (v *NewSessionRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NewSessionRequest", "cwd", "mcpServers")
+	m, err := objectKeys(b, "NewSessionRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NewSessionRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "NewSessionRequest", "cwd", "mcpServers"); err != nil {
 		return err
 	}
 	type Alias NewSessionRequest
@@ -8479,8 +9448,17 @@ type NewSessionResponse struct {
 
 // UnmarshalJSON decodes the NewSessionResponse schema definition's JSON into v.
 func (v *NewSessionResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NewSessionResponse", "sessionId")
+	m, err := objectKeys(b, "NewSessionResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NewSessionResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "NewSessionResponse", "sessionId"); err != nil {
 		return err
 	}
 	type Alias NewSessionResponse
@@ -8543,8 +9521,17 @@ type Notice struct {
 
 // UnmarshalJSON decodes the Notice schema definition's JSON into v.
 func (v *Notice) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "Notice", "severity", "title")
+	m, err := objectKeys(b, "Notice")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *Notice) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "Notice", "severity", "title"); err != nil {
 		return err
 	}
 	type Alias Notice
@@ -8636,10 +9623,16 @@ type NumberPropertySchema struct {
 
 // UnmarshalJSON decodes the NumberPropertySchema schema definition's JSON into v.
 func (v *NumberPropertySchema) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "NumberPropertySchema")
+	m, err := objectKeys(b, "NumberPropertySchema")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *NumberPropertySchema) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias NumberPropertySchema
 	var s struct {
 		Alias
@@ -8678,8 +9671,17 @@ type PermissionOption struct {
 
 // UnmarshalJSON decodes the PermissionOption schema definition's JSON into v.
 func (v *PermissionOption) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PermissionOption", "kind", "name", "optionId")
+	m, err := objectKeys(b, "PermissionOption")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PermissionOption) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PermissionOption", "kind", "name", "optionId"); err != nil {
 		return err
 	}
 	type Alias PermissionOption
@@ -8756,8 +9758,17 @@ func (v Plan) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the Plan schema definition's JSON into v.
 func (v *Plan) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "Plan", "entries")
+	m, err := objectKeys(b, "Plan")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *Plan) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "Plan", "entries"); err != nil {
 		return err
 	}
 	type Alias Plan
@@ -8794,10 +9805,16 @@ type PlanCapabilities struct {
 
 // UnmarshalJSON decodes the PlanCapabilities schema definition's JSON into v.
 func (v *PlanCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PlanCapabilities")
+	m, err := objectKeys(b, "PlanCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PlanCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias PlanCapabilities
 	var s struct {
 		Alias
@@ -8835,8 +9852,17 @@ type PlanEntry struct {
 
 // UnmarshalJSON decodes the PlanEntry schema definition's JSON into v.
 func (v *PlanEntry) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PlanEntry", "content", "priority", "status")
+	m, err := objectKeys(b, "PlanEntry")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PlanEntry) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PlanEntry", "content", "priority", "status"); err != nil {
 		return err
 	}
 	type Alias PlanEntry
@@ -8916,8 +9942,17 @@ type PlanFile struct {
 
 // UnmarshalJSON decodes the PlanFile schema definition's JSON into v.
 func (v *PlanFile) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PlanFile", "planId", "uri")
+	m, err := objectKeys(b, "PlanFile")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PlanFile) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PlanFile", "planId", "uri"); err != nil {
 		return err
 	}
 	type Alias PlanFile
@@ -8974,8 +10009,17 @@ func (v PlanItems) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the PlanItems schema definition's JSON into v.
 func (v *PlanItems) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PlanItems", "entries", "planId")
+	m, err := objectKeys(b, "PlanItems")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PlanItems) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PlanItems", "entries", "planId"); err != nil {
 		return err
 	}
 	type Alias PlanItems
@@ -9016,8 +10060,17 @@ type PlanMarkdown struct {
 
 // UnmarshalJSON decodes the PlanMarkdown schema definition's JSON into v.
 func (v *PlanMarkdown) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PlanMarkdown", "content", "planId")
+	m, err := objectKeys(b, "PlanMarkdown")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PlanMarkdown) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PlanMarkdown", "content", "planId"); err != nil {
 		return err
 	}
 	type Alias PlanMarkdown
@@ -9052,8 +10105,17 @@ type PlanRemoved struct {
 
 // UnmarshalJSON decodes the PlanRemoved schema definition's JSON into v.
 func (v *PlanRemoved) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PlanRemoved", "planId")
+	m, err := objectKeys(b, "PlanRemoved")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PlanRemoved) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PlanRemoved", "planId"); err != nil {
 		return err
 	}
 	type Alias PlanRemoved
@@ -9088,8 +10150,17 @@ type PlanUpdate struct {
 
 // UnmarshalJSON decodes the PlanUpdate schema definition's JSON into v.
 func (v *PlanUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PlanUpdate", "plan")
+	m, err := objectKeys(b, "PlanUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PlanUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PlanUpdate", "plan"); err != nil {
 		return err
 	}
 	type Alias PlanUpdate
@@ -9148,8 +10219,17 @@ func (v PlanUpdateContentItems) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "items" variant of the PlanUpdateContent schema definition's JSON into v.
 func (v *PlanUpdateContentItems) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PlanUpdateContentItems", "entries", "planId")
+	m, err := objectKeys(b, "PlanUpdateContentItems")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PlanUpdateContentItems) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PlanUpdateContentItems", "entries", "planId"); err != nil {
 		return err
 	}
 	type Alias PlanUpdateContentItems
@@ -9187,8 +10267,17 @@ type PlanUpdateContentFile struct {
 
 // UnmarshalJSON decodes the "file" variant of the PlanUpdateContent schema definition's JSON into v.
 func (v *PlanUpdateContentFile) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PlanUpdateContentFile", "planId", "uri")
+	m, err := objectKeys(b, "PlanUpdateContentFile")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PlanUpdateContentFile) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PlanUpdateContentFile", "planId", "uri"); err != nil {
 		return err
 	}
 	type Alias PlanUpdateContentFile
@@ -9222,8 +10311,17 @@ type PlanUpdateContentMarkdown struct {
 
 // UnmarshalJSON decodes the "markdown" variant of the PlanUpdateContent schema definition's JSON into v.
 func (v *PlanUpdateContentMarkdown) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PlanUpdateContentMarkdown", "content", "planId")
+	m, err := objectKeys(b, "PlanUpdateContentMarkdown")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PlanUpdateContentMarkdown) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PlanUpdateContentMarkdown", "content", "planId"); err != nil {
 		return err
 	}
 	type Alias PlanUpdateContentMarkdown
@@ -9277,21 +10375,21 @@ func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "items":
 		var v PlanUpdateContentItems
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("PlanUpdateContent: type \"items\": %w", err)
 		}
 		u.Items = &v
 		return nil
 	case "file":
 		var v PlanUpdateContentFile
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("PlanUpdateContent: type \"file\": %w", err)
 		}
 		u.File = &v
 		return nil
 	case "markdown":
 		var v PlanUpdateContentMarkdown
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("PlanUpdateContent: type \"markdown\": %w", err)
 		}
 		u.Markdown = &v
@@ -9342,21 +10440,21 @@ func (u *PlanUpdateContent) UnmarshalJSON(b []byte) error {
 		switch fit[0] {
 		case "Items":
 			var v PlanUpdateContentItems
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("PlanUpdateContent: variant Items: %w", err)
 			}
 			u.Items = &v
 			return nil
 		case "File":
 			var v PlanUpdateContentFile
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("PlanUpdateContent: variant File: %w", err)
 			}
 			u.File = &v
 			return nil
 		case "Markdown":
 			var v PlanUpdateContentMarkdown
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("PlanUpdateContent: variant Markdown: %w", err)
 			}
 			u.Markdown = &v
@@ -9481,10 +10579,16 @@ type PromptCapabilities struct {
 
 // UnmarshalJSON decodes the PromptCapabilities schema definition's JSON into v.
 func (v *PromptCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PromptCapabilities")
+	m, err := objectKeys(b, "PromptCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PromptCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias PromptCapabilities
 	var s struct {
 		Alias
@@ -9547,8 +10651,17 @@ func (v PromptRequest) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the PromptRequest schema definition's JSON into v.
 func (v *PromptRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PromptRequest", "prompt", "sessionId")
+	m, err := objectKeys(b, "PromptRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PromptRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PromptRequest", "prompt", "sessionId"); err != nil {
 		return err
 	}
 	type Alias PromptRequest
@@ -9601,8 +10714,17 @@ type PromptResponse struct {
 
 // UnmarshalJSON decodes the PromptResponse schema definition's JSON into v.
 func (v *PromptResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "PromptResponse", "stopReason")
+	m, err := objectKeys(b, "PromptResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *PromptResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "PromptResponse", "stopReason"); err != nil {
 		return err
 	}
 	type Alias PromptResponse
@@ -9654,10 +10776,16 @@ type ProvidersCapabilities struct {
 
 // UnmarshalJSON decodes the ProvidersCapabilities schema definition's JSON into v.
 func (v *ProvidersCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ProvidersCapabilities")
+	m, err := objectKeys(b, "ProvidersCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ProvidersCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ProvidersCapabilities
 	var s struct {
 		Alias
@@ -9694,8 +10822,17 @@ type ReadTextFileRequest struct {
 
 // UnmarshalJSON decodes the ReadTextFileRequest schema definition's JSON into v.
 func (v *ReadTextFileRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ReadTextFileRequest", "path", "sessionId")
+	m, err := objectKeys(b, "ReadTextFileRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ReadTextFileRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ReadTextFileRequest", "path", "sessionId"); err != nil {
 		return err
 	}
 	type Alias ReadTextFileRequest
@@ -9744,8 +10881,17 @@ type ReadTextFileResponse struct {
 
 // UnmarshalJSON decodes the ReadTextFileResponse schema definition's JSON into v.
 func (v *ReadTextFileResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ReadTextFileResponse", "content")
+	m, err := objectKeys(b, "ReadTextFileResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ReadTextFileResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ReadTextFileResponse", "content"); err != nil {
 		return err
 	}
 	type Alias ReadTextFileResponse
@@ -9787,8 +10933,17 @@ type ReleaseTerminalRequest struct {
 
 // UnmarshalJSON decodes the ReleaseTerminalRequest schema definition's JSON into v.
 func (v *ReleaseTerminalRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ReleaseTerminalRequest", "sessionId", "terminalId")
+	m, err := objectKeys(b, "ReleaseTerminalRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ReleaseTerminalRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ReleaseTerminalRequest", "sessionId", "terminalId"); err != nil {
 		return err
 	}
 	type Alias ReleaseTerminalRequest
@@ -9826,10 +10981,16 @@ type ReleaseTerminalResponse struct {
 
 // UnmarshalJSON decodes the ReleaseTerminalResponse schema definition's JSON into v.
 func (v *ReleaseTerminalResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ReleaseTerminalResponse")
+	m, err := objectKeys(b, "ReleaseTerminalResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ReleaseTerminalResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ReleaseTerminalResponse
 	var s struct {
 		Alias
@@ -9983,8 +11144,17 @@ type RequestPermissionOutcomeSelected struct {
 
 // UnmarshalJSON decodes the "selected" variant of the RequestPermissionOutcome schema definition's JSON into v.
 func (v *RequestPermissionOutcomeSelected) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "RequestPermissionOutcomeSelected", "optionId")
+	m, err := objectKeys(b, "RequestPermissionOutcomeSelected")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *RequestPermissionOutcomeSelected) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "RequestPermissionOutcomeSelected", "optionId"); err != nil {
 		return err
 	}
 	type Alias RequestPermissionOutcomeSelected
@@ -10045,7 +11215,7 @@ func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 		return nil
 	case "selected":
 		var v RequestPermissionOutcomeSelected
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("RequestPermissionOutcome: outcome \"selected\": %w", err)
 		}
 		u.Selected = &v
@@ -10076,7 +11246,7 @@ func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 			return nil
 		case "Selected":
 			var v RequestPermissionOutcomeSelected
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("RequestPermissionOutcome: variant Selected: %w", err)
 			}
 			u.Selected = &v
@@ -10163,8 +11333,17 @@ func (v RequestPermissionRequest) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the RequestPermissionRequest schema definition's JSON into v.
 func (v *RequestPermissionRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "RequestPermissionRequest", "options", "sessionId", "toolCall")
+	m, err := objectKeys(b, "RequestPermissionRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *RequestPermissionRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "RequestPermissionRequest", "options", "sessionId", "toolCall"); err != nil {
 		return err
 	}
 	type Alias RequestPermissionRequest
@@ -10207,8 +11386,17 @@ type RequestPermissionResponse struct {
 
 // UnmarshalJSON decodes the RequestPermissionResponse schema definition's JSON into v.
 func (v *RequestPermissionResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "RequestPermissionResponse", "outcome")
+	m, err := objectKeys(b, "RequestPermissionResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *RequestPermissionResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "RequestPermissionResponse", "outcome"); err != nil {
 		return err
 	}
 	type Alias RequestPermissionResponse
@@ -10251,10 +11439,16 @@ type RequiresActionStateUpdate struct {
 
 // UnmarshalJSON decodes the RequiresActionStateUpdate schema definition's JSON into v.
 func (v *RequiresActionStateUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "RequiresActionStateUpdate")
+	m, err := objectKeys(b, "RequiresActionStateUpdate")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *RequiresActionStateUpdate) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias RequiresActionStateUpdate
 	var s struct {
 		Alias
@@ -10295,8 +11489,17 @@ type ResourceLink struct {
 
 // UnmarshalJSON decodes the ResourceLink schema definition's JSON into v.
 func (v *ResourceLink) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ResourceLink", "name", "uri")
+	m, err := objectKeys(b, "ResourceLink")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ResourceLink) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ResourceLink", "name", "uri"); err != nil {
 		return err
 	}
 	type Alias ResourceLink
@@ -10353,8 +11556,17 @@ type ResumeSessionRequest struct {
 
 // UnmarshalJSON decodes the ResumeSessionRequest schema definition's JSON into v.
 func (v *ResumeSessionRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ResumeSessionRequest", "cwd", "sessionId")
+	m, err := objectKeys(b, "ResumeSessionRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ResumeSessionRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ResumeSessionRequest", "cwd", "sessionId"); err != nil {
 		return err
 	}
 	type Alias ResumeSessionRequest
@@ -10423,10 +11635,16 @@ type ResumeSessionResponse struct {
 
 // UnmarshalJSON decodes the ResumeSessionResponse schema definition's JSON into v.
 func (v *ResumeSessionResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ResumeSessionResponse")
+	m, err := objectKeys(b, "ResumeSessionResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ResumeSessionResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias ResumeSessionResponse
 	var s struct {
 		Alias
@@ -10489,10 +11707,16 @@ type RunningStateUpdate struct {
 
 // UnmarshalJSON decodes the RunningStateUpdate schema definition's JSON into v.
 func (v *RunningStateUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "RunningStateUpdate")
+	m, err := objectKeys(b, "RunningStateUpdate")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *RunningStateUpdate) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias RunningStateUpdate
 	var s struct {
 		Alias
@@ -10521,8 +11745,17 @@ type SelectedPermissionOutcome struct {
 
 // UnmarshalJSON decodes the SelectedPermissionOutcome schema definition's JSON into v.
 func (v *SelectedPermissionOutcome) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SelectedPermissionOutcome", "optionId")
+	m, err := objectKeys(b, "SelectedPermissionOutcome")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SelectedPermissionOutcome) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SelectedPermissionOutcome", "optionId"); err != nil {
 		return err
 	}
 	type Alias SelectedPermissionOutcome
@@ -10556,10 +11789,16 @@ type SessionAdditionalDirectoriesCapabilities struct {
 
 // UnmarshalJSON decodes the SessionAdditionalDirectoriesCapabilities schema definition's JSON into v.
 func (v *SessionAdditionalDirectoriesCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionAdditionalDirectoriesCapabilities")
+	m, err := objectKeys(b, "SessionAdditionalDirectoriesCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionAdditionalDirectoriesCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SessionAdditionalDirectoriesCapabilities
 	var s struct {
 		Alias
@@ -10592,10 +11831,16 @@ type SessionCancelCapabilities struct {
 
 // UnmarshalJSON decodes the SessionCancelCapabilities schema definition's JSON into v.
 func (v *SessionCancelCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionCancelCapabilities")
+	m, err := objectKeys(b, "SessionCancelCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionCancelCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SessionCancelCapabilities
 	var s struct {
 		Alias
@@ -10669,10 +11914,16 @@ type SessionCapabilities struct {
 
 // UnmarshalJSON decodes the SessionCapabilities schema definition's JSON into v.
 func (v *SessionCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionCapabilities")
+	m, err := objectKeys(b, "SessionCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SessionCapabilities
 	var s struct {
 		Alias
@@ -10713,10 +11964,16 @@ type SessionCloseCapabilities struct {
 
 // UnmarshalJSON decodes the SessionCloseCapabilities schema definition's JSON into v.
 func (v *SessionCloseCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionCloseCapabilities")
+	m, err := objectKeys(b, "SessionCloseCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionCloseCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SessionCloseCapabilities
 	var s struct {
 		Alias
@@ -10739,8 +11996,17 @@ type SessionConfigBoolean struct {
 
 // UnmarshalJSON decodes the SessionConfigBoolean schema definition's JSON into v.
 func (v *SessionConfigBoolean) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionConfigBoolean", "currentValue")
+	m, err := objectKeys(b, "SessionConfigBoolean")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionConfigBoolean) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionConfigBoolean", "currentValue"); err != nil {
 		return err
 	}
 	type Alias SessionConfigBoolean
@@ -10783,8 +12049,17 @@ type SessionConfigOptionSelect struct {
 
 // UnmarshalJSON decodes the "select" variant of the SessionConfigOption schema definition's JSON into v.
 func (v *SessionConfigOptionSelect) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionConfigOptionSelect", "currentValue", "id", "name", "options")
+	m, err := objectKeys(b, "SessionConfigOptionSelect")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionConfigOptionSelect) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionConfigOptionSelect", "currentValue", "id", "name", "options"); err != nil {
 		return err
 	}
 	type Alias SessionConfigOptionSelect
@@ -10840,8 +12115,17 @@ type SessionConfigOptionBoolean struct {
 
 // UnmarshalJSON decodes the "boolean" variant of the SessionConfigOption schema definition's JSON into v.
 func (v *SessionConfigOptionBoolean) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionConfigOptionBoolean", "currentValue", "id", "name")
+	m, err := objectKeys(b, "SessionConfigOptionBoolean")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionConfigOptionBoolean) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionConfigOptionBoolean", "currentValue", "id", "name"); err != nil {
 		return err
 	}
 	type Alias SessionConfigOptionBoolean
@@ -10893,14 +12177,14 @@ func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "select":
 		var v SessionConfigOptionSelect
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionConfigOption: type \"select\": %w", err)
 		}
 		u.Select = &v
 		return nil
 	case "boolean":
 		var v SessionConfigOptionBoolean
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionConfigOption: type \"boolean\": %w", err)
 		}
 		u.Boolean = &v
@@ -10936,14 +12220,14 @@ func (u *SessionConfigOption) UnmarshalJSON(b []byte) error {
 		switch fit[0] {
 		case "Select":
 			var v SessionConfigOptionSelect
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionConfigOption: variant Select: %w", err)
 			}
 			u.Select = &v
 			return nil
 		case "Boolean":
 			var v SessionConfigOptionBoolean
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionConfigOption: variant Boolean: %w", err)
 			}
 			u.Boolean = &v
@@ -11052,10 +12336,16 @@ type SessionConfigOptionsCapabilities struct {
 
 // UnmarshalJSON decodes the SessionConfigOptionsCapabilities schema definition's JSON into v.
 func (v *SessionConfigOptionsCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionConfigOptionsCapabilities")
+	m, err := objectKeys(b, "SessionConfigOptionsCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionConfigOptionsCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SessionConfigOptionsCapabilities
 	var s struct {
 		Alias
@@ -11082,8 +12372,17 @@ type SessionConfigSelect struct {
 
 // UnmarshalJSON decodes the SessionConfigSelect schema definition's JSON into v.
 func (v *SessionConfigSelect) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionConfigSelect", "currentValue", "options")
+	m, err := objectKeys(b, "SessionConfigSelect")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionConfigSelect) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionConfigSelect", "currentValue", "options"); err != nil {
 		return err
 	}
 	type Alias SessionConfigSelect
@@ -11135,8 +12434,17 @@ func (v SessionConfigSelectGroup) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the SessionConfigSelectGroup schema definition's JSON into v.
 func (v *SessionConfigSelectGroup) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionConfigSelectGroup", "group", "name", "options")
+	m, err := objectKeys(b, "SessionConfigSelectGroup")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionConfigSelectGroup) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionConfigSelectGroup", "group", "name", "options"); err != nil {
 		return err
 	}
 	type Alias SessionConfigSelectGroup
@@ -11175,8 +12483,17 @@ type SessionConfigSelectOption struct {
 
 // UnmarshalJSON decodes the SessionConfigSelectOption schema definition's JSON into v.
 func (v *SessionConfigSelectOption) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionConfigSelectOption", "name", "value")
+	m, err := objectKeys(b, "SessionConfigSelectOption")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionConfigSelectOption) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionConfigSelectOption", "name", "value"); err != nil {
 		return err
 	}
 	type Alias SessionConfigSelectOption
@@ -11350,10 +12667,16 @@ type SessionDeleteCapabilities struct {
 
 // UnmarshalJSON decodes the SessionDeleteCapabilities schema definition's JSON into v.
 func (v *SessionDeleteCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionDeleteCapabilities")
+	m, err := objectKeys(b, "SessionDeleteCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionDeleteCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SessionDeleteCapabilities
 	var s struct {
 		Alias
@@ -11386,10 +12709,16 @@ type SessionForkCapabilities struct {
 
 // UnmarshalJSON decodes the SessionForkCapabilities schema definition's JSON into v.
 func (v *SessionForkCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionForkCapabilities")
+	m, err := objectKeys(b, "SessionForkCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionForkCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SessionForkCapabilities
 	var s struct {
 		Alias
@@ -11438,8 +12767,17 @@ type SessionInfo struct {
 
 // UnmarshalJSON decodes the SessionInfo schema definition's JSON into v.
 func (v *SessionInfo) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionInfo", "cwd", "sessionId")
+	m, err := objectKeys(b, "SessionInfo")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionInfo) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionInfo", "cwd", "sessionId"); err != nil {
 		return err
 	}
 	type Alias SessionInfo
@@ -11512,10 +12850,16 @@ type SessionInfoUpdate struct {
 
 // UnmarshalJSON decodes the SessionInfoUpdate schema definition's JSON into v.
 func (v *SessionInfoUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionInfoUpdate")
+	m, err := objectKeys(b, "SessionInfoUpdate")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionInfoUpdate) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SessionInfoUpdate
 	var s struct {
 		Alias
@@ -11548,10 +12892,16 @@ type SessionListCapabilities struct {
 
 // UnmarshalJSON decodes the SessionListCapabilities schema definition's JSON into v.
 func (v *SessionListCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionListCapabilities")
+	m, err := objectKeys(b, "SessionListCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionListCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SessionListCapabilities
 	var s struct {
 		Alias
@@ -11589,8 +12939,17 @@ type SessionMessage struct {
 
 // UnmarshalJSON decodes the SessionMessage schema definition's JSON into v.
 func (v *SessionMessage) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionMessage", "messageId")
+	m, err := objectKeys(b, "SessionMessage")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionMessage) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionMessage", "messageId"); err != nil {
 		return err
 	}
 	type Alias SessionMessage
@@ -11651,8 +13010,17 @@ type SessionMessageChunk struct {
 
 // UnmarshalJSON decodes the SessionMessageChunk schema definition's JSON into v.
 func (v *SessionMessageChunk) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionMessageChunk", "content", "messageId")
+	m, err := objectKeys(b, "SessionMessageChunk")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionMessageChunk) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionMessageChunk", "content", "messageId"); err != nil {
 		return err
 	}
 	type Alias SessionMessageChunk
@@ -11705,8 +13073,17 @@ type SessionMode struct {
 
 // UnmarshalJSON decodes the SessionMode schema definition's JSON into v.
 func (v *SessionMode) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionMode", "id", "name")
+	m, err := objectKeys(b, "SessionMode")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionMode) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionMode", "id", "name"); err != nil {
 		return err
 	}
 	type Alias SessionMode
@@ -11754,8 +13131,17 @@ func (v SessionModeState) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the SessionModeState schema definition's JSON into v.
 func (v *SessionModeState) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionModeState", "availableModes", "currentModeId")
+	m, err := objectKeys(b, "SessionModeState")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionModeState) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionModeState", "availableModes", "currentModeId"); err != nil {
 		return err
 	}
 	type Alias SessionModeState
@@ -11796,8 +13182,17 @@ type SessionNotification struct {
 
 // UnmarshalJSON decodes the SessionNotification schema definition's JSON into v.
 func (v *SessionNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionNotification", "sessionId", "update")
+	m, err := objectKeys(b, "SessionNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionNotification", "sessionId", "update"); err != nil {
 		return err
 	}
 	type Alias SessionNotification
@@ -11840,10 +13235,16 @@ type SessionResumeCapabilities struct {
 
 // UnmarshalJSON decodes the SessionResumeCapabilities schema definition's JSON into v.
 func (v *SessionResumeCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionResumeCapabilities")
+	m, err := objectKeys(b, "SessionResumeCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionResumeCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SessionResumeCapabilities
 	var s struct {
 		Alias
@@ -11878,8 +13279,17 @@ type SessionUpdateUserMessageChunk struct {
 
 // UnmarshalJSON decodes the "user_message_chunk" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateUserMessageChunk) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionUpdateUserMessageChunk", "content")
+	m, err := objectKeys(b, "SessionUpdateUserMessageChunk")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionUpdateUserMessageChunk) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionUpdateUserMessageChunk", "content"); err != nil {
 		return err
 	}
 	type Alias SessionUpdateUserMessageChunk
@@ -11930,8 +13340,17 @@ type SessionUpdateAgentMessageChunk struct {
 
 // UnmarshalJSON decodes the "agent_message_chunk" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateAgentMessageChunk) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionUpdateAgentMessageChunk", "content")
+	m, err := objectKeys(b, "SessionUpdateAgentMessageChunk")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionUpdateAgentMessageChunk) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionUpdateAgentMessageChunk", "content"); err != nil {
 		return err
 	}
 	type Alias SessionUpdateAgentMessageChunk
@@ -11982,8 +13401,17 @@ type SessionUpdateAgentThoughtChunk struct {
 
 // UnmarshalJSON decodes the "agent_thought_chunk" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateAgentThoughtChunk) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionUpdateAgentThoughtChunk", "content")
+	m, err := objectKeys(b, "SessionUpdateAgentThoughtChunk")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionUpdateAgentThoughtChunk) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionUpdateAgentThoughtChunk", "content"); err != nil {
 		return err
 	}
 	type Alias SessionUpdateAgentThoughtChunk
@@ -12050,8 +13478,17 @@ type SessionUpdateToolCall struct {
 
 // UnmarshalJSON decodes the "tool_call" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateToolCall) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionUpdateToolCall", "title", "toolCallId")
+	m, err := objectKeys(b, "SessionUpdateToolCall")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionUpdateToolCall) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionUpdateToolCall", "title", "toolCallId"); err != nil {
 		return err
 	}
 	type Alias SessionUpdateToolCall
@@ -12141,8 +13578,17 @@ type SessionToolCallUpdate struct {
 
 // UnmarshalJSON decodes the "tool_call_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionToolCallUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionToolCallUpdate", "toolCallId")
+	m, err := objectKeys(b, "SessionToolCallUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionToolCallUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionToolCallUpdate", "toolCallId"); err != nil {
 		return err
 	}
 	type Alias SessionToolCallUpdate
@@ -12229,8 +13675,17 @@ func (v SessionUpdatePlan) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "plan" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdatePlan) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionUpdatePlan", "entries")
+	m, err := objectKeys(b, "SessionUpdatePlan")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionUpdatePlan) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionUpdatePlan", "entries"); err != nil {
 		return err
 	}
 	type Alias SessionUpdatePlan
@@ -12270,8 +13725,17 @@ type SessionPlanUpdate struct {
 
 // UnmarshalJSON decodes the "plan_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionPlanUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionPlanUpdate", "plan")
+	m, err := objectKeys(b, "SessionPlanUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionPlanUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionPlanUpdate", "plan"); err != nil {
 		return err
 	}
 	type Alias SessionPlanUpdate
@@ -12319,8 +13783,17 @@ type SessionUpdatePlanRemoved struct {
 
 // UnmarshalJSON decodes the "plan_removed" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdatePlanRemoved) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionUpdatePlanRemoved", "planId")
+	m, err := objectKeys(b, "SessionUpdatePlanRemoved")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionUpdatePlanRemoved) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionUpdatePlanRemoved", "planId"); err != nil {
 		return err
 	}
 	type Alias SessionUpdatePlanRemoved
@@ -12362,8 +13835,17 @@ func (v SessionAvailableCommandsUpdate) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "available_commands_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionAvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionAvailableCommandsUpdate", "availableCommands")
+	m, err := objectKeys(b, "SessionAvailableCommandsUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionAvailableCommandsUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionAvailableCommandsUpdate", "availableCommands"); err != nil {
 		return err
 	}
 	type Alias SessionAvailableCommandsUpdate
@@ -12415,8 +13897,17 @@ type SessionCurrentModeUpdate struct {
 
 // UnmarshalJSON decodes the "current_mode_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionCurrentModeUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionCurrentModeUpdate", "currentModeId")
+	m, err := objectKeys(b, "SessionCurrentModeUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionCurrentModeUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionCurrentModeUpdate", "currentModeId"); err != nil {
 		return err
 	}
 	type Alias SessionCurrentModeUpdate
@@ -12458,8 +13949,17 @@ func (v SessionConfigOptionUpdate) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "config_option_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionConfigOptionUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionConfigOptionUpdate", "configOptions")
+	m, err := objectKeys(b, "SessionConfigOptionUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionConfigOptionUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionConfigOptionUpdate", "configOptions"); err != nil {
 		return err
 	}
 	type Alias SessionConfigOptionUpdate
@@ -12511,10 +14011,16 @@ type SessionSessionInfoUpdate struct {
 
 // UnmarshalJSON decodes the "session_info_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionSessionInfoUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionSessionInfoUpdate")
+	m, err := objectKeys(b, "SessionSessionInfoUpdate")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionSessionInfoUpdate) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SessionSessionInfoUpdate
 	var s struct {
 		Alias
@@ -12552,8 +14058,17 @@ type SessionUsageUpdate struct {
 
 // UnmarshalJSON decodes the "usage_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUsageUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionUsageUpdate", "size", "used")
+	m, err := objectKeys(b, "SessionUsageUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionUsageUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionUsageUpdate", "size", "used"); err != nil {
 		return err
 	}
 	type Alias SessionUsageUpdate
@@ -12594,8 +14109,17 @@ type SessionUpdateNotice struct {
 
 // UnmarshalJSON decodes the "notice" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateNotice) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionUpdateNotice", "severity", "title")
+	m, err := objectKeys(b, "SessionUpdateNotice")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionUpdateNotice) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionUpdateNotice", "severity", "title"); err != nil {
 		return err
 	}
 	type Alias SessionUpdateNotice
@@ -12652,8 +14176,17 @@ type SessionCompactionUpdate struct {
 
 // UnmarshalJSON decodes the "compaction_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionCompactionUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionCompactionUpdate", "compactionId", "status")
+	m, err := objectKeys(b, "SessionCompactionUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionCompactionUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionCompactionUpdate", "compactionId", "status"); err != nil {
 		return err
 	}
 	type Alias SessionCompactionUpdate
@@ -12706,8 +14239,17 @@ type SessionUpdateCompactionSummaryChunk struct {
 
 // UnmarshalJSON decodes the "compaction_summary_chunk" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateCompactionSummaryChunk) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionUpdateCompactionSummaryChunk", "compactionId", "content")
+	m, err := objectKeys(b, "SessionUpdateCompactionSummaryChunk")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionUpdateCompactionSummaryChunk) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionUpdateCompactionSummaryChunk", "compactionId", "content"); err != nil {
 		return err
 	}
 	type Alias SessionUpdateCompactionSummaryChunk
@@ -12782,8 +14324,17 @@ type SessionSubagentUpdate struct {
 
 // UnmarshalJSON decodes the "subagent_update" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionSubagentUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionSubagentUpdate", "sessionId")
+	m, err := objectKeys(b, "SessionSubagentUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionSubagentUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionSubagentUpdate", "sessionId"); err != nil {
 		return err
 	}
 	type Alias SessionSubagentUpdate
@@ -12847,8 +14398,17 @@ type SessionUpdateSessionMessage struct {
 
 // UnmarshalJSON decodes the "session_message" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateSessionMessage) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionUpdateSessionMessage", "messageId")
+	m, err := objectKeys(b, "SessionUpdateSessionMessage")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionUpdateSessionMessage) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionUpdateSessionMessage", "messageId"); err != nil {
 		return err
 	}
 	type Alias SessionUpdateSessionMessage
@@ -12910,8 +14470,17 @@ type SessionUpdateSessionMessageChunk struct {
 
 // UnmarshalJSON decodes the "session_message_chunk" variant of the SessionUpdate schema definition's JSON into v.
 func (v *SessionUpdateSessionMessageChunk) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SessionUpdateSessionMessageChunk", "content", "messageId")
+	m, err := objectKeys(b, "SessionUpdateSessionMessageChunk")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SessionUpdateSessionMessageChunk) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SessionUpdateSessionMessageChunk", "content", "messageId"); err != nil {
 		return err
 	}
 	type Alias SessionUpdateSessionMessageChunk
@@ -13047,133 +14616,133 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "user_message_chunk":
 		var v SessionUpdateUserMessageChunk
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"user_message_chunk\": %w", err)
 		}
 		u.UserMessageChunk = &v
 		return nil
 	case "agent_message_chunk":
 		var v SessionUpdateAgentMessageChunk
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"agent_message_chunk\": %w", err)
 		}
 		u.AgentMessageChunk = &v
 		return nil
 	case "agent_thought_chunk":
 		var v SessionUpdateAgentThoughtChunk
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"agent_thought_chunk\": %w", err)
 		}
 		u.AgentThoughtChunk = &v
 		return nil
 	case "tool_call":
 		var v SessionUpdateToolCall
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"tool_call\": %w", err)
 		}
 		u.ToolCall = &v
 		return nil
 	case "tool_call_update":
 		var v SessionToolCallUpdate
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"tool_call_update\": %w", err)
 		}
 		u.ToolCallUpdate = &v
 		return nil
 	case "plan":
 		var v SessionUpdatePlan
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"plan\": %w", err)
 		}
 		u.Plan = &v
 		return nil
 	case "plan_update":
 		var v SessionPlanUpdate
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"plan_update\": %w", err)
 		}
 		u.PlanUpdate = &v
 		return nil
 	case "plan_removed":
 		var v SessionUpdatePlanRemoved
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"plan_removed\": %w", err)
 		}
 		u.PlanRemoved = &v
 		return nil
 	case "available_commands_update":
 		var v SessionAvailableCommandsUpdate
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"available_commands_update\": %w", err)
 		}
 		u.AvailableCommandsUpdate = &v
 		return nil
 	case "current_mode_update":
 		var v SessionCurrentModeUpdate
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"current_mode_update\": %w", err)
 		}
 		u.CurrentModeUpdate = &v
 		return nil
 	case "config_option_update":
 		var v SessionConfigOptionUpdate
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"config_option_update\": %w", err)
 		}
 		u.ConfigOptionUpdate = &v
 		return nil
 	case "session_info_update":
 		var v SessionSessionInfoUpdate
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"session_info_update\": %w", err)
 		}
 		u.SessionInfoUpdate = &v
 		return nil
 	case "usage_update":
 		var v SessionUsageUpdate
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"usage_update\": %w", err)
 		}
 		u.UsageUpdate = &v
 		return nil
 	case "notice":
 		var v SessionUpdateNotice
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"notice\": %w", err)
 		}
 		u.Notice = &v
 		return nil
 	case "compaction_update":
 		var v SessionCompactionUpdate
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"compaction_update\": %w", err)
 		}
 		u.CompactionUpdate = &v
 		return nil
 	case "compaction_summary_chunk":
 		var v SessionUpdateCompactionSummaryChunk
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"compaction_summary_chunk\": %w", err)
 		}
 		u.CompactionSummaryChunk = &v
 		return nil
 	case "subagent_update":
 		var v SessionSubagentUpdate
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"subagent_update\": %w", err)
 		}
 		u.SubagentUpdate = &v
 		return nil
 	case "session_message":
 		var v SessionUpdateSessionMessage
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"session_message\": %w", err)
 		}
 		u.SessionMessage = &v
 		return nil
 	case "session_message_chunk":
 		var v SessionUpdateSessionMessageChunk
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SessionUpdate: sessionUpdate \"session_message_chunk\": %w", err)
 		}
 		u.SessionMessageChunk = &v
@@ -13368,133 +14937,133 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		switch fit[0] {
 		case "UserMessageChunk":
 			var v SessionUpdateUserMessageChunk
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant UserMessageChunk: %w", err)
 			}
 			u.UserMessageChunk = &v
 			return nil
 		case "AgentMessageChunk":
 			var v SessionUpdateAgentMessageChunk
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant AgentMessageChunk: %w", err)
 			}
 			u.AgentMessageChunk = &v
 			return nil
 		case "AgentThoughtChunk":
 			var v SessionUpdateAgentThoughtChunk
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant AgentThoughtChunk: %w", err)
 			}
 			u.AgentThoughtChunk = &v
 			return nil
 		case "ToolCall":
 			var v SessionUpdateToolCall
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant ToolCall: %w", err)
 			}
 			u.ToolCall = &v
 			return nil
 		case "ToolCallUpdate":
 			var v SessionToolCallUpdate
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant ToolCallUpdate: %w", err)
 			}
 			u.ToolCallUpdate = &v
 			return nil
 		case "Plan":
 			var v SessionUpdatePlan
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant Plan: %w", err)
 			}
 			u.Plan = &v
 			return nil
 		case "PlanUpdate":
 			var v SessionPlanUpdate
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant PlanUpdate: %w", err)
 			}
 			u.PlanUpdate = &v
 			return nil
 		case "PlanRemoved":
 			var v SessionUpdatePlanRemoved
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant PlanRemoved: %w", err)
 			}
 			u.PlanRemoved = &v
 			return nil
 		case "AvailableCommandsUpdate":
 			var v SessionAvailableCommandsUpdate
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant AvailableCommandsUpdate: %w", err)
 			}
 			u.AvailableCommandsUpdate = &v
 			return nil
 		case "CurrentModeUpdate":
 			var v SessionCurrentModeUpdate
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant CurrentModeUpdate: %w", err)
 			}
 			u.CurrentModeUpdate = &v
 			return nil
 		case "ConfigOptionUpdate":
 			var v SessionConfigOptionUpdate
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant ConfigOptionUpdate: %w", err)
 			}
 			u.ConfigOptionUpdate = &v
 			return nil
 		case "SessionInfoUpdate":
 			var v SessionSessionInfoUpdate
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant SessionInfoUpdate: %w", err)
 			}
 			u.SessionInfoUpdate = &v
 			return nil
 		case "UsageUpdate":
 			var v SessionUsageUpdate
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant UsageUpdate: %w", err)
 			}
 			u.UsageUpdate = &v
 			return nil
 		case "Notice":
 			var v SessionUpdateNotice
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant Notice: %w", err)
 			}
 			u.Notice = &v
 			return nil
 		case "CompactionUpdate":
 			var v SessionCompactionUpdate
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant CompactionUpdate: %w", err)
 			}
 			u.CompactionUpdate = &v
 			return nil
 		case "CompactionSummaryChunk":
 			var v SessionUpdateCompactionSummaryChunk
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant CompactionSummaryChunk: %w", err)
 			}
 			u.CompactionSummaryChunk = &v
 			return nil
 		case "SubagentUpdate":
 			var v SessionSubagentUpdate
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant SubagentUpdate: %w", err)
 			}
 			u.SubagentUpdate = &v
 			return nil
 		case "SessionMessage":
 			var v SessionUpdateSessionMessage
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant SessionMessage: %w", err)
 			}
 			u.SessionMessage = &v
 			return nil
 		case "SessionMessageChunk":
 			var v SessionUpdateSessionMessageChunk
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SessionUpdate: variant SessionMessageChunk: %w", err)
 			}
 			u.SessionMessageChunk = &v
@@ -13774,8 +15343,17 @@ type SetSessionConfigOptionBoolean struct {
 
 // UnmarshalJSON decodes the "boolean" variant of the SetSessionConfigOptionRequest schema definition's JSON into v.
 func (v *SetSessionConfigOptionBoolean) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SetSessionConfigOptionBoolean", "configId", "sessionId", "value")
+	m, err := objectKeys(b, "SetSessionConfigOptionBoolean")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SetSessionConfigOptionBoolean) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SetSessionConfigOptionBoolean", "configId", "sessionId", "value"); err != nil {
 		return err
 	}
 	type Alias SetSessionConfigOptionBoolean
@@ -13814,8 +15392,17 @@ type SetSessionConfigOptionValueId struct {
 
 // UnmarshalJSON decodes the ValueId variant of the SetSessionConfigOptionRequest schema definition's JSON into v.
 func (v *SetSessionConfigOptionValueId) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SetSessionConfigOptionValueId", "configId", "sessionId", "value")
+	m, err := objectKeys(b, "SetSessionConfigOptionValueId")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SetSessionConfigOptionValueId) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SetSessionConfigOptionValueId", "configId", "sessionId", "value"); err != nil {
 		return err
 	}
 	type Alias SetSessionConfigOptionValueId
@@ -13866,7 +15453,7 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 	}
 	if disc == "boolean" {
 		var v SetSessionConfigOptionBoolean
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SetSessionConfigOptionRequest: type \"boolean\": %w", err)
 		}
 		u.Boolean = &v
@@ -13883,7 +15470,7 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 			match = false
 		}
 		if match {
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("SetSessionConfigOptionRequest: variant ValueId: %w", err)
 			}
 			u.ValueId = &v
@@ -13966,8 +15553,17 @@ func (v SetSessionConfigOptionResponse) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the SetSessionConfigOptionResponse schema definition's JSON into v.
 func (v *SetSessionConfigOptionResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SetSessionConfigOptionResponse", "configOptions")
+	m, err := objectKeys(b, "SetSessionConfigOptionResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SetSessionConfigOptionResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SetSessionConfigOptionResponse", "configOptions"); err != nil {
 		return err
 	}
 	type Alias SetSessionConfigOptionResponse
@@ -14018,8 +15614,17 @@ type SetSessionModeRequest struct {
 
 // UnmarshalJSON decodes the SetSessionModeRequest schema definition's JSON into v.
 func (v *SetSessionModeRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SetSessionModeRequest", "modeId", "sessionId")
+	m, err := objectKeys(b, "SetSessionModeRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SetSessionModeRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SetSessionModeRequest", "modeId", "sessionId"); err != nil {
 		return err
 	}
 	type Alias SetSessionModeRequest
@@ -14057,10 +15662,16 @@ type SetSessionModeResponse struct {
 
 // UnmarshalJSON decodes the SetSessionModeResponse schema definition's JSON into v.
 func (v *SetSessionModeResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SetSessionModeResponse")
+	m, err := objectKeys(b, "SetSessionModeResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SetSessionModeResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SetSessionModeResponse
 	var s struct {
 		Alias
@@ -14095,10 +15706,16 @@ type StateUpdateRunning struct {
 
 // UnmarshalJSON decodes the "running" variant of the StateUpdate schema definition's JSON into v.
 func (v *StateUpdateRunning) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "StateUpdateRunning")
+	m, err := objectKeys(b, "StateUpdateRunning")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *StateUpdateRunning) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias StateUpdateRunning
 	var s struct {
 		Alias
@@ -14134,10 +15751,16 @@ type StateUpdateIdle struct {
 
 // UnmarshalJSON decodes the "idle" variant of the StateUpdate schema definition's JSON into v.
 func (v *StateUpdateIdle) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "StateUpdateIdle")
+	m, err := objectKeys(b, "StateUpdateIdle")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *StateUpdateIdle) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias StateUpdateIdle
 	var s struct {
 		Alias
@@ -14167,10 +15790,16 @@ type StateUpdateRequiresAction struct {
 
 // UnmarshalJSON decodes the "requires_action" variant of the StateUpdate schema definition's JSON into v.
 func (v *StateUpdateRequiresAction) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "StateUpdateRequiresAction")
+	m, err := objectKeys(b, "StateUpdateRequiresAction")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *StateUpdateRequiresAction) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias StateUpdateRequiresAction
 	var s struct {
 		Alias
@@ -14198,10 +15827,16 @@ type StateUpdateUnknown struct {
 
 // UnmarshalJSON decodes the "unknown" variant of the StateUpdate schema definition's JSON into v.
 func (v *StateUpdateUnknown) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "StateUpdateUnknown")
+	m, err := objectKeys(b, "StateUpdateUnknown")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *StateUpdateUnknown) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias StateUpdateUnknown
 	var s struct {
 		Alias
@@ -14254,6 +15889,12 @@ func (v *StateUpdateOther) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *StateUpdateOther) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	foldKeys(b, m, "state")
 	type Alias StateUpdateOther
 	var a Alias
@@ -14317,28 +15958,28 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "running":
 		var v StateUpdateRunning
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("StateUpdate: state \"running\": %w", err)
 		}
 		u.Running = &v
 		return nil
 	case "idle":
 		var v StateUpdateIdle
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("StateUpdate: state \"idle\": %w", err)
 		}
 		u.Idle = &v
 		return nil
 	case "requires_action":
 		var v StateUpdateRequiresAction
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("StateUpdate: state \"requires_action\": %w", err)
 		}
 		u.RequiresAction = &v
 		return nil
 	case "unknown":
 		var v StateUpdateUnknown
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("StateUpdate: state \"unknown\": %w", err)
 		}
 		u.Unknown = &v
@@ -14362,28 +16003,28 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 		switch fit[0] {
 		case "Running":
 			var v StateUpdateRunning
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("StateUpdate: variant Running: %w", err)
 			}
 			u.Running = &v
 			return nil
 		case "Idle":
 			var v StateUpdateIdle
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("StateUpdate: variant Idle: %w", err)
 			}
 			u.Idle = &v
 			return nil
 		case "RequiresAction":
 			var v StateUpdateRequiresAction
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("StateUpdate: variant RequiresAction: %w", err)
 			}
 			u.RequiresAction = &v
 			return nil
 		case "Unknown":
 			var v StateUpdateUnknown
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("StateUpdate: variant Unknown: %w", err)
 			}
 			u.Unknown = &v
@@ -14549,8 +16190,17 @@ func (v StringMultiSelectItems) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the StringMultiSelectItems schema definition's JSON into v.
 func (v *StringMultiSelectItems) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "StringMultiSelectItems", "enum")
+	m, err := objectKeys(b, "StringMultiSelectItems")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *StringMultiSelectItems) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "StringMultiSelectItems", "enum"); err != nil {
 		return err
 	}
 	type Alias StringMultiSelectItems
@@ -14620,10 +16270,16 @@ type StringPropertySchema struct {
 
 // UnmarshalJSON decodes the StringPropertySchema schema definition's JSON into v.
 func (v *StringPropertySchema) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "StringPropertySchema")
+	m, err := objectKeys(b, "StringPropertySchema")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *StringPropertySchema) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias StringPropertySchema
 	var s struct {
 		Alias
@@ -14663,10 +16319,16 @@ type SubagentCapabilities struct {
 
 // UnmarshalJSON decodes the SubagentCapabilities schema definition's JSON into v.
 func (v *SubagentCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SubagentCapabilities")
+	m, err := objectKeys(b, "SubagentCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SubagentCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SubagentCapabilities
 	var s struct {
 		Alias
@@ -14702,10 +16364,16 @@ type SubagentSessionCapabilities struct {
 
 // UnmarshalJSON decodes the SubagentSessionCapabilities schema definition's JSON into v.
 func (v *SubagentSessionCapabilities) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SubagentSessionCapabilities")
+	m, err := objectKeys(b, "SubagentSessionCapabilities")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SubagentSessionCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias SubagentSessionCapabilities
 	var s struct {
 		Alias
@@ -14784,8 +16452,17 @@ type SubagentUpdate struct {
 
 // UnmarshalJSON decodes the SubagentUpdate schema definition's JSON into v.
 func (v *SubagentUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "SubagentUpdate", "sessionId")
+	m, err := objectKeys(b, "SubagentUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *SubagentUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "SubagentUpdate", "sessionId"); err != nil {
 		return err
 	}
 	type Alias SubagentUpdate
@@ -14842,8 +16519,17 @@ type Terminal struct {
 
 // UnmarshalJSON decodes the Terminal schema definition's JSON into v.
 func (v *Terminal) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "Terminal", "terminalId")
+	m, err := objectKeys(b, "Terminal")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *Terminal) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "Terminal", "terminalId"); err != nil {
 		return err
 	}
 	type Alias Terminal
@@ -14876,10 +16562,16 @@ type TerminalExitStatus struct {
 
 // UnmarshalJSON decodes the TerminalExitStatus schema definition's JSON into v.
 func (v *TerminalExitStatus) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "TerminalExitStatus")
+	m, err := objectKeys(b, "TerminalExitStatus")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *TerminalExitStatus) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias TerminalExitStatus
 	var s struct {
 		Alias
@@ -14917,8 +16609,17 @@ type TerminalOutputRequest struct {
 
 // UnmarshalJSON decodes the TerminalOutputRequest schema definition's JSON into v.
 func (v *TerminalOutputRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "TerminalOutputRequest", "sessionId", "terminalId")
+	m, err := objectKeys(b, "TerminalOutputRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *TerminalOutputRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "TerminalOutputRequest", "sessionId", "terminalId"); err != nil {
 		return err
 	}
 	type Alias TerminalOutputRequest
@@ -14962,8 +16663,17 @@ type TerminalOutputResponse struct {
 
 // UnmarshalJSON decodes the TerminalOutputResponse schema definition's JSON into v.
 func (v *TerminalOutputResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "TerminalOutputResponse", "output", "truncated")
+	m, err := objectKeys(b, "TerminalOutputResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *TerminalOutputResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "TerminalOutputResponse", "output", "truncated"); err != nil {
 		return err
 	}
 	type Alias TerminalOutputResponse
@@ -15007,8 +16717,17 @@ type TextContent struct {
 
 // UnmarshalJSON decodes the TextContent schema definition's JSON into v.
 func (v *TextContent) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "TextContent", "text")
+	m, err := objectKeys(b, "TextContent")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *TextContent) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "TextContent", "text"); err != nil {
 		return err
 	}
 	type Alias TextContent
@@ -15063,8 +16782,17 @@ type TextResourceContents struct {
 
 // UnmarshalJSON decodes the TextResourceContents schema definition's JSON into v.
 func (v *TextResourceContents) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "TextResourceContents", "text", "uri")
+	m, err := objectKeys(b, "TextResourceContents")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *TextResourceContents) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "TextResourceContents", "text", "uri"); err != nil {
 		return err
 	}
 	type Alias TextResourceContents
@@ -15109,8 +16837,17 @@ func (v TitledMultiSelectItems) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the TitledMultiSelectItems schema definition's JSON into v.
 func (v *TitledMultiSelectItems) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "TitledMultiSelectItems", "anyOf")
+	m, err := objectKeys(b, "TitledMultiSelectItems")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *TitledMultiSelectItems) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "TitledMultiSelectItems", "anyOf"); err != nil {
 		return err
 	}
 	type Alias TitledMultiSelectItems
@@ -15167,8 +16904,17 @@ type ToolCall struct {
 
 // UnmarshalJSON decodes the ToolCall schema definition's JSON into v.
 func (v *ToolCall) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ToolCall", "title", "toolCallId")
+	m, err := objectKeys(b, "ToolCall")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ToolCall) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ToolCall", "title", "toolCallId"); err != nil {
 		return err
 	}
 	type Alias ToolCall
@@ -15239,8 +16985,17 @@ type ToolCallContentContent struct {
 
 // UnmarshalJSON decodes the "content" variant of the ToolCallContent schema definition's JSON into v.
 func (v *ToolCallContentContent) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ToolCallContentContent", "content")
+	m, err := objectKeys(b, "ToolCallContentContent")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ToolCallContentContent) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ToolCallContentContent", "content"); err != nil {
 		return err
 	}
 	type Alias ToolCallContentContent
@@ -15288,8 +17043,17 @@ type ToolCallContentDiff struct {
 
 // UnmarshalJSON decodes the "diff" variant of the ToolCallContent schema definition's JSON into v.
 func (v *ToolCallContentDiff) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ToolCallContentDiff", "newText", "path")
+	m, err := objectKeys(b, "ToolCallContentDiff")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ToolCallContentDiff) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ToolCallContentDiff", "newText", "path"); err != nil {
 		return err
 	}
 	type Alias ToolCallContentDiff
@@ -15345,8 +17109,17 @@ type ToolCallContentTerminal struct {
 
 // UnmarshalJSON decodes the "terminal" variant of the ToolCallContent schema definition's JSON into v.
 func (v *ToolCallContentTerminal) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ToolCallContentTerminal", "terminalId")
+	m, err := objectKeys(b, "ToolCallContentTerminal")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ToolCallContentTerminal) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ToolCallContentTerminal", "terminalId"); err != nil {
 		return err
 	}
 	type Alias ToolCallContentTerminal
@@ -15405,21 +17178,21 @@ func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "content":
 		var v ToolCallContentContent
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ToolCallContent: type \"content\": %w", err)
 		}
 		u.Content = &v
 		return nil
 	case "diff":
 		var v ToolCallContentDiff
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ToolCallContent: type \"diff\": %w", err)
 		}
 		u.Diff = &v
 		return nil
 	case "terminal":
 		var v ToolCallContentTerminal
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("ToolCallContent: type \"terminal\": %w", err)
 		}
 		u.Terminal = &v
@@ -15464,21 +17237,21 @@ func (u *ToolCallContent) UnmarshalJSON(b []byte) error {
 		switch fit[0] {
 		case "Content":
 			var v ToolCallContentContent
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ToolCallContent: variant Content: %w", err)
 			}
 			u.Content = &v
 			return nil
 		case "Diff":
 			var v ToolCallContentDiff
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ToolCallContent: variant Diff: %w", err)
 			}
 			u.Diff = &v
 			return nil
 		case "Terminal":
 			var v ToolCallContentTerminal
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("ToolCallContent: variant Terminal: %w", err)
 			}
 			u.Terminal = &v
@@ -15575,8 +17348,17 @@ type ToolCallLocation struct {
 
 // UnmarshalJSON decodes the ToolCallLocation schema definition's JSON into v.
 func (v *ToolCallLocation) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ToolCallLocation", "path")
+	m, err := objectKeys(b, "ToolCallLocation")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ToolCallLocation) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ToolCallLocation", "path"); err != nil {
 		return err
 	}
 	type Alias ToolCallLocation
@@ -15678,8 +17460,17 @@ type ToolCallUpdate struct {
 
 // UnmarshalJSON decodes the ToolCallUpdate schema definition's JSON into v.
 func (v *ToolCallUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "ToolCallUpdate", "toolCallId")
+	m, err := objectKeys(b, "ToolCallUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *ToolCallUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "ToolCallUpdate", "toolCallId"); err != nil {
 		return err
 	}
 	type Alias ToolCallUpdate
@@ -15810,10 +17601,16 @@ type UnknownStateUpdate struct {
 
 // UnmarshalJSON decodes the UnknownStateUpdate schema definition's JSON into v.
 func (v *UnknownStateUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnknownStateUpdate")
+	m, err := objectKeys(b, "UnknownStateUpdate")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnknownStateUpdate) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias UnknownStateUpdate
 	var s struct {
 		Alias
@@ -15848,8 +17645,17 @@ type UnstableAcceptNesNotification struct {
 
 // UnmarshalJSON decodes the AcceptNesNotification schema definition's JSON into v.
 func (v *UnstableAcceptNesNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableAcceptNesNotification", "id", "sessionId")
+	m, err := objectKeys(b, "UnstableAcceptNesNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableAcceptNesNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableAcceptNesNotification", "id", "sessionId"); err != nil {
 		return err
 	}
 	type Alias UnstableAcceptNesNotification
@@ -15896,8 +17702,17 @@ type UnstableCloseNesRequest struct {
 
 // UnmarshalJSON decodes the CloseNesRequest schema definition's JSON into v.
 func (v *UnstableCloseNesRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableCloseNesRequest", "sessionId")
+	m, err := objectKeys(b, "UnstableCloseNesRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableCloseNesRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableCloseNesRequest", "sessionId"); err != nil {
 		return err
 	}
 	type Alias UnstableCloseNesRequest
@@ -15939,10 +17754,16 @@ type UnstableCloseNesResponse struct {
 
 // UnmarshalJSON decodes the CloseNesResponse schema definition's JSON into v.
 func (v *UnstableCloseNesResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableCloseNesResponse")
+	m, err := objectKeys(b, "UnstableCloseNesResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableCloseNesResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias UnstableCloseNesResponse
 	var s struct {
 		Alias
@@ -16000,8 +17821,17 @@ func (v UnstableDidChangeDocumentNotification) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the DidChangeDocumentNotification schema definition's JSON into v.
 func (v *UnstableDidChangeDocumentNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableDidChangeDocumentNotification", "contentChanges", "sessionId", "uri", "version")
+	m, err := objectKeys(b, "UnstableDidChangeDocumentNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableDidChangeDocumentNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableDidChangeDocumentNotification", "contentChanges", "sessionId", "uri", "version"); err != nil {
 		return err
 	}
 	type Alias UnstableDidChangeDocumentNotification
@@ -16047,8 +17877,17 @@ type UnstableDidCloseDocumentNotification struct {
 
 // UnmarshalJSON decodes the DidCloseDocumentNotification schema definition's JSON into v.
 func (v *UnstableDidCloseDocumentNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableDidCloseDocumentNotification", "sessionId", "uri")
+	m, err := objectKeys(b, "UnstableDidCloseDocumentNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableDidCloseDocumentNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableDidCloseDocumentNotification", "sessionId", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableDidCloseDocumentNotification
@@ -16100,8 +17939,17 @@ type UnstableDidFocusDocumentNotification struct {
 
 // UnmarshalJSON decodes the DidFocusDocumentNotification schema definition's JSON into v.
 func (v *UnstableDidFocusDocumentNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableDidFocusDocumentNotification", "position", "sessionId", "uri", "version", "visibleRange")
+	m, err := objectKeys(b, "UnstableDidFocusDocumentNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableDidFocusDocumentNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableDidFocusDocumentNotification", "position", "sessionId", "uri", "version", "visibleRange"); err != nil {
 		return err
 	}
 	type Alias UnstableDidFocusDocumentNotification
@@ -16153,8 +18001,17 @@ type UnstableDidOpenDocumentNotification struct {
 
 // UnmarshalJSON decodes the DidOpenDocumentNotification schema definition's JSON into v.
 func (v *UnstableDidOpenDocumentNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableDidOpenDocumentNotification", "languageId", "sessionId", "text", "uri", "version")
+	m, err := objectKeys(b, "UnstableDidOpenDocumentNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableDidOpenDocumentNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableDidOpenDocumentNotification", "languageId", "sessionId", "text", "uri", "version"); err != nil {
 		return err
 	}
 	type Alias UnstableDidOpenDocumentNotification
@@ -16200,8 +18057,17 @@ type UnstableDidSaveDocumentNotification struct {
 
 // UnmarshalJSON decodes the DidSaveDocumentNotification schema definition's JSON into v.
 func (v *UnstableDidSaveDocumentNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableDidSaveDocumentNotification", "sessionId", "uri")
+	m, err := objectKeys(b, "UnstableDidSaveDocumentNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableDidSaveDocumentNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableDidSaveDocumentNotification", "sessionId", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableDidSaveDocumentNotification
@@ -16245,8 +18111,17 @@ type UnstableDisableProviderRequest struct {
 
 // UnmarshalJSON decodes the DisableProviderRequest schema definition's JSON into v.
 func (v *UnstableDisableProviderRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableDisableProviderRequest", "providerId")
+	m, err := objectKeys(b, "UnstableDisableProviderRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableDisableProviderRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableDisableProviderRequest", "providerId"); err != nil {
 		return err
 	}
 	type Alias UnstableDisableProviderRequest
@@ -16288,10 +18163,16 @@ type UnstableDisableProviderResponse struct {
 
 // UnmarshalJSON decodes the DisableProviderResponse schema definition's JSON into v.
 func (v *UnstableDisableProviderResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableDisableProviderResponse")
+	m, err := objectKeys(b, "UnstableDisableProviderResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableDisableProviderResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias UnstableDisableProviderResponse
 	var s struct {
 		Alias
@@ -16348,8 +18229,17 @@ type UnstableForkSessionRequest struct {
 
 // UnmarshalJSON decodes the ForkSessionRequest schema definition's JSON into v.
 func (v *UnstableForkSessionRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableForkSessionRequest", "cwd", "sessionId")
+	m, err := objectKeys(b, "UnstableForkSessionRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableForkSessionRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableForkSessionRequest", "cwd", "sessionId"); err != nil {
 		return err
 	}
 	type Alias UnstableForkSessionRequest
@@ -16424,8 +18314,17 @@ type UnstableForkSessionResponse struct {
 
 // UnmarshalJSON decodes the ForkSessionResponse schema definition's JSON into v.
 func (v *UnstableForkSessionResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableForkSessionResponse", "sessionId")
+	m, err := objectKeys(b, "UnstableForkSessionResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableForkSessionResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableForkSessionResponse", "sessionId"); err != nil {
 		return err
 	}
 	type Alias UnstableForkSessionResponse
@@ -16478,10 +18377,16 @@ type UnstableListProvidersRequest struct {
 
 // UnmarshalJSON decodes the ListProvidersRequest schema definition's JSON into v.
 func (v *UnstableListProvidersRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableListProvidersRequest")
+	m, err := objectKeys(b, "UnstableListProvidersRequest")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableListProvidersRequest) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias UnstableListProvidersRequest
 	var s struct {
 		Alias
@@ -16533,8 +18438,17 @@ func (v UnstableListProvidersResponse) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the ListProvidersResponse schema definition's JSON into v.
 func (v *UnstableListProvidersResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableListProvidersResponse", "providers")
+	m, err := objectKeys(b, "UnstableListProvidersResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableListProvidersResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableListProvidersResponse", "providers"); err != nil {
 		return err
 	}
 	type Alias UnstableListProvidersResponse
@@ -16635,8 +18549,17 @@ func (v UnstableMcpError) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the McpError schema definition's JSON into v.
 func (v *UnstableMcpError) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "UnstableMcpError", "code", "message")
+	m, err := objectKeys(b, "UnstableMcpError")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableMcpError) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableMcpError", "code", "message"); err != nil {
 		return err
 	}
 	foldKeys(b, m, "data")
@@ -16700,8 +18623,17 @@ func (v UnstableMcpServerHttp) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "http" variant of the McpServer schema definition's JSON into v.
 func (v *UnstableMcpServerHttp) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableMcpServerHttp", "headers", "name", "url")
+	m, err := objectKeys(b, "UnstableMcpServerHttp")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableMcpServerHttp) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableMcpServerHttp", "headers", "name", "url"); err != nil {
 		return err
 	}
 	type Alias UnstableMcpServerHttp
@@ -16749,8 +18681,17 @@ func (v UnstableMcpServerSse) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "sse" variant of the McpServer schema definition's JSON into v.
 func (v *UnstableMcpServerSse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableMcpServerSse", "headers", "name", "url")
+	m, err := objectKeys(b, "UnstableMcpServerSse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableMcpServerSse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableMcpServerSse", "headers", "name", "url"); err != nil {
 		return err
 	}
 	type Alias UnstableMcpServerSse
@@ -16794,8 +18735,17 @@ type UnstableMcpServerAcpInline struct {
 
 // UnmarshalJSON decodes the "acp" variant of the McpServer schema definition's JSON into v.
 func (v *UnstableMcpServerAcpInline) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableMcpServerAcpInline", "name", "serverId")
+	m, err := objectKeys(b, "UnstableMcpServerAcpInline")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableMcpServerAcpInline) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableMcpServerAcpInline", "name", "serverId"); err != nil {
 		return err
 	}
 	type Alias UnstableMcpServerAcpInline
@@ -16869,21 +18819,21 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "http":
 		var v UnstableMcpServerHttp
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("UnstableMcpServer: type \"http\": %w", err)
 		}
 		u.Http = &v
 		return nil
 	case "sse":
 		var v UnstableMcpServerSse
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("UnstableMcpServer: type \"sse\": %w", err)
 		}
 		u.Sse = &v
 		return nil
 	case "acp":
 		var v UnstableMcpServerAcpInline
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("UnstableMcpServer: type \"acp\": %w", err)
 		}
 		u.Acp = &v
@@ -16909,7 +18859,7 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 			match = false
 		}
 		if match {
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("UnstableMcpServer: variant Stdio: %w", err)
 			}
 			u.Stdio = &v
@@ -17015,8 +18965,17 @@ type UnstableMcpServerAcp struct {
 
 // UnmarshalJSON decodes the McpServerAcp schema definition's JSON into v.
 func (v *UnstableMcpServerAcp) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableMcpServerAcp", "name", "serverId")
+	m, err := objectKeys(b, "UnstableMcpServerAcp")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableMcpServerAcp) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableMcpServerAcp", "name", "serverId"); err != nil {
 		return err
 	}
 	type Alias UnstableMcpServerAcp
@@ -17072,8 +19031,17 @@ type UnstableMessageMcpNotification struct {
 
 // UnmarshalJSON decodes the MessageMcpNotification schema definition's JSON into v.
 func (v *UnstableMessageMcpNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableMessageMcpNotification", "method", "requestId", "serverId")
+	m, err := objectKeys(b, "UnstableMessageMcpNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableMessageMcpNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableMessageMcpNotification", "method", "requestId", "serverId"); err != nil {
 		return err
 	}
 	type Alias UnstableMessageMcpNotification
@@ -17125,8 +19093,17 @@ type UnstableMessageMcpRequest struct {
 
 // UnmarshalJSON decodes the MessageMcpRequest schema definition's JSON into v.
 func (v *UnstableMessageMcpRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableMessageMcpRequest", "method", "requestId", "serverId")
+	m, err := objectKeys(b, "UnstableMessageMcpRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableMessageMcpRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableMessageMcpRequest", "method", "requestId", "serverId"); err != nil {
 		return err
 	}
 	type Alias UnstableMessageMcpRequest
@@ -17162,8 +19139,17 @@ type UnstableMessageMcpResult struct {
 
 // UnmarshalJSON decodes the Result variant of the MessageMcpResponse schema definition's JSON into v.
 func (v *UnstableMessageMcpResult) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableMessageMcpResult", "result")
+	m, err := objectKeys(b, "UnstableMessageMcpResult")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableMessageMcpResult) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableMessageMcpResult", "result"); err != nil {
 		return err
 	}
 	type Alias UnstableMessageMcpResult
@@ -17190,8 +19176,17 @@ type UnstableMessageMcpError struct {
 
 // UnmarshalJSON decodes the Error variant of the MessageMcpResponse schema definition's JSON into v.
 func (v *UnstableMessageMcpError) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableMessageMcpError", "error")
+	m, err := objectKeys(b, "UnstableMessageMcpError")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableMessageMcpError) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableMessageMcpError", "error"); err != nil {
 		return err
 	}
 	type Alias UnstableMessageMcpError
@@ -17241,7 +19236,7 @@ func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
 				match = false
 			}
 			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
+				if err := v.decodeKeys(b, m); err != nil {
 					return fmt.Errorf("UnstableMessageMcpResponse: variant Result: %w", err)
 				}
 				u.Result = &v
@@ -17255,7 +19250,7 @@ func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
 				match = false
 			}
 			if match {
-				if err := json.Unmarshal(b, &v); err != nil {
+				if err := v.decodeKeys(b, m); err != nil {
 					return fmt.Errorf("UnstableMessageMcpResponse: variant Error: %w", err)
 				}
 				u.Error = &v
@@ -17340,8 +19335,17 @@ type UnstableNesDiagnostic struct {
 
 // UnmarshalJSON decodes the NesDiagnostic schema definition's JSON into v.
 func (v *UnstableNesDiagnostic) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesDiagnostic", "message", "range", "severity", "uri")
+	m, err := objectKeys(b, "UnstableNesDiagnostic")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesDiagnostic) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesDiagnostic", "message", "range", "severity", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesDiagnostic
@@ -17404,8 +19408,17 @@ type UnstableNesEditHistoryEntry struct {
 
 // UnmarshalJSON decodes the NesEditHistoryEntry schema definition's JSON into v.
 func (v *UnstableNesEditHistoryEntry) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesEditHistoryEntry", "diff", "uri")
+	m, err := objectKeys(b, "UnstableNesEditHistoryEntry")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesEditHistoryEntry) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesEditHistoryEntry", "diff", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesEditHistoryEntry
@@ -17456,8 +19469,17 @@ func (v UnstableNesEditSuggestion) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the NesEditSuggestion schema definition's JSON into v.
 func (v *UnstableNesEditSuggestion) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesEditSuggestion", "edits", "id", "uri")
+	m, err := objectKeys(b, "UnstableNesEditSuggestion")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesEditSuggestion) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesEditSuggestion", "edits", "id", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesEditSuggestion
@@ -17498,8 +19520,17 @@ type UnstableNesExcerpt struct {
 
 // UnmarshalJSON decodes the NesExcerpt schema definition's JSON into v.
 func (v *UnstableNesExcerpt) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesExcerpt", "endLine", "startLine", "text")
+	m, err := objectKeys(b, "UnstableNesExcerpt")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesExcerpt) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesExcerpt", "endLine", "startLine", "text"); err != nil {
 		return err
 	}
 	type Alias UnstableNesExcerpt
@@ -17538,8 +19569,17 @@ type UnstableNesJumpSuggestion struct {
 
 // UnmarshalJSON decodes the NesJumpSuggestion schema definition's JSON into v.
 func (v *UnstableNesJumpSuggestion) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesJumpSuggestion", "id", "position", "uri")
+	m, err := objectKeys(b, "UnstableNesJumpSuggestion")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesJumpSuggestion) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesJumpSuggestion", "id", "position", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesJumpSuggestion
@@ -17580,8 +19620,17 @@ type UnstableNesOpenFile struct {
 
 // UnmarshalJSON decodes the NesOpenFile schema definition's JSON into v.
 func (v *UnstableNesOpenFile) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesOpenFile", "languageId", "uri")
+	m, err := objectKeys(b, "UnstableNesOpenFile")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesOpenFile) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesOpenFile", "languageId", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesOpenFile
@@ -17624,8 +19673,17 @@ type UnstableNesRecentFile struct {
 
 // UnmarshalJSON decodes the NesRecentFile schema definition's JSON into v.
 func (v *UnstableNesRecentFile) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesRecentFile", "languageId", "text", "uri")
+	m, err := objectKeys(b, "UnstableNesRecentFile")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesRecentFile) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesRecentFile", "languageId", "text", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesRecentFile
@@ -17698,8 +19756,17 @@ func (v UnstableNesRelatedSnippet) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the NesRelatedSnippet schema definition's JSON into v.
 func (v *UnstableNesRelatedSnippet) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesRelatedSnippet", "excerpts", "uri")
+	m, err := objectKeys(b, "UnstableNesRelatedSnippet")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesRelatedSnippet) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesRelatedSnippet", "excerpts", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesRelatedSnippet
@@ -17740,8 +19807,17 @@ type UnstableNesRenameSuggestion struct {
 
 // UnmarshalJSON decodes the NesRenameSuggestion schema definition's JSON into v.
 func (v *UnstableNesRenameSuggestion) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesRenameSuggestion", "id", "newName", "position", "uri")
+	m, err := objectKeys(b, "UnstableNesRenameSuggestion")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesRenameSuggestion) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesRenameSuggestion", "id", "newName", "position", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesRenameSuggestion
@@ -17780,8 +19856,17 @@ type UnstableNesRepository struct {
 
 // UnmarshalJSON decodes the NesRepository schema definition's JSON into v.
 func (v *UnstableNesRepository) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesRepository", "name", "owner", "remoteUrl")
+	m, err := objectKeys(b, "UnstableNesRepository")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesRepository) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesRepository", "name", "owner", "remoteUrl"); err != nil {
 		return err
 	}
 	type Alias UnstableNesRepository
@@ -17824,8 +19909,17 @@ type UnstableNesSearchAndReplaceSuggestion struct {
 
 // UnmarshalJSON decodes the NesSearchAndReplaceSuggestion schema definition's JSON into v.
 func (v *UnstableNesSearchAndReplaceSuggestion) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesSearchAndReplaceSuggestion", "id", "replace", "search", "uri")
+	m, err := objectKeys(b, "UnstableNesSearchAndReplaceSuggestion")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesSearchAndReplaceSuggestion) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesSearchAndReplaceSuggestion", "id", "replace", "search", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesSearchAndReplaceSuggestion
@@ -17870,10 +19964,16 @@ type UnstableNesSuggestContext struct {
 
 // UnmarshalJSON decodes the NesSuggestContext schema definition's JSON into v.
 func (v *UnstableNesSuggestContext) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesSuggestContext")
+	m, err := objectKeys(b, "UnstableNesSuggestContext")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesSuggestContext) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias UnstableNesSuggestContext
 	var s struct {
 		Alias
@@ -17919,8 +20019,17 @@ func (v UnstableNesSuggestionEdit) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the "edit" variant of the NesSuggestion schema definition's JSON into v.
 func (v *UnstableNesSuggestionEdit) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesSuggestionEdit", "edits", "id", "uri")
+	m, err := objectKeys(b, "UnstableNesSuggestionEdit")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesSuggestionEdit) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesSuggestionEdit", "edits", "id", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesSuggestionEdit
@@ -17958,8 +20067,17 @@ type UnstableNesSuggestionJump struct {
 
 // UnmarshalJSON decodes the "jump" variant of the NesSuggestion schema definition's JSON into v.
 func (v *UnstableNesSuggestionJump) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesSuggestionJump", "id", "position", "uri")
+	m, err := objectKeys(b, "UnstableNesSuggestionJump")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesSuggestionJump) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesSuggestionJump", "id", "position", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesSuggestionJump
@@ -17997,8 +20115,17 @@ type UnstableNesSuggestionRename struct {
 
 // UnmarshalJSON decodes the "rename" variant of the NesSuggestion schema definition's JSON into v.
 func (v *UnstableNesSuggestionRename) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesSuggestionRename", "id", "newName", "position", "uri")
+	m, err := objectKeys(b, "UnstableNesSuggestionRename")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesSuggestionRename) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesSuggestionRename", "id", "newName", "position", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesSuggestionRename
@@ -18038,8 +20165,17 @@ type UnstableNesSuggestionSearchAndReplace struct {
 
 // UnmarshalJSON decodes the "searchAndReplace" variant of the NesSuggestion schema definition's JSON into v.
 func (v *UnstableNesSuggestionSearchAndReplace) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesSuggestionSearchAndReplace", "id", "replace", "search", "uri")
+	m, err := objectKeys(b, "UnstableNesSuggestionSearchAndReplace")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesSuggestionSearchAndReplace) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesSuggestionSearchAndReplace", "id", "replace", "search", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesSuggestionSearchAndReplace
@@ -18095,28 +20231,28 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 	switch disc {
 	case "edit":
 		var v UnstableNesSuggestionEdit
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("UnstableNesSuggestion: kind \"edit\": %w", err)
 		}
 		u.Edit = &v
 		return nil
 	case "jump":
 		var v UnstableNesSuggestionJump
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("UnstableNesSuggestion: kind \"jump\": %w", err)
 		}
 		u.Jump = &v
 		return nil
 	case "rename":
 		var v UnstableNesSuggestionRename
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("UnstableNesSuggestion: kind \"rename\": %w", err)
 		}
 		u.Rename = &v
 		return nil
 	case "searchAndReplace":
 		var v UnstableNesSuggestionSearchAndReplace
-		if err := json.Unmarshal(b, &v); err != nil {
+		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("UnstableNesSuggestion: kind \"searchAndReplace\": %w", err)
 		}
 		u.SearchAndReplace = &v
@@ -18197,28 +20333,28 @@ func (u *UnstableNesSuggestion) UnmarshalJSON(b []byte) error {
 		switch fit[0] {
 		case "Edit":
 			var v UnstableNesSuggestionEdit
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("UnstableNesSuggestion: variant Edit: %w", err)
 			}
 			u.Edit = &v
 			return nil
 		case "Jump":
 			var v UnstableNesSuggestionJump
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("UnstableNesSuggestion: variant Jump: %w", err)
 			}
 			u.Jump = &v
 			return nil
 		case "Rename":
 			var v UnstableNesSuggestionRename
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("UnstableNesSuggestion: variant Rename: %w", err)
 			}
 			u.Rename = &v
 			return nil
 		case "SearchAndReplace":
 			var v UnstableNesSuggestionSearchAndReplace
-			if err := json.Unmarshal(b, &v); err != nil {
+			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("UnstableNesSuggestion: variant SearchAndReplace: %w", err)
 			}
 			u.SearchAndReplace = &v
@@ -18316,8 +20452,17 @@ type UnstableNesTextEdit struct {
 
 // UnmarshalJSON decodes the NesTextEdit schema definition's JSON into v.
 func (v *UnstableNesTextEdit) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesTextEdit", "newText", "range")
+	m, err := objectKeys(b, "UnstableNesTextEdit")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesTextEdit) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesTextEdit", "newText", "range"); err != nil {
 		return err
 	}
 	type Alias UnstableNesTextEdit
@@ -18380,8 +20525,17 @@ type UnstableNesUserAction struct {
 
 // UnmarshalJSON decodes the NesUserAction schema definition's JSON into v.
 func (v *UnstableNesUserAction) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableNesUserAction", "action", "position", "timestampMs", "uri")
+	m, err := objectKeys(b, "UnstableNesUserAction")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableNesUserAction) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableNesUserAction", "action", "position", "timestampMs", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableNesUserAction
@@ -18420,8 +20574,17 @@ type UnstablePosition struct {
 
 // UnmarshalJSON decodes the Position schema definition's JSON into v.
 func (v *UnstablePosition) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstablePosition", "character", "line")
+	m, err := objectKeys(b, "UnstablePosition")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstablePosition) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstablePosition", "character", "line"); err != nil {
 		return err
 	}
 	type Alias UnstablePosition
@@ -18458,8 +20621,17 @@ type UnstableProviderCurrentConfig struct {
 
 // UnmarshalJSON decodes the ProviderCurrentConfig schema definition's JSON into v.
 func (v *UnstableProviderCurrentConfig) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableProviderCurrentConfig", "apiType", "baseUrl")
+	m, err := objectKeys(b, "UnstableProviderCurrentConfig")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableProviderCurrentConfig) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableProviderCurrentConfig", "apiType", "baseUrl"); err != nil {
 		return err
 	}
 	type Alias UnstableProviderCurrentConfig
@@ -18519,8 +20691,17 @@ func (v UnstableProviderInfo) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the ProviderInfo schema definition's JSON into v.
 func (v *UnstableProviderInfo) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableProviderInfo", "providerId", "required", "supported")
+	m, err := objectKeys(b, "UnstableProviderInfo")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableProviderInfo) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableProviderInfo", "providerId", "required", "supported"); err != nil {
 		return err
 	}
 	type Alias UnstableProviderInfo
@@ -18561,8 +20742,17 @@ type UnstableRange struct {
 
 // UnmarshalJSON decodes the Range schema definition's JSON into v.
 func (v *UnstableRange) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableRange", "end", "start")
+	m, err := objectKeys(b, "UnstableRange")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableRange) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableRange", "end", "start"); err != nil {
 		return err
 	}
 	type Alias UnstableRange
@@ -18601,8 +20791,17 @@ type UnstableRejectNesNotification struct {
 
 // UnmarshalJSON decodes the RejectNesNotification schema definition's JSON into v.
 func (v *UnstableRejectNesNotification) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableRejectNesNotification", "id", "sessionId")
+	m, err := objectKeys(b, "UnstableRejectNesNotification")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableRejectNesNotification) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableRejectNesNotification", "id", "sessionId"); err != nil {
 		return err
 	}
 	type Alias UnstableRejectNesNotification
@@ -18657,8 +20856,17 @@ type UnstableSetProviderRequest struct {
 
 // UnmarshalJSON decodes the SetProviderRequest schema definition's JSON into v.
 func (v *UnstableSetProviderRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableSetProviderRequest", "apiType", "baseUrl", "providerId")
+	m, err := objectKeys(b, "UnstableSetProviderRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableSetProviderRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableSetProviderRequest", "apiType", "baseUrl", "providerId"); err != nil {
 		return err
 	}
 	type Alias UnstableSetProviderRequest
@@ -18700,10 +20908,16 @@ type UnstableSetProviderResponse struct {
 
 // UnmarshalJSON decodes the SetProviderResponse schema definition's JSON into v.
 func (v *UnstableSetProviderResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableSetProviderResponse")
+	m, err := objectKeys(b, "UnstableSetProviderResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableSetProviderResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias UnstableSetProviderResponse
 	var s struct {
 		Alias
@@ -18749,10 +20963,16 @@ type UnstableStartNesRequest struct {
 
 // UnmarshalJSON decodes the StartNesRequest schema definition's JSON into v.
 func (v *UnstableStartNesRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableStartNesRequest")
+	m, err := objectKeys(b, "UnstableStartNesRequest")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableStartNesRequest) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias UnstableStartNesRequest
 	var s struct {
 		Alias
@@ -18798,8 +21018,17 @@ type UnstableStartNesResponse struct {
 
 // UnmarshalJSON decodes the StartNesResponse schema definition's JSON into v.
 func (v *UnstableStartNesResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableStartNesResponse", "sessionId")
+	m, err := objectKeys(b, "UnstableStartNesResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableStartNesResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableStartNesResponse", "sessionId"); err != nil {
 		return err
 	}
 	type Alias UnstableStartNesResponse
@@ -18855,8 +21084,17 @@ type UnstableSuggestNesRequest struct {
 
 // UnmarshalJSON decodes the SuggestNesRequest schema definition's JSON into v.
 func (v *UnstableSuggestNesRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableSuggestNesRequest", "position", "sessionId", "triggerKind", "uri", "version")
+	m, err := objectKeys(b, "UnstableSuggestNesRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableSuggestNesRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableSuggestNesRequest", "position", "sessionId", "triggerKind", "uri", "version"); err != nil {
 		return err
 	}
 	type Alias UnstableSuggestNesRequest
@@ -18910,8 +21148,17 @@ func (v UnstableSuggestNesResponse) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON decodes the SuggestNesResponse schema definition's JSON into v.
 func (v *UnstableSuggestNesResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableSuggestNesResponse", "suggestions")
+	m, err := objectKeys(b, "UnstableSuggestNesResponse")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableSuggestNesResponse) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableSuggestNesResponse", "suggestions"); err != nil {
 		return err
 	}
 	type Alias UnstableSuggestNesResponse
@@ -18965,8 +21212,17 @@ type UnstableTextDocumentContentChangeEvent struct {
 
 // UnmarshalJSON decodes the TextDocumentContentChangeEvent schema definition's JSON into v.
 func (v *UnstableTextDocumentContentChangeEvent) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableTextDocumentContentChangeEvent", "text")
+	m, err := objectKeys(b, "UnstableTextDocumentContentChangeEvent")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableTextDocumentContentChangeEvent) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableTextDocumentContentChangeEvent", "text"); err != nil {
 		return err
 	}
 	type Alias UnstableTextDocumentContentChangeEvent
@@ -19003,8 +21259,17 @@ type UnstableWorkspaceFolder struct {
 
 // UnmarshalJSON decodes the WorkspaceFolder schema definition's JSON into v.
 func (v *UnstableWorkspaceFolder) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstableWorkspaceFolder", "name", "uri")
+	m, err := objectKeys(b, "UnstableWorkspaceFolder")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstableWorkspaceFolder) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstableWorkspaceFolder", "name", "uri"); err != nil {
 		return err
 	}
 	type Alias UnstableWorkspaceFolder
@@ -19035,8 +21300,17 @@ type UnstructuredCommandInput struct {
 
 // UnmarshalJSON decodes the UnstructuredCommandInput schema definition's JSON into v.
 func (v *UnstructuredCommandInput) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UnstructuredCommandInput", "hint")
+	m, err := objectKeys(b, "UnstructuredCommandInput")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UnstructuredCommandInput) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UnstructuredCommandInput", "hint"); err != nil {
 		return err
 	}
 	type Alias UnstructuredCommandInput
@@ -19081,8 +21355,17 @@ type Usage struct {
 
 // UnmarshalJSON decodes the Usage schema definition's JSON into v.
 func (v *Usage) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "Usage", "inputTokens", "outputTokens", "totalTokens")
+	m, err := objectKeys(b, "Usage")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *Usage) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "Usage", "inputTokens", "outputTokens", "totalTokens"); err != nil {
 		return err
 	}
 	type Alias Usage
@@ -19123,8 +21406,17 @@ type UsageUpdate struct {
 
 // UnmarshalJSON decodes the UsageUpdate schema definition's JSON into v.
 func (v *UsageUpdate) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "UsageUpdate", "size", "used")
+	m, err := objectKeys(b, "UsageUpdate")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *UsageUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "UsageUpdate", "size", "used"); err != nil {
 		return err
 	}
 	type Alias UsageUpdate
@@ -19159,8 +21451,17 @@ type WaitForTerminalExitRequest struct {
 
 // UnmarshalJSON decodes the WaitForTerminalExitRequest schema definition's JSON into v.
 func (v *WaitForTerminalExitRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "WaitForTerminalExitRequest", "sessionId", "terminalId")
+	m, err := objectKeys(b, "WaitForTerminalExitRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *WaitForTerminalExitRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "WaitForTerminalExitRequest", "sessionId", "terminalId"); err != nil {
 		return err
 	}
 	type Alias WaitForTerminalExitRequest
@@ -19202,10 +21503,16 @@ type WaitForTerminalExitResponse struct {
 
 // UnmarshalJSON decodes the WaitForTerminalExitResponse schema definition's JSON into v.
 func (v *WaitForTerminalExitResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "WaitForTerminalExitResponse")
+	m, err := objectKeys(b, "WaitForTerminalExitResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *WaitForTerminalExitResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias WaitForTerminalExitResponse
 	var s struct {
 		Alias
@@ -19253,8 +21560,17 @@ type WriteTextFileRequest struct {
 
 // UnmarshalJSON decodes the WriteTextFileRequest schema definition's JSON into v.
 func (v *WriteTextFileRequest) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "WriteTextFileRequest", "content", "path", "sessionId")
+	m, err := objectKeys(b, "WriteTextFileRequest")
 	if err != nil {
+		return err
+	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *WriteTextFileRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error {
+	if err := requireKeys(b, m, "WriteTextFileRequest", "content", "path", "sessionId"); err != nil {
 		return err
 	}
 	type Alias WriteTextFileRequest
@@ -19301,10 +21617,16 @@ type WriteTextFileResponse struct {
 
 // UnmarshalJSON decodes the WriteTextFileResponse schema definition's JSON into v.
 func (v *WriteTextFileResponse) UnmarshalJSON(b []byte) error {
-	_, err := objectKeys(b, "WriteTextFileResponse")
+	m, err := objectKeys(b, "WriteTextFileResponse")
 	if err != nil {
 		return err
 	}
+	return v.decodeKeys(b, m)
+}
+
+// decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON
+// does. It may fold the keys of m.
+func (v *WriteTextFileResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	type Alias WriteTextFileResponse
 	var s struct {
 		Alias
@@ -19627,21 +21949,26 @@ func (p *Patch[T]) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// objectKeys decodes b as a JSON object, folds the required keys as foldKeys
-// does, and fails, naming typ and the key, when a required key is absent. JSON
-// null is an object without keys.
-func objectKeys(b []byte, typ string, required ...string) (map[string]json.RawMessage, error) {
+// objectKeys decodes b as a JSON object, failing with typ named. JSON null is
+// an object without keys.
+func objectKeys(b []byte, typ string) (map[string]json.RawMessage, error) {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, fmt.Errorf("%s: %w", typ, err)
 	}
+	return m, nil
+}
+
+// requireKeys folds the required keys of m, the keys of the JSON object b, as
+// foldKeys does, and fails, naming typ and the key, when one is absent.
+func requireKeys(b []byte, m map[string]json.RawMessage, typ string, required ...string) error {
 	foldKeys(b, m, required...)
 	for _, k := range required {
 		if _, ok := m[k]; !ok {
-			return nil, fmt.Errorf("%s: missing required property %q", typ, k)
+			return fmt.Errorf("%s: missing required property %q", typ, k)
 		}
 	}
-	return m, nil
+	return nil
 }
 
 // foldKeys makes m, the keys of the JSON object b, hold for each of names the

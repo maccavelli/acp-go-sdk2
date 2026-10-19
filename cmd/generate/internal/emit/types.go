@@ -54,6 +54,7 @@ func structField(name string, typ ast.Expr, tag string) *ast.Field {
 // typesFile builds types_gen.go: all types and the Agent/Client interfaces.
 func typesFile(m *model.Model) *goFile {
 	f := newFile()
+	f.keyDecoders = keyDecoders(m)
 	for _, t := range m.Types {
 		emitSchemaDef(f, t)
 	}
@@ -281,6 +282,44 @@ func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 	}
 }
 
+// keyDecoders returns the structs of m whose decoder starts with objectKeys
+// and keeps no Extra, by the rule emitObjectCodec emits them by.
+func keyDecoders(m *model.Model) map[string]bool {
+	out := map[string]bool{}
+	add := func(name string, fields []*model.Field, members []*model.Member, keepExtra bool, orders []*model.KeyOrder, exempt string) {
+		if !keepExtra && decodesKeys(fields, members, keepExtra, orders, exempt) {
+			out[name] = true
+		}
+	}
+	for _, t := range m.Types {
+		if t.Kind == model.KindObject {
+			for _, ns := range t.NestedStructs {
+				add(ns.Name, ns.Fields, nil, false, nil, "")
+			}
+			add(t.Name, t.Fields, t.Members, t.KeepExtra, t.KeyOrders, "")
+		}
+		for _, vi := range t.Variants {
+			if in := vi.Inline; in != nil && in.Kind == model.InlineStruct {
+				add(vi.TypeName, in.Fields, in.Members, in.KeepExtra, nil, in.Exempt)
+			}
+		}
+	}
+	return out
+}
+
+// decodesKeys reports whether a struct of these fields gets an UnmarshalJSON
+// that starts with objectKeys: one with required keys, defaults, lenient or
+// optional raw fields, flattened members, kept keys, or a key order.
+func decodesKeys(fields []*model.Field, members []*model.Member, keepExtra bool, orders []*model.KeyOrder, exempt string) bool {
+	for _, fld := range fields {
+		if fld.Default != nil || fld.Facts.DefaultOnError || fld.Facts.SkipInvalidItems || fld.Patch || fld.NullIsAbsent ||
+			(fld.Required && fld.Key != exempt) {
+			return true
+		}
+	}
+	return keepExtra || len(members) > 0 || len(orders) > 0
+}
+
 // emitObjectCodec synthesizes MarshalJSON for structs with fields whose
 // schema defaults it injects or that are required slices or maps, an Extra
 // (a catch-all's, or an object's whose additionalProperties is true), or
@@ -319,7 +358,7 @@ func emitObjectCodec(f *goFile, name, place string, fields []*model.Field, membe
 	// for it, so the errors of a payload that is not an object stay as they
 	// were.
 	injected := slices.DeleteFunc(slices.Clone(defaults), func(fld *model.Field) bool { return fld.Default.Value.Kind == model.ValueZero })
-	if len(defaults) > 0 || keepExtra || len(required) > 0 || len(lenient) > 0 || len(absent) > 0 || len(members) > 0 || len(orders) > 0 {
+	if decodesKeys(fields, members, keepExtra, orders, exempt) {
 		emitObjectUnmarshal(f, name, place, fields, injected, lenient, absent, members, required, keepExtra, orders)
 	}
 }
@@ -407,24 +446,22 @@ func emitObjectMarshal(f *goFile, name, place string, defaults, fills []*model.F
 	f.line()
 }
 
-// emitObjectUnmarshal emits UnmarshalJSON: it requires the required keys,
-// decodes the fields, decodes each lenient field from its own raw value,
-// empties each optional raw field that holds null, applies defaults when a
-// field is missing, or null when the schema does not allow null, and keeps a
-// catch-all's undeclared keys.
+// emitObjectUnmarshal emits UnmarshalJSON, which decodes b's keys with
+// objectKeys and hands them to decodeKeys. decodeKeys requires the required
+// keys, decodes the fields, decodes each lenient field from its own raw
+// value, empties each optional raw field that holds null, applies defaults
+// when a field is missing, or null when the schema does not allow null, and
+// keeps a catch-all's undeclared keys. A union that holds the keys already
+// calls decodeKeys itself (0019-PLAN-idioms-performance.md, D2).
 func emitObjectUnmarshal(f *goFile, name, place string, fields, defaults, lenient, absent []*model.Field, members []*model.Member, required []string,
 	keepExtra bool, orders []*model.KeyOrder) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	f.uses[helperObjectKeys] = true
-	keys := []ast.Expr{id("b"), str(name)}
-	for _, k := range required {
-		keys = append(keys, str(k))
+	m := "m"
+	if len(required) == 0 && len(defaults) == 0 && !keepExtra && len(members) == 0 && len(orders) == 0 {
+		m = "_"
 	}
-	m := id("m")
-	if len(defaults) == 0 && !keepExtra && len(members) == 0 && len(orders) == 0 {
-		m = id("_")
-	}
-	// The keys read beyond the required ones, which objectKeys folds.
+	// The keys read beyond the required ones, which requireKeys folds.
 	var more []string
 	for _, fld := range defaults {
 		more = append(more, fld.Key)
@@ -441,9 +478,14 @@ func emitObjectUnmarshal(f *goFile, name, place string, fields, defaults, lenien
 		}
 	}
 	reads := foldNames(f, name, append(slices.Clone(required), more...))
-	body := []ast.Stmt{
-		define(exprs(m, id("err")), call(id(helperObjectKeys), keys...)),
-		ifStmt(nil, errNotNil(), ret(id("err"))),
+	var body []ast.Stmt
+	if len(required) > 0 {
+		f.uses[helperRequireKeys] = true
+		args := []ast.Expr{id("b"), id("m"), str(name)}
+		for _, k := range required {
+			args = append(args, str(k))
+		}
+		body = append(body, ifStmt(define(exprs(id("err")), call(id(helperRequireKeys), args...)), errNotNil(), ret(id("err"))))
 	}
 	if fold := foldCall(f, "b", "m", slices.DeleteFunc(reads, func(k string) bool { return slices.Contains(required, k) })); fold != nil {
 		body = append(body, fold)
@@ -500,7 +542,16 @@ func emitObjectUnmarshal(f *goFile, name, place string, fields, defaults, lenien
 	)
 	f.comment(unmarshalDoc("v", place))
 	f.add(method(param("v", star(id(name))), "UnmarshalJSON",
-		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))), body...))
+		funcType([]*ast.Field{param("b", byteSlice())}, param("", id("error"))),
+		define(exprs(id("m"), id("err")), call(id(helperObjectKeys), id("b"), str(name))),
+		ifStmt(nil, errNotNil(), ret(id("err"))),
+		ret(call(dot("v", "decodeKeys"), id("b"), id("m"))),
+	))
+	f.line()
+	f.comment("decodeKeys decodes b, a JSON object whose keys m holds, into v, as UnmarshalJSON",
+		"does. It may fold the keys of m.")
+	f.add(method(param("v", star(id(name))), "decodeKeys",
+		funcType([]*ast.Field{param("b", byteSlice()), param(m, rawMap(f.qual(pkgJSON, "RawMessage")))}, param("", id("error"))), body...))
 	f.line()
 }
 
@@ -662,8 +713,19 @@ func setVariant(vi *model.Variant) []ast.Stmt {
 // decodeStrict decodes b into v and sets the variant. A failure returns
 // "<where>: <cause>".
 func decodeStrict(f *goFile, vi *model.Variant, where string) []ast.Stmt {
+	return decodeChosen(f, vi, where, false)
+}
+
+// decodeChosen is decodeStrict for a union whose map of b's keys, m, is in
+// scope when withKeys is set: a variant with a decodeKeys decodes from it,
+// so b is read into a map once (0019-PLAN-idioms-performance.md, D2).
+func decodeChosen(f *goFile, vi *model.Variant, where string, withKeys bool) []ast.Stmt {
+	decode := call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v")))
+	if withKeys && f.keyDecoders[vi.TypeName] {
+		decode = call(dot("v", "decodeKeys"), id("b"), id("m"))
+	}
 	return append([]ast.Stmt{
-		ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v")))), errNotNil(),
+		ifStmt(define(exprs(id("err")), decode), errNotNil(),
 			ret(call(f.qual(pkgFmt, "Errorf"), str(where+": %w"), id("err")))),
 	}, setVariant(vi)...)
 }
@@ -734,7 +796,7 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 		for _, rk := range vi.Required {
 			stmts = append(stmts, keyMatch("m", rk))
 		}
-		stmts = append(stmts, ifStmt(nil, id("match"), decodeStrict(f, vi, variantPlace(name, vi))...))
+		stmts = append(stmts, ifStmt(nil, id("match"), decodeChosen(f, vi, variantPlace(name, vi), true)...))
 		object = append(object, block(stmts...))
 	}
 	body = append(body,
@@ -804,7 +866,7 @@ func discUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKe
 		if vi.DiscValue != "" {
 			cases = append(cases, caseOf(exprs(str(vi.DiscValue)),
 				append([]ast.Stmt{varStmt("v", id(vi.TypeName))},
-					decodeStrict(f, vi, name+": "+discKey+" "+strconv.Quote(vi.DiscValue))...)...))
+					decodeChosen(f, vi, name+": "+discKey+" "+strconv.Quote(vi.DiscValue), true)...)...))
 		}
 	}
 	reads := []string{discKey}
@@ -864,7 +926,7 @@ func keyLessBody(f *goFile, name string, keyLess []*model.Variant, discKey strin
 	var body []ast.Stmt
 	for _, vi := range keyLess {
 		if len(vi.FitKeys) == 0 {
-			return append(append(body, varStmt("v", id(vi.TypeName))), decodeStrict(f, vi, variantPlace(name, vi))...)
+			return append(append(body, varStmt("v", id(vi.TypeName))), decodeChosen(f, vi, variantPlace(name, vi), true)...)
 		}
 		stmts := []ast.Stmt{
 			varStmt("v", id(vi.TypeName)),
@@ -873,7 +935,7 @@ func keyLessBody(f *goFile, name string, keyLess []*model.Variant, discKey strin
 		for _, k := range vi.FitKeys {
 			stmts = append(stmts, keyMatch("m", k))
 		}
-		body = append(body, block(append(stmts, ifStmt(nil, id("match"), decodeStrict(f, vi, variantPlace(name, vi))...))...))
+		body = append(body, block(append(stmts, ifStmt(nil, id("match"), decodeChosen(f, vi, variantPlace(name, vi), true)...))...))
 	}
 	for _, vi := range keyLess {
 		body = append(body, block(
@@ -906,7 +968,7 @@ func fitBody(f *goFile, name string, variants []*model.Variant, discKey string, 
 			matches = append(matches, block(append(stmts, ifStmt(nil, id("match"), add))...))
 		}
 		cases = append(cases, caseOf(exprs(str(vi.FieldName)),
-			append([]ast.Stmt{varStmt("v", id(vi.TypeName))}, decodeStrict(f, vi, variantPlace(name, vi))...)...))
+			append([]ast.Stmt{varStmt("v", id(vi.TypeName))}, decodeChosen(f, vi, variantPlace(name, vi), true)...)...))
 	}
 	body := []ast.Stmt{varStmt("fit", sliceOf(id("string")))}
 	if len(always) > 0 {

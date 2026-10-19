@@ -12,6 +12,7 @@ import (
 // the file's code calls it (0012-MADR-schema-fidelity-framework.md).
 const (
 	helperObjectKeys   = "objectKeys"
+	helperRequireKeys  = "requireKeys"
 	helperOrDefault    = "orDefault"
 	helperOrZero       = "orZero"
 	helperSkipInvalid  = "skipInvalid"
@@ -46,6 +47,9 @@ func emitDecodeHelpers(f *goFile) {
 	}
 	if f.uses[helperObjectKeys] {
 		emitObjectKeys(f)
+	}
+	if f.uses[helperRequireKeys] {
+		emitRequireKeys(f)
 		f.uses[helperFoldKeys] = true
 	}
 	if f.uses[helperFoldKeys] {
@@ -398,31 +402,50 @@ func emitSkipInvalid(f *goFile) {
 
 // emitObjectKeys emits
 //
-//	func objectKeys(b []byte, typ string, required ...string) (map[string]json.RawMessage, error)
+//	func objectKeys(b []byte, typ string) (map[string]json.RawMessage, error)
 //
-// which decodes b as a JSON object, folds the required keys as foldKeys does,
-// and fails, naming typ and the key, when a required key is absent. JSON null
-// is an object without keys.
+// which decodes b as a JSON object, failing with typ named. JSON null is an
+// object without keys.
 func emitObjectKeys(f *goFile) {
 	raw := func() ast.Expr { return rawMap(f.qual(pkgJSON, "RawMessage")) }
 	f.line()
-	f.comment("objectKeys decodes b as a JSON object, folds the required keys as foldKeys",
-		"does, and fails, naming typ and the key, when a required key is absent. JSON",
-		"null is an object without keys.")
+	f.comment("objectKeys decodes b as a JSON object, failing with typ named. JSON null is",
+		"an object without keys.")
 	f.add(function(helperObjectKeys,
 		funcType([]*ast.Field{
 			param("b", byteSlice()),
 			param("typ", id("string")),
-			param("required", &ast.Ellipsis{Elt: id("string")}),
 		}, param("", raw()), param("", id("error"))),
 		varStmt("m", raw()),
 		ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("m")))), errNotNil(),
 			ret(nilExpr(), call(f.qual(pkgFmt, "Errorf"), str("%s: %w"), id("typ"), id("err")))),
+		ret(id("m"), nilExpr()),
+	))
+}
+
+// emitRequireKeys emits
+//
+//	func requireKeys(b []byte, m map[string]json.RawMessage, typ string, required ...string) error
+//
+// which folds the required keys of m, the keys of the JSON object b, as
+// foldKeys does, and fails, naming typ and the key, when one is absent
+// (0019-PLAN-idioms-performance.md, D2).
+func emitRequireKeys(f *goFile) {
+	f.line()
+	f.comment("requireKeys folds the required keys of m, the keys of the JSON object b, as",
+		"foldKeys does, and fails, naming typ and the key, when one is absent.")
+	f.add(function(helperRequireKeys,
+		funcType([]*ast.Field{
+			param("b", byteSlice()),
+			param("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
+			param("typ", id("string")),
+			param("required", &ast.Ellipsis{Elt: id("string")}),
+		}, param("", id("error"))),
 		exprStmt(&ast.CallExpr{Fun: id(helperFoldKeys), Args: exprs(id("b"), id("m"), id("required")), Ellipsis: 1}),
 		rangeStmt(id("_"), id("k"), id("required"),
 			ifStmt(define(exprs(id("_"), id("ok")), index(id("m"), id("k"))), not(id("ok")),
-				ret(nilExpr(), call(f.qual(pkgFmt, "Errorf"), str("%s: missing required property %q"), id("typ"), id("k"))))),
-		ret(id("m"), nilExpr()),
+				ret(call(f.qual(pkgFmt, "Errorf"), str("%s: missing required property %q"), id("typ"), id("k"))))),
+		ret(nilExpr()),
 	))
 }
 

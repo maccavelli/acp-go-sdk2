@@ -201,6 +201,9 @@ The check:
   case from a key the union folds, and requires `Extra` to hold the key as received. Another requires a missing required key of a
   variant decoded through `decodeKeys` to give the error `objectKeys` gives.
 
+  Annotated during step 6, 2026-10-18 (see "Deviation, 2026-10-18, during step 6"): such a key exists for three of the six. The
+  test also pins, for each, the keys its union folds that the catch-all does not declare.
+
 ### D5, D6, D8, and the hand-written hygiene
 
 - **D5, the id fast path:** `canonicalJSONRPCIDKey`, after trimming, returns the text for 1 to 19 ASCII digits whose first digit is
@@ -695,6 +698,113 @@ Planted breaks, each in a scratch copy of the tree:
 | the empty-constant guard dropped | `TestConstFields` fails: "variant eo … ConstFields [Kind Tag], want []" |
 | an enum kind not counted a string | `TestConstFields` fails: "variant enum … ConstFields [], want [Kind Tag]" |
 | a primitive over `string` not counted a string | `TestConstFields` fails: "variant prim … ConstFields [], want [Kind Tag]" |
+
+Gates, with the API listing against `v1.15.2`, each exit 0:
+
+- regeneration: the generated files unchanged by a second run;
+- `make pre-add-check`, and `scripts/go-precheck.sh` on the two new `.go` files;
+- `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+- `make check-records`, `make markdownlint`, and the identifier scan;
+- the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
+- Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+### Deviation, 2026-10-18, during step 6
+
+**Found.** "Design", D2's spelling test decodes each of the six `Extra`-keeping catch-alls through its union, with an undeclared key
+whose spelling differs in case from a key the union folds. Such a key exists for three of the six only. Read from the `foldKeys`
+call of each union's decoder and the json tags of each catch-all, on this step's tree:
+
+| Union | Keys it folds | Of them, undeclared by its catch-all |
+| :--- | :--- | :--- |
+| `CreateElicitationRequest` | `mode`, `requestedSchema`, `elicitationId`, `url` | `elicitationId`, `requestedSchema`, `url` |
+| `ElicitationPropertySchema` | `type`, `items` | `items` |
+| `MultiSelectItems` | `type`, `enum`, `anyOf` | `anyOf`, `enum` |
+| `CreateElicitationResponse` | `action` | none |
+| `IdleStateUpdate` | `stopReason` | none |
+| `StateUpdate` | `state` | none |
+
+For the last three, the union's fold renames only a key the catch-all declares and folds itself, which `Extra` does not keep. So
+decoding from the union's map would change nothing they hold. The MADR's D2 annotation said the union "could spell a key `Extra`
+keeps differently"; it can for the first three.
+
+**Decision (owner, 2026-10-18).** The test tables all six. For each, it pins the keys its union folds that the catch-all does not
+declare, read from `types_gen.go` with `go/ast`, so a schema change that adds one fails the test until its row is updated. The three
+with such a key decode it in another case and require `Extra` to keep it as received. The other three decode another undeclared key
+and require it kept as received. "Design", D2's tests are annotated, and the MADR's D2 annotation is amended.
+
+### Step 6, D2, 2026-10-18
+
+What changed, on `5d32071`, with the deviation above:
+
+- **`cmd/generate/internal/emit/types.go`:**
+  - Every `objectKeys`-based decoder is split in two. `UnmarshalJSON` is `m, err := objectKeys(b, "T")` then
+    `return v.decodeKeys(b, m)`. The new `decodeKeys` folds and requires the required keys with `requireKeys`, folds the other keys
+    it reads, and runs the body that followed `objectKeys`. Its map parameter is `_` when the body never reads it.
+  - `decodesKeys` holds the rule for which structs get such a decoder, which `emitObjectCodec` used to inline. The pre-pass
+    `keyDecoders(m)`, run first in `typesFile`, applies it to every struct and leaves out those that keep `Extra`.
+  - A union decodes its chosen variant with `v.decodeKeys(b, m)` where its map is in scope and the variant is in `keyDecoders`: the
+    discriminator switch, the fit and key-less paths, and the object path. Trial decodes, the array match and the catch-all branch
+    keep `json.Unmarshal(b, &v)`.
+- **`cmd/generate/internal/emit/decode.go`:** `objectKeys(b, typ)` only decodes the object. The new helper
+  `requireKeys(b, m, typ, required...)` folds and requires keys, with the message `objectKeys` gave.
+- **`cmd/generate/internal/emit/file.go`:** `goFile.keyDecoders`.
+- **Tests:**
+  - New root tests: `catchall_extra_test.go`, `TestCatchAllExtraKeepsSpelling`, and `decode_keys_test.go`,
+    `TestUnionVariantMissingKey`. The latter's four messages are those the generated code gave on `5d32071`, from the comparison
+    below.
+  - New engine case `accept-union-extra-variant.txtar`, with a behaviour test. It is a `$ref` variant whose definition keeps `Extra`,
+    the one input that reaches `keyDecoders`' `Extra` rule. In the committed schemas, no `Extra` type is decoded where the union's
+    map is in scope.
+  - `TestRequiredKeysDecoder` is updated to the new output.
+- **Regenerated:** `types_gen.go`, 20318 lines to 22645.
+
+The shapes of `types_gen.go`, counted by a script outside the tree on `5d32071` and on the tree:
+
+| Shape | `5d32071` | Tree |
+| :--- | ---: | ---: |
+| `objectKeys(b, …)` calls | 291 | 291 |
+| of them, with required keys | 192 | 0 |
+| `decodeKeys` methods | 0 | 291 |
+| `decodeKeys(b, m)` calls | 0 | 423 |
+| `requireKeys(b, m, …)` calls | 0 | 192 |
+| `if err := json.Unmarshal(b, &v); err != nil` | 143 | 11 |
+
+The 423 calls are 291 from `UnmarshalJSON` and 132 from unions. The 11 decodes left are:
+
+- the six catch-alls;
+- `RequestPermissionOutcomeCancelled`, twice, which has no `objectKeys` decoder;
+- `SessionConfigSelectOptions`' two array variants, decoded where no map is in scope;
+- `Patch[T]`, which is not a union.
+
+**The decoders give what they gave.** A test outside the tree decoded, for each schema instance of each registered type that is a
+JSON object, the object with each top-level key removed, upper-cased, and doubled as an upper-cased copy holding null: 7812
+payloads, 1302 of them errors. Each result, the error or the re-encoding, was written on `5d32071` and on the tree, under
+`encoding/json` v2 and with `GOEXPERIMENT=nojsonv2`. Both pairs of files are byte-identical. The two backends word some errors
+differently from each other, so each was compared with itself. `TestEncodingsUnchanged` passes under both.
+
+The benchmarks, medians of six runs with `make bench`. Before is the after of step 5, measured on the code `5d32071` holds; after
+is on the tree:
+
+| Benchmark | ns/op before | ns/op after | allocs/op before | allocs/op after |
+| :--- | ---: | ---: | ---: | ---: |
+| SessionUpdateMarshal | 1,060 | 1,154 | 9 | 9 |
+| SessionUpdateUnmarshal | 6,371 | 4,386 | 41 | 27 |
+| SessionNotificationUnmarshal | 8,254 | 5,724 | 53 | 39 |
+| CanonicalIDKey | 544 | 508 | 10 | 10 |
+| ValidateOutboundValue | 58 | 55 | 2 | 2 |
+| PromptRoundTrip | 33,209 | 32,675 | 128 | 121 |
+| SessionUpdateNotify | 18,513 | 17,326 | 81 | 68 |
+
+Each allocs/op was the same in all six runs after. The ns/op medians are recorded, not gated.
+
+Planted breaks, each in a scratch copy of the tree:
+
+| Break | Result |
+| :--- | :--- |
+| `decodeKeys` not checking a required key | `TestUnionVariantMissingKey` fails: `{"sessionUpdate":"agent_message_chunk"}` "decoded with \<nil\>", and the other rows |
+| the union passing its map to an `Extra` catch-all | `TestCatchAllExtraKeepsSpelling` fails on the three unions with a key to fold: "kept Extra map[url:\"u\"], want \"URL\" holding \"u\" as received", and `items`, `enum` |
+| `keyDecoders` keeping `Extra` types | `TestEngineBehaviour/accept-union-extra-variant` fails: "decoded as &{Kind:a Extra:map[other:\"x\"]}, want Extra holding OTHER as received" |
+| no union decoding from its map | `TestGeneratedFilesUpToDate` fails: "types_gen.go is out of date … line 366" |
 
 Gates, with the API listing against `v1.15.2`, each exit 0:
 
