@@ -75,7 +75,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0024 | MADR | [Bring the SDK in line with Go SDK best practices, on a Go 1.26.9 floor](decisions/0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md) | accepted |
 | 0024 | PLAN | [Implement phase 1 of 0024: the Go 1.26.9 floor](decisions/0024-PLAN-go-1-26-9-floor.md) | complete |
 | 0024 | REPORT | [Release notes for v1.16.2, against v1.16.1](reports/0024-REPORT-release-notes-v1-16-2.md) | observed |
-| 0024 | PLAN | [Implement phase 2 of 0024: documentation](decisions/0024-PLAN-documentation.md) | proposed |
+| 0024 | PLAN | [Implement phase 2 of 0024: documentation](decisions/0024-PLAN-documentation.md) | in-progress |
 
 ## I want to…
 

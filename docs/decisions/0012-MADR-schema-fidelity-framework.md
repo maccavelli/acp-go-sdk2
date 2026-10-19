@@ -120,6 +120,10 @@ every declared keyword one treatment, and a test that requires the registry and 
 | `format` (string), `description` | annotation | doc comments; no check |
 | `x-method`, `x-side`, `x-docs-ignore` | protocol | methods, bindings, docs (phases 1, 3) |
 
+Annotated 2026-10-19 by [0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md](0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md),
+question 4: a generated type's doc comment starts `// <Name> is <place>.`, naming the schema definition, variant or property it
+comes from, before the `description`, which follows unchanged. [0024-PLAN-documentation.md](0024-PLAN-documentation.md) implements it.
+
 A `format` the registry does not know on an `integer` or `number` is refused, naming the definition, property, and format; an unknown `format` on a
 `string` is an annotation, as 2020-12 §7.2.3 requires.
 

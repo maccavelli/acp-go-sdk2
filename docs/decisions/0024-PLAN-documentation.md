@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-19
 associated-madr: "0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md"
 ---
@@ -36,11 +36,11 @@ Each was read on `8c9ad41` on 2026-10-19. Step 1 re-asserts the code facts with 
 
 | For | The tree as it is |
 | :--- | :--- |
-| A5 | `connection.go:290`: "Connection is a simple JSON-RPC 2.0 connection over line-delimited JSON." `cmd/generate/internal/emit/dispatch.go:114` and `:132` emit the side connections' one-line docs. No doc of the five types states concurrent use. Requests are handled each on its own goroutine (`connection.go:1279`); notifications one at a time in order (`processNotifications`, `connection.go:1467`). |
+| A5 | `connection.go:290`: "Connection is a simple JSON-RPC 2.0 connection over line-delimited JSON." `cmd/generate/internal/emit/dispatch.go:114` and `:132` emit the side connections' one-line docs. No doc of the five types states concurrent use. Requests are handled each on its own goroutine (`connection.go:1279`); notifications one at a time in order (`processNotifications`, `connection.go:1467`; corrected in step 1 to `:1471`). |
 | A6 | `outboundDoc` (`emit/dispatch.go:665`) writes "sends the <wire> request to <peer> and returns its response", then the interface method's doc. The paths a typed method's errors come from: `gateMessage` (`types_gen.go:22293`); `encodeParams` and `validateOutbound` (`connection.go:1762`, `:165`); `sendRequestSent`; `toReqErr` (`errors.go:228-242`). |
 | A6 | `gateMessage`: initialize passes; before initialize every other method returns `fmt.Errorf("%s: %w", method, ErrNotInitialized)`; after it, `n.Allows(method)` and the params' gates. `validateOutbound` returns a `*ValidationError` unwrapped. A response is checked by `checkInbound` and its error wrapped `"%s response: %w"`. |
 | A7 | 370 of the 378 exported types in `types_gen.go` have a doc that does not start with their name. `emitSchemaDef` (`emit/types.go:167`) writes `t.Doc`, the schema's description, except for unions, which `emitUnion` documents. `defPlace` (`:155`) and `schemaVariantPlace` (`:159`) name a definition and a variant, as the methods' docs use them; nested structs use "the %q property of …" (`:222`). The 8 that comply: `Cost`, `Agent`, `AgentLoader`, `AgentExperimental`, `Client`, `ClientExperimental`, `Patch`, `Negotiation`. |
-| A8 | `doc.go` is four lines with no happy path. The README's first Go block is at line 199. There are three `Example` functions, all package-level. `mdsh`, which the `Makefile`'s `README.md` target runs, is not installed on this host. |
+| A8 | `doc.go` is four lines with no happy path. The README's first Go block is at line 199 (corrected in step 1 to 204). There are three `Example` functions, all package-level. `mdsh`, which the `Makefile`'s `README.md` target runs, is not installed on this host. |
 | A10 | `connection.go:393-456` and `:602`: `n <= 0` leaves `WithMaxQueuedNotifications` and `WithMaxMessageSize` unchanged but resets `WithMaxConcurrentRequests`; options apply in order; a nil option panics. None of this is documented together. |
 | A11 | The ten JSON-RPC envelope types (`AgentRequest` … `ClientError`), `Error`, `ErrorCode` (`int32`, constants at `types_gen.go:5945-5975`) and `CancelRequestNotification` are generated from the schema, and the runtime uses none of them. `RequestError.Code` is an `int`. |
 | A11 | `cmd/generate/internal/model/acp.go:11` declares `ACP`, the protocol table, whose rules `Build` checks against the schema. `TestProtocolTableRefuses` and `TestProtocolTableAppliesToCommittedSchema` (`internal/model/protocol_test.go:186`, `:440`) test its rules. |
@@ -267,3 +267,23 @@ with it. Nothing compiled changes, so no consumer's build or behaviour changes. 
 confirms at the tag.
 
 ## Execution record
+
+### Step 1, records, 2026-10-19
+
+The owner committed this PLAN as `fbd9afa`, pushed it, and approved it. This step:
+
+* marks this PLAN and its `docs/README.md` row `in-progress`;
+* annotates [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md), after its table of schema keywords:
+  a generated type's doc comment now opens with `// <Name> is <place>.` before the `description`.
+
+A script outside the tree re-asserted "Facts this plan rests on" on `fbd9afa`: 24 facts, each snippet at its line, plus the counts
+quoted. All hold, after two corrections:
+
+* **A5:** `processNotifications` is at `connection.go:1471`, not `:1467`. 0023's and phase 1's changes to `connection.go` moved it.
+  `connection.go:1279`, the request goroutine, holds.
+* **A8:** the README's first Go block is at line 204, not 199. Phase 1 added the minimum Go version and the raw-value line above it.
+
+Both rows are annotated. The counts hold: 378 exported types in `types_gen.go`, 8 starting with their name, and 54 non-compliant ones
+with no method that names their place.
+
+Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
