@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-19
 associated-madr: "0023-MADR-connection-lifetime-and-test-leaks.md"
 ---
@@ -458,3 +458,27 @@ Gates, with the API listing against `v1.16.1`, each exit 0:
 * `make check-records`, `make markdownlint`, and the identifier scan;
 * the API listing: 2429 lines at `v1.16.1` and in the tree, 0 removed, 0 added;
 * Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+### Close, after the fix, 2026-10-19
+
+**The push.**
+
+* The owner committed step 6 as `85ac115`.
+* The owner pushed it with the two records commits of
+  [0024-PLAN-go-1-26-9-floor.md](0024-PLAN-go-1-26-9-floor.md) before it, `ce49693..85ac115`. Git's pre-push hook ran the disclosure
+  guard on the push.
+* CI run `39316014335` on `85ac115` concluded `success` on its first attempt, on `validate (ubuntu-24.04)`, `validate (macos-15)` and
+  `validate (windows-2025)`. Its root tests ran the new guard on each runner.
+
+**Acceptance.** Every criterion in "Verification" holds after step 6:
+
+* each step's checks passed and its record is written, the deviation after the close included;
+* the guard reports nothing on the root suite, plain and with `-race` (step 6's gates), with `-count` above 1 (steps 2 and 3), on
+  Windows and in CI. It caught a planted leak in the last test to run 200 times in 200, plain and with `-race`;
+* `Close` ends a blocked notification handler's context at once (step 3);
+* the end-of-input tests pass unchanged;
+* the API listing against `v1.16.1` shows no difference;
+* CI passed on the pushed commits.
+
+This PLAN and its `docs/README.md` row are `complete` again. The MADR stays `accepted`. No release of its own follows: step 6 changes a
+test file only, and the next release carries it.
