@@ -538,6 +538,10 @@ benchmark measures each performance item.
   third parse, into the shadow struct, stays: decoding field by field from the map would replace one parse with many small ones, and
   would re-implement `encoding/json`'s field matching, which `foldKeys` follows ("the value encoding/json gives a struct field of
   that name", `cmd/generate/internal/emit/decode.go:408-412`).
+
+  Amended while drafting [0019-PLAN-idioms-performance.md](0019-PLAN-idioms-performance.md), 2026-10-18: except for a variant that
+  keeps undeclared keys in `Extra`, of which there are six, all catch-alls. The union's map is folded with the union's key list, so
+  it could spell a key `Extra` keeps differently from how it was received; those six decode from the bytes as before.
 - **D3 (I4 and the default `errcheck` issues): defaults as Go values.**
   - The generator renders each schema default as a Go expression of its field's type when it emits the decoder: nothing at all for a
     default that is the type's zero value, a constant for a scalar, and a composite literal otherwise.
