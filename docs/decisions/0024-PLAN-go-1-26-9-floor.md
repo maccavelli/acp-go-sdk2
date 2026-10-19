@@ -354,3 +354,53 @@ Gates on go1.27.2, with the API listing against `v1.16.1`, each exit 0:
 * `make check-records`, `make markdownlint`, and the identifier scan;
 * the API listing: 2429 lines at `v1.16.1` and in the tree, 0 removed, 0 added;
 * Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+### Step 3, CI, 2026-10-19
+
+What changed, in `.github/workflows/ci.yml` only:
+
+* **The matrix** is `os` × `go`: `ubuntu-24.04`, `macos-15`, `windows-2025` by `1.26.9`, `1.27.2`, six jobs. An `include` adds
+  `floor: true` and `experiment: goroutineleakprofile` to the three `1.26.9` jobs.
+* **`actions/setup-go`** takes `go-version: ${{ matrix.go }}`.
+* **The job's environment:**
+  * `GOTOOLCHAIN: local`, so the `go` command runs the version installed, not the `toolchain` line's go1.27.2;
+  * `GOEXPERIMENT: ${{ matrix.experiment }}`, empty in the `1.27.2` jobs.
+* **"the floor is the go line"**, on the floor's Linux job, as "Design" sets it. It runs `go list -m -f '{{.GoVersion}}'` in both
+  modules against `matrix.go`. It also checks the third field of `go version` against `go${{ matrix.go }}`. "Design" does not name that
+  line; it confirms that the job runs the version the matrix installed.
+* **Where each step runs:**
+  * the test steps run in all six jobs;
+  * the race detector and `govulncheck` run on Linux for both versions;
+  * the `nojsonv2` step and the lint and docs steps run on Linux for `1.27.2` only, as `if: runner.os == 'Linux' && !matrix.floor`.
+    The `nojsonv2` step's own `GOEXPERIMENT` overrides the job's.
+
+**Checked, in scratch copies, before the push:**
+
+* **`actionlint` v1.7.12**, the version CI runs, exits 0 on the new workflow. With `matrix.floor` misspelled `matrix.flor`, it exits 1:
+  "property "flor" is not defined in object type {experiment: string; floor: bool; go: string; os: string}".
+* **`govulncheck` v1.9.0 builds on the floor.** Its `go.mod` reads `go 1.26.0`.
+* **The floor job's steps.** Run on go1.26.9, with `GOEXPERIMENT=goroutineleakprofile`, in a scratch copy, as `ci.yml` runs them on
+  Linux. 8 of 8 as required:
+
+  | Step | Result |
+  | :--- | :--- |
+  | the floor is the go line | exit 0 |
+  | the same, with `1.26.8` as the matrix value | exit 1, as the planted break "Verification" names for G7 requires |
+  | `go mod download` | exit 0, "no module dependencies to download" |
+  | `go test -shuffle=on ./...` | exit 0, every package `ok` |
+  | test generator module | exit 0, every package `ok` |
+  | `go build ./example/...` | exit 0 |
+  | race detector | exit 0, both modules |
+  | `govulncheck`, both modules | exit 0, "No vulnerabilities found." twice |
+
+The `1.27.2` jobs run the steps as before this step: `GOTOOLCHAIN: local` on go1.27.2 is today's default, and their `GOEXPERIMENT` is
+empty. The six jobs run for real only once the commits are pushed, so step 5 records them.
+
+Gates on go1.27.2, with the API listing against `v1.16.1`, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`;
+* `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint`, and the identifier scan;
+* the API listing: 2429 lines at `v1.16.1` and in the tree, 0 removed, 0 added;
+* Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.

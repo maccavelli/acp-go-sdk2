@@ -20,10 +20,23 @@ jobs:
   validate:
     strategy:
       fail-fast: false
+      # The floor, the go line of go.mod, and the version the toolchain line
+      # prefers (0024-PLAN-go-1-26-9-floor.md, G7). On Go 1.26 the root tests'
+      # leak guard needs the goroutineleak profile, an experiment there that
+      # Go 1.27 rejects.
       matrix:
         os: [ubuntu-24.04, macos-15, windows-2025]
+        go: ['1.26.9', '1.27.2']
+        include:
+          - go: '1.26.9'
+            floor: true
+            experiment: goroutineleakprofile
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      # Each job runs the version it installed, never one go.mod selects.
+      GOTOOLCHAIN: local
+      GOEXPERIMENT: ${{ matrix.experiment }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,7 +44,14 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: ${{ matrix.go }}
+      - name: the floor is the go line
+        if: matrix.floor && runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          test "$(go version | cut -d' ' -f3)" = "go${{ matrix.go }}"
+          test "$(go list -m -f '{{.GoVersion}}')" = "${{ matrix.go }}"
+          ( cd cmd/generate && test "$(go list -m -f '{{.GoVersion}}')" = "${{ matrix.go }}" )
       - run: go mod download
       - run: go test -shuffle=on ./...
       - name: test generator module
@@ -45,9 +65,10 @@ jobs:
           go test -race -shuffle=on ./...
           ( cd cmd/generate && go test -race -shuffle=on ./... )
       # encoding/json backed by v1 rather than v2, so a difference between the
-      # two codecs fails the build (0011-PLAN-engine-tests.md, D7).
+      # two codecs fails the build (0011-PLAN-engine-tests.md, D7). Go 1.26's
+      # default build already uses v1, and its jobs test it.
       - name: root tests with GOEXPERIMENT=nojsonv2
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && !matrix.floor
         env:
           GOEXPERIMENT: nojsonv2
         run: go test -shuffle=on ./...
@@ -58,7 +79,7 @@ jobs:
           go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
           ( cd cmd/generate && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... )
       - name: vet, gofmt, tidy, lint
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && !matrix.floor
         run: |
           set -euo pipefail
           go vet ./...
@@ -69,7 +90,7 @@ jobs:
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
           GOLANGCI_LINT="$(go env GOPATH)/bin/golangci-lint" make lint
       - name: markdownlint, actionlint, records
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && !matrix.floor
         run: |
           set -euo pipefail
           npx --yes markdownlint-cli2@0.23.2
