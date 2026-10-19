@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-19
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
@@ -1169,3 +1169,50 @@ Medians of the six runs:
 - The baseline's allocs/op equal the table of "Facts", measured on `f67c9c1`.
 
 The step changes no Go file. Gates, each exit 0: `make check-records`, `make markdownlint`, and the identifier scan.
+
+### Step 11, verification and close, 2026-10-19
+
+**The pushes.** `make push-guard` ran, after a fetch, before each push the owner made, and passed, exit 0:
+
+- over the twelve commits `f7defb4..82d071d`, steps 1 to 9; CI run `39270585336` on `82d071d` concluded `success` on its first attempt,
+  on `validate (ubuntu-24.04)`, `validate (macos-15)` and `validate (windows-2025)`;
+- over the one commit `82d071d..4b3797f`, step 10; CI run `39272624637` on `4b3797f` concluded `success` on its first attempt, on
+  all three runners.
+
+**The gates over the tree**, on `4b3797f`, with the API listing against `v1.15.2`, each exit 0:
+
+- regeneration: the generated files unchanged by a second run;
+- `make pre-add-check`, for both `GOOS` values in both modules;
+- `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+- `make check-records`, `make markdownlint`, and the identifier scan;
+- the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
+- Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+**Acceptance.** Every criterion in "Verification" is met:
+
+- **Each step's checks** passed, and its record is written, with the deviations of 2026-10-18 and 2026-10-19.
+- **`TestEncodingsUnchanged`** held from step 2 to the end, with `testdata/encodings.golden` unchanged since `62f5989`
+  (`git diff 62f5989 HEAD -- testdata/encodings.golden` is empty).
+- **The benchmarks**, against the baseline, are step 10's measurement. No Go file has changed since `82d071d`, which it measured
+  (`git diff 82d071d HEAD -- '*.go'` is empty).
+  - Each median allocs/op is no higher than its baseline.
+  - `BenchmarkSessionUpdateMarshal` (37 to 9), `BenchmarkSessionUpdateUnmarshal` (45 to 27) and `BenchmarkSessionUpdateNotify` (115 to
+    65) are lower.
+- **`make lint`** reports 0 issues for `GOOS=darwin` and `GOOS=windows`, in both modules, through `make pre-add-check` above. CI's
+  `make lint` on `ubuntu-24.04` passed too.
+- **`go fix -diff ./...`** prints nothing in either module, exit 0, on `4b3797f`.
+- **CI** passed on the pushed commits.
+
+The MADR's "Confirmation" for phase 5, "`go fix -diff ./...` reports nothing in either module, and the lint configuration of E16 is
+clean", holds by the `make lint` and `go fix -diff` points.
+
+This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`. Phase 5 is the last phase of its program. Schema
+`1.26.0` is left to a record of its own (question 16).
+
+**Left to the owner.**
+
+- Tag `v1.16.0`, an annotated tag as the earlier ones are, on this close commit once its CI passes. The code is the same as at
+  `82d071d`.
+- Publish its release from the release text of
+  [0019-REPORT-release-notes-v1-16-0.md](../reports/0019-REPORT-release-notes-v1-16-0.md), with its relative links rewritten to the
+  tag.
