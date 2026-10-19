@@ -186,3 +186,52 @@ The fact is checked instead by `go list -deps -test ./...` in `cmd/generate`. Of
 `github.com/maccavelli/acp-go-sdk2`: the module cannot build a connection, tests included.
 
 Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
+
+### Step 2, T2, 2026-10-19
+
+What changed, on `f1c65e9`:
+
+* **The 10 tests** (`acp_test.go`). Each has `t.Cleanup(func() { _ = <client>.Close(); _ = <agent>.Close() })`, with its own names,
+  right after it builds its second connection.
+  * Two built a connection they discarded, and now name it: `TestConnectionHandlesInitialize`, `_ =` became `as :=`; and
+    `TestExtensionMethods_UnknownRequest_ReturnsMethodNotFound`, a bare call became `ag :=`.
+  * A script outside the tree inserted the lines. It asserted each anchor by line number and text, and that each lies inside its
+    test, before writing.
+* **The guard, `leak_test.go`, new.** As "Design", T2 sets out: `TestMain` runs the tests, then `waitForLeaks` polls
+  `pprof.Lookup("goroutineleak")` every 50 ms, for at most `notificationQueueDrainTimeout + 2*time.Second`. If any leaked goroutine
+  is left, it prints the profile with `debug=1` and the run exits 1.
+
+The root suite with the guard: `go test -count=1 .` exit 0.
+
+Planted breaks, each in a scratch copy of the tree:
+
+| Break | Result |
+| :--- | :--- |
+| a planted test that builds a pair over `io.Pipe`s and closes nothing | the run exits 1: "goroutines leaked by the tests …", `goroutineleak profile: total 8`, with `(*Connection).writeLoop` among the stacks |
+| the `t.Cleanup` of `TestConnectionHandlesInitialize` removed, that test run alone | the run exits 1, `goroutineleak profile: total 8` |
+| `waitForLeaks` with its deadline at once, so it reads the profile once, over the whole suite | **passes** |
+
+**The poll is not needed on this suite.**
+* The third break passed. A connection whose input has ended, still in its drain, has no goroutine the profile counts as leaked. Its
+  goroutines wait on a timer, or on something a running goroutine still reaches, not on a primitive nothing can reach.
+* So no test of the suite needs the bound. As the PLAN provides, it is kept as a margin only.
+* The cost is one profile read when nothing has leaked. When something has, the bound adds at most 7 s before the run fails.
+
+The 10 tests ran `-race -count=1000 -timeout 0`: exit 0, in 588 seconds. The guard ran at the end and reported nothing.
+
+**A claim of the MADR is not borne out, and is annotated.**
+* The MADR's consequence that the accumulated connections "slowed step 7's pass" came from step 7's record.
+* Step 7's selection (`Wait|Drain|EndOfInput|HeldBehind|EndedContext|Notification`), run 100 times under `-race` on this step's tree,
+  took 131 s. Its record measured 130 s on `6d60d84`, with the leaks.
+* So the accumulation costs no measurable time at that scale. The MADR's line carries a dated annotation. The decision does not
+  change.
+
+Gates, with the API listing against `v1.16.0`, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`, and `scripts/go-precheck.sh` on the new `leak_test.go`;
+* `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint`, and the identifier scan;
+* the API listing: 2429 lines at `v1.16.0` and in the tree, 0 removed, 0 added;
+* Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0. The guard ran there and reported
+  nothing.

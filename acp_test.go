@@ -504,6 +504,7 @@ func TestConnectionHandlesErrorsBidirectional(t *testing.T) {
 		},
 		CancelFunc: func(context.Context, CancelNotification) error { return nil },
 	}, a2cW, c2aR)
+	t.Cleanup(func() { _ = c.Close(); _ = agentConn.Close() })
 	negotiate(t, c, allAdvertised())
 	negotiate(t, agentConn, allAdvertised())
 
@@ -560,6 +561,7 @@ func TestConnectionHandlesConcurrentRequests(t *testing.T) {
 		},
 		CancelFunc: func(context.Context, CancelNotification) error { return nil },
 	}, a2cW, c2aR)
+	t.Cleanup(func() { _ = cs.Close(); _ = agentConn.Close() })
 	negotiate(t, cs, allAdvertised())
 	negotiate(t, agentConn, allAdvertised())
 
@@ -641,6 +643,7 @@ func TestConnectionHandlesMessageOrdering(t *testing.T) {
 			return nil
 		},
 	}, a2cW, c2aR)
+	t.Cleanup(func() { _ = cs.Close(); _ = as.Close() })
 	negotiate(t, cs, allAdvertised())
 	negotiate(t, as, allAdvertised())
 
@@ -950,7 +953,7 @@ func TestConnectionHandlesInitialize(t *testing.T) {
 		},
 		SessionUpdateFunc: func(context.Context, SessionNotification) error { return nil },
 	}, c2aW, a2cR)
-	_ = NewAgentSideConnection(agentFuncs{
+	as := NewAgentSideConnection(agentFuncs{
 		InitializeFunc: func(_ context.Context, p InitializeRequest) (InitializeResponse, error) {
 			return InitializeResponse{
 				ProtocolVersion: p.ProtocolVersion,
@@ -982,6 +985,7 @@ func TestConnectionHandlesInitialize(t *testing.T) {
 		},
 		CancelFunc: func(context.Context, CancelNotification) error { return nil },
 	}, a2cW, c2aR)
+	t.Cleanup(func() { _ = agentConn.Close(); _ = as.Close() })
 
 	resp, err := agentConn.Initialize(t.Context(), InitializeRequest{
 		ProtocolVersion:    ProtocolVersionNumber,
@@ -1186,6 +1190,7 @@ func TestPromptWaitsForSessionUpdatesComplete(t *testing.T) {
 		},
 		CancelFunc: func(context.Context, CancelNotification) error { return nil },
 	}, a2cW, c2aR)
+	t.Cleanup(func() { _ = c.Close(); _ = ag.Close() })
 
 	if _, err := c.Initialize(t.Context(), InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
 		t.Fatalf("initialize: %v", err)
@@ -1273,6 +1278,7 @@ func TestRequestHandlerCanMakeNestedRequest(t *testing.T) {
 		},
 		CancelFunc: func(context.Context, CancelNotification) error { return nil },
 	}, a2cW, c2aR)
+	t.Cleanup(func() { _ = c.Close(); _ = ag.Close() })
 
 	if _, err := c.Initialize(t.Context(), InitializeRequest{ProtocolVersion: ProtocolVersionNumber}); err != nil {
 		t.Fatalf("initialize: %v", err)
@@ -1371,6 +1377,7 @@ func TestExtensionMethods_ClientToAgentRequest(t *testing.T) {
 	_ = ag
 
 	c := NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
+	t.Cleanup(func() { _ = c.Close(); _ = ag.Close() })
 
 	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()
@@ -1396,8 +1403,9 @@ func TestExtensionMethods_UnknownRequest_ReturnsMethodNotFound(t *testing.T) {
 	c2aR, c2aW := io.Pipe()
 	a2cR, a2cW := io.Pipe()
 
-	NewAgentSideConnection(agentNoExtensions{}, a2cW, c2aR)
+	ag := NewAgentSideConnection(agentNoExtensions{}, a2cW, c2aR)
 	c := NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
+	t.Cleanup(func() { _ = c.Close(); _ = ag.Close() })
 
 	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()
@@ -1436,6 +1444,7 @@ func TestExtensionMethods_UnknownNotification_DoesNotLog(t *testing.T) {
 	ag.SetLogger(slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 
 	c := NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
+	t.Cleanup(func() { _ = c.Close(); _ = ag.Close() })
 
 	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()
@@ -1480,6 +1489,7 @@ func TestExtensionMethods_AgentToClientRequest(t *testing.T) {
 	}, c2aW, a2cR)
 
 	ag := NewAgentSideConnection(agentFuncs{}, a2cW, c2aR)
+	t.Cleanup(func() { _ = cl.Close(); _ = ag.Close() })
 
 	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()

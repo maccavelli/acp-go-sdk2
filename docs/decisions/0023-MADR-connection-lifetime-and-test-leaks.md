@@ -242,6 +242,12 @@ goroutines.
 * Good, because `Close` ends every handler's context at once, as its name and the README imply.
 * Good, because a leaked connection fails the run that introduces it, with its stacks.
 * Good, because the 1,000-run race passes no longer accumulate connections, which slowed step 7's pass.
+
+  Amended while executing [0023-PLAN-connection-lifetime-and-test-leaks.md](0023-PLAN-connection-lifetime-and-test-leaks.md), step
+  2, 2026-10-19: the slowing is not borne out.
+  * Step 7's selection, run 100 times under `-race`, took 131 s with the leaks gone. Its record measured 130 s on `6d60d84` with them.
+  * The accumulation shows in the goroutine dump, not in the time. Its 10-minute timeout came from the pass's length: 1,252 s at
+    1,000 runs.
 * Good, because no dependency is added.
 * Neutral, because applications that want a dead-peer check still build it themselves. ACP v2 may standardize one, and S2 or S4 can be
   revisited then.
