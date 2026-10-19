@@ -27,6 +27,42 @@ and 1.27.2.
 Start by reading the [official ACP documentation](https://agentclientprotocol.com)
 to understand the core concepts and protocol specification.
 
+### A first connection
+
+This is `ExampleNewClientSideConnection`, which `go test` runs: a client and an
+agent in one process over two pipes. `demoAgent` and `demoClient` are the
+example `Agent` and `Client` in `example_agent_test.go` and
+`example_client_test.go`. A real client starts the agent's process and
+passes its stdin and stdout instead of the pipes, as `example/client` does.
+
+<!-- quickstart: ExampleNewClientSideConnection -->
+```go
+// Each side writes to one pipe and reads the other.
+toAgent, fromClient := io.Pipe()
+toClient, fromAgent := io.Pipe()
+agent := acp.NewAgentSideConnection(&demoAgent{}, fromAgent, toAgent)
+client := acp.NewClientSideConnection(&demoClient{}, fromClient, toClient)
+
+resp, err := client.Initialize(context.Background(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
+if err != nil {
+    fmt.Println("initialize:", err)
+    return
+}
+fmt.Println("protocol version:", resp.ProtocolVersion)
+
+// Closing the client ends the agent's input, so the agent ends too.
+if err := client.Close(); err != nil {
+    fmt.Println("close:", err)
+}
+<-agent.Done()
+if err := agent.Close(); err != nil {
+    fmt.Println("close:", err)
+}
+// Output:
+// protocol version: 1
+```
+<!-- /quickstart -->
+
 ### Try the Examples
 
 The [examples directory](https://github.com/maccavelli/acp-go-sdk2/tree/main/example)

@@ -156,6 +156,7 @@ func UpdatePlan(entries ...PlanEntry) SessionUpdate {
 }
 
 // ToolCallStartOpt modifies a tool_call start update before it is built.
+// Options apply in the order given (0024-PLAN-documentation.md, A10).
 type ToolCallStartOpt func(tc *SessionUpdateToolCall)
 
 // StartToolCall constructs a tool_call update with required fields and applies optional modifiers.
@@ -256,6 +257,7 @@ func WithStartRawOutput(v json.RawMessage) ToolCallStartOpt {
 }
 
 // ToolCallUpdateOpt modifies a tool_call_update before it is built.
+// Options apply in the order given (0024-PLAN-documentation.md, A10).
 type ToolCallUpdateOpt func(tu *SessionToolCallUpdate)
 
 // UpdateToolCall constructs a tool_call_update with the given ID and applies optional modifiers.

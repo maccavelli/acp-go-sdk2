@@ -3,6 +3,7 @@ package acp
 import (
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"go/types"
 	"os"
@@ -149,6 +150,64 @@ func TestTypedMethodDocsNameErrors(t *testing.T) {
 	if typed != 40 || untyped != 4 {
 		t.Errorf("%d typed and %d extension methods, want the 40 of agent_gen.go and client_gen.go and the 4 of extensions.go", typed, untyped)
 	}
+}
+
+// TestReadmeQuickstartIsTheExample requires the README's quickstart, the Go
+// block between its quickstart markers, to be the body of
+// ExampleNewClientSideConnection as go/printer prints it, with its comments
+// and with each tab as four spaces, as the README's other blocks are
+// indented. So the snippet is compiled and run as the example, and cannot
+// drift from it (0024-PLAN-documentation.md, A8).
+func TestReadmeQuickstartIsTheExample(t *testing.T) {
+	t.Parallel()
+	want := exampleBody(t, "example_quickstart_test.go", "ExampleNewClientSideConnection")
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const open, end = "<!-- quickstart: ExampleNewClientSideConnection -->\n", "<!-- /quickstart -->"
+	_, rest, ok := strings.Cut(string(readme), open)
+	block, _, closed := strings.Cut(rest, end)
+	if !ok || !closed {
+		t.Fatalf("README.md has no block between %q and %q", open, end)
+	}
+	got, fenced := strings.CutPrefix(strings.TrimSpace(block)+"\n", "```go\n")
+	got, ended := strings.CutSuffix(got, "```\n")
+	if !fenced || !ended {
+		t.Fatalf("the quickstart is not one Go block:\n%s", block)
+	}
+	if got != want {
+		t.Errorf("README.md's quickstart is not ExampleNewClientSideConnection's body.\nREADME:\n%s\nexample:\n%s", got, want)
+	}
+}
+
+// exampleBody prints the body of the function name of file, without its
+// braces, one indent removed and each remaining tab as four spaces.
+func exampleBody(t *testing.T, file, name string) string {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range f.Decls {
+		fn, ok := d.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != name {
+			continue
+		}
+		var b strings.Builder
+		if err := printer.Fprint(&b, fset, &printer.CommentedNode{Node: fn.Body, Comments: f.Comments}); err != nil {
+			t.Fatal(err)
+		}
+		lines := strings.Split(b.String(), "\n")
+		lines = lines[1 : len(lines)-1] // the braces
+		for i, l := range lines {
+			lines[i] = strings.ReplaceAll(strings.TrimPrefix(l, "\t"), "\t", "    ")
+		}
+		return strings.Join(lines, "\n") + "\n"
+	}
+	t.Fatalf("%s has no function %s", file, name)
+	return ""
 }
 
 // undocumented returns each exported declaration of f without a doc comment,

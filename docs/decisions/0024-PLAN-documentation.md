@@ -172,6 +172,8 @@ decode. The clauses of each list are joined with semicolons, as some hold an "or
   `<!-- /quickstart -->`, with the body of `ExampleNewClientSideConnection`.
   * **The check.** A new root test, `TestReadmeQuickstartIsTheExample`, prints that function's body from its file with `go/printer`
     and requires the README block to equal it. So the snippet is compiled and run as the example, and cannot drift from it.
+    Annotated during step 3, 2026-10-19: equal with each tab as four spaces. The README's other Go blocks are indented with spaces,
+    and markdownlint's MD010 refuses hard tabs in code blocks.
   * **Why not `mdsh`.** The tool is not installed, and adding it needs a dependency record.
 
 ### A10: option semantics
@@ -181,6 +183,8 @@ decode. The clauses of each list are joined with semicolons, as some hold an "or
 * options apply in order, so a repeated option's last value wins;
 * `n <= 0` leaves `WithMaxQueuedNotifications` and `WithMaxMessageSize` at their defaults, but sets `WithMaxConcurrentRequests` back
   to no limit;
+  Annotated during step 3, 2026-10-19: `n <= 0` keeps the value already set, which is the default unless an earlier option set one.
+  The facts row says "unchanged"; the doc says this, and `TestOptionSemantics` checks both cases.
 * a nil option panics.
 
 `ToolCallStartOpt` and `ToolCallUpdateOpt` gain "options apply in order".
@@ -467,3 +471,78 @@ The refusal subtests now bound such calls with a five-second context, and every 
 ran.
 
 `TestMethodErrorsAsDocumented` passed 20 runs of 20 under `-race`.
+
+### Step 3, hand-written docs, 2026-10-19
+
+The owner committed step 2 as `3db905a` and approved this step. What changed, on `3db905a`:
+
+* **A5:** `Connection`'s doc gains the concurrency sentences. `concurrent_use_test.go`'s `TestConcurrentUse` covers the three types:
+  * 8 goroutines, 25 rounds each, over a pair connected by pipes;
+  * each round calls every exported method: the 40 typed methods by reflection with zero params, `SendRequest`,
+    `SendRequestNoResult`, `SendNotification`, `CallExtension`, `NotifyExtension`, `Connection`, `Done`, `SetLogger`, `Negotiated`
+    and `DroppedNotifications`; then `Close`, four at once;
+  * what a zero-params call returns is not checked; that every one of the 40 was called is;
+  * it requires every counted notification to arrive, 200 cancels, 200 session updates and 200 raw notifications, so none was
+    written in pieces;
+  * on the final code it passed 3 runs of 3 under `-race`, 0.56 s each.
+* **A10:**
+  * `ConnectionOption`'s doc: options apply in order; `n <= 0`; a nil option panics.
+  * `ToolCallStartOpt` and `ToolCallUpdateOpt`: options apply in order.
+  * Only `WithMaxQueuedNotifications(n <= 0)` had a test (`connection_queue_size_test.go`). `options_test.go`'s `TestOptionSemantics`
+    checks each claim on `buildConnection`'s result, which starts no goroutine, and on the two tool-call constructors.
+* **A8:**
+  * `doc.go`: the two sides, the constructors, reading starting inside the constructor, Initialize first, how a connection ends, the
+    sentinels and the four error types, and where to start;
+  * `example_quickstart_test.go`: `ExampleNewClientSideConnection`;
+  * `example_api_test.go`: `ExampleStartToolCall`, `ExampleRequestError` and `ExampleConnection_Close`;
+  * each example has `// Output:` and passed 10 separate runs of 10 under `-race`;
+  * the README's "Get Started" gains "A first connection", the quickstart between its markers;
+  * `docs_test.go`'s `TestReadmeQuickstartIsTheExample` was seen to fail before the block existed, then passed.
+* **V4:** `RELEASING.md` gains "Release notes and the API".
+  * It names the release-notes report, how it is numbered and indexed, and that its "Release text" is the release's body.
+  * It says each release's notes record the API listing against the last tag, and that an incompatible change needs `/v2`.
+  * The listing program is the 0013 report's, kept outside the tree. The section names no command for it.
+
+The quickstart's example uses `demoAgent` and `demoClient` from the two package examples, so the snippet is not a whole program; the
+README's paragraph above it says where they are.
+
+**The comments-only check.** `connection.go`, `doc.go` and `helpers.go` are each the same tree as at `3db905a`; exit 0.
+
+**Lint.** The first gate run reported one issue, in `TestConcurrentUse`'s reflection loop: `stditerators`, "NumMethod/Method loop can
+simplified using Value.Methods iteration" (modernize). `go fix -diff` proposed the same change. The loop now ranges over
+`reflect.Value.Methods`, and the go1.26.9 gate compiles and runs it.
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree, never in the tree. All 14 failed the check named, with the
+text named:
+
+| Break | The check that failed |
+| :--- | :--- |
+| A5: `SetLogger` storing without its atomic | `TestConcurrentUse` under `-race`: "race detected during execution of test", five reports naming `(*Connection).SetLogger` |
+| A5: the writer losing every seventh raw notification | `TestConcurrentUse`: "raw notifications, want 200 of each" |
+| A5: `Prompt` left out of the typed calls | `TestConcurrentUse`: "typed calls, want the 40 typed methods 200 times" |
+| A8: one line of the README's quickstart changed | `TestReadmeQuickstartIsTheExample` |
+| A8: `ExampleNewClientSideConnection`'s printed line changed | that example |
+| A8: `ExampleStartToolCall`'s printed line changed | that example |
+| A8: `ExampleRequestError`'s printed line changed | that example |
+| A8: `ExampleConnection_Close`'s printed line changed | that example |
+| A10: `WithMaxMessageSize(n <= 0)` setting `n` | `TestOptionSemantics`: "message size -1, want 100" |
+| A10: `WithMaxConcurrentRequests(n <= 0)` keeping an earlier limit | `TestOptionSemantics`: "request limit 2" |
+| A10: options applied in reverse | `TestOptionSemantics`: "the last wins: notification queue 5, want 7" |
+| A10: a nil option skipped | `TestOptionSemantics`: "a nil option did not panic" |
+| A10: `StartToolCall`'s options applied in reverse | `TestOptionSemantics`: "StartToolCall status \"pending\"" |
+| a code token changed in `helpers.go` | the comments-only check: "DIFFERS:", exit 1 |
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* `go run .` in `cmd/generate`: generated files unchanged by regeneration;
+* `make pre-add-check`: "138 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `scripts/go-precheck.sh` on the four new `_test.go` files: "4 file(s) clean";
+* `GOEXPERIMENT=nojsonv2 go test ./...`;
+* `GOOS=windows go vet ./...` in both modules;
+* the identifier scan of the changed files;
+* the API listing against `v1.16.2`: 2429 lines at the tag and in the tree, 0 removed, 0 added;
+* `go fix -diff ./...` in both modules: no output;
+* `make check-records` and `make markdownlint`: 0 issues.
+
+**The go1.26.9 gate**, with `GOTOOLCHAIN=go1.26.9` and scratch caches: `go version` reports go1.26.9; `go vet ./...` and
+`go test -race -count=1 ./...` pass in both modules, the root's with the leak guard.

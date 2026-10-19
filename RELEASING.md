@@ -94,6 +94,17 @@ optional before a release. They report; neither gates.
 Consumers rely on the `vX.Y.Z` semver tag for `go get`, so ensure the tag is
 pushed before announcing the release.
 
+## Release notes and the API
+
+- The changelog is the release notes report,
+  `docs/reports/NNNN-REPORT-release-notes-vX-Y-Z.md`, numbered with
+  `python3 scripts/check_records.py --next` and indexed in `docs/README.md`.
+  Its "Release text" section is the GitHub release's body.
+- Each release's notes record the exported API listing compared with the last
+  tag: the lines removed and the lines added.
+- An incompatible change to the exported API needs a new major version, `/v2`
+  ([0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md](docs/decisions/0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md)).
+
 ## Additional Notes
 
 - If the new schema introduces breaking changes, update examples and docs in

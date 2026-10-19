@@ -288,6 +288,10 @@ func addressable(v any) any {
 type MethodHandler func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError)
 
 // Connection is a simple JSON-RPC 2.0 connection over line-delimited JSON.
+//
+// Its methods are safe for concurrent use. Messages sent from several
+// goroutines are written whole, one at a time, in the order they reach the
+// connection's writer (0024-PLAN-documentation.md, A5).
 type Connection struct {
 	w       io.Writer
 	r       io.Reader
@@ -371,6 +375,12 @@ type Connection struct {
 }
 
 // ConnectionOption configures optional parameters for a Connection.
+//
+// Options apply in the order given, so the last of a repeated option wins. A
+// value n <= 0 keeps the value already set for WithMaxQueuedNotifications and
+// WithMaxMessageSize, the default unless an earlier option set one, but sets
+// WithMaxConcurrentRequests back to no limit. A nil option panics
+// (0024-PLAN-documentation.md, A10).
 type ConnectionOption func(*connectionConfig)
 
 type connectionConfig struct {
