@@ -585,6 +585,10 @@ benchmark measures each performance item.
   - A `-update` flag rewrites the file when a change is meant.
   - D1, D2, D3 and D9 then cannot change a byte of the wire format unseen.
 
+  Amended while executing [0019-PLAN-idioms-performance.md](0019-PLAN-idioms-performance.md), step 2, 2026-10-18: one value is not
+  compared as received. The instances use one absolute path, the host's temporary directory, and 57 of the 1248 encodings carry it.
+  The test writes it as `<instancePath>`, so the committed file carries no host's path and is the same on every host.
+
 #### Questions for the owner
 
 Each has a recommended answer.

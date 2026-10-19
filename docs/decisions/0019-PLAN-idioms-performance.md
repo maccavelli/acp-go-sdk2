@@ -101,6 +101,8 @@ Out of scope:
   - `go test -run '^TestEncodingsUnchanged$' -update .` rewrites the file. `-update` is the root package's first flag.
   - An instance that does not decode or encode writes its error on the line instead, so the file pins that too.
   - On `f67c9c1` the scratch form gave 1248 lines.
+  - Annotated during step 2, 2026-10-18 (see "Deviation, 2026-10-18, during step 2"): the instances' absolute path, the host's
+    temporary directory, is written as `<instancePath>` on each line, raw and JSON-quoted, so the file is the same on every host.
 - **D13, `bench_test.go`** (root, `package acp`): the seven benchmarks of the table above, each with `b.Loop()`.
   - The two over pipes use connections with `WithLogger(slog.New(slog.DiscardHandler))`, both negotiated with `allAdvertised()`.
   - `make bench` runs `go test -run '^$' -bench . -benchmem -count=6 .`.
@@ -328,3 +330,61 @@ The script was seen to fail while this PLAN was drafted: run on the `v1.15.1` tr
 It then had 91 facts; five were added after.
 
 Gates on the tree: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file changed.
+
+### Deviation, 2026-10-18, during step 2
+
+**Found.** The instance builder uses one absolute path, `instancePath`, which is `filepath.Join(os.TempDir(), "acp")`
+(`instances_test.go:82`). It appears in 57 of the 1248 encoding lines, always as the whole of a string value. Written as received,
+the golden file would carry the path of the host that wrote it. That path is a real-machine path, which the identifier scan
+refuses. The test would also fail on every other host, Linux CI and Windows among them. "Design", D14, did not foresee it.
+
+**Decision (owner, 2026-10-18).** `TestEncodingsUnchanged` writes the path as `<instancePath>`, both JSON-quoted (as it appears in an
+encoding, with a Windows path's backslashes escaped) and raw (as an error message would carry it). No other file changes for it.
+"Design", D14, is annotated, and the MADR's D14 is amended, since it said the bytes are compared as encoded.
+
+### Step 2, D14 and D13, 2026-10-18
+
+What changed, on `9227a5b`:
+
+- **`encodings_test.go`** (new): `TestEncodingsUnchanged` and the root package's first flag, `-update`. The encodings are built as
+  "Design", D14, says, with the deviation above. A difference fails with the first differing line, both sides, and the count of
+  differing lines.
+- **`testdata/encodings.golden`** (new), written by `go test -run '^TestEncodingsUnchanged$' -update .`: 1248 lines. 57 carry
+  `<instancePath>`. None carries a decode or encode error, and the identifier scan finds nothing in it. With `<instancePath>` put back
+  to this host's path, the file is byte-identical to the scratch dump made on `f67c9c1` while this PLAN was drafted.
+- **`bench_test.go`** (new): the seven benchmarks of the baseline table, each with `b.Loop()`. The two over pipes use
+  `WithLogger(slog.New(slog.DiscardHandler))`, both sides negotiated with `allAdvertised()`, and `b.Context()`.
+- **`Makefile`**: a `bench` target, `go test -run '^$' -bench . -benchmem -count=6 .`, listed by `make help`.
+
+No generated file changed: the regeneration gate left the tree as it was.
+
+Planted breaks, each in a scratch copy of the tree:
+
+| Break | Result |
+| :--- | :--- |
+| `Diff`'s `json:"newText"` tag spelled `newTexT` in `types_gen.go`, one byte of every `Diff` encoding | `TestEncodingsUnchanged` fails: "testdata/encodings.golden line 193", got `"newTexT":"s"`, want `"newText":"s"`; "3 lines differ" |
+| One byte of one golden line, `Diff\t{"newText":"s",…}`, made `"t"` | `TestEncodingsUnchanged` fails: "line 195", got `"s"`, want `"t"`; "1 lines differ" |
+
+The baseline re-measured on the tree with `make bench`, medians of six runs:
+
+| Benchmark | ns/op | allocs/op | allocs/op, the six runs |
+| :--- | ---: | ---: | :--- |
+| SessionUpdateMarshal | 3,723 | 37 | 37 each |
+| SessionUpdateUnmarshal | 6,798 | 45 | 45 each |
+| SessionNotificationUnmarshal | 8,601 | 58 | 58 each |
+| CanonicalIDKey | 477 | 10 | 10 each |
+| ValidateOutboundValue | 51 | 2 | 2 each |
+| PromptRoundTrip | 30,861 | 149 | 149 each |
+| SessionUpdateNotify | 28,820 | 115 | 115 each |
+
+Each allocs/op median equals its baseline on `f67c9c1`, the table above. The ns/op medians are recorded, not gated.
+
+Gates, with the API listing against `v1.15.2`, each exit 0:
+
+- regeneration: the generated files unchanged;
+- `make pre-add-check`, and `scripts/go-precheck.sh bench_test.go encodings_test.go`;
+- `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+- `make check-records`, `make markdownlint`, and the identifier scan;
+- the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
+- Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0. `TestEncodingsUnchanged` passes
+  there against the file written on macOS, so the placeholder holds across hosts.

@@ -81,6 +81,13 @@ fuzz: ## Runs each fuzz target for FUZZTIME (default 60s)
 	cd cmd/generate && go test -run '^$$' -fuzz '^FuzzBuild$$' -fuzztime $(FUZZTIME) .
 	cd cmd/generate && go test -run '^$$' -fuzz '^FuzzExportedName$$' -fuzztime $(FUZZTIME) ./internal/model
 
+# Benchmarks report and never gate; CI does not run them. A step that changes
+# a hot path records the medians of these six runs before and after
+# (0019-PLAN-idioms-performance.md, D13).
+.PHONY: bench
+bench: ## Runs the root package's benchmarks six times, with allocations
+	go test -run '^$$' -bench . -benchmem -count=6 .
+
 # Mutation runs report and never gate (0011-PLAN-engine-tests.md, D5). MUTANTS
 # samples that many mutants with SEED; empty runs every one. JOBS runs that many
 # at once. The engine run skips TestGeneratedFilesUpToDate, so a mutant only
