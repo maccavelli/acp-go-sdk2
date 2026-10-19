@@ -235,3 +235,58 @@ Gates, with the API listing against `v1.16.0`, each exit 0:
 * the API listing: 2429 lines at `v1.16.0` and in the tree, 0 removed, 0 added;
 * Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0. The guard ran there and reported
   nothing.
+
+### Step 3, C1, 2026-10-19
+
+What changed, on `bb9197b`:
+
+* **`connection.go`:**
+  * `closeWith` calls `c.inboundCancel(cause)` right after `c.cancel(cause)`, inside its `closeOnce`. Its doc comment says why.
+  * `Close`'s doc comment adds: "every handler's context ends, a request's and a notification's alike".
+* **`connection_close_test.go`:**
+  * `readOnly`, a reader with no `Close`.
+  * `TestCloseEndsNotificationHandlers`, as "Design" sets it out. In a `synctest` bubble per case, a request and a notification
+    handler wait on their contexts. The test calls `Close`, and requires both contexts to have ended with no time passed, each with a
+    cause wrapping `ErrConnectionClosed`. Its two cases are a reader `Close` closes, and that reader behind `readOnly`.
+* **`README.md`, "Closing and limits":**
+  * `Close` ends every handler's context.
+  * A new paragraph states S1: the SDK closes no connection on a timer. A request's deadline is its context, a session ends with
+    `session/close`, and an agent process is the client's to end, as the example client's `stopAgent` does.
+* **`docs/architecture.md`:** its list of the tests' checks names `leak_test.go`'s guard.
+
+Seen to fail before the change: the test, written first, failed on the tree's `closeWith`. In both cases: "the _test/notification
+handler's context was still live after Close".
+
+Planted breaks, each in a scratch copy of the tree:
+
+| Break | Result |
+| :--- | :--- |
+| `closeWith` without `inboundCancel`, the case of a reader `Close` closes run alone | fails: "the _test/notification handler's context was still live after Close" |
+| the same break, the case of a reader with no `Close` run alone | fails, with the same message |
+| `inboundCancel` called before `closedLocally` is set, over the `Close` tests and `TestCloseEndsEndOfInputDrain` | **passes** |
+
+**Why the first two end in a deadlock panic.** After their failure, both runs end in "panic: deadlock: main bubble goroutine has
+exited but blocked goroutines remain". The goroutines left are:
+
+* the notification handler, waiting on its context;
+* the drain, `waitForNotificationDrain`, in `sync.Cond.Wait`, with its 5 s timeout pending.
+
+`go doc testing/synctest`: time advances "if there is such a time and the root goroutine of the bubble has not exited. Otherwise,
+there is a deadlock and Test panics." Without the change, the handler would end only after the 5 s drain, as the MADR's probe measured
+outside a bubble. Once the test function has returned, the bubble's clock no longer advances to it.
+
+**The order of the two cancels is not observable.** The third break passed. A handler's context ends with the cause given, whichever
+cancel runs first, and no test reads `endError` from a notification handler at the moment of `Close`. As the PLAN provides, this is
+recorded, and the code keeps the order "Design" sets: the mark, then the connection's context, then the handlers'.
+
+The 12 tests of `connection_close_test.go` and `end_of_input_test.go`, `TestCloseEndsNotificationHandlers` among them, ran
+`-race -count=1000 -timeout 0`: exit 0, in 414 seconds, the guard reporting nothing at the end.
+
+Gates, with the API listing against `v1.16.0`, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`;
+* `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint`, and the identifier scan;
+* the API listing: 2429 lines at `v1.16.0` and in the tree, 0 removed, 0 added;
+* Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.

@@ -378,6 +378,9 @@ Checks that guard this:
   `testdata/json_golden/`. `json_v1_pin_test.go` pins HTML escaping and sorted map
   keys. `generated_output_test.go` covers the encoding rules above, and
   `union_wire_test.go` the union decoding rules.
+- `leak_test.go`'s `TestMain` fails the root package's run when the tests leave a
+  goroutine leaked, by the standard `goroutineleak` profile, such as a
+  connection's that no test closed.
 - `make pre-add-check` runs `scripts/go-precheck.sh`: gofmt, golangci-lint for the
   host and for `GOOS=windows`, vet, tests with `-race`, `go mod tidy -diff`, and
   govulncheck, for both modules. golangci-lint covers the generated files too,

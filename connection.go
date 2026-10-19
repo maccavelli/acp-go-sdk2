@@ -699,22 +699,26 @@ func (c *Connection) endError() error {
 
 // Close ends the connection: its context ends with ErrConnectionClosed, so
 // Done is closed, every call waiting for a response returns, and every later
-// send fails without writing; and its reader and writer are closed when they
-// implement io.Closer, which also ends a read in progress. It returns their
-// errors joined, and nil when it was called before
-// (0019-PLAN-api-decisions.md, B17).
+// send fails without writing; every handler's context ends, a request's and a
+// notification's alike (0023-MADR-connection-lifetime-and-test-leaks.md, C1);
+// and its reader and writer are closed when they implement io.Closer, which
+// also ends a read in progress. It returns their errors joined, and nil when
+// it was called before (0019-PLAN-api-decisions.md, B17).
 func (c *Connection) Close() error {
 	return c.closeWith(ErrConnectionClosed)
 }
 
 // closeWith is Close, ending the context with cause. It marks the connection
 // closed locally before the context ends, so every waiter reads endError
-// after the mark.
+// after the mark. It ends the notification handlers' context too, which the
+// input's drain would otherwise end only once the reader stops
+// (0023-MADR-connection-lifetime-and-test-leaks.md, C1).
 func (c *Connection) closeWith(cause error) error {
 	var err error
 	c.closeOnce.Do(func() {
 		c.closedLocally.Store(true)
 		c.cancel(cause)
+		c.inboundCancel(cause)
 		var closers []io.Closer
 		for _, x := range []any{c.r, c.w} {
 			cl, ok := x.(io.Closer)

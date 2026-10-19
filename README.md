@@ -479,11 +479,20 @@ client application's.
 
 `Close()`, on a connection or on either side connection, ends it: `Done()`
 closes, every call waiting for an answer returns, every later send fails
-without writing, and the reader and the writer are closed when they implement
-`io.Closer`, which also ends a read in progress. A second `Close` returns nil.
-When the peer ends the connection, the same holds, but for the transport,
-which is the application's to close. The default overflow policy,
+without writing, every handler's context ends, a request's and a
+notification's alike, and the reader and the writer are closed when they
+implement `io.Closer`, which also ends a read in progress. A second `Close`
+returns nil. When the peer ends the connection, the same holds, but for the
+transport, which is the application's to close. The default overflow policy,
 `acp.OverflowCloseConnection`, closes the connection as `Close` does.
+
+The SDK closes no connection on a timer: an idle connection is normal in ACP,
+and the protocol has no ping to tell an idle peer from a dead one. The
+application decides how long a connection lives. A request's deadline is its
+context, a session ends with `session/close`, and an agent process is the
+client's to end: close its input, wait for it to exit, and kill it after a
+bound, as the example client's `stopAgent` does
+([0023-MADR-connection-lifetime-and-test-leaks.md](docs/decisions/0023-MADR-connection-lifetime-and-test-leaks.md)).
 
 When the input ends cleanly, at end of file, as when a script closes a stdio
 agent's standard input after writing its requests, the requests already received

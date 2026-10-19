@@ -7,8 +7,10 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -206,4 +208,74 @@ func TestOverflowCloseClosesTransport(t *testing.T) {
 	}
 	close(f.release)
 	waitForNotificationBarrierDrain(t, f.c, overflowWait)
+}
+
+// readOnly is a reader with no Close, such as a bufio.Reader or an
+// application's own type: Close cannot end a read on it.
+type readOnly struct{ r io.Reader }
+
+func (o readOnly) Read(p []byte) (int, error) { return o.r.Read(p) }
+
+// TestCloseEndsNotificationHandlers requires Close to end the context of every
+// running handler at once, a notification's as well as a request's, with the
+// cause ErrConnectionClosed, whether or not Close can close the reader
+// (0023-MADR-connection-lifetime-and-test-leaks.md, C1). It runs in a
+// synctest bubble, so "at once" is no time.
+func TestCloseEndsNotificationHandlers(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		reader func(*io.PipeReader) io.Reader
+	}{
+		{"a reader Close closes", func(r *io.PipeReader) io.Reader { return r }},
+		{"a reader Close cannot close", func(r *io.PipeReader) io.Reader { return readOnly{r} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				inR, inW := io.Pipe()
+				// Ends the input, so that the reader Close cannot close ends
+				// with the bubble.
+				t.Cleanup(func() { _ = inW.Close() })
+				var mu sync.Mutex
+				causes := map[string]error{}
+				c := NewConnection(func(ctx context.Context, method string, _ json.RawMessage) (any, *RequestError) {
+					<-ctx.Done()
+					mu.Lock()
+					causes[method] = context.Cause(ctx)
+					mu.Unlock()
+					return nil, nil
+				}, io.Discard, tc.reader(inR))
+				for _, line := range []string{
+					`{"jsonrpc":"2.0","method":"_test/notification","params":{}}`,
+					`{"jsonrpc":"2.0","id":1,"method":"_test/request","params":{}}`,
+				} {
+					if _, err := io.WriteString(inW, line+"\n"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				synctest.Wait() // both handlers wait on their contexts
+				start := time.Now()
+				if err := c.Close(); err != nil {
+					t.Fatal(err)
+				}
+				synctest.Wait() // every handler whose context Close ended has returned
+				if waited := time.Since(start); waited != 0 {
+					t.Errorf("the handlers returned %v after Close, want at once", waited)
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				for _, method := range []string{"_test/notification", "_test/request"} {
+					cause, ok := causes[method]
+					if !ok {
+						t.Errorf("the %s handler's context was still live after Close", method)
+						continue
+					}
+					if !errors.Is(cause, ErrConnectionClosed) {
+						t.Errorf("the %s handler's context ended with %v, want ErrConnectionClosed", method, cause)
+					}
+				}
+			})
+		})
+	}
 }
