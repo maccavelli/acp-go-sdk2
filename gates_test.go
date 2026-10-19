@@ -437,30 +437,30 @@ func valueGates(t *testing.T) []valueGate {
 		return valueGate{gatedMethod: m, field: "additionalDirectories"}
 	}
 	mcp := func(variant, server string, advertise func(n *Negotiation, on bool)) valueGate {
-		return valueGate{wire: AgentMethodSessionNew, capability: "mcpCapabilities." + variant, toAgent: true,
-			params: newSession(server), send: fromClient((*ClientSideConnection).NewSession), advertise: advertise, variant: variant}
+		return valueGate{gatedMethod: gatedMethod{wire: AgentMethodSessionNew, capability: "mcpCapabilities." + variant, toAgent: true,
+			params: newSession(server), send: fromClient((*ClientSideConnection).NewSession), advertise: advertise}, variant: variant}
 	}
 	forkMcp := func(variant, server string, advertise func(n *Negotiation, on bool)) valueGate {
-		return valueGate{wire: AgentMethodSessionFork, capability: "mcpCapabilities." + variant, toAgent: true,
+		return valueGate{gatedMethod: gatedMethod{wire: AgentMethodSessionFork, capability: "mcpCapabilities." + variant, toAgent: true,
 			params: decoded[UnstableForkSessionRequest](t, `{"sessionId":"s","cwd":`+dir+`,"mcpServers":[`+server+`]}`),
-			send:   fromClient((*ClientSideConnection).UnstableForkSession), advertise: advertise, variant: variant}
+			send:   fromClient((*ClientSideConnection).UnstableForkSession), advertise: advertise}, variant: variant}
 	}
 	block := func(variant, capability, raw string, advertise func(n *Negotiation, on bool)) valueGate {
-		return valueGate{wire: AgentMethodSessionPrompt, capability: "promptCapabilities." + capability, toAgent: true,
+		return valueGate{gatedMethod: gatedMethod{wire: AgentMethodSessionPrompt, capability: "promptCapabilities." + capability, toAgent: true,
 			params: decoded[PromptRequest](t, `{"sessionId":"s","prompt":[{"type":"text","text":"a"},`+raw+`]}`),
-			send:   fromClient((*ClientSideConnection).Prompt), advertise: advertise, field: "prompt[1]", variant: variant}
+			send:   fromClient((*ClientSideConnection).Prompt), advertise: advertise}, field: "prompt[1]", variant: variant}
 	}
 	update := func(variant, capability, raw string, advertise func(n *Negotiation, on bool)) valueGate {
-		return valueGate{wire: ClientMethodSessionUpdate, capability: capability, notifies: true,
+		return valueGate{gatedMethod: gatedMethod{wire: ClientMethodSessionUpdate, capability: capability, notifies: true,
 			params: decoded[SessionNotification](t, `{"sessionId":"s","update":`+raw+`}`),
 			send: func(ctx context.Context, asc *AgentSideConnection, _ *ClientSideConnection, params any) error {
 				return asc.SessionUpdate(ctx, params.(SessionNotification))
-			}, advertise: advertise, variant: variant}
+			}, advertise: advertise}, variant: variant}
 	}
 	elicit := func(variant, raw string, advertise func(n *Negotiation, on bool)) valueGate {
-		return valueGate{wire: ClientMethodElicitationCreate, capability: "elicitation." + variant,
+		return valueGate{gatedMethod: gatedMethod{wire: ClientMethodElicitationCreate, capability: "elicitation." + variant,
 			params: decoded[CreateElicitationRequest](t, raw), send: fromAgent((*AgentSideConnection).CreateElicitation),
-			advertise: advertise, variant: variant}
+			advertise: advertise}, variant: variant}
 	}
 	return []valueGate{
 		withRoots(gatedMethod{wire: AgentMethodSessionNew, params: decoded[NewSessionRequest](t, `{"cwd":`+dir+`,"mcpServers":[],`+roots+`}`),

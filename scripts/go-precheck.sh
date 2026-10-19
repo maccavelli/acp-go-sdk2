@@ -23,6 +23,20 @@ set -uo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT" || exit 1
 
+# On Go 1.26 the root tests' leak guard needs the goroutineleak profile, an
+# experiment there that Go 1.27 rejects, so the tests set it on 1.26 only.
+# golangci-lint, built with Go 1.27, rejects it, so nothing else does
+# (docs/decisions/0024-PLAN-go-1-26-9-floor.md, G5).
+test_experiment="${GOEXPERIMENT:-}"
+case "$(go env GOVERSION)" in
+go1.26*)
+  case ",${test_experiment}," in
+  *,goroutineleakprofile,*) ;;
+  *) test_experiment="${test_experiment:+$test_experiment,}goroutineleakprofile" ;;
+  esac
+  ;;
+esac
+
 files=()
 deleted_dirs=()
 if [ "$#" -gt 0 ]; then
@@ -129,7 +143,7 @@ check_module() {
     printf '%s\n' "$vet_out" | sed 's/^/  /' >&2
     fail 1
   fi
-  if ! test_out="$(cd "$dir" && go test -race "$@" 2>&1)"; then
+  if ! test_out="$(cd "$dir" && GOEXPERIMENT="$test_experiment" go test -race "$@" 2>&1)"; then
     echo "go test -race ($dir):" >&2
     printf '%s\n' "$test_out" | tail -40 | sed 's/^/  /' >&2
     fail 1

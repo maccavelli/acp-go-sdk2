@@ -17,6 +17,9 @@ Learn more about the protocol itself at <https://agentclientprotocol.com>.
 go get github.com/maccavelli/acp-go-sdk2
 ```
 
+It requires Go 1.26.9 or newer, the `go` line of `go.mod`; CI tests Go 1.26.9
+and 1.27.2.
+
 ## Get Started
 
 ### Understand the Protocol
@@ -145,6 +148,8 @@ follow the schema:
   not sent. Formatted with `fmt` (`%v`, `%s`, `fmt.Sprint`), an empty
   `json.RawMessage` prints as `null` under Go 1.27's default build, where it is
   `jsontext.Value` ([golang/go#81050](https://github.com/golang/go/issues/81050)).
+  Under Go 1.26's default build it prints as `[]` with `%v` and `fmt.Sprint`,
+  and as an empty string with `%s`.
   A required raw value, such as a response's `result`, keeps `null`, and so
   does the unstable `UnstableMcpError`'s `data`, whose schema says "explicit
   null is retained": there `nil` is absent, `null` is sent as `null`, and

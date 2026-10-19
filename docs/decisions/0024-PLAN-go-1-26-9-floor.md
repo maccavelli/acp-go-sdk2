@@ -93,6 +93,9 @@ The rest of `waitForLeaks` is unchanged by this PLAN.
 * The `Makefile`, at its top, appends `goroutineleakprofile` to `GOEXPERIMENT`, and exports it, when `go env GOVERSION` starts with
   `go1.26`. A `GOEXPERIMENT` already set, such as `nojsonv2`, keeps its value, joined with a comma.
 * `scripts/go-precheck.sh` does the same before its tests, so the pre-add check runs the guard on either version.
+* Annotated during step 2, 2026-10-19 (see "Deviation, 2026-10-19, during step 2"): exported to the whole `Makefile` and script, the setting reaches `golangci-lint`,
+  built with Go 1.27, which rejects it. It is applied to the root's `go test` commands only: the `Makefile`'s `LEAKGUARD_ENV`
+  prefixes them, and the script sets it on its `go test -race` line.
 * A bare `go test` on Go 1.26 without the setting fails with the message above, as decided.
 
 ### CI (G7, question 8)
@@ -250,3 +253,104 @@ Gates: `make check-records`, `make markdownlint` and the identifier scan, each e
 **Files added to step 2's scope:** none; both `go.mod` files were in it.
 
 "Scope" and "Design", "The floor", are annotated. The MADR's phase 1 gains an amendment.
+
+### Deviation, 2026-10-19, during step 2
+
+**Found.** A positive check of step 2's planted breaks ran `scripts/go-precheck.sh` on a forced go1.26.9
+(`GOTOOLCHAIN=go1.26.9`), in a scratch copy initialised as a git repository.
+
+* It failed. Each of `golangci-lint`'s four runs reported:
+  `level=error msg="Running error: context loading failed: … stderr: go: unknown GOEXPERIMENT goroutineleakprofile"`.
+* `make lint` failed the same way.
+* The design exported `GOEXPERIMENT=goroutineleakprofile` to the whole `Makefile` and the whole script. `golangci-lint` v2.14.0 was
+  built with go1.27.2, which rejects the setting.
+* `golangci-lint run ./...` on go1.26.9 without the setting exits 0.
+* **The exposure is narrow.** A developer on go1.26.9 is switched to go1.27.2 by the `toolchain` line, so the condition is false.
+  CI's floor job runs neither lint nor the script. It fails only when 1.26.9 is forced.
+
+**Decision (owner, 2026-10-19).** Apply the setting to the root's `go test` commands only:
+
+* `Makefile`: a variable, `LEAKGUARD_ENV`, empty unless `go env GOVERSION` starts with `go1.26`. It prefixes the root's `go test`
+  in `test`, both root fuzz targets, `bench`, and the `go run` of `mutation-generated`.
+* `scripts/go-precheck.sh`: it computes `test_experiment` once, and sets `GOEXPERIMENT="$test_experiment"` on `check_module`'s
+  `go test -race` only.
+* Lint, vet, tidiness and `govulncheck` never see it.
+
+"Design", "The leak guard without the profile", is annotated. A positive check is added: `make lint` on go1.26.9 passes.
+
+**Files added to step 2's scope:** none.
+
+### Step 2, the floor, 2026-10-19
+
+What changed, on `09d4a79`:
+
+* **`go.mod` and `cmd/generate/go.mod`:** `go 1.26.9`, then `toolchain go1.27.2`, by the deviation before this step.
+* **`gates_test.go`, G2:** the five `valueGate` literals name the embedded struct, `valueGate{gatedMethod: gatedMethod{…}, …}`.
+* **`cmd/generate/internal/mutate/mutate_test.go`, G4:** both fixture modules write `go 1.26.9`.
+* **`leak_test.go`, G5:**
+  * `TestMain`, after `m.Run`, checks `pprof.Lookup("goroutineleak") == nil`. If so, it prints the instruction "Design" gives and
+    exits 1.
+  * The check sits in `TestMain` rather than in `waitForLeaks`, so the instruction is printed alone, not under "goroutines leaked by
+    the tests". What it prints and how it ends are as designed. `waitForLeaks` is unchanged.
+* **`Makefile`, as the deviation during this step decided:** `LEAKGUARD_ENV` is `GOEXPERIMENT=…goroutineleakprofile` when
+  `go env GOVERSION` starts with `go1.26` and the setting is not already there, and empty otherwise. It prefixes the root's `go test`
+  in `test`, `fuzz` (both root targets) and `bench`, and the `go run` of `mutation-generated`.
+* **`scripts/go-precheck.sh`, as decided:** it computes `test_experiment` with a `case` on `go env GOVERSION`, and sets it as
+  `GOEXPERIMENT` on `check_module`'s `go test -race` only.
+* **`README.md`:**
+  * "Installation" states the requirement: Go 1.26.9 or newer, the `go` line, with CI testing 1.26.9 and 1.27.2.
+  * The raw-value note adds Go 1.26's output.
+
+**The raw-value note, measured.** A scratch module at `go 1.26.9` printed a nil and an empty `json.RawMessage`:
+
+| Go, default build | nil: `%v`, `%s`, `fmt.Sprint` | empty, not nil |
+| :--- | :--- | :--- |
+| go1.27.2 | `null`, `null`, `null` | `""`, `""`, `""` |
+| go1.26.9 | `[]`, `""`, `[]` | `[]`, `""`, `[]` |
+
+* An absent or `null` `rawInput` decodes to a nil value, on both versions (a probe test in a scratch copy). So the note's 1.27 text,
+  which describes the nil value, stands.
+* The note adds: "Under Go 1.26's default build it prints as `[]` with `%v` and `fmt.Sprint`, and as an empty string with `%s`."
+
+**The go1.26.9 gate.** In a scratch copy, with `GOTOOLCHAIN=go1.26.9` and `GOEXPERIMENT=goroutineleakprofile`, every command exits 0
+in both modules:
+
+* `go version`: `go1.26.9 darwin/arm64`;
+* `go build ./...`;
+* `go vet ./...`;
+* `go test -count=1 ./...`: every package `ok`, the root's leak guard included.
+
+On go1.27.2 in the tree: `go vet ./...` and `go mod tidy -diff` exit 0 in both modules, `go test -count=1` passes in both, and
+`make markdownlint` passes.
+
+Planted breaks and positive checks, each in a fresh scratch copy; 14 of 14 as required. The pre-add script's copies were initialised as
+git repositories with their files staged, since the script starts from `git rev-parse --show-toplevel`. The script read the installed
+`golangci-lint` through `GOLANGCI_LINT`.
+
+| Case | Go | Command | Required | Result |
+| :--- | :--- | :--- | :--- | :--- |
+| G2: one literal flattened again | go1.27.2 | `go vet .` | fails | "use of promoted field gatedMethod.wire … requires go1.27 or later" |
+| G2: the same | go1.26.9 | `go vet .` | fails | "unknown field wire in struct literal of type valueGate" |
+| G4: one fixture back at `go 1.27.2` | go1.26.9 | `go test ./internal/mutate` | fails | "go: go.mod requires go >= 1.27.2" in the mutant's error |
+| G5: the check, without the experiment | go1.26.9 | `go test -run ^TestTypedGate$ .` | fails | "the goroutineleak profile is not available: on Go 1.26, set GOEXPERIMENT=goroutineleakprofile" |
+| G5: the check removed | go1.26.9 | the same | fails | "panic: runtime error: invalid memory address or nil pointer dereference" |
+| G5: a planted leaking test | go1.27.2 | that test alone | fails | "goroutines leaked by the tests …" |
+| G5: the same, with the experiment | go1.26.9 | that test alone | fails | "goroutines leaked by the tests …" |
+| the `Makefile` as it is | go1.26.9 | `make test` | passes | `ok` |
+| the `Makefile` as it is | go1.27.2 | `make test` | passes | `ok` |
+| the `Makefile`'s condition reversed | go1.27.2 | `make test` | fails | "go: unknown GOEXPERIMENT goroutineleakprofile" |
+| the `Makefile`'s condition removed | go1.26.9 | `make test` | fails | the guard's instruction |
+| the `Makefile` as it is | go1.26.9 | `make lint` | passes | "0 issues." for each run |
+| `go-precheck.sh` as it is | go1.26.9 | the script, `GO_PRECHECK_SKIP_VULN=1` | passes | "go-precheck: 136 file(s) clean (gofmt, golangci-lint, go vet, go test)" |
+| `go-precheck.sh`'s condition removed | go1.26.9 | the same | fails | the guard's instruction |
+
+The last three rows came after the deviation during this step. Before it, the script on go1.26.9 failed on `golangci-lint`.
+
+Gates on go1.27.2, with the API listing against `v1.16.1`, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`;
+* `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint`, and the identifier scan;
+* the API listing: 2429 lines at `v1.16.1` and in the tree, 0 removed, 0 added;
+* Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.

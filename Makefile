@@ -27,12 +27,25 @@ GOLANGCI_LINT ?= $(GOPATH_BIN)/golangci-lint
 GOVULNCHECK_PIN := $(shell grep -oE 'golang.org/x/vuln/cmd/govulncheck@v[0-9][0-9.]*' .github/workflows/ci.yml | head -1)
 FLEET_LINT_CFG := .golangci.yml
 
+# On Go 1.26 the root tests' leak guard needs the goroutineleak profile, an
+# experiment there that Go 1.27 rejects, so the root's go test commands set
+# it on 1.26 only. Tools built with Go 1.27, such as golangci-lint, reject it,
+# so nothing else does. go env GOVERSION names the toolchain go.mod's
+# toolchain line selects (0024-PLAN-go-1-26-9-floor.md, G5).
+comma := ,
+LEAKGUARD_ENV :=
+ifneq ($(filter go1.26%,$(shell go env GOVERSION)),)
+  ifeq ($(findstring goroutineleakprofile,$(GOEXPERIMENT)),)
+    LEAKGUARD_ENV := GOEXPERIMENT=$(if $(GOEXPERIMENT),$(GOEXPERIMENT)$(comma))goroutineleakprofile
+  endif
+endif
+
 .PHONY: all help test fmt vet lint tidy vuln pre-add-check push-guard
 
 all: help
 
 test: ## Runs all tests
-	GOCACHE=$(GOCACHE) go test ./...
+	GOCACHE=$(GOCACHE) $(LEAKGUARD_ENV) go test ./...
 	cd cmd/generate && GOCACHE=$(GOCACHE) go test ./...
 	GOCACHE=$(GOCACHE) go build ./example/...
 
@@ -77,8 +90,8 @@ vuln: ## Runs govulncheck at the version pinned in CI
 FUZZTIME ?= 60s
 .PHONY: fuzz
 fuzz: ## Runs each fuzz target for FUZZTIME (default 60s)
-	go test -run '^$$' -fuzz '^FuzzRoundTrip$$' -fuzztime $(FUZZTIME) .
-	go test -run '^$$' -fuzz '^FuzzCanonicalIDKey$$' -fuzztime $(FUZZTIME) .
+	$(LEAKGUARD_ENV) go test -run '^$$' -fuzz '^FuzzRoundTrip$$' -fuzztime $(FUZZTIME) .
+	$(LEAKGUARD_ENV) go test -run '^$$' -fuzz '^FuzzCanonicalIDKey$$' -fuzztime $(FUZZTIME) .
 	cd cmd/generate && go test -run '^$$' -fuzz '^FuzzBuild$$' -fuzztime $(FUZZTIME) .
 	cd cmd/generate && go test -run '^$$' -fuzz '^FuzzExportedName$$' -fuzztime $(FUZZTIME) ./internal/model
 
@@ -87,7 +100,7 @@ fuzz: ## Runs each fuzz target for FUZZTIME (default 60s)
 # (0019-PLAN-idioms-performance.md, D13).
 .PHONY: bench
 bench: ## Runs the root package's benchmarks six times, with allocations
-	go test -run '^$$' -bench . -benchmem -count=6 .
+	$(LEAKGUARD_ENV) go test -run '^$$' -bench . -benchmem -count=6 .
 
 # Mutation runs report and never gate (0011-PLAN-engine-tests.md, D5). MUTANTS
 # samples that many mutants with SEED; empty runs every one. JOBS runs that many
@@ -102,7 +115,7 @@ mutation-engine: ## Runs mutants of the generator's engine against its tests
 	cd cmd/generate && $(MUTATE) -dir . -skip "^TestGeneratedFilesUpToDate$$" -files 'internal/load/*.go,internal/model/*.go,internal/emit/*.go,internal/output/*.go'
 
 mutation-generated: ## Runs mutants of the generated SDK files against the root's tests
-	cd cmd/generate && $(MUTATE) -dir ../.. -pkgs . -files 'types_gen.go,agent_gen.go,client_gen.go,helpers_gen.go'
+	cd cmd/generate && $(LEAKGUARD_ENV) $(MUTATE) -dir ../.. -pkgs . -files 'types_gen.go,agent_gen.go,client_gen.go,helpers_gen.go'
 
 FILES ?=
 pre-add-check: ## Runs the pre-add checks

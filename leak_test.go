@@ -14,6 +14,13 @@ import (
 // (0023-MADR-connection-lifetime-and-test-leaks.md, T2).
 func TestMain(m *testing.M) {
 	code := m.Run()
+	// Go 1.26 has the profile only as an experiment, which Go 1.27 rejects
+	// (0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md, question 2).
+	if pprof.Lookup("goroutineleak") == nil {
+		fmt.Fprint(os.Stderr, "the goroutineleak profile is not available: on Go 1.26, set GOEXPERIMENT=goroutineleakprofile\n"+
+			"(0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md, question 2)\n")
+		os.Exit(1)
+	}
 	if leaked := waitForLeaks(notificationQueueDrainTimeout + 2*time.Second); leaked != "" {
 		fmt.Fprintf(os.Stderr, "goroutines leaked by the tests (0023-MADR-connection-lifetime-and-test-leaks.md); "+
 			"run tests alone to find the one that leaked them:\n%s", leaked)
