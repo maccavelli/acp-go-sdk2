@@ -13,6 +13,7 @@ import (
 const (
 	helperObjectKeys   = "objectKeys"
 	helperOrDefault    = "orDefault"
+	helperOrZero       = "orZero"
 	helperSkipInvalid  = "skipInvalid"
 	helperAbsentIfNull = "absentIfNull"
 	helperMergeObject  = "mergeObject"
@@ -49,6 +50,9 @@ func emitDecodeHelpers(f *goFile) {
 	}
 	if f.uses[helperFoldKeys] {
 		emitFoldKeys(f)
+	}
+	if f.uses[helperOrZero] {
+		emitOrZero(f)
 	}
 	if f.uses[helperOrDefault] {
 		emitOrDefault(f)
@@ -316,30 +320,52 @@ func emitPatchItems(f *goFile) {
 	f.add(fn)
 }
 
-// emitOrDefault emits
+// emitOrZero emits
 //
-//	func orDefault[T any](raw json.RawMessage, def string) T
+//	func orZero[T any](raw json.RawMessage) T
 //
-// which decodes raw into a T, or, when raw is empty or does not decode, def,
-// the schema default, or the zero value when def is empty.
-func emitOrDefault(f *goFile) {
-	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
-	fn := function(helperOrDefault,
-		funcType([]*ast.Field{param("raw", f.qual(pkgJSON, "RawMessage")), param("def", id("string"))}, param("", id("T"))),
+// which decodes raw into a T, or returns the zero T when raw is empty or does
+// not decode (0019-PLAN-idioms-performance.md, D3).
+func emitOrZero(f *goFile) {
+	fn := function(helperOrZero,
+		funcType([]*ast.Field{param("raw", f.qual(pkgJSON, "RawMessage"))}, param("", id("T"))),
 		varStmt("v", id("T")),
-		ifStmt(nil, binary(binary(call(id("len"), id("raw")), token.GTR, intLit(0)), token.LAND,
-			binary(unmarshal(id("raw"), addr(id("v"))), token.EQL, nilExpr())), ret(id("v"))),
-		varStmt("d", id("T")),
-		ifStmt(nil, binary(binary(id("def"), token.NEQ, str("")), token.LAND,
-			binary(unmarshal(call(byteSlice(), id("def")), addr(id("d"))), token.NEQ, nilExpr())),
-			varStmt("zero", id("T")), ret(id("zero"))),
-		ret(id("d")),
+		ifStmt(nil, decodes(f), ret(id("v"))),
+		varStmt("zero", id("T")),
+		ret(id("zero")),
 	)
 	fn.Type.TypeParams = typeParamT()
 	f.line()
-	f.comment("orDefault decodes raw into a T, or, when raw is empty or does not decode, def,",
-		"the schema default, or the zero value when def is empty.")
+	f.comment("orZero decodes raw into a T, or returns the zero T when raw is empty or does",
+		"not decode.")
 	f.add(fn)
+}
+
+// emitOrDefault emits
+//
+//	func orDefault[T any](raw json.RawMessage, def T) T
+//
+// which decodes raw into a T, or returns def, the schema default as a Go
+// value, when raw is empty or does not decode
+// (0019-PLAN-idioms-performance.md, D3).
+func emitOrDefault(f *goFile) {
+	fn := function(helperOrDefault,
+		funcType([]*ast.Field{param("raw", f.qual(pkgJSON, "RawMessage")), param("def", id("T"))}, param("", id("T"))),
+		varStmt("v", id("T")),
+		ifStmt(nil, decodes(f), ret(id("v"))),
+		ret(id("def")),
+	)
+	fn.Type.TypeParams = typeParamT()
+	f.line()
+	f.comment("orDefault decodes raw into a T, or returns def, the schema default, when raw",
+		"is empty or does not decode.")
+	f.add(fn)
+}
+
+// decodes is len(raw) > 0 && json.Unmarshal(raw, &v) == nil.
+func decodes(f *goFile) ast.Expr {
+	return binary(binary(call(id("len"), id("raw")), token.GTR, intLit(0)), token.LAND,
+		binary(call(f.qual(pkgJSON, "Unmarshal"), id("raw"), addr(id("v"))), token.EQL, nilExpr()))
 }
 
 // emitSkipInvalid emits

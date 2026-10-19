@@ -146,6 +146,12 @@ is refused:
 | any other string, number or `true` | a literal of the field's type |
 | anything else | refused, with an error naming the definition and the property, and an engine case |
 
+Annotated during step 4, 2026-10-18 (see "Deviation, 2026-10-18, during step 4"): each row gives what decoding the JSON into a new
+value of the field's type gives. A non-empty JSON array for a slice type renders `[]T{…}`, and a non-empty JSON object for a map type
+renders `map[string]T{…}`. Each element is rendered by these rules with a zero element written out, and an element no rule renders is
+refused. A pointer field renders `null` as zero and any other default as `new(…)` of the value its element type renders. A raw or
+`any` field renders `json.RawMessage(<the default's JSON>)`, `null` included. A default on a union field is refused.
+
 How the rendered value is used:
 
 - **A zero default emits nothing:**
@@ -490,6 +496,127 @@ Gates, with the API listing against `v1.15.2`, each exit 0:
 
 - regeneration: the generated files unchanged by a second run;
 - `make pre-add-check`, and `scripts/go-precheck.sh cmd/generate/internal/emit/ast_test.go`;
+- `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+- `make check-records`, `make markdownlint`, and the identifier scan;
+- the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
+- Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+### Deviation, 2026-10-18, during step 4
+
+**Found.** Two kinds of default that the D3 table either refuses or does not settle are accepted by the generator today:
+
+- **A non-empty array default.** The engine case `accept-default-array.txtar` accepts `"names": {"type": "array", "items": {"type":
+  "string"}, "default": ["a"]}`. Its behaviour test requires `{}` to decode `Names` as `[]string{"a"}`, and `Opts{}` to encode it.
+  The table refuses that default. A script outside the tree listed every property default in the engine cases and in both
+  committed schemas: this is the only one outside the table. The stable schema has 21 defaults and the unstable one 22, and none
+  of them is outside the table.
+- **Defaults on a pointer, raw or union field.** The rendered value must be what decoding the JSON into a new value of the field's
+  type gives, which `TestSchemaDefaultsMatchTheirJSON` checks. On these fields the table's zero row does not hold, and its literal
+  row does not say how the value is written:
+  - **Pointer:** `false` decodes to a non-nil pointer, not to `nil`. The model test `TestPatchRules`
+    (`cmd/generate/internal/model/patch_test.go:19`) builds `"withDefault": {"type": ["string", "null"], "default": "x"}`, a
+    `*string` that decodes to a pointer to `"x"`.
+  - **Raw or `any`:** a value decodes to its JSON, `null` included.
+  - **Union:** `admits` accepts a default that fits a member, and decoding sets that variant.
+
+  None of the ACP defaults sits on such a field.
+
+**Decision (owner, 2026-10-18), first question.** A non-empty array or map default is rendered as a literal: `[]T{…}` for a slice
+type and `map[string]T{…}` for a map type. Each element is rendered by the same rules, with a zero element written out (`false`, `0`,
+`""`, `T{}`), and an element no rule renders is refused. Nothing the generator accepts today is refused.
+
+**Decision (owner, 2026-10-18), second question.** A pointer field renders `null` as zero and any other default as `new(…)` of the
+value its element type renders, using `new` of an expression, which Go has had since 1.26; the floor is the `go 1.27.2` of
+`go.mod`. A raw or `any` field renders `json.RawMessage(<the default's JSON>)`, `null` included, which is what decoding gives. A
+default on a union field is refused with an error naming the property, and an engine case: writing a union value out would mean
+building its variant by hand. A first form of this entry, before the second question was asked, refused all three; it was not
+committed.
+
+"Design", D3's table is annotated. The MADR's D3 is amended, since it named the forms a default is written in.
+
+### Step 4, D3, 2026-10-18
+
+What changed, on `172e9cc`, with the deviation above:
+
+- **`cmd/generate/internal/model/defaults.go`** (new): `Value` and `ValueKind`, and `renderDefaults`. It runs in `Build` after
+  `checkDefaults`. It sets `Default.Value` on every field with a default, in the top-level, nested and inline-variant structs, or
+  refuses the default with "`<Struct>.<key>`: default `<JSON>`: …". The rules are "Design", D3's table as annotated.
+  - A struct default is zero when every key it has renders zero, and every field it leaves out, or holds null where the field
+    refuses null, has no default or a zero one, recursively.
+  - A struct whose decoding fills more than its fields (flattened members, a key order, or undeclared keys) is refused, as is a
+    default without one of its struct's required keys.
+- **`cmd/generate/internal/model/fields.go`:** `Default.Value`.
+- **`cmd/generate/internal/emit/defaults.go`** (new): `valueExpr` writes a `Value` as a Go expression, and `typedExpr` as an
+  expression of the field's type: the operand of `new`, and each `schemaDefaults` value.
+- **`cmd/generate/internal/emit/types.go`:**
+  - `MarshalJSON` assigns a nilable default, `a.Properties = map[string]ElicitationPropertySchema{}`.
+  - `UnmarshalJSON` assigns a non-zero default and writes nothing for a zero one. `UnmarshalJSON` is still emitted for a struct
+    whose defaults are all zero, so the errors of a payload that is not an object are as they were.
+  - A lenient field calls `orZero[T](raw)`, or `orDefault[T](raw, def)` for a non-zero default. The skip-invalid fallback assigns
+    the default.
+- **`cmd/generate/internal/emit/decode.go`:** the helpers `orZero[T any](raw json.RawMessage) T` and `orDefault[T any](raw
+  json.RawMessage, def T) T`.
+- **`cmd/generate/internal/emit/registry.go`:** `schemaDefaults()` and `schemaDefault` in `schema_gen_test.go`.
+- **Tests:**
+  - New `cmd/generate/internal/model/defaults_test.go`: `TestRenderDefaults`, one row per renderer case, and
+    `TestRenderDefaultsRefuses`, one row per refusal.
+  - New root test `schema_defaults_test.go`, `TestSchemaDefaultsMatchTheirJSON`.
+  - New engine cases `accept-default-pointer-raw.txtar`, with a behaviour test, and `refuse-default-union.txtar`.
+  - `TestLenientDecoder` is updated to the new output, and gains a field with a zero default.
+- **Regenerated:** `types_gen.go`, `schema_gen_test.go`.
+
+`schemaDefaults()` lists 22 fields with a default. Nineteen render zero. The other three are
+`ElicitationSchema.Properties` (`map[string]ElicitationPropertySchema{}`), `ElicitationSchema.Type`
+(`ElicitationSchemaTypeObject`) and `InitializeResponse.AuthMethods` (`[]AuthMethod{}`).
+
+The decoder shapes of `types_gen.go`, counted by a script outside the tree on `172e9cc` and on the tree:
+
+| Shape | `172e9cc` | Tree |
+| :--- | ---: | ---: |
+| `json.Unmarshal([]byte("…"), &a.X)`, a default decoded at run time | 24 | 0 |
+| `orDefault[…](…)` calls | 474 | 1 |
+| `orZero[…](…)` calls | 0 | 472 |
+| injection blocks, `if !_ok …` | 22 | 3 |
+| `foldKeys(b, m, …)` calls | 43 | 36 |
+
+On `172e9cc`, the 474 `orDefault` calls were 453 without a default, 19 with a zero one, 1 with `"object"`, and 1 with `nil` raw
+and `"[]"`, the skip-invalid fallback. "Design", D3 counted "455 calls with no default", and the fact D3 counted "475 `orDefault`
+calls, 20 with a default". Both were off: the 475 included the helper's definition. The tree's 472 `orZero` calls are the 453 and
+the 19; the `"object"` call is the one `orDefault`; the fallback is an assignment. The 7 `foldKeys` calls that went folded only the
+keys of zero defaults, which nothing reads now.
+
+`TestEncodingsUnchanged` passes, under `encoding/json` v2 and with `GOEXPERIMENT=nojsonv2`, as does
+`TestSchemaDefaultsMatchTheirJSON`. The wire bytes are unchanged.
+
+`new` of an expression was proven to need Go 1.26, by a module outside the tree. At `go 1.25`, `go vet` reported "new(int32(3))
+requires go1.26 or later". At `go 1.26` it exited 0.
+
+Planted breaks, each in a scratch copy of the tree. The tool now reports a break that the generator itself refuses as not seen on
+its check. Four breaks first failed for the wrong reason: three did not compile, and one tripped the generator's guard. They were
+rewritten until each failed on its check:
+
+| Break | Result |
+| :--- | :--- |
+| a zero `bool` default written `true` | `TestSchemaDefaultsMatchTheirJSON` fails: "AgentCapabilities.LoadSession: default false decodes to false; the generated code writes true", and the other `bool` defaults |
+| an empty map written `nil` | `TestSchemaDefaultsMatchTheirJSON` fails: "ElicitationSchema.Properties: default {} decodes to map[string]acp.ElicitationPropertySchema{}; the generated code writes \<nil\>" |
+| an empty slice written `nil` | `TestSchemaDefaultsMatchTheirJSON` fails: "InitializeResponse.AuthMethods: default [] decodes to []acp.AuthMethod{}; …" |
+| a constant chosen without its value | `TestRenderDefaults` fails: "mode: default \"manual\" renders … ModeAuto, want … ModeManual" |
+| a number rendered one higher | `TestRenderDefaults` fails on `n`, `f` and `count` |
+| a pointer default without `new` | `TestRenderDefaults` fails on `title`, `count` and `modeP`; `TestEngineBehaviour` fails: `accept-default-pointer-raw` "does not type-check" |
+| a raw default rendered `null` | `TestRenderDefaults` fails on `raw` and `raws` |
+| a non-zero struct default accepted | `TestRenderDefaultsRefuses` fails on "non-zero struct" and "a field's non-zero default" |
+| a union default accepted | `TestEngineCases/refuse-default-union` fails: "run accepted the schema" |
+| no default assigned on decode | `TestEngineBehaviour/accept-default-array` fails: "defaults decoded as acp.Opts{List:[]string(nil), Names:[]string(nil)}" |
+
+The ACP schema has one enum constant default, `ElicitationSchemaType`, whose only value is `"object"`. A wrongly chosen constant
+therefore cannot be seen in the root package, and the model test sees it instead.
+
+No benchmark of the table decodes a type with a default, so this step records none; steps 5 and 6 measure the decoders.
+
+Gates, with the API listing against `v1.15.2`, each exit 0:
+
+- regeneration: the generated files unchanged by a second run;
+- `make pre-add-check`, and `scripts/go-precheck.sh` on the four new `.go` files;
 - `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
 - `make check-records`, `make markdownlint`, and the identifier scan;
 - the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;

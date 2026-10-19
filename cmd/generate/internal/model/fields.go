@@ -98,6 +98,9 @@ type Default struct {
 	AllowNull bool
 	// Nilable is true when the field's zero value is a nil slice or map.
 	Nilable bool
+	// Value is the default as a Go value of the field's type
+	// (0019-PLAN-idioms-performance.md, D3).
+	Value Value
 }
 
 // Facts are the schema's constraints on a property that the model reads

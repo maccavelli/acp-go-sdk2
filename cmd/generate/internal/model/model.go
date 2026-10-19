@@ -337,6 +337,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 	if err := m.checkDefaults(); err != nil {
 		return nil, err
 	}
+	if err := m.renderDefaults(); err != nil {
+		return nil, err
+	}
 	if err := m.buildValidations(); err != nil {
 		return nil, err
 	}

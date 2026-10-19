@@ -148,7 +148,9 @@ func TestRequiredKeysDecoder(t *testing.T) {
 }
 
 // TestLenientDecoder requires each lenient shape to decode from its own raw
-// value: default-on-error through orDefault with the schema default,
+// value: default-on-error through orDefault with the schema default as a Go
+// value, or through orZero when the default is its type's zero value
+// (0019-PLAN-idioms-performance.md, D3),
 // skip-invalid-items with default-on-error through skipInvalid with a
 // fallback, and skip-invalid-items alone failing on a value that is not an
 // array; and the output, with its helpers, to compile.
@@ -161,6 +163,7 @@ func TestLenientDecoder(t *testing.T) {
 			"tags":  {Type: "array", Items: &load.Definition{Type: "string"}, Default: []any{}, XDeserializeDefaultOnError: true, XDeserializeSkipInvalidItems: true},
 			"ids":   {Type: "array", Items: &load.Definition{Type: "integer", Format: "uint32"}, XDeserializeSkipInvalidItems: true},
 			"plain": {Type: "string"},
+			"on":    {Type: "boolean", Default: false, XDeserializeDefaultOnError: true},
 		},
 	}}}
 	m, err := model.Build(model.Input{Meta: &load.Meta{}, Schema: schema})
@@ -173,12 +176,14 @@ func TestLenientDecoder(t *testing.T) {
 	src := mustRender(t, f)
 	for _, want := range []string{
 		"\t\tMode json.RawMessage `json:\"mode\"`",
-		`a.Mode = orDefault[string](s.Mode, "\"auto\"")`,
+		`a.Mode = orDefault[string](s.Mode, "auto")`,
+		`a.On = orZero[bool](s.On)`,
 		`if items, err := skipInvalid[string](s.Tags); err == nil {`,
-		`a.Tags = orDefault[[]string](nil, "[]")`,
+		"} else {\n\t\ta.Tags = []string{}\n\t}",
 		`items, err := skipInvalid[uint32](s.Ids)`,
 		`return fmt.Errorf("Options: %q: %w", "ids", err)`,
-		"func orDefault[T any](raw json.RawMessage, def string) T {",
+		"func orDefault[T any](raw json.RawMessage, def T) T {",
+		"func orZero[T any](raw json.RawMessage) T {",
 		"func skipInvalid[T any](raw json.RawMessage) ([]T, error) {",
 	} {
 		if !strings.Contains(src, want) {

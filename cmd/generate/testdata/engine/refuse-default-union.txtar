@@ -1,0 +1,14 @@
+A default on a union property (model/defaults.go): writing a union value out
+would mean building its variant by hand, so the generator refuses it
+(0019-PLAN-idioms-performance.md, deviation during step 4).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"oneOf": [{"title": "S", "type": "string"}, {"title": "I", "type": "integer"}]},
+  "Opts": {"type": "object", "properties": {"u": {"allOf": [{"$ref": "#/$defs/U"}], "default": "s"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Opts.u: default "s": no Go value of U, a union, is rendered

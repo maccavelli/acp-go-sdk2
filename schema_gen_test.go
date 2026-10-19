@@ -52,6 +52,18 @@ type schemaAbsolutePath struct {
 	Property string
 }
 
+// schemaDefault is a field with a schema default: its struct, the field, the default's
+// JSON, New, which returns a pointer to a new value of the field's type, and Value,
+// which returns the default as the generated code writes it
+// (0019-PLAN-idioms-performance.md, D3).
+type schemaDefault struct {
+	Type  string
+	Field string
+	JSON  string
+	New   func() any
+	Value func() any
+}
+
 // schemaHelper is a union constructor of helpers_gen.go: the union, the variant field
 // it sets, and New, which calls it with each argument's zero value.
 type schemaHelper struct {
@@ -2624,6 +2636,229 @@ func schemaMethods() []schemaMethod {
 			Wire:         "$/cancel_request",
 			Params:       newOf[CancelRequestNotification],
 			Notification: true,
+		},
+	}
+}
+
+// schemaDefaults returns every field with a schema default, in the order of types_gen.go.
+func schemaDefaults() []schemaDefault {
+	return []schemaDefault{
+		{
+			Type:  "AgentCapabilities",
+			Field: "Auth",
+			JSON:  "{}",
+			New:   newOf[AgentAuthCapabilities],
+			Value: func() any {
+				var v AgentAuthCapabilities
+				return v
+			},
+		},
+		{
+			Type:  "AgentCapabilities",
+			Field: "LoadSession",
+			JSON:  "false",
+			New:   newOf[bool],
+			Value: func() any {
+				var v bool
+				return v
+			},
+		},
+		{
+			Type:  "AgentCapabilities",
+			Field: "McpCapabilities",
+			JSON:  "{\"acp\":false,\"http\":false,\"sse\":false}",
+			New:   newOf[McpCapabilities],
+			Value: func() any {
+				var v McpCapabilities
+				return v
+			},
+		},
+		{
+			Type:  "AgentCapabilities",
+			Field: "PromptCapabilities",
+			JSON:  "{\"audio\":false,\"embeddedContext\":false,\"image\":false}",
+			New:   newOf[PromptCapabilities],
+			Value: func() any {
+				var v PromptCapabilities
+				return v
+			},
+		},
+		{
+			Type:  "AgentCapabilities",
+			Field: "SessionCapabilities",
+			JSON:  "{}",
+			New:   newOf[SessionCapabilities],
+			Value: func() any {
+				var v SessionCapabilities
+				return v
+			},
+		},
+		{
+			Type:  "AuthCapabilities",
+			Field: "Terminal",
+			JSON:  "false",
+			New:   newOf[bool],
+			Value: func() any {
+				var v bool
+				return v
+			},
+		},
+		{
+			Type:  "ClientCapabilities",
+			Field: "Auth",
+			JSON:  "{\"terminal\":false}",
+			New:   newOf[AuthCapabilities],
+			Value: func() any {
+				var v AuthCapabilities
+				return v
+			},
+		},
+		{
+			Type:  "ClientCapabilities",
+			Field: "Fs",
+			JSON:  "{\"readTextFile\":false,\"writeTextFile\":false}",
+			New:   newOf[FileSystemCapabilities],
+			Value: func() any {
+				var v FileSystemCapabilities
+				return v
+			},
+		},
+		{
+			Type:  "ClientCapabilities",
+			Field: "Terminal",
+			JSON:  "false",
+			New:   newOf[bool],
+			Value: func() any {
+				var v bool
+				return v
+			},
+		},
+		{
+			Type:  "ElicitationSchema",
+			Field: "Properties",
+			JSON:  "{}",
+			New:   newOf[map[string]ElicitationPropertySchema],
+			Value: func() any {
+				return map[string]ElicitationPropertySchema{}
+			},
+		},
+		{
+			Type:  "ElicitationSchema",
+			Field: "Type",
+			JSON:  "\"object\"",
+			New:   newOf[ElicitationSchemaType],
+			Value: func() any {
+				return ElicitationSchemaTypeObject
+			},
+		},
+		{
+			Type:  "FileSystemCapabilities",
+			Field: "ReadTextFile",
+			JSON:  "false",
+			New:   newOf[bool],
+			Value: func() any {
+				var v bool
+				return v
+			},
+		},
+		{
+			Type:  "FileSystemCapabilities",
+			Field: "WriteTextFile",
+			JSON:  "false",
+			New:   newOf[bool],
+			Value: func() any {
+				var v bool
+				return v
+			},
+		},
+		{
+			Type:  "InitializeRequest",
+			Field: "ClientCapabilities",
+			JSON:  "{\"auth\":{\"terminal\":false},\"fs\":{\"readTextFile\":false,\"writeTextFile\":false},\"terminal\":false}",
+			New:   newOf[ClientCapabilities],
+			Value: func() any {
+				var v ClientCapabilities
+				return v
+			},
+		},
+		{
+			Type:  "InitializeResponse",
+			Field: "AgentCapabilities",
+			JSON:  "{\"auth\":{},\"loadSession\":false,\"mcpCapabilities\":{\"acp\":false,\"http\":false,\"sse\":false},\"promptCapabilities\":{\"audio\":false,\"embeddedContext\":false,\"image\":false},\"sessionCapabilities\":{}}",
+			New:   newOf[AgentCapabilities],
+			Value: func() any {
+				var v AgentCapabilities
+				return v
+			},
+		},
+		{
+			Type:  "InitializeResponse",
+			Field: "AuthMethods",
+			JSON:  "[]",
+			New:   newOf[[]AuthMethod],
+			Value: func() any {
+				return []AuthMethod{}
+			},
+		},
+		{
+			Type:  "McpCapabilities",
+			Field: "Acp",
+			JSON:  "false",
+			New:   newOf[bool],
+			Value: func() any {
+				var v bool
+				return v
+			},
+		},
+		{
+			Type:  "McpCapabilities",
+			Field: "Http",
+			JSON:  "false",
+			New:   newOf[bool],
+			Value: func() any {
+				var v bool
+				return v
+			},
+		},
+		{
+			Type:  "McpCapabilities",
+			Field: "Sse",
+			JSON:  "false",
+			New:   newOf[bool],
+			Value: func() any {
+				var v bool
+				return v
+			},
+		},
+		{
+			Type:  "PromptCapabilities",
+			Field: "Audio",
+			JSON:  "false",
+			New:   newOf[bool],
+			Value: func() any {
+				var v bool
+				return v
+			},
+		},
+		{
+			Type:  "PromptCapabilities",
+			Field: "EmbeddedContext",
+			JSON:  "false",
+			New:   newOf[bool],
+			Value: func() any {
+				var v bool
+				return v
+			},
+		},
+		{
+			Type:  "PromptCapabilities",
+			Field: "Image",
+			JSON:  "false",
+			New:   newOf[bool],
+			Value: func() any {
+				var v bool
+				return v
+			},
 		},
 	}
 }

@@ -50,6 +50,13 @@ func registryFile(m *model.Model) *goFile {
 		"schemaAbsolutePath is a property the protocol requires to be an absolute path: the Go",
 		"type of its definition, the definition's key in File, and the property.",
 	}, field("Type", id("string")), field("Def", id("string")), field("File", id("string")), field("Property", id("string")))
+	structDecl("schemaDefault", []string{
+		"schemaDefault is a field with a schema default: its struct, the field, the default's",
+		"JSON, New, which returns a pointer to a new value of the field's type, and Value,",
+		"which returns the default as the generated code writes it",
+		"(0019-PLAN-idioms-performance.md, D3).",
+	}, field("Type", id("string")), field("Field", id("string")), field("JSON", id("string")), field("New", newFunc),
+		field("Value", newFunc))
 	structDecl("schemaHelper", []string{
 		"schemaHelper is a union constructor of helpers_gen.go: the union, the variant field",
 		"it sets, and New, which calls it with each argument's zero value.",
@@ -95,6 +102,8 @@ func registryFile(m *model.Model) *goFile {
 	}
 	listFunc(f, "schemaMethods", "schemaMethod", methods,
 		"schemaMethods returns every wire method: the agent's, the client's, then the protocol's.")
+	listFunc(f, "schemaDefaults", "schemaDefault", defaultEntries(f, m, newFunc),
+		"schemaDefaults returns every field with a schema default, in the order of types_gen.go.")
 	listFunc(f, "schemaHelpers", "schemaHelper", helperEntries(f, m, newFunc),
 		"schemaHelpers returns every union constructor, in the order of helpers_gen.go.")
 	var paths []ast.Expr
@@ -139,6 +148,40 @@ func helperEntries(f *goFile, m *model.Model, newFunc *ast.FuncType) []ast.Expr 
 			out = append(out, composite(nil,
 				kv(id("Union"), str(t.Name)), kv(id("Field"), str(t.Variants[h.Variant].FieldName)),
 				kv(id("New"), &ast.FuncLit{Type: newFunc, Body: body})))
+		}
+	}
+	return out
+}
+
+// defaultEntries are the schemaDefault elements of m's fields with a default.
+// New is newOf the field's type; Value returns the default as an expression
+// of that type, or a variable of it holding its zero value.
+func defaultEntries(f *goFile, m *model.Model, newFunc *ast.FuncType) []ast.Expr {
+	var out []ast.Expr
+	add := func(owner string, fields []*model.Field) {
+		for _, fld := range fields {
+			if fld.Default == nil {
+				continue
+			}
+			body := block(varStmt("v", typeAST(f, fld.Type)), ret(id("v")))
+			if fld.Default.Value.Kind != model.ValueZero {
+				body = block(ret(typedExpr(f, fld.Type, fld.Default.Value)))
+			}
+			out = append(out, composite(nil,
+				kv(id("Type"), str(owner)), kv(id("Field"), str(fld.Name)), kv(id("JSON"), str(fld.Default.JSON)),
+				kv(id("New"), index(id("newOf"), typeAST(f, fld.Type))),
+				kv(id("Value"), &ast.FuncLit{Type: newFunc, Body: body})))
+		}
+	}
+	for _, t := range m.Types {
+		add(t.Name, t.Fields)
+		for _, ns := range t.NestedStructs {
+			add(ns.Name, ns.Fields)
+		}
+		for _, vi := range t.Variants {
+			if in := vi.Inline; in != nil && in.Kind == model.InlineStruct {
+				add(vi.TypeName, in.Fields)
+			}
 		}
 	}
 	return out

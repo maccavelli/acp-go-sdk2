@@ -46,8 +46,8 @@ func (v *AgentAuthCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AgentAuthCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Logout = orDefault[*LogoutCapabilities](s.Logout, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Logout = orZero[*LogoutCapabilities](s.Logout)
 	*v = AgentAuthCapabilities(a)
 	return nil
 }
@@ -113,11 +113,10 @@ type AgentCapabilities struct {
 
 // UnmarshalJSON decodes the AgentCapabilities schema definition's JSON into v.
 func (v *AgentCapabilities) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "AgentCapabilities")
+	_, err := objectKeys(b, "AgentCapabilities")
 	if err != nil {
 		return err
 	}
-	foldKeys(b, m, "auth", "loadSession", "mcpCapabilities", "promptCapabilities", "sessionCapabilities")
 	type Alias AgentCapabilities
 	var s struct {
 		Alias
@@ -135,45 +134,15 @@ func (v *AgentCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AgentCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Auth = orDefault[AgentAuthCapabilities](s.Auth, "{}")
-	a.LoadSession = orDefault[bool](s.LoadSession, "false")
-	a.McpCapabilities = orDefault[McpCapabilities](s.McpCapabilities, "{\"acp\":false,\"http\":false,\"sse\":false}")
-	a.Nes = orDefault[*NesCapabilities](s.Nes, "")
-	a.PositionEncoding = orDefault[*PositionEncodingKind](s.PositionEncoding, "")
-	a.PromptCapabilities = orDefault[PromptCapabilities](s.PromptCapabilities, "{\"audio\":false,\"embeddedContext\":false,\"image\":false}")
-	a.Providers = orDefault[*ProvidersCapabilities](s.Providers, "")
-	a.SessionCapabilities = orDefault[SessionCapabilities](s.SessionCapabilities, "{}")
-	{
-		_rm, _ok := m["auth"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("{}"), &a.Auth)
-		}
-	}
-	{
-		_rm, _ok := m["loadSession"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("false"), &a.LoadSession)
-		}
-	}
-	{
-		_rm, _ok := m["mcpCapabilities"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("{\"acp\":false,\"http\":false,\"sse\":false}"), &a.McpCapabilities)
-		}
-	}
-	{
-		_rm, _ok := m["promptCapabilities"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("{\"audio\":false,\"embeddedContext\":false,\"image\":false}"), &a.PromptCapabilities)
-		}
-	}
-	{
-		_rm, _ok := m["sessionCapabilities"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("{}"), &a.SessionCapabilities)
-		}
-	}
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Auth = orZero[AgentAuthCapabilities](s.Auth)
+	a.LoadSession = orZero[bool](s.LoadSession)
+	a.McpCapabilities = orZero[McpCapabilities](s.McpCapabilities)
+	a.Nes = orZero[*NesCapabilities](s.Nes)
+	a.PositionEncoding = orZero[*PositionEncodingKind](s.PositionEncoding)
+	a.PromptCapabilities = orZero[PromptCapabilities](s.PromptCapabilities)
+	a.Providers = orZero[*ProvidersCapabilities](s.Providers)
+	a.SessionCapabilities = orZero[SessionCapabilities](s.SessionCapabilities)
 	*v = AgentCapabilities(a)
 	return nil
 }
@@ -487,12 +456,12 @@ func (v *Annotations) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("Annotations: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[Role](s.Audience); err == nil {
 		a.Audience = items
 	}
-	a.LastModified = orDefault[*string](s.LastModified, "")
-	a.Priority = orDefault[*float64](s.Priority, "")
+	a.LastModified = orZero[*string](s.LastModified)
+	a.Priority = orZero[*float64](s.Priority)
 	*v = Annotations(a)
 	return nil
 }
@@ -529,8 +498,8 @@ func (v *AudioContent) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AudioContent: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Annotations = orDefault[*Annotations](s.Annotations, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Annotations = orZero[*Annotations](s.Annotations)
 	*v = AudioContent(a)
 	return nil
 }
@@ -559,11 +528,10 @@ type AuthCapabilities struct {
 
 // UnmarshalJSON decodes the AuthCapabilities schema definition's JSON into v.
 func (v *AuthCapabilities) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "AuthCapabilities")
+	_, err := objectKeys(b, "AuthCapabilities")
 	if err != nil {
 		return err
 	}
-	foldKeys(b, m, "terminal")
 	type Alias AuthCapabilities
 	var s struct {
 		Alias
@@ -574,14 +542,8 @@ func (v *AuthCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AuthCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Terminal = orDefault[bool](s.Terminal, "false")
-	{
-		_rm, _ok := m["terminal"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("false"), &a.Terminal)
-		}
-	}
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Terminal = orZero[bool](s.Terminal)
 	*v = AuthCapabilities(a)
 	return nil
 }
@@ -625,8 +587,8 @@ func (v *AuthMethodTerminalInline) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AuthMethodTerminalInline: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Description = orDefault[*string](s.Description, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Description = orZero[*string](s.Description)
 	*v = AuthMethodTerminalInline(a)
 	return nil
 }
@@ -795,8 +757,8 @@ func (v *AuthMethodAgent) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AuthMethodAgent: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Description = orDefault[*string](s.Description, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Description = orZero[*string](s.Description)
 	*v = AuthMethodAgent(a)
 	return nil
 }
@@ -847,8 +809,8 @@ func (v *AuthMethodTerminal) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AuthMethodTerminal: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Description = orDefault[*string](s.Description, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Description = orZero[*string](s.Description)
 	*v = AuthMethodTerminal(a)
 	return nil
 }
@@ -883,7 +845,7 @@ func (v *AuthenticateRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AuthenticateRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = AuthenticateRequest(a)
 	return nil
 }
@@ -922,7 +884,7 @@ func (v *AuthenticateResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AuthenticateResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = AuthenticateResponse(a)
 	return nil
 }
@@ -968,8 +930,8 @@ func (v *AvailableCommand) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AvailableCommand: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Input = orDefault[*AvailableCommandInput](s.Input, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Input = orZero[*AvailableCommandInput](s.Input)
 	*v = AvailableCommand(a)
 	return nil
 }
@@ -1107,7 +1069,7 @@ func (v *AvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("AvailableCommandsUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[AvailableCommand](s.AvailableCommands); err == nil {
 		a.AvailableCommands = items
 	}
@@ -1161,8 +1123,8 @@ func (v *BlobResourceContents) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("BlobResourceContents: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.MimeType = orDefault[*string](s.MimeType, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.MimeType = orZero[*string](s.MimeType)
 	*v = BlobResourceContents(a)
 	return nil
 }
@@ -1194,7 +1156,7 @@ func (v *BooleanConfigOptionCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("BooleanConfigOptionCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = BooleanConfigOptionCapabilities(a)
 	return nil
 }
@@ -1241,10 +1203,10 @@ func (v *BooleanPropertySchema) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("BooleanPropertySchema: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Default = orDefault[*bool](s.Default, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Default = orZero[*bool](s.Default)
+	a.Description = orZero[*string](s.Description)
+	a.Title = orZero[*string](s.Title)
 	*v = BooleanPropertySchema(a)
 	return nil
 }
@@ -1278,7 +1240,7 @@ func (v *CancelNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CancelNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CancelNotification(a)
 	return nil
 }
@@ -1321,7 +1283,7 @@ func (v *CancelRequestNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CancelRequestNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CancelRequestNotification(a)
 	return nil
 }
@@ -1416,11 +1378,10 @@ type ClientCapabilities struct {
 
 // UnmarshalJSON decodes the ClientCapabilities schema definition's JSON into v.
 func (v *ClientCapabilities) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "ClientCapabilities")
+	_, err := objectKeys(b, "ClientCapabilities")
 	if err != nil {
 		return err
 	}
-	foldKeys(b, m, "auth", "fs", "terminal")
 	type Alias ClientCapabilities
 	var s struct {
 		Alias
@@ -1439,36 +1400,18 @@ func (v *ClientCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ClientCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Auth = orDefault[AuthCapabilities](s.Auth, "{\"terminal\":false}")
-	a.Elicitation = orDefault[*ElicitationCapabilities](s.Elicitation, "")
-	a.Fs = orDefault[FileSystemCapabilities](s.Fs, "{\"readTextFile\":false,\"writeTextFile\":false}")
-	a.Nes = orDefault[*ClientNesCapabilities](s.Nes, "")
-	a.Plan = orDefault[*PlanCapabilities](s.Plan, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Auth = orZero[AuthCapabilities](s.Auth)
+	a.Elicitation = orZero[*ElicitationCapabilities](s.Elicitation)
+	a.Fs = orZero[FileSystemCapabilities](s.Fs)
+	a.Nes = orZero[*ClientNesCapabilities](s.Nes)
+	a.Plan = orZero[*PlanCapabilities](s.Plan)
 	if items, err := skipInvalid[PositionEncodingKind](s.PositionEncodings); err == nil {
 		a.PositionEncodings = items
 	}
-	a.Session = orDefault[*ClientSessionCapabilities](s.Session, "")
-	a.Subagents = orDefault[*SubagentCapabilities](s.Subagents, "")
-	a.Terminal = orDefault[bool](s.Terminal, "false")
-	{
-		_rm, _ok := m["auth"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("{\"terminal\":false}"), &a.Auth)
-		}
-	}
-	{
-		_rm, _ok := m["fs"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("{\"readTextFile\":false,\"writeTextFile\":false}"), &a.Fs)
-		}
-	}
-	{
-		_rm, _ok := m["terminal"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("false"), &a.Terminal)
-		}
-	}
+	a.Session = orZero[*ClientSessionCapabilities](s.Session)
+	a.Subagents = orZero[*SubagentCapabilities](s.Subagents)
+	a.Terminal = orZero[bool](s.Terminal)
 	*v = ClientCapabilities(a)
 	return nil
 }
@@ -1511,10 +1454,10 @@ func (v *ClientNesCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ClientNesCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Jump = orDefault[*NesJumpCapabilities](s.Jump, "")
-	a.Rename = orDefault[*NesRenameCapabilities](s.Rename, "")
-	a.SearchAndReplace = orDefault[*NesSearchAndReplaceCapabilities](s.SearchAndReplace, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Jump = orZero[*NesJumpCapabilities](s.Jump)
+	a.Rename = orZero[*NesRenameCapabilities](s.Rename)
+	a.SearchAndReplace = orZero[*NesSearchAndReplaceCapabilities](s.SearchAndReplace)
 	*v = ClientNesCapabilities(a)
 	return nil
 }
@@ -1835,10 +1778,10 @@ func (v *ClientSessionCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ClientSessionCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Compaction = orDefault[*CompactionCapabilities](s.Compaction, "")
-	a.ConfigOptions = orDefault[*SessionConfigOptionsCapabilities](s.ConfigOptions, "")
-	a.Notices = orDefault[*NoticeCapabilities](s.Notices, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Compaction = orZero[*CompactionCapabilities](s.Compaction)
+	a.ConfigOptions = orZero[*SessionConfigOptionsCapabilities](s.ConfigOptions)
+	a.Notices = orZero[*NoticeCapabilities](s.Notices)
 	*v = ClientSessionCapabilities(a)
 	return nil
 }
@@ -1876,7 +1819,7 @@ func (v *CloseSessionRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CloseSessionRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CloseSessionRequest(a)
 	return nil
 }
@@ -1915,7 +1858,7 @@ func (v *CloseSessionResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CloseSessionResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CloseSessionResponse(a)
 	return nil
 }
@@ -1985,7 +1928,7 @@ func (v *CompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CompactionSummaryChunk: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CompactionSummaryChunk(a)
 	return nil
 }
@@ -2092,7 +2035,7 @@ func (v *CompleteElicitationNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CompleteElicitationNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CompleteElicitationNotification(a)
 	return nil
 }
@@ -2144,7 +2087,7 @@ func (v *ConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ConfigOptionUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
 		a.ConfigOptions = items
 	}
@@ -2193,7 +2136,7 @@ func (v *Content) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("Content: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = Content(a)
 	return nil
 }
@@ -2244,8 +2187,8 @@ func (v *ContentBlockText) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ContentBlockText: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Annotations = orDefault[*Annotations](s.Annotations, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Annotations = orZero[*Annotations](s.Annotations)
 	*v = ContentBlockText(a)
 	return nil
 }
@@ -2288,9 +2231,9 @@ func (v *ContentBlockImage) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ContentBlockImage: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Annotations = orDefault[*Annotations](s.Annotations, "")
-	a.Uri = orDefault[*string](s.Uri, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Annotations = orZero[*Annotations](s.Annotations)
+	a.Uri = orZero[*string](s.Uri)
 	*v = ContentBlockImage(a)
 	return nil
 }
@@ -2330,8 +2273,8 @@ func (v *ContentBlockAudio) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ContentBlockAudio: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Annotations = orDefault[*Annotations](s.Annotations, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Annotations = orZero[*Annotations](s.Annotations)
 	*v = ContentBlockAudio(a)
 	return nil
 }
@@ -2383,12 +2326,12 @@ func (v *ContentBlockResourceLink) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ContentBlockResourceLink: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Annotations = orDefault[*Annotations](s.Annotations, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.MimeType = orDefault[*string](s.MimeType, "")
-	a.Size = orDefault[*int64](s.Size, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Annotations = orZero[*Annotations](s.Annotations)
+	a.Description = orZero[*string](s.Description)
+	a.MimeType = orZero[*string](s.MimeType)
+	a.Size = orZero[*int64](s.Size)
+	a.Title = orZero[*string](s.Title)
 	*v = ContentBlockResourceLink(a)
 	return nil
 }
@@ -2428,8 +2371,8 @@ func (v *ContentBlockResource) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ContentBlockResource: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Annotations = orDefault[*Annotations](s.Annotations, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Annotations = orZero[*Annotations](s.Annotations)
 	*v = ContentBlockResource(a)
 	return nil
 }
@@ -2786,8 +2729,8 @@ func (v *ContentChunk) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ContentChunk: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.MessageId = orDefault[*MessageId](s.MessageId, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.MessageId = orZero[*MessageId](s.MessageId)
 	*v = ContentChunk(a)
 	return nil
 }
@@ -2833,7 +2776,7 @@ func (v *Cost) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("Cost: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = Cost(a)
 	return nil
 }
@@ -2897,7 +2840,7 @@ func (v *CreateElicitationForm) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CreateElicitationForm: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	switch {
 	case m["sessionId"] != nil:
 		var x ElicitationSessionScope
@@ -3010,7 +2953,7 @@ func (v *CreateElicitationUrl) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CreateElicitationUrl: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	switch {
 	case m["sessionId"] != nil:
 		var x ElicitationSessionScope
@@ -3126,7 +3069,7 @@ func (v *CreateElicitationOther) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CreateElicitationOther: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	for _, k := range []string{
 		"_meta",
 		"message",
@@ -3365,7 +3308,7 @@ func (v *CreateElicitationAccept) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CreateElicitationAccept: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CreateElicitationAccept(a)
 	return nil
 }
@@ -3413,7 +3356,7 @@ func (v *CreateElicitationDecline) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CreateElicitationDecline: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CreateElicitationDecline(a)
 	return nil
 }
@@ -3446,7 +3389,7 @@ func (v *CreateElicitationCancel) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CreateElicitationCancel: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CreateElicitationCancel(a)
 	return nil
 }
@@ -3516,7 +3459,7 @@ func (v *CreateElicitationResponseOther) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CreateElicitationResponseOther: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	for _, k := range []string{
 		"_meta",
 		"action",
@@ -3773,7 +3716,7 @@ func (v *CreateTerminalRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CreateTerminalRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CreateTerminalRequest(a)
 	return nil
 }
@@ -3823,7 +3766,7 @@ func (v *CreateTerminalResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CreateTerminalResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CreateTerminalResponse(a)
 	return nil
 }
@@ -3866,7 +3809,7 @@ func (v *CurrentModeUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("CurrentModeUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = CurrentModeUpdate(a)
 	return nil
 }
@@ -3900,7 +3843,7 @@ func (v *DeleteSessionRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("DeleteSessionRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = DeleteSessionRequest(a)
 	return nil
 }
@@ -3939,7 +3882,7 @@ func (v *DeleteSessionResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("DeleteSessionResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = DeleteSessionResponse(a)
 	return nil
 }
@@ -3989,8 +3932,8 @@ func (v *Diff) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("Diff: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.OldText = orDefault[*string](s.OldText, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.OldText = orZero[*string](s.OldText)
 	*v = Diff(a)
 	return nil
 }
@@ -4073,9 +4016,9 @@ func (v *ElicitationCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ElicitationCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Form = orDefault[*ElicitationFormCapabilities](s.Form, "")
-	a.Url = orDefault[*ElicitationUrlCapabilities](s.Url, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Form = orZero[*ElicitationFormCapabilities](s.Form)
+	a.Url = orZero[*ElicitationUrlCapabilities](s.Url)
 	*v = ElicitationCapabilities(a)
 	return nil
 }
@@ -4245,7 +4188,7 @@ func (v *ElicitationFormCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ElicitationFormCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = ElicitationFormCapabilities(a)
 	return nil
 }
@@ -4415,10 +4358,10 @@ func (v *ElicitationPropertySchemaString) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ElicitationPropertySchemaString: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Default = orDefault[*string](s.Default, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Default = orZero[*string](s.Default)
+	a.Description = orZero[*string](s.Description)
+	a.Title = orZero[*string](s.Title)
 	*v = ElicitationPropertySchemaString(a)
 	return nil
 }
@@ -4474,10 +4417,10 @@ func (v *ElicitationPropertySchemaNumber) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ElicitationPropertySchemaNumber: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Default = orDefault[*float64](s.Default, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Default = orZero[*float64](s.Default)
+	a.Description = orZero[*string](s.Description)
+	a.Title = orZero[*string](s.Title)
 	*v = ElicitationPropertySchemaNumber(a)
 	return nil
 }
@@ -4533,10 +4476,10 @@ func (v *ElicitationPropertySchemaInteger) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ElicitationPropertySchemaInteger: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Default = orDefault[*int64](s.Default, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Default = orZero[*int64](s.Default)
+	a.Description = orZero[*string](s.Description)
+	a.Title = orZero[*string](s.Title)
 	*v = ElicitationPropertySchemaInteger(a)
 	return nil
 }
@@ -4584,10 +4527,10 @@ func (v *ElicitationPropertySchemaBoolean) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ElicitationPropertySchemaBoolean: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Default = orDefault[*bool](s.Default, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Default = orZero[*bool](s.Default)
+	a.Description = orZero[*string](s.Description)
+	a.Title = orZero[*string](s.Title)
 	*v = ElicitationPropertySchemaBoolean(a)
 	return nil
 }
@@ -4645,12 +4588,12 @@ func (v *ElicitationPropertySchemaArray) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ElicitationPropertySchemaArray: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[string](s.Default); err == nil {
 		a.Default = items
 	}
-	a.Description = orDefault[*string](s.Description, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Description = orZero[*string](s.Description)
+	a.Title = orZero[*string](s.Title)
 	*v = ElicitationPropertySchemaArray(a)
 	return nil
 }
@@ -5083,7 +5026,7 @@ func (v ElicitationSchema) MarshalJSON() ([]byte, error) {
 	type Alias ElicitationSchema
 	a := Alias(v)
 	if a.Properties == nil {
-		json.Unmarshal([]byte("{}"), &a.Properties)
+		a.Properties = map[string]ElicitationPropertySchema{}
 	}
 	if len(v.PropertyOrder) == 0 {
 		return json.Marshal(a)
@@ -5125,20 +5068,20 @@ func (v *ElicitationSchema) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ElicitationSchema: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.Title = orDefault[*string](s.Title, "")
-	a.Type = orDefault[ElicitationSchemaType](s.Type, "\"object\"")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Description = orZero[*string](s.Description)
+	a.Title = orZero[*string](s.Title)
+	a.Type = orDefault[ElicitationSchemaType](s.Type, ElicitationSchemaTypeObject)
 	{
 		_rm, _ok := m["properties"]
 		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("{}"), &a.Properties)
+			a.Properties = map[string]ElicitationPropertySchema{}
 		}
 	}
 	{
 		_rm, _ok := m["type"]
 		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("\"object\""), &a.Type)
+			a.Type = ElicitationSchemaTypeObject
 		}
 	}
 	a.PropertyOrder = keyOrder(m["properties"])
@@ -5201,7 +5144,7 @@ func (v *ElicitationSessionScope) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ElicitationSessionScope: %w", err)
 	}
 	a := s.Alias
-	a.ToolCallId = orDefault[*ToolCallId](s.ToolCallId, "")
+	a.ToolCallId = orZero[*ToolCallId](s.ToolCallId)
 	*v = ElicitationSessionScope(a)
 	return nil
 }
@@ -5235,7 +5178,7 @@ func (v *ElicitationUrlCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ElicitationUrlCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = ElicitationUrlCapabilities(a)
 	return nil
 }
@@ -5364,8 +5307,8 @@ func (v *EmbeddedResource) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("EmbeddedResource: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Annotations = orDefault[*Annotations](s.Annotations, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Annotations = orZero[*Annotations](s.Annotations)
 	*v = EmbeddedResource(a)
 	return nil
 }
@@ -5542,8 +5485,8 @@ func (v *EnumOption) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("EnumOption: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Description = orDefault[*string](s.Description, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Description = orZero[*string](s.Description)
 	*v = EnumOption(a)
 	return nil
 }
@@ -5577,7 +5520,7 @@ func (v *EnvVariable) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("EnvVariable: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = EnvVariable(a)
 	return nil
 }
@@ -5615,7 +5558,7 @@ func (v *Error) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("Error: %w", err)
 	}
 	a := s.Alias
-	a.Data = orDefault[json.RawMessage](s.Data, "")
+	a.Data = orZero[json.RawMessage](s.Data)
 	a.Data = absentIfNull(a.Data)
 	*v = Error(a)
 	return nil
@@ -5693,7 +5636,7 @@ func (v *ErrorStopReason) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ErrorStopReason: %w", err)
 	}
 	a := s.Alias
-	a.Error = orDefault[*Error](s.Error, "")
+	a.Error = orZero[*Error](s.Error)
 	*v = ErrorStopReason(a)
 	return nil
 }
@@ -5741,11 +5684,10 @@ type FileSystemCapabilities struct {
 
 // UnmarshalJSON decodes the FileSystemCapabilities schema definition's JSON into v.
 func (v *FileSystemCapabilities) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "FileSystemCapabilities")
+	_, err := objectKeys(b, "FileSystemCapabilities")
 	if err != nil {
 		return err
 	}
-	foldKeys(b, m, "readTextFile", "writeTextFile")
 	type Alias FileSystemCapabilities
 	var s struct {
 		Alias
@@ -5757,21 +5699,9 @@ func (v *FileSystemCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("FileSystemCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.ReadTextFile = orDefault[bool](s.ReadTextFile, "false")
-	a.WriteTextFile = orDefault[bool](s.WriteTextFile, "false")
-	{
-		_rm, _ok := m["readTextFile"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("false"), &a.ReadTextFile)
-		}
-	}
-	{
-		_rm, _ok := m["writeTextFile"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("false"), &a.WriteTextFile)
-		}
-	}
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.ReadTextFile = orZero[bool](s.ReadTextFile)
+	a.WriteTextFile = orZero[bool](s.WriteTextFile)
 	*v = FileSystemCapabilities(a)
 	return nil
 }
@@ -5805,7 +5735,7 @@ func (v *HttpHeader) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("HttpHeader: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = HttpHeader(a)
 	return nil
 }
@@ -5839,8 +5769,8 @@ func (v *IdleStateUpdateEndTurn) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("IdleStateUpdateEndTurn: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Usage = orDefault[*Usage](s.Usage, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Usage = orZero[*Usage](s.Usage)
 	*v = IdleStateUpdateEndTurn(a)
 	return nil
 }
@@ -5874,8 +5804,8 @@ func (v *IdleStateUpdateMaxTokens) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("IdleStateUpdateMaxTokens: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Usage = orDefault[*Usage](s.Usage, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Usage = orZero[*Usage](s.Usage)
 	*v = IdleStateUpdateMaxTokens(a)
 	return nil
 }
@@ -5910,8 +5840,8 @@ func (v *IdleStateUpdateMaxTurnRequests) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("IdleStateUpdateMaxTurnRequests: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Usage = orDefault[*Usage](s.Usage, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Usage = orZero[*Usage](s.Usage)
 	*v = IdleStateUpdateMaxTurnRequests(a)
 	return nil
 }
@@ -5945,8 +5875,8 @@ func (v *IdleStateUpdateRefusal) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("IdleStateUpdateRefusal: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Usage = orDefault[*Usage](s.Usage, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Usage = orZero[*Usage](s.Usage)
 	*v = IdleStateUpdateRefusal(a)
 	return nil
 }
@@ -5980,8 +5910,8 @@ func (v *IdleStateUpdateCancelled) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("IdleStateUpdateCancelled: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Usage = orDefault[*Usage](s.Usage, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Usage = orZero[*Usage](s.Usage)
 	*v = IdleStateUpdateCancelled(a)
 	return nil
 }
@@ -6021,9 +5951,9 @@ func (v *IdleStateUpdateError) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("IdleStateUpdateError: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Error = orDefault[*Error](s.Error, "")
-	a.Usage = orDefault[*Usage](s.Usage, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Error = orZero[*Error](s.Error)
+	a.Usage = orZero[*Usage](s.Usage)
 	*v = IdleStateUpdateError(a)
 	return nil
 }
@@ -6085,8 +6015,8 @@ func (v *IdleStateUpdateOther) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("IdleStateUpdateOther: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Usage = orDefault[*Usage](s.Usage, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Usage = orZero[*Usage](s.Usage)
 	for _, k := range []string{
 		"_meta",
 		"stopReason",
@@ -6130,8 +6060,8 @@ func (v *IdleStateUpdateNone) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("IdleStateUpdateNone: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Usage = orDefault[*Usage](s.Usage, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Usage = orZero[*Usage](s.Usage)
 	a.StopReason = absentIfNull(a.StopReason)
 	*v = IdleStateUpdateNone(a)
 	return nil
@@ -6431,9 +6361,9 @@ func (v *ImageContent) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ImageContent: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Annotations = orDefault[*Annotations](s.Annotations, "")
-	a.Uri = orDefault[*string](s.Uri, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Annotations = orZero[*Annotations](s.Annotations)
+	a.Uri = orZero[*string](s.Uri)
 	*v = ImageContent(a)
 	return nil
 }
@@ -6477,8 +6407,8 @@ func (v *Implementation) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("Implementation: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Title = orZero[*string](s.Title)
 	*v = Implementation(a)
 	return nil
 }
@@ -6509,11 +6439,10 @@ type InitializeRequest struct {
 
 // UnmarshalJSON decodes the InitializeRequest schema definition's JSON into v.
 func (v *InitializeRequest) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "InitializeRequest", "protocolVersion")
+	_, err := objectKeys(b, "InitializeRequest", "protocolVersion")
 	if err != nil {
 		return err
 	}
-	foldKeys(b, m, "clientCapabilities")
 	type Alias InitializeRequest
 	var s struct {
 		Alias
@@ -6525,15 +6454,9 @@ func (v *InitializeRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("InitializeRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.ClientCapabilities = orDefault[ClientCapabilities](s.ClientCapabilities, "{\"auth\":{\"terminal\":false},\"fs\":{\"readTextFile\":false,\"writeTextFile\":false},\"terminal\":false}")
-	a.ClientInfo = orDefault[*Implementation](s.ClientInfo, "")
-	{
-		_rm, _ok := m["clientCapabilities"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("{\"auth\":{\"terminal\":false},\"fs\":{\"readTextFile\":false,\"writeTextFile\":false},\"terminal\":false}"), &a.ClientCapabilities)
-		}
-	}
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.ClientCapabilities = orZero[ClientCapabilities](s.ClientCapabilities)
+	a.ClientInfo = orZero[*Implementation](s.ClientInfo)
 	*v = InitializeRequest(a)
 	return nil
 }
@@ -6583,7 +6506,7 @@ func (v InitializeResponse) MarshalJSON() ([]byte, error) {
 	type Alias InitializeResponse
 	a := Alias(v)
 	if a.AuthMethods == nil {
-		json.Unmarshal([]byte("[]"), &a.AuthMethods)
+		a.AuthMethods = []AuthMethod{}
 	}
 	return json.Marshal(a)
 }
@@ -6594,7 +6517,7 @@ func (v *InitializeResponse) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
-	foldKeys(b, m, "agentCapabilities", "authMethods")
+	foldKeys(b, m, "authMethods")
 	type Alias InitializeResponse
 	var s struct {
 		Alias
@@ -6607,24 +6530,18 @@ func (v *InitializeResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("InitializeResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.AgentCapabilities = orDefault[AgentCapabilities](s.AgentCapabilities, "{\"auth\":{},\"loadSession\":false,\"mcpCapabilities\":{\"acp\":false,\"http\":false,\"sse\":false},\"promptCapabilities\":{\"audio\":false,\"embeddedContext\":false,\"image\":false},\"sessionCapabilities\":{}}")
-	a.AgentInfo = orDefault[*Implementation](s.AgentInfo, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.AgentCapabilities = orZero[AgentCapabilities](s.AgentCapabilities)
+	a.AgentInfo = orZero[*Implementation](s.AgentInfo)
 	if items, err := skipInvalid[AuthMethod](s.AuthMethods); err == nil {
 		a.AuthMethods = items
 	} else {
-		a.AuthMethods = orDefault[[]AuthMethod](nil, "[]")
-	}
-	{
-		_rm, _ok := m["agentCapabilities"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("{\"auth\":{},\"loadSession\":false,\"mcpCapabilities\":{\"acp\":false,\"http\":false,\"sse\":false},\"promptCapabilities\":{\"audio\":false,\"embeddedContext\":false,\"image\":false},\"sessionCapabilities\":{}}"), &a.AgentCapabilities)
-		}
+		a.AuthMethods = []AuthMethod{}
 	}
 	{
 		_rm, _ok := m["authMethods"]
 		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("[]"), &a.AuthMethods)
+			a.AuthMethods = []AuthMethod{}
 		}
 	}
 	*v = InitializeResponse(a)
@@ -6695,10 +6612,10 @@ func (v *IntegerPropertySchema) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("IntegerPropertySchema: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Default = orDefault[*int64](s.Default, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Default = orZero[*int64](s.Default)
+	a.Description = orZero[*string](s.Description)
+	a.Title = orZero[*string](s.Title)
 	*v = IntegerPropertySchema(a)
 	return nil
 }
@@ -6732,7 +6649,7 @@ func (v *KillTerminalRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("KillTerminalRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = KillTerminalRequest(a)
 	return nil
 }
@@ -6771,7 +6688,7 @@ func (v *KillTerminalResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("KillTerminalResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = KillTerminalResponse(a)
 	return nil
 }
@@ -6816,7 +6733,7 @@ func (v *ListSessionsRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ListSessionsRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = ListSessionsRequest(a)
 	return nil
 }
@@ -6881,8 +6798,8 @@ func (v *ListSessionsResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ListSessionsResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.NextCursor = orDefault[*string](s.NextCursor, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.NextCursor = orZero[*string](s.NextCursor)
 	if items, err := skipInvalid[SessionInfo](s.Sessions); err == nil {
 		a.Sessions = items
 	}
@@ -6956,7 +6873,7 @@ func (v *LoadSessionRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("LoadSessionRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = LoadSessionRequest(a)
 	return nil
 }
@@ -7028,11 +6945,11 @@ func (v *LoadSessionResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("LoadSessionResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
 		a.ConfigOptions = items
 	}
-	a.Modes = orDefault[*SessionModeState](s.Modes, "")
+	a.Modes = orZero[*SessionModeState](s.Modes)
 	*v = LoadSessionResponse(a)
 	return nil
 }
@@ -7078,7 +6995,7 @@ func (v *LogoutCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("LogoutCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = LogoutCapabilities(a)
 	return nil
 }
@@ -7110,7 +7027,7 @@ func (v *LogoutRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("LogoutRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = LogoutRequest(a)
 	return nil
 }
@@ -7149,7 +7066,7 @@ func (v *LogoutResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("LogoutResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = LogoutResponse(a)
 	return nil
 }
@@ -7191,11 +7108,10 @@ type McpCapabilities struct {
 
 // UnmarshalJSON decodes the McpCapabilities schema definition's JSON into v.
 func (v *McpCapabilities) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "McpCapabilities")
+	_, err := objectKeys(b, "McpCapabilities")
 	if err != nil {
 		return err
 	}
-	foldKeys(b, m, "acp", "http", "sse")
 	type Alias McpCapabilities
 	var s struct {
 		Alias
@@ -7208,28 +7124,10 @@ func (v *McpCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("McpCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Acp = orDefault[bool](s.Acp, "false")
-	a.Http = orDefault[bool](s.Http, "false")
-	a.Sse = orDefault[bool](s.Sse, "false")
-	{
-		_rm, _ok := m["acp"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("false"), &a.Acp)
-		}
-	}
-	{
-		_rm, _ok := m["http"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("false"), &a.Http)
-		}
-	}
-	{
-		_rm, _ok := m["sse"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("false"), &a.Sse)
-		}
-	}
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Acp = orZero[bool](s.Acp)
+	a.Http = orZero[bool](s.Http)
+	a.Sse = orZero[bool](s.Sse)
 	*v = McpCapabilities(a)
 	return nil
 }
@@ -7278,7 +7176,7 @@ func (v *McpServerHttpInline) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("McpServerHttpInline: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = McpServerHttpInline(a)
 	return nil
 }
@@ -7327,7 +7225,7 @@ func (v *McpServerSseInline) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("McpServerSseInline: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = McpServerSseInline(a)
 	return nil
 }
@@ -7372,7 +7270,7 @@ func (v *McpServerAcpInline) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("McpServerAcpInline: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = McpServerAcpInline(a)
 	return nil
 }
@@ -7618,7 +7516,7 @@ func (v *McpServerAcp) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("McpServerAcp: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = McpServerAcp(a)
 	return nil
 }
@@ -7674,7 +7572,7 @@ func (v *McpServerHttp) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("McpServerHttp: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = McpServerHttp(a)
 	return nil
 }
@@ -7720,7 +7618,7 @@ func (v *McpServerSse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("McpServerSse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = McpServerSse(a)
 	return nil
 }
@@ -7771,7 +7669,7 @@ func (v *McpServerStdio) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("McpServerStdio: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = McpServerStdio(a)
 	return nil
 }
@@ -7837,7 +7735,7 @@ func (v *MultiSelectItemsString) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("MultiSelectItemsString: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = MultiSelectItemsString(a)
 	return nil
 }
@@ -8092,12 +7990,12 @@ func (v *MultiSelectPropertySchema) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("MultiSelectPropertySchema: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[string](s.Default); err == nil {
 		a.Default = items
 	}
-	a.Description = orDefault[*string](s.Description, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Description = orZero[*string](s.Description)
+	a.Title = orZero[*string](s.Title)
 	*v = MultiSelectPropertySchema(a)
 	return nil
 }
@@ -8149,9 +8047,9 @@ func (v *NesCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Context = orDefault[*NesContextCapabilities](s.Context, "")
-	a.Events = orDefault[*NesEventCapabilities](s.Events, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Context = orZero[*NesContextCapabilities](s.Context)
+	a.Events = orZero[*NesEventCapabilities](s.Events)
 	*v = NesCapabilities(a)
 	return nil
 }
@@ -8203,13 +8101,13 @@ func (v *NesContextCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesContextCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Diagnostics = orDefault[*NesDiagnosticsCapabilities](s.Diagnostics, "")
-	a.EditHistory = orDefault[*NesEditHistoryCapabilities](s.EditHistory, "")
-	a.OpenFiles = orDefault[*NesOpenFilesCapabilities](s.OpenFiles, "")
-	a.RecentFiles = orDefault[*NesRecentFilesCapabilities](s.RecentFiles, "")
-	a.RelatedSnippets = orDefault[*NesRelatedSnippetsCapabilities](s.RelatedSnippets, "")
-	a.UserActions = orDefault[*NesUserActionsCapabilities](s.UserActions, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Diagnostics = orZero[*NesDiagnosticsCapabilities](s.Diagnostics)
+	a.EditHistory = orZero[*NesEditHistoryCapabilities](s.EditHistory)
+	a.OpenFiles = orZero[*NesOpenFilesCapabilities](s.OpenFiles)
+	a.RecentFiles = orZero[*NesRecentFilesCapabilities](s.RecentFiles)
+	a.RelatedSnippets = orZero[*NesRelatedSnippetsCapabilities](s.RelatedSnippets)
+	a.UserActions = orZero[*NesUserActionsCapabilities](s.UserActions)
 	*v = NesContextCapabilities(a)
 	return nil
 }
@@ -8243,7 +8141,7 @@ func (v *NesDiagnosticsCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesDiagnosticsCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesDiagnosticsCapabilities(a)
 	return nil
 }
@@ -8279,7 +8177,7 @@ func (v *NesDocumentDidChangeCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesDocumentDidChangeCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesDocumentDidChangeCapabilities(a)
 	return nil
 }
@@ -8313,7 +8211,7 @@ func (v *NesDocumentDidCloseCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesDocumentDidCloseCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesDocumentDidCloseCapabilities(a)
 	return nil
 }
@@ -8347,7 +8245,7 @@ func (v *NesDocumentDidFocusCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesDocumentDidFocusCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesDocumentDidFocusCapabilities(a)
 	return nil
 }
@@ -8381,7 +8279,7 @@ func (v *NesDocumentDidOpenCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesDocumentDidOpenCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesDocumentDidOpenCapabilities(a)
 	return nil
 }
@@ -8415,7 +8313,7 @@ func (v *NesDocumentDidSaveCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesDocumentDidSaveCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesDocumentDidSaveCapabilities(a)
 	return nil
 }
@@ -8464,12 +8362,12 @@ func (v *NesDocumentEventCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesDocumentEventCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.DidChange = orDefault[*NesDocumentDidChangeCapabilities](s.DidChange, "")
-	a.DidClose = orDefault[*NesDocumentDidCloseCapabilities](s.DidClose, "")
-	a.DidFocus = orDefault[*NesDocumentDidFocusCapabilities](s.DidFocus, "")
-	a.DidOpen = orDefault[*NesDocumentDidOpenCapabilities](s.DidOpen, "")
-	a.DidSave = orDefault[*NesDocumentDidSaveCapabilities](s.DidSave, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.DidChange = orZero[*NesDocumentDidChangeCapabilities](s.DidChange)
+	a.DidClose = orZero[*NesDocumentDidCloseCapabilities](s.DidClose)
+	a.DidFocus = orZero[*NesDocumentDidFocusCapabilities](s.DidFocus)
+	a.DidOpen = orZero[*NesDocumentDidOpenCapabilities](s.DidOpen)
+	a.DidSave = orZero[*NesDocumentDidSaveCapabilities](s.DidSave)
 	*v = NesDocumentEventCapabilities(a)
 	return nil
 }
@@ -8506,8 +8404,8 @@ func (v *NesEditHistoryCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesEditHistoryCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.MaxCount = orDefault[*uint32](s.MaxCount, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.MaxCount = orZero[*uint32](s.MaxCount)
 	*v = NesEditHistoryCapabilities(a)
 	return nil
 }
@@ -8544,8 +8442,8 @@ func (v *NesEventCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesEventCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Document = orDefault[*NesDocumentEventCapabilities](s.Document, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Document = orZero[*NesDocumentEventCapabilities](s.Document)
 	*v = NesEventCapabilities(a)
 	return nil
 }
@@ -8579,7 +8477,7 @@ func (v *NesJumpCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesJumpCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesJumpCapabilities(a)
 	return nil
 }
@@ -8613,7 +8511,7 @@ func (v *NesOpenFilesCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesOpenFilesCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesOpenFilesCapabilities(a)
 	return nil
 }
@@ -8650,8 +8548,8 @@ func (v *NesRecentFilesCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesRecentFilesCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.MaxCount = orDefault[*uint32](s.MaxCount, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.MaxCount = orZero[*uint32](s.MaxCount)
 	*v = NesRecentFilesCapabilities(a)
 	return nil
 }
@@ -8685,7 +8583,7 @@ func (v *NesRelatedSnippetsCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesRelatedSnippetsCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesRelatedSnippetsCapabilities(a)
 	return nil
 }
@@ -8719,7 +8617,7 @@ func (v *NesRenameCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesRenameCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesRenameCapabilities(a)
 	return nil
 }
@@ -8753,7 +8651,7 @@ func (v *NesSearchAndReplaceCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesSearchAndReplaceCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesSearchAndReplaceCapabilities(a)
 	return nil
 }
@@ -8790,8 +8688,8 @@ func (v *NesUserActionsCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NesUserActionsCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.MaxCount = orDefault[*uint32](s.MaxCount, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.MaxCount = orZero[*uint32](s.MaxCount)
 	*v = NesUserActionsCapabilities(a)
 	return nil
 }
@@ -8843,7 +8741,7 @@ func (v *NewSessionRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NewSessionRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NewSessionRequest(a)
 	return nil
 }
@@ -8921,11 +8819,11 @@ func (v *NewSessionResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NewSessionResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
 		a.ConfigOptions = items
 	}
-	a.Modes = orDefault[*SessionModeState](s.Modes, "")
+	a.Modes = orZero[*SessionModeState](s.Modes)
 	*v = NewSessionResponse(a)
 	return nil
 }
@@ -8984,8 +8882,8 @@ func (v *Notice) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("Notice: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Description = orDefault[*string](s.Description, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Description = orZero[*string](s.Description)
 	*v = Notice(a)
 	return nil
 }
@@ -9079,10 +8977,10 @@ func (v *NumberPropertySchema) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("NumberPropertySchema: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Default = orDefault[*float64](s.Default, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Default = orZero[*float64](s.Default)
+	a.Description = orZero[*string](s.Description)
+	a.Title = orZero[*string](s.Title)
 	*v = NumberPropertySchema(a)
 	return nil
 }
@@ -9118,7 +9016,7 @@ func (v *PermissionOption) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PermissionOption: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = PermissionOption(a)
 	return nil
 }
@@ -9197,7 +9095,7 @@ func (v *Plan) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("Plan: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[PlanEntry](s.Entries); err == nil {
 		a.Entries = items
 	}
@@ -9234,7 +9132,7 @@ func (v *PlanCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PlanCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = PlanCapabilities(a)
 	return nil
 }
@@ -9275,7 +9173,7 @@ func (v *PlanEntry) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PlanEntry: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = PlanEntry(a)
 	return nil
 }
@@ -9356,7 +9254,7 @@ func (v *PlanFile) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PlanFile: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = PlanFile(a)
 	return nil
 }
@@ -9415,7 +9313,7 @@ func (v *PlanItems) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PlanItems: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[PlanEntry](s.Entries); err == nil {
 		a.Entries = items
 	}
@@ -9456,7 +9354,7 @@ func (v *PlanMarkdown) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PlanMarkdown: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = PlanMarkdown(a)
 	return nil
 }
@@ -9492,7 +9390,7 @@ func (v *PlanRemoved) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PlanRemoved: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = PlanRemoved(a)
 	return nil
 }
@@ -9528,7 +9426,7 @@ func (v *PlanUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PlanUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = PlanUpdate(a)
 	return nil
 }
@@ -9589,7 +9487,7 @@ func (v *PlanUpdateContentItems) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PlanUpdateContentItems: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[PlanEntry](s.Entries); err == nil {
 		a.Entries = items
 	}
@@ -9627,7 +9525,7 @@ func (v *PlanUpdateContentFile) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PlanUpdateContentFile: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = PlanUpdateContentFile(a)
 	return nil
 }
@@ -9662,7 +9560,7 @@ func (v *PlanUpdateContentMarkdown) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PlanUpdateContentMarkdown: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = PlanUpdateContentMarkdown(a)
 	return nil
 }
@@ -9929,11 +9827,10 @@ type PromptCapabilities struct {
 
 // UnmarshalJSON decodes the PromptCapabilities schema definition's JSON into v.
 func (v *PromptCapabilities) UnmarshalJSON(b []byte) error {
-	m, err := objectKeys(b, "PromptCapabilities")
+	_, err := objectKeys(b, "PromptCapabilities")
 	if err != nil {
 		return err
 	}
-	foldKeys(b, m, "audio", "embeddedContext", "image")
 	type Alias PromptCapabilities
 	var s struct {
 		Alias
@@ -9946,28 +9843,10 @@ func (v *PromptCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PromptCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Audio = orDefault[bool](s.Audio, "false")
-	a.EmbeddedContext = orDefault[bool](s.EmbeddedContext, "false")
-	a.Image = orDefault[bool](s.Image, "false")
-	{
-		_rm, _ok := m["audio"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("false"), &a.Audio)
-		}
-	}
-	{
-		_rm, _ok := m["embeddedContext"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("false"), &a.EmbeddedContext)
-		}
-	}
-	{
-		_rm, _ok := m["image"]
-		if !_ok || (string(_rm) == "null") {
-			json.Unmarshal([]byte("false"), &a.Image)
-		}
-	}
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Audio = orZero[bool](s.Audio)
+	a.EmbeddedContext = orZero[bool](s.EmbeddedContext)
+	a.Image = orZero[bool](s.Image)
 	*v = PromptCapabilities(a)
 	return nil
 }
@@ -10027,7 +9906,7 @@ func (v *PromptRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PromptRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = PromptRequest(a)
 	return nil
 }
@@ -10082,8 +9961,8 @@ func (v *PromptResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("PromptResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Usage = orDefault[*Usage](s.Usage, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Usage = orZero[*Usage](s.Usage)
 	*v = PromptResponse(a)
 	return nil
 }
@@ -10134,7 +10013,7 @@ func (v *ProvidersCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ProvidersCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = ProvidersCapabilities(a)
 	return nil
 }
@@ -10174,7 +10053,7 @@ func (v *ReadTextFileRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ReadTextFileRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = ReadTextFileRequest(a)
 	return nil
 }
@@ -10224,7 +10103,7 @@ func (v *ReadTextFileResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ReadTextFileResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = ReadTextFileResponse(a)
 	return nil
 }
@@ -10267,7 +10146,7 @@ func (v *ReleaseTerminalRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ReleaseTerminalRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = ReleaseTerminalRequest(a)
 	return nil
 }
@@ -10306,7 +10185,7 @@ func (v *ReleaseTerminalResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ReleaseTerminalResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = ReleaseTerminalResponse(a)
 	return nil
 }
@@ -10466,7 +10345,7 @@ func (v *RequestPermissionOutcomeSelected) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("RequestPermissionOutcomeSelected: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = RequestPermissionOutcomeSelected(a)
 	return nil
 }
@@ -10660,7 +10539,7 @@ func (v *RequestPermissionRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("RequestPermissionRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = RequestPermissionRequest(a)
 	return nil
 }
@@ -10704,7 +10583,7 @@ func (v *RequestPermissionResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("RequestPermissionResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = RequestPermissionResponse(a)
 	return nil
 }
@@ -10748,7 +10627,7 @@ func (v *RequiresActionStateUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("RequiresActionStateUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = RequiresActionStateUpdate(a)
 	return nil
 }
@@ -10797,12 +10676,12 @@ func (v *ResourceLink) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ResourceLink: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Annotations = orDefault[*Annotations](s.Annotations, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.MimeType = orDefault[*string](s.MimeType, "")
-	a.Size = orDefault[*int64](s.Size, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Annotations = orZero[*Annotations](s.Annotations)
+	a.Description = orZero[*string](s.Description)
+	a.MimeType = orZero[*string](s.MimeType)
+	a.Size = orZero[*int64](s.Size)
+	a.Title = orZero[*string](s.Title)
 	*v = ResourceLink(a)
 	return nil
 }
@@ -10850,7 +10729,7 @@ func (v *ResumeSessionRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ResumeSessionRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = ResumeSessionRequest(a)
 	return nil
 }
@@ -10922,11 +10801,11 @@ func (v *ResumeSessionResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ResumeSessionResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
 		a.ConfigOptions = items
 	}
-	a.Modes = orDefault[*SessionModeState](s.Modes, "")
+	a.Modes = orZero[*SessionModeState](s.Modes)
 	*v = ResumeSessionResponse(a)
 	return nil
 }
@@ -10986,7 +10865,7 @@ func (v *RunningStateUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("RunningStateUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = RunningStateUpdate(a)
 	return nil
 }
@@ -11018,7 +10897,7 @@ func (v *SelectedPermissionOutcome) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SelectedPermissionOutcome: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SelectedPermissionOutcome(a)
 	return nil
 }
@@ -11053,7 +10932,7 @@ func (v *SessionAdditionalDirectoriesCapabilities) UnmarshalJSON(b []byte) error
 		return fmt.Errorf("SessionAdditionalDirectoriesCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionAdditionalDirectoriesCapabilities(a)
 	return nil
 }
@@ -11089,7 +10968,7 @@ func (v *SessionCancelCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionCancelCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionCancelCapabilities(a)
 	return nil
 }
@@ -11172,13 +11051,13 @@ func (v *SessionCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.AdditionalDirectories = orDefault[*SessionAdditionalDirectoriesCapabilities](s.AdditionalDirectories, "")
-	a.Close = orDefault[*SessionCloseCapabilities](s.Close, "")
-	a.Delete = orDefault[*SessionDeleteCapabilities](s.Delete, "")
-	a.Fork = orDefault[*SessionForkCapabilities](s.Fork, "")
-	a.List = orDefault[*SessionListCapabilities](s.List, "")
-	a.Resume = orDefault[*SessionResumeCapabilities](s.Resume, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.AdditionalDirectories = orZero[*SessionAdditionalDirectoriesCapabilities](s.AdditionalDirectories)
+	a.Close = orZero[*SessionCloseCapabilities](s.Close)
+	a.Delete = orZero[*SessionDeleteCapabilities](s.Delete)
+	a.Fork = orZero[*SessionForkCapabilities](s.Fork)
+	a.List = orZero[*SessionListCapabilities](s.List)
+	a.Resume = orZero[*SessionResumeCapabilities](s.Resume)
 	*v = SessionCapabilities(a)
 	return nil
 }
@@ -11210,7 +11089,7 @@ func (v *SessionCloseCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionCloseCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionCloseCapabilities(a)
 	return nil
 }
@@ -11282,9 +11161,9 @@ func (v *SessionConfigOptionSelect) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionConfigOptionSelect: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Category = orDefault[*SessionConfigOptionCategory](s.Category, "")
-	a.Description = orDefault[*string](s.Description, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Category = orZero[*SessionConfigOptionCategory](s.Category)
+	a.Description = orZero[*string](s.Description)
 	*v = SessionConfigOptionSelect(a)
 	return nil
 }
@@ -11339,9 +11218,9 @@ func (v *SessionConfigOptionBoolean) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionConfigOptionBoolean: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Category = orDefault[*SessionConfigOptionCategory](s.Category, "")
-	a.Description = orDefault[*string](s.Description, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Category = orZero[*SessionConfigOptionCategory](s.Category)
+	a.Description = orZero[*string](s.Description)
 	*v = SessionConfigOptionBoolean(a)
 	return nil
 }
@@ -11564,8 +11443,8 @@ func (v *SessionConfigOptionsCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionConfigOptionsCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Boolean = orDefault[*BooleanConfigOptionCapabilities](s.Boolean, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Boolean = orZero[*BooleanConfigOptionCapabilities](s.Boolean)
 	*v = SessionConfigOptionsCapabilities(a)
 	return nil
 }
@@ -11647,7 +11526,7 @@ func (v *SessionConfigSelectGroup) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionConfigSelectGroup: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[SessionConfigSelectOption](s.Options); err == nil {
 		a.Options = items
 	}
@@ -11687,8 +11566,8 @@ func (v *SessionConfigSelectOption) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionConfigSelectOption: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Description = orDefault[*string](s.Description, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Description = orZero[*string](s.Description)
 	*v = SessionConfigSelectOption(a)
 	return nil
 }
@@ -11861,7 +11740,7 @@ func (v *SessionDeleteCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionDeleteCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionDeleteCapabilities(a)
 	return nil
 }
@@ -11897,7 +11776,7 @@ func (v *SessionForkCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionForkCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionForkCapabilities(a)
 	return nil
 }
@@ -11952,12 +11831,12 @@ func (v *SessionInfo) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionInfo: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[string](s.AdditionalDirectories); err == nil {
 		a.AdditionalDirectories = items
 	}
-	a.Title = orDefault[*string](s.Title, "")
-	a.UpdatedAt = orDefault[*string](s.UpdatedAt, "")
+	a.Title = orZero[*string](s.Title)
+	a.UpdatedAt = orZero[*string](s.UpdatedAt)
 	*v = SessionInfo(a)
 	return nil
 }
@@ -12025,7 +11904,7 @@ func (v *SessionInfoUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionInfoUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	a.Title = patchOf[string](s.Title)
 	a.UpdatedAt = patchOf[string](s.UpdatedAt)
 	*v = SessionInfoUpdate(a)
@@ -12059,7 +11938,7 @@ func (v *SessionListCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionListCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionListCapabilities(a)
 	return nil
 }
@@ -12105,8 +11984,8 @@ func (v *SessionMessage) UnmarshalJSON(b []byte) error {
 	a := s.Alias
 	a.Meta = patchOf[map[string]any](s.Meta)
 	a.Content = patchItems[ContentBlock](s.Content)
-	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
-	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
+	a.RecipientSessionId = orZero[*SessionId](s.RecipientSessionId)
+	a.SenderSessionId = orZero[*SessionId](s.SenderSessionId)
 	*v = SessionMessage(a)
 	return nil
 }
@@ -12164,9 +12043,9 @@ func (v *SessionMessageChunk) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionMessageChunk: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
-	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.RecipientSessionId = orZero[*SessionId](s.RecipientSessionId)
+	a.SenderSessionId = orZero[*SessionId](s.SenderSessionId)
 	*v = SessionMessageChunk(a)
 	return nil
 }
@@ -12217,8 +12096,8 @@ func (v *SessionMode) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionMode: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Description = orDefault[*string](s.Description, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Description = orZero[*string](s.Description)
 	*v = SessionMode(a)
 	return nil
 }
@@ -12266,7 +12145,7 @@ func (v *SessionModeState) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionModeState: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[SessionMode](s.AvailableModes); err == nil {
 		a.AvailableModes = items
 	}
@@ -12307,7 +12186,7 @@ func (v *SessionNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionNotification(a)
 	return nil
 }
@@ -12351,7 +12230,7 @@ func (v *SessionResumeCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionResumeCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionResumeCapabilities(a)
 	return nil
 }
@@ -12390,8 +12269,8 @@ func (v *SessionUpdateUserMessageChunk) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionUpdateUserMessageChunk: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.MessageId = orDefault[*MessageId](s.MessageId, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.MessageId = orZero[*MessageId](s.MessageId)
 	*v = SessionUpdateUserMessageChunk(a)
 	return nil
 }
@@ -12442,8 +12321,8 @@ func (v *SessionUpdateAgentMessageChunk) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionUpdateAgentMessageChunk: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.MessageId = orDefault[*MessageId](s.MessageId, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.MessageId = orZero[*MessageId](s.MessageId)
 	*v = SessionUpdateAgentMessageChunk(a)
 	return nil
 }
@@ -12494,8 +12373,8 @@ func (v *SessionUpdateAgentThoughtChunk) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionUpdateAgentThoughtChunk: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.MessageId = orDefault[*MessageId](s.MessageId, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.MessageId = orZero[*MessageId](s.MessageId)
 	*v = SessionUpdateAgentThoughtChunk(a)
 	return nil
 }
@@ -12568,18 +12447,18 @@ func (v *SessionUpdateToolCall) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionUpdateToolCall: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[ToolCallContent](s.Content); err == nil {
 		a.Content = items
 	}
-	a.Kind = orDefault[ToolKind](s.Kind, "")
+	a.Kind = orZero[ToolKind](s.Kind)
 	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
 		a.Locations = items
 	}
-	a.Name = orDefault[*string](s.Name, "")
-	a.RawInput = orDefault[json.RawMessage](s.RawInput, "")
-	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
-	a.Status = orDefault[ToolCallStatus](s.Status, "")
+	a.Name = orZero[*string](s.Name)
+	a.RawInput = orZero[json.RawMessage](s.RawInput)
+	a.RawOutput = orZero[json.RawMessage](s.RawOutput)
+	a.Status = orZero[ToolCallStatus](s.Status)
 	a.RawInput = absentIfNull(a.RawInput)
 	a.RawOutput = absentIfNull(a.RawOutput)
 	*v = SessionUpdateToolCall(a)
@@ -12660,19 +12539,19 @@ func (v *SessionToolCallUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionToolCallUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[ToolCallContent](s.Content); err == nil {
 		a.Content = items
 	}
-	a.Kind = orDefault[*ToolKind](s.Kind, "")
+	a.Kind = orZero[*ToolKind](s.Kind)
 	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
 		a.Locations = items
 	}
-	a.Name = orDefault[*string](s.Name, "")
-	a.RawInput = orDefault[json.RawMessage](s.RawInput, "")
-	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
-	a.Status = orDefault[*ToolCallStatus](s.Status, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Name = orZero[*string](s.Name)
+	a.RawInput = orZero[json.RawMessage](s.RawInput)
+	a.RawOutput = orZero[json.RawMessage](s.RawOutput)
+	a.Status = orZero[*ToolCallStatus](s.Status)
+	a.Title = orZero[*string](s.Title)
 	a.RawInput = absentIfNull(a.RawInput)
 	a.RawOutput = absentIfNull(a.RawOutput)
 	*v = SessionToolCallUpdate(a)
@@ -12741,7 +12620,7 @@ func (v *SessionUpdatePlan) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionUpdatePlan: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[PlanEntry](s.Entries); err == nil {
 		a.Entries = items
 	}
@@ -12781,7 +12660,7 @@ func (v *SessionPlanUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionPlanUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionPlanUpdate(a)
 	return nil
 }
@@ -12830,7 +12709,7 @@ func (v *SessionUpdatePlanRemoved) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionUpdatePlanRemoved: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionUpdatePlanRemoved(a)
 	return nil
 }
@@ -12874,7 +12753,7 @@ func (v *SessionAvailableCommandsUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionAvailableCommandsUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[AvailableCommand](s.AvailableCommands); err == nil {
 		a.AvailableCommands = items
 	}
@@ -12926,7 +12805,7 @@ func (v *SessionCurrentModeUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionCurrentModeUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionCurrentModeUpdate(a)
 	return nil
 }
@@ -12970,7 +12849,7 @@ func (v *SessionConfigOptionUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionConfigOptionUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
 		a.ConfigOptions = items
 	}
@@ -13024,7 +12903,7 @@ func (v *SessionSessionInfoUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionSessionInfoUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	a.Title = patchOf[string](s.Title)
 	a.UpdatedAt = patchOf[string](s.UpdatedAt)
 	*v = SessionSessionInfoUpdate(a)
@@ -13064,8 +12943,8 @@ func (v *SessionUsageUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionUsageUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Cost = orDefault[*Cost](s.Cost, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Cost = orZero[*Cost](s.Cost)
 	*v = SessionUsageUpdate(a)
 	return nil
 }
@@ -13106,8 +12985,8 @@ func (v *SessionUpdateNotice) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionUpdateNotice: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Description = orDefault[*string](s.Description, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Description = orZero[*string](s.Description)
 	*v = SessionUpdateNotice(a)
 	return nil
 }
@@ -13217,7 +13096,7 @@ func (v *SessionUpdateCompactionSummaryChunk) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionUpdateCompactionSummaryChunk: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SessionUpdateCompactionSummaryChunk(a)
 	return nil
 }
@@ -13363,8 +13242,8 @@ func (v *SessionUpdateSessionMessage) UnmarshalJSON(b []byte) error {
 	a := s.Alias
 	a.Meta = patchOf[map[string]any](s.Meta)
 	a.Content = patchItems[ContentBlock](s.Content)
-	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
-	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
+	a.RecipientSessionId = orZero[*SessionId](s.RecipientSessionId)
+	a.SenderSessionId = orZero[*SessionId](s.SenderSessionId)
 	*v = SessionUpdateSessionMessage(a)
 	return nil
 }
@@ -13423,9 +13302,9 @@ func (v *SessionUpdateSessionMessageChunk) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SessionUpdateSessionMessageChunk: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.RecipientSessionId = orDefault[*SessionId](s.RecipientSessionId, "")
-	a.SenderSessionId = orDefault[*SessionId](s.SenderSessionId, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.RecipientSessionId = orZero[*SessionId](s.RecipientSessionId)
+	a.SenderSessionId = orZero[*SessionId](s.SenderSessionId)
 	*v = SessionUpdateSessionMessageChunk(a)
 	return nil
 }
@@ -14418,7 +14297,7 @@ func (v *SetSessionConfigOptionBoolean) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SetSessionConfigOptionBoolean: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SetSessionConfigOptionBoolean(a)
 	return nil
 }
@@ -14458,7 +14337,7 @@ func (v *SetSessionConfigOptionValueId) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SetSessionConfigOptionValueId: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SetSessionConfigOptionValueId(a)
 	return nil
 }
@@ -14626,7 +14505,7 @@ func (v *SetSessionConfigOptionResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SetSessionConfigOptionResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
 		a.ConfigOptions = items
 	}
@@ -14677,7 +14556,7 @@ func (v *SetSessionModeRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SetSessionModeRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SetSessionModeRequest(a)
 	return nil
 }
@@ -14716,7 +14595,7 @@ func (v *SetSessionModeResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SetSessionModeResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SetSessionModeResponse(a)
 	return nil
 }
@@ -14754,7 +14633,7 @@ func (v *StateUpdateRunning) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("StateUpdateRunning: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = StateUpdateRunning(a)
 	return nil
 }
@@ -14795,9 +14674,9 @@ func (v *StateUpdateIdle) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("StateUpdateIdle: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.StopReason = orDefault[*string](s.StopReason, "")
-	a.Usage = orDefault[*Usage](s.Usage, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.StopReason = orZero[*string](s.StopReason)
+	a.Usage = orZero[*Usage](s.Usage)
 	*v = StateUpdateIdle(a)
 	return nil
 }
@@ -14826,7 +14705,7 @@ func (v *StateUpdateRequiresAction) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("StateUpdateRequiresAction: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = StateUpdateRequiresAction(a)
 	return nil
 }
@@ -14857,7 +14736,7 @@ func (v *StateUpdateUnknown) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("StateUpdateUnknown: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = StateUpdateUnknown(a)
 	return nil
 }
@@ -15244,7 +15123,7 @@ func (v *StringMultiSelectItems) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("StringMultiSelectItems: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = StringMultiSelectItems(a)
 	return nil
 }
@@ -15318,10 +15197,10 @@ func (v *StringPropertySchema) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("StringPropertySchema: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Default = orDefault[*string](s.Default, "")
-	a.Description = orDefault[*string](s.Description, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Default = orZero[*string](s.Default)
+	a.Description = orZero[*string](s.Description)
+	a.Title = orZero[*string](s.Title)
 	*v = StringPropertySchema(a)
 	return nil
 }
@@ -15358,7 +15237,7 @@ func (v *SubagentCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SubagentCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = SubagentCapabilities(a)
 	return nil
 }
@@ -15398,8 +15277,8 @@ func (v *SubagentSessionCapabilities) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("SubagentSessionCapabilities: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Cancel = orDefault[*SessionCancelCapabilities](s.Cancel, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Cancel = orZero[*SessionCancelCapabilities](s.Cancel)
 	*v = SubagentSessionCapabilities(a)
 	return nil
 }
@@ -15537,7 +15416,7 @@ func (v *Terminal) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("Terminal: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = Terminal(a)
 	return nil
 }
@@ -15573,9 +15452,9 @@ func (v *TerminalExitStatus) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("TerminalExitStatus: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.ExitCode = orDefault[*uint32](s.ExitCode, "")
-	a.Signal = orDefault[*string](s.Signal, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.ExitCode = orZero[*uint32](s.ExitCode)
+	a.Signal = orZero[*string](s.Signal)
 	*v = TerminalExitStatus(a)
 	return nil
 }
@@ -15612,7 +15491,7 @@ func (v *TerminalOutputRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("TerminalOutputRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = TerminalOutputRequest(a)
 	return nil
 }
@@ -15658,8 +15537,8 @@ func (v *TerminalOutputResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("TerminalOutputResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.ExitStatus = orDefault[*TerminalExitStatus](s.ExitStatus, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.ExitStatus = orZero[*TerminalExitStatus](s.ExitStatus)
 	*v = TerminalOutputResponse(a)
 	return nil
 }
@@ -15703,8 +15582,8 @@ func (v *TextContent) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("TextContent: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Annotations = orDefault[*Annotations](s.Annotations, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Annotations = orZero[*Annotations](s.Annotations)
 	*v = TextContent(a)
 	return nil
 }
@@ -15759,8 +15638,8 @@ func (v *TextResourceContents) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("TextResourceContents: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.MimeType = orDefault[*string](s.MimeType, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.MimeType = orZero[*string](s.MimeType)
 	*v = TextResourceContents(a)
 	return nil
 }
@@ -15804,7 +15683,7 @@ func (v *TitledMultiSelectItems) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("TitledMultiSelectItems: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = TitledMultiSelectItems(a)
 	return nil
 }
@@ -15869,18 +15748,18 @@ func (v *ToolCall) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ToolCall: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[ToolCallContent](s.Content); err == nil {
 		a.Content = items
 	}
-	a.Kind = orDefault[ToolKind](s.Kind, "")
+	a.Kind = orZero[ToolKind](s.Kind)
 	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
 		a.Locations = items
 	}
-	a.Name = orDefault[*string](s.Name, "")
-	a.RawInput = orDefault[json.RawMessage](s.RawInput, "")
-	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
-	a.Status = orDefault[ToolCallStatus](s.Status, "")
+	a.Name = orZero[*string](s.Name)
+	a.RawInput = orZero[json.RawMessage](s.RawInput)
+	a.RawOutput = orZero[json.RawMessage](s.RawOutput)
+	a.Status = orZero[ToolCallStatus](s.Status)
 	a.RawInput = absentIfNull(a.RawInput)
 	a.RawOutput = absentIfNull(a.RawOutput)
 	*v = ToolCall(a)
@@ -15934,7 +15813,7 @@ func (v *ToolCallContentContent) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ToolCallContentContent: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = ToolCallContentContent(a)
 	return nil
 }
@@ -15984,8 +15863,8 @@ func (v *ToolCallContentDiff) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ToolCallContentDiff: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.OldText = orDefault[*string](s.OldText, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.OldText = orZero[*string](s.OldText)
 	*v = ToolCallContentDiff(a)
 	return nil
 }
@@ -16040,7 +15919,7 @@ func (v *ToolCallContentTerminal) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ToolCallContentTerminal: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = ToolCallContentTerminal(a)
 	return nil
 }
@@ -16292,8 +16171,8 @@ func (v *ToolCallLocation) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ToolCallLocation: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Line = orDefault[*uint32](s.Line, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Line = orZero[*uint32](s.Line)
 	*v = ToolCallLocation(a)
 	return nil
 }
@@ -16402,19 +16281,19 @@ func (v *ToolCallUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("ToolCallUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[ToolCallContent](s.Content); err == nil {
 		a.Content = items
 	}
-	a.Kind = orDefault[*ToolKind](s.Kind, "")
+	a.Kind = orZero[*ToolKind](s.Kind)
 	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
 		a.Locations = items
 	}
-	a.Name = orDefault[*string](s.Name, "")
-	a.RawInput = orDefault[json.RawMessage](s.RawInput, "")
-	a.RawOutput = orDefault[json.RawMessage](s.RawOutput, "")
-	a.Status = orDefault[*ToolCallStatus](s.Status, "")
-	a.Title = orDefault[*string](s.Title, "")
+	a.Name = orZero[*string](s.Name)
+	a.RawInput = orZero[json.RawMessage](s.RawInput)
+	a.RawOutput = orZero[json.RawMessage](s.RawOutput)
+	a.Status = orZero[*ToolCallStatus](s.Status)
+	a.Title = orZero[*string](s.Title)
 	a.RawInput = absentIfNull(a.RawInput)
 	a.RawOutput = absentIfNull(a.RawOutput)
 	*v = ToolCallUpdate(a)
@@ -16526,7 +16405,7 @@ func (v *UnknownStateUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnknownStateUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnknownStateUpdate(a)
 	return nil
 }
@@ -16564,7 +16443,7 @@ func (v *UnstableAcceptNesNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableAcceptNesNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableAcceptNesNotification(a)
 	return nil
 }
@@ -16612,7 +16491,7 @@ func (v *UnstableCloseNesRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableCloseNesRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableCloseNesRequest(a)
 	return nil
 }
@@ -16655,7 +16534,7 @@ func (v *UnstableCloseNesResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableCloseNesResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableCloseNesResponse(a)
 	return nil
 }
@@ -16716,7 +16595,7 @@ func (v *UnstableDidChangeDocumentNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableDidChangeDocumentNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableDidChangeDocumentNotification(a)
 	return nil
 }
@@ -16763,7 +16642,7 @@ func (v *UnstableDidCloseDocumentNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableDidCloseDocumentNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableDidCloseDocumentNotification(a)
 	return nil
 }
@@ -16816,7 +16695,7 @@ func (v *UnstableDidFocusDocumentNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableDidFocusDocumentNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableDidFocusDocumentNotification(a)
 	return nil
 }
@@ -16869,7 +16748,7 @@ func (v *UnstableDidOpenDocumentNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableDidOpenDocumentNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableDidOpenDocumentNotification(a)
 	return nil
 }
@@ -16916,7 +16795,7 @@ func (v *UnstableDidSaveDocumentNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableDidSaveDocumentNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableDidSaveDocumentNotification(a)
 	return nil
 }
@@ -16961,7 +16840,7 @@ func (v *UnstableDisableProviderRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableDisableProviderRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableDisableProviderRequest(a)
 	return nil
 }
@@ -17004,7 +16883,7 @@ func (v *UnstableDisableProviderResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableDisableProviderResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableDisableProviderResponse(a)
 	return nil
 }
@@ -17064,7 +16943,7 @@ func (v *UnstableForkSessionRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableForkSessionRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableForkSessionRequest(a)
 	return nil
 }
@@ -17142,11 +17021,11 @@ func (v *UnstableForkSessionResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableForkSessionResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[SessionConfigOption](s.ConfigOptions); err == nil {
 		a.ConfigOptions = items
 	}
-	a.Modes = orDefault[*SessionModeState](s.Modes, "")
+	a.Modes = orZero[*SessionModeState](s.Modes)
 	*v = UnstableForkSessionResponse(a)
 	return nil
 }
@@ -17194,7 +17073,7 @@ func (v *UnstableListProvidersRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableListProvidersRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableListProvidersRequest(a)
 	return nil
 }
@@ -17249,7 +17128,7 @@ func (v *UnstableListProvidersResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableListProvidersResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableListProvidersResponse(a)
 	return nil
 }
@@ -17416,7 +17295,7 @@ func (v *UnstableMcpServerHttp) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableMcpServerHttp: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableMcpServerHttp(a)
 	return nil
 }
@@ -17465,7 +17344,7 @@ func (v *UnstableMcpServerSse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableMcpServerSse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableMcpServerSse(a)
 	return nil
 }
@@ -17510,7 +17389,7 @@ func (v *UnstableMcpServerAcpInline) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableMcpServerAcpInline: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableMcpServerAcpInline(a)
 	return nil
 }
@@ -17760,7 +17639,7 @@ func (v *UnstableMcpServerAcp) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableMcpServerAcp: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableMcpServerAcp(a)
 	return nil
 }
@@ -17817,7 +17696,7 @@ func (v *UnstableMessageMcpNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableMessageMcpNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableMessageMcpNotification(a)
 	return nil
 }
@@ -17870,7 +17749,7 @@ func (v *UnstableMessageMcpRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableMessageMcpRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableMessageMcpRequest(a)
 	return nil
 }
@@ -17907,7 +17786,7 @@ func (v *UnstableMessageMcpResult) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableMessageMcpResult: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableMessageMcpResult(a)
 	return nil
 }
@@ -17935,7 +17814,7 @@ func (v *UnstableMessageMcpError) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableMessageMcpError: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableMessageMcpError(a)
 	return nil
 }
@@ -18104,7 +17983,7 @@ func (v *UnstableNesDiagnostic) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesDiagnostic: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesDiagnostic(a)
 	return nil
 }
@@ -18168,7 +18047,7 @@ func (v *UnstableNesEditHistoryEntry) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesEditHistoryEntry: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesEditHistoryEntry(a)
 	return nil
 }
@@ -18221,8 +18100,8 @@ func (v *UnstableNesEditSuggestion) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesEditSuggestion: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.CursorPosition = orDefault[*UnstablePosition](s.CursorPosition, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.CursorPosition = orZero[*UnstablePosition](s.CursorPosition)
 	*v = UnstableNesEditSuggestion(a)
 	return nil
 }
@@ -18262,7 +18141,7 @@ func (v *UnstableNesExcerpt) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesExcerpt: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesExcerpt(a)
 	return nil
 }
@@ -18302,7 +18181,7 @@ func (v *UnstableNesJumpSuggestion) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesJumpSuggestion: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesJumpSuggestion(a)
 	return nil
 }
@@ -18346,9 +18225,9 @@ func (v *UnstableNesOpenFile) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesOpenFile: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.LastFocusedMs = orDefault[*uint64](s.LastFocusedMs, "")
-	a.VisibleRange = orDefault[*UnstableRange](s.VisibleRange, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.LastFocusedMs = orZero[*uint64](s.LastFocusedMs)
+	a.VisibleRange = orZero[*UnstableRange](s.VisibleRange)
 	*v = UnstableNesOpenFile(a)
 	return nil
 }
@@ -18388,7 +18267,7 @@ func (v *UnstableNesRecentFile) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesRecentFile: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesRecentFile(a)
 	return nil
 }
@@ -18462,7 +18341,7 @@ func (v *UnstableNesRelatedSnippet) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesRelatedSnippet: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesRelatedSnippet(a)
 	return nil
 }
@@ -18504,7 +18383,7 @@ func (v *UnstableNesRenameSuggestion) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesRenameSuggestion: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesRenameSuggestion(a)
 	return nil
 }
@@ -18544,7 +18423,7 @@ func (v *UnstableNesRepository) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesRepository: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesRepository(a)
 	return nil
 }
@@ -18588,7 +18467,7 @@ func (v *UnstableNesSearchAndReplaceSuggestion) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesSearchAndReplaceSuggestion: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesSearchAndReplaceSuggestion(a)
 	return nil
 }
@@ -18634,7 +18513,7 @@ func (v *UnstableNesSuggestContext) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesSuggestContext: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesSuggestContext(a)
 	return nil
 }
@@ -18684,8 +18563,8 @@ func (v *UnstableNesSuggestionEdit) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesSuggestionEdit: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.CursorPosition = orDefault[*UnstablePosition](s.CursorPosition, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.CursorPosition = orZero[*UnstablePosition](s.CursorPosition)
 	*v = UnstableNesSuggestionEdit(a)
 	return nil
 }
@@ -18722,7 +18601,7 @@ func (v *UnstableNesSuggestionJump) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesSuggestionJump: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesSuggestionJump(a)
 	return nil
 }
@@ -18761,7 +18640,7 @@ func (v *UnstableNesSuggestionRename) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesSuggestionRename: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesSuggestionRename(a)
 	return nil
 }
@@ -18802,7 +18681,7 @@ func (v *UnstableNesSuggestionSearchAndReplace) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesSuggestionSearchAndReplace: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesSuggestionSearchAndReplace(a)
 	return nil
 }
@@ -19108,7 +18987,7 @@ func (v *UnstableNesTextEdit) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesTextEdit: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesTextEdit(a)
 	return nil
 }
@@ -19172,7 +19051,7 @@ func (v *UnstableNesUserAction) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableNesUserAction: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesUserAction(a)
 	return nil
 }
@@ -19212,7 +19091,7 @@ func (v *UnstablePosition) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstablePosition: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstablePosition(a)
 	return nil
 }
@@ -19250,7 +19129,7 @@ func (v *UnstableProviderCurrentConfig) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableProviderCurrentConfig: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableProviderCurrentConfig(a)
 	return nil
 }
@@ -19312,7 +19191,7 @@ func (v *UnstableProviderInfo) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableProviderInfo: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	if items, err := skipInvalid[UnstableLlmProtocol](s.Supported); err == nil {
 		a.Supported = items
 	}
@@ -19353,7 +19232,7 @@ func (v *UnstableRange) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableRange: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableRange(a)
 	return nil
 }
@@ -19394,8 +19273,8 @@ func (v *UnstableRejectNesNotification) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableRejectNesNotification: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Reason = orDefault[*UnstableNesRejectReason](s.Reason, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Reason = orZero[*UnstableNesRejectReason](s.Reason)
 	*v = UnstableRejectNesNotification(a)
 	return nil
 }
@@ -19449,7 +19328,7 @@ func (v *UnstableSetProviderRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableSetProviderRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableSetProviderRequest(a)
 	return nil
 }
@@ -19492,7 +19371,7 @@ func (v *UnstableSetProviderResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableSetProviderResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableSetProviderResponse(a)
 	return nil
 }
@@ -19543,9 +19422,9 @@ func (v *UnstableStartNesRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableStartNesRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Repository = orDefault[*UnstableNesRepository](s.Repository, "")
-	a.WorkspaceUri = orDefault[*string](s.WorkspaceUri, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Repository = orZero[*UnstableNesRepository](s.Repository)
+	a.WorkspaceUri = orZero[*string](s.WorkspaceUri)
 	*v = UnstableStartNesRequest(a)
 	return nil
 }
@@ -19590,7 +19469,7 @@ func (v *UnstableStartNesResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableStartNesResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableStartNesResponse(a)
 	return nil
 }
@@ -19647,7 +19526,7 @@ func (v *UnstableSuggestNesRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableSuggestNesRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableSuggestNesRequest(a)
 	return nil
 }
@@ -19702,7 +19581,7 @@ func (v *UnstableSuggestNesResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableSuggestNesResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableSuggestNesResponse(a)
 	return nil
 }
@@ -19757,7 +19636,7 @@ func (v *UnstableTextDocumentContentChangeEvent) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableTextDocumentContentChangeEvent: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableTextDocumentContentChangeEvent(a)
 	return nil
 }
@@ -19795,7 +19674,7 @@ func (v *UnstableWorkspaceFolder) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstableWorkspaceFolder: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableWorkspaceFolder(a)
 	return nil
 }
@@ -19827,7 +19706,7 @@ func (v *UnstructuredCommandInput) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UnstructuredCommandInput: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstructuredCommandInput(a)
 	return nil
 }
@@ -19876,10 +19755,10 @@ func (v *Usage) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("Usage: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.CachedReadTokens = orDefault[*uint64](s.CachedReadTokens, "")
-	a.CachedWriteTokens = orDefault[*uint64](s.CachedWriteTokens, "")
-	a.ThoughtTokens = orDefault[*uint64](s.ThoughtTokens, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.CachedReadTokens = orZero[*uint64](s.CachedReadTokens)
+	a.CachedWriteTokens = orZero[*uint64](s.CachedWriteTokens)
+	a.ThoughtTokens = orZero[*uint64](s.ThoughtTokens)
 	*v = Usage(a)
 	return nil
 }
@@ -19916,8 +19795,8 @@ func (v *UsageUpdate) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("UsageUpdate: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.Cost = orDefault[*Cost](s.Cost, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.Cost = orZero[*Cost](s.Cost)
 	*v = UsageUpdate(a)
 	return nil
 }
@@ -19951,7 +19830,7 @@ func (v *WaitForTerminalExitRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("WaitForTerminalExitRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = WaitForTerminalExitRequest(a)
 	return nil
 }
@@ -19996,9 +19875,9 @@ func (v *WaitForTerminalExitResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("WaitForTerminalExitResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
-	a.ExitCode = orDefault[*uint32](s.ExitCode, "")
-	a.Signal = orDefault[*string](s.Signal, "")
+	a.Meta = orZero[map[string]any](s.Meta)
+	a.ExitCode = orZero[*uint32](s.ExitCode)
+	a.Signal = orZero[*string](s.Signal)
 	*v = WaitForTerminalExitResponse(a)
 	return nil
 }
@@ -20045,7 +19924,7 @@ func (v *WriteTextFileRequest) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("WriteTextFileRequest: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = WriteTextFileRequest(a)
 	return nil
 }
@@ -20093,7 +19972,7 @@ func (v *WriteTextFileResponse) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("WriteTextFileResponse: %w", err)
 	}
 	a := s.Alias
-	a.Meta = orDefault[map[string]any](s.Meta, "")
+	a.Meta = orZero[map[string]any](s.Meta)
 	*v = WriteTextFileResponse(a)
 	return nil
 }
@@ -20474,19 +20353,25 @@ func lastKey(b []byte, name string) string {
 	return last
 }
 
-// orDefault decodes raw into a T, or, when raw is empty or does not decode, def,
-// the schema default, or the zero value when def is empty.
-func orDefault[T any](raw json.RawMessage, def string) T {
+// orZero decodes raw into a T, or returns the zero T when raw is empty or does
+// not decode.
+func orZero[T any](raw json.RawMessage) T {
 	var v T
 	if len(raw) > 0 && json.Unmarshal(raw, &v) == nil {
 		return v
 	}
-	var d T
-	if def != "" && json.Unmarshal([]byte(def), &d) != nil {
-		var zero T
-		return zero
+	var zero T
+	return zero
+}
+
+// orDefault decodes raw into a T, or returns def, the schema default, when raw
+// is empty or does not decode.
+func orDefault[T any](raw json.RawMessage, def T) T {
+	var v T
+	if len(raw) > 0 && json.Unmarshal(raw, &v) == nil {
+		return v
 	}
-	return d
+	return def
 }
 
 // skipInvalid decodes raw as a JSON array, dropping the items that do not decode

@@ -546,6 +546,10 @@ benchmark measures each performance item.
   - The generator renders each schema default as a Go expression of its field's type when it emits the decoder: nothing at all for a
     default that is the type's zero value, a constant for a scalar, and a composite literal otherwise.
   - No default is decoded at run time, so no decode error is dropped.
+
+    Amended while executing [0019-PLAN-idioms-performance.md](0019-PLAN-idioms-performance.md), step 4, 2026-10-18: besides a
+    constant and a composite literal, a default is written as `new(…)` for a pointer field and as `json.RawMessage(…)` for a raw
+    one, and a non-empty array or map default as a literal of its items. A default on a union field is refused.
   - `schema_gen_test.go` gains a table of each default's Go value beside its JSON, and a root test requires decoding the JSON to give
     the same value. A rendering that drifts from what decoding gives fails there.
 - **D4 (I7):** the array match is emitted only for a union with an array variant.

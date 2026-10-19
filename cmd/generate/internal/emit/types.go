@@ -314,8 +314,13 @@ func emitObjectCodec(f *goFile, name, place string, fields []*model.Field, membe
 	if slices.ContainsFunc(defaults, injectsDefault) || len(fills) > 0 || keepExtra || len(members) > 0 || len(orders) > 0 {
 		emitObjectMarshal(f, name, place, defaults, fills, members, keepExtra, orders)
 	}
+	// A default that is its type's zero value needs nothing on decode
+	// (0019-PLAN-idioms-performance.md, D3); UnmarshalJSON is still emitted
+	// for it, so the errors of a payload that is not an object stay as they
+	// were.
+	injected := slices.DeleteFunc(slices.Clone(defaults), func(fld *model.Field) bool { return fld.Default.Value.Kind == model.ValueZero })
 	if len(defaults) > 0 || keepExtra || len(required) > 0 || len(lenient) > 0 || len(absent) > 0 || len(members) > 0 || len(orders) > 0 {
-		emitObjectUnmarshal(f, name, place, fields, defaults, lenient, absent, members, required, keepExtra, orders)
+		emitObjectUnmarshal(f, name, place, fields, injected, lenient, absent, members, required, keepExtra, orders)
 	}
 }
 
@@ -356,7 +361,7 @@ func emitObjectMarshal(f *goFile, name, place string, defaults, fills []*model.F
 	for _, fld := range defaults {
 		if injectsDefault(fld) {
 			body = append(body, ifStmt(nil, binary(dot("a", fld.Name), token.EQL, nilExpr()),
-				exprStmt(unmarshal(bytesOf(fld.Default.JSON), addr(dot("a", fld.Name)))),
+				assign(exprs(dot("a", fld.Name)), valueExpr(f, fld.Default.Value, false)),
 			))
 		}
 	}
@@ -470,7 +475,7 @@ func emitObjectUnmarshal(f *goFile, name, place string, fields, defaults, lenien
 		}
 		body = append(body, block(
 			define(exprs(id(raw), id("_ok")), index(id("m"), str(fld.Key))),
-			ifStmt(nil, cond, exprStmt(unmarshal(bytesOf(fld.Default.JSON), addr(dot("a", fld.Name))))),
+			ifStmt(nil, cond, assign(exprs(dot("a", fld.Name)), valueExpr(f, fld.Default.Value, false))),
 		))
 	}
 	if keepExtra {
@@ -574,9 +579,10 @@ func lenientDecode(f *goFile, name string, lenient []*model.Field, wrap func() a
 		define(exprs(id("a")), dot("s", "Alias")),
 	}
 	for _, fld := range lenient {
-		def := ""
-		if fld.Default != nil {
-			def = fld.Default.JSON
+		// def is the default's Go value, nil for none or a zero one.
+		var def ast.Expr
+		if fld.Default != nil && fld.Default.Value.Kind != model.ValueZero {
+			def = valueExpr(f, fld.Default.Value, false)
 		}
 		raw := dot("s", fld.Name)
 		field := dot("a", fld.Name)
@@ -592,8 +598,13 @@ func lenientDecode(f *goFile, name string, lenient []*model.Field, wrap func() a
 			continue
 		}
 		if !fld.Facts.SkipInvalidItems {
-			f.uses[helperOrDefault] = true
-			body = append(body, assign(exprs(field), call(index(id(helperOrDefault), typeAST(f, fld.Type)), raw, str(def))))
+			if def == nil {
+				f.uses[helperOrZero] = true
+				body = append(body, assign(exprs(field), call(index(id(helperOrZero), typeAST(f, fld.Type)), raw)))
+			} else {
+				f.uses[helperOrDefault] = true
+				body = append(body, assign(exprs(field), call(index(id(helperOrDefault), typeAST(f, fld.Type)), raw, def)))
+			}
 			continue
 		}
 		f.uses[helperSkipInvalid] = true
@@ -607,9 +618,8 @@ func lenientDecode(f *goFile, name string, lenient []*model.Field, wrap func() a
 			continue
 		}
 		var fallback []ast.Stmt
-		if def != "" {
-			f.uses[helperOrDefault] = true
-			fallback = []ast.Stmt{assign(exprs(field), call(index(id(helperOrDefault), typeAST(f, fld.Type)), nilExpr(), str(def)))}
+		if def != nil {
+			fallback = []ast.Stmt{assign(exprs(field), def)}
 		}
 		then := []ast.Stmt{assign(exprs(field), id("items"))}
 		if fallback == nil {

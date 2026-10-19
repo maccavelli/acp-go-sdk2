@@ -1,0 +1,74 @@
+Defaults on a nullable property, a pointer, are written with new, and a
+default on a property of any type is written as its JSON
+(0019-PLAN-idioms-performance.md, deviation during step 4). The meta declares
+$/cancel_request and the schema its smallest definition, which the runtime
+needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Mode": {"type": "string", "enum": ["auto", "manual"]},
+  "Opts": {"type": "object", "properties": {
+    "title": {"type": ["string", "null"], "default": "x"},
+    "count": {"type": ["integer", "null"], "format": "int32", "default": 3},
+    "on": {"type": ["boolean", "null"], "default": true},
+    "mode": {"anyOf": [{"$ref": "#/$defs/Mode"}, {"type": "null"}], "default": "manual"},
+    "raw": {"description": "Anything.", "default": {"a": [1, "b"]}}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+type Mode string
+const ModeAuto Mode = "auto"
+const ModeManual Mode = "manual"
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+type Opts struct{Count *int32 "json:\"count,omitempty\""; Mode *Mode "json:\"mode,omitempty\""; On *bool "json:\"on,omitempty\""; Raw json.RawMessage "json:\"raw,omitempty\""; Title *string "json:\"title,omitempty\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*Opts).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Absent properties take their defaults: pointers to their values, and the
+// raw property its JSON.
+func TestDefaultPointerRaw(t *testing.T) {
+	var o Opts
+	if err := json.Unmarshal([]byte(`{}`), &o); err != nil {
+		t.Fatal(err)
+	}
+	if o.Title == nil || *o.Title != "x" || o.Count == nil || *o.Count != 3 || o.On == nil || !*o.On ||
+		o.Mode == nil || *o.Mode != ModeManual || string(o.Raw) != `{"a":[1,"b"]}` {
+		t.Errorf("defaults decoded as %+v", o)
+	}
+	// A value present is kept.
+	if err := json.Unmarshal([]byte(`{"title":"y","count":4,"on":false,"mode":"auto","raw":2}`), &o); err != nil {
+		t.Fatal(err)
+	}
+	if *o.Title != "y" || *o.Count != 4 || *o.On || *o.Mode != ModeAuto || string(o.Raw) != "2" {
+		t.Errorf("values decoded as %+v", o)
+	}
+}
