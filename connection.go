@@ -1656,6 +1656,19 @@ func SendRequest[T any](c *Connection, ctx context.Context, method string, param
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
 type gateFunc func(method string, params any) error
 
+// typedGate is gate as a gateFunc for a result of type *T, which sendRequest
+// gives its gate. A result of another type is an error naming both types
+// (0019-PLAN-idioms-performance.md, D12).
+func typedGate[T any](gate func(method string, result *T) error) gateFunc {
+	return func(method string, result any) error {
+		r, ok := result.(*T)
+		if !ok {
+			return fmt.Errorf("%s: result of type %T, not %T", method, result, r)
+		}
+		return gate(method, r)
+	}
+}
+
 // sendRequest is SendRequest with the gate its result is checked by, nil for
 // none.
 func sendRequest[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.

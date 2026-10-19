@@ -6,6 +6,7 @@ linters:
   default: none
   enable:
     - bodyclose
+    - copyloopvar
     - errcheck
     - errorlint
     - gocognit
@@ -15,16 +16,21 @@ linters:
     - gosec
     - govet
     - ineffassign
+    - intrange
     - makezero
     - misspell
+    - modernize
     - nakedret
     - nilerr
     - nolintlint
+    - perfsprint
     - revive
     - staticcheck
+    - thelper
     - unconvert
     - unparam
     - unused
+    - usestdlibvars
     - whitespace
   settings:
     errcheck:
@@ -89,8 +95,18 @@ linters:
         - name: package-comments
         - name: var-naming
   exclusions:
-    generated: lax
+    # Generated files are linted like the rest (0019-PLAN-idioms-performance.md,
+    # D12), but for the rule below.
+    generated: disable
     rules:
+      # In generated code the repeated strings are schema literals, and the
+      # dispatch and decoders are long by construction
+      # (0019-MADR-remediate-debugging-pass-findings.md, question 15).
+      - linters:
+          - goconst
+          - gocognit
+          - gocyclo
+        path: _gen\.go$
       # mkwinsyscall's //sys directives must start "//sys<tab>"; gocritic's
       # commentFormatting allowlist (//go:generate, //export, //line) lacks
       # them. Directive lines only; a prose comment is still checked.

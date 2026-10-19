@@ -1063,3 +1063,60 @@ added, and `exclusions.generated: disable`, from a copy outside the tree. It giv
 - **The root:** 93.
   - 92 are `goconst` (86), `gocognit` (4) and `gocyclo` (2), all in `_gen.go` files, which step 9's exclusion covers.
   - 1 is `errcheck` at `client_gen.go:414`, `Initialize`'s type assertion, which step 9's `typedGate` removes.
+
+### Step 9, D12, 2026-10-19
+
+What changed, on `711a1d5`:
+
+- **`.golangci.yml`:**
+  - It enables `copyloopvar`, `intrange`, `modernize`, `perfsprint`, `thelper` and `usestdlibvars`, in the list's alphabetical order.
+  - It sets `exclusions.generated: disable` for linters, so generated files are linted. The formatters keep `generated: lax`.
+  - One exclusion rule covers `goconst`, `gocognit` and `gocyclo` on `_gen\.go$`. Its comment gives question 15's reason: the repeated
+    strings are schema literals, and the dispatch and decoders are long by construction.
+  - The `errcheck` exclusion of `errors.AsType` landed in step 8, as that step's third decision records.
+- **`typedGate`**, by the step 8 deviation's first decision:
+  - `connection.go` gains `typedGate[T any](gate func(method string, result *T) error) gateFunc`. It passes the gate a result of
+    type `*T`, and answers a result of another type with `<method>: result of type <got>, not <want>`, without calling the gate.
+  - The emitter (`cmd/generate/internal/emit/dispatch.go`, `initializeWrapper`) passes `Initialize`'s gate through it, so the gate
+    reads `*result` with no type assertion. `client_gen.go` is the one regenerated file that changes. The emitter's pin
+    (`dispatch_test.go`) is updated.
+  - New root test `TestTypedGate` (`gates_test.go`). It requires the gate to be given the `*InitializeResponse` and its error
+    returned, and a value `InitializeResponse` to be refused with that text and no call of the gate.
+- **`docs/architecture.md`:** the pre-add check's paragraph says that the lint covers the generated files, except for the three
+  linters `.golangci.yml` excludes for `_gen.go` files.
+
+The lint, after the change, each exit 0:
+
+- `make lint`: 0 issues for `GOOS=darwin` and `GOOS=windows`, at the root and in `cmd/generate`;
+- `go fix -diff ./...`: no output at the root or in `cmd/generate`, as the MADR's "Confirmation" requires.
+
+Planted breaks, each in a fresh scratch copy of the tree. For the lint, one file was planted and `make lint` run:
+
+| Break | Result |
+| :--- | :--- |
+| a `for` variable copied, `v := v` | `make lint` exit 2: `zz_plant.go:5:3: The copy of the 'for' variable "v" can be deleted (Go 1.22+) (copyloopvar)` |
+| `for i := 0; i < 3; i++` | exit 2: `for loop can be changed to use an integer range (Go 1.22+) (intrange)` |
+| a range over `strings.Split` | exit 2: `stringsseq: Ranging over SplitSeq is more efficient (modernize)` |
+| `fmt.Sprintf("%d", n)` | exit 2: `integer-format: fmt.Sprintf can be replaced with faster strconv.Itoa (perfsprint)` |
+| a test helper without `t.Helper()` | exit 2: `zz_plant_test.go:5:6: test helper function should start from t.Helper() (thelper)` |
+| `r.StatusCode == 200` | exit 2: `"200" can be replaced by http.StatusOK (usestdlibvars)` |
+| the `intrange` loop in a file with the generated-code header, `zz_plant_gen.go` | exit 2: `zz_plant_gen.go:6:2: … (intrange)`, so generated files are linted |
+| one string four times in that generated file | `goconst` reports nothing on it: the exclusion holds |
+| the same string four times in a hand-written file | exit 2: ``string `zzplant` has 4 occurrences, make it a constant (goconst)``, so the exclusion covers `_gen.go` files only |
+| `typedGate` returning nil for a result of another type | `TestTypedGate` fails: "gate(InitializeResponse) = <nil>, want the error naming both types" |
+| `typedGate` calling the gate for a result of another type | `TestTypedGate` fails: "the gate was called 1 times with a result of another type" |
+| the emitter writing the old `*result.(*T)` | `TestDispatchFollowsTheModel` fails: `client_gen.go lacks "Response: *result,"` |
+
+`TestTypedGate` first tracked the gate's argument and not its calls. The second `typedGate` break passed it, because the gate was
+given a nil `*InitializeResponse`. The test now counts the calls, and both breaks fail it.
+
+No test this step adds or changes uses a context or a bubble, so no `-count=1000` run applies.
+
+Gates, with the API listing against `v1.15.2`, each exit 0:
+
+- regeneration: the generated files unchanged by a second run;
+- `make pre-add-check`, which lints with the new configuration for both `GOOS` values in both modules;
+- `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+- `make check-records`, `make markdownlint`, and the identifier scan;
+- the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
+- Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.

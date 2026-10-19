@@ -845,3 +845,28 @@ func isValidationError(err error) bool {
 	_, ok := errors.AsType[*ValidationError](err)
 	return ok
 }
+
+// TestTypedGate requires typedGate to pass its gate a result of type *T, and to
+// refuse a result of another type with an error naming both types, without
+// calling the gate (0019-PLAN-idioms-performance.md, D12).
+func TestTypedGate(t *testing.T) {
+	t.Parallel()
+	refused := errors.New("refused")
+	var got []*InitializeResponse
+	gate := typedGate(func(method string, result *InitializeResponse) error {
+		got = append(got, result)
+		return refused
+	})
+	want := &InitializeResponse{ProtocolVersion: ProtocolVersionNumber}
+	if err := gate(AgentMethodInitialize, want); !errors.Is(err, refused) || len(got) != 1 || got[0] != want {
+		t.Errorf("gate(*InitializeResponse) = %v, gate given %v; want the gate's error, given only %p", err, got, want)
+	}
+	got = nil
+	err := gate(AgentMethodInitialize, InitializeResponse{})
+	if err == nil || err.Error() != "initialize: result of type acp.InitializeResponse, not *acp.InitializeResponse" {
+		t.Errorf("gate(InitializeResponse) = %v, want the error naming both types", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("the gate was called %d times with a result of another type", len(got))
+	}
+}

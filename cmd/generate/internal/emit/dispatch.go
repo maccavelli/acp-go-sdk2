@@ -630,9 +630,14 @@ func initializeCase(recv ast.Expr, mi *model.Method) []ast.Stmt {
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, N1 and G1).
 func initializeWrapper(mi *model.Method) []ast.Stmt {
 	req, resp := dot("params", mi.ReqVersionField), dot("resp", mi.RespVersionField)
-	gate := gateFuncLit(ret(call(id("gateResult"),
-		addr(composite(id("Negotiation"), kv(id("Request"), id("params")), kv(id("Response"), star(typeAssert(id("result"), star(id(mi.Resp))))))),
-		id("method"), id("result"))))
+	// typedGate checks the result's type, so the gate reads *result without an
+	// assertion (0019-PLAN-idioms-performance.md, D12).
+	gate := call(id("typedGate"), &ast.FuncLit{
+		Type: funcType([]*ast.Field{param("method", id("string")), param("result", star(id(mi.Resp)))}, param("", id("error"))),
+		Body: block(ret(call(id("gateResult"),
+			addr(composite(id("Negotiation"), kv(id("Request"), id("params")), kv(id("Response"), star(id("result"))))),
+			id("method"), id("result")))),
+	})
 	return []ast.Stmt{
 		ifStmt(nil, binary(req, token.EQL, intLit(0)), assign(exprs(dot("params", mi.ReqVersionField)), id("ProtocolVersionNumber"))),
 		ifStmt(nil, binary(dot("params", mi.ReqVersionField), token.NEQ, id("ProtocolVersionNumber")),

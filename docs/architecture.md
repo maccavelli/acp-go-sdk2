@@ -380,7 +380,9 @@ Checks that guard this:
   `union_wire_test.go` the union decoding rules.
 - `make pre-add-check` runs `scripts/go-precheck.sh`: gofmt, golangci-lint for the
   host and for `GOOS=windows`, vet, tests with `-race`, `go mod tidy -diff`, and
-  govulncheck, for both modules. `make check-records` and `make markdownlint`
+  govulncheck, for both modules. golangci-lint covers the generated files too,
+  except for `goconst`, `gocognit` and `gocyclo`, which `.golangci.yml` excludes
+  for `_gen.go` files with the reason. `make check-records` and `make markdownlint`
   check the docs. GitHub Actions runs `.github/workflows/ci.yml`, which also runs
   the root tests with `GOEXPERIMENT=nojsonv2` on Linux.
 
