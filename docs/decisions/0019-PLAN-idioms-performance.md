@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-18
 associated-madr: "0019-MADR-remediate-debugging-pass-findings.md"
 ---
@@ -315,3 +315,16 @@ regenerated output with it. The exported API, the documented behaviour and the w
 `v1.16.0`, as the owner decided.
 
 ## Execution record
+
+### Step 1, records, 2026-10-18
+
+The owner committed this PLAN, its `docs/README.md` row and the MADR's D2 annotation as `581c7d4`, and approved the PLAN. This PLAN
+and its row are now `in-progress`.
+
+Each fact the table "Facts this plan rests on" states was re-asserted on `581c7d4` by a script outside the tree: 83 cited lines, each
+holding its snippet, and 13 counts. 96 of 96 hold.
+
+The script was seen to fail while this PLAN was drafted: run on the `v1.15.1` tree, whose code differs, it held 76 of 91 and exited 1.
+It then had 91 facts; five were added after.
+
+Gates on the tree: `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing. No Go file changed.
