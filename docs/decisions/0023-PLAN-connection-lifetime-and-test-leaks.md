@@ -359,3 +359,34 @@ This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`
 * Publish its release from the release text of
   [0023-REPORT-release-notes-v1-16-1.md](../reports/0023-REPORT-release-notes-v1-16-1.md), with its relative links rewritten to the
   tag.
+
+### Publication, 2026-10-19
+
+**The close.** The owner committed the close as `4c2dd6e`. `make push-guard` ran over that one commit, after a fetch, and passed,
+exit 0, and the owner pushed it. CI run `39291554384` on it concluded `success` on its first attempt, on all three runners.
+
+**What was published.**
+
+* **The tag.** The owner tagged `4c2dd6e` `v1.16.1`, an annotated tag whose message is its name, as `v1.16.0` is, and pushed it. CI
+  run `39292715331`, started by the tag, concluded `success` on its first attempt, on `validate (ubuntu-24.04)`, `validate (macos-15)`
+  and `validate (windows-2025)`.
+* **The release.** The owner then published the GitHub release `v1.16.1`, with `gh release create --verify-tag --latest`. Its body is
+  the release text of [0023-REPORT-release-notes-v1-16-1.md](../reports/0023-REPORT-release-notes-v1-16-1.md), as a script outside the
+  tree extracted it: the text under "### v1.16.1" up to "Sources not in the release text", with its one relative link rewritten to the
+  file at the tag.
+
+**Checks.** The `v1.16.0` publication check, with its tag and commit changed, ran from outside the tree. It used a scratch consumer,
+`GOPROXY` the default `https://proxy.golang.org,direct`, a scratch `GOMODCACHE` and `GOPATH`, and the checksum database on. 9 of 9
+checks hold:
+
+* the release is not a draft or a prerelease, its body is the extracted text, and it is GitHub's latest;
+* the tag is annotated and names `4c2dd6e`;
+* `main` on GitHub is the local `main`, and CI on it succeeded;
+* the proxy's `@v/v1.16.1.info` gives the origin `refs/tags/v1.16.1` at `4c2dd6e`;
+* `go list -m github.com/maccavelli/acp-go-sdk2@latest` gives `v1.16.1`;
+* `go mod download` of `v1.16.1` exits 0.
+
+The check was seen to fail when `v1.15.2` was published: it held 8 of 9 while that tag's CI run was still in progress
+([0019-PLAN-issue-fixes.md](0019-PLAN-issue-fixes.md), "Publication, 2026-10-18").
+
+Nothing of this PLAN is left open.
