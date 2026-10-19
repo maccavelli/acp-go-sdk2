@@ -71,6 +71,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0022 | PLAN | [Implement a generated PropertyOrder that keeps an elicitation form's property order, before v1.15.0](decisions/0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md) | complete |
 | 0023 | MADR | [Leave a connection's lifetime to the application, make Close end every handler, and fail the tests on a leaked connection](decisions/0023-MADR-connection-lifetime-and-test-leaks.md) | accepted |
 | 0023 | PLAN | [Implement 0023: Close ends every handler, the leaking tests close their connections, and a leak guard](decisions/0023-PLAN-connection-lifetime-and-test-leaks.md) | in-progress |
+| 0023 | REPORT | [Release notes for v1.16.1, against v1.16.0](reports/0023-REPORT-release-notes-v1-16-1.md) | observed |
 
 ## I want to…
 

@@ -290,3 +290,29 @@ Gates, with the API listing against `v1.16.0`, each exit 0:
 * `make check-records`, `make markdownlint`, and the identifier scan;
 * the API listing: 2429 lines at `v1.16.0` and in the tree, 0 removed, 0 added;
 * Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+### Step 4, release notes, 2026-10-19
+
+What changed, on `4a769a5`:
+
+* [0023-REPORT-release-notes-v1-16-1.md](../reports/0023-REPORT-release-notes-v1-16-1.md), the draft of the GitHub release text for
+  `v1.16.1`, in the shape of the `v1.16.0` notes;
+* its `docs/README.md` row.
+
+Facts the notes rest on, each read on `4a769a5`:
+
+* **The schema:** `git diff v1.16.0 HEAD -- schema/` is empty.
+* **The API listing:** 2429 lines at `v1.16.0` and at `4a769a5`, 0 removed, 0 added (step 3's gates).
+* **The commits** since `v1.16.0` that change Go files outside `cmd/generate`: `bb9197b` and `4a769a5`. The other four, `d004e9a`,
+  `88a08ec`, `6f49e13` and `f1c65e9`, change records only (`git show --name-only`).
+* **The SDK's non-test files:** `git diff --stat v1.16.0 HEAD -- '*.go' ':!*_test.go' ':!cmd/generate'` lists `connection.go` only,
+  9 lines added and 5 removed.
+* **The overflow policy:** `closeWith` has two callers, `Close` (`connection.go:708`) and the overflow (`:1332`). The overflow's cause
+  is `errNotificationQueueOverflow`, "notification queue overflow" (`:32`), which does not wrap `ErrConnectionClosed`.
+  * The draft said the overflow policy "does the same", which could be read as the same cause, `ErrConnectionClosed`.
+  * The text was corrected to name the overflow's own cause before the step ended.
+
+The first `make markdownlint` failed on the new report: MD004, the file's lists were written with `*` where the repository's reports
+use `-`. The markers were changed, 29 of them, and it passed.
+
+Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0. The step changes no Go file.
