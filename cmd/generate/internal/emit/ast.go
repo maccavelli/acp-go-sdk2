@@ -102,6 +102,12 @@ func ifElse(init ast.Stmt, cond ast.Expr, then, els []ast.Stmt) *ast.IfStmt {
 	return s
 }
 
+// elseIf is s with next as its else-if branch.
+func elseIf(s, next *ast.IfStmt) *ast.IfStmt {
+	s.Else = next
+	return s
+}
+
 func incr(x ast.Expr) *ast.IncDecStmt { return &ast.IncDecStmt{X: x, Tok: token.INC} }
 
 func rangeStmt(key, value, x ast.Expr, body ...ast.Stmt) *ast.RangeStmt {
@@ -119,6 +125,37 @@ func breakStmt() *ast.BranchStmt { return &ast.BranchStmt{Tok: token.BREAK} }
 
 func switchStmt(tag ast.Expr, clauses ...ast.Stmt) *ast.SwitchStmt {
 	return &ast.SwitchStmt{Tag: tag, Body: block(clauses...)}
+}
+
+// switchOrIf is switchStmt, or if tag == value { body } when the switch would
+// have one case of one value, as gocritic's singleCaseSwitch asks. A case
+// whose body breaks out of the switch stays a switch, since the break would
+// then leave an enclosing loop instead.
+func switchOrIf(tag ast.Expr, clauses ...ast.Stmt) ast.Stmt {
+	if len(clauses) == 1 {
+		if cc, ok := clauses[0].(*ast.CaseClause); ok && len(cc.List) == 1 && !breaksOut(cc.Body) {
+			return ifStmt(nil, binary(tag, token.EQL, cc.List[0]), cc.Body...)
+		}
+	}
+	return switchStmt(tag, clauses...)
+}
+
+// breaksOut reports whether body holds an unlabelled break that is not inside
+// a loop, switch or select of its own.
+func breaksOut(body []ast.Stmt) bool {
+	found := false
+	for _, s := range body {
+		ast.Inspect(s, func(n ast.Node) bool {
+			switch n := n.(type) {
+			case *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt, *ast.FuncLit:
+				return false
+			case *ast.BranchStmt:
+				found = found || (n.Tok == token.BREAK && n.Label == nil)
+			}
+			return !found
+		})
+	}
+	return found
 }
 
 // caseOf is a case clause. A nil list is the default clause.

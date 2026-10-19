@@ -105,23 +105,24 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"Requested: int(p.Rev),",
 			"rec, cerr := jsonCopy(Negotiation{",
 			"a.negotiation.Store(&rec)",
-			"func (c *AgentSideConnection) Negotiated() (Negotiation, bool) {",
+			"func (a *AgentSideConnection) Negotiated() (Negotiation, bool) {",
 			"switch a.conn.promptOverlap {\n\tcase PromptOverlapRefuse:\n\t\tif len(a.sessionCancels[key]) > 0 {\n\t\t\treturn false",
 			"case PromptOverlapConcurrent:\n\t\ta.sessionCancels[key] = append(a.sessionCancels[key], turn)",
-			"if prev.receipt > turn.receipt {\n\t\t\t\tturn.cancel(superseded)",
+			"if prev.receipt > turn.receipt {\n\t\t\t\tturn.cancel(errSuperseded)",
+			"var errSuperseded = fmt.Errorf(\"%w: superseded by a new prompt\", ErrPromptCancelled)",
 			"if turn.receipt != 0 && a.lateCancels[key] > turn.receipt {\n\t\tturn.cancel(ErrPromptCancelled)\n\t} else if supersedes {",
 			"if s == 0 || t.receipt < s {\n\t\t\tt.cancel(ErrPromptCancelled)",
 			"store, ok := a.agent.(AgentStore)",
 			"resp, err := store.Open(ctx, p)",
-			"func (c *AgentSideConnection) gate(method string, params any) error {\n\treturn gateMessage(c.negotiation.Load(), method, params)",
-			"func (c *AgentSideConnection) resultGate(method string, result any) error {\n\treturn gateResult(c.negotiation.Load(), method, result)",
+			"func (a *AgentSideConnection) gate(method string, params any) error {\n\treturn gateMessage(a.negotiation.Load(), method, params)",
+			"func (a *AgentSideConnection) resultGate(method string, result any) error {\n\treturn gateResult(a.negotiation.Load(), method, result)",
 			"if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {",
 			"a.conn.checkResult(method, resp, a.resultGate)",
-			"if err := c.gate(ClientMethodAsk, &params); err != nil {\n\t\treturn AskResponse{}, err",
+			"if err := a.gate(ClientMethodAsk, &params); err != nil {\n\t\treturn AskResponse{}, err\n\t}\n\treturn sendRequest[AskResponse](a.conn, ctx, ClientMethodAsk, params, a.resultGate)\n}",
 			"result, rerr := a.conn.checkResult(method, resp, func(method string, result any) error {\n\t\t\treturn gateResult(&Negotiation{",
 		},
 		"client_gen.go": {
-			"if sent && ctx.Err() != nil {\n\t\t\t_ = c.Stop(context.WithoutCancel(ctx), StopNotification{ConversationId: params.ConversationId})",
+			"if sent && ctx.Err() != nil {\n\t\t\tif cerr := c.Stop(context.WithoutCancel(ctx), StopNotification{ConversationId: params.ConversationId}); cerr != nil {\n\t\t\t\tc.conn.loggerOrDefault().Debug(\"failed to send the cancel of a prompt turn\", \"method\", AgentMethodStop, \"err\", cerr)",
 			"pctx, done := c.pending.track(ctx, string(p.ConversationId))",
 			"if params.Rev == 0 {\n\t\tparams.Rev = ProtocolVersionNumber",
 			"return HelloResponse{}, &ProtocolVersionError{Requested: int(params.Rev)}",
@@ -199,11 +200,11 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 			"asc.conn = buildConnection(asc.handleWithExtensions, peerInput, peerOutput, opts...)\n" +
 				"\tif aware, ok := agent.(AgentConnAware); ok {\n\t\taware.SetAgentConnection(asc)\n\t}\n" +
 				"\tasc.conn.start()\n\treturn asc\n}\n",
-			"func (c *AgentSideConnection) DroppedNotifications() uint64 {",
-			"func (c *AgentSideConnection) Done() <-chan struct{} {",
-			"func (c *AgentSideConnection) SetLogger(l *slog.Logger) {",
+			"func (a *AgentSideConnection) DroppedNotifications() uint64 {",
+			"func (a *AgentSideConnection) Done() <-chan struct{} {",
+			"func (a *AgentSideConnection) SetLogger(l *slog.Logger) {",
 			"// It is for requests the typed methods cannot make: a method the client\n",
-			"func (c *AgentSideConnection) Connection() *Connection {",
+			"func (a *AgentSideConnection) Connection() *Connection {",
 		},
 		"client_gen.go": {
 			"// ClientSideConnection provides the client's view of the connection and implements Agent calls.\ntype ClientSideConnection struct {",
@@ -247,7 +248,7 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 		}
 		gated := name == "with prompt turns"
 		for file, w := range map[string]string{
-			"agent_gen.go":  "func (c *AgentSideConnection) gate(",
+			"agent_gen.go":  "func (a *AgentSideConnection) gate(",
 			"client_gen.go": "func (c *ClientSideConnection) resultGate(",
 			"types_gen.go":  "func gateMessage(",
 		} {
@@ -321,7 +322,7 @@ func TestGatesFollowTheModel(t *testing.T) {
 			"if err := c.gate(AgentMethodA, &params); err != nil {\n\t\treturn AResponse{}, err",
 			"if err := c.gate(AgentMethodB, &params); err != nil {",
 		},
-		"agent_gen.go": {"if err := c.gate(ClientMethodD, &params); err != nil {\n\t\treturn err"},
+		"agent_gen.go": {"if err := a.gate(ClientMethodD, &params); err != nil {\n\t\treturn err"},
 	} {
 		for _, w := range lines {
 			if !strings.Contains(out[file], w) {

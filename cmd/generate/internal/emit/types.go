@@ -351,8 +351,7 @@ func emitObjectMarshal(f *goFile, name, place string, defaults, fills []*model.F
 	// required ones to empty, before encoding.
 	body := []ast.Stmt{
 		typeStmt("Alias", id(name)),
-		varStmt("a", id("Alias")),
-		assign(exprs(id("a")), call(id("Alias"), id("v"))),
+		define(exprs(id("a")), call(id("Alias"), id("v"))),
 	}
 	for _, fld := range defaults {
 		if injectsDefault(fld) {
@@ -730,12 +729,12 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 	}
 	body = append(body,
 		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
-		ifElse(define(exprs(id("err")), unmarshal(id("b"), addr(id("m")))), binary(id("err"), token.EQL, nilExpr()),
-			object,
+		elseIf(ifStmt(define(exprs(id("err")), unmarshal(id("b"), addr(id("m")))), binary(id("err"), token.EQL, nilExpr()),
+			object...),
 			// Not an object (e.g., primitive union variant) or invalid JSON.
-			[]ast.Stmt{ifStmt(define(exprs(id("_"), id("ok")), typeAssert(id("err"), star(f.qual(pkgJSON, "UnmarshalTypeError")))), not(id("ok")),
-				ret(id("err")))},
-		),
+			ifStmt(define(exprs(id("_"), id("ok")),
+				call(index(f.qual(pkgErrors, "AsType"), star(f.qual(pkgJSON, "UnmarshalTypeError"))), id("err"))), not(id("ok")),
+				ret(id("err")))),
 	)
 	return append(body, arrayMatch(f, name, variants)...)
 }
@@ -813,7 +812,7 @@ func discUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKe
 		ifStmt(define(exprs(id("v"), id("ok")), index(id("m"), str(discKey))), id("ok"),
 			ifStmt(define(exprs(id("err")), unmarshal(id("v"), addr(id("disc")))), errNotNil(),
 				ret(call(f.qual(pkgFmt, "Errorf"), str(name+": discriminator "+strconv.Quote(discKey)+": %w"), id("err"))))),
-		switchStmt(id("disc"), cases...),
+		switchOrIf(id("disc"), cases...),
 	}
 	present := func(v string) ast.Expr {
 		return binary(id("ok"), token.LAND, binary(call(id("string"), id(v)), token.NEQ, str(schemaTypeNull)))
@@ -880,27 +879,32 @@ func keyLessBody(f *goFile, name string, keyLess []*model.Variant, discKey strin
 // other than the discriminator are all in the payload. When none or several
 // fit, the payload is kept in Unknown, or refused in a union with a catch-all.
 func fitBody(f *goFile, name string, variants []*model.Variant, discKey string, hasUnknown bool, catchAll *model.Variant) []ast.Stmt {
-	body := []ast.Stmt{varStmt("fit", sliceOf(id("string")))}
-	var cases []ast.Stmt
+	// The variants without keys to match always fit: they start the list.
+	var always []ast.Expr
+	var matches, cases []ast.Stmt
 	for _, vi := range variants {
 		if vi == catchAll {
 			continue
 		}
-		add := assign(exprs(id("fit")), call(id("append"), id("fit"), str(vi.FieldName)))
 		if len(vi.FitKeys) == 0 {
-			body = append(body, add)
+			always = append(always, str(vi.FieldName))
 		} else {
 			stmts := []ast.Stmt{define(exprs(id("match")), boolLit(true))}
 			for _, k := range vi.FitKeys {
 				stmts = append(stmts, keyMatch("m", k))
 			}
-			body = append(body, block(append(stmts, ifStmt(nil, id("match"), add))...))
+			add := assign(exprs(id("fit")), call(id("append"), id("fit"), str(vi.FieldName)))
+			matches = append(matches, block(append(stmts, ifStmt(nil, id("match"), add))...))
 		}
 		cases = append(cases, caseOf(exprs(str(vi.FieldName)),
 			append([]ast.Stmt{varStmt("v", id(vi.TypeName))}, decodeStrict(f, vi, variantPlace(name, vi))...)...))
 	}
-	body = append(body, ifStmt(nil, binary(call(id("len"), id("fit")), token.EQL, intLit(1)),
-		switchStmt(index(id("fit"), intLit(0)), cases...)))
+	body := []ast.Stmt{varStmt("fit", sliceOf(id("string")))}
+	if len(always) > 0 {
+		body = []ast.Stmt{define(exprs(id("fit")), composite(sliceOf(id("string")), always...))}
+	}
+	body = append(append(body, matches...), ifStmt(nil, binary(call(id("len"), id("fit")), token.EQL, intLit(1)),
+		switchOrIf(index(id("fit"), intLit(0)), cases...)))
 	if hasUnknown {
 		return append(body,
 			assign(exprs(dot("u", unknownField)), call(f.qual(pkgBytes, "Clone"), id("b"))),
@@ -927,11 +931,7 @@ func unionMarshalBody(f *goFile, name string, variants []*model.Variant, hasUnkn
 				// (0014-MADR-union-constructors-take-every-required-key.md, item 7).
 				then = append(then, ifStmt(nil, binary(star(dot("u", vi.FieldName)), token.EQL, nilExpr()), ret(bytesOf("[]"), nilExpr())))
 			}
-			then = append(then,
-				define(exprs(id("_b"), id("_e")), marshal(star(dot("u", vi.FieldName)))),
-				ifStmt(nil, binary(id("_e"), token.NEQ, nilExpr()), ret(emptyBytes(), id("_e"))),
-				ret(id("_b"), nilExpr()),
-			)
+			then = append(then, ret(marshal(star(dot("u", vi.FieldName)))))
 		default:
 			then = []ast.Stmt{
 				define(exprs(id("_b"), id("_e")), marshal(star(dot("u", vi.FieldName)))),
@@ -980,7 +980,7 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 			list = append(list, str(x))
 		}
 		body = append(body, ifStmt(nil, binary(dot("u", ca.FieldName), token.NEQ, nilExpr()),
-			switchStmt(value, caseOf(list,
+			switchOrIf(value, caseOf(list,
 				ret(validationError(name, str(t.DiscKey), value, "RuleExcludedValue",
 					call(f.qual(pkgFmt, "Sprintf"), str(name+": variant "+ca.FieldName+": "+t.DiscKey+" %q names another variant"), value)))))))
 	}
@@ -1063,7 +1063,11 @@ func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
 	var msg, rule string
 	switch c.Kind {
 	case model.CheckMinLength:
-		cond = binary(call(f.qual("unicode/utf8", "RuneCountInString"), call(id("string"), value)), token.LSS, bound)
+		s := value
+		if c.NamedString {
+			s = call(id("string"), value)
+		}
+		cond = binary(call(f.qual("unicode/utf8", "RuneCountInString"), s), token.LSS, bound)
 		msg, rule = where+": shorter than minLength "+bound.Value, "RuleMinLength"
 	case model.CheckMinimum:
 		cond = binary(value, token.LSS, bound)

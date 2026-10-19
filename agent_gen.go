@@ -40,25 +40,25 @@ func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Read
 
 // DroppedNotifications reports how many inbound notifications the underlying
 // connection has dropped under OverflowDropNewest.
-func (c *AgentSideConnection) DroppedNotifications() uint64 {
-	return c.conn.DroppedNotifications()
+func (a *AgentSideConnection) DroppedNotifications() uint64 {
+	return a.conn.DroppedNotifications()
 }
 
 // Done exposes a channel that closes when the connection ends: the peer
 // disconnects, or Close or the overflow policy closes it.
-func (c *AgentSideConnection) Done() <-chan struct{} {
-	return c.conn.Done()
+func (a *AgentSideConnection) Done() <-chan struct{} {
+	return a.conn.Done()
 }
 
 // Close closes the underlying connection; see Connection.Close
 // (0019-PLAN-api-decisions.md, B17).
-func (c *AgentSideConnection) Close() error {
-	return c.conn.Close()
+func (a *AgentSideConnection) Close() error {
+	return a.conn.Close()
 }
 
 // SetLogger directs connection diagnostics to the provided logger.
-func (c *AgentSideConnection) SetLogger(l *slog.Logger) {
-	c.conn.SetLogger(l)
+func (a *AgentSideConnection) SetLogger(l *slog.Logger) {
+	a.conn.SetLogger(l)
 }
 
 // Connection returns the underlying JSON-RPC connection.
@@ -70,27 +70,27 @@ func (c *AgentSideConnection) SetLogger(l *slog.Logger) {
 // returned connection. It is the same connection the typed methods use, not a
 // copy. It holds no record of initialize, so what is sent through it is not
 // checked against the negotiated capabilities.
-func (c *AgentSideConnection) Connection() *Connection {
-	return c.conn
+func (a *AgentSideConnection) Connection() *Connection {
+	return a.conn
 }
 
 // inboundGate is the gate of the received messages the generated dispatch
 // does not decode, the extension messages: gate, or nil when the schema has
 // no initialize (0019-PLAN-api-decisions.md, B14).
-func (c *AgentSideConnection) inboundGate() gateFunc {
-	return c.gate
+func (a *AgentSideConnection) inboundGate() gateFunc {
+	return a.gate
 }
 
 // gate checks a message of this connection against what initialize agreed
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
-func (c *AgentSideConnection) gate(method string, params any) error {
-	return gateMessage(c.negotiation.Load(), method, params)
+func (a *AgentSideConnection) gate(method string, params any) error {
+	return gateMessage(a.negotiation.Load(), method, params)
 }
 
 // resultGate checks a result of this connection, sent or received, against
 // what initialize agreed.
-func (c *AgentSideConnection) resultGate(method string, result any) error {
-	return gateResult(c.negotiation.Load(), method, result)
+func (a *AgentSideConnection) resultGate(method string, result any) error {
+	return gateResult(a.negotiation.Load(), method, result)
 }
 
 // Negotiated returns what initialize agreed on this connection, the request
@@ -99,8 +99,8 @@ func (c *AgentSideConnection) resultGate(method string, result any) error {
 // the JSON form of what was sent and received, and each call returns a copy
 // of it that shares no memory with the connection's or the caller's values
 // (0019-PLAN-behaviour-fixes.md, B13).
-func (c *AgentSideConnection) Negotiated() (Negotiation, bool) {
-	n := c.negotiation.Load()
+func (a *AgentSideConnection) Negotiated() (Negotiation, bool) {
+	n := a.negotiation.Load()
 	if n == nil {
 		return Negotiation{}, false
 	}
@@ -127,6 +127,10 @@ type promptTurn struct {
 // outside tests.
 var promptReturned func()
 
+// errSuperseded is the cause of a prompt turn that a newer prompt of its
+// session superseded (0019-PLAN-idioms-performance.md, D7).
+var errSuperseded = fmt.Errorf("%w: superseded by a new prompt", ErrPromptCancelled)
+
 // storeTurn stores turn, a prompt turn of the session key, as the connection's
 // prompt-overlap policy has it, and reports false when the policy refuses it.
 // Supersede, the default, cancels the stored turns, or this one when a stored
@@ -146,15 +150,14 @@ func (a *AgentSideConnection) storeTurn(key string, turn *promptTurn) bool {
 	case PromptOverlapConcurrent:
 		a.sessionCancels[key] = append(a.sessionCancels[key], turn)
 	default:
-		superseded := fmt.Errorf("%w: superseded by a new prompt", ErrPromptCancelled)
 		for _, prev := range a.sessionCancels[key] {
 			if prev.receipt > turn.receipt {
-				turn.cancel(superseded)
+				turn.cancel(errSuperseded)
 				return true
 			}
 		}
 		for _, prev := range a.sessionCancels[key] {
-			prev.cancel(superseded)
+			prev.cancel(errSuperseded)
 		}
 		a.sessionCancels[key] = []*promptTurn{turn}
 		supersedes = true
@@ -812,11 +815,11 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 // CompleteElicitation sends the elicitation/complete notification to the client.
 //
 // Notification sent by the agent when a URL-based elicitation is complete.
-func (c *AgentSideConnection) CompleteElicitation(ctx context.Context, params CompleteElicitationNotification) error {
-	if err := c.gate(ClientMethodElicitationComplete, &params); err != nil {
+func (a *AgentSideConnection) CompleteElicitation(ctx context.Context, params CompleteElicitationNotification) error {
+	if err := a.gate(ClientMethodElicitationComplete, &params); err != nil {
 		return err
 	}
-	return c.conn.SendNotification(ctx, ClientMethodElicitationComplete, params)
+	return a.conn.SendNotification(ctx, ClientMethodElicitationComplete, params)
 }
 
 // CreateElicitation sends the elicitation/create request to the client and returns its response.
@@ -826,12 +829,11 @@ func (c *AgentSideConnection) CompleteElicitation(ctx context.Context, params Co
 // The agent sends this to the client to request information from the user,
 // either via a form or by directing them to a URL.
 // Elicitations are tied to a session (optionally a tool call) or a request.
-func (c *AgentSideConnection) CreateElicitation(ctx context.Context, params CreateElicitationRequest) (CreateElicitationResponse, error) {
-	if err := c.gate(ClientMethodElicitationCreate, &params); err != nil {
+func (a *AgentSideConnection) CreateElicitation(ctx context.Context, params CreateElicitationRequest) (CreateElicitationResponse, error) {
+	if err := a.gate(ClientMethodElicitationCreate, &params); err != nil {
 		return CreateElicitationResponse{}, err
 	}
-	resp, err := sendRequest[CreateElicitationResponse](c.conn, ctx, ClientMethodElicitationCreate, params, c.resultGate)
-	return resp, err
+	return sendRequest[CreateElicitationResponse](a.conn, ctx, ClientMethodElicitationCreate, params, a.resultGate)
 }
 
 // ReadTextFile sends the fs/read_text_file request to the client and returns its response.
@@ -839,12 +841,11 @@ func (c *AgentSideConnection) CreateElicitation(ctx context.Context, params Crea
 // Request to read content from a text file.
 //
 // Only available if the client supports the 'fs.readTextFile' capability.
-func (c *AgentSideConnection) ReadTextFile(ctx context.Context, params ReadTextFileRequest) (ReadTextFileResponse, error) {
-	if err := c.gate(ClientMethodFsReadTextFile, &params); err != nil {
+func (a *AgentSideConnection) ReadTextFile(ctx context.Context, params ReadTextFileRequest) (ReadTextFileResponse, error) {
+	if err := a.gate(ClientMethodFsReadTextFile, &params); err != nil {
 		return ReadTextFileResponse{}, err
 	}
-	resp, err := sendRequest[ReadTextFileResponse](c.conn, ctx, ClientMethodFsReadTextFile, params, c.resultGate)
-	return resp, err
+	return sendRequest[ReadTextFileResponse](a.conn, ctx, ClientMethodFsReadTextFile, params, a.resultGate)
 }
 
 // WriteTextFile sends the fs/write_text_file request to the client and returns its response.
@@ -852,12 +853,11 @@ func (c *AgentSideConnection) ReadTextFile(ctx context.Context, params ReadTextF
 // Request to write content to a text file.
 //
 // Only available if the client supports the 'fs.writeTextFile' capability.
-func (c *AgentSideConnection) WriteTextFile(ctx context.Context, params WriteTextFileRequest) (WriteTextFileResponse, error) {
-	if err := c.gate(ClientMethodFsWriteTextFile, &params); err != nil {
+func (a *AgentSideConnection) WriteTextFile(ctx context.Context, params WriteTextFileRequest) (WriteTextFileResponse, error) {
+	if err := a.gate(ClientMethodFsWriteTextFile, &params); err != nil {
 		return WriteTextFileResponse{}, err
 	}
-	resp, err := sendRequest[WriteTextFileResponse](c.conn, ctx, ClientMethodFsWriteTextFile, params, c.resultGate)
-	return resp, err
+	return sendRequest[WriteTextFileResponse](a.conn, ctx, ClientMethodFsWriteTextFile, params, a.resultGate)
 }
 
 // UnstableMessageMcp sends the mcp/message request to the client and returns its response.
@@ -867,12 +867,11 @@ func (c *AgentSideConnection) WriteTextFile(ctx context.Context, params WriteTex
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Request parameters for 'mcp/message'.
-func (c *AgentSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error) {
-	if err := c.gate(ClientMethodMcpMessage, &params); err != nil {
+func (a *AgentSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error) {
+	if err := a.gate(ClientMethodMcpMessage, &params); err != nil {
 		return UnstableMessageMcpResponse{}, err
 	}
-	resp, err := sendRequest[UnstableMessageMcpResponse](c.conn, ctx, ClientMethodMcpMessage, params, c.resultGate)
-	return resp, err
+	return sendRequest[UnstableMessageMcpResponse](a.conn, ctx, ClientMethodMcpMessage, params, a.resultGate)
 }
 
 // RequestPermission sends the session/request_permission request to the client and returns its response.
@@ -882,12 +881,11 @@ func (c *AgentSideConnection) UnstableMessageMcp(ctx context.Context, params Uns
 // Sent when the agent needs authorization before performing a sensitive operation.
 //
 // See protocol docs: [Requesting Permission](https://agentclientprotocol.com/protocol/tool-calls#requesting-permission)
-func (c *AgentSideConnection) RequestPermission(ctx context.Context, params RequestPermissionRequest) (RequestPermissionResponse, error) {
-	if err := c.gate(ClientMethodSessionRequestPermission, &params); err != nil {
+func (a *AgentSideConnection) RequestPermission(ctx context.Context, params RequestPermissionRequest) (RequestPermissionResponse, error) {
+	if err := a.gate(ClientMethodSessionRequestPermission, &params); err != nil {
 		return RequestPermissionResponse{}, err
 	}
-	resp, err := sendRequest[RequestPermissionResponse](c.conn, ctx, ClientMethodSessionRequestPermission, params, c.resultGate)
-	return resp, err
+	return sendRequest[RequestPermissionResponse](a.conn, ctx, ClientMethodSessionRequestPermission, params, a.resultGate)
 }
 
 // SessionUpdate sends the session/update notification to the client.
@@ -897,64 +895,59 @@ func (c *AgentSideConnection) RequestPermission(ctx context.Context, params Requ
 // Used to stream real-time progress and results during prompt processing.
 //
 // See protocol docs: [Agent Reports Output](https://agentclientprotocol.com/protocol/prompt-turn#3-agent-reports-output)
-func (c *AgentSideConnection) SessionUpdate(ctx context.Context, params SessionNotification) error {
-	if err := c.gate(ClientMethodSessionUpdate, &params); err != nil {
+func (a *AgentSideConnection) SessionUpdate(ctx context.Context, params SessionNotification) error {
+	if err := a.gate(ClientMethodSessionUpdate, &params); err != nil {
 		return err
 	}
-	return c.conn.SendNotification(ctx, ClientMethodSessionUpdate, params)
+	return a.conn.SendNotification(ctx, ClientMethodSessionUpdate, params)
 }
 
 // CreateTerminal sends the terminal/create request to the client and returns its response.
 //
 // Request to create a new terminal and execute a command.
-func (c *AgentSideConnection) CreateTerminal(ctx context.Context, params CreateTerminalRequest) (CreateTerminalResponse, error) {
-	if err := c.gate(ClientMethodTerminalCreate, &params); err != nil {
+func (a *AgentSideConnection) CreateTerminal(ctx context.Context, params CreateTerminalRequest) (CreateTerminalResponse, error) {
+	if err := a.gate(ClientMethodTerminalCreate, &params); err != nil {
 		return CreateTerminalResponse{}, err
 	}
-	resp, err := sendRequest[CreateTerminalResponse](c.conn, ctx, ClientMethodTerminalCreate, params, c.resultGate)
-	return resp, err
+	return sendRequest[CreateTerminalResponse](a.conn, ctx, ClientMethodTerminalCreate, params, a.resultGate)
 }
 
 // KillTerminal sends the terminal/kill request to the client and returns its response.
 //
 // Request to kill a terminal without releasing it.
-func (c *AgentSideConnection) KillTerminal(ctx context.Context, params KillTerminalRequest) (KillTerminalResponse, error) {
-	if err := c.gate(ClientMethodTerminalKill, &params); err != nil {
+func (a *AgentSideConnection) KillTerminal(ctx context.Context, params KillTerminalRequest) (KillTerminalResponse, error) {
+	if err := a.gate(ClientMethodTerminalKill, &params); err != nil {
 		return KillTerminalResponse{}, err
 	}
-	resp, err := sendRequest[KillTerminalResponse](c.conn, ctx, ClientMethodTerminalKill, params, c.resultGate)
-	return resp, err
+	return sendRequest[KillTerminalResponse](a.conn, ctx, ClientMethodTerminalKill, params, a.resultGate)
 }
 
 // TerminalOutput sends the terminal/output request to the client and returns its response.
 //
 // Request to get the current output and status of a terminal.
-func (c *AgentSideConnection) TerminalOutput(ctx context.Context, params TerminalOutputRequest) (TerminalOutputResponse, error) {
-	if err := c.gate(ClientMethodTerminalOutput, &params); err != nil {
+func (a *AgentSideConnection) TerminalOutput(ctx context.Context, params TerminalOutputRequest) (TerminalOutputResponse, error) {
+	if err := a.gate(ClientMethodTerminalOutput, &params); err != nil {
 		return TerminalOutputResponse{}, err
 	}
-	resp, err := sendRequest[TerminalOutputResponse](c.conn, ctx, ClientMethodTerminalOutput, params, c.resultGate)
-	return resp, err
+	return sendRequest[TerminalOutputResponse](a.conn, ctx, ClientMethodTerminalOutput, params, a.resultGate)
 }
 
 // ReleaseTerminal sends the terminal/release request to the client and returns its response.
 //
 // Request to release a terminal and free its resources.
-func (c *AgentSideConnection) ReleaseTerminal(ctx context.Context, params ReleaseTerminalRequest) (ReleaseTerminalResponse, error) {
-	if err := c.gate(ClientMethodTerminalRelease, &params); err != nil {
+func (a *AgentSideConnection) ReleaseTerminal(ctx context.Context, params ReleaseTerminalRequest) (ReleaseTerminalResponse, error) {
+	if err := a.gate(ClientMethodTerminalRelease, &params); err != nil {
 		return ReleaseTerminalResponse{}, err
 	}
-	resp, err := sendRequest[ReleaseTerminalResponse](c.conn, ctx, ClientMethodTerminalRelease, params, c.resultGate)
-	return resp, err
+	return sendRequest[ReleaseTerminalResponse](a.conn, ctx, ClientMethodTerminalRelease, params, a.resultGate)
 }
 
 // WaitForTerminalExit sends the terminal/wait_for_exit request to the client and returns its response.
 //
 // Request to wait for a terminal command to exit.
-func (c *AgentSideConnection) WaitForTerminalExit(ctx context.Context, params WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
-	if err := c.gate(ClientMethodTerminalWaitForExit, &params); err != nil {
+func (a *AgentSideConnection) WaitForTerminalExit(ctx context.Context, params WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
+	if err := a.gate(ClientMethodTerminalWaitForExit, &params); err != nil {
 		return WaitForTerminalExitResponse{}, err
 	}
-	resp, err := sendRequest[WaitForTerminalExitResponse](c.conn, ctx, ClientMethodTerminalWaitForExit, params, c.resultGate)
-	return resp, err
+	return sendRequest[WaitForTerminalExitResponse](a.conn, ctx, ClientMethodTerminalWaitForExit, params, a.resultGate)
 }

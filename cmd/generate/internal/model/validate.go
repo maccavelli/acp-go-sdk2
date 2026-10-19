@@ -49,6 +49,9 @@ type Check struct {
 	// InPatch is true for a nested check of a Patch field: Shape is that of
 	// the patch's value, checked when the patch holds one.
 	InPatch bool
+	// NamedString is true for a CheckMinLength on a named type over string,
+	// whose length is taken of its conversion to string.
+	NamedString bool
 }
 
 // goRange is the range of each sized Go number type.
@@ -258,7 +261,7 @@ func (m *Model) bounds(owner, key string, minimum, maximum *float64, minLength *
 		if r.Kind != RefNamed || base != schemaTypeString {
 			return nil, fmt.Errorf("%s: minLength on %s, not a string", where, r)
 		}
-		out = append(out, Check{Kind: CheckMinLength, Key: key, Shape: sh, Bound: float64(*minLength), Integer: true})
+		out = append(out, Check{Kind: CheckMinLength, Key: key, Shape: sh, Bound: float64(*minLength), Integer: true, NamedString: r.Name != base})
 	}
 	if minimum == nil && maximum == nil {
 		return out, nil

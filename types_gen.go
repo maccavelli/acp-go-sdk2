@@ -370,10 +370,8 @@ func (u *AgentResponse) UnmarshalJSON(b []byte) error {
 				return nil
 			}
 		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
-		}
+	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+		return err
 	}
 	var arr []map[string]json.RawMessage
 	if json.Unmarshal(b, &arr) == nil {
@@ -667,8 +665,7 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("AuthMethod: discriminator \"type\": %w", err)
 		}
 	}
-	switch disc {
-	case "terminal":
+	if disc == "terminal" {
 		var v AuthMethodTerminalInline
 		if err := json.Unmarshal(b, &v); err != nil {
 			return fmt.Errorf("AuthMethod: type \"terminal\": %w", err)
@@ -1020,10 +1017,8 @@ func (u *AvailableCommandInput) UnmarshalJSON(b []byte) error {
 				return nil
 			}
 		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
-		}
+	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+		return err
 	}
 	var arr []map[string]json.RawMessage
 	if json.Unmarshal(b, &arr) == nil {
@@ -1089,8 +1084,7 @@ type AvailableCommandsUpdate struct {
 // MarshalJSON encodes v as the AvailableCommandsUpdate schema definition's JSON.
 func (v AvailableCommandsUpdate) MarshalJSON() ([]byte, error) {
 	type Alias AvailableCommandsUpdate
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.AvailableCommands == nil {
 		a.AvailableCommands = []AvailableCommand{}
 	}
@@ -1717,10 +1711,8 @@ func (u *ClientResponse) UnmarshalJSON(b []byte) error {
 				return nil
 			}
 		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
-		}
+	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+		return err
 	}
 	var arr []map[string]json.RawMessage
 	if json.Unmarshal(b, &arr) == nil {
@@ -2129,8 +2121,7 @@ type ConfigOptionUpdate struct {
 // MarshalJSON encodes v as the ConfigOptionUpdate schema definition's JSON.
 func (v ConfigOptionUpdate) MarshalJSON() ([]byte, error) {
 	type Alias ConfigOptionUpdate
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.ConfigOptions == nil {
 		a.ConfigOptions = []SessionConfigOption{}
 	}
@@ -2876,8 +2867,7 @@ type CreateElicitationForm struct {
 // MarshalJSON encodes v as the "form" variant of the CreateElicitationRequest schema definition's JSON.
 func (v CreateElicitationForm) MarshalJSON() ([]byte, error) {
 	type Alias CreateElicitationForm
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	b, err := json.Marshal(a)
 	if err != nil {
 		return nil, err
@@ -2990,8 +2980,7 @@ type CreateElicitationUrl struct {
 // MarshalJSON encodes v as the "url" variant of the CreateElicitationRequest schema definition's JSON.
 func (v CreateElicitationUrl) MarshalJSON() ([]byte, error) {
 	type Alias CreateElicitationUrl
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	b, err := json.Marshal(a)
 	if err != nil {
 		return nil, err
@@ -3104,8 +3093,7 @@ type CreateElicitationOther struct {
 // MarshalJSON encodes v as the Other variant of the CreateElicitationRequest schema definition's JSON.
 func (v CreateElicitationOther) MarshalJSON() ([]byte, error) {
 	type Alias CreateElicitationOther
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	b, err := json.Marshal(a)
 	if err != nil || len(v.Extra) == 0 {
 		return b, err
@@ -3495,8 +3483,7 @@ type CreateElicitationResponseOther struct {
 // MarshalJSON encodes v as the Other variant of the CreateElicitationResponse schema definition's JSON.
 func (v CreateElicitationResponseOther) MarshalJSON() ([]byte, error) {
 	type Alias CreateElicitationResponseOther
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	b, err := json.Marshal(a)
 	if err != nil || len(v.Extra) == 0 {
 		return b, err
@@ -3611,10 +3598,11 @@ func (u *CreateElicitationResponse) UnmarshalJSON(b []byte) error {
 		u.Other = &v
 		return nil
 	}
-	var fit []string
-	fit = append(fit, "Accept")
-	fit = append(fit, "Decline")
-	fit = append(fit, "Cancel")
+	fit := []string{
+		"Accept",
+		"Decline",
+		"Cancel",
+	}
 	if len(fit) == 1 {
 		switch fit[0] {
 		case "Accept":
@@ -4129,10 +4117,8 @@ func (u *ElicitationContentValue) UnmarshalJSON(b []byte) error {
 	*u = ElicitationContentValue{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
-		}
+	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+		return err
 	}
 	var arr []map[string]json.RawMessage
 	if json.Unmarshal(b, &arr) == nil {
@@ -4178,42 +4164,22 @@ func (u *ElicitationContentValue) UnmarshalJSON(b []byte) error {
 // MarshalJSON encodes u as the ElicitationContentValue schema definition's JSON.
 func (u ElicitationContentValue) MarshalJSON() ([]byte, error) {
 	if u.String != nil {
-		_b, _e := json.Marshal(*u.String)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
+		return json.Marshal(*u.String)
 	}
 	if u.Integer != nil {
-		_b, _e := json.Marshal(*u.Integer)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
+		return json.Marshal(*u.Integer)
 	}
 	if u.Number != nil {
-		_b, _e := json.Marshal(*u.Number)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
+		return json.Marshal(*u.Number)
 	}
 	if u.Boolean != nil {
-		_b, _e := json.Marshal(*u.Boolean)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
+		return json.Marshal(*u.Boolean)
 	}
 	if u.StringArray != nil {
 		if *u.StringArray == nil {
 			return []byte("[]"), nil
 		}
-		_b, _e := json.Marshal(*u.StringArray)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
+		return json.Marshal(*u.StringArray)
 	}
 	return nil, errors.New("ElicitationContentValue: no variant set")
 }
@@ -4302,8 +4268,7 @@ type ElicitationFormMode struct {
 // MarshalJSON encodes v as the ElicitationFormMode schema definition's JSON.
 func (v ElicitationFormMode) MarshalJSON() ([]byte, error) {
 	type Alias ElicitationFormMode
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	b, err := json.Marshal(a)
 	if err != nil {
 		return nil, err
@@ -4726,8 +4691,7 @@ type ElicitationPropertySchemaOther struct {
 // MarshalJSON encodes v as the Other variant of the ElicitationPropertySchema schema definition's JSON.
 func (v ElicitationPropertySchemaOther) MarshalJSON() ([]byte, error) {
 	type Alias ElicitationPropertySchemaOther
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	b, err := json.Marshal(a)
 	if err != nil || len(v.Extra) == 0 {
 		return b, err
@@ -4856,11 +4820,12 @@ func (u *ElicitationPropertySchema) UnmarshalJSON(b []byte) error {
 		u.Other = &v
 		return nil
 	}
-	var fit []string
-	fit = append(fit, "String")
-	fit = append(fit, "Number")
-	fit = append(fit, "Integer")
-	fit = append(fit, "Boolean")
+	fit := []string{
+		"String",
+		"Number",
+		"Integer",
+		"Boolean",
+	}
 	{
 		match := true
 		if _, ok := m["items"]; !ok {
@@ -5116,8 +5081,7 @@ type ElicitationSchema struct {
 // MarshalJSON encodes v as the ElicitationSchema schema definition's JSON.
 func (v ElicitationSchema) MarshalJSON() ([]byte, error) {
 	type Alias ElicitationSchema
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Properties == nil {
 		json.Unmarshal([]byte("{}"), &a.Properties)
 	}
@@ -5296,8 +5260,7 @@ type ElicitationUrlMode struct {
 // MarshalJSON encodes v as the ElicitationUrlMode schema definition's JSON.
 func (v ElicitationUrlMode) MarshalJSON() ([]byte, error) {
 	type Alias ElicitationUrlMode
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	b, err := json.Marshal(a)
 	if err != nil {
 		return nil, err
@@ -5470,10 +5433,8 @@ func (u *EmbeddedResourceResource) UnmarshalJSON(b []byte) error {
 				return nil
 			}
 		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
-		}
+	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+		return err
 	}
 	var arr []map[string]json.RawMessage
 	if json.Unmarshal(b, &arr) == nil {
@@ -6090,8 +6051,7 @@ type IdleStateUpdateOther struct {
 // MarshalJSON encodes v as the Other variant of the IdleStateUpdate schema definition's JSON.
 func (v IdleStateUpdateOther) MarshalJSON() ([]byte, error) {
 	type Alias IdleStateUpdateOther
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	b, err := json.Marshal(a)
 	if err != nil || len(v.Extra) == 0 {
 		return b, err
@@ -6621,8 +6581,7 @@ type InitializeResponse struct {
 // MarshalJSON encodes v as the InitializeResponse schema definition's JSON.
 func (v InitializeResponse) MarshalJSON() ([]byte, error) {
 	type Alias InitializeResponse
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.AuthMethods == nil {
 		json.Unmarshal([]byte("[]"), &a.AuthMethods)
 	}
@@ -6898,8 +6857,7 @@ type ListSessionsResponse struct {
 // MarshalJSON encodes v as the ListSessionsResponse schema definition's JSON.
 func (v ListSessionsResponse) MarshalJSON() ([]byte, error) {
 	type Alias ListSessionsResponse
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Sessions == nil {
 		a.Sessions = []SessionInfo{}
 	}
@@ -6976,8 +6934,7 @@ type LoadSessionRequest struct {
 // MarshalJSON encodes v as the LoadSessionRequest schema definition's JSON.
 func (v LoadSessionRequest) MarshalJSON() ([]byte, error) {
 	type Alias LoadSessionRequest
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.McpServers == nil {
 		a.McpServers = []McpServer{}
 	}
@@ -7299,8 +7256,7 @@ type McpServerHttpInline struct {
 // MarshalJSON encodes v as the "http" variant of the McpServer schema definition's JSON.
 func (v McpServerHttpInline) MarshalJSON() ([]byte, error) {
 	type Alias McpServerHttpInline
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Headers == nil {
 		a.Headers = []HttpHeader{}
 	}
@@ -7349,8 +7305,7 @@ type McpServerSseInline struct {
 // MarshalJSON encodes v as the "sse" variant of the McpServer schema definition's JSON.
 func (v McpServerSseInline) MarshalJSON() ([]byte, error) {
 	type Alias McpServerSseInline
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Headers == nil {
 		a.Headers = []HttpHeader{}
 	}
@@ -7697,8 +7652,7 @@ type McpServerHttp struct {
 // MarshalJSON encodes v as the McpServerHttp schema definition's JSON.
 func (v McpServerHttp) MarshalJSON() ([]byte, error) {
 	type Alias McpServerHttp
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Headers == nil {
 		a.Headers = []HttpHeader{}
 	}
@@ -7744,8 +7698,7 @@ type McpServerSse struct {
 // MarshalJSON encodes v as the McpServerSse schema definition's JSON.
 func (v McpServerSse) MarshalJSON() ([]byte, error) {
 	type Alias McpServerSse
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Headers == nil {
 		a.Headers = []HttpHeader{}
 	}
@@ -7793,8 +7746,7 @@ type McpServerStdio struct {
 // MarshalJSON encodes v as the McpServerStdio schema definition's JSON.
 func (v McpServerStdio) MarshalJSON() ([]byte, error) {
 	type Alias McpServerStdio
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Args == nil {
 		a.Args = []string{}
 	}
@@ -7863,8 +7815,7 @@ type MultiSelectItemsString struct {
 // MarshalJSON encodes v as the "string" variant of the MultiSelectItems schema definition's JSON.
 func (v MultiSelectItemsString) MarshalJSON() ([]byte, error) {
 	type Alias MultiSelectItemsString
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Enum == nil {
 		a.Enum = []string{}
 	}
@@ -7907,8 +7858,7 @@ type MultiSelectItemsOther struct {
 // MarshalJSON encodes v as the Other variant of the MultiSelectItems schema definition's JSON.
 func (v MultiSelectItemsOther) MarshalJSON() ([]byte, error) {
 	type Alias MultiSelectItemsOther
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	b, err := json.Marshal(a)
 	if err != nil || len(v.Extra) == 0 {
 		return b, err
@@ -7974,8 +7924,7 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("MultiSelectItems: discriminator \"type\": %w", err)
 		}
 	}
-	switch disc {
-	case "string":
+	if disc == "string" {
 		var v MultiSelectItemsString
 		if err := json.Unmarshal(b, &v); err != nil {
 			return fmt.Errorf("MultiSelectItems: type \"string\": %w", err)
@@ -8078,8 +8027,7 @@ func (u *MultiSelectItems) validate(abs func(string) bool) error {
 		}
 	}
 	if u.Other != nil {
-		switch u.Other.Type {
-		case "string":
+		if u.Other.Type == "string" {
 			return &ValidationError{
 				Type:  "MultiSelectItems",
 				Field: "type",
@@ -8873,8 +8821,7 @@ type NewSessionRequest struct {
 // MarshalJSON encodes v as the NewSessionRequest schema definition's JSON.
 func (v NewSessionRequest) MarshalJSON() ([]byte, error) {
 	type Alias NewSessionRequest
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.McpServers == nil {
 		a.McpServers = []McpServer{}
 	}
@@ -9049,7 +8996,7 @@ func (v *Notice) Validate() error {
 }
 
 func (v *Notice) validate(abs func(string) bool) error {
-	if utf8.RuneCountInString(string(v.Title)) < 1 {
+	if utf8.RuneCountInString(v.Title) < 1 {
 		return &ValidationError{
 			Type:  "Notice",
 			Field: "title",
@@ -9227,8 +9174,7 @@ type Plan struct {
 // MarshalJSON encodes v as the Plan schema definition's JSON.
 func (v Plan) MarshalJSON() ([]byte, error) {
 	type Alias Plan
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Entries == nil {
 		a.Entries = []PlanEntry{}
 	}
@@ -9446,8 +9392,7 @@ type PlanItems struct {
 // MarshalJSON encodes v as the PlanItems schema definition's JSON.
 func (v PlanItems) MarshalJSON() ([]byte, error) {
 	type Alias PlanItems
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Entries == nil {
 		a.Entries = []PlanEntry{}
 	}
@@ -9621,8 +9566,7 @@ type PlanUpdateContentItems struct {
 // MarshalJSON encodes v as the "items" variant of the PlanUpdateContent schema definition's JSON.
 func (v PlanUpdateContentItems) MarshalJSON() ([]byte, error) {
 	type Alias PlanUpdateContentItems
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Entries == nil {
 		a.Entries = []PlanEntry{}
 	}
@@ -10061,8 +10005,7 @@ type PromptRequest struct {
 // MarshalJSON encodes v as the PromptRequest schema definition's JSON.
 func (v PromptRequest) MarshalJSON() ([]byte, error) {
 	type Alias PromptRequest
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Prompt == nil {
 		a.Prompt = []ContentBlock{}
 	}
@@ -10414,10 +10357,8 @@ func (u *RequestId) UnmarshalJSON(b []byte) error {
 	}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
-		}
+	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+		return err
 	}
 	var arr []map[string]json.RawMessage
 	if json.Unmarshal(b, &arr) == nil {
@@ -10452,18 +10393,10 @@ func (u RequestId) MarshalJSON() ([]byte, error) {
 		return json.Marshal(nil)
 	}
 	if u.Number != nil {
-		_b, _e := json.Marshal(*u.Number)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
+		return json.Marshal(*u.Number)
 	}
 	if u.Str != nil {
-		_b, _e := json.Marshal(*u.Str)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
+		return json.Marshal(*u.Str)
 	}
 	return nil, errors.New("RequestId: no variant set")
 }
@@ -10592,8 +10525,7 @@ func (u *RequestPermissionOutcome) UnmarshalJSON(b []byte) error {
 		u.Unknown = bytes.Clone(b)
 		return nil
 	}
-	var fit []string
-	fit = append(fit, "Cancelled")
+	fit := []string{"Cancelled"}
 	{
 		match := true
 		if _, ok := m["optionId"]; !ok {
@@ -10706,8 +10638,7 @@ type RequestPermissionRequest struct {
 // MarshalJSON encodes v as the RequestPermissionRequest schema definition's JSON.
 func (v RequestPermissionRequest) MarshalJSON() ([]byte, error) {
 	type Alias RequestPermissionRequest
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Options == nil {
 		a.Options = []PermissionOption{}
 	}
@@ -11693,8 +11624,7 @@ type SessionConfigSelectGroup struct {
 // MarshalJSON encodes v as the SessionConfigSelectGroup schema definition's JSON.
 func (v SessionConfigSelectGroup) MarshalJSON() ([]byte, error) {
 	type Alias SessionConfigSelectGroup
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Options == nil {
 		a.Options = []SessionConfigSelectOption{}
 	}
@@ -11785,10 +11715,8 @@ func (u *SessionConfigSelectOptions) UnmarshalJSON(b []byte) error {
 	*u = SessionConfigSelectOptions{}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err == nil {
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
-		}
+	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+		return err
 	}
 	var arr []json.RawMessage
 	if json.Unmarshal(b, &arr) == nil {
@@ -11869,21 +11797,13 @@ func (u SessionConfigSelectOptions) MarshalJSON() ([]byte, error) {
 		if *u.Ungrouped == nil {
 			return []byte("[]"), nil
 		}
-		_b, _e := json.Marshal(*u.Ungrouped)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
+		return json.Marshal(*u.Ungrouped)
 	}
 	if u.Grouped != nil {
 		if *u.Grouped == nil {
 			return []byte("[]"), nil
 		}
-		_b, _e := json.Marshal(*u.Grouped)
-		if _e != nil {
-			return []byte{}, _e
-		}
-		return _b, nil
+		return json.Marshal(*u.Grouped)
 	}
 	return nil, errors.New("SessionConfigSelectOptions: no variant set")
 }
@@ -12323,8 +12243,7 @@ type SessionModeState struct {
 // MarshalJSON encodes v as the SessionModeState schema definition's JSON.
 func (v SessionModeState) MarshalJSON() ([]byte, error) {
 	type Alias SessionModeState
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.AvailableModes == nil {
 		a.AvailableModes = []SessionMode{}
 	}
@@ -12799,8 +12718,7 @@ type SessionUpdatePlan struct {
 // MarshalJSON encodes v as the "plan" variant of the SessionUpdate schema definition's JSON.
 func (v SessionUpdatePlan) MarshalJSON() ([]byte, error) {
 	type Alias SessionUpdatePlan
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Entries == nil {
 		a.Entries = []PlanEntry{}
 	}
@@ -12933,8 +12851,7 @@ type SessionAvailableCommandsUpdate struct {
 // MarshalJSON encodes v as the "available_commands_update" variant of the SessionUpdate schema definition's JSON.
 func (v SessionAvailableCommandsUpdate) MarshalJSON() ([]byte, error) {
 	type Alias SessionAvailableCommandsUpdate
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.AvailableCommands == nil {
 		a.AvailableCommands = []AvailableCommand{}
 	}
@@ -13030,8 +12947,7 @@ type SessionConfigOptionUpdate struct {
 // MarshalJSON encodes v as the "config_option_update" variant of the SessionUpdate schema definition's JSON.
 func (v SessionConfigOptionUpdate) MarshalJSON() ([]byte, error) {
 	type Alias SessionConfigOptionUpdate
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.ConfigOptions == nil {
 		a.ConfigOptions = []SessionConfigOption{}
 	}
@@ -13202,7 +13118,7 @@ func (v *SessionUpdateNotice) Validate() error {
 }
 
 func (v *SessionUpdateNotice) validate(abs func(string) bool) error {
-	if utf8.RuneCountInString(string(v.Title)) < 1 {
+	if utf8.RuneCountInString(v.Title) < 1 {
 		return &ValidationError{
 			Type:  "SessionUpdateNotice",
 			Field: "title",
@@ -13765,7 +13681,7 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 		u.Unknown = bytes.Clone(b)
 		return nil
 	}
-	var fit []string
+	fit := []string{"SessionInfoUpdate"}
 	{
 		match := true
 		if _, ok := m["content"]; !ok {
@@ -13868,7 +13784,6 @@ func (u *SessionUpdate) UnmarshalJSON(b []byte) error {
 			fit = append(fit, "ConfigOptionUpdate")
 		}
 	}
-	fit = append(fit, "SessionInfoUpdate")
 	{
 		match := true
 		if _, ok := m["used"]; !ok {
@@ -14580,8 +14495,7 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("SetSessionConfigOptionRequest: discriminator \"type\": %w", err)
 		}
 	}
-	switch disc {
-	case "boolean":
+	if disc == "boolean" {
 		var v SetSessionConfigOptionBoolean
 		if err := json.Unmarshal(b, &v); err != nil {
 			return fmt.Errorf("SetSessionConfigOptionRequest: type \"boolean\": %w", err)
@@ -14689,8 +14603,7 @@ type SetSessionConfigOptionResponse struct {
 // MarshalJSON encodes v as the SetSessionConfigOptionResponse schema definition's JSON.
 func (v SetSessionConfigOptionResponse) MarshalJSON() ([]byte, error) {
 	type Alias SetSessionConfigOptionResponse
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.ConfigOptions == nil {
 		a.ConfigOptions = []SessionConfigOption{}
 	}
@@ -14964,8 +14877,7 @@ type StateUpdateOther struct {
 // MarshalJSON encodes v as the Other variant of the StateUpdate schema definition's JSON.
 func (v StateUpdateOther) MarshalJSON() ([]byte, error) {
 	type Alias StateUpdateOther
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	b, err := json.Marshal(a)
 	if err != nil || len(v.Extra) == 0 {
 		return b, err
@@ -15086,11 +14998,12 @@ func (u *StateUpdate) UnmarshalJSON(b []byte) error {
 		u.Other = &v
 		return nil
 	}
-	var fit []string
-	fit = append(fit, "Running")
-	fit = append(fit, "Idle")
-	fit = append(fit, "RequiresAction")
-	fit = append(fit, "Unknown")
+	fit := []string{
+		"Running",
+		"Idle",
+		"RequiresAction",
+		"Unknown",
+	}
 	if len(fit) == 1 {
 		switch fit[0] {
 		case "Running":
@@ -15309,8 +15222,7 @@ type StringMultiSelectItems struct {
 // MarshalJSON encodes v as the StringMultiSelectItems schema definition's JSON.
 func (v StringMultiSelectItems) MarshalJSON() ([]byte, error) {
 	type Alias StringMultiSelectItems
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Enum == nil {
 		a.Enum = []string{}
 	}
@@ -15870,8 +15782,7 @@ type TitledMultiSelectItems struct {
 // MarshalJSON encodes v as the TitledMultiSelectItems schema definition's JSON.
 func (v TitledMultiSelectItems) MarshalJSON() ([]byte, error) {
 	type Alias TitledMultiSelectItems
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.AnyOf == nil {
 		a.AnyOf = []EnumOption{}
 	}
@@ -16783,8 +16694,7 @@ type UnstableDidChangeDocumentNotification struct {
 // MarshalJSON encodes v as the DidChangeDocumentNotification schema definition's JSON.
 func (v UnstableDidChangeDocumentNotification) MarshalJSON() ([]byte, error) {
 	type Alias UnstableDidChangeDocumentNotification
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.ContentChanges == nil {
 		a.ContentChanges = []UnstableTextDocumentContentChangeEvent{}
 	}
@@ -17317,8 +17227,7 @@ type UnstableListProvidersResponse struct {
 // MarshalJSON encodes v as the ListProvidersResponse schema definition's JSON.
 func (v UnstableListProvidersResponse) MarshalJSON() ([]byte, error) {
 	type Alias UnstableListProvidersResponse
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Providers == nil {
 		a.Providers = []UnstableProviderInfo{}
 	}
@@ -17410,8 +17319,7 @@ type UnstableMcpError struct {
 // MarshalJSON encodes v as the McpError schema definition's JSON.
 func (v UnstableMcpError) MarshalJSON() ([]byte, error) {
 	type Alias UnstableMcpError
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	b, err := json.Marshal(a)
 	if err != nil || len(v.Extra) == 0 {
 		return b, err
@@ -17486,8 +17394,7 @@ type UnstableMcpServerHttp struct {
 // MarshalJSON encodes v as the "http" variant of the McpServer schema definition's JSON.
 func (v UnstableMcpServerHttp) MarshalJSON() ([]byte, error) {
 	type Alias UnstableMcpServerHttp
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Headers == nil {
 		a.Headers = []HttpHeader{}
 	}
@@ -17536,8 +17443,7 @@ type UnstableMcpServerSse struct {
 // MarshalJSON encodes v as the "sse" variant of the McpServer schema definition's JSON.
 func (v UnstableMcpServerSse) MarshalJSON() ([]byte, error) {
 	type Alias UnstableMcpServerSse
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Headers == nil {
 		a.Headers = []HttpHeader{}
 	}
@@ -18088,10 +17994,8 @@ func (u *UnstableMessageMcpResponse) UnmarshalJSON(b []byte) error {
 				return nil
 			}
 		}
-	} else {
-		if _, ok := err.(*json.UnmarshalTypeError); !ok {
-			return err
-		}
+	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+		return err
 	}
 	var arr []map[string]json.RawMessage
 	if json.Unmarshal(b, &arr) == nil {
@@ -18294,8 +18198,7 @@ type UnstableNesEditSuggestion struct {
 // MarshalJSON encodes v as the NesEditSuggestion schema definition's JSON.
 func (v UnstableNesEditSuggestion) MarshalJSON() ([]byte, error) {
 	type Alias UnstableNesEditSuggestion
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Edits == nil {
 		a.Edits = []UnstableNesTextEdit{}
 	}
@@ -18537,8 +18440,7 @@ type UnstableNesRelatedSnippet struct {
 // MarshalJSON encodes v as the NesRelatedSnippet schema definition's JSON.
 func (v UnstableNesRelatedSnippet) MarshalJSON() ([]byte, error) {
 	type Alias UnstableNesRelatedSnippet
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Excerpts == nil {
 		a.Excerpts = []UnstableNesExcerpt{}
 	}
@@ -18759,8 +18661,7 @@ type UnstableNesSuggestionEdit struct {
 // MarshalJSON encodes v as the "edit" variant of the NesSuggestion schema definition's JSON.
 func (v UnstableNesSuggestionEdit) MarshalJSON() ([]byte, error) {
 	type Alias UnstableNesSuggestionEdit
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Edits == nil {
 		a.Edits = []UnstableNesTextEdit{}
 	}
@@ -19388,8 +19289,7 @@ type UnstableProviderInfo struct {
 // MarshalJSON encodes v as the ProviderInfo schema definition's JSON.
 func (v UnstableProviderInfo) MarshalJSON() ([]byte, error) {
 	type Alias UnstableProviderInfo
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Supported == nil {
 		a.Supported = []UnstableLlmProtocol{}
 	}
@@ -19780,8 +19680,7 @@ type UnstableSuggestNesResponse struct {
 // MarshalJSON encodes v as the SuggestNesResponse schema definition's JSON.
 func (v UnstableSuggestNesResponse) MarshalJSON() ([]byte, error) {
 	type Alias UnstableSuggestNesResponse
-	var a Alias
-	a = Alias(v)
+	a := Alias(v)
 	if a.Suggestions == nil {
 		a.Suggestions = []UnstableNesSuggestion{}
 	}

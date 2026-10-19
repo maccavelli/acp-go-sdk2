@@ -124,7 +124,8 @@ Each change below alters the generated code and leaves its behaviour and its byt
 - **The length check:** it calls `utf8.RuneCountInString` on a string value without a conversion.
 - **Receivers:** `AgentSideConnection`'s generated methods all take the receiver `a`.
 - **`Prompt`'s cancel:** the emitter keeps the deliberate discard of its best-effort cancel's error with a `//nolint:errcheck` naming
-  the reason, so `errcheck`'s `check-blank` sees it is meant.
+  the reason, so `errcheck`'s `check-blank` sees it is meant. Annotated during step 3, 2026-10-18 (see "Deviation, 2026-10-18,
+  during step 3"): the emitter cannot print a comment inside a function body. `Prompt` instead logs a failed cancel at Debug.
 - **D7:** a package-level `errSuperseded`, `fmt.Errorf("%w: superseded by a new prompt", ErrPromptCancelled)`, emitted once into
   `agent_gen.go` and used by every supersede.
 
@@ -388,3 +389,108 @@ Gates, with the API listing against `v1.15.2`, each exit 0:
 - the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
 - Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0. `TestEncodingsUnchanged` passes
   there against the file written on macOS, so the placeholder holds across hosts.
+
+### Deviation, 2026-10-18, during step 3
+
+**Found.** "Design", D9, has the emitter mark `Prompt`'s discard of its best-effort cancel's error, `_ = c.Cancel(…)`
+(`client_gen.go:713` on `62f5989`), with `//nolint:errcheck` naming the reason. The emitter cannot print that comment. Its layout
+(`cmd/generate/internal/emit/file.go:158-310`) positions declarations, struct fields, interface methods and doc comments only. No
+statement inside a function body has a position, so `go/printer` has nowhere to attach a line comment to one. Nothing generated
+carries a comment inside a function body. The discard is an issue: the phase 4 lint probe, with generated files linted, reported
+`errcheck` "Error return value of `c.Cancel` is not checked" on it.
+
+**Decision (owner, 2026-10-18).** The error is handled, not discarded. When the cancel fails, the generated `Prompt` logs it at
+Debug on the connection's logger, "failed to send the cancel of a prompt turn", with the method and the error. This is what
+`connection.go` does with other best-effort work that fails, such as "failed to answer an invalid message" (`connection.go:1399`).
+Nothing is suppressed, so `errcheck` has nothing to report.
+
+The Debug record is new behaviour, the one exception to "Design", D9's "leaves its behaviour and its bytes as they are". The wire
+bytes are unchanged. Step 3 adds a test that requires the record when the cancel cannot be written, and plants the record's
+removal to see it fail. "Design", D9, is annotated, and the MADR's D9 is amended.
+
+### Step 3, D9 (emitted) and D7, 2026-10-18
+
+What changed, on `62f5989`, with the deviation above:
+
+- **`cmd/generate/internal/emit/ast.go`:**
+  - `elseIf` moves here from `dispatch.go`.
+  - New `switchOrIf`: an `if tag == value` where a switch would have one case of one value. A case whose body breaks out of the
+    switch stays a switch, since in an `if` the `break` would leave an enclosing loop instead; `breaksOut` finds such a break.
+- **`cmd/generate/internal/emit/types.go`:**
+  - `a := Alias(v)` in each `MarshalJSON`.
+  - The 9 non-object union arms return `json.Marshal(*u.X)`.
+  - The array match's `else { if … }` is `else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok`.
+  - `fitBody` starts `fit` with a composite literal of the variants that always fit. Only `len(fit) == 1` and `fit[0]` are read, so
+    the order of the list does not matter.
+  - The discriminator switch, `fit[0]`'s switch and the catch-all check go through `switchOrIf`.
+  - The length check converts to `string` only for a named string type.
+- **`cmd/generate/internal/model/validate.go`:** `Check.NamedString`, true for a `minLength` check on a named type over `string`.
+- **`cmd/generate/internal/emit/dispatch.go`:**
+  - `side.recv`, `a` for the agent and `c` for the client, is the receiver of every generated method. `emitOutbound` takes the side.
+  - A wrapper with nothing after its call returns the call.
+  - `Prompt` logs a cancel that fails, as the deviation above decided.
+  - D7: `var errSuperseded` is emitted once into `agent_gen.go`, and `storeTurn` cancels with it.
+- **Tests:**
+  - `dispatch_test.go` and `types_test.go` are updated to the new output. `dispatch_test.go` also pins `errSuperseded`, the logged
+    cancel, and a wrapper that returns its call.
+  - New `cmd/generate/internal/emit/ast_test.go`, `TestSwitchOrIf`.
+  - The engine case `accept-validate-minlength.txtar` gains `label`, a nullable property of the named string type `Label`. It is
+    checked with its conversion.
+  - New root test `TestPromptLogsFailedCancel` (`connection_cancel_test.go`), with a writer that refuses writes once told to.
+- **Regenerated:** `types_gen.go`, `agent_gen.go`, `client_gen.go`.
+
+The generated shapes, counted by a script outside the tree on `62f5989` and on the tree:
+
+| Shape | `62f5989` | Tree |
+| :--- | ---: | ---: |
+| `var a Alias` then `a = Alias(v)` | 46 | 0 |
+| `a := Alias(v)` | 0 | 46 |
+| `_b, _e :=` arms | 97 | 88 |
+| `return json.Marshal(*u.…)` | 0 | 9 |
+| `err.(*json.UnmarshalTypeError)` | 8 | 0 |
+| `errors.AsType[*json.UnmarshalTypeError](err)` | 0 | 8 |
+| `} else {` then `if` | 8 | 0 |
+| unconditional `fit = append(fit, …)` | 13 | 0 |
+| `fit := []string{…}` | 0 | 5 |
+| switches of one case of one value | 4 | 0 |
+| `RuneCountInString(string(…))` | 2 | 0 |
+| `func (c *AgentSideConnection)` | 21 | 0 |
+| `func (a *AgentSideConnection)` | 4 | 25 |
+| `resp, err := …` then `return resp, err`, agent and client | 10 and 16 | 0 and 0 |
+| `superseded :=` | 1 | 0 |
+| `var errSuperseded` | 0 | 1 |
+| `_ = c.Cancel(` | 1 | 0 |
+
+The 88 `_b, _e` arms left are the object arms that D1 rewrites in step 5.
+
+`TestEncodingsUnchanged` passes, under `encoding/json` v2 and with `GOEXPERIMENT=nojsonv2`. The wire bytes are unchanged.
+
+Observed, not changed: an optional property of a named string type with `minLength` is a value field, not a pointer. Its absent value
+`""` therefore fails `Validate`. The first form of the new engine rows showed it: `{Title:x}` gave "Named: label: shorter than
+minLength 1". The ACP schema has no such property; its one `minLength`, `Notice.title`, is a plain string. The engine case uses a
+nullable property, a pointer, instead. This record names it so that it is not lost; it is outside this PLAN.
+
+Planted breaks, each in a scratch copy of the tree:
+
+| Break | Result |
+| :--- | :--- |
+| `Prompt`'s Debug call replaced by `_ = cerr` in `client_gen.go` | `TestPromptLogsFailedCancel` fails: "no Debug record of the failed session/cancel" |
+| `switchOrIf` without its `breaksOut` guard | `TestSwitchOrIf` fails: "a break out of the switch: *ast.IfStmt, want an if: false", and the nested `if` row |
+| `NamedString` always false | `TestEngineCases/accept-validate-minlength` fails: "generated code does not type-check" |
+| `NamedString` always true | `TestGeneratedFilesUpToDate` fails: "types_gen.go is out of date … first difference at line 8999" |
+| `switchOrIf` never writing an `if` | `TestGeneratedFilesUpToDate` fails: "first difference at line 668" |
+
+Run `-count=1000 -race`, each exit 0:
+
+- `TestPromptLogsFailedCancel`, `TestPromptEndedBeforeHandOverSendsNoCancel`, `TestPromptWithEndedContextWritesNothing` and
+  `TestPromptCancellationSendsCancelAndAllowsNewSession`.
+- The tests matching `Overlap|Supersed|NewerPrompt|PromptTurn`, which run `storeTurn` and its cancels.
+
+Gates, with the API listing against `v1.15.2`, each exit 0:
+
+- regeneration: the generated files unchanged by a second run;
+- `make pre-add-check`, and `scripts/go-precheck.sh cmd/generate/internal/emit/ast_test.go`;
+- `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+- `make check-records`, `make markdownlint`, and the identifier scan;
+- the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
+- Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.

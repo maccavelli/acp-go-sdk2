@@ -7,8 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"slices"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -764,6 +767,52 @@ func TestPromptEndedBeforeHandOverSendsNoCancel(t *testing.T) {
 			t.Errorf("Prompt = %v, want -32800", err)
 		}
 	})
+}
+
+// refusingWriter writes to w until refuse is set, then refuses every write.
+type refusingWriter struct {
+	w      io.Writer
+	refuse atomic.Bool
+}
+
+func (r *refusingWriter) Write(p []byte) (int, error) {
+	if r.refuse.Load() {
+		return 0, errors.New("refused")
+	}
+	return r.w.Write(p)
+}
+
+// TestPromptLogsFailedCancel requires Prompt, whose context ends after its
+// request was handed to the writer, to log at Debug the session/cancel it
+// could not write, rather than drop its error
+// (0019-PLAN-idioms-performance.md, deviation during step 3).
+func TestPromptLogsFailedCancel(t *testing.T) {
+	t.Parallel()
+	var logs lockedBuffer
+	debug := WithLogger(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	out := &refusingWriter{}
+	var csc *ClientSideConnection
+	p := rawWire(t, func(w io.Writer, r io.Reader) {
+		out.w = w
+		csc = NewClientSideConnection(&clientFuncs{}, out, r, debug)
+		negotiate(t, csc, allAdvertised())
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	returned := make(chan error, 1)
+	go func() {
+		_, err := csc.Prompt(ctx, PromptRequest{SessionId: "s1", Prompt: []ContentBlock{TextBlock("hi")}})
+		returned <- err
+	}()
+	within(t, p.lines, "the session/prompt request")
+	out.refuse.Store(true)
+	cancel()
+	err := within(t, returned, "Prompt's return")
+	if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != -32800 {
+		t.Errorf("Prompt = %v, want -32800", err)
+	}
+	if got := logs.String(); !strings.Contains(got, "level=DEBUG msg=\"failed to send the cancel of a prompt turn\" method=session/cancel") {
+		t.Errorf("no Debug record of the failed session/cancel; the log holds:\n%s", got)
+	}
 }
 
 // TestDuplicateInflightIDKeepsLaterCancel requires a request that reuses the id

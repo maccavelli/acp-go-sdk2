@@ -1,4 +1,5 @@
-minLength on a string field is checked by Validate.
+minLength on a string field is checked by Validate, on a plain string and on a
+named string type, whose length is taken of its conversion to string.
 The meta declares $/cancel_request and the schema its smallest definition, which
 the runtime needs.
 
@@ -6,7 +7,8 @@ the runtime needs.
 {"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
 -- schema.json --
 {"$defs": {
-  "Named": {"type": "object", "properties": {"title": {"type": "string", "minLength": 1}, "alt": {"type": ["string", "null"], "minLength": 2}}, "required": ["title"]},
+  "Named": {"type": "object", "properties": {"title": {"type": "string", "minLength": 1}, "alt": {"type": ["string", "null"], "minLength": 2}, "label": {"anyOf": [{"$ref": "#/$defs/Label"}, {"type": "null"}], "minLength": 1}}, "required": ["title"]},
+  "Label": {"type": "string"},
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
 }}
 -- want.api --
@@ -17,7 +19,8 @@ type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
 type ClientSideConnection struct{conn *Connection; client Client}
-type Named struct{Alt *string "json:\"alt,omitempty\""; Title string "json:\"title\""}
+type Label string
+type Named struct{Alt *string "json:\"alt,omitempty\""; Label *Label "json:\"label,omitempty\""; Title string "json:\"title\""}
 func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
 func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
@@ -40,10 +43,11 @@ package acp
 
 import "testing"
 
-// minLength counts code points, as JSON Schema does, on a required string and
-// on a nullable one.
+// minLength counts code points, as JSON Schema does, on a required string, on
+// a nullable one, and on a named string type.
 func TestValidateMinLength(t *testing.T) {
 	short, ok2, emoji := "a", "ab", "😀"
+	noLabel, label := Label(""), Label("😀")
 	tests := []struct {
 		v    Named
 		fail bool
@@ -54,6 +58,8 @@ func TestValidateMinLength(t *testing.T) {
 		{Named{Title: "x", Alt: &short}, true},
 		{Named{Title: "x", Alt: &emoji}, true},
 		{Named{Title: "x", Alt: &ok2}, false},
+		{Named{Title: "x", Label: &noLabel}, true},
+		{Named{Title: "x", Label: &label}, false},
 	}
 	for _, tt := range tests {
 		if err := tt.v.Validate(); (err != nil) != tt.fail {

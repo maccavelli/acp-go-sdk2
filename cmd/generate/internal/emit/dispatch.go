@@ -93,6 +93,8 @@ type side struct {
 	// aware and setter the hand-written interface through which the
 	// constructor hands the handler its connection, and its method.
 	typeName, ctor, local, field, iface, aware, setter string
+	// recv is the receiver name of the type's generated methods.
+	recv string
 	// doc and ctorDoc are the type's and the constructor's doc comments; peer
 	// names the other side in Connection's.
 	doc, ctorDoc []string
@@ -107,7 +109,7 @@ type side struct {
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, S1).
 func agentSide(m *model.Model) side {
 	return side{
-		typeName: "AgentSideConnection", ctor: "NewAgentSideConnection", local: "asc", field: "agent",
+		typeName: "AgentSideConnection", ctor: "NewAgentSideConnection", local: "asc", field: "agent", recv: "a",
 		iface: m.InterfaceOf(model.BindAgent).Name, aware: "AgentConnAware", setter: "SetAgentConnection",
 		doc: []string{"AgentSideConnection represents the agent's view of a connection to a client."},
 		ctorDoc: []string{
@@ -125,7 +127,7 @@ func agentSide(m *model.Model) side {
 
 func clientSide(m *model.Model) side {
 	return side{
-		typeName: "ClientSideConnection", ctor: "NewClientSideConnection", local: "csc", field: "client",
+		typeName: "ClientSideConnection", ctor: "NewClientSideConnection", local: "csc", field: "client", recv: "c",
 		iface: m.InterfaceOf(model.BindClient).Name, aware: "ClientConnAware", setter: "SetClientConnection",
 		doc: []string{"ClientSideConnection provides the client's view of the connection and implements Agent calls."},
 		ctorDoc: []string{
@@ -195,26 +197,26 @@ func emitSideConnection(f *goFile, s side) {
 		param("opts", &ast.Ellipsis{Elt: id("ConnectionOption")}),
 	}, param("", star(id(s.typeName)))), body...))
 
-	recv := func() *ast.Field { return param("c", star(id(s.typeName))) }
+	recv := func() *ast.Field { return param(s.recv, star(id(s.typeName))) }
 	f.line()
 	f.comment("DroppedNotifications reports how many inbound notifications the underlying",
 		"connection has dropped under OverflowDropNewest.")
 	f.add(method(recv(), "DroppedNotifications", funcType(nil, param("", id("uint64"))),
-		ret(call(dot("c", "conn", "DroppedNotifications")))))
+		ret(call(dot(s.recv, "conn", "DroppedNotifications")))))
 	f.line()
 	f.comment("Done exposes a channel that closes when the connection ends: the peer",
 		"disconnects, or Close or the overflow policy closes it.")
 	f.add(method(recv(), "Done", funcType(nil, param("", &ast.ChanType{Dir: ast.RECV, Value: &ast.StructType{Fields: fields()}})),
-		ret(call(dot("c", "conn", "Done")))))
+		ret(call(dot(s.recv, "conn", "Done")))))
 	f.line()
 	f.comment("Close closes the underlying connection; see Connection.Close",
 		"(0019-PLAN-api-decisions.md, B17).")
 	f.add(method(recv(), "Close", funcType(nil, param("", id("error"))),
-		ret(call(dot("c", "conn", "Close")))))
+		ret(call(dot(s.recv, "conn", "Close")))))
 	f.line()
 	f.comment("SetLogger directs connection diagnostics to the provided logger.")
 	f.add(method(recv(), "SetLogger", funcType([]*ast.Field{param("l", star(f.qual(pkgSlog, "Logger")))}),
-		exprStmt(call(dot("c", "conn", "SetLogger"), id("l")))))
+		exprStmt(call(dot(s.recv, "conn", "SetLogger"), id("l")))))
 	f.line()
 	f.comment(
 		"Connection returns the underlying JSON-RPC connection.",
@@ -227,13 +229,13 @@ func emitSideConnection(f *goFile, s side) {
 		"copy. It holds no record of initialize, so what is sent through it is not",
 		"checked against the negotiated capabilities.",
 	)
-	f.add(method(recv(), "Connection", funcType(nil, param("", star(id("Connection")))), ret(dot("c", "conn"))))
+	f.add(method(recv(), "Connection", funcType(nil, param("", star(id("Connection")))), ret(dot(s.recv, "conn"))))
 	f.line()
 	// The hand-written extension dispatch, compiled with every schema, takes
 	// its gate from here (0019-PLAN-api-decisions.md, B14).
 	var inbound ast.Expr = nilExpr()
 	if s.negotiated {
-		inbound = dot("c", "gate")
+		inbound = dot(s.recv, "gate")
 	}
 	f.comment("inboundGate is the gate of the received messages the generated dispatch",
 		"does not decode, the extension messages: gate, or nil when the schema has",
@@ -244,12 +246,12 @@ func emitSideConnection(f *goFile, s side) {
 		f.comment("gate checks a message of this connection against what initialize agreed",
 			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1).")
 		f.add(method(recv(), "gate", funcType([]*ast.Field{param("method", id("string")), param("params", id("any"))}, param("", id("error"))),
-			ret(call(id("gateMessage"), call(dot("c", "negotiation", "Load")), id("method"), id("params")))))
+			ret(call(id("gateMessage"), call(dot(s.recv, "negotiation", "Load")), id("method"), id("params")))))
 		f.line()
 		f.comment("resultGate checks a result of this connection, sent or received, against",
 			"what initialize agreed.")
 		f.add(method(recv(), "resultGate", funcType([]*ast.Field{param("method", id("string")), param("result", id("any"))}, param("", id("error"))),
-			ret(call(id("gateResult"), call(dot("c", "negotiation", "Load")), id("method"), id("result")))))
+			ret(call(id("gateResult"), call(dot(s.recv, "negotiation", "Load")), id("method"), id("result")))))
 		f.line()
 		f.comment("Negotiated returns what initialize agreed on this connection, the request",
 			"and the response of its last successful initialize, and false before one",
@@ -258,7 +260,7 @@ func emitSideConnection(f *goFile, s side) {
 			"of it that shares no memory with the connection's or the caller's values",
 			"(0019-PLAN-behaviour-fixes.md, B13).")
 		f.add(method(recv(), "Negotiated", funcType(nil, param("", id("Negotiation")), param("", id("bool"))),
-			define(exprs(id("n")), call(dot("c", "negotiation", "Load"))),
+			define(exprs(id("n")), call(dot(s.recv, "negotiation", "Load"))),
 			ifStmt(nil, binary(id("n"), token.EQL, nilExpr()), ret(composite(id("Negotiation")), id("false"))),
 			define(exprs(id("rec"), id("err")), call(id("jsonCopy"), star(id("n")))),
 			ifStmt(nil, errNotNil(), ret(composite(id("Negotiation")), id("false"))),
@@ -282,14 +284,15 @@ func emitSideConnection(f *goFile, s side) {
 		f.add(&ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
 			Names: []*ast.Ident{id("promptReturned")}, Type: &ast.FuncType{Params: fields()}}}})
 		f.line()
+		f.comment("errSuperseded is the cause of a prompt turn that a newer prompt of its",
+			"session superseded (0019-PLAN-idioms-performance.md, D7).")
+		f.add(&ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+			Names:  []*ast.Ident{id("errSuperseded")},
+			Values: exprs(call(f.qual(pkgFmt, "Errorf"), str("%w: superseded by a new prompt"), id("ErrPromptCancelled"))),
+		}}})
+		f.line()
 		emitTurnStore(f, s)
 	}
-}
-
-// elseIf is s with next as its else-if branch.
-func elseIf(s, next *ast.IfStmt) *ast.IfStmt {
-	s.Else = next
-	return s
 }
 
 // emitTurnStore emits the side's prompt-turn store: storeTurn, removeTurn
@@ -322,11 +325,10 @@ func emitTurnStore(f *goFile, s side) {
 			caseOf(exprs(id("PromptOverlapConcurrent")),
 				assign(exprs(turns()), call(id("append"), turns(), id("turn")))),
 			caseOf(nil,
-				define(exprs(id("superseded")), call(f.qual(pkgFmt, "Errorf"), str("%w: superseded by a new prompt"), id("ErrPromptCancelled"))),
 				rangeStmt(id("_"), id("prev"), turns(),
 					ifStmt(nil, binary(dot("prev", "receipt"), token.GTR, dot("turn", "receipt")),
-						exprStmt(call(dot("turn", "cancel"), id("superseded"))), ret(boolLit(true)))),
-				rangeStmt(id("_"), id("prev"), turns(), exprStmt(call(dot("prev", "cancel"), id("superseded")))),
+						exprStmt(call(dot("turn", "cancel"), id("errSuperseded"))), ret(boolLit(true)))),
+				rangeStmt(id("_"), id("prev"), turns(), exprStmt(call(dot("prev", "cancel"), id("errSuperseded")))),
 				assign(exprs(turns()), single()),
 				assign(exprs(id("supersedes")), boolLit(true))),
 		),
@@ -521,7 +523,7 @@ func agentFile(m *model.Model) *goFile {
 	f.add(handleFunc(f, "a", "AgentSideConnection", cases))
 
 	// Agent outbound wrappers (agent -> client).
-	emitOutbound(f, "AgentSideConnection", agentSide(m).peer, m.ClientMethods, m.Initialize != nil)
+	emitOutbound(f, agentSide(m), m.ClientMethods, m.Initialize != nil)
 
 	return f
 }
@@ -560,7 +562,7 @@ func clientFile(m *model.Model) *goFile {
 	f.add(handleFunc(f, "c", "ClientSideConnection", cases))
 
 	// Client outbound wrappers (client -> agent).
-	emitOutbound(f, "ClientSideConnection", clientSide(m).peer, m.AgentMethods, m.Initialize != nil)
+	emitOutbound(f, clientSide(m), m.AgentMethods, m.Initialize != nil)
 
 	return f
 }
@@ -671,8 +673,8 @@ func outboundDoc(mi *model.Method, peer string) []string {
 
 // emitOutbound emits one method per peer method on recvType that sends the
 // request or notification over c.conn to peer.
-func emitOutbound(f *goFile, recvType, peer string, methods []*model.Method, gated bool) {
-	recv := func() *ast.Field { return param("c", star(id(recvType))) }
+func emitOutbound(f *goFile, s side, methods []*model.Method, gated bool) {
+	recv := func() *ast.Field { return param(s.recv, star(id(s.typeName))) }
 	params := func(typeName string) []*ast.Field {
 		return []*ast.Field{param("ctx", f.qual(pkgContext, "Context")), param("params", id(typeName))}
 	}
@@ -687,12 +689,12 @@ func emitOutbound(f *goFile, recvType, peer string, methods []*model.Method, gat
 		if zero != nil {
 			fail = ret(zero, id("err"))
 		}
-		return []ast.Stmt{ifStmt(define(exprs(id("err")), call(dot("c", "gate"), id(mi.Const), addr(id("params")))), errNotNil(), fail)}
+		return []ast.Stmt{ifStmt(define(exprs(id("err")), call(dot(s.recv, "gate"), id(mi.Const), addr(id("params")))), errNotNil(), fail)}
 	}
 	// resultArg is the gate the response is checked by.
 	resultArg := func() ast.Expr {
 		if gated {
-			return dot("c", "resultGate")
+			return dot(s.recv, "resultGate")
 		}
 		return nilExpr()
 	}
@@ -700,14 +702,14 @@ func emitOutbound(f *goFile, recvType, peer string, methods []*model.Method, gat
 	for _, mi := range methods {
 		// A blank line separates each wrapper from the declaration before it.
 		f.line()
-		f.comment(outboundDoc(mi, peer)...)
+		f.comment(outboundDoc(mi, s.peer)...)
 		if mi.Notif != "" && mi.CancelsPending {
 			// The cancel is written before the pending requests are answered
 			// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).
 			f.add(method(recv(), mi.GoName, funcType(params(mi.Notif), param("", id("error"))),
 				append(gateFirst(mi, nil),
-					define(exprs(id("err")), call(dot("c", "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))),
-					exprStmt(call(dot("c", "pending", "cancel"), call(id("string"), dot("params", mi.SessionField)))),
+					define(exprs(id("err")), call(dot(s.recv, "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))),
+					exprStmt(call(dot(s.recv, "pending", "cancel"), call(id("string"), dot("params", mi.SessionField)))),
 					ret(id("err")),
 				)...,
 			))
@@ -715,13 +717,13 @@ func emitOutbound(f *goFile, recvType, peer string, methods []*model.Method, gat
 		}
 		if mi.Notif != "" {
 			f.add(method(recv(), mi.GoName, funcType(params(mi.Notif), param("", id("error"))),
-				append(gateFirst(mi, nil), ret(call(dot("c", "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))))...,
+				append(gateFirst(mi, nil), ret(call(dot(s.recv, "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))))...,
 			))
 			continue
 		}
 		if !mi.HasResult {
 			f.add(method(recv(), mi.GoName, funcType(params(mi.Req), param("", id("error"))),
-				append(gateFirst(mi, nil), ret(call(dot("c", "conn", "SendRequestNoResult"), id("ctx"), id(mi.Const), id("params"))))...,
+				append(gateFirst(mi, nil), ret(call(dot(s.recv, "conn", "SendRequestNoResult"), id("ctx"), id(mi.Const), id("params"))))...,
 			))
 			continue
 		}
@@ -741,31 +743,40 @@ func emitOutbound(f *goFile, recvType, peer string, methods []*model.Method, gat
 		if canceller != nil {
 			send, results = "sendRequestSent", exprs(id("resp"), id("sent"), id("err"))
 		}
-		body := append(gateFirst(mi, composite(id(mi.Resp))),
-			define(results,
-				call(index(id(send), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), id("params"), resultArg())),
-		)
+		sendCall := call(index(id(send), id(mi.Resp)), dot(s.recv, "conn"), id("ctx"), id(mi.Const), id("params"), resultArg())
+		sig := funcType(params(mi.Req), param("", id(mi.Resp)), param("", id("error")))
+		// A wrapper with nothing to do after the call returns it.
+		if canceller == nil && !mi.CancelsPending {
+			f.add(method(recv(), mi.GoName, sig, append(gateFirst(mi, composite(id(mi.Resp))), ret(sendCall))...))
+			continue
+		}
+		body := append(gateFirst(mi, composite(id(mi.Resp))), define(results, sendCall))
 		// A session close the agent accepted has ended the session's turn, so
 		// its pending requests are answered as on the prompt-turn cancel
 		// (0019-PLAN-behaviour-fixes.md, B4).
 		if mi.CancelsPending {
 			body = append(body, ifStmt(nil, binary(id("err"), token.EQL, nilExpr()),
-				exprStmt(call(dot("c", "pending", "cancel"), call(id("string"), dot("params", mi.SessionField))))))
+				exprStmt(call(dot(s.recv, "pending", "cancel"), call(id("string"), dot("params", mi.SessionField))))))
 		}
 		// A prompt turn whose context ended after its request was handed to
 		// the writer sends its cancel, best effort, under a context that keeps
-		// the caller's values without its end (I10).
-		if c := canceller; c != nil {
+		// the caller's values without its end (I10). A cancel that fails is
+		// logged at Debug, as the connection logs other best-effort work that
+		// fails (0019-PLAN-idioms-performance.md, deviation during step 3).
+		if cn := canceller; cn != nil {
 			body = append(body, ifStmt(nil, errNotNil(),
 				ifStmt(nil, binary(id("sent"), token.LAND, binary(call(dot("ctx", "Err")), token.NEQ, nilExpr())),
-					assign(exprs(id("_")), call(dot("c", c.GoName),
+					ifStmt(define(exprs(id("cerr")), call(dot(s.recv, cn.GoName),
 						call(f.qual(pkgContext, "WithoutCancel"), id("ctx")),
-						composite(id(c.Notif), kv(id(c.SessionField), dot("params", mi.SessionField))),
-					)),
+						composite(id(cn.Notif), kv(id(cn.SessionField), dot("params", mi.SessionField))),
+					)), binary(id("cerr"), token.NEQ, nilExpr()),
+						exprStmt(call(sel(call(dot(s.recv, "conn", "loggerOrDefault")), "Debug"),
+							str("failed to send the cancel of a prompt turn"), str("method"), id(cn.Const), str("err"), id("cerr"))),
+					),
 				),
 			))
 		}
 		body = append(body, ret(id("resp"), id("err")))
-		f.add(method(recv(), mi.GoName, funcType(params(mi.Req), param("", id(mi.Resp)), param("", id("error"))), body...))
+		f.add(method(recv(), mi.GoName, sig, body...))
 	}
 }

@@ -225,7 +225,7 @@ func TestValidateMethods(t *testing.T) {
 	emitDecodeHelpers(f)
 	src := mustRender(t, f)
 	for _, want := range []string{
-		"if utf8.RuneCountInString(string(v.T)) < 2 {",
+		"if utf8.RuneCountInString(v.T) < 2 {",
 		"return &ValidationError{",
 		`"Leaf: t: shorter than minLength 2",`,
 		"RuleMinLength,",

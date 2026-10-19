@@ -568,6 +568,11 @@ benchmark measures each performance item.
   - Each change `go fix -diff` proposes is applied.
   - The `gocritic` and `unconvert` findings are fixed in the emitter.
   - `Prompt`'s deliberate discard of its best-effort cancel's error is kept and marked, so `errcheck` sees it is meant.
+
+    Amended while executing [0019-PLAN-idioms-performance.md](0019-PLAN-idioms-performance.md), step 3, 2026-10-18: the emitter
+    cannot print a comment inside a function body, so the mark cannot be written. `Prompt` handles the error instead: a cancel
+    that fails is logged at Debug on the connection's logger, as `connection.go` logs other best-effort work that fails. This is
+    the one change of D9 that adds behaviour, a diagnostic. The wire bytes do not change.
 - **D10 (I15):** `t.Context()`, `wg.Go`, `slog.DiscardHandler`, `strconv.Itoa` and `t.Helper()` where the tests need them.
 - **D11 (I16):** the mutation tool runs under `signal.NotifyContext`, for `os.Interrupt` and, where the platform has it, `SIGTERM`. It
   passes that context to every subprocess, so an interrupt ends the running `go test` and the deferred clean-up runs.
