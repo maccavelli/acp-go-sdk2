@@ -76,6 +76,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0024 | PLAN | [Implement phase 1 of 0024: the Go 1.26.9 floor](decisions/0024-PLAN-go-1-26-9-floor.md) | complete |
 | 0024 | REPORT | [Release notes for v1.16.2, against v1.16.1](reports/0024-REPORT-release-notes-v1-16-2.md) | observed |
 | 0024 | PLAN | [Implement phase 2 of 0024: documentation](decisions/0024-PLAN-documentation.md) | in-progress |
+| 0024 | REPORT | [Release notes for v1.16.3, against v1.16.2](reports/0024-REPORT-release-notes-v1-16-3.md) | observed |
 
 ## I want to…
 

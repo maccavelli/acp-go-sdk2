@@ -546,3 +546,18 @@ text named:
 
 **The go1.26.9 gate**, with `GOTOOLCHAIN=go1.26.9` and scratch caches: `go version` reports go1.26.9; `go vet ./...` and
 `go test -race -count=1 ./...` pass in both modules, the root's with the leak guard.
+
+### Step 4, release notes, 2026-10-19
+
+The owner committed step 3 as `54cb0a2` and approved this step. It adds
+[0024-REPORT-release-notes-v1-16-3.md](../reports/0024-REPORT-release-notes-v1-16-3.md) and its row in `docs/README.md`.
+
+Its facts, each re-run on `54cb0a2`:
+
+* `git diff v1.16.2 HEAD -- schema/` is empty;
+* `git diff --name-only v1.16.2 HEAD -- '*.go' ':!*_test.go'` lists seven SDK files and five of the generator's;
+* the comments-only check against `v1.16.2`: each of the seven SDK files has the same syntax tree, exit 0;
+* the API listing: 2429 lines at `v1.16.2` and in the tree, 0 removed, 0 added;
+* the five commits since `v1.16.2` and their files, from `git show --name-only`.
+
+Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
