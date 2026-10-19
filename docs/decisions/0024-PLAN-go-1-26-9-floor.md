@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-19
 associated-madr: "0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md"
 ---
@@ -427,3 +427,51 @@ The owner pushed steps 1 to 3 after step 3, `85ac115..1179253`; `make push-guard
 six-job run, `39325017852` on `1179253`, is recorded in step 5.
 
 Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0. The step changes no Go file.
+
+### Step 5, verification and close, 2026-10-19
+
+**The pushes.**
+
+* **After step 3.** `make push-guard` ran over the four commits not yet pushed, `85ac115..1179253`, and passed, exit 0. The owner pushed
+  `1179253`.
+* **CI run `39325017852` on `1179253`,** the first of the matrix, concluded `success` on its first attempt in all six jobs:
+  `ubuntu-24.04`, `macos-15` and `windows-2025`, each with `1.26.9` and `1.27.2`.
+* **Its two Linux jobs' steps:**
+  * **`1.26.9`:** "the floor is the go line" `success`; the `nojsonv2` step and the lint and docs steps `skipped`; the tests, the race
+    detector and `govulncheck` `success`.
+  * **`1.27.2`:** "the floor is the go line" `skipped`; every other step `success`.
+* **Still to push:** step 4's commit, `a162ba6`, release notes only, and this close. CI on that push is the tag's precondition.
+
+**The gates over the tree**, on `a162ba6`, with the API listing against `v1.16.1`, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`;
+* `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint`, and the identifier scan;
+* the API listing: 2429 lines at `v1.16.1` and in the tree, 0 removed, 0 added;
+* Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+**Acceptance.** Every criterion in "Verification" is met:
+
+* **Each step's checks** passed and its record is written, with the deviations before step 2 (the `toolchain` line) and during it (the
+  experiment's scope).
+* **Both suites pass on both versions:**
+  * go1.26.9 with the experiment: step 2's gate, and CI's three `1.26.9` jobs;
+  * go1.27.2 without it: the gates above, and CI's three `1.27.2` jobs.
+* **The guard reports the planted leak on both versions:** step 2's planted breaks.
+* **CI's six jobs passed** on the pushed commits.
+* **At the `1.26.9` line,** `make lint` reports 0 issues, through `make pre-add-check` above, and `go fix -diff ./...` prints nothing in
+  either module, exit 0, on `a162ba6`.
+* **The API listing** against `v1.16.1` shows no difference.
+
+This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`, with phases 2 to 4 to come, each with a PLAN of its
+own.
+
+**Left to the owner.**
+
+* Push step 4's commit and this close, after `make push-guard`.
+* Tag `v1.16.2` on this close commit once its CI passes, an annotated tag whose message is its name, as `v1.16.1` is. Its code is the
+  same as at `1179253`.
+* Publish its release from the release text of
+  [0024-REPORT-release-notes-v1-16-2.md](../reports/0024-REPORT-release-notes-v1-16-2.md), with its relative links rewritten to the
+  tag.
