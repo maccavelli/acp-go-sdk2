@@ -220,7 +220,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodDocumentDidChange:
 		if sentAsRequest(ctx) {
 			return nil, NewMethodNotFound(method)
@@ -352,7 +352,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 			a.conn.loggerOrDefault().Error("initialize answer not sent", "method", method, "err", verr)
 			return nil, NewInternalError(map[string]any{"error": verr.Error()})
 		}
-		result, rerr := a.conn.checkResult(method, resp, func(method string, result any) error {
+		result, rerr := a.conn.checkResult(method, &resp, func(method string, result any) error {
 			return gateResult(&Negotiation{
 				Request:  p,
 				Response: resp,
@@ -386,7 +386,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodMcpMessage:
 		if sentAsRequest(ctx) {
 			return nil, NewMethodNotFound(method)
@@ -450,7 +450,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodNesReject:
 		if sentAsRequest(ctx) {
 			return nil, NewMethodNotFound(method)
@@ -493,7 +493,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodNesSuggest:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -515,7 +515,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodProvidersDisable:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -537,7 +537,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodProvidersList:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -559,7 +559,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodProvidersSet:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -581,7 +581,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodSessionCancel:
 		if sentAsRequest(ctx) {
 			return nil, NewMethodNotFound(method)
@@ -622,7 +622,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodSessionDelete:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -638,7 +638,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodSessionFork:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -660,7 +660,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodSessionList:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -676,7 +676,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodSessionLoad:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -696,7 +696,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodSessionNew:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -712,7 +712,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodSessionPrompt:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -758,7 +758,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodSessionResume:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -774,7 +774,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodSessionSetConfigOption:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -790,7 +790,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	case AgentMethodSessionSetMode:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -806,7 +806,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, resp, a.resultGate)
+		return a.conn.checkResult(method, &resp, a.resultGate)
 	default:
 		return nil, NewMethodNotFound(method)
 	}
@@ -819,7 +819,7 @@ func (a *AgentSideConnection) CompleteElicitation(ctx context.Context, params Co
 	if err := a.gate(ClientMethodElicitationComplete, &params); err != nil {
 		return err
 	}
-	return a.conn.SendNotification(ctx, ClientMethodElicitationComplete, params)
+	return a.conn.SendNotification(ctx, ClientMethodElicitationComplete, &params)
 }
 
 // CreateElicitation sends the elicitation/create request to the client and returns its response.
@@ -833,7 +833,7 @@ func (a *AgentSideConnection) CreateElicitation(ctx context.Context, params Crea
 	if err := a.gate(ClientMethodElicitationCreate, &params); err != nil {
 		return CreateElicitationResponse{}, err
 	}
-	return sendRequest[CreateElicitationResponse](a.conn, ctx, ClientMethodElicitationCreate, params, a.resultGate)
+	return sendRequest[CreateElicitationResponse](a.conn, ctx, ClientMethodElicitationCreate, &params, a.resultGate)
 }
 
 // ReadTextFile sends the fs/read_text_file request to the client and returns its response.
@@ -845,7 +845,7 @@ func (a *AgentSideConnection) ReadTextFile(ctx context.Context, params ReadTextF
 	if err := a.gate(ClientMethodFsReadTextFile, &params); err != nil {
 		return ReadTextFileResponse{}, err
 	}
-	return sendRequest[ReadTextFileResponse](a.conn, ctx, ClientMethodFsReadTextFile, params, a.resultGate)
+	return sendRequest[ReadTextFileResponse](a.conn, ctx, ClientMethodFsReadTextFile, &params, a.resultGate)
 }
 
 // WriteTextFile sends the fs/write_text_file request to the client and returns its response.
@@ -857,7 +857,7 @@ func (a *AgentSideConnection) WriteTextFile(ctx context.Context, params WriteTex
 	if err := a.gate(ClientMethodFsWriteTextFile, &params); err != nil {
 		return WriteTextFileResponse{}, err
 	}
-	return sendRequest[WriteTextFileResponse](a.conn, ctx, ClientMethodFsWriteTextFile, params, a.resultGate)
+	return sendRequest[WriteTextFileResponse](a.conn, ctx, ClientMethodFsWriteTextFile, &params, a.resultGate)
 }
 
 // UnstableMessageMcp sends the mcp/message request to the client and returns its response.
@@ -871,7 +871,7 @@ func (a *AgentSideConnection) UnstableMessageMcp(ctx context.Context, params Uns
 	if err := a.gate(ClientMethodMcpMessage, &params); err != nil {
 		return UnstableMessageMcpResponse{}, err
 	}
-	return sendRequest[UnstableMessageMcpResponse](a.conn, ctx, ClientMethodMcpMessage, params, a.resultGate)
+	return sendRequest[UnstableMessageMcpResponse](a.conn, ctx, ClientMethodMcpMessage, &params, a.resultGate)
 }
 
 // RequestPermission sends the session/request_permission request to the client and returns its response.
@@ -885,7 +885,7 @@ func (a *AgentSideConnection) RequestPermission(ctx context.Context, params Requ
 	if err := a.gate(ClientMethodSessionRequestPermission, &params); err != nil {
 		return RequestPermissionResponse{}, err
 	}
-	return sendRequest[RequestPermissionResponse](a.conn, ctx, ClientMethodSessionRequestPermission, params, a.resultGate)
+	return sendRequest[RequestPermissionResponse](a.conn, ctx, ClientMethodSessionRequestPermission, &params, a.resultGate)
 }
 
 // SessionUpdate sends the session/update notification to the client.
@@ -899,7 +899,7 @@ func (a *AgentSideConnection) SessionUpdate(ctx context.Context, params SessionN
 	if err := a.gate(ClientMethodSessionUpdate, &params); err != nil {
 		return err
 	}
-	return a.conn.SendNotification(ctx, ClientMethodSessionUpdate, params)
+	return a.conn.SendNotification(ctx, ClientMethodSessionUpdate, &params)
 }
 
 // CreateTerminal sends the terminal/create request to the client and returns its response.
@@ -909,7 +909,7 @@ func (a *AgentSideConnection) CreateTerminal(ctx context.Context, params CreateT
 	if err := a.gate(ClientMethodTerminalCreate, &params); err != nil {
 		return CreateTerminalResponse{}, err
 	}
-	return sendRequest[CreateTerminalResponse](a.conn, ctx, ClientMethodTerminalCreate, params, a.resultGate)
+	return sendRequest[CreateTerminalResponse](a.conn, ctx, ClientMethodTerminalCreate, &params, a.resultGate)
 }
 
 // KillTerminal sends the terminal/kill request to the client and returns its response.
@@ -919,7 +919,7 @@ func (a *AgentSideConnection) KillTerminal(ctx context.Context, params KillTermi
 	if err := a.gate(ClientMethodTerminalKill, &params); err != nil {
 		return KillTerminalResponse{}, err
 	}
-	return sendRequest[KillTerminalResponse](a.conn, ctx, ClientMethodTerminalKill, params, a.resultGate)
+	return sendRequest[KillTerminalResponse](a.conn, ctx, ClientMethodTerminalKill, &params, a.resultGate)
 }
 
 // TerminalOutput sends the terminal/output request to the client and returns its response.
@@ -929,7 +929,7 @@ func (a *AgentSideConnection) TerminalOutput(ctx context.Context, params Termina
 	if err := a.gate(ClientMethodTerminalOutput, &params); err != nil {
 		return TerminalOutputResponse{}, err
 	}
-	return sendRequest[TerminalOutputResponse](a.conn, ctx, ClientMethodTerminalOutput, params, a.resultGate)
+	return sendRequest[TerminalOutputResponse](a.conn, ctx, ClientMethodTerminalOutput, &params, a.resultGate)
 }
 
 // ReleaseTerminal sends the terminal/release request to the client and returns its response.
@@ -939,7 +939,7 @@ func (a *AgentSideConnection) ReleaseTerminal(ctx context.Context, params Releas
 	if err := a.gate(ClientMethodTerminalRelease, &params); err != nil {
 		return ReleaseTerminalResponse{}, err
 	}
-	return sendRequest[ReleaseTerminalResponse](a.conn, ctx, ClientMethodTerminalRelease, params, a.resultGate)
+	return sendRequest[ReleaseTerminalResponse](a.conn, ctx, ClientMethodTerminalRelease, &params, a.resultGate)
 }
 
 // WaitForTerminalExit sends the terminal/wait_for_exit request to the client and returns its response.
@@ -949,5 +949,5 @@ func (a *AgentSideConnection) WaitForTerminalExit(ctx context.Context, params Wa
 	if err := a.gate(ClientMethodTerminalWaitForExit, &params); err != nil {
 		return WaitForTerminalExitResponse{}, err
 	}
-	return sendRequest[WaitForTerminalExitResponse](a.conn, ctx, ClientMethodTerminalWaitForExit, params, a.resultGate)
+	return sendRequest[WaitForTerminalExitResponse](a.conn, ctx, ClientMethodTerminalWaitForExit, &params, a.resultGate)
 }

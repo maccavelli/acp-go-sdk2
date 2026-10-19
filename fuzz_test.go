@@ -106,3 +106,25 @@ func goldenType(name string) string {
 	}
 	return ""
 }
+
+// FuzzCanonicalIDKey requires canonicalJSONRPCIDKey, with its fast path for a
+// plain integer, to give every id the key and the error the JSON decoder gives
+// it, called directly (0019-PLAN-idioms-performance.md, D5). The seeds are the
+// ids the plan measured, the fast path's edges, and ids it must leave to the
+// decoder.
+func FuzzCanonicalIDKey(f *testing.F) {
+	for _, seed := range []string{
+		"0", "12345", "18446744073709551615", "-0", "1e2", "1.0", "007",
+		"9", "1234567890123456789", "12345678901234567890", "00", "01", " 42 ", "\t7\n",
+		"+1", "0x1", "1 2", `"x"`, `"12"`, "null", "", "[1]",
+	} {
+		f.Add([]byte(seed))
+	}
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		got, gotErr := canonicalJSONRPCIDKey(raw)
+		want, wantErr := decodeJSONRPCIDKey(bytes.TrimSpace(raw))
+		if got != want || (gotErr == nil) != (wantErr == nil) || (gotErr != nil && gotErr.Error() != wantErr.Error()) {
+			t.Errorf("id %q: key %q, error %v; the decoder gives %q, %v", raw, got, gotErr, want, wantErr)
+		}
+	})
+}

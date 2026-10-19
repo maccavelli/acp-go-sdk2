@@ -48,14 +48,9 @@ func (e *RequestError) Error() string {
 	if e == nil {
 		return "<nil>"
 	}
-	// Try to pretty-print compact JSON for stability in logs.
-	type view struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    any    `json:"data,omitempty"`
-	}
-	v := view{Code: e.Code, Message: e.Message, Data: e.Data}
-	b, err := json.Marshal(v)
+	// Compact JSON of the exported fields, as the wire has them; the cause is
+	// unexported and not encoded.
+	b, err := json.Marshal(e)
 	if err == nil {
 		return string(b)
 	}

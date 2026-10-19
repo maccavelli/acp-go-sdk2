@@ -607,7 +607,7 @@ func initializeCase(recv ast.Expr, mi *model.Method) []ast.Stmt {
 			exprStmt(call(sel(call(dot("a", "conn", "loggerOrDefault")), "Error"), str("initialize answer not sent"), str("method"), id("method"), str("err"), id("verr"))),
 			ret(nilExpr(), call(id("NewInternalError"), composite(rawMap(id("any")), kv(str("error"), call(dot("verr", "Error")))))),
 		),
-		define(exprs(id("result"), id("rerr")), call(dot("a", "conn", "checkResult"), id("method"), id("resp"), gate)),
+		define(exprs(id("result"), id("rerr")), call(dot("a", "conn", "checkResult"), id("method"), addr(id("resp")), gate)),
 		ifStmt(nil, binary(id("rerr"), token.NEQ, nilExpr()), ret(nilExpr(), id("rerr"))),
 		// The record is the JSON form of the request and the answer, sharing
 		// no memory with the handler's values (0019-PLAN-behaviour-fixes.md, B13).
@@ -639,7 +639,7 @@ func initializeWrapper(mi *model.Method) []ast.Stmt {
 			ret(composite(id(mi.Resp)), addr(composite(id("ProtocolVersionError"),
 				kv(id("Requested"), call(id("int"), dot("params", mi.ReqVersionField))))))),
 		define(exprs(id("resp"), id("err")),
-			call(index(id("sendRequest"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), id("params"), gate)),
+			call(index(id("sendRequest"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), addr(id("params")), gate)),
 		ifStmt(nil, errNotNil(), ret(id("resp"), id("err"))),
 		ifStmt(nil, binary(resp, token.NEQ, id("ProtocolVersionNumber")),
 			ret(id("resp"), addr(composite(id("ProtocolVersionError"),
@@ -708,7 +708,7 @@ func emitOutbound(f *goFile, s side, methods []*model.Method, gated bool) {
 			// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).
 			f.add(method(recv(), mi.GoName, funcType(params(mi.Notif), param("", id("error"))),
 				append(gateFirst(mi, nil),
-					define(exprs(id("err")), call(dot(s.recv, "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))),
+					define(exprs(id("err")), call(dot(s.recv, "conn", "SendNotification"), id("ctx"), id(mi.Const), addr(id("params")))),
 					exprStmt(call(dot(s.recv, "pending", "cancel"), call(id("string"), dot("params", mi.SessionField)))),
 					ret(id("err")),
 				)...,
@@ -717,13 +717,13 @@ func emitOutbound(f *goFile, s side, methods []*model.Method, gated bool) {
 		}
 		if mi.Notif != "" {
 			f.add(method(recv(), mi.GoName, funcType(params(mi.Notif), param("", id("error"))),
-				append(gateFirst(mi, nil), ret(call(dot(s.recv, "conn", "SendNotification"), id("ctx"), id(mi.Const), id("params"))))...,
+				append(gateFirst(mi, nil), ret(call(dot(s.recv, "conn", "SendNotification"), id("ctx"), id(mi.Const), addr(id("params")))))...,
 			))
 			continue
 		}
 		if !mi.HasResult {
 			f.add(method(recv(), mi.GoName, funcType(params(mi.Req), param("", id("error"))),
-				append(gateFirst(mi, nil), ret(call(dot(s.recv, "conn", "SendRequestNoResult"), id("ctx"), id(mi.Const), id("params"))))...,
+				append(gateFirst(mi, nil), ret(call(dot(s.recv, "conn", "SendRequestNoResult"), id("ctx"), id(mi.Const), addr(id("params")))))...,
 			))
 			continue
 		}
@@ -743,7 +743,7 @@ func emitOutbound(f *goFile, s side, methods []*model.Method, gated bool) {
 		if canceller != nil {
 			send, results = "sendRequestSent", exprs(id("resp"), id("sent"), id("err"))
 		}
-		sendCall := call(index(id(send), id(mi.Resp)), dot(s.recv, "conn"), id("ctx"), id(mi.Const), id("params"), resultArg())
+		sendCall := call(index(id(send), id(mi.Resp)), dot(s.recv, "conn"), id("ctx"), id(mi.Const), addr(id("params")), resultArg())
 		sig := funcType(params(mi.Req), param("", id(mi.Resp)), param("", id("error")))
 		// A wrapper with nothing to do after the call returns it.
 		if canceller == nil && !mi.CancelsPending {

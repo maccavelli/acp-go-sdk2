@@ -78,6 +78,7 @@ FUZZTIME ?= 60s
 .PHONY: fuzz
 fuzz: ## Runs each fuzz target for FUZZTIME (default 60s)
 	go test -run '^$$' -fuzz '^FuzzRoundTrip$$' -fuzztime $(FUZZTIME) .
+	go test -run '^$$' -fuzz '^FuzzCanonicalIDKey$$' -fuzztime $(FUZZTIME) .
 	cd cmd/generate && go test -run '^$$' -fuzz '^FuzzBuild$$' -fuzztime $(FUZZTIME) .
 	cd cmd/generate && go test -run '^$$' -fuzz '^FuzzExportedName$$' -fuzztime $(FUZZTIME) ./internal/model
 

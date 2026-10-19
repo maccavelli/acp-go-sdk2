@@ -117,9 +117,9 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"func (a *AgentSideConnection) gate(method string, params any) error {\n\treturn gateMessage(a.negotiation.Load(), method, params)",
 			"func (a *AgentSideConnection) resultGate(method string, result any) error {\n\treturn gateResult(a.negotiation.Load(), method, result)",
 			"if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {",
-			"a.conn.checkResult(method, resp, a.resultGate)",
-			"if err := a.gate(ClientMethodAsk, &params); err != nil {\n\t\treturn AskResponse{}, err\n\t}\n\treturn sendRequest[AskResponse](a.conn, ctx, ClientMethodAsk, params, a.resultGate)\n}",
-			"result, rerr := a.conn.checkResult(method, resp, func(method string, result any) error {\n\t\t\treturn gateResult(&Negotiation{",
+			"a.conn.checkResult(method, &resp, a.resultGate)",
+			"if err := a.gate(ClientMethodAsk, &params); err != nil {\n\t\treturn AskResponse{}, err\n\t}\n\treturn sendRequest[AskResponse](a.conn, ctx, ClientMethodAsk, &params, a.resultGate)\n}",
+			"result, rerr := a.conn.checkResult(method, &resp, func(method string, result any) error {\n\t\t\treturn gateResult(&Negotiation{",
 		},
 		"client_gen.go": {
 			"if sent && ctx.Err() != nil {\n\t\t\tif cerr := c.Stop(context.WithoutCancel(ctx), StopNotification{ConversationId: params.ConversationId}); cerr != nil {\n\t\t\t\tc.conn.loggerOrDefault().Debug(\"failed to send the cancel of a prompt turn\", \"method\", AgentMethodStop, \"err\", cerr)",
@@ -131,11 +131,11 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"func (c *ClientSideConnection) Negotiated() (Negotiation, bool) {",
 			"resp, err := answerUnlessCancelled(c.conn, pctx, method, func(ctx context.Context) (AskResponse, error) {",
 			"}, AskResponse{Verdict: NewVerdictWithdrawn()})",
-			"err := c.conn.SendNotification(ctx, AgentMethodStop, params)\n\tc.pending.cancel(string(params.ConversationId))",
+			"err := c.conn.SendNotification(ctx, AgentMethodStop, &params)\n\tc.pending.cancel(string(params.ConversationId))",
 			"func (c *ClientSideConnection) gate(method string, params any) error {",
 			"if err := c.gate(AgentMethodSend, &params); err != nil {\n\t\treturn SendResponse{}, err",
-			"resp, sent, err := sendRequestSent[SendResponse](c.conn, ctx, AgentMethodSend, params, c.resultGate)",
-			"sendRequest[HelloResponse](c.conn, ctx, AgentMethodHello, params, func(method string, result any) error {",
+			"resp, sent, err := sendRequestSent[SendResponse](c.conn, ctx, AgentMethodSend, &params, c.resultGate)",
+			"sendRequest[HelloResponse](c.conn, ctx, AgentMethodHello, &params, func(method string, result any) error {",
 			"Response: *result.(*HelloResponse),",
 			"if err := c.gate(AgentMethodStop, &params); err != nil {\n\t\treturn err",
 			"if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {",
@@ -258,7 +258,7 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 		}
 		for file, w := range map[string]string{
 			"agent_gen.go":  "checkInbound(ctx, method, &p, nil)",
-			"client_gen.go": "sendRequest[OpenResponse](c.conn, ctx, AgentMethodOpen, params, nil)",
+			"client_gen.go": "sendRequest[OpenResponse](c.conn, ctx, AgentMethodOpen, &params, nil)",
 		} {
 			if got := strings.Contains(files[file], w); got == gated {
 				t.Errorf("%s: %s holds %q: %v, want %v", name, file, w, got, !gated)

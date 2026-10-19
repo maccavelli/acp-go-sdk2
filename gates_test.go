@@ -181,8 +181,8 @@ func receive(t *testing.T, m gatedMethod, n *Negotiation, opts ...ConnectionOpti
 // wantMethodGate fails unless err is the *CapabilityError of m's method gate.
 func wantMethodGate(t *testing.T, what string, m gatedMethod, err error) {
 	t.Helper()
-	var ce *CapabilityError
-	if !errors.As(err, &ce) || ce.Method != m.wire || ce.Capability != m.capability || ce.Field != "" || ce.Variant != "" {
+	ce, ok := errors.AsType[*CapabilityError](err)
+	if !ok || ce.Method != m.wire || ce.Capability != m.capability || ce.Field != "" || ce.Variant != "" {
 		t.Errorf("%s: %v, want *CapabilityError{Method: %q, Capability: %q}", what, err, m.wire, m.capability)
 	}
 }
@@ -232,8 +232,7 @@ func TestMethodGates(t *testing.T) {
 				t.Errorf("send advertising only %s: nothing written", m.capability)
 			}
 			cancel()
-			var ce *CapabilityError
-			if err := within(t, sent, "the send"); errors.As(err, &ce) || (m.notifies && err != nil) {
+			if err := within(t, sent, "the send"); isCapabilityError(err) || (m.notifies && err != nil) {
 				t.Errorf("send advertising only %s: %v", m.capability, err)
 			}
 			if rerr, ran := receive(t, m, only); rerr != nil || !ran {
@@ -241,7 +240,7 @@ func TestMethodGates(t *testing.T) {
 			}
 
 			accept := WithInboundValidation(func(_ context.Context, _ string, _ any, err error) error {
-				if errors.As(err, &ce) {
+				if isCapabilityError(err) {
 					return nil
 				}
 				return err
@@ -263,8 +262,7 @@ func TestHookRulesOnEachError(t *testing.T) {
 	asc := NewAgentSideConnection(recordingAgent{calls: make(chan any, 1)}, &countingWriter{}, idleReader(t),
 		WithInboundValidation(func(_ context.Context, _ string, _ any, err error) error {
 			seen = append(seen, err)
-			var ve *ValidationError
-			if errors.As(err, &ve) {
+			if _, ok := errors.AsType[*ValidationError](err); ok {
 				return nil
 			}
 			return err
@@ -274,9 +272,7 @@ func TestHookRulesOnEachError(t *testing.T) {
 	if rerr == nil || rerr.Code != -32601 {
 		t.Errorf("handle = %v, want -32601", rerr)
 	}
-	var ve *ValidationError
-	var ce *CapabilityError
-	if len(seen) != 2 || !errors.As(seen[0], &ve) || !errors.As(seen[1], &ce) {
+	if len(seen) != 2 || !isValidationError(seen[0]) || !isCapabilityError(seen[1]) {
 		t.Errorf("the hook saw %v, want the *ValidationError, then the *CapabilityError", seen)
 	}
 }
@@ -441,30 +437,30 @@ func valueGates(t *testing.T) []valueGate {
 		return valueGate{gatedMethod: m, field: "additionalDirectories"}
 	}
 	mcp := func(variant, server string, advertise func(n *Negotiation, on bool)) valueGate {
-		return valueGate{gatedMethod: gatedMethod{wire: AgentMethodSessionNew, capability: "mcpCapabilities." + variant, toAgent: true,
-			params: newSession(server), send: fromClient((*ClientSideConnection).NewSession), advertise: advertise}, variant: variant}
+		return valueGate{wire: AgentMethodSessionNew, capability: "mcpCapabilities." + variant, toAgent: true,
+			params: newSession(server), send: fromClient((*ClientSideConnection).NewSession), advertise: advertise, variant: variant}
 	}
 	forkMcp := func(variant, server string, advertise func(n *Negotiation, on bool)) valueGate {
-		return valueGate{gatedMethod: gatedMethod{wire: AgentMethodSessionFork, capability: "mcpCapabilities." + variant, toAgent: true,
+		return valueGate{wire: AgentMethodSessionFork, capability: "mcpCapabilities." + variant, toAgent: true,
 			params: decoded[UnstableForkSessionRequest](t, `{"sessionId":"s","cwd":`+dir+`,"mcpServers":[`+server+`]}`),
-			send:   fromClient((*ClientSideConnection).UnstableForkSession), advertise: advertise}, variant: variant}
+			send:   fromClient((*ClientSideConnection).UnstableForkSession), advertise: advertise, variant: variant}
 	}
 	block := func(variant, capability, raw string, advertise func(n *Negotiation, on bool)) valueGate {
-		return valueGate{gatedMethod: gatedMethod{wire: AgentMethodSessionPrompt, capability: "promptCapabilities." + capability, toAgent: true,
+		return valueGate{wire: AgentMethodSessionPrompt, capability: "promptCapabilities." + capability, toAgent: true,
 			params: decoded[PromptRequest](t, `{"sessionId":"s","prompt":[{"type":"text","text":"a"},`+raw+`]}`),
-			send:   fromClient((*ClientSideConnection).Prompt), advertise: advertise}, field: "prompt[1]", variant: variant}
+			send:   fromClient((*ClientSideConnection).Prompt), advertise: advertise, field: "prompt[1]", variant: variant}
 	}
 	update := func(variant, capability, raw string, advertise func(n *Negotiation, on bool)) valueGate {
-		return valueGate{gatedMethod: gatedMethod{wire: ClientMethodSessionUpdate, capability: capability, notifies: true,
+		return valueGate{wire: ClientMethodSessionUpdate, capability: capability, notifies: true,
 			params: decoded[SessionNotification](t, `{"sessionId":"s","update":`+raw+`}`),
 			send: func(ctx context.Context, asc *AgentSideConnection, _ *ClientSideConnection, params any) error {
 				return asc.SessionUpdate(ctx, params.(SessionNotification))
-			}, advertise: advertise}, variant: variant}
+			}, advertise: advertise, variant: variant}
 	}
 	elicit := func(variant, raw string, advertise func(n *Negotiation, on bool)) valueGate {
-		return valueGate{gatedMethod: gatedMethod{wire: ClientMethodElicitationCreate, capability: "elicitation." + variant,
+		return valueGate{wire: ClientMethodElicitationCreate, capability: "elicitation." + variant,
 			params: decoded[CreateElicitationRequest](t, raw), send: fromAgent((*AgentSideConnection).CreateElicitation),
-			advertise: advertise}, variant: variant}
+			advertise: advertise, variant: variant}
 	}
 	return []valueGate{
 		withRoots(gatedMethod{wire: AgentMethodSessionNew, params: decoded[NewSessionRequest](t, `{"cwd":`+dir+`,"mcpServers":[],`+roots+`}`),
@@ -552,8 +548,8 @@ func TestValueGates(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 			err := g.send(ctx, asc, csc, g.params)
 			cancel()
-			var ce *CapabilityError
-			if !errors.As(err, &ce) || ce.Method != g.wire || ce.Capability != g.capability || ce.Field != g.field || ce.Variant != g.variant {
+			ce, ok := errors.AsType[*CapabilityError](err)
+			if !ok || ce.Method != g.wire || ce.Capability != g.capability || ce.Field != g.field || ce.Variant != g.variant {
 				t.Errorf("send = %v, want *CapabilityError{%s, %s, Field %q, Variant %q}", err, g.wire, g.capability, g.field, g.variant)
 			}
 			if got := w.count(); got != 0 {
@@ -586,7 +582,7 @@ func TestValueGates(t *testing.T) {
 			if !g.notifies {
 				err = within(t, sent, "the send")
 			}
-			if errors.As(err, &ce) || (g.notifies && err != nil) {
+			if isCapabilityError(err) || (g.notifies && err != nil) {
 				t.Errorf("send with the capability: %v", err)
 			}
 			if rerr, ran := receive(t, g.gatedMethod, with); rerr != nil || !ran {
@@ -621,8 +617,8 @@ func TestResultGates(t *testing.T) {
 		peer := rawPeer(t, option)
 		negotiate(t, peer, n)
 		_, err := peer.NewSession(t.Context(), NewSessionRequest{Cwd: testAbsPath(), McpServers: []McpServer{}})
-		var ce *CapabilityError
-		if advertised != (err == nil) || (err != nil && (!errors.As(err, &ce) || ce.Variant != "boolean")) {
+		ce, isCE := errors.AsType[*CapabilityError](err)
+		if advertised != (err == nil) || (err != nil && (!isCE || ce.Variant != "boolean")) {
 			t.Errorf("advertised %v: the client's NewSession = %v", advertised, err)
 		}
 	}
@@ -649,12 +645,12 @@ func TestInitializeGates(t *testing.T) {
 	answer := jsonOf(t, terminal)
 	c := rawPeer(t, answer)
 	_, err := c.Initialize(t.Context(), InitializeRequest{})
-	var ce *CapabilityError
-	if _, ok := c.Negotiated(); !errors.As(err, &ce) || ce.Field != "authMethods[0]" || ce.Variant != "terminal" || ok {
+	ce, isCE := errors.AsType[*CapabilityError](err)
+	if _, ok := c.Negotiated(); !isCE || ce.Field != "authMethods[0]" || ce.Variant != "terminal" || ok {
 		t.Errorf("Initialize = %v, recorded %v; want the *CapabilityError and no record", err, ok)
 	}
 	accept := WithInboundValidation(func(_ context.Context, _ string, _ any, err error) error {
-		if errors.As(err, &ce) {
+		if isCapabilityError(err) {
 			return nil
 		}
 		return err
@@ -817,8 +813,8 @@ func TestUndeclaredElicitationMode(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	_, err := asc.CreateElicitation(ctx, req)
 	cancel()
-	var ce *CapabilityError
-	if !errors.As(err, &ce) || ce.Method != ClientMethodElicitationCreate || ce.Capability != "elicitation.telepathy" ||
+	ce, ok := errors.AsType[*CapabilityError](err)
+	if !ok || ce.Method != ClientMethodElicitationCreate || ce.Capability != "elicitation.telepathy" ||
 		ce.Variant != "telepathy" || ce.Field != "" {
 		t.Errorf("send = %v, want *CapabilityError{%s, elicitation.telepathy, Variant telepathy}", err, ClientMethodElicitationCreate)
 	} else if want := "capability elicitation.telepathy not advertised: variant telepathy"; !strings.HasSuffix(err.Error(), want) {
@@ -836,4 +832,16 @@ func TestUndeclaredElicitationMode(t *testing.T) {
 	if rerr, ran := receive(t, m, allAdvertised(), accept); rerr != nil || !ran {
 		t.Errorf("received with a validation hook that accepts it: %v, handler ran %v, want it handled", rerr, ran)
 	}
+}
+
+// isCapabilityError reports whether err is, or wraps, a *CapabilityError.
+func isCapabilityError(err error) bool {
+	_, ok := errors.AsType[*CapabilityError](err)
+	return ok
+}
+
+// isValidationError reports whether err is, or wraps, a *ValidationError.
+func isValidationError(err error) bool {
+	_, ok := errors.AsType[*ValidationError](err)
+	return ok
 }

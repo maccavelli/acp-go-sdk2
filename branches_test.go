@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"testing/synctest"
+	"time"
 )
 
 // The tests in this file run the documented branches the coverage profile
@@ -207,33 +208,48 @@ func TestSendRequestNoResultHeldBehindNotification(t *testing.T) {
 // TestWaitNotificationsEnds requires the wait a response makes for the
 // notifications received before it to return the caller's cause when its
 // context ends, and the connection's end when the connection ends, while a
-// notification's handler still runs.
+// notification's handler still runs. Each runs in a synctest bubble and ends
+// the wait only once it is blocked on the notification sequence, so the wake
+// each end registers is what returns it, and at once
+// (0019-PLAN-idioms-performance.md, D8).
 func TestWaitNotificationsEnds(t *testing.T) {
 	t.Parallel()
 	t.Run("context", func(t *testing.T) {
 		t.Parallel()
-		c, _ := blockedNotification(t)
-		ctx, cancel := context.WithCancel(t.Context())
-		returned := make(chan error, 1)
-		go func() { returned <- c.waitNotificationsUpTo(ctx, 1) }()
-		cancel()
-		err := within(t, returned, "the wait's return")
-		if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != -32800 || !errors.Is(err, context.Canceled) {
-			t.Errorf("waitNotificationsUpTo = %v, want -32800 wrapping context.Canceled", err)
-		}
+		synctest.Test(t, func(t *testing.T) {
+			c, _ := blockedNotification(t)
+			ctx, cancel := context.WithCancel(t.Context())
+			returned := make(chan error, 1)
+			go func() { returned <- c.waitNotificationsUpTo(ctx, 1) }()
+			synctest.Wait() // the wait is blocked in notifyCond.Wait
+			cancel()
+			err := <-returned
+			if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != -32800 || !errors.Is(err, context.Canceled) {
+				t.Errorf("waitNotificationsUpTo = %v, want -32800 wrapping context.Canceled", err)
+			}
+		})
 	})
 	t.Run("connection", func(t *testing.T) {
 		t.Parallel()
-		c, p := blockedNotification(t)
-		returned := make(chan error, 1)
-		go func() { returned <- c.waitNotificationsUpTo(t.Context(), 1) }()
-		if err := p.w.(io.Closer).Close(); err != nil {
-			t.Fatal(err)
-		}
-		err := within(t, returned, "the wait's return")
-		if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != -32603 || !errors.Is(err, ErrPeerDisconnected) {
-			t.Errorf("waitNotificationsUpTo = %v, want -32603 wrapping ErrPeerDisconnected", err)
-		}
+		synctest.Test(t, func(t *testing.T) {
+			c, p := blockedNotification(t)
+			returned := make(chan error, 1)
+			go func() { returned <- c.waitNotificationsUpTo(t.Context(), 1) }()
+			synctest.Wait() // the wait is blocked in notifyCond.Wait
+			start := time.Now()
+			if err := p.w.(io.Closer).Close(); err != nil {
+				t.Fatal(err)
+			}
+			err := <-returned
+			// The end of the drain would wake the wait too, after its timeout:
+			// the connection's end must wake it at once.
+			if waited := time.Since(start); waited >= notificationQueueDrainTimeout {
+				t.Errorf("the wait returned %v after the connection ended, as the drain timed out", waited)
+			}
+			if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != -32603 || !errors.Is(err, ErrPeerDisconnected) {
+				t.Errorf("waitNotificationsUpTo = %v, want -32603 wrapping ErrPeerDisconnected", err)
+			}
+		})
 	})
 }
 

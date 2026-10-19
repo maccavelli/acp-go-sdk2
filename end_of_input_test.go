@@ -166,6 +166,39 @@ func TestEndOfInputDrainIsBounded(t *testing.T) {
 	})
 }
 
+// TestEndOfInputNotificationDrainIsBounded requires a notification handler
+// that does not return to hold the end of the input for
+// notificationQueueDrainTimeout only: the drain's timeout wakes its wait, and
+// the handler's context is then cancelled with a cause. It runs in a synctest
+// bubble, so the bound passes in no wall time, and a drain that is never woken
+// leaves the bubble deadlocked (0019-PLAN-idioms-performance.md, D8).
+func TestEndOfInputNotificationDrainIsBounded(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		causes := make(chan error, 1)
+		p := rawWire(t, func(w io.Writer, r io.Reader) {
+			NewConnection(func(ctx context.Context, _ string, _ json.RawMessage) (any, *RequestError) {
+				<-ctx.Done()
+				causes <- context.Cause(ctx)
+				return nil, nil
+			}, w, r)
+		})
+		start := time.Now()
+		p.send(`{"jsonrpc":"2.0","method":"_x/stuck"}`)
+		synctest.Wait() // the notification's handler runs
+		if err := p.w.(io.Closer).Close(); err != nil {
+			t.Fatal(err)
+		}
+		cause := <-causes
+		if waited := time.Since(start); waited < notificationQueueDrainTimeout {
+			t.Errorf("the handler's context ended after %v, want the drain's %v", waited, notificationQueueDrainTimeout)
+		}
+		if cause == nil {
+			t.Error("the handler's context ended without a cause")
+		}
+	})
+}
+
 // TestCloseEndsEndOfInputDrain requires Close during the drain to end the
 // connection at once, its shutdown included, even with a handler that ignores
 // its context. It runs in a synctest bubble, so "at once" is no time.

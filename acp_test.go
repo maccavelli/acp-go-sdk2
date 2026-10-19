@@ -459,9 +459,9 @@ func TestAgentDispatch_AllowsPartialUnstableMethodImplementation(t *testing.T) {
 		t.Fatal("expected UnstableForkSession method to be invoked")
 	}
 
-	resp, ok := result.(UnstableForkSessionResponse)
+	resp, ok := result.(*UnstableForkSessionResponse)
 	if !ok {
-		t.Fatalf("expected UnstableForkSessionResponse, got %T", result)
+		t.Fatalf("expected *UnstableForkSessionResponse, got %T", result)
 	}
 	if resp.SessionId != "forked-session" {
 		t.Fatalf("unexpected response session id: %q", resp.SessionId)
@@ -1414,8 +1414,8 @@ func TestExtensionMethods_UnknownRequest_ReturnsMethodNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	var re *RequestError
-	if !errors.As(err, &re) {
+	re, ok := errors.AsType[*RequestError](err)
+	if !ok {
 		t.Fatalf("expected *RequestError, got %T: %v", err, err)
 	}
 	if re.Code != -32601 {

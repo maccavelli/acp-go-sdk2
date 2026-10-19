@@ -137,7 +137,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp, c.resultGate)
+		return c.conn.checkResult(method, &resp, c.resultGate)
 	case ClientMethodFsReadTextFile:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -153,7 +153,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp, c.resultGate)
+		return c.conn.checkResult(method, &resp, c.resultGate)
 	case ClientMethodFsWriteTextFile:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -169,7 +169,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp, c.resultGate)
+		return c.conn.checkResult(method, &resp, c.resultGate)
 	case ClientMethodMcpMessage:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -191,7 +191,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp, c.resultGate)
+		return c.conn.checkResult(method, &resp, c.resultGate)
 	case ClientMethodSessionRequestPermission:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -211,7 +211,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp, c.resultGate)
+		return c.conn.checkResult(method, &resp, c.resultGate)
 	case ClientMethodSessionUpdate:
 		if sentAsRequest(ctx) {
 			return nil, NewMethodNotFound(method)
@@ -242,7 +242,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp, c.resultGate)
+		return c.conn.checkResult(method, &resp, c.resultGate)
 	case ClientMethodTerminalKill:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -258,7 +258,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp, c.resultGate)
+		return c.conn.checkResult(method, &resp, c.resultGate)
 	case ClientMethodTerminalOutput:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -274,7 +274,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp, c.resultGate)
+		return c.conn.checkResult(method, &resp, c.resultGate)
 	case ClientMethodTerminalRelease:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -290,7 +290,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp, c.resultGate)
+		return c.conn.checkResult(method, &resp, c.resultGate)
 	case ClientMethodTerminalWaitForExit:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -306,7 +306,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, resp, c.resultGate)
+		return c.conn.checkResult(method, &resp, c.resultGate)
 	default:
 		return nil, NewMethodNotFound(method)
 	}
@@ -321,7 +321,7 @@ func (c *ClientSideConnection) Authenticate(ctx context.Context, params Authenti
 	if err := c.gate(AgentMethodAuthenticate, &params); err != nil {
 		return AuthenticateResponse{}, err
 	}
-	return sendRequest[AuthenticateResponse](c.conn, ctx, AgentMethodAuthenticate, params, c.resultGate)
+	return sendRequest[AuthenticateResponse](c.conn, ctx, AgentMethodAuthenticate, &params, c.resultGate)
 }
 
 // UnstableDidChangeDocument sends the document/didChange notification to the agent.
@@ -335,7 +335,7 @@ func (c *ClientSideConnection) UnstableDidChangeDocument(ctx context.Context, pa
 	if err := c.gate(AgentMethodDocumentDidChange, &params); err != nil {
 		return err
 	}
-	return c.conn.SendNotification(ctx, AgentMethodDocumentDidChange, params)
+	return c.conn.SendNotification(ctx, AgentMethodDocumentDidChange, &params)
 }
 
 // UnstableDidCloseDocument sends the document/didClose notification to the agent.
@@ -349,7 +349,7 @@ func (c *ClientSideConnection) UnstableDidCloseDocument(ctx context.Context, par
 	if err := c.gate(AgentMethodDocumentDidClose, &params); err != nil {
 		return err
 	}
-	return c.conn.SendNotification(ctx, AgentMethodDocumentDidClose, params)
+	return c.conn.SendNotification(ctx, AgentMethodDocumentDidClose, &params)
 }
 
 // UnstableDidFocusDocument sends the document/didFocus notification to the agent.
@@ -363,7 +363,7 @@ func (c *ClientSideConnection) UnstableDidFocusDocument(ctx context.Context, par
 	if err := c.gate(AgentMethodDocumentDidFocus, &params); err != nil {
 		return err
 	}
-	return c.conn.SendNotification(ctx, AgentMethodDocumentDidFocus, params)
+	return c.conn.SendNotification(ctx, AgentMethodDocumentDidFocus, &params)
 }
 
 // UnstableDidOpenDocument sends the document/didOpen notification to the agent.
@@ -377,7 +377,7 @@ func (c *ClientSideConnection) UnstableDidOpenDocument(ctx context.Context, para
 	if err := c.gate(AgentMethodDocumentDidOpen, &params); err != nil {
 		return err
 	}
-	return c.conn.SendNotification(ctx, AgentMethodDocumentDidOpen, params)
+	return c.conn.SendNotification(ctx, AgentMethodDocumentDidOpen, &params)
 }
 
 // UnstableDidSaveDocument sends the document/didSave notification to the agent.
@@ -391,7 +391,7 @@ func (c *ClientSideConnection) UnstableDidSaveDocument(ctx context.Context, para
 	if err := c.gate(AgentMethodDocumentDidSave, &params); err != nil {
 		return err
 	}
-	return c.conn.SendNotification(ctx, AgentMethodDocumentDidSave, params)
+	return c.conn.SendNotification(ctx, AgentMethodDocumentDidSave, &params)
 }
 
 // Initialize sends the initialize request to the agent and returns its response.
@@ -408,7 +408,7 @@ func (c *ClientSideConnection) Initialize(ctx context.Context, params Initialize
 	if params.ProtocolVersion != ProtocolVersionNumber {
 		return InitializeResponse{}, &ProtocolVersionError{Requested: int(params.ProtocolVersion)}
 	}
-	resp, err := sendRequest[InitializeResponse](c.conn, ctx, AgentMethodInitialize, params, func(method string, result any) error {
+	resp, err := sendRequest[InitializeResponse](c.conn, ctx, AgentMethodInitialize, &params, func(method string, result any) error {
 		return gateResult(&Negotiation{
 			Request:  params,
 			Response: *result.(*InitializeResponse),
@@ -443,7 +443,7 @@ func (c *ClientSideConnection) Logout(ctx context.Context, params LogoutRequest)
 	if err := c.gate(AgentMethodLogout, &params); err != nil {
 		return LogoutResponse{}, err
 	}
-	return sendRequest[LogoutResponse](c.conn, ctx, AgentMethodLogout, params, c.resultGate)
+	return sendRequest[LogoutResponse](c.conn, ctx, AgentMethodLogout, &params, c.resultGate)
 }
 
 // UnstableMessageMcp sends the mcp/message notification to the agent.
@@ -460,7 +460,7 @@ func (c *ClientSideConnection) UnstableMessageMcp(ctx context.Context, params Un
 	if err := c.gate(AgentMethodMcpMessage, &params); err != nil {
 		return err
 	}
-	return c.conn.SendNotification(ctx, AgentMethodMcpMessage, params)
+	return c.conn.SendNotification(ctx, AgentMethodMcpMessage, &params)
 }
 
 // UnstableAcceptNes sends the nes/accept notification to the agent.
@@ -474,7 +474,7 @@ func (c *ClientSideConnection) UnstableAcceptNes(ctx context.Context, params Uns
 	if err := c.gate(AgentMethodNesAccept, &params); err != nil {
 		return err
 	}
-	return c.conn.SendNotification(ctx, AgentMethodNesAccept, params)
+	return c.conn.SendNotification(ctx, AgentMethodNesAccept, &params)
 }
 
 // UnstableCloseNes sends the nes/close request to the agent and returns its response.
@@ -491,7 +491,7 @@ func (c *ClientSideConnection) UnstableCloseNes(ctx context.Context, params Unst
 	if err := c.gate(AgentMethodNesClose, &params); err != nil {
 		return UnstableCloseNesResponse{}, err
 	}
-	return sendRequest[UnstableCloseNesResponse](c.conn, ctx, AgentMethodNesClose, params, c.resultGate)
+	return sendRequest[UnstableCloseNesResponse](c.conn, ctx, AgentMethodNesClose, &params, c.resultGate)
 }
 
 // UnstableRejectNes sends the nes/reject notification to the agent.
@@ -505,7 +505,7 @@ func (c *ClientSideConnection) UnstableRejectNes(ctx context.Context, params Uns
 	if err := c.gate(AgentMethodNesReject, &params); err != nil {
 		return err
 	}
-	return c.conn.SendNotification(ctx, AgentMethodNesReject, params)
+	return c.conn.SendNotification(ctx, AgentMethodNesReject, &params)
 }
 
 // UnstableStartNes sends the nes/start request to the agent and returns its response.
@@ -519,7 +519,7 @@ func (c *ClientSideConnection) UnstableStartNes(ctx context.Context, params Unst
 	if err := c.gate(AgentMethodNesStart, &params); err != nil {
 		return UnstableStartNesResponse{}, err
 	}
-	return sendRequest[UnstableStartNesResponse](c.conn, ctx, AgentMethodNesStart, params, c.resultGate)
+	return sendRequest[UnstableStartNesResponse](c.conn, ctx, AgentMethodNesStart, &params, c.resultGate)
 }
 
 // UnstableSuggestNes sends the nes/suggest request to the agent and returns its response.
@@ -533,7 +533,7 @@ func (c *ClientSideConnection) UnstableSuggestNes(ctx context.Context, params Un
 	if err := c.gate(AgentMethodNesSuggest, &params); err != nil {
 		return UnstableSuggestNesResponse{}, err
 	}
-	return sendRequest[UnstableSuggestNesResponse](c.conn, ctx, AgentMethodNesSuggest, params, c.resultGate)
+	return sendRequest[UnstableSuggestNesResponse](c.conn, ctx, AgentMethodNesSuggest, &params, c.resultGate)
 }
 
 // UnstableDisableProvider sends the providers/disable request to the agent and returns its response.
@@ -547,7 +547,7 @@ func (c *ClientSideConnection) UnstableDisableProvider(ctx context.Context, para
 	if err := c.gate(AgentMethodProvidersDisable, &params); err != nil {
 		return UnstableDisableProviderResponse{}, err
 	}
-	return sendRequest[UnstableDisableProviderResponse](c.conn, ctx, AgentMethodProvidersDisable, params, c.resultGate)
+	return sendRequest[UnstableDisableProviderResponse](c.conn, ctx, AgentMethodProvidersDisable, &params, c.resultGate)
 }
 
 // UnstableListProviders sends the providers/list request to the agent and returns its response.
@@ -561,7 +561,7 @@ func (c *ClientSideConnection) UnstableListProviders(ctx context.Context, params
 	if err := c.gate(AgentMethodProvidersList, &params); err != nil {
 		return UnstableListProvidersResponse{}, err
 	}
-	return sendRequest[UnstableListProvidersResponse](c.conn, ctx, AgentMethodProvidersList, params, c.resultGate)
+	return sendRequest[UnstableListProvidersResponse](c.conn, ctx, AgentMethodProvidersList, &params, c.resultGate)
 }
 
 // UnstableSetProvider sends the providers/set request to the agent and returns its response.
@@ -577,7 +577,7 @@ func (c *ClientSideConnection) UnstableSetProvider(ctx context.Context, params U
 	if err := c.gate(AgentMethodProvidersSet, &params); err != nil {
 		return UnstableSetProviderResponse{}, err
 	}
-	return sendRequest[UnstableSetProviderResponse](c.conn, ctx, AgentMethodProvidersSet, params, c.resultGate)
+	return sendRequest[UnstableSetProviderResponse](c.conn, ctx, AgentMethodProvidersSet, &params, c.resultGate)
 }
 
 // Cancel sends the session/cancel notification to the agent.
@@ -589,7 +589,7 @@ func (c *ClientSideConnection) Cancel(ctx context.Context, params CancelNotifica
 	if err := c.gate(AgentMethodSessionCancel, &params); err != nil {
 		return err
 	}
-	err := c.conn.SendNotification(ctx, AgentMethodSessionCancel, params)
+	err := c.conn.SendNotification(ctx, AgentMethodSessionCancel, &params)
 	c.pending.cancel(string(params.SessionId))
 	return err
 }
@@ -607,7 +607,7 @@ func (c *ClientSideConnection) CloseSession(ctx context.Context, params CloseSes
 	if err := c.gate(AgentMethodSessionClose, &params); err != nil {
 		return CloseSessionResponse{}, err
 	}
-	resp, err := sendRequest[CloseSessionResponse](c.conn, ctx, AgentMethodSessionClose, params, c.resultGate)
+	resp, err := sendRequest[CloseSessionResponse](c.conn, ctx, AgentMethodSessionClose, &params, c.resultGate)
 	if err == nil {
 		c.pending.cancel(string(params.SessionId))
 	}
@@ -623,7 +623,7 @@ func (c *ClientSideConnection) DeleteSession(ctx context.Context, params DeleteS
 	if err := c.gate(AgentMethodSessionDelete, &params); err != nil {
 		return DeleteSessionResponse{}, err
 	}
-	return sendRequest[DeleteSessionResponse](c.conn, ctx, AgentMethodSessionDelete, params, c.resultGate)
+	return sendRequest[DeleteSessionResponse](c.conn, ctx, AgentMethodSessionDelete, &params, c.resultGate)
 }
 
 // UnstableForkSession sends the session/fork request to the agent and returns its response.
@@ -642,7 +642,7 @@ func (c *ClientSideConnection) UnstableForkSession(ctx context.Context, params U
 	if err := c.gate(AgentMethodSessionFork, &params); err != nil {
 		return UnstableForkSessionResponse{}, err
 	}
-	return sendRequest[UnstableForkSessionResponse](c.conn, ctx, AgentMethodSessionFork, params, c.resultGate)
+	return sendRequest[UnstableForkSessionResponse](c.conn, ctx, AgentMethodSessionFork, &params, c.resultGate)
 }
 
 // ListSessions sends the session/list request to the agent and returns its response.
@@ -654,7 +654,7 @@ func (c *ClientSideConnection) ListSessions(ctx context.Context, params ListSess
 	if err := c.gate(AgentMethodSessionList, &params); err != nil {
 		return ListSessionsResponse{}, err
 	}
-	return sendRequest[ListSessionsResponse](c.conn, ctx, AgentMethodSessionList, params, c.resultGate)
+	return sendRequest[ListSessionsResponse](c.conn, ctx, AgentMethodSessionList, &params, c.resultGate)
 }
 
 // LoadSession sends the session/load request to the agent and returns its response.
@@ -668,7 +668,7 @@ func (c *ClientSideConnection) LoadSession(ctx context.Context, params LoadSessi
 	if err := c.gate(AgentMethodSessionLoad, &params); err != nil {
 		return LoadSessionResponse{}, err
 	}
-	return sendRequest[LoadSessionResponse](c.conn, ctx, AgentMethodSessionLoad, params, c.resultGate)
+	return sendRequest[LoadSessionResponse](c.conn, ctx, AgentMethodSessionLoad, &params, c.resultGate)
 }
 
 // NewSession sends the session/new request to the agent and returns its response.
@@ -680,7 +680,7 @@ func (c *ClientSideConnection) NewSession(ctx context.Context, params NewSession
 	if err := c.gate(AgentMethodSessionNew, &params); err != nil {
 		return NewSessionResponse{}, err
 	}
-	return sendRequest[NewSessionResponse](c.conn, ctx, AgentMethodSessionNew, params, c.resultGate)
+	return sendRequest[NewSessionResponse](c.conn, ctx, AgentMethodSessionNew, &params, c.resultGate)
 }
 
 // Prompt sends the session/prompt request to the agent and returns its response.
@@ -694,7 +694,7 @@ func (c *ClientSideConnection) Prompt(ctx context.Context, params PromptRequest)
 	if err := c.gate(AgentMethodSessionPrompt, &params); err != nil {
 		return PromptResponse{}, err
 	}
-	resp, sent, err := sendRequestSent[PromptResponse](c.conn, ctx, AgentMethodSessionPrompt, params, c.resultGate)
+	resp, sent, err := sendRequestSent[PromptResponse](c.conn, ctx, AgentMethodSessionPrompt, &params, c.resultGate)
 	if err != nil {
 		if sent && ctx.Err() != nil {
 			if cerr := c.Cancel(context.WithoutCancel(ctx), CancelNotification{SessionId: params.SessionId}); cerr != nil {
@@ -717,7 +717,7 @@ func (c *ClientSideConnection) ResumeSession(ctx context.Context, params ResumeS
 	if err := c.gate(AgentMethodSessionResume, &params); err != nil {
 		return ResumeSessionResponse{}, err
 	}
-	return sendRequest[ResumeSessionResponse](c.conn, ctx, AgentMethodSessionResume, params, c.resultGate)
+	return sendRequest[ResumeSessionResponse](c.conn, ctx, AgentMethodSessionResume, &params, c.resultGate)
 }
 
 // SetSessionConfigOption sends the session/set_config_option request to the agent and returns its response.
@@ -727,7 +727,7 @@ func (c *ClientSideConnection) SetSessionConfigOption(ctx context.Context, param
 	if err := c.gate(AgentMethodSessionSetConfigOption, &params); err != nil {
 		return SetSessionConfigOptionResponse{}, err
 	}
-	return sendRequest[SetSessionConfigOptionResponse](c.conn, ctx, AgentMethodSessionSetConfigOption, params, c.resultGate)
+	return sendRequest[SetSessionConfigOptionResponse](c.conn, ctx, AgentMethodSessionSetConfigOption, &params, c.resultGate)
 }
 
 // SetSessionMode sends the session/set_mode request to the agent and returns its response.
@@ -737,5 +737,5 @@ func (c *ClientSideConnection) SetSessionMode(ctx context.Context, params SetSes
 	if err := c.gate(AgentMethodSessionSetMode, &params); err != nil {
 		return SetSessionModeResponse{}, err
 	}
-	return sendRequest[SetSessionModeResponse](c.conn, ctx, AgentMethodSessionSetMode, params, c.resultGate)
+	return sendRequest[SetSessionModeResponse](c.conn, ctx, AgentMethodSessionSetMode, &params, c.resultGate)
 }

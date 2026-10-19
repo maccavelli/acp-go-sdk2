@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"testing"
 	"time"
 )
@@ -78,13 +79,13 @@ func TestRemediationErrors(t *testing.T) {
 	if err := fmt.Errorf("session/new: %w", ErrNotInitialized); !errors.Is(err, ErrNotInitialized) {
 		t.Errorf("errors.Is(%v, ErrNotInitialized) = false", err)
 	}
-	var ce *CapabilityError
-	if err := fmt.Errorf("send: %w", &CapabilityError{Method: "logout", Capability: "auth.logout"}); !errors.As(err, &ce) || ce.Method != "logout" {
-		t.Errorf("errors.As(%v, *CapabilityError) = %v", err, ce)
+	capErr := fmt.Errorf("send: %w", &CapabilityError{Method: "logout", Capability: "auth.logout"})
+	if ce, ok := errors.AsType[*CapabilityError](capErr); !ok || ce.Method != "logout" {
+		t.Errorf("errors.AsType[*CapabilityError](%v) = %v", capErr, ce)
 	}
-	var pe *ProtocolVersionError
-	if err := fmt.Errorf("initialize: %w", &ProtocolVersionError{Requested: 1, Answered: 2}); !errors.As(err, &pe) || pe.Answered != 2 {
-		t.Errorf("errors.As(%v, *ProtocolVersionError) = %v", err, pe)
+	verErr := fmt.Errorf("initialize: %w", &ProtocolVersionError{Requested: 1, Answered: 2})
+	if pe, ok := errors.AsType[*ProtocolVersionError](verErr); !ok || pe.Answered != 2 {
+		t.Errorf("errors.AsType[*ProtocolVersionError](%v) = %v", verErr, pe)
 	}
 
 	b, err := json.Marshal(NewResourceNotFound("file:///a"))
@@ -193,5 +194,31 @@ func TestPeerErrorsWrapNothing(t *testing.T) {
 	}
 	if errors.Unwrap(err) != nil || errors.Is(err, context.Canceled) {
 		t.Errorf("the peer's -32800 unwraps to %v", errors.Unwrap(err))
+	}
+}
+
+// TestRequestErrorText pins the text of RequestError.Error: the compact JSON
+// of its code, message and data as the wire writes them, without the cause it
+// keeps, and the fallback when its data does not encode
+// (0019-PLAN-idioms-performance.md, D9).
+func TestRequestErrorText(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name string
+		err  *RequestError
+		want string
+	}{
+		{"code, message and data", &RequestError{Code: -32602, Message: "Invalid params", Data: map[string]any{"k": "v"}},
+			`{"code":-32602,"message":"Invalid params","data":{"k":"v"}}`},
+		{"no data", &RequestError{Code: -32603, Message: "Internal error"}, `{"code":-32603,"message":"Internal error"}`},
+		{"a cause", NewInternalError(map[string]any{"error": "x"}).withCause(errors.New("hidden")),
+			`{"code":-32603,"message":"Internal error","data":{"error":"x"}}`},
+		{"escaped", &RequestError{Code: 1, Message: "<a>&"}, `{"code":1,"message":"\u003ca\u003e\u0026"}`},
+		{"data that does not encode", &RequestError{Code: 1, Message: "m", Data: math.Inf(1)}, "code 1: m (data: +Inf)"},
+		{"nil", nil, "<nil>"},
+	} {
+		if got := tt.err.Error(); got != tt.want {
+			t.Errorf("%s: Error() = %q, want %q", tt.name, got, tt.want)
+		}
 	}
 }

@@ -139,8 +139,8 @@ func TestProtocolVersion(t *testing.T) {
 			return InitializeResponse{ProtocolVersion: 2}, nil
 		})
 		_, err := c.Initialize(t.Context(), InitializeRequest{})
-		var re *RequestError
-		if !errors.As(err, &re) || re.Code != -32603 {
+		re, ok := errors.AsType[*RequestError](err)
+		if !ok || re.Code != -32603 {
 			t.Errorf("Initialize = %v, want -32603", err)
 		}
 		if _, ok := asc.Negotiated(); ok {
@@ -152,8 +152,8 @@ func TestProtocolVersion(t *testing.T) {
 		w := &countingWriter{}
 		c := NewClientSideConnection(&clientFuncs{}, w, idleReader(t))
 		_, err := c.Initialize(t.Context(), InitializeRequest{ProtocolVersion: 2})
-		var pe *ProtocolVersionError
-		if !errors.As(err, &pe) || pe.Requested != 2 || pe.Answered != 0 {
+		pe, ok := errors.AsType[*ProtocolVersionError](err)
+		if !ok || pe.Requested != 2 || pe.Answered != 0 {
 			t.Errorf("Initialize = %v, want *ProtocolVersionError{Requested: 2}", err)
 		}
 		w.mu.Lock()
@@ -167,8 +167,8 @@ func TestProtocolVersion(t *testing.T) {
 		t.Parallel()
 		c := rawPeer(t, `{"protocolVersion":2,"agentCapabilities":{},"authMethods":[]}`)
 		_, err := c.Initialize(t.Context(), InitializeRequest{})
-		var pe *ProtocolVersionError
-		if !errors.As(err, &pe) || pe.Requested != ProtocolVersionNumber || pe.Answered != 2 {
+		pe, ok := errors.AsType[*ProtocolVersionError](err)
+		if !ok || pe.Requested != ProtocolVersionNumber || pe.Answered != 2 {
 			t.Errorf("Initialize = %v, want *ProtocolVersionError{Requested: 1, Answered: 2}", err)
 		}
 		if _, ok := c.Negotiated(); ok {

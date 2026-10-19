@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -29,7 +30,7 @@ type ExtensionMethodHandler interface {
 
 func validateExtensionMethodName(method string) error {
 	if method == "" {
-		return fmt.Errorf("extension method name must be non-empty")
+		return errors.New("extension method name must be non-empty")
 	}
 	if !strings.HasPrefix(method, "_") {
 		return fmt.Errorf("extension method name must start with '_' (got %q)", method)

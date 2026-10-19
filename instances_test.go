@@ -3,6 +3,7 @@ package acp
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -107,21 +108,15 @@ func (b builder) resolve(n schemaNode) schemaNode {
 // merge returns base with over's keys, properties and required keys added.
 func merge(base, over schemaNode) schemaNode {
 	out := schemaNode{}
-	for k, v := range base {
-		out[k] = v
-	}
+	maps.Copy(out, base)
 	for k, v := range over {
 		switch k {
 		case "properties":
 			props := schemaNode{}
 			if bp, ok := base["properties"].(schemaNode); ok {
-				for pk, pv := range bp {
-					props[pk] = pv
-				}
+				maps.Copy(props, bp)
 			}
-			for pk, pv := range v.(schemaNode) {
-				props[pk] = pv
-			}
+			maps.Copy(props, v.(schemaNode))
 			out[k] = props
 		case "required":
 			req, _ := base["required"].([]any)

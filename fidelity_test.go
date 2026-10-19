@@ -278,8 +278,8 @@ func TestValidationErrorRules(t *testing.T) {
 			"type", "string", RuleExcludedValue, `ElicitationPropertySchema: variant Other: type "string" names another variant`},
 	} {
 		err := tt.v.Validate()
-		var ve *ValidationError
-		if !errors.As(err, &ve) {
+		ve, ok := errors.AsType[*ValidationError](err)
+		if !ok {
 			t.Errorf("%s: Validate() = %v, not a *ValidationError", tt.name, err)
 			continue
 		}

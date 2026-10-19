@@ -175,7 +175,7 @@ func validateOutbound(params any) error {
 	}
 	ptr := reflect.New(rv.Type())
 	ptr.Elem().Set(rv)
-	if v, ok := ptr.Interface().(validator); ok {
+	if v, ok := reflect.TypeAssert[validator](ptr); ok {
 		return v.validate(isPortableAbs)
 	}
 	return nil
@@ -640,16 +640,22 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 // start starts the connection's goroutines, reading included. It is called
 // once, after the connection is built.
 func (c *Connection) start() {
-	go func() {
-		<-c.ctx.Done()
-		c.notifyMu.Lock()
-		c.notifyCond.Broadcast()
-		c.notifyMu.Unlock()
-	}()
+	// The end of the connection wakes every notification wait; the
+	// registration lasts the connection's life
+	// (0019-PLAN-idioms-performance.md, D8).
+	context.AfterFunc(c.ctx, c.wakeNotificationWaits)
 	go c.writeLoop()
 	go c.sendCancelRequests()
 	go c.receive()
 	go c.processNotifications()
+}
+
+// wakeNotificationWaits wakes every wait on the notification sequence, so each
+// checks again whether its context or the connection has ended.
+func (c *Connection) wakeNotificationWaits() {
+	c.notifyMu.Lock()
+	c.notifyCond.Broadcast()
+	c.notifyMu.Unlock()
 }
 
 // writeRequest is one message for the writer goroutine and where it reports
@@ -777,6 +783,31 @@ var (
 
 func canonicalJSONRPCIDKey(raw json.RawMessage) (string, error) {
 	trimmed := bytes.TrimSpace(raw)
+	// A plain integer is its own key, the one the decoder gives it
+	// (0019-PLAN-idioms-performance.md, D5).
+	if isPlainIDInteger(trimmed) {
+		return string(trimmed), nil
+	}
+	return decodeJSONRPCIDKey(trimmed)
+}
+
+// isPlainIDInteger reports whether b is 0, or 1 to 19 ASCII digits whose
+// first is not 0: an integer the decoder keeps as it is written.
+func isPlainIDInteger(b []byte) bool {
+	if len(b) == 0 || len(b) > 19 || (b[0] == '0' && len(b) > 1) {
+		return false
+	}
+	for _, d := range b {
+		if !isASCIIDigit(d) {
+			return false
+		}
+	}
+	return true
+}
+
+// decodeJSONRPCIDKey is the key of trimmed, an id without surrounding space,
+// read by the JSON decoder: canonicalJSONRPCIDKey without its fast path.
+func decodeJSONRPCIDKey(trimmed []byte) (string, error) {
 	if len(trimmed) == 0 {
 		return "", errors.New("empty json-rpc id")
 	}
@@ -921,7 +952,7 @@ func parseBoundedInt(raw string, upper int) (int, error) {
 	}
 
 	value := 0
-	for i := 0; i < len(raw); i++ {
+	for i := range len(raw) {
 		if !isASCIIDigit(raw[i]) {
 			return 0, errInvalidJSONRPCNumericID
 		}
@@ -1831,14 +1862,9 @@ func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, i
 		c.sendCancelRequest(idKey)
 		c.cleanupPending(idKey)
 
-		cause := context.Cause(ctx)
-		if cause == nil {
-			cause = ctx.Err()
-		}
-		if cause != nil {
-			return responseEnvelope{}, toReqErr(cause)
-		}
-		return responseEnvelope{}, NewInternalError(map[string]any{jsonErrorField: "request context ended without cause"})
+		// An ended context has a cause: context.Cause gives its Err
+		// when none was set, and Err is non-nil once Done is closed.
+		return responseEnvelope{}, toReqErr(context.Cause(ctx))
 	case <-c.Done():
 		if resp, ok := answered(); ok {
 			return resp, nil
@@ -1856,8 +1882,6 @@ func (c *Connection) waitNotificationsUpTo(ctx context.Context, target uint64) e
 	ended := func() *RequestError {
 		return NewInternalError(map[string]any{jsonErrorField: "connection ended while waiting for pre-response notifications"}).withCause(c.endError())
 	}
-	stopWake := make(chan struct{})
-	defer close(stopWake)
 
 	c.notifyMu.Lock()
 	defer c.notifyMu.Unlock()
@@ -1872,16 +1896,9 @@ func (c *Connection) waitNotificationsUpTo(ctx context.Context, target uint64) e
 		target = m.seq - 1
 	}
 
-	go func() {
-		select {
-		case <-ctx.Done():
-		case <-stopWake:
-			return
-		}
-		c.notifyMu.Lock()
-		c.notifyCond.Broadcast()
-		c.notifyMu.Unlock()
-	}()
+	// The end of ctx wakes this wait (0019-PLAN-idioms-performance.md, D8).
+	stop := context.AfterFunc(ctx, c.wakeNotificationWaits)
+	defer stop()
 
 	for c.completedNotificationSeq < target {
 		if c.completedNotificationSeq > c.lastEnqueuedNotificationSeq {
@@ -1900,14 +1917,7 @@ func (c *Connection) waitNotificationsUpTo(ctx context.Context, target uint64) e
 				return ended()
 			default:
 			}
-			cause := context.Cause(ctx)
-			if cause == nil {
-				cause = ctx.Err()
-			}
-			if cause != nil {
-				return toReqErr(cause)
-			}
-			return NewInternalError(map[string]any{jsonErrorField: "request context ended without cause while waiting for notifications"})
+			return toReqErr(context.Cause(ctx))
 		default:
 		}
 
@@ -1924,25 +1934,15 @@ func (c *Connection) waitForNotificationDrain(target uint64, timeout time.Durati
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	stopWake := make(chan struct{})
-	defer close(stopWake)
-
 	c.notifyMu.Lock()
 	defer c.notifyMu.Unlock()
 	if target > c.lastEnqueuedNotificationSeq {
 		panic("drain target exceeded last enqueued notification sequence")
 	}
 
-	go func() {
-		select {
-		case <-ctx.Done():
-		case <-stopWake:
-			return
-		}
-		c.notifyMu.Lock()
-		c.notifyCond.Broadcast()
-		c.notifyMu.Unlock()
-	}()
+	// The timeout wakes this wait (0019-PLAN-idioms-performance.md, D8).
+	stop := context.AfterFunc(ctx, c.wakeNotificationWaits)
+	defer stop()
 
 	for c.completedNotificationSeq < target {
 		if c.completedNotificationSeq > c.lastEnqueuedNotificationSeq {
@@ -2075,15 +2075,14 @@ func (c *Connection) checkInbound(ctx context.Context, method string, params any
 // inboundError is the answer to a received request that checkInbound refused: a
 // *RequestError as it is, any other error as invalid params.
 func inboundError(err error) *RequestError {
-	var re *RequestError
-	if errors.As(err, &re) {
+	if re, ok := errors.AsType[*RequestError](err); ok {
 		return re
 	}
 	// A method the record does not allow, or any before initialize, is not
 	// available: -32601. A property or variant it does not allow is a bad
 	// parameter: -32602 (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
-	var ce *CapabilityError
-	if errors.Is(err, ErrNotInitialized) || (errors.As(err, &ce) && ce.Field == "" && ce.Variant == "") {
+	ce, isCE := errors.AsType[*CapabilityError](err)
+	if errors.Is(err, ErrNotInitialized) || (isCE && ce.Field == "" && ce.Variant == "") {
 		return &RequestError{Code: -32601, Message: "Method not found", Data: map[string]any{jsonErrorField: err.Error()}}
 	}
 	return NewInvalidParams(map[string]any{jsonErrorField: err.Error()})

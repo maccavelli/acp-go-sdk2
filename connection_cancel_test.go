@@ -475,8 +475,8 @@ func TestConnectionOutboundCancelRequest_SendsNotification(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected request error")
 		}
-		var re *RequestError
-		if !errors.As(err, &re) {
+		re, ok := errors.AsType[*RequestError](err)
+		if !ok {
 			t.Fatalf("expected *RequestError, got %T: %v", err, err)
 		}
 		if re.Code != -32800 {
@@ -504,8 +504,8 @@ func TestConnectionOutboundRequestTimeout_ReturnsInternalError(t *testing.T) {
 		t.Fatal("expected request error")
 	}
 
-	var re *RequestError
-	if !errors.As(err, &re) {
+	re, ok := errors.AsType[*RequestError](err)
+	if !ok {
 		t.Fatalf("expected *RequestError, got %T: %v", err, err)
 	}
 	if re.Code != -32603 {
@@ -579,8 +579,8 @@ func TestConnectionOutboundCancelRequest_DoesNotBlockWhenPeerStopsReading(t *tes
 		if err == nil {
 			t.Fatal("expected request error")
 		}
-		var re *RequestError
-		if !errors.As(err, &re) {
+		re, ok := errors.AsType[*RequestError](err)
+		if !ok {
 			t.Fatalf("expected *RequestError, got %T: %v", err, err)
 		}
 		if re.Code != -32800 {
@@ -648,8 +648,8 @@ func TestConnectionWaitForResponse_PeerDisconnectWinsOverDerivedContextCancel(t 
 		if err == nil {
 			t.Fatalf("iteration %d: expected error", i)
 		}
-		var re *RequestError
-		if !errors.As(err, &re) {
+		re, ok := errors.AsType[*RequestError](err)
+		if !ok {
 			t.Fatalf("iteration %d: expected *RequestError, got %T (%v)", i, err, err)
 		}
 		if re.Code != -32603 {

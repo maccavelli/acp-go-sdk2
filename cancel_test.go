@@ -525,9 +525,11 @@ func (ra *receiptAgent) prompt(r uint64) <-chan StopReason {
 	go func() {
 		res, rerr := ra.asc.handle(context.WithValue(ra.t.Context(), receiptKey{}, r), AgentMethodSessionPrompt,
 			json.RawMessage(`{"sessionId":"s","prompt":[]}`))
-		resp, ok := res.(PromptResponse)
+		resp, ok := res.(*PromptResponse)
 		if rerr != nil || !ok {
 			ra.t.Errorf("prompt %d: %v %v", r, res, rerr)
+			out <- ""
+			return
 		}
 		out <- resp.StopReason
 	}()
@@ -706,8 +708,8 @@ func TestPromptOverlapRefuse(t *testing.T) {
 	refusing, stop := context.WithTimeout(t.Context(), 10*time.Second)
 	defer stop()
 	_, err := oa.c.Prompt(refusing, PromptRequest{SessionId: "s"})
-	var re *RequestError
-	if !errors.As(err, &re) || re.Code != -32603 {
+	re, ok := errors.AsType[*RequestError](err)
+	if !ok || re.Code != -32603 {
 		t.Fatalf("second prompt: %v, want -32603", err)
 	}
 	if data, _ := re.Data.(map[string]any); data["error"] != "a prompt turn is already running for this session" || data["sessionId"] != "s" {

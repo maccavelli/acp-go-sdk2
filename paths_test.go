@@ -137,8 +137,8 @@ func TestSendRefusesRelativePaths(t *testing.T) {
 		for _, bad := range []string{"", "relative/dir"} {
 			before := w.count()
 			err := c.SendNotification(t.Context(), "x/send", tc.build(bad))
-			var ve *ValidationError
-			if !errors.As(err, &ve) || ve.Rule != RuleAbsolutePath || ve.Type != tc.typ || ve.Field != tc.field {
+			ve, ok := errors.AsType[*ValidationError](err)
+			if !ok || ve.Rule != RuleAbsolutePath || ve.Type != tc.typ || ve.Field != tc.field {
 				t.Errorf("%s = %q: SendNotification() = %v, want an absolute-path error on %s %s", tc.name, bad, err, tc.typ, tc.field)
 			}
 			if w.count() != before {
@@ -158,8 +158,8 @@ func TestSendRefusesRelativePaths(t *testing.T) {
 	defer cancel()
 	before := w.count()
 	_, err := SendRequest[json.RawMessage](c, ctx, "x/request", &ReadTextFileRequest{SessionId: "s", Path: "rel"})
-	var ve *ValidationError
-	if !errors.As(err, &ve) || ve.Field != "path" || w.count() != before {
+	ve, ok := errors.AsType[*ValidationError](err)
+	if !ok || ve.Field != "path" || w.count() != before {
 		t.Errorf("SendRequest() = %v, %d bytes written, want an absolute-path error and nothing written", err, w.count()-before)
 	}
 }
@@ -201,8 +201,8 @@ func TestHandlerResultValidated(t *testing.T) {
 	negotiate(t, asc, allAdvertised())
 	negotiate(t, cs, allAdvertised())
 	_, err := cs.ListSessions(t.Context(), ListSessionsRequest{})
-	var re *RequestError
-	if !errors.As(err, &re) || re.Code != -32603 || !strings.Contains(fmt.Sprint(re.Data), `SessionInfo: cwd: "rel" is not an absolute path`) {
+	re, ok := errors.AsType[*RequestError](err)
+	if !ok || re.Code != -32603 || !strings.Contains(fmt.Sprint(re.Data), `SessionInfo: cwd: "rel" is not an absolute path`) {
 		t.Fatalf("ListSessions() = %v, want -32603 naming SessionInfo cwd", err)
 	}
 	if !strings.Contains(logs.String(), "handler result fails validation") {
@@ -288,8 +288,8 @@ func TestReceiveRefusesRelativePaths(t *testing.T) {
 				peer := rawPeer(t, string(raw))
 				negotiate(t, peer, allAdvertised())
 				_, err := peer.ListSessions(t.Context(), ListSessionsRequest{})
-				var ve *ValidationError
-				if !errors.As(err, &ve) || ve.Type != tc.typ || ve.Field != tc.field {
+				ve, ok := errors.AsType[*ValidationError](err)
+				if !ok || ve.Type != tc.typ || ve.Field != tc.field {
 					t.Errorf("%s = %q: ListSessions() = %v, want an error wrapping the absolute-path error", tc.name, bad, err)
 				}
 			default:
@@ -368,8 +368,7 @@ func TestInboundHooks(t *testing.T) {
 		var got string
 		asc := NewAgentSideConnection(newSession(&got), io.Discard, idleReader(t),
 			WithInboundValidation(func(_ context.Context, _ string, _ any, err error) error {
-				var ve *ValidationError
-				if errors.As(err, &ve) && ve.Type == "McpServerStdio" && ve.Field == "command" {
+				if ve, ok := errors.AsType[*ValidationError](err); ok && ve.Type == "McpServerStdio" && ve.Field == "command" {
 					return nil
 				}
 				return err

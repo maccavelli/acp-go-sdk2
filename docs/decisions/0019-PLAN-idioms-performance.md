@@ -814,3 +814,99 @@ Gates, with the API listing against `v1.15.2`, each exit 0:
 - `make check-records`, `make markdownlint`, and the identifier scan;
 - the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
 - Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+### Step 7, D5, D6, D8 and the hand-written D9, 2026-10-18
+
+What changed, on `6d60d84`:
+
+- **D5, `connection.go`:** `canonicalJSONRPCIDKey` returns a plain integer as its own key: `0`, or 1 to 19 ASCII digits whose first is
+  not `0` (`isPlainIDInteger`). Anything else goes to `decodeJSONRPCIDKey`, the former body. The new `FuzzCanonicalIDKey`
+  (`fuzz_test.go`) requires the two to give every id the same key and the same error. It has 22 seeds: the ids the PLAN measured, the
+  fast path's edges, and ids it must leave to the decoder. It is listed in `make fuzz`. A 60-second run fuzzed 1,579,557 inputs and
+  found no difference.
+- **D6:**
+  - The emitter passes `&params` to every send and `&resp` to `checkResult` (`cmd/generate/internal/emit/dispatch.go`,
+    `dispatch_helpers.go`).
+  - `validateOutbound`'s value path uses `reflect.TypeAssert[validator]`.
+  - A handler's result reaches the connection as a pointer, so two root tests that type-asserted it as a value now assert the pointer:
+    `acp_test.go`, `UnstableForkSessionResponse`, and `cancel_test.go`, `PromptResponse`. The emitter's tests are updated to the new
+    calls.
+- **D8, `connection.go`:**
+  - The three wake goroutines are `context.AfterFunc` registrations of the new `wakeNotificationWaits`: `start`'s, for the
+    connection's life, and `waitNotificationsUpTo`'s and `waitForNotificationDrain`'s, each stopped by a deferred call.
+  - After `<-ctx.Done()`, `waitForResponse` and `waitNotificationsUpTo` return `toReqErr(context.Cause(ctx))`. Their nil-cause
+    branches are deleted. `go doc context.Cause`: "Otherwise Cause(c) returns the same value as c.Err()". `go doc context.Context`, on
+    `Err`: "If Done is closed, Err returns a non-nil error".
+  - The three `go func()` in `connection.go` that remain are not wake goroutines.
+- **D9, hand-written:**
+  - `inboundError` uses `errors.AsType` for both its checks, the first applied by `go fix`.
+  - `extensions.go`'s verbless `fmt.Errorf` is `errors.New`.
+  - `RequestError.Error` encodes `e` itself. The view struct is gone; its fields and tags were `RequestError`'s exported ones.
+  - `parseBoundedInt`'s loop is `for i := range len(raw)`.
+  - `go fix ./...` at the root applied its 5 proposals in `connection.go`, `gates_test.go` and `instances_test.go`. `go fix -diff ./...`
+    then reports nothing.
+  - Every `errors.As` call in the root tests is `errors.AsType`: 29 calls, none left. Two more matches were the text of messages,
+    now reworded. `gates_test.go` gains `isCapabilityError` and `isValidationError` for the checks that only test the type. A script
+    outside the tree checked each new `ok :=` for an `ok` it could shadow or reassign. The six it flagged are each in a scope of their
+    own.
+  - New `TestRequestErrorText` (`errors_test.go`) pins `Error()`'s text: data, no data, a cause that is not encoded, HTML escaping,
+    data that does not encode, and nil. It passes on `6d60d84` too, in a scratch copy, so removing the view struct changed no text.
+
+**The D8 checks, strengthened.** The planted-break table names `TestWaitNotificationsEnds` for each `context.AfterFunc` not
+registered. All three such breaks passed it as it stood. It ended the wait before the wait had blocked, and the wait's loop checks
+`ctx.Done()` and `c.Done()` before it waits. So no wake was needed, by the goroutines this step replaces either. As the PLAN's
+"Verification" requires of such a break, the step adds checks that fail on them:
+
+- **`TestWaitNotificationsEnds`** (`branches_test.go`) runs each case in a `synctest` bubble and ends the wait only after
+  `synctest.Wait()`, once the wait is blocked in `notifyCond.Wait`, which `go doc testing/synctest` lists as durably blocking.
+  - Its `connection` case also requires the wait to return before `notificationQueueDrainTimeout`. Without `start`'s registration,
+    the drain's own timeout wakes it five seconds later.
+- **`TestEndOfInputNotificationDrainIsBounded`** (`end_of_input_test.go`, new) ends the input while a notification handler waits on
+  its context. It requires the handler's context to end with a cause, after the drain's timeout.
+
+Both tests pass on `6d60d84` as well, in a scratch copy with its goroutines.
+
+Planted breaks, each in a scratch copy of the tree:
+
+| Break | Result |
+| :--- | :--- |
+| the fast path accepting a leading zero | `FuzzCanonicalIDKey` fails from its seeds: `id "007": key "007", error <nil>; the decoder gives "", invalid json-rpc id: trailing data` |
+| `start`'s `context.AfterFunc` not registered | `TestWaitNotificationsEnds/connection` fails: "the wait returned 5s after the connection ended, as the drain timed out" |
+| `waitNotificationsUpTo`'s not registered | `TestWaitNotificationsEnds/context` fails: "deadlock: all goroutines in bubble are blocked" |
+| `waitForNotificationDrain`'s not registered | `TestEndOfInputNotificationDrainIsBounded` fails: "deadlock: all goroutines in bubble are blocked" |
+| `Error()` encoding the cause | `TestRequestErrorText` fails on each row with a cause field |
+
+The tests matching `Wait|Drain|EndOfInput|HeldBehind|EndedContext|Notification`, 37 of them, ran `-race -count=1000 -timeout 0`:
+exit 0, in 1,252 seconds.
+
+- A first run under `go test`'s default 10-minute timeout reached the timeout. Its goroutine dump shows no wait blocked in the code
+  this step changes; one goroutine was in `sync.Cond.Wait`.
+- It does show 1,978 connections whose goroutines (`writeLoop`, `sendCancelRequests`, `processNotifications` and the pipe reader)
+  stay blocked. The tests leave those connections open, which this step did not change, and they slow later iterations.
+- Run 100 times, the same selection took 130 seconds on `6d60d84` and 126 on the tree, so the run's length is not this step's.
+  `6d60d84` lacks the new drain test.
+
+The benchmarks, medians of six runs with `make bench`. Before is the after of step 6, measured on the code `6d60d84` holds; after is
+on the tree:
+
+| Benchmark | ns/op before | ns/op after | allocs/op before | allocs/op after |
+| :--- | ---: | ---: | ---: | ---: |
+| SessionUpdateMarshal | 1,154 | 946 | 9 | 9 |
+| SessionUpdateUnmarshal | 4,386 | 4,089 | 27 | 27 |
+| SessionNotificationUnmarshal | 5,724 | 5,732 | 39 | 39 |
+| CanonicalIDKey | 508 | 15 | 10 | 1 |
+| ValidateOutboundValue | 55 | 53 | 2 | 2 |
+| PromptRoundTrip | 32,675 | 25,493 | 121 | 97 |
+| SessionUpdateNotify | 17,326 | 13,738 | 68 | 65 |
+
+Each allocs/op was the same in all six runs after. ValidateOutboundValue keeps its 2: "Design", D6 claims no allocation for
+`reflect.TypeAssert`, and the value is still copied to be addressed.
+
+Gates, with the API listing against `v1.15.2`, each exit 0:
+
+- regeneration: the generated files unchanged by a second run;
+- `make pre-add-check`;
+- `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+- `make check-records`, `make markdownlint`, and the identifier scan;
+- the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
+- Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
