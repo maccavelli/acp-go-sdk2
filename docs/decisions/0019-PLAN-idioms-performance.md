@@ -1120,3 +1120,52 @@ Gates, with the API listing against `v1.15.2`, each exit 0:
 - `make check-records`, `make markdownlint`, and the identifier scan;
 - the API listing: 2429 lines at `v1.15.2` and in the tree, 0 removed, 0 added;
 - Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+### Step 10, release notes, 2026-10-19
+
+What changed, on `82d071d`, after the owner pushed steps 1 to 9:
+
+- [0019-REPORT-release-notes-v1-16-0.md](../reports/0019-REPORT-release-notes-v1-16-0.md), the draft of the GitHub release text for
+  `v1.16.0`, in the shape of the `v1.15.2` notes. Each statement names a commit, a record, the API listing or the benchmark run below.
+- Its `docs/README.md` row, after the `v1.15.2` notes.
+
+Facts the notes rest on, each read on `82d071d`:
+
+- **The schema:** `git diff v1.15.2 HEAD -- schema/` is empty.
+- **The API listing:** 2429 lines at `v1.15.2` and at `82d071d`, 0 removed, 0 added (step 9's gates).
+- **The commits** since `v1.15.2` that change Go files outside `cmd/generate`: `62f5989`, `172e9cc`, `d494964`, `5d32071`, `6d60d84`,
+  `95d66e3`, `711a1d5` and `82d071d`. The other four, `f67c9c1`, `2ce6421`, `581c7d4` and `9227a5b`, change records only
+  (`git show --name-only`).
+- **The SDK's non-test files:** `git diff --stat v1.15.2 HEAD -- '*.go' ':!*_test.go' ':!cmd/generate' ':!example'` lists six,
+  3754 lines added and 2314 removed, 5671 of the changed lines in `types_gen.go`.
+- **The one behaviour change:** `Prompt`'s failed best-effort cancel, logged at Debug (step 3's deviation). At `v1.15.2`,
+  `client_gen.go:713` discarded it (`_ = c.Cancel(…)`).
+- **What callers cannot see:** a handler's result reaches only `checkResult`, which validates and gates it and returns it to be
+  encoded. No `With…` option takes a function that receives it. The decoded messages the hooks receive were pointers already.
+
+The benchmarks, which are also the measurement step 11 compares with the baseline:
+
+- **The baseline** is `git archive 62f5989`: the `v1.15.2` code with `bench_test.go` added. `git diff v1.15.2 62f5989 -- '*.go'
+  ':!*_test.go'` is empty.
+- **The run:** a script outside the tree ran `go test -run '^$' -bench . -benchmem -count=1 .` six times on each, alternating, on
+  `darwin/arm64` with `go1.27.2`.
+
+Medians of the six runs:
+
+| Benchmark | ns/op, baseline | ns/op, `82d071d` | allocs/op, baseline | allocs/op, `82d071d` |
+| :--- | ---: | ---: | ---: | ---: |
+| `BenchmarkSessionUpdateMarshal` | 3,188 | 943 | 37 | 9 |
+| `BenchmarkSessionUpdateUnmarshal` | 5,959 | 4,086 | 45 | 27 |
+| `BenchmarkSessionNotificationUnmarshal` | 7,516 | 5,723 | 58 | 39 |
+| `BenchmarkCanonicalIDKey` | 472 | 15 | 10 | 1 |
+| `BenchmarkValidateOutboundValue` | 51 | 53 | 2 | 2 |
+| `BenchmarkPromptRoundTrip` | 30,974 | 25,496 | 149 | 97 |
+| `BenchmarkSessionUpdateNotify` | 18,526 | 13,167 | 115 | 65 |
+
+- Each allocs/op of `82d071d` was the same in all six runs.
+- Against "Verification"'s acceptance:
+  - each median allocs/op is no higher than the baseline's;
+  - `BenchmarkSessionUpdateMarshal`, `BenchmarkSessionUpdateUnmarshal` and `BenchmarkSessionUpdateNotify` are lower.
+- The baseline's allocs/op equal the table of "Facts", measured on `f67c9c1`.
+
+The step changes no Go file. Gates, each exit 0: `make check-records`, `make markdownlint`, and the identifier scan.
