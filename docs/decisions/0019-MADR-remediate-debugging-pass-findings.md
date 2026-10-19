@@ -437,6 +437,191 @@ Phase 4's open question is closed.
 | 16. Schema 1.26.0 | **Not pinned yet.** The program stays on schema `1.25.0`, and no record decides the bump now. |
 | 17. Pull request #1 | Closed by the agent at the owner's request, on 2026-10-18, with a comment naming `9fb9ae5`. |
 
+### Amended while planning phase 5, 2026-10-18
+
+The owner asked on 2026-10-18 for the next phase to be researched and this record drafted against the codebase as it is. The owner
+called it "phase 6". It is this record's phase 5, idioms and performance, the only phase left. The issue fixes ran before it as their
+own PLAN, [0019-PLAN-issue-fixes.md](0019-PLAN-issue-fixes.md), released as `v1.15.2`. The name "phase 5" is kept, so that the
+decisions already recorded against it still apply.
+
+**How it was researched.** Everything was re-measured on `f67c9c1`, read-only, with prototypes and benchmarks in scratch copies of the
+tree:
+
+- a pattern count of each finding's code;
+- `go fix -diff` in both modules;
+- the lint probe of phase 4's planning, which adds `modernize`, `intrange`, `copyloopvar`, `perfsprint` and `usestdlibvars` and lints
+  the generated files;
+- `thelper` on its own;
+- `go doc` on `go1.27.2` for every API named below: `reflect.TypeAssert`, `context.AfterFunc`, `testing.B.Loop`, `errors.AsType`,
+  `strings.SplitSeq`, `sync.OnceValue`, `sync.WaitGroup.Go`, `signal.NotifyContext`, `slices.Backward` and `testing/synctest`, all
+  present.
+
+Benchmarks are the median of six runs of `go test -bench -benchmem` on `go1.27.2`, `darwin/arm64`.
+
+#### Phase 5's findings on `f67c9c1`
+
+`connection.go` has moved since the assessment on `7c48c95`, with B22 and B23, so its lines are given anew.
+
+| Id | On `f67c9c1` |
+| :--- | :--- |
+| I1 | Holds, and wider than written: all 88 union `MarshalJSON` arms marshal the variant, decode it into a map and marshal again, in 22 unions. 67 arms then set the discriminator. In each, the variant's struct carries the discriminator as a string field: 55 variants are plain structs and 12 have their own `MarshalJSON`. The other 21 arms, in unions with no discriminator (`AgentResponse`, `ClientResponse` and others), set nothing: the round trip only re-sorts the top-level keys. |
+| I2 | Holds: `canonicalJSONRPCIDKey` (`connection.go:778`) builds a decoder for every id. Its key for a plain unsigned decimal integer without a leading zero, or `0`, is the integer's text, for every sample tried, up to the 20 digits of `18446744073709551615`. `-0`, `1e2` and `1.0` normalise to `0`, `100` and `1`, and `007` is refused. |
+| I3 | Holds: `validateOutbound` (`connection.go:165`) copies a value through `reflect.New` and asserts `ptr.Interface().(validator)`, 2 allocations per call. It is called in `encodeParams` (`:1714-1718`), for the params of every request and notification sent, and in `checkResult` (`:2029`), for every handler's result. |
+| I4 | Narrowed, and joined to a lint finding. `orDefault` is called 475 times; 455 pass no default and only decode the present value. Of the 20 with a default, 11 are `bool` with `"false"`, the zero value, and 8 are capability structs whose JSON defaults are made of `false` and `{}`. `ElicitationSchemaType`'s `"object"` is the one non-zero scalar default. Separately, 24 of the 26 `errcheck` issues in generated code are `json.Unmarshal([]byte("<default>"), &a.X)` calls that drop the error, for a missing or null field's default: 24 calls for 22 fields. The 20 fields with an `orDefault` default are among those 22; the direct decode also covers `ElicitationSchema.Properties` and `InitializeResponse.AuthMethods`. |
+| I5 | Narrowed (`7c48c95`): only `agent_gen.go:149`'s `fmt.Errorf` of the superseded cause remains. It runs on every prompt under `PromptOverlapSupersede`, the default, being the zero value (`connection.go:410`): the `default:` branch that serves it makes the error each time (`agent_gen.go:148-149`). |
+| I6 | Holds: 291 `objectKeys` calls. A union decodes the whole object into a map and folds its keys; the variant it picks then calls `objectKeys`, which decodes the same bytes into a map again, before decoding them a third time into its shadow struct. A `session/update` with a text chunk is parsed six times, three for the update and three for its `ContentBlock`, as the generated decoders read. |
+| I7 | Holds, and is dead work: the seven sites decode the whole payload into `[]map[string]json.RawMessage` inside an `if` whose body is empty, all seven counted. The emitter writes the decode whether or not the union has an array variant (`arrayMatch`, `cmd/generate/internal/emit/types.go:769-777`). |
+| I9 | Narrowed (`7c48c95`). Left: 2 `errors.As` in hand-written code (`connection.go:2079`, `:2086`), 2 in the generator (`output/check.go:86`, `:147`), 31 in root tests, and the 8 `err.(*json.UnmarshalTypeError)` assertions in generated code, which are the 8 `errorlint` issues. |
+| I10 | Done by [0019-PLAN-issue-fixes.md](0019-PLAN-issue-fixes.md), step 3. |
+| I11 | Holds: the end-of-connection broadcast goroutine of `start` (`connection.go:642`) and the stop-channel wake goroutines of `waitNotificationsUpTo` (`:1859`) and `waitForNotificationDrain` (`:1927`). The nil-cause branches after `<-ctx.Done()` are at `:1835`, in `waitForResponse`, and `:1904`, in `waitNotificationsUpTo`. Phase 4's step 6 found the second never run and did not measure the first; `go doc context.Cause` says it "returns a non-nil error explaining why c was canceled", so neither can run. |
+| I12 | Done in phase 4. |
+| I13 | Holds: 97 `_b, _e` with `return []byte{}, _e`; 46 `var a Alias; a = Alias(v)`; 26 `resp, err := …; return resp, err`; 8 `else { if`. `AgentSideConnection`'s generated methods name their receiver `a` on 4 and `c` on 21. |
+| I14 | Holds: `fmt.Errorf` without a verb at `extensions.go:32` and 21 times in the generator; the view struct at `errors.go:52`; the index loop at `connection.go:924`. `go fix -diff` proposes 5 changes at the root (`connection.go`, `gates_test.go` 2, `instances_test.go` 2) and 6 in the generator (`mutate/main.go` 3, `mutate/sites.go`, `model/keywords_test.go`, `output/check.go`). |
+| I15 | Holds: 3 `wg.Add`, 49 `context.Background()` and 3 `fmt.Sprintf("%d", …)` in tests; 1 `slog.NewTextHandler(io.Discard, …)`. `thelper` finds 10 issues at the root and 10 in the generator. |
+| I16 | Holds: the mutation tool runs each mutant under `context.Background()` (`cmd/generate/internal/mutate/main.go:144`) and lists packages with `exec.Command` (`:166`). Ctrl-C ends it without its deferred `os.RemoveAll` of the work directory (`:112`): by default "a SIGHUP, SIGINT, or SIGTERM signal causes the program to exit" (`go doc os/signal`), which runs no deferred call. |
+| E16 | The probe finds the same counts for `darwin` and `windows`. |
+
+E16's counts, in detail:
+
+- **At the root:** 128 issues.
+  - Hand-written code: 20 (`modernize` 13, `perfsprint` 6, `intrange` 1).
+  - Generated code: 108 (`goconst` 58, `errcheck` 26, `errorlint` 8, `gocritic` 7, `gocognit` 5, `gocyclo` 2, `unconvert` 2).
+- **In `cmd/generate`:** 28, all in hand-written code (`perfsprint` 22, `modernize` 6).
+- **What question 15's answer leaves to fix in generated code:** 43 issues, after excluding `goconst`, `gocognit` and `gocyclo`.
+  - `errcheck`: 26 (I4's defaults, `Prompt`'s best-effort cancel, and one type assertion).
+  - `errorlint`: 8 (I9).
+  - `gocritic`: 7 (4 one-case `switch` statements, 3 chains of `append` calls).
+  - `unconvert`: 2.
+
+#### What it costs now, and what the prototypes save
+
+Medians of six runs:
+
+| Benchmark | `f67c9c1` | I1 prototype | I1 and I6 prototypes |
+| :--- | :--- | :--- | :--- |
+| `SessionUpdate` encode | 3,530 ns, 37 allocs | 1,059 ns, 9 allocs | — |
+| `SessionUpdate` decode | 6,530 ns, 45 allocs | 6,532 ns, 45 allocs | 4,290 ns, 31 allocs |
+| `SessionNotification` decode | 8,415 ns, 58 allocs | 8,470 ns, 58 allocs | 6,037 ns, 44 allocs |
+| `session/update` sent and received over pipes | 34,432 ns, 115 allocs | 19,153 ns, 86 allocs | 15,948 ns, 73 allocs |
+| a prompt round trip over pipes | 37,519 ns, 149 allocs | 36,490 ns, 135 allocs | — |
+| the id key of `12345` | 542 ns, 10 allocs | — | — |
+| `validateOutbound` on a value | 62 ns, 2 allocs | — | — |
+
+**The I1 prototype** rewrote all 88 arms of `types_gen.go`:
+
+- the 67 with a discriminator set it on a copy of the variant and marshal once;
+- the 21 without one marshal the variant.
+
+The root suite passed. Every schema instance of every registered type, 1248 in all, was decoded and encoded on `f67c9c1` and on the
+prototype, and the two dumps were byte-identical. The dump holds the variants with their own `MarshalJSON`: three instances each of the `form` and `url` elicitations and of the `http` and `sse` servers. A discriminator altered in the
+prototype changed 5 lines of the dump, so the comparison does see a difference.
+
+**The I6 prototype** gave two variants, `SessionUpdateAgentMessageChunk` and `ContentBlockText`, an unexported `decodeKeys(b, m)`: the
+decoder's body after `objectKeys`. Their unions call it with the map they have already parsed. The root suite passed.
+
+A discriminated union folds its discriminator and every variant's `FitKeys`, the variant's other required keys
+(`cmd/generate/internal/model/model.go:209-212`), so the keys a variant requires arrive folded. `decodeKeys` folds them again on the
+shared map all the same: that changes nothing on a folded map, costs no parse, and keeps `decodeKeys` independent of its caller.
+
+#### Design
+
+Each item takes the approach that changes no exported API and no wire bytes. A test or a guard seen to fail first pins each, and a
+benchmark measures each performance item.
+
+- **D1 (I1): marshal once.** A union arm whose variant struct carries the discriminator as a string field marshals a copy with that
+  field set: `v := *u.X; v.Field = "value"; return json.Marshal(v)`. An arm with no discriminator marshals the variant. The map round
+  trip is no longer emitted. A variant without such a field, if the schema ever has one, keeps the map path, and an engine case pins
+  that.
+- **D2 (I6): decode once at each level.** Every generated object type with an `objectKeys` decoder gains an unexported `decodeKeys(b
+  []byte, m map[string]json.RawMessage) error`. It folds the type's required keys on `m`, checks them, and decodes its fields;
+  `UnmarshalJSON` becomes `objectKeys` and then `decodeKeys`. A union calls the chosen variant's `decodeKeys` with its own map. The
+  third parse, into the shadow struct, stays: decoding field by field from the map would replace one parse with many small ones, and
+  would re-implement `encoding/json`'s field matching, which `foldKeys` follows ("the value encoding/json gives a struct field of
+  that name", `cmd/generate/internal/emit/decode.go:408-412`).
+- **D3 (I4 and the default `errcheck` issues): defaults as Go values.**
+  - The generator renders each schema default as a Go expression of its field's type when it emits the decoder: nothing at all for a
+    default that is the type's zero value, a constant for a scalar, and a composite literal otherwise.
+  - No default is decoded at run time, so no decode error is dropped.
+  - `schema_gen_test.go` gains a table of each default's Go value beside its JSON, and a root test requires decoding the JSON to give
+    the same value. A rendering that drifts from what decoding gives fails there.
+- **D4 (I7):** the array match is emitted only for a union with an array variant.
+- **D5 (I2):** a fast path in `canonicalJSONRPCIDKey` for a plain unsigned decimal integer without a leading zero, of at most 19
+  digits: its key is its text. Everything else takes the decoder. A fuzz target requires the fast path and the decoder to give the
+  same key and error for every input.
+- **D6 (I3):**
+  - The generated outbound methods and dispatch pass pointers to `validateOutbound`, so no value is copied.
+  - For a value from the raw API, `reflect.TypeAssert[validator]` replaces `ptr.Interface().(validator)`.
+- **D7 (I5):** the superseded cause is a package-level error, made once, still wrapping `ErrPromptCancelled`.
+- **D8 (I11):**
+  - The three wake and broadcast goroutines become `context.AfterFunc` registrations, stopped by their callers.
+  - The two nil-cause branches are deleted: `context.Cause` returns a non-nil error once a context is canceled (`go doc context.Cause`).
+- **D9 (I9, I13, I14), hygiene:**
+  - `errors.AsType` everywhere `errors.As` or a type assertion on an error is used, the generated `UnmarshalTypeError` checks included.
+  - The generated code drops its underscore names, the alias assignment, the `resp, err` copies and `else { if`.
+  - `AgentSideConnection`'s methods take the receiver `a`.
+  - `errors.New` where `fmt.Errorf` has no verb.
+  - The view struct and the index loop go.
+  - Each change `go fix -diff` proposes is applied.
+  - The `gocritic` and `unconvert` findings are fixed in the emitter.
+  - `Prompt`'s deliberate discard of its best-effort cancel's error is kept and marked, so `errcheck` sees it is meant.
+- **D10 (I15):** `t.Context()`, `wg.Go`, `slog.DiscardHandler`, `strconv.Itoa` and `t.Helper()` where the tests need them.
+- **D11 (I16):** the mutation tool runs under `signal.NotifyContext`, for `os.Interrupt` and, where the platform has it, `SIGTERM`. It
+  passes that context to every subprocess, so an interrupt ends the running `go test` and the deferred clean-up runs.
+- **D12 (E16), lint:**
+  - `.golangci.yml` enables `modernize`, `intrange`, `copyloopvar`, `perfsprint` and `usestdlibvars`, and `thelper` (question 20).
+  - It lints the generated files, excluding `goconst`, `gocognit` and `gocyclo` for `_gen.go` with the reason, as question 15 decided.
+  - The lint over generated code runs in `make pre-add-check` and CI, as the rest does.
+- **D13, benchmarks committed:**
+  - A root `bench_test.go` holds the seven benchmarks above, written with `testing.B.Loop`, and `make bench` runs them.
+  - CI does not run them: a benchmark measures, and has nothing to fail on.
+  - Each PLAN step that changes a hot path records the medians of at least six runs, before and after.
+  - No benchmark-comparison tool is added as a dependency.
+- **D14, a guard on the encodings:**
+  - A root test encodes every schema instance of every registered type and compares the bytes with a committed file under `testdata/`.
+  - A `-update` flag rewrites the file when a change is meant.
+  - D1, D2, D3 and D9 then cannot change a byte of the wire format unseen.
+
+#### Questions for the owner
+
+Each has a recommended answer.
+
+18. **The encodings guard (D14).** Recommended: commit it. The conformance round trip (`conformance_test.go:282-302`) and the 33 JSON
+    goldens (`json_parity_test.go:13-23`) compare decoded values, so a change of key order or of a number's spelling would pass them.
+    A few fidelity tests compare the bytes of single cases (`fidelity_test.go:120`).
+19. **Defaults (D3).** Recommended: Go values from the generator, with the generated equivalence test.
+
+    Alternative: decode each default once, through `sync.OnceValue`, and copy it per use. That is smaller in the generator, but keeps a
+    run-time decode, and needs a deep copy for any default with a map or slice.
+20. **`thelper` (I15).** Recommended: enable it with D12's linters, so missing `t.Helper()` calls stay fixed.
+
+    Alternative: fix the 20 now and leave the linter out.
+21. **The release.** Recommended: a patch, `v1.15.3`. No exported API changes, the wire bytes are pinned by D14 if question 18
+    adopts it, and the changes are performance and hygiene. The owner confirms at the tag.
+
+#### Decided with the owner, 2026-10-18
+
+The owner asked for every claim of this amendment to be proved before deciding. An audit against the tree followed.
+
+- **Three claims were wrong** and are corrected above: I4's two sets of defaults nest rather than match; a discriminated union does
+  fold every variant's required keys; and phase 4 measured only one of I11's nil-cause branches.
+- **The others are now cited:** each to a measurement, a line of the tree, or `go doc`.
+- **The guard's own check:** the encoding comparison of the I1 prototype was seen to fail on a planted discriminator.
+
+Then the owner answered questions 18 to 21. One answer differs from the recommendation, and is marked.
+
+| Question | Answer |
+| :--- | :--- |
+| 18. The encodings guard (D14) | Committed, as recommended. |
+| 19. Defaults (D3) | Go values from the generator, with the generated equivalence test, as recommended. |
+| 20. `thelper` | Enabled with D12's linters, as recommended, and its 20 findings fixed. |
+| 21. The release | **Not the recommendation:** a minor release, `v1.16.0`, which the owner confirms at the tag. |
+
+#### The scope of phase 5, as researched
+
+I1 to I7, I9, I11, I13 to I16, and E16's linters with lint over generated code. I8 was done in phase 2, I10 in the issue fixes, and
+I12 in phase 4. D1 to D14 are the designs, as questions 18 to 21 settled them. Phase 5 releases as `v1.16.0`. The schema stays at
+`1.25.0` (question 16).
+
 ## Decision Drivers
 
 * An SDK user must not meet a deadlock, a lost cancel or a refused valid request in ordinary use (B1 to B5).
@@ -480,7 +665,9 @@ The phases, each a `0019-PLAN-<scope>.md` beside this record, written and approv
    assessing phase 5, 2026-10-18"). I4, I5 and I9 have narrowed. Questions 14 to 17 are open: issues #7 to #9 as B22 to B24, E18, the
    scope of lint over generated code, and schema 1.26.0. Decided the same day ("Evaluated and decided with the owner, 2026-10-18"):
    before phase 5, `0019-PLAN-issue-fixes.md` takes B22 to B24, E18 and I10; phase 5 lints the generated code except for `goconst`,
-   `gocognit` and `gocyclo`; and the schema stays at `1.25.0`.
+   `gocognit` and `gocyclo`; and the schema stays at `1.25.0`. Amended 2026-10-18, again: researched on `f67c9c1`, with the designs
+   D1 to D14 and questions 18 to 21 ("Amended while planning phase 5, 2026-10-18"). Decided the same day: the encodings guard, defaults
+   as Go values, `thelper`, and a minor release, `v1.16.0`.
 
 Phases 3 to 5 ride the release after each lands (decision 12).
 
