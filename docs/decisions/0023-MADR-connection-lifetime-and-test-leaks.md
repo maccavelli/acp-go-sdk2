@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-19
 decision-makers: Repository owner
 ---
@@ -192,7 +192,7 @@ For the tests:
 
 ## Decision Outcome
 
-Proposed for the owner's decision. Chosen options: **"S1", "C1" and "T2"**:
+Chosen options, decided by the owner on 2026-10-19 (see "Decided with the owner, 2026-10-19"): **"S1", "C1" and "T2"**:
 
 * **S1:** ACP, every official SDK and every comparable project leave a connection's lifetime to the application. An idle ACP
   connection is normal, and the protocol has no liveness check an SDK timer could rely on.
@@ -222,6 +222,19 @@ In detail:
   * The guard is a root `TestMain`. After `m.Run`, it polls `pprof.Lookup("goroutineleak")` until the count is 0, for at most the
     drain bound and a margin. It then fails the run and prints the profile's stacks if any leaked goroutine is left.
   * The guard runs on every `go test` of the root package, CI's included.
+
+### Decided with the owner, 2026-10-19
+
+The owner answered the record's three questions, each as recommended:
+
+| Question | Answer |
+| :--- | :--- |
+| The SDK's lifetime policy | S1: no SDK timer. |
+| `Close` and notification handlers | C1: `Close` also cancels the notification handlers' context. |
+| The tests' guard | T2: the standard library's `goroutineleak` profile, in a root `TestMain`. |
+
+Checked after the decision, in a scratch copy of `d004e9a`: under `-race`, the profile again counted the suite's 80 leaked
+goroutines.
 
 ### Consequences
 
@@ -339,7 +352,7 @@ The PLAN confirms the decision with these checks, each seen to fail on a planted
     `stopAgent` shows the pattern with `os/exec`.
 
   Each would be a record of its own.
-* **The PLAN** will be `0023-PLAN-connection-lifetime-and-test-leaks.md`, written once the owner decides this record.
+* **The PLAN** is [0023-PLAN-connection-lifetime-and-test-leaks.md](0023-PLAN-connection-lifetime-and-test-leaks.md).
 * **The release:** C1 changes behaviour, documented, with no exported API change. The owner decides the version at the tag.
 * **The measurements' scripts** stay outside the tree, as the repository's records do for their scratch tools. The figures above are
   their output.

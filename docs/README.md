@@ -69,7 +69,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0021 | PLAN | [Implement the prompt-overlap policy option and the three-state Patch[T] before v1.14.0](decisions/0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md) | complete |
 | 0022 | MADR | [Keep the order of an elicitation form's properties before v1.15.0: a generated PropertyOrder beside the map](decisions/0022-MADR-keep-elicitation-property-order-before-v1-15-0.md) | accepted |
 | 0022 | PLAN | [Implement a generated PropertyOrder that keeps an elicitation form's property order, before v1.15.0](decisions/0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md) | complete |
-| 0023 | MADR | [Leave a connection's lifetime to the application, make Close end every handler, and fail the tests on a leaked connection](decisions/0023-MADR-connection-lifetime-and-test-leaks.md) | proposed |
+| 0023 | MADR | [Leave a connection's lifetime to the application, make Close end every handler, and fail the tests on a leaked connection](decisions/0023-MADR-connection-lifetime-and-test-leaks.md) | accepted |
+| 0023 | PLAN | [Implement 0023: Close ends every handler, the leaking tests close their connections, and a leak guard](decisions/0023-PLAN-connection-lifetime-and-test-leaks.md) | proposed |
 
 ## I want to…
 
