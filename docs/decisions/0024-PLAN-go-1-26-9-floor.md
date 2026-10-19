@@ -404,3 +404,26 @@ Gates on go1.27.2, with the API listing against `v1.16.1`, each exit 0:
 * `make check-records`, `make markdownlint`, and the identifier scan;
 * the API listing: 2429 lines at `v1.16.1` and in the tree, 0 removed, 0 added;
 * Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+### Step 4, release notes, 2026-10-19
+
+What changed, on `1179253`:
+
+* [0024-REPORT-release-notes-v1-16-2.md](../reports/0024-REPORT-release-notes-v1-16-2.md), the draft of the GitHub release text for
+  `v1.16.2`, in the shape of the `v1.16.1` notes;
+* its `docs/README.md` row.
+
+Facts the notes rest on, each read on `1179253`:
+
+* **The schema:** `git diff v1.16.1 HEAD -- schema/` is empty.
+* **No SDK code changes:** `git diff --stat v1.16.1 HEAD -- '*.go' ':!*_test.go'` lists no file.
+* **The `go.mod` change:** both files change `go 1.27.2` to `go 1.26.9` and add `toolchain go1.27.2`, and nothing else.
+* **The commits** since `v1.16.1` and what each changes, by `git show --name-only`:
+  * `df19114`, `1179253` and `85ac115` change code, tests, CI or the README;
+  * `ce49693`, `c4777ff`, `805d997`, `11c50df` and `09d4a79` change records only.
+* **The API listing:** 2429 lines at `v1.16.1` and at `1179253`, 0 removed, 0 added (step 3's gates).
+
+The owner pushed steps 1 to 3 after step 3, `85ac115..1179253`; `make push-guard` passed over the four commits first. CI's first
+six-job run, `39325017852` on `1179253`, is recorded in step 5.
+
+Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0. The step changes no Go file.
