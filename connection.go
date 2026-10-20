@@ -29,8 +29,6 @@ const (
 	jsonErrorField        = "error"
 )
 
-var errNotificationQueueOverflow = errors.New("notification queue overflow")
-
 type anyMessage struct {
 	JSONRPC string           `json:"jsonrpc"`
 	ID      *json.RawMessage `json:"id,omitempty"`
@@ -325,6 +323,11 @@ type Connection struct {
 	inflightReceipts     map[uint64]struct{}
 	pendingCancelRequest []string
 	cancelRequestSignal  chan struct{}
+
+	// endErr is why the connection ended, recorded once, by the first of
+	// closeWith and shutdownReceive, before the context ends; Err returns it
+	// (0026-MADR-connection-end-cause-and-wait.md).
+	endErr atomic.Pointer[error]
 
 	// ctx/cancel govern connection lifetime and are used for Done() and for canceling
 	// callers waiting on responses when the peer disconnects.
@@ -722,6 +725,36 @@ func (c *Connection) endError() error {
 	return ErrPeerDisconnected
 }
 
+// recordEnd records why the connection ended, kind wrapping cause unless cause
+// already is kind, unless an end is recorded already: the first end wins, so
+// a Close after the peer's end leaves the peer's
+// (0026-MADR-connection-end-cause-and-wait.md, E4).
+func (c *Connection) recordEnd(kind, cause error) {
+	err := kind
+	if cause != nil && !errors.Is(cause, kind) {
+		err = fmt.Errorf("%w: %w", kind, cause)
+	}
+	c.endErr.CompareAndSwap(nil, &err)
+}
+
+// Err returns nil until the connection ends, and then why it ended, the
+// same each time: ErrConnectionClosed when this side ended it, by Close or
+// by a notification overflow, wrapping ErrNotificationQueueOverflow for the
+// latter; otherwise ErrPeerDisconnected, wrapping how the peer ended it,
+// io.EOF at the end of its output or the read's error. It is non-nil exactly
+// when Done is closed. A call made after the end returns its own error,
+// which after a late Close is ErrConnectionClosed
+// (0026-MADR-connection-end-cause-and-wait.md).
+func (c *Connection) Err() error {
+	if c.ctx.Err() == nil {
+		return nil
+	}
+	if err := c.endErr.Load(); err != nil {
+		return *err
+	}
+	return c.endError()
+}
+
 // Close ends the connection: its context ends with ErrConnectionClosed, so
 // Done is closed, every call waiting for a response returns, and every later
 // send fails without writing; every handler's context ends, a request's and a
@@ -742,6 +775,7 @@ func (c *Connection) closeWith(cause error) error {
 	var err error
 	c.closeOnce.Do(func() {
 		c.closedLocally.Store(true)
+		c.recordEnd(ErrConnectionClosed, cause)
 		c.cancel(cause)
 		c.inboundCancel(cause)
 		var closers []io.Closer
@@ -1081,7 +1115,7 @@ func readLine(r *bufio.Reader, maxBytes int) (line []byte, tooLong bool, err err
 func (c *Connection) receive() {
 	r := bufio.NewReaderSize(c.r, 64*1024)
 	var received uint64
-	cause := errors.New("peer connection closed")
+	cause := errPeerEOF
 	for {
 		line, tooLong, err := readLine(r, c.maxMessageSize)
 		switch {
@@ -1351,13 +1385,13 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 			c.dropNotification(m.Method)
 			return true
 		}
-		c.loggerOrDefault().Error("failed to queue notification; closing connection", "err", errNotificationQueueOverflow, "capacity", cap(c.notificationQueue), "queued", len(c.notificationQueue))
+		c.loggerOrDefault().Error("failed to queue notification; closing connection", "err", ErrNotificationQueueOverflow, "capacity", cap(c.notificationQueue), "queued", len(c.notificationQueue))
 		// The policy closes the connection, its transport included
 		// (0019-PLAN-api-decisions.md, B17).
-		if err := c.closeWith(errNotificationQueueOverflow); err != nil {
+		if err := c.closeWith(ErrNotificationQueueOverflow); err != nil {
 			c.loggerOrDefault().Debug("closing the transport after a notification overflow", "err", err)
 		}
-		c.shutdownReceive(errNotificationQueueOverflow)
+		c.shutdownReceive(ErrNotificationQueueOverflow)
 		return false
 	}
 	return true
@@ -1466,6 +1500,7 @@ func (c *Connection) shutdownReceive(cause error) {
 	}
 
 	// First, signal disconnect to callers waiting on responses.
+	c.recordEnd(ErrPeerDisconnected, cause)
 	c.cancel(cause)
 
 	// Then close the notification queue so already-received messages can drain.
@@ -2158,7 +2193,7 @@ func (c *Connection) prepareNotification(method string, params any) (anyMessage,
 // running keep their contexts and their answers are written, for at most
 // five seconds, after which they are cancelled; then Done is closed. A read
 // that fails otherwise ends the connection at once
-// (0019-PLAN-issue-fixes.md, B23).
+// (0019-PLAN-issue-fixes.md, B23). Err then says why it ended.
 func (c *Connection) Done() <-chan struct{} {
 	return c.ctx.Done()
 }

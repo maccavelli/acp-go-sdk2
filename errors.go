@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 )
 
 // RequestError represents a JSON-RPC error response.
@@ -141,6 +142,25 @@ var ErrPeerDisconnected = errors.New("acp: peer disconnected")
 // Close has ended its connection, read with errors.Is
 // (0019-MADR-remediate-debugging-pass-findings.md, decision 4).
 var ErrConnectionClosed = errors.New("acp: connection closed")
+
+// ErrNotificationQueueOverflow is why a connection closed itself under
+// OverflowCloseConnection: an inbound notification found its queue full.
+// Err and the errors of later calls wrap it, beside ErrConnectionClosed, read
+// with errors.Is (0026-MADR-connection-end-cause-and-wait.md).
+var ErrNotificationQueueOverflow = errors.New("notification queue overflow")
+
+// peerEOF is why a connection ended at the end of the peer's output. Its text
+// is the one the connection has always given; it wraps io.EOF, so Err and a
+// later call's error can be read with errors.Is(err, io.EOF)
+// (0026-MADR-connection-end-cause-and-wait.md).
+type peerEOF struct{}
+
+func (peerEOF) Error() string { return "peer connection closed" }
+
+func (peerEOF) Unwrap() error { return io.EOF }
+
+// errPeerEOF is the peer's end of output.
+var errPeerEOF error = peerEOF{}
 
 // CapabilityError reports a method, property or variant that the capabilities
 // negotiated by initialize do not allow. Method is the wire method;

@@ -203,7 +203,7 @@ func TestOverflowCloseClosesTransport(t *testing.T) {
 
 	err := f.c.SendNotification(t.Context(), "_test/n", map[string]any{})
 	checkLocal(t, "a send after the overflow", err, ErrConnectionClosed, -32603)
-	if !errors.Is(err, errNotificationQueueOverflow) {
+	if !errors.Is(err, ErrNotificationQueueOverflow) {
 		t.Errorf("a send after the overflow: %v does not wrap the overflow", err)
 	}
 	close(f.release)

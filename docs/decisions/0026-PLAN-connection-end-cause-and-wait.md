@@ -200,3 +200,63 @@ content, and:
 exits 1, "31 of 33 facts hold": "MISS connection.go:32 the overflow error" and "MISS no Err, Wait or ErrNotificationQueueOverflow yet".
 
 Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
+
+### Step 2, `Err`, 2026-10-20
+
+The owner committed step 1 as `26b7f27` and approved this step. What changed:
+
+* **`errors.go`:** `ErrNotificationQueueOverflow`, exported beside the other sentinels, its text "notification queue overflow"
+  unchanged; `peerEOF`, whose `Error` returns "peer connection closed" and whose `Unwrap` returns `io.EOF`, and its value
+  `errPeerEOF`.
+* **`connection.go`:**
+  * `errNotificationQueueOverflow`'s declaration is gone and its three uses name the export;
+  * `receive` starts from `errPeerEOF` in place of `errors.New("peer connection closed")`;
+  * `endErr atomic.Pointer[error]`, set by `recordEnd`, called by `closeWith` (`ErrConnectionClosed`) and `shutdownReceive`
+    (`ErrPeerDisconnected`) before each ends the context, with `CompareAndSwap` from nil, so the first end wins;
+  * `Err`, as specified; it falls back to `endError` should the context end with nothing recorded, which no path does today;
+  * `Done`'s doc ends "Err then says why it ended."
+* **Tests renamed to the export,** in scope as the rename's: `acp_test.go`, `connection_close_test.go`,
+  `connection_overflow_policy_test.go`.
+* **`connection_end_test.go`, new:** `TestErr`, a case per end. Before the end: nil. `Close`: "acp: connection closed". The peer's EOF:
+  "acp: peer disconnected: peer connection closed", wrapping `io.EOF`, and a later send's error wraps `ErrPeerDisconnected` and
+  `io.EOF`. A read error: wrapped. Overflow: "acp: connection closed: notification queue overflow", wrapping
+  `ErrNotificationQueueOverflow`. The peer's EOF then `Close`: `Err` unchanged, a send `ErrConnectionClosed`. Every `Err` is read
+  twice, with `errors.Is` on the two, which a freshly built error fails. It passed 3 runs of 3 under `-race`.
+
+**Found while linting:** errorlint refused `!=` between the two reads of `Err`; `errors.Is(again, err)` keeps the identity the test
+means, since two errors built apart do not match, and the plant "not the record" still fails it.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| `Err` is nil until the end, non-nil once `Done` is closed | `TestErr`, "before the end", and every case through `Done` |
+| the same each time | `TestErr`'s double read; the plant "not the record" |
+| `ErrConnectionClosed` for `Close`, wrapping `ErrNotificationQueueOverflow` for an overflow | the cases "Close" and "notification overflow" |
+| `ErrPeerDisconnected` wrapping `io.EOF` or the read's error | the cases "the peer's end of output" and "a read error" |
+| a later call's error wraps `ErrNotificationQueueOverflow`, or `io.EOF` | `connection_close_test.go:206`; the send in "the peer's end of output" |
+| a call after a late `Close` returns `ErrConnectionClosed` | "the peer's end, then Close" |
+| the first end wins | "the peer's end, then Close"; the plant "record overwritten" |
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree. All 6 failed `TestErr` with the text named:
+
+| Break | Failure |
+| :--- | :--- |
+| `Err` returning `endError()` before the end | "Err before the end = acp: peer disconnected, want nil" |
+| `Err` returning `endError()` after it, not the record | "Err returned acp: peer disconnected: peer connection closed, then acp: peer disconnected: peer connection closed"; "Err after a late Close" |
+| `recordEnd` storing over a recorded end | "Err after a late Close = acp: connection closed, want the peer's end" |
+| the overflow closing with `ErrConnectionClosed` alone | "want it to wrap notification queue overflow" |
+| `peerEOF.Unwrap` returning nil | "want it to wrap EOF"; "a send after the peer's end … want ErrPeerDisconnected and io.EOF" |
+| `endError` returning the record, for a call | "a send after the late Close = … want ErrConnectionClosed" |
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* regeneration: the generated files unchanged;
+* `make pre-add-check`: "151 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; the new test file alone, after its
+  last change: "1 file(s) clean";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* `make api` against `v1.17.1`: "0 incompatible, 2 compatible", `(*Connection).Err` and `ErrNotificationQueueOverflow`.
+
+**The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
+leak guard.

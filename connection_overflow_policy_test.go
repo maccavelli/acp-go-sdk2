@@ -155,8 +155,8 @@ func TestConnection_NotificationOverflowPolicyClosesByDefault(t *testing.T) {
 			case <-time.After(overflowWait):
 				t.Fatal("connection stayed open after overflow; the default must close it")
 			}
-			if cause := context.Cause(f.c.ctx); !errors.Is(cause, errNotificationQueueOverflow) {
-				t.Fatalf("close cause = %v, want errNotificationQueueOverflow", cause)
+			if cause := context.Cause(f.c.ctx); !errors.Is(cause, ErrNotificationQueueOverflow) {
+				t.Fatalf("close cause = %v, want ErrNotificationQueueOverflow", cause)
 			}
 			if got := f.c.DroppedNotifications(); got != 0 {
 				t.Errorf("DroppedNotifications() = %d, want 0 when closing", got)
