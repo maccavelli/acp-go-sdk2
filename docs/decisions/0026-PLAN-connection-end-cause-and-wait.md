@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-20
 associated-madr: "0026-MADR-connection-end-cause-and-wait.md"
 ---
@@ -182,3 +182,21 @@ The release is proposed as the minor `v1.18.0`, which the owner confirms at the 
 * **The callbacks of `context.AfterFunc` stay uncounted,** as the MADR's correction says.
 
 ## Execution record
+
+### Step 1, records, 2026-10-20
+
+The owner committed the MADR and this PLAN as `3be2b1f` and approved the PLAN ("committed, proceed"). This PLAN and its row are
+`in-progress`.
+
+**The facts,** re-asserted on `3be2b1f` by a script outside the tree: 33 of 33 hold. It checks each line this PLAN cites by its
+content, and:
+
+* the nine `go` statements of the root's non-test files are exactly those named, all in `connection.go`;
+* no `Err`, `Wait` or `ErrNotificationQueueOverflow` exists yet;
+* all 73 accept engine cases list `func (*AgentSideConnection).Close() error`;
+* `scripts/check_records.py --next` gives `0027`.
+
+**The script, planted.** In a scratch copy of `3be2b1f`, with `errNotificationQueueOverflow` renamed `ErrNotificationQueueOverflow`, it
+exits 1, "31 of 33 facts hold": "MISS connection.go:32 the overflow error" and "MISS no Err, Wait or ErrNotificationQueueOverflow yet".
+
+Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
