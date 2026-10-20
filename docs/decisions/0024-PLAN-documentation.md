@@ -607,3 +607,41 @@ own.
 * Publish its release from the release text of
   [0024-REPORT-release-notes-v1-16-3.md](../reports/0024-REPORT-release-notes-v1-16-3.md), with its relative links rewritten to the
   tag.
+
+### Publication, 2026-10-19
+
+**The close.**
+
+* The owner committed the close as `b3804c6` and pushed it. Git's pre-push hook ran the disclosure guard on the push.
+* CI run `39349098535` on `b3804c6` concluded `success` on its first attempt, in all six jobs.
+
+**What was published.**
+
+* **The tag.** The owner tagged `b3804c6` `v1.16.3`, an annotated tag whose message is its name, as `v1.16.2` is, and pushed it. CI
+  run `39349577941`, started by the tag, concluded `success` on its first attempt, in all six jobs: `ubuntu-24.04`, `macos-15` and
+  `windows-2025`, each with `1.26.9` and `1.27.2`.
+* **The release.** The owner then published the GitHub release `v1.16.3`, with
+  `gh release create v1.16.3 --title v1.16.3 --notes-file <file>`. Its body is the release text of
+  [0024-REPORT-release-notes-v1-16-3.md](../reports/0024-REPORT-release-notes-v1-16-3.md), as a script outside the tree extracted it:
+  the text under "### v1.16.3" up to "Sources not in the release text", with its one relative link rewritten to the file at the tag.
+
+**Checks.** The `v1.16.2` publication check, with its tag and commit changed, ran from outside the tree. It used a scratch consumer,
+`GOPROXY` the default `https://proxy.golang.org,direct`, a scratch `GOMODCACHE` and `GOPATH`, and the checksum database on.
+
+* **The first run** held 8 of 9. "CI on main's head" missed: the tag's CI run, the newest on `b3804c6`, was still in progress.
+* **After that run succeeded,** 9 of 9 hold:
+  * the release is not a draft or a prerelease, its body is the extracted text, and it is GitHub's latest;
+  * the tag is annotated and names `b3804c6`;
+  * `main` on GitHub is the local `main`, and CI on it succeeded;
+  * the proxy's `@v/v1.16.3.info` gives the origin `refs/tags/v1.16.3` at `b3804c6`;
+  * `go list -m github.com/maccavelli/acp-go-sdk2@latest` gives `v1.16.3`;
+  * `go mod download` of `v1.16.3` exits 0.
+
+**A consumer on the floor,** as for `v1.16.2`: a fresh module at `go 1.26.9`, with `GOTOOLCHAIN=go1.26.9` forced, the default
+`GOPROXY` and the checksum database on.
+
+* `go get github.com/maccavelli/acp-go-sdk2@v1.16.3` exited 0: "go: added github.com/maccavelli/acp-go-sdk2 v1.16.3".
+* The program built with go1.26.9 and ran, printing "protocol version 1".
+* The consumer's `go.mod` kept `go 1.26.9` and gained no `toolchain` line.
+
+Nothing of this PLAN is left open.
