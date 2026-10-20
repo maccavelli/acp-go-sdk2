@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-20
 associated-madr: "0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md"
 ---
@@ -902,3 +902,28 @@ required:
 
 **The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
 leak guard.
+
+### Step 8, close, 2026-10-20
+
+The owner committed step 8 as `609cb41` and pushed it. Git's pre-push hook ran the disclosure guard on the push.
+
+* **Before the push, not run:** Windows over SSH and `make push-guard`, which this PLAN puts there; the owner pushed first. Windows
+  ran after the push, on `609cb41`: `go test -count=1 -shuffle=on ./...` in both modules, root exit 0, `cmd/generate` exit 0.
+* **CI run `39464566129` on `609cb41`.**
+  * Attempt 1 concluded `failure`. Its two `macos-15` jobs were `cancelled` with no step run: "The job was not acquired by Runner of
+    type hosted even after multiple attempts", with GitHub's notice on macOS arm64 queue times. Its four other jobs passed.
+  * The owner had the failed jobs rerun (`gh run rerun 39464566129 --failed`). Attempt 2 concluded `success` in all six jobs:
+    `ubuntu-24.04`, `macos-15` and `windows-2025`, each with `1.26.9` and `1.27.2`; the two `macos-15` jobs ran at 17:38Z and 17:43Z.
+* **The gate's first run in CI,** on `validate (ubuntu-24.04, 1.27.2)`: its checkout with `fetch-depth: 0` fetched 15 tags
+  (`* [new tag]` lines), and "API compatibility (apidiff)" ran `python3 -B scripts/check_api.py`: "check_api: against v1.17.1: 0
+  incompatible, 0 compatible", `success`. The step is `skipped` on the other five jobs.
+
+**Acceptance.** The criteria of "Verification" hold again with the gate on `apidiff`: step 8's checks passed and its record is written;
+its 12 plants and controls were as required; its claims map to checks; `make lint` reports 0 issues; CI's six jobs passed on the pushed
+commits, and the gate step ran; `make api` reports no change against `v1.17.1`.
+
+This PLAN and its `docs/README.md` row are `complete` again.
+
+**Left open.** The `v1.17.1` GitHub release is not yet published. Its tag, its CI (run `39456238211`, `success` in all six jobs), the
+mirror, the checksum database and a go1.26.9 consumer all hold (the MADR's R14, and the follow-up above). Its publication record, the
+nine checks, follows the release; its text describes the `gorelease` gate that `v1.17.1` contains.

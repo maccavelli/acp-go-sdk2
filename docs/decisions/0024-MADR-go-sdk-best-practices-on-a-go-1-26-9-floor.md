@@ -552,6 +552,7 @@ must be a minor; the owner picks the number at the tag, as before phase 4.
 
   Annotated again 2026-10-20: phase 4's PLAN is `complete`, closed by its step 7. The four phases of this program are complete.
   Annotated a third time the same day: it reopens, `in-progress`, for the follow-up "Found after the `v1.17.1` tag".
+  And it closes again, `complete`, with its step 8: the gate on `apidiff` (question 14).
 
 * **Related records:**
   * [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md): its Go pin, superseded if
