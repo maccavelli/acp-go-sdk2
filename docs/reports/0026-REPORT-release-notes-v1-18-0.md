@@ -8,7 +8,7 @@ Each statement names its source:
 
 - a record;
 - a commit;
-- `make api`, run on `93ad59a` with nothing uncommitted, and again on step 6's working tree;
+- `make api`, run on `93ad59a` and on `84a4865`, each with nothing uncommitted;
 - or a probe: a scratch program run against `git archive` trees of `v1.17.1` and `93ad59a`.
 
 Bring it up to date if more changes land before the tag.
@@ -70,7 +70,7 @@ case errors.Is(err, io.EOF):
 #### Documentation
 
 - The README's "Closing and limits" describes `Err()` and `Wait()`, with the example above, and `docs/architecture.md` the recorded end
-  and the wait group. (`93ad59a`, and step 6's commit.)
+  and the wait group. (`93ad59a`, `84a4865`.)
 
 #### For maintainers
 
@@ -88,11 +88,11 @@ case errors.Is(err, io.EOF):
   - in the generator, pins of the side connections' `Err` and `Wait`, and the four new lines in each of the 73 accept engine cases'
     `want.api`.
 
-  (`48d6ab8`, `d78220e`, `bacac56`, and step 6's commit.)
+  (`48d6ab8`, `d78220e`, `bacac56`, `84a4865`.)
 
 ## Sources not in the release text
 
-- **Commits since `v1.17.1`** (`git log v1.17.1..93ad59a`), eleven, and step 6's:
+- **Commits since `v1.17.1`** (`git log v1.17.1..84a4865`), twelve:
   - `609cb41` changes `ci.yml`, the `Makefile`, `RELEASING.md` and `docs/architecture.md`, and adds `scripts/check_api.py`;
   - `48d6ab8` changes `connection.go` and `errors.go`, adds `connection_end_test.go` and renames the sentinel in three tests;
   - `d78220e` changes `connection.go` and `connection_end_test.go`;
@@ -100,11 +100,11 @@ case errors.Is(err, io.EOF):
     `connection_end_test.go`;
   - `93ad59a` changes `README.md` and `docs/architecture.md`;
   - `1dfce5e`, `9e3f23b`, `2965021`, `0afe75e`, `3be2b1f` and `26b7f27` change records only (`git show --name-only`);
-  - step 6's commit corrects `Err`'s doc and a README sentence, adds two request checks to `TestErr`, amends the MADR, and adds this
+  - `84a4865`, step 6's, corrects `Err`'s doc and a README sentence, adds two request checks to `TestErr`, amends the MADR, and adds this
     report.
 - **Go files changed.** `git diff --name-only v1.17.1 93ad59a -- '*.go' ':!*_test.go'` lists five: `agent_gen.go`, `client_gen.go`,
   `connection.go`, `errors.go`, and the generator's `cmd/generate/internal/emit/dispatch.go`.
-- **`make api` on `93ad59a`:** exit 0, "against v1.17.1: 0 incompatible, 7 compatible", the seven `(*AgentSideConnection).Err`,
+- **`make api` on `93ad59a`, and again on `84a4865`:** exit 0 each, "against v1.17.1: 0 incompatible, 7 compatible", the seven `(*AgentSideConnection).Err`,
   `(*AgentSideConnection).Wait`, `(*ClientSideConnection).Err`, `(*ClientSideConnection).Wait`, `(*Connection).Err`,
   `(*Connection).Wait` and `ErrNotificationQueueOverflow`, each "added".
 - **The probes,** against `v1.17.1` and `93ad59a`, after the peer's end of output:
