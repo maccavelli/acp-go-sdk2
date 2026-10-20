@@ -81,6 +81,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0024 | REPORT | [Release notes for v1.17.0, against v1.16.3](reports/0024-REPORT-release-notes-v1-17-0.md) | observed |
 | 0024 | PLAN | [Implement phase 4 of 0024: the API gate and deprecation notices](decisions/0024-PLAN-api-gate-and-deprecation.md) | complete |
 | 0024 | REPORT | [Release notes for v1.17.1, against v1.17.0](reports/0024-REPORT-release-notes-v1-17-1.md) | observed |
+| 0025 | REPORT | [Schema 1.26.0: what adopting it would bring, what it would cost, and whether to adopt it now](reports/0025-REPORT-schema-1-26-0-adoption-assessment.md) | observed |
 
 ## I want to…
 
