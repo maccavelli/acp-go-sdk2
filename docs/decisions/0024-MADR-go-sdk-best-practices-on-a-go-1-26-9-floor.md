@@ -120,6 +120,10 @@ Annotated 2026-10-19 by [0024-PLAN-behaviour-fixes.md](0024-PLAN-behaviour-fixes
 | V4 | **No `CHANGELOG`.** The release notes in `docs/reports/` and the GitHub releases serve as one. The owner's workspace policy lists `CHANGELOG.md` under "Do not add", as a "fleet-wide decision, not a per-repo default" (`~/.claude/skills/workspace-scaffolding/references/do-not-add.md`). `RELEASING.md` names neither the notes reports nor the API listing. | `RELEASING.md` |
 | V5 | **One package, by design.** `acp` holds 2,830 hand-written and 24,885 generated lines, with no sub-package. Moving any part into one breaks the API within v1 unless the root keeps aliases. | line counts |
 
+Annotated 2026-10-20 by "Phase 4 scoped" below, R11: V2's evidence is corrected. The listing each release's notes cite is the API listing
+program of 0011's plans, run by hand and kept outside the tree. `enginetest.API` (`cmd/generate/internal/enginetest/api.go:104`) is
+another listing, in the tree, that the engine cases compare.
+
 #### Found while assessing, belonging to another record
 
 * **0023's leak guard can miss a leak in the last test it runs.** `waitForLeaks` returns as soon as the profile counts 0. If the only
@@ -128,6 +132,9 @@ Annotated 2026-10-19 by [0024-PLAN-behaviour-fixes.md](0024-PLAN-behaviour-fixes
 * This is a defect found in that PLAN's live run, so by `AGENTS.md` it amends
   [0023-PLAN-connection-lifetime-and-test-leaks.md](0023-PLAN-connection-lifetime-and-test-leaks.md), not this record. It is listed
   here because G5's fix touches the same function.
+
+Annotated 2026-10-20: resolved in that record. Its step 6 (`805d997`) gave `waitForLeaks` a settle window, `settleWindow`
+(`leak_test.go:37`), and shipped in `v1.16.2`.
 
 ## Decision Drivers
 
@@ -425,7 +432,16 @@ docs and `schemars_derive` source were downloaded into scratch and only read.
 | 13. Hand-written notices | As recommended: the root test. |
 | `RELEASING.md`'s tag command | As recommended: phase 4 changes it to `git tag -a vX.Y.Z -m vX.Y.Z` (R12). |
 
-The specification above stands as written, and phase 4's PLAN implements it.
+The specification above stands as written, and [0024-PLAN-api-gate-and-deprecation.md](0024-PLAN-api-gate-and-deprecation.md) implements it.
+
+Corrected 2026-10-20, while drafting that PLAN: question 10's "as the model's other notes are" is not what the code does. A doc
+note on a definition the schema lacks applies nothing at generation (`DocNote`, `cmd/generate/internal/model/protocol.go:65`),
+and `checkCommittedDocNotes` (`cmd/generate/internal/model/patch_test.go:273`) requires each to name a committed definition. A
+deprecation note is refused at generation, as decided, which is stricter.
+
+Corrected the same day: D7's "methods, from their request definition (`methods.go:213`)" is narrower than the code. A method's
+doc is the description of its notification, request or response definition, the first that has one (`methods.go:210`-`:216`).
+Question 11's answer is unchanged: a method's notice comes from its request or notification definition being marked.
 
 ##### Consequences, if the recommendations are accepted
 
@@ -477,9 +493,18 @@ The phase 4 PLAN names its checks. Each is seen to fail on a planted break in a 
   were all made under the session's scratch directory, like this repository's other measurements.
 * **The PLANs:** [0024-PLAN-go-1-26-9-floor.md](0024-PLAN-go-1-26-9-floor.md) implements phase 1. Phases 2 to 4 each get a
   PLAN of their own under this number.
+
+  Annotated 2026-10-20:
+
+  * phase 1, [0024-PLAN-go-1-26-9-floor.md](0024-PLAN-go-1-26-9-floor.md): `complete`, released as `v1.16.2`;
+  * phase 2, [0024-PLAN-documentation.md](0024-PLAN-documentation.md): `complete`, released as `v1.16.3`;
+  * phase 3, [0024-PLAN-behaviour-fixes.md](0024-PLAN-behaviour-fixes.md): `complete`, released as `v1.17.0`;
+  * phase 4, [0024-PLAN-api-gate-and-deprecation.md](0024-PLAN-api-gate-and-deprecation.md): `proposed`.
+
 * **Related records:**
   * [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md): its Go pin, superseded if
-    this record is accepted;
+    this record is accepted (annotated 2026-10-20: accepted 2026-10-19, and superseded since step 2 of
+    [0024-PLAN-go-1-26-9-floor.md](0024-PLAN-go-1-26-9-floor.md), as 0002's own annotation records);
   * [0003-MADR-install-fleet-agent-workspace.md](0003-MADR-install-fleet-agent-workspace.md): `SendRequest`'s order;
   * [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md): generated docs;
   * [0017-PLAN-remediate-acp-v1-conformance-violations.md](0017-PLAN-remediate-acp-v1-conformance-violations.md): the test seam;
