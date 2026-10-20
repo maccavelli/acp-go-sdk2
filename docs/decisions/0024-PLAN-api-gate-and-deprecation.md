@@ -302,6 +302,9 @@ Planted breaks, at least. Each must be seen to fail on the check named.
 The CI step itself cannot be planted without pushing a break. Its command is `make api`'s, from the same pin, and its first run on
 the pushed commits is read in step 7.
 
+Annotated 2026-10-20, step 2: where the table says `make api` exits 1, it exits 2, Make's status when a recipe fails; `gorelease`
+itself exits 1.
+
 Expected: `gorelease` against `v1.17.0` reports no change, and the generated files are byte-identical to `f6f9d73`'s.
 
 Acceptance:
@@ -366,3 +369,57 @@ content, and these counts:
 "MISS keywords.go: no deprecated", 75 of 76.
 
 Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
+
+### Step 2, the gate, 2026-10-20
+
+The owner committed step 1 as `1545949` and approved this step. What changed:
+
+* **`ci.yml`:** the step "API compatibility (gorelease)", directly after `go mod download`, on Linux at `1.27.2` only, running
+  `go run golang.org/x/exp/cmd/gorelease@v0.0.0-20261014143641-f0251eb4aa3e` with no flags, with its comment.
+* **`Makefile`:** `GORELEASE_PIN`, read from `ci.yml` beside `GOVULNCHECK_PIN`; `api` on the `.PHONY` line; the `api` target, after
+  `vuln`, with its comment. `make help` lists it under GNU Make 3.81 and 4.4.1.
+* **`RELEASING.md`:** "Tag and Publish" gains `make api TAG=vX.Y.Z` as its first step, and its tag command becomes
+  `git tag -a vX.Y.Z -m vX.Y.Z`. "Release notes and the API" says the notes record `make api`'s report, and that CI runs it on each
+  push and pull request.
+* **`docs/architecture.md`:** the checks gain `make api` and CI's step.
+
+**The docs' claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| a change `gorelease` calls incompatible fails: a removed declaration, a method added to an interface | the plants "an exported method removed" and "a method added to `Agent`" |
+| a tag that does not follow from the changes fails | the plant "an addition with `TAG=v1.17.1`" |
+| the version CI pins | the plant "the pin removed from `ci.yml`" |
+| it needs nothing uncommitted | the plant "an uncommitted file" |
+| it needs the network | the MADR's R7 |
+| CI runs it on each push and pull request | `ci.yml`'s `on:` (`push` to `main`, `pull_request`), and the step's job runs for each |
+
+**Planted breaks.** Each ran in a scratch clone of the committed history with this step's changes committed on top, and its break
+committed there, under GNU Make 3.81 (the system's `make`) and 4.4.1 (`gmake`). 11 of 11 under each were as required:
+
+| Break or control | Result |
+| :--- | :--- |
+| control: no API change | exit 0, "Suggested version: v1.17.1" |
+| `(*ClientSideConnection).UnstableDidCloseDocument` removed | exit 2, "## incompatible changes", "(*ClientSideConnection).UnstableDidCloseDocument: removed" |
+| `ProbeMethod` added to `Agent` | exit 2, "Agent.ProbeMethod: added" |
+| an exported function added, `TAG=v1.17.1` | exit 2, "minor version is not incremented" |
+| control: the same, `TAG=v1.18.0` | exit 0, "v1.18.0 is a valid semantic version" |
+| control: the same, no `TAG` | exit 0, "ProbeAdded: added" |
+| the pin in `ci.yml` replaced by `@latest` | exit 2, "no gorelease pin in .github/workflows/ci.yml" |
+| an untracked file | exit 2, "has uncommitted changes" |
+| control: `actionlint` on the new `ci.yml` | exit 0 |
+| the step's `if:` naming `matrix.flor` | `actionlint` exit 1: "property "flor" is not defined in object type" |
+| the step's `run:` spelled `runs:` | `actionlint` exit 1: "step must run script with "run" section or run action with "uses" section" |
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* regeneration: the generated files unchanged;
+* `make pre-add-check`: "146 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* the API listing against `v1.17.0`: 2429 lines at the tag and in the tree, 0 removed, 0 added; and `make api` in the plants' control
+  clone, no change;
+* `actionlint` v1.7.12 on the tree.
+
+**The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
+leak guard.

@@ -79,14 +79,27 @@ optional before a release. They report; neither gates.
 
 ## Tag and Publish
 
-1. Tag the release commit with a Go-compatible tag:
+1. Check the proposed tag against the latest release, on the release commit
+   with nothing uncommitted. It must exit 0:
 
    ```bash
-   git tag vX.Y.Z
+   make api TAG=vX.Y.Z
+   ```
+
+   `make api` runs `gorelease` at the version CI pins. It fails on a change
+   to the exported API it calls incompatible, and on a tag that does not
+   follow from the changes, such as a patch that adds API. It needs the
+   network.
+
+2. Tag the release commit with an annotated, Go-compatible tag whose message
+   is its name:
+
+   ```bash
+   git tag -a vX.Y.Z -m vX.Y.Z
    git push origin vX.Y.Z
    ```
 
-2. Create a GitHub release for the tag. Include a summary of notable changes and
+3. Create a GitHub release for the tag. Include a summary of notable changes and
    reference the upstream ACP schema version. Call out any change to what the SDK
    sends or accepts on the wire, as the decision records under `docs/decisions/`
    describe it.
@@ -100,8 +113,11 @@ pushed before announcing the release.
   `docs/reports/NNNN-REPORT-release-notes-vX-Y-Z.md`, numbered with
   `python3 scripts/check_records.py --next` and indexed in `docs/README.md`.
   Its "Release text" section is the GitHub release's body.
-- Each release's notes record the exported API listing compared with the last
-  tag: the lines removed and the lines added.
+- Each release's notes record what `make api` reports on the release commit
+  against the last tag: its compatible and incompatible changes, and the
+  version it suggests.
+- CI runs the same check on every push and pull request, so an incompatible
+  change fails before a release is prepared.
 - An incompatible change to the exported API needs a new major version, `/v2`
   ([0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md](docs/decisions/0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md)).
 

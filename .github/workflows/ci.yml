@@ -53,6 +53,12 @@ jobs:
           test "$(go list -m -f '{{.GoVersion}}')" = "${{ matrix.go }}"
           ( cd cmd/generate && test "$(go list -m -f '{{.GoVersion}}')" = "${{ matrix.go }}" )
       - run: go mod download
+      # The exported API against the latest release, by gorelease: a change it
+      # calls incompatible fails the job (0024-PLAN-api-gate-and-deprecation.md).
+      # It needs a clean tree, so it comes before every step that builds.
+      - name: API compatibility (gorelease)
+        if: runner.os == 'Linux' && !matrix.floor
+        run: go run golang.org/x/exp/cmd/gorelease@v0.0.0-20261014143641-f0251eb4aa3e
       - run: go test -shuffle=on ./...
       - name: test generator module
         working-directory: cmd/generate
