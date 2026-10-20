@@ -719,3 +719,24 @@ as required:
 
 **The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
 leak guard.
+
+### Step 6, release notes, 2026-10-20
+
+The owner committed step 5 as `0a9b5c1`, on the owner's permission in that turn, and approved this step. It adds
+[0024-REPORT-release-notes-v1-17-1.md](../reports/0024-REPORT-release-notes-v1-17-1.md) and its row in `docs/README.md`.
+
+Its facts, each run on `0a9b5c1` with nothing uncommitted:
+
+* `make api`, in the repository: exit 0, "Inferred base version: v1.17.0", "Suggested version: v1.17.1"; with `TAG=v1.17.1`, exit 0,
+  "v1.17.1 is a valid semantic version for this release"; with `TAG=v1.17.0`, exit 2, "version v1.17.0 already exists". `git status`
+  was empty before and after;
+* `git diff v1.17.0 0a9b5c1 -- schema/` is empty;
+* `git diff --name-only v1.17.0 0a9b5c1 -- '*.go' ':!*_test.go'` lists eleven files, all in `cmd/generate`;
+* the root's non-test `.go` files, `go.mod` and `README.md`: `git diff --quiet v1.17.0 0a9b5c1` exits 0;
+* the eight commits since `v1.17.0` and their files, from `git show --name-only`.
+
+**A point for the owner.** The package's code is the same as at `v1.17.0`. [0023-PLAN-connection-lifetime-and-test-leaks.md](0023-PLAN-connection-lifetime-and-test-leaks.md),
+step 6, made no release of its own for a change with no SDK code ("No SDK code changes, so no release of its own"). This PLAN
+proposes `v1.17.1`, which the owner confirms at the tag, or leaves the notes for the next release.
+
+Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
