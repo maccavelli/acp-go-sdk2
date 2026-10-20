@@ -438,3 +438,58 @@ first planted again on the final code:
 
 **The go1.26.9 gate**, with `GOTOOLCHAIN=go1.26.9` and scratch caches: `go version` reports go1.26.9; `go vet ./...` and
 `go test -race -count=1 ./...` pass in both modules, the root's with the leak guard.
+
+### Step 4, A3 and A4, 2026-10-19
+
+The owner committed step 3 as `e7dd716` and approved this step. What changed, in `connection.go` (lines as they now stand):
+
+* **A4, Warn.** The eleven faults of the peer's message log at Warn: `:1089`, `:1215`, `:1222`, `:1232`, `:1290`, `:1423`, `:1447`,
+  `:1521`, `:1551`, `:1555`, `:1561`.
+* **A3, size.** Three of them, `:1290`, `:1521` and `:1561`, log `"size", len(…)` in place of the id's or `requestId`'s bytes.
+* **A4, the notification's error** (`:1613`) logs at Warn when its code is `-32601` or `-32602`, and at Error otherwise, through
+  `Log` with the handler's context.
+* **A4, the connection's end** (`:1491`) logs at Debug.
+* **Error stays** for the full queue (`:1354`), an invalid handler result (`:2083`) and an invalid initialize answer
+  (`agent_gen.go:368`, `:385`).
+* **The two tests** that wait for "connection closed", `TestWithLoggerReceivesEarlyDiagnostics` and
+  `TestCloseEndsEndOfInputDrain`, pass their text handler `Level: slog.LevelDebug`. Each passed 3 runs of 3 under `-race`.
+* **Tests,** in `log_levels_test.go`, each through a JSON handler at Debug:
+  * `TestPeerFaultLogLevels`:
+    * the eleven faults, each driven by a line a raw peer sends, at WARN;
+    * a notification its handler refuses `-32602` at WARN, and one its handler fails `-32603` at ERROR;
+    * an invalid initialize answer, and a `session/list` result whose `cwd` is relative, at ERROR;
+    * the connection's end at DEBUG.
+  * `TestUncanonicalIDsLogSize`: an inbound request's and a response's id `7e99999`, past the canonical form's 4096 characters, and a
+    `$/cancel_request` whose `requestId` is an object holding a marker. Each line must hold `size`, equal to the value's length, and
+    neither `id` nor `requestId`. The marker must reach no log line.
+  * Both passed 3 runs of 3 under `-race`.
+
+**Left as it is.** Four lines still log an id the connection read: "invalid request" (`:1232`) and "malformed response" (`:1447`) at
+Warn, and "received a request whose id is still in flight" (`:1298`) and "received a response to no pending request" (`:1533`) at
+Debug. Each id passed `validID`, so it is a JSON string or number, which B15 keeps in the log. By `handleResponse`'s code, a response
+id that cannot be canonicalised, as in the A3 test, then reaches `:1533` in full at Debug.
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree, never in the tree. All 6 failed the check named:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the `requestId`'s bytes logged again | `TestUncanonicalIDsLogSize`: "logs the requestId" |
+| the response id's line without its size | `TestUncanonicalIDsLogSize`: "logs size <nil>, want 7" |
+| "malformed response" back at Error | `TestPeerFaultLogLevels`: `"malformed response" at ERROR, want WARN` |
+| the notification's error at Warn for every code | `TestPeerFaultLogLevels`: `"failed to handle notification" at WARN, want ERROR` |
+| the connection's end back at Info | `TestPeerFaultLogLevels`: "the connection's end at INFO, want DEBUG" |
+| the invalid handler result at Warn | `TestPeerFaultLogLevels`: "the invalid result at WARN, want ERROR" |
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* `go run .` in `cmd/generate`: generated files unchanged by regeneration;
+* `make pre-add-check`: "145 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `scripts/go-precheck.sh` on the new `log_levels_test.go`: "1 file(s) clean";
+* `GOEXPERIMENT=nojsonv2 go test ./...`;
+* `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* the API listing against `v1.16.3`: 2429 lines at the tag and in the tree, 0 removed, 0 added;
+* `go fix -diff ./...` in both modules: no output.
+
+**The go1.26.9 gate**, with `GOTOOLCHAIN=go1.26.9` and scratch caches: `go version` reports go1.26.9; `go vet ./...` and
+`go test -race -count=1 ./...` pass in both modules, the root's with the leak guard.

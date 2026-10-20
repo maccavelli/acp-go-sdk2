@@ -1086,7 +1086,7 @@ func (c *Connection) receive() {
 		line, tooLong, err := readLine(r, c.maxMessageSize)
 		switch {
 		case tooLong:
-			c.loggerOrDefault().Error("incoming message exceeds the size limit; answered and skipped", "limit", c.maxMessageSize)
+			c.loggerOrDefault().Warn("incoming message exceeds the size limit; answered and skipped", "limit", c.maxMessageSize)
 			c.answer(nil, NewInvalidRequest(map[string]any{jsonErrorField: fmt.Sprintf("message exceeds %d bytes", c.maxMessageSize)}))
 		case len(bytes.TrimSpace(line)) > 0:
 			if !c.receiveLine(line, &received) {
@@ -1212,14 +1212,14 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 	// contents. Its size, the fault and a valid id are
 	// (0019-PLAN-behaviour-fixes.md, B15).
 	if !json.Valid(line) {
-		c.loggerOrDefault().Error("failed to parse incoming message", "size", len(line))
+		c.loggerOrDefault().Warn("failed to parse incoming message", "size", len(line))
 		c.answer(nil, NewParseError(nil))
 		return true
 	}
 	line = bytes.TrimSpace(line)
 	var env envelope
 	if line[0] != '{' || json.Unmarshal(line, &env) != nil {
-		c.loggerOrDefault().Error("incoming message is not a JSON-RPC object", "size", len(line))
+		c.loggerOrDefault().Warn("incoming message is not a JSON-RPC object", "size", len(line))
 		c.answer(nil, NewInvalidRequest(map[string]any{jsonErrorField: "not a JSON-RPC object"}))
 		return true
 	}
@@ -1229,7 +1229,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 	}
 	id, fault := requestFault(&env)
 	if fault != "" {
-		c.loggerOrDefault().Error("invalid request", "fault", fault, "size", len(line), "id", string(id))
+		c.loggerOrDefault().Warn("invalid request", "fault", fault, "size", len(line), "id", string(id))
 		c.answer(id, NewInvalidRequest(map[string]any{jsonErrorField: fault}))
 		return true
 	}
@@ -1287,7 +1287,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		if string(*msg.ID) != jsonNull {
 			var err error
 			if idKey, err = canonicalJSONRPCIDKey(*msg.ID); err != nil {
-				c.loggerOrDefault().Error("failed to canonicalize inbound request id", "err", err, "id", string(*msg.ID))
+				c.loggerOrDefault().Warn("failed to canonicalize inbound request id", "err", err, "size", len(*msg.ID))
 				idKey = string(*msg.ID)
 			}
 			c.mu.Lock()
@@ -1420,7 +1420,7 @@ func (c *Connection) isPending(raw json.RawMessage) bool {
 // never answered, so two peers cannot answer each other's errors.
 func (c *Connection) receiveResponse(env *envelope, line []byte) {
 	if env.ID == nil || !validID(env.ID) || string(env.ID) == jsonNull {
-		c.loggerOrDefault().Error("received a response without a request id", "size", len(line))
+		c.loggerOrDefault().Warn("received a response without a request id", "size", len(line))
 		return
 	}
 	id := env.ID
@@ -1444,7 +1444,7 @@ func (c *Connection) receiveResponse(env *envelope, line []byte) {
 		msg.Result = env.Result
 	}
 	if fault != "" {
-		c.loggerOrDefault().Error("malformed response", "fault", fault, "size", len(line), "id", string(id))
+		c.loggerOrDefault().Warn("malformed response", "fault", fault, "size", len(line), "id", string(id))
 		msg.Error = NewInternalError(map[string]any{jsonErrorField: "malformed response: " + fault})
 	}
 	c.handleResponse(&msg)
@@ -1488,7 +1488,7 @@ func (c *Connection) shutdownReceive(cause error) {
 		c.inboundCancel(cause)
 	}(finalEnqueuedSeq)
 
-	c.loggerOrDefault().Info("connection closed", "cause", cause.Error())
+	c.loggerOrDefault().Debug("connection closed", "cause", cause.Error())
 }
 
 // processNotifications processes notifications sequentially to maintain order.
@@ -1518,7 +1518,7 @@ func (c *Connection) processNotifications() {
 func (c *Connection) handleResponse(msg *anyMessage) {
 	idStr, err := canonicalJSONRPCIDKey(*msg.ID)
 	if err != nil {
-		c.loggerOrDefault().Error("failed to canonicalize response id", "err", err, "id", string(*msg.ID))
+		c.loggerOrDefault().Warn("failed to canonicalize response id", "err", err, "size", len(*msg.ID))
 		idStr = string(*msg.ID)
 	}
 
@@ -1548,17 +1548,17 @@ func (c *Connection) handleResponse(msg *anyMessage) {
 func (c *Connection) handleCancelRequest(msg *anyMessage) {
 	var p cancelRequestParams
 	if err := json.Unmarshal(msg.Params, &p); err != nil {
-		c.loggerOrDefault().Error("failed to parse "+ProtocolMethodCancelRequest+" params", "err", err)
+		c.loggerOrDefault().Warn("failed to parse "+ProtocolMethodCancelRequest+" params", "err", err)
 		return
 	}
 	if len(bytes.TrimSpace(p.RequestID)) == 0 {
-		c.loggerOrDefault().Error("received " + ProtocolMethodCancelRequest + " without requestId")
+		c.loggerOrDefault().Warn("received " + ProtocolMethodCancelRequest + " without requestId")
 		return
 	}
 
 	idKey, err := canonicalJSONRPCIDKey(p.RequestID)
 	if err != nil {
-		c.loggerOrDefault().Error("failed to canonicalize "+ProtocolMethodCancelRequest+" requestId", "err", err, "requestId", string(p.RequestID))
+		c.loggerOrDefault().Warn("failed to canonicalize "+ProtocolMethodCancelRequest+" requestId", "err", err, "size", len(p.RequestID))
 		idKey = string(p.RequestID)
 	}
 
@@ -1603,7 +1603,14 @@ func (c *Connection) handleInbound(ctx context.Context, req *anyMessage, handled
 			if err.Code == -32601 && strings.HasPrefix(req.Method, "_") {
 				return
 			}
-			c.loggerOrDefault().Error("failed to handle notification", "method", req.Method, "err", err)
+			// The dispatch refuses a notification the peer got wrong -32601 or
+			// -32602: the peer's fault, at Warn; any other error is this side's
+			// (0024-PLAN-behaviour-fixes.md, A4).
+			level := slog.LevelError
+			if err.Code == -32601 || err.Code == -32602 {
+				level = slog.LevelWarn
+			}
+			c.loggerOrDefault().Log(ctx, level, "failed to handle notification", "method", req.Method, "err", err)
 		}
 		return
 	}

@@ -39,7 +39,7 @@ func TestWithLoggerReceivesEarlyDiagnostics(t *testing.T) {
 	var buf lockedBuffer
 	r, w := io.Pipe()
 	_ = w.Close()
-	c := NewConnection(noopHandler, io.Discard, r, WithLogger(slog.New(slog.NewTextHandler(&buf, nil))))
+	c := NewConnection(noopHandler, io.Discard, r, WithLogger(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))))
 	<-c.Done()
 	deadline := time.Now().Add(5 * time.Second)
 	for !strings.Contains(buf.String(), "connection closed") {

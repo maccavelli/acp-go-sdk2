@@ -213,7 +213,7 @@ func TestCloseEndsEndOfInputDrain(t *testing.T) {
 			c = NewConnection(func(context.Context, string, json.RawMessage) (any, *RequestError) {
 				<-release // ignores its context
 				return nil, nil
-			}, w, r, WithLogger(slog.New(slog.NewTextHandler(&logs, nil))))
+			}, w, r, WithLogger(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))))
 		})
 		start := time.Now()
 		p.send(`{"jsonrpc":"2.0","id":4,"method":"_x/stuck"}`)
