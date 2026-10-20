@@ -404,12 +404,13 @@ Checks that guard this:
   for `_gen.go` files with the reason. `make check-records` and `make markdownlint`
   check the docs. GitHub Actions runs `.github/workflows/ci.yml`, which also runs
   the root tests with `GOEXPERIMENT=nojsonv2` on Linux.
-- `make api` and CI's "API compatibility" step run `gorelease`, pinned in
-  `ci.yml`, on the root module: the last commit's exported API against the
-  latest release the module proxy lists. A change it calls incompatible, such
-  as a removed declaration or a method added to an interface, fails. It needs
-  a tree with nothing uncommitted and the network, so it is not a pre-add
-  check. `make api TAG=vX.Y.Z` also checks a proposed tag.
+- `make api` and CI's "API compatibility" step run `scripts/check_api.py`:
+  `apidiff`, pinned there, compares the working tree's root package with the
+  newest `v1` tag's, taken with `git archive`, or with `BASE`. An incompatible
+  change, such as a removed declaration or a method added to an interface,
+  fails; the compatible ones are listed. `apidiff` exits 0 either way, so the
+  script reads its report. It needs the tags, so CI's Linux job at the newest
+  Go fetches every commit and tag.
 
 The schema stamp lives in `schema/version`. The `go` line lives in `go.mod` and
 `cmd/generate/go.mod`.

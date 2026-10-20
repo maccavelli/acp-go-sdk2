@@ -79,17 +79,17 @@ optional before a release. They report; neither gates.
 
 ## Tag and Publish
 
-1. Check the proposed tag against the latest release, on the release commit
-   with nothing uncommitted. It must exit 0:
+1. Check the exported API against the latest release, on the release commit.
+   It must exit 0:
 
    ```bash
-   make api TAG=vX.Y.Z
+   make api
    ```
 
-   `make api` runs `gorelease` at the version CI pins. It fails on a change
-   to the exported API it calls incompatible, and on a tag that does not
-   follow from the changes, such as a patch that adds API. It needs the
-   network.
+   `make api` runs `apidiff`, through `scripts/check_api.py`, on the root
+   package against the newest `v1` tag. It fails on an incompatible change,
+   and lists the compatible ones: when there are any, the release is a minor
+   (`vX.Y+1.0`), otherwise a patch. It needs the tags.
 
 2. Tag the release commit with an annotated, Go-compatible tag whose message
    is its name:
@@ -114,8 +114,7 @@ pushed before announcing the release.
   `python3 scripts/check_records.py --next` and indexed in `docs/README.md`.
   Its "Release text" section is the GitHub release's body.
 - Each release's notes record what `make api` reports on the release commit
-  against the last tag: its compatible and incompatible changes, and the
-  version it suggests.
+  against the last tag: its compatible and incompatible changes.
 - CI runs the same check on every push and pull request, so an incompatible
   change fails before a release is prepared.
 - An incompatible change to the exported API needs a new major version, `/v2`

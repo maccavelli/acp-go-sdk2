@@ -38,9 +38,12 @@ jobs:
       GOTOOLCHAIN: local
       GOEXPERIMENT: ${{ matrix.experiment }}
     steps:
+      # The job that runs the API gate fetches every commit and tag: the gate
+      # compares with the newest v1 tag (0024-PLAN-api-gate-and-deprecation.md,
+      # step 8). The others need the commit alone.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 1
+          fetch-depth: ${{ (runner.os == 'Linux' && !matrix.floor) && '0' || '1' }}
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -53,12 +56,14 @@ jobs:
           test "$(go list -m -f '{{.GoVersion}}')" = "${{ matrix.go }}"
           ( cd cmd/generate && test "$(go list -m -f '{{.GoVersion}}')" = "${{ matrix.go }}" )
       - run: go mod download
-      # The exported API against the latest release, by gorelease: a change it
-      # calls incompatible fails the job (0024-PLAN-api-gate-and-deprecation.md).
-      # It needs a clean tree, so it comes before every step that builds.
-      - name: API compatibility (gorelease)
+      # The root package's exported API against the newest v1 tag, by apidiff:
+      # an incompatible change fails the job. apidiff exits 0 either way, so
+      # scripts/check_api.py reads its report. On a tag push the base is that
+      # tag, which compares the tree with itself
+      # (0024-PLAN-api-gate-and-deprecation.md, step 8).
+      - name: API compatibility (apidiff)
         if: runner.os == 'Linux' && !matrix.floor
-        run: go run golang.org/x/exp/cmd/gorelease@v0.0.0-20261014143641-f0251eb4aa3e
+        run: make api
       - run: go test -shuffle=on ./...
       - name: test generator module
         working-directory: cmd/generate

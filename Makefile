@@ -25,7 +25,6 @@ MDSH ?= mdsh
 GOPATH_BIN := $(shell go env GOPATH)/bin
 GOLANGCI_LINT ?= $(GOPATH_BIN)/golangci-lint
 GOVULNCHECK_PIN := $(shell grep -oE 'golang.org/x/vuln/cmd/govulncheck@v[0-9][0-9.]*' .github/workflows/ci.yml | head -1)
-GORELEASE_PIN := $(shell grep -oE 'golang.org/x/exp/cmd/gorelease@v0\.0\.0-[0-9]{14}-[0-9a-f]{12}' .github/workflows/ci.yml | head -1)
 FLEET_LINT_CFG := .golangci.yml
 
 # On Go 1.26 the root tests' leak guard needs the goroutineleak profile, an
@@ -86,17 +85,11 @@ vuln: ## Runs govulncheck at the version pinned in CI
 	go run $(GOVULNCHECK_PIN) ./...
 	cd cmd/generate && go run $(GOVULNCHECK_PIN) ./...
 
-# gorelease compares the last commit's exported API with the latest release
-# the module proxy lists, and fails on a change it calls incompatible. It
-# refuses a tree with uncommitted changes and needs the network, so it is not
-# a pre-add check. TAG checks a proposed tag before tagging
-# (0024-PLAN-api-gate-and-deprecation.md).
-api: ## Runs gorelease, pinned in CI, on the last commit; TAG=vX.Y.Z checks a proposed tag
-	@if [ -z "$(GORELEASE_PIN)" ]; then \
-		echo "no gorelease pin in .github/workflows/ci.yml"; \
-		exit 1; \
-	fi
-	go run $(GORELEASE_PIN)$(if $(TAG), -version=$(TAG))
+# apidiff compares the working tree's root package with the newest v1 tag, or
+# BASE, and fails on an incompatible change; scripts/check_api.py pins it and
+# reads its report (0024-PLAN-api-gate-and-deprecation.md, step 8).
+api: ## Fails on an incompatible exported API change (apidiff against the newest v1 tag, or BASE)
+	python3 -B scripts/check_api.py $(BASE)
 
 # A crasher is written under the package's testdata/fuzz/, and is committed
 # with its fix (0011-PLAN-engine-tests.md, D4).

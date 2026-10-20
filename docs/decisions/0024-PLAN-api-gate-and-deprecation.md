@@ -843,3 +843,62 @@ The MADR's R17 to R20 hold the probes.
   mistyped `fetch-depth` expression.
 * **Gates:** phase 1's, the go1.26.9 gate, and Windows over SSH before the push.
 * **After CI passes,** the publication record of `v1.17.1`, then this PLAN `complete` again.
+
+### Step 8, the gate on `apidiff`, 2026-10-20
+
+The owner committed the respecified step as `1dfce5e` and approved it. What changed:
+
+* **`scripts/check_api.py`, new:** as specified. It also refuses, exit 2, a line of `apidiff`'s report it does not recognise, so a
+  change in the report's form cannot pass as "no change".
+* **`ci.yml`:** the Linux job at `1.27.2` checks out every commit and tag (`fetch-depth: ${{ (runner.os == 'Linux' &&
+  !matrix.floor) && '0' || '1' }}`), with the reason in a comment; the step "API compatibility (apidiff)" runs `make api` in place of
+  `gorelease`.
+* **`Makefile`:** `api` runs `python3 -B scripts/check_api.py $(BASE)`, with its comment; `GORELEASE_PIN` and `TAG` are gone.
+* **`RELEASING.md`:** "Tag and Publish" runs `make api` first, and says compatible changes mean a minor; "Release notes and the API"
+  records its report. `docs/architecture.md` describes the check.
+* `git grep -i gorelease`, outside `docs/decisions` and `docs/reports`, finds nothing (exit 1).
+
+On the tree: `make api` prints "check_api: against v1.17.1: 0 incompatible, 0 compatible", exit 0; `make help` lists "api  Fails on
+an incompatible exported API change (apidiff against the newest v1 tag, or BASE)".
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| an incompatible change fails: a removed declaration, a method added to an interface | the plants "a method removed" and "a method added to `Agent`" |
+| the compatible changes are listed | "an exported function added"; the control `BASE=v1.14.0` |
+| the examples' `main` packages are not compared | "an exported function in `example/agent`" |
+| it needs the tags | "a clone without tags" |
+| `apidiff` exits 0 either way, so the report is read, strictly | the two parse plants |
+| `BASE` names another ref | the control `BASE=v1.14.0` |
+| it asks the mirror nothing about this module | the MADR's R19 |
+| CI's job fetches the tags | `actionlint`, and the step's first run in CI, read at the close |
+
+**Planted breaks and controls.** Each ran in a scratch clone of the committed history with this step's changes applied. 12 of 12 as
+required:
+
+| Plant | Result |
+| :--- | :--- |
+| control: no change | exit 0, "against v1.17.1: 0 incompatible, 0 compatible" |
+| control: `make api BASE=v1.14.0` | exit 0, the three compatible changes, "against v1.14.0: 0 incompatible, 3 compatible" |
+| `(*ClientSideConnection).UnstableDidCloseDocument` removed | exit 1, "check_api: incompatible: (*ClientSideConnection).UnstableDidCloseDocument: removed"; through `make api`, exit 2 |
+| `ProbeMethod` added to `Agent` | exit 1, "check_api: incompatible: Agent.ProbeMethod: added" |
+| an exported function added | exit 0, "check_api: compatible: ProbeAdded: added" |
+| an exported function in `example/agent` | exit 0, "0 incompatible, 0 compatible", not named |
+| a clone at depth 1 without tags | exit 2, "no v1.X.Y tag to compare against; fetch the tags, or pass BASE" |
+| the incompatible section's header not recognised, a method removed | exit 2, "apidiff's report has a line this script does not recognise: 'Incompatible changes:'" |
+| the exit decision broken, a method removed | exit 0: the removal passes, which the "a method removed" check catches when the script is whole |
+| control: `actionlint` on the new `ci.yml` | exit 0 |
+| `fetch-depth`'s expression naming `matrix.flor` | `actionlint` exit 1: "property "flor" is not defined in object type" |
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* regeneration: the generated files unchanged;
+* `make pre-add-check`: "151 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* the API listing against `v1.17.1`: 2429 lines each, 0 removed, 0 added;
+* `actionlint` v1.7.12 on the tree.
+
+**The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
+leak guard.
