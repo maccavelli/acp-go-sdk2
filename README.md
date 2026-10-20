@@ -590,14 +590,26 @@ the same id, `$/cancel_request` for it reaches the later one. A handler that
 returns a nil `*acp.RequestError` as a non-nil `error` is answered `-32603`.
 
 An error the connection makes for a local failure keeps that failure, for
-`errors.Is`: a call whose context ended wraps `context.Canceled` or
-`context.DeadlineExceeded`; one whose connection ended wraps
+`errors.Is`: a call whose context ended wraps `context.Cause(ctx)`, which is
+`context.Canceled` or `context.DeadlineExceeded` when no cause was given; one
+whose connection ended wraps
 `acp.ErrPeerDisconnected`, or `acp.ErrConnectionClosed` after `Close`; one
 whose write failed wraps the write's error. Its code is as before. An error the
 peer answered wraps nothing, so a peer's `-32800` is not `context.Canceled`.
 
+An error a handler returns reaches the peer. A `*acp.RequestError` is sent as
+it is; any other error is answered `-32603`, or `-32800` when it wraps
+`context.Canceled`, with its text in the answer's `data` as `"error"`. A
+message that names a local path or holds a token reaches the peer as it is,
+so return a `*acp.RequestError` of your own to keep it private. An agent's
+`Prompt` and a client's `RequestPermission` are the exceptions: once their
+prompt turn is cancelled, they are answered cancelled, whatever they return.
+
 A malformed message is logged by its fault, its size and, when it has a valid
 one, its id, never by its content, which may hold prompt text or file contents.
+A message that breaks the schema is refused with an `*acp.ValidationError`;
+for an absolute path or an excluded value, its text quotes the value refused,
+so that value reaches the answer's `data` and the logs as it was.
 
 These rules are decided in
 [0017-MADR-remediate-acp-v1-conformance-violations.md](docs/decisions/0017-MADR-remediate-acp-v1-conformance-violations.md)

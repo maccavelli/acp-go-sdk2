@@ -91,6 +91,10 @@ const (
 // value; Value is the offending value when it is a single value; Rule is the
 // rule broken. A Validate error that wraps a nested type's error keeps this
 // one reachable with errors.As.
+//
+// The message of an absolute-path or excluded-value check quotes the value it
+// refuses, so a value the peer sent reaches the answer's data and the logs as
+// it was (0024-PLAN-behaviour-fixes.md, A14).
 type ValidationError struct {
 	Type  string
 	Field string

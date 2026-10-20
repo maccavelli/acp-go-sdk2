@@ -336,3 +336,105 @@ with a nil agent, client, reader or writer; the two hits left are records quotin
 `go test -race -count=1 ./...` pass in both modules, the root's with the leak guard.
 
 Windows over SSH runs before the push, at the close.
+
+### Deviation, 2026-10-19, during step 3: the exceptions' method names
+
+**Found.** Step 3's gates failed in `cmd/generate/internal/emit`, under `make pre-add-check` and under the go1.26.9 gate:
+
+```text
+--- FAIL: TestDispatchFollowsTheModel
+    dispatch_test.go:164: interfaces contains "RequestPermission"
+    dispatch_test.go:164: types_gen.go contains "RequestPermission"
+```
+
+The docs of `Agent` and `Client` come from `sdkInterfaces`, a table every protocol the generator builds shares. That test requires the
+interfaces to take every protocol name from the model. A2's paragraph, as first written, named `Prompt` and `RequestPermission` in the
+table; the test's list holds only the second. The generator's tests had not been run after the docs changed. The same run reported a
+lint issue in the new `error_text_test.go`: "ST1023: should omit type error from declaration".
+
+**Decision (owner, 2026-10-19).** The shared paragraph names no method. The model appends each exception to the paragraph, naming the
+method from its protocol rule, and only when the protocol has that rule:
+
+* a prompt turn's method (`PromptTurn`): it is answered with its stop field set to the cancelled constant once its turn is cancelled,
+  whatever it returns;
+* a request answered with its prompt turn (`CancelledByPromptCancel`): it is answered with its cancelled helper's value once its prompt
+  turn is cancelled, whatever it returns.
+
+A model test covers both, and a protocol without the rules. A planted break must fail it. The lint issue is fixed.
+
+**Files added to step 3's scope:** `cmd/generate/internal/model/protocol.go`'s interface building, and a model test file.
+
+### Step 3, A2 and A14, 2026-10-19
+
+The owner committed step 2 as `6ceac3f` and approved this step. What changed:
+
+* **A2, `Agent` and `Client`.** The shared table's docs gain the paragraph on a handler's error text, naming no method. The model
+  appends an exception to each, from the protocol's rules (deviation above), regenerated into `types_gen.go`. The exceptions go
+  beyond the design's wording, and each was found in the code:
+  * an agent's `Prompt`: "Prompt is the exception: once its turn is cancelled, it is answered with StopReasonCancelled as its
+    StopReason, whatever it returns." (`agent_gen.go`, the prompt turn's `cause != nil` branch);
+  * a client's `RequestPermission`: "… answered with NewRequestPermissionOutcomeCancelled() as its Outcome, whatever it returns."
+    (`answerUnlessCancelled`, `client_gen.go:224`).
+* **The model** (`model/protocol.go`): `noteAnsweredCancelled`, called from `buildInterfaces`, writes each sentence for a
+  `PromptTurn` or `CancelledByPromptCancel` method, wrapped at 76 characters by `wrapWords`.
+* **A2, the README's "Errors on the wire".**
+  * A paragraph says the same, with both exceptions.
+  * The sentence on a call whose context ended now says it wraps `context.Cause(ctx)`, which is `context.Canceled` or
+    `context.DeadlineExceeded` when no cause was given.
+* **A14.** `ValidationError`'s doc and the README's paragraph on malformed messages say an absolute-path or excluded-value check's
+  message quotes the value it refuses, so the value reaches the answer's `data` and the logs.
+* **Tests,** in `error_text_test.go`:
+  * `TestHandlerErrorReachesPeer`: an `Agent`'s `NewSession` and a `Client`'s `ReadTextFile` return, in turn, a plain error, one
+    wrapping `context.Canceled`, and a `*RequestError`. The peer must get `-32603`, `-32800` and the `*RequestError`'s own code, and
+    `data.error` the error's text for the first two.
+  * `TestValidationMessagesQuoteValue`:
+    * an absolute-path message holds the quoted `cwd`, and an excluded-value message the quoted `"form"`;
+    * the one-variant message is exactly "CreateElicitationRequest must have exactly one variant set";
+    * a `session/new` with that `cwd` is answered `-32602` quoting it;
+    * a `session/update` with a relative tool-call location is refused, and the log holds its path.
+* **Tests,** in `cmd/generate/internal/model/exceptions_test.go`:
+  * `TestAnsweredCancelledNotes`: the test protocol's `Agent` and `Client` docs end with the two sentences built from its methods'
+    fields; a table without the rules adds none; no sentence line exceeds 76 characters; `sdkInterfaces` names no exception;
+  * `checkCommittedAnsweredCancelled`, from `TestProtocolTableAppliesToCommittedSchema`: the committed docs end with the `Prompt`
+    and `RequestPermission` sentences.
+* **Lint:** `error_text_test.go`'s `var fail error = tc.err` is now `fail := tc.err` (ST1023).
+
+**A2's claims mapped to tests:**
+
+| Claim | Test |
+| :--- | :--- |
+| a `*RequestError` is sent as it is | `TestHandlerErrorReachesPeer`, both sides |
+| any other error: `-32603`, its text in `data.error` | `TestHandlerErrorReachesPeer`, both sides |
+| wrapping `context.Canceled`: `-32800` | `TestHandlerErrorReachesPeer`, both sides |
+| `Prompt` answered `cancelled` once its turn is cancelled, whatever it returns | `TestPromptCancelledAnswersCancelled` (handlers returning `ctx.Err()` and a wrapped error), `TestPromptCancelRequestAnswersCancelled` |
+| `RequestPermission` answered cancelled once its prompt turn is cancelled | `TestCancelAnswersPendingPermissions` (a handler returning `ctx.Err()`) |
+
+The two tests passed 3 runs of 3 under `-race`.
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree, never in the tree. All 8 failed the check named, the five
+first planted again on the final code:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `toReqErr`'s `-32800` branch disabled | `TestHandlerErrorReachesPeer`: "the peer got" … "want code -32800" |
+| `toReqErr` sending "handler failed" for the text | `TestHandlerErrorReachesPeer`: `data's error "handler failed"` |
+| the emitter's absolute-path message printing `%.0q`, regenerated | `TestValidationMessagesQuoteValue`: "absolute path: message" |
+| `inboundError` answering without the message | `TestValidationMessagesQuoteValue`: "want -32602 quoting" |
+| the refused notification logged without its error | `TestValidationMessagesQuoteValue`: "the refused notification's log lacks" |
+| `noteAnsweredCancelled`'s call removed | `TestAnsweredCancelledNotes` ("doc ends"), and the committed check ("the committed doc does not end") |
+| "Prompt is the exception" put back in the shared table | `TestAnsweredCancelledNotes`: "sdkInterfaces' Agent names an exception" |
+| the sentences wrapped at 1000 | `TestAnsweredCancelledNotes`: "line of" |
+
+**Gates.** The first run failed, as the deviation above records. After the fix, on the working tree, go1.27.2, each exit 0:
+
+* `go run .` in `cmd/generate`: generated files unchanged by regeneration;
+* `make pre-add-check`: "143 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `scripts/go-precheck.sh` on the two new `_test.go` files, `error_text_test.go` and `model/exceptions_test.go`: "2 file(s) clean";
+* `GOEXPERIMENT=nojsonv2 go test ./...`;
+* `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* the API listing against `v1.16.3`: 2429 lines at the tag and in the tree, 0 removed, 0 added;
+* `go fix -diff ./...` in both modules: no output.
+
+**The go1.26.9 gate**, with `GOTOOLCHAIN=go1.26.9` and scratch caches: `go version` reports go1.26.9; `go vet ./...` and
+`go test -race -count=1 ./...` pass in both modules, the root's with the leak guard.

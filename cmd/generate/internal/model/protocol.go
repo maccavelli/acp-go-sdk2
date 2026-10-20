@@ -200,6 +200,13 @@ var sdkInterfaces = []Interface{
 		"A method that panics ends the process, as an unrecovered panic in any",
 		"goroutine does. The connection does not recover it",
 		"(0024-PLAN-behaviour-fixes.md, A1).",
+		"",
+		"An error a request's method returns reaches the client. A *RequestError is",
+		"sent as it is. Any other error is answered -32603, or -32800 when it wraps",
+		"context.Canceled, with its text in the answer's data as \"error\": a message",
+		"that names a local path or holds a token reaches the client as it is. To",
+		"keep a message private, return a *RequestError of your own",
+		"(0024-PLAN-behaviour-fixes.md, A2).",
 	}},
 	{Binding: BindAgentExperimental, Name: "AgentExperimental", Var: "exp",
 		Doc: []string{"AgentExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice."}},
@@ -216,6 +223,13 @@ var sdkInterfaces = []Interface{
 		"A method that panics ends the process, as an unrecovered panic in any",
 		"goroutine does. The connection does not recover it",
 		"(0024-PLAN-behaviour-fixes.md, A1).",
+		"",
+		"An error a request's method returns reaches the agent. A *RequestError is",
+		"sent as it is. Any other error is answered -32603, or -32800 when it wraps",
+		"context.Canceled, with its text in the answer's data as \"error\": a message",
+		"that names a local path or holds a token reaches the agent as it is. To",
+		"keep a message private, return a *RequestError of your own",
+		"(0024-PLAN-behaviour-fixes.md, A2).",
 	}},
 	{Binding: BindClientExperimental, Name: "ClientExperimental", Var: "exp",
 		Doc: []string{"ClientExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice."}},
@@ -883,7 +897,53 @@ func (m *Model) buildInterfaces(n *namer, r *rules) error {
 		m.Interfaces = append(m.Interfaces, in)
 	}
 	slices.SortStableFunc(m.Interfaces, func(a, b Interface) int { return int(a.Binding) - int(b.Binding) })
+	m.noteAnsweredCancelled()
 	return nil
+}
+
+// noteAnsweredCancelled ends the doc of each method's interface with the
+// exception to its paragraph on a handler's error: a prompt turn's method,
+// and a request answered with its prompt turn, are answered cancelled once
+// the turn is, whatever they return. The names come from the model, so a
+// protocol without the rules gets no such sentence
+// (0024-PLAN-behaviour-fixes.md, step 3 deviation).
+func (m *Model) noteAnsweredCancelled() {
+	for _, mi := range slices.Concat(m.AgentMethods, m.ClientMethods) {
+		var note string
+		switch {
+		case mi.PromptTurn:
+			note = fmt.Sprintf("%s is the exception: once its turn is cancelled, it is answered with %s as its %s, whatever it returns.",
+				mi.GoName, mi.StopConst, mi.StopField)
+		case mi.CancelledByPromptCancel:
+			note = fmt.Sprintf("%s is the exception: once its prompt turn is cancelled, it is answered with %s() as its %s, whatever it returns.",
+				mi.GoName, mi.CancelledHelper, mi.CancelledField)
+		default:
+			continue
+		}
+		for i := range m.Interfaces {
+			if m.Interfaces[i].Binding == mi.Binding {
+				m.Interfaces[i].Doc = append(slices.Clip(m.Interfaces[i].Doc), wrapWords(note, 76)...)
+			}
+		}
+	}
+}
+
+// wrapWords splits text into lines of at most width characters, between
+// words; a word longer than width has a line of its own.
+func wrapWords(text string, width int) []string {
+	var lines []string
+	line := ""
+	for w := range strings.FieldsSeq(text) {
+		if line != "" && len(line)+1+len(w) > width {
+			lines = append(lines, line)
+			line = ""
+		}
+		if line != "" {
+			line += " "
+		}
+		line += w
+	}
+	return append(lines, line)
 }
 
 // interfaceName returns the name of the interface a binding calls through,

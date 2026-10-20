@@ -22440,6 +22440,15 @@ func (v *WriteTextFileResponse) validate(abs func(string) bool) error {
 // A method that panics ends the process, as an unrecovered panic in any
 // goroutine does. The connection does not recover it
 // (0024-PLAN-behaviour-fixes.md, A1).
+//
+// An error a request's method returns reaches the client. A *RequestError is
+// sent as it is. Any other error is answered -32603, or -32800 when it wraps
+// context.Canceled, with its text in the answer's data as "error": a message
+// that names a local path or holds a token reaches the client as it is. To
+// keep a message private, return a *RequestError of your own
+// (0024-PLAN-behaviour-fixes.md, A2).
+// Prompt is the exception: once its turn is cancelled, it is answered with
+// StopReasonCancelled as its StopReason, whatever it returns.
 type Agent interface {
 	// Request parameters for the authenticate method.
 	//
@@ -22627,6 +22636,16 @@ type AgentExperimental interface {
 // A method that panics ends the process, as an unrecovered panic in any
 // goroutine does. The connection does not recover it
 // (0024-PLAN-behaviour-fixes.md, A1).
+//
+// An error a request's method returns reaches the agent. A *RequestError is
+// sent as it is. Any other error is answered -32603, or -32800 when it wraps
+// context.Canceled, with its text in the answer's data as "error": a message
+// that names a local path or holds a token reaches the agent as it is. To
+// keep a message private, return a *RequestError of your own
+// (0024-PLAN-behaviour-fixes.md, A2).
+// RequestPermission is the exception: once its prompt turn is cancelled, it is
+// answered with NewRequestPermissionOutcomeCancelled() as its Outcome,
+// whatever it returns.
 type Client interface {
 	// Notification sent by the agent when a URL-based elicitation is complete.
 	CompleteElicitation(ctx context.Context, params CompleteElicitationNotification) error
