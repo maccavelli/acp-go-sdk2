@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-20
 associated-madr: "0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md"
 ---
@@ -346,3 +346,23 @@ The release is proposed as the patch `v1.17.1`, which the owner confirms at the 
 * **`v1.17.1`, a patch:** nothing a consumer can see changes.
 
 ## Execution record
+
+### Step 1, records, 2026-10-20
+
+The owner committed this PLAN as `d078835` and approved it ("committed, proceed"). This PLAN and its row are `in-progress`.
+
+**The facts,** re-asserted on `d078835` by a script outside the tree: 76 of 76 hold. It checks each line this PLAN cites by its
+content, and these counts:
+
+* three steps in `ci.yml` run only on Linux at `1.27.2`, and `ci.yml` names no `gorelease`;
+* the `Makefile` has no `api` target, and `load.go`, `keywords.go` and the model name no `deprecated` or `Deprecation`;
+* 13 calls of `docLines` on a description, and a method's doc taken from its notification, request or response definition in that
+  order;
+* the five hand-written and five generated non-test root files;
+* `git grep -i deprecated -- '*.go' '*.txtar'` exits 1;
+* `scripts/check_records.py --next` gives `0025`.
+
+**The script, planted.** In a scratch copy of `d078835`, with `"deprecated": TreatAnnotation` added to the registry, it exits 1:
+"MISS keywords.go: no deprecated", 75 of 76.
+
+Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
