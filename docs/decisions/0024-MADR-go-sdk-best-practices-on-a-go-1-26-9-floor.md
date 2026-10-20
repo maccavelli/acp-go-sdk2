@@ -346,6 +346,10 @@ docs and `schemars_derive` source were downloaded into scratch and only read.
 | D12 | **A plain `bool` field accepts `null`.** Decoded strictly into a struct with `Deprecated bool`, `"yes"` and `1` are refused ("json: cannot unmarshal string into Go struct field definition.deprecated of type bool", and "number"), but `null` decodes as `false` with no error. The same on go1.27.2's default backend and with `GOEXPERIMENT=nojsonv2`. 2020-12 says the value MUST be a boolean (D4). | scratch program, both backends |
 | D13 | **Nothing hand-written is deprecated, and two records expect it may be.** `git grep -i deprecated -- '*.go' '*.txtar'` finds nothing (exit 1). [0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md](0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md): "After the tag, `PropertyOrder` stays within `v1`; it can be deprecated, not removed." [0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md](0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md): "step 3's option can be deprecated but not removed." | `git grep`, records |
 
+Annotated 2026-10-20, during step 5 of [0024-PLAN-api-gate-and-deprecation.md](0024-PLAN-api-gate-and-deprecation.md): of D10's
+four ignored forms, the repository's lint already reports three, through gocritic's `deprecatedComment`: no blank line before
+it, lower case, and a comma. The mid-line form passes it. Question 13's answer stands, by the owner's decision the same day.
+
 ##### Specification, as recommended
 
 **The gate (V2), as question 6 decided it:**

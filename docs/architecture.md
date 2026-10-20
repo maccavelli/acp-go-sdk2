@@ -390,6 +390,10 @@ Checks that guard this:
   `testdata/json_golden/`. `json_v1_pin_test.go` pins HTML escaping and sorted map
   keys. `generated_output_test.go` covers the encoding rules above, and
   `union_wire_test.go` the union decoding rules.
+- `deprecation_test.go` requires each deprecation notice in the root's
+  hand-written files in the form staticcheck honours, a paragraph of its own
+  starting "Deprecated: "; gocritic's `deprecatedComment` reports most other
+  forms too, but not a notice in the middle of a line.
 - `leak_test.go`'s `TestMain` fails the root package's run when the tests leave a
   goroutine leaked, by the standard `goroutineleak` profile, such as a
   connection's that no test closed.

@@ -652,3 +652,70 @@ plant run again.
 
 **The go1.26.9 gate**, on the final tree: `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules,
 the root's with the leak guard.
+
+### Deviation, 2026-10-20, during step 5: the lint already reports three of the four forms
+
+**Found,** before step 5's test was written. In a scratch copy of `61ac81e`, each of D10's forms alone on a new function in
+`errors.go`, `golangci-lint` with the repository's config over the root:
+
+| Form | Result |
+| :--- | :--- |
+| the paragraph, the control | exit 0, no report |
+| no blank line before it | exit 1, gocritic `deprecatedComment`: "`Deprecated: ` notices should be in a dedicated paragraph, separated from the rest" |
+| mid-line | exit 0, no report |
+| lower case | exit 1, gocritic `deprecatedComment`: "use `Deprecated: ` (note the casing) instead of `deprecated: `" |
+| a comma | exit 1, gocritic `deprecatedComment`: "use `:` instead of `,` in `Deprecated, `" |
+
+Question 13's alternative was put as "review alone"; `make lint` and CI's lint step already refuse three of the four forms.
+
+**Decision (owner, 2026-10-20), the recommended resolution.** Keep `TestDeprecationNotices` as planned. It refuses all four in
+`go test`, whatever the lint configuration, and it is the only check on the mid-line form. Its doc names the overlap.
+
+### Step 5, hand-written notices, 2026-10-20
+
+The owner committed step 4 as `61ac81e`, on the owner's permission in that turn, and approved this step. Its deviation, above, was
+decided before the test was written. What changed:
+
+* **`deprecation_test.go`, new:** `TestDeprecationNotices` parses the root's non-test files that `ast.IsGenerated` does not report:
+  `connection.go`, `doc.go`, `errors.go`, `extensions.go` and `helpers.go`. In each comment, a line whose text starts with
+  "deprecated", in any case, must start with "Deprecated: " and begin a paragraph, and no other line may hold "deprecated:", in any
+  case. A block comment is read line by line. Its doc names gocritic's overlap.
+* **`docs/architecture.md`:** the checks list the test, and the one form only it reports.
+
+It passes on the tree: no hand-written file holds a notice.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| a notice in each of D10's four ignored forms fails | the four plants below |
+| the paragraph form passes | the control below |
+| a block comment is read too | the block comment plant |
+| the generated files are left to the engine cases | the generated-file control |
+| gocritic reports three of the four; the mid-line form only this test | the deviation's probe, above |
+
+**Planted breaks and controls.** Each ran in its own scratch copy of the working tree, its text appended to the file named. 7 of 7
+as required:
+
+| Plant | Result |
+| :--- | :--- |
+| `errors.go`: "Deprecated: use X." with no blank line before it | exit 1: "a notice must begin a paragraph, after a blank comment line: Deprecated: use X." |
+| `errors.go`: the notice mid-line | exit 1: "a notice must begin its own line and paragraph: Probe is a probe. Deprecated: use X." |
+| `errors.go`: "deprecated: use X." | exit 1: "a notice must start with "Deprecated: ": deprecated: use X." |
+| `errors.go`: "Deprecated, use X." | exit 1: "a notice must start with "Deprecated: ": Deprecated, use X." |
+| `errors.go`: a block comment with the notice mid-line | exit 1: "a notice must begin its own line and paragraph" |
+| control: `errors.go`, the paragraph form | exit 0 |
+| control: `types_gen.go`, the notice mid-line | exit 0: the generated file is not read |
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* regeneration: the generated files unchanged;
+* `make pre-add-check`: "150 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; and the new file alone: "1 file(s)
+  clean";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* the API listing against `v1.17.0`: 2429 lines each, 0 removed, 0 added;
+* `make api` in a scratch clone with this step committed: "Inferred base version: v1.17.0", "Suggested version: v1.17.1".
+
+**The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
+leak guard.
