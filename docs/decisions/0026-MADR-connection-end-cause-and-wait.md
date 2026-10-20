@@ -140,7 +140,7 @@ func (c *Connection) Err() error
 
 * **Fixed at the first end.** The cause is recorded once, by whichever of `closeWith` and `shutdownReceive` ends the context first, and
   `Err` returns it from then on (E4). It is safe for concurrent use, and non-nil exactly when `Done` is closed.
-* **A call's error is unchanged.** A send or a call after a late `Close` still returns `ErrConnectionClosed` (question 7).
+* **A call's error is unchanged.** A send or a call after a late `Close` still returns `ErrConnectionClosed` (question 7) (amended 2026-10-20, see "Amended during the PLAN's step 6").
 
 **Testable causes.**
 
@@ -190,7 +190,7 @@ tag.
 * Neutral, because `Wait` can block forever with a reader `Close` cannot close, or a handler that ignores its context; its doc says
   so, as 0023's `Close` doc does for the reader.
 * Bad, because a call that tests `errors.Is(err, io.EOF)` on a failed call's error now matches after the peer's EOF, where it did not;
-  the release notes name it.
+  the release notes name it (amended 2026-10-20, see "Amended during the PLAN's step 6").
 * Bad, because every goroutine start goes through the wait group, so a future `go` statement that bypasses it is a gap only a test
   catches.
 
@@ -244,7 +244,25 @@ Each has a recommended answer.
 | 4. `Wait`'s form | As recommended: `Wait() error`, unbounded. |
 | 5. What `Wait` covers | As recommended: every goroutine the connection starts, handlers included. |
 | 6. The side connections | As recommended: `Err` and `Wait` on both, delegating. |
-| 7. A call after a late `Close` | As recommended: unchanged, `ErrConnectionClosed`. |
+| 7. A call after a late `Close` | As recommended: unchanged, `ErrConnectionClosed` (amended 2026-10-20, see "Amended during the PLAN's step 6"). |
+
+#### Amended during the PLAN's step 6, 2026-10-20
+
+Question 7's decision stands: a call's error is unchanged. Two statements of what that error is claimed more than the code does, and a
+probe against `git archive` trees of `v1.17.1` and of the PLAN's step 5 commit found:
+
+* **After the peer's end of output, a request does not return `ErrConnectionClosed` after a late `Close`.** A request, in flight or
+  sent later, fails `-32603` with "input ended before a response", wrapping `ErrPeerDisconnected`, before and after a late `Close`,
+  in both trees: the end of input refuses it before the connection's end is consulted. A notification sent after the late `Close`
+  wraps `ErrConnectionClosed`, as this record said.
+* **Only a notification's error newly matches `io.EOF`.** After the peer's EOF, a later notification's error wraps `io.EOF` in the
+  step 5 tree and not in `v1.17.1`'s, after a late `Close` too. A request's error matches it in neither. Every error's text is the same
+  in both trees.
+* **After an overflow,** a request's and a notification's error both wrap `ErrConnectionClosed` and `ErrNotificationQueueOverflow`, as
+  `ErrNotificationQueueOverflow`'s doc says.
+
+The owner chose to correct the docs, not the behaviour: `Err`'s doc, the README and `TestErr` say and require the above. The
+alternative, a request after the end reporting the recorded end, was a behaviour change this record's question 7 ruled out.
 
 [0026-PLAN-connection-end-cause-and-wait.md](0026-PLAN-connection-end-cause-and-wait.md) implements it.
 

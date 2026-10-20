@@ -748,8 +748,10 @@ func (c *Connection) recordEnd(kind, cause error) {
 // by a notification overflow, wrapping ErrNotificationQueueOverflow for the
 // latter; otherwise ErrPeerDisconnected, wrapping how the peer ended it,
 // io.EOF at the end of its output or the read's error. It is non-nil exactly
-// when Done is closed. A call made after the end returns its own error,
-// which after a late Close is ErrConnectionClosed
+// when Done is closed. A call made after the end returns its own error:
+// after the peer's end of output, a request's wraps ErrPeerDisconnected,
+// a late Close or not, since the input has ended, while a notification's
+// wraps ErrConnectionClosed once a late Close has run
 // (0026-MADR-connection-end-cause-and-wait.md).
 func (c *Connection) Err() error {
 	if c.ctx.Err() == nil {

@@ -548,8 +548,9 @@ the same error each time: `acp.ErrConnectionClosed` when this side ended it, by
 `Close` or by the overflow policy, which wraps `acp.ErrNotificationQueueOverflow`;
 otherwise `acp.ErrPeerDisconnected`, wrapping `io.EOF` when the peer ended its
 output, or the read's error. The first end is the one kept: a `Close` after the
-peer's end leaves `Err()` as it was, though a call made then returns
-`acp.ErrConnectionClosed`. `Wait()` blocks until the connection has ended and
+peer's end leaves `Err()` as it was, though a notification sent then fails with
+`acp.ErrConnectionClosed`; a request still fails with `acp.ErrPeerDisconnected`,
+as above. `Wait()` blocks until the connection has ended and
 every goroutine it started has returned, its handlers' included, and then returns
 `Err()`. It does not end the connection, so close it first. A reader that does
 not implement `io.Closer` keeps `Wait()` waiting until its `Read` returns, and so

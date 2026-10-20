@@ -18,10 +18,10 @@ Implement the MADR's O1, as the owner decided questions 1 to 7 on 2026-10-20:
   (question 3).
 * **`Wait() error`** on the three: unbounded; it returns once the connection has ended and every goroutine it started has returned,
   handlers included, and then returns `Err` (questions 4, 5, 6).
-* **A call or send after a late `Close`** keeps returning `ErrConnectionClosed` (question 7).
+* **A call or send after a late `Close`** keeps returning `ErrConnectionClosed` (question 7) (corrected 2026-10-20, see the deviation during step 6).
 
 `make api` must report only additions: the six methods and `ErrNotificationQueueOverflow`. One behaviour changes: a failed call's error
-after the peer's EOF now matches `errors.Is(err, io.EOF)`. The release is proposed as the minor `v1.18.0`, which the owner confirms at
+after the peer's EOF now matches `errors.Is(err, io.EOF)` (corrected 2026-10-20, see the deviation during step 6). The release is proposed as the minor `v1.18.0`, which the owner confirms at
 the tag.
 
 ## Facts this plan rests on
@@ -100,7 +100,7 @@ Out of scope:
 * **`TestErr`,** a case per end, through `NewConnection`, as the MADR's probe did, each also through `Done`: before the end, nil;
   `Close`; the peer's EOF, with `errors.Is(…, io.EOF)`; a read error, with `errors.Is` reaching it; overflow, with
   `errors.Is(…, ErrNotificationQueueOverflow)`; the peer's EOF then `Close`, still the peer's, while a call then returns
-  `ErrConnectionClosed`; the same answer on every call.
+  `ErrConnectionClosed` (corrected 2026-10-20, see the deviation during step 6); the same answer on every call.
 * **`TestWait`:** after `Close` with an `io.Pipe`, it returns `Err` and no goroutine of the connection is left; with a reader that has no
   `Close` and blocks, it does not return within 200 ms of `Close`, and returns once the read does; with a handler that ignores its
   context, likewise; before the end, it blocks.
@@ -143,7 +143,7 @@ Planted breaks, at least. Each must be seen to fail on the check named.
 | Err | `closeWith` recording even when an end was recorded | `TestErr`, the peer's EOF then `Close` |
 | Err | the overflow closing with `ErrConnectionClosed` alone | `TestErr`, overflow |
 | Err | `errPeerEOF`'s `Unwrap` removed | `TestErr`, the peer's EOF |
-| Err | a call after a late `Close` returning the record | `TestErr`, the call after the late `Close` |
+| Err | a call after a late `Close` returning the record (corrected 2026-10-20, see the deviation during step 6) | `TestErr`, the call after the late `Close` |
 | Wait | `Wait` not waiting for `Done` | `TestWait`, before the end  (cannot fail: see the deviation during step 3) |
 | Wait | the handler's goroutine started with `go`, outside the wait group | `TestWait`, the handler; and `TestGoStatementsCounted` |
 | Wait | `Wait` not waiting for the wait group | `TestWait`, the reader without `Close` |
@@ -168,7 +168,7 @@ Each step is one commit, reverted by reverting it; step 4 reverts the generated 
 For a consumer:
 
 * six methods and a sentinel are added;
-* after the peer's EOF, a failed call's error now also matches `errors.Is(err, io.EOF)`; its text is unchanged;
+* after the peer's EOF, a failed call's error now also matches `errors.Is(err, io.EOF)`; its text is unchanged (corrected 2026-10-20, see the deviation during step 6);
 * a connection's goroutines start through a wait group, with no change to what they do.
 
 The release is proposed as the minor `v1.18.0`, which the owner confirms at the tag.
@@ -235,7 +235,7 @@ means, since two errors built apart do not match, and the plant "not the record"
 | `ErrConnectionClosed` for `Close`, wrapping `ErrNotificationQueueOverflow` for an overflow | the cases "Close" and "notification overflow" |
 | `ErrPeerDisconnected` wrapping `io.EOF` or the read's error | the cases "the peer's end of output" and "a read error" |
 | a later call's error wraps `ErrNotificationQueueOverflow`, or `io.EOF` | `connection_close_test.go:206`; the send in "the peer's end of output" |
-| a call after a late `Close` returns `ErrConnectionClosed` | "the peer's end, then Close" |
+| a call after a late `Close` returns `ErrConnectionClosed` (corrected 2026-10-20, see the deviation during step 6) | "the peer's end, then Close" |
 | the first end wins | "the peer's end, then Close"; the plant "record overwritten" |
 
 **Planted breaks.** Each ran in its own scratch copy of the working tree. All 6 failed `TestErr` with the text named:
@@ -387,7 +387,7 @@ The owner committed step 4 as `bacac56` and approved this step. What changed:
 | `Close` gives `ErrConnectionClosed` | `TestErr`, "Close" |
 | the overflow policy gives `ErrConnectionClosed` wrapping `ErrNotificationQueueOverflow` | `TestErr`, "notification overflow" |
 | the peer's end gives `ErrPeerDisconnected` wrapping `io.EOF`, or the read's error | `TestErr`, "the peer's end of output" and "a read error" |
-| a later `Close` leaves `Err()` as it was; a call then returns `ErrConnectionClosed` | `TestErr`, "the peer's end, then Close" |
+| a later `Close` leaves `Err()` as it was; a call then returns `ErrConnectionClosed` (corrected 2026-10-20, see the deviation during step 6) | `TestErr`, "the peer's end, then Close" |
 | `Wait()` blocks until the end and every goroutine's return, then returns `Err()` | `TestWait`, all four cases |
 | it does not end the connection | `TestWait`, "before the end" |
 | a reader with no `Close`, or a handler that ignores its context, holds `Wait()` | `TestWait`, "a reader Close cannot close" and "a handler that ignores its context" |
@@ -412,3 +412,72 @@ The owner committed step 4 as `bacac56` and approved this step. What changed:
 
 **The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
 leak guard.
+
+### Deviation, 2026-10-20, during step 6: what a call after the end returns
+
+**Found.** Drafting the release notes, a probe ran against `git archive` trees of `v1.17.1` and of `93ad59a` (step 5): a scratch program
+that sends a request and a notification after the peer's EOF, and again after a late `Close`. Two claims did not hold, and neither was
+a behaviour that changed:
+
+* "a failed call's error after the peer's EOF now matches `errors.Is(err, io.EOF)`" (Goal; Rollout and Rollback): only a notification's
+  does. A request, in flight or later, fails "input ended before a response", wrapping `ErrPeerDisconnected` and not `io.EOF`, in both
+  trees.
+* "a call after a late `Close` returns `ErrConnectionClosed`" (Goal; Tests; the verification table; steps 2 and 5's claims tables), in
+  `Err`'s doc (`48d6ab8`) and the README (`93ad59a`): a notification does; a request still wraps `ErrPeerDisconnected`, in both trees.
+  `TestErr` sent only a notification, so it passed.
+
+A second probe, after an overflow, found a request's and a notification's error both wrap `ErrConnectionClosed` and
+`ErrNotificationQueueOverflow`, as that sentinel's doc says.
+
+**Decision (owner, 2026-10-20), the recommended resolution.** Correct the docs, not the behaviour; the MADR is amended ("Amended during
+the PLAN's step 6"). Added to step 6's scope:
+
+* `connection.go`: `Err`'s doc says what a request and a notification return after the peer's end and a late `Close`;
+* `README.md`: the sentence on a late `Close` likewise;
+* `connection_end_test.go`: `TestErr` also sends a request after the peer's end, requiring `ErrPeerDisconnected` and not `io.EOF`, and
+  after the late `Close`, requiring `ErrPeerDisconnected` and not `ErrConnectionClosed`; each seen to fail on a planted break.
+
+The original lines are annotated, not rewritten.
+
+### Step 6, release notes, 2026-10-20
+
+The owner committed step 5 as `93ad59a` and approved this step. The deviation above came first; what changed:
+
+* **`docs/reports/0026-REPORT-release-notes-v1-18-0.md`, new,** and its row in `docs/README.md`, `observed`: the release text for
+  `v1.18.0`, with `make api`'s report, the probes, and the gate's switch to `apidiff` (`609cb41`), which landed after `v1.17.1`.
+* **The deviation's corrections:** `Err`'s doc in `connection.go`; the README's sentence on a late `Close`; `TestErr`'s two request
+  checks and its doc; the MADR's amendment and annotations; this PLAN's annotations.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| seven additions, none incompatible | `make api` on `93ad59a` and on the working tree: "against v1.17.1: 0 incompatible, 7 compatible" |
+| after the peer's end, a notification's error newly matches `io.EOF`, after a late `Close` too; its text is unchanged | the probe, both trees; `TestErr`, "the peer's end of output" |
+| a request's error after the peer's end is unchanged, without `io.EOF` | the probe, both trees; `TestErr`, the new request check |
+| after a late `Close`, a request wraps `ErrPeerDisconnected`, a notification `ErrConnectionClosed` | the probe, both trees; `TestErr`, "the peer's end, then Close" |
+| after an overflow, a request's and a notification's error wrap the overflow | the overflow probe, on `93ad59a`; `TestOverflowCloseClosesTransport` for the notification |
+| the notes' example is the README's | a script: the two blocks are byte for byte the same, 13 lines; the README's example check, rerun, as required |
+| the schema is still `1.25.0` | `git diff --quiet v1.17.1 HEAD -- schema/`, exit 0 |
+| the commits and the Go files changed | `git log v1.17.1..93ad59a`, eleven; `git show --name-only` each; `git diff --name-only v1.17.1 93ad59a -- '*.go' ':!*_test.go'`, five |
+
+**Planted breaks** for `TestErr`'s request checks, each in a scratch copy of the working tree, `errInputEnded` changed. 2 of 2 failed
+as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `errInputEnded` also wrapping `ErrConnectionClosed` | "a request after the late Close = …, want ErrPeerDisconnected, not ErrConnectionClosed" |
+| `errInputEnded` also wrapping `io.EOF` | "a request after the peer's end = …, want ErrPeerDisconnected, not io.EOF" |
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`: "152 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* `make api` against `v1.17.1`: "0 incompatible, 7 compatible".
+
+**The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
+leak guard.
+
+**Left for step 7:** the release text names "step 6's commit" where its hash belongs; step 7 replaces it once the commit exists.

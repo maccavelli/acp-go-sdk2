@@ -35,11 +35,13 @@ func ended(t *testing.T, c *Connection) error {
 
 // TestErr requires Err to be nil until the connection ends and then to say
 // why it ended, the same each time, with the cause each end gives readable by
-// errors.Is: Close, the peer's end of output (io.EOF, which a later send's
-// error wraps too), a read's error, and a notification overflow; and, after
-// the peer's end, a later Close not to change it while a call then still
-// returns ErrConnectionClosed
-// (0026-MADR-connection-end-cause-and-wait.md, E1 to E6).
+// errors.Is: Close, the peer's end of output (io.EOF, which a later
+// notification's error wraps too, and a later request's does not), a read's
+// error, and a notification overflow; and, after the peer's end, a later
+// Close not to change it, while a notification then returns
+// ErrConnectionClosed and a request still ErrPeerDisconnected
+// (0026-MADR-connection-end-cause-and-wait.md, E1 to E6, and its amendment
+// during the PLAN's step 6).
 func TestErr(t *testing.T) {
 	t.Parallel()
 	is := func(t *testing.T, err error, want []error, not []error) {
@@ -87,6 +89,10 @@ func TestErr(t *testing.T) {
 		if !errors.Is(send, ErrPeerDisconnected) || !errors.Is(send, io.EOF) {
 			t.Errorf("a send after the peer's end = %v, want ErrPeerDisconnected and io.EOF", send)
 		}
+		req := c.SendRequestNoResult(context.Background(), "_x/r", map[string]any{})
+		if !errors.Is(req, ErrPeerDisconnected) || errors.Is(req, io.EOF) {
+			t.Errorf("a request after the peer's end = %v, want ErrPeerDisconnected, not io.EOF", req)
+		}
 	})
 	t.Run("a read error", func(t *testing.T) {
 		t.Parallel()
@@ -130,6 +136,10 @@ func TestErr(t *testing.T) {
 		is(t, c.Err(), []error{ErrPeerDisconnected, io.EOF}, []error{ErrConnectionClosed})
 		if err := c.SendNotification(context.Background(), "_x/n", map[string]any{}); !errors.Is(err, ErrConnectionClosed) {
 			t.Errorf("a send after the late Close = %v, want ErrConnectionClosed", err)
+		}
+		req := c.SendRequestNoResult(context.Background(), "_x/r", map[string]any{})
+		if !errors.Is(req, ErrPeerDisconnected) || errors.Is(req, ErrConnectionClosed) {
+			t.Errorf("a request after the late Close = %v, want ErrPeerDisconnected, not ErrConnectionClosed", req)
 		}
 	})
 }
