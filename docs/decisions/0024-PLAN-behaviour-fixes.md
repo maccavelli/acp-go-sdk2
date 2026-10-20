@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-19
 associated-madr: "0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md"
 ---
@@ -39,7 +39,8 @@ Each was read on `d6cab27` on 2026-10-19. Step 1 re-asserts the code facts with 
 
 | For | Fact |
 | :--- | :--- |
-| A1 | `NewConnection` (`connection.go:578`) and the generated `NewAgentSideConnection` (`agent_gen.go:32`) and `NewClientSideConnection` (`client_gen.go:28`) check no argument. `cmd/generate/internal/emit/dispatch.go:111-213` (`agentSide`, `clientSide`, `emitSideConnection`) emits the two side constructors; `emit/dispatch_test.go:200` and `:212` pin their bodies. |
+| A1 | `NewConnection` (`connection.go:578`) and the generated `NewAgentSideConnection` (`agent_gen.go:32`) and `NewClientSideConnection` (`client_gen.go:28`) check no argument. `cmd/generate/internal/emit/dispatch.go:111-213` (corrected in step 1 to `:111-209`) (`agentSide`, `clientSide`,
+`emitSideConnection`) emits the two side constructors; `emit/dispatch_test.go:200` and `:212` pin their bodies. |
 | A1 | A probe in a scratch copy of `d6cab27`, each case in its own test process: a nil reader panics at `connection.go:1049`, a nil writer at `connection.go:687`, a nil agent answering `initialize` at `agent_gen.go:344`, and a nil client given a `session/update` after initialize at `client_gen.go:230`. Each is a nil pointer dereference on a connection goroutine, and each ends the process, exit 1. |
 | A1 | `handleInbound` (`connection.go:1570`) answers a request `-32601` when the handler is nil and drops a notification. The non-test code has no `recover()`. |
 | A1 | `MethodHandler`'s doc is at `connection.go:279`. The docs of `Agent` and `Client` are in the protocol table (`cmd/generate/internal/model/protocol.go:189` and `:202`). |
@@ -241,3 +242,27 @@ The release is proposed as the minor `v1.17.0`, which the owner confirms at the 
 * **`v1.17.0`, a minor,** rather than a patch. The API is unchanged, but three behaviours change, and A4's levels change what a
   consumer's log handler sees.
 * **The README's `context.Canceled` sentence** is corrected here, with A2's paragraph in the same section.
+
+## Execution record
+
+### Step 1, records, 2026-10-19
+
+The owner committed this PLAN as `12dd249` and approved it. This step:
+
+* marks this PLAN and its `docs/README.md` row `in-progress`;
+* annotates the MADR, after its table of findings A1 to A14, with the corrections to A3, A4 and A14 in "Facts this plan rests on".
+
+A script outside the tree re-asserted "Facts this plan rests on" on `12dd249`: 37 facts, each snippet at its line, plus the counts
+quoted. The code is the same as at `d6cab27`. All hold, after one correction:
+
+* **A1:** the side constructors' emission ends at `cmd/generate/internal/emit/dispatch.go:209`, not `:213`. The row is annotated.
+
+The A1 probe ran again, in a scratch copy of `12dd249`, each case in its own test process. Each case still ends the process, exit 1,
+with a nil pointer dereference:
+
+* a nil reader at `connection.go:1049`;
+* a nil writer at `connection.go:687`;
+* a nil agent answering `initialize` at `agent_gen.go:344`;
+* a nil client given a `session/update` after initialize at `client_gen.go:230`.
+
+Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.

@@ -98,6 +98,18 @@ This record holds the findings and the decisions they need. Each question had a 
 | A13 | **Concurrent inbound handlers are unbounded by default.** A peer can start any number of handler goroutines unless the application sets `WithMaxConcurrentRequests`. This is recorded ([0019-PLAN-api-decisions.md](0019-PLAN-api-decisions.md), B18). | `connection.go:443-449` |
 | A14 | **Validation messages quote the value.** 55 `ValidationError` sites put the path or discriminator they refuse into the message, e.g. `McpServerStdio: command: %q is not an absolute path`. The message reaches the peer and Error-level logs. A secret placed in `command` would follow it. | `types_gen.go` |
 
+Annotated 2026-10-19 by [0024-PLAN-behaviour-fixes.md](0024-PLAN-behaviour-fixes.md), step 1, which re-read the code on
+`12dd249`. Three findings above are corrected:
+
+* **A3.** Three lines, not two, log an id that could not be canonicalised as `string(…)`. The response id's line, now
+  `connection.go:1506`, is the third. The inbound and response ids have passed `validID`, so they are JSON strings or numbers; the
+  `$/cancel_request` `requestId` can be any JSON value.
+* **A4.** Eleven lines, not nine, log a fault of the peer's message at Error: the nine listed, now `connection.go:1074`, `:1200`,
+  `:1207`, `:1217`, `:1408`, `:1432`, `:1536`, `:1540` and `:1546`, and the inbound and response id lines, `:1275` and `:1506`. A
+  notification handler's error, `:1591`, is the peer's fault when the dispatch refused the notification.
+* **A14.** 24 of the 55 `ValidationError` sites quote the value they refuse: 18 absolute-path checks and 6 excluded-value checks.
+  55 is every site; the other 31 do not quote it.
+
 #### Versioning, packaging and process (V)
 
 | Id | Finding | Evidence |
