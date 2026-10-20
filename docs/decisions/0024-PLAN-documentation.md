@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-19
 associated-madr: "0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md"
 ---
@@ -561,3 +561,49 @@ Its facts, each re-run on `54cb0a2`:
 * the five commits since `v1.16.2` and their files, from `git show --name-only`.
 
 Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
+
+### Step 5, verification and close, 2026-10-19
+
+The owner committed step 4 as `c9ecb15`.
+
+**The push.**
+
+* `git fetch`, then `make push-guard` over the four commits not yet pushed, `fbd9afa..c9ecb15`: "the guard passed (exit 0)". The owner
+  pushed `c9ecb15`.
+* **CI run `39348500054` on `c9ecb15`** concluded `success` in all six jobs: `ubuntu-24.04`, `macos-15` and `windows-2025`, each with
+  `1.26.9` and `1.27.2`. Its one annotation is GitHub's notice on macOS arm64 queue times.
+
+**The gates over the tree**, on `c9ecb15`, with the API listing against `v1.16.2`, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`: "142 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records` and `make markdownlint`;
+* the API listing: 2429 lines at `v1.16.2` and in the tree, 0 removed, 0 added;
+* `go fix -diff ./...` in both modules: no output;
+* the go1.26.9 gate: `go vet` and `go test -race -count=1` in both modules, the root's with the leak guard;
+* Windows, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0. It ran after the push, not before
+  it; CI's two Windows jobs had passed on the same commit.
+
+**Acceptance.** Every criterion in "Verification" is met:
+
+* **Each step's checks** passed and its record is written, with step 2's three deviations and the annotations of steps 2 and 3.
+* **The comments-only check** holds for every non-test SDK file each step changed, and for the seven together against `v1.16.2`
+  (step 4).
+* **`TestExportedDeclarationsDocumented`, `TestExportedTypeDocsStartWithName` and `TestTypedMethodDocsNameErrors` pass,** in
+  `make pre-add-check` above and in CI.
+* **`make lint` reports 0 issues,** through `make pre-add-check`, and `go fix -diff` prints nothing.
+* **CI's six jobs passed** on the pushed commits.
+* **The API listing** against `v1.16.2` shows no difference.
+
+This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`, with phases 3 and 4 to come, each with a PLAN of its
+own.
+
+**Left to the owner.**
+
+* Push this close, after `make push-guard`.
+* Tag `v1.16.3` on this close commit once its CI passes, an annotated tag whose message is its name, as `v1.16.2` is. Its code is the
+  same as at `c9ecb15`.
+* Publish its release from the release text of
+  [0024-REPORT-release-notes-v1-16-3.md](../reports/0024-REPORT-release-notes-v1-16-3.md), with its relative links rewritten to the
+  tag.
