@@ -77,7 +77,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0024 | REPORT | [Release notes for v1.16.2, against v1.16.1](reports/0024-REPORT-release-notes-v1-16-2.md) | observed |
 | 0024 | PLAN | [Implement phase 2 of 0024: documentation](decisions/0024-PLAN-documentation.md) | complete |
 | 0024 | REPORT | [Release notes for v1.16.3, against v1.16.2](reports/0024-REPORT-release-notes-v1-16-3.md) | observed |
-| 0024 | PLAN | [Implement phase 3 of 0024: behaviour fixes](decisions/0024-PLAN-behaviour-fixes.md) | in-progress |
+| 0024 | PLAN | [Implement phase 3 of 0024: behaviour fixes](decisions/0024-PLAN-behaviour-fixes.md) | complete |
 | 0024 | REPORT | [Release notes for v1.17.0, against v1.16.3](reports/0024-REPORT-release-notes-v1-17-0.md) | observed |
 
 ## I want to…

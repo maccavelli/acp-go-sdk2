@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-10-19
+status: complete
+date: 2026-10-20
 associated-madr: "0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md"
 ---
 
@@ -507,3 +507,62 @@ Its facts, each re-run on `945115b`:
 * the six commits since `v1.16.3` and their files, from `git show --name-only`.
 
 Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
+
+### Step 6, verification and close, 2026-10-20
+
+The owner committed step 5 as `78c1cd0`. `b5f9491`, which follows it, changes only `AGENTS.md`'s commit rule, under that file's
+bootstrap exception; it is not part of this PLAN.
+
+**The gates over the tree**, on `b5f9491`, go1.27.2, with the API listing against `v1.16.3`, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`: "146 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `GOEXPERIMENT=nojsonv2 go test -count=1 ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* the API listing: 2429 lines at `v1.16.3` and in the tree, 0 removed, 0 added. Its first run failed before listing anything: the
+  scratch copy of the listing program had been emptied ("stat main.go: no such file or directory"). The program was restored from
+  where it was written, unchanged since, and gives the same 2429 lines as steps 4 and 5;
+* `go fix -diff ./...` in both modules: no output;
+* the go1.26.9 gate: `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
+  leak guard;
+* Windows over SSH, before the push, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+**The push.**
+
+* `git fetch`, then `make push-guard` over the eight commits not yet pushed, `b3804c6..b5f9491`: "the guard passed (exit 0)". The
+  owner gave permission in the turn, and `b5f9491` was pushed to `main`.
+* **CI run `39431233605` on `b5f9491`** concluded `success` in all six jobs: `ubuntu-24.04`, `macos-15` and `windows-2025`, each with
+  `1.26.9` and `1.27.2`. Its only annotation, on the two `macos-15` jobs, is GitHub's notice on macOS arm64 queue times.
+
+**The new docs' claims, each to the test that makes it:**
+
+| Claim | Test |
+| :--- | :--- |
+| a constructor panics on a nil argument, naming it, before the connection is handed out | `TestConstructorsPanicOnNil` |
+| a nil handler answers every request `-32601` and drops every notification | `TestNilHandlerAnswers` |
+| a panicking handler or method ends the process | `TestHandlerPanicEndsProcess` |
+| a handler's error: a `*RequestError` as it is, else `-32603` with its text, or `-32800` for `context.Canceled` | `TestHandlerErrorReachesPeer` |
+| `Prompt` and `RequestPermission` answered cancelled once their turn is cancelled | step 3's table |
+| validation messages quote the value they refuse | `TestValidationMessagesQuoteValue` |
+| a call whose context ended wraps `context.Cause(ctx)` | `TestMethodErrorsAsDocumented`, both "a context's cause" cases |
+
+**Acceptance.** Every criterion in "Verification" is met:
+
+* **Each step's checks** passed and its record is written, with the deviations during steps 2 and 3.
+* **The planted breaks** the Verification table names were each seen to fail on the check named: 5 in step 2, 8 in step 3, 6 in step
+  4, each in a scratch copy of the working tree.
+* **Every claim the new docs make** maps to a test that makes it (above).
+* **`make lint` reports 0 issues,** through `make pre-add-check`, and `go fix -diff` prints nothing.
+* **CI's six jobs passed** on the pushed commits.
+* **The API listing** against `v1.16.3` shows no difference.
+
+This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`, with phase 4 to come, with a PLAN of its own.
+
+**Left to the owner.**
+
+* Push this close, after `make push-guard`.
+* Tag `v1.17.0` on this close commit once its CI passes, an annotated tag whose message is its name, as `v1.16.3` is. Its code is the
+  same as at `945115b`.
+* Publish its release from the release text of
+  [0024-REPORT-release-notes-v1-17-0.md](../reports/0024-REPORT-release-notes-v1-17-0.md), with its relative links rewritten to the
+  tag.
