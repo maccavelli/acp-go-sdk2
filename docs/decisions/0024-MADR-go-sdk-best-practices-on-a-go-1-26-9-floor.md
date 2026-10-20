@@ -509,6 +509,8 @@ The phase 4 PLAN names its checks. Each is seen to fail on a planted break in a 
   * phase 3, [0024-PLAN-behaviour-fixes.md](0024-PLAN-behaviour-fixes.md): `complete`, released as `v1.17.0`;
   * phase 4, [0024-PLAN-api-gate-and-deprecation.md](0024-PLAN-api-gate-and-deprecation.md): `proposed`.
 
+  Annotated again 2026-10-20: phase 4's PLAN is `complete`, closed by its step 7. The four phases of this program are complete.
+
 * **Related records:**
   * [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md): its Go pin, superseded if
     this record is accepted (annotated 2026-10-20: accepted 2026-10-19, and superseded since step 2 of

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-20
 associated-madr: "0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md"
 ---
@@ -740,3 +740,54 @@ step 6, made no release of its own for a change with no SDK code ("No SDK code c
 proposes `v1.17.1`, which the owner confirms at the tag, or leaves the notes for the next release.
 
 Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
+
+### Step 7, verification and close, 2026-10-20
+
+The owner committed step 6 as `1d8aa96`.
+
+**The gates over the tree**, on `1d8aa96`, go1.27.2, each exit 0:
+
+* regeneration: the generated files unchanged;
+* `make pre-add-check`: "151 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* the API listing against `v1.17.0`: 2429 lines each, 0 removed, 0 added;
+* `actionlint` v1.7.12 on the tree; `go fix -diff ./...` in both modules: no output;
+* the go1.26.9 gate: `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
+  leak guard;
+* Windows over SSH, before the push, `go test -count=1 -shuffle=on ./...` in both modules: root exit 0, `cmd/generate` exit 0.
+
+**The push.**
+
+* `make api` on `1d8aa96`, in the repository with nothing uncommitted: exit 0, "Inferred base version: v1.17.0", "Suggested
+  version: v1.17.1"; with `TAG=v1.17.1`, exit 0, "v1.17.1 is a valid semantic version for this release".
+* `git fetch`, then `make push-guard` over the eight commits not yet pushed, `b463216..1d8aa96`: "the guard passed (exit 0)". The
+  owner pushed `1d8aa96`.
+* **CI run `39454425664` on `1d8aa96`** concluded `success` on its first attempt, in all six jobs: `ubuntu-24.04`, `macos-15` and
+  `windows-2025`, each with `1.26.9` and `1.27.2`. Its only annotation, on the two `macos-15` jobs, is GitHub's notice on macOS arm64
+  queue times.
+* **The gate step's first run in CI,** on `validate (ubuntu-24.04, 1.27.2)`, step 6, after `go mod download` and before the tests:
+  `success`, in about 3.4 s. Its log: "go: downloading golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e", "Inferred base version:
+  v1.17.0", "Suggested version: v1.17.1". The step is `skipped` on the other five jobs.
+
+**Acceptance.** Every criterion in "Verification" is met:
+
+* **Each step's checks** passed and its record is written, with the deviations during steps 4 and 5 and the annotations of steps 2
+  and 3.
+* **The planted breaks** were each seen to fail on the check named: 11 of 11 under each of GNU Make 3.81 and 4.4.1 in step 2, 4 in
+  step 3, 13 in step 4 and 7 in step 5, each in a scratch clone or copy.
+* **Every claim the new docs make** maps to a test or a check, in the claim tables of steps 2 to 5.
+* **`make lint` reports 0 issues,** through `make pre-add-check`, and `go fix -diff` prints nothing.
+* **CI's six jobs passed** on the pushed commits, and the gate step ran.
+* **`make api` reports no change** against `v1.17.0`.
+
+This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`; its four phases are complete.
+
+**Left to the owner.**
+
+* Push this close, after `make push-guard`.
+* Decide the release, as step 6 put it: tag `v1.17.1` on this close commit once its CI passes, with `make api TAG=v1.17.1` first, as
+  `RELEASING.md` now says, and `git tag -a v1.17.1 -m v1.17.1`; or make no release, and keep the notes for the next one.
+* If tagged, publish its release from the release text of
+  [0024-REPORT-release-notes-v1-17-1.md](../reports/0024-REPORT-release-notes-v1-17-1.md), with its relative links rewritten to the
+  tag.

@@ -79,7 +79,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0024 | REPORT | [Release notes for v1.16.3, against v1.16.2](reports/0024-REPORT-release-notes-v1-16-3.md) | observed |
 | 0024 | PLAN | [Implement phase 3 of 0024: behaviour fixes](decisions/0024-PLAN-behaviour-fixes.md) | complete |
 | 0024 | REPORT | [Release notes for v1.17.0, against v1.16.3](reports/0024-REPORT-release-notes-v1-17-0.md) | observed |
-| 0024 | PLAN | [Implement phase 4 of 0024: the API gate and deprecation notices](decisions/0024-PLAN-api-gate-and-deprecation.md) | in-progress |
+| 0024 | PLAN | [Implement phase 4 of 0024: the API gate and deprecation notices](decisions/0024-PLAN-api-gate-and-deprecation.md) | complete |
 | 0024 | REPORT | [Release notes for v1.17.1, against v1.17.0](reports/0024-REPORT-release-notes-v1-17-1.md) | observed |
 
 ## I want to…
