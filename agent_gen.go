@@ -29,7 +29,19 @@ type AgentSideConnection struct {
 // NewAgentSideConnection creates a new agent-side connection bound to the
 // provided Agent implementation. Optional ConnectionOption values configure
 // the underlying connection (e.g., WithMaxQueuedNotifications).
+//
+// It panics, naming the argument, when agent, peerInput or peerOutput is nil
+// (0024-PLAN-behaviour-fixes.md, A1).
 func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection {
+	if agent == nil {
+		panic("acp: NewAgentSideConnection: nil agent")
+	}
+	if peerInput == nil {
+		panic("acp: NewAgentSideConnection: nil peerInput")
+	}
+	if peerOutput == nil {
+		panic("acp: NewAgentSideConnection: nil peerOutput")
+	}
 	asc := &AgentSideConnection{}
 	asc.agent = agent
 	asc.sessionCancels = make(map[string][]*promptTurn)

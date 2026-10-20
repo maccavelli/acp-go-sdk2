@@ -60,7 +60,7 @@ func TestPingOverPipes(t *testing.T) {
 	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
 	a := pingAgent{got: make(chan PingNotification, 1)}
 	NewAgentSideConnection(a, aw, ar)
-	c := NewClientSideConnection(nil, cw, cr)
+	c := NewClientSideConnection(struct{}{}, cw, cr)
 	if err := c.Ping(t.Context(), PingNotification{N: -9223372036854775808}); err != nil {
 		t.Fatal(err)
 	}

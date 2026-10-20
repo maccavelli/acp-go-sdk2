@@ -22436,6 +22436,10 @@ func (v *WriteTextFileResponse) validate(abs func(string) bool) error {
 // methods for requests run concurrently. It calls the methods for
 // notifications one at a time, in the order they arrive
 // (0024-PLAN-documentation.md, A5).
+//
+// A method that panics ends the process, as an unrecovered panic in any
+// goroutine does. The connection does not recover it
+// (0024-PLAN-behaviour-fixes.md, A1).
 type Agent interface {
 	// Request parameters for the authenticate method.
 	//
@@ -22619,6 +22623,10 @@ type AgentExperimental interface {
 // methods for requests run concurrently. It calls the methods for
 // notifications one at a time, in the order they arrive
 // (0024-PLAN-documentation.md, A5).
+//
+// A method that panics ends the process, as an unrecovered panic in any
+// goroutine does. The connection does not recover it
+// (0024-PLAN-behaviour-fixes.md, A1).
 type Client interface {
 	// Notification sent by the agent when a URL-based elicitation is complete.
 	CompleteElicitation(ctx context.Context, params CompleteElicitationNotification) error

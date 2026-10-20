@@ -25,7 +25,19 @@ type ClientSideConnection struct {
 // NewClientSideConnection creates a new client-side connection bound to the
 // provided Client implementation. Optional ConnectionOption values configure
 // the underlying connection (e.g., WithMaxQueuedNotifications).
+//
+// It panics, naming the argument, when client, peerInput or peerOutput is nil
+// (0024-PLAN-behaviour-fixes.md, A1).
 func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection {
+	if client == nil {
+		panic("acp: NewClientSideConnection: nil client")
+	}
+	if peerInput == nil {
+		panic("acp: NewClientSideConnection: nil peerInput")
+	}
+	if peerOutput == nil {
+		panic("acp: NewClientSideConnection: nil peerOutput")
+	}
 	csc := &ClientSideConnection{}
 	csc.client = client
 	csc.conn = buildConnection(csc.handleWithExtensions, peerInput, peerOutput, opts...)

@@ -266,3 +266,73 @@ with a nil pointer dereference:
 * a nil client given a `session/update` after initialize at `client_gen.go:230`.
 
 Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
+
+### Deviation, 2026-10-19, during step 2: the engine cases' nil client
+
+**Found.** With the generated nil checks in place, `TestEngineBehaviour` failed in three engine cases with "panic: acp:
+NewClientSideConnection: nil client":
+
+* `cmd/generate/testdata/engine/accept-agent-request.txtar:72`;
+* `accept-agent-optional.txtar:75`;
+* `accept-agent-notification.txtar:63`.
+
+Each builds `NewClientSideConnection(nil, cw, cr)`. In their schemas the client has no methods, so their `Client` is `interface{}`.
+The search for nil callers behind "Facts this plan rests on" covered the root package only, not `cmd/generate/testdata`.
+
+**Decision (owner, 2026-10-19).** The three cases pass `struct{}{}`, which satisfies their empty `Client`. The contract stays the same
+for every schema: a nil client panics.
+
+**Files added to step 2's scope:** the three `.txtar` files above.
+
+### Step 2, A1, 2026-10-19
+
+The owner committed step 1 as `d5405d1` and approved this step. What changed:
+
+* **`NewConnection`** (`connection.go`) panics with "acp: NewConnection: nil peerInput" or "… nil peerOutput" before building
+  anything. Its doc names the panic, and says a nil handler answers every request `-32601` and drops every notification.
+* **The side constructors.** `emitSideConnection` (`emit/dispatch.go`) writes three inline checks at the top of each constructor's
+  body, for the agent or client, `peerInput` and `peerOutput`, each panicking with "acp: <constructor>: nil <argument>". The
+  constructors' docs name the panic.
+* **The panic docs.** `MethodHandler`'s doc, and the protocol table's docs of `Agent` and `Client`, gain: "A method that panics ends
+  the process, as an unrecovered panic in any goroutine does. The connection does not recover it." `MethodHandler`'s says "A handler".
+* **Regenerated:** `agent_gen.go`, `client_gen.go` (the checks and docs), `types_gen.go` (the interfaces' docs).
+* **The emitter's pins** (`emit/dispatch_test.go`) now include the three checks of each constructor.
+* **The three engine cases** pass `struct{}{}` as their client (deviation above).
+* **Tests,** in `nil_panic_test.go`:
+  * `TestConstructorsPanicOnNil`: each constructor with each nil argument, eight cases. The `recover()` value must equal the message,
+    and the agent or client, the existing `awareAgent` and `awareClient`, must not have been handed the connection. The reader is a
+    pipe whose writer is dropped, so a connection started before a panic would leave a goroutine the leak guard reports.
+  * `TestHandlerPanicEndsProcess`: runs the test binary again as a child, twice. In one a raw handler panics, in the other an `Agent`'s
+    `Initialize`. Each child must exit non-zero with "panic: handler bug: raw" or "… agent" in its output.
+* **The nil handler's claim** maps to the existing `TestNilHandlerAnswers` (`branches_test.go:300`): a request answered `-32601`, a
+  notification unanswered.
+
+The three tests passed 3 runs of 3 under `-race`. A search of the whole repository, `.go`, `.txtar` and `.md`, finds no other call
+with a nil agent, client, reader or writer; the two hits left are records quoting it.
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree, never in the tree. All 5 failed the check named:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the emitter's check of the agent or client removed, regenerated | `TestConstructorsPanicOnNil`: `want "acp: NewAgentSideConnection: nil agent"` |
+| `NewConnection`'s `peerOutput` check removed | `TestConstructorsPanicOnNil`: the reader goroutine's nil pointer dereference ends the run |
+| `NewAgentSideConnection`'s `peerOutput` check moved after the hand-off | `TestConstructorsPanicOnNil`: "was handed the connection before the panic" |
+| a `recover` around the handler call in `handleInbound` | `TestHandlerPanicEndsProcess`: "want a non-zero exit" |
+| `handleInbound`'s nil-handler branch removed | `TestNilHandlerAnswers`: a nil pointer dereference |
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* `go run .` in `cmd/generate`: generated files unchanged by regeneration;
+* `make pre-add-check`: "142 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `scripts/go-precheck.sh` on the new `nil_panic_test.go`: "1 file(s) clean";
+* `GOEXPERIMENT=nojsonv2 go test ./...`;
+* `GOOS=windows go vet ./...` in both modules;
+* the identifier scan of the changed files;
+* the API listing against `v1.16.3`: 2429 lines at the tag and in the tree, 0 removed, 0 added;
+* `go fix -diff ./...` in both modules: no output;
+* `make check-records` and `make markdownlint`.
+
+**The go1.26.9 gate**, with `GOTOOLCHAIN=go1.26.9` and scratch caches: `go version` reports go1.26.9; `go vet ./...` and
+`go test -race -count=1 ./...` pass in both modules, the root's with the leak guard.
+
+Windows over SSH runs before the push, at the close.

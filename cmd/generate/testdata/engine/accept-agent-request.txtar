@@ -69,7 +69,7 @@ func connect(t *testing.T, agent Agent) *ClientSideConnection {
 	cr, aw := io.Pipe()
 	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
 	NewAgentSideConnection(agent, aw, ar)
-	return NewClientSideConnection(nil, cw, cr)
+	return NewClientSideConnection(struct{}{}, cw, cr)
 }
 
 // A request reaches the agent with its parameters, and the result comes back.

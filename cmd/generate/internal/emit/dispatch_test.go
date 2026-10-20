@@ -196,7 +196,8 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 	common := map[string][]string{
 		"agent_gen.go": {
 			"// AgentSideConnection represents the agent's view of a connection to a client.\n//\n// Its methods are safe for concurrent use. Messages sent from several\n// goroutines are written whole, one at a time, in the order they reach the\n// connection's writer (0024-PLAN-documentation.md, A5).\ntype AgentSideConnection struct {",
-			"func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection {",
+			"func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection {\n" +
+				"\tif agent == nil {\n\t\tpanic(\"acp: NewAgentSideConnection: nil agent\")\n\t}\n\tif peerInput == nil {\n\t\tpanic(\"acp: NewAgentSideConnection: nil peerInput\")\n\t}\n\tif peerOutput == nil {\n\t\tpanic(\"acp: NewAgentSideConnection: nil peerOutput\")\n\t}\n",
 			"asc.conn = buildConnection(asc.handleWithExtensions, peerInput, peerOutput, opts...)\n" +
 				"\tif aware, ok := agent.(AgentConnAware); ok {\n\t\taware.SetAgentConnection(asc)\n\t}\n" +
 				"\tasc.conn.start()\n\treturn asc\n}\n",
@@ -208,7 +209,8 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 		},
 		"client_gen.go": {
 			"// ClientSideConnection provides the client's view of the connection and implements Agent calls.\n//\n// Its methods are safe for concurrent use. Messages sent from several\n// goroutines are written whole, one at a time, in the order they reach the\n// connection's writer (0024-PLAN-documentation.md, A5).\ntype ClientSideConnection struct {",
-			"func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection {",
+			"func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection {\n" +
+				"\tif client == nil {\n\t\tpanic(\"acp: NewClientSideConnection: nil client\")\n\t}\n\tif peerInput == nil {\n\t\tpanic(\"acp: NewClientSideConnection: nil peerInput\")\n\t}\n\tif peerOutput == nil {\n\t\tpanic(\"acp: NewClientSideConnection: nil peerOutput\")\n\t}\n",
 			"csc.conn = buildConnection(csc.handleWithExtensions, peerInput, peerOutput, opts...)\n" +
 				"\tif aware, ok := client.(ClientConnAware); ok {\n\t\taware.SetClientConnection(csc)\n\t}\n" +
 				"\tcsc.conn.start()\n\treturn csc\n}\n",

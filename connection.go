@@ -285,6 +285,10 @@ func addressable(v any) any {
 // from it: such a request does not wait for the handler that sent it. Sent
 // under an unrelated context, such as context.Background(), it waits for that
 // handler, which is waiting for it (0019-PLAN-behaviour-fixes.md, B1).
+//
+// A handler that panics ends the process, as an unrecovered panic in any
+// goroutine does. The connection does not recover it
+// (0024-PLAN-behaviour-fixes.md, A1).
 type MethodHandler func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError)
 
 // Connection is a simple JSON-RPC 2.0 connection over line-delimited JSON.
@@ -575,7 +579,18 @@ func WithInboundValidation(fn func(ctx context.Context, method string, params an
 //
 // Reading starts before NewConnection returns, so handler may be called
 // before then: it must not read a variable assigned from the result.
+//
+// A nil handler answers every request -32601 and drops every notification.
+// NewConnection panics, naming the argument, when peerInput or peerOutput is
+// nil, as http.Handle does for a nil handler
+// (0024-PLAN-behaviour-fixes.md, A1).
 func NewConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *Connection {
+	if peerInput == nil {
+		panic("acp: NewConnection: nil peerInput")
+	}
+	if peerOutput == nil {
+		panic("acp: NewConnection: nil peerOutput")
+	}
 	c := buildConnection(handler, peerInput, peerOutput, opts...)
 	c.start()
 	return c

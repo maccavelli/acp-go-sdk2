@@ -122,6 +122,9 @@ func agentSide(m *model.Model) side {
 			"NewAgentSideConnection creates a new agent-side connection bound to the",
 			"provided Agent implementation. Optional ConnectionOption values configure",
 			"the underlying connection (e.g., WithMaxQueuedNotifications).",
+			"",
+			"It panics, naming the argument, when agent, peerInput or peerOutput is nil",
+			"(0024-PLAN-behaviour-fixes.md, A1).",
 		},
 		peer:       "client",
 		negotiated: m.Initialize != nil,
@@ -145,6 +148,9 @@ func clientSide(m *model.Model) side {
 			"NewClientSideConnection creates a new client-side connection bound to the",
 			"provided Client implementation. Optional ConnectionOption values configure",
 			"the underlying connection (e.g., WithMaxQueuedNotifications).",
+			"",
+			"It panics, naming the argument, when client, peerInput or peerOutput is nil",
+			"(0024-PLAN-behaviour-fixes.md, A1).",
 		},
 		peer:       "agent",
 		negotiated: m.Initialize != nil,
@@ -174,10 +180,16 @@ func emitSideConnection(f *goFile, s side) {
 	f.comment(s.doc...)
 	f.add(typeDecl(s.typeName, &ast.StructType{Fields: fields(fs...)}))
 
-	body := []ast.Stmt{
-		define(exprs(id(s.local)), addr(composite(id(s.typeName)))),
-		assign(exprs(dot(s.local, s.field)), id(s.field)),
+	// A nil argument panics before anything is built, naming it, as
+	// http.Handle does for a nil handler (0024-PLAN-behaviour-fixes.md, A1).
+	var body []ast.Stmt
+	for _, arg := range []string{s.field, "peerInput", "peerOutput"} {
+		body = append(body, ifStmt(nil, binary(id(arg), token.EQL, nilExpr()),
+			exprStmt(call(id("panic"), str("acp: "+s.ctor+": nil "+arg)))))
 	}
+	body = append(body,
+		define(exprs(id(s.local)), addr(composite(id(s.typeName)))),
+		assign(exprs(dot(s.local, s.field)), id(s.field)))
 	if s.promptTurns {
 		body = append(body, assign(exprs(dot(s.local, "sessionCancels")),
 			call(id("make"), mapOf(id("string"), sliceOf(star(id("promptTurn")))))),
