@@ -566,3 +566,40 @@ This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`
 * Publish its release from the release text of
   [0024-REPORT-release-notes-v1-17-0.md](../reports/0024-REPORT-release-notes-v1-17-0.md), with its relative links rewritten to the
   tag.
+
+### Publication, 2026-10-20
+
+**The close.**
+
+* The owner committed the close as `2b73dd1` and pushed it. Git's pre-push hook ran the disclosure guard on the push.
+* CI run `39432140414` on `2b73dd1` concluded `success` on its first attempt, in all six jobs.
+
+**What was published.**
+
+* **The tag.** The owner tagged `2b73dd1` `v1.17.0`, an annotated tag whose message is its name, as `v1.16.3` is, and pushed it. CI
+  run `39433426376`, started by the tag, concluded `success` on its first attempt, in all six jobs: `ubuntu-24.04`, `macos-15` and
+  `windows-2025`, each with `1.26.9` and `1.27.2`.
+* **The release.** The owner then published the GitHub release `v1.17.0`, with
+  `gh release create v1.17.0 --title v1.17.0 --notes-file <file>`. Its body is the release text of
+  [0024-REPORT-release-notes-v1-17-0.md](../reports/0024-REPORT-release-notes-v1-17-0.md), as a script outside the tree extracted it:
+  the text under "### v1.17.0" up to "Sources not in the release text", with its one relative link rewritten to the file at the tag.
+
+**Checks.** The `v1.16.3` publication check, with its tag and commit changed, ran from outside the tree after the release was
+published. It used a scratch consumer, `GOPROXY` the default `https://proxy.golang.org,direct`, a scratch `GOMODCACHE` and `GOPATH`,
+and the checksum database on. Its first run held 9 of 9:
+
+* the release is not a draft or a prerelease, its body is the extracted text, and it is GitHub's latest;
+* the tag is annotated and names `2b73dd1`;
+* `main` on GitHub is the local `main`, and CI on it succeeded (the newest run on `2b73dd1`, the tag's);
+* the proxy's `@v/v1.17.0.info` gives the origin `refs/tags/v1.17.0` at `2b73dd1`;
+* `go list -m github.com/maccavelli/acp-go-sdk2@latest` gives `v1.17.0`;
+* `go mod download` of `v1.17.0` exits 0.
+
+**A consumer on the floor,** as for `v1.16.3`: a fresh module at `go 1.26.9`, with `GOTOOLCHAIN=go1.26.9` forced, the default
+`GOPROXY` and the checksum database on.
+
+* `go get github.com/maccavelli/acp-go-sdk2@v1.17.0` exited 0: "go: added github.com/maccavelli/acp-go-sdk2 v1.17.0".
+* The program, which calls `NewConnection` with a nil handler, built with go1.26.9 and ran, printing "protocol version 1".
+* The consumer's `go.mod` kept `go 1.26.9` and gained no `toolchain` line.
+
+Nothing of this PLAN is left open. The MADR's phase 4, the `gorelease` gate and the generator's `Deprecated:` path, has no PLAN yet.
