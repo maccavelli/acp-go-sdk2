@@ -239,10 +239,10 @@ func answerUnlessCancelled[T any](c *Connection, ctx context.Context, method str
 		err error
 	}
 	done := make(chan result, 1)
-	go func() {
+	c.goroutines.Go(func() {
 		v, err := call(ctx)
 		done <- result{v, err}
-	}()
+	})
 	select {
 	case r := <-done:
 		if errors.Is(context.Cause(ctx), ErrPromptCancelled) {
@@ -251,10 +251,10 @@ func answerUnlessCancelled[T any](c *Connection, ctx context.Context, method str
 		return r.v, r.err
 	case <-ctx.Done():
 		if errors.Is(context.Cause(ctx), ErrPromptCancelled) {
-			go func() {
+			c.goroutines.Go(func() {
 				r := <-done
 				c.loggerOrDefault().Debug("handler returned after its request was answered cancelled; result discarded", "method", method, "err", r.err)
-			}()
+			})
 			return cancelled, nil
 		}
 		r := <-done
@@ -323,6 +323,12 @@ type Connection struct {
 	inflightReceipts     map[uint64]struct{}
 	pendingCancelRequest []string
 	cancelRequestSignal  chan struct{}
+
+	// goroutines counts every goroutine the connection starts, each through
+	// its Go, so Wait can wait for them all. The context.AfterFunc callbacks
+	// are not counted: one on a caller's context can start after the count has
+	// reached zero (0026-MADR-connection-end-cause-and-wait.md).
+	goroutines sync.WaitGroup
 
 	// endErr is why the connection ended, recorded once, by the first of
 	// closeWith and shutdownReceive, before the context ends; Err returns it
@@ -672,10 +678,10 @@ func (c *Connection) start() {
 	// registration lasts the connection's life
 	// (0019-PLAN-idioms-performance.md, D8).
 	context.AfterFunc(c.ctx, c.wakeNotificationWaits)
-	go c.writeLoop()
-	go c.sendCancelRequests()
-	go c.receive()
-	go c.processNotifications()
+	c.goroutines.Go(c.writeLoop)
+	c.goroutines.Go(c.sendCancelRequests)
+	c.goroutines.Go(c.receive)
+	c.goroutines.Go(c.processNotifications)
 }
 
 // wakeNotificationWaits wakes every wait on the notification sequence, so each
@@ -753,6 +759,22 @@ func (c *Connection) Err() error {
 		return *err
 	}
 	return c.endError()
+}
+
+// Wait blocks until the connection has ended and every goroutine it
+// started has returned, its handlers' included, and then returns Err. It
+// does not end the connection: call Close first to stop it. A reader that
+// Close cannot close, one that does not implement io.Closer, keeps Wait
+// waiting until its Read returns; so does a handler that ignores its
+// context (0026-MADR-connection-end-cause-and-wait.md).
+func (c *Connection) Wait() error {
+	// The end comes first, as the contract says. Today the wait group alone
+	// implies it, since writeLoop and sendCancelRequests return only once the
+	// connection's context ends; this wait keeps the contract should that
+	// change (0026-PLAN-connection-end-cause-and-wait.md, step 3).
+	<-c.Done()
+	c.goroutines.Wait()
+	return c.Err()
 }
 
 // Close ends the connection: its context ends with ErrConnectionClosed, so
@@ -1149,10 +1171,10 @@ func (c *Connection) receive() {
 func (c *Connection) drainInput() {
 	close(c.inputDone)
 	answered := make(chan struct{})
-	go func() {
+	c.goroutines.Go(func() {
 		c.inboundRequests.Wait()
 		close(answered)
-	}()
+	})
 	bound := time.NewTimer(notificationQueueDrainTimeout)
 	defer bound.Stop()
 	select {
@@ -1335,7 +1357,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 
 		m := msg
 		c.inboundRequests.Add(1)
-		go func(m *anyMessage, idKey string, reqCtx context.Context, own *inflightRequest) {
+		c.goroutines.Go(func() {
 			defer c.inboundRequests.Done()
 			release := func() {}
 			if c.requestSlots != nil {
@@ -1351,8 +1373,8 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 				c.mu.Unlock()
 				own.cancel(nil)
 			}()
-			c.handleInbound(reqCtx, m, release)
-		}(&m, idKey, reqCtx, own)
+			c.handleInbound(reqCtx, &m, release)
+		})
 		return true
 	}
 
@@ -1518,10 +1540,10 @@ func (c *Connection) shutdownReceive(cause error) {
 
 	// Cancel inboundCtx after notifications finish, but ensure we don't leak forever if a
 	// handler blocks waiting for cancellation.
-	go func(finalEnqueuedSeq uint64) {
+	c.goroutines.Go(func() {
 		c.waitForNotificationDrain(finalEnqueuedSeq, notificationQueueDrainTimeout)
 		c.inboundCancel(cause)
-	}(finalEnqueuedSeq)
+	})
 
 	c.loggerOrDefault().Debug("connection closed", "cause", cause.Error())
 }
@@ -2193,7 +2215,8 @@ func (c *Connection) prepareNotification(method string, params any) (anyMessage,
 // running keep their contexts and their answers are written, for at most
 // five seconds, after which they are cancelled; then Done is closed. A read
 // that fails otherwise ends the connection at once
-// (0019-PLAN-issue-fixes.md, B23). Err then says why it ended.
+// (0019-PLAN-issue-fixes.md, B23). Err then says why it ended, and Wait
+// returns once its goroutines have.
 func (c *Connection) Done() <-chan struct{} {
 	return c.ctx.Done()
 }

@@ -144,7 +144,7 @@ Planted breaks, at least. Each must be seen to fail on the check named.
 | Err | the overflow closing with `ErrConnectionClosed` alone | `TestErr`, overflow |
 | Err | `errPeerEOF`'s `Unwrap` removed | `TestErr`, the peer's EOF |
 | Err | a call after a late `Close` returning the record | `TestErr`, the call after the late `Close` |
-| Wait | `Wait` not waiting for `Done` | `TestWait`, before the end |
+| Wait | `Wait` not waiting for `Done` | `TestWait`, before the end  (cannot fail: see the deviation during step 3) |
 | Wait | the handler's goroutine started with `go`, outside the wait group | `TestWait`, the handler; and `TestGoStatementsCounted` |
 | Wait | `Wait` not waiting for the wait group | `TestWait`, the reader without `Close` |
 | sides | the emitter's `Err` returning nil | `TestSideConnectionsErrAndWait`; the accept cases' `want.api` |
@@ -257,6 +257,68 @@ means, since two errors built apart do not match, and the plant "not the record"
 * `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
 * `make check-records`, `make markdownlint` and the identifier scan;
 * `make api` against `v1.17.1`: "0 incompatible, 2 compatible", `(*Connection).Err` and `ErrNotificationQueueOverflow`.
+
+**The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
+leak guard.
+
+### Deviation, 2026-10-20, during step 3: `Wait`'s wait for `Done` cannot be caught
+
+**Found.** The plant "`Wait` not waiting for `Done`", `<-c.Done()` removed, left `TestWait` passing, exit 0. The wait group cannot reach
+zero while the connection runs: `writeLoop` and `sendCancelRequests` return only once its context ends. The wait group alone implies
+the end today, so no test can tell the line's absence.
+
+**Decision (owner, 2026-10-20), the recommended resolution.** Keep `<-c.Done()` as `Wait`'s stated contract, with a comment saying
+why it stays; record the plant as one that cannot be caught. The verification table's row is annotated. No test changes.
+
+### Step 3, `Wait`, 2026-10-20
+
+The owner committed step 2 as `48d6ab8` and approved this step. What changed:
+
+* **`connection.go`:**
+  * `goroutines sync.WaitGroup`, with its comment, beside `endErr`;
+  * the nine `go` statements are `c.goroutines.Go(…)`: `start`'s four, `answerUnlessCancelled`'s two, the drain's waiter, the handler,
+    whose arguments became the closure's captures (`&m`, `idKey`, `reqCtx`, `own`), and the notification drain;
+  * `Wait`, as specified, its `<-c.Done()` commented as the deviation above decided;
+  * `Done`'s doc ends "Err then says why it ended, and Wait returns once its goroutines have."
+* **`connection_end_test.go`:**
+  * `TestWait`: before the end, it has not returned 200 ms on, and returns `ErrConnectionClosed` after `Close`; with a reader `Close`
+    closes, it returns `Err`, and no goroutine's stack names the test's reader type; with a reader `Close` cannot close, it has not
+    returned 200 ms after `Close`, and returns once the read does; with a handler that ignores its context, likewise, and no stack
+    names the handler. Each case uses a type or function no other test uses, so a stack is the test's own.
+  * `TestGoStatementsCounted`: fails on a `go` statement in the package's non-test files.
+  * Both passed 3 runs of 3 under `-race`, with `TestErr`.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| `Wait` blocks until the connection has ended | `TestWait`, "before the end" |
+| it waits for every goroutine, the handlers' included | "a handler that ignores its context"; the plant "a bare go handler" |
+| it returns `Err` | "a reader Close closes" |
+| it does not end the connection | "before the end": still waiting while the connection runs |
+| a reader `Close` cannot close, or a handler ignoring its context, keeps it waiting | the two cases of those names |
+| every goroutine goes through the wait group | `TestGoStatementsCounted` |
+| the `context.AfterFunc` callbacks are not counted | the MADR's correction, after `sync.WaitGroup`'s doc; not a test |
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree:
+
+| Break | Result |
+| :--- | :--- |
+| `<-c.Done()` removed from `Wait` | not caught, as the deviation above records: `TestWait` passes |
+| the handler started with `go`, outside the wait group | `TestWait`: "Wait returned acp: connection closed while the handler runs"; `TestGoStatementsCounted`: "a go statement; start it with the connection's goroutines.Go" |
+| `c.goroutines.Wait()` removed | `TestWait`: "Wait returned acp: connection closed while the reader's Read blocks", and "… while the handler runs" |
+
+The handler plant's runner first expected "Wait returned <nil>"; `Wait` returns `Err`, so the message reads "acp: connection closed".
+The expectation was corrected and the plant run again.
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* regeneration: the generated files unchanged;
+* `make pre-add-check`: "152 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* `make api` against `v1.17.1`: "0 incompatible, 3 compatible", `(*Connection).Err`, `(*Connection).Wait` and
+  `ErrNotificationQueueOverflow`.
 
 **The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
 leak guard.

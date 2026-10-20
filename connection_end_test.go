@@ -1,11 +1,19 @@
 package acp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
+	"path/filepath"
+	"runtime/pprof"
+	"strings"
 	"testing"
+	"time"
 )
 
 // errOnRead is a reader whose every read fails with err.
@@ -124,4 +132,132 @@ func TestErr(t *testing.T) {
 			t.Errorf("a send after the late Close = %v, want ErrConnectionClosed", err)
 		}
 	})
+}
+
+// waitPipe is a reader Close can close, a type no other test uses, so a
+// goroutine blocked in its Read is this test's.
+type waitPipe struct{ *io.PipeReader }
+
+// waitStuck is a reader with no Close whose reads block until release closes.
+type waitStuck struct{ release chan struct{} }
+
+func (r waitStuck) Read([]byte) (int, error) { <-r.release; return 0, io.EOF }
+
+// waitIgnoringHandler is a handler that ignores its context until release
+// closes.
+func waitIgnoringHandler(started, release chan struct{}) MethodHandler {
+	return func(context.Context, string, json.RawMessage) (any, *RequestError) {
+		close(started)
+		<-release
+		return map[string]any{}, nil
+	}
+}
+
+// stacksNaming reports whether a goroutine's stack names fn.
+func stacksNaming(fn string) bool {
+	var b bytes.Buffer
+	_ = pprof.Lookup("goroutine").WriteTo(&b, 2)
+	return strings.Contains(b.String(), fn)
+}
+
+// waiting starts c.Wait on a goroutine and returns where its result arrives.
+func waiting(c *Connection) <-chan error {
+	done := make(chan error, 1)
+	go func() { done <- c.Wait() }()
+	return done
+}
+
+// stillWaiting fails the test when done delivers within 200 ms.
+func stillWaiting(t *testing.T, done <-chan error, why string) {
+	t.Helper()
+	select {
+	case err := <-done:
+		t.Fatalf("Wait returned %v while %s", err, why)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// TestWait requires Wait to block until the connection has ended and every
+// goroutine it started has returned: before the end; with a reader Close
+// closes, none left once it returns; with a reader Close cannot close, until
+// its Read returns; with a handler that ignores its context, until it
+// returns. It returns Err (0026-MADR-connection-end-cause-and-wait.md).
+func TestWait(t *testing.T) {
+	t.Run("before the end", func(t *testing.T) {
+		c := NewConnection(nil, io.Discard, idleReader(t))
+		done := waiting(c)
+		stillWaiting(t, done, "the connection runs")
+		_ = c.Close()
+		if err := within(t, done, "Wait after Close"); !errors.Is(err, ErrConnectionClosed) {
+			t.Errorf("Wait = %v, want ErrConnectionClosed", err)
+		}
+	})
+	t.Run("a reader Close closes", func(t *testing.T) {
+		pr, pw := io.Pipe()
+		t.Cleanup(func() { _ = pw.Close() })
+		c := NewConnection(nil, io.Discard, waitPipe{pr})
+		_ = c.Close()
+		err := within(t, waiting(c), "Wait after Close")
+		if !errors.Is(err, c.Err()) {
+			t.Errorf("Wait = %v, want Err, %v", err, c.Err())
+		}
+		if stacksNaming("waitPipe") {
+			t.Error("a goroutine still reads the closed reader after Wait")
+		}
+	})
+	t.Run("a reader Close cannot close", func(t *testing.T) {
+		stuck := waitStuck{release: make(chan struct{})}
+		c := NewConnection(nil, io.Discard, stuck)
+		_ = c.Close()
+		done := waiting(c)
+		stillWaiting(t, done, "the reader's Read blocks")
+		close(stuck.release)
+		within(t, done, "Wait once the Read returns")
+		if stacksNaming("waitStuck") {
+			t.Error("a goroutine still reads after Wait")
+		}
+	})
+	t.Run("a handler that ignores its context", func(t *testing.T) {
+		pr, pw := io.Pipe()
+		t.Cleanup(func() { _ = pw.Close() })
+		started, release := make(chan struct{}), make(chan struct{})
+		c := NewConnection(waitIgnoringHandler(started, release), io.Discard, pr)
+		go func() { _, _ = pw.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"_x/r","params":{}}` + "\n")) }()
+		within(t, started, "the handler's start")
+		_ = c.Close()
+		done := waiting(c)
+		stillWaiting(t, done, "the handler runs")
+		close(release)
+		within(t, done, "Wait once the handler returns")
+		if stacksNaming("waitIgnoringHandler") {
+			t.Error("the handler's goroutine is left after Wait")
+		}
+	})
+}
+
+// TestGoStatementsCounted fails on a go statement in the package's non-test
+// files: every goroutine the connection starts goes through its wait group's
+// Go, so Wait can wait for it (0026-MADR-connection-end-cause-and-wait.md).
+func TestGoStatementsCounted(t *testing.T) {
+	t.Parallel()
+	names, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if g, ok := n.(*ast.GoStmt); ok {
+				t.Errorf("%s: a go statement; start it with the connection's goroutines.Go", fset.Position(g.Go))
+			}
+			return true
+		})
+	}
 }
