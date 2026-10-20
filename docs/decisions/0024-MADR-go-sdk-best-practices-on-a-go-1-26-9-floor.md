@@ -471,6 +471,47 @@ The phase 4 PLAN names its checks. Each is seen to fail on a planted break in a 
 * the root notice test failing on each of D10's four ignored forms;
 * `actionlint` and `make check-records` clean, and the API listing against `v1.17.0` unchanged.
 
+##### Found after the `v1.17.1` tag, 2026-10-20 (proposed, for the owner's review)
+
+The owner ran `make api TAG=v1.17.1`, the first step of the new `RELEASING.md`, then tagged `f19d332` `v1.17.1` and pushed the tag.
+For the next 30 minutes the module mirror and the checksum database refused the version. The findings were probed in scratch clones
+with a local server that forwards to proxy.golang.org and sum.golang.org and logs each request that names this module.
+
+| Id | Finding | Evidence |
+| :--- | :--- | :--- |
+| R13 | **`gorelease -version` asks the mirror for the proposed version.** Without `-version` it asks for the version list and the base's `.info`, `.mod` and `.zip`, all 200. With `-version=v1.99.97` it also asks for `/@v/v1.99.97.info`, which is 404 before the tag exists. | the logging server |
+| R14 | **The mirror caches that "not found".** proxy.golang.org's FAQ: "if someone requested the version before the tag was pushed, it may take up to 30 minutes for the mirror's cache to expire and fresh data about the version to become available." `v1.17.1` was tagged at 16:12:36Z (the mirror's `.info` `Time`). At 16:21:59Z the mirror's `@v/v1.17.1.info` and the checksum database's lookup both answered 404, "invalid version: unknown revision v1.17.1", and `go get …@v1.17.1` failed at "verifying module". At 16:56Z both answered 200, and a go1.26.9 consumer fetched, built and ran the release. | proxy.golang.org, sum.golang.org |
+| R15 | **Routing this module around the mirror keeps the check and asks nothing about the proposed version.** With `GONOPROXY=github.com/maccavelli/acp-go-sdk2`, `-version=v1.99.96` made 0 mirror requests for the module and one checksum-database request, `lookup …@v1.17.1`, the base, 200: the base is still verified. The verdicts are unchanged: "v1.99.96 is a valid semantic version for this release"; after a committed addition, `-version=v1.17.999` exits 1, "the minor version is not incremented". The module's versions come from its repository by git. | the logging server |
+| R16 | **CI is not affected.** CI's step runs without `-version` (R13's first case). The sibling `go-llmprovider-sdk` and `go-selfupdate-lib` gate with `apidiff` on trees from their own git tags, and check no proposed tag, so they never ask the mirror about this module. | their `scripts/check_api.py`, `scripts/check-api-compat.sh` |
+
+14. **How the pre-tag check avoids the mirror.** Decided the same day, not as recommended: see below.
+    * Recommended: `make api` sets `GONOPROXY` to this module when `TAG` is set (R15). `RELEASING.md` says why, and that nothing
+      should fetch the new version through the mirror before its tag is pushed.
+    * Alternatives:
+      * compare `TAG` with `gorelease`'s "Suggested version" from a run without `-version`, which re-implements its rules over its
+        output;
+      * `apidiff` on trees from git tags, as the sibling repositories do, which reverses question 6;
+      * keep the step and document the 30 minutes, which leaves every release unfetchable for up to that long.
+
+###### Decided with the owner, 2026-10-20: question 14
+
+**Not the recommendation: `apidiff`, as `go-llmprovider-sdk` and `go-selfupdate-lib` gate.** This reverses question 6's choice of
+`gorelease`. The owner's reason: working around the mirror's part in a release is not worth its cost. `gorelease` stays named in this record's history; the
+tool dependency is now `golang.org/x/exp/cmd/apidiff`, at the same `golang.org/x/exp` pseudo-version.
+
+Probed the same day, in scratch trees from `git archive`, with `apidiff` at `v0.0.0-20261014143641-f0251eb4aa3e` and the logging
+server of R13:
+
+| Id | Finding |
+| :--- | :--- |
+| R17 | **Package mode on the root package gives the gate.** `apidiff -w` on the base's tree and on the tree, then a comparison: no change prints nothing; a removed method prints "Incompatible changes:", "- (*ClientSideConnection).UnstableDidCloseDocument: removed"; a method added to `Agent`, "- Agent.ProbeMethod: added" as incompatible; an exported function added, "Compatible changes:", "- ProbeAdded: added". Every comparison exits 0, so the gate reads the report, as question 6's probe found. |
+| R18 | **Module mode would not do.** With `-m`, `apidiff -w` type-checks every package of the module, the examples' `main` packages included: a method added to `Agent` fails to load at `example/agent` ("*exampleAgent does not implement acp.Agent (missing method ProbeMethod)") instead of being reported, and an exported function of `example/agent` is reported as "./example/agent.ProbeExample: added". Package mode does neither. The root package is the module's only API (V5). |
+| R19 | **It asks nothing of the mirror.** Each run made no request for this module to the mirror or the checksum database, and took 1.6 to 2.8 s. The base comes from a git tag, so CI needs the tags: `go-selfupdate-lib` fetches every commit and tag on its Linux leg. |
+| R20 | **It agrees with the history.** `v1.15.0` against `v1.14.0`: the same three compatible changes its notes and R9 record; HEAD against `v1.17.1`: none. |
+
+**What the gate loses:** `gorelease`'s check of a proposed tag (`make api TAG=`). The report's compatible changes show when a release
+must be a minor; the owner picks the number at the tag, as before phase 4.
+
 ## Pros and Cons of the Options
 
 ### P1. A phased program under this record
@@ -510,6 +551,7 @@ The phase 4 PLAN names its checks. Each is seen to fail on a planted break in a 
   * phase 4, [0024-PLAN-api-gate-and-deprecation.md](0024-PLAN-api-gate-and-deprecation.md): `proposed`.
 
   Annotated again 2026-10-20: phase 4's PLAN is `complete`, closed by its step 7. The four phases of this program are complete.
+  Annotated a third time the same day: it reopens, `in-progress`, for the follow-up "Found after the `v1.17.1` tag".
 
 * **Related records:**
   * [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md): its Go pin, superseded if

@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 date: 2026-10-20
 associated-madr: "0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md"
 ---
@@ -791,3 +791,55 @@ This PLAN and its `docs/README.md` row are `complete`. The MADR stays `accepted`
 * If tagged, publish its release from the release text of
   [0024-REPORT-release-notes-v1-17-1.md](../reports/0024-REPORT-release-notes-v1-17-1.md), with its relative links rewritten to the
   tag.
+
+### Deviation, 2026-10-20, after the close: the pre-tag check made the mirror refuse `v1.17.1`
+
+**Found.** After the owner ran `make api TAG=v1.17.1` and pushed the tag, the mirror and the checksum database refused `v1.17.1` for
+about 30 minutes: "invalid version: unknown revision v1.17.1". `gorelease -version` asks the mirror for the proposed version before
+it exists, and the mirror caches the "not found" (the MADR's R13, R14). The fix was probed: routing this module around the mirror
+keeps the check and asks nothing about the proposed version (R15). CI is not affected (R16).
+
+**Decision:** the MADR's question 14, decided by the owner the same day: `apidiff`, as the sibling repositories gate, in
+place of `gorelease`. (Written first as: the MADR's question 14, open.) This PLAN reopens, `in-progress`, for step 8 below, and the `v1.17.1` publication record
+waits for the release to be published.
+
+### Step 8, the pre-tag check without the mirror (proposed, for question 14)
+
+Superseded the same day by question 14's answer: the step below, "Step 8, respecified", replaces this one.
+
+* **`Makefile`:** `api` sets `GONOPROXY=github.com/maccavelli/acp-go-sdk2` for its run when `TAG` is set, with the reason in its
+  comment.
+* **`RELEASING.md`:** "Tag and Publish" says why, and that nothing should fetch the new version through the mirror, such as a
+  `go get` or a consumer check, before its tag is pushed.
+* **Planted breaks,** each with `make api TAG=v1.99.95` in a scratch clone, its `GOPROXY` pointed at the logging server:
+  * the `GONOPROXY` removed: the server logs `/@v/v1.99.95.info` at the mirror;
+  * as committed: no mirror request for the module, and the checksum database asked only for the base;
+  * an addition committed, `TAG=` a patch: exit 2, "minor version is not incremented".
+* **Gates:** phase 1's, the go1.26.9 gate, and `make api` in a scratch clone.
+* **After CI passes,** the publication record of `v1.17.1`, then this PLAN `complete` again.
+
+### Step 8, respecified: the gate on `apidiff` (proposed, for approval)
+
+The MADR's R17 to R20 hold the probes.
+
+* **`scripts/check_api.py`, new, Python and the standard library,** as `go-llmprovider-sdk`'s:
+  * the base is the newest `v1.X.Y` tag, by number, from `git tag --list 'v1.*'`; an argument names another ref;
+  * the base's tree comes from `git archive`, in a temporary directory;
+  * `apidiff`, pinned in the script at `golang.org/x/exp/cmd/apidiff@v0.0.0-20261014143641-f0251eb4aa3e` and run with `go run`,
+    writes the root package's API from each tree (package mode, R18), then compares them;
+  * it prints the report, the compatible and incompatible changes, and exits 1 on an incompatible one, 0 otherwise, 2 on a tool error
+    or when there is no tag;
+  * it reads the working tree, so it needs no commit and no network once the tool is cached.
+* **`ci.yml`:** the step "API compatibility (apidiff)" runs `make api`, on Linux at `1.27.2` only. That job's checkout fetches every
+  commit and tag, `fetch-depth: ${{ (runner.os == 'Linux' && !matrix.floor) && '0' || '1' }}`, as `go-selfupdate-lib` does; the others
+  stay at depth 1. The `gorelease` step goes.
+* **`Makefile`:** `api` runs `python3 -B scripts/check_api.py`; `GORELEASE_PIN` and `TAG` go.
+* **`RELEASING.md`:** before tagging, `make api` exits 0 on the release commit, and its compatible changes, when there are any, mean
+  a minor release. The notes record its report. The tag command stays annotated.
+* **`docs/architecture.md`:** the check described as it is.
+* **Planted breaks,** each in a scratch clone, with `make api`: a removed method, exit 1; a method added to `Agent`, exit 1; an
+  exported function added, exit 0 with it listed; an exported function in `example/agent`, exit 0 and not listed; no `v1` tag (a
+  clone without tags), exit 2; the report's incompatible lines not read (the parse removed), the removal passing. And `actionlint` on a
+  mistyped `fetch-depth` expression.
+* **Gates:** phase 1's, the go1.26.9 gate, and Windows over SSH before the push.
+* **After CI passes,** the publication record of `v1.17.1`, then this PLAN `complete` again.
