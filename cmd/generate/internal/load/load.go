@@ -75,6 +75,10 @@ type Definition struct {
 	// array items that fail to decode.
 	XDeserializeDefaultOnError   bool `json:"x-deserialize-default-on-error"`
 	XDeserializeSkipInvalidItems bool `json:"x-deserialize-skip-invalid-items"`
+	// Deprecated is JSON Schema 2020-12's annotation that applications should
+	// refrain from using the node; false is the same as absent, and null is
+	// refused (0024-PLAN-api-gate-and-deprecation.md).
+	Deprecated bool `json:"deprecated"`
 
 	// boolSchema records whether this definition was a boolean schema (true/false).
 	// JSON Schema allows boolean schemas, where true matches anything and false matches nothing.
@@ -110,7 +114,24 @@ func (d *Definition) UnmarshalJSON(b []byte) error {
 	if err := decodeStrict(b, &a); err != nil {
 		return err
 	}
+	if err := refuseNull(b, "deprecated"); err != nil {
+		return err
+	}
 	*d = Definition(a)
+	return nil
+}
+
+// refuseNull fails when the JSON object b holds key with the value null,
+// which decoding into a bool takes as false where JSON Schema requires a
+// boolean (0024-PLAN-api-gate-and-deprecation.md).
+func refuseNull(b []byte, key string) error {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return err
+	}
+	if v, ok := obj[key]; ok && bytes.Equal(bytes.TrimSpace(v), []byte("null")) {
+		return fmt.Errorf("%s is null; it must be true or false", key)
+	}
 	return nil
 }
 

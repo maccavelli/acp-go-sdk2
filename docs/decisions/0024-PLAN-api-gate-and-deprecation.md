@@ -134,6 +134,10 @@ api: ## Runs gorelease, pinned in CI, on the last commit; TAG=vX.Y.Z checks a pr
   declaration; only a definition, a property of an object definition, or a direct anyOf or oneOf member of a definition can be
   deprecated". `false` is accepted anywhere, as absent.
 
+  Annotated 2026-10-20, step 3: the refusal on "a variant the model skips" is not written. The model skips only a JSON `null`
+  entry of a union's list (`model.go:748`), which holds no keyword. A `{"type": "null"}` variant is not skipped; it is a union
+  field like any other (`emit/types.go:1009`).
+
 ### The notices
 
 **What the model carries.** A `Deprecation` value, nil when the node is not marked:
@@ -206,6 +210,8 @@ type DeprecationNote struct {
   * a property whose `$ref` names a deprecated definition: the type has its notice, and the field none.
 * **`refuse-deprecated-string.txtar`** and **`refuse-deprecated-null.txtar`:** each names the definition and `deprecated`.
 * **`refuse-deprecated-placement.txtar`:** `deprecated: true` on an array's `items`, refused with its path.
+* **`refuse-deprecated-under-not.txtar`,** added in step 3: `deprecated: true` inside a definition's `not`, which `checkTypable`
+  does not walk and `checkDeprecated` must.
 
 **Model tests:** `TestDeprecationNotes`, as `TestDocNotes` (`patch_test.go:211`) sets a table's notes. It covers a note's text after
 the sentence, and the refusals of `checkDeprecationNotes` and of a note on an unmarked or absent node.
@@ -420,6 +426,80 @@ committed there, under GNU Make 3.81 (the system's `make`) and 4.4.1 (`gmake`). 
 * the API listing against `v1.17.0`: 2429 lines at the tag and in the tree, 0 removed, 0 added; and `make api` in the plants' control
   clone, no change;
 * `actionlint` v1.7.12 on the tree.
+
+**The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
+leak guard.
+
+### Step 3, the keyword, 2026-10-20
+
+The owner committed step 2 as `803c77b` and approved this step. What changed:
+
+* **`internal/load/load.go`:** `Definition.Deprecated` (`json:"deprecated"`), documented; `refuseNull`, called by
+  `Definition.UnmarshalJSON` after the strict decode, refuses `"deprecated": null`.
+* **`internal/model/keywords.go`:** `"deprecated": TreatAnnotation`.
+* **`internal/model/schema.go`:** `childPlace`, the placement rule `checkTypable` held inline, now shared; `checkDeprecated`, called
+  by `checkRefs` for each definition, refuses `deprecated: true` at `placeOther`, and walks `not` and `unevaluatedProperties`, which
+  `checkTypable` skips. `checkRefs`'s doc names it.
+* **Engine cases:** `refuse-deprecated-string`, `refuse-deprecated-null`, `refuse-deprecated-placement`, and
+  `refuse-deprecated-under-not`, added beyond the three this PLAN lists, for `checkDeprecated`'s walk of `not`.
+* **`internal/load/load_test.go`:** `TestDeepCopyDefinitionCoversEveryField`'s fixture sets `Deprecated`. The test requires every
+  field of `Definition` set, and failed without it in the first `make pre-add-check` run: "the fixture leaves Deprecated zero; set it
+  so its copy is checked". `deepCopyDefinition` already copies the field (`copyDef := *d`, `merge.go:455`).
+* **Docs:** 0012's keyword table is annotated with the row; `docs/architecture.md`'s keyword paragraph names the refusals.
+
+**The refusals, as the generator prints them,** the same on go1.27.2's default JSON backend and with `GOEXPERIMENT=nojsonv2`, exit 1
+each:
+
+| Case | Error |
+| :--- | :--- |
+| a string | "parse schema.json: definition "T": json: cannot unmarshal string into Go struct field alias.deprecated of type bool" |
+| `null` on a property | "parse schema.json: definition "T": deprecated is null; it must be true or false" |
+| on `items` | "model: T.properties.a.items: deprecated here marks no Go declaration; only a definition, a property of an object definition, or a direct anyOf or oneOf member of a definition can be deprecated" |
+| inside `not` | "model: T.not: deprecated here marks no Go declaration; …" |
+
+**Accepted, and marking nothing yet.** In a scratch copy, `deprecated: true` on `McpServerSse`, `McpCapabilities.sse` and
+`McpServer`'s `sse` variant, in both `schema.json` and `schema.unstable.json`: the generator exits 0, and the five generated files are
+byte-identical. Step 4 adds the notices before the push.
+
+**Found: a deprecation in one schema file alone renames unstable types.** The same marks in `schema.json` only changed
+`types_gen.go` and `helpers_gen.go`: `UnstableMcpServer`'s `sse` variant type became `UnstableMcpServerSseInline`, where it was
+`UnstableMcpServerSse`. The merge copies an unstable definition that differs from the stable one, by `reflect.DeepEqual`
+(`internal/load/merge.go:211`, `:329`), so `Deprecated` takes part as `Description` does; the unstable `McpServerSse` then needs its
+own name, and the variant's moves aside. Upstream writes both files from one Rust source (D3), so both carry a mark. Were they ever to
+differ, the rename is an incompatible change, and step 2's gate fails on it.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| a value that is not a boolean is refused | `refuse-deprecated-string` |
+| `null` is refused | `refuse-deprecated-null` |
+| refused on a node no Go declaration is built from | `refuse-deprecated-placement` |
+| `checkDeprecated` walks `not` and `unevaluatedProperties` | `refuse-deprecated-under-not` |
+| accepted on a definition, a property or a variant | the scratch probe above; step 4's `accept-deprecated` |
+| `false` is the same as absent | step 4's `accept-deprecated` |
+| the registry lists the keyword | `TestKeywordRegistryMatchesLoader` |
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree. All 4 failed the check named:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the registry's `deprecated` entry removed | `TestKeywordRegistryMatchesLoader`: the registry's list lacks `deprecated`, `load.Definition`'s has it |
+| `refuseNull`'s call removed | `refuse-deprecated-null`: "run accepted the schema" |
+| `checkDeprecated`'s call removed | `refuse-deprecated-placement`: "run accepted the schema" |
+| `checkDeprecated` skipping `not` and `unevaluatedProperties` | `refuse-deprecated-under-not`: "run accepted the schema" |
+
+The `null` plant was first expected to fail with the refusal's own text. It fails with "run accepted the schema": without the
+refusal, `null` decodes as `false`. The runner's expectation was corrected, and the plant run again.
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* regeneration: the generated files unchanged;
+* `make pre-add-check`: "146 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", on its second run, after the fixture;
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* the API listing against `v1.17.0`: 2429 lines each, 0 removed, 0 added;
+* `make api` in a scratch clone with this step committed (10 files): "Inferred base version: v1.17.0", "Suggested version: v1.17.1".
 
 **The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
 leak guard.

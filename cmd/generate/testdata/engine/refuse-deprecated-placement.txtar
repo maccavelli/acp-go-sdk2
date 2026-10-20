@@ -1,0 +1,13 @@
+Refused: deprecated on an array's items, from which no Go declaration is
+built (0024-PLAN-api-gate-and-deprecation.md).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "T": {"type": "object", "properties": {"a": {"type": "array", "items": {"type": "string", "deprecated": true}}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+T.properties.a.items
+deprecated here marks no Go declaration

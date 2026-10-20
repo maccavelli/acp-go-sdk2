@@ -210,6 +210,10 @@ Every keyword the schema loader accepts has one treatment, listed in
 `cmd/generate/internal/model/keywords.go`; the loader refuses any other
 keyword, and one written in another letter case, which `encoding/json` would
 match, and the model refuses an integer or number `format` without a Go type.
+`deprecated` is an annotation: the loader refuses it when it is `null`, and the
+model refuses it on a node no Go declaration is built from, anything but a
+definition, a property of an object definition, or a direct `anyOf` or `oneOf`
+member of a definition.
 A property's `default` is checked against its schema, through references,
 union members, array items and object properties: its JSON kind, an integer's
 range for its format, its `enum` and its `const`, so the generated decoding of

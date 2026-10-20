@@ -1,0 +1,13 @@
+Refused: deprecated that is not a boolean, which JSON Schema 2020-12 requires
+(0024-PLAN-api-gate-and-deprecation.md).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "T": {"type": "object", "properties": {"a": {"type": "string"}}, "deprecated": "yes"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+definition "T"
+deprecated

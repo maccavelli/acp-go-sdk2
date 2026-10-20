@@ -1,0 +1,13 @@
+Refused: deprecated inside a not, which is never typed, so checkTypable does
+not walk it and checkDeprecated must (0024-PLAN-api-gate-and-deprecation.md).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "T": {"type": "object", "properties": {"a": {"type": "string"}}, "not": {"required": ["b"], "deprecated": true}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+T.not
+deprecated here marks no Go declaration

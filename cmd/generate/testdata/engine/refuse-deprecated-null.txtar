@@ -1,0 +1,14 @@
+Refused: deprecated null on a property, which a bool would decode as false
+where JSON Schema 2020-12 requires a boolean
+(0024-PLAN-api-gate-and-deprecation.md).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "T": {"type": "object", "properties": {"a": {"type": "string", "deprecated": null}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+definition "T"
+deprecated is null; it must be true or false

@@ -138,6 +138,7 @@ func TestDeepCopyDefinitionCoversEveryField(t *testing.T) {
 		UnevaluatedProperties:        child(),
 		XDeserializeDefaultOnError:   true,
 		XDeserializeSkipInvalidItems: true,
+		Deprecated:                   true,
 		boolSchema:                   &b,
 	}
 	ov := reflect.ValueOf(orig).Elem()

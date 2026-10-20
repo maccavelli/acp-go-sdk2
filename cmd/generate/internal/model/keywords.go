@@ -55,6 +55,7 @@ var keywords = map[string]Treatment{
 	"minLength": TreatValidate,
 
 	"description": TreatAnnotation,
+	"deprecated":  TreatAnnotation,
 
 	"x-method":      TreatProtocol,
 	"x-side":        TreatProtocol,

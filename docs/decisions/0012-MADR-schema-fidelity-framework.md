@@ -124,6 +124,11 @@ Annotated 2026-10-19 by [0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md
 question 4: a generated type's doc comment starts `// <Name> is <place>.`, naming the schema definition, variant or property it
 comes from, before the `description`, which follows unchanged. [0024-PLAN-documentation.md](0024-PLAN-documentation.md) implements it.
 
+Annotated 2026-10-20 by [0024-PLAN-api-gate-and-deprecation.md](0024-PLAN-api-gate-and-deprecation.md), step 3: the registry gains
+`deprecated`, JSON Schema 2020-12's annotation (validation §9.3), with the row: `deprecated` | annotation | a `Deprecated:` paragraph
+on the Go declarations built from a definition, a property of an object definition, or a direct `anyOf` or `oneOf` member of a
+definition (that PLAN's step 4). It is refused on any other node, and when it is `null`.
+
 A `format` the registry does not know on an `integer` or `number` is refused, naming the definition, property, and format; an unknown `format` on a
 `string` is an annotation, as 2020-12 §7.2.3 requires.
 

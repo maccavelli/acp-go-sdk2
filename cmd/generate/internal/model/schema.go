@@ -195,14 +195,18 @@ func isOpenStringEnum(def *load.Definition) bool {
 
 // checkRefs fails on a $ref that is not local or names no definition, on an
 // integer or number whose format has no Go type (keywords.go), on
-// x-deserialize-skip-invalid-items on a node that is not an array, and on a
-// shape the model would type with loss (checkTypable).
+// x-deserialize-skip-invalid-items on a node that is not an array, on a
+// shape the model would type with loss (checkTypable), and on deprecated
+// where no Go declaration is built (checkDeprecated).
 func checkRefs(schema *load.Schema) error {
 	for _, name := range slices.Sorted(maps.Keys(schema.Defs)) {
 		if err := walkRefs(schema, name, schema.Defs[name]); err != nil {
 			return err
 		}
 		if err := checkTypable(name, schema.Defs[name], placeDefinition); err != nil {
+			return err
+		}
+		if err := checkDeprecated(name, schema.Defs[name], placeDefinition); err != nil {
 			return err
 		}
 	}
@@ -254,16 +258,44 @@ func checkTypable(path string, d *load.Definition, place placement) error {
 	// they are not walked.
 	isUnion := len(d.AnyOf) > 0 || len(d.OneOf) > 0
 	for _, c := range subschemas(path, d) {
-		child := placeOther
-		switch {
-		case c.keyword == kwNot || c.keyword == kwUnevaluated:
+		if c.keyword == kwNot || c.keyword == kwUnevaluated {
 			continue
-		case c.keyword == kwProperties && place == placeDefinition && !isUnion:
-			child = placeProperty
-		case (c.keyword == kwAnyOf || c.keyword == kwOneOf) && place == placeDefinition:
-			child = placeVariant
 		}
-		if err := checkTypable(c.path, c.def, child); err != nil {
+		if err := checkTypable(c.path, c.def, childPlace(place, c.keyword, isUnion)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// childPlace is where a subschema held by keyword sits, under a node at place
+// that is a union or not.
+func childPlace(place placement, keyword string, isUnion bool) placement {
+	switch {
+	case keyword == kwProperties && place == placeDefinition && !isUnion:
+		return placeProperty
+	case (keyword == kwAnyOf || keyword == kwOneOf) && place == placeDefinition:
+		return placeVariant
+	}
+	return placeOther
+}
+
+// checkDeprecated refuses deprecated on a node no Go declaration is built
+// from: anything but a definition, a property of an object definition, or a
+// direct anyOf or oneOf member of a definition, as checkTypable places them.
+// Unlike checkTypable, it walks not and unevaluatedProperties too
+// (0024-PLAN-api-gate-and-deprecation.md).
+func checkDeprecated(path string, d *load.Definition, place placement) error {
+	if d == nil {
+		return nil
+	}
+	if d.Deprecated && place == placeOther {
+		return fmt.Errorf("%s: deprecated here marks no Go declaration; only a definition, a property of an object definition, "+
+			"or a direct anyOf or oneOf member of a definition can be deprecated", path)
+	}
+	isUnion := len(d.AnyOf) > 0 || len(d.OneOf) > 0
+	for _, c := range subschemas(path, d) {
+		if err := checkDeprecated(c.path, c.def, childPlace(place, c.keyword, isUnion)); err != nil {
 			return err
 		}
 	}
