@@ -927,3 +927,39 @@ This PLAN and its `docs/README.md` row are `complete` again.
 **Left open.** The `v1.17.1` GitHub release is not yet published. Its tag, its CI (run `39456238211`, `success` in all six jobs), the
 mirror, the checksum database and a go1.26.9 consumer all hold (the MADR's R14, and the follow-up above). Its publication record, the
 nine checks, follows the release; its text describes the `gorelease` gate that `v1.17.1` contains.
+
+### Publication of `v1.17.1`, 2026-10-20
+
+**What was published.**
+
+* **The tag.** The owner ran `make api TAG=v1.17.1`, then tagged `f19d332` `v1.17.1`, an annotated tag whose message is its name, and
+  pushed it. CI run `39456238211`, started by the tag, concluded `success` on its first attempt, in all six jobs.
+* **The mirror's refusal, and its end.** For about 30 minutes the mirror and the checksum database refused the version, "invalid
+  version: unknown revision v1.17.1": the pre-tag check had asked the mirror for it before the tag existed (the MADR's R13, R14). At
+  16:56Z both served it. That led to question 14 and step 8.
+* **The release.** The owner published the GitHub release `v1.17.1` with `gh release create v1.17.1 --title v1.17.1 --notes-file
+  <file>`. Its body is the release text of [0024-REPORT-release-notes-v1-17-1.md](../reports/0024-REPORT-release-notes-v1-17-1.md),
+  as a script outside the tree extracted it: the text under "### v1.17.1" up to "Sources not in the release text", with its one
+  relative link rewritten to the file at the tag. It describes the `gorelease` gate that `v1.17.1` contains; step 8 replaced it after
+  the tag.
+
+**Checks.** The `v1.17.0` publication check, with its tag and commit changed, ran from outside the tree after the release was published,
+with a scratch module cache, the default `GOPROXY` and the checksum database on. 9 of 9 hold:
+
+* the release is not a draft or a prerelease, its body is the extracted text, and it is GitHub's latest;
+* the tag is annotated and names `f19d332`;
+* `main` on GitHub is the local `main`, `9e3f23b`, and CI on it succeeded (run `39472390273`, attempt 2: its first attempt's
+  `macos-15, 1.26.9` job was cancelled unrun, "The job was not acquired by Runner of type hosted even after multiple attempts", and
+  rerun by the owner);
+* the mirror's `@v/v1.17.1.info` gives the origin `refs/tags/v1.17.1` at `f19d332`;
+* `go list -m github.com/maccavelli/acp-go-sdk2@latest` gives `v1.17.1`;
+* `go mod download` of `v1.17.1` exits 0.
+
+**A consumer on the floor,** run once the mirror served the version: a fresh module at `go 1.26.9`, with `GOTOOLCHAIN=go1.26.9`
+forced, the default `GOPROXY` and the checksum database on.
+
+* `go get github.com/maccavelli/acp-go-sdk2@v1.17.1` exited 0: "go: added github.com/maccavelli/acp-go-sdk2 v1.17.1".
+* The program, which calls `NewConnection` with a nil handler, built with go1.26.9 and ran, printing "protocol version 1".
+* The consumer's `go.mod` kept `go 1.26.9` and gained no `toolchain` line.
+
+Nothing of this PLAN is left open.
