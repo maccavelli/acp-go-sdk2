@@ -493,3 +493,17 @@ id that cannot be canonicalised, as in the A3 test, then reaches `:1533` in full
 
 **The go1.26.9 gate**, with `GOTOOLCHAIN=go1.26.9` and scratch caches: `go version` reports go1.26.9; `go vet ./...` and
 `go test -race -count=1 ./...` pass in both modules, the root's with the leak guard.
+
+### Step 5, release notes, 2026-10-19
+
+The owner committed step 4 as `945115b` and approved this step. It adds
+[0024-REPORT-release-notes-v1-17-0.md](../reports/0024-REPORT-release-notes-v1-17-0.md) and its row in `docs/README.md`.
+
+Its facts, each re-run on `945115b`:
+
+* `git diff v1.16.3 HEAD -- schema/` is empty;
+* `git diff --name-only v1.16.3 HEAD -- '*.go' ':!*_test.go'` lists five SDK files and two of the generator's;
+* the API listing: 2429 lines at `v1.16.3` and in the tree, 0 removed, 0 added;
+* the six commits since `v1.16.3` and their files, from `git show --name-only`.
+
+Gates: `make check-records`, `make markdownlint` and the identifier scan, each exit 0.
