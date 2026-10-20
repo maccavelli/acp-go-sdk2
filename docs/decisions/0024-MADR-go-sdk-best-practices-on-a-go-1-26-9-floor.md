@@ -1,6 +1,6 @@
 ---
 status: accepted
-date: 2026-10-19
+date: 2026-10-20
 decision-makers: Repository owner
 ---
 
@@ -183,6 +183,7 @@ The phases, each subject to the questions below:
 3. **Behaviour (A1 to A4, A14).** As questions 1, 3 and 5 decide.
 4. **Process (V2, V3).** An API-compatibility gate in CI from the existing listing, and the generator's path to `// Deprecated:`, as
    questions 6 and 7 decide. Decided under question 6: the gate is `gorelease`, not the existing listing.
+   Scoped 2026-10-20 in "Phase 4 scoped" below, with questions 9 to 13, which the owner decided the same day.
 
 V1, the unstable API's policy, stays with the record question 16 of 0019 calls for, which a schema `1.26.0` update will need. A9, A12
 and A13 stay as recorded.
@@ -292,6 +293,159 @@ module's latest; it has no tagged version.
 
 Both run as `go run <path>@<version>`, as `govulncheck` does, so neither changes a `go.mod`. This record names `gorelease` as a tool
 dependency, as `AGENTS.md`, "Dependencies", requires. It describes itself as "an experimental tool".
+
+#### Phase 4 scoped, 2026-10-20 (decided the same day)
+
+The owner asked on 2026-10-20 for phase 4 to be scoped and specified, every claim proven. This section holds the findings, the
+specification they lead to, and the questions they raise. It changes no decision above until the owner answers questions 9 to 13.
+
+**How it was assessed.** The code was read on `b463216`, the `v1.17.0` publication record. Every probe ran in scratch clones of the
+committed history or scratch copies of the tree, with the module cache, build cache and `GOPATH` in the scratch directory, and
+`GOPROXY` the default with the checksum database on. Nothing in the tree or in `$HOME` was written. The upstream schemas, protocol
+docs and `schemars_derive` source were downloaded into scratch and only read.
+
+##### The gate, `gorelease` (V2)
+
+| Id | Finding | Evidence |
+| :--- | :--- | :--- |
+| R1 | **The pin is still the latest.** `golang.org/x/exp@latest` is `v0.0.0-20261014143641-f0251eb4aa3e` (2026-10-14T14:36:41Z), the pseudo-version probed for question 6. The module has no tagged version. Its `go` line is `1.26.0`, so it builds on the floor. It requires `golang.org/x/mod v0.42.0`, `golang.org/x/tools v0.52.0`, `github.com/google/go-cmp v0.6.0` and `golang.org/x/tools/go/packages/packagestest`. The pinned commit is itself an `apidiff` change, the engine `gorelease` uses ("apidiff: require exported old types to match same-named type in new"). `cmd/gorelease` was last changed on 2026-08-24 (`e88cd73687aa`). | `go list -m -json`, `go mod download -json`, the GitHub commits API |
+| R2 | **Run with no flags, it is the gate.** For a commit after `v1.17.0`: no API change exits 0, "Suggested version: v1.17.1". An exported function added exits 0, listing "ProbeAdded: added" under "compatible changes", "Suggested version: v1.18.0". A method removed exits 1, listing "(*ClientSideConnection).UnstableDidCloseDocument: removed" under "incompatible changes", "Incompatible changes were detected". A method added to `Agent` exits 1, "Agent.ProbeMethod: added" under "incompatible changes": an interface that gains a method breaks its implementers. | scratch clones, each change committed |
+| R3 | **The base comes from the module proxy.** "Inferred base version: v1.17.0" in a full clone, in a clone like CI's checkout (`fetch-depth: 1`, no tags, `ci.yml:43`), and under go1.26.9. Given `-base=` an older tag and no `-version`, it exits 1: "Can only suggest a release version when compared against the most recent version of this major: v1.17.0". The gate therefore passes no `-base`. | scratch clones |
+| R4 | **At a tag, it compares the tag with itself.** Checked out at `v1.17.0`, full or as a tag push fetches it, it infers base `v1.17.0` and exits 0. A tag-push run of the gate is vacuous; the runs on `main` and on pull requests carry it. | scratch clones |
+| R5 | **`-version` checks a proposed tag.** After an addition, `-version=v1.17.1` exits 1: "There are compatible changes, but the minor version is not incremented over the base version (v1.17.0)"; `v1.18.0` exits 0. With no API change it accepts `v1.17.1`, `v1.18.0`, `v1.17.2` and `v1.17.1-rc.1`. It refuses `v2.0.0`, "The module path does not end with the major version suffix /v2", and an existing tag, "version v1.17.0 already exists". With the `go` line raised to `1.27.2` it suggests `v1.18.0` but accepts `-version=v1.17.1`, so it does not guard the floor; CI's step "the floor is the go line" does. | scratch clones |
+| R6 | **It needs a clean tree.** A modified tracked file and an untracked file each exit 1: "repo … has uncommitted changes". An ignored directory (`.gocache`) does not. It cannot run inside `make pre-add-check`, which runs before anything is staged; it runs on a commit. | scratch clone |
+| R7 | **It needs the network.** With `GOPROXY=off` and the module cache warm, `go run <pin>` exits 1: "loading deprecation for golang.org/x/exp: module lookup disabled by GOPROXY=off". | scratch clone |
+| R8 | **The generator's module has nothing to compare.** No tag has the prefix `cmd/generate/`, and the proxy lists no version of `github.com/maccavelli/acp-go-sdk2/cmd/generate`. There, `gorelease` prints "Inferred base version: none" and suggests `cmd/generate/v0.1.0`. Question 6's "on the root module" stands. | `git tag -l`, `go list -m -versions`, scratch clone |
+| R9 | **On this module's history it agrees with the listing.** Replayed at each of the eight releases from `v1.15.0` to `v1.17.0` against the one before: 0 incompatible changes in each. `v1.15.0` has 3 compatible changes, `ElicitationSchema.PropertyOrder`, `UnstableMcpError.Extra` and `UnstableMcpError.MarshalJSON`, the three lines its notes record from the listing ([0019-REPORT-release-notes-v1-15-0.md](../reports/0019-REPORT-release-notes-v1-15-0.md)). The other seven have none, as their notes say. Each run exited 1 for R3's reason; the count is read from its sections. | scratch clones at each tag |
+| R10 | **A schema `1.26.0` update would fail the gate.** Regenerating from upstream's `schema-v1.26.0` stops first at the generator's type check: hand-written tests use unstable types it removes ("acp_test.go:145:54: undefined: UnstableDidChangeDocumentNotification", "and 20 more"), and so does `example/agent`. With the 27 test files the type check named removed from the scratch clone, `gorelease` exits 1 with 132 incompatible changes and 16 compatible. 40 of the 132 name no `Unstable` identifier, among them `AgentCapabilities.Nes`, `ClientCapabilities.PositionEncodings`, `AgentMethodNesStart`, `NesCapabilities` and `PositionEncodingKind`. A rule for "`Unstable*` identifiers" would not cover them. | scratch clone, upstream release files |
+| R11 | **The listing the release notes cite lives outside the tree.** Each of the eight notes reports from `v1.15.0` to `v1.17.0` names "the 0013 report's listing program", run by hand on `git archive` of the last tag. On 2026-10-20 its scratch copy had been emptied, and was recovered from the session's record ([0024-PLAN-behaviour-fixes.md](0024-PLAN-behaviour-fixes.md), step 6). `enginetest.API` (`cmd/generate/internal/enginetest/api.go:104`) is in the tree and serves the engine cases. | `RELEASING.md:103`, the notes reports |
+| R12 | **`RELEASING.md` shows a lightweight tag.** `RELEASING.md:85` reads `git tag vX.Y.Z`. Every tag from `v1.16.0` to `v1.17.0` is annotated (`git cat-file -t` prints `tag`). | `RELEASING.md`, `git cat-file` |
+
+##### Deprecation (V3)
+
+| Id | Finding | Evidence |
+| :--- | :--- | :--- |
+| D1 | **No published schema marks anything deprecated.** In each of the four files of the committed `1.25.0`, upstream `1.26.0` and upstream `2.0.0-alpha.9`: 0 `deprecated` keys, and 0 descriptions that mention deprecation. | a walk of every JSON value |
+| D2 | **Upstream deprecates in prose.** At `schema-v1.26.0`: `docs/protocol/v1/initialization.mdx:261`, "Note: This transport has been deprecated by the MCP spec." (SSE); `docs/protocol/v1/session-setup.mdx:488`, "This transport was deprecated by the MCP spec."; `docs/rfds/session-config-options.mdx:233`, "We would also likely move session modes to be `@deprecated` in favor of this approach"; `docs/protocol/v2/migration.mdx:795`, "The deprecated HTTP+SSE transport (`"type": "sse"`) is **removed**". The schema's `McpServerSse` says only "SSE transport configuration for MCP." | the GitHub contents API |
+| D3 | **Upstream's schema writer would emit the keyword.** `Cargo.lock` at `schema-v1.26.0` locks `schemars` and `schemars_derive` `1.2.2`. In `schemars_derive-1.2.2`, `src/attr/mod.rs:79` sets `deprecated` from a `#[deprecated]` attribute, and `:213`–`:215` insert `"deprecated": true`. The mutator is applied to containers (`src/schema_exprs.rs:113`, `:160`), fields (`:201`) and enum variants (`:339`, `:366`, `:461`, `:600`): a definition, a property, or a union variant. | crate source |
+| D4 | **JSON Schema defines it as an annotation.** 2020-12 validation §9.3: "The value of this keyword MUST be a boolean." "If "deprecated" has a value of boolean true, it indicates that applications SHOULD refrain from usage of the declared property. It MAY mean the property is going to be removed in the future." "Omitting this keyword has the same behavior as a value of false." | json-schema.org |
+| D5 | **The generator refuses it today.** With `"deprecated": true` added in a scratch copy, `go run .` exits 1 for each placement: on `McpServerSse`, "definition "McpServerSse": json: unknown field "deprecated""; on `McpCapabilities.sse`, "definition "McpCapabilities": …"; on `McpServer`'s `sse` variant, "definition "McpServer": …". The loader decodes strictly (`cmd/generate/internal/load/load.go:95`, `decodeStrict`), so an upstream deprecation stops `make version` until the generator models the keyword. | scratch copies |
+| D6 | **Modelling a keyword has three parts.** A field of `load.Definition`; a treatment in the registry (`cmd/generate/internal/model/keywords.go`), which `TestKeywordRegistryMatchesLoader` keeps equal to the loader's fields; and a row of the keyword table of [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md). | `keywords.go`, `keywords_test.go` |
+| D7 | **Descriptions reach 13 kinds of doc.** The model calls `docLines` on a schema description 13 times: definitions (`model.go:424`), enum and constant values (`:518`, `:561`, `:570`), nested structs (`:612`), inline variants (`:960`), flattened members (`:1052`), fields (`fields.go:529`, `:578`), inline shapes (`:596`, `:615`, `:617`) and methods, from their request definition (`methods.go:213`). A helper constructor's doc (`helperDoc`, `cmd/generate/internal/emit/helpers.go:61`) is built from the variant's discriminator, not its description, so a variant's deprecation must reach it as a flag, not as text. | `grep` |
+| D8 | **Engine cases compare no doc comment.** A case holds `want.api`, the exported API as `enginetest.API` lists it, or `want.err` (`cmd/generate/engine_test.go:72`–`:73`). A deprecation case needs a section of its own. | `engine_test.go` |
+| D9 | **Go's convention is a paragraph.** go.dev/doc/comment: "Paragraphs starting with Deprecated: are treated as deprecation notices. … Deprecation notices are followed by some information about the deprecation, and a recommendation on what to use instead, if applicable. The paragraph does not have to be the last paragraph in the doc comment." The Go wiki adds: "In general, if an API still works and does not have significant downsides, we do not formally mark it as deprecated". | go.dev |
+| D10 | **staticcheck honours only that form.** Five functions in a scratch copy, called from another package: SA1019 reported the notice as its own paragraph ("Deprecated: use X." after a blank comment line), and none of "Deprecated:" with no blank line before it, "Deprecated:" mid-line, "deprecated:" and "Deprecated," (1 issue). | scratch copy, `golangci-lint` v2.14.0, the repository's config |
+| D11 | **It reports uses from other packages only.** With notices on the generated `McpServerSse`, `McpServer.Sse`, `McpCapabilities.Sse` and `NewMcpServerSse`, `golangci-lint` with the repository's config, run at the root as `make lint` runs it, reports 0 issues for both `GOOS` values: the generated code and the root's tests use them inside the package. A package of the module that uses them gets three SA1019 reports, one each for the type, the field and the constructor. The examples are packages of their own, so a deprecation of something they use must change them in the same commit. The three doc tests (`TestExportedDeclarationsDocumented`, `TestExportedTypeDocsStartWithName`, `TestTypedMethodDocsNameErrors`) pass with the notices, and `go doc McpServerSse` shows the paragraph last. | scratch copy |
+| D12 | **A plain `bool` field accepts `null`.** Decoded strictly into a struct with `Deprecated bool`, `"yes"` and `1` are refused ("json: cannot unmarshal string into Go struct field definition.deprecated of type bool", and "number"), but `null` decodes as `false` with no error. The same on go1.27.2's default backend and with `GOEXPERIMENT=nojsonv2`. 2020-12 says the value MUST be a boolean (D4). | scratch program, both backends |
+| D13 | **Nothing hand-written is deprecated, and two records expect it may be.** `git grep -i deprecated -- '*.go' '*.txtar'` finds nothing (exit 1). [0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md](0022-PLAN-keep-elicitation-property-order-before-v1-15-0.md): "After the tag, `PropertyOrder` stays within `v1`; it can be deprecated, not removed." [0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md](0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md): "step 3's option can be deprecated but not removed." | `git grep`, records |
+
+##### Specification, as recommended
+
+**The gate (V2), as question 6 decided it:**
+
+* **CI.** One step, "API compatibility (gorelease)", in the `validate` job, `if: runner.os == 'Linux' && !matrix.floor`, as the
+  lint step is. It runs `go run golang.org/x/exp/cmd/gorelease@v0.0.0-20261014143641-f0251eb4aa3e` with no flags, from the root
+  (R2, R3). It sits directly after `go mod download` (`ci.yml:55`), so no step before it has written the tree (R6). It runs on every
+  push to `main`, every pull request and the weekly schedule; on a tag push it passes trivially (R4).
+* **`make api`.** `GORELEASE_PIN` is read from `ci.yml`, as `GOVULNCHECK_PIN` is (`Makefile:27`), so the pin has one home. The target
+  fails when the pin is missing, runs the gate with no flags, and adds `-version=$(TAG)` when `TAG` is set. `TAG`, not `VERSION`,
+  because `make release VERSION=` already names a schema version. It is not part of `make pre-add-check` (R6). Offline it fails with
+  R7's message.
+* **`RELEASING.md`.**
+  * Before tagging, `make api TAG=vX.Y.Z` exits 0 on the commit to be tagged.
+  * Each notes report records `make api`'s compatible and incompatible changes and its suggested version, in place of the listing
+    program outside the tree (R11). `enginetest.API` stays for the engine cases.
+  * The tag command becomes `git tag -a vX.Y.Z -m vX.Y.Z`, the practice since `v1.16.0` (R12).
+* **No override.** A removal or an interface method added fails CI. What a record decides for it is question 12.
+
+**Deprecation (V3), as question 7 decided it, with the scope of questions 9 to 11:**
+
+* **The keyword.** `load.Definition` gains `Deprecated bool` (`json:"deprecated"`), the registry gives it `TreatAnnotation`, and
+  0012's table is annotated with the row (D6). A value that is not `true` or `false` is refused, `null` included, which a
+  plain `bool` would accept (D12); `false` is the same as absent (D4).
+* **Where a notice goes.** Each Go declaration made from a deprecated node carries one:
+
+  | Schema node | Go declarations |
+  | :--- | :--- |
+  | a definition | its type; for a request or notification definition, the method of its interface and of its side's connection, whose docs come from it (D7) |
+  | a property | its struct field; for an inline object property, its nested type too |
+  | a union variant | the union's field, the variant's inline type, and its helper constructor; for a constant variant, the constant |
+
+* **The notice.** A paragraph of its own, after a blank comment line (D10), as question 10 decides its text.
+* **No change today.** The committed schema marks nothing (D1), so every generated file stays byte-identical and the API listing
+  unchanged; `TestGeneratedFilesUpToDate` holds that.
+* **Tests.**
+  * The engine harness gains an optional `want.deprecated` section: every generated declaration with a notice, and its text, compared
+    exactly, so a missing or an extra notice fails (D8).
+  * Engine cases: a definition, a property, a variant, a constant variant and a method's definition, each deprecated; `deprecated:
+    false`; and a string and a `null`, each refused, naming the definition and the keyword.
+  * At the root, a test that every comment line of a non-test file whose text starts with "deprecated", in any case, is a notice in
+    D10's form, so a hand-written one that tools would ignore fails (question 13).
+* **Release.** Phase 4 changes no exported API and no behaviour, so `gorelease` would suggest a patch, `v1.17.1`. The owner confirms
+  it at the tag.
+
+##### Questions for the owner
+
+9. **Where `deprecated` is honoured.** Question 7 says "when the schema marks a definition deprecated".
+   * Recommended: every node `schemars` marks, a definition, a property or a union variant (D3), with the declarations of the table
+     above.
+   * Alternative: definitions only. A deprecated property or variant is then still refused, and stops `make version` (D5).
+10. **The notice's text.** The schema carries a boolean, not a reason or a replacement (D4), where Go's convention asks for "a
+    recommendation on what to use instead, if applicable" (D9).
+    * Recommended: a fixed sentence naming the node, such as "Deprecated: the ACP schema marks the "sse" variant of the McpServer
+      schema definition deprecated.", followed by an optional note from the model naming the replacement. A note for a node the schema
+      does not mark is refused, as the model's other notes are.
+    * Alternative A: a note required for every deprecated node, the generator refusing one without it. Every upstream deprecation then
+      waits for a person to write it.
+    * Alternative B: the fixed sentence only.
+11. **Methods.** A deprecated request or notification definition is the method's own deprecation upstream.
+    * Recommended: its interface method and its side connection's method carry the notice too (table above). Callers in other
+      packages are then warned (D11); implementers are not, as SA1019 reports uses, not implementations.
+    * Alternative: types only.
+12. **What the gate does with an intended break.** R10 shows the next schema update makes 132 incompatible changes, 40 of them to
+    names without `Unstable`, and R2 that a new stable method on `Agent` is incompatible too.
+    * Recommended: phase 4 adds no override. A change `gorelease` calls incompatible fails CI until a record decides it: the record
+      that question 16 of [0019-MADR-remediate-debugging-pass-findings.md](0019-MADR-remediate-debugging-pass-findings.md) calls
+      for, for schema `1.26.0`, or a `/v2`. A new stable method can avoid the break by binding to an optional interface, as
+      `session/load` binds to `AgentLoader`.
+    * Alternative: a committed list of expected incompatible lines that CI compares with `gorelease`'s output. That parses its output,
+      the cost question 6 held against `apidiff`.
+13. **Hand-written notices.**
+    * Recommended: the root test of the specification, so a notice in a form tools ignore (D10) fails the build.
+    * Alternative: review alone.
+
+##### Decided with the owner, 2026-10-20
+
+| Question | Answer |
+| :--- | :--- |
+| 9. Where `deprecated` is honoured | As recommended: a definition, a property or a union variant, with the declarations of the specification's table. This widens question 7, which named definitions. |
+| 10. The notice's text | As recommended: the fixed sentence naming the node, then an optional model note naming the replacement; a note for a node the schema does not mark is refused. |
+| 11. Methods | As recommended: a deprecated request or notification definition also marks its interface method and its side connection's method. |
+| 12. An intended break | As recommended: no override. A change `gorelease` calls incompatible fails CI until a record decides it. |
+| 13. Hand-written notices | As recommended: the root test. |
+| `RELEASING.md`'s tag command | As recommended: phase 4 changes it to `git tag -a vX.Y.Z -m vX.Y.Z` (R12). |
+
+The specification above stands as written, and phase 4's PLAN implements it.
+
+##### Consequences, if the recommendations are accepted
+
+* Good, because an incompatible change fails CI at the push, not at the next release's hand-run listing, and the comparison is
+  reproducible from a pin rather than a program outside the tree (R11).
+* Good, because an upstream deprecation no longer stops `make version` (D5) and reaches callers as SA1019 (D11).
+* Neutral, because `make api` needs a clean tree and the network (R6, R7), so it runs after a commit, as `make push-guard` does.
+* Neutral, because a tag-push run of the gate checks nothing (R4).
+* Bad, because the schema `1.26.0` update cannot land until its record decides the removals (R10), which until now nothing enforced.
+* Bad, because the tool is experimental and untagged (R1); a pin update is a reviewed change to `ci.yml`.
+
+##### Confirmation
+
+The phase 4 PLAN names its checks. Each is seen to fail on a planted break in a scratch clone or copy, at least:
+
+* the gate step, and `make api`, exiting 1 on a committed removal and on a method added to `Agent`, and 0 on a committed addition;
+* `make api TAG=v1.17.1` exiting 1 on a committed addition;
+* each engine case failing when its notice, or its refusal, is removed from the generator;
+* the root notice test failing on each of D10's four ignored forms;
+* `actionlint` and `make check-records` clean, and the API listing against `v1.17.0` unchanged.
 
 ## Pros and Cons of the Options
 
