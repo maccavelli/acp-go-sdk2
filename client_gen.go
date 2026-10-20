@@ -66,6 +66,18 @@ func (c *ClientSideConnection) Close() error {
 	return c.conn.Close()
 }
 
+// Err returns nil until the connection ends, and then why it ended; see
+// Connection.Err.
+func (c *ClientSideConnection) Err() error {
+	return c.conn.Err()
+}
+
+// Wait blocks until the connection has ended and every goroutine it started
+// has returned, and then returns Err; see Connection.Wait.
+func (c *ClientSideConnection) Wait() error {
+	return c.conn.Wait()
+}
+
 // SetLogger directs connection diagnostics to the provided logger.
 func (c *ClientSideConnection) SetLogger(l *slog.Logger) {
 	c.conn.SetLogger(l)

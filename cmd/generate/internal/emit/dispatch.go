@@ -237,6 +237,18 @@ func emitSideConnection(f *goFile, s side) {
 	f.add(method(recv(), "Close", funcType(nil, param("", id("error"))),
 		ret(call(dot(s.recv, "conn", "Close")))))
 	f.line()
+	// Why the connection ended, and a wait for its goroutines
+	// (0026-MADR-connection-end-cause-and-wait.md).
+	f.comment("Err returns nil until the connection ends, and then why it ended; see",
+		"Connection.Err.")
+	f.add(method(recv(), "Err", funcType(nil, param("", id("error"))),
+		ret(call(dot(s.recv, "conn", "Err")))))
+	f.line()
+	f.comment("Wait blocks until the connection has ended and every goroutine it started",
+		"has returned, and then returns Err; see Connection.Wait.")
+	f.add(method(recv(), "Wait", funcType(nil, param("", id("error"))),
+		ret(call(dot(s.recv, "conn", "Wait")))))
+	f.line()
 	f.comment("SetLogger directs connection diagnostics to the provided logger.")
 	f.add(method(recv(), "SetLogger", funcType([]*ast.Field{param("l", star(f.qual(pkgSlog, "Logger")))}),
 		exprStmt(call(dot(s.recv, "conn", "SetLogger"), id("l")))))

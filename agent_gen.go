@@ -72,6 +72,18 @@ func (a *AgentSideConnection) Close() error {
 	return a.conn.Close()
 }
 
+// Err returns nil until the connection ends, and then why it ended; see
+// Connection.Err.
+func (a *AgentSideConnection) Err() error {
+	return a.conn.Err()
+}
+
+// Wait blocks until the connection has ended and every goroutine it started
+// has returned, and then returns Err; see Connection.Wait.
+func (a *AgentSideConnection) Wait() error {
+	return a.conn.Wait()
+}
+
 // SetLogger directs connection diagnostics to the provided logger.
 func (a *AgentSideConnection) SetLogger(l *slog.Logger) {
 	a.conn.SetLogger(l)

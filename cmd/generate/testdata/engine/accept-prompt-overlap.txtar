@@ -43,8 +43,10 @@ func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
 func (*AgentSideConnection).SessionUpdate(ctx context.Context, params SessionNotification) error
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
 func (*CancelNotification).UnmarshalJSON(b []byte) error
 func (*CancelNotification).Validate() error
 func (*CancelRequestNotification).Validate() error
@@ -53,8 +55,10 @@ func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
 func (*ClientSideConnection).Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error)
 func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
 func (*PromptRequest).UnmarshalJSON(b []byte) error
 func (*PromptRequest).Validate() error
 func (*PromptResponse).UnmarshalJSON(b []byte) error

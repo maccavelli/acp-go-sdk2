@@ -203,6 +203,8 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 				"\tasc.conn.start()\n\treturn asc\n}\n",
 			"func (a *AgentSideConnection) DroppedNotifications() uint64 {",
 			"func (a *AgentSideConnection) Done() <-chan struct{} {",
+			"func (a *AgentSideConnection) Err() error {\n\treturn a.conn.Err()\n}\n",
+			"func (a *AgentSideConnection) Wait() error {\n\treturn a.conn.Wait()\n}\n",
 			"func (a *AgentSideConnection) SetLogger(l *slog.Logger) {",
 			"// It is for requests the typed methods cannot make: a method the client\n",
 			"func (a *AgentSideConnection) Connection() *Connection {",
@@ -216,6 +218,8 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 				"\tcsc.conn.start()\n\treturn csc\n}\n",
 			"// It is for requests the typed methods cannot make: a method the agent\n",
 			"func (c *ClientSideConnection) Connection() *Connection {",
+			"func (c *ClientSideConnection) Err() error {\n\treturn c.conn.Err()\n}\n",
+			"func (c *ClientSideConnection) Wait() error {\n\treturn c.conn.Wait()\n}\n",
 		},
 	}
 	turnState := []string{"\tmu             sync.Mutex\n", "\tsessionCancels map[string][]*promptTurn\n",

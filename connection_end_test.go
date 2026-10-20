@@ -235,6 +235,51 @@ func TestWait(t *testing.T) {
 	})
 }
 
+// TestSideConnectionsErrAndWait requires each side connection's Err and Wait
+// to return its connection's: nil before the end, then the peer's end of
+// output (0026-MADR-connection-end-cause-and-wait.md, question 6).
+func TestSideConnectionsErrAndWait(t *testing.T) {
+	t.Parallel()
+	type side interface {
+		Err() error
+		Wait() error
+		Done() <-chan struct{}
+		Connection() *Connection
+	}
+	for name, open := range map[string]func(io.Reader) side{
+		"agent":  func(r io.Reader) side { return NewAgentSideConnection(&agentFuncs{}, io.Discard, r) },
+		"client": func(r io.Reader) side { return NewClientSideConnection(&clientFuncs{}, io.Discard, r) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			pr, pw := io.Pipe()
+			s := open(pr)
+			if err := s.Err(); err != nil {
+				t.Errorf("Err before the end = %v, want nil", err)
+			}
+			_ = pw.Close()
+			within(t, s.Done(), "the connection's end")
+			want := s.Connection().Err()
+			if want == nil || !errors.Is(want, io.EOF) {
+				t.Fatalf("the connection's Err = %v, want the peer's end", want)
+			}
+			if err := s.Err(); !errors.Is(err, want) {
+				t.Errorf("Err = %v, want the connection's, %v", err, want)
+			}
+			if err := within(t, waitingFor(s.Wait), "Wait"); !errors.Is(err, want) {
+				t.Errorf("Wait = %v, want the connection's, %v", err, want)
+			}
+		})
+	}
+}
+
+// waitingFor runs wait on a goroutine and returns where its result arrives.
+func waitingFor(wait func() error) <-chan error {
+	done := make(chan error, 1)
+	go func() { done <- wait() }()
+	return done
+}
+
 // TestGoStatementsCounted fails on a go statement in the package's non-test
 // files: every goroutine the connection starts goes through its wait group's
 // Go, so Wait can wait for it (0026-MADR-connection-end-cause-and-wait.md).

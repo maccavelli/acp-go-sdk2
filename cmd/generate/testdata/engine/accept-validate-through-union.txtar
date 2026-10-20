@@ -35,13 +35,17 @@ func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
 func (*CancelRequestNotification).Validate() error
 func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
 func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
 func (*Leaf).UnmarshalJSON(b []byte) error
 func (*Leaf).Validate() error
 func (Root).MarshalJSON() ([]byte, error)

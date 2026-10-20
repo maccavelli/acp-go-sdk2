@@ -322,3 +322,48 @@ The expectation was corrected and the plant run again.
 
 **The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
 leak guard.
+
+### Step 4, the side connections, 2026-10-20
+
+The owner committed step 3 as `d78220e` and approved this step. What changed:
+
+* **`cmd/generate/internal/emit/dispatch.go`:** `emitSideConnection` writes `Err` and `Wait` after `Close`, each delegating to the
+  connection, each doc naming the connection's method.
+* **`cmd/generate/main_test.go`:** the stub `Connection` gains `Err` and `Wait`.
+* **Regenerated:** `agent_gen.go` and `client_gen.go`, 12 lines added each, and nothing else.
+* **The 73 accept engine cases,** by `go test -run '^TestEngineCases$' -update`: a script over `git diff -U0` found each of the 73
+  changed, each gaining exactly `func (*AgentSideConnection).Err() error`, `…Wait() error`, `func (*ClientSideConnection).Err() error`
+  and `…Wait() error`, and losing nothing; no other case changed.
+* **`emit/dispatch_test.go`:** `TestSideConnectionsFollowTheModel` pins each side's `Err` and `Wait`, their bodies included.
+* **`connection_end_test.go`:** `TestSideConnectionsErrAndWait`, for each side: `Err` nil before the end; after the peer's end, `Err`
+  and `Wait` return the connection's `Err`, which wraps `io.EOF`. It passed 3 runs of 3 under `-race`.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| each side's `Err` returns its connection's | `TestSideConnectionsErrAndWait`; the pins |
+| each side's `Wait` returns its connection's | `TestSideConnectionsErrAndWait`; the pins |
+| the side docs say what `Connection`'s do | the generated docs, read: "Err returns nil until the connection ends, and then why it ended; see Connection.Err." and "Wait blocks until the connection has ended and every goroutine it started has returned, and then returns Err; see Connection.Wait." |
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree. 5 of 5 checks failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the emitted `Err` returning nil, regenerated | `TestSideConnectionsErrAndWait`: "Err = <nil>, want the connection's"; the pins: "agent_gen.go lacks "func (a *AgentSideConnection) Err() error {\n\treturn a.conn.Err()\n}\n"" |
+| `Wait` not emitted | the generator's own type check refuses to write: "*AgentSideConnection does not implement side (missing method Wait)"; the pins: "lacks "func (a *AgentSideConnection) Wait() error …""; `TestEngineCases`: all 73 accept cases, "API differs from want.api" |
+
+The `Wait` plant was first run regenerated, as the `Err` one was; the generator's type check of the root package with its tests stopped
+it before it wrote, which is itself a check that fails. It was then run without regenerating, so the pins and the engine cases could
+run.
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`: "152 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* `make api` against `v1.17.1`: "0 incompatible, 7 compatible", exactly the seven this PLAN expects.
+
+**The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
+leak guard.

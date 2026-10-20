@@ -180,6 +180,10 @@ func (*Connection) Done() <-chan struct{} { return nil }
 
 func (*Connection) Close() error { return nil }
 
+func (*Connection) Err() error { return nil }
+
+func (*Connection) Wait() error { return nil }
+
 type AgentConnAware interface{ SetAgentConnection(*AgentSideConnection) }
 
 type ClientConnAware interface{ SetClientConnection(*ClientSideConnection) }

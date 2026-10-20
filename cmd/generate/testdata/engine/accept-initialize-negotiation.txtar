@@ -37,16 +37,20 @@ func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
 func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
 func (*AgentSideConnection).Negotiated() (Negotiation, bool)
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
 func (*CancelRequestNotification).Validate() error
 func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
 func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
 func (*ClientSideConnection).Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error)
 func (*ClientSideConnection).Negotiated() (Negotiation, bool)
 func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
 func (*InitializeRequest).UnmarshalJSON(b []byte) error
 func (*InitializeRequest).Validate() error
 func (*InitializeResponse).UnmarshalJSON(b []byte) error
