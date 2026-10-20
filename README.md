@@ -543,6 +543,33 @@ arrive. The handlers already running keep their contexts and their answers are
 written, for at most five seconds, after which their contexts are cancelled and
 `Done()` closes. A read that fails otherwise ends the connection at once.
 
+`Err()` says why a connection ended. It is nil until `Done()` closes, and then
+the same error each time: `acp.ErrConnectionClosed` when this side ended it, by
+`Close` or by the overflow policy, which wraps `acp.ErrNotificationQueueOverflow`;
+otherwise `acp.ErrPeerDisconnected`, wrapping `io.EOF` when the peer ended its
+output, or the read's error. The first end is the one kept: a `Close` after the
+peer's end leaves `Err()` as it was, though a call made then returns
+`acp.ErrConnectionClosed`. `Wait()` blocks until the connection has ended and
+every goroutine it started has returned, its handlers' included, and then returns
+`Err()`. It does not end the connection, so close it first. A reader that does
+not implement `io.Closer` keeps `Wait()` waiting until its `Read` returns, and so
+does a handler that ignores its context. Either side connection has both
+([0026-MADR-connection-end-cause-and-wait.md](docs/decisions/0026-MADR-connection-end-cause-and-wait.md)):
+
+```go
+select {
+case <-ctx.Done():
+case <-asc.Done():
+}
+_ = asc.Close() // Err keeps an earlier end
+switch err := asc.Wait(); {
+case errors.Is(err, acp.ErrNotificationQueueOverflow):
+    log.Print("the client sent notifications faster than they were handled")
+case errors.Is(err, io.EOF):
+    log.Print("the client closed its output")
+}
+```
+
 Every send returns when its context ends, even while the peer does not read.
 A message whose write has begun may still reach the peer.
 

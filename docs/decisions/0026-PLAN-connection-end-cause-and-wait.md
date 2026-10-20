@@ -367,3 +367,48 @@ run.
 
 **The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
 leak guard.
+
+### Step 5, docs, 2026-10-20
+
+The owner committed step 4 as `bacac56` and approved this step. What changed:
+
+* **`README.md`, "Closing and limits":** after the paragraph on a clean end of input, a paragraph on `Err()` and `Wait()` and an
+  example: wait for the caller's context or the connection's end, `Close`, `Wait`, then `errors.Is` for
+  `acp.ErrNotificationQueueOverflow` and `io.EOF`.
+* **`docs/architecture.md`:** after the paragraph on the drain at a clean end of input, one on `endErr`, recorded by the first of
+  `closeWith` and `shutdownReceive`, and on the `goroutines` wait group and the uncounted `context.AfterFunc` callbacks; in the checks
+  that guard it, a bullet for `connection_end_test.go`.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| `Err()` is nil until `Done()` closes, then the same each time | `TestErr`, "before the end" and `ended`'s second read |
+| `Close` gives `ErrConnectionClosed` | `TestErr`, "Close" |
+| the overflow policy gives `ErrConnectionClosed` wrapping `ErrNotificationQueueOverflow` | `TestErr`, "notification overflow" |
+| the peer's end gives `ErrPeerDisconnected` wrapping `io.EOF`, or the read's error | `TestErr`, "the peer's end of output" and "a read error" |
+| a later `Close` leaves `Err()` as it was; a call then returns `ErrConnectionClosed` | `TestErr`, "the peer's end, then Close" |
+| `Wait()` blocks until the end and every goroutine's return, then returns `Err()` | `TestWait`, all four cases |
+| it does not end the connection | `TestWait`, "before the end" |
+| a reader with no `Close`, or a handler that ignores its context, holds `Wait()` | `TestWait`, "a reader Close cannot close" and "a handler that ignores its context" |
+| either side connection has both | `TestSideConnectionsErrAndWait`; the emitter's pins |
+| every goroutine starts through the wait group's `Go` | `TestGoStatementsCounted` |
+| the example does what the paragraph says | a scratch program whose body is the README's example, line for line, against the working tree: `go vet` exit 0; `go run` printed "the client closed its output", then `Err` "acp: peer disconnected: peer connection closed" for the client's end and "acp: connection closed" for the context's |
+
+**Planted breaks** for the example's check, each in a scratch copy. 2 of 2 failed as required:
+
+| Break | What failed |
+| :--- | :--- |
+| the program's `io.EOF` case changed, so it is no longer the README's example | the line-for-line comparison: `AssertionError` |
+| `peerEOF` no longer wrapping `io.EOF`, in a copy of the tree the program was built against | the output: "the client closed its output" missing |
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`: "152 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* `make api` against `v1.17.1`: "0 incompatible, 7 compatible", unchanged by this step.
+
+**The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
+leak guard.

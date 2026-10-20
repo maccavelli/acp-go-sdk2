@@ -334,6 +334,15 @@ Only then does `shutdownReceive` end the connection's context, which cancels
 the handlers still running. A read that fails otherwise shuts down at once
 (0019-PLAN-issue-fixes.md, B23).
 
+The first of `closeWith` and `shutdownReceive` records why the connection
+ended, in `endErr`, before it ends the context; `Err` returns that record once
+the context has ended, and a later end leaves it as it was. Every goroutine the
+connection starts, its handlers' included, starts through the `Go` of its
+`goroutines` wait group, and `Wait` waits for the context's end and then for that
+group. The `context.AfterFunc` callbacks are not counted: one on a caller's
+context can start after the count has reached zero
+(0026-MADR-connection-end-cause-and-wait.md).
+
 Checks that guard this:
 
 - `TestGeneratedFilesUpToDate` in `cmd/generate` fails when the committed
@@ -397,6 +406,10 @@ Checks that guard this:
 - `leak_test.go`'s `TestMain` fails the root package's run when the tests leave a
   goroutine leaked, by the standard `goroutineleak` profile, such as a
   connection's that no test closed.
+- `connection_end_test.go` covers `Err` for each end and after a late `Close`,
+  `Wait` with a reader `Close` cannot close and with a handler that ignores its
+  context, and both on the side connections; its `TestGoStatementsCounted` fails
+  on a `go` statement in the root package's non-test files.
 - `make pre-add-check` runs `scripts/go-precheck.sh`: gofmt, golangci-lint for the
   host and for `GOOS=windows`, vet, tests with `-race`, `go mod tidy -diff`, and
   govulncheck, for both modules. golangci-lint covers the generated files too,
