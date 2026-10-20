@@ -1,0 +1,14 @@
+Refused: deprecated on an open enum's member without a const, its string
+catch-all, from which no Go declaration is built
+(0024-PLAN-api-gate-and-deprecation.md, the deviation during step 4).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "E": {"anyOf": [{"type": "string", "const": "known"}, {"type": "string", "deprecated": true}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+E variant 2
+deprecated on a member without a const marks no Go declaration

@@ -87,7 +87,7 @@ func interfaceMethod(f *goFile, name, paramType, respType string) *ast.Field {
 
 // addRPCMethod adds the interface method for mi to target.
 func addRPCMethod(f *goFile, target *fieldSet, mi *model.Method) {
-	target.comment(mi.Doc...)
+	target.comment(methodNotice(mi.Doc, mi)...)
 	if mi.Notif != "" {
 		target.add(interfaceMethod(f, mi.GoName, mi.Notif, ""))
 		return
@@ -124,27 +124,28 @@ func integerLit(v string) ast.Expr {
 	return &ast.BasicLit{Kind: token.INT, Value: v}
 }
 
-// enumConsts declares <Const> name = "value" for each value.
-func enumConsts(f *goFile, name string, values []model.EnumValue) {
-	if len(values) == 0 {
+// enumConsts declares <Const> name = "value" for each value of t.
+func enumConsts(f *goFile, t *model.Type) {
+	if len(t.Enum) == 0 {
 		return
 	}
 	var specs []*ast.ValueSpec
-	for _, v := range values {
-		specs = append(specs, enumSpec(v, id(name), str(v.Value), strconv.Quote(v.Value)))
+	for _, v := range t.Enum {
+		specs = append(specs, enumSpec(v, id(t.Name), str(v.Value), strconv.Quote(v.Value), defPlace(t)))
 	}
 	f.add(constDecl(true, specs...))
 }
 
 // enumSpec is <Const> typ = value, documented as the value shown, then the
-// value's schema description (0019-PLAN-examples-docs-tests-tooling.md, I12).
-func enumSpec(v model.EnumValue, typ, value ast.Expr, shown string) *ast.ValueSpec {
+// value's schema description (0019-PLAN-examples-docs-tests-tooling.md, I12),
+// then its deprecation notice, naming it a variant of owner.
+func enumSpec(v model.EnumValue, typ, value ast.Expr, shown, owner string) *ast.ValueSpec {
 	s := constSpec(v.Const, typ, value)
 	lines := []string{v.Const + " is the " + shown + " value."}
 	if len(v.Doc) > 0 {
 		lines = append(append(lines, ""), v.Doc...)
 	}
-	s.Doc = docLines(lines...)
+	s.Doc = docLines(withNotice(lines, "the "+shown+" variant of "+owner, v.Deprecation)...)
 	return s
 }
 
@@ -168,6 +169,35 @@ func typeDoc(name, place string, doc []string) []string {
 	return lines
 }
 
+// withNotice returns doc with the deprecation notice of the node at place as
+// its last paragraph, after a blank line, when d marks the node; doc
+// otherwise. The notice is a fixed sentence, then the protocol table's note
+// when there is one (0024-PLAN-api-gate-and-deprecation.md). doc is not
+// changed.
+func withNotice(doc []string, place string, d *model.Deprecation) []string {
+	if d == nil {
+		return doc
+	}
+	text := "Deprecated: the ACP schema marks " + place + " deprecated."
+	if d.Note != "" {
+		text += " " + d.Note
+	}
+	out := slices.Clone(doc)
+	if len(out) > 0 {
+		out = append(out, "")
+	}
+	return append(out, wrapDoc(text)...)
+}
+
+// methodNotice is withNotice for a method's doc: its notice names the
+// request or notification definition whose mark it carries.
+func methodNotice(doc []string, mi *model.Method) []string {
+	if mi.Deprecation == nil {
+		return doc
+	}
+	return withNotice(doc, "the "+mi.Deprecation.Definition+" schema definition", mi.Deprecation)
+}
+
 // schemaVariantPlace names variant vi of union t: by its discriminator value,
 // else by its field name.
 func schemaVariantPlace(t *model.Type, vi *model.Variant) string {
@@ -187,7 +217,7 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 	// A union emits its variant types first, so emitUnion places its
 	// description; every other case starts with the type it documents.
 	if t.Kind != model.KindUnion {
-		f.comment(typeDoc(name, defPlace(t), t.Doc)...)
+		f.comment(withNotice(typeDoc(name, defPlace(t), t.Doc), defPlace(t), t.Deprecation)...)
 	}
 
 	switch t.Kind {
@@ -195,7 +225,7 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 		// An open enum's unknown values are still representable as strings,
 		// matching the schema's extensibility.
 		f.add(typeDecl(name, id("string")))
-		enumConsts(f, name, t.Enum)
+		enumConsts(f, t)
 		f.line()
 	case model.KindUnion:
 		emitUnion(f, t)
@@ -208,7 +238,7 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 		f.add(typeDecl(name, typeAST(f, *t.Underlying)))
 		var specs []*ast.ValueSpec
 		for _, v := range t.Enum {
-			specs = append(specs, enumSpec(v, id(name), integerLit(v.Value), v.Value))
+			specs = append(specs, enumSpec(v, id(name), integerLit(v.Value), v.Value, defPlace(t)))
 		}
 		f.add(constDecl(true, specs...))
 		f.line()
@@ -233,7 +263,7 @@ func emitObjectSchema(f *goFile, t *model.Type) {
 	// Nested struct types for inline object properties come first.
 	for _, ns := range t.NestedStructs {
 		place := fmt.Sprintf("the %q property of %s", ns.Key, defPlace(t))
-		f.comment(typeDoc(ns.Name, place, ns.Doc)...)
+		f.comment(withNotice(typeDoc(ns.Name, place, ns.Doc), place, ns.Deprecation)...)
 		emitStruct(f, ns.Name, place, ns.Fields, nil, false, nil, "", ns.Validation)
 	}
 	emitStruct(f, t.Name, defPlace(t), t.Fields, t.Members, t.KeepExtra, t.KeyOrders, "", t.Validation)
@@ -247,15 +277,16 @@ func emitStruct(f *goFile, name, place string, fields []*model.Field, members []
 	exempt string, val *model.Validation) {
 	var st fieldSet
 	for _, fld := range fields {
-		st.comment(fld.Doc...)
+		st.comment(withNotice(fld.Doc, fmt.Sprintf("the %q property of %s", fld.Key, place), fld.Deprecation)...)
 		st.add(structField(fld.Name, typeAST(f, fld.Type), fld.Tag))
 	}
 	for _, mb := range members {
-		st.comment(mb.Doc...)
-		if len(mb.Doc) > 0 {
-			st.comment("")
+		doc := slices.Clone(mb.Doc)
+		if len(doc) > 0 {
+			doc = append(doc, "")
 		}
-		st.comment("Its keys share this struct's JSON object; exactly one member is set.")
+		doc = append(doc, "Its keys share this struct's JSON object; exactly one member is set.")
+		st.comment(withNotice(doc, "the "+mb.Field+" member of "+place, mb.Deprecation)...)
 		st.add(structField(mb.Field, star(id(mb.Type)), "-"))
 	}
 	if keepExtra {
@@ -699,11 +730,11 @@ func lenientDecode(f *goFile, name string, lenient []*model.Field, wrap func() a
 
 // emitInlineVariant emits the type the model gives a union variant without a
 // $ref, if any.
-func emitInlineVariant(f *goFile, tname, place string, in *model.Inline) {
+func emitInlineVariant(f *goFile, tname, place string, in *model.Inline, dep *model.Deprecation) {
 	if in == nil {
 		return
 	}
-	f.comment(typeDoc(tname, place, in.Doc)...)
+	f.comment(withNotice(typeDoc(tname, place, in.Doc), place, dep)...)
 	switch in.Kind {
 	case model.InlineStruct:
 		emitStruct(f, tname, place, in.Fields, in.Members, in.KeepExtra, nil, in.Exempt, in.Validation)
@@ -1271,14 +1302,14 @@ func emitUnion(f *goFile, t *model.Type) {
 		if vi.Skip {
 			continue
 		}
-		emitInlineVariant(f, vi.TypeName, schemaVariantPlace(t, vi), vi.Inline)
+		emitInlineVariant(f, vi.TypeName, schemaVariantPlace(t, vi), vi.Inline, vi.Deprecation)
 		variants = append(variants, vi)
 	}
 
 	// Wrapper: one pointer field per variant, set by UnmarshalJSON.
 	var st fieldSet
 	for _, vi := range variants {
-		st.comment(vi.Doc...)
+		st.comment(withNotice(vi.Doc, schemaVariantPlace(t, vi), vi.Deprecation)...)
 		st.add(structField(vi.FieldName, star(id(vi.TypeName)), "-"))
 	}
 	if t.HasUnknown {
@@ -1289,7 +1320,7 @@ func emitUnion(f *goFile, t *model.Type) {
 		st.add(structField(unknownField, f.qual(pkgJSON, "RawMessage"), "-"))
 	}
 	// The union's description belongs on the wrapper, after the variant types.
-	f.comment(typeDoc(name, defPlace(t), t.Doc)...)
+	f.comment(withNotice(typeDoc(name, defPlace(t), t.Doc), defPlace(t), t.Deprecation)...)
 	f.add(typeDecl(name, st.structType(f)))
 	f.line()
 	f.comment(unmarshalDoc("u", defPlace(t)))

@@ -14,7 +14,7 @@ import (
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/enginetest"
 )
 
-var update = flag.Bool("update", false, "rewrite the want.api of the engine cases")
+var update = flag.Bool("update", false, "rewrite the want.api and want.deprecated of the engine cases")
 
 // engineCases returns the paths of the engine cases, 0011-PLAN-engine-tests.md, D1.
 func engineCases(tb testing.TB) []string {
@@ -33,7 +33,10 @@ func engineCases(tb testing.TB) []string {
 // holding the hand-written runtime. A case with want.err must be refused with
 // each of its lines and leave the directory as it was; a case with want.api
 // must generate a package whose exported API, as enginetest.API lists it,
-// equals want.api. -update rewrites want.api instead.
+// equals want.api, and whose deprecation notices, as enginetest.Deprecations
+// lists them, equal want.deprecated, or are none when the case has none.
+// -update rewrites want.api, and want.deprecated when there are notices,
+// instead.
 func TestEngineCases(t *testing.T) {
 	t.Parallel()
 	for _, path := range engineCases(t) {
@@ -94,9 +97,17 @@ func runEngineCase(t *testing.T, path string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := enginetest.API(pkg, fset, func(name string) bool { return slices.Contains(generatedFiles, name) })
+		generated := func(name string) bool { return slices.Contains(generatedFiles, name) }
+		got := enginetest.API(pkg, fset, generated)
+		gotDeprecated, err := enginetest.Deprecations(out, generated)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if *update {
 			a.Set("want.api", []byte(got))
+			if gotDeprecated != "" {
+				a.Set("want.deprecated", []byte(gotDeprecated))
+			}
 			if err := os.WriteFile(path, enginetest.Format(a), 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -104,6 +115,12 @@ func runEngineCase(t *testing.T, path string) {
 		}
 		if got != string(wantAPI) {
 			t.Errorf("API differs from want.api (rerun with -update to accept):\ngot:\n%s\nwant:\n%s", got, wantAPI)
+		}
+		// A case without want.deprecated must generate no notice
+		// (0024-PLAN-api-gate-and-deprecation.md).
+		if wantDeprecated, _ := a.File("want.deprecated"); gotDeprecated != string(wantDeprecated) {
+			t.Errorf("deprecation notices differ from want.deprecated (rerun with -update to accept):\ngot:\n%s\nwant:\n%s",
+				gotDeprecated, wantDeprecated)
 		}
 	}
 }

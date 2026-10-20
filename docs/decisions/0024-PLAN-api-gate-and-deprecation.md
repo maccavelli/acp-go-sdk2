@@ -158,6 +158,10 @@ It is a field of each declaration the specification's table names:
 | a property of an object definition | `Field.Deprecation`; for an inline object property, also `Struct.Deprecation` | the struct field; the nested type |
 | a union variant | `Variant.Deprecation`, which the variant's inline type and helper read; for a constant variant, `EnumValue.Deprecation` | the union's field, the inline type, the helper constructor; the constant |
 
+Annotated 2026-10-20 by the deviation during step 4: a direct `anyOf` or `oneOf` member that becomes a flattened member
+marks its field (`Member.Deprecation`), and an enum kind's member with no `const`, from which no declaration is built, is
+refused.
+
 A response definition marks its type only, as question 11 decided, even when the method's doc text is the response's description (`methods.go:210`-`:216`). A method's mark comes from its request or notification definition alone.
 
 **The notice's text,** composed in the emitter, which names places already (`defPlace`, `schemaVariantPlace`, the nested struct's):
@@ -210,6 +214,8 @@ type DeprecationNote struct {
   * a property whose `$ref` names a deprecated definition: the type has its notice, and the field none.
 * **`refuse-deprecated-string.txtar`** and **`refuse-deprecated-null.txtar`:** each names the definition and `deprecated`.
 * **`refuse-deprecated-placement.txtar`:** `deprecated: true` on an array's `items`, refused with its path.
+* **`refuse-deprecated-catch-all.txtar`,** added by the deviation during step 4: `deprecated: true` on an open enum's member with
+  no `const`, refused, naming the definition and the member.
 * **`refuse-deprecated-under-not.txtar`,** added in step 3: `deprecated: true` inside a definition's `not`, which `checkTypable`
   does not walk and `checkDeprecated` must.
 
@@ -503,3 +509,146 @@ refusal, `null` decodes as `false`. The runner's expectation was corrected, and 
 
 **The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's with the
 leak guard.
+
+### Deviation, 2026-10-20, during step 4: flattened members and enum members with no `const`
+
+**Found,** before step 4's first change. Step 3's `checkDeprecated` accepts `deprecated: true` on every direct `anyOf` or `oneOf`
+member of a definition. Two kinds of such members are not in this PLAN's table:
+
+* **Flattened members.** A definition with properties of its own and an `anyOf` or `oneOf` whose members are all references is an
+  object; each member becomes a pointer field of the struct (`Member`, `model.go:1052`), not a union's field. In the committed schema:
+  `ElicitationFormMode`, `ElicitationUrlMode` and `SessionConfigOption`, two members each, in both schema files.
+* **Enum members with no `const`.** An enum kind's member without a `const`, such as an open enum's string catch-all, makes no Go
+  declaration: `enumValues` and the integer enum's loop skip it (`model.go:509`, `:568`). In the committed schema: `CompactionStatus`,
+  `ErrorCode`, `NoticeSeverity` and `SessionConfigOptionCategory`, one each, and `LlmProtocol` in the unstable file.
+
+Left as it was, a mark on either would be accepted and give no notice, against question 9's answer and this PLAN's "refused where no
+declaration is made".
+
+**Decision (owner, 2026-10-20), the recommended resolution.**
+
+* A flattened member's field carries the notice, as a union's field does: `Member.Deprecation`, and the field's place, "the <field>
+  member of the <definition> schema definition".
+* An enum kind's member with no `const` is refused in the model, naming the definition and the member: no declaration is built from
+  it.
+
+**Files added to step 4's scope:** none beyond those named. `accept-deprecated.txtar` gains a flattened member, and
+`refuse-deprecated-catch-all.txtar` is new. The MADR's specification table is amended the same day.
+
+### Step 4, the notices, 2026-10-20
+
+The owner committed step 3 as `45fa905` and approved this step. Its deviation, above, was decided before the first change. What
+changed:
+
+* **The model** (`internal/model`):
+  * `Deprecation {Note, Definition}`, and `deprecationOf`, which marks a node whose `deprecated` is true;
+  * a `Deprecation` field on `Type`, `Field`, `Struct`, `Variant`, `EnumValue`, `Member` and `Method`, set where each is built:
+    `buildType`, `objectFields`, `buildObject`'s nested structs, `buildVariant`, the enum and integer enum values, and
+    `flatMembers`;
+  * `refuseConstless`, called for the four enum kinds, refuses a marked member without a `const` (the deviation);
+  * the protocol table's `DeprecationNotes []DeprecationNote`, empty in `ACP`; `checkDeprecationNotes`, beside `checkDocNotes`;
+    and `applyDeprecations`, a build step after `applyDocNotes`, which refuses a note on a node the schema lacks or does not mark,
+    gives a note to each declaration of its node, and then marks each method whose notification or request definition is marked,
+    naming the definition.
+* **The emitter** (`internal/emit`): `withNotice`, which adds "Deprecated: the ACP schema marks <place> deprecated.", then the note,
+  wrapped by `wrapDoc`, as the doc's last paragraph after a blank line, without changing the doc it is given; and `methodNotice`. They
+  are applied to a definition's type and a union's wrapper, a nested struct, a struct field, a flattened member's field, a union's
+  field, an inline variant type, a helper, a constant, an interface method and a side connection's method. `enumConsts` now takes the
+  type, and `enumSpec` and `emitInlineVariant` the place and the mark.
+* **The harness:** `enginetest.Deprecations` and `TestDeprecations` (`internal/enginetest/deprecations.go`, new);
+  `runEngineCase` compares `want.deprecated`, none when absent, and `-update` writes it.
+* **Cases and tests:** `accept-deprecated.txtar`; `refuse-deprecated-catch-all.txtar` (the deviation); `TestDeprecationNotes`
+  (`internal/model/deprecation_test.go`) and `TestWithNotice` (`internal/emit/deprecation_test.go`), both new.
+* **Docs:** `docs/architecture.md`'s keyword paragraph names the notices, its engine-case bullet `want.deprecated`, and its tree
+  line the listing.
+
+**`accept-deprecated`'s notices,** as `enginetest.Deprecations` lists them:
+
+```text
+  const LevelLow: Deprecated: the ACP schema marks the "low" variant of the Level schema definition deprecated.
+  field Holder.A: Deprecated: the ACP schema marks the "a" property of the Holder schema definition deprecated.
+  field Holder.Inner: Deprecated: the ACP schema marks the "inner" property of the Holder schema definition deprecated.
+  field Mode.Session: Deprecated: the ACP schema marks the Session member of the Mode schema definition deprecated.
+  field U.A: Deprecated: the ACP schema marks the "a" variant of the U schema definition deprecated.
+  field V.Text: Deprecated: the ACP schema marks the Text variant of the V schema definition deprecated.
+  func NewUA: Deprecated: the ACP schema marks the "a" variant of the U schema definition deprecated.
+  func NewVText: Deprecated: the ACP schema marks the Text variant of the V schema definition deprecated.
+  method (*ClientSideConnection).Init: Deprecated: the ACP schema marks the InitRequest schema definition deprecated.
+  method Agent.Init: Deprecated: the ACP schema marks the InitRequest schema definition deprecated.
+  type HolderInner: Deprecated: the ACP schema marks the "inner" property of the Holder schema definition deprecated.
+  type InitRequest: Deprecated: the ACP schema marks the InitRequest schema definition deprecated.
+  type Old: Deprecated: the ACP schema marks the Old schema definition deprecated.
+  type UA: Deprecated: the ACP schema marks the "a" variant of the U schema definition deprecated.
+  type VText: Deprecated: the ACP schema marks the Text variant of the V schema definition deprecated.
+```
+
+`Holder.Old`, whose `$ref` names the deprecated `Old`, `Holder.Keep` and `Kept`, marked `false`, the response `InitResponse`, and
+`U`'s `b` variant have none. The regenerated files of the committed schema are byte-identical.
+
+**End to end.** In a scratch copy, `deprecated: true` on `McpServerSse`, `McpCapabilities.sse` and `McpServer`'s `sse` variant, in
+both schema files, regenerated:
+
+* the notices land on `McpServerSse`, `McpCapabilities.Sse`, `McpServerSseInline`, `McpServer.Sse` and `NewMcpServerSse`, and on
+  the unstable `UnstableMcpServerSse`, `UnstableMcpServer.Sse` and `NewUnstableMcpServerSse`;
+* `golangci-lint` with the repository's config reports 0 issues at the root for both `GOOS` values: the package's own uses;
+* a package of the module that uses the three gets SA1019 for each, quoting the sentence: "github.com/maccavelli/acp-go-sdk2.McpServerSse
+  is deprecated: the ACP schema marks the McpServerSse schema definition deprecated.", and the same for `(McpCapabilities).Sse` and
+  `NewMcpServerSse`.
+
+**Found while linting, fixed before the gates passed:**
+
+* gocritic's `deprecatedComment` check reported `DeprecationNote`'s own doc, which wrapped so a line began "deprecated:": "use
+  `Deprecated: ` (note the casing) instead of `deprecated: `". The comment was reworded. The repository's lint already refuses that
+  form, so step 5's test is measured against what gocritic already catches.
+* gocognit reported `TestDeprecationNotes` at 52, over 50; its reading of the marks moved to `readMarks`.
+
+**A first expectation corrected.** `TestWithNotice` first expected a method's sentence on one line; at 81 characters it wraps, as
+`wrapDoc` is meant to. The test's expectation was corrected.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| each declaration of the table gets the notice, with its place | `accept-deprecated`'s `want.deprecated` |
+| a flattened member's field gets it; a member without a `const` is refused | `accept-deprecated`; `refuse-deprecated-catch-all` |
+| a method is marked by its request definition, naming it, and its response by its own mark only | `accept-deprecated`; `TestDeprecationNotes` |
+| a note follows the sentence, on each declaration of its node | `TestDeprecationNotes`; `TestWithNotice` |
+| a note on a node the schema lacks or does not mark is refused | `TestDeprecationNotes` |
+| the notice is the last paragraph, after a blank line, wrapped at 76 | `TestWithNotice`; `accept-deprecated` |
+| `withNotice` does not change the doc it is given | `TestWithNotice` |
+| a case without `want.deprecated` has no notice | the plant "every type marked" |
+| tools honour the notice | the end-to-end check above |
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree. All 13 failed the check named:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the type's notice not emitted | `accept-deprecated`: "deprecation notices differ from want.deprecated" |
+| the helper's notice not emitted | the same |
+| the field's notice not emitted | the same |
+| the constant's notice not emitted | the same |
+| the flattened member's notice not emitted | the same |
+| the method's mark not taken from its request definition | the same |
+| the notice joined to the paragraph before it | the same |
+| every type marked deprecated | `accept-enum`, which has no `want.deprecated`: the same |
+| a note on an unmarked or absent node accepted | `TestDeprecationNotes`: "an unmarked definition: Build = <nil>, want an error containing …" |
+| `enginetest.Deprecations` listing nothing | `TestDeprecations`, and, separately, `accept-deprecated` |
+| `refuseConstless` disabled | `refuse-deprecated-catch-all`: "run accepted the schema" |
+| `withNotice` appending to the doc it is given | `TestWithNotice`: "the doc given was changed: the first notice is now … the B schema definition …" |
+
+The type's plant was first expected to print a diff line; the test prints the two lists instead. It failed with "deprecation notices
+differ from want.deprecated", `type Old` and `type InitRequest` only in the want list. The runner's expectation was corrected and the
+plant run again.
+
+**Gates** on the working tree, go1.27.2, each exit 0:
+
+* regeneration: the generated files unchanged;
+* `make pre-add-check`: "146 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; and the four new Go files alone:
+  "4 file(s) clean";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* the API listing against `v1.17.0`: 2429 lines each, 0 removed, 0 added;
+* `make api` in a scratch clone with this step committed (17 files): "Inferred base version: v1.17.0", "Suggested version: v1.17.1".
+
+**The go1.26.9 gate**, on the final tree: `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules,
+the root's with the leak guard.

@@ -126,6 +126,9 @@ type Field struct {
 	Required bool
 	// Doc is the field's doc comment, one entry per line.
 	Doc []string
+	// Deprecation marks a property of an object definition the schema marks
+	// deprecated.
+	Deprecation *Deprecation
 	// Default is set on a top-level object's field with a schema default.
 	Default *Default
 	// Fill is true for a required slice or map that encodes nil as empty.
@@ -154,6 +157,9 @@ type Struct struct {
 	Fields []*Field
 	// Validation is what the struct's Validate checks; nil is no Validate.
 	Validation *Validation
+	// Deprecation marks the struct of a property the schema marks
+	// deprecated, as its field is.
+	Deprecation *Deprecation
 }
 
 // InlineKind is how an inline union variant's type is emitted.
@@ -199,6 +205,10 @@ type Member struct {
 	Required []string
 	// Validates is true when the member's type has a Validate method.
 	Validates bool
+	// Deprecation marks a member the schema marks deprecated, which its
+	// field carries (0024-PLAN-api-gate-and-deprecation.md, the deviation
+	// during step 4).
+	Deprecation *Deprecation
 }
 
 // docLines formats a description as doc comment lines, or nil.
@@ -526,7 +536,8 @@ func objectFields(t *Type) ([]*Field, error) {
 		if err != nil {
 			return nil, err
 		}
-		fld := &Field{Key: key, Name: name, Tag: key, Required: req[key], Doc: docLines(prop.Description), Facts: factsOf(prop), prop: prop}
+		fld := &Field{Key: key, Name: name, Tag: key, Required: req[key], Doc: docLines(prop.Description), Facts: factsOf(prop), prop: prop,
+			Deprecation: deprecationOf(prop)}
 		if prop.Default != nil {
 			// Whether the field's zero value is nil (slice or map), for the encode fill-in.
 			pt := primaryType(prop)

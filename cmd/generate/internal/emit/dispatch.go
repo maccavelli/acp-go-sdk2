@@ -813,7 +813,7 @@ func emitOutbound(f *goFile, s side, methods []*model.Method, gated bool, termin
 	for _, mi := range methods {
 		// A blank line separates each wrapper from the declaration before it.
 		f.line()
-		f.comment(outboundDoc(mi, s.peer, gated, terminalAuth[mi.Req])...)
+		f.comment(methodNotice(outboundDoc(mi, s.peer, gated, terminalAuth[mi.Req]), mi)...)
 		if mi.Notif != "" && mi.CancelsPending {
 			// The cancel is written before the pending requests are answered
 			// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).

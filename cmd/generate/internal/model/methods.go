@@ -49,6 +49,11 @@ type Method struct {
 	DocsIgnored bool
 	// Doc is the interface method's doc comment.
 	Doc []string
+	// Deprecation marks a method whose request or notification definition
+	// the schema marks deprecated; its interface method and its side
+	// connection's method carry the notice (0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md,
+	// question 11).
+	Deprecation *Deprecation
 	// PromptTurn and CancelsPromptTurn are the method's prompt-turn role
 	// from the protocol table, and ClosesSession marks a request that ends its
 	// session's work as the cancel does; SessionField is the Go field of its

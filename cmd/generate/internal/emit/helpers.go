@@ -49,7 +49,7 @@ func emitHelperConstructors(f *goFile, t *model.Type) {
 			body = append(body, ret(composite(id(t.Name), kv(id(vi.FieldName), addr(composite(id(vi.TypeName), elts...))))))
 		}
 
-		f.comment(helperDoc(h, t, vi)...)
+		f.comment(withNotice(helperDoc(h, t, vi), schemaVariantPlace(t, vi), vi.Deprecation)...)
 		f.add(function(h.Name, funcType(params, param("", id(t.Name))), body...))
 		f.line()
 	}

@@ -213,7 +213,14 @@ match, and the model refuses an integer or number `format` without a Go type.
 `deprecated` is an annotation: the loader refuses it when it is `null`, and the
 model refuses it on a node no Go declaration is built from, anything but a
 definition, a property of an object definition, or a direct `anyOf` or `oneOf`
-member of a definition.
+member of a definition, and on an enum's member without a `const`. Each Go
+declaration built from a marked node gets a last paragraph, "Deprecated: the
+ACP schema marks <place> deprecated.", then the protocol table's note naming
+the replacement when it has one: a definition's type, and for a request or
+notification its interface method and its side connection's; a property's
+field and nested type; a variant's field, inline type and helper, or its
+constant; a flattened member's field. A note on a node the schema does not
+mark is refused.
 A property's `default` is checked against its schema, through references,
 union members, array items and object properties: its JSON kind, an integer's
 range for its format, its `enum` and its `const`, so the generated decoding of
@@ -363,9 +370,10 @@ Checks that guard this:
   `accept-description-comment-markers` the generator's comments.
 - `TestEngineCases` in `cmd/generate` runs the generator on each synthetic case
   in `testdata/engine/`: a case with `want.err` must be refused with those
-  lines, one with `want.api` must give that exported API. `TestEngineBehaviour`
+  lines, one with `want.api` must give that exported API, and the deprecation
+  notices of its `want.deprecated`, or none when it has none. `TestEngineBehaviour`
   compiles each case's output with its `behaviour_test.go` and runs it.
-  `internal/enginetest` reads the cases and lists an API.
+  `internal/enginetest` reads the cases and lists an API and its notices.
 - The conformance test at the root, `conformance_test.go` over
   `schema_gen_test.go`, builds instances of every definition from the schema
   files (`instances_test.go`) and requires each generated type to decode,
@@ -418,7 +426,7 @@ cmd/generate/             the generator, its own module
   internal/emit/          go/ast emission, rendered in memory
   internal/output/        type-check and staged write of the output
   internal/util/          naming helpers
-  internal/enginetest/    engine case reader and API listing, for tests
+  internal/enginetest/    engine case reader, API and notice listings, for tests
   internal/mutate/        the mutation tool
   testdata/engine/        synthetic engine cases, one txtar each
   testdata/fuzz/          FuzzBuild seeds kept from crashers

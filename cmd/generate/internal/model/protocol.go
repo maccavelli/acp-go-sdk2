@@ -49,6 +49,10 @@ type Protocol struct {
 	// description cannot say, such as a wire type the runtime does not use
 	// (0024-PLAN-documentation.md, A11).
 	DocNotes []DocNote
+	// DeprecationNotes name the replacement of nodes the schema marks
+	// deprecated, after the notice's sentence
+	// (0024-PLAN-api-gate-and-deprecation.md).
+	DeprecationNotes []DeprecationNote
 }
 
 // OrderRule names a typed map property whose key order is kept, by the
@@ -65,6 +69,28 @@ type OrderRule struct {
 type DocNote struct {
 	Definition string
 	Lines      []string
+}
+
+// DeprecationNote names the replacement of a node the schema marks as
+// deprecated, by Definition, as the merged schema names it, and by Property
+// or Variant when the node is one of those. A variant is named by its
+// discriminator value, else its field name; a flattened member by its field
+// name; a constant variant by its value. Unlike a doc note, a note on a node
+// the schema lacks or does not mark is refused.
+type DeprecationNote struct {
+	Definition, Property, Variant, Note string
+}
+
+// name is how an error names the note.
+func (n DeprecationNote) name() string {
+	s := "deprecation note " + n.Definition
+	if n.Property != "" {
+		s += "." + n.Property
+	}
+	if n.Variant != "" {
+		s += " " + strconv.Quote(n.Variant)
+	}
+	return s
 }
 
 // PathRule names a property the protocol requires to be an absolute path,
@@ -360,6 +386,9 @@ func newRules(p *Protocol) (*rules, error) {
 	if err := checkDocNotes(p.DocNotes); err != nil {
 		return nil, err
 	}
+	if err := checkDeprecationNotes(p.DeprecationNotes); err != nil {
+		return nil, err
+	}
 	if err := checkCapabilityRules(p.CapabilityRules); err != nil {
 		return nil, err
 	}
@@ -378,6 +407,26 @@ func checkDocNotes(notes []DocNote) error {
 			return fmt.Errorf("doc note %s: two notes", note.Definition)
 		}
 		noted[note.Definition] = true
+	}
+	return nil
+}
+
+// checkDeprecationNotes refuses a deprecation note without a definition or a
+// note, one that names both a property and a variant, and two notes on one
+// node.
+func checkDeprecationNotes(notes []DeprecationNote) error {
+	noted := map[[3]string]bool{}
+	for _, note := range notes {
+		k := [3]string{note.Definition, note.Property, note.Variant}
+		switch {
+		case note.Definition == "" || note.Note == "":
+			return fmt.Errorf("%s: it needs a definition and a note", note.name())
+		case note.Property != "" && note.Variant != "":
+			return fmt.Errorf("%s: it names both a property and a variant", note.name())
+		case noted[k]:
+			return fmt.Errorf("%s: two notes", note.name())
+		}
+		noted[k] = true
 	}
 	return nil
 }
@@ -851,6 +900,80 @@ func (m *Model) applyDocNotes(r *rules) {
 			}
 		}
 	}
+}
+
+// applyDeprecations gives each deprecation note to the declarations built
+// from its node, refusing a note whose node the schema lacks or does not
+// mark, then marks each method whose notification or request definition is
+// marked (0024-PLAN-api-gate-and-deprecation.md).
+func (m *Model) applyDeprecations(r *rules) error {
+	if r.table != nil {
+		for _, note := range r.table.DeprecationNotes {
+			marks := m.deprecationsOf(note)
+			if len(marks) == 0 {
+				return fmt.Errorf("%s: the schema does not mark it deprecated", note.name())
+			}
+			for _, d := range marks {
+				d.Note = note.Note
+			}
+		}
+	}
+	for _, mi := range slices.Concat(m.AgentMethods, m.ClientMethods) {
+		for _, name := range []string{mi.Notif, mi.Req} {
+			if t := m.Type(name); name != "" && t != nil && t.Deprecation != nil {
+				mi.Deprecation = &Deprecation{Note: t.Deprecation.Note, Definition: t.Origin.Key}
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// deprecationsOf returns the marks of the declarations built from note's
+// node, none when the schema lacks it or does not mark it.
+func (m *Model) deprecationsOf(note DeprecationNote) []*Deprecation {
+	t := m.Type(note.Definition)
+	if t == nil {
+		return nil
+	}
+	var out []*Deprecation
+	add := func(d *Deprecation) {
+		if d != nil {
+			out = append(out, d)
+		}
+	}
+	switch {
+	case note.Property != "":
+		for _, fld := range t.Fields {
+			if fld.Key == note.Property {
+				add(fld.Deprecation)
+			}
+		}
+		for _, ns := range t.NestedStructs {
+			if ns.Key == note.Property {
+				add(ns.Deprecation)
+			}
+		}
+	case note.Variant != "":
+		for _, vi := range t.Variants {
+			if !vi.Skip && (vi.DiscValue == note.Variant || (vi.DiscValue == "" && vi.FieldName == note.Variant)) {
+				add(vi.Deprecation)
+			}
+		}
+		for _, mb := range t.Members {
+			if mb.Field == note.Variant {
+				add(mb.Deprecation)
+			}
+		}
+		for i := range t.Enum {
+			if t.Enum[i].Value == note.Variant {
+				add(t.Enum[i].Deprecation)
+			}
+		}
+	default:
+		add(t.Deprecation)
+	}
+	return out
 }
 
 // checkTypeRules refuses a hand-written-helpers type that is not a union; a

@@ -118,6 +118,9 @@ type Type struct {
 	def *load.Definition
 	// Doc is the definition's doc comment, one entry per line.
 	Doc []string
+	// Deprecation marks a definition the schema marks deprecated; nil when
+	// it does not.
+	Deprecation *Deprecation
 
 	// Nested maps a property key of a KindObject to the name of the struct
 	// emitted for its inline object; NestedStructs holds those structs, in
@@ -187,6 +190,9 @@ type Variant struct {
 	Inline *Inline
 	// Doc is the variant's description, for its wrapper field.
 	Doc []string
+	// Deprecation marks a variant the schema marks deprecated: its wrapper
+	// field, its inline type and its helper carry the notice.
+	Deprecation *Deprecation
 	// Required lists the variant's required keys, for decoding by key match.
 	Required []string
 	// IsObject, IsArray, and IsNull describe the variant's JSON shape.
@@ -234,11 +240,45 @@ const (
 
 // EnumValue is one constant of an enum kind. Doc is the value's schema
 // description, one entry per line, nil when it has none
-// (0019-PLAN-examples-docs-tests-tooling.md, I12).
+// (0019-PLAN-examples-docs-tests-tooling.md, I12). Deprecation marks a
+// constant variant the schema marks deprecated.
 type EnumValue struct {
-	Value string
-	Const string
-	Doc   []string
+	Value       string
+	Const       string
+	Doc         []string
+	Deprecation *Deprecation
+}
+
+// Deprecation marks a declaration built from a node the schema marks
+// deprecated (0024-PLAN-api-gate-and-deprecation.md). Note is the protocol
+// table's replacement for the node, or "". Definition, on a method's, is the
+// key of the request or notification definition whose mark it carries.
+type Deprecation struct {
+	Note       string
+	Definition string
+}
+
+// deprecationOf returns a mark for d, or nil when the schema does not mark
+// it deprecated.
+func deprecationOf(d *load.Definition) *Deprecation {
+	if d == nil || !d.Deprecated {
+		return nil
+	}
+	return &Deprecation{}
+}
+
+// refuseConstless refuses deprecated on a member of an enum kind's list
+// that has no const: no declaration is built from it
+// (0024-PLAN-api-gate-and-deprecation.md, the deviation during step 4).
+func refuseConstless(t *Type) error {
+	for _, list := range [][]*load.Definition{t.def.OneOf, t.def.AnyOf} {
+		for i, v := range list {
+			if v != nil && v.Const == nil && v.Deprecated {
+				return fmt.Errorf("%s variant %d: deprecated on a member without a const marks no Go declaration", t.Name, i+1)
+			}
+		}
+	}
+	return nil
 }
 
 // Helper is a New<Union><Field> constructor for one union variant.
@@ -379,6 +419,7 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		func() error { return m.resolveGates(r) },
 		func() error { return m.checkTypeRules(r) },
 		func() error { m.applyDocNotes(r); return nil },
+		func() error { return m.applyDeprecations(r) },
 		func() error { return m.buildInterfaces(n, r) },
 	} {
 		if err := step(); err != nil {
@@ -422,9 +463,13 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition,
 	t := &Type{Name: name, def: def, Kind: classify(def), CatchAll: -1}
 	if def != nil {
 		t.Doc = docLines(def.Description)
+		t.Deprecation = deprecationOf(def)
 	}
 	switch t.Kind {
 	case KindEnum, KindStringConstUnion, KindOpenEnum:
+		if err := refuseConstless(t); err != nil {
+			return nil, err
+		}
 		for _, v := range enumValues(t) {
 			v.Const = util.ToEnumConst(name, v.Value)
 			if err := n.declare(v.Const, fmt.Sprintf("%s enum value %q", name, v.Value)); err != nil {
@@ -461,6 +506,9 @@ func buildType(schema *load.Schema, n *namer, name string, def *load.Definition,
 		u := primitiveRef(primaryType(def), def.Format)
 		t.Underlying = &u
 	case KindIntegerEnum:
+		if err := refuseConstless(t); err != nil {
+			return nil, err
+		}
 		if err := buildIntegerEnum(n, t); err != nil {
 			return nil, err
 		}
@@ -515,7 +563,7 @@ func buildIntegerEnum(n *namer, t *Type) error {
 		if err := n.declare(c, fmt.Sprintf("%s value %s", t.Name, value)); err != nil {
 			return err
 		}
-		t.Enum = append(t.Enum, EnumValue{Value: value, Const: c, Doc: docLines(v.Description)})
+		t.Enum = append(t.Enum, EnumValue{Value: value, Const: c, Doc: docLines(v.Description), Deprecation: deprecationOf(v)})
 	}
 	u := primitiveRef(schemaTypeInteger, format)
 	t.Underlying = &u
@@ -558,7 +606,7 @@ func enumValues(t *Type) []EnumValue {
 	case KindStringConstUnion:
 		for _, v := range t.def.OneOf {
 			if v != nil && v.Const != nil {
-				values = append(values, EnumValue{Value: fmt.Sprint(v.Const), Doc: docLines(v.Description)})
+				values = append(values, EnumValue{Value: fmt.Sprint(v.Const), Doc: docLines(v.Description), Deprecation: deprecationOf(v)})
 			}
 		}
 	case KindOpenEnum:
@@ -567,7 +615,7 @@ func enumValues(t *Type) []EnumValue {
 				continue
 			}
 			if s, ok := v.Const.(string); ok {
-				values = append(values, EnumValue{Value: s, Doc: docLines(v.Description)})
+				values = append(values, EnumValue{Value: s, Doc: docLines(v.Description), Deprecation: deprecationOf(v)})
 			}
 		}
 	}
@@ -609,7 +657,8 @@ func buildObject(n *namer, t *Type) error {
 			return err
 		}
 		t.Nested[key] = nested
-		t.NestedStructs = append(t.NestedStructs, &Struct{Name: nested, Key: key, Doc: docLines(prop.Description), Fields: fields})
+		t.NestedStructs = append(t.NestedStructs, &Struct{Name: nested, Key: key, Doc: docLines(prop.Description), Fields: fields,
+			Deprecation: deprecationOf(prop)})
 	}
 	fields, err := objectFields(t)
 	if err != nil {
@@ -958,6 +1007,7 @@ func buildVariant(schema *load.Schema, n *namer, t *Type, owner string, idx int,
 		FieldName:       field,
 		DiscValue:       dv,
 		Doc:             docLines(ev.Description),
+		Deprecation:     deprecationOf(v),
 		Required:        facts.Required,
 		IsObject:        isObj,
 		IsArray:         primaryType(facts) == schemaTypeArray,
@@ -1049,7 +1099,8 @@ func flatMembers(schema *load.Schema, def *load.Definition) ([]*Member, bool) {
 		if v.Title != "" {
 			field = util.ToExportedField(v.Title)
 		}
-		out = append(out, &Member{Field: field, Type: name, Doc: docLines(v.Description), Required: expandAllOf(schema, schema.Defs[name]).Required})
+		out = append(out, &Member{Field: field, Type: name, Doc: docLines(v.Description), Required: expandAllOf(schema, schema.Defs[name]).Required,
+			Deprecation: deprecationOf(v)})
 	}
 	return out, true
 }

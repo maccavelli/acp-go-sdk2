@@ -378,6 +378,10 @@ docs and `schemars_derive` source were downloaded into scratch and only read.
   | a property | its struct field; for an inline object property, its nested type too |
   | a union variant | the union's field, the variant's inline type, and its helper constructor; for a constant variant, the constant |
 
+  Amended 2026-10-20, during step 4 of [0024-PLAN-api-gate-and-deprecation.md](0024-PLAN-api-gate-and-deprecation.md), by the
+  owner: a direct `anyOf` or `oneOf` member that becomes a flattened member marks that member's field; an enum kind's member with
+  no `const`, from which no declaration is built, is refused.
+
 * **The notice.** A paragraph of its own, after a blank comment line (D10), as question 10 decides its text.
 * **No change today.** The committed schema marks nothing (D1), so every generated file stays byte-identical and the API listing
   unchanged; `TestGeneratedFilesUpToDate` holds that.

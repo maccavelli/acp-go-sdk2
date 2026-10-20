@@ -1,0 +1,122 @@
+deprecated marks the Go declarations built from its node with a notice, as
+the paragraph "Deprecated: the ACP schema marks <place> deprecated.": a
+definition's type; a property's field, and an inline object property's
+nested type; a union variant's field, inline type and helper; a constant
+variant's constant; a flattened member's field; and a request definition's
+methods, its interface method and its side connection's, while its response
+is marked only by its own mark. A property whose $ref names a deprecated
+definition gets no notice of its own, and deprecated false marks nothing
+(0024-PLAN-api-gate-and-deprecation.md).
+The meta declares $/cancel_request and the schema its smallest definition,
+which the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {"hello": "x/hello"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Old": {"type": "object", "description": "An old shape.", "properties": {"x": {"type": "string"}}, "deprecated": true},
+  "Holder": {"type": "object", "properties": {
+    "a": {"type": "string", "description": "A string.", "deprecated": true},
+    "inner": {"type": "object", "properties": {"y": {"type": "string"}}, "deprecated": true},
+    "old": {"$ref": "#/$defs/Old"},
+    "keep": {"type": "string", "deprecated": false}
+  }, "required": ["a"]},
+  "Kept": {"type": "object", "properties": {"z": {"type": "string"}}, "deprecated": false},
+  "U": {"oneOf": [
+    {"type": "object", "properties": {"kind": {"type": "string", "const": "a"}}, "required": ["kind"], "deprecated": true},
+    {"type": "object", "properties": {"kind": {"type": "string", "const": "b"}}, "required": ["kind"]}
+  ]},
+  "V": {"oneOf": [
+    {"title": "Text", "type": "string", "deprecated": true},
+    {"title": "Count", "type": "integer", "format": "int64"}
+  ]},
+  "Level": {"oneOf": [{"type": "string", "const": "low", "deprecated": true}, {"type": "string", "const": "high"}]},
+  "SessionScope": {"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"]},
+  "RequestScope": {"type": "object", "properties": {"requestId": {"type": "integer", "format": "int64"}}, "required": ["requestId"]},
+  "Mode": {"type": "object", "properties": {"schema": {"type": "string"}}, "required": ["schema"], "anyOf": [
+    {"title": "Session", "allOf": [{"$ref": "#/$defs/SessionScope"}], "deprecated": true},
+    {"title": "Request", "allOf": [{"$ref": "#/$defs/RequestScope"}]}
+  ]},
+  "InitRequest": {"type": "object", "properties": {"v": {"type": "integer", "format": "uint16"}}, "required": ["v"], "x-side": "agent", "x-method": "x/hello", "deprecated": true},
+  "InitResponse": {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"], "x-side": "agent", "x-method": "x/hello"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{Init(ctx context.Context, params InitRequest) (InitResponse, error)}
+type AgentExperimental interface{}
+const AgentMethodHello untyped string = "x/hello"
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+type Holder struct{A string "json:\"a\""; Inner HolderInner "json:\"inner\""; Keep string "json:\"keep,omitempty\""; Old Old "json:\"old\""}
+type HolderInner struct{Y string "json:\"y,omitempty\""}
+type InitRequest struct{V uint16 "json:\"v\""}
+type InitResponse struct{Ok bool "json:\"ok\""}
+type Kept struct{Z string "json:\"z,omitempty\""}
+type Level string
+const LevelHigh Level = "high"
+const LevelLow Level = "low"
+type Mode struct{Schema string "json:\"schema\""; Session *SessionScope "json:\"-\""; Request *RequestScope "json:\"-\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewUA() U
+func NewUB() U
+func NewVCount(value int64) V
+func NewVText(value string) V
+type Old struct{X string "json:\"x,omitempty\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type RequestScope struct{RequestId int64 "json:\"requestId\""}
+type SessionScope struct{SessionId string "json:\"sessionId\""}
+type U struct{A *UA "json:\"-\""; B *UB "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type UA struct{Kind string "json:\"kind\""}
+type UB struct{Kind string "json:\"kind\""}
+type V struct{Text *VText "json:\"-\""; Count *VCount "json:\"-\""}
+type VCount int64
+type VText string
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Init(ctx context.Context, params InitRequest) (InitResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*Holder).UnmarshalJSON(b []byte) error
+func (*InitRequest).UnmarshalJSON(b []byte) error
+func (*InitRequest).Validate() error
+func (*InitResponse).UnmarshalJSON(b []byte) error
+func (*InitResponse).Validate() error
+func (Mode).MarshalJSON() ([]byte, error)
+func (*Mode).UnmarshalJSON(b []byte) error
+func (*Mode).Validate() error
+func (*RequestScope).UnmarshalJSON(b []byte) error
+func (*SessionScope).UnmarshalJSON(b []byte) error
+func (U).MarshalJSON() ([]byte, error)
+func (*U).UnmarshalJSON(b []byte) error
+func (*U).Validate() error
+func (V).MarshalJSON() ([]byte, error)
+func (*V).UnmarshalJSON(b []byte) error
+func (*V).Validate() error
+-- want.deprecated --
+const LevelLow: Deprecated: the ACP schema marks the "low" variant of the Level schema definition deprecated.
+field Holder.A: Deprecated: the ACP schema marks the "a" property of the Holder schema definition deprecated.
+field Holder.Inner: Deprecated: the ACP schema marks the "inner" property of the Holder schema definition deprecated.
+field Mode.Session: Deprecated: the ACP schema marks the Session member of the Mode schema definition deprecated.
+field U.A: Deprecated: the ACP schema marks the "a" variant of the U schema definition deprecated.
+field V.Text: Deprecated: the ACP schema marks the Text variant of the V schema definition deprecated.
+func NewUA: Deprecated: the ACP schema marks the "a" variant of the U schema definition deprecated.
+func NewVText: Deprecated: the ACP schema marks the Text variant of the V schema definition deprecated.
+method (*ClientSideConnection).Init: Deprecated: the ACP schema marks the InitRequest schema definition deprecated.
+method Agent.Init: Deprecated: the ACP schema marks the InitRequest schema definition deprecated.
+type HolderInner: Deprecated: the ACP schema marks the "inner" property of the Holder schema definition deprecated.
+type InitRequest: Deprecated: the ACP schema marks the InitRequest schema definition deprecated.
+type Old: Deprecated: the ACP schema marks the Old schema definition deprecated.
+type UA: Deprecated: the ACP schema marks the "a" variant of the U schema definition deprecated.
+type VText: Deprecated: the ACP schema marks the Text variant of the V schema definition deprecated.
