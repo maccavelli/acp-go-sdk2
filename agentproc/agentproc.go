@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"sync"
 	"time"
 
@@ -124,32 +125,63 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 	if cmd.WaitDelay == 0 {
 		cmd.WaitDelay = grace / 2
 	}
-	if err := cmd.Start(); err != nil {
+	p := &Process{cmd: cmd, grace: grace, done: make(chan struct{})}
+	started, proceed := make(chan error, 1), make(chan bool, 1)
+	p.goroutines.Go(func() { p.run(started, proceed) })
+	if err := <-started; err != nil {
+		p.goroutines.Wait()
 		return nil, errors.Join(fmt.Errorf("agentproc: starting the agent: %w", err), inR.Close(), inW.Close(),
 			outR.Close(), outW.Close())
 	}
 	// The agent holds its own ends now; with the parent's closed, its output
 	// ends when it and the processes it started have closed theirs.
 	if err := errors.Join(inR.Close(), outW.Close()); err != nil {
-		return nil, abandon(cmd, err, inW, outR)
+		return nil, p.abandon(proceed, err, inW, outR)
 	}
 	t, err := attach(cmd)
 	if err != nil {
-		return nil, abandon(cmd, err, inW, outR)
+		return nil, p.abandon(proceed, err, inW, outR)
 	}
-	stdin := &sharedClose{File: inW}
-	p := &Process{cmd: cmd, grace: grace, stdin: stdin, tree: t, done: make(chan struct{})}
-	p.conn = acp.NewClientSideConnection(client, stdin, outR, c.ConnectionOptions...)
-	p.goroutines.Go(p.watch)
+	p.stdin = &sharedClose{File: inW}
+	p.tree = t
+	p.conn = acp.NewClientSideConnection(client, p.stdin, outR, c.ConnectionOptions...)
+	proceed <- true
 	p.goroutines.Go(p.monitor)
 	return p, nil
 }
 
-// abandon kills an agent Start has started but cannot connect, waits for
-// it, closes the parent's ends of its pipes, and returns why.
-func abandon(cmd *exec.Cmd, why error, files ...*os.File) error {
-	_ = cmd.Process.Kill() //nolint:errcheck // the agent may have exited; Wait reaps it either way.
-	_ = cmd.Wait()         //nolint:errcheck // its exit is not why Start failed.
+// run starts the agent and then waits for it, on one goroutine locked to
+// its OS thread for the agent's life: on Linux the kernel sends a Pdeathsig
+// when the thread that started the child ends, which can be long before the
+// process ends (0029-MADR-unix-client-death-pdeathsig.md, D12 to D14). It
+// reports Cmd.Start's error on started; then, as proceed says, it watches
+// the agent, or kills it and reaps it.
+func (p *Process) run(started chan<- error, proceed <-chan bool) {
+	runtime.LockOSThread()
+	// Unlocked only once Cmd.Wait has returned, so the thread is the agent's
+	// until it is reaped. An earlier unlock would leave it free while run
+	// waits for Start's word, which no test can catch
+	// (0029-PLAN-unix-client-death-pdeathsig.md, the deviation during step 2).
+	defer runtime.UnlockOSThread()
+	if err := p.cmd.Start(); err != nil {
+		started <- err
+		return
+	}
+	started <- nil
+	if !<-proceed {
+		_ = p.cmd.Process.Kill() //nolint:errcheck // the agent may have exited; Wait reaps it either way.
+		_ = p.cmd.Wait()         //nolint:errcheck // its exit is not why Start failed.
+		return
+	}
+	p.watch()
+}
+
+// abandon has run kill and reap an agent Start has started but cannot
+// connect, waits for it, closes the parent's ends of its pipes, and returns
+// why.
+func (p *Process) abandon(proceed chan<- bool, why error, files ...*os.File) error {
+	proceed <- false
+	p.goroutines.Wait()
 	errs := []error{fmt.Errorf("agentproc: %w", why)}
 	for _, f := range files {
 		errs = append(errs, f.Close())
@@ -172,7 +204,7 @@ func (f *sharedClose) Close() error {
 	return f.err
 }
 
-// watch owns Cmd.Wait. When it returns, watch kills what is left of the
+// watch owns Cmd.Wait, on run's locked thread. When it returns, watch kills what is left of the
 // agent's process group or job, since a launcher's descendants outlive it
 // (0027-MADR-agent-process-helper.md, P8), records the result, and closes
 // done; then it gives the connection up to the grace to read to the end of

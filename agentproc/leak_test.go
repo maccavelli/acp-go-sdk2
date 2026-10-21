@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"testing"
 	"time"
@@ -32,6 +33,10 @@ func TestMain(m *testing.M) {
 	if mode := os.Getenv(childEnv); mode != "" {
 		os.Exit(child(mode))
 	}
+	// The main goroutine keeps the main thread, which Go never ends, so a
+	// test's goroutine that locks its thread and returns ends a thread of its
+	// own (0029-PLAN-unix-client-death-pdeathsig.md, step 2).
+	runtime.LockOSThread()
 	code := m.Run()
 	// Go 1.26 has the profile only as an experiment, which Go 1.27 rejects
 	// (0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md, question 2).

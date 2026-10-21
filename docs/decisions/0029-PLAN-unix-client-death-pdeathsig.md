@@ -99,7 +99,7 @@ Planted breaks, each in a scratch copy:
 | For | Break | The check that must fail |
 | :--- | :--- | :--- |
 | the locked start | `Cmd.Start` back on the caller's goroutine | `TestStartFromExitingLockedGoroutine` (Linux) |
-| the locked start | `runtime.UnlockOSThread` before `Cmd.Wait` | `TestStartFromExitingLockedGoroutine` (Linux) |
+| the locked start | `runtime.UnlockOSThread` before `Cmd.Wait` | `TestStartFromExitingLockedGoroutine` (Linux) (cannot fail: see the deviation during step 2) |
 | `Pdeathsig` | `setDeathSignal` doing nothing on Linux | `TestClientDeathEndsAgent`, `TestDefaultPdeathsig` |
 | `Pdeathsig` | a caller's `Pdeathsig` overwritten | `TestCallersPdeathsigKept` |
 | platforms | `deathsig_none.go` removed | `go vet ./agentproc` for `darwin` |
@@ -148,3 +148,61 @@ A first run planted the three at once; the first break added a line, which moved
 own break. The breaks were run again, one to a copy, as above.
 
 **Gates:** `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing in the changed records.
+
+### Deviation, 2026-10-21, during step 2: an early unlock cannot be caught
+
+**Found.** The plant "`runtime.UnlockOSThread` before `Cmd.Wait`", an unlock added right after `Cmd.Start` succeeds, left
+`TestStartFromExitingLockedGoroutine` passing on the Linux host, 5 runs of 5. Once unlocked, `run`'s thread is still held through the
+agent's life by the blocking wait for the agent; it is exposed only while `run` waits for `Start`'s word, before the wait, when another
+goroutine could take the thread, lock it and end it. No deterministic test reaches that window.
+
+**Decision (owner, 2026-10-21), the recommended resolution.** Keep `defer runtime.UnlockOSThread()`, so the thread is reserved until
+`Cmd.Wait` has returned, with a comment in `run` saying why it stays; record the plant as one that cannot be caught. The verification
+table's row is annotated. No test changes.
+
+### Step 2, the locked start, 2026-10-21
+
+The owner committed step 1 as `e068f97` and approved this step. What changed:
+
+* **`agentproc/agentproc.go`:** `Start` builds the `Process` before the agent starts and hands the start to `run`, through
+  `p.goroutines.Go`. `run` locks its goroutine to its OS thread, calls `Cmd.Start`, reports the error on a channel, then waits for
+  `Start`'s word: "watch" runs `watch` on the same thread; "abandon" kills the agent and calls `Cmd.Wait`. It unlocks once `Cmd.Wait` has
+  returned. `abandon` is now a method that sends "abandon" and waits for `run`, then closes the parent's pipe ends. `Cmd.Wait` is still
+  called by one goroutine alone.
+* **`agentproc/leak_test.go`:** `TestMain` locks the main goroutine to the main thread, which Go never ends, so a test's goroutine that
+  locks its thread and returns ends a thread of its own.
+* **`agentproc/pdeathsig_test.go`, new** (`linux || freebsd`): `TestStartFromExitingLockedGoroutine`: a goroutine locks its thread, calls
+  `Start` for a `stubborn` agent with `Pdeathsig` SIGKILL, and returns, which ends the thread; the agent must say it is ready, still run a
+  second later, and `Close` must return `ErrKilled`.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| an agent with `Pdeathsig` lives while its client does, whatever thread called `Start` | `TestStartFromExitingLockedGoroutine`, the Linux host, 3 runs of 3 |
+| every other behaviour is unchanged | `agentproc`'s tests: macOS, `-race`, 5 runs; the Linux host, 3 runs; the Windows host |
+
+**Planted breaks,** each in its own scratch copy, the test binary cross-compiled and run on the Linux host. 1 of 2 failed as required;
+the second is the deviation above:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `Cmd.Start` on the caller's goroutine again, `run` only waiting | `TestStartFromExitingLockedGoroutine`, 3 runs of 3: "the agent ended, signal: killed, when the thread that called Start did, before it said it was ready" |
+| `runtime.UnlockOSThread` right after `Cmd.Start` | none, 5 runs of 5: the deviation above |
+
+The first break's first run failed for its readiness wait, "the agent did not say it was ready within 30s": the agent died before it
+could say so. The test now watches for the agent's end while it waits, and names it.
+
+**Gates,** each exit 0, run alone:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "166 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and
+  the new file's, "1 file(s) clean"; `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules;
+  `make check-records`, `make markdownlint` and the identifier scan; `make lint`, "0 issues." four times, and `golangci-lint` for
+  `GOOS=linux` and `GOOS=freebsd` on `agentproc`, "0 issues." each, since `make lint` builds neither; `go fix -diff ./...` prints nothing;
+* `go vet ./agentproc` for `darwin`, `linux`, `freebsd`, `windows` (amd64, arm64), `openbsd`, `netbsd`, `illumos`, `js/wasm`,
+  `wasip1/wasm`, `plan9`;
+* `make api` against `v1.19.0`: "0 incompatible, 0 compatible";
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules;
+* the Linux host: the `agentproc` test binary, 3 runs, "PASS".
+
+**The floor gate at go1.26.10:** `go vet` and `go test -race -count=1` pass in both modules, the leak guards on.
