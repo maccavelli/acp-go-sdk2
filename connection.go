@@ -125,10 +125,18 @@ type inflightRequest struct{ cancel context.CancelCauseFunc }
 type responseEnvelope struct {
 	msg                   anyMessage
 	notificationWatermark uint64
+	// committed and commitErr are what the pending request's commit made of
+	// its result, on the reader, before the envelope was handed over
+	// (0030-MADR-record-initialize-on-arrival.md, O1).
+	committed any
+	commitErr error
 }
 
 type pendingResponse struct {
 	ch chan responseEnvelope
+	// commit, when set, checks and records a result as the reader reads it,
+	// before it reads the next message (sendRequestCommit).
+	commit func(result json.RawMessage) (any, error)
 }
 
 type cancelRequestParams struct {
@@ -1600,7 +1608,13 @@ func (c *Connection) handleResponse(msg *anyMessage) {
 			panic("completed notification sequence exceeded response watermark")
 		}
 		c.notifyMu.Unlock()
-		pr.ch <- responseEnvelope{msg: *msg, notificationWatermark: watermark}
+		env := responseEnvelope{msg: *msg, notificationWatermark: watermark}
+		// The commit runs before the reader reads on, so every later message
+		// is judged by what it recorded (0030-MADR-record-initialize-on-arrival.md, O1).
+		if pr.commit != nil && msg.Error == nil {
+			env.committed, env.commitErr = pr.commit(msg.Result)
+		}
+		pr.ch <- env
 	}
 }
 
@@ -1775,38 +1789,9 @@ func sendRequest[T any](c *Connection, ctx context.Context, method string, param
 // handed to the writer goroutine, so that it may have reached the peer
 // (0019-PLAN-issue-fixes.md, B22).
 func sendRequestSent[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc) (result T, sent bool, err error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
-	// A request whose context has already ended is not written
-	// (0019-PLAN-behaviour-fixes.md, B9).
-	if ctx.Err() != nil {
-		return result, false, toReqErr(context.Cause(ctx))
-	}
-	// No answer can arrive once the input has ended.
-	if c.inputEnded() {
-		return result, false, inputEndedError()
-	}
-
-	msg, idKey, err := c.prepareRequest(method, params)
+	resp, sent, err := c.exchange(ctx, method, params, &pendingResponse{ch: make(chan responseEnvelope, 1)})
 	if err != nil {
-		return result, false, err
-	}
-
-	pr := &pendingResponse{ch: make(chan responseEnvelope, 1)}
-	c.mu.Lock()
-	c.pending[idKey] = pr
-	c.mu.Unlock()
-
-	sent, err = c.sendMessageSent(ctx, msg)
-	if err != nil {
-		c.cleanupPending(idKey)
-		if ctx.Err() != nil {
-			c.sendCancelRequest(idKey)
-		}
-		return result, sent, toReqErr(err)
-	}
-
-	resp, err := c.waitForResponse(ctx, pr, idKey)
-	if err != nil {
-		return result, true, err
+		return result, sent, err
 	}
 	if err := c.waitNotificationsUpTo(ctx, resp.notificationWatermark); err != nil {
 		return result, true, err
@@ -1826,6 +1811,118 @@ func sendRequestSent[T any](c *Connection, ctx context.Context, method string, p
 		}
 	}
 	return result, true, nil
+}
+
+// sendRequestCommit is sendRequest for a request whose result the reader
+// checks and records as it reads it, before it reads the next message: on
+// the reader, the result is decoded and checked as sendRequestSent checks it,
+// with ctx and gate, and then given to commit, whose error is the call's. It
+// returns the value the reader checked, decoding nothing itself, and returns
+// a committed result even when the wait for earlier notifications then ends,
+// so that what it returns and what commit recorded agree
+// (0030-MADR-record-initialize-on-arrival.md, O1;
+// 0030-PLAN-record-initialize-on-arrival.md, the deviation during step 2).
+func sendRequestCommit[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc, commit func(result *T) error) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
+	pr := &pendingResponse{ch: make(chan responseEnvelope, 1), commit: func(raw json.RawMessage) (any, error) {
+		var result T
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &result); err != nil {
+				return result, NewInternalError(map[string]any{jsonErrorField: err.Error()})
+			}
+			if err := c.checkInbound(ctx, method, &result, gate); err != nil {
+				var zero T
+				return zero, fmt.Errorf("%s response: %w", method, err)
+			}
+		}
+		err := commit(&result)
+		return result, err
+	}}
+	var zero T
+	resp, _, err := c.exchange(ctx, method, params, pr)
+	if err != nil {
+		return zero, err
+	}
+	werr := c.waitNotificationsUpTo(ctx, resp.notificationWatermark)
+	// committed is nil only for an error response, which runs no commit.
+	var result T
+	if v, ok := resp.committed.(T); ok {
+		result = v
+	}
+	switch {
+	case resp.msg.Error == nil && resp.commitErr == nil:
+		return result, nil
+	case werr != nil:
+		return zero, werr
+	case resp.msg.Error != nil:
+		return zero, resp.msg.Error
+	default:
+		return result, resp.commitErr
+	}
+}
+
+// exchange sends the request for method, registered as pr, and returns its
+// answer, and whether the request was handed to the writer goroutine, so
+// that it may have reached the peer (0019-PLAN-issue-fixes.md, B22).
+func (c *Connection) exchange(ctx context.Context, method string, params any, pr *pendingResponse) (responseEnvelope, bool, error) {
+	// A request whose context has already ended is not written
+	// (0019-PLAN-behaviour-fixes.md, B9).
+	if ctx.Err() != nil {
+		return responseEnvelope{}, false, toReqErr(context.Cause(ctx))
+	}
+	// No answer can arrive once the input has ended.
+	if c.inputEnded() {
+		return responseEnvelope{}, false, inputEndedError()
+	}
+
+	msg, idKey, err := c.prepareRequest(method, params)
+	if err != nil {
+		return responseEnvelope{}, false, err
+	}
+
+	c.mu.Lock()
+	c.pending[idKey] = pr
+	c.mu.Unlock()
+
+	sent, err := c.sendMessageSent(ctx, msg)
+	if err != nil {
+		// A write that has begun runs to its end (writeLoop), so the answer
+		// may already have been read.
+		if resp, ok := c.claimedAnswer(pr, idKey); ok {
+			return resp, true, nil
+		}
+		c.cleanupPending(idKey)
+		if ctx.Err() != nil {
+			c.sendCancelRequest(idKey)
+		}
+		return responseEnvelope{}, sent, toReqErr(err)
+	}
+
+	resp, err := c.waitForResponse(ctx, pr, idKey)
+	return resp, true, err
+}
+
+// claimedAnswer is, for a request with a commit, the answer the reader has
+// already taken from the pending requests, waited for while its commit runs,
+// so that a caller that stops waiting after that returns what was recorded;
+// a request still pending is removed, and nothing is committed for it. It
+// reports false for a request without a commit, leaving it pending
+// (0030-PLAN-record-initialize-on-arrival.md, the deviation during step 2).
+// Only the reader and the caller remove a pending request, and the reader
+// always hands over what it took.
+func (c *Connection) claimedAnswer(pr *pendingResponse, idKey string) (responseEnvelope, bool) {
+	if pr.commit == nil {
+		return responseEnvelope{}, false
+	}
+	c.mu.Lock()
+	pending := c.pending[idKey] == pr
+	if pending {
+		delete(c.pending, idKey)
+	}
+	c.mu.Unlock()
+	if pending {
+		return responseEnvelope{}, false
+	}
+	return <-pr.ch, true
 }
 
 func (c *Connection) prepareRequest(method string, params any) (anyMessage, string, error) {
@@ -1948,6 +2045,8 @@ func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, i
 		}
 	}
 
+	claimed := func() (responseEnvelope, bool) { return c.claimedAnswer(pr, idKey) }
+
 	select {
 	case resp := <-pr.ch:
 		return resp, nil
@@ -1955,9 +2054,15 @@ func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, i
 		if resp, ok := answered(); ok {
 			return resp, nil
 		}
+		if resp, ok := claimed(); ok {
+			return resp, nil
+		}
 		c.cleanupPending(idKey)
 		return responseEnvelope{}, inputEndedError()
 	case <-ctx.Done():
+		if resp, ok := claimed(); ok {
+			return resp, nil
+		}
 		// If the connection dropped at the same time, prefer reporting peer disconnect
 		// and avoid queueing a best-effort cancel notification to a dead peer.
 		select {
@@ -1975,6 +2080,9 @@ func (c *Connection) waitForResponse(ctx context.Context, pr *pendingResponse, i
 		return responseEnvelope{}, toReqErr(context.Cause(ctx))
 	case <-c.Done():
 		if resp, ok := answered(); ok {
+			return resp, nil
+		}
+		if resp, ok := claimed(); ok {
 			return resp, nil
 		}
 		c.cleanupPending(idKey)

@@ -662,7 +662,10 @@ func initializeCase(recv ast.Expr, mi *model.Method) []ast.Stmt {
 // with another version is a *ProtocolVersionError and records nothing; the
 // answer's gates are checked against the record it would make, through the
 // validation hook as any response is
-// (0017-MADR-remediate-acp-v1-conformance-violations.md, N1 and G1).
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, N1 and G1). The
+// connection's reader checks and records the answer as it reads it, before it
+// reads the next message, through sendRequestCommit
+// (0030-MADR-record-initialize-on-arrival.md, O1).
 func initializeWrapper(mi *model.Method) []ast.Stmt {
 	req, resp := dot("params", mi.ReqVersionField), dot("resp", mi.RespVersionField)
 	// typedGate checks the result's type, so the gate reads *result without an
@@ -673,25 +676,31 @@ func initializeWrapper(mi *model.Method) []ast.Stmt {
 			addr(composite(id("Negotiation"), kv(id("Request"), id("params")), kv(id("Response"), star(id("result"))))),
 			id("method"), id("result")))),
 	})
+	// The commit runs on the reader once the answer has been decoded and
+	// checked; its error is Initialize's, and it records the answer only when
+	// it returns nil.
+	commit := &ast.FuncLit{
+		Type: funcType([]*ast.Field{param("resp", star(id(mi.Resp)))}, param("", id("error"))),
+		Body: block(
+			ifStmt(nil, binary(resp, token.NEQ, id("ProtocolVersionNumber")),
+				ret(addr(composite(id("ProtocolVersionError"),
+					kv(id("Requested"), call(id("int"), dot("params", mi.ReqVersionField))),
+					kv(id("Answered"), call(id("int"), dot("resp", mi.RespVersionField))))))),
+			// The record is the JSON form of what was sent and received, sharing
+			// no memory with the caller's values (0019-PLAN-behaviour-fixes.md, B13).
+			define(exprs(id("rec"), id("err")), call(id("jsonCopy"),
+				composite(id("Negotiation"), kv(id("Request"), id("params")), kv(id("Response"), star(id("resp")))))),
+			ifStmt(nil, errNotNil(), ret(id("err"))),
+			exprStmt(call(dot("c", "negotiation", "Store"), addr(id("rec")))),
+			ret(nilExpr()),
+		),
+	}
 	return []ast.Stmt{
 		ifStmt(nil, binary(req, token.EQL, intLit(0)), assign(exprs(dot("params", mi.ReqVersionField)), id("ProtocolVersionNumber"))),
 		ifStmt(nil, binary(dot("params", mi.ReqVersionField), token.NEQ, id("ProtocolVersionNumber")),
 			ret(composite(id(mi.Resp)), addr(composite(id("ProtocolVersionError"),
 				kv(id("Requested"), call(id("int"), dot("params", mi.ReqVersionField))))))),
-		define(exprs(id("resp"), id("err")),
-			call(index(id("sendRequest"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), addr(id("params")), gate)),
-		ifStmt(nil, errNotNil(), ret(id("resp"), id("err"))),
-		ifStmt(nil, binary(resp, token.NEQ, id("ProtocolVersionNumber")),
-			ret(id("resp"), addr(composite(id("ProtocolVersionError"),
-				kv(id("Requested"), call(id("int"), dot("params", mi.ReqVersionField))),
-				kv(id("Answered"), call(id("int"), dot("resp", mi.RespVersionField))))))),
-		// The record is the JSON form of what was sent and received, sharing no
-		// memory with the caller's values (0019-PLAN-behaviour-fixes.md, B13).
-		define(exprs(id("rec"), id("err")), call(id("jsonCopy"),
-			composite(id("Negotiation"), kv(id("Request"), id("params")), kv(id("Response"), id("resp"))))),
-		ifStmt(nil, errNotNil(), ret(id("resp"), id("err"))),
-		exprStmt(call(dot("c", "negotiation", "Store"), addr(id("rec")))),
-		ret(id("resp"), nilExpr()),
+		ret(call(index(id("sendRequestCommit"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), addr(id("params")), gate, commit)),
 	}
 }
 
@@ -709,6 +718,12 @@ func outboundDoc(mi *model.Method, peer string, gated, terminalAuth bool) []stri
 	lines := []string{first}
 	if len(mi.Doc) > 0 {
 		lines = append(append(lines, ""), mi.Doc...)
+	}
+	if mi.Initializes {
+		// 0030-MADR-record-initialize-on-arrival.md, O1.
+		lines = append(append(lines, ""), wrapDoc("The connection's reader checks and records the answer as it reads it, "+
+			"before it reads the next message, so that a message the "+peer+" sends after its answer is judged by what "+
+			"the answer agreed.")...)
 	}
 	return append(append(lines, ""), outboundErrors(mi, gated, terminalAuth)...)
 }

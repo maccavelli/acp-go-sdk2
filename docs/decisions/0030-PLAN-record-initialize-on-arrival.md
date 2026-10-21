@@ -81,14 +81,14 @@ the initialize probe, and its amendment's T, K, W and B findings the others.
 
 ### The commit
 
-* `pendingResponse{ch, commit func(result json.RawMessage) error}`.
+* ~~`pendingResponse{ch, commit func(result json.RawMessage) error}`.~~ (Amended 2026-10-21, during step 2: see the deviation during step 2.)
 * `handleResponse`, for a pending request with a commit, whose response is a result: runs the commit before it hands the response over;
   the envelope carries the commit's error. An error response runs no commit.
-* `sendRequestCommit[T]`, beside `sendRequestSent`, registers the commit with the pending request and returns the commit's error, when
+* ~~`sendRequestCommit[T]`, beside `sendRequestSent`, registers the commit with the pending request and returns the commit's error, when
   there is one, before decoding; otherwise it decodes as `sendRequestSent` does. The commit decodes the answer once more; it is one small
-  message per connection.
+  message per connection.~~ (Amended 2026-10-21, during step 2: see the deviation during step 2.)
 * The emitted `Initialize`: its commit decodes the `InitializeResponse`, checks the version (`ProtocolVersionError`), applies the result
-  gate, `jsonCopy`s the record and `Store`s it, exactly as today's code after `sendRequest`, then marks `initialize` complete.
+  gate, `jsonCopy`s the record and `Store`s it, exactly as today's code after `sendRequest`, then marks `initialize` complete. (Amended 2026-10-21, during step 2: see the deviation during step 2.)
 
 ### The hold
 
@@ -199,7 +199,8 @@ it is relied on.
 
 1. **Records:** this PLAN and its row `in-progress`; the facts re-asserted by a script. (Amended 2026-10-21: F9 to F17 too.)
 2. **The commit:** `connection.go`; the emitter's `Initialize`; regeneration; `TestInitializeRecordedOnArrival`,
-   `TestAgentRecordsBeforeAnswering`; the pins.
+   `TestAgentRecordsBeforeAnswering`; the pins. (Amended 2026-10-21, during step 2: and `TestInitializeHooksRunOnce`,
+   `TestInitializeRefusedByHookRecordsNothing`, `TestInitializeGiveUpAgrees`.)
 3. **The hold:** the emitter's in-flight state and gate; regeneration; `TestHeldUntilInitialized`, `TestHeldRefusedWhenInitializeFails`,
    `TestNotHeldBeforeInitialize`; the pins.
 4. **(Added 2026-10-21) The reader's buffer:** `readBufferSize`; `TestReceiveReadBufferSize`.
@@ -231,6 +232,9 @@ Planted breaks, each in a scratch copy:
 | the commit | the record made by the caller again, the commit removed | `TestInitializeRecordedOnArrival` |
 | the commit | the commit run after the hand-over | `TestInitializeRecordedOnArrival` |
 | the commit | the version check left out of the commit | `TestHeldRefusedWhenInitializeFails`, another version |
+| the commit (added 2026-10-21, during step 2) | the caller decoding and checking the answer again after the commit | `TestInitializeHooksRunOnce` |
+| the commit | the commit applying the gate alone, the hooks left to the caller | `TestInitializeRefusedByHookRecordsNothing` |
+| the commit | `waitForResponse` returning the caller's error though the reader has claimed the answer | `TestInitializeGiveUpAgrees` |
 | the hold | the gate refusing at once, as today | `TestHeldUntilInitialized` |
 | the hold | a failure not closing `done` | `TestHeldRefusedWhenInitializeFails`, by its bound |
 | the hold | an attempt not failed when the caller gives up | `TestHeldRefusedWhenInitializeFails`, the caller's context |
@@ -312,3 +316,122 @@ A first run caught 16 of 17: F6 then tested that its lines contained a call, and
 in place. F6 now tests its three lines whole, as the other facts do, and the run above is the second.
 
 **Gates:** `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing in the changed records.
+
+### Deviation, 2026-10-21, during step 2: the commit's checks, and a caller that gives up
+
+**Found,** reading the code before any change, at `c2b33c1`:
+
+1. **The hooks decide the record.** `Initialize` stores the record only once `sendRequest` has returned without error
+   (`client_gen.go:507`–`:523`), and `sendRequestSent` has by then run `checkInbound` on the decoded answer (`connection.go:1823`): the
+   rewrite hook, which may change it, the validation, the validation hook, and the gate (`:2156`–`:2181`). So the record is the answer as
+   the hooks left it, and none is made when a hook refuses it. The design above, a commit that applies the gate alone and a caller that
+   then decodes and checks as `sendRequestSent` does, would record the answer before the rewrite hook, and record it when a hook refuses;
+   checking in both places would run the hooks twice.
+2. **A caller can give up after the reader has claimed the answer.** `handleResponse` removes the pending request (`:1584`–`:1588`) before
+   it hands the answer over (`:1603`); the commit runs between. A context that ends then takes `waitForResponse`'s `ctx.Done` branch, which
+   returns the context's error (`:1960`–`:1975`), and the connection's end its `Done` branch, which finds no answer yet (`:1976`–`:1981`):
+   `Initialize` would fail while the record exists.
+3. **The wait for earlier notifications** (`waitNotificationsUpTo`, `:1811`, `:1985`–`:2023`) also ends with the caller's context or the
+   connection, after the commit.
+
+**Decision (owner, 2026-10-21).**
+
+1. The commit runs today's whole path after the answer, once, on the reader: decode, `checkInbound` with the caller's context, the version,
+   `jsonCopy`, `Store`; the caller returns the value the commit checked, and decodes nothing. The alternative was this PLAN's design as
+   written.
+2. A caller that gives up after the reader has claimed the answer waits for the commit and returns its result, so that `Initialize`'s
+   return and the record always agree; a request without a commit is unchanged. The alternative was to leave the race. By the same rule,
+   the owner's, a committed answer is returned when the wait for earlier notifications then ends with the context or the connection: the
+   record exists.
+
+**The design, as amended:**
+
+* `pendingResponse{ch, commit func(result json.RawMessage) (any, error)}`; `responseEnvelope` gains `committed any` and `commitErr error`.
+* `handleResponse`, for a pending request with a commit and a response with no error: runs the commit before it hands the envelope over,
+  and puts its value and error in it.
+* `sendRequestCommit[T]`, beside `sendRequestSent`: as `sendRequestSent` up to the answer; an error response is returned as it is; a commit's
+  error is returned; otherwise it waits for the earlier notifications, ignoring that wait's error, and returns the committed value.
+* `waitForResponse`, for a request with a commit, when the context, the input or the connection ends: under the lock, a request still pending
+  is removed and the error returned, as today; one the reader has claimed is waited for, and its envelope returned.
+* Found by `TestInitializeGiveUpAgrees`'s first run, the same race on a second path: a send whose context ends while the writer still
+  writes returns the context's error (`writeLoop`: "A write that has begun runs to its end"), after which the agent's answer can be read
+  and committed. `exchange`'s send-failure path makes the same check, through `claimedAnswer`, which both paths call.
+* The emitted `Initialize`: its commit does what `sendRequestSent` and today's `Initialize` do after the answer, in that order: an empty
+  result decodes to the zero value; a result is decoded (`NewInternalError` on failure) and checked with `checkInbound`, wrapped as
+  "%s response: %w"; then the version (`ProtocolVersionError`), `jsonCopy` and `Store`. Its errors are today's.
+
+**Added to step 2:**
+
+* `TestInitializeHooksRunOnce`: a rewrite hook that counts its calls for `initialize` and changes the answer's `agentInfo`; it runs once,
+  and the record and `Initialize`'s return both carry its change.
+* `TestInitializeRefusedByHookRecordsNothing`: a validation hook that refuses the `initialize` answer; `Initialize` returns its error, and a
+  `session/update` sent afterwards is refused, `ErrNotInitialized`.
+* `TestInitializeGiveUpAgrees`: a rewrite hook that, on the reader, ends the caller's context, and in a second case closes the connection;
+  in each, `Initialize` succeeds and the record exists, 200 times.
+
+The MADR gets an amendment for the same; its decision, O1, is unchanged.
+
+### Step 2, the commit, 2026-10-21
+
+The owner committed step 1 and approved this step; the deviation above was decided before any code changed. What changed:
+
+* **`connection.go`:** `pendingResponse.commit` and `responseEnvelope`'s `committed` and `commitErr`; `handleResponse` runs the commit
+  before it hands the envelope over; `sendRequestCommit[T]`; `exchange`, the sending and waiting `sendRequestSent` did, now shared by both;
+  `claimedAnswer`, called by `waitForResponse` when the context, the input or the connection ends and by `exchange` when the send fails.
+* **The emitter** (`cmd/generate/internal/emit/dispatch.go`): `initializeWrapper` returns `sendRequestCommit` with a commit that checks
+  the version, `jsonCopy`s the record and stores it; `outboundDoc` gives `Initialize` a paragraph saying when the answer is recorded.
+  Regenerated: `client_gen.go`, `Initialize` alone.
+* **The pins** (`emit/dispatch_test.go`): the `Hello` wrapper's `sendRequestCommit` call, its commit and its doc line.
+* **Tests,** `initialize_test.go`, new: `TestInitializeRecordedOnArrival`, `TestAgentRecordsBeforeAnswering`, `TestInitializeHooksRunOnce`,
+  `TestInitializeRefusedByHookRecordsNothing`, `TestInitializeGiveUpAgrees`.
+
+`TestInitializeRefusedByHookRecordsNothing` shows the refusal after a refused answer with an extension request, answered `-32601` for
+`ErrNotInitialized`, where the deviation names a `session/update`: a refused notification has no answer to show it.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| what the agent sends in the write that carries its answer is judged by the answer (the MADR's I6) | `TestInitializeRecordedOnArrival`, 200 trials |
+| the agent records before it answers (I1, I8) | `TestAgentRecordsBeforeAnswering`, 200 trials |
+| the hooks see the answer once, and the record is the answer as they left it | `TestInitializeHooksRunOnce` |
+| an answer a hook refuses records nothing | `TestInitializeRefusedByHookRecordsNothing` |
+| `Initialize`'s return and the record agree when the caller gives up or the connection ends after the claim | `TestInitializeGiveUpAgrees`, 200 trials each |
+| an answer with another version fails and records nothing | `TestProtocolVersion`, existing |
+| the emitter writes the commit | `TestDispatchFollowsTheModel` |
+| no exported change | `make api` |
+
+**Found during the step, within the deviation's decision:** `TestInitializeGiveUpAgrees`'s first run, 5 runs of 200 trials, failed in each,
+at trials 98 to 195: `Initialize` returned "Request cancelled" while the record was still being made. The caller had given up inside
+`sendMessageSent`, whose write runs to its end, so `exchange`'s send-failure path returned before the claim check `waitForResponse` makes.
+That path now calls `claimedAnswer` too, as the deviation's design records; 10 runs then passed.
+
+**Planted breaks,** each in its own scratch copy; 8 of 8 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the record made by the caller again, the commit removed | `TestInitializeRecordedOnArrival`, trial 0: `_x/ask` answered `-32601`, "initialize has not completed" |
+| the commit run by the caller after the hand-over | `TestInitializeRecordedOnArrival`, trial 0, the same |
+| the caller decoding and checking the answer again | `TestInitializeHooksRunOnce`: "saw the initialize answer 2 times, want once" |
+| the commit applying the gate alone, the hooks left to the caller | `TestInitializeRefusedByHookRecordsNothing`: "a record was made of an answer the hook refused" |
+| no claim check | `TestInitializeGiveUpAgrees`, trial 0: "connection ended before response" with no record |
+| no claim check on the send path alone | `TestInitializeGiveUpAgrees`: "Request cancelled" with no record; caught in 6 of 6 runs, at trials 5 to 130 |
+| the agent recording after its answer, in a goroutine | `TestAgentRecordsBeforeAnswering`, trial 0: `session/new` answered `-32601` |
+| the emitted call renamed | `TestDispatchFollowsTheModel`: "lacks `return sendRequestCommit[HelloResponse]`" |
+
+The PLAN's third break for the commit, the version check left out of it, is listed against step 3's `TestHeldRefusedWhenInitializeFails`;
+run now against the root package, the existing `TestProtocolVersion` failed: "Initialize = <nil>, want *ProtocolVersionError{Requested: 1,
+Answered: 2}" and "the client recorded an answer it refused".
+
+**Gates,** each exit 0, run one at a time. Their first run failed `make lint`, 4 issues: an unchecked type assertion and an evaluation
+order in `sendRequestCommit`, and two unused `nolint` directives in the test; fixed, the planted breaks were run again on the fixed code,
+8 of 8, and the gates again:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "170 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and
+  the new file's, "1 file(s) clean"; `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules;
+  `make check-records`, `make markdownlint` and the identifier scan; `make lint`, "0 issues." four times; `go fix -diff ./...` and
+  `go mod tidy -diff` print nothing, in both modules;
+* `make api` against `v1.19.0`: "0 incompatible, 0 compatible";
+* `go test -race -count=3 -shuffle=on .`;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.

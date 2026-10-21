@@ -135,7 +135,12 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"func (c *ClientSideConnection) gate(method string, params any) error {",
 			"if err := c.gate(AgentMethodSend, &params); err != nil {\n\t\treturn SendResponse{}, err",
 			"resp, sent, err := sendRequestSent[SendResponse](c.conn, ctx, AgentMethodSend, &params, c.resultGate)",
-			"sendRequest[HelloResponse](c.conn, ctx, AgentMethodHello, &params, typedGate(func(method string, result *HelloResponse) error {",
+			// The reader records the answer as it arrives
+			// (0030-MADR-record-initialize-on-arrival.md, O1).
+			"return sendRequestCommit[HelloResponse](c.conn, ctx, AgentMethodHello, &params, typedGate(func(method string, result *HelloResponse) error {",
+			"}), func(resp *HelloResponse) error {\n\t\tif resp.Rev != ProtocolVersionNumber {",
+			"Response: *resp,\n\t\t})\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tc.negotiation.Store(&rec)\n\t\treturn nil\n\t})\n}",
+			"// The connection's reader checks and records the answer as it reads it, before\n// it reads the next message,",
 			"Response: *result,",
 			"if err := c.gate(AgentMethodStop, &params); err != nil {\n\t\treturn err",
 			"if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {",

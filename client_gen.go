@@ -482,6 +482,10 @@ func (c *ClientSideConnection) UnstableDidSaveDocument(ctx context.Context, para
 //
 // See protocol docs: [Initialization](https://agentclientprotocol.com/protocol/initialization)
 //
+// The connection's reader checks and records the answer as it reads it, before
+// it reads the next message, so that a message the agent sends after its
+// answer is judged by what the answer agreed.
+//
 // Before anything is sent, it returns a *ProtocolVersionError when params ask
 // for a version this SDK does not speak; and a *ValidationError when params
 // break the schema. It returns a *RequestError wrapping context.Cause(ctx)
@@ -498,30 +502,28 @@ func (c *ClientSideConnection) Initialize(ctx context.Context, params Initialize
 	if params.ProtocolVersion != ProtocolVersionNumber {
 		return InitializeResponse{}, &ProtocolVersionError{Requested: int(params.ProtocolVersion)}
 	}
-	resp, err := sendRequest[InitializeResponse](c.conn, ctx, AgentMethodInitialize, &params, typedGate(func(method string, result *InitializeResponse) error {
+	return sendRequestCommit[InitializeResponse](c.conn, ctx, AgentMethodInitialize, &params, typedGate(func(method string, result *InitializeResponse) error {
 		return gateResult(&Negotiation{
 			Request:  params,
 			Response: *result,
 		}, method, result)
-	}))
-	if err != nil {
-		return resp, err
-	}
-	if resp.ProtocolVersion != ProtocolVersionNumber {
-		return resp, &ProtocolVersionError{
-			Requested: int(params.ProtocolVersion),
-			Answered:  int(resp.ProtocolVersion),
+	}), func(resp *InitializeResponse) error {
+		if resp.ProtocolVersion != ProtocolVersionNumber {
+			return &ProtocolVersionError{
+				Requested: int(params.ProtocolVersion),
+				Answered:  int(resp.ProtocolVersion),
+			}
 		}
-	}
-	rec, err := jsonCopy(Negotiation{
-		Request:  params,
-		Response: resp,
+		rec, err := jsonCopy(Negotiation{
+			Request:  params,
+			Response: *resp,
+		})
+		if err != nil {
+			return err
+		}
+		c.negotiation.Store(&rec)
+		return nil
 	})
-	if err != nil {
-		return resp, err
-	}
-	c.negotiation.Store(&rec)
-	return resp, nil
 }
 
 // Logout sends the logout request to the agent and returns its response.

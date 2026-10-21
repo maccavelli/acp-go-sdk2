@@ -116,7 +116,7 @@ the answer makes, as the TypeScript SDK's v2 code does.
   pending request has a commit and the response is a result, calls it before it hands the response over, on the reader's goroutine; its
   error travels with the envelope. A response that is an error calls no commit.
 * **`sendRequest`'s family:** an unexported variant takes the commit and returns its error before decoding, so a failed commit is the
-  call's error.
+  call's error. (Amended 2026-10-21, during the PLAN's step 2: it returns the value the commit checked, and decodes nothing.)
 * **The generator** emits `ClientSideConnection.Initialize` with a commit that does what `Initialize` does today after `sendRequest`:
   decode the `InitializeResponse`, check the protocol version (`ProtocolVersionError`), apply the result gate, `jsonCopy` the record, and
   `c.negotiation.Store` it. `Initialize` then returns the decoded response or the commit's error. Its errors are unchanged.
@@ -187,7 +187,8 @@ The PLAN will make each finding a test, seen to fail on a planted break in a scr
 ### O1. Commit on arrival
 
 * Good, because the order is by construction and needs no wait.
-* Bad, because the commit runs on the reader, which must keep it short; it is one decode and a copy.
+* Bad, because the commit runs on the reader, which must keep it short; it is one decode and a copy. (Amended 2026-10-21, during the
+  PLAN's step 2: and the caller's inbound hooks, run once on the answer, as today; see "Amendment 2026-10-21, step 2".)
 
 ### O2. A barrier
 
@@ -525,6 +526,22 @@ tap set, which fails when the tap's reader is not an `io.Closer` (T3); a tap who
 that blocks leaving the connection and `Close` unheld and detached with an exact prefix (A1f); a slow tap's drain bounded by the grace
 (A1e); the taps unset leaving the pipe and the input as they are, with no goroutine; K2 as `Kill` within the slack, with `ErrKilled`, and
 cutting a `Close` short; W3c and W3d on Windows; the buffer's size at the connection's first read.
+
+## Amendment 2026-10-21, step 2: the commit's checks, and a caller that gives up
+
+Found while the PLAN's step 2 began, by reading `c2b33c1`, and decided by the owner the same day; the decision, O1, is unchanged.
+
+* **The hooks decide the record today.** `Initialize` stores it only after `sendRequest` returns without error (`client_gen.go:507`–`:523`),
+  by which time `checkInbound` has run the rewrite hook, the validation and its hook, and the gate on the answer (`connection.go:1823`,
+  `:2156`–`:2181`). So the commit runs that whole path, once, on the reader, with the caller's context, and the caller returns the value
+  it checked. The specification's "apply the result gate" means `checkInbound`, hooks included; its "one decode and a copy" also runs the
+  caller's hooks, once.
+* **A caller that gives up.** The reader claims the pending request (`:1584`–`:1588`) before it hands the answer over (`:1603`). A request
+  with a commit whose caller gives up, or whose connection ends, after the claim waits for the commit and returns it; before the claim,
+  nothing is recorded, as question 3 decided. A committed answer is returned when the wait for earlier notifications then ends. So
+  `Initialize`'s return and the record always agree.
+* **Consequence:** the hooks, for the `initialize` answer alone, run on the reader goroutine, and before the notifications received ahead of
+  the answer are handled, where today they run on the caller's after them.
 
 ## More Information
 
