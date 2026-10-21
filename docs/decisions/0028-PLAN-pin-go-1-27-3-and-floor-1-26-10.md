@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-21
 associated-madr: "0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md"
 ---
@@ -81,3 +81,35 @@ One commit, reverted by reverting it. No release follows from this alone. The fl
 1.26.10 has it raised when it requires the next release, which is a minor; the next release's notes name it.
 
 The work lands between the 0027 PLAN's steps; the 0027 PLAN's own step 5 is committed first.
+
+## Execution record
+
+### Step 1, records, 2026-10-21
+
+The owner committed the MADR, this PLAN, 0024's pointer and the 0027 PLAN's correction as `cfc3d12`, and approved execution. What
+changed: this PLAN and its `docs/README.md` row `in-progress`, and a correction in the MADR.
+
+**The facts,** re-asserted by a script outside the tree, reading `cfc3d12`'s tree: 12 of 12 hold.
+
+| Id | What the script read |
+| :--- | :--- |
+| T1, T2 | `go.mod:5` and `cmd/generate/go.mod:5` are `toolchain go1.27.2` |
+| T3, F3 | `ci.yml:29` is `go: ['1.26.9', '1.27.2']`; `:31` is `- go: '1.26.9'` |
+| T4, F4 | `README.md:20` is "It requires Go 1.26.9 or newer, the `go` line of `go.mod`; CI tests Go 1.26.9", `:21` "and 1.27.2." |
+| F1, F2 | `go.mod:3` and `cmd/generate/go.mod:3` are `go 1.26.9` |
+| F5 | `mutate_test.go:92` and `:287` write `go 1.26.9` into their fixtures' `go.mod` |
+| M1 | `Makefile:37` filters `go1.26%`; `scripts/go-precheck.sh:32` matches `go1.26*)` |
+| G1 | `git grep` for `1.27.2` and `1.26.9`, the records and the index left out, finds exactly those ten lines |
+| X1 | `go list -deps` finds no `crypto/x509` or `net/http` for the root package, `agentproc`, `example/client` or `example/agent`, nor `crypto/x509` in `cmd/generate` |
+
+**Planted breaks,** four at once in a scratch copy, `.git` included: the root's `toolchain` line at go1.27.1; the Makefile filtering
+`go1.25%`; `1.27.2` added to `AGENTS.md:9`; a file in `agentproc` importing `net/http`. The script reported exactly T1, M1, G1 and X1
+missing, "8 of 12 facts hold", exit 1; G1 named the extra `AGENTS.md:9` and the missing `go.mod:5`.
+
+**Found, and corrected:**
+
+* the MADR cited `Makefile:36` and `go-precheck.sh:31`; the lines are `:37` and `:32`. The MADR carries the correction;
+* the script's first G1 counted the lines, and the planted breaks, one removing a `1.27.2` and one adding one, kept the count at ten: it
+  passed when it should have failed. G1 now compares the set of file and line pairs, and failed as above.
+
+**Gates:** `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing in the changed records.

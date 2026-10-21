@@ -58,7 +58,8 @@ toolchain", so CI's `local` ignores the line, and T3 alone decides what CI runs.
 | F5 | `cmd/generate/internal/mutate/mutate_test.go:92`, `:287`, `go 1.26.9` in two fixtures' `go.mod` | the floor, as 0024 decided "The two fixtures of G4 write the floor" |
 
 The Makefile's `LEAKGUARD_ENV` and `scripts/go-precheck.sh` set the leak guard's experiment for any `go1.26*` (`Makefile:36`,
-`go-precheck.sh:31`), so a 1.26.10 floor needs no change there. Both consumers' `go` lines are `1.27.2`, above either floor.
+`go-precheck.sh:31`; corrected 2026-10-21, during the PLAN's step 1: `Makefile:37`, `go-precheck.sh:32`), so a 1.26.10 floor needs no
+change there. Both consumers' `go` lines are `1.27.2`, above either floor.
 
 ### What go1.27.3 changes
 
