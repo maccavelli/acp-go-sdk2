@@ -19,9 +19,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/maccavelli/acp-go-sdk2"
+	"github.com/maccavelli/acp-go-sdk2/agentproc"
 )
 
 type exampleClient struct {
@@ -211,12 +211,11 @@ func (e *exampleClient) CreateElicitation(ctx context.Context, params acp.Create
 
 func main() {
 	// If args provided, treat them as agent program + args. Otherwise run the Go agent example.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
 
 	var cmd *exec.Cmd
 	if len(os.Args) > 1 {
-		cmd = exec.CommandContext(ctx, os.Args[1], os.Args[2:]...) //nolint:gosec // G204: the agent command the user names is what this mode runs.
+		cmd = exec.Command(os.Args[1], os.Args[2:]...) //nolint:gosec // G204: the agent command the user names is what this mode runs.
 	} else {
 		// Default: run the Go example agent. Detect relative to this client's location.
 		_, filename, _, ok := runtime.Caller(0)
@@ -234,28 +233,19 @@ func main() {
 			os.Exit(1)
 		}
 
-		cmd = exec.CommandContext(ctx, "go", "run", agentPath) //nolint:gosec // G204: the example agent's directory in this source checkout.
+		cmd = exec.Command("go", "run", agentPath) //nolint:gosec // G204: the example agent's directory in this source checkout.
 	}
 	cmd.Stderr = os.Stderr
-	// Set up pipes for stdio
-	stdin, err := cmd.StdinPipe()
+	client := &exampleClient{lines: readLines(os.Stdin), cwd: mustCwd()}
+	agent, err := (&agentproc.Command{
+		Cmd:               cmd,
+		ConnectionOptions: []acp.ConnectionOption{acp.WithLogger(slog.Default())},
+	}).Start(client)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "stdin pipe error: %v\n", err)
-		os.Exit(1)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "stdout pipe error: %v\n", err)
-		os.Exit(1)
-	}
-	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start agent: %v\n", err)
 		os.Exit(1)
 	}
-
-	client := &exampleClient{lines: readLines(os.Stdin), cwd: mustCwd()}
-	conn := acp.NewClientSideConnection(client, stdin, stdout)
-	conn.SetLogger(slog.Default())
+	conn := agent.Conn()
 
 	// Initialize
 	initResp, err := conn.Initialize(ctx, acp.InitializeRequest{
@@ -266,7 +256,7 @@ func main() {
 	})
 	if err != nil {
 		printRequestError("initialize", err)
-		stopAgent(cmd, stdin, cancel)
+		stopAgent(agent)
 		os.Exit(1)
 	}
 	fmt.Printf("✅ Connected to agent (protocol v%v)\n", initResp.ProtocolVersion)
@@ -275,7 +265,7 @@ func main() {
 	newSess, err := conn.NewSession(ctx, acp.NewSessionRequest{Cwd: client.cwd, McpServers: []acp.McpServer{}})
 	if err != nil {
 		printRequestError("newSession", err)
-		stopAgent(cmd, stdin, cancel)
+		stopAgent(agent)
 		os.Exit(1)
 	}
 	fmt.Printf("📝 Created session: %s\n", newSess.SessionId)
@@ -289,11 +279,11 @@ func main() {
 	})
 	if err != nil {
 		printRequestError("prompt", err)
-		stopAgent(cmd, stdin, cancel)
+		stopAgent(agent)
 		os.Exit(1)
 	}
 	fmt.Printf("\n\n✅ Turn ended: stop reason %s\n", resp.StopReason)
-	stopAgent(cmd, stdin, cancel)
+	stopAgent(agent)
 }
 
 // printRequestError surfaces a failed call, with a JSON-RPC error's detail.
@@ -310,16 +300,11 @@ func printRequestError(op string, err error) {
 	}
 }
 
-// stopAgent closes the agent's input, which ends an ACP agent, and waits for
-// it to exit; after five seconds it cancels the agent's context, which kills
-// it.
-func stopAgent(cmd *exec.Cmd, stdin io.Closer, cancel context.CancelFunc) {
-	if err := stdin.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "close agent input: %v\n", err)
-	}
-	t := time.AfterFunc(5*time.Second, cancel)
-	defer t.Stop()
-	if err := cmd.Wait(); err != nil {
+// stopAgent stops the agent and the processes it started: Close closes its
+// input, waits, signals and kills, each step bounded
+// (0027-MADR-agent-process-helper.md).
+func stopAgent(agent *agentproc.Process) {
+	if err := agent.Close(); err != nil {
 		fmt.Fprintf(os.Stderr, "agent exited: %v\n", err)
 	}
 }

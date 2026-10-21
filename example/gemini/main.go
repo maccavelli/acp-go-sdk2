@@ -17,9 +17,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/maccavelli/acp-go-sdk2"
+	"github.com/maccavelli/acp-go-sdk2/agentproc"
 )
 
 type replClient struct {
@@ -224,30 +224,20 @@ func main() {
 		args = append(args, "--debug")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
 
-	cmd := exec.CommandContext(ctx, *binary, args...) //nolint:gosec // G204: the Gemini CLI binary the user names.
+	cmd := exec.Command(*binary, args...) //nolint:gosec // G204: the Gemini CLI binary the user names.
 	cmd.Stderr = os.Stderr
-	stdin, err := cmd.StdinPipe()
+	client := &replClient{autoApprove: *yolo, answers: make(chan string, 16), cwd: mustCwd()}
+	agent, err := (&agentproc.Command{
+		Cmd:               cmd,
+		ConnectionOptions: []acp.ConnectionOption{acp.WithLogger(slog.Default())},
+	}).Start(client)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "stdin pipe error: %v\n", err)
-		os.Exit(1)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "stdout pipe error: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start Gemini: %v\n", err)
 		os.Exit(1)
 	}
-
-	client := &replClient{autoApprove: *yolo, answers: make(chan string, 16), cwd: mustCwd()}
-	conn := acp.NewClientSideConnection(client, stdin, stdout)
-	conn.SetLogger(slog.Default())
+	conn := agent.Conn()
 
 	// Initialize
 	initResp, err := conn.Initialize(ctx, acp.InitializeRequest{
@@ -258,7 +248,7 @@ func main() {
 	})
 	if err != nil {
 		printRequestError("initialize", err)
-		stopAgent(cmd, stdin, cancel)
+		stopAgent(agent)
 		os.Exit(1)
 	}
 	fmt.Printf("✅ Connected to Gemini (protocol v%v)\n", initResp.ProtocolVersion)
@@ -270,7 +260,7 @@ func main() {
 	})
 	if err != nil {
 		printRequestError("newSession", err)
-		stopAgent(cmd, stdin, cancel)
+		stopAgent(agent)
 		os.Exit(1)
 	}
 	fmt.Printf("📝 Created session: %s\n", newSess.SessionId)
@@ -289,7 +279,7 @@ func main() {
 		}
 		switch line {
 		case ":exit", ":quit":
-			stopAgent(cmd, stdin, cancel)
+			stopAgent(agent)
 			return
 		case ":cancel":
 			fmt.Println("No turn is running.")
@@ -300,7 +290,7 @@ func main() {
 		}
 	}
 
-	stopAgent(cmd, stdin, cancel)
+	stopAgent(agent)
 }
 
 // readLines reads r on its own goroutine and sends each line on the channel it
@@ -379,16 +369,11 @@ func printRequestError(op string, err error) {
 	}
 }
 
-// stopAgent closes the agent's input, which ends an ACP agent, and waits for
-// it to exit; after five seconds it cancels the agent's context, which kills
-// it.
-func stopAgent(cmd *exec.Cmd, stdin io.Closer, cancel context.CancelFunc) {
-	if err := stdin.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "close agent input: %v\n", err)
-	}
-	t := time.AfterFunc(5*time.Second, cancel)
-	defer t.Stop()
-	if err := cmd.Wait(); err != nil {
+// stopAgent stops the agent and the processes it started: Close closes its
+// input, waits, signals and kills, each step bounded
+// (0027-MADR-agent-process-helper.md).
+func stopAgent(agent *agentproc.Process) {
+	if err := agent.Close(); err != nil {
 		fmt.Fprintf(os.Stderr, "agent exited: %v\n", err)
 	}
 }

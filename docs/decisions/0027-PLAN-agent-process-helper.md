@@ -476,3 +476,42 @@ The plants that leave descendants alive left up to three test processes on the W
 
 **The go1.26.9 gate:** `go vet` and `go test -race -count=1` pass in both modules, `agentproc` with the leak guard; `GOOS=windows go vet
 ./agentproc` under go1.26.9 exits 0.
+
+### Step 5, the examples, 2026-10-21
+
+The owner committed step 4's record as `5930996` and approved this step. What changed, in `example/client/main.go`,
+`example/claude-code/main.go` and `example/gemini/main.go`, by one asserted script:
+
+* `exec.CommandContext(ctx, …)` became `exec.Command(…)`, and `context.WithCancel` with its `defer cancel()` became
+  `context.Background()`: the helper, not a context, ends the agent;
+* the `StdinPipe`, `StdoutPipe` and `Cmd.Start` block, and `NewClientSideConnection` with `SetLogger`, became
+  `(&agentproc.Command{Cmd: cmd, ConnectionOptions: []acp.ConnectionOption{acp.WithLogger(slog.Default())}}).Start(client)` and
+  `agent.Conn()`; the logger is an option because the connection reads from the moment `Start` returns; each example keeps its own start
+  error message;
+* each `stopAgent(cmd, stdin, cancel)` became `stopAgent(agent)`, four calls in each file;
+* `stopAgent` itself, the 10 identical lines of F3, became 5 that call `agent.Close()` and print its error;
+* the unused `time` import went, and `example/client`'s stale "Set up pipes for stdio" comment.
+
+`git diff --stat`: 3 files, 55 lines added, 100 removed.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| the example client and agent still work together | `TestExamplePair`, "allowed" and "input ended", under `-race` |
+| the client, run as a user runs it, starts its agent through `go run`, a launcher, and stops it cleanly | `go run ./example/client`: exit 0 in 5.6 s, "Turn ended", no "agent exited" line, no example agent process left |
+| the three examples build and their tests pass | `go vet ./example/...`; `go test -race ./example/...` |
+
+**Planted breaks:** none; this step adds no test or check. It moves the examples onto checks steps 2 to 4 made.
+
+**Gates** on the working tree, go1.27.2, each exit 0, run alone:
+
+* regeneration unchanged; `make pre-add-check`, "166 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* `make lint`, "0 issues." four times; `go fix -diff ./...` prints nothing;
+* `make api` against `v1.18.0`: "0 incompatible, 4 compatible", unchanged;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules, the root package and the three examples among them.
+
+**The go1.26.9 gate:** `go vet` and `go test -race -count=1` pass in both modules, the root's tests and `agentproc`'s with the leak
+guard.
