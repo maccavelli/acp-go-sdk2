@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-21
 associated-madr: "0029-MADR-unix-client-death-pdeathsig.md"
 ---
@@ -350,3 +350,31 @@ the tree, and its results are not used.
 * the Windows host: `go test -count=1 -shuffle=on ./...` in both modules;
 * the Linux host: `go test -count=1 -shuffle=on ./...` in both modules, from a copy of the tree; macOS: `go test -count=5 -race ./agentproc`;
 * the floor gate at go1.26.10: `go vet` and `go test -race -count=1` pass in both modules, the leak guards on.
+
+### Step 5, verification and close, 2026-10-21
+
+The owner committed step 4 as `631b128` and pushed `main`. Every acceptance criterion is met; the release rides with
+[0030-PLAN-record-initialize-on-arrival.md](0030-PLAN-record-initialize-on-arrival.md)'s `v1.20.0`.
+
+**Gates on the committed tree,** each exit 0, run one at a time; `git status --porcelain` printed nothing before them and after:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "170 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+  `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules; `make check-records`, `make markdownlint` and the
+  identifier scan; `make lint`, "0 issues." four times; `golangci-lint` for `GOOS=linux` and `GOOS=freebsd` on `agentproc`, "0 issues."
+  each; `go fix -diff ./...` and `go mod tidy -diff` print nothing, in both modules;
+* `go vet ./agentproc` for `darwin`, `linux` (amd64, arm64), `freebsd`, `openbsd`, `netbsd`, `illumos`, `windows`, `js/wasm`,
+  `wasip1/wasm`, `plan9`;
+* `make api` against `v1.19.0`: "0 incompatible, 0 compatible";
+* the root package, `go test -race -count=1 -shuffle=on .` ten times, its leak guard on: 10 of 10 passed, where before the deviation after
+  step 3 one run in seven failed in the guard;
+* `go test -race -count=5 ./agentproc` on macOS;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
+
+**Before the push:** `make push-guard`, after a fetch: "5 outgoing commit(s), f193910..631b128, main to origin", "the guard passed
+(exit 0)".
+
+**CI** on `631b128`, run `39660261939`: all six jobs passed, ubuntu-24.04, macos-15 and windows-2025 at 1.26.10 and at 1.27.3. The two
+macOS jobs carry GitHub's notice that macOS runners may queue longer; it is not a failure.
+
+This PLAN and its row in `docs/README.md` are now `complete`.
