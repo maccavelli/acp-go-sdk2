@@ -167,7 +167,7 @@ Planted breaks, at least. Each must be seen to fail on the check named.
 | Close | `ErrKilled` not joined | `TestCloseLadder`, `stubborn` (on Windows, the exit 0 case) |
 | Close | `sync.Once` removed | `TestCloseIdempotent` (cannot fail: see the deviation during step 2) |
 | ties | the tree not ended on the agent's own exit | `TestDescendantsEnded`, the own exit |
-| ties | the connection not closed after the drain | `Wait` past its bound in `TestDescendantsEnded` |
+| ties | the connection not closed after the drain | `Wait` past its bound in `TestDescendantsEnded` (step 3: in `TestEscapedDescendantDoesNotHoldWait`, Unix; in `TestDescendantsEnded` the tree's end ends the output first) |
 | ties | the connection's end not stopping the agent | `TestConnectionEndStopsAgent` |
 | Windows | no job object | `TestDescendantsEnded` on Windows |
 | platforms | `tree_other.go` removed | `go vet ./agentproc` for `js/wasm` |
@@ -332,3 +332,72 @@ A first run of the set, alongside the gates, failed the `ErrKilled` plant for an
 
 **The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's tests and
 `agentproc`'s with `GOEXPERIMENT=goroutineleakprofile`, the leak guards on.
+
+### Step 3, the ties, 2026-10-21
+
+The owner committed step 2 as `e33eec2` and approved this step. What changed:
+
+* **`agentproc/agentproc.go`:**
+  * the watcher, when `Cmd.Wait` returns, kills what is left of the agent's group (`endTree`) under the lock that marks the agent exited,
+    closes `Done`, gives the connection up to the grace to reach the end of the agent's output, then closes it;
+  * a monitor stops the agent, through `closeOnce`, when the connection ends while the agent runs;
+  * `Wait` waits for both goroutines (`goroutines`, a `sync.WaitGroup` started with `Go`);
+  * `sharedClose`, the agent's input as both the connection and `Close` hold it: closed once, the same result to every caller;
+  * the docs of `Start` and `Done` describe the ties.
+* **`agentproc/tree_unix.go`:** `hasTree`; `endTree`, SIGKILL to the group; `kill` now also kills the agent directly, after the group.
+* **`agentproc/tree_other.go`:** `hasTree` false; `endTree` does nothing.
+* **Tests:** `ties_test.go` (`TestDescendantsEnded`, `TestConnectionEndStopsAgent`); `agentproc_unix_test.go` gains
+  `TestEscapedDescendantDoesNotHoldWait`; `child_test.go` gains the modes `beat` (appends to a file every 50 ms), `parent`,
+  `parent-wait`, `parent-exit` and `flood`, and `answerInitialize`, which `burst` now uses too; `child_unix_test.go` has
+  `parent-escape` (a beat in a session of its own, outside the group); `child_other_test.go` has none.
+
+**Found, and fixed in this step:**
+
+* **Two closes of the agent's input raced.** When the caller closed the connection, the connection's `Close` and the monitor's stop closed
+  the same file at once, and the second failed: `Conn().Close()` returned "close |1: file already closed". `sharedClose` closes it once.
+  `TestConnectionEndStopsAgent`, "the caller closes the connection", fails on the race, as the plant below shows.
+* **A group that cannot be signalled left the agent running.** With no group, `kill` had treated `ESRCH` as done and killed nothing, and
+  `Close` waited for an agent nobody had killed. `prepare` always makes the group, so it was not reachable, but `kill` now kills the agent
+  directly too. The MADR's kill step carries the amendment.
+
+**On Windows,** `TestDescendantsEnded` is skipped for this step: `tree_other.go` has no tree to end until step 4.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| a descendant ends after `Close`, when the agent exits at its input's end | `TestDescendantsEnded`, "the agent exits at its input's end" |
+| a descendant ends after `Close`, when the agent is terminated | `TestDescendantsEnded`, "the agent is terminated" |
+| a descendant ends when the agent exits of itself, and the connection is closed | `TestDescendantsEnded`, "the agent exits of itself" |
+| a descendant outside the group that holds the output does not hold `Wait` past the grace | `TestEscapedDescendantDoesNotHoldWait` |
+| the connection's end stops the agent: closed by the caller, or by an overflow | `TestConnectionEndStopsAgent` |
+| closing the connection and stopping the agent at once raises no error | `TestConnectionEndStopsAgent`, "the caller closes the connection" |
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree. 5 of 5 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `Setpgid` not set | `TestDescendantsEnded`: "still runs after" |
+| the tree not ended on the agent's own exit | `TestDescendantsEnded`, "the agent exits of itself": "still runs after the agent exited" |
+| the connection not closed after the drain | `TestEscapedDescendantDoesNotHoldWait`: "Wait took longer than" |
+| the monitor removed | `TestConnectionEndStopsAgent` |
+| `sharedClose` bypassed, the connection given the bare file | `TestConnectionEndStopsAgent`, "the caller closes the connection", 20 runs: "file already closed" |
+
+The plants that leave a descendant alive left four `beat` grandchildren running, as they should; each was ended after the run.
+
+**Gates** on the working tree, go1.27.2, each exit 0, run alone:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`: "160 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and the new files' check, "3 file(s)
+  clean";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* `make lint`: "0 issues." four times; `go fix -diff ./...` prints nothing;
+* `go vet ./agentproc` for the 13 targets of step 2;
+* `make api` against `v1.18.0`: "0 incompatible, 4 compatible", unchanged by this step;
+* the Windows host reached over SSH, both modules, `agentproc` among them;
+* the Linux host reached over SSH: the `agentproc` test binary, `-test.count=3`, "PASS";
+* `go test -count=5` of `agentproc`, with and without `-race`, on macOS.
+
+**The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, `agentproc` with the
+leak guard.

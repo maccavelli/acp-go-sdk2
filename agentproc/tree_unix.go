@@ -4,6 +4,7 @@ package agentproc
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"syscall"
 )
@@ -27,14 +28,23 @@ func prepare(cmd *exec.Cmd) error {
 // hasGroups reports that the agent runs in a process group Close can signal.
 const hasGroups = true
 
+// hasTree reports that stopping the agent ends the processes it started.
+const hasTree = true
+
+// endTree kills what is left of the agent's process group once the agent
+// has exited. The group's ID is not reused while the group has members.
+func endTree(cmd *exec.Cmd) { _ = signalGroup(cmd, syscall.SIGKILL) } //nolint:errcheck // an emptied group is the common case.
+
 // terminate sends SIGTERM to the agent's process group.
 func terminate(cmd *exec.Cmd) error { return signalGroup(cmd, syscall.SIGTERM) }
 
-// kill sends SIGKILL to the agent's process group, or kills the agent alone
-// when the group cannot be signalled.
+// kill sends SIGKILL to the agent's process group, and kills the agent
+// itself too, as the Rust SDK does, so the agent ends even where the group
+// cannot be signalled.
 func kill(cmd *exec.Cmd) error {
-	if err := signalGroup(cmd, syscall.SIGKILL); err != nil {
-		return cmd.Process.Kill()
+	gerr := signalGroup(cmd, syscall.SIGKILL)
+	if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return errors.Join(gerr, err)
 	}
 	return nil
 }

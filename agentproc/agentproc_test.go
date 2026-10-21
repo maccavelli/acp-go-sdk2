@@ -69,7 +69,12 @@ func (w *readyWriter) Write(b []byte) (int, error) {
 // agent when the test ends.
 func start(t *testing.T, mode string, client acp.Client) *Process {
 	t.Helper()
-	cmd := agentCmd(mode)
+	return startCmd(t, agentCmd(mode), mode, client)
+}
+
+// startCmd is start for a command the test has adjusted.
+func startCmd(t *testing.T, cmd *exec.Cmd, mode string, client acp.Client) *Process {
+	t.Helper()
 	w := &readyWriter{ready: make(chan struct{})}
 	cmd.Stderr = w
 	p, err := (&Command{Cmd: cmd, Grace: testGrace}).Start(client)

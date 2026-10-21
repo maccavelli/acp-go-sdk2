@@ -49,7 +49,7 @@ type Process struct {
 	cmd   *exec.Cmd
 	grace time.Duration
 	conn  *acp.ClientSideConnection
-	stdin *os.File // the write end of the agent's standard input
+	stdin *sharedClose // the write end of the agent's standard input
 
 	// done is closed once Cmd.Wait has returned, which the watcher alone
 	// calls (os/exec: "Wait must not be called concurrently").
@@ -59,6 +59,9 @@ type Process struct {
 	exited  bool  // Cmd.Wait has returned: no signal is sent from then on
 	waitErr error // what Cmd.Wait returned
 	ended   error // ErrTerminated or ErrKilled, when Close ended the agent so
+
+	// goroutines counts the watcher and the monitor, which Wait waits for.
+	goroutines sync.WaitGroup
 
 	// closeOnce runs Close's steps once, so concurrent callers share one
 	// sequence of graces and send no signal twice. Each step is idempotent by
@@ -73,6 +76,11 @@ type Process struct {
 // Cmd.WaitDelay is zero, Start sets it to the grace. Start refuses, starting
 // nothing, a nil Cmd or client, a Cmd already started, or one whose Stdin or
 // Stdout is set.
+//
+// The process and the connection are tied. When the agent exits, what is
+// left of its process group is killed, and the connection is closed once it
+// has read to the end of the agent's output, or after the grace. When the
+// connection ends first, the agent is stopped as Close stops it.
 func (c *Command) Start(client acp.Client) (*Process, error) {
 	cmd := c.Cmd
 	switch {
@@ -118,25 +126,65 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 	if err := errors.Join(inR.Close(), outW.Close()); err != nil {
 		return nil, errors.Join(fmt.Errorf("agentproc: %w", err), cmd.Process.Kill(), cmd.Wait(), inW.Close(), outR.Close())
 	}
-	p := &Process{cmd: cmd, grace: grace, stdin: inW, done: make(chan struct{})}
-	p.conn = acp.NewClientSideConnection(client, inW, outR, c.ConnectionOptions...)
-	go p.watch()
+	stdin := &sharedClose{File: inW}
+	p := &Process{cmd: cmd, grace: grace, stdin: stdin, done: make(chan struct{})}
+	p.conn = acp.NewClientSideConnection(client, stdin, outR, c.ConnectionOptions...)
+	p.goroutines.Go(p.watch)
+	p.goroutines.Go(p.monitor)
 	return p, nil
 }
 
-// watch owns Cmd.Wait, records its result, and closes done.
+// sharedClose is the agent's input, which both the connection's Close and
+// Close's first step close, at times at once when the connection's end
+// stops the agent: it is closed once, and every caller gets that result.
+type sharedClose struct {
+	*os.File
+	once sync.Once
+	err  error
+}
+
+// Close closes the file the first time, and returns that result each time.
+func (f *sharedClose) Close() error {
+	f.once.Do(func() { f.err = f.File.Close() })
+	return f.err
+}
+
+// watch owns Cmd.Wait. When it returns, watch kills what is left of the
+// agent's process group, since a launcher's descendants outlive it
+// (0027-MADR-agent-process-helper.md, P8), records the result, and closes
+// done; then it gives the connection up to the grace to read to the end of
+// the agent's output, and closes it.
 func (p *Process) watch() {
 	err := p.cmd.Wait()
 	p.mu.Lock()
+	endTree(p.cmd)
 	p.exited, p.waitErr = true, err
 	p.mu.Unlock()
 	close(p.done)
+	t := time.NewTimer(p.grace)
+	defer t.Stop()
+	select {
+	case <-p.conn.Done():
+	case <-t.C:
+	}
+	_ = p.conn.Close() //nolint:errcheck // Close of a connection reports nothing Wait does not.
+}
+
+// monitor stops the agent when the connection ends while the agent runs: an
+// agent without its connection cannot be reached.
+func (p *Process) monitor() {
+	select {
+	case <-p.done:
+	case <-p.conn.Done():
+		p.closeOnce.Do(p.stop)
+	}
 }
 
 // Conn returns the connection to the agent.
 func (p *Process) Conn() *acp.ClientSideConnection { return p.conn }
 
-// Done returns a channel that is closed once the agent process has exited.
+// Done returns a channel that is closed once the agent process has exited
+// and what was left of its process group has been killed.
 func (p *Process) Done() <-chan struct{} { return p.done }
 
 // Wait blocks until the agent process has exited and the connection's
@@ -146,6 +194,7 @@ func (p *Process) Done() <-chan struct{} { return p.done }
 // ended the agent so. It does not stop the agent.
 func (p *Process) Wait() error {
 	<-p.done
+	p.goroutines.Wait()
 	_ = p.conn.Wait() //nolint:errcheck // the connection's end is not the agent's; Conn().Err() reports it.
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -173,7 +222,7 @@ func (p *Process) Close() error {
 func (p *Process) stop() {
 	// The agent's input only: the connection keeps reading what the agent
 	// writes before it exits (0027-MADR-agent-process-helper.md, A6).
-	_ = p.stdin.Close() //nolint:errcheck // a second close, by the connection, is expected and harmless.
+	_ = p.stdin.Close() //nolint:errcheck // a failed close leaves the agent to the next steps.
 	switch {
 	case p.exitedWithin(p.grace):
 	case p.signal(terminate, ErrTerminated) && p.exitedWithin(p.grace):

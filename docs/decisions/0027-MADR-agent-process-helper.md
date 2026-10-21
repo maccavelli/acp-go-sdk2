@@ -317,7 +317,8 @@ agent without its connection is unreachable.
 3. On Unix, send SIGTERM to the group, `syscall.Kill(-pgid, SIGTERM)` (P12, P14), and wait up to the grace. Windows has no such step
    (S3, P7).
 4. Kill the group with SIGKILL (P13, P14), or end the job with `TerminateJobObject` (P17). `Kill` on the agent is the fallback where
-   neither applies. Wait for the agent's exit; `WaitDelay` bounds it (P11).
+   neither applies. (Amended 2026-10-21, during the PLAN's step 3: on Unix the agent is killed directly too, after its group, as the
+   Rust SDK does, so it ends even where the group cannot be signalled.) Wait for the agent's exit; `WaitDelay` bounds it (P11).
 5. Close the connection, which closes the reader (P4) and the writer, and wait for its goroutines (`Wait`).
 6. On Windows, close the job's handle.
 
