@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-20
 associated-madr: "0026-MADR-connection-end-cause-and-wait.md"
 ---
@@ -481,3 +481,61 @@ as required:
 leak guard.
 
 **Left for step 7:** the release text names "step 6's commit" where its hash belongs; step 7 replaces it once the commit exists.
+
+### Step 7, verification and close, 2026-10-20
+
+The owner committed step 6 as `84a4865` and approved this step.
+
+**Gates** on `84a4865`'s tree, with the release notes' update uncommitted, each exit 0:
+
+* go1.27.2: regeneration unchanged; `make pre-add-check`, "152 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+  `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules; `make check-records`, `make markdownlint` and the
+  identifier scan;
+* `make lint`: "0 issues." for the host and for `GOOS=windows`, in both modules; `go fix -diff ./...` printed nothing in either;
+* a Windows host reached over SSH: `go test -count=1 -shuffle=on ./...` at the root and in `cmd/generate`, exit 0 each;
+* the go1.26.9 gate: `go vet` and `go test -race -count=1` in both modules, the root's with the leak guard;
+* `make api` on `84a4865`, nothing uncommitted: "against v1.17.1: 0 incompatible, 7 compatible", exactly the seven this PLAN expects;
+* after a fetch, `make push-guard`: "7 outgoing commit(s), 0afe75e..84a4865, main to origin", the guard passed.
+
+**The release notes:** `docs/reports/0026-REPORT-release-notes-v1-18-0.md` names `84a4865` where step 6 left "step 6's commit", counts
+twelve commits (`git log v1.17.1..84a4865`), and says `make api` ran on `84a4865`. The owner committed that as `ab9f260` and pushed
+`main`; the push guard covered it there. CI run `39506770372` on `ab9f260` concluded `success` in all six jobs.
+
+### Publication of `v1.18.0`, 2026-10-20
+
+**What was published.**
+
+* **The tag.** The owner tagged `ab9f260` `v1.18.0`, an annotated tag whose message is its name, and pushed it. CI run `39507416474`,
+  started by the tag, concluded `success` on its first attempt, in all six jobs.
+* **The release.** At the owner's ask, `gh release create v1.18.0 --title v1.18.0 --notes-file <file>`. Its body is the release text
+  of [0026-REPORT-release-notes-v1-18-0.md](../reports/0026-REPORT-release-notes-v1-18-0.md), as a script outside the tree extracted
+  it: the text under "### v1.18.0" up to "Sources not in the release text", 65 lines, with its one relative link rewritten to the file
+  at the tag.
+
+**Checks.** The `v1.17.1` publication check, its tag and commit changed and a check of the tag's own CI run added, ran from outside the
+tree with a scratch module cache, the default `GOPROXY` and the checksum database on. Before the release, 5 of 10 held: the three
+release checks missed, "release not found", and the two CI checks missed while the tag's run was `in_progress`, which is the new
+check seen to fail. After it, 10 of 10 hold:
+
+* the release is not a draft or a prerelease, its body is the extracted text, and it is GitHub's latest;
+* the tag is annotated and names `ab9f260`;
+* `main` on GitHub is the local `main`, `ab9f260`; CI on it succeeded, and CI on the tag, run `39507416474`, succeeded;
+* the mirror's `@v/v1.18.0.info` gives the origin `refs/tags/v1.18.0` at `ab9f260`;
+* `go list -m github.com/maccavelli/acp-go-sdk2@latest` gives `v1.18.0`;
+* `go mod download` of `v1.18.0` exits 0.
+
+**A consumer on the floor:** a fresh module at `go 1.26.9`, with `GOTOOLCHAIN=go1.26.9` forced, the default `GOPROXY` and the
+checksum database on.
+
+* `go get github.com/maccavelli/acp-go-sdk2@v1.18.0` exited 0: "go: added github.com/maccavelli/acp-go-sdk2 v1.18.0".
+* The program, which waits on a `NewConnection` whose peer ended its output, built with go1.26.9 and ran, printing "Wait: acp: peer
+  disconnected: peer connection closed" and that the error wraps `ErrPeerDisconnected` and `io.EOF` and is `Err`'s.
+* The consumer's `go.mod` kept `go 1.26.9` and gained no `toolchain` line.
+
+**Acceptance,** each met: every step's checks passed and its record is written; every claim of the new docs is mapped to a test
+(steps 5 and 6); the leak guard passes; `make lint` reports 0 issues and `go fix -diff` prints nothing; CI's six jobs passed on the
+pushed commits; `make api` reports exactly the seven additions.
+
+This PLAN and its `docs/README.md` row are `complete`. Nothing of it is left open. Not in it, and left to records of their own: schema
+`1.26.0` ([0025-REPORT-schema-1-26-0-adoption-assessment.md](../reports/0025-REPORT-schema-1-26-0-adoption-assessment.md)), and the
+agent-process helper that [0023-MADR-connection-lifetime-and-test-leaks.md](0023-MADR-connection-lifetime-and-test-leaks.md) left.

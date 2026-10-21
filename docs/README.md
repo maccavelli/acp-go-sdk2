@@ -83,7 +83,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0024 | REPORT | [Release notes for v1.17.1, against v1.17.0](reports/0024-REPORT-release-notes-v1-17-1.md) | observed |
 | 0025 | REPORT | [Schema 1.26.0: what adopting it would bring, what it would cost, and whether to adopt it now](reports/0025-REPORT-schema-1-26-0-adoption-assessment.md) | observed |
 | 0026 | MADR | [Report why a connection ended, and wait for its goroutines to exit](decisions/0026-MADR-connection-end-cause-and-wait.md) | accepted |
-| 0026 | PLAN | [Implement 0026: report why a connection ended, and wait for its goroutines to exit](decisions/0026-PLAN-connection-end-cause-and-wait.md) | in-progress |
+| 0026 | PLAN | [Implement 0026: report why a connection ended, and wait for its goroutines to exit](decisions/0026-PLAN-connection-end-cause-and-wait.md) | complete |
 | 0026 | REPORT | [Release notes for v1.18.0, against v1.17.1](reports/0026-REPORT-release-notes-v1-18-0.md) | observed |
 
 ## I want to…
