@@ -139,11 +139,16 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			// (0030-MADR-record-initialize-on-arrival.md, O1).
 			"return sendRequestCommit[HelloResponse](c.conn, ctx, AgentMethodHello, &params, typedGate(func(method string, result *HelloResponse) error {",
 			"}), func(resp *HelloResponse) error {\n\t\tif resp.Rev != ProtocolVersionNumber {",
-			"Response: *resp,\n\t\t})\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tc.negotiation.Store(&rec)\n\t\treturn nil\n\t})\n}",
+			"Response: *resp,\n\t\t})\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tc.negotiation.Store(&rec)\n\t\treturn nil\n\t}, attempt.end)\n}",
+			// A received message is held while initialize is in flight
+			// (0030-MADR-record-initialize-on-arrival.md, question 2).
+			"attempt := newInitializeAttempt()\n\tc.initializing.Store(attempt)\n\treturn sendRequestCommit[HelloResponse](",
+			"func (c *ClientSideConnection) inboundGate() gateFunc {\n\treturn c.heldGate\n}",
+			"func (c *ClientSideConnection) heldGate(method string, params any) error {\n\treturn holdUntilInitialized(c.gate, c.initializing.Load(), c.conn.Done(), method, params)\n}",
 			"// The connection's reader checks and records the answer as it reads it, before\n// it reads the next message,",
 			"Response: *result,",
 			"if err := c.gate(AgentMethodStop, &params); err != nil {\n\t\treturn err",
-			"if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {",
+			"if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {",
 		},
 		"types_gen.go": {
 			"func (n Negotiation) Allows(method string) error {\n\treturn nil\n}",
@@ -160,6 +165,16 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 				t.Errorf("%s lacks %q:\n%s", name, w, files[name])
 			}
 		}
+	}
+	// The agent, which answers initialize, holds nothing, and the client's
+	// own sends pass the gate that does not hold.
+	for _, bad := range []string{"heldGate", "initializing", "newInitializeAttempt"} {
+		if strings.Contains(files["agent_gen.go"], bad) {
+			t.Errorf("agent_gen.go contains %q", bad)
+		}
+	}
+	if strings.Contains(files["client_gen.go"], "if err := c.heldGate(") {
+		t.Errorf("client_gen.go holds an outbound message:\n%s", files["client_gen.go"])
 	}
 	for name, src := range files {
 		for _, bad := range []string{"session/prompt", "SessionId", "CancelNotification", "AgentLoader", "loader", "c.Cancel(", "StopReason",

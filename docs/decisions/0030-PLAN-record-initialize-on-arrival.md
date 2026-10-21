@@ -65,8 +65,8 @@ the initialize probe, and its amendment's T, K, W and B findings the others.
 * **`connection.go`:** `pendingResponse` gains `commit`; `handleResponse` runs it; an unexported variant of `sendRequestSent` takes it.
   (Amended 2026-10-21: and `receive`'s buffer, 128 KiB, as a constant.)
 * **The generator,** `cmd/generate/internal/emit/dispatch.go`: the client's `Initialize` with a commit; the client's state for an
-  `initialize` in flight; the client's gate that holds. Regenerated: `client_gen.go`. The engine cases' `want.api` should not change; the
-  pins in `emit/dispatch_test.go` follow the emitted code.
+  `initialize` in flight; the client's gate that holds. Regenerated: `client_gen.go`. ~~The engine cases' `want.api` should not change;~~ (Amended 2026-10-21, during step 3:
+  four of them change by one line; see the deviation during step 3.) The pins in `emit/dispatch_test.go` follow the emitted code.
 * **(Added 2026-10-21) `agentproc`:** `agentproc.go`, the two taps' fields, `Kill` and `DroppedTapBytes`; `tap.go`, new, the tap's
   queue, goroutine, reader and writer; `tree_windows.go`, the breakaway limit; the tests and child modes below; an example of a tap in
   `example_test.go`.
@@ -431,6 +431,81 @@ order in `sendRequestCommit`, and two unused `nolint` directives in the test; fi
   the new file's, "1 file(s) clean"; `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules;
   `make check-records`, `make markdownlint` and the identifier scan; `make lint`, "0 issues." four times; `go fix -diff ./...` and
   `go mod tidy -diff` print nothing, in both modules;
+* `make api` against `v1.19.0`: "0 incompatible, 0 compatible";
+* `go test -race -count=3 -shuffle=on .`;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
+
+### Deviation, 2026-10-21, during step 3: the engine cases' `want.api`
+
+**Found.** The hold's state, `initializing atomic.Pointer[initializeAttempt]`, a field of the generated `ClientSideConnection` beside
+`negotiation`, changes the `want.api` of the engine cases that have an `initialize`: `TestEngineCases` lists a side connection's
+unexported fields too. Measured in a scratch copy with `-update`, 4 of the 172 cases change, by that one line each:
+`accept-capability-gates`, `accept-capability-undeclared-variant`, `accept-initialize-negotiation` and `accept-untyped-object-gates`. The
+scope above expected none to change.
+
+**Decision (owner, 2026-10-21).** Accept the four, rewritten by `-update`; the alternative was to keep the attempt on the hand-written
+`Connection`, apart from the record it gates on, only so that the snapshots stay. `make api` still reports no exported change. The MADR is
+unchanged.
+
+### Step 3, the hold, 2026-10-21
+
+The owner committed step 2 and approved this step; the deviation above was decided during it. What changed:
+
+* **`connection.go`:** `pendingResponse.settle`, which `handleResponse` runs once it has judged an answer, after the commit for a result
+  and at once for an error answer; `sendRequestCommit` takes `settled`, set as `settle`, and runs it itself when no answer will come;
+  `initializeAttempt`, whose `done` closes once, and `holdUntilInitialized`, which holds a message the gate refuses only for want of a
+  record while an attempt is in flight, until the attempt ends or the connection does.
+* **The emitter:** the side descriptor's `holds`, true for the client when the schema has an `initialize`; the client's struct gains
+  `initializing atomic.Pointer[initializeAttempt]`; a generated `heldGate` that calls `holdUntilInitialized`; `inboundGate` and the client's
+  typed dispatch use it, while its outbound methods keep `gate`; `Initialize` stores a new attempt before it sends and passes `attempt.end`
+  as `settled`. Regenerated: `client_gen.go` alone. The engine cases: four `want.api`, by one line each (the deviation).
+* **The pins:** the attempt, `heldGate`, `inboundGate` and the client's inbound checks; the agent's file names none of them, and the
+  client's outbound methods do not call `heldGate`.
+* **Tests,** in `initialize_test.go`: `TestHeldUntilInitialized`, `TestHeldRefusedWhenInitializeFails` (four cases),
+  `TestNotHeldBeforeInitialize`; a validation hook reports each extension message's verdict, which shows a refused notification too.
+
+**Settled on the reader, by design:** an answer that ends the attempt only when `Initialize` returns would deadlock on an error answer:
+`sendRequestCommit` waits for the notifications received before the answer, and a held one waits for the attempt. So the reader ends the
+attempt once it has judged any answer, and the caller only when no answer will come.
+
+**Checked, as the MADR states:** the hold cannot block the answer it waits for. The reader never waits for a request slot, answering a
+request over the limit at once (`connection.go`, the comment citing B18), nor for room in the notification queue, which drops or closes
+(the comment "The reader must not block here"). A consequence the MADR's "Neutral" names in part: held notifications stay in the queue, so
+an agent that sends more notifications before its answer than the queue holds meets the overflow policy, where before they were refused one
+by one.
+
+**A first run** of the new tests failed in `TestHeldRefusedWhenInitializeFails`, the caller's context: the test read the client's
+`$/cancel_request` for its `initialize` as the extension request's answer. The test now passes over that line; 10 runs with `-race` then
+passed.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| a message the agent sends before its answer is held, then judged by the answer | `TestHeldUntilInitialized`, 200 trials |
+| held messages are refused when the attempt fails: an error answer, another version, the caller's context, the connection's end | `TestHeldRefusedWhenInitializeFails` |
+| nothing is held before `Initialize` is called | `TestNotHeldBeforeInitialize` |
+| only the client holds, and only what it receives | the pins, `TestDispatchFollowsTheModel` |
+| no exported change | `make api` |
+
+**Planted breaks,** each in its own scratch copy; 7 of 7 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the gate refusing at once, as before | `TestHeldUntilInitialized`, trial 0: `_x/ask` answered `-32601` |
+| a failure not ending the attempt | `TestHeldRefusedWhenInitializeFails`, an error answer: "Initialize did not happen", by its bound |
+| an attempt not ended when the caller gives up | the same, the caller's context: "the gate's verdict ... did not happen" |
+| messages held with no attempt in flight | `TestNotHeldBeforeInitialize`: "the gate's verdict ... did not happen" |
+| the version check left out of the commit | `TestHeldRefusedWhenInitializeFails`, another version: "Initialize = nil, want its failure" |
+| the agent's side holding too | `TestDispatchFollowsTheModel`: "agent_gen.go contains \"heldGate\"" |
+| the client's outbound methods calling `heldGate` | `TestDispatchFollowsTheModel`: "holds an outbound message" |
+
+**Gates,** each exit 0, run one at a time:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "171 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+  `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules; `make check-records`, `make markdownlint` and the
+  identifier scan; `make lint`, "0 issues." four times; `go fix -diff ./...` and `go mod tidy -diff` print nothing, in both modules;
 * `make api` against `v1.19.0`: "0 incompatible, 0 compatible";
 * `go test -race -count=3 -shuffle=on .`;
 * the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;

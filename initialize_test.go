@@ -43,6 +43,16 @@ func initializeClient(t *testing.T, opts ...ConnectionOption) (c *ClientSideConn
 // returned.
 func initializeAgainst(ctx context.Context, t *testing.T, c *ClientSideConnection, p wire, more string) (InitializeResponse, error) {
 	t.Helper()
+	return initializeWith(ctx, t, c, p, func(id string) string {
+		return fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":%s}`, id, initializeAnswer) + more
+	})
+}
+
+// initializeWith calls Initialize under ctx while p reads the request and
+// writes what reply makes of its id, in one write, and returns what
+// Initialize returned.
+func initializeWith(ctx context.Context, t *testing.T, c *ClientSideConnection, p wire, reply func(id string) string) (InitializeResponse, error) {
+	t.Helper()
 	type result struct {
 		resp InitializeResponse
 		err  error
@@ -53,9 +63,41 @@ func initializeAgainst(ctx context.Context, t *testing.T, c *ClientSideConnectio
 		done <- result{resp, err}
 	}()
 	req := p.next("the initialize request")
-	p.send(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":%s}`, req.ID, initializeAnswer) + more)
+	if s := reply(string(req.ID)); s != "" {
+		p.send(s)
+	}
 	r := within(t, done, "Initialize")
 	return r.resp, r.err
+}
+
+// judgement is the gate's verdict on an extension message, as the validation
+// hook sees it once the gate, and any hold, has judged it.
+type judgement struct {
+	method string
+	err    error
+}
+
+// judged is a validation hook that sends each extension message's verdict on
+// seen and leaves it as it is.
+func judged(seen chan<- judgement) ConnectionOption {
+	return WithInboundValidation(func(_ context.Context, method string, _ any, err error) error {
+		if method == "_x/hello" || method == "_x/ask" {
+			seen <- judgement{method, err}
+		}
+		return err
+	})
+}
+
+// verdicts collects the verdicts on the extension notification and request,
+// each within within's bound.
+func verdicts(t *testing.T, seen <-chan judgement) map[string]error {
+	t.Helper()
+	got := map[string]error{}
+	for range 2 {
+		j := within(t, seen, "the gate's verdict on an extension message")
+		got[j.method] = j.err
+	}
+	return got
 }
 
 // TestInitializeRecordedOnArrival requires an extension notification and an
@@ -206,5 +248,126 @@ func TestInitializeGiveUpAgrees(t *testing.T) {
 				_ = c.conn.Close()
 			}
 		})
+	}
+}
+
+// TestHeldUntilInitialized requires an extension notification and an
+// extension request that the agent writes before its initialize answer, in
+// the same write, to be held until the answer is recorded and then handled,
+// 200 times (0030-MADR-record-initialize-on-arrival.md, question 2).
+func TestHeldUntilInitialized(t *testing.T) {
+	t.Parallel()
+	for i := range 200 {
+		c, p, ext := initializeClient(t)
+		if _, err := initializeWith(t.Context(), t, c, p, func(id string) string {
+			return extNotification + "\n" + extRequest + "\n" + fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":%s}`, id, initializeAnswer)
+		}); err != nil {
+			t.Fatalf("trial %d: Initialize = %v", i, err)
+		}
+		if a := p.next("the extension request's answer"); string(a.ID) != `"a1"` || a.Error != nil {
+			t.Fatalf("trial %d: the extension request sent before the answer was answered %s %+v, want a result", i, a.ID, a.Error)
+		}
+		got := []string{within(t, ext, "an extension handler"), within(t, ext, "the other extension handler")}
+		slices.Sort(got)
+		if want := []string{"_x/ask", "_x/hello"}; !slices.Equal(got, want) {
+			t.Fatalf("trial %d: the extension handlers ran for %q, want %q", i, got, want)
+		}
+		if err := c.conn.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestHeldRefusedWhenInitializeFails requires the extension messages held
+// while initialize is in flight to be refused, as sent before initialize
+// completed, once it fails: on an error answer, on an answer with another
+// protocol version, when the caller's context ends first, and when the
+// connection closes first. None waits past within's bound after Initialize
+// returns, no handler runs, and the request, while the connection lives, is
+// answered -32601 (0030-MADR-record-initialize-on-arrival.md, questions 2
+// and 3).
+func TestHeldRefusedWhenInitializeFails(t *testing.T) {
+	t.Parallel()
+	held := extNotification + "\n" + extRequest
+	for _, tt := range []struct {
+		name  string
+		reply func(id string, end func()) string
+		alive bool // the connection lives after Initialize returns
+	}{
+		{"an error answer", func(id string, _ func()) string {
+			return held + "\n" + fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"error":{"code":-32603,"message":"no"}}`, id)
+		}, true},
+		{"another protocol version", func(id string, _ func()) string {
+			return held + "\n" + fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":2,"agentCapabilities":{},"authMethods":[]}}`, id)
+		}, true},
+		{"the caller's context ends first", func(_ string, end func()) string {
+			time.AfterFunc(50*time.Millisecond, end)
+			return held
+		}, true},
+		{"the connection closes first", func(_ string, end func()) string {
+			time.AfterFunc(50*time.Millisecond, end)
+			return held
+		}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			seen := make(chan judgement, 4)
+			c, p, ext := initializeClient(t, judged(seen))
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			end := cancel
+			if !tt.alive {
+				end = func() { _ = c.conn.Close() }
+			}
+			if _, err := initializeWith(ctx, t, c, p, func(id string) string { return tt.reply(id, end) }); err == nil {
+				t.Fatal("Initialize = nil, want its failure")
+			}
+			for method, err := range verdicts(t, seen) {
+				if !errors.Is(err, ErrNotInitialized) {
+					t.Errorf("%s, held while initialize was in flight, was judged %v, want ErrNotInitialized", method, err)
+				}
+			}
+			if tt.alive {
+				// A caller whose context ends cancels its request first.
+				line := within(t, p.lines, "the extension request's answer")
+				if strings.Contains(line, `"method":"`+ProtocolMethodCancelRequest+`"`) {
+					line = within(t, p.lines, "the extension request's answer")
+				}
+				var a answer
+				if err := json.Unmarshal([]byte(line), &a); err != nil || string(a.ID) != `"a1"` || a.Error == nil || a.Error.Code != -32601 {
+					t.Errorf("the held extension request was answered %s (%v), want -32601", line, err)
+				}
+			}
+			select {
+			case m := <-ext:
+				t.Errorf("the handler ran for %s, refused while held", m)
+			default:
+			}
+		})
+	}
+}
+
+// TestNotHeldBeforeInitialize requires an extension notification and an
+// extension request received before Initialize is called to be refused at
+// once, as before: no initialize is in flight to hold them for
+// (0030-MADR-record-initialize-on-arrival.md, question 2).
+func TestNotHeldBeforeInitialize(t *testing.T) {
+	t.Parallel()
+	seen := make(chan judgement, 4)
+	_, p, ext := initializeClient(t, judged(seen))
+	p.send(extNotification)
+	p.send(extRequest)
+	for method, err := range verdicts(t, seen) {
+		if !errors.Is(err, ErrNotInitialized) {
+			t.Errorf("%s, received before Initialize, was judged %v, want ErrNotInitialized", method, err)
+		}
+	}
+	if a := p.next("the extension request's answer"); string(a.ID) != `"a1"` || a.Error == nil || a.Error.Code != -32601 {
+		t.Errorf("the extension request was answered %s %+v, want -32601", a.ID, a.Error)
+	}
+	select {
+	case m := <-ext:
+		t.Errorf("the handler ran for %s before initialize", m)
+	default:
 	}
 }

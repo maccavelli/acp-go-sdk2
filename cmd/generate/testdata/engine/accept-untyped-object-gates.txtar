@@ -51,7 +51,7 @@ type ClientCapabilities struct{Session *ClientSessionCapabilities "json:\"sessio
 type ClientExperimental interface{}
 const ClientMethodUpdate untyped string = "x/update"
 type ClientSessionCapabilities struct{Compaction *Flag "json:\"compaction,omitempty\""; Notices *Flag "json:\"notices,omitempty\""}
-type ClientSideConnection struct{conn *Connection; client Client; negotiation atomic.Pointer[Negotiation]}
+type ClientSideConnection struct{conn *Connection; client Client; negotiation atomic.Pointer[Negotiation]; initializing atomic.Pointer[initializeAttempt]}
 type ContentBlock struct{Text *ContentBlockText "json:\"-\""; Image *ContentBlockImage "json:\"-\""; Audio *ContentBlockAudio "json:\"-\""; Resource *ContentBlockResource "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
 type ContentBlockAudio struct{Data string "json:\"data\""; Type string "json:\"type\""}
 type ContentBlockImage struct{Data string "json:\"data\""; Type string "json:\"type\""}

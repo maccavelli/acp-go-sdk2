@@ -16,10 +16,11 @@ import (
 // goroutines are written whole, one at a time, in the order they reach the
 // connection's writer (0024-PLAN-documentation.md, A5).
 type ClientSideConnection struct {
-	conn        *Connection
-	client      Client
-	pending     pendingRequests
-	negotiation atomic.Pointer[Negotiation]
+	conn         *Connection
+	client       Client
+	pending      pendingRequests
+	negotiation  atomic.Pointer[Negotiation]
+	initializing atomic.Pointer[initializeAttempt]
 }
 
 // NewClientSideConnection creates a new client-side connection bound to the
@@ -97,10 +98,19 @@ func (c *ClientSideConnection) Connection() *Connection {
 }
 
 // inboundGate is the gate of the received messages the generated dispatch
-// does not decode, the extension messages: gate, or nil when the schema has
+// does not decode, the extension messages: heldGate, or nil when the schema has
 // no initialize (0019-PLAN-api-decisions.md, B14).
 func (c *ClientSideConnection) inboundGate() gateFunc {
-	return c.gate
+	return c.heldGate
+}
+
+// heldGate is gate for a received message: one that gate refuses only for
+// want of a record, while this side's initialize is in flight, waits until
+// the answer has been judged, and is judged again; the connection's end, or
+// no initialize in flight, leaves the refusal as it is
+// (0030-MADR-record-initialize-on-arrival.md, question 2).
+func (c *ClientSideConnection) heldGate(method string, params any) error {
+	return holdUntilInitialized(c.gate, c.initializing.Load(), c.conn.Done(), method, params)
 }
 
 // gate checks a message of this connection against what initialize agreed
@@ -143,7 +153,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		if err := c.client.CompleteElicitation(ctx, p); err != nil {
@@ -158,7 +168,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.CreateElicitation(ctx, p)
@@ -174,7 +184,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.ReadTextFile(ctx, p)
@@ -190,7 +200,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.WriteTextFile(ctx, p)
@@ -206,7 +216,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		exp, ok := c.client.(interface {
@@ -228,7 +238,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		pctx, done := c.pending.track(ctx, string(p.SessionId))
@@ -248,7 +258,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		if err := c.client.SessionUpdate(ctx, p); err != nil {
@@ -263,7 +273,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.CreateTerminal(ctx, p)
@@ -279,7 +289,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.KillTerminal(ctx, p)
@@ -295,7 +305,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.TerminalOutput(ctx, p)
@@ -311,7 +321,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.ReleaseTerminal(ctx, p)
@@ -327,7 +337,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err := decodeParams(params, &p); err != nil {
 			return nil, NewInvalidParams(map[string]any{"error": err.Error()})
 		}
-		if err := c.conn.checkInbound(ctx, method, &p, c.gate); err != nil {
+		if err := c.conn.checkInbound(ctx, method, &p, c.heldGate); err != nil {
 			return nil, inboundError(err)
 		}
 		resp, err := c.client.WaitForTerminalExit(ctx, p)
@@ -502,6 +512,8 @@ func (c *ClientSideConnection) Initialize(ctx context.Context, params Initialize
 	if params.ProtocolVersion != ProtocolVersionNumber {
 		return InitializeResponse{}, &ProtocolVersionError{Requested: int(params.ProtocolVersion)}
 	}
+	attempt := newInitializeAttempt()
+	c.initializing.Store(attempt)
 	return sendRequestCommit[InitializeResponse](c.conn, ctx, AgentMethodInitialize, &params, typedGate(func(method string, result *InitializeResponse) error {
 		return gateResult(&Negotiation{
 			Request:  params,
@@ -523,7 +535,7 @@ func (c *ClientSideConnection) Initialize(ctx context.Context, params Initialize
 		}
 		c.negotiation.Store(&rec)
 		return nil
-	})
+	}, attempt.end)
 }
 
 // Logout sends the logout request to the agent and returns its response.

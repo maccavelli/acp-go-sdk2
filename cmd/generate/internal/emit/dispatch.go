@@ -102,8 +102,10 @@ type side struct {
 	peer         string
 	// promptTurns is true when the side holds prompt-turn contexts, pending
 	// when it answers requests itself on a prompt-turn cancel, and negotiated
-	// when it records what initialize agreed.
-	promptTurns, pending, negotiated bool
+	// when it records what initialize agreed. holds is true when it sends
+	// initialize, and so holds a received message while its initialize is in
+	// flight (0030-MADR-record-initialize-on-arrival.md, question 2).
+	promptTurns, pending, negotiated, holds bool
 }
 
 // agentSide and clientSide describe the two side connections of m
@@ -154,6 +156,7 @@ func clientSide(m *model.Model) side {
 		},
 		peer:       "agent",
 		negotiated: m.Initialize != nil,
+		holds:      m.Initialize != nil,
 		pending: slices.ContainsFunc(m.ClientMethods, func(mi *model.Method) bool {
 			return mi.CancelledByPromptCancel
 		}),
@@ -176,6 +179,9 @@ func emitSideConnection(f *goFile, s side) {
 	}
 	if s.negotiated {
 		fs = append(fs, param("negotiation", index(f.qual(pkgAtomic, "Pointer"), id("Negotiation"))))
+	}
+	if s.holds {
+		fs = append(fs, param("initializing", index(f.qual(pkgAtomic, "Pointer"), id("initializeAttempt"))))
 	}
 	f.comment(s.doc...)
 	f.add(typeDecl(s.typeName, &ast.StructType{Fields: fields(fs...)}))
@@ -269,14 +275,29 @@ func emitSideConnection(f *goFile, s side) {
 	// The hand-written extension dispatch, compiled with every schema, takes
 	// its gate from here (0019-PLAN-api-decisions.md, B14).
 	var inbound ast.Expr = nilExpr()
+	inboundName := "gate"
+	if s.holds {
+		inboundName = "heldGate"
+	}
 	if s.negotiated {
-		inbound = dot(s.recv, "gate")
+		inbound = dot(s.recv, inboundName)
 	}
 	f.comment("inboundGate is the gate of the received messages the generated dispatch",
-		"does not decode, the extension messages: gate, or nil when the schema has",
+		"does not decode, the extension messages: "+inboundName+", or nil when the schema has",
 		"no initialize (0019-PLAN-api-decisions.md, B14).")
 	f.add(method(recv(), "inboundGate", funcType(nil, param("", id("gateFunc"))), ret(inbound)))
 	f.line()
+	if s.holds {
+		f.comment("heldGate is gate for a received message: one that gate refuses only for",
+			"want of a record, while this side's initialize is in flight, waits until",
+			"the answer has been judged, and is judged again; the connection's end, or",
+			"no initialize in flight, leaves the refusal as it is",
+			"(0030-MADR-record-initialize-on-arrival.md, question 2).")
+		f.add(method(recv(), "heldGate", funcType([]*ast.Field{param("method", id("string")), param("params", id("any"))}, param("", id("error"))),
+			ret(call(id("holdUntilInitialized"), dot(s.recv, "gate"), call(dot(s.recv, "initializing", "Load")),
+				call(dot(s.recv, "conn", "Done")), id("method"), id("params")))))
+		f.line()
+	}
 	if s.negotiated {
 		f.comment("gate checks a message of this connection against what initialize agreed",
 			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1).")
@@ -567,7 +588,9 @@ func agentFile(m *model.Model) *goFile {
 func clientFile(m *model.Model) *goFile {
 	f := newFile()
 	emitSideConnection(f, clientSide(m))
-	gate, resultGate := gateOf(m, "c", "gate"), gateOf(m, "c", "resultGate")
+	// A received message passes the gate that holds it while initialize is
+	// in flight (0030-MADR-record-initialize-on-arrival.md, question 2).
+	gate, resultGate := gateOf(m, "c", "heldGate"), gateOf(m, "c", "resultGate")
 
 	var cases []ast.Stmt
 	for _, mi := range m.ClientMethods {
@@ -700,7 +723,13 @@ func initializeWrapper(mi *model.Method) []ast.Stmt {
 		ifStmt(nil, binary(dot("params", mi.ReqVersionField), token.NEQ, id("ProtocolVersionNumber")),
 			ret(composite(id(mi.Resp)), addr(composite(id("ProtocolVersionError"),
 				kv(id("Requested"), call(id("int"), dot("params", mi.ReqVersionField))))))),
-		ret(call(index(id("sendRequestCommit"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), addr(id("params")), gate, commit)),
+		// From here until the answer has been judged, a received message
+		// refused only for want of a record is held
+		// (0030-MADR-record-initialize-on-arrival.md, question 2).
+		define(exprs(id("attempt")), call(id("newInitializeAttempt"))),
+		exprStmt(call(dot("c", "initializing", "Store"), id("attempt"))),
+		ret(call(index(id("sendRequestCommit"), id(mi.Resp)), dot("c", "conn"), id("ctx"), id(mi.Const), addr(id("params")), gate, commit,
+			dot("attempt", "end"))),
 	}
 }
 

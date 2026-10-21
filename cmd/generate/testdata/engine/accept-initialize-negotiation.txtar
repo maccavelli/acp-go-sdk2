@@ -24,7 +24,7 @@ type CancelRequestNotification struct{}
 type Client interface{}
 type ClientCapabilities struct{Fs bool "json:\"fs,omitempty\""}
 type ClientExperimental interface{}
-type ClientSideConnection struct{conn *Connection; client Client; negotiation atomic.Pointer[Negotiation]}
+type ClientSideConnection struct{conn *Connection; client Client; negotiation atomic.Pointer[Negotiation]; initializing atomic.Pointer[initializeAttempt]}
 type InitializeRequest struct{ClientCapabilities ClientCapabilities "json:\"clientCapabilities\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
 type InitializeResponse struct{AgentCapabilities AgentCapabilities "json:\"agentCapabilities\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
 type Negotiation struct{Request InitializeRequest; Response InitializeResponse}

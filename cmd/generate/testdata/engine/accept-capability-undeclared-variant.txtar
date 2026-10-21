@@ -36,7 +36,7 @@ type Client interface{CreateElicitation(ctx context.Context, params CreateElicit
 type ClientCapabilities struct{Elicitation *ElicitationCapabilities "json:\"elicitation,omitempty\""}
 type ClientExperimental interface{}
 const ClientMethodElicit untyped string = "x/elicit"
-type ClientSideConnection struct{conn *Connection; client Client; negotiation atomic.Pointer[Negotiation]}
+type ClientSideConnection struct{conn *Connection; client Client; negotiation atomic.Pointer[Negotiation]; initializing atomic.Pointer[initializeAttempt]}
 type CreateElicitationForm struct{Message string "json:\"message\""; Mode string "json:\"mode\""}
 type CreateElicitationOther struct{Mode string "json:\"mode\""; Extra map[string]json.RawMessage "json:\"-\""}
 type CreateElicitationRequest struct{Form *CreateElicitationForm "json:\"-\""; Url *CreateElicitationUrl "json:\"-\""; Other *CreateElicitationOther "json:\"-\""}

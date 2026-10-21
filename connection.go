@@ -137,6 +137,10 @@ type pendingResponse struct {
 	// commit, when set, checks and records a result as the reader reads it,
 	// before it reads the next message (sendRequestCommit).
 	commit func(result json.RawMessage) (any, error)
+	// settle, when set, runs on the reader once it has judged the answer,
+	// after commit for a result, before it reads the next message
+	// (sendRequestCommit).
+	settle func()
 }
 
 type cancelRequestParams struct {
@@ -1614,6 +1618,9 @@ func (c *Connection) handleResponse(msg *anyMessage) {
 		if pr.commit != nil && msg.Error == nil {
 			env.committed, env.commitErr = pr.commit(msg.Result)
 		}
+		if pr.settle != nil {
+			pr.settle()
+		}
 		pr.ch <- env
 	}
 }
@@ -1822,8 +1829,14 @@ func sendRequestSent[T any](c *Connection, ctx context.Context, method string, p
 // so that what it returns and what commit recorded agree
 // (0030-MADR-record-initialize-on-arrival.md, O1;
 // 0030-PLAN-record-initialize-on-arrival.md, the deviation during step 2).
-func sendRequestCommit[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc, commit func(result *T) error) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
-	pr := &pendingResponse{ch: make(chan responseEnvelope, 1), commit: func(raw json.RawMessage) (any, error) {
+// settled runs once the answer has been judged, on the reader, after the
+// commit for a result and at once for an error answer, or, when no answer
+// will come, on the caller before it returns; it ends what waits for the
+// answer, and so it runs before the wait for earlier notifications, which
+// may be among what waits (0030-MADR-record-initialize-on-arrival.md,
+// question 2).
+func sendRequestCommit[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc, commit func(result *T) error, settled func()) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
+	pr := &pendingResponse{ch: make(chan responseEnvelope, 1), settle: settled, commit: func(raw json.RawMessage) (any, error) {
 		var result T
 		if len(raw) > 0 {
 			if err := json.Unmarshal(raw, &result); err != nil {
@@ -1840,6 +1853,8 @@ func sendRequestCommit[T any](c *Connection, ctx context.Context, method string,
 	var zero T
 	resp, _, err := c.exchange(ctx, method, params, pr)
 	if err != nil {
+		// No answer was judged, and none will be.
+		settled()
 		return zero, err
 	}
 	werr := c.waitNotificationsUpTo(ctx, resp.notificationWatermark)
@@ -1857,6 +1872,42 @@ func sendRequestCommit[T any](c *Connection, ctx context.Context, method string,
 		return zero, resp.msg.Error
 	default:
 		return result, resp.commitErr
+	}
+}
+
+// initializeAttempt is a client's initialize in flight: done is closed once,
+// when the attempt's answer has been judged or no answer will come. A
+// received message held for want of a record waits for it
+// (0030-MADR-record-initialize-on-arrival.md, question 2).
+type initializeAttempt struct {
+	done chan struct{}
+	once sync.Once
+}
+
+// newInitializeAttempt returns an attempt in flight.
+func newInitializeAttempt() *initializeAttempt {
+	return &initializeAttempt{done: make(chan struct{})}
+}
+
+// end marks the attempt over; a later call does nothing.
+func (a *initializeAttempt) end() { a.once.Do(func() { close(a.done) }) }
+
+// holdUntilInitialized judges a received message with gate. When gate refuses
+// it only for want of a record and attempt is in flight, it waits until the
+// attempt ends, and judges it again, so that a message the peer sends before
+// its initialize answer is judged by that answer; with no attempt, or when
+// the connection ends first, done, the refusal stands
+// (0030-MADR-record-initialize-on-arrival.md, question 2).
+func holdUntilInitialized(gate gateFunc, attempt *initializeAttempt, done <-chan struct{}, method string, params any) error {
+	err := gate(method, params)
+	if attempt == nil || !errors.Is(err, ErrNotInitialized) {
+		return err
+	}
+	select {
+	case <-attempt.done:
+		return gate(method, params)
+	case <-done:
+		return err
 	}
 }
 
