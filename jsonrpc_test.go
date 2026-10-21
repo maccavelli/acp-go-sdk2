@@ -247,6 +247,36 @@ func TestMaxMessageSize(t *testing.T) {
 	}
 }
 
+// sizeRecorder is a reader that sends the size of the buffer each Read is
+// given on sizes, then waits for stop and reports the end of input.
+type sizeRecorder struct {
+	sizes chan<- int
+	stop  <-chan struct{}
+}
+
+func (r sizeRecorder) Read(p []byte) (int, error) {
+	r.sizes <- len(p)
+	<-r.stop
+	return 0, io.EOF
+}
+
+// TestReceiveReadBufferSize requires the connection's reader to read through
+// a buffer of 128 KiB: its first Read is given 131,072 bytes
+// (0030-MADR-record-initialize-on-arrival.md, the amendment of 2026-10-21).
+func TestReceiveReadBufferSize(t *testing.T) {
+	t.Parallel()
+	sizes, stop := make(chan int, 1), make(chan struct{})
+	c := NewConnection(nil, io.Discard, sizeRecorder{sizes: sizes, stop: stop})
+	t.Cleanup(func() {
+		close(stop)
+		_ = c.Close()
+		_ = c.Wait()
+	})
+	if n := within(t, sizes, "the reader's first Read"); n != 131072 {
+		t.Errorf("the reader's first Read was given %d bytes, want 131072", n)
+	}
+}
+
 // TestParamsNeverSentAsNull requires params that encode as null to be left
 // out, and params that encode as neither an object nor an array to be refused
 // before anything is written (0019-PLAN-behaviour-fixes.md, B10).

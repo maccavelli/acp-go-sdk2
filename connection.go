@@ -24,9 +24,13 @@ const (
 	// defaultMaxMessageSize is the largest line receive accepts unless
 	// WithMaxMessageSize sets another.
 	defaultMaxMessageSize = 10 * 1024 * 1024
-	jsonRPCVersion        = "2.0"
-	jsonNull              = "null"
-	jsonErrorField        = "error"
+	// readBufferSize is the size of receive's bufio.Reader: a line up to it is
+	// read in one piece (0030-MADR-record-initialize-on-arrival.md, the
+	// amendment of 2026-10-21, B1 to B7).
+	readBufferSize = 128 << 10
+	jsonRPCVersion = "2.0"
+	jsonNull       = "null"
+	jsonErrorField = "error"
 )
 
 type anyMessage struct {
@@ -1149,7 +1153,7 @@ func readLine(r *bufio.Reader, maxBytes int) (line []byte, tooLong bool, err err
 }
 
 func (c *Connection) receive() {
-	r := bufio.NewReaderSize(c.r, 64*1024)
+	r := bufio.NewReaderSize(c.r, readBufferSize)
 	var received uint64
 	cause := errPeerEOF
 	for {

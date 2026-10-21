@@ -510,3 +510,25 @@ passed.
 * `go test -race -count=3 -shuffle=on .`;
 * the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
 * the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
+
+### Step 4, the reader's buffer, 2026-10-21
+
+The owner committed step 3 and approved this step. What changed:
+
+* **`connection.go`:** `readBufferSize = 128 << 10`, in the constants beside `defaultMaxMessageSize`, citing the MADR's amendment; `receive`
+  reads through `bufio.NewReaderSize(c.r, readBufferSize)`, its one use.
+* **Test,** `jsonrpc_test.go`: `TestReceiveReadBufferSize`, with `sizeRecorder`, a reader that reports the length of the buffer each `Read`
+  is given; the connection's first `Read` is given 131,072 bytes. It compares with the literal, so that a change of the constant fails it.
+
+**Planted break,** in a scratch copy: the constant at `64 << 10`. `TestReceiveReadBufferSize` failed: "the reader's first Read was given
+65536 bytes, want 131072". 1 of 1.
+
+**Gates,** each exit 0, run one at a time:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "171 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+  `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules; `make check-records`, `make markdownlint` and the
+  identifier scan; `make lint`, "0 issues." four times; `go fix -diff ./...` and `go mod tidy -diff` print nothing, in both modules;
+* `make api` against `v1.19.0`: "0 incompatible, 0 compatible";
+* `go test -race -count=3 -shuffle=on .`;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
