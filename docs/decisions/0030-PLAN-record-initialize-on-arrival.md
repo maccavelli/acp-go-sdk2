@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-21
 associated-madr: "0030-MADR-record-initialize-on-arrival.md"
 ---
@@ -274,3 +274,41 @@ does not allow is still refused once the record exists. The release is the minor
   should it fall 32 MiB behind, and end an agent at once with `Process.Kill`;
 * on Windows, a process the agent starts with `CREATE_BREAKAWAY_FROM_JOB`, refused before, now starts outside the job and outlives the
   agent; every other process ends with the job as before.
+
+## Execution record
+
+### Step 1, records, 2026-10-21
+
+The owner committed the MADR's amendment and this PLAN's as `c2b33c1`, and approved execution. What changed: this PLAN and its
+`docs/README.md` row `in-progress`.
+
+**The facts,** re-asserted by a script outside the tree, reading `c2b33c1`'s tree, each fact from lines no other fact reads: 17 of 17
+hold.
+
+| Id | What the script read |
+| :--- | :--- |
+| F1 | `agent_gen.go:400` is `a.negotiation.Store(&rec)`, and `:401` `return result, nil` |
+| F2 | `client_gen.go:494` begins `Initialize`; `:501` calls `sendRequest[InitializeResponse]`; `:523` is `c.negotiation.Store(&rec)` |
+| F3 | `emit/dispatch.go:690` emits the `jsonCopy`, and `:693` the `Store` |
+| F4 | `connection.go:130`–`:132`: `pendingResponse` holds `ch chan responseEnvelope` alone |
+| F5 | `:1577` begins `handleResponse`; `:1603` sends the envelope on `pr.ch`; `:1508` calls it |
+| F6 | `:1807` waits for the response; `:1820` decodes the result; `:1823` gates it |
+| F7 | `types_gen.go:23107`–`:23112`: `gateMessage` passes `initialize` and returns `ErrNotInitialized` with no record |
+| F8 | `client_gen.go:102`–`:103`: `inboundGate` returns `c.gate`; `:109` calls `gateMessage`; `extensions.go:55` passes `c.inboundGate()` |
+| F9 | `agentproc/agentproc.go:110` is `case cmd.Stdout != nil:`; `:157` hands the connection `outR` |
+| F10 | `:235` and `:298` are `_ = p.conn.Close()` |
+| F11 | `connection.go:798` begins `closeWith`; `:807` is `cl, ok := x.(io.Closer)`; it ends at `:820` |
+| F12 | `:1140` is `r := bufio.NewReaderSize(c.r, 64*1024)` |
+| F13 | `:705` begins `writeLoop`; `:711` is `_, err := c.w.Write(req.b)`; it ends at `:715` |
+| F14 | `agentproc/agentproc.go:287` begins `stop`; `:292` and `:293` wait a grace each; it ends at `:299` |
+| F15 | `:222` begins `watch`; `:225` is `p.tree.end()`; `:229` starts the grace's timer |
+| F16 | `agentproc/tree_windows.go:43` sets `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and the file names no breakaway limit |
+| F17 | `:74` begins `end`; `:75` terminates the job |
+
+**Planted breaks,** each a change to one line in place, in its own scratch copy of the tree; each made the script report its own fact
+alone missing, exit 1: 17 of 17.
+
+A first run caught 16 of 17: F6 then tested that its lines contained a call, and its break, a comment added after the call, left the call
+in place. F6 now tests its three lines whole, as the other facts do, and the run above is the second.
+
+**Gates:** `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing in the changed records.
