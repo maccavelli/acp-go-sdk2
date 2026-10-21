@@ -36,3 +36,36 @@ func ExampleCommand() {
 		log.Printf("initialize: %v", err)
 	}
 }
+
+// The agent's output copied, byte for byte, to a file as the connection
+// reads it: a record of the wire. The tap writes on a goroutine of its own,
+// and DroppedTapBytes says whether it kept up.
+func ExampleCommand_outputTap() {
+	ctx := context.Background()
+	f, err := os.Create("agent-output.jsonl")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Printf("record: %v", err)
+		}
+	}()
+	cmd := exec.Command("my-agent", "--acp")
+	cmd.Stderr = os.Stderr
+	p, err := (&agentproc.Command{Cmd: cmd, OutputTap: f}).Start(client{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		if err := p.Close(); err != nil {
+			log.Printf("agent: %v", err)
+		}
+		if out, _ := p.DroppedTapBytes(); out > 0 {
+			log.Printf("the record lacks the last %d bytes", out)
+		}
+	}()
+	if _, err := p.Conn().Initialize(ctx, acp.InitializeRequest{}); err != nil {
+		log.Printf("initialize: %v", err)
+	}
+}

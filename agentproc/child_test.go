@@ -25,6 +25,15 @@ func ready() { fmt.Fprintln(os.Stderr, "ready") }
 // (0027-MADR-agent-process-helper.md, "How a child process behaves").
 func child(mode string) int {
 	switch mode {
+	case "frames": // writes framesStream, then exits at its input's end (tap_test.go)
+		if _, err := os.Stdout.Write(framesStream()); err != nil {
+			return 1
+		}
+		ready()
+		_, _ = io.Copy(io.Discard, os.Stdin)
+		return 0
+	case "bulk": // writes a bulkStream in two parts, the second after a line of input (tap_test.go)
+		return bulk()
 	case "eof": // exits 0 at its input's end
 		ready()
 		_, _ = io.Copy(io.Discard, os.Stdin)

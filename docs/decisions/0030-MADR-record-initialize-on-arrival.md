@@ -543,6 +543,80 @@ Found while the PLAN's step 2 began, by reading `c2b33c1`, and decided by the ow
 * **Consequence:** the hooks, for the `initialize` answer alone, run on the reader goroutine, and before the notifications received ahead of
   the answer are handled, where today they run on the caller's after them.
 
+## Amendment 2026-10-21, Windows: a process the agent starts before its job assignment
+
+Found during the PLAN's step 5, and decided by the owner the same day: fix it inside this record's PLAN, as its step 6. The decisions
+above are unchanged. The measurements ran on the Windows host reached over SSH, with go1.27.3, the repository only read.
+
+* **J1. The failure.** `TestDescendantsEnded` (0027), which this record does not change, failed in step 5's first Windows gate, "the
+  agent's grandchild still runs after the agent exited", and at `b5177dd`, before step 5, in 1 of 15 runs of the whole `agentproc`
+  package, "the agent's grandchild still runs after Close"; run alone it failed in none of 20 runs from either tree.
+* **J2. Not the test's own reading.** `TerminateJobObject` returns before its processes are gone, and `os.Stat` might lag a file another
+  process holds; either could make the test's `beating`, two sizes 400 ms apart, read a dead grandchild as running. A writer put in a
+  job before it wrote, the job terminated, then `beating`'s two sizes, by `os.Stat` and through a handle, in 300 trials alone and 900
+  three at once: the file never grew, `os.Stat` was never behind the handle, and the writer was never alive 400 ms after.
+* **J3. The margin.** In the real test, three test binaries at once, 180 grandchildren: each was in the job, created 6.6 to 26.1 ms after
+  the agent's assignment, median 13.7 ms. A pause of that order in the client between the agent's start and `attach` lets the grandchild
+  start first, outside the job, which [0027-MADR-agent-process-helper.md](0027-MADR-agent-process-helper.md)'s S7 names.
+* **J4. The mechanism and the remedy,** a child that starts a grandchild at once, assigned 100 ms after its start, 20 trials each:
+
+  | Id | The child's start | Started | The grandchild in the job | It survived the job's termination |
+  | :--- | :--- | :--- | :--- | :--- |
+  | J4a | plain, as `attach` does | 20 | **0** | **20** |
+  | J4b | `CREATE_SUSPENDED` through `SysProcAttr.CreationFlags`; assigned; its thread resumed | 20 | 20 | 0 |
+
+* **J5. S7 corrected.** S7 says that "a caller cannot resume a suspended child", since `syscall.StartProcess` closes the new main thread's
+  handle (`syscall/exec_windows.go:446`). The thread can be opened again by its ID: a thread snapshot (`CreateToolhelp32Snapshot`,
+  `TH32CS_SNAPTHREAD`) lists the process's threads, and `OpenThread` with `THREAD_SUSPEND_RESUME` and `ResumeThread` resume them, all
+  documented calls in `golang.org/x/sys/windows`; J4b used them.
+
+### Considered Options, for this amendment
+
+* **S-a.** Start the agent suspended, assign it, then resume it (J4b).
+* **S-b.** Create the process inside the job, `PROC_THREAD_ATTRIBUTE_JOB_LIST`: `syscall.SysProcAttr` has no field for it, so `Start`
+  would create the process itself, outside `os/exec`.
+* **S-c.** Resume with `NtResumeProcess`, an undocumented export of `ntdll`.
+* **S-d.** Change the tests only, so their children wait before they start a grandchild.
+
+### Decision Outcome, for this amendment
+
+Chosen option: "S-a", because it closes the window wholly, the agent running nothing until it is in the job, keeps `os/exec`'s process
+creation, `Wait` and pipes, and uses documented calls only (J4b, J5). S-b replaces `os/exec`'s creation of the process; S-c depends on an
+undocumented call; S-d leaves the product's gap, a grandchild escaping a slow client's job, behind a passing test.
+
+* **`prepare`** adds `CREATE_SUSPENDED` to the caller's `CreationFlags`, keeping the others, and refuses a `Cmd` that has it already
+  (question 12).
+* **`attach`** assigns the job, then resumes the agent's threads; an error in either is `attach`'s error, and `Start` abandons the agent.
+* **The test** makes the assignment late through an unexported delay in `attach`, zero in production (question 13), so that the fix's
+  absence fails it, which a test without the delay cannot show (J3).
+* **The contract** of [0029-MADR-unix-client-death-pdeathsig.md](0029-MADR-unix-client-death-pdeathsig.md)'s docs, "on Windows the job
+  ends the agent and every process it started", then holds without S7's exception; the docs say so in the PLAN's docs step.
+
+#### Questions, for this amendment
+
+12. **A caller's own `CREATE_SUSPENDED`.**
+    * Recommended: refused, as Unix's `prepare` refuses a shared `Pgid`: the helper must resume the agent.
+    * Alternative: taken as the helper's, and resumed after the assignment.
+13. **The test's late assignment.**
+    * Recommended: an unexported delay in `attach`, zero in production, set by a test that is not parallel.
+    * Alternative: test the flags only, with no delay; the race is then never exercised.
+
+#### Decided with the owner, 2026-10-21, the Windows amendment
+
+| Question | Answer |
+| :--- | :--- |
+| How to handle the failure | Fix it inside this record's PLAN, now. |
+| 12. A caller's own `CREATE_SUSPENDED` | As recommended: refused. |
+| 13. The test's late assignment | As recommended: an unexported delay. |
+
+### Consequences, for this amendment
+
+* Good, because a process the agent starts is in its job however late the client assigns it, so the job ends it.
+* Good, because `TestDescendantsEnded`'s intermittent Windows failure has its cause removed, not its test changed.
+* Neutral, because `Start` on Windows sets a flag in the caller's `SysProcAttr`, as on Unix it sets `Setpgid` and `Pdeathsig`.
+* Bad, because a caller that starts its agent suspended itself is refused.
+* Bad, because `attach` carries a test-only delay, zero in production.
+
 ## More Information
 
 * **Measurements outside the tree:** the probe and its output stay outside the repository, as its records do for scratch tools.

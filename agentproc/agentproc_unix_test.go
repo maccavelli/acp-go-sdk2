@@ -5,6 +5,7 @@ package agentproc
 import (
 	"bufio"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -108,6 +109,30 @@ func TestEscapedDescendantDoesNotHoldWait(t *testing.T) {
 	}
 	if !beating(beat) {
 		t.Error("the escaped grandchild is not running: the test proves nothing")
+	}
+}
+
+// TestTapKeepsCloseEnding requires Wait to return, an output tap set, when a
+// process the agent started has left its process group and still holds the
+// agent's output: the tap's reader closes the pipe when the connection closes
+// it (0030-MADR-record-initialize-on-arrival.md, the amendment of 2026-10-21,
+// T2 and T3).
+func TestTapKeepsCloseEnding(t *testing.T) {
+	t.Parallel()
+	beat := filepath.Join(t.TempDir(), "beat")
+	p := startTapped(t, "parent-escape", []string{beatEnv + "=" + beat}, testGrace, &capture{}, nil)
+	t.Cleanup(func() {
+		if b, err := os.ReadFile(beat + ".pid"); err == nil {
+			if pid, err := strconv.Atoi(string(b)); err == nil {
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+	})
+	if !beating(beat) {
+		t.Fatal("the escaped grandchild is not running: the test proves nothing")
+	}
+	if _, err := within(t, testGrace+slack, "Wait", p.Wait); err != nil {
+		t.Errorf("Wait = %v, want nil: the agent exits of itself", err)
 	}
 }
 

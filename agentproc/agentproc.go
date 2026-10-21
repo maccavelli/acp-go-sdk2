@@ -7,6 +7,7 @@ package agentproc
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
@@ -42,6 +43,24 @@ type Command struct {
 
 	// ConnectionOptions configure the connection to the agent.
 	ConnectionOptions []acp.ConnectionOption
+
+	// OutputTap, when set, receives a copy of every byte the agent writes to
+	// its standard output, in order, as the connection reads it and before it
+	// is decoded: a line too long or not JSON included, through the end of
+	// the output. A goroutine of the tap's own calls Write, so the connection
+	// never waits for it, and Write's error is ignored. Should the tap fall
+	// 32 MiB behind, it is detached: what it received is the stream's
+	// beginning, and DroppedTapBytes counts the rest. Wait waits up to the
+	// grace for the tap to write what it was given. Write must return, and
+	// must not retain p (0030-MADR-record-initialize-on-arrival.md, the
+	// amendment of 2026-10-21).
+	OutputTap io.Writer
+
+	// InputTap, when set, receives a copy of what the connection writes to
+	// the agent's standard input, as OutputTap does of its output. A writer
+	// set as both taps is called from two goroutines, and must be safe for
+	// concurrent use; the two streams have no order between them.
+	InputTap io.Writer
 }
 
 // Process is a running agent and the connection to it. Its methods are safe
@@ -70,6 +89,12 @@ type Process struct {
 	// itself, so no test can tell its absence
 	// (0027-PLAN-agent-process-helper.md, the deviation during step 2).
 	closeOnce sync.Once
+
+	// outTap and inTap are the taps of the agent's output and input, nil
+	// when unset; their goroutines are not in goroutines, and Wait drains
+	// them once, up to the grace (drainOnce).
+	outTap, inTap *tap
+	drainOnce     sync.Once
 }
 
 // Start starts the agent and connects client to it over the agent's
@@ -154,7 +179,9 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 	}
 	p.stdin = &sharedClose{File: inW}
 	p.tree = t
-	p.conn = acp.NewClientSideConnection(client, p.stdin, outR, c.ConnectionOptions...)
+	in, out, inTap, outTap := streams(p.stdin, outR, c.InputTap, c.OutputTap)
+	p.inTap, p.outTap = inTap, outTap
+	p.conn = acp.NewClientSideConnection(client, in, out, c.ConnectionOptions...)
 	proceed <- true
 	p.goroutines.Go(p.monitor)
 	return p, nil
@@ -253,14 +280,16 @@ func (p *Process) Conn() *acp.ClientSideConnection { return p.conn }
 func (p *Process) Done() <-chan struct{} { return p.done }
 
 // Wait blocks until the agent process has exited and the connection's
-// goroutines have returned, and then returns the agent's error, the same
-// each time: nil for an exit of status 0 of its own, otherwise the error
+// goroutines have returned, and the taps have written what they were given,
+// or the grace has passed, and then returns the agent's error, the same each
+// time: nil for an exit of status 0 of its own, otherwise the error
 // exec.Cmd.Wait returned, joined with ErrTerminated or ErrKilled when Close
 // ended the agent so. It does not stop the agent.
 func (p *Process) Wait() error {
 	<-p.done
 	p.goroutines.Wait()
 	_ = p.conn.Wait() //nolint:errcheck // the connection's end is not the agent's; Conn().Err() reports it.
+	p.drainOnce.Do(p.drainTaps)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	switch {
@@ -271,6 +300,47 @@ func (p *Process) Wait() error {
 	default:
 		return fmt.Errorf("%w: %w", p.ended, p.waitErr)
 	}
+}
+
+// drainTaps ends the taps' streams and waits, from one timer of the grace,
+// for each tap to write what it was given; a tap still writing when the grace
+// has passed is abandoned, and what it has not written is counted as dropped
+// (0030-MADR-record-initialize-on-arrival.md, the amendment of 2026-10-21,
+// question 11).
+func (p *Process) drainTaps() {
+	t := time.NewTimer(p.grace)
+	defer t.Stop()
+	expired := false
+	for _, tp := range []*tap{p.outTap, p.inTap} {
+		if tp == nil {
+			continue
+		}
+		tp.end()
+		if !expired {
+			select {
+			case <-tp.done:
+				continue
+			case <-t.C:
+				expired = true
+			}
+		}
+		tp.abandon()
+	}
+}
+
+// DroppedTapBytes reports how many bytes of the agent's output and of its
+// input OutputTap and InputTap did not receive: zero for a complete copy, or
+// a tap unset. It is final once Wait has returned. A tap that falls 32 MiB
+// behind, or is still writing when Wait's grace has passed, receives the
+// stream's beginning, and the rest is counted here.
+func (p *Process) DroppedTapBytes() (output, input uint64) {
+	if p.outTap != nil {
+		output = p.outTap.droppedBytes()
+	}
+	if p.inTap != nil {
+		input = p.inTap.droppedBytes()
+	}
+	return output, input
 }
 
 // Close stops the agent and returns Wait's error. It closes the agent's

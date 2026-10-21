@@ -118,7 +118,9 @@ It sets no time between the two, and no signal.
 * **S7. Windows has no process group to signal, and `os/exec` cannot start a child suspended.** Windows' `SysProcAttr` has
   `CreationFlags` and no job field, the same on both toolchains. `syscall.StartProcess` closes the new main thread's handle at once
   (`syscall/exec_windows.go:446`, `defer CloseHandle(Handle(pi.Thread))`), so a caller cannot resume a suspended child. A job object
-  is assigned after the child has started.
+  is assigned after the child has started. (Amended 2026-10-21: the thread can be opened again by its ID and resumed, and the agent is now started
+  suspended and assigned before it runs; see [0030-MADR-record-initialize-on-arrival.md](0030-MADR-record-initialize-on-arrival.md),
+  "Amendment 2026-10-21, Windows: a process the agent starts before its job assignment".)
 * **S8. `golang.org/x/sys/windows` v0.49.0** declares `go 1.26.0`, under the floor. It has `CreateJobObject`, `SetInformationJobObject`,
   `AssignProcessToJobObject`, `TerminateJobObject`, `JOBOBJECT_EXTENDED_LIMIT_INFORMATION` and `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`
   (`zsyscall_windows.go`, `types_windows.go`).

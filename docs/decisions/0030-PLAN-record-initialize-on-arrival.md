@@ -147,6 +147,17 @@ the initialize probe, and its amendment's T, K, W and B findings the others.
 * `attach` sets `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK`; its comment cites W3 and W4. `Start`'s doc and the
   README say that a process started with `CREATE_BREAKAWAY_FROM_JOB` leaves the job, and is then the agent's to end.
 
+### The suspended start on Windows (added 2026-10-21, during step 5)
+
+* `prepare`, on Windows, refuses a `Cmd` whose `SysProcAttr.CreationFlags` has `CREATE_SUSPENDED`, starting nothing, as Unix's refuses a
+  shared `Pgid`; otherwise it adds `CREATE_SUSPENDED` to them, keeping the caller's other flags, creating `SysProcAttr` when it is nil.
+* `attach` assigns the agent to its job, then resumes it: a thread snapshot (`CreateToolhelp32Snapshot`, `TH32CS_SNAPTHREAD`) lists the
+  agent's threads, one for a new suspended process, and each is opened (`OpenThread`, `THREAD_SUSPEND_RESUME`) and resumed
+  (`ResumeThread`). An error in either returns `attach`'s error, and `Start` abandons the agent, as for any `attach` error.
+* `attachDelay`, an unexported `atomic.Int64` in `tree_windows.go`, zero in production: `attach` sleeps that long before the assignment,
+  so that a test can make it late (the MADR's amendment, question 13).
+* `attach`'s comment no longer says that a process the agent starts before the assignment is outside the job; it cites the amendment.
+
 ## Tests
 
 At the root, a fake agent over `io.Pipe`s, as the MADR's probe:
@@ -190,6 +201,10 @@ At the root, a fake agent over `io.Pipe`s, as the MADR's probe:
 * **`TestBreakawayLeavesJob`** (W3c, W3d; Windows): a child mode `parent-breakaway` starts one beat with `CREATE_BREAKAWAY_FROM_JOB` and
   one without, and records both process IDs; after `Close`, the first still beats and the second has stopped; the cleanup kills the first.
 * **`ExampleCommand_outputTap`:** compiles; a capture file as the output tap, with no `// Output:`.
+* **(Added 2026-10-21, during step 5) `TestDescendantInJobDespiteSlowAttach`** (Windows, not parallel): `attachDelay` at 200 ms, the
+  `parent-exit` agent, whose beat grandchild starts at once; once the agent has exited and `Wait` returned, the beat has stopped.
+* **`TestStartRefusesSuspended`** (Windows): a `Cmd` with `CREATE_SUSPENDED` is refused, and nothing started.
+* **`TestCallersCreationFlagsKept`** (Windows): a caller's `CREATE_NEW_PROCESS_GROUP` is kept beside `CREATE_SUSPENDED`, and the agent runs.
 
 ## Implementation Steps
 
@@ -206,18 +221,22 @@ it is relied on.
 4. **(Added 2026-10-21) The reader's buffer:** `readBufferSize`; `TestReceiveReadBufferSize`.
 5. **(Added 2026-10-21) The taps:** `Command.OutputTap`, `Command.InputTap`, `tap.go`, `Process.DroppedTapBytes`; the child modes
    `frames` and `bulk`; the eight tap tests; `ExampleCommand_outputTap`; `make api`, which reports the two fields and the method.
-6. **(Added 2026-10-21) Kill:** `Process.Kill` and `hurry`; `TestKill`, `TestKillCutsCloseShort`, `TestKillAfterExit`; `make api`, which
-   reports the method.
-7. **(Added 2026-10-21) Breakaway:** `attach`'s limit; the child mode `parent-breakaway`; `TestBreakawayLeavesJob`, on the Windows host
-   and in CI's Windows jobs.
-8. **Docs:** the README and `docs/architecture.md`; each claim mapped to a test. (Was step 4; amended 2026-10-21: the paragraphs the
-   scope adds.)
-9. **Release notes:** `docs/reports/0030-REPORT-release-notes-v1-20-0.md` and its row, for 0029 and 0030, with `make api`'s report. (Was
-   step 5; amended 2026-10-21: naming issue #10, `Command.OutputTap`, `Command.InputTap`, `Process.Kill`, `Process.DroppedTapBytes`, the
-   breakaway and the buffer.)
-10. **Verification and close:** the gates; the Linux and Windows hosts and `make push-guard` before the push; after CI's six jobs pass,
+6. **(Added 2026-10-21, during step 5) The suspended start on Windows:** `prepare`'s flag and refusal, `attach`'s resume, `attachDelay`;
+   `TestDescendantInJobDespiteSlowAttach`, `TestStartRefusesSuspended`, `TestCallersCreationFlagsKept`; on the Windows host, and the whole
+   package there 30 times. Its docs are step 9's.
+7. **(Added 2026-10-21) Kill:** `Process.Kill` and `hurry`; `TestKill`, `TestKillCutsCloseShort`, `TestKillAfterExit`; `make api`, which
+   reports the method. (Was step 6; renumbered 2026-10-21, during step 5.)
+8. **(Added 2026-10-21) Breakaway:** `attach`'s limit; the child mode `parent-breakaway`; `TestBreakawayLeavesJob`, on the Windows host
+   and in CI's Windows jobs. (Was step 7; renumbered 2026-10-21, during step 5.)
+9. **Docs:** the README and `docs/architecture.md`; each claim mapped to a test. (Was step 4; amended 2026-10-21: the paragraphs the
+   scope adds; renumbered from 8, during step 5, and the suspended start added.)
+10. **Release notes:** `docs/reports/0030-REPORT-release-notes-v1-20-0.md` and its row, for 0029 and 0030, with `make api`'s report. (Was
+    step 5; amended 2026-10-21: naming issue #10, `Command.OutputTap`, `Command.InputTap`, `Process.Kill`, `Process.DroppedTapBytes`, the
+    breakaway and the buffer; renumbered from 9, during step 5, and the suspended start added.)
+11. **Verification and close:** the gates; the Linux and Windows hosts and `make push-guard` before the push; after CI's six jobs pass,
     this PLAN and its row `complete`, and 0029's if it waits on the release; the owner tags `v1.20.0` and publishes its release; the
-    publication checks and a consumer on the floor. (Was step 6; amended 2026-10-21: the owner closes issue #10 with the release.)
+    publication checks and a consumer on the floor. (Was step 6; amended 2026-10-21: the owner closes issue #10 with the release;
+    renumbered from 10, during step 5.)
 
 ## Verification
 
@@ -255,6 +274,10 @@ Planted breaks, each in a scratch copy:
 | Kill | `exitedWithin` not watching `hurry` | `TestKillCutsCloseShort`, by its bound |
 | Kill | `ErrKilled` recorded though nothing was sent | `TestKillAfterExit` |
 | breakaway (added 2026-10-21) | `BREAKAWAY_OK` left out | `TestBreakawayLeavesJob` (Windows host) |
+| the suspended start (added 2026-10-21, during step 5) | `CREATE_SUSPENDED` not added, the resume kept | `TestDescendantInJobDespiteSlowAttach` |
+| the suspended start | the resume before the assignment | `TestDescendantInJobDespiteSlowAttach` |
+| the suspended start | a caller's `CREATE_SUSPENDED` accepted | `TestStartRefusesSuspended` |
+| the suspended start | the caller's flags replaced by `CREATE_SUSPENDED` | `TestCallersCreationFlagsKept` |
 
 Acceptance:
 
@@ -532,3 +555,92 @@ The owner committed step 3 and approved this step. What changed:
 * `go test -race -count=3 -shuffle=on .`;
 * the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
 * the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
+
+### Step 5, the taps, 2026-10-21
+
+The owner committed step 4 and approved this step. What changed:
+
+* **`agentproc/tap.go`, new:** `tapQueueBytes` (32 MiB); `tap`, its queue, its goroutine `run`, and `offer`, `end`, `abandon` and
+  `droppedBytes`; `tapReader` and `tapWriter`, whose `Close` ends the tap and closes the pipe or the shared input; `streams`, which builds
+  what the connection reads and writes, and the taps, only when set.
+* **`agentproc/agentproc.go`:** `Command.OutputTap` and `Command.InputTap`, documented as the MADR specifies; `Process` holds the two taps
+  and `drainOnce`; `Start` builds the connection on `streams`; `Wait` drains the taps once, through `drainTaps`, which ends each tap's
+  stream and waits for it up to the grace, from one timer, then abandons it; `DroppedTapBytes`. As built, a tap's stream ends when the
+  connection closes the tap's reader or writer, which `watch` and `stop` always do, and in `drainTaps`, rather than by calls in `watch` and
+  `stop` as the design above says; the result is the same, every tap's stream ended before `Wait` drains it.
+* **Tests:** `tap_test.go`, new, with the child modes `frames` and `bulk` (in `child_test.go`) and the eight tap tests;
+  `TestTapKeepsCloseEnding` in `agentproc_unix_test.go`; `ExampleCommand_outputTap` in `example_test.go`.
+
+**As built, the tests differ from the list above in three places:** `TestBlockedTapDetached` takes the tap's drop before `Close`, requiring
+about the last 16 MiB of the 48 dropped, between 16 MiB less 256 KiB and 16 MiB more, which shows the tap was detached at the 32 MiB bound
+and not only abandoned by `Wait`; the `bulk` agent says it is ready once it has written its first part, and writes its second after a
+line of input, so that `TestDetachedTapIsPrefix` releases the tap before the agent's last 8 MiB; and `TestTapDrainBoundedByGrace`'s tap
+takes 30 ms a write, through 24 MiB, so that its drain outlasts the grace and the slack.
+
+**Found while building the tests:** two of the first ten planted breaks were not caught as required. The queue without a bound passed
+`TestBlockedTapDetached`, which then checked only that something was dropped, as `Wait`'s abandon drops the queue anyway; the test now
+checks the drop before `Close`, as above. The synchronous tap failed it only by `go test`'s timeout, since the test's cleanup closed the
+agent before it released the tap that held the connection; the blocked tests now release first (`launchTapped`, `blockedTap`). The first
+version of the `bulk` agent's stream took 21 to 27 s a test under `-race`; built byte by byte, and once for the comparison, 7 to 8 s.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| the output tap receives every byte, the line too long and the line not JSON included, by `Close`'s return (T1) | `TestOutputTapVerbatim` |
+| the input tap receives what the connection writes, a line each | `TestInputTapSeesWrites` |
+| a tap set leaves `Close` ending a read a descendant holds (T2, T3) | `TestTapKeepsCloseEnding` |
+| a tap's error does not reach the connection (X7) | `TestTapErrorIgnored` |
+| unset, nothing is wrapped and no goroutine started | `TestTapsUnset` |
+| a blocked tap holds neither the connection nor `Close`, and is detached at 32 MiB (A1f) | `TestBlockedTapDetached` |
+| a detached tap's copy is the stream's beginning, nothing after a gap | `TestDetachedTapIsPrefix` |
+| `Wait` waits for a slow tap no longer than the grace (A1e) | `TestTapDrainBoundedByGrace` |
+| the additions, and nothing else | `make api`: "compatible: agentproc: (*Process).DroppedTapBytes: added", "Command.InputTap: added", "Command.OutputTap: added"; "0 incompatible, 3 compatible" |
+
+**Planted breaks,** each in its own scratch copy; 11 of 11 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the output tap given `p[:n-1]` | `TestOutputTapVerbatim`: "received 2097175 bytes, want the agent's 2097208" |
+| the input tap never offered | `TestInputTapSeesWrites`: "the input tap holds \"\", not the connection's two answers, after 30s" |
+| `tapReader` without `Close` | `TestTapKeepsCloseEnding`: "Wait took longer than 3.3s" |
+| the tap's error returned as the read's | `TestTapErrorIgnored`: `SendNotification`, "peer disconnected: the tap fails" |
+| a reader wrapped with no tap set | `TestTapsUnset`: "want the input and the output themselves, and no tap" |
+| the copy written on the reader's goroutine | `TestBlockedTapDetached`: "the bulk agent did not say it was ready within 30s" |
+| no bound on the queue | `TestBlockedTapDetached`: "dropped 0 bytes in 30s, want about the last 16 MiB" |
+| a bound of 24 MiB | `TestBlockedTapDetached`: "dropped 25165824 bytes, want about the last 16 MiB: detached before 32 MiB" |
+| a full queue's copy dropped and later ones queued | `TestDetachedTapIsPrefix`: "received 41943040 bytes that are not the stream's beginning" |
+| `Wait` not draining | `TestOutputTapVerbatim`: "received 655360 bytes, want the agent's 2097208" |
+| the drain without a bound | `TestTapDrainBoundedByGrace`: "Close took longer than 3.3s" |
+
+**Gates,** run one at a time. The first run of `make lint` found gosec's G115 on a conversion of the queue's count and a field gofmt
+had not aligned; the counts are `uint64` now, and the second and third runs report "0 issues." four times. Then, each exit 0:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "171 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and
+  the new files', "2 file(s) clean"; `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules;
+  `make check-records`, `make markdownlint` and the identifier scan; `make lint`; `go fix -diff ./...` and `go mod tidy -diff` print
+  nothing, in both modules;
+* `make api` against `v1.19.0`: "0 incompatible, 3 compatible", the three additions;
+* `go test -race -count=3 -shuffle=on .`; the tap tests, `-race -count=3`;
+* the Linux host: `go test -count=1 -shuffle=on ./...` in both modules, from a copy of the tree;
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules: the first run failed, below; run again, both modules passed.
+
+**Found, outside this step:** the first Windows run failed in 0027's `TestDescendantsEnded`, the agent exiting of itself: "the agent's
+grandchild still runs after the agent exited". Its tap tests passed. The deviation during step 5, below, holds the investigation and the
+owner's decision.
+
+### Deviation, 2026-10-21, during step 5: a process the agent starts before its job assignment
+
+**Found.** Step 5's first Windows gate failed in `TestDescendantsEnded` (0027), which this PLAN does not change. The same test failed at
+`HEAD` (`b5177dd`, before step 5) in 1 of 15 runs of the whole package on the Windows host, its other two cases, "the agent's grandchild
+still runs after Close"; from step 5's tree, 0 of 15; run alone, 0 of 20 from either. The MADR's amendment of 2026-10-21 for this
+deviation holds the measurements: the two ways the test could see a dead grandchild as running were not seen in 1,200 trials; under load
+the grandchild was created 6.6 to 26.1 ms after the agent's assignment; and with the assignment 100 ms late, a plain start left the
+grandchild outside the job in 20 of 20 trials, and a suspended start, resumed after the assignment, in 0 of 20.
+
+**Decision (owner, 2026-10-21).** Fix it inside this PLAN, now: the alternatives were to record it and fix it in a later pair, or to stop
+and investigate first. Then, as recommended: a caller's own `CREATE_SUSPENDED` is refused (the MADR's question 12); and the test makes the
+assignment late through an unexported delay, zero in production (question 13). Added: step 6, its design ("The suspended start on
+Windows"), its tests and its planted breaks above; files `agentproc/tree_windows.go`, a Windows test file, and the docs in step 9. Steps
+6 to 10 are renumbered 7 to 11, each annotated.
