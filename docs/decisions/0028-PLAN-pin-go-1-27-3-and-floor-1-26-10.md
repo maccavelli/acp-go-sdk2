@@ -113,3 +113,47 @@ missing, "8 of 12 facts hold", exit 1; G1 named the extra `AGENTS.md:9` and the 
   passed when it should have failed. G1 now compares the set of file and line pairs, and failed as above.
 
 **Gates:** `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing in the changed records.
+
+### Step 2, the pins, 2026-10-21
+
+The owner committed step 1 as `ed150be` and approved this step. What changed, by one asserted script:
+
+* `go.mod` and `cmd/generate/go.mod`: `go 1.26.10`, `toolchain go1.27.3`;
+* `.github/workflows/ci.yml`: the matrix `['1.26.10', '1.27.3']`, the floor's `include` entry `'1.26.10'`, and the step "the newest is the
+  toolchain line" after "the floor is the go line", on the newest Linux job: `go version` must print `go` plus the matrix version, and
+  each module's `toolchain` line, read with `sed`, must equal it;
+* `README.md:20`–`:21`: "It requires Go 1.26.10 or newer, the `go` line of `go.mod`; CI tests Go 1.26.10 and 1.27.3.";
+* `cmd/generate/internal/mutate/mutate_test.go:92`, `:287`: the two fixtures write `go 1.26.10`.
+
+`git diff --stat`: 5 files, 20 lines added, 10 removed. `go.sum` is unchanged: `go mod tidy -diff` prints nothing in either module.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| nothing outside the records names 1.27.2 or 1.26.9 | `git grep` for both, the records and the index left out: no line |
+| the `toolchain` lines select go1.27.3 | `GOTOOLCHAIN=go1.27.2+auto go version`, in each module: "go version go1.27.3 darwin/arm64" |
+| CI's two version steps pass | their commands, read from `ci.yml` and run here with the matrix value: "the floor is the go line" at 1.26.10 and "the newest is the toolchain line" at 1.27.3, exit 0 each |
+| `ci.yml` is a valid workflow | `actionlint`, exit 0 |
+| the tree builds and its tests pass on the new floor | the floor gate at go1.26.10, below |
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree, `.git` included. 5 of 5 checks failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `cmd/generate`'s `toolchain` line left at go1.27.2 | `git grep`: "cmd/generate/go.mod:5:toolchain go1.27.2"; "the newest is the toolchain line, at 1.27.3: exit 1" |
+| the root's `toolchain` line removed | `GOTOOLCHAIN=go1.27.2+auto go version` in the root: "go version go1.27.2" |
+| `cmd/generate`'s `go` line left at 1.26.9 | `git grep`: "cmd/generate/go.mod:3:go 1.26.9"; "the floor is the go line, at 1.26.10: exit 1" |
+
+**Gates,** each exit 0, run alone:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "166 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+  `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules; `make check-records`, `make markdownlint` and the
+  identifier scan; `make lint`, "0 issues." four times; `go fix -diff ./...` prints nothing;
+* `make api` against `v1.18.0`: "0 incompatible, 4 compatible", unchanged;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules;
+* the Linux host: the `agentproc` test binary, built with go1.27.3, 2 runs, "PASS".
+
+**The floor gate, now at go1.26.10** (`GOTOOLCHAIN=go1.26.10`, which downloaded it into the gate's scratch module cache): `go version`
+prints "go version go1.26.10 darwin/arm64"; `go vet ./...` and `go test -race -count=1 ./...` pass in both modules, the root's tests and
+`agentproc`'s with `GOEXPERIMENT=goroutineleakprofile`, the leak guards on.

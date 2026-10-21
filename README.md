@@ -17,8 +17,8 @@ Learn more about the protocol itself at <https://agentclientprotocol.com>.
 go get github.com/maccavelli/acp-go-sdk2
 ```
 
-It requires Go 1.26.9 or newer, the `go` line of `go.mod`; CI tests Go 1.26.9
-and 1.27.2.
+It requires Go 1.26.10 or newer, the `go` line of `go.mod`; CI tests Go 1.26.10
+and 1.27.3.
 
 ## Get Started
 

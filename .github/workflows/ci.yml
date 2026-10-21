@@ -26,9 +26,9 @@ jobs:
       # Go 1.27 rejects.
       matrix:
         os: [ubuntu-24.04, macos-15, windows-2025]
-        go: ['1.26.9', '1.27.2']
+        go: ['1.26.10', '1.27.3']
         include:
-          - go: '1.26.9'
+          - go: '1.26.10'
             floor: true
             experiment: goroutineleakprofile
     runs-on: ${{ matrix.os }}
@@ -55,6 +55,16 @@ jobs:
           test "$(go version | cut -d' ' -f3)" = "go${{ matrix.go }}"
           test "$(go list -m -f '{{.GoVersion}}')" = "${{ matrix.go }}"
           ( cd cmd/generate && test "$(go list -m -f '{{.GoVersion}}')" = "${{ matrix.go }}" )
+      # The newest job runs the version both toolchain lines name, so the
+      # matrix and the lines cannot drift apart
+      # (0028-PLAN-pin-go-1-27-3-and-floor-1-26-10.md).
+      - name: the newest is the toolchain line
+        if: "!matrix.floor && runner.os == 'Linux'"
+        run: |
+          set -euo pipefail
+          test "$(go version | cut -d' ' -f3)" = "go${{ matrix.go }}"
+          test "$(sed -n 's/^toolchain //p' go.mod)" = "go${{ matrix.go }}"
+          test "$(sed -n 's/^toolchain //p' cmd/generate/go.mod)" = "go${{ matrix.go }}"
       - run: go mod download
       # The root package's exported API against the newest v1 tag, by apidiff:
       # an incompatible change fails the job. apidiff exits 0 either way, so

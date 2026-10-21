@@ -89,7 +89,7 @@ func TestSites(t *testing.T) {
 // equality of the untested IsZero (survived), a break outside a loop made a
 // continue (invalid), and Sum's step made - 1, which never ends (timeout).
 var moduleFiles = map[string]string{
-	"go.mod": "module example.com/m\n\ngo 1.26.9\n",
+	"go.mod": "module example.com/m\n\ngo 1.26.10\n",
 	"m.go": `package m
 
 // Sum returns 0+1+...+(n-1).
@@ -284,7 +284,7 @@ func TestRunAllEndedContext(t *testing.T) {
 // blockFiles is a module with one mutant, Ready's > made >=. Its test then
 // writes the file started and waits until that file is removed.
 var blockFiles = map[string]string{
-	"go.mod": "module example.com/b\n\ngo 1.26.9\n",
+	"go.mod": "module example.com/b\n\ngo 1.26.10\n",
 	"b.go": `package b
 
 // Ready reports whether n is positive.
