@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-21
 associated-madr: "0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md"
 ---
@@ -157,3 +157,34 @@ The owner committed step 1 as `ed150be` and approved this step. What changed, by
 **The floor gate, now at go1.26.10** (`GOTOOLCHAIN=go1.26.10`, which downloaded it into the gate's scratch module cache): `go version`
 prints "go version go1.26.10 darwin/arm64"; `go vet ./...` and `go test -race -count=1 ./...` pass in both modules, the root's tests and
 `agentproc`'s with `GOEXPERIMENT=goroutineleakprofile`, the leak guards on.
+
+### Step 3, verification and close, 2026-10-21
+
+The owner committed step 2 as `0665658` and pushed `main`, which carried ten commits, `d034801..0665658`: the 0027 PLAN's steps 1 to 5
+and this PLAN's records and steps.
+
+**The push guard ran after the push, not before** as Verification asks. The global pre-push guard ran on the owner's push. The same
+guard, run here afterwards over the pushed range, with `refs/heads/main 0665658 refs/heads/main d034801` as its pre-push input, the line
+`scripts/push_guard.py` gives it: "guard over 10 commit(s), d034801..0665658", "the guard passed (exit 0)". Step 2's gates had already run
+on both hosts reached over SSH.
+
+**CI,** run `39622421451` on `0665658`: `success` on its first attempt, in all six jobs, `ubuntu-24.04`, `macos-15` and `windows-2025` at
+`1.26.10` and at `1.27.3`. On the Linux jobs:
+
+* at 1.26.10, `setup-go` printed "go version go1.26.10 linux/amd64"; "the floor is the go line" `success`; "the newest is the toolchain
+  line" `skipped`;
+* at 1.27.3, `setup-go` printed "go version go1.27.3 linux/amd64"; "the newest is the toolchain line" `success`; "the floor is the go
+  line" `skipped`.
+
+**Acceptance,** each met:
+
+* no file outside `docs/decisions/` and `docs/reports/`, and the index's titles of earlier records, names `1.27.2` or `1.26.9` (step 2);
+* `GOTOOLCHAIN=go1.27.2+auto go version` selects go1.27.3 in both modules (step 2);
+* the floor gate passes on go1.26.10 (step 2), and CI's floor jobs installed and passed on it;
+* CI's six jobs pass on the pushed commit, the newest at go1.27.3;
+* `make api` is unchanged: "0 incompatible, 4 compatible" against `v1.18.0`.
+
+**No release follows from this alone.** The floor reaches consumers, so the next release's notes name it: the 0027 PLAN's release
+notes, `v1.19.0`.
+
+This PLAN and its `docs/README.md` row are `complete`.
