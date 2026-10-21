@@ -87,7 +87,7 @@ optional before a release. They report; neither gates.
    ```
 
    `make api` runs `apidiff`, through `scripts/check_api.py`, on the root
-   package against the newest `v1` tag. It fails on an incompatible change,
+   package and `agentproc` against the newest `v1` tag. It fails on an incompatible change,
    and lists the compatible ones: when there are any, the release is a minor
    (`vX.Y+1.0`), otherwise a patch. It needs the tags.
 

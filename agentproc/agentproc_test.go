@@ -44,7 +44,7 @@ func (c *testClient) SessionUpdate(context.Context, acp.SessionNotification) err
 // 1000 ms by default, before it exits, longer than testGrace; os/exec keeps
 // the last value of a repeated variable.
 func agentCmd(mode string) *exec.Cmd {
-	cmd := exec.Command(os.Args[0], "-test.run=^$")
+	cmd := exec.Command(testBinary(), "-test.run=^$")
 	cmd.Env = append(os.Environ(), childEnv+"="+mode, "GORACE=atexit_sleep_ms=0")
 	return cmd
 }
@@ -232,6 +232,38 @@ func TestStderrHeldByDescendant(t *testing.T) {
 	_, err := within(t, testGrace*3+slack, "Close", p.Close)
 	if !errors.Is(err, exec.ErrWaitDelay) || errors.Is(err, ErrTerminated) || errors.Is(err, ErrKilled) {
 		t.Errorf("Close = %v, want exec.ErrWaitDelay, and no signal", err)
+	}
+}
+
+// TestDefaultGrace requires the grace the docs name: 5 seconds when
+// Command.Grace is zero or less, and a zero WaitDelay set to half of it,
+// a WaitDelay the caller set kept (0027-MADR-agent-process-helper.md).
+func TestDefaultGrace(t *testing.T) {
+	t.Parallel()
+	for _, grace := range []time.Duration{0, -time.Second} {
+		cmd := agentCmd("eof")
+		p, err := (&Command{Cmd: cmd, Grace: grace}).Start(&testClient{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.grace != 5*time.Second || cmd.WaitDelay != 2500*time.Millisecond {
+			t.Errorf("Grace %v: the grace is %v and WaitDelay %v, want 5s and 2.5s", grace, p.grace, cmd.WaitDelay)
+		}
+		if err := p.Close(); err != nil {
+			t.Errorf("Close = %v", err)
+		}
+	}
+	cmd := agentCmd("eof")
+	cmd.WaitDelay = time.Second
+	p, err := (&Command{Cmd: cmd}).Start(&testClient{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd.WaitDelay != time.Second {
+		t.Errorf("a WaitDelay the caller set became %v, want 1s kept", cmd.WaitDelay)
+	}
+	if err := p.Close(); err != nil {
+		t.Errorf("Close = %v", err)
 	}
 }
 

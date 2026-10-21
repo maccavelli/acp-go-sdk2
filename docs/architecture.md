@@ -8,7 +8,8 @@ and [README.md](README.md) points at the ones people ask for most.
 ## What it is
 
 This repository is the Go module `github.com/maccavelli/acp-go-sdk2`, package
-`acp`, at the repository root.
+`acp`, at the repository root, and package `agentproc` in `agentproc/`, which
+starts an agent as a child process and stops it (below).
 
 - Hand-written: `connection.go` (JSON-RPC over a reader and a writer),
   `errors.go`, `extensions.go` (`_`-prefixed methods), `helpers.go` (the
@@ -418,8 +419,9 @@ Checks that guard this:
   check the docs. GitHub Actions runs `.github/workflows/ci.yml`, which also runs
   the root tests with `GOEXPERIMENT=nojsonv2` on Linux.
 - `make api` and CI's "API compatibility" step run `scripts/check_api.py`:
-  `apidiff`, pinned there, compares the working tree's root package with the
-  newest `v1` tag's, taken with `git archive`, or with `BASE`. An incompatible
+  `apidiff`, pinned there, compares the working tree's root package and
+  `agentproc` with the newest `v1` tag's, a package missing from the tag
+  against an empty one, taken with `git archive`, or with `BASE`. An incompatible
   change, such as a removed declaration or a method added to an interface,
   fails; the compatible ones are listed. `apidiff` exits 0 either way, so the
   script reads its report. It needs the tags, so CI's Linux job at the newest
@@ -427,6 +429,51 @@ Checks that guard this:
 
 The schema stamp lives in `schema/version`. The `go` line lives in `go.mod` and
 `cmd/generate/go.mod`.
+
+## The agent process helper
+
+`agentproc` (0027-MADR-agent-process-helper.md) wraps an `*exec.Cmd` the
+caller configures. `Command.Start` refuses a `Cmd` already started or whose
+`Stdin` or `Stdout` is set, then gives the agent two `os.Pipe`s it owns: with
+`StdoutPipe`, `Cmd.Wait` would close the connection's reader once the agent
+exits, before its last output is read. A zero `WaitDelay` becomes half the
+grace, so a `Stderr` writer that a process the agent started still holds
+neither keeps `Wait` waiting nor makes `Close` escalate before the agent's exit
+is seen.
+
+The agent's tree is per platform, in `tree_unix.go`, `tree_windows.go` and
+`tree_other.go`. On Unix `prepare` sets `Setpgid`, unless `Setsid` is set, and
+refuses a non-zero `Pgid`; `terminate` and `kill` signal the group, and `kill`
+the agent itself too. On Windows `attach` puts the agent, once started, in a job
+object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, through
+`os.Process.WithHandle`; there is no terminating signal, and `kill` ends the
+job. Elsewhere, `js`, `wasip1` and `plan9`, only the agent is killed.
+`golang.org/x/sys` is built for Windows alone.
+
+Two goroutines tie the process to the connection. The watcher alone calls
+`Cmd.Wait`, as os/exec requires; when it returns, it ends what is left of the
+tree under the lock that marks the agent exited, after which nothing is
+signalled, closes `Done`, gives the connection up to the grace to read to the
+end of the agent's output, and closes it. The monitor stops the agent when the
+connection ends first. `Close` runs, once, its steps: close the agent's input,
+which the connection shares through `sharedClose`, so the two closes never
+collide; wait up to the grace; on Unix SIGTERM and the grace again; kill; close
+the connection. `Wait` waits for both goroutines and the connection, and joins
+`ErrTerminated` or `ErrKilled` to `Cmd.Wait`'s error by the step that ended the
+agent.
+
+Checks that guard it:
+
+- `agentproc`'s tests run the test binary itself as the agent, in a mode an
+  environment variable names (`child_test.go`): `TestStartRefuses`,
+  `TestNoLostOutput`, `TestCloseLadder`, `TestStderrHeldByDescendant`,
+  `TestCloseIdempotent`, `TestDefaultGrace`, `TestCallersCommandKept`,
+  `TestDescendantsEnded`, `TestConnectionEndStopsAgent`; on Unix `TestStartRefusesSharedGroup` and
+  `TestEscapedDescendantDoesNotHoldWait`; on Windows `TestClientDeathEndsTree`.
+- Its `TestMain` runs the goroutine-leak guard after the tests, as the root's
+  does.
+- `TestReadmeAgentprocIsTheExample` at the root requires the README's example
+  to be `ExampleCommand`'s body.
 
 ## Tree
 
@@ -437,6 +484,7 @@ AGENTS.md                 agent instructions
 Makefile                  version, test, lint, pre-add-check, fuzz, mutation, docs gates
 go.mod                    the SDK module
 *.go                      package acp: hand-written and *_gen.go files
+agentproc/                package agentproc: an agent as a child process, started and stopped
 schema_gen_test.go        generated list of types, unions, and methods for tests
 cmd/generate/             the generator, its own module
   internal/load/          schema loading

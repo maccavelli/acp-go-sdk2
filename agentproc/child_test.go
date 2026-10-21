@@ -45,7 +45,7 @@ func child(mode string) int {
 	case "burst": // answers initialize, writes burstCount session updates, and exits at once
 		return burst()
 	case "parent-stderr": // starts a heartbeat on its stderr, then exits at its input's end
-		g := exec.Command(os.Args[0], "-test.run=^$")
+		g := exec.Command(testBinary(), "-test.run=^$")
 		g.Env = append(os.Environ(), childEnv+"=heartbeat-stderr")
 		g.Stderr = os.Stderr
 		if err := g.Start(); err != nil {
@@ -81,7 +81,7 @@ const beatEnv = "AGENTPROC_TEST_BEAT"
 // which it holds open as a launcher's agent does, and returns it once its
 // file has grown. setup, when not nil, adjusts its command first.
 func startBeat(setup func(*exec.Cmd)) (*exec.Cmd, error) {
-	g := exec.Command(os.Args[0], "-test.run=^$")
+	g := exec.Command(testBinary(), "-test.run=^$")
 	g.Env = append(os.Environ(), childEnv+"=beat")
 	g.Stdout = os.Stdout
 	if setup != nil {
@@ -136,6 +136,17 @@ func tieChild(mode string) (int, bool) {
 			return 1, true
 		}
 		ready()
+		return 0, true
+	case "where": // writes its working directory and AGENTPROC_TEST_VALUE to the file beatEnv names, then exits at its input's end
+		wd, err := os.Getwd()
+		if err != nil {
+			return 1, true
+		}
+		if err := os.WriteFile(os.Getenv(beatEnv), []byte(wd+"\n"+os.Getenv("AGENTPROC_TEST_VALUE")), 0o600); err != nil {
+			return 1, true
+		}
+		ready()
+		_, _ = io.Copy(io.Discard, os.Stdin)
 		return 0, true
 	case "flood": // answers initialize; after the client's next message, writes 10 updates; exits at its input's end
 		in := bufio.NewReader(os.Stdin)

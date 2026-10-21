@@ -181,6 +181,32 @@ func TestReadmeQuickstartIsTheExample(t *testing.T) {
 	}
 }
 
+// TestReadmeAgentprocIsTheExample requires the README's agentproc example,
+// in "Closing and limits", to be ExampleCommand's body, so the README shows
+// code that compiles (0027-PLAN-agent-process-helper.md, step 6).
+func TestReadmeAgentprocIsTheExample(t *testing.T) {
+	t.Parallel()
+	want := exampleBody(t, "agentproc/example_test.go", "ExampleCommand")
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const open, end = "<!-- example: agentproc ExampleCommand -->\n", "<!-- /example -->"
+	_, rest, ok := strings.Cut(string(readme), open)
+	block, _, closed := strings.Cut(rest, end)
+	if !ok || !closed {
+		t.Fatalf("README.md has no block between %q and %q", open, end)
+	}
+	got, fenced := strings.CutPrefix(strings.TrimSpace(block)+"\n", "```go\n")
+	got, ended := strings.CutSuffix(got, "```\n")
+	if !fenced || !ended {
+		t.Fatalf("the agentproc example is not one Go block:\n%s", block)
+	}
+	if got != want {
+		t.Errorf("README.md's agentproc example is not ExampleCommand's body.\nREADME:\n%s\nexample:\n%s", got, want)
+	}
+}
+
 // exampleBody prints the body of the function name of file, without its
 // braces, one indent removed and each remaining tab as four spaces.
 func exampleBody(t *testing.T, file, name string) string {

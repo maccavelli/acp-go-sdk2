@@ -20,8 +20,9 @@ func (client) SessionUpdate(context.Context, acp.SessionNotification) error { re
 // bounded by the grace.
 func ExampleCommand() {
 	ctx := context.Background()
-	cmd := exec.CommandContext(ctx, "my-agent", "--acp")
-	cmd.Stderr = os.Stderr // the agent's log
+	cmd := exec.Command("my-agent", "--acp")
+	// The agent's log.
+	cmd.Stderr = os.Stderr
 	p, err := (&agentproc.Command{Cmd: cmd}).Start(client{})
 	if err != nil {
 		log.Fatal(err)

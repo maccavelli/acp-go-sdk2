@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -91,6 +92,33 @@ func TestDescendantsEnded(t *testing.T) {
 			t.Error("the agent's grandchild still runs after the agent exited")
 		}
 	})
+}
+
+// TestCallersCommandKept requires the agent to run with the Env and Dir the
+// caller set on its Cmd (0027-MADR-agent-process-helper.md, question 8, and
+// the README's "Closing and limits").
+func TestCallersCommandKept(t *testing.T) {
+	t.Parallel()
+	dir, out := t.TempDir(), filepath.Join(t.TempDir(), "where")
+	cmd := agentCmd("where")
+	cmd.Env = append(cmd.Env, beatEnv+"="+out, "AGENTPROC_TEST_VALUE=the caller's")
+	cmd.Dir = dir
+	p := startCmd(t, cmd, "where", &testClient{})
+	if err := p.Close(); err != nil {
+		t.Fatalf("Close = %v", err)
+	}
+	b, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wd, value, _ := strings.Cut(string(b), "\n")
+	want, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := filepath.EvalSymlinks(wd); got != want || value != "the caller's" {
+		t.Errorf("the agent ran in %q with AGENTPROC_TEST_VALUE %q, want %q and %q", wd, value, want, "the caller's")
+	}
 }
 
 // blockingClient blocks every session update until release closes.

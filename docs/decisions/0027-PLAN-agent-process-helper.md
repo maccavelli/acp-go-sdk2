@@ -527,3 +527,78 @@ which a `GOTOOLCHAIN` set to one version overrides.
 Nothing else in those records changes: their gates and their results stand, on go1.27.3. Step 4's Windows run built with go1.26.9 and
 `GOEXPERIMENT=goroutineleakprofile`, and the go1.26.9 gates, are as recorded. The steps' lines are annotated, not rewritten.
 [0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md](0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md) pins the repository to go1.27.3.
+
+### Step 6, docs, 2026-10-21
+
+The owner committed step 5 as `432426d`, and
+[0028-PLAN-pin-go-1-27-3-and-floor-1-26-10.md](0028-PLAN-pin-go-1-27-3-and-floor-1-26-10.md) landed and closed in between
+(`2bd014f`); this step ran on go1.27.3, with the floor at 1.26.10. What changed:
+
+* **`README.md`, "Closing and limits":** the sentence that sent a client to the example client's `stopAgent` names `agentproc`; a new
+  paragraph describes the package, and an example follows, between `<!-- example: agentproc ExampleCommand -->` and
+  `<!-- /example -->`.
+* **`docs/architecture.md`:** "What it is" names `agentproc`; a section, "The agent process helper", describes `Start`, the trees per
+  platform, the watcher and the monitor, `Close` and `Wait`, and the checks that guard it; the API gate's bullet covers `agentproc` and a
+  package missing from the tag; the tree lists `agentproc/`.
+* **`RELEASING.md`:** `make api` runs on the root package and `agentproc`.
+* **`agentproc/example_test.go`:** `ExampleCommand` uses `exec.Command`, as the examples do since step 5, with its comment on a line of
+  its own.
+* **Tests, new:** at the root, `TestReadmeAgentprocIsTheExample` (`docs_test.go`): the README's block is `ExampleCommand`'s body, as
+  `TestReadmeQuickstartIsTheExample` holds the quickstart; in `agentproc`, `TestDefaultGrace` (the 5-second default, a zero or negative
+  `Grace` meaning it, a zero `WaitDelay` set to 2.5 s, a set one kept) and `TestCallersCommandKept` (the agent runs in the caller's `Dir`
+  with the caller's `Env`), with the child mode `where`.
+* **`agentproc`'s tests start the test binary by `os.Executable()`** (`testBinary`), not `os.Args[0]`.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| nothing the agent writes before it exits is lost | `TestNoLostOutput` |
+| `Stderr`, `Env` and `Dir` stay the caller's | every test reads the child's "ready" through the caller's `Stderr`; `TestCallersCommandKept` |
+| on Unix a process group, on Windows a job object | `TestDescendantsEnded`, on each |
+| the job ends the agent's processes should the client die | `TestClientDeathEndsTree`, Windows |
+| the grace is 5 seconds unless `Command.Grace` says otherwise | `TestDefaultGrace` |
+| `Close`'s steps: input, wait, SIGTERM on Unix, wait, kill, the connection closed | `TestCloseLadder`; `TestConnectionEndStopsAgent` |
+| `Close` and `Wait` join `ErrTerminated` or `ErrKilled` when `Close` escalated | `TestCloseLadder` |
+| the agent's exit ends what is left of its tree; the connection's end stops the agent | `TestDescendantsEnded`; `TestConnectionEndStopsAgent` |
+| the package needs `golang.org/x/sys` on Windows only | not a test: `go list -deps`, step 4 |
+| the README's example compiles | `TestReadmeAgentprocIsTheExample`, with `ExampleCommand` compiled in `agentproc` |
+| `make api` covers `agentproc`, and a package missing from the tag | step 2's plant of the gate; `make api` below |
+
+**Found while writing, and fixed:**
+
+* **The README test failed on its first run, on a difference the eye misses.** The example printer renders a trailing comment's
+  alignment as a tab, so `cmd.Stderr = os.Stderr // the agent's log` printed with four spaces before the comment. The comment moved to a
+  line of its own in both.
+* **`TestCallersCommandKept` failed on the Linux host:** "fork/exec ./pkg.test: no such file or directory". Run by hand there, the test
+  binary is `./pkg.test`; `os/exec` resolves a relative `Path` against `Cmd.Dir`, which the test sets. `testBinary` gives the absolute
+  path. The helper itself is unaffected: a relative `Path` is the caller's.
+
+**Not explained:** one local run, `go test -count=3 -race ./agentproc`, right after that change, ended "FAIL"; it was piped to
+`tail -1`, so its output was not kept. The runs after it, each with its output kept, all passed: `-count=1`, then `-count=5` four times,
+then `-count=20` with `-race` and `-count=20` without, 41 runs. What failed that once is not known.
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree. 7 of 7 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the README's example changed | `TestReadmeAgentprocIsTheExample`: "is not ExampleCommand's body" |
+| the README's marker removed | `TestReadmeAgentprocIsTheExample`: "README.md has no block between" |
+| the default grace 4 s | `TestDefaultGrace`: "want 5s and 2.5s" |
+| a zero `WaitDelay` set to the whole grace | `TestDefaultGrace`: "want 5s and 2.5s" |
+| a set `WaitDelay` overwritten | `TestDefaultGrace`: "want 1s kept" |
+| `Start` clearing `Cmd.Dir` | `TestCallersCommandKept` |
+| `Start` replacing `Cmd.Env` | `TestCallersCommandKept` |
+
+**Gates** on the working tree, go1.27.3, each exit 0, run alone:
+
+* regeneration unchanged; `make pre-add-check`, "166 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* `make lint`, "0 issues." four times; `go fix -diff ./...` prints nothing;
+* `make api` against `v1.18.0`: "0 incompatible, 4 compatible", unchanged;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules, and the `agentproc` test binary, 2 runs, "PASS";
+* the Linux host: the `agentproc` test binary, 2 runs, "PASS".
+
+**The floor gate, at go1.26.10:** `go version` prints go1.26.10; `go vet` and `go test -race -count=1` pass in both modules, the root's
+tests and `agentproc`'s with the leak guards.

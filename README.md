@@ -531,9 +531,46 @@ The SDK closes no connection on a timer: an idle connection is normal in ACP,
 and the protocol has no ping to tell an idle peer from a dead one. The
 application decides how long a connection lives. A request's deadline is its
 context, a session ends with `session/close`, and an agent process is the
-client's to end: close its input, wait for it to exit, and kill it after a
-bound, as the example client's `stopAgent` does
+client's to end, which the `agentproc` package does
 ([0023-MADR-connection-lifetime-and-test-leaks.md](docs/decisions/0023-MADR-connection-lifetime-and-test-leaks.md)).
+
+`agentproc` starts an agent as a child process and stops it with the processes
+it started, every wait bounded
+([0027-MADR-agent-process-helper.md](docs/decisions/0027-MADR-agent-process-helper.md)).
+`Command.Start` connects a `ClientSideConnection` over the agent's standard
+input and output, through pipes it owns, so nothing the agent writes before it
+exits is lost; the command's `Stderr`, `Env` and `Dir` stay the caller's. On
+Unix the agent runs in a process group of its own, and on Windows in a job
+object, which also ends the agent's processes should the client die. `Close`
+closes the agent's input and waits up to the grace, 5 seconds unless
+`Command.Grace` says otherwise; on Unix it then sends SIGTERM to the group and
+waits again; then it kills the group, or ends the job, and closes the
+connection. `Close` and `Wait` return the agent's exit error, joined with
+`agentproc.ErrTerminated` or `agentproc.ErrKilled` when `Close` had to
+escalate. When the agent exits, what is left of its group or job is killed;
+when the connection ends first, the agent is stopped. The package needs
+`golang.org/x/sys`, on Windows only:
+
+<!-- example: agentproc ExampleCommand -->
+```go
+ctx := context.Background()
+cmd := exec.Command("my-agent", "--acp")
+// The agent's log.
+cmd.Stderr = os.Stderr
+p, err := (&agentproc.Command{Cmd: cmd}).Start(client{})
+if err != nil {
+    log.Fatal(err)
+}
+defer func() {
+    if err := p.Close(); err != nil {
+        log.Printf("agent: %v", err)
+    }
+}()
+if _, err := p.Conn().Initialize(ctx, acp.InitializeRequest{}); err != nil {
+    log.Printf("initialize: %v", err)
+}
+```
+<!-- /example -->
 
 When the input ends cleanly, at end of file, as when a script closes a stdio
 agent's standard input after writing its requests, the requests already received

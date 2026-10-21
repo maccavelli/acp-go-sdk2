@@ -13,6 +13,17 @@ import (
 // (child_test.go).
 const childEnv = "AGENTPROC_TEST_CHILD"
 
+// testBinary is the test binary's absolute path. os.Args[0] can be
+// relative, as "./pkg.test" is when the binary is run by hand, and os/exec
+// resolves a relative path against a Cmd's Dir.
+func testBinary() string {
+	exe, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	return exe
+}
+
 // TestMain runs a child mode when childEnv names one; otherwise it runs the
 // package's tests and then fails the run if they left a goroutine leaked, as
 // the root package's guard does
