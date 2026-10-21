@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-20
 associated-madr: "0027-MADR-agent-process-helper.md"
 ---
@@ -625,3 +625,69 @@ The owner committed step 6 as `084ec9b` and approved this step. What changed:
 **Planted breaks:** none; this step adds no test or check.
 
 **Gates:** `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing in the report or the index.
+
+### Step 8, verification and close, 2026-10-21
+
+The owner committed step 7 as `d804fb7` and asked for the guard.
+
+**Gates** on `d804fb7`'s tree, each exit 0, run alone:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "166 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+  `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules; `make check-records`, `make markdownlint` and the
+  identifier scan; `make lint`, "0 issues." four times; `go fix -diff ./...` prints nothing;
+* `make api` against `v1.18.0`: "0 incompatible, 4 compatible";
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on;
+* the Windows host reached over SSH: `go test -count=1 -shuffle=on ./...` in both modules;
+* the Linux host reached over SSH: `go test -count=1 -shuffle=on ./...` in both modules, on a copy of the tree, at go1.27.3. A first run
+  copied only the root package's test binary there, and three tests failed for want of the source tree ("go.mod file not found", "open
+  types_gen.go: no such file or directory", the goldens); it said nothing of the code, and the tree's copy replaced it.
+
+**The push guard,** after a fetch, `make push-guard`: "3 outgoing commit(s), 0665658..d804fb7, main to origin", "the guard passed (exit
+0)". The owner then pushed `main`.
+
+**CI:** run `39632683975` on `main` at `d804fb7`, `success` on its first attempt in all six jobs, `ubuntu-24.04`, `macos-15` and
+`windows-2025` at `1.26.10` and `1.27.3`.
+
+**Acceptance,** each met:
+
+* every step's checks passed and its record is written, steps 1 to 8;
+* every claim the new docs make is mapped to a test that makes it (step 6), but `golang.org/x/sys` on Windows only, which a command shows
+  (step 4);
+* the tests pass on macOS, on the Linux and Windows hosts, and in CI's six jobs;
+* `make lint` reports 0 issues, `go fix -diff` prints nothing, and `go mod tidy -diff` is clean;
+* `govulncheck` reports nothing, `golang.org/x/sys` included;
+* `make api` reports the root package unchanged and `agentproc`'s API as additions.
+
+### Publication of `v1.19.0`, 2026-10-21
+
+**What was published.**
+
+* **The tag.** The owner tagged `d804fb7` `v1.19.0`, an annotated tag whose message is its name, and pushed it. CI run `39633748716`,
+  started by the tag, concluded `success` on its first attempt, in all six jobs.
+* **The release.** The owner ran `gh release create v1.19.0 --title v1.19.0 --notes-file <file>`. Its body is the release text of
+  [0027-REPORT-release-notes-v1-19-0.md](../reports/0027-REPORT-release-notes-v1-19-0.md), as a script outside the tree extracted it: the
+  text under "### v1.19.0" up to "Sources not in the release text", 66 lines, with its two relative links rewritten to the files at the
+  tag.
+
+**Checks.** The `v1.18.0` publication check, its tag and commit changed, ran from outside the tree with a scratch module cache, the
+default `GOPROXY` and the checksum database on. Before the release, 5 of 10 held: the three release checks missed, "release not found",
+and the two CI checks while the tag's run was `in_progress`. After it, 10 of 10 hold:
+
+* the release is not a draft or a prerelease, its body is the extracted text, and it is GitHub's latest;
+* the tag is annotated and names `d804fb7`;
+* `main` on GitHub is the local `main`, `d804fb7`; CI on it, and on the tag, run `39633748716`, succeeded;
+* the mirror's `@v/v1.19.0.info` gives the origin `refs/tags/v1.19.0` at `d804fb7`;
+* `go list -m github.com/maccavelli/acp-go-sdk2@latest` gives `v1.19.0`;
+* `go mod download` of `v1.19.0` exits 0.
+
+**A consumer on the floor:** a fresh module at `go 1.26.10`, with `GOTOOLCHAIN=go1.26.10` forced, the default `GOPROXY` and the checksum
+database on.
+
+* `go get github.com/maccavelli/acp-go-sdk2@v1.19.0` exited 0: "go: added github.com/maccavelli/acp-go-sdk2 v1.19.0"; `go mod tidy`
+  downloaded `golang.org/x/sys v0.49.0`.
+* The program starts `sh -c "cat >/dev/null"` through `agentproc` and closes it. It built with go1.26.10 and ran, printing "Close:
+  <nil>" and "protocol version 1"; built for `GOOS=windows`, it built too.
+* The consumer's `go.mod` kept `go 1.26.10`, gained no `toolchain` line, and lists `golang.org/x/sys v0.49.0 // indirect`.
+
+This PLAN and its `docs/README.md` row are `complete`. Nothing of it is left open. Not in it, and left to records of their own: schema
+`1.26.0`, deferred by the owner; `Pdeathsig` on Linux; anything on the agent side.
