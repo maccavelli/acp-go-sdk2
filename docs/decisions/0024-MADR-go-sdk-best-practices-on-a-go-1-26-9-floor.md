@@ -175,6 +175,8 @@ The phases, each subject to the questions below:
    * The leak guard handles an absent profile (question 2).
    * The README states the minimum Go version.
    * 0002's `go 1.27.2` is superseded by this record. Its schema decision stands.
+   * Superseded 2026-10-21 in its versions, not its policy, by [0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md](0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md): the floor is
+     `1.26.10` and the toolchain `go1.27.3`.
 2. **Documentation (A5 to A8, A10, A11, V4).**
    * A concurrency contract on the five main types.
    * One generated paragraph per typed method naming the errors it returns.

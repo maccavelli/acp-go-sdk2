@@ -87,6 +87,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0026 | REPORT | [Release notes for v1.18.0, against v1.17.1](reports/0026-REPORT-release-notes-v1-18-0.md) | observed |
 | 0027 | MADR | [Start an agent process, and stop it with its descendants in bounded steps](decisions/0027-MADR-agent-process-helper.md) | accepted |
 | 0027 | PLAN | [Implement 0027: start an agent process, and stop it with its descendants in bounded steps](decisions/0027-PLAN-agent-process-helper.md) | in-progress |
+| 0028 | MADR | [Pin Go 1.27.3 as the toolchain and Go 1.26.10 as the floor](decisions/0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md) | accepted |
+| 0028 | PLAN | [Implement 0028: pin Go 1.27.3 as the toolchain and Go 1.26.10 as the floor](decisions/0028-PLAN-pin-go-1-27-3-and-floor-1-26-10.md) | proposed |
 
 ## I want to…
 

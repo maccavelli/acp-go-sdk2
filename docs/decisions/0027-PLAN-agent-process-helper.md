@@ -314,7 +314,7 @@ above:
 A first run of the set, alongside the gates, failed the `ErrKilled` plant for another reason: its children did not say "ready" within
 3 s. With the setup bound of its own, the whole set was run again alone, on the final tree, with the results above.
 
-**Gates** on the working tree, go1.27.2, each exit 0, run alone:
+**Gates** on the working tree, go1.27.2 (corrected 2026-10-21: go1.27.3; see the correction after step 5), each exit 0, run alone:
 
 * regeneration: the generated files unchanged by a second run;
 * `make pre-add-check`: "152 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and the new files' check, "8 file(s)
@@ -385,7 +385,7 @@ The owner committed step 2 as `e33eec2` and approved this step. What changed:
 
 The plants that leave a descendant alive left four `beat` grandchildren running, as they should; each was ended after the run.
 
-**Gates** on the working tree, go1.27.2, each exit 0, run alone:
+**Gates** on the working tree, go1.27.2 (corrected 2026-10-21: go1.27.3; see the correction after step 5), each exit 0, run alone:
 
 * regeneration: the generated files unchanged by a second run;
 * `make pre-add-check`: "160 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and the new files' check, "3 file(s)
@@ -463,7 +463,7 @@ The plants that leave descendants alive left up to three test processes on the W
 
 **Gates,** each exit 0, run alone:
 
-* on `449b2b6`'s tree, go1.27.2: regeneration unchanged; `make pre-add-check`, "166 file(s) clean (gofmt, golangci-lint, go vet, go test,
+* on `449b2b6`'s tree, go1.27.2 (corrected 2026-10-21: go1.27.3; see the correction after step 5): regeneration unchanged; `make pre-add-check`, "166 file(s) clean (gofmt, golangci-lint, go vet, go test,
   govulncheck)"; `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules; `make check-records`,
   `make markdownlint` and the identifier scan; `make lint`, "0 issues." four times; `go fix -diff` and `go mod tidy -diff` print nothing;
 * `go vet ./agentproc` for 14 targets: `darwin`, `linux`, `windows` (amd64, arm64 and 386), `freebsd`, `openbsd`, `netbsd`, `illumos`,
@@ -504,7 +504,7 @@ The owner committed step 4's record as `5930996` and approved this step. What ch
 
 **Planted breaks:** none; this step adds no test or check. It moves the examples onto checks steps 2 to 4 made.
 
-**Gates** on the working tree, go1.27.2, each exit 0, run alone:
+**Gates** on the working tree, go1.27.2 (corrected 2026-10-21: go1.27.3; see the correction after step 5), each exit 0, run alone:
 
 * regeneration unchanged; `make pre-add-check`, "166 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
 * `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules;
@@ -515,3 +515,15 @@ The owner committed step 4's record as `5930996` and approved this step. What ch
 
 **The go1.26.9 gate:** `go vet` and `go test -race -count=1` pass in both modules, the root's tests and `agentproc`'s with the leak
 guard.
+
+### Correction, 2026-10-21: the toolchain steps 2 to 5 ran on
+
+Steps 2 to 5 record their gates as run on go1.27.2. They ran on go1.27.3. This machine's default toolchain changed on 2026-10-20 between
+19:44 and 22:31: `go env GOTOOLCHAIN` is `go1.27.3`, set in Go's environment file, and every binary built in the session's scratch
+directories from 22:31 on names go1.27.3 (`go version <file>`), as those built up to 19:44 name go1.27.2. Step 2's first build, at 22:31,
+is the earliest go1.27.3 one. The Windows and Linux hosts reached over SSH run go1.27.3 too. The `toolchain` line still names go1.27.2,
+which a `GOTOOLCHAIN` set to one version overrides.
+
+Nothing else in those records changes: their gates and their results stand, on go1.27.3. Step 4's Windows run built with go1.26.9 and
+`GOEXPERIMENT=goroutineleakprofile`, and the go1.26.9 gates, are as recorded. The steps' lines are annotated, not rewritten.
+[0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md](0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md) pins the repository to go1.27.3.
