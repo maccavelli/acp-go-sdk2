@@ -91,7 +91,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0028 | MADR | [Pin Go 1.27.3 as the toolchain and Go 1.26.10 as the floor](decisions/0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md) | accepted |
 | 0028 | PLAN | [Implement 0028: pin Go 1.27.3 as the toolchain and Go 1.26.10 as the floor](decisions/0028-PLAN-pin-go-1-27-3-and-floor-1-26-10.md) | complete |
 | 0029 | MADR | [End an agent with its client on Linux and FreeBSD, and start it from a thread that lives as long as it](decisions/0029-MADR-unix-client-death-pdeathsig.md) | accepted |
-| 0029 | PLAN | [Implement 0029: end an agent with its client on Linux and FreeBSD, and start it from a thread that lives as long as it](decisions/0029-PLAN-unix-client-death-pdeathsig.md) | proposed |
+| 0029 | PLAN | [Implement 0029: end an agent with its client on Linux and FreeBSD, and start it from a thread that lives as long as it](decisions/0029-PLAN-unix-client-death-pdeathsig.md) | in-progress |
 | 0030 | MADR | [Record a client's initialize when its answer arrives, and hold what comes before it](decisions/0030-MADR-record-initialize-on-arrival.md) | accepted |
 | 0030 | PLAN | [Implement 0030: record a client's initialize when its answer arrives, and hold what comes before it](decisions/0030-PLAN-record-initialize-on-arrival.md) | proposed |
 

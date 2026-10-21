@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-21
 associated-madr: "0029-MADR-unix-client-death-pdeathsig.md"
 ---
@@ -121,3 +121,30 @@ For a consumer:
 * on Linux and FreeBSD, an agent started through `agentproc` now ends when its client dies, by SIGKILL, unless the caller set its own
   `Pdeathsig`; an agent that cleans up at its input's end loses that cleanup in that case (the MADR's D10);
 * everywhere, an agent is started from a thread reserved to it, so a `Pdeathsig` the caller sets no longer ends it early.
+
+## Execution record
+
+### Step 1, records, 2026-10-21
+
+The owner committed the MADR, this PLAN and 0030's pair as `2f3dd47`, at the owner's word in that turn, and approved execution. What
+changed: this PLAN and its `docs/README.md` row `in-progress`.
+
+**The facts,** re-asserted by a script outside the tree, reading `2f3dd47`'s tree and the installed toolchains: 6 of 6 hold.
+
+| Id | What the script read |
+| :--- | :--- |
+| F1 | `agentproc/agentproc.go:127` is `if err := cmd.Start(); err != nil {`; `Start` has no `go` statement and the file no `LockOSThread` |
+| F2 | `:136` is `t, err := attach(cmd)`; `:143` and `:144` start the watcher, then the monitor |
+| F3 | `tree_unix.go:21` is `func prepare(cmd *exec.Cmd) error {`; it refuses a non-zero `Pgid`, sets `Setpgid`, and names no `Pdeathsig` |
+| F4 | `go doc syscall.SysProcAttr` names `Pdeathsig` for `linux` and `freebsd`, and not for `darwin`, `netbsd`, `openbsd`, `dragonfly` or `solaris`, under go1.27.3 and go1.26.10 |
+| F5 | go1.27.3's `syscall/exec_freebsd.go:209` tests `sys.Pdeathsig != 0`, and `:212` and `:214` pass `_PROC_PDEATHSIG_CTL` |
+| F6 | `go doc runtime.LockOSThread`, under go1.27.3 and go1.26.10: "exits without unlocking the thread, the thread will be terminated" |
+
+**Planted breaks,** each in its own scratch copy of the tree: `Cmd.Start` called after a `runtime.LockOSThread`; the watcher and the
+monitor swapped; `prepare` setting `Pdeathsig`. Each made the script report its own fact alone missing, exit 1: 3 of 3. F4 to F6 read the
+installed toolchains, which a copy of the tree cannot plant.
+
+A first run planted the three at once; the first break added a line, which moved F2's lines too, so F2 would have failed without its
+own break. The breaks were run again, one to a copy, as above.
+
+**Gates:** `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing in the changed records.
