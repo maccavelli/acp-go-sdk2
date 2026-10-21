@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-20
 associated-madr: "0027-MADR-agent-process-helper.md"
 ---
@@ -39,7 +39,7 @@ hold the probes.
 | F5 | `golang.org/x/sys` v0.49.0 declares `go 1.26.0` and has the job-object calls | the module cache; the MADR's S8 |
 | F6 | `os.Process.WithHandle` exists under go1.26.9 | `go doc`; the MADR's S5 |
 | F7 | `os/exec` cannot start a child suspended on Windows | `syscall/exec_windows.go:446`; the MADR's S7 |
-| F8 | the root package vets for 14 targets, `js/wasm`, `wasip1/wasm` and `plan9` among them | the MADR's A4 |
+| F8 | the root package vets for 14 targets, `js/wasm`, `wasip1/wasm` and `plan9` among them (corrected 2026-10-20, step 1: 15) | the MADR's A4 |
 | F9 | a test may re-execute its own binary as a child | `nil_panic_test.go:78` |
 | F10 | the leak guard is the root package's `TestMain` only | `leak_test.go` |
 | F11 | `.github` holds `workflows/` only: no `dependabot` configuration | `ls .github` |
@@ -201,3 +201,38 @@ The release is proposed as the minor `v1.19.0`, which the owner confirms at the 
 * **The child modes live in a `_test.go` file,** so they ship in no binary.
 * **The grace in tests is 300 ms,** to keep the suite fast; the default stays 5 seconds.
 * **The Linux host joins the Windows host** in the pre-push checks from step 2.
+
+## Execution record
+
+### Step 1, records, 2026-10-20
+
+The owner approved the MADR's answers and this PLAN, and committed both as `1ea8475`. What changed:
+
+* this PLAN and its `docs/README.md` row `in-progress`;
+* a correction to the MADR's A4 and to F8 above: 15 targets, not 14.
+
+**The facts,** re-asserted by a script outside the tree, reading `1ea8475`'s tree: 11 of 11 hold.
+
+| Id | What the script read |
+| :--- | :--- |
+| F1 | no line of `go.mod` starts with `require` |
+| F2 | the docstring's "The root package is the module's only API"; `run` calls `fail`, which exits 2; both `apidiff -w` calls load `module`, the root package, in the base and in the tree |
+| F3 | each `stopAgent` found at `:316`, `:365` and `:385`, the three bodies one SHA-256 |
+| F4 | `connection.go:705` is `func (c *Connection) writeLoop() {`; its body holds `req.done <- err` and no `closeWith`, `cancel(` or `shutdownReceive` |
+| F5 | `golang.org/x/sys@v0.49.0/go.mod` has `go 1.26.0`; its `windows` package declares the four calls, the limit structure and the flag |
+| F6 | under go1.26.9, `go doc os.Process.WithHandle` exits 0 and prints `func (p *Process) WithHandle(f func(handle uintptr)) error` |
+| F7 | under go1.26.9, `syscall/exec_windows.go:446` is `defer CloseHandle(Handle(pi.Thread))` |
+| F8 | `go vet .` exits 0 for `darwin`, `linux`, `windows`, `freebsd`, `openbsd`, `netbsd`, `dragonfly`, `solaris`, `illumos`, `aix`, `ios`, `android`, `js/wasm`, `wasip1/wasm` and `plan9`: 15 |
+| F9 | `nil_panic_test.go:78` runs `exec.CommandContext` on `os.Args[0]` |
+| F10 | the only test file with both `func TestMain` and `goroutineleak` is `leak_test.go` |
+| F11 | `.github` holds `workflows` alone |
+
+**Planted breaks,** six at once in a scratch copy of the tree: a `require` in `go.mod`; one `stopAgent` changed; `writeLoop` calling
+`closeWith` on a failed write; a root file using `syscall.Kill`; a second test file with `TestMain` and `goroutineleak`; a
+`.github/dependabot.yml`. The script reported exactly F1, F3, F4, F8, F10 and F11 missing, "5 of 11 facts hold", exit 1. F8's break
+failed for `windows` and `plan9` alone: `js` and `wasip1` declare `syscall.Kill`.
+
+**Found, and corrected:** the MADR's A4 counted 14 targets for a list of 15; the first probe had vetted 14, without `darwin`, the host.
+The script vetted all 15. A4 and F8 carry the correction.
+
+**Gates:** `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing in the changed records.

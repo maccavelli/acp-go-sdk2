@@ -50,6 +50,8 @@ It sets no time between the two, and no signal.
   `require`.
 * **A4. The root package builds everywhere tried.** `go vet .` exits 0 for 14 targets: `darwin`, `linux`, `windows`, `freebsd`,
   `openbsd`, `netbsd`, `dragonfly`, `solaris`, `illumos`, `aix`, `ios`, `android`, `js/wasm`, `wasip1/wasm` and `plan9`.
+  Corrected 2026-10-20, during the PLAN's step 1: 15 targets. The list always named 15; the first count left out `darwin`, the
+  host, which the PLAN's fact script vetted with the others.
 * **A5. The API gate covers the root package only.** `scripts/check_api.py`: "The root package is the module's only API; the examples'
   main packages are not compared."
 * **A6. A failed write does not end a connection.** `writeLoop` hands a write's error to its sender (`connection.go:705`). A probe
