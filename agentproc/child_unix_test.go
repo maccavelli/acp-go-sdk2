@@ -3,6 +3,7 @@
 package agentproc
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"os/exec"
@@ -33,13 +34,25 @@ func platformChild(mode string) (int, bool) {
 	return 0, true
 }
 
-// owner is a client: it starts a stubborn agent through Start, its Cmd as
+// ownedEnv names the mode of the agent the "owner" child starts, "stubborn"
+// when it is unset. inertDeathEnv, when set, has the owner give the agent a
+// Pdeathsig it survives, where there is one
+// (0029-PLAN-unix-client-death-pdeathsig.md, the deviation during step 4).
+const (
+	ownedEnv      = "AGENTPROC_TEST_OWNED"
+	inertDeathEnv = "AGENTPROC_TEST_INERT_DEATHSIG"
+)
+
+// owner is a client: it starts an agent through Start, its Cmd otherwise as
 // the caller left it, the agent's stderr its own, writes "pid <n>" to stderr,
 // and waits to be killed (0029-PLAN-unix-client-death-pdeathsig.md, step 3).
 func owner() int {
 	cmd := exec.Command(testBinary(), "-test.run=^$")
-	cmd.Env = append(os.Environ(), childEnv+"=stubborn", "GORACE=atexit_sleep_ms=0")
+	cmd.Env = append(os.Environ(), childEnv+"="+cmp.Or(os.Getenv(ownedEnv), "stubborn"), "GORACE=atexit_sleep_ms=0")
 	cmd.Stderr = os.Stderr
+	if os.Getenv(inertDeathEnv) != "" {
+		setInertDeathSignal(cmd)
+	}
 	if _, err := (&Command{Cmd: cmd}).Start(&testClient{}); err != nil {
 		return 1
 	}

@@ -85,7 +85,8 @@ it is relied on.
 2. **The locked start,** on every platform; `TestStartFromExitingLockedGoroutine`, with `Pdeathsig` set by the test on Linux.
 3. **`Pdeathsig`:** `setDeathSignal` and its two files; `TestClientDeathEndsAgent`, `TestCallersPdeathsigKept`, `TestDefaultPdeathsig`.
 4. **Docs:** `Start`'s doc, the README and `docs/architecture.md`; each claim mapped to a test. (Amended 2026-10-21, after step 3:
-   and `rawWire`'s reader in `jsonrpc_test.go`; see the deviation after step 3.)
+   and `rawWire`'s reader in `jsonrpc_test.go`; see the deviation after step 3.) (Amended 2026-10-21, during step 4: and
+   `TestClientDeathEndsAgentAtInputEnd`; see the deviation during step 4.)
 5. **Verification and close:** the gates; the Linux and Windows hosts reached over SSH; after CI's six jobs pass on the pushed commits,
    this PLAN and its row `complete`. The release follows with 0030's.
 
@@ -104,6 +105,8 @@ Planted breaks, each in a scratch copy:
 | `Pdeathsig` | `setDeathSignal` doing nothing on Linux | `TestClientDeathEndsAgent`, `TestDefaultPdeathsig` |
 | `Pdeathsig` | a caller's `Pdeathsig` overwritten | `TestCallersPdeathsigKept` |
 | platforms | `deathsig_none.go` removed | `go vet ./agentproc` for `darwin` |
+| the root's test reader | `rawWire`'s send without the select on `stop` | the root package's leak guard, after `TestRawWireReaderStopsAtCleanup` (added 2026-10-21, after step 3) |
+| the input's end | the agent given a copy of its input's write end, in `ExtraFiles` | `TestClientDeathEndsAgentAtInputEnd` (macOS, Linux) (added 2026-10-21, during step 4) |
 
 Acceptance:
 
@@ -270,3 +273,80 @@ run in seven failed so. It is test code of the root package, unchanged since `71
 [0023-PLAN-connection-lifetime-and-test-leaks.md](0023-PLAN-connection-lifetime-and-test-leaks.md), whose subject test leaks are, and
 recording it only. Added to step 4's scope: `jsonrpc_test.go`, whose reader stops when the test ends (a send that also selects on a
 channel the cleanup closes), and a planted break that shows the reader blocked without it. The MADR's decision is unchanged.
+
+### Deviation, 2026-10-21, during step 4: no test for the input's end
+
+**Found.** The contract step 4 documents says that when the client dies without `Close`, the agent's input ends, which ends an agent
+that exits at its input's end, on every platform. No committed test made that claim: the MADR's D1, D3 and D5 show it, by probes run in
+scratch only, and `TestClientDeathEndsAgent` uses a stubborn agent, which only `Pdeathsig` ends. The PLAN's acceptance requires every claim
+the new docs make to be mapped to a test.
+
+**Decision (owner, 2026-10-21).** Add the test, in step 4; the alternative was to map the claim to the MADR's probes and amend the
+acceptance line, which leaves the claim unguarded. Added to step 4's scope:
+
+* `TestClientDeathEndsAgentAtInputEnd`, on every Unix system: the `owner` child starts an `eof` agent through `Start`, the test kills the
+  owner, and the agent must be gone within 2 s. On Linux and FreeBSD the owner sets the agent's `Pdeathsig` to SIGURG, which the Go runtime
+  of the agent handles and survives, so that only the input's end can end it;
+* the `owner` mode takes the agent's mode and that `Pdeathsig` from the test, and its process-ID handshake becomes a helper both tests use;
+* a planted break, the agent given a copy of its input's write end in `ExtraFiles`, which must fail the test on macOS and on the Linux
+  host.
+
+The negative claims (an agent that ignores its input's end, or what any agent started, survives where nothing more ends it: D2, D4, D9)
+and the claims for FreeBSD, which has no host here, stay mapped to the MADR's findings and, for FreeBSD, to `go vet` and `golangci-lint`
+for `GOOS=freebsd`, as the MADR's "Confirmation" says. The MADR's decision is unchanged.
+
+### Step 4, the docs, 2026-10-21
+
+The owner committed step 3 and approved this step. What changed:
+
+* **`agentproc/agentproc.go`,** `Start`'s doc: the contract by platform when the client dies without `Close`, and the locked start.
+* **`README.md`,** "Closing and limits": the same contract, linking the MADR.
+* **`docs/architecture.md`,** "The agent process helper": `Pdeathsig` in `prepare` and its two files; `run`, the locked start; the new
+  tests in its list of checks.
+* **`jsonrpc_test.go`** (the deviation after step 3): `rawWire`'s reader also selects on `stop`, which its cleanup closes;
+  `TestRawWireReaderStopsAtCleanup` leaves 20 answers unread, more than the reader's 16, and ends.
+* **The deviation during step 4:** `TestClientDeathEndsAgentAtInputEnd` in `agentproc_unix_test.go`, with the handshake
+  `TestClientDeathEndsAgent` used moved there as `killOwner` and `requireGone`; the `owner` mode takes its agent's mode from
+  `AGENTPROC_TEST_OWNED` and, from `AGENTPROC_TEST_INERT_DEATHSIG`, a `Pdeathsig` of SIGURG (`setInertDeathSignal`, in
+  `pdeathsig_test.go`, and a no-op in `deathsig_none_test.go`, new).
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| the client's death ends the agent's input, which ends an agent that exits at its input's end | `TestClientDeathEndsAgentAtInputEnd`, macOS and the Linux host |
+| on Windows the job ends the agent and every process it started | `TestClientDeathEndsTree`, the Windows host |
+| on Linux and FreeBSD `Start` sets SIGKILL as `Pdeathsig` when the caller set none, and keeps the caller's | `TestDefaultPdeathsig`, `TestCallersPdeathsigKept` |
+| on Linux a stubborn agent ends when its client dies | `TestClientDeathEndsAgent`, the Linux host |
+| on FreeBSD, the same | the MADR's FreeBSD finding; `go vet` and `golangci-lint` for `GOOS=freebsd`; no host runs it |
+| a process the agent started ends only at its input's end, on Linux and FreeBSD | the MADR's D8 and D9 |
+| elsewhere nothing more ends them | the MADR's D2 and D4 |
+| the agent is started from a goroutine locked to its thread until it is reaped | `TestStartFromExitingLockedGoroutine`, the Linux host; the unlock's timing, no test (the deviation during step 2) |
+| Linux sends a `Pdeathsig` when the thread that started the child ends | the MADR's D12 to D14 |
+| the other Unix systems build without `Pdeathsig` | `go vet ./agentproc` for `darwin`, `openbsd`, `netbsd`, `illumos` |
+| `rawWire`'s reader ends with its test | `TestRawWireReaderStopsAtCleanup` and the root package's leak guard |
+
+**Planted breaks,** each in its own scratch copy. 4 of 4 checks failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `rawWire`'s send without the select on `stop` | macOS, the root package: the tests pass, then the leak guard, "goroutines leaked by the tests", names `rawWire.func2` at `jsonrpc_test.go:72`; exit 1 |
+| the agent given a copy of its input's write end, in `ExtraFiles` | `TestClientDeathEndsAgentAtInputEnd`, on macOS and on the Linux host: "the agent, pid …, still runs 2s after its client was killed" |
+| `setDeathSignal` doing nothing, against the refactored `TestClientDeathEndsAgent` | the Linux host: "the agent, pid …, still runs 2s after its client was killed" |
+
+On the Linux host the second break also shows that the agent survives the SIGURG the test sets, so that in the real test only its input's
+end ends it. The tests' cleanup killed each planted survivor; none was left on either machine.
+
+**Gates,** each exit 0, run one at a time. A first run of them was stopped before it finished, when the deviation during step 4 changed
+the tree, and its results are not used.
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "169 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and
+  the new file's, "1 file(s) clean"; `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules;
+  `make check-records`, `make markdownlint` and the identifier scan; `make lint`, "0 issues." four times; `golangci-lint` for
+  `GOOS=linux` and `GOOS=freebsd` on `agentproc`, "0 issues." each; `go fix -diff ./...` prints nothing, in both modules;
+* `go vet ./agentproc` for `darwin`, `linux` (amd64, arm64), `freebsd`, `openbsd`, `netbsd`, `illumos`, `windows`, `js/wasm`,
+  `wasip1/wasm`, `plan9`;
+* `make api` against `v1.19.0`: "0 incompatible, 0 compatible";
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules;
+* the Linux host: `go test -count=1 -shuffle=on ./...` in both modules, from a copy of the tree; macOS: `go test -count=5 -race ./agentproc`;
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` pass in both modules, the leak guards on.

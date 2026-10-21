@@ -3,16 +3,22 @@
 package agentproc
 
 import (
-	"bufio"
 	"errors"
+	"os/exec"
 	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
 )
+
+// setInertDeathSignal sets cmd's Pdeathsig to SIGURG, which the Go runtime of
+// a test child handles and survives, so that a test can tell the agent's
+// input's end from its Pdeathsig at its client's death
+// (0029-PLAN-unix-client-death-pdeathsig.md, the deviation during step 4).
+func setInertDeathSignal(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGURG}
+}
 
 // TestDefaultPdeathsig requires Start to set SIGKILL as the agent's Pdeathsig
 // when the caller set none (0029-MADR-unix-client-death-pdeathsig.md,
@@ -49,51 +55,7 @@ func TestCallersPdeathsigKept(t *testing.T) {
 // (0029-MADR-unix-client-death-pdeathsig.md, D7).
 func TestClientDeathEndsAgent(t *testing.T) {
 	t.Parallel()
-	o := agentCmd("owner")
-	stderr, err := o.StderrPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := o.Start(); err != nil {
-		t.Fatal(err)
-	}
-	pid, ready := 0, false
-	found := make(chan struct{})
-	go func() {
-		sc := bufio.NewScanner(stderr)
-		for sc.Scan() {
-			line := sc.Text()
-			if n, ok := strings.CutPrefix(line, "pid "); ok {
-				pid, _ = strconv.Atoi(n)
-			}
-			ready = ready || line == "ready"
-			if pid > 0 && ready {
-				close(found)
-				break
-			}
-		}
-		for sc.Scan() { // drain until the owner and the agent have closed it
-		}
-	}()
-	select {
-	case <-found:
-	case <-time.After(readyWait):
-		_ = o.Process.Kill()
-		_ = o.Wait()
-		t.Fatalf("the owner did not report a ready agent within %v", readyWait)
-	}
-	t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
-	if err := o.Process.Signal(syscall.SIGKILL); err != nil {
-		t.Fatal(err)
-	}
-	_ = o.Wait()
-	deadline := time.Now().Add(2 * time.Second)
-	for syscall.Kill(pid, 0) == nil {
-		if time.Now().After(deadline) {
-			t.Fatalf("the agent, pid %d, still runs 2s after its client was killed", pid)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	requireGone(t, killOwner(t))
 }
 
 // TestStartFromExitingLockedGoroutine requires an agent with a Pdeathsig to

@@ -75,7 +75,17 @@ type Process struct {
 // Start starts the agent and connects client to it over the agent's
 // standard input and output. On Unix the agent runs in a process group of
 // its own, and on Windows in a job object, so that stopping it stops the
-// processes it started; the job also ends them should this process die. When
+// processes it started.
+//
+// Should this process die without Close, the agent's input ends, which ends
+// an agent that exits at its input's end. Beyond that, on Windows the job
+// ends the agent and every process it started; on Linux and FreeBSD the
+// kernel sends the agent the SIGKILL that Start sets as its Pdeathsig, unless
+// the caller set one, and a process it started ends only at its input's end;
+// elsewhere nothing more ends them. Start starts the agent from a goroutine
+// locked to its OS thread until the agent is reaped, since Linux sends a
+// Pdeathsig when the thread that started the child ends
+// (0029-MADR-unix-client-death-pdeathsig.md). When
 // Cmd.WaitDelay is zero, Start sets it to half the grace, so that an agent
 // that exits within it is seen to exit even while a process it started
 // holds a Stderr writer that is not a file. Start refuses, starting

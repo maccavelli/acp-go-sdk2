@@ -541,7 +541,14 @@ it started, every wait bounded
 input and output, through pipes it owns, so nothing the agent writes before it
 exits is lost; the command's `Stderr`, `Env` and `Dir` stay the caller's. On
 Unix the agent runs in a process group of its own, and on Windows in a job
-object, which also ends the agent's processes should the client die. `Close`
+object. Should the client die without `Close`, the agent's input ends, which
+ends an agent that exits at its input's end; beyond that, on Windows the job
+ends the agent and the processes it started, and on Linux and FreeBSD the
+kernel sends the agent SIGKILL, unless the caller set its own `Pdeathsig`,
+while a process it started ends only at its input's end; elsewhere nothing
+more ends them
+([0029-MADR-unix-client-death-pdeathsig.md](docs/decisions/0029-MADR-unix-client-death-pdeathsig.md)).
+`Close`
 closes the agent's input and waits up to the grace, 5 seconds unless
 `Command.Grace` says otherwise; on Unix it then sends SIGTERM to the group and
 waits again; then it kills the group, or ends the job, and closes the

@@ -53,7 +53,13 @@ func rawWire(t *testing.T, start func(w io.Writer, r io.Reader)) wire {
 	t.Helper()
 	inR, inW := io.Pipe()
 	outR, outW := io.Pipe()
+	// stop ends the reader below when the test ends: closing the pipes does
+	// not unblock a send to a full lines, so a test that leaves more than its
+	// capacity unread would otherwise leak the reader
+	// (0029-PLAN-unix-client-death-pdeathsig.md, the deviation after step 3).
+	stop := make(chan struct{})
 	t.Cleanup(func() {
+		close(stop)
 		_ = inW.Close()
 		_ = outW.Close()
 	})
@@ -63,10 +69,34 @@ func rawWire(t *testing.T, start func(w io.Writer, r io.Reader)) wire {
 		sc := bufio.NewScanner(outR)
 		sc.Buffer(nil, 1<<20)
 		for sc.Scan() {
-			lines <- sc.Text()
+			select {
+			case lines <- sc.Text():
+			case <-stop:
+				return
+			}
 		}
 	}()
 	return wire{t: t, w: inW, lines: lines}
+}
+
+// TestRawWireReaderStopsAtCleanup leaves more of the connection's lines unread
+// than rawWire's reader can hold, and ends: the package's leak guard fails the
+// run if the reader is still blocked (0029-PLAN-unix-client-death-pdeathsig.md,
+// the deviation after step 3).
+func TestRawWireReaderStopsAtCleanup(t *testing.T) {
+	t.Parallel()
+	p := agentWire(t)
+	for range cap(p.lines) + 4 {
+		p.send(probe)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for len(p.lines) < cap(p.lines) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the connection wrote %d of the %d answers within 5s", len(p.lines), cap(p.lines)+4)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond) // the reader has read another answer, and waits to send it
 }
 
 // agentWire is a raw peer of an agent whose session/new answers "s".

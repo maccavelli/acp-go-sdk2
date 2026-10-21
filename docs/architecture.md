@@ -443,15 +443,21 @@ is seen.
 
 The agent's tree is per platform, in `tree_unix.go`, `tree_windows.go` and
 `tree_other.go`. On Unix `prepare` sets `Setpgid`, unless `Setsid` is set, and
-refuses a non-zero `Pgid`; `terminate` and `kill` signal the group, and `kill`
-the agent itself too. On Windows `attach` puts the agent, once started, in a job
+refuses a non-zero `Pgid`; on Linux and FreeBSD it also sets `Pdeathsig` to
+SIGKILL when the caller set none (`deathsig_pdeathsig.go`; `deathsig_none.go`
+elsewhere on Unix); `terminate` and `kill` signal the group, and `kill` the
+agent itself too. On Windows `attach` puts the agent, once started, in a job
 object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, through
 `os.Process.WithHandle`; there is no terminating signal, and `kill` ends the
 job. Elsewhere, `js`, `wasip1` and `plan9`, only the agent is killed.
 `golang.org/x/sys` is built for Windows alone.
 
-Two goroutines tie the process to the connection. The watcher alone calls
-`Cmd.Wait`, as os/exec requires; when it returns, it ends what is left of the
+`run` starts the agent and waits for it on one goroutine, locked to its OS
+thread until the agent is reaped: Linux sends a `Pdeathsig` when the thread
+that started the child ends, which may be long before the process does
+(0029-MADR-unix-client-death-pdeathsig.md). Two goroutines tie the process to
+the connection. The watcher, which `run` becomes once `Start` has connected,
+alone calls `Cmd.Wait`, as os/exec requires; when it returns, it ends what is left of the
 tree under the lock that marks the agent exited, after which nothing is
 signalled, closes `Done`, gives the connection up to the grace to read to the
 end of the agent's output, and closes it. The monitor stops the agent when the
@@ -469,7 +475,9 @@ Checks that guard it:
   `TestNoLostOutput`, `TestCloseLadder`, `TestStderrHeldByDescendant`,
   `TestCloseIdempotent`, `TestDefaultGrace`, `TestCallersCommandKept`,
   `TestDescendantsEnded`, `TestConnectionEndStopsAgent`; on Unix `TestStartRefusesSharedGroup` and
-  `TestEscapedDescendantDoesNotHoldWait`; on Windows `TestClientDeathEndsTree`.
+  `TestEscapedDescendantDoesNotHoldWait` and `TestClientDeathEndsAgentAtInputEnd`; on Linux and FreeBSD
+  `TestStartFromExitingLockedGoroutine`, `TestDefaultPdeathsig`, `TestCallersPdeathsigKept` and
+  `TestClientDeathEndsAgent`; on Windows `TestClientDeathEndsTree`.
 - Its `TestMain` runs the goroutine-leak guard after the tests, as the root's
   does.
 - `TestReadmeAgentprocIsTheExample` at the root requires the README's example
