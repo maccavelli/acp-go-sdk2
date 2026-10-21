@@ -165,7 +165,7 @@ Planted breaks, at least. Each must be seen to fail on the check named.
 | Close | the kill first, without closing stdin | `TestCloseLadder`, `eof` |
 | Close | the SIGTERM step removed | `TestCloseLadder`, `term` |
 | Close | `ErrKilled` not joined | `TestCloseLadder`, `stubborn` (on Windows, the exit 0 case) |
-| Close | `sync.Once` removed | `TestCloseIdempotent` |
+| Close | `sync.Once` removed | `TestCloseIdempotent` (cannot fail: see the deviation during step 2) |
 | ties | the tree not ended on the agent's own exit | `TestDescendantsEnded`, the own exit |
 | ties | the connection not closed after the drain | `Wait` past its bound in `TestDescendantsEnded` |
 | ties | the connection's end not stopping the agent | `TestConnectionEndStopsAgent` |
@@ -236,3 +236,99 @@ failed for `windows` and `plan9` alone: `js` and `wasip1` declare `syscall.Kill`
 The script vetted all 15. A4 and F8 carry the correction.
 
 **Gates:** `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing in the changed records.
+
+### Deviation, 2026-10-20, during step 2: `Close`'s `sync.Once` cannot be caught
+
+**Found.** The plant "`sync.Once` removed", `p.closeOnce.Do(p.stop)` made `p.stop()`, left `TestCloseIdempotent` passing, exit 0, over
+3 runs. Every step of `stop` is idempotent by itself: a second close of the agent's input is harmless; each signal is skipped once the
+agent has exited, under the lock that records the exit; the connection's `Close` is idempotent. A second sequence, concurrent or
+later, ends in the same state and the same error, so no test can tell the `Once`'s absence.
+
+**Decision (owner, 2026-10-20), the recommended resolution.** Keep `closeOnce`, so concurrent callers share one sequence of graces and
+send no signal twice, with a comment saying why it stays; record the plant as one that cannot be caught. The verification table's row is
+annotated. No test changes.
+
+### Step 2, the core, 2026-10-20
+
+The owner committed step 1 as `68130ca` and approved this step. What changed:
+
+* **`agentproc/agentproc.go`, new:** `Command{Cmd, Grace, ConnectionOptions}` and its `Start`; `Process` with `Conn`, `Done`, `Wait` and
+  `Close`; `ErrTerminated`, `ErrKilled`. `Start` refuses a nil `Cmd` or client, a started `Cmd`, and a set `Stdin` or `Stdout`, starting
+  nothing; it owns both pipes (`os.Pipe`), sets a zero `WaitDelay` to the grace, and starts the watcher that alone calls `Cmd.Wait`.
+  `Close` runs the MADR's sequence once.
+* **`agentproc/tree_unix.go`, new:** `Setpgid` unless `Setsid`; a non-zero `Pgid` refused; SIGTERM and SIGKILL to the group, an emptied
+  group (`ESRCH`) not an error, `Process.Kill` when the group cannot be signalled.
+* **`agentproc/tree_other.go`, new,** `//go:build !unix` for this step: no group, no terminating signal (`errors.ErrUnsupported`),
+  `Process.Kill`. Windows builds and runs with it until step 4 adds `tree_windows.go` and narrows this file to `!unix && !windows`, as
+  Scope says.
+* **Tests, new:** `leak_test.go` (`TestMain`: a child mode when `AGENTPROC_TEST_CHILD` names one; otherwise the tests, then the
+  goroutine-leak guard); `child_test.go` (the modes `eof`, `term`, `stubborn`, `burst`, `parent-stderr`, `heartbeat-stderr`; each writes
+  "ready" to stderr once set up); `agentproc_test.go` (`TestStartRefuses`, `TestNoLostOutput`, `TestCloseLadder`,
+  `TestStderrHeldByDescendant`, `TestCloseIdempotent`); `agentproc_unix_test.go` (`TestStartRefusesSharedGroup`); `example_test.go`
+  (`ExampleCommand`, compiled, not run).
+* **`scripts/check_api.py`:** `PACKAGES`, the root and `agentproc`; a package missing from the base is compared against an empty package
+  written into the base's scratch copy; one missing from the working tree exits 2. Root changes print as before; `agentproc`'s carry its
+  name.
+
+**Found while writing the tests,** each settled in the tests, not the package:
+
+* the client refuses a `session/update` before `initialize` has completed on its side ("initialize has not completed"): an agent that
+  writes updates right after its `initialize` answer can have the first few refused. A real agent sends updates only for a session the
+  client creates after `initialize`, so this is not a loss; the `burst` agent waits for one more message from the client first;
+* the client's notification queue holds 1024, the default; the burst is 1000 updates;
+* a child built with `-race` waits the race runtime's `atexit_sleep_ms`, 1000 ms by default, before it exits: measured, 1005 to 1013 ms
+  against 1 ms without `-race`, and 1 ms with `GORACE=atexit_sleep_ms=0`, which the test children now get;
+* a child's start, under the load of the gates running alongside, took over 3 s; the wait for "ready" is a setup bound of its own, 30 s.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| `Start` refuses each bad `Command`, starting nothing | `TestStartRefuses`; `TestStartRefusesSharedGroup` |
+| no message written before the agent exits is lost | `TestNoLostOutput`: 1000 of 1000 updates |
+| an agent that exits at its input's end is not signalled, and `Close` returns nil | `TestCloseLadder`, "exits at its input's end" |
+| one that exits on SIGTERM is terminated between one and two graces, `ErrTerminated` with exit status 3 | `TestCloseLadder`, "exits on SIGTERM" |
+| one that ignores both is killed, `ErrKilled`, after two graces where there is a group, one elsewhere | `TestCloseLadder`, "ignores both" |
+| a `Stderr` writer a descendant holds does not hold `Close` past `WaitDelay` | `TestStderrHeldByDescendant` |
+| concurrent and repeated calls return the same error | `TestCloseIdempotent` |
+| the package builds where the root does | `go vet ./agentproc` for the targets below |
+| the API gate covers `agentproc` | `make api` |
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree. 10 of 11 failed as required; the eleventh is the deviation
+above:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the agent's stdout through `StdoutPipe` | `TestNoLostOutput`: "the client received … of the 1000 session updates the agent wrote" |
+| the `Stdout` refusal removed | `TestStartRefuses`, "Stdout set" |
+| the `Pgid` refusal removed | `TestStartRefusesSharedGroup`: "want a refusal naming Pgid" |
+| `WaitDelay` not set | `TestStderrHeldByDescendant`: "want exec.ErrWaitDelay, and no kill" |
+| the kill first, without waiting after closing the input | `TestCloseLadder`: "want nil within the grace" |
+| the SIGTERM step removed | `TestCloseLadder`: "want ErrTerminated with exit status 3" |
+| `ErrKilled` not joined | `TestCloseLadder`: "want ErrKilled after" |
+| `sync.Once` removed | none: the deviation above |
+| the watcher never returning | the leak guard: "goroutines leaked by the tests" |
+| `tree_other.go` removed | `GOOS=js GOARCH=wasm go vet ./agentproc`: "undefined: prepare" |
+| the API gate's empty package removed | `scripts/check_api.py`: exit 2, "check_api: go run … failed" |
+
+A first run of the set, alongside the gates, failed the `ErrKilled` plant for another reason: its children did not say "ready" within
+3 s. With the setup bound of its own, the whole set was run again alone, on the final tree, with the results above.
+
+**Gates** on the working tree, go1.27.2, each exit 0, run alone:
+
+* regeneration: the generated files unchanged by a second run;
+* `make pre-add-check`: "152 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and the new files' check, "8 file(s)
+  clean";
+* `GOEXPERIMENT=nojsonv2 go test ./...`, and `GOOS=windows go vet ./...` in both modules;
+* `make check-records`, `make markdownlint` and the identifier scan;
+* `make lint`: "0 issues." four times; `go fix -diff ./...` prints nothing;
+* `go vet ./agentproc` for `darwin`, `linux`, `windows` (amd64 and arm64), `freebsd`, `openbsd`, `netbsd`, `illumos`, `ios`, `android`,
+  `js/wasm`, `wasip1/wasm` and `plan9`; `aix` and `solaris` too, before a test used `syscall.Getpgid`, which they lack, and the owner then
+  set `aix` aside;
+* `make api` against `v1.18.0`: "0 incompatible, 4 compatible": `agentproc: Command`, `ErrKilled`, `ErrTerminated` and `Process`, each
+  "added"; the root package unchanged;
+* the Windows host reached over SSH: `go test -count=1 -shuffle=on ./...` in both modules, `agentproc` among them;
+* the Linux host reached over SSH: the cross-compiled `agentproc` test binary, `-test.count=3`, "PASS", the leak guard included.
+
+**The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, the root's tests and
+`agentproc`'s with `GOEXPERIMENT=goroutineleakprofile`, the leak guards on.

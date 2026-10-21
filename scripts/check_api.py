@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Compare the root package's exported API with the latest v1 release.
+"""Compare the module's exported API with the latest v1 release.
 
 The gate of docs/decisions/0024-PLAN-api-gate-and-deprecation.md, step 8, as
 go-llmprovider-sdk and go-selfupdate-lib gate theirs: apidiff, pinned below
-and run with `go run`, writes the API of the root package from the base's
-tree, taken with `git archive`, and from the working tree, then compares
-them. The root package is the module's only API; the examples' main packages
-are not compared.
+and run with `go run`, writes the API of each package in PACKAGES from the
+base's tree, taken with `git archive`, and from the working tree, then
+compares them. PACKAGES are the module's API: the root package and agentproc
+(docs/decisions/0027-PLAN-agent-process-helper.md, step 2); the examples'
+main packages are not compared. A package missing from the base is compared
+against an empty package of the same path written into the base's scratch
+copy, so its API reads as additions; one missing from the working tree is a
+tool error.
 
   python3 scripts/check_api.py [BASE]
 
@@ -35,6 +39,8 @@ ROOT = Path(__file__).resolve().parent.parent
 APIDIFF = "golang.org/x/exp/cmd/apidiff@v0.0.0-20261014143641-f0251eb4aa3e"
 RELEASE = re.compile(r"^v1\.(\d+)\.(\d+)$")
 SECTIONS = {"Incompatible changes:": "incompatible", "Compatible changes:": "compatible"}
+# The module's packages, by directory: "" is the root.
+PACKAGES = ("", "agentproc")
 
 
 def fail(msg: str) -> None:
@@ -85,21 +91,35 @@ def parse(report: str) -> dict[str, list[str]]:
     return changes
 
 
+def has_package(directory: Path) -> bool:
+    """Whether directory holds a Go package: a .go file that is not a test."""
+    return any(not f.name.endswith("_test.go") for f in directory.glob("*.go"))
+
+
 def main(argv: list[str]) -> int:
     if len(argv) > 1:
         fail("usage: check_api.py [BASE]")
     base = argv[0] if argv else latest_release()
     run(["git", "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}"], ROOT)
     module = module_path()
+    changes: dict[str, list[str]] = {"incompatible": [], "compatible": []}
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
         old_tree = work / "base"
         with tarfile.open(fileobj=io.BytesIO(run(["git", "archive", base], ROOT))) as tar:
             tar.extractall(old_tree, filter="data")
-        run(["go", "run", APIDIFF, "-w", str(work / "base.api"), module], old_tree)
-        run(["go", "run", APIDIFF, "-w", str(work / "tree.api"), module], ROOT)
-        report = run(["go", "run", APIDIFF, str(work / "base.api"), str(work / "tree.api")], ROOT).decode()
-    changes = parse(report)
+        for n, rel in enumerate(PACKAGES):
+            path = f"{module}/{rel}" if rel else module
+            if not has_package(ROOT / rel):
+                fail(f"{path} is missing from the working tree")
+            if not has_package(old_tree / rel):
+                (old_tree / rel).mkdir(parents=True, exist_ok=True)
+                (old_tree / rel / "doc.go").write_text(f"package {rel.rsplit('/', 1)[-1]}\n", encoding="utf-8")
+            run(["go", "run", APIDIFF, "-w", str(work / f"base{n}.api"), path], old_tree)
+            run(["go", "run", APIDIFF, "-w", str(work / f"tree{n}.api"), path], ROOT)
+            report = run(["go", "run", APIDIFF, str(work / f"base{n}.api"), str(work / f"tree{n}.api")], ROOT).decode()
+            for kind, found in parse(report).items():
+                changes[kind] += [f"{rel}: {c}" if rel else c for c in found]
     for kind in ("incompatible", "compatible"):
         for change in changes[kind]:
             print(f"check_api: {kind}: {change}")

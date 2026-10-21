@@ -1,0 +1,212 @@
+// Package agentproc starts an ACP agent as a child process, connects to it
+// over the child's standard input and output, and stops it, with the
+// processes it started, in bounded steps
+// (0027-MADR-agent-process-helper.md).
+package agentproc
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"sync"
+	"time"
+
+	acp "github.com/maccavelli/acp-go-sdk2"
+)
+
+// defaultGrace is how long each step of Close waits for the agent when
+// Command.Grace is zero or less.
+const defaultGrace = 5 * time.Second
+
+// ErrTerminated is joined to Wait's error when the agent exited after Close
+// sent SIGTERM to its process group.
+var ErrTerminated = errors.New("agentproc: agent terminated")
+
+// ErrKilled is joined to Wait's error when Close killed the agent's process
+// group, or the agent itself where there is no group.
+var ErrKilled = errors.New("agentproc: agent killed")
+
+// Command is an agent to start as a child process.
+type Command struct {
+	// Cmd is the agent's command. It must not have been started, and its
+	// Stdin and Stdout must be nil: Start connects them to pipes it owns.
+	// Its Path, Args, Env, Dir and Stderr are the caller's; a nil Stderr
+	// discards the agent's log, as os/exec does.
+	Cmd *exec.Cmd
+
+	// Grace is how long each step of Close waits for the agent to exit.
+	// Zero or less means 5 seconds.
+	Grace time.Duration
+
+	// ConnectionOptions configure the connection to the agent.
+	ConnectionOptions []acp.ConnectionOption
+}
+
+// Process is a running agent and the connection to it. Its methods are safe
+// for concurrent use.
+type Process struct {
+	cmd   *exec.Cmd
+	grace time.Duration
+	conn  *acp.ClientSideConnection
+	stdin *os.File // the write end of the agent's standard input
+
+	// done is closed once Cmd.Wait has returned, which the watcher alone
+	// calls (os/exec: "Wait must not be called concurrently").
+	done chan struct{}
+
+	mu      sync.Mutex
+	exited  bool  // Cmd.Wait has returned: no signal is sent from then on
+	waitErr error // what Cmd.Wait returned
+	ended   error // ErrTerminated or ErrKilled, when Close ended the agent so
+
+	// closeOnce runs Close's steps once, so concurrent callers share one
+	// sequence of graces and send no signal twice. Each step is idempotent by
+	// itself, so no test can tell its absence
+	// (0027-PLAN-agent-process-helper.md, the deviation during step 2).
+	closeOnce sync.Once
+}
+
+// Start starts the agent and connects client to it over the agent's
+// standard input and output. On Unix the agent runs in a process group of
+// its own, so that stopping it stops the processes it started. When
+// Cmd.WaitDelay is zero, Start sets it to the grace. Start refuses, starting
+// nothing, a nil Cmd or client, a Cmd already started, or one whose Stdin or
+// Stdout is set.
+func (c *Command) Start(client acp.Client) (*Process, error) {
+	cmd := c.Cmd
+	switch {
+	case cmd == nil:
+		return nil, errors.New("agentproc: Command.Cmd is nil")
+	case client == nil:
+		return nil, errors.New("agentproc: the client is nil")
+	case cmd.Process != nil:
+		return nil, errors.New("agentproc: Command.Cmd has already been started")
+	case cmd.Stdin != nil:
+		return nil, errors.New("agentproc: Command.Cmd.Stdin is set; Start connects it")
+	case cmd.Stdout != nil:
+		return nil, errors.New("agentproc: Command.Cmd.Stdout is set; Start connects it")
+	}
+	if err := prepare(cmd); err != nil {
+		return nil, err
+	}
+	grace := c.Grace
+	if grace <= 0 {
+		grace = defaultGrace
+	}
+	// Pipes the helper owns, not StdoutPipe: Wait closes a StdoutPipe once
+	// the agent exits, which can lose the agent's last output
+	// (0027-MADR-agent-process-helper.md, P1, P2).
+	inR, inW, err := os.Pipe()
+	if err != nil {
+		return nil, fmt.Errorf("agentproc: %w", err)
+	}
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("agentproc: %w", err), inR.Close(), inW.Close())
+	}
+	cmd.Stdin, cmd.Stdout = inR, outW
+	if cmd.WaitDelay == 0 {
+		cmd.WaitDelay = grace
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, errors.Join(fmt.Errorf("agentproc: starting the agent: %w", err), inR.Close(), inW.Close(),
+			outR.Close(), outW.Close())
+	}
+	// The agent holds its own ends now; with the parent's closed, its output
+	// ends when it and the processes it started have closed theirs.
+	if err := errors.Join(inR.Close(), outW.Close()); err != nil {
+		return nil, errors.Join(fmt.Errorf("agentproc: %w", err), cmd.Process.Kill(), cmd.Wait(), inW.Close(), outR.Close())
+	}
+	p := &Process{cmd: cmd, grace: grace, stdin: inW, done: make(chan struct{})}
+	p.conn = acp.NewClientSideConnection(client, inW, outR, c.ConnectionOptions...)
+	go p.watch()
+	return p, nil
+}
+
+// watch owns Cmd.Wait, records its result, and closes done.
+func (p *Process) watch() {
+	err := p.cmd.Wait()
+	p.mu.Lock()
+	p.exited, p.waitErr = true, err
+	p.mu.Unlock()
+	close(p.done)
+}
+
+// Conn returns the connection to the agent.
+func (p *Process) Conn() *acp.ClientSideConnection { return p.conn }
+
+// Done returns a channel that is closed once the agent process has exited.
+func (p *Process) Done() <-chan struct{} { return p.done }
+
+// Wait blocks until the agent process has exited and the connection's
+// goroutines have returned, and then returns the agent's error, the same
+// each time: nil for an exit of status 0 of its own, otherwise the error
+// exec.Cmd.Wait returned, joined with ErrTerminated or ErrKilled when Close
+// ended the agent so. It does not stop the agent.
+func (p *Process) Wait() error {
+	<-p.done
+	_ = p.conn.Wait() //nolint:errcheck // the connection's end is not the agent's; Conn().Err() reports it.
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	switch {
+	case p.ended == nil:
+		return p.waitErr
+	case p.waitErr == nil:
+		return p.ended
+	default:
+		return fmt.Errorf("%w: %w", p.ended, p.waitErr)
+	}
+}
+
+// Close stops the agent and returns Wait's error. It closes the agent's
+// standard input and waits up to the grace for the agent to exit. On Unix it
+// then sends SIGTERM to the agent's process group and waits up to the grace
+// again. It then kills the group, or the agent where there is no group, and
+// closes the connection. A second call returns the same error.
+func (p *Process) Close() error {
+	p.closeOnce.Do(p.stop)
+	return p.Wait()
+}
+
+// stop runs Close's steps once.
+func (p *Process) stop() {
+	// The agent's input only: the connection keeps reading what the agent
+	// writes before it exits (0027-MADR-agent-process-helper.md, A6).
+	_ = p.stdin.Close() //nolint:errcheck // a second close, by the connection, is expected and harmless.
+	switch {
+	case p.exitedWithin(p.grace):
+	case p.signal(terminate, ErrTerminated) && p.exitedWithin(p.grace):
+	default:
+		p.signal(kill, ErrKilled)
+		<-p.done // WaitDelay bounds it once the agent has exited
+	}
+	_ = p.conn.Close() //nolint:errcheck // Close of a connection reports nothing Wait does not.
+}
+
+// exitedWithin reports whether the agent has exited within d.
+func (p *Process) exitedWithin(d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-p.done:
+		return true
+	case <-t.C:
+		return false
+	}
+}
+
+// signal sends what send sends, unless the agent has exited, and records
+// why the agent ended. It reports whether it sent anything.
+func (p *Process) signal(send func(*exec.Cmd) error, why error) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.exited {
+		return false
+	}
+	if err := send(p.cmd); err != nil {
+		return false
+	}
+	p.ended = why
+	return true
+}
