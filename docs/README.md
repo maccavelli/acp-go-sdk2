@@ -85,6 +85,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0026 | MADR | [Report why a connection ended, and wait for its goroutines to exit](decisions/0026-MADR-connection-end-cause-and-wait.md) | accepted |
 | 0026 | PLAN | [Implement 0026: report why a connection ended, and wait for its goroutines to exit](decisions/0026-PLAN-connection-end-cause-and-wait.md) | complete |
 | 0026 | REPORT | [Release notes for v1.18.0, against v1.17.1](reports/0026-REPORT-release-notes-v1-18-0.md) | observed |
+| 0027 | MADR | [Start an agent process, and stop it with its descendants in bounded steps](decisions/0027-MADR-agent-process-helper.md) | accepted |
+| 0027 | PLAN | [Implement 0027: start an agent process, and stop it with its descendants in bounded steps](decisions/0027-PLAN-agent-process-helper.md) | proposed |
 
 ## I want to…
 
