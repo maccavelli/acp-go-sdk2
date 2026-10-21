@@ -401,3 +401,78 @@ The plants that leave a descendant alive left four `beat` grandchildren running,
 
 **The go1.26.9 gate:** `go version` reports go1.26.9; `go vet` and `go test -race -count=1` pass in both modules, `agentproc` with the
 leak guard.
+
+### Deviation, 2026-10-21, during step 4: `WaitDelay` is half the grace
+
+**Found.** With the job object in place, `TestStderrHeldByDescendant` failed on the Windows host, 3 runs of 3: "Close = agentproc: agent
+killed, want exec.ErrWaitDelay, and no kill". The agent exits at its input's end, but a grandchild still holds the caller's `Cmd.Stderr`,
+a writer that is not a file, so `Cmd.Wait` returns, and the agent is seen to exit, only when `WaitDelay` closes that pipe. With
+`WaitDelay` equal to the grace, `Close`'s first wait ran out at the same time, the kill ended the job, and a clean exit was reported as a
+kill. Unix had passed only because its SIGTERM step, which the grandchild ignores, came first; Windows had passed in step 2 because its
+kill could not reach the grandchild.
+
+**Decision (owner, 2026-10-21), the recommended resolution.** `Start` sets a zero `WaitDelay` to half the grace, so an agent that exits
+within half the grace is seen to exit within `Close`'s first step, with no signal on any platform; `Close` then reports
+`exec.ErrWaitDelay`. The MADR's "Start, in order", step 4, and its specification carry the amendment; Design above is annotated.
+`TestStderrHeldByDescendant` now also refuses `ErrTerminated`. Added to this step: `agentproc/agentproc.go`'s one line and doc, the
+test's comment and assertion.
+
+### Step 4, Windows, 2026-10-21
+
+The owner committed step 3 as `529bdac` and approved this step, and committed this step's code, the MADR's amendment and this PLAN's
+annotation as `449b2b6` while its gates ran; this record follows it. What changed:
+
+* **`agentproc/tree_windows.go`, new:** `attach` creates a job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and assigns the agent
+  through `os.Process.WithHandle`; `kill` is `TerminateJobObject(job, 1)`, with `Process.Kill` as the fallback; `end` terminates what is
+  left of the job and closes its handle; `terminate` is `errors.ErrUnsupported`; `hasGroups` false, `hasTree` true.
+* **The platforms' state:** each `tree_*.go` now has a `tree` type made by `attach` after `Cmd.Start`, with `terminate`, `kill` and `end`;
+  `agentproc.go` holds it, and `abandon` kills, waits for and closes an agent `Start` started but cannot connect.
+* **`agentproc/tree_other.go`** narrowed to `!unix && !windows`, as Scope says.
+* **`go.mod` and `go.sum`:** `require golang.org/x/sys v0.49.0`, the newest release, published 2026-10-06, whose `go` line is `1.26.0`
+  (`go list -m -json golang.org/x/sys@latest`); `go mod tidy -diff` prints nothing.
+* **Tests:** `agentproc_windows_test.go`, `TestClientDeathEndsTree`: an `owner` child starts an agent through the helper and exits
+  without `Close`; the agent's grandchild stops. `child_windows_test.go` has the `owner` mode; `child_other_test.go` narrowed to
+  `!unix && !windows`. On Windows, `TestDescendantsEnded` now runs.
+
+**Where `golang.org/x/sys` is linked:** `go list -deps` names `golang.org/x/sys/windows` for `agentproc` under `GOOS=windows` alone; for
+`agentproc` under `linux` and `js/wasm`, and for the root package, it names no `golang.org/x/sys` package.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| on Windows, the agent's descendants end with it, after `Close` and on its own exit | `TestDescendantsEnded`, on the Windows host |
+| on Windows, the agent's descendants end when the process that started them dies | `TestClientDeathEndsTree` |
+| a Windows kill reads as a kill | `TestCloseLadder`, "ignores both", on the Windows host |
+| a held `Stderr` writer makes no signal and no kill | `TestStderrHeldByDescendant`, on the three platforms |
+| `golang.org/x/sys` is built for Windows only | `go list -deps`, above |
+
+**Planted breaks.** Each ran in its own scratch copy of the working tree; a Windows one's test binary was cross-compiled from that copy
+and run on the Windows host. 7 of 7 checks failed as required:
+
+| Break | Where | The check that failed |
+| :--- | :--- | :--- |
+| no job object | Windows | `TestDescendantsEnded`: "still runs after"; `TestClientDeathEndsTree`: "still runs after the process that started it died" |
+| the job without `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` | Windows | `TestClientDeathEndsTree`: "still runs after the process that started it died" |
+| `WaitDelay` not set | Windows | `TestStderrHeldByDescendant`: "want exec.ErrWaitDelay, and no signal" |
+| `WaitDelay` not set | macOS | `TestStderrHeldByDescendant`: "want exec.ErrWaitDelay, and no signal" |
+| `WaitDelay` the whole grace, as before the deviation | Windows | `TestStderrHeldByDescendant`: "want exec.ErrWaitDelay, and no signal" |
+| `ErrKilled` not joined | Windows | `TestCloseLadder`: "want ErrKilled" |
+
+The plants that leave descendants alive left up to three test processes on the Windows host each; the runner ended them after each run.
+
+**Gates,** each exit 0, run alone:
+
+* on `449b2b6`'s tree, go1.27.2: regeneration unchanged; `make pre-add-check`, "166 file(s) clean (gofmt, golangci-lint, go vet, go test,
+  govulncheck)"; `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules; `make check-records`,
+  `make markdownlint` and the identifier scan; `make lint`, "0 issues." four times; `go fix -diff` and `go mod tidy -diff` print nothing;
+* `go vet ./agentproc` for 14 targets: `darwin`, `linux`, `windows` (amd64, arm64 and 386), `freebsd`, `openbsd`, `netbsd`, `illumos`,
+  `ios`, `android`, `js/wasm`, `wasip1/wasm`, `plan9`;
+* `make api` against `v1.18.0`: "0 incompatible, 4 compatible", unchanged by this step;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the cross-compiled `agentproc` test binary, 5 runs, every test
+  "PASS"; and, built with go1.26.9 and `GOEXPERIMENT=goroutineleakprofile`, 3 runs, "PASS";
+* the Linux host: the `agentproc` test binary, 3 runs, "PASS";
+* macOS: `go test -count=5 -race ./agentproc`.
+
+**The go1.26.9 gate:** `go vet` and `go test -race -count=1` pass in both modules, `agentproc` with the leak guard; `GOOS=windows go vet
+./agentproc` under go1.26.9 exits 0.
