@@ -602,3 +602,26 @@ then `-count=20` with `-race` and `-count=20` without, 41 runs. What failed that
 
 **The floor gate, at go1.26.10:** `go version` prints go1.26.10; `go vet` and `go test -race -count=1` pass in both modules, the root's
 tests and `agentproc`'s with the leak guards.
+
+### Step 7, release notes, 2026-10-21
+
+The owner committed step 6 as `084ec9b` and approved this step. What changed:
+
+* **`docs/reports/0027-REPORT-release-notes-v1-19-0.md`, new,** and its row in `docs/README.md`, `observed`: the release text for
+  `v1.19.0`, with `make api`'s report; it names the floor raised to 1.26.10 and the new requirement, `golang.org/x/sys`, as
+  [0028-PLAN-pin-go-1-27-3-and-floor-1-26-10.md](0028-PLAN-pin-go-1-27-3-and-floor-1-26-10.md) asked.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| four additions, all in `agentproc`, none incompatible | `make api` on `084ec9b`, nothing uncommitted: "against v1.18.0: 0 incompatible, 4 compatible" |
+| the root package's code is unchanged | `git diff --name-only v1.18.0 084ec9b -- '*.go' ':!*_test.go'`: `agentproc`'s four files and the three examples' `main.go` |
+| the schema is still `1.25.0` | `git diff --quiet v1.18.0 084ec9b -- schema/`, exit 0 |
+| the commits | `git log v1.18.0..084ec9b`, thirteen; `git show --name-only` each |
+| the notes' example is the README's, which is `ExampleCommand`'s body | a script: the two blocks are byte for byte the same, 18 lines; `TestReadmeAgentprocIsTheExample` |
+| `golang.org/x/sys` is built only for `agentproc` on Windows | `go list -deps`, step 4 |
+
+**Planted breaks:** none; this step adds no test or check.
+
+**Gates:** `make check-records` and `make markdownlint` exit 0; the identifier scan finds nothing in the report or the index.
