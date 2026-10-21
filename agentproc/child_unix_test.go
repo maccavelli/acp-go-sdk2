@@ -3,14 +3,19 @@
 package agentproc
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 	"syscall"
+	"time"
 )
 
 // platformChild runs the modes only Unix has.
 func platformChild(mode string) (int, bool) {
+	if mode == "owner" {
+		return owner(), true
+	}
 	if mode != "parent-escape" {
 		return 0, false
 	}
@@ -26,4 +31,19 @@ func platformChild(mode string) (int, bool) {
 	}
 	ready()
 	return 0, true
+}
+
+// owner is a client: it starts a stubborn agent through Start, its Cmd as
+// the caller left it, the agent's stderr its own, writes "pid <n>" to stderr,
+// and waits to be killed (0029-PLAN-unix-client-death-pdeathsig.md, step 3).
+func owner() int {
+	cmd := exec.Command(testBinary(), "-test.run=^$")
+	cmd.Env = append(os.Environ(), childEnv+"=stubborn", "GORACE=atexit_sleep_ms=0")
+	cmd.Stderr = os.Stderr
+	if _, err := (&Command{Cmd: cmd}).Start(&testClient{}); err != nil {
+		return 1
+	}
+	fmt.Fprintf(os.Stderr, "pid %d\n", cmd.Process.Pid)
+	time.Sleep(time.Hour)
+	return 0
 }

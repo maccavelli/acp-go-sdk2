@@ -84,7 +84,8 @@ it is relied on.
 1. **Records:** this PLAN and its row `in-progress`; the facts re-asserted by a script.
 2. **The locked start,** on every platform; `TestStartFromExitingLockedGoroutine`, with `Pdeathsig` set by the test on Linux.
 3. **`Pdeathsig`:** `setDeathSignal` and its two files; `TestClientDeathEndsAgent`, `TestCallersPdeathsigKept`, `TestDefaultPdeathsig`.
-4. **Docs:** `Start`'s doc, the README and `docs/architecture.md`; each claim mapped to a test.
+4. **Docs:** `Start`'s doc, the README and `docs/architecture.md`; each claim mapped to a test. (Amended 2026-10-21, after step 3:
+   and `rawWire`'s reader in `jsonrpc_test.go`; see the deviation after step 3.)
 5. **Verification and close:** the gates; the Linux and Windows hosts reached over SSH; after CI's six jobs pass on the pushed commits,
    this PLAN and its row `complete`. The release follows with 0030's.
 
@@ -206,3 +207,66 @@ could say so. The test now watches for the agent's end while it waits, and names
 * the Linux host: the `agentproc` test binary, 3 runs, "PASS".
 
 **The floor gate at go1.26.10:** `go vet` and `go test -race -count=1` pass in both modules, the leak guards on.
+
+### Step 3, `Pdeathsig`, 2026-10-21
+
+The owner committed step 2 and approved this step. What changed:
+
+* **`agentproc/deathsig_pdeathsig.go`, new** (`linux || freebsd`): `setDeathSignal` sets `Pdeathsig` to SIGKILL when it is zero.
+* **`agentproc/deathsig_none.go`, new** (`unix && !linux && !freebsd`): `setDeathSignal` does nothing.
+* **`agentproc/tree_unix.go`:** `prepare` calls `setDeathSignal` after `Setpgid`.
+* **Tests:** `pdeathsig_test.go` gains `TestDefaultPdeathsig`, `TestCallersPdeathsigKept` and `TestClientDeathEndsAgent`;
+  `child_unix_test.go` gains the mode `owner`, a client that starts a `stubborn` agent through `Start`, writes its process ID, and waits
+  to be killed.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| a stubborn agent ends when its client is killed without `Close` | `TestClientDeathEndsAgent`, the Linux host, 3 runs of 3 |
+| `Start` sets SIGKILL when the caller set none | `TestDefaultPdeathsig` |
+| a caller's `Pdeathsig` is kept | `TestCallersPdeathsigKept` |
+| the other Unix systems build without it | `go vet ./agentproc` for `darwin`, `openbsd`, `netbsd`, `illumos` |
+
+**Planted breaks,** each in its own scratch copy; the Linux ones run on the Linux host. 4 of 4 checks failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `setDeathSignal` doing nothing | `TestClientDeathEndsAgent`: "the agent, pid …, still runs 2s after its client was killed"; `TestDefaultPdeathsig`: "Pdeathsig = signal 0, want SIGKILL" |
+| a caller's `Pdeathsig` overwritten | `TestCallersPdeathsigKept`: "Pdeathsig = killed, want the caller's SIGTERM" |
+| `deathsig_none.go` removed | `GOOS=darwin go vet ./agentproc`: "undefined: setDeathSignal" |
+
+The test's own cleanup killed the planted survivor; no test process was left on the host after any run.
+
+**Found, outside this PLAN:** the first run of the floor gate on this step's tree failed in the root package, not `agentproc`: its
+tests passed and its leak guard then reported one goroutine, `rawWire`'s line reader blocked on `lines <- sc.Text()`
+(`jsonrpc_test.go:66`). `rawWire`'s channel holds 16 lines and its cleanup closes the pipes, which does not unblock a send to a full
+channel, so a test that leaves more than 16 of the connection's lines unread leaks it. `jsonrpc_test.go` last changed in `711a1d5`, before
+this work, and this PLAN changes nothing in the root package. Five runs of the root tests on go1.26.10 with the leak guard, and the floor
+gate run again, found no leak. It waits for the owner's decision on where it is fixed.
+
+**Gates,** each exit 0, run alone:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "167 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and
+  the new files', "2 file(s) clean"; `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules;
+  `make check-records`, `make markdownlint` and the identifier scan; `make lint`, "0 issues." four times; `golangci-lint` for
+  `GOOS=linux` and `GOOS=freebsd` on `agentproc`, "0 issues." each; `go fix -diff ./...` prints nothing;
+* `go vet ./agentproc` for `darwin`, `linux` (amd64, arm64), `freebsd`, `openbsd`, `netbsd`, `illumos`, `windows`, `js/wasm`,
+  `wasip1/wasm`, `plan9`;
+* `make api` against `v1.19.0`: "0 incompatible, 0 compatible";
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules;
+* the Linux host: the `agentproc` test binary, 3 runs, "PASS"; macOS: `go test -count=5 -race ./agentproc`.
+
+**The floor gate at go1.26.10,** run again after the leak above: `go vet` and `go test -race -count=1` pass in both modules, the leak
+guards on.
+
+### Deviation, 2026-10-21, after step 3: `rawWire`'s reader leaks
+
+**Found.** As step 3 records, the floor gate's first run on that tree failed in the root package's leak guard: `rawWire`'s line reader,
+`jsonrpc_test.go:66`, blocked on `lines <- sc.Text()`, its 16-line channel full; the pipes its cleanup closes do not unblock a send. One
+run in seven failed so. It is test code of the root package, unchanged since `711a1d5`, and not this PLAN's subject.
+
+**Decision (owner, 2026-10-21).** Fix it inside this PLAN, in step 4, as this deviation; the alternatives were an amendment to
+[0023-PLAN-connection-lifetime-and-test-leaks.md](0023-PLAN-connection-lifetime-and-test-leaks.md), whose subject test leaks are, and
+recording it only. Added to step 4's scope: `jsonrpc_test.go`, whose reader stops when the test ends (a send that also selects on a
+channel the cleanup closes), and a planted break that shows the reader blocked without it. The MADR's decision is unchanged.

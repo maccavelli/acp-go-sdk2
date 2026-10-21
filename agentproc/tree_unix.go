@@ -28,6 +28,7 @@ func prepare(cmd *exec.Cmd) error {
 	if !cmd.SysProcAttr.Setsid {
 		cmd.SysProcAttr.Setpgid = true
 	}
+	setDeathSignal(cmd.SysProcAttr)
 	return nil
 }
 
