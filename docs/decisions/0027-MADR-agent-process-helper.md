@@ -289,6 +289,9 @@ var ErrTerminated = errors.New("agentproc: agent terminated")
 var ErrKilled = errors.New("agentproc: agent killed")
 ```
 
+(Amended 2026-10-21, during the PLAN's step 4: `Start` sets a zero `WaitDelay` to half the grace, not the grace, and the code's doc
+comment says so; the PLAN's deviation during step 4 holds why.)
+
 **Start, in order.**
 
 1. Refuse, starting nothing, a nil `Cmd`, or one whose `Process` is set, whose `Stdin` or `Stdout` is set, or, on Unix, whose `SysProcAttr` sets
@@ -296,7 +299,7 @@ var ErrKilled = errors.New("agentproc: agent killed")
 2. Create two `os.Pipe`s. The agent's stdout is one the helper owns, so `Wait` never closes the connection's reader (P1, P2).
 3. On Unix, set `SysProcAttr.Setpgid` unless `Setsid` is set, which makes the agent its own group's leader too. The caller's
    `SysProcAttr` is kept otherwise.
-4. Set `WaitDelay` to the grace when it is zero (P10, P11), then `cmd.Start()`. Close the agent's ends of both pipes in the parent.
+4. Set `WaitDelay` to the grace when it is zero (P10, P11) (amended 2026-10-21, during the PLAN's step 4: half the grace; see the PLAN's deviation during step 4), then `cmd.Start()`. Close the agent's ends of both pipes in the parent.
 5. On Windows, create a job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and assign the agent to it through `Process.WithHandle`
    (S5), which needs no process ID and so meets no reused one. A descendant the agent starts before the assignment is outside the job
    (S7); in every probe run (P17, P18) the assignment came first.

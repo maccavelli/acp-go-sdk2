@@ -65,7 +65,7 @@ As the MADR's "Start, in order", with these details:
   Unix, `Cmd.SysProcAttr.Pgid` non-zero.
 * **The pipes** are two `os.Pipe` pairs. After `Cmd.Start`, the parent closes the child's ends, so the agent's exit, with its tree's,
   ends the output (P2, P8).
-* **`WaitDelay`** is set to the grace only when zero.
+* **`WaitDelay`** is set to the grace only when zero (corrected 2026-10-21: to half the grace; see the deviation during step 4).
 * **A failure after `Cmd.Start`** (the job's creation or assignment, on Windows) kills the agent with `Process.Kill`, waits for it, closes
   the pipes, and returns the error wrapped with its step.
 

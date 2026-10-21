@@ -218,19 +218,20 @@ func TestCloseLadder(t *testing.T) {
 }
 
 // TestStderrHeldByDescendant requires a Cmd.Stderr writer that a process the
-// agent started still holds not to keep Close waiting: WaitDelay, which
-// Start sets to the grace, closes it (0027-MADR-agent-process-helper.md,
-// P10, P11).
+// agent started still holds neither to keep Close waiting nor to make it
+// escalate: WaitDelay, which Start sets to half the grace, closes it, so the
+// agent's exit is seen within Close's first step
+// (0027-MADR-agent-process-helper.md, P10, P11;
+// 0027-PLAN-agent-process-helper.md, the deviation during step 4).
 func TestStderrHeldByDescendant(t *testing.T) {
 	t.Parallel()
 	p := start(t, "parent-stderr", &testClient{}) // its Stderr is a readyWriter, not a file
 	// The agent exits at its input's end; the heartbeat it started ignores
 	// SIGTERM and holds the writer. Without WaitDelay, Wait would hold until
-	// the kill ended the heartbeat, or for its minute where there is no
-	// group.
+	// a kill ended the heartbeat, or for its minute where nothing can.
 	_, err := within(t, testGrace*3+slack, "Close", p.Close)
-	if !errors.Is(err, exec.ErrWaitDelay) || errors.Is(err, ErrKilled) {
-		t.Errorf("Close = %v, want exec.ErrWaitDelay, and no kill", err)
+	if !errors.Is(err, exec.ErrWaitDelay) || errors.Is(err, ErrTerminated) || errors.Is(err, ErrKilled) {
+		t.Errorf("Close = %v, want exec.ErrWaitDelay, and no signal", err)
 	}
 }
 
