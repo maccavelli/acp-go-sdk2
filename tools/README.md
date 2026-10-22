@@ -37,7 +37,7 @@ cache directory, outside the tree.
 | `release_body.py VERSION REV` | a release's body, from its release-notes report |
 | `publication.py VERSION COMMIT BODY` | ten checks of a release's publication |
 | `consumer.py VERSION` | a module at the floor that uses the release |
-| `watch_ci.py REV` | a commit's CI run, waited for and watched |
+| `watch_ci.py REV [--branch B]` | every CI run of a commit, or of one branch, waited for, watched, and read once every job has settled (`--settle`, 180 s, `--every`, 10 s) |
 | `find.py lines \| files` | lines or files, without `grep` |
 | `procs.py TEXT...` | processes, without `pgrep` |
 

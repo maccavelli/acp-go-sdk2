@@ -214,6 +214,85 @@ copies of the tree, go to the user's cache directory, `ACP_TOOLS_CACHE` when set
 directory per tool; `.cache/tools/` holds the logs alone. The alternative was to exclude `.cache` in `.markdownlint-cli2.jsonc` and
 `scripts/check_records.py`, two copied templates, leaving about a gigabyte in the tree for editors, indexers and backups to walk.
 
+## Amendment 2026-10-22, after step 8: the CI runs a tool reads, and when it reads them
+
+Found when the PLAN's step 8 watched its push, assessed at the owner's request the same day, and decided by the owner then (see "Decided
+with the owner, 2026-10-22, the CI amendment"). The decisions above are
+unchanged; what changes is how two of the tools read GitHub Actions. Every figure below was taken that day with gh 2.102.0, the
+repository only read, at `b42620c`.
+
+### What was found
+
+* **W1. A job list taken before the jobs settled.** `tools/watch_ci.py b42620c` printed "watch_ci: run completed success" with five jobs
+  "success" and the sixth, "validate (ubuntu-24.04, 1.27.3)", "in_progress" (its output, kept outside the tree). A later
+  `gh run view 39792270232` gave that job "completed success", every one of its steps "completed success", its `completedAt`
+  14:05:52Z, and the run's `updatedAt` 14:09:44Z. The tool reads the run once, as soon as `gh run watch` returns
+  (`tools/watch_ci.py:57`–`:58`), prints each job as that read has it, and decides by the run's `conclusion` alone (`:64`). So the run's
+  verdict was GitHub's final one, and right, but the job list beside it was a moment early, and a record quoting it would contradict
+  itself.
+* **W2. One run of several.** `gh run list --commit` filters by commit (its help: "Filter runs by the SHA of the commit") and lists the
+  newest first: for `4fa7204`, the released commit, it gives the tag's push, `39716056732`, `v1.20.0`, created 03:17:51Z, then `main`'s
+  push, `39714586565`, created 03:01:41Z. `find_run` takes the first run whose commit matches (`:30`–`:34`), so `watch_ci.py 4fa7204`, in
+  the PLAN's step 6, watched the tag's run and never `main`'s. A commit with a branch's run and a tag's, or one day more than one
+  workflow (there is one now, `ci.yml`), is reported by its newest run alone.
+* **W3. The watch's own status discarded.** `gh run watch --exit-status` exits non-zero "if run fails" (its help), but the tool ignores
+  its exit status (`:57`); and a watch longer than its `timeout` raises `subprocess.TimeoutExpired` (a probe: `subprocess.run(["sleep",
+  "2"], timeout=0.2)` raised it), which the tool does not catch, so it would end with a traceback rather than a verdict.
+* **W4. The same choice in `publication.py`.** Its check "CI on origin main's head" asks `gh run list --commit <origin main> --limit 1`
+  (`tools/publication.py:74`), which, at a release, when `main`'s head is the tagged commit, returns the tag's run: for `4fa7204` it
+  returns `39716056732`, `headBranch` `v1.20.0`. So the check read the tag's run twice, as "CI on the tag" (`:78`) does, and never
+  `main`'s. The scratch directory's check it replaced asked the same, so
+  [0030-PLAN-record-initialize-on-arrival.md](0030-PLAN-record-initialize-on-arrival.md)'s "Publication of `v1.20.0`" records "CI on
+  it, and on the tag, run `39716056732`": both checks were that one run. `main`'s own run, `39714586565`, succeeded (W2's listing), so
+  the publication's result stands; what the check proved was less than its name.
+
+### Considered Options, for this amendment
+
+* **For W1.** (a) After the watch, read the run again until every job is "completed", up to a bound, then decide by the run and every
+  job. (b) Decide by the run's `conclusion`, as now, and print no job list. (c) Leave it, and record the list's timing where it matters.
+* **For W2.** (a) Watch every run of the commit, each reported, all required to succeed; `--branch` narrows them to one branch's.
+  (b) Require `--branch`, and watch the newest run of that branch. (c) Leave it.
+* **For W3.** (a) Report the watch's exit status, and turn a timeout into a verdict, "did not finish within". (b) Leave it.
+* **For W4.** (a) Ask for `main`'s run by branch, `--commit <head> --branch main`, and name its run in the check's detail. (b) Leave
+  it, and rename the check to what it reads.
+
+### Decision Outcome, for this amendment
+
+Chosen: W1 (a), W2 (a), W3 (a), W4 (a), as proposed, because each makes the tool report what its name says, from data that has settled, with no
+new dependency.
+
+* W1 (b) drops what a record needs, which job passed or failed; (c) leaves a record able to quote a list that contradicts its verdict.
+* W2 (b) makes the common case, a branch's push, need a flag, and still misses a tag's run of the same commit; (c) leaves a failing
+  run unread whenever a newer run of the same commit passed.
+* W3 (b) leaves a hung or failed watch reported as a traceback, or not at all.
+* W4 (b) leaves `main`'s own run unchecked at every release.
+
+#### Questions, for this amendment
+
+5. **How long to wait for the jobs to settle** (W1 a).
+   * Recommended: up to 120 seconds, reading every 5, the bound a flag. The lag seen (W1) was not measured to the second, so the bound
+     is a choice; a run still unsettled at the bound fails, saying so.
+   * Alternative: no bound, waiting as long as the jobs take.
+6. **Which runs `watch_ci.py` waits to appear** (W2 a).
+   * Recommended: the runs of the commit that exist once the first has appeared, then a further 30 seconds for others, such as a tag's
+     pushed after the branch; `--branch` narrows to one.
+   * Alternative: only those present when the first appears.
+
+#### Decided with the owner, 2026-10-22, the CI amendment
+
+| Question | Answer |
+| :--- | :--- |
+| W1 to W4 | As proposed: (a) for each. |
+| 5. How long to wait for the jobs to settle | **The owner's variant:** up to 180 seconds, reading every 10. |
+| 6. Which runs `watch_ci.py` waits to appear | As recommended: those present once the first appears, and 30 seconds more for others. |
+
+### Consequences, for this amendment
+
+* Good, because a watched verdict and its job list agree, each job read once it has settled.
+* Good, because every run of a commit is read, and `main`'s at a release, by its branch.
+* Neutral, because a watch takes up to the settle bound longer, only when GitHub lags.
+* Bad, because `watch_ci.py` grows from one run to several, and its tests with it.
+
 ## More Information
 
 * **The scope** was the owner's answer of 2026-10-21: the reusable tools, generalized; the one-off record, probe and plant scripts not kept.

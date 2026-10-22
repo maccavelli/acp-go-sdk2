@@ -336,8 +336,6 @@ class HelpersTest(Temp):
         git(repo, "commit", "-q", "-m", "c")
         full = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
         self.assertEqual(watch_ci.full_sha(repo, full[:7]), full)
-        self.assertEqual(watch_ci.find_run([{"headSha": "a" * 40, "databaseId": 1}, {"headSha": full, "databaseId": 2}], full), 2)
-        self.assertIsNone(watch_ci.find_run([{"headSha": "a" * 40, "databaseId": 1}], full))
 
     def test_consumer_go_mod(self) -> None:
         import consumer
@@ -365,6 +363,67 @@ class HelpersTest(Temp):
         import publication
         self.assertTrue(publication.same_body("text\n", "\ntext"))
         self.assertFalse(publication.same_body("text", "text."))
+
+
+class WatchCiTest(unittest.TestCase):
+    """watch_ci.py's verdict and the runs it reads
+    (0031-MADR-verification-tools-in-repository.md, "Amendment 2026-10-22, after step 8")."""
+    SHA = "b" * 40
+    RUNS = [{"databaseId": 2, "headSha": SHA, "headBranch": "v9.9.9", "event": "push"},
+            {"databaseId": 1, "headSha": SHA, "headBranch": "main", "event": "push"},
+            {"databaseId": 3, "headSha": "c" * 40, "headBranch": "main", "event": "push"}]
+
+    def test_every_run_of_the_commit(self) -> None:
+        import watch_ci
+        self.assertEqual([r["databaseId"] for r in watch_ci.runs_for(self.RUNS, self.SHA)], [2, 1], "both runs of the commit")
+        self.assertEqual([r["databaseId"] for r in watch_ci.runs_for(self.RUNS, self.SHA, "main")], [1], "the branch's alone")
+        self.assertEqual(watch_ci.runs_for(self.RUNS, self.SHA, "nope"), [])
+
+    def test_verdict_reads_every_job(self) -> None:
+        import watch_ci
+        ok = {"status": "completed", "conclusion": "success"}
+        self.assertTrue(watch_ci.verdict({"conclusion": "success"}, [ok, {"status": "completed", "conclusion": "skipped"}]))
+        self.assertFalse(watch_ci.verdict({"conclusion": "success"}, [ok, {"status": "completed", "conclusion": "failure"}]),
+                         "a job's failure under a run's success must fail")
+        self.assertFalse(watch_ci.verdict({"conclusion": "failure"}, [ok]))
+        self.assertFalse(watch_ci.verdict({"conclusion": "success"}, []), "no job read is no verdict")
+
+    def test_wait_settled(self) -> None:
+        import watch_ci
+        now = [0.0]
+        reads = []
+        lagging = {"status": "completed", "jobs": [{"status": "in_progress"}]}
+        done = {"status": "completed", "jobs": [{"status": "completed"}]}
+
+        def fetch() -> dict:
+            reads.append(now[0])
+            return lagging if len(reads) < 3 else done
+
+        info, calm = watch_ci.wait_settled(fetch, 180, 10, clock=lambda: now[0], sleep=lambda s: now.__setitem__(0, now[0] + s))
+        self.assertTrue(calm)
+        self.assertIs(info, done)
+        self.assertEqual(reads, [0.0, 10.0, 20.0], "read again every 10 s until settled")
+
+        now[0], reads[:] = 0.0, []
+        info, calm = watch_ci.wait_settled(lambda: (reads.append(now[0]), lagging)[1], 180, 10, clock=lambda: now[0],
+                                           sleep=lambda s: now.__setitem__(0, now[0] + s))
+        self.assertFalse(calm, "unsettled at the bound")
+        self.assertEqual(reads[-1], 180.0)
+
+    def test_watch_timeout_is_a_verdict(self) -> None:
+        import watch_ci
+
+        def hangs(cmd, **kw):
+            raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+
+        self.assertEqual(watch_ci.watch(["gh"], timeout=5, runner=hangs), (None, "did not finish within 5 s"))
+        self.assertEqual(watch_ci.watch(["gh"], runner=lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1)), (1, ""))
+
+    def test_main_run_of_a_released_commit(self) -> None:
+        import publication
+        runs = [{"databaseId": 2, "headBranch": "v9.9.9"}, {"databaseId": 1, "headBranch": "main"}]
+        self.assertEqual(publication.main_run(runs)["databaseId"], 1, "main's run, not the newer tag's")
+        self.assertIsNone(publication.main_run(runs[:1]))
 
 
 class ReadmeTest(unittest.TestCase):

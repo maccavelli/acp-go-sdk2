@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 date: 2026-10-22
 associated-madr: "0031-MADR-verification-tools-in-repository.md"
 ---
@@ -68,6 +68,26 @@ the MADR's recommended answers to questions 1 to 4; an answer otherwise amends i
 * **`find.py`.** `lines PATH|GLOB... -- TEXT...`, each matching line with its file and number; `files ROOT PATTERN...`, the matching paths,
   `.git` left out. **`procs.py TEXT...`**, the processes whose command line holds any, this one excluded; exit 1 when any.
 
+### `watch_ci.py` and the main check (added 2026-10-22, after step 8)
+
+The MADR's "Amendment 2026-10-22, after step 8", W1 to W4, as the owner decided them.
+
+* **`watch_ci.py`,** its pure parts functions the tests call:
+  * `runs_for(runs, sha, branch)`: every run of the commit, newest first, those of `branch` alone when it is given;
+  * `settled(jobs)`: every job's status "completed";
+  * `verdict(run, jobs)`: success only when the run's conclusion is "success" and every job's is "success" or "skipped";
+  * `wait_settled(fetch, bound, every, clock, sleep)`: calls `fetch` until `settled`, or the bound passes; returns the last read and
+    whether it settled; `clock` and `sleep` injected, so a test needs no wait;
+  * `watch(cmd, timeout, runner)`: runs `gh run watch`, returns its exit status, or a "did not finish within" verdict for
+    `TimeoutExpired`.
+  * The flow: wait for the first run (`--minutes`, 20); then 30 seconds more for others (`--more`, question 6); watch each run, then
+    `wait_settled` it (`--settle`, 180 seconds, every 10, question 5); print each run's id, branch, event, status, conclusion, the
+    watch's exit status, and each job; exit 0 only when every run's `verdict` is success, 1 when one is not or did not settle, 2 when no
+    run appeared. `--branch` narrows.
+* **`publication.py`:** "CI on origin main's head" asks `gh run list --commit <head> --branch main --limit 1`, and names the run's id and
+  branch in its detail; "CI on the tag" names its run's id too. `main_run(runs)` picks the newest run whose `headBranch` is `main`.
+* **`tools/README.md`:** `watch_ci.py`'s row and its flags.
+
 ## Tests
 
 `tools/test_tools.py`, `unittest`, no host and no network:
@@ -81,6 +101,10 @@ the MADR's recommended answers to questions 1 to 4; an answer otherwise amends i
 * `find.py` and `procs.py`: a planted line found with its number; this process not listed.
 * `_common.host`: unset, it stops naming the variable.
 * `gates.py`'s `fix` and `tidy` rule: output on exit 0 counts as a failure.
+* (Added 2026-10-22, after step 8.) `watch_ci.py`: `runs_for` returns both of two runs of a commit, and one with `--branch`;
+  `verdict` fails a run whose conclusion is "success" with a job "failure", and passes "skipped"; `wait_settled`, on a fetch that reads
+  "in_progress" twice then "completed", returns settled after three reads, and on one that never settles, unsettled at the bound, with a
+  fake clock; `watch` turns `TimeoutExpired` into a verdict. `publication.py`: `main_run` picks the `main` run of a tag's and a branch's.
 
 ## Implementation Steps
 
@@ -102,6 +126,12 @@ planted break in a scratch copy, never in the tree.
    last pushed commit.
 7. **CI and docs:** `ci.yml`, `tools/README.md`, `docs/architecture.md`, `AGENTS.md`.
 8. **Verification and close:** the gates, by `gates.py --all`; `make push-guard`; after CI passes, this PLAN and its row `complete`.
+9. **(Added 2026-10-22, after step 8) The CI runs:** `watch_ci.py` and `publication.py` as the design's last section has it; their
+   tests; `tools/README.md`. Live: `watch_ci.py 4fa7204` reports both its runs, the tag's and `main`'s, each success, and `--branch
+   main` the one; `watch_ci.py b42620c` lists every job "completed"; `publication.py v1.20.0 4fa7204 <body>` holds 10 of 10, "CI on
+   origin main's head" naming `39714586565`, `main` (amended 2026-10-22, during step 9: `main`'s run of origin main's head; see
+   the deviation during step 9). Then the gates, `make push-guard`, and after CI passes, this PLAN and its row
+   `complete` again.
 
 ## Verification
 
@@ -119,6 +149,12 @@ Planted breaks, each in a scratch copy:
 | `leftovers.py` | a substring match in place of the image name | `leftovers.py`, `tasklist.exe` not matched as `t.exe` |
 | `plants.py` | an edit that does not apply accepted | `test_tools.py` |
 | `release_body.py` | a link target missing | `test_tools.py` |
+| `watch_ci.py` (added 2026-10-22, after step 8) | the verdict by the run's conclusion alone | `test_tools.py`, a job's failure under a run's success |
+| `watch_ci.py` | no wait for the jobs to settle | `test_tools.py`, `wait_settled`'s three reads |
+| `watch_ci.py` | the first run alone | `test_tools.py`, `runs_for`'s two runs |
+| `watch_ci.py` | `--branch` ignored | `test_tools.py`, `runs_for` with a branch |
+| `watch_ci.py` | `TimeoutExpired` not caught | `test_tools.py`, `watch` |
+| `publication.py` | the main check without `--branch main` | `test_tools.py`, `main_run` |
 
 Acceptance:
 
@@ -457,3 +493,75 @@ the job "completed". The verdict was the run's own conclusion, and right; the jo
 change may wait for every job's status as well.
 
 Every acceptance criterion is met, and this PLAN and its row in `docs/README.md` are now `complete`.
+
+### Amendment, 2026-10-22, after step 8: step 9 proposed
+
+**Found.** Step 8's record notes that `watch_ci.py` printed a job "in_progress" beside the run's "success". Assessed at the owner's
+request, with each figure taken that day, the repository only read: the job list was read before the jobs had settled (the MADR's W1);
+`watch_ci.py` reads only the newest of a commit's runs (W2), so in step 6 it watched `4fa7204`'s tag run, `39716056732`, and not
+`main`'s, `39714586565`; it ignores the watch's own status and does not catch a timeout (W3); and `publication.py`'s "CI on origin main's
+head" reads the newest run of the head commit, at a release the tag's (W4), so in step 6, as in
+[0030-PLAN-record-initialize-on-arrival.md](0030-PLAN-record-initialize-on-arrival.md)'s publication, it read `39716056732` and not
+`main`'s run. `main`'s run succeeded, so no recorded result changes; the records stand as written.
+
+**Proposed.** The design's last section, the tests and planted breaks marked "added 2026-10-22, after step 8, proposed", and step 9; the
+MADR's questions 5 and 6. Nothing is changed until the owner approves; this PLAN then returns to `in-progress` until step 9 closes it,
+and step 8's close stands as recorded.
+
+**Decided (owner, 2026-10-22).** W1 to W4 as proposed; question 5, the owner's variant, up to 180 seconds, reading every 10; question
+6 as recommended. Step 9 is approved, and this PLAN is `in-progress` again until it closes.
+
+### Deviation, 2026-10-22, during step 9: the main check's run
+
+**Found.** Step 9's acceptance has `publication.py`'s "CI on origin main's head" name `39714586565`, `main`'s run of `4fa7204`. It named
+`39792270232`, `main`: since the owner pushed step 8, origin's `main` is `b42620c`, and the check reads `main`'s run of origin main's
+head, as the amendment decided. The acceptance assumed `main` still at the released commit.
+
+**Decision (owner, 2026-10-22).** The acceptance is corrected: the check names `main`'s run of origin main's head; and, at the released
+commit, the check's query, `gh run list --commit 4fa7204 --branch main`, gives `39714586565`, `main`, where the old one, `--limit 1`,
+gives `39716056732`, `v1.20.0`, both run that day. `main_run`'s test and its planted break cover the choice. The alternative was a
+`--head` option for the replay alone.
+
+### Step 9, the CI runs, 2026-10-22
+
+The owner committed step 8's close as `4083a6e`, decided the amendment and approved this step; the deviation above was decided during it.
+What changed:
+
+* **`tools/watch_ci.py`,** rewritten around `runs_for`, `settled`, `verdict`, `wait_settled` and `watch`: every run of the commit, or of
+  `--branch`, waited for (`--minutes`, 20; `--more`, 30 s); each watched, the watch's exit status kept, a timeout a verdict; each read
+  again until every job is "completed" (`--settle`, 180 s; `--every`, 10 s); each printed with its id, branch, event, status,
+  conclusion, the watch's status and every job. A run passes only when the watch exited 0, its jobs settled, and its and every job's
+  conclusion is success or, for a job, skipped. `find_run` is gone.
+* **`tools/publication.py`:** "CI on origin main's head" asks `--commit <head> --branch main` and takes `main_run`'s choice, naming its
+  run and branch; "CI on the tag" names its run and branch.
+* **`tools/test_tools.py`:** `WatchCiTest`, five tests; `find_run`'s assertions removed with it; 41 tests.
+* **`tools/README.md`:** `watch_ci.py`'s row.
+
+**Live,** each exit 0:
+
+| Check | Result |
+| :--- | :--- |
+| `watch_ci.py 4fa7204` | "2 run(s) for 4fa7204: 39716056732, 39714586565"; each "completed success", watch exit 0, six jobs "completed success" |
+| `watch_ci.py 4fa7204 --branch main` | "1 run(s) for 4fa7204: 39714586565", `main` |
+| `watch_ci.py b42620c` | run `39792270232`, `main`: six jobs "completed success", none "in_progress" |
+| `publication.py v1.20.0 4fa7204 <body>` | 10 of 10; "CI on origin main's head", "run 39792270232, main"; "CI on the tag", "run 39716056732, v1.20.0" |
+| at the released commit, `gh run list --commit 4fa7204 --branch main` | `39714586565`, `main`; the old query, `--limit 1`, `39716056732`, `v1.20.0` |
+
+The settling cannot be made to lag on demand; `test_wait_settled` shows it, with a fake clock: three reads, 10 s apart, until the jobs
+settle, and an unsettled run reported so at 180 s.
+
+**Planted breaks,** each in a copy of `tools/`; 6 of 6 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the verdict by the run's conclusion alone | `test_verdict_reads_every_job`: "a job's failure under a run's success must fail" |
+| no wait for the jobs to settle | `test_wait_settled`: the lagging read returned |
+| the first run alone | `test_every_run_of_the_commit`: "both runs of the commit" |
+| `--branch` ignored | `test_every_run_of_the_commit`: "the branch's alone" |
+| `TimeoutExpired` not caught | `test_watch_timeout_is_a_verdict`: the exception reached the test |
+| the main check without its branch | `test_main_run_of_a_released_commit`: "main's run, not the newer tag's" |
+
+**Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 41 tests"; `make markdownlint`, 28 files, 0 issues; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed.
+
+The push, CI on it watched by the new `watch_ci.py`, and this PLAN and its row `complete` follow, in the owner's turn that asks for the
+push.

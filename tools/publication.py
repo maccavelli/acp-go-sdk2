@@ -29,6 +29,14 @@ def same_body(published: str, expected: str) -> bool:
     return published.strip() == expected.strip()
 
 
+def main_run(runs: list[dict]) -> dict | None:
+    """The newest of the runs whose branch is main: at a release, main's head
+    is also the tag's commit, and the tag's run is listed first
+    (0031-MADR-verification-tools-in-repository.md, "Amendment 2026-10-22,
+    after step 8", W4)."""
+    return next((r for r in runs if r.get("headBranch") == "main"), None)
+
+
 def contains(root: Path, ancestor: str, head: str) -> bool:
     """Whether commit head has ancestor in its history (the same commit
     included), fetching origin's main when head is not present locally."""
@@ -71,14 +79,15 @@ def main(argv: list[str]) -> int:
     # is make push-guard's (0031-PLAN, the deviation during step 6).
     origin_main = refs.get("refs/heads/main", "")
     check("the tag's commit is on origin's main", bool(peeled and origin_main) and contains(root, peeled, origin_main), origin_main[:7])
-    rc, out = run("gh", "run", "list", "--repo", repo, "--commit", origin_main, "--json", "conclusion,status", "--limit", "1")
-    runs = json.loads(out) if rc == 0 and origin_main else []
-    check("CI on origin main's head", bool(runs) and runs[0]["status"] == "completed" and runs[0]["conclusion"] == "success",
-          json.dumps(runs[:1]))
-    rc, out = run("gh", "run", "list", "--repo", repo, "--branch", tag, "--json", "conclusion,status,headSha,databaseId", "--limit", "1")
+    rc, out = run("gh", "run", "list", "--repo", repo, "--commit", origin_main, "--branch", "main", "--json",
+                  "conclusion,status,headBranch,databaseId", "--limit", "5")
+    m_run = main_run(json.loads(out)) if rc == 0 and origin_main else None
+    check("CI on origin main's head", bool(m_run) and m_run["status"] == "completed" and m_run["conclusion"] == "success",
+          f"run {m_run['databaseId']}, {m_run['headBranch']}" if m_run else "no run of main")
+    rc, out = run("gh", "run", "list", "--repo", repo, "--branch", tag, "--json", "conclusion,status,headSha,databaseId,headBranch", "--limit", "1")
     runs = json.loads(out) if rc == 0 else []
     check("CI on the tag", bool(runs) and runs[0]["status"] == "completed" and runs[0]["conclusion"] == "success" and
-          runs[0]["headSha"].startswith(want), json.dumps(runs[:1]))
+          runs[0]["headSha"].startswith(want), f"run {runs[0]['databaseId']}, {runs[0]['headBranch']}" if runs else "no run of the tag")
 
     try:
         with urllib.request.urlopen(f"https://proxy.golang.org/{mod}/@v/{tag}.info", timeout=60) as r:
