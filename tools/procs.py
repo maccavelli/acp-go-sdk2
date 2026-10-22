@@ -11,6 +11,10 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _common  # noqa: E402
 
 
 def matching(needles: list[str]) -> list[str]:
@@ -37,4 +41,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(_common.main_guard(main, sys.argv[1:]))

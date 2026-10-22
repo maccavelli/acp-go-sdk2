@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 date: 2026-10-22
 associated-madr: "0031-MADR-verification-tools-in-repository.md"
 ---
@@ -107,6 +107,11 @@ The MADR's "Amendment 2026-10-22, after step 8", W1 to W4, as the owner decided 
   fake clock; `watch` turns `TimeoutExpired` into a verdict. `publication.py`: `main_run` picks the `main` run of a tag's and a branch's.
 * (Added 2026-10-22, after step 9.) `find.py`: run with its output piped to a reader that takes one line and closes, it exits
   without a traceback, by Python's documented handling of `BrokenPipeError`.
+* (Added 2026-10-22, after step 10.) Every tool: each `tools/*.py` but `_common.py` and `test_tools.py` ends
+  `sys.exit(_common.main_guard(main, sys.argv[1:]))`, read from its source; ~~and `procs.py`, piped to a reader that closes early, exits
+  without a traceback, as `find.py` does.~~ (Amended 2026-10-22, during step 11: and `main_guard` itself, in a subprocess, a `main`
+  that writes to a reader closing after one line and a `main` that raises `BrokenPipeError`: exit 1, no traceback; see the deviation
+  during step 11.)
 
 ## Implementation Steps
 
@@ -137,6 +142,10 @@ planted break in a scratch copy, never in the tree.
 10. **(Added 2026-10-22, after step 9) `find.py`'s broken pipe:** `_common.main_guard`, which runs a tool's `main` and, on
     `BrokenPipeError`, points standard output at the null device and exits 1, as Python's documentation of `signal` advises for
     SIGPIPE; `find.py` run through it; the test; the gates, `make push-guard`, and after CI passes, this PLAN and its row `complete`.
+11. **(Added 2026-10-22, after step 10) Every tool through `main_guard`:** the twelve tools whose entry point still calls `main`
+    directly, `consumer.py`, `floor.py`, `gates.py`, `idscan.py`, `leftovers.py`, `plants.py`, `platforms.py`, `procs.py`,
+    `publication.py`, `release_body.py`, `remote.py` and `watch_ci.py`, run through it, `procs.py` importing `_common` to do so; the
+    tests; the gates, `make push-guard`, and after CI passes, this PLAN and its row `complete`.
 
 ## Verification
 
@@ -161,6 +170,8 @@ Planted breaks, each in a scratch copy:
 | `watch_ci.py` | `TimeoutExpired` not caught | `test_tools.py`, `watch` |
 | `publication.py` | the main check without `--branch main` | `test_tools.py`, `main_run` |
 | `find.py` (added 2026-10-22, after step 9) | the broken pipe not handled | `test_tools.py`, the closed reader |
+| every tool (added 2026-10-22, after step 10) | one tool's entry point calling `main` directly | `test_tools.py`, the entry points read |
+| ~~`procs.py`~~ `main_guard` (amended during step 11) | the broken pipe not handled | `test_tools.py`, ~~the closed reader~~ the guard's own test |
 
 Acceptance:
 
@@ -623,3 +634,51 @@ the 6 files. `tools/watch_ci.py bf0b215`: run `39825211145`, `main`, "completed 
 success", the Windows floor job among them. In the Linux job at the newest Go, `make check-tools`: "Ran 42 tests", OK.
 
 Every acceptance criterion is met; this PLAN and its row in `docs/README.md` are `complete` again.
+
+### Amendment, 2026-10-22, after step 10: step 11 proposed
+
+**Found.** Step 10 routed `find.py` alone through `main_guard`; the twelve other tools' entry points call `main` directly
+(`if __name__ == "__main__": sys.exit(main(sys.argv[1:]))`, read from each), so any of them piped into `head` can end with the
+traceback `find.py` did. Besides `find.py`, `procs.py`, `idscan.py` and `leftovers.py` print a line for each thing they find; the
+others print a line per gate, check or job.
+
+**Proposed, at the owner's request.** Step 11 above, its tests and planted breaks. Nothing is changed until the owner approves; this PLAN
+then returns to `in-progress` until step 11 closes.
+
+**Approved (owner, 2026-10-22).** Step 11 as proposed; this PLAN is `in-progress` until it closes.
+
+### Deviation, 2026-10-22, during step 11: the guard's test
+
+**Found.** Step 11's proposed test pipes `procs.py` into a reader that closes after one line. `procs.py` prints a line per matching
+process, and its whole output usually fits the pipe's buffer, 64 KB, before the reader closes, so no `BrokenPipeError` arises and the
+test would pass with the guard or without it; on a CI runner, with fewer processes, the more so.
+
+**Decision (owner, 2026-10-22).** The guard is tested itself, in a subprocess: a `main` that writes to a reader closing after one line,
+and a `main` that raises `BrokenPipeError`, each run through `_common.main_guard`, must exit 1 without a traceback; with the test that
+reads every tool's entry point, every tool is covered through the one guard. The alternative was a `procs.py` test made big with a few
+hundred child processes. The test list and the planted-break row are annotated above.
+
+### Step 11, every tool through `main_guard`, 2026-10-22
+
+The owner approved this step; the deviation above was decided during it. What changed:
+
+* **Twelve tools,** `consumer.py`, `floor.py`, `gates.py`, `idscan.py`, `leftovers.py`, `plants.py`, `platforms.py`, `procs.py`,
+  `publication.py`, `release_body.py`, `remote.py` and `watch_ci.py`: each ends `sys.exit(_common.main_guard(main, sys.argv[1:]))`, by a
+  script that asserted each change applied once; `procs.py` now imports `_common`.
+* **`tools/test_tools.py`:** `GuardTest`: `test_every_entry_point` reads each tool's last two lines; `test_reader_that_closes_early` and
+  `test_broken_pipe_raised` run `main_guard` in a subprocess; 45 tests.
+
+**Seen to fail first:** `test_every_entry_point`, before the tools changed, failed naming the twelve; the guard's two tests passed, the
+guard being step 10's. After the change, `make check-tools`: "Ran 45 tests", OK; `procs.py`, `idscan.py` and `gates.py` with `--help`,
+and `procs.py` with a text no process holds ("none"), each exit 0.
+
+**Planted breaks,** each in a copy of `tools/`; 2 of 2 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| one tool's entry point calling `main` directly, `idscan.py` | `test_every_entry_point`: "['idscan.py'] != []" |
+| the guard catching nothing, `except ZeroDivisionError` | `GuardTest`, both guard tests: "'Traceback' unexpectedly found" |
+
+**Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 45 tests"; `make markdownlint`, 29 files, 0 issues; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed.
+
+The push, CI, and this PLAN and its row `complete` follow, in the owner's turn that asks for the push.

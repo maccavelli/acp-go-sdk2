@@ -133,6 +133,44 @@ class FindTest(Temp):
         self.assertEqual(status, 1, "a broken pipe exits 1, as Python's documentation advises")
 
 
+class GuardTest(Temp):
+    """Every tool ends through _common.main_guard, and the guard ends a broken
+    pipe quietly (0031-PLAN, step 11)."""
+    ENTRY = "sys.exit(_common.main_guard(main, sys.argv[1:]))"
+
+    def test_every_entry_point(self) -> None:
+        tools = sorted(p for p in TOOLS.glob("*.py") if p.name not in ("_common.py", "test_tools.py"))
+        self.assertGreaterEqual(len(tools), 13)
+        unguarded = []
+        for p in tools:
+            tail = p.read_text(encoding="utf-8").rstrip().splitlines()[-2:]
+            if tail != ['if __name__ == "__main__":', "    " + self.ENTRY]:
+                unguarded.append(p.name)
+        self.assertEqual(unguarded, [], "these tools do not end through main_guard")
+
+    def guarded(self, body: str) -> subprocess.Popen:
+        script = self.dir / "t.py"
+        script.write_text(f"import sys\nsys.path.insert(0, {str(TOOLS)!r})\nimport _common\n\n\ndef main(argv):\n{body}\n\n\n"
+                          "sys.exit(_common.main_guard(main, sys.argv[1:]))\n")
+        return subprocess.Popen([sys.executable, str(script)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def test_reader_that_closes_early(self) -> None:
+        proc = self.guarded("    for i in range(200_000):\n        print('line', i)\n    return 0")
+        self.assertTrue(proc.stdout.readline())
+        proc.stdout.close()
+        err = proc.stderr.read().decode()
+        proc.stderr.close()
+        self.assertEqual(proc.wait(timeout=60), 1)
+        self.assertNotIn("Traceback", err, err[-400:])
+        self.assertNotIn("BrokenPipeError", err)
+
+    def test_broken_pipe_raised(self) -> None:
+        proc = self.guarded("    raise BrokenPipeError(32, 'Broken pipe')")
+        out, err = proc.communicate(timeout=60)
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(err.decode(), "", "no traceback, nothing at shutdown")
+
+
 class ProcsTest(unittest.TestCase):
     def test_finds_a_process_and_not_itself(self) -> None:
         token = "zq-procs-token-41"
