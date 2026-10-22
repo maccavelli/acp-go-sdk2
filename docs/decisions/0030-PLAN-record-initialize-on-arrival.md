@@ -887,3 +887,22 @@ overflow's own check; the failure was the one required, and the plant, run again
 * `go test -race -count=3 -shuffle=on .`, `TestReadmeAgentprocIsTheExample` among them;
 * the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
 * the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
+
+### Step 10, release notes, 2026-10-21
+
+The owner committed step 9 and approved this step. What changed:
+
+* **`docs/reports/0030-REPORT-release-notes-v1-20-0.md`,** new: the release text for `v1.20.0` against `v1.19.0`, covering 0029 and
+  0030, naming issue #10, `Command.OutputTap`, `Command.InputTap`, `Process.Kill`, `Process.DroppedTapBytes`, the breakaway, the buffer
+  and the suspended start, as step 10 lists; and its row in `docs/README.md`, `observed`.
+* **Its sources,** observed on `02f20a8` with nothing uncommitted: `git log v1.19.0..02f20a8`, sixteen commits, each one's files by
+  `git show --name-only`; `git diff` of `schema/`, of both `go.mod` and `go.sum`, and of CI, the scripts, `RELEASING.md` and the examples,
+  each empty; the Go files changed outside tests, nine; `make api`, exit 0, "against v1.19.0: 0 incompatible, 4 compatible"; and
+  `gh issue view 10`, open.
+* **Each figure it gives is a MADR's,** read again there: 0030's I6, B3, B4, J1 and J4a, and 0029's D2, D7, D9, D10 and D14. A first draft
+  gave J3's 6.6 to 26.1 ms as the window, which measures the grandchildren's creation after the assignment instead, and said the hooks run
+  before the notifications ahead of the answer are handled, which no test shows; both were removed before the gates.
+
+The number is the PLAN's, `0030`, as a report on this record takes its number, rather than `scripts/check_records.py --next`.
+
+**Gates,** each exit 0: `make check-records`, `make markdownlint` and the identifier scan. No Go file changed in this step.

@@ -94,6 +94,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0029 | PLAN | [Implement 0029: end an agent with its client on Linux and FreeBSD, and start it from a thread that lives as long as it](decisions/0029-PLAN-unix-client-death-pdeathsig.md) | complete |
 | 0030 | MADR | [Record a client's initialize when its answer arrives, and hold what comes before it](decisions/0030-MADR-record-initialize-on-arrival.md); amended 2026-10-21: issue #10's taps, `Kill` and job breakaway, and the reader's 128 KiB buffer | accepted |
 | 0030 | PLAN | [Implement 0030: record a client's initialize when its answer arrives, and hold what comes before it](decisions/0030-PLAN-record-initialize-on-arrival.md); amended 2026-10-21: issue #10's taps, `Kill` and job breakaway, and the reader's 128 KiB buffer | in-progress |
+| 0030 | REPORT | [Release notes for v1.20.0, against v1.19.0](reports/0030-REPORT-release-notes-v1-20-0.md) | observed |
 
 ## I want to…
 
