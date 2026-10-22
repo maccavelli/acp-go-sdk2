@@ -91,9 +91,11 @@ planted break in a scratch copy, never in the tree.
 2. **The base:** `_common.py`, `idscan.py`, `find.py`, `procs.py`; their tests; `make check-tools`. `idscan.py --all` over the tree finds
    nothing; with a planted identifier in a scratch copy, it finds it, by place.
 3. **The gates:** `gates.py`, `floor.py`, `platforms.py`; their tests. On one tree, `gates.py --all` agrees gate by gate with the
-   scratch directory's gate run of 0030's steps.
+   scratch directory's gate run of 0030's steps. (Amended 2026-10-21, during step 3: every gate but the two hosts'; see the deviation
+   during step 3.)
 4. **The hosts:** `remote.py`, `leftovers.py`. Both hosts: `remote.py tree` passes; a planted failing test fails it; `remote.py pkg` runs
-   a single test by pattern, `|` in it; `leftovers.py` catches a planted name.
+   a single test by pattern, `|` in it; `leftovers.py` catches a planted name. (Amended 2026-10-21, during step 3: and `gates.py`'s
+   `windows` and `linux` gates agree with the scratch directory's host runs, so that `--all` is matched.)
 5. **The plants:** `plants.py`; its tests. 0030's step 7 plants, as a spec, fail as required, 3 of 3, as its record says.
 6. **The release:** `release_body.py`, `publication.py`, `consumer.py`, `watch_ci.py`. `release_body.py v1.20.0 4fa7204` reproduces the
    published body byte for byte; `publication.py` holds 10 of 10 for `v1.20.0`; `consumer.py v1.20.0` as recorded; `watch_ci.py` on the
@@ -209,3 +211,69 @@ replaces from step 3, run as in 0030's steps: regeneration unchanged, `make pre-
 `GOOS=windows go vet ./...` in both modules, `make check-records`, `make markdownlint` and its identifier scan, `make lint`, `go fix -diff`
 and `go mod tidy -diff` in both modules, `make api` ("against v1.20.0: 0 incompatible, 0 compatible"), the root's tests under `-race`
 three times, the floor gate, and both hosts' tests.
+
+### Deviation, 2026-10-21, during step 3: the host gates compared in step 4
+
+**Found.** Step 3's acceptance compares `gates.py --all` with the scratch directory's gate run, but `--all` includes the `windows` and
+`linux` gates, which run through `remote.py tree`, and step 4 builds `remote.py`.
+
+**Decision (owner, 2026-10-21).** Step 3 builds `gates.py` with its host gates calling `tools/remote.py`, and compares every other gate;
+step 4 compares the two host gates once `remote.py` exists. The alternative was to move `remote.py tree` into step 3. Steps 3 and 4 are
+annotated above; no file moves between them.
+
+### Deviation, 2026-10-22, during step 3: the caches outside the repository
+
+**Found.** The comparison of `tools/gates.py` with the gate set run after it disagreed on `mdlint` alone: 0 against 2. `floor.py` had put
+the Go caches, a toolchain's Markdown files among them, under `.cache/tools/floor/`, which `make markdownlint` lints (the MADR's
+"Amendment 2026-10-22, step 3: the caches outside the repository", C1 to C3).
+
+**Decision (owner, 2026-10-22).** The caches go to the user's cache directory, `_common.cache_dir`, `ACP_TOOLS_CACHE` overriding it; the
+logs stay in `.cache/tools/`. Added to step 3: `cache_dir` and its tests; the 882 MB `.cache/tools/floor/` this step's run made moved
+out of the tree; and the comparison run again, with `make markdownlint` after the floor gate.
+
+### Step 3, the gates, 2026-10-22
+
+The owner committed step 2 as `dc15c42` and approved this step; the two deviations above were decided during it. What changed:
+
+* **`tools/gates.py`:** the 18 gates of its docstring, by name; no name, every gate but `windows` and `linux`; `--all`, every gate.
+  `fails_on_output` makes `fix` and `tidy` fail on any output. The host gates call `tools/remote.py tree`, which step 4 adds. A `tools`
+  gate, `make check-tools`, which the scratch directory's gate set had no counterpart for, is added.
+* **`tools/floor.py`:** the version from `go.mod`'s `go` line; `floor_env` forces that toolchain and puts the Go caches in
+  `_common.cache_dir("floor")`; it fails when `go version` names another toolchain. Its log is `.cache/tools/floor/floor.log`.
+* **`tools/platforms.py`:** the 13 per-platform checks, `--tree` for another tree.
+* **`tools/_common.py`:** `cache_dir`, outside the repository (the second deviation).
+* **`tools/test_tools.py`:** 18 tests: the gates' output rule, their selection and their definitions; `cache_dir`'s default and override;
+  `floor_env`; the `go` line.
+
+**The 882 MB of Go caches** the step's first floor run made under `.cache/tools/floor/` were moved to the floor's cache directory, not
+downloaded again; `.cache` is 56 KB, `make markdownlint` lints 27 files, 0 issues.
+
+**The comparison,** `tools/gates.py`, then the scratch directory's gate set, on the same tree, one after the other. Its first run
+disagreed on `mdlint` alone (the deviation); run again after the change, every gate with a counterpart agrees:
+
+| Gate | `tools/gates.py` | The scratch directory's |
+| :--- | :--- | :--- |
+| `regen`, `precheck`, `newfiles`, `nojsonv2`, `winvet`, `records`, `mdlint`, `idscan` | 0 each | 0 each |
+| `lint`, `fix`, `tidy`, `api`, `race3`, `floor`, `platforms` | 0 each | 0 each |
+| `tools` | 0 | none |
+
+Then `tools/gates.py mdlint records`, after the floor gate had run: both 0.
+
+**Planted breaks,** each in its own scratch copy; 6 of 6 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| a diff gate passing on output | `test_output_fails_a_diff_gate`: "output on exit 0 must fail" |
+| the hosts in the default set | `test_selection`: "'windows' unexpectedly found" |
+| the cache in the repository | `test_default_is_outside_the_repository`: "is inside the repository" |
+| the `go` line misread as the `toolchain` line | `test_go_line`: "'1.27.3' != '1.26.10'" |
+| `floor.py` without `GOTOOLCHAIN` | `floor.py`: "`go version` names 'go version go1.27.3 darwin/arm64', not go1.26.10" |
+| a variable declared and not used in the Linux and FreeBSD file | `platforms.py`: "8 of 13 passed; failed: lint-linux, lint-freebsd, vet-linux-amd64, vet-linux-arm64, vet-freebsd-amd64" |
+
+The cache plant's first run, in a copy of `tools/` alone, erred instead: the test calls `_common.repo()`, which needs a repository. Run
+in a clone, it passed unplanted and failed as required planted.
+
+**Gates,** by `tools/gates.py`, each exit 0: `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test,
+govulncheck)"; `make check-tools`, "Ran 18 tests"; `make lint`, "0 issues." four times; `platforms`, "13 of 13 passed"; `make api`,
+"against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; and the rest of the table above. The host gates
+wait for step 4.

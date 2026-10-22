@@ -81,7 +81,8 @@ new dependency, and puts the tools where a record can name them, with the identi
 * **`tools/`,** standard-library Python, each tool a script run as `python3 tools/<name>.py`, its usage in its docstring and `--help`:
   * `_common.py`: the repository's root from `git rev-parse --show-toplevel`; a runner that records each command's exit status before its
     output is read, and writes the output to a log; the hosts (question 1); the output directory, `.cache/tools/` (ignored, T6) unless
-    `--out` names another;
+    `--out` names another; (Amended 2026-10-22, during the PLAN's step 3: the logs only; the caches outside the repository; see
+    "Amendment 2026-10-22, step 3: the caches outside the repository".)
   * `gates.py`: the gate set of T3, each gate by name, the default every gate but the hosts';
   * `idscan.py`: the changed files, or `--all`, or a commit range, against the deny list (question 2); it prints the file and line of each
     match, never the match;
@@ -195,6 +196,23 @@ word, is left to the list as it stands (D2).
 **Decision (owner, 2026-10-21):** the owner drops the word's pattern from the deny list. It identifies no one, and the paths it guarded
 against are caught by the two temporary-directory patterns. The alternative was to keep it and reword the 11 lines in a new commit. The
 coverage check of D1 then leaves the word out.
+
+## Amendment 2026-10-22, step 3: the caches outside the repository
+
+Found during the PLAN's step 3, and decided by the owner the same day.
+
+* **C1.** `floor.py` kept its Go caches under `.cache/tools/floor/`, as the specification said: 882 MB once it had run, the downloaded
+  go1.26.10 toolchain with its Markdown files among them.
+* **C2.** `make markdownlint` globs every `*.md` but under `node_modules`, `vendor`, `dist`, `.git` and `.tools`
+  (`.markdownlint-cli2.jsonc`), git's ignores not consulted: after a floor run it linted 48 files, not 27, and failed with 513 issues in
+  the toolchain's docs. `scripts/check_records.py` walks every `*.md` too (`:59`–`:66`), `.cache` not among its skipped parts.
+* **C3.** The step's comparison found it: `tools/gates.py` runs `mdlint` before `floor`, so it passed; the gate set run after it failed.
+
+**Decision (owner, 2026-10-22):** a tool's caches, the floor's Go caches now, and later the consumer's module cache and the plants'
+copies of the tree, go to the user's cache directory, `ACP_TOOLS_CACHE` when set, else `~/Library/Caches/acp-go-sdk2-tools` on macOS,
+`%LOCALAPPDATA%\acp-go-sdk2-tools` on Windows, and `$XDG_CACHE_HOME/acp-go-sdk2-tools` or `~/.cache/acp-go-sdk2-tools` elsewhere, a
+directory per tool; `.cache/tools/` holds the logs alone. The alternative was to exclude `.cache` in `.markdownlint-cli2.jsonc` and
+`scripts/check_records.py`, two copied templates, leaving about a gigabyte in the tree for editors, indexers and backups to walk.
 
 ## More Information
 

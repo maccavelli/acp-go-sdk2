@@ -41,6 +41,26 @@ def out_dir(tool: str, given: str | None = None) -> Path:
     return d
 
 
+def cache_dir(tool: str) -> Path:
+    """The tool's cache directory, outside the repository, where a tree-wide
+    lint would otherwise walk it: ACP_TOOLS_CACHE when set, else the user's
+    cache directory, under acp-go-sdk2-tools; created
+    (0031-MADR-verification-tools-in-repository.md, "Amendment 2026-10-22,
+    step 3: the caches outside the repository")."""
+    base = os.environ.get("ACP_TOOLS_CACHE", "").strip()
+    if base:
+        root = Path(base)
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library" / "Caches" / "acp-go-sdk2-tools"
+    elif sys.platform == "win32":
+        root = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "acp-go-sdk2-tools"
+    else:
+        root = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "acp-go-sdk2-tools"
+    d = root / tool
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def run(log: Path, cmd: list[str], cwd: Path | None = None, env: dict[str, str] | None = None, stdin: bytes | None = None,
         timeout: int = 3600) -> tuple[int, str]:
     """Run cmd, take its exit status before its output is read, append both to

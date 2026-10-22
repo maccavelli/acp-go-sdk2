@@ -129,6 +129,67 @@ class ProcsTest(unittest.TestCase):
         self.assertIn(str(sleeper.pid), r.stdout.split())
 
 
+class GatesTest(unittest.TestCase):
+    def test_output_fails_a_diff_gate(self) -> None:
+        import gates
+        self.assertEqual(gates.fails_on_output(0, ""), 0)
+        self.assertEqual(gates.fails_on_output(0, "  \n"), 0)
+        self.assertNotEqual(gates.fails_on_output(0, "--- a/x.go\n+++ b/x.go\n"), 0, "output on exit 0 must fail")
+        self.assertEqual(gates.fails_on_output(3, ""), 3)
+
+    def test_selection(self) -> None:
+        import gates
+        default = gates.selected([], False)
+        self.assertNotIn("windows", default)
+        self.assertNotIn("linux", default)
+        self.assertEqual(gates.selected([], True), gates.ORDER)
+        self.assertEqual(gates.selected(["api", "fix"], False), ["api", "fix"])
+        with self.assertRaises(SystemExit):
+            gates.selected(["nope"], False)
+
+    def test_every_gate_is_defined(self) -> None:
+        import gates
+        for name in gates.ORDER:
+            self.assertTrue(callable(getattr(gates.Gates, name, None)), name)
+
+
+class CacheTest(Temp):
+    def test_default_is_outside_the_repository(self) -> None:
+        saved = os.environ.pop("ACP_TOOLS_CACHE", None)
+        self.addCleanup(lambda: saved is not None and os.environ.__setitem__("ACP_TOOLS_CACHE", saved))
+        d = _common.cache_dir("zq-test-probe")
+        self.addCleanup(d.rmdir)
+        self.assertFalse(d.resolve().is_relative_to(_common.repo().resolve()), f"{d} is inside the repository")
+        self.assertEqual(d.name, "zq-test-probe")
+
+    def test_override(self) -> None:
+        saved = os.environ.get("ACP_TOOLS_CACHE")
+        os.environ["ACP_TOOLS_CACHE"] = str(self.dir / "c")
+        self.addCleanup(lambda: os.environ.__setitem__("ACP_TOOLS_CACHE", saved) if saved is not None else os.environ.pop("ACP_TOOLS_CACHE"))
+        self.assertEqual(_common.cache_dir("floor"), self.dir / "c" / "floor")
+        self.assertTrue((self.dir / "c" / "floor").is_dir())
+
+    def test_floor_caches_in_the_cache(self) -> None:
+        import floor
+        env = floor.floor_env("1.26.10", self.dir / "cache", {"GOFLAGS": "-x", "GOTOOLCHAIN": "local", "PATH": "p"})
+        self.assertEqual(env["GOTOOLCHAIN"], "go1.26.10")
+        for key in ("GOPATH", "GOMODCACHE", "GOCACHE"):
+            self.assertTrue(Path(env[key]).is_relative_to(self.dir / "cache"), f"{key}={env[key]}")
+        self.assertEqual(env["GOFLAGS"], "-modcacherw")
+        self.assertEqual(env["PATH"], "p")
+
+
+class FloorTest(Temp):
+    def test_go_line(self) -> None:
+        import floor
+        mod = self.dir / "go.mod"
+        mod.write_text("module example.invalid/m\n\ngo 1.26.10\n\ntoolchain go1.27.3\n")
+        self.assertEqual(floor.go_line(mod), "1.26.10")
+        mod.write_text("module example.invalid/m\n")
+        with self.assertRaises(SystemExit):
+            floor.go_line(mod)
+
+
 class HostTest(unittest.TestCase):
     def test_unset_names_the_variable(self) -> None:
         saved = os.environ.pop("ACP_LINUX_HOST", None)
