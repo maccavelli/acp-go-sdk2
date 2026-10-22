@@ -25,8 +25,9 @@ const defaultGrace = 5 * time.Second
 // sent SIGTERM to its process group.
 var ErrTerminated = errors.New("agentproc: agent terminated")
 
-// ErrKilled is joined to Wait's error when Close killed the agent's process
-// group or ended its job, or killed the agent itself where there is neither.
+// ErrKilled is joined to Wait's error when Close or Kill killed the agent's
+// process group or ended its job, or killed the agent itself where there is
+// neither.
 var ErrKilled = errors.New("agentproc: agent killed")
 
 // Command is an agent to start as a child process.
@@ -89,6 +90,11 @@ type Process struct {
 	// itself, so no test can tell its absence
 	// (0027-PLAN-agent-process-helper.md, the deviation during step 2).
 	closeOnce sync.Once
+
+	// hurry is closed, once (hurryOnce), by Kill: Close's steps then wait no
+	// more, and send no SIGTERM, but kill.
+	hurry     chan struct{}
+	hurryOnce sync.Once
 
 	// outTap and inTap are the taps of the agent's output and input, nil
 	// when unset; their goroutines are not in goroutines, and Wait drains
@@ -160,7 +166,7 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 	if cmd.WaitDelay == 0 {
 		cmd.WaitDelay = grace / 2
 	}
-	p := &Process{cmd: cmd, grace: grace, done: make(chan struct{})}
+	p := &Process{cmd: cmd, grace: grace, done: make(chan struct{}), hurry: make(chan struct{})}
 	started, proceed := make(chan error, 1), make(chan bool, 1)
 	p.goroutines.Go(func() { p.run(started, proceed) })
 	if err := <-started; err != nil {
@@ -284,7 +290,7 @@ func (p *Process) Done() <-chan struct{} { return p.done }
 // or the grace has passed, and then returns the agent's error, the same each
 // time: nil for an exit of status 0 of its own, otherwise the error
 // exec.Cmd.Wait returned, joined with ErrTerminated or ErrKilled when Close
-// ended the agent so. It does not stop the agent.
+// or Kill ended the agent so. It does not stop the agent.
 func (p *Process) Wait() error {
 	<-p.done
 	p.goroutines.Wait()
@@ -348,7 +354,23 @@ func (p *Process) DroppedTapBytes() (output, input uint64) {
 // then sends SIGTERM to the agent's process group and waits up to the grace
 // again. It then kills the group, or on Windows ends the job, or kills the
 // agent where there is neither, and closes the connection. A second call returns the same error.
+// Kill cuts a Close in progress short.
 func (p *Process) Close() error {
+	p.closeOnce.Do(p.stop)
+	return p.Wait()
+}
+
+// Kill stops the agent at once and returns Wait's error. It runs Close's
+// steps without their waits: it closes the agent's standard input, kills the
+// agent's process group, or on Windows ends its job, or kills the agent where
+// there is neither, so that the processes the agent started end with it, and
+// closes the connection; Wait's error then has ErrKilled joined. An agent that
+// has already exited is sent nothing. A Close in progress stops waiting and
+// kills, and Close and Kill, called during or after it, return the same error
+// (0030-MADR-record-initialize-on-arrival.md, the amendment of 2026-10-21,
+// question 7).
+func (p *Process) Kill() error {
+	p.hurryOnce.Do(func() { close(p.hurry) })
 	p.closeOnce.Do(p.stop)
 	return p.Wait()
 }
@@ -360,7 +382,7 @@ func (p *Process) stop() {
 	_ = p.stdin.Close() //nolint:errcheck // a failed close leaves the agent to the next steps.
 	switch {
 	case p.exitedWithin(p.grace):
-	case p.signal(p.tree.terminate, ErrTerminated) && p.exitedWithin(p.grace):
+	case !p.hurried() && p.signal(p.tree.terminate, ErrTerminated) && p.exitedWithin(p.grace):
 	default:
 		p.signal(p.tree.kill, ErrKilled)
 		<-p.done // WaitDelay bounds it once the agent has exited
@@ -368,14 +390,27 @@ func (p *Process) stop() {
 	_ = p.conn.Close() //nolint:errcheck // Close of a connection reports nothing Wait does not.
 }
 
-// exitedWithin reports whether the agent has exited within d.
+// exitedWithin reports whether the agent has exited within d, and false at
+// once when Kill hurries Close's steps.
 func (p *Process) exitedWithin(d time.Duration) bool {
 	t := time.NewTimer(d)
 	defer t.Stop()
 	select {
 	case <-p.done:
 		return true
+	case <-p.hurry:
+		return false
 	case <-t.C:
+		return false
+	}
+}
+
+// hurried reports whether Kill has been called.
+func (p *Process) hurried() bool {
+	select {
+	case <-p.hurry:
+		return true
+	default:
 		return false
 	}
 }

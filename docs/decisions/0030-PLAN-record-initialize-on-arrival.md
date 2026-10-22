@@ -698,3 +698,46 @@ gates ran again, each exit 0:
 * `go test -race -count=3 -shuffle=on .`;
 * the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
 * the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
+
+### Step 7, Kill, 2026-10-21
+
+The owner committed step 6 and approved this step. What changed, as the PLAN's "Kill" section has it:
+
+* **`agentproc/agentproc.go`:** `Process` gains `hurry`, made in `Start`, and `hurryOnce`. `Kill` closes `hurry` once, runs
+  `closeOnce.Do(p.stop)` and returns `Wait`'s error. `exitedWithin` returns false at once when `hurry` is closed; `stop` sends no SIGTERM
+  once it is (`hurried`). `Kill`'s doc sits beside `Close`'s, which now says that `Kill` cuts a `Close` in progress short. `ErrKilled`'s
+  doc names `Kill`; so does `Wait`'s, which said "when Close ended the agent so", a line the PLAN did not list.
+* **Tests,** `agentproc/kill_test.go`, new: `TestKill`, `TestKillCutsCloseShort`, `TestKillAfterExit`. They start the agent through
+  step 5's `startTapped`, with no tap, for its grace parameter; no child mode was added.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| `Kill` ends an agent that ignores its input's end at once, at the default grace, with `ErrKilled` and not `ErrTerminated`, and, where there is a tree, the grandchild holding its output (K2) | `TestKill`, within the slack of 3 s, shorter than the grace |
+| a `Close` waiting out a grace of 5 s stops waiting and kills; both return the same error, `ErrKilled` joined | `TestKillCutsCloseShort` |
+| an agent that has exited is sent nothing; `Kill` returns `Wait`'s error | `TestKillAfterExit` |
+
+Not checked by a test: that a hurried `stop` sends no SIGTERM before the kill. Where there is a process group, the SIGTERM would be
+followed at once by the kill, and which of the two ends the agent is a race; no test tells the two apart without one.
+
+The three tests, 20 times each: under `-race` on macOS, and on the Windows and Linux hosts, 60 of 60 passed on each.
+
+**Planted breaks,** each in its own scratch copy, run on macOS; 3 of 3 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `Kill` running `Close`: `hurry` never closed | `TestKill`: "Kill took longer than 3s" |
+| `exitedWithin` not watching `hurry` | `TestKillCutsCloseShort`: "Kill took longer than 3s" |
+| `Kill` recording `ErrKilled` though nothing was sent | `TestKillAfterExit`: "Kill = agentproc: agent killed, want nil, the agent's exit of status 0" |
+
+**Gates,** each exit 0:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "174 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and
+  the new file's, "1 file(s) clean"; `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules;
+  `make check-records`, `make markdownlint` and the identifier scan; `make lint`, "0 issues." four times; `go fix -diff ./...` and
+  `go mod tidy -diff` print nothing, in both modules;
+* `make api` against `v1.19.0`: "0 incompatible, 4 compatible", step 5's three additions and `(*Process).Kill`;
+* `go test -race -count=3 -shuffle=on .`;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
