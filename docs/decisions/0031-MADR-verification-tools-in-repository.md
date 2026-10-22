@@ -186,6 +186,16 @@ the alternatives were for the agent to append them with the owner's leave, or a 
 alternative). The PLAN's step 2 reruns D1 once they are added, and requires every kind covered. The Linux host's alias alone, a common
 word, is left to the list as it stands (D2).
 
+* **D4. The word, added, matched published prose.** With the six patterns the owner added, 23 in all, every kind of D1 is covered, but
+  `idscan.py --all` found 11 lines, all the scratch-directory word, in five PLANs of
+  [0011-PLAN-engine-tests.md](0011-PLAN-engine-tests.md)'s and [0012-PLAN-schema-fidelity-framework.md](0012-PLAN-schema-fidelity-framework.md)'s
+  records, on `origin/main` since 2026-10-11, where it describes past runs and names no one. The guard would also refuse any outgoing
+  commit, in any repository, that holds the word.
+
+**Decision (owner, 2026-10-21):** the owner drops the word's pattern from the deny list. It identifies no one, and the paths it guarded
+against are caught by the two temporary-directory patterns. The alternative was to keep it and reword the 11 lines in a new commit. The
+coverage check of D1 then leaves the word out.
+
 ## More Information
 
 * **The scope** was the owner's answer of 2026-10-21: the reusable tools, generalized; the one-off record, probe and plant scripts not kept.

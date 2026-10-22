@@ -153,3 +153,59 @@ tree found 0 matches in 506 files with 17 patterns, but the list lacks five kind
 
 **Decision (owner, 2026-10-21).** The owner adds patterns for D3 to the deny list. Added to step 2: the coverage check, rerun after the
 addition, every kind covered; then `idscan.py --all` over the tree again. No file is added to the step.
+
+### Deviation, 2026-10-21, during step 2: the scratch-directory word dropped
+
+**Found.** Once the owner had added six patterns, 23 in all, the coverage check covered every kind, and `idscan.py --all` found 11 lines,
+each the scratch-directory word, in five published PLANs (the MADR's D4).
+
+**Decision (owner, 2026-10-21).** The owner removes that pattern, by a Python script that removes exactly that line and prints nothing of
+the list. Step 2's coverage check then requires every kind but the word, and `idscan.py --all` finds nothing.
+
+### Step 2, the base, 2026-10-21
+
+The owner approved this step. What changed:
+
+* **`tools/_common.py`:** `repo`, `host` (stops naming `ACP_LINUX_HOST` or `ACP_WINDOWS_HOST` when unset), `out_dir` (`.cache/tools/<tool>/`
+  or `--out`), `run` (the status taken before the output is read, both appended to a log), `files_of_tree`, `fail`.
+* **`tools/idscan.py`:** the deny list from `DISCLOSURE_DENY` or `~/.config/git/disclosure-deny`; the changed files, `--all`, `--range A..B`
+  (each file as at `B`, read as bytes) or `--paths`; each match printed as `path:line`, never its text; exit 1 on a match, 2 when the list
+  is missing or empty.
+* **`tools/find.py`** (`lines`, `files`) and **`tools/procs.py`.**
+* **`tools/test_tools.py`:** 11 tests; the test repositories commit with `core.hooksPath=/dev/null`, so that no global hook runs.
+* **`Makefile`:** `check-tools`, `py_compile` on every tool, then `unittest`.
+
+The owner committed the step's files as `d6f3e78` before its checks were done; the two deviations above came after, and this record and
+the deviations' records follow in the step's own commit.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| a match is reported by place, without its text | `test_match_reported_by_place_only`; and the planted home path below |
+| the changed files include the untracked; `--range` reads the commit, not the tree | `test_changed_files_include_untracked`, `test_range_reads_the_commit` |
+| a missing or empty deny list fails, exit 2 | `test_missing_or_empty_list` |
+| `find.py` and `procs.py` find what they should, and `procs.py` not itself | `FindTest`, `ProcsTest` |
+| an unset host stops the tool, naming the variable | `test_unset_names_the_variable` |
+| the deny list covers every kind of identifier the records' scans have caught, the scratch-directory word left out | the coverage check: 22 patterns, 8 of 8 kinds |
+| the tree holds none | `idscan.py --all`: "511 file(s), 22 pattern(s), 0 match(es)" |
+
+**Planted breaks,** each in its own scratch copy; 9 of 9 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the matched text printed | `test_match_reported_by_place_only`: "the matched text must not be printed" |
+| the untracked files not scanned | `test_changed_files_include_untracked`: "0 != 1" |
+| `--range` read from the tree | `test_range_reads_the_commit`: "0 != 1" |
+| a missing list taken as clean | `test_missing_or_empty_list`: "0 != 2" |
+| `find.py`'s line numbers off by one | `test_lines` |
+| `procs.py` listing itself | `test_finds_a_process_and_not_itself`: "1 != 0" |
+| an unset host accepted | `test_unset_names_the_variable`: "SystemExit not raised" |
+| a home path planted in a clone of the tree | `idscan.py --all`: "identifier at docs/planted.md:2", the path not printed |
+| a syntax error in a tool | `make check-tools`: "SyntaxError: expected ':'" |
+
+**Gates,** each exit 0: `make check-tools`, "Ran 11 tests", OK; the coverage check and `idscan.py --all` above; and the gate set this PLAN
+replaces from step 3, run as in 0030's steps: regeneration unchanged, `make pre-add-check`, `GOEXPERIMENT=nojsonv2 go test ./...`,
+`GOOS=windows go vet ./...` in both modules, `make check-records`, `make markdownlint` and its identifier scan, `make lint`, `go fix -diff`
+and `go mod tidy -diff` in both modules, `make api` ("against v1.20.0: 0 incompatible, 0 compatible"), the root's tests under `-race`
+three times, the floor gate, and both hosts' tests.
