@@ -406,3 +406,30 @@ The owner committed step 5 and approved this step; the deviation above was decid
 The PLAN's row for `release_body.py`, a link target missing, is the first.
 
 **Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 35 tests"; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed.
+
+### Step 7, CI and docs, 2026-10-22
+
+The owner committed step 6 and approved this step. What changed:
+
+* **`.github/workflows/ci.yml`:** the records step, renamed "markdownlint, actionlint, records, tools", also runs `make check-tools`.
+* **`tools/README.md`,** new: the variables, the logs and caches, a table of the tools, a plant's JSON form, and `make check-tools`.
+* **`docs/architecture.md`:** a section "Verification tools", and `tools/` in the tree and `check-tools` on the `Makefile`'s line.
+* **`AGENTS.md`:** under "Pre-add checks", the tools' place and `make check-tools` before a commit that changes them.
+* **`tools/test_tools.py`:** `ReadmeTest`, which resolves `tools/README.md`'s relative links; 36 tests.
+
+**Before CI ran it,** `make check-tools` ran on the Linux host, from a copy of the tree: Python 3.14.7, procps-ng 4.0.4's `ps`, "Ran 35
+tests", OK; `procs.py`'s `ps -axo` holds there. CI's image has an older Python; its run, in step 8, is what shows the tools hold there.
+
+**Found:** `scripts/check_records.py` checks the links of the records, `README.md`, `docs/README.md`, `docs/architecture.md` and
+`docs/guides/` (its docstring and `:223`–`:229`), not `tools/README.md`, so its one link was checked by nothing; a planted broken link
+there passed `make check-records`. `ReadmeTest` now checks it, inside `make check-tools`. It is a test of the tools' own docs and changes
+no file outside the step's scope.
+
+**Planted breaks,** each in a clone with the step's files; 2 of 2 failed as required, each first seen to pass unplanted:
+
+| Break | The check that failed |
+| :--- | :--- |
+| a failing assertion in a tool test | `make check-tools`, the command CI's records step runs under `set -euo pipefail`: "FAILED (failures=1)", exit 2 |
+| a broken link in `tools/README.md` | `make check-tools`: "tools/README.md links ../docs/decisions/0031-MADR-gone.md, which does not exist" |
+
+**Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 36 tests"; `make markdownlint`, 28 files, 0 issues; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed; and `actionlint` v1.7.12 over the workflows, exit 0, nothing printed.

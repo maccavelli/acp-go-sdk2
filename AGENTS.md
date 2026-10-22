@@ -108,6 +108,9 @@ docs/reports/NNNN-GATES-short-slug.md
   in `.github/workflows/ci.yml`. `GO_PRECHECK_SKIP_VULN=1` skips the
   vulnerability check offline. A file that fails is not committed.
 - Before every commit, run `make check-records` and `make markdownlint`.
+- The verification tools a PLAN's steps run, the gate set, the test hosts,
+  planted breaks and the release checks, are in `tools/`; `tools/README.md`
+  says how. Before committing a change to them, run `make check-tools`.
 - A file that fails is not committed.
 
 ## Identifiers

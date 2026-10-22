@@ -529,13 +529,41 @@ Checks that guard it:
 - `TestReadmeAgentprocIsTheExample` at the root requires the README's example
   to be `ExampleCommand`'s body.
 
+## Verification tools
+
+`tools/` (0031-MADR-verification-tools-in-repository.md) holds what a PLAN's
+steps run beyond `make pre-add-check`, in Python and the standard library;
+`tools/README.md` gives each tool's use. `scripts/` keeps what `make` and CI
+call. `_common.py` gives every tool the repository's root from git, the test
+hosts from `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST`, the logs under
+`.cache/tools/`, and the caches, Go's and the planted breaks' copies of the
+tree, in the user's cache directory, outside the tree, where `make
+markdownlint` and `scripts/check_records.py` would otherwise walk them.
+
+- `gates.py` runs the gate set, one gate at a time, each exit status taken
+  before its output is read; `floor.py` the tests at the `go` line;
+  `platforms.py` `agentproc`'s lint and vet per platform; `remote.py` the tests
+  on a test host, in a fresh directory removed after, and `leftovers.py` the
+  Windows host's process list.
+- `idscan.py` scans for identifiers with the push guard's deny list
+  (`DISCLOSURE_DENY` or `~/.config/git/disclosure-deny`), and prints where a
+  match is, never what it is; nothing in the tree names an identifier.
+- `plants.py` runs planted breaks from a JSON list, each in its own copy.
+- `release_body.py`, `publication.py`, `consumer.py` and `watch_ci.py` build a
+  release's body from its report and check the release, its publication, a
+  consumer at the floor, and a commit's CI run.
+- `find.py` and `procs.py` search files and processes.
+- `make check-tools` compiles every tool and runs `tools/test_tools.py`, their
+  offline parts, in CI's records step too; what needs a host or the network
+  each step runs, and its record says.
+
 ## Tree
 
 ```text
 README.md                 repository entry; links here
 RELEASING.md              schema bump and release steps
 AGENTS.md                 agent instructions
-Makefile                  version, test, lint, pre-add-check, fuzz, mutation, docs gates
+Makefile                  version, test, lint, pre-add-check, fuzz, mutation, docs gates, check-tools
 go.mod                    the SDK module
 *.go                      package acp: hand-written and *_gen.go files
 agentproc/                package agentproc: an agent as a child process, started and stopped
@@ -556,6 +584,7 @@ testdata/json_golden/     JSON goldens
 testdata/fuzz/            FuzzRoundTrip seeds kept from crashers
 scripts/go-precheck.sh    the pre-add gate
 scripts/check_records.py  record numbering and link check
+tools/                    the verification tools; tools/README.md
 .github/workflows/ci.yml  CI
 .markdownlint-cli2.jsonc  fleet Markdown style
 .gitattributes            LF on every platform

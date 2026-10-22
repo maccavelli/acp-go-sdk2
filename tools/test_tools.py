@@ -367,6 +367,18 @@ class HelpersTest(Temp):
         self.assertFalse(publication.same_body("text", "text."))
 
 
+class ReadmeTest(unittest.TestCase):
+    def test_relative_links_resolve(self) -> None:
+        # scripts/check_records.py checks the docs tree's links; this README
+        # is outside it.
+        import re
+        readme = TOOLS / "README.md"
+        links = re.findall(r"\]\(((?!https?://|#)[^)\s]+)\)", readme.read_text(encoding="utf-8"))
+        self.assertTrue(links, "the README links its record")
+        for link in links:
+            self.assertTrue((readme.parent / link.split("#")[0]).is_file(), f"tools/README.md links {link}, which does not exist")
+
+
 class HostTest(unittest.TestCase):
     def test_unset_names_the_variable(self) -> None:
         saved = os.environ.pop("ACP_LINUX_HOST", None)
