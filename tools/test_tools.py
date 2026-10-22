@@ -116,6 +116,22 @@ class FindTest(Temp):
     def test_usage(self) -> None:
         self.assertEqual(tool("find", "lines", "x").returncode, 2)
 
+    def test_reader_that_closes_early(self) -> None:
+        # Its output piped to a reader that takes one line and closes, as
+        # `| head -n 1` does: no traceback (0031-PLAN, step 10).
+        big = self.dir / "big.txt"
+        big.write_text("needle\n" * 200_000)
+        proc = subprocess.Popen([sys.executable, str(TOOLS / "find.py"), "lines", str(big), "--", "needle"], stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        self.assertTrue(proc.stdout.readline())
+        proc.stdout.close()
+        err = proc.stderr.read().decode()
+        proc.stderr.close()
+        status = proc.wait(timeout=60)
+        self.assertNotIn("Traceback", err, err[-400:])
+        self.assertNotIn("BrokenPipeError", err)
+        self.assertEqual(status, 1, "a broken pipe exits 1, as Python's documentation advises")
+
 
 class ProcsTest(unittest.TestCase):
     def test_finds_a_process_and_not_itself(self) -> None:

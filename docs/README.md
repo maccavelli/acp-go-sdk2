@@ -96,7 +96,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0030 | PLAN | [Implement 0030: record a client's initialize when its answer arrives, and hold what comes before it](decisions/0030-PLAN-record-initialize-on-arrival.md); amended 2026-10-21: issue #10's taps, `Kill` and job breakaway, and the reader's 128 KiB buffer | complete |
 | 0030 | REPORT | [Release notes for v1.20.0, against v1.19.0](reports/0030-REPORT-release-notes-v1-20-0.md) | observed |
 | 0031 | MADR | [Keep the maintainer's verification tools in the repository, in `tools/`, with every identifier kept out](decisions/0031-MADR-verification-tools-in-repository.md) | accepted |
-| 0031 | PLAN | [Implement 0031: keep the maintainer's verification tools in the repository, in `tools/`, with every identifier kept out](decisions/0031-PLAN-verification-tools-in-repository.md) | complete |
+| 0031 | PLAN | [Implement 0031: keep the maintainer's verification tools in the repository, in `tools/`, with every identifier kept out](decisions/0031-PLAN-verification-tools-in-repository.md) | in-progress |
 | 0032 | REPORT | [Windows floor CI: two runtime crashes in the root package's tests, not reproduced](reports/0032-REPORT-windows-floor-runtime-crashes.md) | observed |
 
 ## I want to…

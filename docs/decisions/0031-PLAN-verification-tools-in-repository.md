@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 date: 2026-10-22
 associated-madr: "0031-MADR-verification-tools-in-repository.md"
 ---
@@ -105,6 +105,8 @@ The MADR's "Amendment 2026-10-22, after step 8", W1 to W4, as the owner decided 
   `verdict` fails a run whose conclusion is "success" with a job "failure", and passes "skipped"; `wait_settled`, on a fetch that reads
   "in_progress" twice then "completed", returns settled after three reads, and on one that never settles, unsettled at the bound, with a
   fake clock; `watch` turns `TimeoutExpired` into a verdict. `publication.py`: `main_run` picks the `main` run of a tag's and a branch's.
+* (Added 2026-10-22, after step 9.) `find.py`: run with its output piped to a reader that takes one line and closes, it exits
+  without a traceback, by Python's documented handling of `BrokenPipeError`.
 
 ## Implementation Steps
 
@@ -132,6 +134,9 @@ planted break in a scratch copy, never in the tree.
    origin main's head" naming `39714586565`, `main` (amended 2026-10-22, during step 9: `main`'s run of origin main's head; see
    the deviation during step 9). Then the gates, `make push-guard`, and after CI passes, this PLAN and its row
    `complete` again.
+10. **(Added 2026-10-22, after step 9) `find.py`'s broken pipe:** `_common.main_guard`, which runs a tool's `main` and, on
+    `BrokenPipeError`, points standard output at the null device and exits 1, as Python's documentation of `signal` advises for
+    SIGPIPE; `find.py` run through it; the test; the gates, `make push-guard`, and after CI passes, this PLAN and its row `complete`.
 
 ## Verification
 
@@ -155,6 +160,7 @@ Planted breaks, each in a scratch copy:
 | `watch_ci.py` | `--branch` ignored | `test_tools.py`, `runs_for` with a branch |
 | `watch_ci.py` | `TimeoutExpired` not caught | `test_tools.py`, `watch` |
 | `publication.py` | the main check without `--branch main` | `test_tools.py`, `main_run` |
+| `find.py` (added 2026-10-22, after step 9) | the broken pipe not handled | `test_tools.py`, the closed reader |
 
 Acceptance:
 
@@ -571,3 +577,44 @@ tests", OK.
 
 Every acceptance criterion is met, step 9's as the deviation during it corrected; this PLAN and its row in `docs/README.md` are
 `complete` again.
+
+### Amendment, 2026-10-22, after step 9: step 10, `find.py`'s broken pipe
+
+**Found.** During the investigation that [0032-REPORT-windows-floor-runtime-crashes.md](../reports/0032-REPORT-windows-floor-runtime-crashes.md)
+records, `python3 -B tools/find.py lines <log> -- ... | head -n 12` printed its matches, then ended with a traceback,
+"BrokenPipeError: [Errno 32] Broken pipe", at `tools/find.py:37`, its `print`: once `head` has read its lines and closed the pipe, the
+next write fails, and nothing in the tool handles it.
+
+**Decided (owner, 2026-10-22).** The owner asked for the tool to be fixed. Step 10 adds it, with its test and planted break; this PLAN is
+`in-progress` until step 10 closes.
+
+### Step 10, `find.py`'s broken pipe, 2026-10-22
+
+The owner asked for the fix. What changed:
+
+* **`tools/_common.py`:** `main_guard(main, argv)`, the handling Python's documentation of `signal` gives in its "Note on SIGPIPE":
+  `main` run and standard output flushed inside the `try`; on `BrokenPipeError`, standard output pointed at the null device, "Python
+  flushes standard streams on exit; redirect remaining output to devnull to avoid another BrokenPipeError at shutdown", and status 1,
+  "Python exits with error code 1 on EPIPE" (both the documentation's comments, read that day).
+* **`tools/find.py`:** run through `main_guard`; its docstring names status 1 for a reader that closes early.
+* **`tools/test_tools.py`:** `test_reader_that_closes_early`, 200,000 matching lines read by one `readline` and the pipe closed: no
+  traceback, no `BrokenPipeError`, status 1; 42 tests.
+
+**Seen to fail first:** the test, run before the fix, failed with the tool's own traceback, "BrokenPipeError: [Errno 32] Broken pipe";
+and `python3 -B tools/find.py lines <a log> -- runtime | head -n 2`, after it, printed two lines with no traceback, `find.py`'s status 1
+and `head`'s 0.
+
+**Planted breaks,** each in a copy of `tools/`:
+
+| Break | Result |
+| :--- | :--- |
+| the broken pipe not handled, `main` called directly | failed as required: "'Traceback' unexpectedly found" |
+| standard output not pointed at the null device | **passed**: the test does not reach it |
+
+The second is not the PLAN's planted break; it was tried to see whether the test covers the redirect, and it does not: in these runs the
+failed write left nothing in the buffer, so the flush at exit had nothing to fail on. The redirect is kept as the documentation gives it,
+on the documentation's word, and no test claims it.
+
+**Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 42 tests"; `make markdownlint`, 29 files, 0 issues; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed.
+
+The push, CI, and this PLAN and its row `complete` follow, in the owner's turn that asks for the push.

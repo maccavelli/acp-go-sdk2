@@ -8,13 +8,17 @@ Usage:
       the paths under ROOT whose name matches any of the glob patterns, .git
       left out
 
-Exit 0 when something is found, 1 when nothing is, 2 on a usage error.
+Exit 0 when something is found, 1 when nothing is, or when the reader of its
+output closes early (`| head`), 2 on a usage error.
 """
 from __future__ import annotations
 
 import glob
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _common  # noqa: E402
 
 
 def lines(args: list[str]) -> int:
@@ -67,4 +71,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(_common.main_guard(main, sys.argv[1:]))

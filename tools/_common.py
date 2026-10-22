@@ -104,6 +104,22 @@ def origin_repo(root: Path) -> str:
     return github_repo(url)
 
 
+def main_guard(main, argv: list[str]) -> int:
+    """Run a tool's main; when its reader closes the pipe early, as `| head`
+    does, end quietly with status 1 rather than a traceback. This is the
+    handling Python's documentation of the signal module gives ("Note on
+    SIGPIPE"): it points standard output at the null device because "Python
+    flushes standard streams on exit", which could otherwise raise again."""
+    try:
+        status = main(argv)
+        sys.stdout.flush()
+        return status
+    except BrokenPipeError:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        return 1
+
+
 def fail(message: str, status: int = 1) -> None:
     """Print message to standard error and exit with status."""
     print(message, file=sys.stderr)
