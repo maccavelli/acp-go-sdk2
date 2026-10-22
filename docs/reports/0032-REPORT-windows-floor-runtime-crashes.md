@@ -198,3 +198,71 @@ The owner answered "Open" the same day:
   at go1.27.3 and at go1.26.10 with the experiment, showed `Count` stale before a `WriteTo`, and equal to the profile just written after
   one (3, then 5); the guard calls `WriteTo` (`leak_test.go:49`) before every `Count` (`:54`).
   [0033-PLAN-traceback-on-windows-floor-ci.md](../decisions/0033-PLAN-traceback-on-windows-floor-ci.md) holds the table.
+
+## Addendum, 2026-10-22: a third crash, at 1.27.3 without the experiment
+
+A third crash came the same day, on the job "What the evidence supports" said would change it: Windows at the newest Go, without the
+experiment. Added as "If it happens again" says.
+
+| | 2026-10-22, later |
+| :--- | :--- |
+| Run, attempt | `39841121410`, 1 |
+| Commit | `2f58588`, "chore(tools): route every verification tool through main_guard"; the run also carried `57ce3f2` and `a716dfe`, which change `ci.yml` and records; none changes a Go file of the module |
+| Job | `validate (windows-2025, 1.27.3)` |
+| Environment | `GOTOOLCHAIN=local`; `GOEXPERIMENT` and `GOTRACEBACK` empty |
+| Step | `go test -shuffle=on ./...` |
+| Shuffle seed | `1792697648940304500` |
+| Package | the root |
+| The other five jobs | passed, the Windows floor job, at 1.26.10 with the experiment, among them |
+
+**"fatal error: found pointer to free object".** The runtime's own report, before the stack:
+
+```text
+runtime: marked free object in span 0x23ade95dc90, elemsize=80 freeindex=13 (bad use of unsafe.Pointer or having race conditions? try -d=checkptr)
+...
+fatal error: found pointer to free object
+
+runtime stack:
+runtime.throw({0x7ff625acd81b?, 0x68ad5ff150?})
+        C:/hostedtoolcache/windows/go/1.27.3/x64/src/runtime/panic.go:1243
+runtime.(*mspan).reportZombies(0x23ade95dc90)
+        C:/hostedtoolcache/windows/go/1.27.3/x64/src/runtime/mgcsweep.go:893
+runtime.(*sweepLocked).sweep(0x7ff62568420e?, 0x0)
+        C:/hostedtoolcache/windows/go/1.27.3/x64/src/runtime/mgcsweep.go:673
+runtime.(*mcentral).uncacheSpan(0x7ff62563f3fa?, 0x68ad5ff2d8?)
+        C:/hostedtoolcache/windows/go/1.27.3/x64/src/runtime/mcentral.go:237
+```
+
+The collector, sweeping, found an 80-byte object it had freed still marked reachable: a pointer to freed memory. As a failure inside the
+runtime, it printed every goroutine (the log's "goroutine 1 ... [chan receive]" and the rest), with `GOTRACEBACK` unset.
+
+**What the root package does that the runtime's hint names.** No `.go` file at the root, the tests included, uses `unsafe`,
+`go:linkname`, `syscall`, `reflect.SliceHeader` or `reflect.StringHeader` (`tools/find.py`, no line found). The module requires no
+package but `golang.org/x/sys`, which only `agentproc` imports, on Windows.
+
+**The race detector on Windows.** CI runs it on Linux alone (`ci.yml:82`–`:87`). On the Windows host, go1.27.3 with MinGW-W64 gcc 16.2.0
+and cgo on: the root package from a copy of the tree, `go test -race -shuffle=on -count=1 .`, 10 runs: all passed, no "WARNING: DATA
+RACE", no fatal error. The detector was first seen to work there: a test written into a copy, two goroutines incrementing one variable,
+`go test -race -run TestPlantedRace .`, printed "WARNING: DATA RACE" and failed.
+
+**Where it happens, again.** The 40 most recent runs on `main`, 28 of them with the six-job matrix, first attempts:
+
+| Job | `GOEXPERIMENT` | Jobs | Success | Failure | Cancelled |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| ubuntu-24.04, floor 1.26.x | `goroutineleakprofile` | 28 | 28 | 0 | 0 |
+| macos-15, floor 1.26.x | `goroutineleakprofile` | 28 | 25 | 0 | 3 |
+| windows-2025, floor 1.26.x | `goroutineleakprofile` | 28 | 26 | **2** | 0 |
+| ubuntu-24.04, newest 1.27.x | none | 28 | 28 | 0 | 0 |
+| macos-15, newest 1.27.x | none | 28 | 26 | 0 | 2 |
+| windows-2025, newest 1.27.x | none | 28 | 27 | **1** | 0 |
+
+**What changes in "What the evidence supports".**
+
+- **No longer supported:** that the crashes are confined to 1.26.x with the experiment. They are on Windows, 3 of 56 Windows jobs, at both
+  Go versions, with and without the experiment; 0 of 56 on Linux, 0 of the 51 run on macOS.
+- **Still supported:** each is a corruption the runtime finds, in a state ordinary Go code cannot reach while its memory is intact, in the
+  root package's tests, on commits that change no Go file of the module.
+- **Weakened, not excluded:** a data race in this package or its tests. The race detector found none in 10 Windows runs or on Linux in
+  every run of both Linux jobs; a race the tests reach rarely could still be missed by both.
+- **Not decided:** whether the cause is this package, the Go runtime on Windows, or the runners. The experiment is no longer the leading
+  suspect.
