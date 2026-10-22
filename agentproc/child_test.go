@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -98,6 +99,10 @@ func startBeat(setup func(*exec.Cmd)) (*exec.Cmd, error) {
 	}
 	if err := g.Start(); err != nil {
 		return nil, err
+	}
+	// A test that finds the beat running when it should not ends it by this.
+	if err := os.WriteFile(os.Getenv(beatEnv)+".gpid", []byte(strconv.Itoa(g.Process.Pid)), 0o600); err != nil {
+		return g, err
 	}
 	for range 400 {
 		if fi, err := os.Stat(os.Getenv(beatEnv)); err == nil && fi.Size() > 0 {

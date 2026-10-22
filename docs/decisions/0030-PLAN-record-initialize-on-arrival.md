@@ -644,3 +644,57 @@ and investigate first. Then, as recommended: a caller's own `CREATE_SUSPENDED` i
 assignment late through an unexported delay, zero in production (question 13). Added: step 6, its design ("The suspended start on
 Windows"), its tests and its planted breaks above; files `agentproc/tree_windows.go`, a Windows test file, and the docs in step 9. Steps
 6 to 10 are renumbered 7 to 11, each annotated.
+
+### Step 6, the suspended start on Windows, 2026-10-21
+
+The owner committed step 5 with the deviation above and approved this step. What changed:
+
+* **`agentproc/tree_windows.go`:** `prepare` refuses a `Cmd` whose `CreationFlags` has `CREATE_SUSPENDED`, and otherwise adds it,
+  creating `SysProcAttr` when nil and keeping the caller's other flags; `attach` waits `attachDelay` (zero but in a test), assigns the
+  agent to its job, then calls `resume`, which lists the agent's threads in a snapshot, opens each by its ID and resumes it, and fails when
+  it finds none. The comments cite the amendment; the one that said a process started before the assignment is outside the job is gone.
+* **Tests,** `agentproc/suspended_windows_test.go`, new: `TestDescendantInJobDespiteSlowAttach`, not parallel, with `endBeat`, which ends
+  a beat a failing run leaves; `TestStartRefusesSuspended`; `TestCallersCreationFlagsKept`. `startBeat` (`child_test.go`) records its beat's
+  process ID beside the beat's file, for `endBeat`.
+
+**As built, the first test differs from the list above:** it uses the `parent` agent and `Close`, not `parent-exit` and `Wait`. Its first
+version, with `parent-exit`, failed under the break that leaves out `CREATE_SUSPENDED`, but with "assigning the agent to its job object:
+Access is denied": unsuspended, `parent-exit` exits within the 200 ms before the late assignment, which then finds no process. `parent`
+stays alive, so that without the fix it is assigned late and its grandchild is not, which is the failure the test means. That run left
+the escaped grandchild running on the host; it was found (`tasklist`), ended by its process ID, and its directory removed, and `endBeat`
+now ends such a grandchild.
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| a process the agent starts at once is in its job however late the assignment (J4) | `TestDescendantInJobDespiteSlowAttach`, the Windows host, 3 runs of 3 |
+| a caller's own `CREATE_SUSPENDED` is refused, nothing started (question 12) | `TestStartRefusesSuspended` |
+| the caller's other flags are kept, and the agent runs | `TestCallersCreationFlagsKept` |
+| `TestDescendantsEnded` passes on Windows | the whole package on the Windows host, three binaries at once, shuffled, 30 rounds: 0 of 90 runs failed |
+
+The 90 runs alone prove little: before the fix the failure was rare, 2 seen in about 250 runs (the deviation). The deterministic test, with
+its late assignment, and its two planted breaks are what show the window closed.
+
+**Planted breaks,** each in its own scratch copy, run on the Windows host; 4 of 4 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `CREATE_SUSPENDED` not added, the resume kept | `TestDescendantInJobDespiteSlowAttach`: "the grandchild the agent started at once, before a late assignment, still runs after Close" |
+| the resume before the assignment | the same |
+| a caller's `CREATE_SUSPENDED` accepted | `TestStartRefusesSuspended`: "want a refusal naming CREATE_SUSPENDED" |
+| the caller's flags replaced by `CREATE_SUSPENDED` | `TestCallersCreationFlagsKept`: "CreationFlags = 0x4, want the caller's CREATE_NEW_PROCESS_GROUP and CREATE_SUSPENDED" |
+
+After them, `tasklist` on the host listed no test process, and no scratch directory was left.
+
+**Gates,** run one at a time. The first run of `make lint` found a `nolint` directive gosec does not need in the test file; removed, the
+gates ran again, each exit 0:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "173 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and
+  the new file's, "1 file(s) clean"; `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules;
+  `make check-records`, `make markdownlint` and the identifier scan; `make lint`, "0 issues." four times; `go fix -diff ./...` and
+  `go mod tidy -diff` print nothing, in both modules;
+* `make api` against `v1.19.0`: "0 incompatible, 3 compatible", step 5's three additions, nothing more;
+* `go test -race -count=3 -shuffle=on .`;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
