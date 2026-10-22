@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-21
 associated-madr: "0030-MADR-record-initialize-on-arrival.md"
 ---
@@ -906,3 +906,78 @@ The owner committed step 9 and approved this step. What changed:
 The number is the PLAN's, `0030`, as a report on this record takes its number, rather than `scripts/check_records.py --next`.
 
 **Gates,** each exit 0: `make check-records`, `make markdownlint` and the identifier scan. No Go file changed in this step.
+
+### Deviation, 2026-10-21, during step 11: the per-platform checks
+
+**Found.** Before closing, the PLAN's "Verification" was read again. Its amendment of 2026-10-21 asks, from step 4, for `golangci-lint`
+for `GOOS=linux` and `GOOS=freebsd` on `agentproc`, and `go vet ./agentproc` for 0029's platforms. The gates of steps 4 to 10 did not run
+them, and their records do not claim them: the gate script run at each step had no such check.
+
+**Done.** The checks, by a script, `golangci-lint` for `linux` and `freebsd` and `go vet ./agentproc` for `darwin/arm64`, `linux/amd64`,
+`linux/arm64`, `freebsd`, `openbsd`, `netbsd`, `illumos`, `windows`, `js/wasm`, `wasip1/wasm` and `plan9`, 13 in all, run on a scratch
+export of each commit from step 4 to step 10, `b5177dd`, `e2755e9`, `1133e55`, `445fc21`, `d1055d6`, `02f20a8` and `4fa7204`: 13 of 13
+passed at each. The script was first seen to fail on a planted break in a scratch copy, a variable declared and not used in
+`deathsig_pdeathsig.go`, which only Linux and FreeBSD build: the two `golangci-lint` runs and the three Linux and FreeBSD `go vet` runs
+failed, "declared and not used: unused", and the other eight passed. The owner reads this entry with the close.
+
+### Step 11, verification and close, 2026-10-21
+
+The owner committed step 10 as `4fa7204` and asked for the push in the same turn.
+
+**Gates on the committed tree,** each exit 0; `git status --porcelain` printed nothing before them:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+  `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules; `make check-records`, `make markdownlint` and the
+  identifier scan; `make lint`, "0 issues." four times; `go fix -diff ./...` and `go mod tidy -diff` print nothing, in both modules;
+* the per-platform checks of the deviation above;
+* `make api` against `v1.19.0`: "0 incompatible, 4 compatible";
+* `go test -race -count=3 -shuffle=on .`;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules, and afterwards no test binary in its process list; the Linux
+  host: the same, from a copy of the tree;
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
+
+**Before the push:** a fetch, `main` 0 behind and 11 ahead of `origin/main`; `make push-guard`: "11 outgoing commit(s), 631b128..4fa7204,
+main to origin", "the guard passed (exit 0)". **The push:** `631b128..4fa7204  main -> main`, a fast-forward.
+
+**CI** on `4fa7204`, run `39714586565`: all six jobs passed, ubuntu-24.04, macos-15 and windows-2025 at 1.26.10 and at 1.27.3.
+
+Every acceptance criterion is met, and this PLAN and its row in `docs/README.md` are now `complete`.
+[0029-PLAN-unix-client-death-pdeathsig.md](0029-PLAN-unix-client-death-pdeathsig.md) was already `complete`, its release riding with this
+one.
+
+**What followed,** in the owner's turn that asked for the tag, its push, the release and the issue's close:
+
+### Publication of `v1.20.0`, 2026-10-21
+
+**What was published.**
+
+* **The tag.** `4fa7204` tagged `v1.20.0`, an annotated tag whose message is its name, and pushed; `git ls-remote` gives the tag object
+  `686a420` peeling to `4fa7204`. CI run `39716056732`, started by the tag, concluded `success` in all six jobs.
+* **The release.** `gh release create v1.20.0 --verify-tag --title v1.20.0 --notes-file <file>`. Its body is the release text of
+  [0030-REPORT-release-notes-v1-20-0.md](../reports/0030-REPORT-release-notes-v1-20-0.md) at `4fa7204`, as a script outside the tree
+  extracted it: the text under "### v1.20.0" up to "Sources not in the release text", 89 lines, with its two relative links rewritten to
+  the files at the tag, each checked to exist in `4fa7204`; the identifier scan's pattern found nothing in it. The commits after
+  `02f20a8` change records only, so the text needed no update. `gh release view` returned the body unchanged.
+* **Issue #10** closed as completed.
+
+**Checks.** The `v1.19.0` publication check, its tag, commit and body file changed, ran from outside the tree with a scratch module cache,
+the default `GOPROXY` and the checksum database on. Its first run held 8 of 10: the two CI checks missed while the tag's run was
+`in_progress`. Once it had succeeded, 10 of 10 held:
+
+* the release is not a draft or a prerelease, its body is the extracted text, and it is GitHub's latest;
+* the tag is annotated and names `4fa7204`;
+* `main` on GitHub is the local `main`, `4fa7204`; CI on it, and on the tag, run `39716056732`, succeeded;
+* the mirror's `@v/v1.20.0.info` gives the origin `refs/tags/v1.20.0` at `4fa7204`;
+* `go list -m github.com/maccavelli/acp-go-sdk2@latest` gives `v1.20.0`;
+* `go mod download` of `v1.20.0` exits 0.
+
+**A consumer on the floor:** a fresh module at `go 1.26.10`, with `GOTOOLCHAIN=go1.26.10` forced, the default `GOPROXY` and the checksum
+database on.
+
+* `go get github.com/maccavelli/acp-go-sdk2@v1.20.0` exited 0: "go: added github.com/maccavelli/acp-go-sdk2 v1.20.0"; `go mod tidy`
+  downloaded `golang.org/x/sys v0.49.0`.
+* The program starts `sh -c "cat >/dev/null"` through `agentproc` with an `OutputTap` set, closes it, and prints `DroppedTapBytes`. It
+  built with go1.26.10 and ran, printing "Close: <nil>", "dropped 0 0" and "protocol version 1"; built for `GOOS=windows`, it built too.
+* The consumer's `go.mod` kept `go 1.26.10`, gained no `toolchain` line, and lists `golang.org/x/sys v0.49.0 // indirect`.
+
+Nothing of this PLAN is left open.
