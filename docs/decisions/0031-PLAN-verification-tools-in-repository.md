@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-22
 associated-madr: "0031-MADR-verification-tools-in-repository.md"
 ---
@@ -617,4 +617,9 @@ on the documentation's word, and no test claims it.
 
 **Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 42 tests"; `make markdownlint`, 29 files, 0 issues; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed.
 
-The push, CI, and this PLAN and its row `complete` follow, in the owner's turn that asks for the push.
+**The push and CI.** The owner committed the step as `bf0b215`, after the report as `e93457b`, and pushed `main`. Before it,
+`make push-guard`, "2 outgoing commit(s), 1fc1d21..bf0b215", passed, and `tools/idscan.py --range origin/main..main` found 0 matches in
+the 6 files. `tools/watch_ci.py bf0b215`: run `39825211145`, `main`, "completed success; watch exit 0", its six jobs each "completed
+success", the Windows floor job among them. In the Linux job at the newest Go, `make check-tools`: "Ran 42 tests", OK.
+
+Every acceptance criterion is met; this PLAN and its row in `docs/README.md` are `complete` again.
