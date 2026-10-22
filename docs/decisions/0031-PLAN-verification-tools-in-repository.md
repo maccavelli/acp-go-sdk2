@@ -319,3 +319,42 @@ With the planted failing test above, the PLAN's row for `remote.py` is met.
 
 **Gates,** `tools/gates.py --all`, the hosts included, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 21 tests"; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed. `--all` is now matched against the scratch directory's
 gate set, as the deviation during step 3 has it.
+
+### Step 5, the plants, 2026-10-22
+
+The owner committed step 4 and approved this step. What changed:
+
+* **`tools/plants.py SPEC.json`:** each plant in its own copy of the tree, in `_common.cache_dir("plants")`, outside the repository,
+  without `.git`, `.cache`, `.tools`, `.gocache` or macOS metadata; each edit's text asserted to occur once, else the plant is refused;
+  local plants by `go test -count=1 -timeout -run`, host plants by `remote.py pkg --tree <copy>`; the first line the failing test wrote
+  printed; the copies removed unless `--keep`; exit 0 only when every plant failed with its wanted text, 2 for a malformed spec.
+* **`tools/remote.py`:** `pkg --tree DIR`, to build from a copy that has no `.git`; the PLAN's design had `plants.py` call `remote.py
+  pkg`, and a copy cannot name its own tree to git.
+* **`tools/test_tools.py`:** 27 tests; `PlantsTest` runs `plants.py` against a one-test Go module, `ACP_TOOLS_CACHE` in a temporary
+  directory, so that no test writes the user's cache.
+
+**The replay,** the PLAN's acceptance for this step: 0030's step 7 plants, as a spec, and its step 8 breakaway plant on the Windows host;
+4 of 4 failed as required, the first three with the lines
+[0030-PLAN-record-initialize-on-arrival.md](0030-PLAN-record-initialize-on-arrival.md) records:
+
+| Plant | The line the failing test wrote |
+| :--- | :--- |
+| `Kill` running `Close` | "kill_test.go:23: Kill took longer than 3s" |
+| `exitedWithin` not watching `hurry` | "kill_test.go:41: Kill took longer than 3s" |
+| `ErrKilled` recorded though nothing was sent | "kill_test.go:65: Kill = agentproc: agent killed, want nil, the agent's exit of status 0" |
+| `BREAKAWAY_OK` left out, on the Windows host | "the parent-breakaway agent exited before it was ready: exit status 1" |
+
+Its first run printed each test's `--- FAIL` line rather than what the test wrote; `first_failure` now prefers the `_test.go:` line, and
+the table is the second run's. After both, `leftovers.py` found no test process on the Windows host, and the plants' cache directory was
+empty.
+
+**Planted breaks** in `plants.py`, each in a copy of `tools/`; 4 of 4 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| an edit that does not apply accepted | `test_edit_that_does_not_apply` |
+| the wanted text ignored | `test_want_text_absent`: "0 != 1" |
+| the copy keeping `.git` | `test_copy_outside_the_tree_without_git`: "the copy must leave .git out" |
+| the plant applied to the tree itself | `test_copy_outside_the_tree_without_git`: "1 != 0" |
+
+**Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 27 tests"; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed.

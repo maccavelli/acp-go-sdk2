@@ -9,9 +9,10 @@ Usage:
   remote.py tree --host {linux,windows}
       copy the working tree's tracked and untracked-but-not-ignored files,
       then `go test -count=1 -shuffle=on ./...` in both modules
-  remote.py pkg --host {linux,windows} [--goarch ARCH] PKG [FLAG ...]
-      cross-compile PKG's test binary, copy it, run it with the flags, each
-      quoted for the remote shell (a -test.run pattern may hold `|`)
+  remote.py pkg --host {linux,windows} [--goarch ARCH] [--tree DIR] PKG [FLAG ...]
+      cross-compile PKG's test binary, from DIR when given (a copy with no
+      .git), copy it, run it with the flags, each quoted for the remote
+      shell (a -test.run pattern may hold `|`)
 
 Exit with the tests' status: 0 when every run passed.
 """
@@ -76,9 +77,9 @@ def tree(kind: str, out: Path) -> int:
     return 1 if failed else 0
 
 
-def pkg(kind: str, goarch: str, package: str, flags: list[str], out: Path) -> int:
+def pkg(kind: str, goarch: str, package: str, flags: list[str], out: Path, tree_dir: Path | None = None) -> int:
     host = _common.host(kind)
-    root = _common.repo()
+    root = tree_dir or _common.repo()
     log = out / f"pkg-{kind}.log"
     log.unlink(missing_ok=True)
     exe = "pkg.test.exe" if kind == "windows" else "pkg.test"
@@ -118,6 +119,7 @@ def main(argv: list[str]) -> int:
     p = sub.add_parser("pkg")
     p.add_argument("--host", choices=sorted(_common.HOST_VARS), required=True)
     p.add_argument("--goarch", default="amd64")
+    p.add_argument("--tree", help="build from this tree instead of the repository")
     p.add_argument("--out")
     p.add_argument("package")
     p.add_argument("flags", nargs=argparse.REMAINDER)
@@ -125,7 +127,7 @@ def main(argv: list[str]) -> int:
     out = _common.out_dir("remote", args.out)
     if args.cmd == "tree":
         return tree(args.host, out)
-    return pkg(args.host, args.goarch, args.package, args.flags, out)
+    return pkg(args.host, args.goarch, args.package, args.flags, out, Path(args.tree).resolve() if args.tree else None)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 Run by `make check-tools`. Every pattern and name here is made up."""
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -218,6 +219,65 @@ class LeftoversTest(unittest.TestCase):
         self.assertEqual([r.split()[0] for r in rows], ["agentproc.test.exe"])
         rows = leftovers.leftover_rows(self.LIST, {"t.exe"})
         self.assertEqual([r.split()[0] for r in rows], ["agentproc.test.exe", "t.exe"], "tasklist.exe must not match t.exe")
+
+
+class PlantsTest(Temp):
+    """plants.py against a one-test Go module."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tree = self.dir / "tree"
+        self.tree.mkdir()
+        (self.tree / "go.mod").write_text("module example.invalid/m\n\ngo 1.26\n")
+        (self.tree / "m.go").write_text("package m\n\n// Add adds.\nfunc Add(a, b int) int { return a + b }\n")
+        (self.tree / "m_test.go").write_text('package m\n\nimport "testing"\n\nfunc TestAdd(t *testing.T) {\n'
+                                             '\tif Add(2, 2) != 4 {\n\t\tt.Fatal("Add is wrong")\n\t}\n}\n')
+        (self.tree / ".git").mkdir()
+        (self.tree / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+        self.env = {"ACP_TOOLS_CACHE": str(self.dir / "cache")}
+
+    def plants(self, *plants: dict, extra: tuple[str, ...] = ()) -> subprocess.CompletedProcess[str]:
+        spec = self.dir / "spec.json"
+        spec.write_text(json.dumps(list(plants)))
+        return tool("plants", str(spec), "--tree", str(self.tree), "--out", str(self.dir / "out"), *extra, env=self.env)
+
+    @staticmethod
+    def plant(name: str, old: str, new: str, want: str = "Add is wrong") -> dict:
+        return {"name": name, "edits": [{"file": "m.go", "old": old, "new": new}], "pkg": ".", "run": "^TestAdd$", "want": want}
+
+    def test_fails_as_required(self) -> None:
+        r = self.plants(self.plant("subtract", "return a + b", "return a - b"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("FAILED AS REQUIRED: subtract", r.stdout)
+        self.assertIn("1/1 as required", r.stdout)
+
+    def test_edit_that_does_not_apply(self) -> None:
+        r = self.plants(self.plant("absent", "return a * b", "return 0"))
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("refused: m.go: the text to replace occurs 0 time(s)", r.stdout)
+
+    def test_test_that_still_passes(self) -> None:
+        r = self.plants(self.plant("comment", "// Add adds.", "// Add sums."))
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("NOT AS REQUIRED: comment", r.stdout)
+
+    def test_want_text_absent(self) -> None:
+        r = self.plants(self.plant("wrong text", "return a + b", "return a - b", want="some other failure"))
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+
+    def test_spec_refused(self) -> None:
+        r = self.plants({"name": "x", "edits": []})
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("lacks", r.stdout)
+
+    def test_copy_outside_the_tree_without_git(self) -> None:
+        r = self.plants(self.plant("subtract", "return a + b", "return a - b"), extra=("--keep",))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        copies = [p for p in (self.dir / "cache" / "plants").glob("run-*/subtract")]
+        self.assertEqual(len(copies), 1, copies)
+        self.assertFalse((copies[0] / ".git").exists(), "the copy must leave .git out")
+        self.assertIn("return a - b", (copies[0] / "m.go").read_text())
+        self.assertIn("return a + b", (self.tree / "m.go").read_text(), "the tree itself must be unchanged")
 
 
 class HostTest(unittest.TestCase):
