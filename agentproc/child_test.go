@@ -91,8 +91,13 @@ const beatEnv = "AGENTPROC_TEST_BEAT"
 // which it holds open as a launcher's agent does, and returns it once its
 // file has grown. setup, when not nil, adjusts its command first.
 func startBeat(setup func(*exec.Cmd)) (*exec.Cmd, error) {
+	return startBeatAt(os.Getenv(beatEnv), setup)
+}
+
+// startBeatAt is startBeat for a beat that appends to file.
+func startBeatAt(file string, setup func(*exec.Cmd)) (*exec.Cmd, error) {
 	g := exec.Command(testBinary(), "-test.run=^$")
-	g.Env = append(os.Environ(), childEnv+"=beat")
+	g.Env = append(os.Environ(), childEnv+"=beat", beatEnv+"="+file)
 	g.Stdout = os.Stdout
 	if setup != nil {
 		setup(g)
@@ -101,11 +106,11 @@ func startBeat(setup func(*exec.Cmd)) (*exec.Cmd, error) {
 		return nil, err
 	}
 	// A test that finds the beat running when it should not ends it by this.
-	if err := os.WriteFile(os.Getenv(beatEnv)+".gpid", []byte(strconv.Itoa(g.Process.Pid)), 0o600); err != nil {
+	if err := os.WriteFile(file+".gpid", []byte(strconv.Itoa(g.Process.Pid)), 0o600); err != nil {
 		return g, err
 	}
 	for range 400 {
-		if fi, err := os.Stat(os.Getenv(beatEnv)); err == nil && fi.Size() > 0 {
+		if fi, err := os.Stat(file); err == nil && fi.Size() > 0 {
 			return g, nil
 		}
 		time.Sleep(25 * time.Millisecond)

@@ -113,7 +113,11 @@ type Process struct {
 // ends the agent and every process it started; on Linux and FreeBSD the
 // kernel sends the agent the SIGKILL that Start sets as its Pdeathsig, unless
 // the caller set one, and a process it started ends only at its input's end;
-// elsewhere nothing more ends them. Start starts the agent from a goroutine
+// elsewhere nothing more ends them. On Windows, a process the agent's tree
+// starts with CREATE_BREAKAWAY_FROM_JOB is outside the job, as one that
+// starts a session of its own is outside the process group on Unix: what
+// ends the job or the group does not end it, and it is the agent's to end.
+// Start starts the agent from a goroutine
 // locked to its OS thread until the agent is reaped, since Linux sends a
 // Pdeathsig when the thread that started the child ends
 // (0029-MADR-unix-client-death-pdeathsig.md). When

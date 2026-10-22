@@ -741,3 +741,54 @@ The three tests, 20 times each: under `-race` on macOS, and on the Windows and L
 * `go test -race -count=3 -shuffle=on .`;
 * the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
 * the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
+
+### Step 8, breakaway, 2026-10-21
+
+The owner committed step 7 and approved this step. What changed, as the PLAN's "Breakaway" section has it:
+
+* **`agentproc/tree_windows.go`:** `attach` sets `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK`; its comment says
+  that a process started with `CREATE_BREAKAWAY_FROM_JOB` is outside the job, citing W3 and W4.
+* **`Start`'s doc** (`agentproc/agentproc.go`): on Windows, such a process is outside the job, as one that starts a session of its own is
+  outside the process group on Unix; what ends the job or the group does not end it, and it is the agent's to end. The MADR names the
+  four ends, `Close`, `Kill`, the agent's exit and this process's death; the doc names what they share, ending the job, since the tests
+  below stop the agent by `Close` and by `Kill` alone. The README's paragraph is step 9's.
+* **The child mode** `parent-breakaway` (`agentproc/child_windows_test.go`, whose `platformChild` is now a `switch`): it starts a beat
+  with `CREATE_BREAKAWAY_FROM_JOB` on the beat file's name with `.away` added, its standard output unset, as a detached updater runs (W4),
+  then a beat without it, as `parent` does, and exits at its input's end; a beat it cannot start is written to its standard error.
+  `startBeatAt` (`child_test.go`) is `startBeat` for a given file, which `startBeat` now calls with the file the environment names, so
+  that its callers are unchanged.
+* **The test,** `agentproc/breakaway_windows_test.go`, new: `TestBreakawayLeavesJob`, with two subtests, as the PLAN lists it and more:
+  the agent stopped by `Close`, which ends the job once the agent exits at its input's end (`end`), and by `Kill`, which terminates it
+  (`kill`). The PLAN named `Close` alone; `Kill` ends the job by the other call. `stderrText` keeps the agent's standard error, so that an
+  agent that exits before it is ready says why; the cleanup ends both beats by their recorded process IDs (`endBeat`).
+
+**The claims, each to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| a process the agent starts with `CREATE_BREAKAWAY_FROM_JOB` starts, and still runs after `Close` and after `Kill` (W3d) | `TestBreakawayLeavesJob`, both subtests |
+| a process the agent starts without it ends with the job, the limit set (W3c) | the same |
+
+The test, 5 times on the Windows host: 5 of 5 passed, each subtest. Afterwards the host's process list held no test binary, by its exact
+image name; that check was first seen to catch a planted name, `tasklist.exe`, which it lists while it runs.
+
+**Planted breaks,** each in its own scratch copy, run on the Windows host; 2 of 2 failed as required, the second beyond the PLAN's table:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `BREAKAWAY_OK` left out | `TestBreakawayLeavesJob`, both subtests: "the parent-breakaway agent exited before it was ready: exit status 1", the agent having written "starting the beat that breaks away: fork/exec …: Access is denied.", W3b |
+| `SILENT_BREAKAWAY_OK` in its place, which lets every process leave | `TestBreakawayLeavesJob`, both subtests: "the grandchild started without CREATE_BREAKAWAY_FROM_JOB still runs after the agent was stopped" |
+
+After them, the host's process list held no test binary.
+
+**Gates,** each exit 0:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "175 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and the new file's, "1 file(s) clean";
+  `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet ./...` in both modules; `make check-records`, `make markdownlint` and the
+  identifier scan; `make lint`, "0 issues." four times; `go fix -diff ./...` and `go mod tidy -diff` print nothing, in both modules;
+* `make api` against `v1.19.0`: "0 incompatible, 4 compatible", as after step 7;
+* `go test -race -count=3 -shuffle=on .`;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
+
+CI's Windows jobs run the test with step 11's push.
