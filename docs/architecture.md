@@ -105,7 +105,8 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   `atomic.Pointer[Negotiation]`, the JSON form of what was sent and received
   (`jsonCopy`), and `Negotiated` returns a copy of it; it is stored by the
   agent before its answer is
-  written and by the client when `Initialize` returns, a zero version
+  written and by the client as the answer arrives, by the commit the
+  generated `Initialize` gives `sendRequestCommit`, a zero version
   filled and another refused;
 - the name `SessionUpdate` for the client's `session/update` handler;
 - the unions whose constructors `helpers.go` writes;
@@ -286,7 +287,22 @@ paths check the answer against the record it is about to make.
 `*CapabilityError` `-32601`, other refusals `-32602`. `Connection`,
 `SendRequest[T]` and the outbound extension methods pass no gate.
 
-`receive` reads one line at a time through a `bufio.Reader`, up to
+The client records `initialize` on arrival and holds what comes before it
+(0030-MADR-record-initialize-on-arrival.md). The generated `Initialize` stores
+an `initializeAttempt` in `initializing` before it sends, and calls
+`sendRequestCommit` with a commit and the attempt's `end`. `handleResponse`,
+on the reader, runs the commit for a result before it hands the answer over:
+`checkInbound`, hooks and gate included, the version check, and the record's
+`Store`; then `settle`, which ends the attempt, for any answer. A caller that
+gives up after the reader has claimed the answer waits for the commit
+(`claimedAnswer`), so its return and the record agree. The client's dispatch
+and `inboundGate` pass `heldGate`, its outbound methods `gate`: `heldGate`
+calls `holdUntilInitialized`, which, while an attempt is in flight, makes a
+message `gate` refuses only with `ErrNotInitialized` wait for the attempt's
+end, or the connection's, and judges it again. The agent's side holds nothing.
+
+`receive` reads one line at a time through a 128 KiB `bufio.Reader`
+(`readBufferSize`), up to
 `WithMaxMessageSize` (10 MiB by default), and classifies it: an overlong
 line is discarded and answered `-32600`; a line `json.Valid` refuses,
 `-32700`; JSON that is not an object, `-32600`; an object without `method`
@@ -305,7 +321,9 @@ its own entry. With `WithMaxConcurrentRequests(n)`, `receive` takes a slot of
 `requestSlots`, a channel of capacity `n`, for each request, and answers one it
 finds no slot for `-32603` without starting it; a slot is given back when the
 handler returns, before its answer is written. Notifications run one at a time from a queue, each handler's
-context marked with its sequence number. A response is returned after the
+context marked with its sequence number. A held request keeps its slot, and a
+held notification the loop, so the queue behind it fills, until the
+`initialize` in flight ends. A response is returned after the
 notifications received before it are handled, unless the request was sent
 under the context of a notification whose handler is still running: that wait
 stops before it. A message's params are left out when they encode as `null`,
@@ -368,8 +386,11 @@ Checks that guard this:
 - `cancel_test.go` covers prompt turns and permission requests on cancel
   and on `session/close`, cancels ordered across two prompts, and the bound
   on kept cancels,
-  `jsonrpc_test.go` the answers to malformed input and the size limit,
-  `negotiation_test.go` the record and the version, and `gates_test.go`
+  `jsonrpc_test.go` the answers to malformed input, the size limit and the
+  reader's buffer,
+  `negotiation_test.go` the record and the version, `initialize_test.go` the
+  record on arrival, the hooks on the reader, and the hold, with the queue and
+  the slots it keeps, and `gates_test.go`
   every method and value gate both ways, the undeclared elicitation mode,
   extension messages through the hooks and the gate, the hook's order, the
   raw paths, and `initialize`'s own check; the engine cases
@@ -446,11 +467,17 @@ The agent's tree is per platform, in `tree_unix.go`, `tree_windows.go` and
 refuses a non-zero `Pgid`; on Linux and FreeBSD it also sets `Pdeathsig` to
 SIGKILL when the caller set none (`deathsig_pdeathsig.go`; `deathsig_none.go`
 elsewhere on Unix); `terminate` and `kill` signal the group, and `kill` the
-agent itself too. On Windows `attach` puts the agent, once started, in a job
-object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, through
-`os.Process.WithHandle`; there is no terminating signal, and `kill` ends the
-job. Elsewhere, `js`, `wasip1` and `plan9`, only the agent is killed.
-`golang.org/x/sys` is built for Windows alone.
+agent itself too. On Windows `prepare` adds `CREATE_SUSPENDED` to the
+caller's `CreationFlags`, refusing a command that has it already, and `attach`
+puts the agent in a job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and
+`JOB_OBJECT_LIMIT_BREAKAWAY_OK`, through `os.Process.WithHandle`, then resumes
+it (`resume`: a thread snapshot, `OpenThread`, `ResumeThread`), so nothing the
+agent starts precedes the assignment
+(0030-MADR-record-initialize-on-arrival.md, the Windows amendment); a process
+started with `CREATE_BREAKAWAY_FROM_JOB` leaves the job. `attachDelay`, zero
+in production, lets a test make the assignment late. There is no terminating
+signal, and `kill` ends the job. Elsewhere, `js`, `wasip1` and `plan9`, only
+the agent is killed. `golang.org/x/sys` is built for Windows alone.
 
 `run` starts the agent and waits for it on one goroutine, locked to its OS
 thread until the agent is reaped: Linux sends a `Pdeathsig` when the thread
@@ -464,9 +491,24 @@ end of the agent's output, and closes it. The monitor stops the agent when the
 connection ends first. `Close` runs, once, its steps: close the agent's input,
 which the connection shares through `sharedClose`, so the two closes never
 collide; wait up to the grace; on Unix SIGTERM and the grace again; kill; close
-the connection. `Wait` waits for both goroutines and the connection, and joins
-`ErrTerminated` or `ErrKilled` to `Cmd.Wait`'s error by the step that ended the
-agent.
+the connection. `Kill` closes `hurry` and runs the same steps: a closed
+`hurry` ends each wait at once and skips SIGTERM, so a `Close` in progress
+kills too. `Wait` waits for both goroutines and the connection, drains the
+taps, and joins `ErrTerminated` or `ErrKilled` to `Cmd.Wait`'s error by the
+step that ended the agent.
+
+The taps are in `tap.go` (0030-MADR-record-initialize-on-arrival.md, the
+amendment for issue #10). `streams` hands the connection, for an output tap, a
+`tapReader` over the output pipe, and for an input tap, a `tapWriter` over the
+shared input, which offer each read's or write's bytes to the tap's queue, and
+starts the tap's goroutine. That goroutine
+writes the queue to the caller's writer, ignoring its error. A copy that would
+take the queue past `tapQueueBytes`, 32 MiB, detaches the tap, so what it
+received is a prefix, and counts what it does not receive. `Wait` runs
+`drainTaps` once: it ends each tap's stream and waits, up to the grace from one
+timer, for its queue to be written, then abandons a tap still writing. With no
+tap set, the connection gets the pipe and the input themselves, and no
+goroutine starts.
 
 Checks that guard it:
 
@@ -474,10 +516,14 @@ Checks that guard it:
   environment variable names (`child_test.go`): `TestStartRefuses`,
   `TestNoLostOutput`, `TestCloseLadder`, `TestStderrHeldByDescendant`,
   `TestCloseIdempotent`, `TestDefaultGrace`, `TestCallersCommandKept`,
-  `TestDescendantsEnded`, `TestConnectionEndStopsAgent`; on Unix `TestStartRefusesSharedGroup` and
-  `TestEscapedDescendantDoesNotHoldWait` and `TestClientDeathEndsAgentAtInputEnd`; on Linux and FreeBSD
+  `TestDescendantsEnded`, `TestConnectionEndStopsAgent`, `TestKill`, `TestKillCutsCloseShort`,
+  `TestKillAfterExit`, and the taps' `TestOutputTapVerbatim`, `TestInputTapSeesWrites`,
+  `TestTapErrorIgnored`, `TestTapsUnset`, `TestBlockedTapDetached`, `TestDetachedTapIsPrefix` and
+  `TestTapDrainBoundedByGrace`; on Unix `TestStartRefusesSharedGroup` and
+  `TestEscapedDescendantDoesNotHoldWait`, `TestTapKeepsCloseEnding` and `TestClientDeathEndsAgentAtInputEnd`; on Linux and FreeBSD
   `TestStartFromExitingLockedGoroutine`, `TestDefaultPdeathsig`, `TestCallersPdeathsigKept` and
-  `TestClientDeathEndsAgent`; on Windows `TestClientDeathEndsTree`.
+  `TestClientDeathEndsAgent`; on Windows `TestClientDeathEndsTree`, `TestDescendantInJobDespiteSlowAttach`,
+  `TestStartRefusesSuspended`, `TestCallersCreationFlagsKept` and `TestBreakawayLeavesJob`.
 - Its `TestMain` runs the goroutine-leak guard after the tests, as the root's
   does.
 - `TestReadmeAgentprocIsTheExample` at the root requires the README's example

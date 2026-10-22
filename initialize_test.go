@@ -371,3 +371,102 @@ func TestNotHeldBeforeInitialize(t *testing.T) {
 	default:
 	}
 }
+
+// TestHeldNotificationsFillQueue requires notifications held while initialize
+// is in flight to stay in the notification queue: three, each in its own
+// write 100 ms apart, overflow a queue of one, and the connection ends, where
+// refused at once each would have left it
+// (0030-MADR-record-initialize-on-arrival.md, "Amendment 2026-10-21, step 9:
+// what a held message holds", M1).
+func TestHeldNotificationsFillQueue(t *testing.T) {
+	t.Parallel()
+	c, p, _ := initializeClient(t, WithMaxQueuedNotifications(1))
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Initialize(t.Context(), InitializeRequest{})
+		done <- err
+	}()
+	req := p.next("the initialize request")
+	for range 3 {
+		p.send(extNotification)
+		time.Sleep(100 * time.Millisecond)
+	}
+	select {
+	case <-c.Done():
+	default:
+		p.send(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":%s}`, req.ID, initializeAnswer))
+	}
+	if err := within(t, done, "Initialize"); err == nil {
+		t.Error("Initialize = nil, want an error: the connection ended before the answer")
+	}
+	within(t, c.Done(), "the connection's end")
+	if err := c.Err(); !errors.Is(err, ErrNotificationQueueOverflow) {
+		t.Errorf("the connection ended with %v, want ErrNotificationQueueOverflow", err)
+	}
+}
+
+// TestHeldRequestsKeepSlots requires a request held while initialize is in
+// flight to keep its request slot: with one slot, a second request before the
+// answer is answered -32603 at once, and the first, once the answer is
+// recorded, with a result (the amendment above, M3).
+func TestHeldRequestsKeepSlots(t *testing.T) {
+	t.Parallel()
+	c, p, _ := initializeClient(t, WithMaxConcurrentRequests(1))
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Initialize(t.Context(), InitializeRequest{})
+		done <- err
+	}()
+	req := p.next("the initialize request")
+	p.send(`{"jsonrpc":"2.0","id":"r1","method":"_x/ask","params":{}}`)
+	time.Sleep(100 * time.Millisecond)
+	p.send(`{"jsonrpc":"2.0","id":"r2","method":"_x/ask","params":{}}`)
+	if a := p.next("the second request's answer"); string(a.ID) != `"r2"` || a.Error == nil || a.Error.Code != -32603 ||
+		!strings.Contains(fmt.Sprint(a.Error.Data), "too many concurrent requests") {
+		t.Fatalf("before the answer, the client wrote %s %+v; want r2 answered -32603, too many concurrent requests", a.ID, a.Error)
+	}
+	p.send(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":%s}`, req.ID, initializeAnswer))
+	if err := within(t, done, "Initialize"); err != nil {
+		t.Fatalf("Initialize = %v", err)
+	}
+	if a := p.next("the first request's answer"); string(a.ID) != `"r1"` || a.Error != nil {
+		t.Errorf("the request held in its slot was answered %s %+v, want a result", a.ID, a.Error)
+	}
+}
+
+// TestInitializeHookHoldsReader requires the inbound hooks to see the
+// initialize answer on the reader: while a rewrite hook blocks on it, the
+// line after the answer, not JSON, which the reader answers itself, is not
+// answered; once the hook returns it is answered -32700 and Initialize
+// returns the answer (the amendment above, M4; "Amendment 2026-10-21, step 2:
+// the commit's checks, and a caller that gives up").
+func TestInitializeHookHoldsReader(t *testing.T) {
+	t.Parallel()
+	release := make(chan struct{})
+	c, p, _ := initializeClient(t, WithInboundRewrite(func(_ context.Context, _ string, params any) error {
+		if _, ok := params.(*InitializeResponse); ok {
+			<-release
+		}
+		return nil
+	}))
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Initialize(t.Context(), InitializeRequest{})
+		done <- err
+	}()
+	req := p.next("the initialize request")
+	p.send(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":%s}`, req.ID, initializeAnswer) + "\nnot json")
+	select {
+	case line := <-p.lines:
+		close(release)
+		t.Fatalf("while the hook held the answer, the client wrote %s, want nothing: the reader runs the hook", line)
+	case <-time.After(300 * time.Millisecond):
+	}
+	close(release)
+	if a := p.next("the answer to the line that is not JSON"); a.Error == nil || a.Error.Code != -32700 {
+		t.Errorf("the line after the answer was answered %+v, want -32700", a.Error)
+	}
+	if err := within(t, done, "Initialize"); err != nil {
+		t.Errorf("Initialize = %v, want the answer", err)
+	}
+}

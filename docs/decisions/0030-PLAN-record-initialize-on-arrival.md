@@ -206,6 +206,15 @@ At the root, a fake agent over `io.Pipe`s, as the MADR's probe:
 * **`TestStartRefusesSuspended`** (Windows): a `Cmd` with `CREATE_SUSPENDED` is refused, and nothing started.
 * **`TestCallersCreationFlagsKept`** (Windows): a caller's `CREATE_NEW_PROCESS_GROUP` is kept beside `CREATE_SUSPENDED`, and the agent runs.
 
+(Added 2026-10-21, during step 9.) At the root, in `initialize_test.go`, the MADR's M1, M3 and M4:
+
+* **`TestHeldNotificationsFillQueue`:** `WithMaxQueuedNotifications(1)`; three extension notifications before the answer, each in its
+  own write 100 ms apart; the connection ends with `ErrNotificationQueueOverflow`, and `Initialize` returns an error.
+* **`TestHeldRequestsKeepSlots`:** `WithMaxConcurrentRequests(1)`; two extension requests before the answer, 100 ms apart, then the
+  answer; the second is answered `-32603` before the answer is sent, and the first with a result after it.
+* **`TestInitializeHookHoldsReader`:** a rewrite hook that blocks on the answer, and a line that is not JSON after it in the same write;
+  nothing is written while the hook blocks, then the line is answered `-32700` and `Initialize` returns the answer.
+
 ## Implementation Steps
 
 Each step ends with its gates and an execution record. Agents stage; a commit or a push on `main` needs the owner's explicit permission in
@@ -229,7 +238,8 @@ it is relied on.
 8. **(Added 2026-10-21) Breakaway:** `attach`'s limit; the child mode `parent-breakaway`; `TestBreakawayLeavesJob`, on the Windows host
    and in CI's Windows jobs. (Was step 7; renumbered 2026-10-21, during step 5.)
 9. **Docs:** the README and `docs/architecture.md`; each claim mapped to a test. (Was step 4; amended 2026-10-21: the paragraphs the
-   scope adds; renumbered from 8, during step 5, and the suspended start added.)
+   scope adds; renumbered from 8, during step 5, and the suspended start added; amended during step 9: and
+   `TestHeldNotificationsFillQueue`, `TestHeldRequestsKeepSlots`, `TestInitializeHookHoldsReader`; see the deviation during step 9.)
 10. **Release notes:** `docs/reports/0030-REPORT-release-notes-v1-20-0.md` and its row, for 0029 and 0030, with `make api`'s report. (Was
     step 5; amended 2026-10-21: naming issue #10, `Command.OutputTap`, `Command.InputTap`, `Process.Kill`, `Process.DroppedTapBytes`, the
     breakaway and the buffer; renumbered from 9, during step 5, and the suspended start added.)
@@ -278,6 +288,8 @@ Planted breaks, each in a scratch copy:
 | the suspended start | the resume before the assignment | `TestDescendantInJobDespiteSlowAttach` |
 | the suspended start | a caller's `CREATE_SUSPENDED` accepted | `TestStartRefusesSuspended` |
 | the suspended start | the caller's flags replaced by `CREATE_SUSPENDED` | `TestCallersCreationFlagsKept` |
+| the hold (added 2026-10-21, during step 9) | the gate refusing at once, as before | `TestHeldNotificationsFillQueue`, `TestHeldRequestsKeepSlots` |
+| the commit | the commit run on a goroutine of its own, off the reader | `TestInitializeHookHoldsReader` |
 
 Acceptance:
 
@@ -792,3 +804,86 @@ After them, the host's process list held no test binary.
 * the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.
 
 CI's Windows jobs run the test with step 11's push.
+
+### Deviation, 2026-10-21, during step 9: what a held message holds
+
+**Found.** Step 9 maps each claim the docs make to a test. Three consequences of steps 2 and 3, which the docs must state, had none: held
+notifications fill the notification queue; held requests keep their request slots; and the hooks see the `initialize` answer on the
+reader, so a hook that blocks there holds what follows. A probe confirmed each against the tree before this PLAN's code (the MADR's
+"Amendment 2026-10-21, step 9: what a held message holds", M1 to M4); it also showed that a burst of notifications written at once
+overflowed before too (M2), so the consequence is for notifications spread out until the answer.
+
+**Decision (owner, 2026-10-21).** Add a test for each, seen to fail on a planted break, and state each in the docs; the MADR's
+Consequences are completed by its amendment. The alternative was to redesign the hold so that held messages use neither the queue nor
+the slots, which would still need a bound and an overflow rule of its own. Added: the three tests above, in `initialize_test.go`, and
+two rows of planted breaks.
+
+### Step 9, docs, 2026-10-21
+
+The owner committed step 8 and approved this step; the deviation above was decided during it. What changed:
+
+* **`README.md`, "Initialization and capabilities":** the client's record made as the answer arrives, and returned; a caller that gives
+  up once it has arrived; the hold, what ends it, and the queue and slots it keeps; the hooks on the reader for the answer.
+* **`README.md`, "Closing and limits":** the suspended start on Windows and the refusal of a caller's `CREATE_SUSPENDED`; a process that
+  leaves the group or the job; `Kill`; the taps, after the example, which stays `ExampleCommand`'s body.
+* **`docs/architecture.md`:** the record stored by the commit; a paragraph on the commit, `settle`, `claimedAnswer`, the attempt,
+  `heldGate` and `holdUntilInitialized`; `receive`'s 128 KiB buffer; the slot and the queue a held message keeps; `initialize_test.go`
+  and the buffer in the root's checks; in "The agent process helper", the Windows `prepare`, `attach`, `resume` and `attachDelay`,
+  `Kill` and `hurry`, a paragraph on `tap.go`, and the new tests in its checks.
+* **Tests,** the deviation's three, in `initialize_test.go`: `TestHeldNotificationsFillQueue`, `TestHeldRequestsKeepSlots`,
+  `TestInitializeHookHoldsReader`.
+
+**Each claim the docs make, to what makes it:**
+
+| Claim | Check |
+| :--- | :--- |
+| the client records the answer as it arrives, before what follows is read; a message sent at once is judged by it | `TestInitializeRecordedOnArrival` |
+| the agent records before its answer is written | `TestAgentRecordsBeforeAnswering` |
+| a caller whose context ends, or whose connection closes, once the answer has arrived gets it, and the record holds it | `TestInitializeGiveUpAgrees` |
+| a message sent before the answer is held, then judged by the record | `TestHeldUntilInitialized` |
+| it is refused on an error answer, another version, the caller's context, the connection's close | `TestHeldRefusedWhenInitializeFails` |
+| nothing is held before `Initialize` is called | `TestNotHeldBeforeInitialize` |
+| held notifications fill the queue; past it, the overflow policy closes the connection | `TestHeldNotificationsFillQueue` |
+| a held request keeps its slot; past the limit, `-32603` | `TestHeldRequestsKeepSlots` |
+| the hooks see the answer once; what the rewrite hook makes of it is returned and recorded | `TestInitializeHooksRunOnce` |
+| an answer the validation hook refuses records nothing | `TestInitializeRefusedByHookRecordsNothing` |
+| a hook that blocks on the answer holds every message behind it | `TestInitializeHookHoldsReader` |
+| `receive` reads through 128 KiB | `TestReceiveReadBufferSize` |
+| on Windows the agent runs only once in its job, so a process it starts at once is in it | `TestDescendantInJobDespiteSlowAttach` |
+| a caller's `CREATE_SUSPENDED` is refused | `TestStartRefusesSuspended` |
+| a process started with `CREATE_BREAKAWAY_FROM_JOB` is outside the job; what ends the job does not end it | `TestBreakawayLeavesJob` |
+| a process in a session of its own on Unix outlives the group's end | `TestEscapedDescendantDoesNotHoldWait` (0027) |
+| `Kill` ends the agent and its processes at once, with `ErrKilled` | `TestKill` |
+| an agent that has exited is sent nothing | `TestKillAfterExit` |
+| a `Close` in progress stops waiting and kills | `TestKillCutsCloseShort` |
+| the taps receive every byte, in order, before decoding, a line too long or not JSON included | `TestOutputTapVerbatim`, `TestInputTapSeesWrites` |
+| a tap's errors are ignored | `TestTapErrorIgnored` |
+| the connection never waits for a tap; one 32 MiB behind is detached, a prefix, the rest counted | `TestBlockedTapDetached`, `TestDetachedTapIsPrefix` |
+| `Wait` gives the taps up to the grace | `TestOutputTapVerbatim`, `TestTapDrainBoundedByGrace` |
+| with no tap set, the pipe and the input themselves, no goroutine | `TestTapsUnset` |
+| `ExampleCommand_outputTap` records the output to a file | it compiles, with no `// Output:` |
+
+The architecture's descriptions of the code, the identifiers it names among them, were checked by reading the code, and each identifier
+by a script that requires it in the file the doc gives; the script was first seen to fail on a planted name. One sentence there describes
+code no test observes: a hurried `stop` sends no SIGTERM (step 7's record says why).
+
+**The three tests** passed 20 times under `-race`. **Planted breaks,** each in its own scratch copy; 3 of 3 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the gate refusing at once, as before | `TestHeldNotificationsFillQueue`: "Initialize = nil, want an error: the connection ended before the answer", then "the connection's end did not happen" |
+| the same | `TestHeldRequestsKeepSlots`: the client answered r1 `-32601` before the answer, "…; want r2 answered -32603, too many concurrent requests" |
+| the commit run on a goroutine of its own, off the reader | `TestInitializeHookHoldsReader`: "while the hook held the answer, the client wrote …-32700…, want nothing: the reader runs the hook" |
+
+The first run of the plants named the wrong expected text for the first break: the test stops at its first failure, before the
+overflow's own check; the failure was the one required, and the plant, run again with the text corrected, failed as required.
+
+**Gates,** each exit 0:
+
+* go1.27.3: regeneration unchanged; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `GOEXPERIMENT=nojsonv2 go test ./...`; `GOOS=windows go vet
+  ./...` in both modules; `make check-records`, `make markdownlint` and the identifier scan; `make lint`, "0 issues." four times;
+  `go fix -diff ./...` and `go mod tidy -diff` print nothing, in both modules;
+* `make api` against `v1.19.0`: "0 incompatible, 4 compatible", as after step 7;
+* `go test -race -count=3 -shuffle=on .`, `TestReadmeAgentprocIsTheExample` among them;
+* the Windows host: `go test -count=1 -shuffle=on ./...` in both modules; the Linux host: the same, from a copy of the tree;
+* the floor gate at go1.26.10: `go vet` and `go test -race -count=1` in both modules, the leak guards on.

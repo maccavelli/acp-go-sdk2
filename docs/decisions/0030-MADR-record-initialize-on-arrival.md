@@ -167,7 +167,9 @@ Each has a recommended answer.
 * Good, because an agent can use an extension it advertised in its `initialize` answer at once.
 * Good, because the record is made in the order the messages arrived, on the client as on the agent.
 * Good, because a message the agent sends before its answer is judged by that answer, not refused for timing.
-* Neutral, because, while a message is held, the notifications behind it wait too, until `initialize` completes or fails.
+* Neutral, because, while a message is held, the notifications behind it wait too, until `initialize` completes or fails. (Amended
+  2026-10-21, during the PLAN's step 9: and held notifications fill the notification queue, and held requests keep their request
+  slots; see "Amendment 2026-10-21, step 9: what a held message holds".)
 * Neutral, because the commit's work, a decode and a copy of one small answer, moves to the reader once per connection.
 * Bad, because `sendRequest` gains an internal variant for one method.
 
@@ -616,6 +618,28 @@ undocumented call; S-d leaves the product's gap, a grandchild escaping a slow cl
 * Neutral, because `Start` on Windows sets a flag in the caller's `SysProcAttr`, as on Unix it sets `Setpgid` and `Pdeathsig`.
 * Bad, because a caller that starts its agent suspended itself is refused.
 * Bad, because `attach` carries a test-only delay, zero in production.
+
+## Amendment 2026-10-21, step 9: what a held message holds
+
+Found while the PLAN's step 9 mapped the docs' claims to tests, and decided by the owner the same day: a test for each, and the docs
+state each. The decisions above are unchanged. The probe ran a fake agent over a raw pipe against the client at `d1055d6`, and against
+an export of the tree at `ced609e`, before this record's code:
+
+| Id | Before the `initialize` answer | `ced609e` | `d1055d6` |
+| :--- | :--- | :--- | :--- |
+| M1 | three extension notifications, each in its own write 100 ms apart; `WithMaxQueuedNotifications(1)` | each refused; `Initialize` returns the answer | the first held by the notification loop, the second queued, the third overflows: the connection closes, `ErrNotificationQueueOverflow` |
+| M2 | the same three in one write | overflows | overflows |
+| M3 | two extension requests, 100 ms apart; `WithMaxConcurrentRequests(1)` | both answered `-32601` | the first held in its slot; the second answered `-32603`, "too many concurrent requests"; the first answered with a result once the record exists |
+| M4 | a rewrite hook that blocks on the answer; an extension request after the answer, in the same write | the request answered `-32601` while the hook blocks | nothing answered while the hook blocks; the request answered with a result after |
+
+* **M1, M3.** A held notification is held by the notification loop, so the queue behind it fills as the agent writes, and a held request
+  keeps the slot `receive` took for it (step 3's record, "Checked, as the MADR states"). Before this record each was refused once judged,
+  and gave its place back. So an agent that sends, before its answer, more notifications than the queue holds now meets the overflow
+  policy, which by default closes the connection, and more requests than the limit allows has the rest answered `-32603`.
+* **M2.** A burst written at once overflowed before this record too: the loop judges after the queue, slower than the reader fills it.
+* **M4.** The step 2 amendment's consequence, observed: the hooks see the answer on the reader, so a hook that blocks there holds every
+  message behind the answer. The PLAN's test shows it with a line that is not JSON, which the reader answers itself: a request would be
+  held by the hold as well, and show nothing either way.
 
 ## More Information
 

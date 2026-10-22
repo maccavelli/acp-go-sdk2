@@ -361,9 +361,13 @@ and
 ### Initialization and capabilities
 
 A connection starts with `initialize`. `ClientSideConnection.Initialize` records
-the request and the agent's answer as an `acp.Negotiation` when it returns
-without error, and `AgentSideConnection` records the same before its answer is
-written. `Negotiated()` on either side returns the record and whether there is
+the request and the agent's answer as an `acp.Negotiation` when the answer
+arrives, before the connection reads what the agent wrote after it, and returns
+the answer it recorded; `AgentSideConnection` records the same before its
+answer is written. So a message either side sends the moment it has the answer
+is judged by the record. A caller whose context ends, or whose connection
+closes, once the answer has arrived still gets the answer, and the record holds
+it. `Negotiated()` on either side returns the record and whether there is
 one; a later `initialize` replaces it. The record is the JSON form of the
 request and the answer as they went over the wire: it shares no memory with the
 values passed to or returned by `Initialize` or a handler, and each call of
@@ -381,8 +385,18 @@ tell the user.
 
 Until the record exists, every typed method but `Initialize` returns an error
 wrapping `acp.ErrNotInitialized` and writes nothing, and a request received is
-answered `-32601`. After it, the SDK checks what each side sends and receives
-against the capabilities in the record:
+answered `-32601`. On the client, while `Initialize` waits for its answer, a
+message the agent sends that only a record could allow is held instead: once
+the answer is recorded it is judged against the record, and it is refused, as
+before, when `initialize` fails by an error answer, another protocol version,
+the caller's context ending or the connection closing. Before `Initialize` is
+called nothing is held. A held notification waits in the notification queue,
+with the notifications behind it, and a held request keeps its request slot,
+so an agent that sends more of them before its answer than
+`acp.WithMaxQueuedNotifications` or `acp.WithMaxConcurrentRequests` allows
+meets those limits: the overflow policy, which closes the connection by
+default, or `-32603`. After the record, the SDK checks what each side sends and
+receives against the capabilities in the record:
 
 - Methods: `session/load` needs `loadSession`; `session/list`, `session/delete`,
   `session/resume`, `session/close` and the unstable `session/fork` need the
@@ -417,6 +431,12 @@ response's error is returned to the caller. The answer to `initialize` is
 checked against the record it is about to make, so an agent offering a terminal
 auth method to a client without `auth.terminal` answers `-32603`, and a client
 given one returns the error and records nothing.
+
+The client's inbound hooks see the `initialize` answer once, on the goroutine
+that reads the connection, before anything after it is read: what a rewrite
+hook makes of it is what `Initialize` returns and what is recorded, an answer
+the validation hook refuses records nothing, and a hook that blocks on it holds
+every message behind it.
 
 `Authenticate` with the id of a `terminal` auth method the agent listed returns
 an error wrapping `acp.ErrTerminalAuthMethod` and sends nothing, since a
@@ -541,7 +561,13 @@ it started, every wait bounded
 input and output, through pipes it owns, so nothing the agent writes before it
 exits is lost; the command's `Stderr`, `Env` and `Dir` stay the caller's. On
 Unix the agent runs in a process group of its own, and on Windows in a job
-object. Should the client die without `Close`, the agent's input ends, which
+object; on Windows the agent is started suspended and runs only once it is in
+the job, so a process it starts at once is in the job too, and `Start` refuses
+a command whose `CreationFlags` has `CREATE_SUSPENDED` already. A process the
+agent's tree starts in a session of its own on Unix, or with
+`CREATE_BREAKAWAY_FROM_JOB` on Windows, is outside the group or the job: what
+ends them does not end it, and it is the agent's to end. Should the client die
+without `Close`, the agent's input ends, which
 ends an agent that exits at its input's end; beyond that, on Windows the job
 ends the agent and the processes it started, and on Linux and FreeBSD the
 kernel sends the agent SIGKILL, unless the caller set its own `Pdeathsig`,
@@ -554,8 +580,11 @@ closes the agent's input and waits up to the grace, 5 seconds unless
 waits again; then it kills the group, or ends the job, and closes the
 connection. `Close` and `Wait` return the agent's exit error, joined with
 `agentproc.ErrTerminated` or `agentproc.ErrKilled` when `Close` had to
-escalate. When the agent exits, what is left of its group or job is killed;
-when the connection ends first, the agent is stopped. The package needs
+escalate. `Kill` runs the same steps without their waits, ending the agent and
+the processes it started at once, with `agentproc.ErrKilled`, and an agent that
+has exited is sent nothing; a `Close` in progress stops waiting and kills. When
+the agent exits, what is left of its group or job is killed; when the
+connection ends first, the agent is stopped. The package needs
 `golang.org/x/sys`, on Windows only:
 
 <!-- example: agentproc ExampleCommand -->
@@ -578,6 +607,16 @@ if _, err := p.Conn().Initialize(ctx, acp.InitializeRequest{}); err != nil {
 }
 ```
 <!-- /example -->
+
+`Command.OutputTap` and `Command.InputTap` are writers that receive a copy of
+every byte the agent writes to its output, and of what the connection writes to
+its input, in order, before anything is decoded: a line too long or not JSON
+included. Each tap is written on a goroutine of its own, so the connection
+never waits for it, and its errors are ignored. A tap that falls 32 MiB behind
+is detached: what it received is the stream's beginning, and
+`Process.DroppedTapBytes` counts the rest. `Wait` gives the taps up to the
+grace to write what they hold. `ExampleCommand_outputTap` records the agent's
+output to a file.
 
 When the input ends cleanly, at end of file, as when a script closes a stdio
 agent's standard input after writing its requests, the requests already received
