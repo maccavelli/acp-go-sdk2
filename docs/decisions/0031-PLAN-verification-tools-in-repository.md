@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 date: 2026-10-22
 associated-madr: "0031-MADR-verification-tools-in-repository.md"
 ---
@@ -19,11 +19,14 @@ the MADR's recommended answers to questions 1 to 4; an answer otherwise amends i
 
 * **New, `tools/`:** `_common.py`, `gates.py`, `idscan.py`, `floor.py`, `platforms.py`, `remote.py`, `leftovers.py`, `plants.py`,
   `release_body.py`, `publication.py`, `consumer.py`, `watch_ci.py`, `find.py`, `procs.py`, `test_tools.py`, `README.md`.
+  (Added 2026-10-22, after step 11, proposed: `ci_jobs.py`.)
 * **`Makefile`:** `check-tools`, `python3 -m py_compile` on every tool, then `python3 -m unittest` on `tools/test_tools.py`.
 * **`.github/workflows/ci.yml`:** the records step also runs `make check-tools`.
 * **Docs:** `docs/architecture.md`, a section "Verification tools" and the tree; `AGENTS.md`, a line under "Pre-add checks" naming
   `tools/README.md`.
 * **The records:** this pair and their rows in `docs/README.md`.
+* **(Added 2026-10-22, after step 11, proposed) The report:** [0032-REPORT-windows-floor-runtime-crashes.md](../reports/0032-REPORT-windows-floor-runtime-crashes.md), its third quotation and its
+  "If it happens again", as the owner answers the MADR's question 8.
 * **Not in scope:** `scripts/`, unchanged; the one-off scripts of the MADR's T1; any Go file.
 
 ## Design
@@ -88,6 +91,36 @@ The MADR's "Amendment 2026-10-22, after step 8", W1 to W4, as the owner decided 
   branch in its detail; "CI on the tag" names its run's id too. `main_run(runs)` picks the newest run whose `headBranch` is `main`.
 * **`tools/README.md`:** `watch_ci.py`'s row and its flags.
 
+### `ci_jobs.py` (added 2026-10-22, after step 11, proposed)
+
+The MADR's "Amendment 2026-10-22, after step 11", E1. Standard library; `gh` for every read, `--repo` from origin as `watch_ci.py`
+has it; every log read by its job id, `gh api --allow-escape-sequences repos/<origin>/actions/jobs/<id>/logs` (H3), never through
+`gh run view --log` (H2).
+
+* **`tally [--branch B] [--runs N] [--created RANGE] [--markdown]`.** The N (40) most recent runs of B (`main`), `--created`
+  passed to `gh run list` as given; a run not completed is named and left out. Each run's attempt-1 jobs,
+  `.../runs/<id>/attempts/1/jobs?per_page=100`, whatever its latest attempt, so a rerun hides nothing. Each job counted under its
+  group, its name with a Go version's patch made `x` (`validate (windows-2025, 1.26.x)`), by conclusion: success, failure,
+  cancelled, and any other by its name. It prints the window (runs, oldest and newest `createdAt`), each group's counts, then each
+  job that did not succeed: run, commit, created, job, conclusion, and its failing step or "no step ran". `--markdown` prints the
+  groups as a table in the report's columns, `GOEXPERIMENT` left to the writer.
+* **`failure RUN [--attempt N]`.** Every attempt, 1 to the run's latest, or N alone; for each job concluded "failure", its failing
+  step and, from its log with the timestamps stripped, the `-test.shuffle` line, the first `fatal error:` or `panic:` line with up
+  to five `runtime:` lines before it, each `--- FAIL` line (the first 20), each `FAIL` package line and each `##[error]` line; the
+  job's URL; the whole log written to `.cache/tools/ci_jobs/<run>-<attempt>-<job id>.log`. An attempt with no failed job says so.
+* **`env RUN VAR [--attempt N] [--expect JOB=VALUE]... [--others VALUE]`.** The jobs of attempt N, by default the run's latest;
+  in each job's log, the value of VAR in each step's `env:` block, from the line `env:` to `##[endgroup]`, nothing outside a
+  block. It prints, per job, the blocks holding VAR and their distinct values. With `--expect`, each named job's distinct values
+  must be exactly `{VALUE}`; with `--others`, every job not named must have exactly `{VALUE}` (`''`, the empty value GitHub prints
+  for an unset matrix field). A named job not in the attempt fails.
+* **Exit:** 0 when every read succeeded and, for `env`, every expectation held; 1 when a read failed or an expectation did not
+  hold; 2 on a usage error. Run through `_common.main_guard`.
+* **Pure parts the tests call:** `group(name)`, `tally(runs)`, `markdown(counts)`, `failing_step(job)`, `strip(line)`,
+  `env_values(log, var)`, `failure_lines(log)` and `holds(values, expect, others)`; and the reads, `jobs_of(api, repo, run,
+  attempt)` and `job_log(api, repo, job_id)`, with `api` injected, so a test sees the path asked for without the network.
+* **`tools/README.md`:** its row. **`docs/architecture.md`:** `ci_jobs.py` named with `watch_ci.py`.
+* **The report:** its quotation and its "If it happens again", as the owner answers the MADR's question 8.
+
 ## Tests
 
 `tools/test_tools.py`, `unittest`, no host and no network:
@@ -112,6 +145,13 @@ The MADR's "Amendment 2026-10-22, after step 8", W1 to W4, as the owner decided 
   without a traceback, as `find.py` does.~~ (Amended 2026-10-22, during step 11: and `main_guard` itself, in a subprocess, a `main`
   that writes to a reader closing after one line and a `main` that raises `BrokenPipeError`: exit 1, no traceback; see the deviation
   during step 11.)
+* (Added 2026-10-22, after step 11, proposed.) `ci_jobs.py`: `group` puts 1.26.9 and 1.26.10 in one group and leaves a name
+  without a version as it is; `tally` counts by conclusion and lists a failure with its failing step, and a cancelled job with no
+  steps as "no step ran"; the tally asks for attempt 1 of a run whose latest is 2; `job_log` asks for `actions/jobs/<id>/logs`
+  with the id given; `env_values` reads the `env:` blocks alone, an empty value as `''`, and neither a `set VAR=` line nor a
+  `VAR: x` line outside a block; `failure_lines` takes the seed, the fatal error with the `runtime:` lines before it, the `FAIL`
+  lines and `##[error]`, from a log with timestamps and a byte-order mark; `holds` fails a named job's wrong value, a job not named
+  with a value under `--others`, and a named job missing; `markdown` prints the report's columns.
 
 ## Implementation Steps
 
@@ -146,6 +186,18 @@ planted break in a scratch copy, never in the tree.
     directly, `consumer.py`, `floor.py`, `gates.py`, `idscan.py`, `leftovers.py`, `plants.py`, `platforms.py`, `procs.py`,
     `publication.py`, `release_body.py`, `remote.py` and `watch_ci.py`, run through it, `procs.py` importing `_common` to do so; the
     tests; the gates, `make push-guard`, and after CI passes, this PLAN and its row `complete`.
+12. **(Added 2026-10-22, after step 11, proposed) CI's job history:** `tools/ci_jobs.py` as the design's last section has it;
+    its tests; `tools/README.md`; `docs/architecture.md`; the report's corrections as the owner answers the MADR's question 8.
+    Live, each against what the records hold:
+    * `ci_jobs.py tally --created '<2026-10-22T20:00:00Z' --markdown`: 40 runs, and the six matrix groups' rows equal to the
+      report's second table: 28 jobs each; Linux 28 success at both versions; macOS 25 success and 3 cancelled at the floor, 26
+      and 2 at the newest; Windows 26 success and 2 failure at the floor, 27 and 1 at the newest;
+    * `ci_jobs.py failure` on `39477545696`, `39803032026` and `39841121410`: each attempt 1's failed job, step and seed as the
+      report records them, and its crash line; `39841121410`'s attempt 2, no failed job;
+    * `ci_jobs.py env 39841121410 GOTRACEBACK --expect 'validate (windows-2025, 1.26.10)=crash' --others ''` holding with
+      `--attempt 1` and with `--attempt 2` (the MADR's H5); and failing with `--expect 'validate (windows-2025, 1.27.3)=crash'`.
+
+    Then the gates, `make push-guard`, and after CI passes, this PLAN and its row `complete` again.
 
 ## Verification
 
@@ -172,6 +224,13 @@ Planted breaks, each in a scratch copy:
 | `find.py` (added 2026-10-22, after step 9) | the broken pipe not handled | `test_tools.py`, the closed reader |
 | every tool (added 2026-10-22, after step 10) | one tool's entry point calling `main` directly | `test_tools.py`, the entry points read |
 | ~~`procs.py`~~ `main_guard` (amended during step 11) | the broken pipe not handled | `test_tools.py`, ~~the closed reader~~ the guard's own test |
+| `ci_jobs.py` (added 2026-10-22, after step 11, proposed) | the tally reading the run's latest attempt | `test_tools.py`, the attempt asked for |
+| `ci_jobs.py` | a log read through `gh run view --job --log` | `test_tools.py`, the path `job_log` asks for |
+| `ci_jobs.py` | a variable read anywhere in the log | `test_tools.py`, `env_values` |
+| `ci_jobs.py` | the patch version kept in the group | `test_tools.py`, `group` |
+| `ci_jobs.py` | a cancelled job with no steps not told apart | `test_tools.py`, `tally` |
+| `ci_jobs.py` | `--others` ignored | `test_tools.py`, `holds` |
+| `ci_jobs.py` | the `runtime:` lines before the fatal error dropped | `test_tools.py`, `failure_lines` |
 
 Acceptance:
 
@@ -691,3 +750,67 @@ changes no Go file. At the owner's request the failed job was rerun: attempt 2, 
 six jobs "completed success". In the Linux job at the newest Go, `make check-tools`: "Ran 45 tests", OK.
 
 Every acceptance criterion is met; this PLAN and its row in `docs/README.md` are `complete` again.
+
+### Amendment, 2026-10-22, after step 11: step 12 proposed
+
+**Found.** The owner asked for the two scratch scripts that filled [0032-REPORT-windows-floor-runtime-crashes.md](../reports/0032-REPORT-windows-floor-runtime-crashes.md)'s tallies and
+[0033-PLAN-traceback-on-windows-floor-ci.md](0033-PLAN-traceback-on-windows-floor-ci.md)'s environment check to be made a tool
+in `tools/`. Reading what they read, every figure taken that day (the MADR's H2 to H6): `gh run view --job <id> --log` reads the
+run's latest attempt whatever the id, so the report's "If it happens again" step shows a passing rerun in place of the crash; the
+REST endpoint reads by job id; the report's third quotation drops "or -race" from the runtime's line; and 0033's step 3 does not
+say which attempt it read.
+
+**Proposed.** The design's last section, the tests and planted breaks marked "added 2026-10-22, after step 11, proposed", and step
+12; the MADR's questions 7 and 8. Nothing is changed until the owner approves; this PLAN then returns to `in-progress` until step
+12 closes.
+
+**Decided (owner, 2026-10-22).** Questions 7 and 8 as recommended: the tool is `tools/ci_jobs.py`; the report's quotation is
+corrected in place with a dated note, and its `gh run view` item struck through and annotated. Step 12 waits for the owner's
+approval to execute.
+
+**Approved (owner, 2026-10-22).** Step 12 as proposed; this PLAN is `in-progress` until it closes.
+
+### Step 12, CI's job history, 2026-10-22
+
+The owner answered questions 7 and 8 and approved this step. What changed:
+
+* **`tools/ci_jobs.py`,** 289 lines, as the design's last section has it: `tally`, `failure` and `env`; every log read through
+  `gh api --allow-escape-sequences repos/<origin>/actions/jobs/<id>/logs`; `first_attempts` asks for each run's attempt 1; run
+  through `_common.main_guard`.
+* **`tools/test_tools.py`:** `CiJobsTest`, eight tests, against a fake `gh api` that answers by path and keeps the paths asked
+  for, and a log in the REST endpoint's form; 53 tests.
+* **`tools/README.md`:** its row. **`docs/architecture.md`:** a bullet under "Verification tools".
+* **[0032-REPORT-windows-floor-runtime-crashes.md](../reports/0032-REPORT-windows-floor-runtime-crashes.md):** the third crash's quotation corrected in place to the log's line, "try -d=checkptr or -race)", with a dated note
+  under it; in "If it happens again", the `gh run view` item struck through and annotated with `ci_jobs.py failure`, and the tally
+  item with `ci_jobs.py tally --markdown` (question 8).
+
+**Live,** each command's exit status as required:
+
+| Check | Result |
+| :--- | :--- |
+| `tally --created '<2026-10-22T20:00:00Z' --markdown`, exit 0 | "40 run(s) of main, created 2026-10-18T23:15:51Z to 2026-10-22T19:33:21Z"; the six matrix groups, 28 jobs each: ubuntu-24.04 28 success at 1.26.x and at 1.27.x; macos-15 25 success, 3 cancelled at 1.26.x, 26 and 2 at 1.27.x; windows-2025 26 success, 2 failure at 1.26.x, 27 and 1 at 1.27.x: the report's second table, row for row. The 12 older runs' one job per system: macos-15 12 success, windows-2025 12 success, ubuntu-24.04 11 success and 1 failure, the "race detector" step of `39175773059`, the oldest run, which no table of the report covers. The five cancelled macOS jobs, "no step ran". |
+| `failure 39477545696`, exit 0 | attempt 1 of 1: `validate (windows-2025, 1.26.9)`, step "Run go test -shuffle=on ./...", `-test.shuffle 1792521974776092100`, the two `runtime:` lines and "fatal error: invalid g status", `FAIL` of the root package, 8.774s |
+| `failure 39803032026`, exit 0 | attempt 1 of 2: `validate (windows-2025, 1.26.10)`, the same step, `-test.shuffle 1792682148899561700`, "panic: reflect: Field index out of bounds [recovered, repanicked]", `FAIL`, 9.803s; attempt 2, "no failed job" |
+| `failure 39841121410`, exit 0 | attempt 1 of 2: `validate (windows-2025, 1.27.3)`, the same step, `-test.shuffle 1792697648940304500`, the `runtime:` line ending "try -d=checkptr or -race)", "fatal error: found pointer to free object", `FAIL`, 10.476s; attempt 2, "no failed job" |
+| `env 39841121410 GOTRACEBACK --attempt 1 --expect 'validate (windows-2025, 1.26.10)=crash' --others ''`, exit 0 | the Windows floor job, 6 env blocks, `['crash']`; the other five, `['']`; "holds". `validate (windows-2025, 1.27.3)` has 4 blocks: its job stopped at the crash |
+| the same with `--attempt 2`, exit 0 | the same values, "holds"; `validate (windows-2025, 1.27.3)`, rerun, 6 blocks |
+| with `--expect 'validate (windows-2025, 1.27.3)=crash'` added, `--attempt 1`, exit 1 | "does not hold: validate (windows-2025, 1.27.3): values [''], want ['crash']" |
+
+Each seed, job and crash line is the report's; so the MADR's H5 is settled: both attempts of `39841121410` hold what
+[0033-PLAN-traceback-on-windows-floor-ci.md](0033-PLAN-traceback-on-windows-floor-ci.md)'s step 3 recorded, whichever it read.
+
+**Planted breaks,** each in its own copy of `tools/`, `CiJobsTest` run there; 7 of 7 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the tally reading the run's latest attempt | `test_tally_reads_first_attempt`: "KeyError: 'repos/o/n/actions/runs/7/attempts/2/jobs?per_page=100'" |
+| a log read through `gh run view --job --log` | `test_job_log_by_id`: "'' != 'log'" |
+| a variable read anywhere in the log | `test_env_values`: "['crash', 'other', ''] != ['crash', '']" |
+| the patch version kept in the group | `test_group`, and `test_tally`: "KeyError: 'validate (linux, 1.26.x)'" |
+| a cancelled job with no steps not told apart | `test_tally`: "no step failed" for "no step ran" |
+| `--others` ignored | `test_holds`: "0 != 1 : another job's value" |
+| the `runtime:` lines before the fatal error dropped | `test_failure_lines`: the `runtime:` line missing |
+
+**Gates,** `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set, `tools/gates.py --all`, each exit 0: all 18 gates, "all gates passed"; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 53 tests"; `make markdownlint`, 29 files, 0 issues; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux`, at go1.27.3, passed. `idscan`, "8 file(s), 17 pattern(s), 0 match(es)": the deny list held 22 patterns when this step was proposed and 17 at this run, read outside the repository, its changes not this step's; the scan is as good as the list it reads.
+
+What is left: the push, CI, and this PLAN and its row `complete`, in the owner's turn that asks for the push.

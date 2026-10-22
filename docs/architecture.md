@@ -552,6 +552,9 @@ markdownlint` and `scripts/check_records.py` would otherwise walk them.
 - `release_body.py`, `publication.py`, `consumer.py` and `watch_ci.py` build a
   release's body from its report and check the release, its publication, a
   consumer at the floor, and a commit's CI run.
+- `ci_jobs.py` reads CI's job history: every job's first attempt tallied, a
+  failed job's step, seed and crash, and a variable's value in each step's
+  environment, each log read by its job id, so from that job's own attempt.
 - `find.py` and `procs.py` search files and processes.
 - `make check-tools` compiles every tool and runs `tools/test_tools.py`, their
   offline parts, in CI's records step too; what needs a host or the network

@@ -480,6 +480,115 @@ class WatchCiTest(unittest.TestCase):
         self.assertIsNone(publication.main_run(runs[:1]))
 
 
+class FakeApi:
+    """gh_api's stand-in: answers each path from a table, and keeps the
+    paths asked for."""
+
+    def __init__(self, answers: dict[str, str]) -> None:
+        self.answers, self.paths = answers, []
+
+    def __call__(self, path: str) -> str:
+        self.paths.append(path)
+        return self.answers[path]
+
+
+# A failed job's log as the REST endpoint gives it: timestamps, a byte-order
+# mark, a step's env: block, and lines outside it that name the variable.
+CI_LOG = "\n".join([
+    "﻿2026-10-22T19:33:25.8298786Z Current runner version: '2.338.0'",
+    "2026-10-22T19:34:01.9396559Z env:",
+    "2026-10-22T19:34:01.9396877Z   GOTOOLCHAIN: local",
+    "2026-10-22T19:34:01.9397565Z   GOTRACEBACK: crash",
+    "2026-10-22T19:34:01.9397852Z ##[endgroup]",
+    "2026-10-22T19:34:02.1000000Z set GOTRACEBACK=other",
+    "2026-10-22T19:34:02.1000001Z   GOTRACEBACK: other",
+    "﻿2026-10-22T19:34:02.3291082Z ##[group]Run go test -shuffle=on ./...",
+    "2026-10-22T19:34:02.3349159Z env:",
+    "2026-10-22T19:34:02.3349467Z   GOTOOLCHAIN: local",
+    "2026-10-22T19:34:02.3350106Z   GOTRACEBACK: ",
+    "2026-10-22T19:34:02.3350384Z ##[endgroup]",
+    "2026-10-22T19:34:19.3985216Z -test.shuffle 1792697648940304500",
+    "2026-10-22T19:34:19.4004092Z runtime: marked free object in span 0x23ade95dc90 (try -d=checkptr or -race)",
+    "2026-10-22T19:34:19.4005003Z 0x2f62b78f8000 alloc unmarked",
+    "2026-10-22T19:34:19.4049007Z fatal error: found pointer to free object",
+    "2026-10-22T19:34:19.4050000Z panic: not the first",
+    "2026-10-22T19:34:20.0000000Z --- FAIL: TestX (0.00s)",
+    "2026-10-22T19:34:20.2244246Z FAIL\tgithub.com/example/m\t10.476s",
+    "2026-10-22T19:34:20.2245094Z FAIL",
+    "2026-10-22T19:34:20.2257020Z ##[error]Process completed with exit code 1.",
+])
+
+
+class CiJobsTest(unittest.TestCase):
+    def test_group(self) -> None:
+        import ci_jobs
+        self.assertEqual(ci_jobs.group("validate (windows-2025, 1.26.9)"), "validate (windows-2025, 1.26.x)")
+        self.assertEqual(ci_jobs.group("validate (windows-2025, 1.26.10)"), "validate (windows-2025, 1.26.x)")
+        self.assertEqual(ci_jobs.group("validate (ubuntu-24.04)"), "validate (ubuntu-24.04)")
+
+    def test_tally(self) -> None:
+        import ci_jobs
+        run = {"databaseId": 7, "headSha": "abcdef0123", "createdAt": "2026-10-22T00:00:00Z"}
+        jobs = [
+            {"name": "validate (linux, 1.26.9)", "conclusion": "success", "steps": [{"name": "a", "conclusion": "success"}]},
+            {"name": "validate (linux, 1.26.10)", "conclusion": "failure",
+             "steps": [{"name": "Set up job", "conclusion": "success"}, {"name": "Run go test", "conclusion": "failure"}]},
+            {"name": "validate (macos, 1.27.3)", "conclusion": "cancelled", "steps": []},
+        ]
+        counts, notable = ci_jobs.tally([(run, jobs)])
+        self.assertEqual(dict(counts["validate (linux, 1.26.x)"]), {"jobs": 2, "success": 1, "failure": 1})
+        self.assertEqual(dict(counts["validate (macos, 1.27.x)"]), {"jobs": 1, "cancelled": 1})
+        self.assertEqual([(n["job"], n["conclusion"], n["step"], n["commit"]) for n in notable],
+                         [("validate (linux, 1.26.10)", "failure", "Run go test", "abcdef0"),
+                          ("validate (macos, 1.27.3)", "cancelled", "no step ran", "abcdef0")])
+
+    def test_tally_reads_first_attempt(self) -> None:
+        import ci_jobs
+        api = FakeApi({"repos/o/n/actions/runs/7/attempts/1/jobs?per_page=100": '{"jobs": []}'})
+        ci_jobs.first_attempts(api, "o/n", [{"databaseId": 7, "attempt": 2}])
+        self.assertEqual(api.paths, ["repos/o/n/actions/runs/7/attempts/1/jobs?per_page=100"], "attempt 1, whatever the latest")
+
+    def test_job_log_by_id(self) -> None:
+        import ci_jobs
+        api = FakeApi({"repos/o/n/actions/jobs/42/logs": "log"})
+        self.assertEqual(ci_jobs.job_log(api, "o/n", 42), "log")
+        self.assertEqual(api.paths, ["repos/o/n/actions/jobs/42/logs"], "the job's own log, by its id")
+
+    def test_env_values(self) -> None:
+        import ci_jobs
+        self.assertEqual(ci_jobs.env_values(CI_LOG, "GOTRACEBACK"), ["crash", ""], "the env: blocks alone")
+        self.assertEqual(ci_jobs.env_values(CI_LOG, "GOEXPERIMENT"), [])
+
+    def test_failure_lines(self) -> None:
+        import ci_jobs
+        self.assertEqual(ci_jobs.failure_lines(CI_LOG), [
+            "-test.shuffle 1792697648940304500",
+            "runtime: marked free object in span 0x23ade95dc90 (try -d=checkptr or -race)",
+            "fatal error: found pointer to free object",
+            "--- FAIL: TestX (0.00s)",
+            "FAIL\tgithub.com/example/m\t10.476s",
+            "##[error]Process completed with exit code 1.",
+        ])
+
+    def test_holds(self) -> None:
+        import ci_jobs
+        values = {"a": ["crash", "crash"], "b": [""], "c": [""]}
+        self.assertEqual(ci_jobs.holds(values, {"a": "crash"}, ""), [])
+        self.assertEqual(len(ci_jobs.holds(values, {"a": "none"}, "")), 1, "a named job's wrong value")
+        self.assertEqual(len(ci_jobs.holds({"a": ["crash"], "b": ["x"]}, {"a": "crash"}, "")), 1, "another job's value")
+        self.assertEqual(len(ci_jobs.holds(values, {"z": "crash"}, None)), 1, "a named job missing")
+
+    def test_markdown(self) -> None:
+        import collections
+        import ci_jobs
+        counts = {"validate (linux, 1.26.x)": collections.Counter(jobs=3, success=1, failure=1, timed_out=1)}
+        self.assertEqual(ci_jobs.markdown(counts).splitlines(), [
+            "| Job | Jobs | Success | Failure | Cancelled | Timed out |",
+            "| :--- | :--- | :--- | :--- | :--- | :--- |",
+            "| validate (linux, 1.26.x) | 3 | 1 | 1 | 0 | 1 |",
+        ])
+
+
 class ReadmeTest(unittest.TestCase):
     def test_relative_links_resolve(self) -> None:
         # scripts/check_records.py checks the docs tree's links; this README

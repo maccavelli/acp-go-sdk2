@@ -181,8 +181,12 @@ None of these was done; each is the owner's to decide, and any change to CI or t
 Add a row to "The two crashes" and to "Where it happens", from:
 
 - `python3 tools/watch_ci.py <commit>`: the run and each job, once settled;
-- `gh run view <run> --job <job> --log-failed`: the step, the seed, the trace;
-- the tally above: every job's first attempt, by system and Go version, from the runs' `attempts/1/jobs`.
+- ~~`gh run view <run> --job <job> --log-failed`: the step, the seed, the trace;~~ (Amended 2026-10-22: that command reads the
+  run's latest attempt whatever the job's id, so once the failed job has been rerun it shows the rerun.
+  `python3 tools/ci_jobs.py failure <run>` reads every attempt's failed jobs by their ids: the step, the seed, the crash. See
+  [0031-MADR-verification-tools-in-repository.md](../decisions/0031-MADR-verification-tools-in-repository.md), "Amendment 2026-10-22, after step 11".)
+- the tally above: every job's first attempt, by system and Go version, from the runs' `attempts/1/jobs`. (Amended 2026-10-22:
+  `python3 tools/ci_jobs.py tally --markdown`.)
 
 A crash on another job, at 1.27.x, or without the experiment, would change "What the evidence supports" above.
 
@@ -219,7 +223,7 @@ experiment. Added as "If it happens again" says.
 **"fatal error: found pointer to free object".** The runtime's own report, before the stack:
 
 ```text
-runtime: marked free object in span 0x23ade95dc90, elemsize=80 freeindex=13 (bad use of unsafe.Pointer or having race conditions? try -d=checkptr)
+runtime: marked free object in span 0x23ade95dc90, elemsize=80 freeindex=13 (bad use of unsafe.Pointer or having race conditions? try -d=checkptr or -race)
 ...
 fatal error: found pointer to free object
 
@@ -233,6 +237,10 @@ runtime.(*sweepLocked).sweep(0x7ff62568420e?, 0x0)
 runtime.(*mcentral).uncacheSpan(0x7ff62563f3fa?, 0x68ad5ff2d8?)
         C:/hostedtoolcache/windows/go/1.27.3/x64/src/runtime/mcentral.go:237
 ```
+
+(Corrected 2026-10-22: the first line above read "try -d=checkptr)" when this addendum was written, dropping the log's "or
+-race"; it now reads as the log does, by `python3 tools/ci_jobs.py failure 39841121410`. See
+[0031-MADR-verification-tools-in-repository.md](../decisions/0031-MADR-verification-tools-in-repository.md), "Amendment 2026-10-22, after step 11".)
 
 The collector, sweeping, found an 80-byte object it had freed still marked reachable: a pointer to freed memory. As a failure inside the
 runtime, it printed every goroutine (the log's "goroutine 1 ... [chan receive]" and the rest), with `GOTRACEBACK` unset.

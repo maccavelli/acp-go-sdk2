@@ -293,6 +293,83 @@ new dependency.
 * Neutral, because a watch takes up to the settle bound longer, only when GitHub lags.
 * Bad, because `watch_ci.py` grows from one run to several, and its tests with it.
 
+## Amendment 2026-10-22, after step 11: CI's job history, read by attempt
+
+Found while the third crash of [0032-REPORT-windows-floor-runtime-crashes.md](../reports/0032-REPORT-windows-floor-runtime-crashes.md) was recorded, and assessed at the owner's request the same
+day: the owner asked for the scratch scripts that filled its tallies to be made a tool. The decisions above are unchanged; this
+adds a tool, and its outcome is proposed. Every figure below was taken that day with gh 2.102.0, the repository only read, at
+`ef050db`.
+
+### What was found, for this amendment
+
+* **H1. The report's procedure rests on two scratch scripts.** Its "If it happens again" asks for a tally of every job's first
+  attempt, by system and Go version, and the failed step's log. The tally behind its addendum's table was a scratch script of
+  36 lines, the repository's path and its GitHub name written in; the environment check of
+  [0033-PLAN-traceback-on-windows-floor-ci.md](0033-PLAN-traceback-on-windows-floor-ci.md)'s step 3 was another, 30 lines, its one
+  job and value written in. Neither is in the repository, and a session's scratch directory goes with the session (T1).
+* **H2. `gh run view --job` reads the latest attempt.** Run `39841121410` crashed in attempt 1, in job `120042086316`, and passed
+  when that job was rerun, attempt 2. `gh run view 39841121410 --job 120042086316 --log`, with attempt 1's job id, returned 49,279
+  bytes stamped from 19:46:01Z, attempt 2's, with the root package "ok" and no crash; with `--attempt 1` added, 5,150,437 bytes
+  from 19:33:25Z, holding "fatal error: found pointer to free object". `--log-failed` did the same: 1,850 bytes without the crash,
+  and 5,107,398 with `--attempt 1`. So the report's step, `gh run view <run> --job <job> --log-failed`, shows the passing rerun
+  once the failed job has been rerun.
+* **H3. The REST endpoint reads by job id, so by attempt.** `gh api repos/<owner>/<name>/actions/jobs/<id>/logs` gave, for
+  attempt 1's id, 3,268,240 bytes with the crash, and for attempt 2's, `120048503562`, 25,051 bytes without it. gh 2.102.0
+  refuses it unless `--allow-escape-sequences` is passed ("the response contains terminal escape sequences; pass
+  --allow-escape-sequences to output it anyway"). In that run the Windows floor job, not rerun, is listed in attempt 2 under a
+  new id, `120048506640`, with attempt 1's start, 19:33:24Z, and attempt 1's log, which holds `GOTRACEBACK: crash`.
+* **H4. The report misquotes the runtime.** The third crash's quotation, `0032-REPORT-windows-floor-runtime-crashes.md:222`, ends
+  "try -d=checkptr)"; the log's line, read both ways, ends "try -d=checkptr or -race)". The commit that holds it, `a76e929`, is
+  on `origin/main`.
+* **H5. 0033's step 3 named the run, not the attempt.** Its environment check read each job's log through `gh run view --job
+  --log` (H2), on run `39841121410`, which has two attempts; the record does not say which was read. Both run the same workflow
+  at the same commit, so their values should agree: step 12 checks it rather than assume it.
+* **H6. A tally's window can be read again.** `gh run list --branch main --limit 40 --created '<2026-10-22T20:00:00Z'` gives 40
+  runs, the newest `39841121410`, the oldest `39175773059`: the window of the report's second tally, so a tool's tally can be
+  compared with the recorded one.
+
+### Considered Options, for this amendment
+
+* **E1.** One tool, `tools/ci_jobs.py`: `tally`, `failure` and `env`, every log read by its job id.
+* **E2.** `tools/ci_tally.py`, the tally alone, as first proposed; the failed step and the environment read by hand.
+* **E3.** Two tools, a tally and an environment check, as the scratch scripts were.
+* **E4.** No tool: the report's step corrected to `--attempt N`, the scripts left out.
+
+### Decision Outcome, for this amendment
+
+Proposed: "E1", because the report's procedure becomes three commands of one tool that reads each job's log by its id, so the
+attempt is never implicit (H2, H3), and each command can be checked against what the records already hold (H6). (Decided
+2026-10-22: E1, by the owner's answers to questions 7 and 8, both of which build on it; see "Decided with the owner,
+2026-10-22, the job-history amendment".)
+
+* E2 leaves the step that H2 breaks a hand-run command.
+* E3 splits two readers of the same API by the same id, and leaves the failed step by hand.
+* E4 keeps the procedure on scripts a session deletes (H1).
+
+#### Questions, for this amendment
+
+7. **The tool's name.**
+   * Recommended: `ci_jobs.py`, since it tallies, reads failures and checks the environment, all of CI's jobs.
+   * Alternative: `ci_tally.py`, the name first proposed, with the same three subcommands.
+8. **The report's misquotation (H4) and its procedure (H2).**
+   * Recommended: the quotation corrected in place to the log's line, with a dated note under it naming the correction; the
+     procedure's `gh run view` item struck through and annotated, `ci_jobs.py`'s commands beside it.
+   * Alternative: the report left as written, and a third addendum carrying both corrections.
+
+#### Decided with the owner, 2026-10-22, the job-history amendment
+
+| Question | Answer |
+| :--- | :--- |
+| 7. The tool's name | As recommended: `ci_jobs.py`. |
+| 8. The report's misquotation and its procedure | As recommended: the quotation corrected in place with a dated note; the procedure's `gh run view` item struck through and annotated, `ci_jobs.py`'s commands beside it. |
+
+### Consequences, for this amendment
+
+* Good, because the report's tables and rows each come from one command, and a rerun cannot hide the attempt that failed.
+* Good, because the records' figures for the three crashes, their seeds and traces and the second tally, can be read again.
+* Neutral, because a crash's log is megabytes, 3.3 MB for the third, kept under `.cache/tools/`.
+* Bad, because one more tool and its tests are code to maintain.
+
 ## More Information
 
 * **The scope** was the owner's answer of 2026-10-21: the reusable tools, generalized; the one-off record, probe and plant scripts not kept.
