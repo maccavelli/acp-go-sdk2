@@ -59,7 +59,7 @@ the MADR's recommended answers to questions 1 to 4; an answer otherwise amends i
   release text", each relative link made absolute at the tag, each target asserted to exist at `REV`; the result written to the output
   directory, and `idscan.py`'s patterns applied to it.
 * **`publication.py VERSION COMMIT BODY`.** The ten checks of [0030-PLAN-record-initialize-on-arrival.md](0030-PLAN-record-initialize-on-arrival.md)'s
-  "Publication of `v1.20.0`", in a scratch module cache.
+  "Publication of `v1.20.0`", in a scratch module cache. (Amended 2026-10-22, during step 6: two of them on origin's `main`; see the deviation during step 6.)
 * **`consumer.py VERSION`.** A fresh module at the `go` line, with that toolchain forced, `go get` of the version, a program that starts
   `sh -c "cat >/dev/null"` through `agentproc` with an `OutputTap`, built and run, and built for Windows; its `go.mod` must keep the `go`
   line and gain no `toolchain` line.
@@ -358,3 +358,51 @@ empty.
 | the plant applied to the tree itself | `test_copy_outside_the_tree_without_git`: "1 != 0" |
 
 **Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 27 tests"; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed.
+
+### Deviation, 2026-10-22, during step 6: the publication's main checks on origin's main
+
+**Found.** `publication.py v1.20.0 4fa7204` held 8 of 10. The two that missed, "origin main is the local main" and "CI on main's head",
+compared origin's `main` with the local `main`, which was 7 commits ahead with this PLAN's unpushed work: they checked the local branch,
+not what was published, and fail any replay made while work is unpushed.
+
+**Decision (owner, 2026-10-22).** The two check what is published: the tag's commit is on origin's `main`, and CI on origin main's head
+succeeded. That nothing is left unpushed at a release stays `make push-guard`'s. The alternative was to keep them and push first. Added:
+a test of the ancestry check, and its planted break.
+
+### Step 6, the release, 2026-10-22
+
+The owner committed step 5 and approved this step; the deviation above was decided during it. What changed:
+
+* **`tools/release_body.py VERSION REV`:** the report found at `REV` by its name; the text under `### VERSION` up to "Sources not in the
+  release text"; every relative link, a fragment kept, made absolute at the tag on the origin remote's GitHub repository, its target
+  asserted to exist at `REV`; the body scanned by `idscan.py --paths`, and written to `.cache/tools/release/`.
+* **`tools/publication.py VERSION COMMIT BODY`:** the ten checks, two of them on origin's `main` (the deviation); the module cache in
+  `_common.cache_dir("publication")`, removed after.
+* **`tools/consumer.py VERSION`:** the floor consumer, its module and toolchain read from `go.mod`, its caches in
+  `_common.cache_dir("consumer")`, its module removed after.
+* **`tools/watch_ci.py REV`:** the revision resolved to its full id first, then its run found, watched, and its jobs printed.
+* **`tools/_common.py`:** `module_path`, `github_repo` (https and SSH forms), `origin_repo`.
+* **`tools/test_tools.py`:** 35 tests, the release tools' offline parts among them.
+
+**Live, against `v1.20.0`:**
+
+| Check | Result |
+| :--- | :--- |
+| `release_body.py v1.20.0 4fa7204` | 89 lines, 3 links, the scan clean; **byte for byte** the published body and the file it was published from, 7,498 bytes |
+| `publication.py v1.20.0 4fa7204 <body>` | first 8 of 10, the local branch 7 commits ahead (the deviation); then 10 of 10 |
+| `consumer.py v1.20.0` | go1.26.10; `go get` added `v1.20.0`; the program printed "Close: <nil>", "dropped 0 0", "protocol version 1"; built for Windows; `go.mod` kept `go 1.26.10`, no `toolchain` line |
+| `watch_ci.py 4fa7204`, a short id | run `39716056732`, completed, success, its six jobs listed |
+
+**Planted breaks,** each in a clone with the step's tools; 5 of 5 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| a missing link target accepted | `test_missing_target_refused`: "0 != 1" |
+| a relative link left relative | `test_body_extracted_and_links_made_absolute` |
+| the ancestry check reversed | `test_tag_on_main`: "an older tag is on main" |
+| a short id not resolved | `test_watch_ci_resolves_a_short_id`: the short id returned as it was |
+| a `toolchain` line accepted | `test_consumer_go_mod`: "True is not false" |
+
+The PLAN's row for `release_body.py`, a link target missing, is the first.
+
+**Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 35 tests"; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed.

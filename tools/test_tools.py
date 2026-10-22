@@ -280,6 +280,93 @@ class PlantsTest(Temp):
         self.assertIn("return a + b", (self.tree / "m.go").read_text(), "the tree itself must be unchanged")
 
 
+class ReleaseTest(Temp):
+    REPORT = ("# Release notes for v9.9.9, against v9.9.8\n\n## Release text\n\n### v9.9.9\n\n"
+              "It is in [the record](../decisions/0001-MADR-x.md#more), and [elsewhere](https://example.invalid/x).\n{extra}\n"
+              "## Sources not in the release text\n\n- not in the body\n")
+
+    def make(self, extra: str = "") -> Path:
+        repo = self.dir / "r"
+        (repo / "docs" / "reports").mkdir(parents=True)
+        (repo / "docs" / "decisions").mkdir()
+        (repo / "docs" / "decisions" / "0001-MADR-x.md").write_text("# x\n")
+        (repo / "docs" / "reports" / "0002-REPORT-release-notes-v9-9-9.md").write_text(self.REPORT.format(extra=extra))
+        git(repo, "init", "-q")
+        git(repo, "remote", "add", "origin", "https://github.com/example-owner/example-repo.git")
+        git(repo, "add", ".")
+        git(repo, "commit", "-q", "-m", "r")
+        deny = self.dir / "deny"
+        deny.write_text(DENY_LINE)
+        self.env = {"DISCLOSURE_DENY": str(deny)}
+        return repo
+
+    def test_body_extracted_and_links_made_absolute(self) -> None:
+        repo = self.make()
+        r = tool("release_body", "v9.9.9", "HEAD", "--out", str(self.dir / "out"), cwd=repo, env=self.env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        body = (self.dir / "out" / "release-body-v9.9.9.md").read_text()
+        self.assertEqual(body, "It is in [the record](https://github.com/example-owner/example-repo/blob/v9.9.9/docs/decisions/0001-MADR-x.md"
+                               "#more), and [elsewhere](https://example.invalid/x).\n")
+
+    def test_missing_target_refused(self) -> None:
+        repo = self.make(extra="See [gone](0099-REPORT-gone.md).\n")
+        r = tool("release_body", "v9.9.9", "HEAD", "--out", str(self.dir / "out"), cwd=repo, env=self.env)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("the link target docs/reports/0099-REPORT-gone.md does not exist", r.stdout)
+
+
+class HelpersTest(Temp):
+    def test_github_repo(self) -> None:
+        for url in ("https://github.com/o/n.git", "https://github.com/o/n", "git@github.com:o/n.git", "ssh://git@github.com/o/n.git\n"):
+            self.assertEqual(_common.github_repo(url), "o/n", url)
+        with self.assertRaises(SystemExit):
+            _common.github_repo("https://example.invalid/o/n.git")
+
+    def test_module_path(self) -> None:
+        (self.dir / "go.mod").write_text("// c\nmodule example.invalid/m/v2\n\ngo 1.26.10\n")
+        self.assertEqual(_common.module_path(self.dir), "example.invalid/m/v2")
+
+    def test_watch_ci_resolves_a_short_id(self) -> None:
+        import watch_ci
+        repo = self.dir / "r"
+        repo.mkdir()
+        git(repo, "init", "-q")
+        (repo / "f").write_text("x")
+        git(repo, "add", ".")
+        git(repo, "commit", "-q", "-m", "c")
+        full = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+        self.assertEqual(watch_ci.full_sha(repo, full[:7]), full)
+        self.assertEqual(watch_ci.find_run([{"headSha": "a" * 40, "databaseId": 1}, {"headSha": full, "databaseId": 2}], full), 2)
+        self.assertIsNone(watch_ci.find_run([{"headSha": "a" * 40, "databaseId": 1}], full))
+
+    def test_consumer_go_mod(self) -> None:
+        import consumer
+        good = "module example.invalid/consumer\n\ngo 1.26.10\n\nrequire example.invalid/m v1.2.3\n"
+        self.assertTrue(consumer.go_mod_ok(good, "1.26.10", "example.invalid/m", "v1.2.3"))
+        self.assertFalse(consumer.go_mod_ok(good + "\ntoolchain go1.27.3\n", "1.26.10", "example.invalid/m", "v1.2.3"))
+        self.assertFalse(consumer.go_mod_ok(good.replace("1.26.10", "1.27.3"), "1.26.10", "example.invalid/m", "v1.2.3"))
+
+    def test_tag_on_main(self) -> None:
+        import publication
+        repo = self.dir / "a"
+        repo.mkdir()
+        git(repo, "init", "-q")
+        sha = []
+        for i in range(2):
+            (repo / "f").write_text(str(i))
+            git(repo, "add", ".")
+            git(repo, "commit", "-q", "-m", str(i))
+            sha.append(subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip())
+        self.assertTrue(publication.contains(repo, sha[0], sha[1]), "an older tag is on main")
+        self.assertTrue(publication.contains(repo, sha[1], sha[1]), "the tag at main's head is on main")
+        self.assertFalse(publication.contains(repo, sha[1], sha[0]), "a tag ahead of main is not on it")
+
+    def test_same_body(self) -> None:
+        import publication
+        self.assertTrue(publication.same_body("text\n", "\ntext"))
+        self.assertFalse(publication.same_body("text", "text."))
+
+
 class HostTest(unittest.TestCase):
     def test_unset_names_the_variable(self) -> None:
         saved = os.environ.pop("ACP_LINUX_HOST", None)

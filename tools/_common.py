@@ -8,6 +8,7 @@ an account or a machine's path.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -79,6 +80,28 @@ def files_of_tree(root: Path) -> list[str]:
     macOS metadata files."""
     out = subprocess.run(["git", "ls-files", "-co", "--exclude-standard", "-z"], cwd=root, capture_output=True, check=True).stdout
     return [n for n in out.decode().split("\0") if n and not Path(n).name.startswith("._") and (root / n).is_file()]
+
+
+def module_path(root: Path) -> str:
+    """The module path on go.mod's module line."""
+    for line in (root / "go.mod").read_text(encoding="utf-8").splitlines():
+        if line.startswith("module "):
+            return line.split()[1]
+    raise SystemExit(f"no module line in {root / 'go.mod'}")
+
+
+def github_repo(url: str) -> str:
+    """OWNER/NAME of a GitHub remote URL, https or SSH form."""
+    m = re.match(r"^(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([^/]+)/([^/]+?)(?:\.git)?/?$", url.strip())
+    if not m:
+        raise SystemExit(f"not a GitHub remote: {url!r}")
+    return f"{m.group(1)}/{m.group(2)}"
+
+
+def origin_repo(root: Path) -> str:
+    """OWNER/NAME of the repository's origin remote."""
+    url = subprocess.run(["git", "remote", "get-url", "origin"], cwd=root, capture_output=True, text=True, check=True).stdout
+    return github_repo(url)
 
 
 def fail(message: str, status: int = 1) -> None:
