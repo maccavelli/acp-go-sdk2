@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-10-21
+status: complete
+date: 2026-10-22
 associated-madr: "0031-MADR-verification-tools-in-repository.md"
 ---
 
@@ -433,3 +433,27 @@ no file outside the step's scope.
 | a broken link in `tools/README.md` | `make check-tools`: "tools/README.md links ../docs/decisions/0031-MADR-gone.md, which does not exist" |
 
 **Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 36 tests"; `make markdownlint`, 28 files, 0 issues; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed; and `actionlint` v1.7.12 over the workflows, exit 0, nothing printed.
+
+### Step 8, verification and close, 2026-10-22
+
+The owner committed step 7 as `b42620c` and pushed `main`.
+
+**Gates on the committed tree,** `git status --porcelain` empty before them: `tools/gates.py --all`, all 18 gates, each exit 0;
+`make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 36 tests";
+`make markdownlint`, 28 files, 0 issues; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible";
+the floor gate at go1.26.10; both hosts. Afterwards `leftovers.py` found no test process on the Windows host.
+
+**Before the push:** a fetch, `main` 9 commits ahead of `origin/main`, 0 behind; `make push-guard`, "9 outgoing commit(s),
+4fa7204..b42620c, main to origin", "the guard passed (exit 0)"; and `tools/idscan.py --range origin/main..main`, "24 file(s),
+22 pattern(s), 0 match(es)".
+
+**CI** on `b42620c`, run `39792270232`, watched by `tools/watch_ci.py b42620c`: all six jobs passed, ubuntu-24.04, macos-15 and
+windows-2025 at 1.26.10 and at 1.27.3. In the Linux job at the newest Go, the step "markdownlint, actionlint, records, tools" ran
+`make check-tools`: `py_compile` on every tool, then "Ran 36 tests", OK, on the image's Python.
+
+**Found, not changed:** `watch_ci.py` printed the run as "completed success" with that one job still "in_progress": GitHub had marked
+the run complete while the job's status lagged its steps, every one of which had completed with success; a later `gh run view` gave
+the job "completed". The verdict was the run's own conclusion, and right; the job list was a snapshot taken a moment early. A later
+change may wait for every job's status as well.
+
+Every acceptance criterion is met, and this PLAN and its row in `docs/README.md` are now `complete`.
