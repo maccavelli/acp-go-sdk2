@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-22
 associated-madr: "0031-MADR-verification-tools-in-repository.md"
 ---
@@ -563,5 +563,11 @@ settle, and an unsettled run reported so at 180 s.
 
 **Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 41 tests"; `make markdownlint`, 28 files, 0 issues; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed.
 
-The push, CI on it watched by the new `watch_ci.py`, and this PLAN and its row `complete` follow, in the owner's turn that asks for the
-push.
+**The push and CI.** The owner committed the step as `c39195a` and pushed `main`. Before it, `make push-guard` passed over what was then
+outgoing. `tools/watch_ci.py HEAD`, the rewritten tool: "1 run(s) for c39195a: 39800319491"; "run 39800319491 (main, push): completed
+success; watch exit 0"; its six jobs, ubuntu-24.04, macos-15 and windows-2025 at 1.26.10 and at 1.27.3, each "completed success" as read,
+none in progress. In the Linux job at the newest Go, the step "markdownlint, actionlint, records, tools" ran `make check-tools`: "Ran 41
+tests", OK.
+
+Every acceptance criterion is met, step 9's as the deviation during it corrected; this PLAN and its row in `docs/README.md` are
+`complete` again.
