@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-22
 associated-madr: "0031-MADR-verification-tools-in-repository.md"
 ---
@@ -813,4 +813,10 @@ Each seed, job and crash line is the report's; so the MADR's H5 is settled: both
 
 **Gates,** `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set, `tools/gates.py --all`, each exit 0: all 18 gates, "all gates passed"; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 53 tests"; `make markdownlint`, 29 files, 0 issues; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux`, at go1.27.3, passed. `idscan`, "8 file(s), 17 pattern(s), 0 match(es)": the deny list held 22 patterns when this step was proposed and 17 at this run, read outside the repository, its changes not this step's; the scan is as good as the list it reads.
 
-What is left: the push, CI, and this PLAN and its row `complete`, in the owner's turn that asks for the push.
+**The push and CI.** The owner committed the step as `d2c5cd6` and pushed `main`. Before it, `git fetch` found origin unchanged;
+`make push-guard`, "1 outgoing commit(s), ef050db..d2c5cd6", passed; and `tools/idscan.py --range origin/main..main`, "8 file(s),
+17 pattern(s), 0 match(es)". `tools/watch_ci.py d2c5cd6`: "1 run(s) for d2c5cd6: 39868994517"; "run 39868994517 (main, push):
+completed success; watch exit 0"; its six jobs each "completed success". In the Linux job at the newest Go, `120138346730`, read by
+its id through `ci_jobs.py`'s own reader, `make check-tools`: "Ran 53 tests", OK.
+
+Every acceptance criterion is met; this PLAN and its row in `docs/README.md` are `complete` again.
