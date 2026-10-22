@@ -31,12 +31,20 @@ jobs:
           - go: '1.26.10'
             floor: true
             experiment: goroutineleakprofile
+          # The Windows floor job alone: its next crash prints every goroutine's
+          # stack (0032-REPORT-windows-floor-runtime-crashes.md,
+          # 0033-MADR-traceback-on-windows-floor-ci.md).
+          - os: windows-2025
+            go: '1.26.10'
+            traceback: crash
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
       # Each job runs the version it installed, never one go.mod selects.
       GOTOOLCHAIN: local
       GOEXPERIMENT: ${{ matrix.experiment }}
+      # Empty, the default, on every job but the Windows floor job.
+      GOTRACEBACK: ${{ matrix.traceback }}
     steps:
       # The job that runs the API gate fetches every commit and tag: the gate
       # compares with the newest v1 tag (0024-PLAN-api-gate-and-deprecation.md,

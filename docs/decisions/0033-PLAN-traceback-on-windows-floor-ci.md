@@ -77,3 +77,16 @@ The owner approved this PLAN. What changed: this PLAN `in-progress`, its row and
 its open options and the leak guard's answer.
 
 **Gates,** each exit 0: `make check-records`, `make markdownlint` and `tools/idscan.py`. No file but records changed.
+
+### Step 2, the workflow, 2026-10-22
+
+What changed: `.github/workflows/ci.yml`, an `include` entry `{os: windows-2025, go: '1.26.10', traceback: crash}` with a comment citing
+the report and the MADR, and in the job's `env`, `GOTRACEBACK: ${{ matrix.traceback }}` with a comment that it is empty, the default, on
+every job but that one.
+
+**Checks,** each exit 0: `actionlint` v1.7.12 over the workflows, nothing printed; `make check-records`, `make markdownlint` and
+`tools/idscan.py`.
+
+**The environment check,** a script outside the tree, was first seen to fail on the logs of run `39825211145`, from before the change:
+"MISS validate (windows-2025, 1.26.10): GOTRACEBACK in 0 env block(s), values none; want crash", the other five "ok", "does NOT hold",
+exit 1. It runs on the pushed commit's run in step 3.
