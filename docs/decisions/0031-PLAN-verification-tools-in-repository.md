@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-22
 associated-madr: "0031-MADR-verification-tools-in-repository.md"
 ---
@@ -681,4 +681,13 @@ and `procs.py` with a text no process holds ("none"), each exit 0.
 
 **Gates,** `tools/gates.py --all`, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 45 tests"; `make markdownlint`, 29 files, 0 issues; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed.
 
-The push, CI, and this PLAN and its row `complete` follow, in the owner's turn that asks for the push.
+**The push and CI.** With [0033-PLAN-traceback-on-windows-floor-ci.md](0033-PLAN-traceback-on-windows-floor-ci.md)'s commits,
+at the owner's request, "Commit all 3, then push to main", the agent committed this work as `a716dfe` (records), `57ce3f2` (the
+workflow) and `2f58588` (0031's step 11), and pushed `main`, `b533de4..2f58588`, after `make push-guard`, "3 outgoing commit(s)", passed and `tools/idscan.py
+--range` found 0 matches in 19 files. CI run `39841121410`, attempt 1: five jobs passed, and `validate (windows-2025, 1.27.3)` crashed in
+the root package's tests, "fatal error: found pointer to free object", a third occurrence of what
+[0032-REPORT-windows-floor-runtime-crashes.md](../reports/0032-REPORT-windows-floor-runtime-crashes.md) records, on a commit that
+changes no Go file. At the owner's request the failed job was rerun: attempt 2, `tools/watch_ci.py 2f58588`, "completed success", all
+six jobs "completed success". In the Linux job at the newest Go, `make check-tools`: "Ran 45 tests", OK.
+
+Every acceptance criterion is met; this PLAN and its row in `docs/README.md` are `complete` again.

@@ -214,6 +214,7 @@ experiment. Added as "If it happens again" says.
 | Shuffle seed | `1792697648940304500` |
 | Package | the root |
 | The other five jobs | passed, the Windows floor job, at 1.26.10 with the experiment, among them |
+| The rerun | attempt 2, at the owner's request, started 19:46:00Z: the job passed, all six jobs passed |
 
 **"fatal error: found pointer to free object".** The runtime's own report, before the stack:
 

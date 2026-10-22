@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-22
 associated-madr: "0033-MADR-traceback-on-windows-floor-ci.md"
 ---
@@ -90,3 +90,19 @@ every job but that one.
 **The environment check,** a script outside the tree, was first seen to fail on the logs of run `39825211145`, from before the change:
 "MISS validate (windows-2025, 1.26.10): GOTRACEBACK in 0 env block(s), values none; want crash", the other five "ok", "does NOT hold",
 exit 1. It runs on the pushed commit's run in step 3.
+
+### Step 3, verification and close, 2026-10-22
+
+The owner asked for the commits and the push in one turn: at the owner's request, "Commit all 3, then push to main", the agent committed this work as `a716dfe` (records), `57ce3f2` (the
+workflow) and `2f58588` (0031's step 11), and pushed `main`, `b533de4..2f58588`, after `make push-guard`, "3 outgoing commit(s)", passed and `tools/idscan.py
+--range` found 0 matches in 19 files. CI run `39841121410`, attempt 1: five jobs passed, and `validate (windows-2025, 1.27.3)` crashed in
+the root package's tests, "fatal error: found pointer to free object", a third occurrence of what
+[0032-REPORT-windows-floor-runtime-crashes.md](../reports/0032-REPORT-windows-floor-runtime-crashes.md) records, on a commit that
+changes no Go file. At the owner's request the failed job was rerun: attempt 2, `tools/watch_ci.py 2f58588`, "completed success", all
+six jobs "completed success".
+
+**The environment check** on run `39841121410`'s logs: "ok validate (windows-2025, 1.26.10): GOTRACEBACK in 6 env block(s), values
+['crash']; want crash", and for each of the five others "values ['']; want none set": "6 validate jobs; holds", exit 0. The empty value
+is the default (the MADR's G4).
+
+Every acceptance criterion is met, and this PLAN and its row in `docs/README.md` are `complete`.
