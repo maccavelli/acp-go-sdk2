@@ -190,6 +190,36 @@ class FloorTest(Temp):
             floor.go_line(mod)
 
 
+class RemoteTest(unittest.TestCase):
+    def test_flags_quoted_for_the_remote_shell(self) -> None:
+        import remote
+        cmd = remote.binary_command("acp-tools-ab12", "pkg.test", ["-test.run=TestKill$|TestKillAfterExit$", "-test.count=2"])
+        self.assertEqual(cmd, "cd acp-tools-ab12 && ./pkg.test '-test.run=TestKill$|TestKillAfterExit$' -test.count=2")
+        self.assertEqual(remote.binary_command("d", "pkg.test", []), "cd d && ./pkg.test")
+
+    def test_fresh_relative_directory(self) -> None:
+        import remote
+        a, b = remote.remote_dir(), remote.remote_dir()
+        self.assertNotEqual(a, b)
+        self.assertTrue(a.startswith("acp-tools-") and "/" not in a)
+
+
+class LeftoversTest(unittest.TestCase):
+    LIST = ("Image Name                     PID Session Name        Session#    Mem Usage\n"
+            "========================= ======== ================ =========== ============\n"
+            "tasklist.exe                 4812 Services                   0     12,312 K\n"
+            "svchost.exe                  2604 Services                   0     57,076 K\n"
+            "agentproc.test.exe           7310 Services                   0     20,100 K\n"
+            "t.exe                        7311 Services                   0      9,000 K\n")
+
+    def test_exact_image_names(self) -> None:
+        import leftovers
+        rows = leftovers.leftover_rows(self.LIST, set())
+        self.assertEqual([r.split()[0] for r in rows], ["agentproc.test.exe"])
+        rows = leftovers.leftover_rows(self.LIST, {"t.exe"})
+        self.assertEqual([r.split()[0] for r in rows], ["agentproc.test.exe", "t.exe"], "tasklist.exe must not match t.exe")
+
+
 class HostTest(unittest.TestCase):
     def test_unset_names_the_variable(self) -> None:
         saved = os.environ.pop("ACP_LINUX_HOST", None)

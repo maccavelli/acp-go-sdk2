@@ -277,3 +277,45 @@ in a clone, it passed unplanted and failed as required planted.
 govulncheck)"; `make check-tools`, "Ran 18 tests"; `make lint`, "0 issues." four times; `platforms`, "13 of 13 passed"; `make api`,
 "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; and the rest of the table above. The host gates
 wait for step 4.
+
+### Step 4, the hosts, 2026-10-22
+
+The owner committed step 3 and approved this step, setting the two hosts' variables for its runs; they were set on each command only.
+What changed:
+
+* **`tools/remote.py`:** `tree --host H`, the tree's files to `acp-tools-<random>` in the remote home, `go test -count=1 -shuffle=on
+  ./...` in both modules, the directory removed in a `finally`; `pkg --host H [--goarch A] PKG FLAG...`, the test binary cross-compiled
+  with `CGO_ENABLED=0`, copied, run with each flag quoted by `shlex.quote`, then removed.
+* **`tools/leftovers.py`:** `tasklist` on the Windows host; a row whose image name is a Go test binary's, ending in `.test.exe`, or
+  equals a `--name`, compared whole and without case.
+* **`tools/test_tools.py`:** 21 tests: the remote command's quoting, the fresh directory's name, the exact image names.
+
+**On the hosts,** one script, 9 of 9 held:
+
+| Check | Result |
+| :--- | :--- |
+| `gates.py windows` and the scratch directory's Windows run | both 0 |
+| `gates.py linux` and the scratch directory's Linux run | both 0 |
+| `remote.py pkg --host windows ./agentproc '-test.run=^(TestKill\|TestKillAfterExit)$'` | exit 0; ran and passed exactly those two |
+| the same on the Linux host | exit 0; the same two |
+| `leftovers.py` | "350 rows; test processes left: 0" |
+| `leftovers.py --name tasklist.exe` | exit 1: `tasklist.exe` is listed while it runs |
+| a failing test planted in a clone, `remote.py tree --host windows` | exit 1, "--- FAIL: TestPlantedFailure" |
+| the same on the Linux host | exit 1, the same |
+| `leftovers.py` after the runs | "353 rows; test processes left: 0" |
+
+Afterwards neither host's home held an `acp-tools-` directory; that check, a scratch script, was first seen to catch one planted on the
+Linux host, and the planted directory was removed.
+
+**Planted breaks,** offline, each in a copy of `tools/`; 3 of 3 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| a substring image match | `test_exact_image_names`: "tasklist.exe must not match t.exe" |
+| the flags not quoted | `test_flags_quoted_for_the_remote_shell` |
+| a fixed remote directory | `test_fresh_relative_directory` |
+
+With the planted failing test above, the PLAN's row for `remote.py` is met.
+
+**Gates,** `tools/gates.py --all`, the hosts included, each exit 0: all 18 gates; `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 21 tests"; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate at go1.26.10 passed; `windows` and `linux` passed. `--all` is now matched against the scratch directory's
+gate set, as the deviation during step 3 has it.
