@@ -124,7 +124,7 @@ Each has a recommended answer.
 | Question | Answer |
 | :--- | :--- |
 | 1. Where the hosts' names come from | As recommended: `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST`. |
-| 2. Where the identifier scan's patterns come from | As recommended: the guard's deny list. |
+| 2. Where the identifier scan's patterns come from | As recommended: the guard's deny list. (Amended 2026-10-21, during the PLAN's step 2: the owner adds what it lacked; see "Amendment 2026-10-21, step 2: what the deny list covers".) |
 | 3. CI | As recommended: the records step runs `make check-tools`. |
 | 4. Docs | As recommended: `tools/README.md`, a section of `docs/architecture.md`, a line in `AGENTS.md`. |
 
@@ -167,6 +167,24 @@ only its place; `remote.py` and `leftovers.py` on both hosts; `plants.py` reprod
 
 * Good, because it costs nothing now.
 * Bad, because the tools are lost with each session, and a record's commands cannot be run again.
+
+## Amendment 2026-10-21, step 2: what the deny list covers
+
+Found during the PLAN's step 2, and decided by the owner the same day; question 2's answer stands.
+
+* **D1. The check.** `tools/idscan.py --paths` over a scratch file of one line per kind of identifier the records' scans have looked for,
+  each written as the scripts write it; the lines it reports show which kinds the deny list covers, and nothing of the list is printed.
+  The list held 17 patterns.
+* **D2. What it covers:** the local account name, a home path, the Windows host's remote working path, and the Linux host's alias where
+  the scripts use it, after `ssh`.
+* **D3. What it lacks:** the Windows host's full name, the second consumer's name, the organization's short name, paths in
+  macOS's system and per-user temporary directories, and the word an agent session's scratch directory is named by. The records' scans caught each so
+  far; the push guard lets each through today, in every repository.
+
+**Decision (owner, 2026-10-21):** the owner adds patterns for D3 to the deny list, so that the scan and the push guard both catch them;
+the alternatives were for the agent to append them with the owner's leave, or a second list for the scan alone (question 2's
+alternative). The PLAN's step 2 reruns D1 once they are added, and requires every kind covered. The Linux host's alias alone, a common
+word, is left to the list as it stands (D2).
 
 ## More Information
 

@@ -11,10 +11,16 @@ else
 endif
 .SHELLFLAGS := -eu -o pipefail -c
 
-.PHONY: check-records markdownlint
+.PHONY: check-records markdownlint check-tools
 
 check-records:
 	python3 scripts/check_records.py --check-all
+
+# The verification tools: each compiles, and their offline tests pass
+# (docs/decisions/0031-MADR-verification-tools-in-repository.md).
+check-tools:
+	python3 -m py_compile tools/*.py
+	python3 -B -m unittest discover -s tools -p 'test_*.py'
 
 markdownlint:
 	npx --yes markdownlint-cli2@0.23.2

@@ -144,3 +144,12 @@ pair, and it was replaced by "scratch directory"; and the acceptance said CI's s
 the newest Go does (`ci.yml:113`–`:119`), and was corrected.
 
 **Gates,** each exit 0: `make check-records`, `make markdownlint` and the identifier scan. No file but these records changed.
+
+### Deviation, 2026-10-21, during step 2: what the deny list covers
+
+**Found.** Before relying on `idscan.py`, its patterns, the push guard's deny list, were checked against the kinds of identifier the
+records' scans have caught (the MADR's "Amendment 2026-10-21, step 2: what the deny list covers", D1 to D3): `idscan.py --all` over the
+tree found 0 matches in 506 files with 17 patterns, but the list lacks five kinds (D3), so a clean scan would not have shown them absent.
+
+**Decision (owner, 2026-10-21).** The owner adds patterns for D3 to the deny list. Added to step 2: the coverage check, rerun after the
+addition, every kind covered; then `idscan.py --all` over the tree again. No file is added to the step.
