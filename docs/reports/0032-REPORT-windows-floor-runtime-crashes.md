@@ -185,3 +185,16 @@ Add a row to "The two crashes" and to "Where it happens", from:
 - the tally above: every job's first attempt, by system and Go version, from the runs' `attempts/1/jobs`.
 
 A crash on another job, at 1.27.x, or without the experiment, would change "What the evidence supports" above.
+
+## Addendum, 2026-10-22: the owner's answers, and the leak guard's count
+
+The owner answered "Open" the same day:
+
+- **More from the next crash:** done by [0033-MADR-traceback-on-windows-floor-ci.md](../decisions/0033-MADR-traceback-on-windows-floor-ci.md),
+  `GOTRACEBACK=crash` on the Windows floor job alone.
+- **Separating the experiment from Windows at 1.26:** not now; the leak guard stays on every floor job.
+- **Upstream:** not now.
+- **The leak guard's count:** not affected by [golang/go#80311](https://github.com/golang/go/issues/80311). A probe that leaks goroutines,
+  at go1.27.3 and at go1.26.10 with the experiment, showed `Count` stale before a `WriteTo`, and equal to the profile just written after
+  one (3, then 5); the guard calls `WriteTo` (`leak_test.go:49`) before every `Count` (`:54`).
+  [0033-PLAN-traceback-on-windows-floor-ci.md](../decisions/0033-PLAN-traceback-on-windows-floor-ci.md) holds the table.

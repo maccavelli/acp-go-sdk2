@@ -98,6 +98,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0031 | MADR | [Keep the maintainer's verification tools in the repository, in `tools/`, with every identifier kept out](decisions/0031-MADR-verification-tools-in-repository.md) | accepted |
 | 0031 | PLAN | [Implement 0031: keep the maintainer's verification tools in the repository, in `tools/`, with every identifier kept out](decisions/0031-PLAN-verification-tools-in-repository.md) | complete |
 | 0032 | REPORT | [Windows floor CI: two runtime crashes in the root package's tests, not reproduced](reports/0032-REPORT-windows-floor-runtime-crashes.md) | observed |
+| 0033 | MADR | [Print every goroutine's stack when the Windows floor CI job crashes](decisions/0033-MADR-traceback-on-windows-floor-ci.md) | accepted |
+| 0033 | PLAN | [Implement 0033: print every goroutine's stack when the Windows floor CI job crashes](decisions/0033-PLAN-traceback-on-windows-floor-ci.md) | in-progress |
 
 ## I want to…
 
