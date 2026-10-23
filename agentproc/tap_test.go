@@ -336,15 +336,20 @@ func TestDetachedTapIsPrefix(t *testing.T) {
 	}
 }
 
-// TestTapDrainBoundedByGrace requires Wait to wait for a slow tap no longer
-// than the grace: a tap that takes 30 ms a write is still writing what the
-// agent's 24 MiB filled its queue with when the grace ends, and Wait returns,
-// counting the rest as dropped (0030-MADR-record-initialize-on-arrival.md,
-// the amendment of 2026-10-21, A1e and question 11).
+// TestTapDrainBoundedByGrace requires Wait to wait for a tap no longer than
+// the grace: a tap blocked in its first Write until the test ends still holds
+// what the agent's 24 MiB filled its queue with when the grace ends, and Wait
+// returns, counting the rest as dropped
+// (0030-MADR-record-initialize-on-arrival.md, the amendment of 2026-10-21, A1e
+// and question 11). A tap that was merely slow could keep pace with an agent
+// read slowly, as under the race detector on Windows, and leave nothing queued
+// (0034-MADR-race-detector-on-windows-ci.md, R6 to R8).
 func TestTapDrainBoundedByGrace(t *testing.T) {
 	t.Parallel()
-	tap := &capture{delay: 30 * time.Millisecond}
+	tap, release := blockedTap(t)
 	p := startTapped(t, "bulk", []string{bulkEnv + "=24", bulkMoreEnv + "=0"}, testGrace, tap, nil)
+	// Registered after startTapped's Close, so that it runs first.
+	t.Cleanup(release)
 	if err := p.Conn().Connection().SendNotification(t.Context(), "_test/go", map[string]any{}); err != nil {
 		t.Fatalf("SendNotification = %v", err)
 	}

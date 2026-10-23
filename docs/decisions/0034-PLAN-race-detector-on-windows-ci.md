@@ -84,3 +84,37 @@ The owner answered the MADR's questions, 1 "both", and 2 "it is already installe
 source was read and R2 records it, MinGW-w64 on the machine's `PATH`; the MADR is `accepted`. The owner approved this PLAN
 ("proceed"); it is `in-progress`. `make check-records` and `make markdownlint` passed, and `tools/idscan.py` found no match in the
 three files, against the deny list's 17 patterns.
+
+### Step 2, the test, 2026-10-22
+
+The owner committed step 1 as `b8a978e`. What changed:
+
+* **`agentproc/tap_test.go`:** `TestTapDrainBoundedByGrace`'s tap is `blockedTap(t)`, released by `t.Cleanup(release)` registered after
+  `startTapped`, so that it runs before the agent's Close in cleanup; its comment says why a slow tap was not enough, citing the MADR.
+  What it requires is unchanged: Close within the grace and the slack, and something counted as dropped.
+
+**Locally,** `gofmt -l agentproc/` printed nothing; `go vet ./agentproc`, exit 0; the test under `-race`, `-count=3`, 3 of 3 passed,
+2.79 s to 2.82 s.
+
+**On the Windows host,** each a fresh copy of the tree, removed after; `agentproc` whole, `-shuffle=on -count=5 -v`:
+
+| Run | Exit | The test | Data races |
+| :--- | :--- | :--- | :--- |
+| the changed test, `-race`, go1.27.3 | 0 | 5 of 5 passed, 11.35 s to 14.84 s | 0 |
+| the changed test, `-race`, go1.26.10 with the experiment | 0 | 5 of 5 passed, 4.50 s to 8.02 s | 0 |
+| the changed test, without `-race`, go1.27.3 | 0 | 5 of 5 passed, 1.78 s to 2.92 s | 0 |
+| the test as it was, `-race`, go1.27.3 | 1, as required | 5 of 5 failed, 11.56 s to 14.87 s, "nothing dropped" | 0 |
+
+**Planted breaks,** each in its own copy of the tree, the test run under `-race`; 2 of 2 failed as required, and the third row above is
+the third:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `drainTaps` waits for the tap's end with no timer | the test: "tap_test.go:356: Close took longer than 3.3s" |
+| `abandon` counts nothing as dropped | the test: "tap_test.go:360: DroppedTapBytes reports nothing dropped by a tap still writing when the grace ended" |
+| the 30 ms tap restored | on the Windows host, as the table shows |
+
+**Gates,** `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set, `tools/gates.py --all`, each exit 0: all 18 gates, "all gates passed";
+`make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 53 tests";
+`make markdownlint`, 29 files; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor
+gate at go1.26.10 passed; `windows` and `linux` passed; `idscan`, "1 file(s), 17 pattern(s), 0 match(es)".
