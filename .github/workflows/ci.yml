@@ -87,8 +87,13 @@ jobs:
         working-directory: cmd/generate
         run: go test -shuffle=on ./...
       - run: go build ./example/...
+      # On the Linux and Windows jobs, at both versions. On Windows -race needs
+      # cgo and a C compiler on PATH, the image's MinGW-w64 gcc, and the step is
+      # bash, Git for Windows' (0034-MADR-race-detector-on-windows-ci.md,
+      # 0032-REPORT-windows-floor-runtime-crashes.md).
       - name: race detector
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' || runner.os == 'Windows'
+        shell: bash
         run: |
           set -euo pipefail
           go test -race -shuffle=on ./...

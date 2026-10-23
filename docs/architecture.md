@@ -438,7 +438,8 @@ Checks that guard this:
   except for `goconst`, `gocognit` and `gocyclo`, which `.golangci.yml` excludes
   for `_gen.go` files with the reason. `make check-records` and `make markdownlint`
   check the docs. GitHub Actions runs `.github/workflows/ci.yml`, which also runs
-  the root tests with `GOEXPERIMENT=nojsonv2` on Linux.
+  the root tests with `GOEXPERIMENT=nojsonv2` on Linux, and both modules' tests
+  with `-race` on the Linux and Windows jobs.
 - `make api` and CI's "API compatibility" step run `scripts/check_api.py`:
   `apidiff`, pinned there, compares the working tree's root package and
   `agentproc` with the newest `v1` tag's, a package missing from the tag

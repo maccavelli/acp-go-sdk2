@@ -118,3 +118,29 @@ the third:
 `make pre-add-check`, "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 53 tests";
 `make markdownlint`, 29 files; `platforms`, "13 of 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor
 gate at go1.26.10 passed; `windows` and `linux` passed; `idscan`, "1 file(s), 17 pattern(s), 0 match(es)".
+
+### Step 3, CI, 2026-10-22
+
+The owner committed step 2 as `347949e`. What changed:
+
+* **`.github/workflows/ci.yml`:** the step "race detector": `if: runner.os == 'Linux' || runner.os == 'Windows'`, `shell: bash`, and a
+  comment citing the MADR and the report; its commands unchanged.
+* **`docs/architecture.md`:** CI runs both modules' tests with `-race` on the Linux and Windows jobs.
+
+**`actionlint`,** v1.7.12, the version CI pins: exit 0, nothing reported.
+
+**The CI check,** a script in the scratch directory that reads a run's first-attempt jobs, and each Windows job's log by its id, through
+`tools/ci_jobs.py`'s readers: the step "race detector" "success" on both Linux and both Windows jobs, "skipped" on both macOS jobs,
+and in each Windows job's race step an `ok` line for the root package, `agentproc` and a package of the generator module, and no
+"WARNING: DATA RACE". **Seen to fail first,** on run `39869786459`, from before the change, exit 1: "MISS validate (windows-2025,
+1.27.3): step 'race detector' skipped, want success", the same for 1.26.10, the four others "ok", "does NOT hold". Its log reading,
+which that run's Windows jobs could not reach, was run on that run's Linux job at the newest Go, where the step ran: the step's 24
+lines, from "##[group]Run set -euo pipefail", each of the three `ok` lines found, and, with the `ok` lines taken out, all three
+reported missing.
+
+**Gates,** `tools/gates.py --all`, each exit 0: all 18 gates, "all gates passed"; `make pre-add-check`, "176 file(s) clean (gofmt,
+golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 53 tests"; `make markdownlint`, 29 files; `platforms`, "13 of
+13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate passed; `windows` and `linux` passed;
+`idscan`, "2 file(s), 17 pattern(s), 0 match(es)".
+
+What is left: the owner's push; then `tools/watch_ci.py` and the CI check on its run, and step 4.
