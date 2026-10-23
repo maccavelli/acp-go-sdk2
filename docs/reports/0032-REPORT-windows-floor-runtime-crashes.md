@@ -275,3 +275,20 @@ RACE", no fatal error. The detector was first seen to work there: a test written
   every run of both Linux jobs; a race the tests reach rarely could still be missed by both.
 - **Not decided:** whether the cause is this package, the Go runtime on Windows, or the runners. The experiment is no longer the leading
   suspect.
+
+## Addendum, 2026-10-22: the race detector on Windows
+
+The owner asked for a race step on CI's Windows jobs; [0034-MADR-race-detector-on-windows-ci.md](../decisions/0034-MADR-race-detector-on-windows-ci.md) decided it, on both Windows jobs, and
+[0034-PLAN-race-detector-on-windows-ci.md](../decisions/0034-PLAN-race-detector-on-windows-ci.md) carried it out.
+
+- **On the Windows host,** CI's race step, both modules, at go1.27.3 and at go1.26.10 with the experiment: no "WARNING: DATA RACE".
+  One test failed under `-race` beside the rest of `agentproc`, `TestTapDrainBoundedByGrace`, 6 of 6 at 1.27.3: not a race, but a
+  premise that depended on the machine's speed. It was changed first, and passed 15 of 15 there after.
+- **On CI,** the first run with the step, `39877624745` on `616864e`: the step passed on both Windows jobs, 131 s at 1.26.10 and 159 s
+  at 1.27.3, in Git for Windows' bash, with `-race` built by the image's MinGW-w64 gcc; every package of both modules "ok", no data race
+  warning. Each Windows job took about 275 s, against about 115 s before.
+
+**What changes in "What the evidence supports".** A data race in either module stays "weakened, not excluded"; but from now on every
+Windows job, at both versions, looks for one, and a race the tests reach fails the step, where until now only a crash could show it.
+Should a crash recur, the race step's result on the same job is part of its row: `python3 tools/ci_jobs.py failure <run>` names the
+failing step.

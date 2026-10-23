@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-22
 associated-madr: "0034-MADR-race-detector-on-windows-ci.md"
 ---
@@ -143,4 +143,27 @@ golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 53 tests
 13 passed"; `make api`, "against v1.20.0: 0 incompatible, 0 compatible"; the floor gate passed; `windows` and `linux` passed;
 `idscan`, "2 file(s), 17 pattern(s), 0 match(es)".
 
-What is left: the owner's push; then `tools/watch_ci.py` and the CI check on its run, and step 4.
+**The push and CI.** The owner committed the step as `616864e`; before the push, `git fetch` found origin unchanged; `make push-guard`,
+"3 outgoing commit(s), b1be5bf..616864e", passed; `tools/idscan.py --range origin/main..main`, "6 file(s), 17 pattern(s), 0
+match(es)". The owner pushed `main`. `tools/watch_ci.py 616864e`: "1 run(s) for 616864e: 39877624745"; "completed success; watch exit
+0"; its six jobs each "completed success". The CI check on `39877624745`, exit 0, "holds":
+
+| Job | The step "race detector" | Its log |
+| :--- | :--- | :--- |
+| windows-2025, 1.26.10 | success, 131 s | 46 lines; every `ok` line found; 0 data races; `GOTRACEBACK: crash` |
+| windows-2025, 1.27.3 | success, 159 s | 46 lines; every `ok` line found; 0 data races |
+| ubuntu-24.04, 1.26.10 and 1.27.3 | success, 93 s and 96 s | |
+| macos-15, 1.26.10 and 1.27.3 | skipped, as before | |
+
+Each Windows race step ran in "shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}" (the MADR's R3), and
+`-race` built and ran there, which on Windows needs cgo and gcc on `PATH` (R1): the image's compiler was found (R2). Every package of
+both modules "ok": the root, 14.847 s and 18.058 s; `agentproc`, 11.160 s and 16.075 s, `TestTapDrainBoundedByGrace` among its tests;
+the generator, 64.180 s and 102.035 s. The Windows jobs took 273 s and 278 s, against medians of 117 s and 115 s before (R4).
+
+### Step 4, close, 2026-10-22
+
+* **`docs/reports/0032-REPORT-windows-floor-runtime-crashes.md`:** an addendum, "the race detector on Windows": the owner's request, the
+  Windows host's runs, the test changed, the first CI run's result, and what it changes in "What the evidence supports".
+* `make check-records` and `make markdownlint` passed; `tools/idscan.py` found no match.
+
+Every acceptance criterion is met; this PLAN and its row in `docs/README.md` are `complete`.

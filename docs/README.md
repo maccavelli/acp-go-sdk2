@@ -101,7 +101,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0033 | MADR | [Print every goroutine's stack when the Windows floor CI job crashes](decisions/0033-MADR-traceback-on-windows-floor-ci.md) | accepted |
 | 0033 | PLAN | [Implement 0033: print every goroutine's stack when the Windows floor CI job crashes](decisions/0033-PLAN-traceback-on-windows-floor-ci.md) | complete |
 | 0034 | MADR | [Run the race detector on CI's Windows jobs, once the tap drain test no longer depends on the machine's speed](decisions/0034-MADR-race-detector-on-windows-ci.md) | accepted |
-| 0034 | PLAN | [Implement 0034: run the race detector on CI's Windows jobs, once the tap drain test no longer depends on the machine's speed](decisions/0034-PLAN-race-detector-on-windows-ci.md) | in-progress |
+| 0034 | PLAN | [Implement 0034: run the race detector on CI's Windows jobs, once the tap drain test no longer depends on the machine's speed](decisions/0034-PLAN-race-detector-on-windows-ci.md) | complete |
 
 ## I want to…
 
