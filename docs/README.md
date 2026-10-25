@@ -107,7 +107,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0036 | PLAN | [Implement 0036: the stable SessionUpdate constructors, SessionUpdate.Kind(), and ClientRefusals](decisions/0036-PLAN-session-update-constructors-kind-and-client-refusals.md) | complete |
 | 0036 | REPORT | [Release notes for v1.21.0, against v1.20.0](reports/0036-REPORT-release-notes-v1-21-0.md) | observed |
 | 0037 | MADR | [Align docs-only CI and disclosure gates](decisions/0037-MADR-align-docs-ci-and-disclosure-gates.md) | accepted |
-| 0037 | PLAN | [Implement aligned docs-only CI and disclosure gates](decisions/0037-PLAN-align-docs-ci-and-disclosure-gates.md) | in-progress |
+| 0037 | PLAN | [Implement aligned docs-only CI and disclosure gates](decisions/0037-PLAN-align-docs-ci-and-disclosure-gates.md) | complete |
 
 ## I want to…
 

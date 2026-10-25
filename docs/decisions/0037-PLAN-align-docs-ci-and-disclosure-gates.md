@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-25
 associated-madr: "0037-MADR-align-docs-ci-and-disclosure-gates.md"
 ---
@@ -38,13 +38,13 @@ Boundary: Do not filter schedule or `v*` tags. Preserve the Go floor/current mat
 
 1. Explain routing, docs-safe paths, common checks, local readers and the private pre-push guard in AGENTS.md and the architecture or CI guide. Verify this pair's exact filenames and current statuses in the records index; use the repository index generator if present.
 2. Run `make check-records markdownlint check-tools disclosure-check`; actionlint; scratch plants for MD018, a broken record link, a real home path, root README incorrectly ignored, divergent filters and a missing docs gate. Capture status before filtering output. Check this pair and edited documents for real-machine identifiers. Read each edited file in full and verify links.
-3. After explicit authorization to push in that same turn, observe a docs-only push, a non-doc or mixed push and the next tag or scheduled run. Record run IDs, conclusions and which workflow started. Mark this PLAN complete only after the criteria below hold; otherwise record the outstanding observation. Commit at the end of each approved phase under repository rules.
+3. After explicit authorization to push in that same turn, observe a docs-only push, a non-doc or mixed push ~~and the next tag or scheduled run~~. Record run IDs, conclusions and which workflow started. Mark this PLAN complete only after the criteria below hold; otherwise record the outstanding observation. Commit at the end of each approved phase under repository rules. *Amended 2026-10-25, see the deviation in step 3's record: the tag and schedule cases are checked statically, not by waiting for a run.*
 
 ## Verification
 
 * Both workflows pass pinned Markdownlint, numbered-record/index and relative-link validation, and portable tracked-text disclosure scanning.
 * Each Markdown reader runs on changes to its input, either in Docs or full CI.
-* A docs-only push starts Docs but not full CI; a non-doc or mixed push starts full CI. Tags, schedules and dispatch retain existing behavior.
+* A docs-only push starts Docs but not full CI; a non-doc or mixed push starts full CI. Tags, schedules and dispatch retain existing behavior. *Amended 2026-10-25: the first two by observed runs; the third by `check_ci_filters.py`'s `filters` part and the workflow's structure, as step 3's record says.*
 * Scratch plants fail their intended gates; filter or gate drift fails the parity test.
 * Before an authorized push, the local pre-push guard checks outgoing commits. Its private deny list is never copied into CI.
 
@@ -265,7 +265,7 @@ file(s), 17 pattern(s), 0 match(es)". The owner pushed.
 | :--- | :--- | :--- | :--- |
 | `9b20468..5f0cb2b` | mixed: workflows, `Makefile`, `scripts/`, records and docs | CI and Docs | CI `40197791734`, "completed success", six jobs; Docs `40197791752`, "completed success", job `docs` |
 | `5f0cb2b..72879af`, this record alone | docs-only: this PLAN | Docs alone | Docs `40198771543`, "completed success", job `docs`; no CI run, by `gh run list --commit` after `tools/watch_ci.py` settled |
-| the next `v*` tag or weekly schedule | none | to be observed: CI | |
+| ~~the next `v*` tag or weekly schedule~~ | | not observed: checked statically, see the deviation below | |
 
 In the mixed push's logs (`gh run view --log`), CI's job `validate (ubuntu-24.04, 1.27.3)`, step "markdownlint, actionlint,
 records, disclosure, tools", printed "Summary: 0 issues", "check-disclosure: 551 tracked file(s), 0 finding(s)" and
@@ -276,6 +276,23 @@ runner without error.
 The owner committed the record above as `72879af` and pushed it; the agent ran no `make push-guard` before that push. Only Docs
 started, so a docs-only push routes as intended.
 
-Still to be observed: full CI on the next weekly schedule, `17 6 * * 1`, Monday 2026-10-26 at 06:17 UTC, or on a `v*` tag if one
-comes first. This PLAN stays `in-progress` until that run is recorded.
+~~Still to be observed: full CI on the next weekly schedule, `17 6 * * 1`, Monday 2026-10-26 at 06:17 UTC, or on a `v*` tag if one
+comes first. This PLAN stays `in-progress` until that run is recorded.~~
+
+**Deviation, 2026-10-25: the tag and schedule cases are not waited for.** Step 3 required observing "the next tag or scheduled
+run" before completion. That held this PLAN open for a run that cannot route otherwise, and the owner directed the cause removed. The
+case is settled without a run:
+
+* the new filters are `paths-ignore` under `on.push` and `on.pull_request` alone; `on.schedule` carries none, and cannot;
+* GitHub does not evaluate path filters for a tag push, so `push.tags: ['v*']` runs CI whatever a tag's commit changes;
+* `scripts/check_ci_filters.py`'s `filters` part fails when `tags: ['v*']` or the `schedule` is removed from CI, or when CI gains a
+  `paths` filter; it runs in `make check-tools`, and printed "check-ci-filters: 0 problem(s)" in CI run `40197791734`.
+
+The step and the verification item are annotated. The MADR's confirmation, "observed Docs-only and full-CI runs after an approved
+push", is met by the two pushes above, so the MADR is unchanged. The same clause stood in the six other repositories' PLANs of this
+alignment; on the owner's direction ("please eliminate this issue") each is amended the same way the same day, its step 3, its
+verification item and, where the check is not yet built, its phase 2 contract check, which now also fails when CI loses a tag,
+schedule or dispatch trigger or gains a `paths` filter.
+
+Every criterion now holds, so this PLAN and its row are `complete`.
 
