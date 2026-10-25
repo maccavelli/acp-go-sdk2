@@ -108,6 +108,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0036 | REPORT | [Release notes for v1.21.0, against v1.20.0](reports/0036-REPORT-release-notes-v1-21-0.md) | observed |
 | 0037 | MADR | [Align docs-only CI and disclosure gates](decisions/0037-MADR-align-docs-ci-and-disclosure-gates.md) | accepted |
 | 0037 | PLAN | [Implement aligned docs-only CI and disclosure gates](decisions/0037-PLAN-align-docs-ci-and-disclosure-gates.md) | complete |
+| 0038 | MADR | [Add the consumers' protocol helpers, Kind() on four more unions, and an AgentRefusals embed](decisions/0038-MADR-consumer-helpers-kind-and-agent-refusals.md) | accepted |
+| 0038 | PLAN | [Implement 0038: the consumers' protocol helpers, Kind() on four more unions, and AgentRefusals](decisions/0038-PLAN-consumer-helpers-kind-and-agent-refusals.md) | proposed |
 
 ## I want to…
 
