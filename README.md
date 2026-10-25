@@ -126,9 +126,9 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
 - `acp.AllSessions(ctx, client, req)` ranges over every session
   `session/list` pages through, and stops with `acp.ErrRepeatedCursor` when
   the agent repeats a cursor. Helpers that take a side connection are
-  functions, since a side connection's methods are its protocol methods;
-  `acp.PickPermissionOption` chooses a permission option by its kind, never
-  by its name.
+  functions, since a side connection's methods are its protocol methods.
+- `acp.PickPermissionOption` chooses a permission option by its kind, never by
+  its name, so an option named "Don't allow" is never taken as an allow.
 
 Helper constructors are provided to reduce boilerplate when working with union types:
 

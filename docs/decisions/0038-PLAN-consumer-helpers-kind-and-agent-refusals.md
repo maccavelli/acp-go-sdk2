@@ -524,3 +524,46 @@ The first `make pre-add-check` failed, exit 2, on `perfsprint`: "fmt.Sprint can 
 * `make check-records`, `make markdownlint`, `make disclosure-check`, and `tools/idscan.py --paths` over the step's files.
 
 Step 5 was committed by the owner as `cb1a763`. Step 6's files are staged for the owner.
+
+### Step 7, close the implementation, 2026-10-25
+
+On the tree of steps 2 to 6, with step 6 staged:
+
+* **`make api`:** exit 0, "against v1.21.0: 0 incompatible, 22 compatible": `(*Connection).RefusedMessages`,
+  `(*RequestError).Reason`, `AgentRefusals`, `AllSessions`, `ChainRewrites`, `ConfigOptionByCategory`, `ContentBlock.Kind`,
+  `DecodeMeta`, `ErrRepeatedCursor`, `IsAuthRequired`, `IsCancelled`, `IsMethodNotFound`, `MetaObject`, `OfferedAuthMethods`,
+  `PickPermissionOption`, `RequestPermissionOutcome.Kind`, `RequestPermissionResponse.Chosen`, `ResolveStdioCommands`,
+  `SessionConfigOption.Kind`, `SessionConfigSelectOptions.All`, `SessionInfo.Updated` and `ToolCallContent.Kind`, each
+  "added". `apidiff` lists `AgentRefusals` once, without its five methods.
+* **`tools/gates.py --all`,** with `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set: "all gates passed", 18 of 18.
+* **`README.md`,** read in full, all 867 lines, against the code. One fault was found and fixed: the client section's
+  `AllSessions` item ran on, after a semicolon, into `PickPermissionOption`; each now has its own item. `docs/architecture.md`'s
+  hand-written list, the only part of it this PLAN changed, was read against the four files it describes.
+* **The README's statements checked against the code:** `WithInboundRewrite(ResolveStdioCommands(exec.LookPath))` type-checks,
+  since `exec.LookPath` is a `func(string) (string, error)`; "the SDK would refuse to send" a terminal auth method is the
+  agent's `-32603` that "Initialization and capabilities" describes; `RefusedMessages` counts at steps 2 to 4 of the inbound
+  order and at the gate, and not a message that never decodes, as `TestRefusedMessages` shows.
+
+The MADR's "Confirmation", item by item:
+
+| Item | Met by |
+| :--- | :--- |
+| `AllSessions` over two pages, a repeating cursor, an error on the second page, a break, and an unadvertised agent | `TestAllSessions`: `two_pages`, `repeating_cursor`, `error_on_second_page`, `break`, `not_advertised`, and `empty_next_cursor` and `nil_connection` besides |
+| `PickPermissionOption` refusing an option named "Don't allow" of kind `reject_once` when asked for an allow | `TestPickPermissionOption`, "don't allow is not an allow" and "name never read" |
+| each `Is*` through a wrapped error, and `IsMethodNotFound` false for a value gate | `TestIsMethodNotFound`, `TestIsAuthRequired`, `TestIsCancelled`, each with wrapped cases; the value gate from a real send of `UpdateNotice` |
+| `ResolveStdioCommands` over the four requests with a fake `lookPath`, and the SDK still refusing what it leaves | `TestResolveStdioCommands`; `TestResolveStdioCommandsOverTheWire`, `-32602` for an unresolvable command |
+| `OfferedAuthMethods` making an answer the SDK would refuse pass | `TestOfferedAuthMethods`, whose wire half first sees the unfiltered list refused |
+| `Kind()` equal to every `schemaUnions()` value for the four unions, with the `Unknown` and zero cases | `TestUnionKinds`; `TestKindCoversKeyedStableUnions` for the set |
+| `AgentRefusals` with exactly five methods, not an `Agent` alone, and `-32601` over the wire | `TestAgentRefusalsAnswers`, `TestAgentRefusalsMethodSet`, `TestAgentRefusalsOverTheWire` |
+| `RefusedMessages` counting a rewrite, a validation and a gate refusal, and not a malformed line | `TestRefusedMessages` |
+| `make api` against `v1.21.0` listing only compatible changes | above |
+
+Every planted break of steps 2 to 6 failed its check: 8, 5, 6, 4 and 3, 26 in all, each line in its step's table.
+
+Not done: the push, which waits for the owner's ask, with `git fetch`, `make push-guard` and `tools/idscan.py --range
+origin/main..main` before it and `tools/watch_ci.py` after; and step 8, the release, on the owner's ask. This PLAN stays
+`in-progress` until the release is published.
+
+Step 6 was committed by the owner as `b039e6b`. Before any push: `git fetch`; `make push-guard`, "9 outgoing commit(s),
+ea09a07..b039e6b, main to origin", "the guard passed (exit 0)"; `tools/idscan.py --range origin/main..main`, "18 file(s), 17
+pattern(s), 0 match(es)". Step 7's files are staged for the owner.
