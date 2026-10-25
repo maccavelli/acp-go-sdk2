@@ -63,6 +63,27 @@ func ExampleSessionUpdate_Kind() {
 	// future_update
 }
 
+// refusingClient offers no file-system, terminal or elicitation methods: it
+// embeds ClientRefusals for them and implements the two it must.
+type refusingClient struct{ acp.ClientRefusals }
+
+func (refusingClient) SessionUpdate(context.Context, acp.SessionNotification) error { return nil }
+
+func (refusingClient) RequestPermission(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
+}
+
+// ExampleClientRefusals is a client that embeds ClientRefusals, and the answer
+// it gives a file read
+// (0036-PLAN-session-update-constructors-kind-and-client-refusals.md, step 4).
+func ExampleClientRefusals() {
+	var c acp.Client = refusingClient{}
+	_, err := c.ReadTextFile(context.Background(), acp.ReadTextFileRequest{})
+	fmt.Println(err)
+	// Output:
+	// {"code":-32601,"message":"Method not found","data":{"method":"fs/read_text_file"}}
+}
+
 // ExampleRequestError reads the code and message of the error a peer's
 // handler answered with (0024-PLAN-documentation.md, A8).
 func ExampleRequestError() {

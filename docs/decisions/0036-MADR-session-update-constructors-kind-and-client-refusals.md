@@ -171,7 +171,8 @@ How the arguments are treated:
   compaction's `Summary`, `Error` and `Meta`. No functional options are added.
 * None of the unstable variants gets a constructor.
 
-`helpers_gen.go`, `HandWrittenHelpers` and the generator are unchanged.
+`helpers_gen.go`, `HandWrittenHelpers` and the generator are unchanged. *Amended 2026-10-25: one generator test,
+`TestRuntimeFilesCoverHandWritten`, names `refusals.go`; see "Amendment, 2026-10-25" below.*
 
 #### `Kind()`, in `helpers.go`
 
@@ -251,6 +252,19 @@ The owner: "take recommendations and proceed".
 | 2. `Kind()` for an `Unknown` with `""` | As recommended: `"unknown"`. |
 | 3. Where `ClientRefusals` lives | As recommended: a new `refusals.go`. |
 | 4. The release | As recommended: `v1.21.0`, once committed and CI has passed; the tag and the push on the owner's ask in that turn. |
+
+#### Amendment, 2026-10-25
+
+This record said the generator is unchanged, and the PLAN kept `cmd/generate` out of scope. That missed
+`cmd/generate/engine_test.go`'s `TestRuntimeFilesCoverHandWritten`. It requires every hand-written `.go` file of the root to be
+either one of `enginetest.RuntimeFiles`, which are compiled into each synthetic case, or excluded by name, as `helpers.go` is.
+`refusals.go` uses ACP types, so it cannot be a runtime file. With it added, the test failed on every host: "hand-written files of the
+root are [connection.go doc.go errors.go extensions.go helpers.go refusals.go], want [connection.go doc.go errors.go extensions.go
+helpers.go]".
+
+The owner chose, out of two resolutions, "option 1": the test excludes `refusals.go` beside `helpers.go`, and its comment says so.
+The other resolution, putting `ClientRefusals` in `helpers.go`, would have reversed question 3. The generator's code, its output and
+`HandWrittenHelpers` are still unchanged; only that test's list of exclusions is.
 
 ### Consequences
 

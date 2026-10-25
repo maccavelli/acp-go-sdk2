@@ -103,7 +103,11 @@ If you're building an [Agent](https://agentclientprotocol.com/protocol/overview#
 If you're building a [Client](https://agentclientprotocol.com/protocol/overview#client):
 
 - Implement the `acp.Client` interface. It includes the file-system and terminal
-  methods, such as `ReadTextFile` and `CreateTerminal`.
+  methods, such as `ReadTextFile` and `CreateTerminal`. A client that offers
+  none of the file-system, terminal and elicitation methods embeds
+  `acp.ClientRefusals`, which answers each with method-not-found, and
+  implements only `SessionUpdate` and `RequestPermission`; a client that
+  implements some of them implements all of them instead.
 - Launch or connect to your Agent process (stdio), then create a connection with
   `acp.NewClientSideConnection(client, stdin, stdout)`.
 - Call `Initialize`, `NewSession`, and `Prompt` to run a turn and stream updates.

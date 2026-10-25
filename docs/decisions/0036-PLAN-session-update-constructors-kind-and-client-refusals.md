@@ -39,7 +39,9 @@ changes: question 1 changes step 2, question 2 step 3, question 3 step 4, and qu
   [0035-REPORT-consumer-acp-code-for-the-sdk.md](../reports/0035-REPORT-consumer-acp-code-for-the-sdk.md), already aligned with
   issue #11; and, at step 6, `docs/reports/0036-REPORT-release-notes-v1-21-0.md`.
 * **Not in scope:**
-  * any generated file, `cmd/generate`, `HandWrittenHelpers`, or the schema;
+  * any generated file, `cmd/generate`, `HandWrittenHelpers`, or the schema; *amended 2026-10-25, see step 4's deviation:
+    `cmd/generate/engine_test.go`'s `TestRuntimeFilesCoverHandWritten` excludes `refusals.go`, and nothing else under
+    `cmd/generate` changes;*
   * the six existing `SessionUpdate` helpers, unless question 1 is answered otherwise;
   * the unstable variants' constructors;
   * `Kind()` on other unions;
@@ -183,6 +185,9 @@ Docs:
 * `README.md`'s client section: one sentence naming `ClientRefusals`, and when not to embed it;
 * `docs/architecture.md`'s "Hand-written" list names `refusals.go`, and says that `helpers.go` holds `Kind()`.
 
+*Added 2026-10-25, see the step's deviation:* `cmd/generate/engine_test.go`'s `TestRuntimeFilesCoverHandWritten` excludes
+`refusals.go` beside `helpers.go`, and its comment says so.
+
 Planted breaks:
 
 | Break | The check that must fail |
@@ -231,7 +236,8 @@ Acceptance, issue #11's list as this PLAN meets it:
   method's code is `-32601` and its data names the method; `CompleteElicitation` returns nil: the three `ClientRefusals` tests.
 * `apidiff` against `v1.20.0` lists only additions: `make api`.
 * The generator does not emit `SessionUpdate` constructors, and `HandWrittenHelpers` is unchanged: `git diff --stat` touches no file
-  under `cmd/generate` and no `*_gen.go`; `TestGeneratedFilesUpToDate` passes.
+  under `cmd/generate` and no `*_gen.go`; `TestGeneratedFilesUpToDate` passes. *Amended 2026-10-25: under `cmd/generate`, only
+  `engine_test.go`, step 4's deviation.*
 * The root's `go test ./...` and `-race`, the `cmd/generate` tests, and `make pre-add-check` pass on every changed `.go` file.
 * No identifier is committed: `tools/idscan.py`.
 
@@ -369,3 +375,62 @@ final code. Five of five failed as required:
 * `tools/idscan.py --paths` over the four files: "4 file(s), 17 pattern(s), 0 match(es)".
 
 Step 2 was committed by the owner as `4189d9a`. Step 3's files are staged for the owner.
+
+### Step 4, `ClientRefusals`, 2026-10-25
+
+What changed:
+
+* **`refusals.go`, new:** `ClientRefusals` and its nine value-receiver methods, in the `Client` interface's order. Each request
+  method returns its zero response and `NewMethodNotFound` with its own `ClientMethod*` constant; `CompleteElicitation` returns nil.
+  The doc comment says the three things the MADR requires.
+* **`refusals_test.go`, new:** `TestClientRefusalsAnswers`, `TestClientRefusalsMethodSet`, with `var _ Client = refusingClient{}`,
+  and `TestClientRefusalsOverTheWire`, whose agent and client are paired over `io.Pipe` and closed in cleanup.
+* **`example_api_test.go`:** `ExampleClientRefusals`, which prints the answer to a file read,
+  `{"code":-32601,"message":"Method not found","data":{"method":"fs/read_text_file"}}`.
+* **`README.md`:** the client section's first item names `acp.ClientRefusals`, and says that a client implementing some of its
+  methods implements all of them instead.
+* **`docs/architecture.md`:** the "Hand-written" list names `refusals.go`, and `SessionUpdate.Kind` in `helpers.go`.
+* **`cmd/generate/engine_test.go`:** the deviation below.
+
+**Deviation, 2026-10-25.** The first `tools/gates.py --all` failed three gates, `floor`, `windows` and `linux`, each on
+`cmd/generate`'s `TestRuntimeFilesCoverHandWritten`: "engine_test.go:163: hand-written files of the root are [connection.go doc.go
+errors.go extensions.go helpers.go refusals.go], want [connection.go doc.go errors.go extensions.go helpers.go]: add a new file to
+enginetest.RuntimeFiles if it uses no ACP type, or exclude it here as helpers.go is". The failure was not there before: `refusals.go`
+caused it. `make pre-add-check` does not run the `cmd/generate` tests, so it passed. This PLAN kept `cmd/generate` out of scope.
+Two resolutions were put to the owner: exclude `refusals.go` in that test, or move `ClientRefusals` into `helpers.go`, which would
+reverse question 3. The owner chose "option 1". The test's exclusions now name `refusals.go` beside `helpers.go`, and its comment says
+so. The scope and the acceptance item on `cmd/generate` are annotated, and the MADR has "Amendment, 2026-10-25".
+
+**Tests,** `go test -count=1 -race -v`, exit 0: the three `ClientRefusals` tests, `ExampleClientRefusals`,
+`TestExportedDeclarationsDocumented` and `TestExportedTypeDocsStartWithName`. In `cmd/generate`, `TestRuntimeFilesCoverHandWritten`
+passes.
+
+**Planted breaks,** five of five failed as required. The first four ran through `tools/plants.py`, each in its own copy of the tree,
+the list in the session's scratch directory:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `WriteTextFile` answers with `ClientMethodFsReadTextFile` | "refusals_test.go:58: WriteTextFile: {\"code\":-32601,\"message\":\"Method not found\",\"data\":{\"method\":\"fs/read_text_file\"}}, want -32601 naming fs/write_text_file" |
+| `CompleteElicitation` returns `NewMethodNotFound(…)` | "refusals_test.go:62: CompleteElicitation: {\"code\":-32601,\"message\":\"Method not found\",\"data\":{\"method\":\"elicitation/complete\"}}, want nil" |
+| a `SessionUpdate` method added to `ClientRefusals` | "refusals_test.go:79: methods = [CompleteElicitation CreateElicitation CreateTerminal KillTerminal ReadTextFile ReleaseTerminal SessionUpdate TerminalOutput WaitForTerminalExit WriteTextFile], want [...]" |
+| `ReadTextFile` returns `ReadTextFileResponse{Content: "x"}, nil` | "refusals_test.go:105: ReadTextFile: <nil>, want a -32601 *RequestError" |
+| `TestRuntimeFilesCoverHandWritten`'s exclusion of `refusals.go` removed | "engine_test.go:163: hand-written files of the root are [connection.go doc.go errors.go extensions.go helpers.go refusals.go], want [connection.go doc.go errors.go extensions.go helpers.go]: ..." |
+
+For the third break, the first run's expected text was "ClientRefusals implements Client by itself". The test failed, at the method
+set, but that text was not printed: with `SessionUpdate` alone, `ClientRefusals` still lacks `RequestPermission`, so it is no
+`Client`. The expected text was corrected to the method list, and the break failed as required. `tools/plants.py` runs `go test`
+from the copy's root, which cannot reach the nested `cmd/generate` module. So the fifth break ran from a script in the session's
+scratch directory, which copies the tree, makes the same edit, and runs the test in `cmd/generate`.
+
+**Gates,** `tools/gates.py --all`, with `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set, after the deviation's fix, every gate exit 0:
+"all gates passed", 18 of 18.
+
+* `precheck`: "178 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)".
+* `newfiles`: `refusals.go` and `refusals_test.go`, "2 file(s) clean".
+* `api`: "against v1.20.0: 0 incompatible, 11 compatible": `ClientRefusals`, `SessionUpdate.Kind` and step 2's nine, each "added".
+  `apidiff` lists a new type once, without its methods.
+* `idscan`: "13 file(s), 17 pattern(s), 0 match(es)".
+* `floor`: passed at go1.26.10, `cmd/generate` included.
+* `nojsonv2`, `windows` and `linux`: passed.
+
+Step 3 was committed by the owner as `e0f4854`. Step 4's files are staged for the owner.

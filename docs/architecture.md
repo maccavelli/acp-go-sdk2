@@ -13,8 +13,10 @@ starts an agent as a child process and stops it (below).
 
 - Hand-written: `connection.go` (JSON-RPC over a reader and a writer),
   `errors.go`, `extensions.go` (`_`-prefixed methods), `helpers.go` (the
-  constructors of the three unions the protocol table names, `Ptr`, and
-  `Roots`), and `doc.go`. None of them holds protocol state.
+  constructors of the three unions the protocol table names,
+  `SessionUpdate.Kind`, `Ptr`, and `Roots`), `refusals.go` (`ClientRefusals`,
+  which answers method-not-found for the `Client` methods a client may leave
+  unadvertised), and `doc.go`. None of them holds protocol state.
 - Generated from `schema/`: `constants_gen.go`, `types_gen.go`, `agent_gen.go`
   and `client_gen.go` (the two connection types, `AgentSideConnection` and
   `ClientSideConnection`, with the state the protocol table's rules need:
