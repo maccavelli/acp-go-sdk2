@@ -23,6 +23,7 @@ check-tools:
 	python3 -m py_compile tools/*.py scripts/*.py
 	python3 -B -m unittest discover -s tools -p 'test_*.py'
 	python3 -B -m unittest discover -s scripts -p 'test_*.py'
+	python3 -B scripts/check_ci_filters.py
 
 markdownlint:
 	npx --yes markdownlint-cli2@0.23.2

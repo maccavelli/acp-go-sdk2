@@ -158,3 +158,57 @@ the check's own output only, and was dropped for the fourth.
 
 Not checked locally: what the changed CI step does on GitHub, until a push.
 
+Phase 1 was committed by the owner as `c1b86d1`.
+
+### Phase 2: workflow routing and parity, 2026-10-25
+
+What changed:
+
+* **`.github/workflows/ci.yml`:** `push` and `pull_request` each gain the same `paths-ignore`, the docs-safe path set of step 1:
+  `docs/**`, `AGENTS.md`, `RELEASING.md`, `tools/README.md`, `.claude/rules/**`, `.codex/rules/**`, `.grok/rules/**`,
+  `.kilo/agent/**` and `.opencode/rules.md`. `branches`, `tags: ['v*']`, the `schedule`, the concurrency, the permissions and the
+  jobs are unchanged. A comment says that GitHub evaluates no path filter for a tag push.
+* **`.github/workflows/docs.yml`, new:** `push` to `main` and `pull_request`, each with `paths` equal to CI's ignored paths and
+  `.github/workflows/docs.yml`. One job, `docs`, on `ubuntu-24.04`, `permissions: contents: read`, checks out with CI's
+  `actions/checkout` pin and runs `make markdownlint`, `make check-records` and `make disclosure-check`, the targets CI's
+  documentation step runs. A change to `docs.yml` itself is not in CI's ignored paths, so it runs full CI as well, with actionlint.
+* **`scripts/check_ci_filters.py`, new:** the contract check. It reads both workflows as YAML and checks six parts: `filters`,
+  `docs`, `tracked`, `readers`, `gates` and `pins`, as its docstring sets out. `readers` finds the Markdown that Go code reads by the
+  string literals of tracked Go files that name a tracked `.md` file, which today finds `README.md` in `docs_test.go`.
+* **`scripts/test_check_ci_filters.py`, new:** sixteen tests: the YAML subset and what it refuses, the globs, a clean scratch
+  repository, one break per part, the "missing" message, and the repository itself.
+* **`Makefile`:** `check-tools` also runs `python3 -B scripts/check_ci_filters.py`, so CI's documentation step runs it.
+
+The step requires the check to read "actual YAML structure". The standard library has no YAML reader, and `AGENTS.md` admits no
+dependency that a MADR does not name; this MADR names none. So the check has a reader of its own, for the subset the workflows use,
+which refuses anchors, aliases, tags, flow mappings, document markers, duplicate keys and tabs in indentation rather than guessing.
+PyYAML 6.0.3, installed on this host, was used once from the session's scratch directory, as an oracle and not a dependency: on
+both workflows, the reader's value equalled `yaml.safe_load`'s, with YAML 1.1's `on: true` key read as `on`.
+
+The first run of the new tests failed two of fifteen. The `docs` message listed paths that were not missing: in
+`set(ignore) | {DOCS_WORKFLOW} - set(dpush)`, Python binds `-` before `|`. The condition was right; the message is fixed, and a test
+pins it. And the tests' helper required every problem of a break to be in one part, where a missing Docs path rightly fails both
+`docs` and `tracked`; it now requires the named part among them.
+
+**Checks,** each exit 0:
+
+* `python3 -B scripts/check_ci_filters.py`: "check-ci-filters: 0 problem(s)";
+* `make check-tools`: the tools' "Ran 53 tests", "OK"; the scripts' "Ran 23 tests", "OK"; and the contract, "0 problem(s)";
+* `actionlint@v1.7.12` over both workflows;
+* `check_disclosure.scan` over the three new files: no finding.
+
+**Planted breaks,** on the real workflows, each in its own scratch copy of the tree, from a script in the session's scratch
+directory; four of four failed `make check-tools` as required, with exit 2:
+
+| Break | What failed |
+| :--- | :--- |
+| CI's `pull_request` list loses `RELEASING.md` | "filters: CI's push and pull_request paths-ignore differ, or are empty" |
+| the root `README.md` added to CI's ignored paths and to Docs' paths | "readers: CI ignores README.md, which Go code reads" |
+| Docs no longer runs `make disclosure-check` | "gates: Docs does not run make disclosure-check" |
+| Docs checks out with another `actions/checkout` pin | "pins: actions/checkout differs, CI [...], Docs [...]" |
+
+Each was found by `RepositoryTest`, the scripts' test of this repository, before the target's own run of the check.
+
+Not checked locally: that GitHub starts Docs alone for a docs-only push, both for a mixed one, and full CI for a tag. Phase 3, step 3
+observes them after an authorized push.
+

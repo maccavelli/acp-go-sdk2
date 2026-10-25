@@ -1,0 +1,53 @@
+name: Docs
+# The documentation gates, for a change to the docs-safe paths: the paths CI
+# ignores, and this file. They are the Makefile's targets that CI's
+# documentation step runs, with the same pins; scripts/check_ci_filters.py
+# checks both (0037-PLAN-align-docs-ci-and-disclosure-gates.md).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'AGENTS.md'
+      - 'RELEASING.md'
+      - 'tools/README.md'
+      - '.claude/rules/**'
+      - '.codex/rules/**'
+      - '.grok/rules/**'
+      - '.kilo/agent/**'
+      - '.opencode/rules.md'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'AGENTS.md'
+      - 'RELEASING.md'
+      - 'tools/README.md'
+      - '.claude/rules/**'
+      - '.codex/rules/**'
+      - '.grok/rules/**'
+      - '.kilo/agent/**'
+      - '.opencode/rules.md'
+      - '.github/workflows/docs.yml'
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: markdownlint, records, disclosure
+        run: |
+          set -euo pipefail
+          make markdownlint
+          make check-records
+          make disclosure-check

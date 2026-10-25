@@ -1,9 +1,34 @@
 name: CI
+# A change to the docs-safe paths alone runs the Docs workflow instead; any
+# other file in it runs this one too. The two lists are equal, and the same as
+# docs.yml's paths, as scripts/check_ci_filters.py checks. GitHub evaluates no
+# path filter for a tag push, so every v* tag runs this workflow
+# (0037-PLAN-align-docs-ci-and-disclosure-gates.md).
 on:
   push:
     branches: [main]
     tags: ['v*']
+    paths-ignore:
+      - 'docs/**'
+      - 'AGENTS.md'
+      - 'RELEASING.md'
+      - 'tools/README.md'
+      - '.claude/rules/**'
+      - '.codex/rules/**'
+      - '.grok/rules/**'
+      - '.kilo/agent/**'
+      - '.opencode/rules.md'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'AGENTS.md'
+      - 'RELEASING.md'
+      - 'tools/README.md'
+      - '.claude/rules/**'
+      - '.codex/rules/**'
+      - '.grok/rules/**'
+      - '.kilo/agent/**'
+      - '.opencode/rules.md'
   # Weekly, so a new advisory or a toolchain change shows without a push.
   schedule:
     - cron: '17 6 * * 1'
