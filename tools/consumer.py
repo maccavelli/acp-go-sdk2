@@ -3,7 +3,12 @@ a fresh module at go.mod's `go` version, built with that toolchain forced,
 `go get`s VERSION from the proxy with the checksum database on, and builds and
 runs a program that starts `sh -c "cat >/dev/null"` through agentproc with an
 OutputTap, closes it, and prints DroppedTapBytes; it also builds the program
-for Windows. Its go.mod must keep the `go` line and gain no toolchain line.
+for Windows. Its client embeds ClientRefusals and implements only
+SessionUpdate and RequestPermission, and it prints UpdateNotice's Kind and the
+answer to a file read
+(0036-PLAN-session-update-constructors-kind-and-client-refusals.md, step 6), so
+VERSION is v1.21.0 or later. Its go.mod must keep the `go` line and gain no
+toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
 Usage: consumer.py VERSION
@@ -34,9 +39,13 @@ import (
 	"MODULE/agentproc"
 )
 
-type client struct{ acp.Client }
+type client struct{ acp.ClientRefusals }
 
 func (client) SessionUpdate(context.Context, acp.SessionNotification) error { return nil }
+
+func (client) RequestPermission(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
+}
 
 func main() {
 	cmd := exec.Command("sh", "-c", "cat >/dev/null")
@@ -49,9 +58,13 @@ func main() {
 	out, in := p.DroppedTapBytes()
 	fmt.Println("dropped", out, in)
 	fmt.Println("protocol version", acp.ProtocolVersionNumber)
+	fmt.Println("kind", acp.UpdateNotice(acp.NoticeSeverityInfo, "t").Kind())
+	_, err = client{}.ReadTextFile(context.Background(), acp.ReadTextFileRequest{})
+	fmt.Println("refused", err)
 }
 '''
-WANT_RUN = "Close: <nil>\ndropped 0 0\nprotocol version 1"
+WANT_RUN = ("Close: <nil>\ndropped 0 0\nprotocol version 1\nkind notice\n"
+            'refused {"code":-32601,"message":"Method not found","data":{"method":"fs/read_text_file"}}')
 
 
 def go_mod_ok(text: str, go: str, mod: str, version: str) -> bool:
@@ -84,7 +97,9 @@ def main(argv: list[str]) -> int:
             outs[name] = (p.stdout + p.stderr).strip()
             print(f"$ {' '.join(cmd)} {extra or ''}: exit {p.returncode}\n    " + outs[name].replace("\n", "\n    ")[:700], flush=True)
             ok &= p.returncode == 0
-        ok &= f"go version go{go} " in outs["version"] and outs["run"] == WANT_RUN
+            if not ok:
+                break
+        ok &= f"go version go{go} " in outs["version"] and outs.get("run") == WANT_RUN
         text = (d / "go.mod").read_text(encoding="utf-8")
         print("consumer go.mod:\n    " + text.strip().replace("\n", "\n    "))
         ok &= go_mod_ok(text, go, mod, args.version)

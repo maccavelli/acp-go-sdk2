@@ -36,7 +36,7 @@ cache directory, outside the tree.
 | `plants.py SPEC.json` | planted breaks, each in its own copy of the tree |
 | `release_body.py VERSION REV` | a release's body, from its release-notes report |
 | `publication.py VERSION COMMIT BODY` | ten checks of a release's publication |
-| `consumer.py VERSION` | a module at the floor that uses the release |
+| `consumer.py VERSION` | a module at the floor that uses the release: `agentproc`'s taps, `ClientRefusals` and `SessionUpdate.Kind`, so `v1.21.0` or later |
 | `watch_ci.py REV [--branch B]` | every CI run of a commit, or of one branch, waited for, watched, and read once every job has settled (`--settle`, 180 s, `--every`, 10 s) |
 | `ci_jobs.py tally \| failure RUN \| env RUN VAR` | CI's job history: every job's first attempt counted by job and conclusion; each failed job's step, seed and crash; a variable's value in each step's environment, checked with `--expect` and `--others`. Each log is read by its job id, so it is that job's own attempt |
 | `find.py lines \| files` | lines or files, without `grep` |
