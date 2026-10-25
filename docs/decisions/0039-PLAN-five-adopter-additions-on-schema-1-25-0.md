@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-25
 associated-madr: "0039-MADR-five-adopter-additions-on-schema-1-25-0.md"
 ---
@@ -36,8 +36,9 @@ questions 3 and 5 phase 2, question 4 this PLAN's shape, question 6 phase 6, and
 **Answered 2026-10-25.** The owner took the recommended answer to each of the MADR's questions 1 to 6 and to P1, as the MADR's
 "Decided with the owner, 2026-10-25" records, so this PLAN needs no amendment for them.
 
-**Question 7, open.** The MADR's second assessment added question 7, when to build package `unstable`'s generation. Phase 2's
-2f is written for its recommended answer, and says what changes for the other.
+**Question 7, answered 2026-10-25.** The MADR's second assessment added question 7, when to build package `unstable`'s
+generation. The owner chose "build the emissions now", not the recommendation; 2f was amended for that answer before it starts,
+as its first text required.
 
 ## Prerequisites
 
@@ -50,12 +51,14 @@ questions 3 and 5 phase 2, question 4 this PLAN's shape, question 6 phase 6, and
 
 * **Generator, phase 2** (*revised 2026-10-25*): `cmd/generate/internal/load` (provenance for properties and union entries; the
   merge reading the manifest), `cmd/generate/internal/model` (the `Unstable` flag on fields and variants; the manifest as a
-  deprecation source), `cmd/generate/internal/emit` (the notice text), `cmd/generate/main.go` (`-write-unstable-manifest`, the
-  report of left-out definitions), engine cases under `cmd/generate/testdata/engine/`, and the regenerated `*_gen.go` files.
-  `internal/output` and a second output package only if question 7 is answered "now".
+  deprecation source), `cmd/generate/internal/emit` (the notice text; `File.Dir`; the `unstable` builders),
+  `cmd/generate/main.go` (`-write-unstable-manifest`; the root import path), `cmd/generate/internal/output` (the
+  serving importer; two directories; removing a stale generated file), `cmd/generate/internal/enginetest` (the second listing),
+  engine cases under `cmd/generate/testdata/engine/`, and the regenerated `*_gen.go` files (*question 7 answered "now"*).
 * **New committed data, phase 2:** `schema/unstable-v1.json`, the manifest, holding the frozen fragments; no second file.
 * **Example, phase 2:** `example/agent/main.go`, which stops implementing the deprecated unstable methods.
-* **New packages:** `unstable/` (phase 2, `doc.go` only under question 7's recommended answer), `acptest/` (phase 3).
+* **New packages:** `unstable/` (phase 2: its hand-written `doc.go`, and its generated files whenever a schema has an unstable
+  definition the manifest does not hold, none at `1.25.0`), `acptest/` (phase 3).
 * **Root, hand-written:** `helpers.go` (phase 4); `compaction.go`, new (phase 5), with `cmd/generate/engine_test.go`'s
   `TestRuntimeFilesCoverHandWritten` naming it beside `helpers.go` and `refusals.go`; `extensions.go` and `connection.go` (phase 6).
 * **Scripts:** `scripts/check_api.py` (phase 2), with tests in `scripts/`.
@@ -169,23 +172,54 @@ the unstable schema changes (G10), and the order of a rebuilt union. It is rewri
 * `acptest` joins `PACKAGES` in phase 3, when it exists, since a package missing from the working tree is a tool error
   (`check_api.py:113`).
 
-**2f. Package `unstable`, under question 7's answer.**
+**2f. Package `unstable` and its emission, as question 7 was answered: "build the emissions now".**
 
-* *Recommended answer, "the policy now, the emission later":* `unstable/doc.go` alone, stating the policy and `golang.org/x/exp`'s
-  stance; `unstable` joins `REPORTED`. The merge leaves out a new unstable-only definition or method not in the manifest, and
-  `make version` prints each one it leaves out, so a schema bump shows what it would add. Engine case `accept-unstable-left-out`:
-  a new standalone unstable definition and a new unstable method appear in no API listing, the method is answered `-32601` as
-  any unknown method is, and the generator's report names both.
-* *If the owner chooses to build the emission now:* this sub-step amends this PLAN before it starts, with the work G4 names:
-  `emit.File` gains a package; `Render` returns each package's files; `output.Check` type-checks `acp` and then `unstable` against
-  the `acp` it has just checked, through an importer that serves that package rather than the source on disk; `output.Write` and
-  `main.go` write two directories; `TestGeneratedFilesUpToDate` and `TestCheckAcceptsRepository` cover both; and the engine
-  harness gains a second output and a `want.api.unstable` section.
+*Amended 2026-10-25, before the sub-step starts, as the first text required for this answer.* The work is the generator's
+second output package (the MADR's G4), and two facts the first text did not name: in the behaviour harness the root package's
+import path is `enginetest/<case>` (`cmd/generate/behaviour_test.go:19`, `:130`–`:153`), not the module path, so the emitted
+import of `acp` cannot be fixed; and `output.Check` and `enginetest.LoadPackage` resolve imports from source on disk
+(`internal/output/check.go:109`–`:131`, `internal/enginetest/api.go:72`–`:97`), which cannot see the root package the same run
+has just rendered.
+
+* **What goes into `unstable`,** under question 5's answer: a new unstable-only definition not in the manifest, when standalone
+  (a type, enum, request, response or notification), with its constructors; a new unstable method's request and response or
+  notification types and a method-name constant; and for a new unstable variant of a stable union, a function
+  `Decode<Union><Variant>(raw json.RawMessage) (<Variant type>, error)` that decodes the union's `Unknown` payload. Nothing in
+  `unstable` adds to an `acp` type; a new field on a stable type is emitted nowhere.
+* **`emit`:** `File` gains `Dir`, `""` for the root and `"unstable"`; `Render` takes the root's import path and returns both
+  packages' files; the `unstable` builders use the existing `goFile.qual` to refer to `acp`, under that path.
+* **`main.go`:** the root's import path is the module path of the `go.mod` that holds `-out`, joined with `-out`'s directory
+  relative to it; with no `go.mod`, as in a non-behaviour engine case, it is the package name, `acp`. The `unstable` files go to
+  `<out>/unstable`.
+* **`output.Check`:** checks `acp` first, as now, under its import path, then `unstable` through an importer that returns the
+  just-checked `acp` package for that path and defers every other path to the shared source importer.
+* **`output.Write`:** writes each package's directory, staged as now. A package directory the run renders nothing into keeps no
+  generated file: a `*_gen.go` left there from an earlier run is removed, in the same stage-then-rename order, so a schema that
+  stops having new unstable definitions leaves `unstable/` with its `doc.go` alone.
+* **`unstable/doc.go`,** hand-written: the package's purpose, its compatibility stance (`golang.org/x/exp`'s: "not subject to the
+  Go 1 compatibility promise"), and how a name moves to `acp` when it stabilizes. At schema `1.25.0` it is the only file:
+  every unstable definition is in the manifest.
+* **Tests in `cmd/generate`:** `TestGeneratedFilesUpToDate` and `TestCheckAcceptsRepository` cover both directories; a `main.go`
+  test for the import-path rule, with a `go.mod`, nested under one, and with none; an `output` test that a stale `*_gen.go` in an
+  empty package directory is removed and a hand-written file is not.
+* **Engine harness:** a case may have `want.api.unstable` and `want.deprecated.unstable` sections (a section name may not hold
+  `/`, `enginetest/archive.go:60`–`:64`); `enginetest.LoadPackage` gains the same serving importer, to list `<out>/unstable`
+  against the case's own root; a behaviour case's `unstable` is `enginetest/<case>/unstable`.
+* **Engine cases:**
+  * `accept-unstable-standalone`: a new standalone unstable definition is in `want.api.unstable` and not in `want.api`;
+  * `accept-unstable-variant-decode`: a new unstable variant of a stable union is in no API listing as a field; its `Decode…` is
+    in `unstable`; a `behaviour_test.go` decodes a payload into the union's `Unknown` and then into the variant;
+  * `accept-unstable-method-types`: a new unstable method's types and constant are in `unstable`, and a `behaviour_test.go` shows
+    a received one answered `-32601` by `acp`'s dispatch;
+  * `accept-unstable-field-nowhere`: a new unstable property of a stable definition is in neither listing;
+  * `accept-unstable-empty`: with every unstable definition in the manifest, no file is written to `unstable/`.
+* **`scripts/check_api.py`:** `unstable` joins `REPORTED`, so `make api` lists it as a new package, and its later incompatible
+  changes are listed, not gated.
 
 Docs: `README.md` gains "Stability": the stable `acp` API, the deprecated unstable names, package `unstable`, and the policy;
-`docs/architecture.md` describes the provenance, the manifest, the merge restriction and the deprecation source; `RELEASING.md`'s
-schema-bump steps say the manifest is never regenerated by a bump, and that the generator's report of left-out definitions is
-read and recorded.
+`docs/architecture.md` describes the provenance, the manifest, the merge restriction, the deprecation source and the second
+package; `RELEASING.md`'s schema-bump steps say the manifest is never regenerated by a bump, and that `make api`'s report for
+`unstable`, which does not gate, is read and recorded in the bump's record.
 
 Planted breaks, each in its own copy of the tree, through a scratch script for the `cmd/generate` module:
 
@@ -201,7 +235,12 @@ Planted breaks, each in its own copy of the tree, through a scratch script for t
 | 2d: `example/agent` keeps `acp.AgentExperimental` | `make lint`, SA1019 |
 | 2e: a reported package's incompatible change fails | `test_check_api.py` |
 | 2e: a gated package's incompatible change passes | `test_check_api.py` |
-| 2f: a left-out definition emitted into `acp` | `accept-unstable-left-out` |
+| 2f: a new standalone unstable definition emitted into `acp` | `accept-unstable-standalone` |
+| 2f: a new unstable variant emitted as a field of the stable union | `accept-unstable-variant-decode` |
+| 2f: `unstable` imports `acp` under a fixed path | the behaviour cases, which build it as `enginetest/<case>/unstable` |
+| 2f: `output.Check` type-checks `unstable` against the source on disk | `accept-unstable-standalone`, whose root exists only in memory |
+| 2f: a stale `*_gen.go` left in an empty `unstable/` | the `output` test, and `accept-unstable-empty` |
+| 2f: `unstable` added to `PACKAGES`, gated | `test_check_api.py` |
 
 ### 3. Package `acptest` (MADR item 5)
 
@@ -385,4 +424,15 @@ its row are `complete`.
 
 ## Execution record
 
-Not started: this PLAN is `proposed`.
+### Phase 1, records, 2026-10-25
+
+* **The pair** was written, assessed against its sources (the MADR's first assessment), and assessed again for item 1 against the
+  generator's code (the second, G1 to G10, which rewrote phase 2). The owner committed the MADR and PLAN as `a91343a` and the
+  second assessment as `14419b0`.
+* **The owner's answers:** questions 1 to 6 and P1 as recommended; question 7, "build the emissions now", not the
+  recommendation. The MADR's "Decided with the owner" table holds all seven, and 2f was amended for question 7's answer before
+  it starts. The owner approved execution: "committed, proceed". This PLAN is `in-progress`.
+* **The prerequisite** holds: [0038-PLAN-consumer-helpers-kind-and-agent-refusals.md](0038-PLAN-consumer-helpers-kind-and-agent-refusals.md)
+  is `complete`, with `v1.22.0` published.
+* **Checks** on the records, each exit 0: `make check-records`, `make markdownlint`, `make disclosure-check`, and
+  `tools/idscan.py --paths` over the three files.

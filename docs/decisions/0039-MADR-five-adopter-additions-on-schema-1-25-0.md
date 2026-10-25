@@ -476,6 +476,7 @@ The owner chose, out of three options for each:
 | 4. The PLAN | As recommended: one PLAN, as written | five PLANs; one PLAN with `acptest` first and the boundary last |
 | 5. New unstable fields, variants and methods | As recommended: untyped until stable, with `Decode…` in `unstable` for a new variant | a registry in `acp`; the `Unstable` prefix rule only |
 | 6. Notification or request in the mux | As recommended: `IsNotification(ctx)` in `connection.go` | an `ExtensionNotificationHandler` interface; no distinction |
+| 7. When to build package `unstable`'s generation (added by the second assessment) | Not the recommendation: the owner chose "build the emissions now". The generator emits into `unstable` in this record, proved by synthetic engine cases until a schema bump brings a real definition | the policy now and the emission later; no package `unstable` |
 
 The PLAN's own question, P1, the releases: as recommended, two minors, one after the boundary and `acptest`, one after the three
 runtimes. Not chosen: one minor at the end; a minor per phase.
@@ -692,5 +693,5 @@ These stay as 0035 numbered them. They are the natural record after this one lan
 * Changing `PromptOverlapRefuse`'s code (0021)
 * Adding methods to `Agent` or `Client` (that is an incompatible `apidiff` change for every embedder)
 
-The owner answered questions 1–6 on 2026-10-25 ("Decided with the owner"). Question 7, from the second assessment, is open.
-Implementation waits on its answer and an approved PLAN.
+The owner answered questions 1–6 on 2026-10-25 ("Decided with the owner"), and question 7, from the second assessment, the same
+day: "build the emissions now". The PLAN is approved: "committed, proceed".
