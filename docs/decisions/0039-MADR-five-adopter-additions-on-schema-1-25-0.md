@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-25
 decision-makers: Repository owner
 ---
@@ -35,26 +35,34 @@ RFDs at agentclientprotocol.com, the TypeScript and Rust SDK release notes, and 
 ### What the 1.25.0 spec is
 
 Stable `schema.json` has 178 `$defs`. Stable `meta.json` lists protocol version 1, 13 agent methods, 11 client methods, and
-the protocol method `$/cancel_request`. Unstable `schema.unstable.json` has 277 `$defs`. `go doc -short .` lists 79 exported `Unstable*` identifiers.
+the protocol method `$/cancel_request`. Unstable `schema.unstable.json` has 277 `$defs`. `go doc -short .` declares 65 exported
+names that start with `Unstable`, on 79 lines that mention one; the "79" of
+[0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md](0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md) V1 is that
+line count.
 `AgentExperimental` and `ClientExperimental` already exist as optional interfaces (`types_gen.go:22521`, `:22691`).
 
 The two features 1.25.0 moved from Preview to Completed, and that this SDK therefore now generates as stable, are:
 
 * **Session notices** ([Session Notices RFD](https://agentclientprotocol.com/rfds/session-notices),
   [v1 prompt turn](https://agentclientprotocol.com/protocol/v1/prompt-turn.md#session-notices)). A fire-and-forget
-  `sessionUpdate: "notice"` with required `severity` and non-empty `title`. No ID, no acknowledgement, no replay. v1 Agents
-  **MUST NOT** send it unless the Client supplied `clientCapabilities.session.notices: {}`. When that capability is absent, the
-  Agent may use an ordinary agent message if the information should still reach the user. Notice support advertises a presentation
-  channel, not that any individual notice was seen. Zed, the Claude Agent adapter, and the Codex adapter already gate on the
-  capability and keep notices out of history.
+  `sessionUpdate: "notice"` with required `severity` (an open enum, initially `info`, `warning`, `error`) and a non-empty plain-text
+  `title`; `description` is optional. No ID, response or acknowledgement; notices "SHOULD NOT be included in session replay". v1
+  Agents **MUST NOT** send it unless the Client supplied `clientCapabilities.session.notices: {}`. When that capability is absent,
+  "the Agent may use an ordinary agent message instead". Notice support "advertises a presentation channel, not acknowledgement of
+  any individual notice". The RFD lists Zed, the Claude Agent adapter and the Codex adapter: both adapters gate live notices on the
+  capability and keep them out of history, and the Codex adapter "preserves legacy fallback behavior".
 * **Session compaction** ([Session Compaction RFD](https://agentclientprotocol.com/rfds/session-compaction),
   [v1 prompt turn](https://agentclientprotocol.com/protocol/v1/prompt-turn.md#session-compaction)). An ID-addressed
   `compaction_update` / `compaction_summary_chunk` pair. The first notification for an ID fixes timeline position; later updates
   patch in place. `summary`, `error`, and `_meta` are omit / `null` / value patches; chunks append; a concrete `summary` replaces
-  accumulated content; `summary: []` and `summary: null` clear it. The Agent **MUST** report a terminal status when a reported
-  compaction ends, and **MUST NOT** send either variant unless the Client supplied `clientCapabilities.session.compaction: {}`,
-  for live delivery and for `session/load` replay. Unknown statuses are preserved. The Claude Agent adapter is the published
-  agent-side implementation evidence.
+  accumulated content; `summary: []` and `summary: null` clear it. Clients initialize a first-seen ID with status `in_progress`
+  and unset optional fields, then apply the notification. The statuses are `in_progress`, `completed`, `failed` and `cancelled`;
+  Clients "preserve an unknown string". The Agent **MUST** report a terminal status when a reported compaction ends. Agents "must
+  only send" either variant to a v1 Client that supplied `clientCapabilities.session.compaction: {}` (lowercase in the RFD), and
+  "the v1 capability gate applies to replay as well as live delivery". When the capability is absent, "the Agent may describe
+  compaction through an ordinary agent message instead" (v1 prompt turn). "Replay does not implicitly reset omitted patch fields."
+  The RFD cites the Claude Agent adapter as "public v1 Agent-side implementation evidence". It was stabilized on 2026-10-06; its
+  latest revision, 2026-10-13, changes `_meta` patching for v2 only.
 
 Elicitation is already stable. Clients **SHOULD** validate submitted form values before responding, and Agents **SHOULD** validate
 them again ([v1 elicitation](https://agentclientprotocol.com/protocol/v1/elicitation.md)). The SDK's dispatch sends the handler's
@@ -75,11 +83,11 @@ fields at the root of a specified type.
 | Notice and compaction *send* gates | yes | `SessionUpdate.gates` refuses `notice` without `session.notices` and both compaction variants without `session.compaction` (`types_gen.go:23342`–`:23363`) |
 | Method-level `Negotiation.Allows` | yes | `types_gen.go:23016`; `session/update` is always allowed, so this does not answer "may I send a notice" |
 | `ClientRefusals` / (accepted) `AgentRefusals` | yes / in 0038 | "do not implement" embeds for unadvertised methods |
-| Extension send and receive | yes, untyped | `ExtensionMethodHandler.HandleExtensionMethod(ctx, method, json.RawMessage)`; `CallExtension` / `NotifyExtension` return `json.RawMessage` (`extensions.go:27`, `:92`, `:127`) |
+| Extension send and receive | yes, untyped | `ExtensionMethodHandler.HandleExtensionMethod(ctx, method, json.RawMessage) (any, error)` (`extensions.go:27`) receives requests and notifications alike, and nothing exported tells them apart; `CallExtension` returns `json.RawMessage` and `NotifyExtension` an `error` (agent side `:92`, `:109`; client side `:127`, `:144`) |
 | `_meta` as `map[string]any` | yes, by design | [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md); 0038 adds `MetaObject` / `DecodeMeta` |
 | `agentproc` process tree, taps, death signals | yes | [0027-MADR-agent-process-helper.md](0027-MADR-agent-process-helper.md) |
 | In-memory test pair | no package | 124 `io.Pipe()` calls across 27 test files in this repository; both consumers built their own harness ([0035-REPORT-consumer-acp-code-for-the-sdk.md](../reports/0035-REPORT-consumer-acp-code-for-the-sdk.md), D1) |
-| Unstable API isolated from the default import | no | 79 `Unstable*` names in package `acp`; unstable fields such as `AgentCapabilities.Nes` merged onto stable-named types (0025) |
+| Unstable API isolated from the default import | no | 65 `Unstable*` names in package `acp`; unstable fields such as `AgentCapabilities.Nes` (`types_gen.go:98`) merged onto stable-named types (0025) |
 
 Sending `UpdateNotice` to a Client that omitted `session.notices` fails with a `*CapabilityError` and writes nothing
 (`helpers.go:228`–`:231`). The v1 guide's documented fallback — an ordinary agent message — is left to every agent author. The
@@ -91,8 +99,8 @@ rules. `Kind()` names a `notice` or `compaction_update` after it arrives; it doe
 | SDK | 1.25.0 | Unstable boundary |
 | :--- | :--- | :--- |
 | TypeScript `@agentclientprotocol/sdk` | `v1.8.0` (2026-10-09): "update to v1.25.0" | `v2.0.0` three days after 1.26.0: default imports expose only stable-feature schemas; unstable v1 requires `@agentclientprotocol/sdk/unstable` |
-| Rust `agent-client-protocol` | crate minors track schema tags; `unstable_session_compaction` Cargo feature removed when compaction stabilized | Cargo features (`unstable_nes`, `unstable_mcp_over_acp`, …); a user who never enabled a feature is not broken when it disappears |
-| This Go module | types and gates for 1.25.0; no runtime for the new contracts | no boundary. 0025 measured 115 incompatible `apidiff` changes regenerating from 1.26.0, 40 of them on identifiers with no `Unstable` prefix |
+| Rust schema crate `agent-client-protocol-schema` | one crate release per schema tag, under its own numbers: `1.11.0` with `schema-v1.25.0` (same commit), `1.12.0` with `schema-v1.26.0`; `1.11.0` dropped the `unstable_session_compaction` and `unstable_session_notices` features | Cargo features: `unstable_nes` until `1.11.0`, removed in `1.12.0` with NES; `unstable_mcp_over_acp` still present. A user who never enabled a feature is not broken when it disappears. (The SDK crate is `agent-client-protocol`, `3.5.0`.) |
+| This Go module | types and gates for 1.25.0; no runtime for the new contracts | no boundary. 0025 measured, against `v1.17.1`, 115 incompatible `apidiff` changes regenerating from 1.26.0, 40 of them on identifiers with no `Unstable` prefix |
 
 Go's import compatibility rule is stricter than Cargo features or a TypeScript entrypoint. go.dev/ref/mod: "If an old package and
 a new package have the same import path, the new package must be backwards compatible with the old package", and "a v1 version
@@ -109,8 +117,8 @@ not now. The policy is still unwritten.
 ### What 0035 already sorted, and what this record leaves
 
 [0035-REPORT-consumer-acp-code-for-the-sdk.md](../reports/0035-REPORT-consumer-acp-code-for-the-sdk.md) sorted the consumers' ACP
-code. Units 1–3 are 0036 and 0038. Units 4–6 (elicitation `Check`, FileHost / TerminalHost, `acptest`) and the unstable policy are
-still open. This record takes the two that change an adopter's ability to use 1.25.0 and to extend the protocol, plus the test
+code. Units 1–3 are 0036 and 0038. Units 4 (C3 elicitation `Check`, C6 `AllowsValue`), 5 (C4 `TerminalHost`, C5 file reads and
+writes, C7 `LineTap`) and 6 (D1 `acptest`), and the unstable policy, are still open. This record takes the two that change an adopter's ability to use 1.25.0 and to extend the protocol, plus the test
 harness 0035 called the largest remaining piece, plus the policy 0025 needs. Elicitation `Check`, `FileHost`, `TerminalHost`,
 `Negotiation.AllowsValue`, and `agentproc.LineTap` stay as the next wave, recorded under More Information.
 
@@ -177,6 +185,27 @@ and a major; Rust isolates it with Cargo features; Go's corresponding pattern is
 * `scripts/check_api.py` continues to fail on an incompatible change in package `acp`. It compares `unstable` too, and treats
   incompatible changes there as a listed, non-failing report, so a Draft feature can leave `unstable` without forcing `/v2`.
 
+**What a separate package cannot hold** (assessment, 2026-10-25). Go allows no type to gain a field, a union variant or a method
+from another package, and `acp` cannot import `unstable`, which imports it. So "new unstable definitions emit only into
+`unstable`" fits a new standalone definition: a type, an enum, a request or response struct. It does not fit three shapes the
+unstable schema has used:
+
+* a new unstable **field on a stable type**, as NES added `AgentCapabilities.Nes`: a stable struct drops a key it does not declare
+  on decode, unless the generator keeps extra keys for it;
+* a new unstable **variant of a stable union**, as `subagent_update` is of `SessionUpdate`: it would decode into `Unknown`;
+* a new unstable **method**, as the `AgentExperimental` methods are: the generated dispatch in `acp` cannot call a handler declared
+  in `unstable`, so a received one is answered `-32601`.
+
+Question 5 decides how those reach an adopter.
+
+Two further constraints:
+
+* The generator refuses a deprecation note on a node the schema does not mark (`docs/architecture.md`, the paragraph on
+  `deprecated`). The `Deprecated:` paragraphs on existing unstable names therefore need a new deprecation source in the generator,
+  not a protocol-table note.
+* Where no `unstable` counterpart exists, as for `AgentExperimental` until question 5's mechanism does, the notice names this
+  record and says the name stays under `v1`; it names no replacement.
+
 **Adopter benefit.** Default importers stay on the stable 1.25.0 contract as the schema's unstable set moves. This module can
 absorb 1.26.0's NES removal and system-prompt addition later without a major, by stubbing the removed root names and placing the
 new Draft types in `unstable`.
@@ -185,18 +214,24 @@ new Draft types in `unstable`.
 
 **Problem.** The v1 guide requires Agents to choose a presentation channel. This SDK implements the refuse-if-unadvertised half.
 An agent that calls `SessionUpdate(UpdateNotice(...))` against a Client that omitted `session.notices` gets a `*CapabilityError`
-and the user sees nothing. The Claude Agent and Codex adapters already "gate live notices on the Client capability, retain
-fallback behavior, and keep notices separate from history". Compaction has the same gate and the same documented fallback: an
-ordinary agent message, which is conversation content, not an ID-addressed entity.
+and the user sees nothing. The Notices RFD records that the Claude Agent adapter "gates live notices on the Client capability" and
+keeps them separate from history, and that the Codex adapter gates them and "preserves legacy fallback behavior". Compaction has
+the same gate and a documented fallback: "the Agent may describe compaction through an ordinary agent message instead", which is
+conversation content, not an ID-addressed entity.
 
 `Negotiation.Allows` cannot express this: it switches on method names, and both features travel as `session/update` variants
 (`types_gen.go:23016`, `:23342`).
 
-**Add**, hand-written in `helpers.go` (a runtime file that may name ACP types):
+**Add**, hand-written in `helpers.go`, which may name ACP types because it is not one of the generator's runtime files
+(`connection.go`, `doc.go`, `errors.go`, `extensions.go`, which may not):
 
 * `func (a *AgentSideConnection) PresentNotice(ctx context.Context, sessionId SessionId, n Notice) error`
-* `func (a *AgentSideConnection) PresentCompaction(ctx context.Context, sessionId SessionId, u SessionCompactionUpdate) error`
-* `func (a *AgentSideConnection) PresentCompactionSummary(ctx context.Context, sessionId SessionId, chunk SessionUpdateCompactionSummaryChunk) error`
+* `func (a *AgentSideConnection) PresentCompaction(ctx context.Context, sessionId SessionId, u CompactionUpdate) error`
+* `func (a *AgentSideConnection) PresentCompactionSummary(ctx context.Context, sessionId SessionId, chunk CompactionSummaryChunk) error`
+
+Each takes the schema's definition type (`types_gen.go:9864`, `:2250`, `:2190`), not the `SessionUpdate` variant, which also carries
+a `SessionUpdate` discriminator field. The draft took the variant types for compaction and the definition type for the notice;
+the assessment made the three uniform.
 
 Behaviour, fixed by the v1 guide:
 
@@ -234,15 +269,21 @@ wrong.
 * `func (t *CompactionTimeline) Apply(u SessionUpdate) (CompactionEntity, bool)`
   * `compaction_update` for a new ID: initialize status `in_progress` and unset optional fields, then apply the notification, as
     the RFD states; return the entity and `true`
-  * later `compaction_update` for a known ID: apply patches in place (`Patch.Present` / `Patch.Null` / value; `summary: []`
-    clears); return the entity and `true`
+  * later `compaction_update` for a known ID: apply patches in place (`Patch.IsZero` leaves the field, `IsNull` clears it,
+    `Value` replaces it; `summary: []` clears); return the entity and `true`
   * `compaction_summary_chunk` for a known ID: append `content` to `Summary`; for an unknown ID, first-seen-initialize then
-    append
+    append. The RFD states the first-seen rule for "a first-seen compaction ID" without naming chunks, so this case is inferred
+    from it, not stated
   * any other variant: zero entity, `false`
   * unknown `Status` strings are stored as they arrive
 * `func (t *CompactionTimeline) Get(id CompactionId) (CompactionEntity, bool)`
 * `func (t *CompactionTimeline) Open() []CompactionId` — IDs whose status is `in_progress` or an unknown string, so a Client can
-  fail or cancel them when the turn ends, which is the defect the Claude adapter's PR #1154 closed
+  show them as unfinished when a turn ends without a terminal status. The agent-side counterpart is the defect
+  agentclientprotocol/claude-agent-acp PR #1154 fixed, "close interrupted compactions lifecycles" (merged 2026-09-22, in `0.80.0`):
+  compactions left open by cancelled or failed prompts
+
+The RFD leaves each Client to keep this state; 0035 F lists "a session-state reducer" as not recommended because no consumer had
+one as a unit. `CompactionTimeline` is narrower: one entity type whose algebra the RFD fixes, not a reducer over the session.
 
 Apply is the same function for live `session/update` and for `session/load` replay. The type holds no connection and sends
 nothing.
@@ -255,8 +296,11 @@ lives here, once.
 
 **Problem.** ACP's supported extension surface is `_` methods plus `_meta`. This SDK's API for it is one
 `HandleExtensionMethod` that takes `json.RawMessage`, and `CallExtension` that returns `json.RawMessage`. Callers switch on
-strings and decode by hand. 0035 recorded that both consumers built a mux, one of them on `encoding/json/v2`, which this
-module's floor (Go 1.26.10) and CI's `GOEXPERIMENT=nojsonv2` job do not default to. The spec **SHOULD** advertise custom
+strings and decode by hand. 0035 recorded `<cli-b>`'s mux, on `encoding/json/v2`, which this module's floor (Go 1.26.10) and
+CI's `GOEXPERIMENT=nojsonv2` job do not build. 0035 F listed "an extension-method mux" among shapes "not recommended now", because
+each consumer's policy differs. This item reverses that, for its dispatch core only: the extensibility page fixes the `_` prefix,
+the method-not-found answer to an unknown request, and that implementations "SHOULD ignore unrecognized notifications", so the
+mux is protocol-generic; each consumer's handlers stay its own. The spec **SHOULD** advertise custom
 capabilities under `_meta` on capability objects, and **SHOULD** reserve `traceparent`, `tracestate`, and `baggage` at the root
 of `_meta`. 0038's `MetaObject` / `DecodeMeta` read a namespaced object; nothing writes the reserved keys or advertises a
 namespace.
@@ -274,6 +318,10 @@ module's floor.
   logged, not answered, as notifications are today
 * Unregistered request → `NewMethodNotFound(method)`; unregistered notification → ignored, which is the spec's SHOULD
 * `func (m *ExtensionMux) Methods() []string` — registered names, for tests and for capability advertisement
+* `func IsNotification(ctx context.Context) bool`, in `connection.go` — reads the mark the connection already puts in a handler's
+  context, which nothing exported reads today. `HandleExtensionMethod` receives requests and notifications alike, so without it
+  the mux cannot tell one from the other, and so cannot ignore an unregistered notification or refuse a request sent to a `Notify`
+  name (question 6)
 * `func TraceMeta(traceparent, tracestate, baggage string) map[string]any` — the three reserved keys, omitting empty strings
 * `func AdvertiseMeta(meta map[string]any, namespace string, features map[string]any) map[string]any` — sets `meta[namespace]`
   to `features` when `namespace` is non-empty, copying `meta` first; this is the spec's capability-object `_meta` example
@@ -300,12 +348,14 @@ package surface: there is no supported way to stand up a pair, record frames, or
 * `func Connect(t testing.TB, agent acp.Agent, client acp.Client, opts ...acp.ConnectionOption) Pair` — two pipes, both side
   connections, cleanup that `Close`s and `Wait`s both, so the root leak guard stays green
 * `type Pair struct` with `Agent *acp.AgentSideConnection`, `Client *acp.ClientSideConnection`, `Close() error`, `Wait() error`
-* `func Abs(path string) string` — makes a POSIX-looking fixture path absolute on the host, the helper 0035 recorded both
-  consumers need because inbound `Validate` uses `filepath.IsAbs`
+* `func Abs(path string) string` — makes a POSIX-looking fixture path absolute on the host, as `<cli-b>`'s `acptest` does (0035
+  D1), because inbound `Validate` uses `filepath.IsAbs`; this repository's tests have the same helper, `testAbsPath`
+  (`paths_test.go:24`)
 * `type Recorder struct` — an `io.Writer` / `io.Reader` pair that copies each newline-terminated frame; `Frames() []json.RawMessage`
   returns copies; canonical form is `encoding/json` v1 with the same HTML-escaping and map-key sorting `json_v1_pin_test.go` pins
-* `type ScriptAgent` — implements `acp.Agent` by playing a list of `SessionUpdate`s per `Prompt`, then a `StopReason`; ungated
-  methods embed `AgentRefusals` once 0038 lands, and `Initialize` answers `ProtocolVersionNumber` plus caller-supplied capabilities
+* `type ScriptAgent` — implements `acp.Agent` by playing a list of `SessionUpdate`s per `Prompt`, then a `StopReason`; the five
+  capability-gated methods come from embedding `AgentRefusals`, so 0038's step 4 lands first, and `Initialize` answers
+  `ProtocolVersionNumber` plus caller-supplied capabilities
 * `type MemoryClient` — implements `acp.Client` with in-memory files (1-based `line` / `limit`, missing path as
   `NewResourceNotFound`) and a map of scripted permission outcomes; terminal methods return `NewMethodNotFound` unless a later
   record adds `TerminalHost`
@@ -336,9 +386,47 @@ package is also how items 2–4 get their black-box tests without 124 more `io.P
      (`AgentCapabilities.Nes`, …) would still break unless the exemption lists those fields too, which is the dishonest shape
      0025 warned about.
 4. **The PLAN.**
-   * Recommended: a PLAN under this number after the owner answers 1–3, sequenced 1 (generator + package + deprecation), 5
+   * Recommended: a PLAN under this number after the owner answers 1–3, and 5 and 6 since the assessment, sequenced 1 (generator + package + deprecation), 5
      (`acptest`, so the rest test against it), 2, 3, 4. Each phase a minor or one minor at the end, owner's choice at the PLAN.
    * Alternative: five PLANs with slugs of their own, still numbered 0039.
+   * Written 2026-10-25, at the owner's request, as
+     [0039-PLAN-five-adopter-additions-on-schema-1-25-0.md](0039-PLAN-five-adopter-additions-on-schema-1-25-0.md), under the
+     recommended answers to questions 1 to 6; an answer otherwise amends it before the phase it changes.
+5. **How new unstable fields, union variants and methods reach an adopter (item 1).** Added by the assessment: a separate package
+   cannot hold them (item 1, "What a separate package cannot hold").
+   * Recommended: `unstable` holds new standalone definitions, and for the three shapes it cannot hold, the generator emits nothing
+     into `acp` and the shape is not typed until it is stable. A new unstable variant decodes into the union's `Unknown`, which
+     `unstable` can decode with a generated `Decode…` function over the raw payload; a new unstable field or method is reachable
+     only through `_meta` or the untyped `Connection` until it stabilizes. Smallest surface; the cost is that a Draft feature of
+     those shapes is not typed.
+   * Alternative: a registry in `acp`, through which `unstable` registers method handlers, union variant decoders and extra struct
+     keys at `init`. Typed reach for every shape, at the cost of a new exported registration API in `acp` and a dispatch path that
+     no stable method uses.
+   * Alternative: keep generating unstable definitions into `acp`, under `Unstable`-prefixed names only and never merged into a
+     stable-named type, and publish that `Unstable*` names are outside the `v1` promise. Closest to today; it is question 3's
+     alternative, and leaves the boundary a naming rule rather than an import path.
+6. **How `ExtensionMux` tells a notification from a request (item 4).** Added by the assessment.
+   * Recommended: `IsNotification(ctx) bool` in `connection.go`, reading the mark the connection already sets.
+   * Alternative: a new optional interface, `ExtensionNotificationHandler`, that the connection calls for `_` notifications when
+     the handler implements it, so the mux implements both.
+   * Alternative: no distinction. An unregistered method answers `NewMethodNotFound` for both; the connection already drops a
+     notification's answer. A request to a `Notify` registration is then run and answered with a `null` result.
+
+#### Decided with the owner, 2026-10-25
+
+The owner chose, out of three options for each:
+
+| Question | Answer | Not chosen |
+| :--- | :--- | :--- |
+| 1. Compaction fallback | As recommended: `PresentCompaction` sends "Compaction {status}" and the error as an agent message; `PresentCompactionSummary` sends nothing | a typed fallback error; the summary's chunks sent as messages too |
+| 2. `acptest` or the Client hosts | As recommended: `acptest` here (O1); the Client hosts are the next record | the Client hosts here (O2); both in this record |
+| 3. Unstable names `v1` has exported | As recommended: frozen stubs in `acp`; only `unstable` may break | a published exemption; empty stubs without the frozen schema |
+| 4. The PLAN | As recommended: one PLAN, as written | five PLANs; one PLAN with `acptest` first and the boundary last |
+| 5. New unstable fields, variants and methods | As recommended: untyped until stable, with `Decode…` in `unstable` for a new variant | a registry in `acp`; the `Unstable` prefix rule only |
+| 6. Notification or request in the mux | As recommended: `IsNotification(ctx)` in `connection.go` | an `ExtensionNotificationHandler` interface; no distinction |
+
+The PLAN's own question, P1, the releases: as recommended, two minors, one after the boundary and `acptest`, one after the three
+runtimes. Not chosen: one minor at the end; a minor per phase.
 
 #### Specification notes that are not questions
 
@@ -390,6 +478,8 @@ A later PLAN shows each of the following, every new check first seen to fail on 
   `acptest` and `unstable` as new packages
 * `go doc` of package `acp` still shows existing `Unstable*` names; a new unstable definition added in a synthetic engine case
   appears only under `unstable`
+* a new unstable field, union variant and method, each in a synthetic engine case, follow question 5's answer
+* `ExtensionMux` runs a `Notify` handler for a notification and not for a request of the same name, by question 6's answer
 
 ## Pros and Cons of the Options
 
@@ -446,7 +536,10 @@ A later PLAN shows each of the following, every new check first seen to fail on 
 * Go modules reference, import compatibility: <https://go.dev/ref/mod>
 * Go blog, module compatibility ("add, don't change or remove"): <https://go.dev/blog/module-compatibility>
 * golang.org/x/exp compatibility stance: <https://pkg.go.dev/golang.org/x/exp>
-* TypeScript SDK 1.8.0 / 2.0.0: <https://github.com/agentclientprotocol/typescript-sdk/blob/main/CHANGELOG.md>
+* TypeScript SDK 1.8.0 (2026-10-09) / 2.0.0 (2026-10-19): <https://github.com/agentclientprotocol/typescript-sdk/blob/main/CHANGELOG.md>
+* Rust schema crate features, by version: <https://docs.rs/crate/agent-client-protocol-schema/latest/features>
+* RFD updates, stabilization dates: <https://agentclientprotocol.com/rfds/updates>
+* Claude Agent adapter PR #1154: <https://github.com/agentclientprotocol/claude-agent-acp/pull/1154>
 * 0025's regeneration and `apidiff` counts: [0025-REPORT-schema-1-26-0-adoption-assessment.md](../reports/0025-REPORT-schema-1-26-0-adoption-assessment.md)
 
 ### Tree citations
@@ -456,7 +549,45 @@ A later PLAN shows each of the following, every new check first seen to fail on 
   `schema/schema.json` definition `Notice`
 * `CompactionUpdate` schema, including patch semantics: `schema/schema.json` definition `CompactionUpdate`
 * Terminal truncation MUST: `types_gen.go:4094`
-* `NewResourceNotFound`: `errors.go:243`
+* `NewResourceNotFound`: `errors.go:246`, its doc comment from `:243`
+* `Patch[T]`'s methods `IsZero`, `IsNull`, `Value`: `types_gen.go:22729`–`:22740`
+* `Negotiated()`: `agent_gen.go:130`, `client_gen.go:134`; `ErrNotInitialized`: `errors.go:127`
+* `scripts/check_api.py` compares `PACKAGES = ("", "agentproc")` (`:43`); items 1 and 5 add `unstable` and `acptest` to it
+
+### Assessment, 2026-10-25
+
+At the owner's request ("assess madr 0039. ensure it is grounded in facts and research, and that all assertions are proven"),
+every assertion was checked: the tree's at `0ff0849` by script, and the external ones by reading each source. The draft's
+decision and its five items are unchanged. What changed:
+
+| Assertion in the draft | Finding | Change |
+| :--- | :--- | :--- |
+| `go doc -short .` lists 79 exported `Unstable*` identifiers | 65 names start with `Unstable`; 79 is the count of lines that mention one | corrected, with 0024's figure explained |
+| `CallExtension` / `NotifyExtension` return `json.RawMessage` (`extensions.go:27`, `:92`, `:127`) | `NotifyExtension` returns `error` (`:109`, `:144`); `:127` is the client's `CallExtension` | corrected |
+| `helpers.go` is "a runtime file that may name ACP types" | the runtime files are `connection.go`, `doc.go`, `errors.go`, `extensions.go`, which may not; `helpers.go` is excluded because it does | corrected |
+| `PresentCompaction` takes `SessionCompactionUpdate`; `PresentCompactionSummary` takes `SessionUpdateCompactionSummaryChunk` | those are the variant types; `Notice` was the definition type; `CompactionUpdate` and `CompactionSummaryChunk` exist | the three take definition types |
+| `Patch.Present` / `Patch.Null` | the methods are `IsZero`, `IsNull`, `Value` | corrected |
+| compaction: Agents "MUST NOT send either variant unless …, for live delivery and for `session/load` replay" | the RFD says "must only send …" in lowercase, and "applies to replay as well as live delivery" | quoted as written |
+| compaction RFD "Completed 2026-10-06" | stabilized 2026-10-06 (updates page); latest revision 2026-10-13, v2 `_meta` only | dated as stabilized |
+| a chunk for an unknown ID first-seen-initializes | the RFD's first-seen rule does not name chunks | marked as inferred |
+| the Claude and Codex adapters "retain fallback behavior" | the RFD says that of the Codex adapter only | quoted per adapter |
+| PR #1154 closed compactions left open at turn end | it is in `claude-agent-acp`, merged 2026-09-22, and closes compactions on interrupted prompts | corrected |
+| Rust `agent-client-protocol` minors track schema tags; `unstable_nes` a current feature | the schema crate is `agent-client-protocol-schema`, one release per tag under its own numbers; `unstable_nes` was removed in `1.12.0` | corrected |
+| 0025's 115 / 40 | confirmed, measured against `v1.17.1` | baseline named; a PLAN re-measures |
+| 0035 recorded both consumers built a mux | 0035 names `<cli-b>`'s only, and lists a mux as "not recommended now" (0035 F) | corrected; item 4 states the reversal and its reason |
+| `Abs` is a helper 0035 recorded both consumers need | 0035 names `<cli-b>`'s; this repository has `testAbsPath` | corrected |
+| `ScriptAgent`'s "ungated methods embed `AgentRefusals`" | `AgentRefusals` holds the five gated methods | corrected; the dependency on 0038's step 4 named |
+| new unstable definitions emit only into `unstable` | a separate package cannot add a field, a variant or a method to an `acp` type | item 1 states the limit; question 5 added |
+| existing unstable names get `Deprecated:` paragraphs | the generator refuses a note on a node the schema does not mark | item 1 names the generator change |
+| `ExtensionMux` answers an unregistered request and ignores an unregistered notification | `HandleExtensionMethod` cannot tell them apart; nothing exported reads the connection's mark | `IsNotification` added; question 6 added |
+| `CompactionTimeline` | 0035 F lists "a session-state reducer" as not recommended | item 3 says why one entity type differs |
+
+Confirmed as written, with the source read: the counts of `$defs` (178, 277) and `meta.json` methods (13, 11, one protocol method);
+`schema/version`, `go` and `toolchain` lines; every other line citation; 124 `io.Pipe()` calls in 27 test files; the schema
+release's four items and its date; the Notices RFD's shape, gate, fallback and replay rule; the compaction patch, chunk,
+first-seen, terminal-status and unknown-status rules; the extensibility page's `_` prefix, `_meta` capability example,
+trace keys (SHOULD), root-field MUST NOT and notification SHOULD; the elicitation SHOULDs; the TypeScript changelog's two entries;
+and the Go modules reference, `golang.org/x/exp` and module-compatibility quotations.
 
 ### Next wave, not this decision
 
@@ -480,4 +611,4 @@ These stay as 0035 numbered them. They are the natural record after this one lan
 * Changing `PromptOverlapRefuse`'s code (0021)
 * Adding methods to `Agent` or `Client` (that is an incompatible `apidiff` change for every embedder)
 
-Implementation waits on the owner's answers to questions 1–4 and an approved PLAN.
+The owner answered questions 1–6 on 2026-10-25 ("Decided with the owner"). Implementation waits on an approved PLAN.
