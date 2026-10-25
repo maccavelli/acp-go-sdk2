@@ -255,3 +255,21 @@ scratch directory; six of six failed as required, each with exit 2 from `make`:
 Step 3 is not done: it observes GitHub's routing after a push, which needs the owner's authorization in that turn. Until it is
 recorded, this PLAN stays `in-progress`.
 
+### Phase 3, step 3: the observed rollout, 2026-10-25
+
+The owner committed phase 2 as `abb59b2` and phase 3 as `5f0cb2b`. Before the push: `git fetch`; `make push-guard`, "4 outgoing
+commit(s), 9b20468..5f0cb2b, main to origin", "the guard passed (exit 0)"; `tools/idscan.py --range origin/main..main`, "13
+file(s), 17 pattern(s), 0 match(es)". The owner pushed.
+
+| Push | Changes | Workflows started | Runs and conclusions |
+| :--- | :--- | :--- | :--- |
+| `9b20468..5f0cb2b` | mixed: workflows, `Makefile`, `scripts/`, records and docs | CI and Docs | CI `40197791734`, "completed success", six jobs; Docs `40197791752`, "completed success", job `docs` |
+| this record, alone | docs-only: this PLAN | to be observed: Docs alone | |
+| the next `v*` tag or weekly schedule | none | to be observed: CI | |
+
+In the mixed push's logs (`gh run view --log`), CI's job `validate (ubuntu-24.04, 1.27.3)`, step "markdownlint, actionlint,
+records, disclosure, tools", printed "Summary: 0 issues", "check-disclosure: 551 tracked file(s), 0 finding(s)" and
+"check-ci-filters: 0 problem(s)"; Docs' step "markdownlint, records, disclosure" printed "Summary: 0 issues in 0 files" and
+"check-disclosure: 551 tracked file(s), 0 finding(s)". So both run the gates on GitHub, and the `Makefile` evaluated on Docs'
+runner without error.
+
