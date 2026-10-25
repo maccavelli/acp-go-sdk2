@@ -757,3 +757,45 @@ scratch directory.
   * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `newfiles` covered `frozen.go` and
     `frozen_test.go`, and `api` reported "0 incompatible, 0 compatible" against `v1.22.0`;
   * `make disclosure-check`; `tools/idscan.py --paths` over the 18 changed and new files: 0 matches.
+
+### 2e, the API gate, 2026-10-25
+
+* **`scripts/check_api.py`:**
+  * `REPORTED`, empty until 2f adds `unstable`, sits beside `PACKAGES`, the gated packages.
+  * The comparison is `compare(root, base, gated, reported)`, and `main` calls it with the repository's root and the two tuples,
+    so a test can point it at a scratch module. `module_path` and `latest_release` take the root.
+  * A reported package's incompatible changes are printed as `check_api: incompatible, reported, not gated: <pkg>: <change>`,
+    with a summary line of their own. Its compatible changes are listed with the others, and only a gated package's
+    incompatible change gives exit 1.
+  * A package in both tuples is a tool error, exit 2.
+  * The report of the tree is unchanged: "check_api: against v1.22.0: 0 incompatible, 0 compatible".
+* **`scripts/test_check_api.py`**, new, its first tests. Each builds a scratch module, with this repository's `go` line, in a git
+  repository tagged `v1.9.0` and `v1.10.0`, and runs the pinned `apidiff` through `compare`. They cover:
+  * the newest tag by number (`v1.10.0`);
+  * a compatible change, exit 0;
+  * an incompatible change in a gated package, exit 1;
+  * the same removal in a reported package, exit 0 and listed;
+  * the same removal gated, exit 1;
+  * a package new since the tag, compatible;
+  * the two tool errors, a package in both tuples and one missing from the tree.
+
+  They need Go, and the network only until `apidiff` is in the module cache. The CI job that runs `make check-tools`, the Linux
+  non-floor one, already runs `go run` for actionlint.
+* **`acptest`** joins `PACKAGES` in phase 3, as this sub-step says.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | 2e's row: a reported package's incompatible change fails | `FAIL: test_incompatible_change_in_a_reported_package_is_listed_and_passes` |
+  | 2e's row: a gated package's incompatible change passes | `FAIL: test_incompatible_change_in_a_gated_package_fails`, `FAIL: test_the_same_change_gated_fails` |
+  | a package in both tuples accepted | `FAIL: test_tool_errors (… name='in both lists')` |
+  | tags ordered as strings | `FAIL: test_newest_tag_by_number` |
+
+  2f's row, `unstable` added to `PACKAGES` and gated, waits for 2f, which adds the package.
+* **Checks**, each exit 0:
+  * `make check-tools`: 53 tools tests, 30 scripts tests;
+  * `make api`: "check_api: against v1.22.0: 0 incompatible, 0 compatible";
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`;
+  * `make disclosure-check`; `tools/idscan.py --paths` over the two scripts: 0 matches.
+
+  No Go file changed.
