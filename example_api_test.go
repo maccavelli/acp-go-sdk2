@@ -43,6 +43,26 @@ func ExampleUpdateSessionTitle() {
 	// {"sessionUpdate":"session_info_update","title":null}
 }
 
+// ExampleSessionUpdate_Kind decodes an update this SDK knows and one it does
+// not, and prints the kind of each
+// (0036-PLAN-session-update-constructors-kind-and-client-refusals.md, step 3).
+func ExampleSessionUpdate_Kind() {
+	for _, payload := range []string{
+		`{"sessionUpdate":"current_mode_update","currentModeId":"code"}`,
+		`{"sessionUpdate":"future_update","detail":1}`,
+	} {
+		var u acp.SessionUpdate
+		if err := json.Unmarshal([]byte(payload), &u); err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println(u.Kind())
+	}
+	// Output:
+	// current_mode_update
+	// future_update
+}
+
 // ExampleRequestError reads the code and message of the error a peer's
 // handler answered with (0024-PLAN-documentation.md, A8).
 func ExampleRequestError() {

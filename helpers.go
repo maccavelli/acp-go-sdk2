@@ -14,14 +14,26 @@ const (
 	rawInputPathKey       = "path"
 	rawInputContentKey    = "content"
 
-	sessionUpdateAvailableCommands = "available_commands_update"
-	sessionUpdateCurrentMode       = "current_mode_update"
-	sessionUpdateConfigOptions     = "config_option_update"
-	sessionUpdateSessionInfo       = "session_info_update"
-	sessionUpdateUsage             = "usage_update"
-	sessionUpdateNotice            = "notice"
-	sessionUpdateCompaction        = "compaction_update"
-	sessionUpdateCompactionSummary = "compaction_summary_chunk"
+	sessionUpdateUserMessage         = "user_message_chunk"
+	sessionUpdateAgentMessage        = "agent_message_chunk"
+	sessionUpdateAgentThought        = "agent_thought_chunk"
+	sessionUpdateToolCall            = "tool_call"
+	sessionUpdateToolCallUpdate      = "tool_call_update"
+	sessionUpdatePlan                = "plan"
+	sessionUpdatePlanUpdate          = "plan_update"
+	sessionUpdatePlanRemoved         = "plan_removed"
+	sessionUpdateAvailableCommands   = "available_commands_update"
+	sessionUpdateCurrentMode         = "current_mode_update"
+	sessionUpdateConfigOptions       = "config_option_update"
+	sessionUpdateSessionInfo         = "session_info_update"
+	sessionUpdateUsage               = "usage_update"
+	sessionUpdateNotice              = "notice"
+	sessionUpdateCompaction          = "compaction_update"
+	sessionUpdateCompactionSummary   = "compaction_summary_chunk"
+	sessionUpdateSubagent            = "subagent_update"
+	sessionUpdateSessionMessage      = "session_message"
+	sessionUpdateSessionMessageChunk = "session_message_chunk"
+	sessionUpdateUnknownKind         = "unknown"
 )
 
 // TextBlock constructs a text content block.
@@ -251,6 +263,72 @@ func UpdateCompactionSummary(id CompactionId, content ContentBlock) SessionUpdat
 // from text, as UpdateCompactionSummary does with a text block.
 func UpdateCompactionSummaryText(id CompactionId, text string) SessionUpdate {
 	return UpdateCompactionSummary(id, TextBlock(text))
+}
+
+// Kind returns the sessionUpdate value of the variant u sends: the first set
+// variant, in the order MarshalJSON checks them, such as "agent_message_chunk"
+// or "notice". With no variant set, it returns the "sessionUpdate" of Unknown,
+// read as UnmarshalJSON reads it, when that is a non-empty string, and
+// "unknown" when Unknown holds anything else. The zero SessionUpdate returns "".
+func (u SessionUpdate) Kind() string {
+	switch {
+	case u.UserMessageChunk != nil:
+		return sessionUpdateUserMessage
+	case u.AgentMessageChunk != nil:
+		return sessionUpdateAgentMessage
+	case u.AgentThoughtChunk != nil:
+		return sessionUpdateAgentThought
+	case u.ToolCall != nil:
+		return sessionUpdateToolCall
+	case u.ToolCallUpdate != nil:
+		return sessionUpdateToolCallUpdate
+	case u.Plan != nil:
+		return sessionUpdatePlan
+	case u.PlanUpdate != nil:
+		return sessionUpdatePlanUpdate
+	case u.PlanRemoved != nil:
+		return sessionUpdatePlanRemoved
+	case u.AvailableCommandsUpdate != nil:
+		return sessionUpdateAvailableCommands
+	case u.CurrentModeUpdate != nil:
+		return sessionUpdateCurrentMode
+	case u.ConfigOptionUpdate != nil:
+		return sessionUpdateConfigOptions
+	case u.SessionInfoUpdate != nil:
+		return sessionUpdateSessionInfo
+	case u.UsageUpdate != nil:
+		return sessionUpdateUsage
+	case u.Notice != nil:
+		return sessionUpdateNotice
+	case u.CompactionUpdate != nil:
+		return sessionUpdateCompaction
+	case u.CompactionSummaryChunk != nil:
+		return sessionUpdateCompactionSummary
+	case u.SubagentUpdate != nil:
+		return sessionUpdateSubagent
+	case u.SessionMessage != nil:
+		return sessionUpdateSessionMessage
+	case u.SessionMessageChunk != nil:
+		return sessionUpdateSessionMessageChunk
+	case u.Unknown != nil:
+		return unknownSessionUpdateKind(u.Unknown)
+	}
+	return ""
+}
+
+// unknownSessionUpdateKind reads the "sessionUpdate" of b as
+// SessionUpdate.UnmarshalJSON reads it, folding keys, the last match winning.
+func unknownSessionUpdateKind(b json.RawMessage) string {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return sessionUpdateUnknownKind
+	}
+	foldKeys(b, m, "sessionUpdate")
+	var kind string
+	if err := json.Unmarshal(m["sessionUpdate"], &kind); err != nil || kind == "" {
+		return sessionUpdateUnknownKind
+	}
+	return kind
 }
 
 // ToolCallStartOpt modifies a tool_call start update before it is built.

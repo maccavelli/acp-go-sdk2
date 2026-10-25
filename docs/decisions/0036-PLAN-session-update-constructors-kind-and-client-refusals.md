@@ -323,3 +323,49 @@ missing return"), so it proved nothing. It was rewritten to return the other var
 
 Step 1 was committed by the owner as `f171b3a`. Step 2's files are staged for the owner, without the docs index change and the 0037
 records that appeared in the tree meanwhile, which are not this PLAN's.
+
+### Step 3, `Kind()`, 2026-10-25
+
+What changed:
+
+* **`helpers.go`:**
+  * `SessionUpdate.Kind()`, after the constructors, with the MADR's doc comment. It switches on the 19 pointer fields in
+    `MarshalJSON`'s order and never reads a variant's `SessionUpdate` field.
+  * `unknownSessionUpdateKind`, which reads `Unknown` as `UnmarshalJSON` does: an object, `foldKeys(b, m, "sessionUpdate")`, and the
+    key decoded into a string.
+  * Twelve more unexported constants in the block beside `blockTypeText`, for the eleven values step 2 did not name and for
+    `"unknown"`.
+* **`kind_test.go`, new:** `TestSessionUpdateKind`, with the step's five subtests, each a function of its own.
+* **`example_api_test.go`:** `ExampleSessionUpdate_Kind`, which prints `current_mode_update` and `future_update`.
+* **`README.md`:** the "Session updates" item names `SessionUpdate.Kind()`.
+
+The step says each case returns "its literal value". The first `make pre-add-check` failed, exit 2, on `goconst` against the string
+literals, eight of which step 2 had already named ("string `notice` has 4 occurrences, but such constant `sessionUpdateNotice`
+already exists"), and on `modernize` against a `NumField` loop in the test. Each case now returns a named constant holding that
+literal, which keeps what the step requires: a fixed value, never the variant's field. The second run failed on `gocognit`,
+"cognitive complexity 61 of func `TestSessionUpdateKind` is high (> 50)", and the subtests were split into functions. Neither rule
+was loosened.
+
+**Tests,** `go test -count=1 -v`, exit 0: `TestSessionUpdateKind` and its five subtests, and `ExampleSessionUpdate_Kind`. Decoding
+put each of the four string-discriminator payloads, `{"sessionUpdate":""}` included, whole into `Unknown`, as R4 says.
+
+**Planted breaks,** `tools/plants.py`, each in its own copy of the tree, the list in the session's scratch directory, run against the
+final code. Five of five failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| the `Notice` case removed | "kind_test.go:76: Notice: Kind() = \"\", want \"notice\"" |
+| the `AgentMessageChunk` case returns `u.AgentMessageChunk.SessionUpdate` | "kind_test.go:91: agent_message_chunk: Kind() = \"\", sent \"agent_message_chunk\"" |
+| `foldKeys` not called | "kind_test.go:100: {\"SessionUpdate\":\"folded\"}: Kind() = \"unknown\", want \"folded\"" |
+| `""` returned for an empty discriminator | "kind_test.go:100: {\"sessionUpdate\":\"\"}: Kind() = \"\", want \"unknown\"" |
+| the `UserMessageChunk` case moved after `Notice` | "kind_test.go:135: two set: Kind() = \"notice\", sent \"user_message_chunk\", want \"user_message_chunk\"" |
+
+**Gates,** each exit 0:
+
+* `make pre-add-check`: "177 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `make check-records`;
+* `make markdownlint`: 30 files, 0 issues;
+* `make api`: "against v1.20.0: 0 incompatible, 10 compatible", step 2's nine and `SessionUpdate.Kind`, each "added";
+* `tools/idscan.py --paths` over the four files: "4 file(s), 17 pattern(s), 0 match(es)".
+
+Step 2 was committed by the owner as `4189d9a`. Step 3's files are staged for the owner.
