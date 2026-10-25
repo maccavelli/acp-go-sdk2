@@ -247,6 +247,66 @@ func NewResourceNotFound(uri string) *RequestError {
 	return &RequestError{Code: -32002, Message: "Resource not found", Data: map[string]any{"uri": uri}}
 }
 
+// The codes the error helpers compare. Each is the ErrorCode constant named
+// beside it, written as a number, since this file is compiled into the
+// generator's synthetic cases, which have no ErrorCode; TestErrorCodesPinned
+// keeps them equal.
+const (
+	codeMethodNotFound         = -32601 // ErrorCodeMethodNotFound
+	codeAuthenticationRequired = -32000 // ErrorCodeAuthenticationRequired
+	codeRequestCancelled       = -32800 // ErrorCodeRequestCancelled
+)
+
+// IsMethodNotFound reports whether err, or an error it wraps, is a
+// method-not-found answer (-32601), the peer's or this side's, or the
+// *CapabilityError of a method the peer did not advertise, which this side
+// refuses before sending it. A *CapabilityError that names a field or a
+// variant is not: the method exists, and one of its values is refused
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func IsMethodNotFound(err error) bool {
+	if re, ok := errors.AsType[*RequestError](err); ok && re != nil && re.Code == codeMethodNotFound {
+		return true
+	}
+	ce, ok := errors.AsType[*CapabilityError](err)
+	return ok && ce != nil && ce.Field == "" && ce.Variant == ""
+}
+
+// IsAuthRequired reports whether err, or an error it wraps, is an
+// authentication-required answer (-32000)
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func IsAuthRequired(err error) bool {
+	re, ok := errors.AsType[*RequestError](err)
+	return ok && re != nil && re.Code == codeAuthenticationRequired
+}
+
+// IsCancelled reports whether err, or an error it wraps, is a cancellation:
+// context.Canceled, ErrPromptCancelled, or a request-cancelled answer
+// (-32800). A context's deadline is not a cancellation
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func IsCancelled(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, ErrPromptCancelled) {
+		return true
+	}
+	re, ok := errors.AsType[*RequestError](err)
+	return ok && re != nil && re.Code == codeRequestCancelled
+}
+
+// Reason returns why e was answered: the "error" of its data when that is a
+// non-empty string, as this SDK writes a refusal's reason, and its message
+// otherwise. A nil e returns ""
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func (e *RequestError) Reason() string {
+	if e == nil {
+		return ""
+	}
+	if m, ok := e.Data.(map[string]any); ok {
+		if s, ok := m[jsonErrorField].(string); ok && s != "" {
+			return s
+		}
+	}
+	return e.Message
+}
+
 // toReqErr coerces arbitrary errors into JSON-RPC RequestError.
 func toReqErr(err error) *RequestError {
 	if err == nil {

@@ -741,6 +741,13 @@ so return a `*acp.RequestError` of your own to keep it private. An agent's
 `Prompt` and a client's `RequestPermission` are the exceptions: once their
 prompt turn is cancelled, they are answered cancelled, whatever they return.
 
+To classify an error a call returned, wrapped or not: `acp.IsMethodNotFound`
+is true for a peer's `-32601` and for a method the peer did not advertise,
+which this side refuses before sending; `acp.IsAuthRequired` for `-32000`;
+and `acp.IsCancelled` for `context.Canceled`, `acp.ErrPromptCancelled` and
+`-32800`. `(*acp.RequestError).Reason()` gives the `"error"` of its `data`,
+where this SDK writes why it refused, or else its message.
+
 A malformed message is logged by its fault, its size and, when it has a valid
 one, its id, never by its content, which may hold prompt text or file contents.
 A message that breaks the schema is refused with an `*acp.ValidationError`;

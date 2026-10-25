@@ -348,3 +348,42 @@ failed as required:
 
 Step 1 was committed by the owner as `15e89f6`. Step 2's files are staged for the owner, with the 0039 MADR's and PLAN's
 amendments for the same rule.
+
+### Step 3, the error helpers, 2026-10-25
+
+What changed:
+
+* **`errors.go`:** after `NewResourceNotFound`, three unexported constants, `codeMethodNotFound`, `codeAuthenticationRequired` and
+  `codeRequestCancelled`, each with the `ErrorCode` constant it equals named in a comment, since `errors.go` is compiled into the
+  generator's synthetic cases; then `IsMethodNotFound`, `IsAuthRequired`, `IsCancelled` and `(*RequestError).Reason`, which reads
+  `data[jsonErrorField]`, the key the SDK's own refusals use. Each looks through wrapping with `errors.AsType` and `errors.Is`,
+  and `Reason` and the predicates accept a nil `*RequestError`.
+* **`errors_classify_test.go`, new:** `TestErrorCodesPinned`; `TestIsMethodNotFound`, with a peer's `-32601` over a raw `Connection`
+  pair, a local method gate from `ListSessions` on an unadvertised record, a value gate from sending `UpdateNotice` (checked to
+  carry a `Variant`), each wrapped too; `TestIsAuthRequired`, a peer's `-32000` included; `TestIsCancelled`; `TestReason`.
+* **`README.md`:** "Errors on the wire" names the four helpers.
+
+The step lists no docs item; the README line follows the MADR's "Documentation", which names every new helper.
+
+**Tests,** `go test -count=1 -race`, exit 0: the five tests, `TestExportedDeclarationsDocumented`,
+`TestExportedTypeDocsStartWithName` and `TestSideConnectionMethodsAreProtocolMethods`.
+
+**Planted breaks,** `tools/plants.py`, each in its own copy of the tree; five of five failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `IsMethodNotFound` accepts any `*CapabilityError` | "errors_classify_test.go:73: value gate: IsMethodNotFound(session/update: capability session.notices not advertised: variant notice) = true, want false" |
+| `IsMethodNotFound` uses a type assertion, not `errors.AsType` | "errors_classify_test.go:73: peer's -32601, wrapped: IsMethodNotFound(listing: {\"code\":-32601,…}) = false, want true" |
+| the authentication code written as `-32001` | "errors_classify_test.go:27: authentication required: -32001, want -32000" |
+| `IsCancelled` accepts `context.DeadlineExceeded` | "errors_classify_test.go:117: context.DeadlineExceeded: IsCancelled(context deadline exceeded) = true, want false" |
+| `Reason` returns an empty `data.error` | "errors_classify_test.go:139: empty data.error: Reason() = \"\", want \"Invalid params\"" |
+
+**Gates,** each exit 0:
+
+* `make pre-add-check`: "182 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `(cd cmd/generate && go test -count=1 ./...)`: every package `ok`, so the synthetic cases compile with the new `errors.go`;
+* `make api`: "against v1.21.0: 0 incompatible, 13 compatible", step 2's nine and `IsAuthRequired`, `IsCancelled`,
+  `IsMethodNotFound` and `(*RequestError).Reason`, each "added";
+* `make check-records`, `make markdownlint`, `make disclosure-check`, and `tools/idscan.py --paths` over the step's files.
+
+Step 2 was committed by the owner as `0ac866b`. Step 3's files are staged for the owner.
