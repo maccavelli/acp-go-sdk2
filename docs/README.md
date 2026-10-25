@@ -102,6 +102,9 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0033 | PLAN | [Implement 0033: print every goroutine's stack when the Windows floor CI job crashes](decisions/0033-PLAN-traceback-on-windows-floor-ci.md) | complete |
 | 0034 | MADR | [Run the race detector on CI's Windows jobs, once the tap drain test no longer depends on the machine's speed](decisions/0034-MADR-race-detector-on-windows-ci.md) | accepted |
 | 0034 | PLAN | [Implement 0034: run the race detector on CI's Windows jobs, once the tap drain test no longer depends on the machine's speed](decisions/0034-PLAN-race-detector-on-windows-ci.md) | complete |
+| 0035 | REPORT | [ACP code in the two consumers: what belongs in the SDK](reports/0035-REPORT-consumer-acp-code-for-the-sdk.md); aligned 2026-10-24 with issue #11 | observed |
+| 0036 | MADR | [Complete the stable SessionUpdate constructors, add SessionUpdate.Kind(), and a ClientRefusals embed](decisions/0036-MADR-session-update-constructors-kind-and-client-refusals.md) | accepted |
+| 0036 | PLAN | [Implement 0036: the stable SessionUpdate constructors, SessionUpdate.Kind(), and ClientRefusals](decisions/0036-PLAN-session-update-constructors-kind-and-client-refusals.md) | in-progress |
 
 ## I want to…
 
