@@ -1,0 +1,433 @@
+Every declaration the unstable manifest keeps carries the frozen notice: a type
+kept under its own name (Level) with its enum constants, a copied type (UnstableShape)
+with its variants and constructors, a field added to a stable type (Caps.N), a variant
+added to a stable union (Pick.N, its type and constructor), the method's interface
+method, constant and outbound method, and AgentExperimental itself; nothing stable
+carries it (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2d).
+
+-- meta.json --
+{
+  "version": 1,
+  "agentMethods": {
+    "old": "x/old"
+  },
+  "clientMethods": {},
+  "protocolMethods": {
+    "cancel_request": "$/cancel_request"
+  }
+}
+-- schema.json --
+{
+  "$defs": {
+    "OldRequest": {
+      "type": "object",
+      "properties": {
+        "c": {
+          "$ref": "#/$defs/Caps"
+        },
+        "p": {
+          "$ref": "#/$defs/Pick"
+        }
+      },
+      "required": [
+        "c",
+        "p"
+      ],
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "OldResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "CancelRequestNotification": {
+      "type": "object",
+      "x-side": "protocol",
+      "x-method": "$/cancel_request"
+    },
+    "Caps": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        }
+      }
+    },
+    "Pick": {
+      "discriminator": {
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "a",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    }
+  }
+}
+-- meta.unstable.json --
+{
+  "version": 1,
+  "agentMethods": {
+    "old": "x/old",
+    "new": "x/new"
+  },
+  "clientMethods": {},
+  "protocolMethods": {
+    "cancel_request": "$/cancel_request"
+  }
+}
+-- schema.unstable.json --
+{
+  "$defs": {
+    "OldRequest": {
+      "type": "object",
+      "properties": {
+        "c": {
+          "$ref": "#/$defs/Caps"
+        },
+        "p": {
+          "$ref": "#/$defs/Pick"
+        }
+      },
+      "required": [
+        "c",
+        "p"
+      ],
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "OldResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "CancelRequestNotification": {
+      "type": "object",
+      "x-side": "protocol",
+      "x-method": "$/cancel_request"
+    },
+    "Caps": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "n": {
+          "$ref": "#/$defs/Level"
+        }
+      }
+    },
+    "Level": {
+      "type": "string",
+      "enum": [
+        "low",
+        "high"
+      ]
+    },
+    "Pick": {
+      "discriminator": {
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "a",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "n",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "Shape": {
+      "discriminator": {
+        "propertyName": "form"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "form": {
+              "const": "x",
+              "type": "string"
+            }
+          },
+          "required": [
+            "form"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "form": {
+              "const": "y",
+              "type": "string"
+            }
+          },
+          "required": [
+            "form"
+          ]
+        }
+      ]
+    },
+    "NewRequest": {
+      "type": "object",
+      "properties": {
+        "s": {
+          "$ref": "#/$defs/Shape"
+        }
+      },
+      "required": [
+        "s"
+      ],
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "NewResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/new"
+    }
+  }
+}
+-- unstable-v1.json --
+{
+  "version": 1,
+  "schema": "",
+  "methods": {
+    "agent": {
+      "new": "x/new"
+    }
+  },
+  "definitions": {
+    "Level": "Level",
+    "UnstableNewRequest": "NewRequest",
+    "UnstableNewResponse": "NewResponse",
+    "UnstableShape": "Shape"
+  },
+  "changes": {
+    "Caps": {
+      "properties": [
+        "n"
+      ]
+    },
+    "Pick": {
+      "entries": [
+        "const kind=a",
+        "const kind=n"
+      ],
+      "frozenEntries": [
+        "const kind=n"
+      ]
+    }
+  },
+  "$defs": {
+    "Caps": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "n": {
+          "$ref": "#/$defs/Level"
+        }
+      }
+    },
+    "Level": {
+      "type": "string",
+      "enum": [
+        "low",
+        "high"
+      ]
+    },
+    "NewRequest": {
+      "type": "object",
+      "properties": {
+        "s": {
+          "$ref": "#/$defs/Shape"
+        }
+      },
+      "required": [
+        "s"
+      ],
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "NewResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "Pick": {
+      "discriminator": {
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "a",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "n",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "Shape": {
+      "discriminator": {
+        "propertyName": "form"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "form": {
+              "const": "x",
+              "type": "string"
+            }
+          },
+          "required": [
+            "form"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "form": {
+              "const": "y",
+              "type": "string"
+            }
+          },
+          "required": [
+            "form"
+          ]
+        }
+      ]
+    }
+  }
+}
+-- want.api --
+type Agent interface{Old(ctx context.Context, params OldRequest) (OldResponse, error)}
+type AgentExperimental interface{UnstableNew(ctx context.Context, params UnstableNewRequest) (UnstableNewResponse, error)}
+const AgentMethodNew untyped string = "x/new"
+const AgentMethodOld untyped string = "x/old"
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Caps struct{A string "json:\"a,omitempty\""; N Level "json:\"n,omitempty\""}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+type Level string
+const LevelHigh Level = "high"
+const LevelLow Level = "low"
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewPickA() Pick
+func NewPickN() Pick
+func NewUnstableShapeX() UnstableShape
+func NewUnstableShapeY() UnstableShape
+type OldRequest struct{C Caps "json:\"c\""; P Pick "json:\"p\""}
+type OldResponse struct{}
+type Pick struct{A *PickA "json:\"-\""; N *PickN "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type PickA struct{Kind string "json:\"kind\""}
+type PickN struct{Kind string "json:\"kind\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type UnstableNewRequest struct{S UnstableShape "json:\"s\""}
+type UnstableNewResponse struct{}
+type UnstableShape struct{X *UnstableShapeX "json:\"-\""; Y *UnstableShapeY "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type UnstableShapeX struct{Form string "json:\"form\""}
+type UnstableShapeY struct{Form string "json:\"form\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).Old(ctx context.Context, params OldRequest) (OldResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).UnstableNew(ctx context.Context, params UnstableNewRequest) (UnstableNewResponse, error)
+func (*ClientSideConnection).Wait() error
+func (*OldRequest).UnmarshalJSON(b []byte) error
+func (*OldRequest).Validate() error
+func (*OldResponse).Validate() error
+func (Pick).MarshalJSON() ([]byte, error)
+func (*Pick).UnmarshalJSON(b []byte) error
+func (*Pick).Validate() error
+func (*UnstableNewRequest).UnmarshalJSON(b []byte) error
+func (*UnstableNewRequest).Validate() error
+func (*UnstableNewResponse).Validate() error
+func (UnstableShape).MarshalJSON() ([]byte, error)
+func (*UnstableShape).UnmarshalJSON(b []byte) error
+func (*UnstableShape).Validate() error
+-- want.deprecated --
+const AgentMethodNew: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+const LevelHigh: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+const LevelLow: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+field Caps.N: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+field Pick.N: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+field UnstableShape.X: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+field UnstableShape.Y: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+func NewPickN: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+func NewUnstableShapeX: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+func NewUnstableShapeY: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+method (*ClientSideConnection).UnstableNew: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+method AgentExperimental.UnstableNew: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type AgentExperimental: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type Level: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type PickN: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableNewRequest: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableNewResponse: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableShape: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableShapeX: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableShapeY: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).

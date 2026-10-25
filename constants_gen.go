@@ -7,26 +7,71 @@ const ProtocolVersionNumber = 1
 
 // Agent method names
 const (
-	AgentMethodAuthenticate           = "authenticate"
-	AgentMethodDocumentDidChange      = "document/didChange"
-	AgentMethodDocumentDidClose       = "document/didClose"
-	AgentMethodDocumentDidFocus       = "document/didFocus"
-	AgentMethodDocumentDidOpen        = "document/didOpen"
-	AgentMethodDocumentDidSave        = "document/didSave"
-	AgentMethodInitialize             = "initialize"
-	AgentMethodLogout                 = "logout"
-	AgentMethodMcpMessage             = "mcp/message"
-	AgentMethodNesAccept              = "nes/accept"
-	AgentMethodNesClose               = "nes/close"
-	AgentMethodNesReject              = "nes/reject"
-	AgentMethodNesStart               = "nes/start"
-	AgentMethodNesSuggest             = "nes/suggest"
-	AgentMethodProvidersDisable       = "providers/disable"
-	AgentMethodProvidersList          = "providers/list"
-	AgentMethodProvidersSet           = "providers/set"
-	AgentMethodSessionCancel          = "session/cancel"
-	AgentMethodSessionClose           = "session/close"
-	AgentMethodSessionDelete          = "session/delete"
+	AgentMethodAuthenticate = "authenticate"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodDocumentDidChange = "document/didChange"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodDocumentDidClose = "document/didClose"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodDocumentDidFocus = "document/didFocus"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodDocumentDidOpen = "document/didOpen"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodDocumentDidSave = "document/didSave"
+	AgentMethodInitialize      = "initialize"
+	AgentMethodLogout          = "logout"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodMcpMessage = "mcp/message"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodNesAccept = "nes/accept"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodNesClose = "nes/close"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodNesReject = "nes/reject"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodNesStart = "nes/start"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodNesSuggest = "nes/suggest"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodProvidersDisable = "providers/disable"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodProvidersList = "providers/list"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+	AgentMethodProvidersSet  = "providers/set"
+	AgentMethodSessionCancel = "session/cancel"
+	AgentMethodSessionClose  = "session/close"
+	AgentMethodSessionDelete = "session/delete"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	AgentMethodSessionFork            = "session/fork"
 	AgentMethodSessionList            = "session/list"
 	AgentMethodSessionLoad            = "session/load"
@@ -39,10 +84,13 @@ const (
 
 // Client method names
 const (
-	ClientMethodElicitationComplete      = "elicitation/complete"
-	ClientMethodElicitationCreate        = "elicitation/create"
-	ClientMethodFsReadTextFile           = "fs/read_text_file"
-	ClientMethodFsWriteTextFile          = "fs/write_text_file"
+	ClientMethodElicitationComplete = "elicitation/complete"
+	ClientMethodElicitationCreate   = "elicitation/create"
+	ClientMethodFsReadTextFile      = "fs/read_text_file"
+	ClientMethodFsWriteTextFile     = "fs/write_text_file"
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	ClientMethodMcpMessage               = "mcp/message"
 	ClientMethodSessionRequestPermission = "session/request_permission"
 	ClientMethodSessionUpdate            = "session/update"

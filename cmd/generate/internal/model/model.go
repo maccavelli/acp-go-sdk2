@@ -256,9 +256,13 @@ type EnumValue struct {
 // deprecated (0024-PLAN-api-gate-and-deprecation.md). Note is the protocol
 // table's replacement for the node, or "". Definition, on a method's, is the
 // key of the request or notification definition whose mark it carries.
+// Frozen is true for the other source of a mark, the unstable manifest: a
+// declaration of unstable origin that v1 keeps for compatibility
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 1).
 type Deprecation struct {
 	Note       string
 	Definition string
+	Frozen     bool
 }
 
 // deprecationOf returns a mark for d, or nil when the schema does not mark
@@ -427,6 +431,7 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		func() error { m.applyDocNotes(r); return nil },
 		func() error { return m.applyDeprecations(r) },
 		func() error { return m.buildInterfaces(n, r) },
+		func() error { m.applyFrozenDeprecations(); return nil },
 	} {
 		if err := step(); err != nil {
 			return nil, fmt.Errorf(tablePrefix+"%w", err)

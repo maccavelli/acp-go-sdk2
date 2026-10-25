@@ -159,31 +159,55 @@ func NewEmbeddedResourceResourceBlobResourceContents(blob string, uri string) Em
 }
 
 // NewIdleStateUpdateEndTurn constructs a IdleStateUpdate using the 'end_turn' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewIdleStateUpdateEndTurn() IdleStateUpdate {
 	return IdleStateUpdate{EndTurn: &IdleStateUpdateEndTurn{StopReason: "end_turn"}}
 }
 
 // NewIdleStateUpdateMaxTokens constructs a IdleStateUpdate using the 'max_tokens' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewIdleStateUpdateMaxTokens() IdleStateUpdate {
 	return IdleStateUpdate{MaxTokens: &IdleStateUpdateMaxTokens{StopReason: "max_tokens"}}
 }
 
 // NewIdleStateUpdateMaxTurnRequests constructs a IdleStateUpdate using the 'max_turn_requests' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewIdleStateUpdateMaxTurnRequests() IdleStateUpdate {
 	return IdleStateUpdate{MaxTurnRequests: &IdleStateUpdateMaxTurnRequests{StopReason: "max_turn_requests"}}
 }
 
 // NewIdleStateUpdateRefusal constructs a IdleStateUpdate using the 'refusal' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewIdleStateUpdateRefusal() IdleStateUpdate {
 	return IdleStateUpdate{Refusal: &IdleStateUpdateRefusal{StopReason: "refusal"}}
 }
 
 // NewIdleStateUpdateCancelled constructs a IdleStateUpdate using the 'cancelled' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewIdleStateUpdateCancelled() IdleStateUpdate {
 	return IdleStateUpdate{Cancelled: &IdleStateUpdateCancelled{StopReason: "cancelled"}}
 }
 
 // NewIdleStateUpdateError constructs a IdleStateUpdate using the 'error' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewIdleStateUpdateError() IdleStateUpdate {
 	return IdleStateUpdate{Error: &IdleStateUpdateError{StopReason: "error"}}
 }
@@ -191,11 +215,19 @@ func NewIdleStateUpdateError() IdleStateUpdate {
 // NewIdleStateUpdateOther constructs a IdleStateUpdate using its Other variant.
 // Keys the variant does not declare go in its Extra field, which MarshalJSON writes
 // after the declared ones; a key a declared field writes is not taken from Extra.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewIdleStateUpdateOther(stopReason string) IdleStateUpdate {
 	return IdleStateUpdate{Other: &IdleStateUpdateOther{StopReason: stopReason}}
 }
 
 // NewIdleStateUpdateNone constructs a IdleStateUpdate using its None variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewIdleStateUpdateNone() IdleStateUpdate {
 	return IdleStateUpdate{None: &IdleStateUpdateNone{}}
 }
@@ -221,6 +253,10 @@ func NewMcpServerSse(name string, url string, headers []HttpHeader) McpServer {
 }
 
 // NewMcpServerAcp constructs a McpServer using the 'acp' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewMcpServerAcp(name string, serverId McpServerAcpId) McpServer {
 	return McpServer{Acp: &McpServerAcpInline{
 		Name:     name,
@@ -260,6 +296,10 @@ func NewMultiSelectItemsTitled(anyOf []EnumOption) MultiSelectItems {
 }
 
 // NewPlanUpdateContentItems constructs a PlanUpdateContent using the 'items' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewPlanUpdateContentItems(planId PlanId, entries []PlanEntry) PlanUpdateContent {
 	return PlanUpdateContent{Items: &PlanUpdateContentItems{
 		Entries: entries,
@@ -269,6 +309,10 @@ func NewPlanUpdateContentItems(planId PlanId, entries []PlanEntry) PlanUpdateCon
 }
 
 // NewPlanUpdateContentFile constructs a PlanUpdateContent using the 'file' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewPlanUpdateContentFile(planId PlanId, uri string) PlanUpdateContent {
 	return PlanUpdateContent{File: &PlanUpdateContentFile{
 		PlanId: planId,
@@ -278,6 +322,10 @@ func NewPlanUpdateContentFile(planId PlanId, uri string) PlanUpdateContent {
 }
 
 // NewPlanUpdateContentMarkdown constructs a PlanUpdateContent using the 'markdown' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewPlanUpdateContentMarkdown(planId PlanId, content string) PlanUpdateContent {
 	return PlanUpdateContent{Markdown: &PlanUpdateContentMarkdown{
 		Content: content,
@@ -369,21 +417,37 @@ func NewSetSessionConfigOptionRequestValueId(sessionId SessionId, configId Sessi
 }
 
 // NewStateUpdateRunning constructs a StateUpdate using the 'running' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewStateUpdateRunning() StateUpdate {
 	return StateUpdate{Running: &StateUpdateRunning{State: "running"}}
 }
 
 // NewStateUpdateIdle constructs a StateUpdate using the 'idle' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewStateUpdateIdle() StateUpdate {
 	return StateUpdate{Idle: &StateUpdateIdle{State: "idle"}}
 }
 
 // NewStateUpdateRequiresAction constructs a StateUpdate using the 'requires_action' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewStateUpdateRequiresAction() StateUpdate {
 	return StateUpdate{RequiresAction: &StateUpdateRequiresAction{State: "requires_action"}}
 }
 
 // NewStateUpdateUnknown constructs a StateUpdate using the 'unknown' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewStateUpdateUnknown() StateUpdate {
 	return StateUpdate{Unknown: &StateUpdateUnknown{State: "unknown"}}
 }
@@ -391,11 +455,19 @@ func NewStateUpdateUnknown() StateUpdate {
 // NewStateUpdateOther constructs a StateUpdate using its Other variant.
 // Keys the variant does not declare go in its Extra field, which MarshalJSON writes
 // after the declared ones; a key a declared field writes is not taken from Extra.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewStateUpdateOther(state string) StateUpdate {
 	return StateUpdate{Other: &StateUpdateOther{State: state}}
 }
 
 // NewUnstableMcpServerHttp constructs a UnstableMcpServer using the 'http' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewUnstableMcpServerHttp(name string, url string, headers []HttpHeader) UnstableMcpServer {
 	return UnstableMcpServer{Http: &UnstableMcpServerHttp{
 		Headers: headers,
@@ -406,6 +478,10 @@ func NewUnstableMcpServerHttp(name string, url string, headers []HttpHeader) Uns
 }
 
 // NewUnstableMcpServerSse constructs a UnstableMcpServer using the 'sse' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewUnstableMcpServerSse(name string, url string, headers []HttpHeader) UnstableMcpServer {
 	return UnstableMcpServer{Sse: &UnstableMcpServerSse{
 		Headers: headers,
@@ -416,6 +492,10 @@ func NewUnstableMcpServerSse(name string, url string, headers []HttpHeader) Unst
 }
 
 // NewUnstableMcpServerAcp constructs a UnstableMcpServer using the 'acp' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewUnstableMcpServerAcp(name string, serverId UnstableMcpServerAcpId) UnstableMcpServer {
 	return UnstableMcpServer{Acp: &UnstableMcpServerAcpInline{
 		Name:     name,
@@ -425,6 +505,10 @@ func NewUnstableMcpServerAcp(name string, serverId UnstableMcpServerAcpId) Unsta
 }
 
 // NewUnstableMcpServerStdio constructs a UnstableMcpServer using its Stdio variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewUnstableMcpServerStdio(name string, command string, args []string, env []EnvVariable) UnstableMcpServer {
 	return UnstableMcpServer{Stdio: &McpServerStdio{
 		Args:    args,
@@ -435,16 +519,28 @@ func NewUnstableMcpServerStdio(name string, command string, args []string, env [
 }
 
 // NewUnstableMessageMcpResponseResult constructs a UnstableMessageMcpResponse using its Result variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewUnstableMessageMcpResponseResult(result json.RawMessage) UnstableMessageMcpResponse {
 	return UnstableMessageMcpResponse{Result: &UnstableMessageMcpResult{Result: result}}
 }
 
 // NewUnstableMessageMcpResponseError constructs a UnstableMessageMcpResponse using its Error variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewUnstableMessageMcpResponseError(errorValue UnstableMcpError) UnstableMessageMcpResponse {
 	return UnstableMessageMcpResponse{Error: &UnstableMessageMcpError{Error: errorValue}}
 }
 
 // NewUnstableNesSuggestionEdit constructs a UnstableNesSuggestion using the 'edit' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewUnstableNesSuggestionEdit(id UnstableNesSuggestionId, uri string, edits []UnstableNesTextEdit) UnstableNesSuggestion {
 	return UnstableNesSuggestion{Edit: &UnstableNesSuggestionEdit{
 		Edits: edits,
@@ -455,6 +551,10 @@ func NewUnstableNesSuggestionEdit(id UnstableNesSuggestionId, uri string, edits 
 }
 
 // NewUnstableNesSuggestionJump constructs a UnstableNesSuggestion using the 'jump' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewUnstableNesSuggestionJump(id UnstableNesSuggestionId, uri string, position UnstablePosition) UnstableNesSuggestion {
 	return UnstableNesSuggestion{Jump: &UnstableNesSuggestionJump{
 		Id:       id,
@@ -465,6 +565,10 @@ func NewUnstableNesSuggestionJump(id UnstableNesSuggestionId, uri string, positi
 }
 
 // NewUnstableNesSuggestionRename constructs a UnstableNesSuggestion using the 'rename' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewUnstableNesSuggestionRename(id UnstableNesSuggestionId, uri string, position UnstablePosition, newName string) UnstableNesSuggestion {
 	return UnstableNesSuggestion{Rename: &UnstableNesSuggestionRename{
 		Id:       id,
@@ -476,6 +580,10 @@ func NewUnstableNesSuggestionRename(id UnstableNesSuggestionId, uri string, posi
 }
 
 // NewUnstableNesSuggestionSearchAndReplace constructs a UnstableNesSuggestion using the 'searchAndReplace' variant.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func NewUnstableNesSuggestionSearchAndReplace(id UnstableNesSuggestionId, uri string, search string, replace string) UnstableNesSuggestion {
 	return UnstableNesSuggestion{SearchAndReplace: &UnstableNesSuggestionSearchAndReplace{
 		Id:      id,

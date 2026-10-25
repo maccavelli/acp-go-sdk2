@@ -389,6 +389,10 @@ func (c *ClientSideConnection) Authenticate(ctx context.Context, params Authenti
 // wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
 // ErrConnectionClosed when the connection ends, or the write's error when
 // writing fails.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableDidChangeDocument(ctx context.Context, params UnstableDidChangeDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidChange, &params); err != nil {
 		return err
@@ -411,6 +415,10 @@ func (c *ClientSideConnection) UnstableDidChangeDocument(ctx context.Context, pa
 // wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
 // ErrConnectionClosed when the connection ends, or the write's error when
 // writing fails.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableDidCloseDocument(ctx context.Context, params UnstableDidCloseDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidClose, &params); err != nil {
 		return err
@@ -433,6 +441,10 @@ func (c *ClientSideConnection) UnstableDidCloseDocument(ctx context.Context, par
 // wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
 // ErrConnectionClosed when the connection ends, or the write's error when
 // writing fails.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableDidFocusDocument(ctx context.Context, params UnstableDidFocusDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidFocus, &params); err != nil {
 		return err
@@ -455,6 +467,10 @@ func (c *ClientSideConnection) UnstableDidFocusDocument(ctx context.Context, par
 // wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
 // ErrConnectionClosed when the connection ends, or the write's error when
 // writing fails.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableDidOpenDocument(ctx context.Context, params UnstableDidOpenDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidOpen, &params); err != nil {
 		return err
@@ -477,6 +493,10 @@ func (c *ClientSideConnection) UnstableDidOpenDocument(ctx context.Context, para
 // wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
 // ErrConnectionClosed when the connection ends, or the write's error when
 // writing fails.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableDidSaveDocument(ctx context.Context, params UnstableDidSaveDocumentNotification) error {
 	if err := c.gate(AgentMethodDocumentDidSave, &params); err != nil {
 		return err
@@ -579,6 +599,10 @@ func (c *ClientSideConnection) Logout(ctx context.Context, params LogoutRequest)
 // wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
 // ErrConnectionClosed when the connection ends, or the write's error when
 // writing fails.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpNotification) error {
 	if err := c.gate(AgentMethodMcpMessage, &params); err != nil {
 		return err
@@ -601,6 +625,10 @@ func (c *ClientSideConnection) UnstableMessageMcp(ctx context.Context, params Un
 // wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
 // ErrConnectionClosed when the connection ends, or the write's error when
 // writing fails.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableAcceptNes(ctx context.Context, params UnstableAcceptNesNotification) error {
 	if err := c.gate(AgentMethodNesAccept, &params); err != nil {
 		return err
@@ -629,6 +657,10 @@ func (c *ClientSideConnection) UnstableAcceptNes(ctx context.Context, params Uns
 // that breaks the schema or what initialize agreed returns an error wrapping
 // *ValidationError or *CapabilityError, and one that does not decode a
 // *RequestError.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableCloseNes(ctx context.Context, params UnstableCloseNesRequest) (UnstableCloseNesResponse, error) {
 	if err := c.gate(AgentMethodNesClose, &params); err != nil {
 		return UnstableCloseNesResponse{}, err
@@ -651,6 +683,10 @@ func (c *ClientSideConnection) UnstableCloseNes(ctx context.Context, params Unst
 // wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
 // ErrConnectionClosed when the connection ends, or the write's error when
 // writing fails.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableRejectNes(ctx context.Context, params UnstableRejectNesNotification) error {
 	if err := c.gate(AgentMethodNesReject, &params); err != nil {
 		return err
@@ -676,6 +712,10 @@ func (c *ClientSideConnection) UnstableRejectNes(ctx context.Context, params Uns
 // that breaks the schema or what initialize agreed returns an error wrapping
 // *ValidationError or *CapabilityError, and one that does not decode a
 // *RequestError.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableStartNes(ctx context.Context, params UnstableStartNesRequest) (UnstableStartNesResponse, error) {
 	if err := c.gate(AgentMethodNesStart, &params); err != nil {
 		return UnstableStartNesResponse{}, err
@@ -701,6 +741,10 @@ func (c *ClientSideConnection) UnstableStartNes(ctx context.Context, params Unst
 // that breaks the schema or what initialize agreed returns an error wrapping
 // *ValidationError or *CapabilityError, and one that does not decode a
 // *RequestError.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableSuggestNes(ctx context.Context, params UnstableSuggestNesRequest) (UnstableSuggestNesResponse, error) {
 	if err := c.gate(AgentMethodNesSuggest, &params); err != nil {
 		return UnstableSuggestNesResponse{}, err
@@ -726,6 +770,10 @@ func (c *ClientSideConnection) UnstableSuggestNes(ctx context.Context, params Un
 // that breaks the schema or what initialize agreed returns an error wrapping
 // *ValidationError or *CapabilityError, and one that does not decode a
 // *RequestError.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableDisableProvider(ctx context.Context, params UnstableDisableProviderRequest) (UnstableDisableProviderResponse, error) {
 	if err := c.gate(AgentMethodProvidersDisable, &params); err != nil {
 		return UnstableDisableProviderResponse{}, err
@@ -751,6 +799,10 @@ func (c *ClientSideConnection) UnstableDisableProvider(ctx context.Context, para
 // that breaks the schema or what initialize agreed returns an error wrapping
 // *ValidationError or *CapabilityError, and one that does not decode a
 // *RequestError.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableListProviders(ctx context.Context, params UnstableListProvidersRequest) (UnstableListProvidersResponse, error) {
 	if err := c.gate(AgentMethodProvidersList, &params); err != nil {
 		return UnstableListProvidersResponse{}, err
@@ -778,6 +830,10 @@ func (c *ClientSideConnection) UnstableListProviders(ctx context.Context, params
 // that breaks the schema or what initialize agreed returns an error wrapping
 // *ValidationError or *CapabilityError, and one that does not decode a
 // *RequestError.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableSetProvider(ctx context.Context, params UnstableSetProviderRequest) (UnstableSetProviderResponse, error) {
 	if err := c.gate(AgentMethodProvidersSet, &params); err != nil {
 		return UnstableSetProviderResponse{}, err
@@ -884,6 +940,10 @@ func (c *ClientSideConnection) DeleteSession(ctx context.Context, params DeleteS
 // that breaks the schema or what initialize agreed returns an error wrapping
 // *ValidationError or *CapabilityError, and one that does not decode a
 // *RequestError.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (c *ClientSideConnection) UnstableForkSession(ctx context.Context, params UnstableForkSessionRequest) (UnstableForkSessionResponse, error) {
 	if err := c.gate(AgentMethodSessionFork, &params); err != nil {
 		return UnstableForkSessionResponse{}, err

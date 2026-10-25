@@ -110,7 +110,7 @@ func emitRPCInterfaces(f *goFile, m *model.Model) {
 		addRPCMethod(f, sets[mi.Binding], mi)
 	}
 	for _, in := range m.Interfaces {
-		f.comment(in.Doc...)
+		f.comment(withNotice(in.Doc, "", in.Deprecation)...)
 		f.add(typeDecl(in.Name, sets[in.Binding].interfaceType(f)))
 	}
 }
@@ -169,18 +169,27 @@ func typeDoc(name, place string, doc []string) []string {
 	return lines
 }
 
+// frozenNotice is the deprecation notice of a declaration the unstable
+// manifest keeps: it names no replacement, since there is none
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 1).
+const frozenNotice = "Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for " +
+	"compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md)."
+
 // withNotice returns doc with the deprecation notice of the node at place as
 // its last paragraph, after a blank line, when d marks the node; doc
 // otherwise. The notice is a fixed sentence, then the protocol table's note
-// when there is one (0024-PLAN-api-gate-and-deprecation.md). doc is not
-// changed.
+// when there is one (0024-PLAN-api-gate-and-deprecation.md), or for a frozen
+// mark frozenNotice. doc is not changed.
 func withNotice(doc []string, place string, d *model.Deprecation) []string {
 	if d == nil {
 		return doc
 	}
-	text := "Deprecated: the ACP schema marks " + place + " deprecated."
-	if d.Note != "" {
-		text += " " + d.Note
+	text := frozenNotice
+	if !d.Frozen {
+		text = "Deprecated: the ACP schema marks " + place + " deprecated."
+		if d.Note != "" {
+			text += " " + d.Note
+		}
 	}
 	out := slices.Clone(doc)
 	if len(out) > 0 {

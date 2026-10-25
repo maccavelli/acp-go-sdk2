@@ -158,6 +158,9 @@ type Interface struct {
 	// empty for a required interface.
 	Name, Var string
 	Doc       []string
+	// Deprecation marks an interface every method of which the unstable
+	// manifest keeps (applyFrozenDeprecations).
+	Deprecation *Deprecation
 }
 
 // MethodRule is what one wire method does beyond its schema.

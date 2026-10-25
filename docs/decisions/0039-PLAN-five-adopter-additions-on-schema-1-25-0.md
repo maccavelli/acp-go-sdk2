@@ -443,6 +443,9 @@ its row are `complete`.
   and the new engine cases pass.
 * After 2c, the regenerated `*_gen.go` files are byte-identical to the committed ones; after 2d, they differ only by the
   deprecation paragraphs (`git diff` on them adds comment lines and nothing else).
+  *Amended 2026-10-25 by the deviation entry "2d, the generated diff": once a method constant carries a notice, `gofmt`
+  re-aligns its `const` block, so the check is that each file's token stream, comments skipped, is identical to the committed
+  file's, and that `git diff -w` adds only comment lines and removes none.*
 * `make lint`, staticcheck's SA1019 included, passes on the whole module, `example/agent` included.
 * The root's and each new package's `go test ./...` and `-race`; the `cmd/generate` tests; `make pre-add-check`; `tools/gates.py
   --all` at every code phase, on the Linux and Windows hosts and at the floor.
@@ -668,3 +671,89 @@ scratch directory.
   * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `newfiles` covered the three new Go
     files, and `api` reported "0 incompatible, 0 compatible" against `v1.22.0`.
   * `make disclosure-check`; `tools/idscan.py --paths` over the 24 changed and new files: 0 matches.
+
+### Deviation, 2026-10-25: 2d, the generated diff
+
+* **Found** when regenerating in 2d. The Verification's "`git diff` on them adds comment lines and nothing else" cannot hold as
+  worded. 2d puts a notice on each frozen method constant, and those constants sit in the aligned `const` blocks of
+  `constants_gen.go`. A comment line between two specs ends `gofmt`'s alignment group, so 24 constant lines change their
+  padding: `git diff --numstat` gives 72 added and 24 removed for `constants_gen.go`. No other generated file removes a line.
+  Leaving the constants without a notice was not an option, since 2d lists them, and a block of their own would move lines,
+  not only pad them.
+* **Not pre-existing:** this is the first notice on a method constant.
+* **Resolved** by checking what the sentence was for, that no declaration changes, directly and more strictly. In a scratch
+  program, each regenerated file's token stream, comments skipped, is compared with the committed file's, and it is identical
+  for all six. `git diff -w` adds only comment lines and removes none. The comparison was seen to fail on a copy of
+  `constants_gen.go` with one value changed (`"nes/accept"` → `"nes/acept"`: "same tokens without comments: false"). The
+  Verification bullet is annotated. No decision and no MADR fact changes, since the MADR's Confirmation says "changes no
+  generated declaration but the deprecation paragraphs".
+
+### 2d, the deprecation source and `example/agent`, 2026-10-25
+
+* **`model`:**
+  * `Deprecation` gains `Frozen`, the manifest's mark.
+  * `Interface` gains `Deprecation`.
+  * `frozen.go`, new: `applyFrozenDeprecations` runs as the last build step, after `applyDeprecations`, so a protocol-table note
+    never names a frozen mark, and a mark the schema gives is kept. It marks:
+    * each type built from the manifest, with its nested structs, variants and enum constants;
+    * each field and variant the manifest adds to a stable type;
+    * each method whose request or notification type comes from the manifest;
+    * each interface all of whose methods are so marked.
+* **`emit`:**
+  * `withNotice` writes `frozenNotice` for a frozen mark.
+  * An interface's doc carries its mark.
+  * `methodConsts` gives a frozen method's constant its notice.
+
+  The schema-keyword text and the refusal of a note on an unmarked node are unchanged.
+* **Regenerated:** 1,076 comment lines in all. `git diff --numstat` counts 1,100 lines added, 24 of them the re-aligned
+  constants. The notices, counted by a scratch script over the five `*_gen.go` files, match
+  2a's inventory:
+
+  | Declaration | Notices |
+  | :--- | :--- |
+  | types | 133: the 102 kept definitions, 25 inline variant types, and the 6 inline types of the stable unions' new variants |
+  | constructors | 27: 26, and `NewMcpServerAcp` |
+  | enum constants | 21 |
+  | method constants | 16 |
+  | interface methods | 16 |
+  | outbound methods | 16 |
+  | interfaces | 2: `AgentExperimental` and `ClientExperimental` |
+  | fields | 42: the 10 new fields, the 6 variant fields on stable unions, and the 26 variant fields of the unstable unions |
+
+  Every manifest definition has its type's notice.
+* **`example/agent/main.go`:** the `acp.AgentExperimental` assertion and the 15 `Unstable*` methods are removed. No test relies
+  on them: `example_pair_test.go` builds and runs the example. Before the removal, `make lint` exited 2 with 24 SA1019 reports
+  per OS, all in this file and none elsewhere in the module. After it, `make lint` reports "0 issues." on both. Nothing was
+  excluded.
+* **Tests:**
+  * `model/frozen_test.go`, new: `TestFrozenDeprecations`. A type from the live unstable schema has no mark, a schema mark is
+    kept, and an interface with a method that is not frozen has none, while its frozen method does.
+  * The engine case `accept-unstable-deprecated`, new, its manifest frozen by the generator. Its `want.deprecated`, written by
+    `-update` and read, lists 20 notices, and no stable declaration has one. They are:
+    * the kept type `Level` and its two constants;
+    * the copied union `UnstableShape`, its two variant types, fields and constructors;
+    * the added field `Caps.N`;
+    * the added variant `Pick.N`, with its type and constructor;
+    * `UnstableNewRequest`, `UnstableNewResponse` and `AgentMethodNew`;
+    * `AgentExperimental.UnstableNew`, `(*ClientSideConnection).UnstableNew` and `AgentExperimental` itself.
+  * The five accepting 2c cases gain `want.deprecated` by `-update`. Each diff only adds that section, and no `want.api` changed.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | 2d's row: one field's notice not emitted | `--- FAIL: TestEngineCases/accept-unstable-deprecated`, missing `field Caps.N: Deprecated: …`; `main_test.go:64: types_gen.go is out of date` |
+  | 2d's row: `example/agent` as it was before 2d | `make lint`, exit 2: `example/agent/main.go:41:4: SA1019: github.com/maccavelli/acp-go-sdk2.AgentExperimental is deprecated: …`, 24 reports per OS |
+  | a method constant's notice not emitted | `accept-unstable-deprecated`, missing `const AgentMethodNew: Deprecated: …` |
+  | an interface marked when one of its methods is frozen | `frozen_test.go:61: AgentExperimental is marked, but one of its methods is not frozen` |
+  | a schema mark replaced by the frozen one | `frozen_test.go:51: Marked: mark &{Note: Definition: Frozen:true}, want mark true frozen false` |
+  | live unstable types marked | `frozen_test.go:51: Live: mark &{… Frozen:true}, want mark false frozen false` |
+
+  The first attempt at the `example/agent` row restored only the assertion, without its 15 methods. It failed as a type error,
+  not SA1019. The plant was corrected to the pre-2d file from `HEAD`.
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "188 file(s) clean";
+  * `(cd cmd/generate && go test -count=1 ./...)`; `go test -count=1 ./...` at the root;
+  * `make lint`;
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `newfiles` covered `frozen.go` and
+    `frozen_test.go`, and `api` reported "0 incompatible, 0 compatible" against `v1.22.0`;
+  * `make disclosure-check`; `tools/idscan.py --paths` over the 18 changed and new files: 0 matches.

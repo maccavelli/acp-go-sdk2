@@ -158,3 +158,18 @@ func (*UnstableNewResponse).Validate() error
 func (*UnstableWatchRequest).UnmarshalJSON(b []byte) error
 func (*UnstableWatchRequest).Validate() error
 func (*UnstableWatchResponse).Validate() error
+-- want.deprecated --
+const AgentMethodNew: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+const ClientMethodWatch: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+field Shared.B: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+method (*AgentSideConnection).UnstableWatch: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+method (*ClientSideConnection).UnstableNew: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+method AgentExperimental.UnstableNew: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+method ClientExperimental.UnstableWatch: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type AgentExperimental: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type ClientExperimental: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableExtra: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableNewRequest: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableNewResponse: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableWatchRequest: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableWatchResponse: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).

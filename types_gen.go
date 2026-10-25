@@ -95,12 +95,20 @@ type AgentCapabilities struct {
 	//
 	// Optional. Omitted or 'null' both mean the agent does not advertise support
 	// for NES methods.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Nes *NesCapabilities `json:"nes,omitempty"`
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// The position encoding selected by the agent from the client's supported encodings.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	PositionEncoding *PositionEncodingKind `json:"positionEncoding,omitempty"`
 	// Prompt capabilities supported by the agent.
 	//
@@ -114,6 +122,10 @@ type AgentCapabilities struct {
 	//
 	// Optional. Omitted or 'null' both mean the agent does not advertise support.
 	// Supplying '{}' means the agent supports provider configuration methods.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Providers *ProvidersCapabilities `json:"providers,omitempty"`
 	// Session lifecycle and prompt capabilities advertised by the agent.
 	//
@@ -1530,6 +1542,10 @@ type ClientCapabilities struct {
 	//
 	// Optional. Omitted or 'null' both mean the client does not advertise any
 	// NES suggestion-kind extensions.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Nes *ClientNesCapabilities `json:"nes,omitempty"`
 	// **UNSTABLE**
 	//
@@ -1539,12 +1555,20 @@ type ClientCapabilities struct {
 	//
 	// Optional. Omitted or 'null' both mean the client does not advertise support.
 	// Supplying '{}' means the client can receive both update types.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Plan *PlanCapabilities `json:"plan,omitempty"`
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// The position encodings supported by the client, in order of preference.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	PositionEncodings []PositionEncodingKind `json:"positionEncodings,omitempty"`
 	// Session-related capabilities supported by the client.
 	//
@@ -1561,6 +1585,10 @@ type ClientCapabilities struct {
 	// advertise support.
 	// Supplying '{}' means the client understands child associations, work-state
 	// snapshots, session-directed messages, and restricted-session semantics.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Subagents *SubagentCapabilities `json:"subagents,omitempty"`
 	// Whether the Client support all 'terminal/*' methods.
 	//
@@ -1621,6 +1649,10 @@ func (v *ClientCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // NES capabilities advertised by the client during initialization.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type ClientNesCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -6209,6 +6241,10 @@ const (
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Details of a failure that ended a child's foreground work.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type ErrorStopReason struct {
 	// The failure, as a JSON-RPC error object.
 	//
@@ -6370,6 +6406,10 @@ func (v *HttpHeader) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 // IdleStateUpdateEndTurn is the "end_turn" variant of the IdleStateUpdate schema definition.
 //
 // The work ended successfully.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type IdleStateUpdateEndTurn struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -6413,6 +6453,10 @@ func (v *IdleStateUpdateEndTurn) decodeKeys(b []byte, _ map[string]json.RawMessa
 // IdleStateUpdateMaxTokens is the "max_tokens" variant of the IdleStateUpdate schema definition.
 //
 // The work ended because the agent reached the maximum number of tokens.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type IdleStateUpdateMaxTokens struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -6457,6 +6501,10 @@ func (v *IdleStateUpdateMaxTokens) decodeKeys(b []byte, _ map[string]json.RawMes
 //
 // The work ended because the agent reached the maximum number of allowed
 // agent requests.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type IdleStateUpdateMaxTurnRequests struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -6500,6 +6548,10 @@ func (v *IdleStateUpdateMaxTurnRequests) decodeKeys(b []byte, _ map[string]json.
 // IdleStateUpdateRefusal is the "refusal" variant of the IdleStateUpdate schema definition.
 //
 // The work ended because the agent refused to continue.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type IdleStateUpdateRefusal struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -6543,6 +6595,10 @@ func (v *IdleStateUpdateRefusal) decodeKeys(b []byte, _ map[string]json.RawMessa
 // IdleStateUpdateCancelled is the "cancelled" variant of the IdleStateUpdate schema definition.
 //
 // The work was cancelled.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type IdleStateUpdateCancelled struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -6586,6 +6642,10 @@ func (v *IdleStateUpdateCancelled) decodeKeys(b []byte, _ map[string]json.RawMes
 // IdleStateUpdateError is the "error" variant of the IdleStateUpdate schema definition.
 //
 // The work ended because something failed.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type IdleStateUpdateError struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -6639,6 +6699,10 @@ func (v *IdleStateUpdateError) decodeKeys(b []byte, _ map[string]json.RawMessage
 //
 // Values beginning with '_' are reserved for implementation-specific
 // extensions. Other unknown values are reserved for future ACP variants.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type IdleStateUpdateOther struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -6717,6 +6781,10 @@ func (v *IdleStateUpdateOther) decodeKeys(b []byte, m map[string]json.RawMessage
 // IdleStateUpdateNone is the None variant of the IdleStateUpdate schema definition.
 //
 // No stop reason: 'stopReason' is omitted or 'null'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type IdleStateUpdateNone struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -6767,26 +6835,62 @@ func (v *IdleStateUpdateNone) decodeKeys(b []byte, _ map[string]json.RawMessage)
 // The child is ready to process another prompt.
 //
 // An omitted, 'null', or malformed 'stopReason' means not reported.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type IdleStateUpdate struct {
 	// The work ended successfully.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	EndTurn *IdleStateUpdateEndTurn `json:"-"`
 	// The work ended because the agent reached the maximum number of tokens.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	MaxTokens *IdleStateUpdateMaxTokens `json:"-"`
 	// The work ended because the agent reached the maximum number of allowed
 	// agent requests.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	MaxTurnRequests *IdleStateUpdateMaxTurnRequests `json:"-"`
 	// The work ended because the agent refused to continue.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Refusal *IdleStateUpdateRefusal `json:"-"`
 	// The work was cancelled.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Cancelled *IdleStateUpdateCancelled `json:"-"`
 	// The work ended because something failed.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Error *IdleStateUpdateError `json:"-"`
 	// Custom or future stop reason.
 	//
 	// Values beginning with '_' are reserved for implementation-specific
 	// extensions. Other unknown values are reserved for future ACP variants.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Other *IdleStateUpdateOther `json:"-"`
 	// No stop reason: 'stopReason' is omitted or 'null'.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	None *IdleStateUpdateNone `json:"-"`
 }
 
@@ -7865,6 +7969,10 @@ type McpCapabilities struct {
 	// Agent supports ['McpServer::Acp'].
 	//
 	// Defaults to false if unset.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Acp bool `json:"acp,omitempty"`
 	// Agent supports ['McpServer::Http'].
 	//
@@ -8038,6 +8146,10 @@ func (v *McpServerSseInline) decodeKeys(b []byte, m map[string]json.RawMessage) 
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.acp' is 'true'.
 // The MCP server is provided by an ACP component and communicates over the ACP channel.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type McpServerAcpInline struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -8109,6 +8221,10 @@ type McpServer struct {
 	//
 	// Only available when the Agent capabilities indicate 'mcp_capabilities.acp' is 'true'.
 	// The MCP server is provided by an ACP component and communicates over the ACP channel.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Acp *McpServerAcpInline `json:"-"`
 	// Stdio transport configuration
 	//
@@ -8269,6 +8385,10 @@ func (u *McpServer) validate(abs func(string) bool) error {
 //
 // The MCP server is provided by an ACP component and communicates over the ACP channel
 // using 'mcp/message'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type McpServerAcp struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -8324,6 +8444,10 @@ func (v *McpServerAcp) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 //
 // The value is opaque and generated by the ACP component providing the MCP server. It is
 // used by 'mcp/message' to route requests to the component that declared the server.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type McpServerAcpId string
 
 // McpServerHttp is the McpServerHttp schema definition.
@@ -8858,6 +8982,10 @@ func (v *MultiSelectPropertySchema) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // NES capabilities advertised by the agent during initialization.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -8908,6 +9036,10 @@ func (v *NesCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) err
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Context capabilities the agent wants attached to each suggestion request.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesContextCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -8974,6 +9106,10 @@ func (v *NesContextCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessa
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Capabilities for diagnostics context.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesDiagnosticsCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9016,6 +9152,10 @@ func (v *NesDiagnosticsCapabilities) decodeKeys(b []byte, _ map[string]json.RawM
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Capabilities for 'document/didChange' events.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesDocumentDidChangeCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9063,6 +9203,10 @@ func (v *NesDocumentDidChangeCapabilities) decodeKeys(b []byte, m map[string]jso
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Marker for 'document/didClose' capability support.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesDocumentDidCloseCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9105,6 +9249,10 @@ func (v *NesDocumentDidCloseCapabilities) decodeKeys(b []byte, _ map[string]json
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Marker for 'document/didFocus' capability support.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesDocumentDidFocusCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9147,6 +9295,10 @@ func (v *NesDocumentDidFocusCapabilities) decodeKeys(b []byte, _ map[string]json
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Marker for 'document/didOpen' capability support.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesDocumentDidOpenCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9189,6 +9341,10 @@ func (v *NesDocumentDidOpenCapabilities) decodeKeys(b []byte, _ map[string]json.
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Marker for 'document/didSave' capability support.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesDocumentDidSaveCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9231,6 +9387,10 @@ func (v *NesDocumentDidSaveCapabilities) decodeKeys(b []byte, _ map[string]json.
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Document event capabilities the agent wants to receive.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesDocumentEventCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9293,6 +9453,10 @@ func (v *NesDocumentEventCapabilities) decodeKeys(b []byte, _ map[string]json.Ra
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Capabilities for edit history context.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesEditHistoryCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9339,6 +9503,10 @@ func (v *NesEditHistoryCapabilities) decodeKeys(b []byte, _ map[string]json.RawM
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Event capabilities the agent can consume.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesEventCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9385,6 +9553,10 @@ func (v *NesEventCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Marker for jump suggestion support.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesJumpCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9427,6 +9599,10 @@ func (v *NesJumpCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage)
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Capabilities for open files context.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesOpenFilesCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9469,6 +9645,10 @@ func (v *NesOpenFilesCapabilities) decodeKeys(b []byte, _ map[string]json.RawMes
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Capabilities for recent files context.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesRecentFilesCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9515,6 +9695,10 @@ func (v *NesRecentFilesCapabilities) decodeKeys(b []byte, _ map[string]json.RawM
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Capabilities for related snippets context.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesRelatedSnippetsCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9557,6 +9741,10 @@ func (v *NesRelatedSnippetsCapabilities) decodeKeys(b []byte, _ map[string]json.
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Marker for rename suggestion support.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesRenameCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9599,6 +9787,10 @@ func (v *NesRenameCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessag
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Marker for search and replace suggestion support.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesSearchAndReplaceCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -9641,6 +9833,10 @@ func (v *NesSearchAndReplaceCapabilities) decodeKeys(b []byte, _ map[string]json
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Capabilities for user actions context.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type NesUserActionsCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -10167,6 +10363,10 @@ func (v *Plan) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Capabilities for receiving 'plan_update' and 'plan_removed' session updates.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PlanCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -10308,6 +10508,10 @@ const (
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A plan represented by a file URI.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PlanFile struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -10357,6 +10561,10 @@ func (v *PlanFile) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Unique identifier for a plan within a session.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PlanId string
 
 // PlanItems is the PlanItems schema definition.
@@ -10366,6 +10574,10 @@ type PlanId string
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A plan represented as structured entries.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PlanItems struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -10432,6 +10644,10 @@ func (v *PlanItems) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A plan represented as raw markdown content.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PlanMarkdown struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -10481,6 +10697,10 @@ func (v *PlanMarkdown) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Removal notice for a plan identified by ID.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PlanRemoved struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -10528,6 +10748,10 @@ func (v *PlanRemoved) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A content update for a plan identified by ID.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PlanUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -10583,6 +10807,10 @@ func (v *PlanUpdate) validate(abs func(string) bool) error {
 // PlanUpdateContentItems is the "items" variant of the PlanUpdateContent schema definition.
 //
 // Structured plan entries.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PlanUpdateContentItems struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -10646,6 +10874,10 @@ func (v *PlanUpdateContentItems) decodeKeys(b []byte, m map[string]json.RawMessa
 // PlanUpdateContentFile is the "file" variant of the PlanUpdateContent schema definition.
 //
 // A URI pointing to a file containing the plan.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PlanUpdateContentFile struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -10692,6 +10924,10 @@ func (v *PlanUpdateContentFile) decodeKeys(b []byte, m map[string]json.RawMessag
 // PlanUpdateContentMarkdown is the "markdown" variant of the PlanUpdateContent schema definition.
 //
 // Raw markdown content for the plan.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PlanUpdateContentMarkdown struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -10742,12 +10978,28 @@ func (v *PlanUpdateContentMarkdown) decodeKeys(b []byte, m map[string]json.RawMe
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Updated content for a plan.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PlanUpdateContent struct {
 	// Structured plan entries.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Items *PlanUpdateContentItems `json:"-"`
 	// A URI pointing to a file containing the plan.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	File *PlanUpdateContentFile `json:"-"`
 	// Raw markdown content for the plan.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Markdown *PlanUpdateContentMarkdown `json:"-"`
 	// Unknown holds a payload whose "type" names no variant this SDK knows, as it was received.
 	// MarshalJSON writes it back unchanged when no variant is set.
@@ -10925,20 +11177,36 @@ func (u *PlanUpdateContent) validate(abs func(string) bool) error {
 // The encoding used for character offsets in positions.
 //
 // Follows the same conventions as LSP 3.17. The default is UTF-16.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type PositionEncodingKind string
 
 const (
 	// PositionEncodingKindUtf16 is the "utf-16" value.
 	//
 	// Character offsets count UTF-16 code units. This is the default.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	PositionEncodingKindUtf16 PositionEncodingKind = "utf-16"
 	// PositionEncodingKindUtf32 is the "utf-32" value.
 	//
 	// Character offsets count Unicode code points.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	PositionEncodingKindUtf32 PositionEncodingKind = "utf-32"
 	// PositionEncodingKindUtf8 is the "utf-8" value.
 	//
 	// Character offsets count UTF-8 code units (bytes).
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	PositionEncodingKindUtf8 PositionEncodingKind = "utf-8"
 )
 
@@ -11116,6 +11384,10 @@ type PromptResponse struct {
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Token usage for this turn (optional).
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Usage *Usage `json:"usage,omitempty"`
 }
 
@@ -11176,6 +11448,10 @@ type ProtocolVersion uint16
 // Provider configuration capabilities supported by the agent.
 //
 // Supplying '{}' means the agent supports provider configuration methods.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type ProvidersCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -11869,6 +12145,10 @@ func (v *RequestPermissionResponse) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Foreground work is blocked on user action.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type RequiresActionStateUpdate struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -12147,6 +12427,10 @@ const (
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Foreground work is in progress.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type RunningStateUpdate struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -12275,6 +12559,10 @@ func (v *SessionAdditionalDirectoriesCapabilities) decodeKeys(b []byte, _ map[st
 // Capability to cancel work in a subagent session without ending that session.
 //
 // Supplying '{}' advertises support; an omitted or 'null' 'cancel' does not.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SessionCancelCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -12356,6 +12644,10 @@ type SessionCapabilities struct {
 	//
 	// Optional. Omitted or 'null' both mean the agent does not advertise support.
 	// Supplying '{}' means the agent supports forking sessions.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Fork *SessionForkCapabilities `json:"fork,omitempty"`
 	// Whether the agent supports 'session/list'.
 	//
@@ -13191,6 +13483,10 @@ func (v *SessionDeleteCapabilities) decodeKeys(b []byte, _ map[string]json.RawMe
 // Capabilities for the 'session/fork' method.
 //
 // Supplying '{}' means the agent supports forking sessions.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SessionForkCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -13424,6 +13720,10 @@ func (v *SessionListCapabilities) decodeKeys(b []byte, _ map[string]json.RawMess
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // An upsert for an inter-session message.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SessionMessage struct {
 	// Omitted leaves metadata unchanged; 'null' removes it.
 	//
@@ -13498,6 +13798,10 @@ func (v *SessionMessage) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A streamed content block of an inter-session message.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SessionMessageChunk struct {
 	// Optional and nullable chunk-scoped metadata; omitted or 'null' means none.
 	//
@@ -14240,6 +14544,10 @@ func (v *SessionUpdatePlan) decodeKeys(b []byte, m map[string]json.RawMessage) e
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A content update for a plan identified by ID.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SessionPlanUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -14300,6 +14608,10 @@ func (v *SessionPlanUpdate) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Removal notice for a plan identified by ID.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SessionUpdatePlanRemoved struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -14833,6 +15145,10 @@ func (v *SessionUpdateCompactionSummaryChunk) validate(abs func(string) bool) er
 //
 // Announces a child session created and owned by this session, or updates
 // that ownership association's metadata.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SessionSubagentUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -14930,6 +15246,10 @@ func (v *SessionSubagentUpdate) validate(abs func(string) bool) error {
 //
 // A message upsert observed in this session's transcript, sent to or
 // received from another session.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SessionUpdateSessionMessage struct {
 	// Omitted leaves metadata unchanged; 'null' removes it.
 	//
@@ -15005,6 +15325,10 @@ func (v *SessionUpdateSessionMessage) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // One content block appended to a sent or received session message.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SessionUpdateSessionMessageChunk struct {
 	// Optional and nullable chunk-scoped metadata; omitted or 'null' means none.
 	//
@@ -15092,12 +15416,20 @@ type SessionUpdate struct {
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// A content update for a plan identified by ID.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	PlanUpdate *SessionPlanUpdate `json:"-"`
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Removal notice for a plan identified by ID.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	PlanRemoved *SessionUpdatePlanRemoved `json:"-"`
 	// Available commands are ready or have changed
 	AvailableCommandsUpdate *SessionAvailableCommandsUpdate `json:"-"`
@@ -15132,6 +15464,10 @@ type SessionUpdate struct {
 	//
 	// Announces a child session created and owned by this session, or updates
 	// that ownership association's metadata.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	SubagentUpdate *SessionSubagentUpdate `json:"-"`
 	// **UNSTABLE**
 	//
@@ -15139,12 +15475,20 @@ type SessionUpdate struct {
 	//
 	// A message upsert observed in this session's transcript, sent to or
 	// received from another session.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	SessionMessage *SessionUpdateSessionMessage `json:"-"`
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// One content block appended to a sent or received session message.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	SessionMessageChunk *SessionUpdateSessionMessageChunk `json:"-"`
 	// Unknown holds a payload whose "sessionUpdate" names no variant this SDK knows, as it was received.
 	// MarshalJSON writes it back unchanged when no variant is set.
@@ -16265,6 +16609,10 @@ func (v *SetSessionModeResponse) validate(abs func(string) bool) error {
 // StateUpdateRunning is the "running" variant of the StateUpdate schema definition.
 //
 // Foreground work is in progress.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type StateUpdateRunning struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -16302,6 +16650,10 @@ func (v *StateUpdateRunning) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 // StateUpdateIdle is the "idle" variant of the StateUpdate schema definition.
 //
 // The child is ready to process another prompt.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type StateUpdateIdle struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -16353,6 +16705,10 @@ func (v *StateUpdateIdle) decodeKeys(b []byte, _ map[string]json.RawMessage) err
 // StateUpdateRequiresAction is the "requires_action" variant of the StateUpdate schema definition.
 //
 // Foreground work is blocked on user action.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type StateUpdateRequiresAction struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -16392,6 +16748,10 @@ func (v *StateUpdateRequiresAction) decodeKeys(b []byte, _ map[string]json.RawMe
 // The Agent cannot currently determine foreground activity.
 //
 // This replaces previously confirmed activity without ending the work or session.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type StateUpdateUnknown struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -16432,6 +16792,10 @@ func (v *StateUpdateUnknown) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 //
 // Values beginning with '_' are reserved for implementation-specific
 // extensions. Other unknown values are reserved for future ACP variants.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type StateUpdateOther struct {
 	// Unrecognized state discriminator.
 	State string `json:"state"`
@@ -16499,21 +16863,45 @@ func (v *StateUpdateOther) decodeKeys(b []byte, m map[string]json.RawMessage) er
 // Each update is a whole-object snapshot. Idle does not terminate the child;
 // the parent can message it again, transitioning it back to running.
 // Background activity may still emit other session updates while idle.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type StateUpdate struct {
 	// Foreground work is in progress.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Running *StateUpdateRunning `json:"-"`
 	// The child is ready to process another prompt.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Idle *StateUpdateIdle `json:"-"`
 	// Foreground work is blocked on user action.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	RequiresAction *StateUpdateRequiresAction `json:"-"`
 	// The Agent cannot currently determine foreground activity.
 	//
 	// This replaces previously confirmed activity without ending the work or session.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Unknown *StateUpdateUnknown `json:"-"`
 	// Custom or future state.
 	//
 	// Values beginning with '_' are reserved for implementation-specific
 	// extensions. Other unknown values are reserved for future ACP variants.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Other *StateUpdateOther `json:"-"`
 }
 
@@ -16899,6 +17287,10 @@ func (v *StringPropertySchema) decodeKeys(b []byte, _ map[string]json.RawMessage
 // session-directed messages, and restricted-session semantics. The client
 // must advertise this capability before the agent sends subagent updates or
 // session-directed messages.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SubagentCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -16942,6 +17334,10 @@ func (v *SubagentCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage
 //
 // A mutation requires an explicit per-child capability; support for the method
 // on ordinary sessions does not grant support on a child.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SubagentSessionCapabilities struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -17006,6 +17402,10 @@ func (v *SubagentSessionCapabilities) decodeKeys(b []byte, _ map[string]json.Raw
 // state replaces the entire previous state object, not the session.
 // The title and description provide the parent's display metadata for the
 // child. They do not replace the content of individual messages or operations.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type SubagentUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -17358,16 +17758,28 @@ func (v *TextContent) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // How the agent wants document changes delivered.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type TextDocumentSyncKind string
 
 const (
 	// TextDocumentSyncKindFull is the "full" value.
 	//
 	// Client sends the entire file content on each change.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	TextDocumentSyncKindFull TextDocumentSyncKind = "full"
 	// TextDocumentSyncKindIncremental is the "incremental" value.
 	//
 	// Client sends only the changed ranges.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	TextDocumentSyncKindIncremental TextDocumentSyncKind = "incremental"
 )
 
@@ -18225,6 +18637,10 @@ const (
 //
 // This is not a task outcome or session closure. It does not cancel work, resolve
 // pending requests, or revoke capabilities; capabilities are updated separately.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnknownStateUpdate struct {
 	// The _meta property is reserved by ACP for additional metadata.
 	// Implementations MUST NOT make assumptions about values at these keys.
@@ -18265,6 +18681,10 @@ func (v *UnknownStateUpdate) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a suggestion is accepted.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableAcceptNesNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -18326,6 +18746,10 @@ func (v *UnstableAcceptNesNotification) validate(abs func(string) bool) error {
 //
 // The agent **must** cancel any ongoing work related to the NES session
 // and then free up any resources associated with the session.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableCloseNesRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -18382,6 +18806,10 @@ func (v *UnstableCloseNesRequest) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Response from closing an NES session.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableCloseNesResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -18433,6 +18861,10 @@ func (v *UnstableCloseNesResponse) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a file is edited.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableDidChangeDocumentNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -18505,6 +18937,10 @@ func (v *UnstableDidChangeDocumentNotification) validate(abs func(string) bool) 
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a file is closed.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableDidCloseDocumentNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -18563,6 +18999,10 @@ func (v *UnstableDidCloseDocumentNotification) validate(abs func(string) bool) e
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a file becomes the active editor tab.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableDidFocusDocumentNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -18627,6 +19067,10 @@ func (v *UnstableDidFocusDocumentNotification) validate(abs func(string) bool) e
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a file is opened in the editor.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableDidOpenDocumentNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -18691,6 +19135,10 @@ func (v *UnstableDidOpenDocumentNotification) validate(abs func(string) bool) er
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a file is saved.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableDidSaveDocumentNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -18749,6 +19197,10 @@ func (v *UnstableDidSaveDocumentNotification) validate(abs func(string) bool) er
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Request parameters for 'providers/disable'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableDisableProviderRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -18805,6 +19257,10 @@ func (v *UnstableDisableProviderRequest) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Response to 'providers/disable'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableDisableProviderResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -18861,6 +19317,10 @@ func (v *UnstableDisableProviderResponse) validate(abs func(string) bool) error 
 // operations like generating summaries without affecting the original session's history.
 //
 // Only available if the Agent supports the 'session.fork' capability.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableForkSessionRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -18952,6 +19412,10 @@ func (v *UnstableForkSessionRequest) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Response from forking an existing session.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableForkSessionResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -19025,6 +19489,10 @@ func (v *UnstableForkSessionResponse) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Request parameters for 'providers/list'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableListProvidersRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -19076,6 +19544,10 @@ func (v *UnstableListProvidersRequest) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Response to 'providers/list'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableListProvidersResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -19147,28 +19619,52 @@ func (v *UnstableListProvidersResponse) validate(abs func(string) bool) error {
 //
 // Protocol names beginning with '_' are free for custom use, like other ACP extension methods.
 // Protocol names that do not begin with '_' are reserved for the ACP spec.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableLlmProtocol string
 
 const (
 	// UnstableLlmProtocolAnthropic is the "anthropic" value.
 	//
 	// Anthropic API protocol.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableLlmProtocolAnthropic UnstableLlmProtocol = "anthropic"
 	// UnstableLlmProtocolOpenai is the "openai" value.
 	//
 	// OpenAI API protocol.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableLlmProtocolOpenai UnstableLlmProtocol = "openai"
 	// UnstableLlmProtocolAzure is the "azure" value.
 	//
 	// Azure OpenAI API protocol.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableLlmProtocolAzure UnstableLlmProtocol = "azure"
 	// UnstableLlmProtocolVertex is the "vertex" value.
 	//
 	// Google Vertex AI API protocol.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableLlmProtocolVertex UnstableLlmProtocol = "vertex"
 	// UnstableLlmProtocolBedrock is the "bedrock" value.
 	//
 	// AWS Bedrock API protocol.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableLlmProtocolBedrock UnstableLlmProtocol = "bedrock"
 )
 
@@ -19180,6 +19676,10 @@ const (
 //
 // 'code' and 'message' are required and non-null. 'data' is optional;
 // explicit 'null' is preserved separately from an omitted key.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMcpError struct {
 	// Inner MCP error code; never an ACP error code.
 	Code int32 `json:"code"`
@@ -19257,6 +19757,10 @@ func (v *UnstableMcpError) decodeKeys(b []byte, m map[string]json.RawMessage) er
 //
 // Generated by the caller and preserved unchanged by proxies. This is distinct
 // from the outer ACP JSON-RPC request ID.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMcpRequestId string
 
 // UnstableMcpServerHttp is the "http" variant of the McpServer schema definition.
@@ -19264,6 +19768,10 @@ type UnstableMcpRequestId string
 // # HTTP transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.http' is 'true'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMcpServerHttp struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -19324,6 +19832,10 @@ func (v *UnstableMcpServerHttp) decodeKeys(b []byte, m map[string]json.RawMessag
 // # SSE transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.sse' is 'true'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMcpServerSse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -19389,6 +19901,10 @@ func (v *UnstableMcpServerSse) decodeKeys(b []byte, m map[string]json.RawMessage
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.acp' is 'true'.
 // The MCP server is provided by an ACP component and communicates over the ACP channel.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMcpServerAcpInline struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -19447,14 +19963,26 @@ func (v *UnstableMcpServerAcpInline) decodeKeys(b []byte, m map[string]json.RawM
 // processing prompts.
 //
 // See protocol docs: [MCP Servers](https://agentclientprotocol.com/protocol/session-setup#mcp-servers)
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMcpServer struct {
 	// HTTP transport configuration
 	//
 	// Only available when the Agent capabilities indicate 'mcp_capabilities.http' is 'true'.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Http *UnstableMcpServerHttp `json:"-"`
 	// SSE transport configuration
 	//
 	// Only available when the Agent capabilities indicate 'mcp_capabilities.sse' is 'true'.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Sse *UnstableMcpServerSse `json:"-"`
 	// **UNSTABLE**
 	//
@@ -19464,10 +19992,18 @@ type UnstableMcpServer struct {
 	//
 	// Only available when the Agent capabilities indicate 'mcp_capabilities.acp' is 'true'.
 	// The MCP server is provided by an ACP component and communicates over the ACP channel.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Acp *UnstableMcpServerAcpInline `json:"-"`
 	// Stdio transport configuration
 	//
 	// All Agents MUST support this transport.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Stdio *McpServerStdio `json:"-"`
 	// Unknown holds a payload whose "type" names no variant this SDK knows, as it was received.
 	// MarshalJSON writes it back unchanged when no variant is set.
@@ -19624,6 +20160,10 @@ func (u *UnstableMcpServer) validate(abs func(string) bool) error {
 //
 // The MCP server is provided by an ACP component and communicates over the ACP channel
 // using 'mcp/message'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMcpServerAcp struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -19679,6 +20219,10 @@ func (v *UnstableMcpServerAcp) decodeKeys(b []byte, m map[string]json.RawMessage
 //
 // The value is opaque and generated by the ACP component providing the MCP server. It is
 // used by 'mcp/message' to route requests to the component that declared the server.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMcpServerAcpId string
 
 // UnstableMessageMcpNotification is the MessageMcpNotification schema definition.
@@ -19691,6 +20235,10 @@ type UnstableMcpServerAcpId string
 //
 // Sent by the provider to the consumer for an active request (including
 // subscription acknowledgements and updates); the outer envelope has no 'id'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMessageMcpNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -19755,6 +20303,10 @@ func (v *UnstableMessageMcpNotification) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Request parameters for 'mcp/message'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMessageMcpRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -19815,6 +20367,10 @@ func (v *UnstableMessageMcpRequest) validate(abs func(string) bool) error {
 // UnstableMessageMcpResult is the Result variant of the MessageMcpResponse schema definition.
 //
 // An opaque inner MCP result.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMessageMcpResult struct {
 	// Optional ACP carrier metadata.
 	Meta map[string]any `json:"_meta,omitempty"`
@@ -19854,6 +20410,10 @@ func (v *UnstableMessageMcpResult) decodeKeys(b []byte, m map[string]json.RawMes
 // UnstableMessageMcpError is the Error variant of the MessageMcpResponse schema definition.
 //
 // A structured inner MCP error.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMessageMcpError struct {
 	// Optional ACP carrier metadata.
 	Meta map[string]any `json:"_meta,omitempty"`
@@ -19902,10 +20462,22 @@ func (v *UnstableMessageMcpError) decodeKeys(b []byte, m map[string]json.RawMess
 // Unknown outer fields are ignored; inner result and error fields are preserved.
 // Carrier '_meta' is optional; null or invalid values are treated as absent.
 // Senders must include exactly one outcome; receivers prefer 'result' if both are present.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableMessageMcpResponse struct {
 	// An opaque inner MCP result.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Result *UnstableMessageMcpResult `json:"-"`
 	// A structured inner MCP error.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Error *UnstableMessageMcpError `json:"-"`
 }
 
@@ -20007,6 +20579,10 @@ func (u *UnstableMessageMcpResponse) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A diagnostic (error, warning, etc.).
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesDiagnostic struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20060,24 +20636,44 @@ func (v *UnstableNesDiagnostic) decodeKeys(b []byte, m map[string]json.RawMessag
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Severity of a diagnostic.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesDiagnosticSeverity string
 
 const (
 	// UnstableNesDiagnosticSeverityError is the "error" value.
 	//
 	// An error.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesDiagnosticSeverityError UnstableNesDiagnosticSeverity = "error"
 	// UnstableNesDiagnosticSeverityWarning is the "warning" value.
 	//
 	// A warning.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesDiagnosticSeverityWarning UnstableNesDiagnosticSeverity = "warning"
 	// UnstableNesDiagnosticSeverityInformation is the "information" value.
 	//
 	// An informational message.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesDiagnosticSeverityInformation UnstableNesDiagnosticSeverity = "information"
 	// UnstableNesDiagnosticSeverityHint is the "hint" value.
 	//
 	// A hint.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesDiagnosticSeverityHint UnstableNesDiagnosticSeverity = "hint"
 )
 
@@ -20088,6 +20684,10 @@ const (
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // An entry in the edit history.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesEditHistoryEntry struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20137,6 +20737,10 @@ func (v *UnstableNesEditHistoryEntry) decodeKeys(b []byte, m map[string]json.Raw
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A text edit suggestion.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesEditSuggestion struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20202,6 +20806,10 @@ func (v *UnstableNesEditSuggestion) decodeKeys(b []byte, m map[string]json.RawMe
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A code excerpt from a file.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesExcerpt struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20253,6 +20861,10 @@ func (v *UnstableNesExcerpt) decodeKeys(b []byte, m map[string]json.RawMessage) 
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A jump-to-location suggestion.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesJumpSuggestion struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20304,6 +20916,10 @@ func (v *UnstableNesJumpSuggestion) decodeKeys(b []byte, m map[string]json.RawMe
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // An open file in the editor.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesOpenFile struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20361,6 +20977,10 @@ func (v *UnstableNesOpenFile) decodeKeys(b []byte, m map[string]json.RawMessage)
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A recently accessed file.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesRecentFile struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20412,24 +21032,44 @@ func (v *UnstableNesRecentFile) decodeKeys(b []byte, m map[string]json.RawMessag
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // The reason a suggestion was rejected.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesRejectReason string
 
 const (
 	// UnstableNesRejectReasonRejected is the "rejected" value.
 	//
 	// The user explicitly dismissed the suggestion.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesRejectReasonRejected UnstableNesRejectReason = "rejected"
 	// UnstableNesRejectReasonIgnored is the "ignored" value.
 	//
 	// The suggestion was shown but the user continued editing without interacting.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesRejectReasonIgnored UnstableNesRejectReason = "ignored"
 	// UnstableNesRejectReasonReplaced is the "replaced" value.
 	//
 	// The suggestion was superseded by a newer suggestion.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesRejectReasonReplaced UnstableNesRejectReason = "replaced"
 	// UnstableNesRejectReasonCancelled is the "cancelled" value.
 	//
 	// The request was cancelled before the agent returned a response.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesRejectReasonCancelled UnstableNesRejectReason = "cancelled"
 )
 
@@ -20440,6 +21080,10 @@ const (
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A related code snippet from a file.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesRelatedSnippet struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20499,6 +21143,10 @@ func (v *UnstableNesRelatedSnippet) decodeKeys(b []byte, m map[string]json.RawMe
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A rename symbol suggestion.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesRenameSuggestion struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20552,6 +21200,10 @@ func (v *UnstableNesRenameSuggestion) decodeKeys(b []byte, m map[string]json.Raw
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Repository metadata for an NES session.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesRepository struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20603,6 +21255,10 @@ func (v *UnstableNesRepository) decodeKeys(b []byte, m map[string]json.RawMessag
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A search-and-replace suggestion.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesSearchAndReplaceSuggestion struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20658,6 +21314,10 @@ func (v *UnstableNesSearchAndReplaceSuggestion) decodeKeys(b []byte, m map[strin
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Context attached to a suggestion request.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesSuggestContext struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20708,6 +21368,10 @@ func (v *UnstableNesSuggestContext) decodeKeys(b []byte, _ map[string]json.RawMe
 // UnstableNesSuggestionEdit is the "edit" variant of the NesSuggestion schema definition.
 //
 // A text edit suggestion.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesSuggestionEdit struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20770,6 +21434,10 @@ func (v *UnstableNesSuggestionEdit) decodeKeys(b []byte, m map[string]json.RawMe
 // UnstableNesSuggestionJump is the "jump" variant of the NesSuggestion schema definition.
 //
 // A jump-to-location suggestion.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesSuggestionJump struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20818,6 +21486,10 @@ func (v *UnstableNesSuggestionJump) decodeKeys(b []byte, m map[string]json.RawMe
 // UnstableNesSuggestionRename is the "rename" variant of the NesSuggestion schema definition.
 //
 // A rename symbol suggestion.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesSuggestionRename struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20868,6 +21540,10 @@ func (v *UnstableNesSuggestionRename) decodeKeys(b []byte, m map[string]json.Raw
 // UnstableNesSuggestionSearchAndReplace is the "searchAndReplace" variant of the NesSuggestion schema definition.
 //
 // A search-and-replace suggestion.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesSuggestionSearchAndReplace struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -20924,14 +21600,34 @@ func (v *UnstableNesSuggestionSearchAndReplace) decodeKeys(b []byte, m map[strin
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A suggestion returned by the agent.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesSuggestion struct {
 	// A text edit suggestion.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Edit *UnstableNesSuggestionEdit `json:"-"`
 	// A jump-to-location suggestion.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Jump *UnstableNesSuggestionJump `json:"-"`
 	// A rename symbol suggestion.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	Rename *UnstableNesSuggestionRename `json:"-"`
 	// A search-and-replace suggestion.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	SearchAndReplace *UnstableNesSuggestionSearchAndReplace `json:"-"`
 	// Unknown holds a payload whose "kind" names no variant this SDK knows, as it was received.
 	// MarshalJSON writes it back unchanged when no variant is set.
@@ -21159,6 +21855,10 @@ func (u *UnstableNesSuggestion) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Unique identifier for a next edit suggestion.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesSuggestionId string
 
 // UnstableNesTextEdit is the NesTextEdit schema definition.
@@ -21168,6 +21868,10 @@ type UnstableNesSuggestionId string
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A text edit within a suggestion.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesTextEdit struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21217,20 +21921,36 @@ func (v *UnstableNesTextEdit) decodeKeys(b []byte, m map[string]json.RawMessage)
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // What triggered the suggestion request.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesTriggerKind string
 
 const (
 	// UnstableNesTriggerKindAutomatic is the "automatic" value.
 	//
 	// Triggered by user typing or cursor movement.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesTriggerKindAutomatic UnstableNesTriggerKind = "automatic"
 	// UnstableNesTriggerKindDiagnostic is the "diagnostic" value.
 	//
 	// Triggered by a diagnostic appearing at or near the cursor.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesTriggerKindDiagnostic UnstableNesTriggerKind = "diagnostic"
 	// UnstableNesTriggerKindManual is the "manual" value.
 	//
 	// Triggered by an explicit user action (keyboard shortcut).
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesTriggerKindManual UnstableNesTriggerKind = "manual"
 )
 
@@ -21241,6 +21961,10 @@ const (
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A user action (typing, cursor movement, etc.).
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableNesUserAction struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21296,6 +22020,10 @@ func (v *UnstableNesUserAction) decodeKeys(b []byte, m map[string]json.RawMessag
 // A zero-based position in a text document.
 //
 // The meaning of 'character' depends on the negotiated position encoding.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstablePosition struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21345,6 +22073,10 @@ func (v *UnstablePosition) decodeKeys(b []byte, m map[string]json.RawMessage) er
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Current effective non-secret routing configuration for a provider.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableProviderCurrentConfig struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21394,6 +22126,10 @@ func (v *UnstableProviderCurrentConfig) decodeKeys(b []byte, m map[string]json.R
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Unique identifier for a configurable LLM provider.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableProviderId string
 
 // UnstableProviderInfo is the ProviderInfo schema definition.
@@ -21403,6 +22139,10 @@ type UnstableProviderId string
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Information about a configurable LLM provider.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableProviderInfo struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21472,6 +22212,10 @@ func (v *UnstableProviderInfo) decodeKeys(b []byte, m map[string]json.RawMessage
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A range in a text document, expressed as start and end positions.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableRange struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21521,6 +22265,10 @@ func (v *UnstableRange) decodeKeys(b []byte, m map[string]json.RawMessage) error
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Notification sent when a suggestion is rejected.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableRejectNesNotification struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21585,6 +22333,10 @@ func (v *UnstableRejectNesNotification) validate(abs func(string) bool) error {
 // Request parameters for 'providers/set'.
 //
 // Replaces the full configuration for one provider ID.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableSetProviderRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21648,6 +22400,10 @@ func (v *UnstableSetProviderRequest) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Response to 'providers/set'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableSetProviderResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21699,6 +22455,10 @@ func (v *UnstableSetProviderResponse) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Request to start an NES session.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableStartNesRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21760,6 +22520,10 @@ func (v *UnstableStartNesRequest) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Response to 'nes/start'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableStartNesResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21816,6 +22580,10 @@ func (v *UnstableStartNesResponse) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Request for a code suggestion.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableSuggestNesRequest struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21884,6 +22652,10 @@ func (v *UnstableSuggestNesRequest) validate(abs func(string) bool) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Response to 'nes/suggest'.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableSuggestNesResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -21958,6 +22730,10 @@ func (v *UnstableSuggestNesResponse) validate(abs func(string) bool) error {
 //
 // When 'range' is 'None', 'text' is the full content of the document.
 // When 'range' is 'Some', 'text' replaces the given range.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableTextDocumentContentChangeEvent struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -22007,6 +22783,10 @@ func (v *UnstableTextDocumentContentChangeEvent) decodeKeys(b []byte, m map[stri
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // A workspace folder.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type UnstableWorkspaceFolder struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -22099,6 +22879,10 @@ func (v *UnstructuredCommandInput) decodeKeys(b []byte, m map[string]json.RawMes
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Token usage information for a prompt turn.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type Usage struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at
@@ -22518,36 +23302,60 @@ type AgentLoader interface {
 }
 
 // AgentExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type AgentExperimental interface {
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Notification sent when a file is edited.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableDidChangeDocument(ctx context.Context, params UnstableDidChangeDocumentNotification) error
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Notification sent when a file is closed.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableDidCloseDocument(ctx context.Context, params UnstableDidCloseDocumentNotification) error
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Notification sent when a file becomes the active editor tab.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableDidFocusDocument(ctx context.Context, params UnstableDidFocusDocumentNotification) error
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Notification sent when a file is opened in the editor.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableDidOpenDocument(ctx context.Context, params UnstableDidOpenDocumentNotification) error
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Notification sent when a file is saved.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableDidSaveDocument(ctx context.Context, params UnstableDidSaveDocumentNotification) error
 	// **UNSTABLE**
 	//
@@ -22557,12 +23365,20 @@ type AgentExperimental interface {
 	//
 	// Sent by the provider to the consumer for an active request (including
 	// subscription acknowledgements and updates); the outer envelope has no 'id'.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpNotification) error
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Notification sent when a suggestion is accepted.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableAcceptNes(ctx context.Context, params UnstableAcceptNesNotification) error
 	// **UNSTABLE**
 	//
@@ -22572,36 +23388,60 @@ type AgentExperimental interface {
 	//
 	// The agent **must** cancel any ongoing work related to the NES session
 	// and then free up any resources associated with the session.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableCloseNes(ctx context.Context, params UnstableCloseNesRequest) (UnstableCloseNesResponse, error)
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Notification sent when a suggestion is rejected.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableRejectNes(ctx context.Context, params UnstableRejectNesNotification) error
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Request to start an NES session.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableStartNes(ctx context.Context, params UnstableStartNesRequest) (UnstableStartNesResponse, error)
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Request for a code suggestion.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableSuggestNes(ctx context.Context, params UnstableSuggestNesRequest) (UnstableSuggestNesResponse, error)
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Request parameters for 'providers/disable'.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableDisableProvider(ctx context.Context, params UnstableDisableProviderRequest) (UnstableDisableProviderResponse, error)
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Request parameters for 'providers/list'.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableListProviders(ctx context.Context, params UnstableListProvidersRequest) (UnstableListProvidersResponse, error)
 	// **UNSTABLE**
 	//
@@ -22610,6 +23450,10 @@ type AgentExperimental interface {
 	// Request parameters for 'providers/set'.
 	//
 	// Replaces the full configuration for one provider ID.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableSetProvider(ctx context.Context, params UnstableSetProviderRequest) (UnstableSetProviderResponse, error)
 	// **UNSTABLE**
 	//
@@ -22621,6 +23465,10 @@ type AgentExperimental interface {
 	// operations like generating summaries without affecting the original session's history.
 	//
 	// Only available if the Agent supports the 'session.fork' capability.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableForkSession(ctx context.Context, params UnstableForkSessionRequest) (UnstableForkSessionResponse, error)
 }
 
@@ -22688,12 +23536,20 @@ type Client interface {
 }
 
 // ClientExperimental defines unstable methods that are not part of the official spec. These may change or be removed without notice.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 type ClientExperimental interface {
 	// **UNSTABLE**
 	//
 	// This capability is not part of the spec yet, and may be removed or changed at any point.
 	//
 	// Request parameters for 'mcp/message'.
+	//
+	// Deprecated: this declaration comes from the unstable ACP schema; it stays
+	// under v1 for compatibility only
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error)
 }
 

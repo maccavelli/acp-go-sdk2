@@ -47,11 +47,17 @@ func constantsFile(m *model.Model) *goFile {
 }
 
 // methodConsts declares <const> = "wire" for each method, in the model's
-// order, sorted by meta key.
+// order, sorted by meta key. The constant of a method the unstable manifest
+// keeps carries its notice
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 1).
 func methodConsts(methods []*model.Method) *ast.GenDecl {
 	var specs []*ast.ValueSpec
 	for _, mi := range methods {
-		specs = append(specs, constSpec(mi.Const, nil, str(mi.Wire)))
+		s := constSpec(mi.Const, nil, str(mi.Wire))
+		if d := mi.Deprecation; d != nil && d.Frozen {
+			s.Doc = docLines(methodNotice(nil, mi)...)
+		}
+		specs = append(specs, s)
 	}
 	return constDecl(true, specs...)
 }

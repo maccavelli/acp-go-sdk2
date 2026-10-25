@@ -947,6 +947,10 @@ func (a *AgentSideConnection) WriteTextFile(ctx context.Context, params WriteTex
 // that breaks the schema or what initialize agreed returns an error wrapping
 // *ValidationError or *CapabilityError, and one that does not decode a
 // *RequestError.
+//
+// Deprecated: this declaration comes from the unstable ACP schema; it stays
+// under v1 for compatibility only
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 func (a *AgentSideConnection) UnstableMessageMcp(ctx context.Context, params UnstableMessageMcpRequest) (UnstableMessageMcpResponse, error) {
 	if err := a.gate(ClientMethodMcpMessage, &params); err != nil {
 		return UnstableMessageMcpResponse{}, err
