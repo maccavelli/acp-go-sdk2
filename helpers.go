@@ -1,6 +1,12 @@
 package acp
 
-import "encoding/json"
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"iter"
+	"time"
+)
 
 const (
 	blockTypeText         = "text"
@@ -329,6 +335,165 @@ func unknownSessionUpdateKind(b json.RawMessage) string {
 		return sessionUpdateUnknownKind
 	}
 	return kind
+}
+
+// ErrRepeatedCursor is the error AllSessions yields when the agent answers
+// a cursor it already gave, so following it would never end
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+var ErrRepeatedCursor = errors.New("acp: session/list answered a cursor it already gave")
+
+// errNilConnection is what a helper taking a side connection yields or
+// returns when it is given none.
+var errNilConnection = errors.New("acp: nil connection")
+
+// AllSessions lists every session c's agent has, from req.Cursor on: it
+// calls c.ListSessions, yields each session, and follows NextCursor until the
+// agent gives none, or an empty one. A cursor already seen, the starting one
+// included, yields ErrRepeatedCursor and stops, so the list is known to be
+// incomplete. An error from a call, a *RequestError, ErrNotInitialized or
+// the end of ctx among them, is yielded once and stops; so is an error for a
+// nil c. Breaking out of the loop sends no further request. Sent to an agent
+// that did not advertise sessionCapabilities.list, the first call fails with
+// a *CapabilityError and writes nothing. The cursors seen are kept until the
+// loop ends, so ctx bounds an agent that answers new cursors forever.
+//
+// It is a function, not a method of ClientSideConnection: every method of a
+// side connection that takes a context is a protocol method
+// (0038-PLAN-consumer-helpers-kind-and-agent-refusals.md, step 2's deviation).
+func AllSessions(ctx context.Context, c *ClientSideConnection, req ListSessionsRequest) iter.Seq2[SessionInfo, error] {
+	return func(yield func(SessionInfo, error) bool) {
+		if c == nil {
+			yield(SessionInfo{}, errNilConnection)
+			return
+		}
+		seen := map[string]bool{}
+		if req.Cursor != nil {
+			seen[*req.Cursor] = true
+		}
+		for {
+			resp, err := c.ListSessions(ctx, req)
+			if err != nil {
+				yield(SessionInfo{}, err)
+				return
+			}
+			for _, s := range resp.Sessions {
+				if !yield(s, nil) {
+					return
+				}
+			}
+			if resp.NextCursor == nil || *resp.NextCursor == "" {
+				return
+			}
+			next := *resp.NextCursor
+			if seen[next] {
+				yield(SessionInfo{}, ErrRepeatedCursor)
+				return
+			}
+			seen[next] = true
+			req.Cursor = &next
+		}
+	}
+}
+
+// Updated returns r.UpdatedAt as a time, read as RFC 3339, fractional
+// seconds included; false when it is absent or not a date-time
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func (r SessionInfo) Updated() (time.Time, bool) {
+	if r.UpdatedAt == nil {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, *r.UpdatedAt)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+// PickPermissionOption returns the first option whose kind is the first of
+// kinds present in opts, trying each kind in turn. It reads only Kind, never
+// Name, since PermissionOptionKind is a closed enum and a name such as
+// "Don't allow" says nothing about the kind. It returns false when no option
+// has any of kinds, or kinds is empty
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func PickPermissionOption(opts []PermissionOption, kinds ...PermissionOptionKind) (PermissionOption, bool) {
+	for _, k := range kinds {
+		for _, o := range opts {
+			if o.Kind == k {
+				return o, true
+			}
+		}
+	}
+	return PermissionOption{}, false
+}
+
+// Chosen returns the option the client selected, and false when the
+// outcome is cancelled, unknown or unset
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func (r RequestPermissionResponse) Chosen() (PermissionOptionId, bool) {
+	if r.Outcome.Selected == nil {
+		return "", false
+	}
+	return r.Outcome.Selected.OptionId, true
+}
+
+// MetaObject returns meta[key] when it is a JSON object, and nil when it is
+// absent or anything else. It is the read for a namespaced _meta entry, such
+// as a vendor's capabilities (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func MetaObject(meta map[string]any, key string) map[string]any {
+	if m, ok := meta[key].(map[string]any); ok {
+		return m
+	}
+	return nil
+}
+
+// DecodeMeta decodes meta[key] into a T through encoding/json. It returns
+// false, and no error, when the key is absent, and true with the decode's
+// error when the value does not fit T
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func DecodeMeta[T any](meta map[string]any, key string) (T, bool, error) {
+	var v T
+	raw, ok := meta[key]
+	if !ok {
+		return v, false, nil
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return v, true, err
+	}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return v, true, err
+	}
+	return v, true, nil
+}
+
+// ConfigOptionByCategory returns the first select option of opts whose
+// category is c, such as SessionConfigOptionCategoryModel, and false when
+// there is none (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func ConfigOptionByCategory(opts []SessionConfigOption, c SessionConfigOptionCategory) (*SessionConfigOptionSelect, bool) {
+	for _, o := range opts {
+		if o.Select != nil && o.Select.Category != nil && *o.Select.Category == c {
+			return o.Select, true
+		}
+	}
+	return nil, false
+}
+
+// All returns every value o offers: Ungrouped as it is, or each group's
+// options in order, so a client that lists values does not lose grouped
+// ones. It returns nil when neither is set
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func (o SessionConfigSelectOptions) All() []SessionConfigSelectOption {
+	if o.Ungrouped != nil {
+		return []SessionConfigSelectOption(*o.Ungrouped)
+	}
+	if o.Grouped == nil {
+		return nil
+	}
+	var out []SessionConfigSelectOption
+	for _, g := range *o.Grouped {
+		out = append(out, g.Options...)
+	}
+	return out
 }
 
 // ToolCallStartOpt modifies a tool_call start update before it is built.

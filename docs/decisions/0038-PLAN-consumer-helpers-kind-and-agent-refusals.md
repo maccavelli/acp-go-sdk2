@@ -73,7 +73,8 @@ Checks: `make check-records`, `make markdownlint`, `make disclosure-check`, and 
 ### 2. The client-side reading helpers
 
 In `helpers.go`, after the `SessionUpdate` helpers, with `ErrRepeatedCursor` in its own `var` and `iter` and `time` imported:
-`AllSessions`, `SessionInfo.Updated`, `PickPermissionOption`, `RequestPermissionResponse.Chosen`, `MetaObject`, `DecodeMeta`,
+`AllSessions` (*amended 2026-10-25: a package-level function, `AllSessions(ctx, c, req)`, see this step's deviation*),
+`SessionInfo.Updated`, `PickPermissionOption`, `RequestPermissionResponse.Chosen`, `MetaObject`, `DecodeMeta`,
 `ConfigOptionByCategory` and `SessionConfigSelectOptions.All`, as the MADR specifies.
 
 Tests, in `consumer_helpers_test.go`:
@@ -97,8 +98,8 @@ Tests, in `consumer_helpers_test.go`:
   a struct, a mismatched type giving an error, and absent giving `false` with no error.
 * **`TestConfigOptionByCategory` and `TestSelectOptionsAll`:** the first `Select` of the category, past a `Boolean` and a `Select`
   without one; ungrouped, grouped in order, and neither.
-* **`ExampleClientSideConnection_AllSessions`** and **`ExamplePickPermissionOption`,** in `example_api_test.go`, with
-  `// Output:`.
+* **`ExampleClientSideConnection_AllSessions`** (*amended 2026-10-25: `ExampleAllSessions`*) and **`ExamplePickPermissionOption`,**
+  in `example_api_test.go`, with `// Output:`.
 
 Docs: `README.md`'s helper list and client section.
 
@@ -283,3 +284,67 @@ Commenting on the consumer issues needs the owner's ask too. When the release is
   `8b6d65f`, then approved execution: "committed, proceed". This PLAN is `in-progress`.
 * **Checks** on the records, each exit 0: `make check-records`, `make markdownlint`, `make disclosure-check`, and `tools/idscan.py
   --paths` over the three files, "0 match(es)".
+
+### Step 2, the client-side reading helpers, 2026-10-25
+
+What changed:
+
+* **`helpers.go`:** `context`, `errors`, `iter` and `time` imported; after `unknownSessionUpdateKind`, `ErrRepeatedCursor`,
+  `errNilConnection`, `AllSessions`, `SessionInfo.Updated`, `PickPermissionOption`, `RequestPermissionResponse.Chosen`,
+  `MetaObject`, `DecodeMeta`, `ConfigOptionByCategory` and `SessionConfigSelectOptions.All`.
+* **`consumer_helpers_test.go`, new:** `TestAllSessions` with seven subtests (two pages, repeating cursor, error on the second page,
+  break, empty next cursor, not advertised, nil connection), over a paired agent that answers from a table of pages and counts the
+  calls; `TestSessionInfoUpdated`, `TestPickPermissionOption`, `TestChosen`, `TestMetaObject`, `TestDecodeMeta`,
+  `TestConfigOptionByCategory` and `TestSelectOptionsAll`.
+* **`side_methods_test.go`, new:** `TestSideConnectionMethodsAreProtocolMethods`, the deviation's rule.
+* **`example_api_test.go`:** `ExampleAllSessions`, over a `pagingAgent` that wraps `demoAgent` and answers two pages, and
+  `ExamplePickPermissionOption`; `os` imported, for a `cwd` that is absolute on every host.
+* **`README.md`:** the client section names `acp.AllSessions` and `acp.PickPermissionOption`, and says why a helper that takes a
+  side connection is a function; the helper list gains "Reading values".
+
+**Deviation, 2026-10-25: `AllSessions` is a function.** The first `make pre-add-check` failed, exit 2. Three findings were lint, and
+were fixed: `errcheck` on a two-value type assertion in `MetaObject`, `revive` on `Updated`'s receiver name (`SessionInfo`'s other
+method names it `r`), and `thelper` on `listCtx`. The others were four tests that treat every exported method of a side connection
+taking a context as a protocol method:
+
+* `docs_test.go:133`: "AllSessions's doc does not name *RequestError";
+* `docs_test.go:145`: "AllSessions's doc does not name ErrNotInitialized";
+* `docs_test.go:151`: "41 typed and 4 extension methods, want the 40 of agent_gen.go and client_gen.go and the 4 of extensions.go";
+* `gates_test.go:303`: "*acp.ClientSideConnection.AllSessions = <nil>, want an error wrapping ErrNotInitialized";
+* `concurrent_use_test.go:127`: "8200 typed calls, want the 40 typed methods 200 times".
+
+None failed before this step. Two resolutions were put to the owner: a package-level function, keeping the four tests; or keeping
+the method and narrowing the tests to methods whose last result is an `error`, which would stop them seeing such a helper. The
+owner chose "option 1, make it robust". `AllSessions` is `AllSessions(ctx, c, req)`, as `SendRequest[T]` is; a nil `c` yields
+`errNilConnection`; and `TestSideConnectionMethodsAreProtocolMethods` states the rule, so a later helper fails with that message
+rather than a miscount. The MADR has "Amendment, 2026-10-25"; this step's text is annotated; the rule is carried into
+[0039-MADR-five-adopter-additions-on-schema-1-25-0.md](0039-MADR-five-adopter-additions-on-schema-1-25-0.md) and its PLAN for
+`Present*`.
+
+**Tests,** `go test -count=1 -race`, exit 0: the step's tests, the two examples, `TestSideConnectionMethodsAreProtocolMethods`,
+`TestTypedMethodDocsNameErrors`, `TestNotInitialized`, `TestConcurrentUse`, `TestExportedDeclarationsDocumented` and
+`TestExportedTypeDocsStartWithName`.
+
+**Planted breaks,** `tools/plants.py`, each in its own copy of the tree, the list in the session's scratch directory; eight of eight
+failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `AllSessions` ignores `NextCursor` | "consumer_helpers_test.go:99: ids [a b], errors [], 1 calls; want [a b c], none, 2" |
+| `AllSessions` does not remember cursors | `TestAllSessions/repeating_cursor`, after its 5 s context ended, with the second page's session repeated |
+| `AllSessions` keeps going after `yield` returns false | `TestAllSessions/break`: "panic: runtime error: range function continued iteration after function for loop body returned false" |
+| `PickPermissionOption` also matches an option named "Allow" | "consumer_helpers_test.go:212: name never read: \"trap\", true; want \"\", false" |
+| `All` returns only `Ungrouped` | "consumer_helpers_test.go:314: grouped: []" |
+| `DecodeMeta` returns `true` for an absent key | "consumer_helpers_test.go:270: absent: true, <nil>; want false, nil" |
+| a context-taking method `Pages` added to `ClientSideConnection` in `helpers.go` | "side_methods_test.go:42: helpers.go:346:1: ClientSideConnection.Pages takes a context but is declared in helpers.go, not in a generated file or extensions.go; …" |
+| `AllSessions` without its nil check | `TestAllSessions/nil_connection`: "panic: runtime error: invalid memory address or nil pointer dereference" |
+
+**Gates,** each exit 0:
+
+* `make pre-add-check`: "180 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `(cd cmd/generate && go test -count=1 ./...)`: every package `ok`;
+* `make api`: "against v1.21.0: 0 incompatible, 9 compatible", the nine names above, `errNilConnection` being unexported;
+* `make check-records`, `make markdownlint`, `make disclosure-check`, and `tools/idscan.py --paths` over the staged files.
+
+Step 1 was committed by the owner as `15e89f6`. Step 2's files are staged for the owner, with the 0039 MADR's and PLAN's
+amendments for the same rule.

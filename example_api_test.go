@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	acp "github.com/maccavelli/acp-go-sdk2"
 )
@@ -71,6 +72,68 @@ func (refusingClient) SessionUpdate(context.Context, acp.SessionNotification) er
 
 func (refusingClient) RequestPermission(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
+}
+
+// pagingAgent is demoAgent with session/list advertised and answered in two
+// pages, the first naming the second by its cursor. Each session's cwd is
+// os.TempDir(), absolute on every host, since the client checks it with
+// filepath.IsAbs.
+type pagingAgent struct{ *demoAgent }
+
+func (pagingAgent) Initialize(context.Context, acp.InitializeRequest) (acp.InitializeResponse, error) {
+	return acp.InitializeResponse{
+		ProtocolVersion:   acp.ProtocolVersionNumber,
+		AgentCapabilities: acp.AgentCapabilities{SessionCapabilities: acp.SessionCapabilities{List: &acp.SessionListCapabilities{}}},
+	}, nil
+}
+
+func (pagingAgent) ListSessions(_ context.Context, req acp.ListSessionsRequest) (acp.ListSessionsResponse, error) {
+	if req.Cursor == nil {
+		next := "page-2"
+		return acp.ListSessionsResponse{Sessions: []acp.SessionInfo{{SessionId: "s1", Cwd: os.TempDir()}}, NextCursor: &next}, nil
+	}
+	return acp.ListSessionsResponse{Sessions: []acp.SessionInfo{{SessionId: "s2", Cwd: os.TempDir()}}}, nil
+}
+
+// ExampleAllSessions lists every session an agent has across its pages
+// (0038-PLAN-consumer-helpers-kind-and-agent-refusals.md, step 2).
+func ExampleAllSessions() {
+	toAgent, fromClient := io.Pipe()
+	toClient, fromAgent := io.Pipe()
+	agent := acp.NewAgentSideConnection(pagingAgent{&demoAgent{}}, fromAgent, toAgent)
+	client := acp.NewClientSideConnection(refusingClient{}, fromClient, toClient)
+	defer func() { _ = client.Close(); _ = agent.Close() }()
+
+	ctx := context.Background()
+	if _, err := client.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
+		fmt.Println(err)
+		return
+	}
+	for s, err := range acp.AllSessions(ctx, client, acp.ListSessionsRequest{}) {
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println(s.SessionId)
+	}
+	// Output:
+	// s1
+	// s2
+}
+
+// ExamplePickPermissionOption declines a permission request by kind, never
+// by an option's name (0038-PLAN-consumer-helpers-kind-and-agent-refusals.md,
+// step 2).
+func ExamplePickPermissionOption() {
+	opts := []acp.PermissionOption{
+		{OptionId: "allow", Name: "Allow", Kind: acp.PermissionOptionKindAllowOnce},
+		{OptionId: "deny", Name: "Don't allow", Kind: acp.PermissionOptionKindRejectOnce},
+	}
+	if o, ok := acp.PickPermissionOption(opts, acp.PermissionOptionKindRejectOnce, acp.PermissionOptionKindRejectAlways); ok {
+		fmt.Println(o.OptionId)
+	}
+	// Output:
+	// deny
 }
 
 // ExampleClientRefusals is a client that embeds ClientRefusals, and the answer

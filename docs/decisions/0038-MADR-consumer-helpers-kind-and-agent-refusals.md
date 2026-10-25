@@ -119,7 +119,7 @@ Each new exported name has a doc comment that opens with its name and cites this
 
 | Name | Behaviour |
 | :--- | :--- |
-| `func (c *ClientSideConnection) AllSessions(ctx context.Context, req ListSessionsRequest) iter.Seq2[SessionInfo, error]` | Calls `ListSessions` from `req.Cursor`, yields each session, and follows `NextCursor` until it is absent or empty. A cursor already seen yields `(SessionInfo{}, ErrRepeatedCursor)` and stops (question 2). An error from a call is yielded once, and stops. Breaking out of the loop sends nothing more. |
+| ~~`func (c *ClientSideConnection) AllSessions(ctx context.Context, req ListSessionsRequest) iter.Seq2[SessionInfo, error]`~~ `func AllSessions(ctx context.Context, c *ClientSideConnection, req ListSessionsRequest) iter.Seq2[SessionInfo, error]`, amended 2026-10-25 (see "Amendment, 2026-10-25"); a nil `c` yields an error | Calls `ListSessions` from `req.Cursor`, yields each session, and follows `NextCursor` until it is absent or empty. A cursor already seen yields `(SessionInfo{}, ErrRepeatedCursor)` and stops (question 2). An error from a call is yielded once, and stops. Breaking out of the loop sends nothing more. |
 | `var ErrRepeatedCursor` | the error above |
 | `func (s SessionInfo) Updated() (time.Time, bool)` | `UpdatedAt` parsed with `time.RFC3339`, which also reads fractional seconds; `false` when absent or not a date-time |
 | `func PickPermissionOption(opts []PermissionOption, kinds ...PermissionOptionKind) (PermissionOption, bool)` | The first option of the first of `kinds` present, by `Kind` alone, never by name. `false` when none is, or when `kinds` is empty. |
@@ -193,6 +193,23 @@ The owner chose, out of three options for each:
 | 2. `AllSessions` on a repeating cursor | As recommended: yield `ErrRepeatedCursor` and stop. Not chosen: stop silently; a page cap as well. |
 | 3. What `RefusedMessages` counts | As recommended: every message `checkInbound` refuses. Not chosen: validation only; malformed lines and unknown methods too. |
 | 4. The release | As recommended: `v1.22.0` once committed and CI has passed, the notes before the tag, the tag and push on the owner's ask. Not chosen: hold for more work; a release per step. |
+
+#### Amendment, 2026-10-25: helpers that take a side connection are functions
+
+R11 missed a rule the tree's tests keep. `TestTypedMethodDocsNameErrors` (`docs_test.go`), `TestNotInitialized`
+(`gates_test.go`) and `TestConcurrentUse` (`concurrent_use_test.go`) treat every exported method of `AgentSideConnection` and
+`ClientSideConnection` that takes a context as a protocol method: its doc must name `*RequestError` and `ErrNotInitialized`, it
+must fail with `ErrNotInitialized` before `initialize`, and the count of such methods is the 40 generated ones. As a method,
+`AllSessions` failed all four, and an iterator cannot return that error (the PLAN's step 2 deviation). The owner chose "option 1,
+make it robust":
+
+* `AllSessions` is a package-level function, `AllSessions(ctx, c, req)`, as `SendRequest[T](conn, ctx, …)` already is; a nil `c`
+  yields an error instead of panicking.
+* The rule is a test of its own, `TestSideConnectionMethodsAreProtocolMethods` (`side_methods_test.go`): an exported method of a
+  side connection that takes a context may be declared only in a generated file or in `extensions.go`, and the failure says that a
+  helper is a function.
+* The rule applies to every later helper that takes a side connection, among them
+  [0039-MADR-five-adopter-additions-on-schema-1-25-0.md](0039-MADR-five-adopter-additions-on-schema-1-25-0.md)'s `Present*`.
 
 ### Consequences
 

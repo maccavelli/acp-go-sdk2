@@ -113,6 +113,12 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
 - Call `Initialize`, `NewSession`, and `Prompt` to run a turn and stream updates.
   A client that keeps its connection implements `acp.ClientConnAware`, whose
   `SetClientConnection` the constructor calls the same way.
+- `acp.AllSessions(ctx, client, req)` ranges over every session
+  `session/list` pages through, and stops with `acp.ErrRepeatedCursor` when
+  the agent repeats a cursor. Helpers that take a side connection are
+  functions, since a side connection's methods are its protocol methods;
+  `acp.PickPermissionOption` chooses a permission option by its kind, never
+  by its name.
 
 Helper constructors are provided to reduce boilerplate when working with union types:
 
@@ -134,6 +140,11 @@ Helper constructors are provided to reduce boilerplate when working with union t
   `acp.WithStartRawOutput`, `acp.WithUpdateRawInput`, `acp.WithUpdateRawOutput`,
   and the content of `acp.StartEditToolCall` take a `json.RawMessage`.
 - Utility: `acp.Ptr[T]` for pointer fields in request/update structs.
+- Reading values: `SessionInfo.Updated()` parses `updatedAt`;
+  `RequestPermissionResponse.Chosen()` gives the selected option;
+  `acp.MetaObject` and `acp.DecodeMeta[T]` read a namespaced `_meta` entry;
+  `acp.ConfigOptionByCategory` finds a select option by category, and
+  `SessionConfigSelectOptions.All()` lists its values, grouped or not.
 - Every other union, except `AgentResponse` and `ClientResponse`, which the
   schema keeps out of its documentation, has a generated constructor for each
   of its variants, `acp.New<Union><Variant>`, such as

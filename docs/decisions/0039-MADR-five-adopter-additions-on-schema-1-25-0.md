@@ -225,9 +225,14 @@ conversation content, not an ID-addressed entity.
 **Add**, hand-written in `helpers.go`, which may name ACP types because it is not one of the generator's runtime files
 (`connection.go`, `doc.go`, `errors.go`, `extensions.go`, which may not):
 
-* `func (a *AgentSideConnection) PresentNotice(ctx context.Context, sessionId SessionId, n Notice) error`
-* `func (a *AgentSideConnection) PresentCompaction(ctx context.Context, sessionId SessionId, u CompactionUpdate) error`
-* `func (a *AgentSideConnection) PresentCompactionSummary(ctx context.Context, sessionId SessionId, chunk CompactionSummaryChunk) error`
+* `func PresentNotice(ctx context.Context, a *AgentSideConnection, sessionId SessionId, n Notice) error`
+* `func PresentCompaction(ctx context.Context, a *AgentSideConnection, sessionId SessionId, u CompactionUpdate) error`
+* `func PresentCompactionSummary(ctx context.Context, a *AgentSideConnection, sessionId SessionId, chunk CompactionSummaryChunk) error`
+
+*Amended 2026-10-25:* these were methods of `AgentSideConnection`. They are package-level functions, by the rule
+[0038-MADR-consumer-helpers-kind-and-agent-refusals.md](0038-MADR-consumer-helpers-kind-and-agent-refusals.md)'s "Amendment,
+2026-10-25" records: every exported method of a side connection that takes a context is a protocol method, which
+`TestSideConnectionMethodsAreProtocolMethods` enforces. A nil `a` returns an error.
 
 Each takes the schema's definition type (`types_gen.go:9864`, `:2250`, `:2190`), not the `SessionUpdate` variant, which also carries
 a `SessionUpdate` discriminator field. The draft took the variant types for compaction and the definition type for the notice;

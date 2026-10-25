@@ -200,8 +200,10 @@ Planted breaks:
 
 ### 4. `PresentNotice` and `PresentCompaction` (MADR item 2)
 
-In `helpers.go`: the three methods on `*AgentSideConnection`, taking `Notice`, `CompactionUpdate` and `CompactionSummaryChunk`,
-under question 1's answer:
+In `helpers.go`: the three ~~methods on `*AgentSideConnection`~~ package-level functions, each taking the `*AgentSideConnection`
+after the context (*amended 2026-10-25, by 0038's step 2 deviation; `TestSideConnectionMethodsAreProtocolMethods` refuses a
+method*), taking `Notice`, `CompactionUpdate` and `CompactionSummaryChunk`, under question 1's answer, and an error for a nil
+connection:
 
 * with the capability in `Negotiated()`'s record: the dedicated variant, through `SessionUpdate`;
 * without it: `PresentNotice` sends `UpdateAgentMessageText` of the title, and the description on a line after it when present;
@@ -217,7 +219,7 @@ Tests, in `present_test.go`, package `acp_test`, so they can use `acptest` (an i
   capability;
 * the three terminal statuses each sent as the variant with the capability;
 * before `initialize`, `ErrNotInitialized` and nothing written;
-* `ExampleAgentSideConnection_PresentNotice`.
+* ~~`ExampleAgentSideConnection_PresentNotice`~~ `ExamplePresentNotice` (*amended 2026-10-25*).
 
 Docs: `README.md`'s agent section.
 
