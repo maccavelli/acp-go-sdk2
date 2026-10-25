@@ -25,11 +25,13 @@ func main() {
 // output directory, which must exist, before it writes anything, so a schema
 // the model refuses, a file that fails to render, or output that does not
 // type-check leaves the output directory as it was. output.Write then stages
-// every changed file before it replaces any.
+// every changed file before it replaces any. With -write-unstable-manifest it
+// only freezes the manifest (load.WriteUnstableManifest).
 func run(args []string) error {
 	fs := flag.NewFlagSet("generate", flag.ContinueOnError)
 	schemaDir := fs.String("schema", "", "path to schema directory (defaults to <repo>/schema)")
 	outDir := fs.String("out", "", "output directory for generated go files (defaults to <repo>)")
+	writeManifest := fs.Bool("write-unstable-manifest", false, "freeze the unstable-origin API into <schema>/"+load.ManifestFile+", once, and generate nothing")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -45,6 +47,9 @@ func run(args []string) error {
 		if *outDir == "" {
 			*outDir = repoRoot
 		}
+	}
+	if *writeManifest {
+		return load.WriteUnstableManifest(*schemaDir)
 	}
 	meta, schema, prov, err := loadSchema(*schemaDir)
 	if err != nil {
@@ -86,6 +91,16 @@ func loadSchema(schemaDir string) (*load.Meta, *load.Schema, *load.Provenance, e
 	}
 	if unstableMetaFound != unstableSchemaFound {
 		return nil, nil, nil, fmt.Errorf("unstable schema/meta mismatch: meta found=%v schema found=%v", unstableMetaFound, unstableSchemaFound)
+	}
+	// The manifest, when present, is the unstable-origin API, frozen; the live
+	// unstable files have no part in it
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 1).
+	manifest, manifestFound, err := load.ReadUnstableManifest(schemaDir)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if manifestFound {
+		return load.MergeManifest(meta, schema, manifest)
 	}
 	if !unstableMetaFound {
 		return meta, schema, nil, nil

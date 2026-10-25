@@ -32,7 +32,7 @@ type Provenance struct {
 // changes in it: properties by key, in key order, and the entries of its
 // anyOf, or its oneOf when it has no anyOf, by index in the unstable
 // version's list. An entry is matched to the stable one it changes by
-// unionEntryKey. What the unstable version removes is not recorded.
+// UnionEntryKey. What the unstable version removes is not recorded.
 type Changes struct {
 	AddedProperties   []string
 	ChangedProperties []string
@@ -392,8 +392,8 @@ func changesOf(s, u *Definition) *Changes {
 		if slices.ContainsFunc(stableList, func(se *Definition) bool { return reflect.DeepEqual(se, e) }) {
 			continue
 		}
-		key := unionEntryKey(e, disc)
-		if key != "" && slices.ContainsFunc(stableList, func(se *Definition) bool { return unionEntryKey(se, disc) == key }) {
+		key := UnionEntryKey(e, disc)
+		if key != "" && slices.ContainsFunc(stableList, func(se *Definition) bool { return UnionEntryKey(se, disc) == key }) {
 			c.ChangedEntries = append(c.ChangedEntries, i)
 		} else {
 			c.AddedEntries = append(c.AddedEntries, i)
@@ -402,12 +402,12 @@ func changesOf(s, u *Definition) *Changes {
 	return c
 }
 
-// unionEntryKey names what a union entry stands for, so that a changed entry
+// UnionEntryKey names what a union entry stands for, so that a changed entry
 // is matched to the stable one it changes: the value of the union's declared
 // discriminator disc, or without one its const-valued properties, as a
 // discriminated variant's tag; else its title, else its reference, else the
 // references its allOf composes. It is "" for an entry with none of them.
-func unionEntryKey(e *Definition, disc string) string {
+func UnionEntryKey(e *Definition, disc string) string {
 	if e == nil {
 		return ""
 	}

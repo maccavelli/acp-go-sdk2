@@ -1,0 +1,261 @@
+A union the manifest changes keeps the frozen entry order, then the entries the
+stable schema has added since: frozen from a stable [a, b] whose unstable version is
+[a, n, b], with a stable schema that now has [a, b, c], the union is [a, n, b, c]
+(0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2c).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"old": "x/old"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{
+  "$defs": {
+    "OldRequest": {
+      "type": "object",
+      "properties": {
+        "u": {
+          "$ref": "#/$defs/Pick"
+        }
+      },
+      "required": [
+        "u"
+      ],
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "OldResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "CancelRequestNotification": {
+      "type": "object",
+      "x-side": "protocol",
+      "x-method": "$/cancel_request"
+    },
+    "Pick": {
+      "discriminator": {
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "a",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "b",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "c",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    }
+  }
+}
+-- meta.unstable.json --
+{"version": 1, "agentMethods": {"old": "x/old"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.unstable.json --
+{
+  "$defs": {
+    "OldRequest": {
+      "type": "object",
+      "properties": {
+        "u": {
+          "$ref": "#/$defs/Pick"
+        }
+      },
+      "required": [
+        "u"
+      ],
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "OldResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "CancelRequestNotification": {
+      "type": "object",
+      "x-side": "protocol",
+      "x-method": "$/cancel_request"
+    },
+    "Pick": {
+      "discriminator": {
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "a",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "n",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "b",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    }
+  }
+}
+-- unstable-v1.json --
+{
+  "version": 1,
+  "schema": "",
+  "methods": {},
+  "definitions": {},
+  "changes": {
+    "Pick": {
+      "entries": [
+        "const kind=a",
+        "const kind=n",
+        "const kind=b"
+      ],
+      "frozenEntries": [
+        "const kind=n"
+      ]
+    }
+  },
+  "$defs": {
+    "Pick": {
+      "discriminator": {
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "a",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "n",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "b",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    }
+  }
+}
+-- want.api --
+type Agent interface{Old(ctx context.Context, params OldRequest) (OldResponse, error)}
+type AgentExperimental interface{}
+const AgentMethodOld untyped string = "x/old"
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewPickA() Pick
+func NewPickB() Pick
+func NewPickC() Pick
+func NewPickN() Pick
+type OldRequest struct{U Pick "json:\"u\""}
+type OldResponse struct{}
+type Pick struct{A *PickA "json:\"-\""; N *PickN "json:\"-\""; B *PickB "json:\"-\""; C *PickC "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type PickA struct{Kind string "json:\"kind\""}
+type PickB struct{Kind string "json:\"kind\""}
+type PickC struct{Kind string "json:\"kind\""}
+type PickN struct{Kind string "json:\"kind\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).Old(ctx context.Context, params OldRequest) (OldResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+func (*OldRequest).UnmarshalJSON(b []byte) error
+func (*OldRequest).Validate() error
+func (*OldResponse).Validate() error
+func (Pick).MarshalJSON() ([]byte, error)
+func (*Pick).UnmarshalJSON(b []byte) error
+func (*Pick).Validate() error

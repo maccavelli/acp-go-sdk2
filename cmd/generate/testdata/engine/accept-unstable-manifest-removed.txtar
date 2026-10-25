@@ -1,0 +1,279 @@
+The live unstable files drop the frozen method x/new and the definitions it
+reached. The manifest keeps them: the API is accept-unstable-merge's, unchanged, and
+x/new still reaches an agent that implements it
+(0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2c).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"old": "x/old"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Shared": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "OldRequest": {"type": "object", "properties": {"s": {"$ref": "#/$defs/Shared"}}, "required": ["s"], "x-side": "agent", "x-method": "x/old"},
+  "OldResponse": {"type": "object", "x-side": "agent", "x-method": "x/old"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- meta.unstable.json --
+{
+  "version": 1,
+  "agentMethods": {
+    "old": "x/old"
+  },
+  "clientMethods": {
+    "watch": "x/watch"
+  },
+  "protocolMethods": {
+    "cancel_request": "$/cancel_request"
+  }
+}
+-- schema.unstable.json --
+{
+  "$defs": {
+    "Shared": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        }
+      }
+    },
+    "OldRequest": {
+      "type": "object",
+      "properties": {
+        "s": {
+          "$ref": "#/$defs/Shared"
+        }
+      },
+      "required": [
+        "s"
+      ],
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "OldResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "WatchRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "WatchResponse": {
+      "type": "object",
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "CancelRequestNotification": {
+      "type": "object",
+      "x-side": "protocol",
+      "x-method": "$/cancel_request"
+    }
+  }
+}
+-- unstable-v1.json --
+{
+  "version": 1,
+  "schema": "",
+  "methods": {
+    "agent": {
+      "new": "x/new"
+    },
+    "client": {
+      "watch": "x/watch"
+    }
+  },
+  "definitions": {
+    "UnstableExtra": "Extra",
+    "UnstableNewRequest": "NewRequest",
+    "UnstableNewResponse": "NewResponse",
+    "UnstableWatchRequest": "WatchRequest",
+    "UnstableWatchResponse": "WatchResponse"
+  },
+  "changes": {
+    "Shared": {
+      "properties": [
+        "b"
+      ]
+    }
+  },
+  "$defs": {
+    "Extra": {
+      "type": "object",
+      "properties": {
+        "z": {
+          "type": "string"
+        }
+      }
+    },
+    "NewRequest": {
+      "type": "object",
+      "properties": {
+        "extra": {
+          "$ref": "#/$defs/Extra"
+        }
+      },
+      "required": [
+        "extra"
+      ],
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "NewResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "Shared": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        }
+      }
+    },
+    "WatchRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "WatchResponse": {
+      "type": "object",
+      "x-side": "client",
+      "x-method": "x/watch"
+    }
+  }
+}
+-- want.api --
+type Agent interface{Old(ctx context.Context, params OldRequest) (OldResponse, error)}
+type AgentExperimental interface{UnstableNew(ctx context.Context, params UnstableNewRequest) (UnstableNewResponse, error)}
+const AgentMethodNew untyped string = "x/new"
+const AgentMethodOld untyped string = "x/old"
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{UnstableWatch(ctx context.Context, params UnstableWatchRequest) (UnstableWatchResponse, error)}
+const ClientMethodWatch untyped string = "x/watch"
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+type OldRequest struct{S Shared "json:\"s\""}
+type OldResponse struct{}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Shared struct{A string "json:\"a,omitempty\""; B string "json:\"b,omitempty\""}
+type UnstableExtra struct{Z string "json:\"z,omitempty\""}
+type UnstableNewRequest struct{Extra UnstableExtra "json:\"extra\""}
+type UnstableNewResponse struct{}
+type UnstableWatchRequest struct{Path string "json:\"path\""}
+type UnstableWatchResponse struct{}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).UnstableWatch(ctx context.Context, params UnstableWatchRequest) (UnstableWatchResponse, error)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).Old(ctx context.Context, params OldRequest) (OldResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).UnstableNew(ctx context.Context, params UnstableNewRequest) (UnstableNewResponse, error)
+func (*ClientSideConnection).Wait() error
+func (*OldRequest).UnmarshalJSON(b []byte) error
+func (*OldRequest).Validate() error
+func (*OldResponse).Validate() error
+func (*UnstableNewRequest).UnmarshalJSON(b []byte) error
+func (*UnstableNewRequest).Validate() error
+func (*UnstableNewResponse).Validate() error
+func (*UnstableWatchRequest).UnmarshalJSON(b []byte) error
+func (*UnstableWatchRequest).Validate() error
+func (*UnstableWatchResponse).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"errors"
+	"io"
+	"testing"
+)
+
+type stableAgent struct{}
+
+func (stableAgent) Old(context.Context, OldRequest) (OldResponse, error) { return OldResponse{}, nil }
+
+type experimentalAgent struct{ stableAgent }
+
+func (experimentalAgent) UnstableNew(_ context.Context, p UnstableNewRequest) (UnstableNewResponse, error) {
+	if p.Extra.Z != "z" {
+		return UnstableNewResponse{}, errors.New("no z")
+	}
+	return UnstableNewResponse{}, nil
+}
+
+type watchClient struct{}
+
+func (watchClient) UnstableWatch(context.Context, UnstableWatchRequest) (UnstableWatchResponse, error) {
+	return UnstableWatchResponse{}, nil
+}
+
+func pair(t *testing.T, agent Agent, client Client) (*AgentSideConnection, *ClientSideConnection) {
+	t.Helper()
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	return NewAgentSideConnection(agent, aw, ar), NewClientSideConnection(client, cw, cr)
+}
+
+// An unstable method reaches a peer that implements its experimental
+// interface, and is method not found for one that does not; the stable method
+// takes the promoted Shared.
+func TestExperimentalMethods(t *testing.T) {
+	asc, c := pair(t, experimentalAgent{}, watchClient{})
+	if _, err := c.UnstableNew(t.Context(), UnstableNewRequest{Extra: UnstableExtra{Z: "z"}}); err != nil {
+		t.Errorf("x/new: %v", err)
+	}
+	if _, err := asc.UnstableWatch(t.Context(), UnstableWatchRequest{Path: "p"}); err != nil {
+		t.Errorf("x/watch: %v", err)
+	}
+	if _, err := c.Old(t.Context(), OldRequest{S: Shared{A: "a", B: "b"}}); err != nil {
+		t.Errorf("x/old: %v", err)
+	}
+
+	asc, c = pair(t, stableAgent{}, struct{}{})
+	var re *RequestError
+	if _, err := c.UnstableNew(t.Context(), UnstableNewRequest{}); !errors.As(err, &re) || re.Code != -32601 {
+		t.Errorf("x/new to a stable agent: %v, want method not found", err)
+	}
+	if _, err := asc.UnstableWatch(t.Context(), UnstableWatchRequest{Path: "p"}); !errors.As(err, &re) || re.Code != -32601 {
+		t.Errorf("x/watch to a client without it: %v, want method not found", err)
+	}
+}

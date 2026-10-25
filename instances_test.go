@@ -17,32 +17,45 @@ import (
 // This file builds JSON instances of a schema definition from the schema files
 // themselves, apart from the generator, for the conformance test
 // (0011-PLAN-engine-tests.md, D3). It reads only the definition's file and key,
-// which schema_gen_test.go gives.
+// which schema_gen_test.go gives: schema.json, or for a definition built from
+// the unstable manifest, unstable-v1.json.
 
 // schemaNode is a JSON Schema node as encoding/json decodes it, numbers as
 // json.Number.
 type schemaNode = map[string]any
 
-// schemaDefs returns the $defs of a file of schema/, read once.
+// schemaDefs returns the $defs of a file of schema/, read once. The unstable
+// manifest's are laid over schema.json's: a frozen fragment's reference
+// resolves to the frozen fragment of that key, else to the stable definition,
+// as the merge resolves it
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, question 8).
 var schemaDefs = sync.OnceValue(func() map[string]map[string]any {
 	out := map[string]map[string]any{}
 	for _, file := range []string{"schema.json", "schema.unstable.json"} {
-		b, err := os.ReadFile(filepath.Join("schema", file))
-		if err != nil {
-			panic(err)
-		}
-		d := json.NewDecoder(bytes.NewReader(b))
-		d.UseNumber()
-		var doc struct {
-			Defs map[string]any `json:"$defs"`
-		}
-		if err := d.Decode(&doc); err != nil {
-			panic(err)
-		}
-		out[file] = doc.Defs
+		out[file] = readDefs(file)
 	}
+	frozen := maps.Clone(out["schema.json"])
+	maps.Copy(frozen, readDefs("unstable-v1.json"))
+	out["unstable-v1.json"] = frozen
 	return out
 })
+
+// readDefs returns the $defs of a file of schema/, numbers as json.Number.
+func readDefs(file string) map[string]any {
+	b, err := os.ReadFile(filepath.Join("schema", file))
+	if err != nil {
+		panic(err)
+	}
+	d := json.NewDecoder(bytes.NewReader(b))
+	d.UseNumber()
+	var doc struct {
+		Defs map[string]any `json:"$defs"`
+	}
+	if err := d.Decode(&doc); err != nil {
+		panic(err)
+	}
+	return doc.Defs
+}
 
 // instanceShape is which instance of a node to build: with the required
 // properties only or with every property, and with the first or the last

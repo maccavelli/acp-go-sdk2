@@ -91,8 +91,8 @@ func TestUnionEntryKey(t *testing.T) {
 		{&Definition{Type: "null"}, "", ""},
 		{nil, "kind", ""},
 	} {
-		if got := unionEntryKey(tt.entry, tt.disc); got != tt.want {
-			t.Errorf("case %d: unionEntryKey(entry, %q) = %q, want %q", i, tt.disc, got, tt.want)
+		if got := UnionEntryKey(tt.entry, tt.disc); got != tt.want {
+			t.Errorf("case %d: UnionEntryKey(entry, %q) = %q, want %q", i, tt.disc, got, tt.want)
 		}
 	}
 }

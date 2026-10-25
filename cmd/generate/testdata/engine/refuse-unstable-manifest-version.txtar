@@ -1,0 +1,113 @@
+A manifest of a version this generator does not read.
+(0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2c.)
+
+-- meta.json --
+{"version": 1, "agentMethods": {"old": "x/old"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Shared": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "OldRequest": {"type": "object", "properties": {"s": {"$ref": "#/$defs/Shared"}}, "required": ["s"], "x-side": "agent", "x-method": "x/old"},
+  "OldResponse": {"type": "object", "x-side": "agent", "x-method": "x/old"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- meta.unstable.json --
+{"version": 1, "agentMethods": {"old": "x/old", "new": "x/new"}, "clientMethods": {"watch": "x/watch"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.unstable.json --
+{"$defs": {
+  "Shared": {"type": "object", "properties": {"a": {"type": "string"}, "b": {"type": "string"}}},
+  "OldRequest": {"type": "object", "properties": {"s": {"$ref": "#/$defs/Shared"}}, "required": ["s"], "x-side": "agent", "x-method": "x/old"},
+  "OldResponse": {"type": "object", "x-side": "agent", "x-method": "x/old"},
+  "NewRequest": {"type": "object", "properties": {"extra": {"$ref": "#/$defs/Extra"}}, "required": ["extra"], "x-side": "agent", "x-method": "x/new"},
+  "NewResponse": {"type": "object", "x-side": "agent", "x-method": "x/new"},
+  "Extra": {"type": "object", "properties": {"z": {"type": "string"}}},
+  "WatchRequest": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "x-side": "client", "x-method": "x/watch"},
+  "WatchResponse": {"type": "object", "x-side": "client", "x-method": "x/watch"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- unstable-v1.json --
+{
+  "version": 2,
+  "schema": "",
+  "methods": {
+    "agent": {
+      "new": "x/new"
+    },
+    "client": {
+      "watch": "x/watch"
+    }
+  },
+  "definitions": {
+    "UnstableExtra": "Extra",
+    "UnstableNewRequest": "NewRequest",
+    "UnstableNewResponse": "NewResponse",
+    "UnstableWatchRequest": "WatchRequest",
+    "UnstableWatchResponse": "WatchResponse"
+  },
+  "changes": {
+    "Shared": {
+      "properties": [
+        "b"
+      ]
+    }
+  },
+  "$defs": {
+    "Extra": {
+      "type": "object",
+      "properties": {
+        "z": {
+          "type": "string"
+        }
+      }
+    },
+    "NewRequest": {
+      "type": "object",
+      "properties": {
+        "extra": {
+          "$ref": "#/$defs/Extra"
+        }
+      },
+      "required": [
+        "extra"
+      ],
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "NewResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "Shared": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        }
+      }
+    },
+    "WatchRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "WatchResponse": {
+      "type": "object",
+      "x-side": "client",
+      "x-method": "x/watch"
+    }
+  }
+}
+-- want.err --
+parse unstable-v1.json
+version 2; this generator reads version 1

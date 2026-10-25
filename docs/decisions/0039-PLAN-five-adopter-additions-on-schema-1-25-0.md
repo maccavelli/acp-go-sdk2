@@ -120,6 +120,45 @@ the unstable schema changes (G10), and the order of a rebuilt union. It is rewri
 
 **2c. The manifest, as the frozen contract** (`schema/unstable-v1.json`, the loader, the merge).
 
+*Amended 2026-10-25, before the sub-step's code, by the deviation entry "2c, where a frozen type's schema is read" and the MADR's
+question 8.* The bullets below stand, with these changes. Where they conflict, the amendment wins.
+
+* **Scope gains** `instances_test.go` (root), whose `schemaDefs` reads the manifest's `$defs` over `schema.json`'s, and
+  `cmd/generate/internal/model/gates.go`, whose `ruleTypes` also accepts a copy whose origin is the manifest.
+* **The manifest's shape:**
+  * `version`: 1;
+  * `schema`: the schema version it was frozen from, `1.25.0`;
+  * `methods`: by side, key to wire;
+  * `definitions`: each name `acp` gives a kept definition, mapped to its key in `$defs`;
+  * `changes`: for each replaced definition, the listed property keys, and, for a union, its entry keys in the frozen order,
+    with the keys whose fragment is frozen;
+  * `$defs`: the fragments, the JSON values `schema.unstable.json` holds (re-indented, not escaped), under its keys. These are each kept
+    definition's source and the whole unstable version of each replaced definition.
+
+  An entry key is `load.unionEntryKey`'s.
+* **The merge with the manifest:**
+  * A kept definition is built from its `$defs` fragment. One kept under another name has its references renamed, and its
+    `x-method` cleared for a stable wire, as the merge does now.
+  * A replaced definition is the stable one with each listed property taken from the frozen version. Its union is rebuilt in
+    the frozen order: a frozen key's entry from the frozen version, any other key's from the stable definition, then any stable
+    entry the order does not name.
+  * The live unstable schema contributes nothing to `acp`.
+  * Each definition built from the manifest has the origin `unstable-v1.json`, at its `$defs` key.
+* **The writer.** `-write-unstable-manifest` refuses when the file exists. It also refuses unless merging through the manifest
+  gives exactly the merge's present output: the schema, the meta, and the provenance but for the origins' file. That is this
+  commit's guarantee of unchanged declarations.
+* **Refusals:**
+  * a manifest that does not parse, or has another `version`;
+  * a `definitions` name the stable schema has;
+  * a `definitions` key or `changes` name missing from `$defs`;
+  * a `changes` name the stable schema lacks;
+  * a listed property or frozen entry the frozen version lacks.
+* **The acceptance:** `TestGeneratedFilesUpToDate` and `TestCheckAcceptsRepository` pass after regeneration. The `*_gen.go` files
+  are byte-identical to today's, and `schema_gen_test.go` differs only in the `File` of its 112 entries (110 types, 2
+  absolute-path rules) that named
+  `schema.unstable.json`. The root tests pass. A scratch copy whose `schema.unstable.json` lacks `NesCapabilities` passes them
+  too: they failed there before this sub-step.
+
 * `schema/unstable-v1.json`: one entry for each of the 102 unstable-only definitions the merge keeps (its whole fragment; an
   unstable definition no walk reaches is dropped by the merge today and stays out), the 18 entries of the 8 replaced definitions
   (each a property or union-entry fragment, with the union's entry order), and each of the 16 unstable methods (its
@@ -532,3 +571,100 @@ scratch directory.
     `changes_test.go`;
   * `make disclosure-check`;
   * `tools/idscan.py --paths` over the six Go files: 0 matches.
+
+### Deviation, 2026-10-25: 2c, where a frozen type's schema is read
+
+* **Found** while reading 2c's inputs, before any 2c code. The emitted registry in `schema_gen_test.go`
+  (`internal/emit/registry.go:79`, `:111`–`:112`) gives each type its origin's file and key. The root conformance tests build JSON
+  instances from that file at that key: `instances_test.go:28`–`:45`, `newBuilder(st.File)` and `b.def(st.Def)` in
+  `conformance_test.go`, `encodings_test.go` and `fuzz_test.go`. 112 entries name `schema.unstable.json`: 110 types and the 2
+  absolute-path rules of `UnstableForkSessionRequest`.
+* **Measured** in a scratch copy of `04c37eb`. `NesCapabilities` alone was removed from `schema/schema.unstable.json` and the
+  generated files were kept, as a manifest-frozen `acp` keeps them. `go test -count=1 .` exits 1, and `TestEncodingsUnchanged`,
+  `TestConformanceRoundTrip` and `TestConformanceLenient` fail, first at `TestConformanceRoundTrip/NesCapabilities`.
+* **Pre-existing:** yes. Today a bump also regenerates the types, so nothing reads a missing key. The manifest is what makes it a
+  failure.
+* **Decided** by the owner, from two resolutions: "Manifest holds frozen $defs". The other, keeping the origin on
+  `schema.unstable.json` in 2c and repointing it before the first unstable bump, was not chosen. The MADR records it as
+  question 8 and amends "How it is built".
+* **Scope added to 2c:** `instances_test.go`, `cmd/generate/internal/model/gates.go`. 2c's acceptance is restated in its
+  amendment.
+
+### 2c, the manifest, 2026-10-25
+
+* **`load/manifest.go`, new.**
+  * `Manifest`, `ParseManifest` (strict, with each `$defs` fragment decoded) and `ReadUnstableManifest`.
+  * `MergeManifest`, the merge through the manifest that the amendment describes.
+  * `WriteUnstableManifest` and `ManifestReproduces`.
+  * `ManifestFile` is `unstable-v1.json`.
+  * `unionEntryKey` is exported as `UnionEntryKey`, the manifest format's entry key, for the completeness test in package
+    `main`.
+* **`main.go`:** `loadSchema` reads the manifest after the live unstable files are read and checked. When the manifest is
+  present, it merges through it; otherwise the merge is as before. `-write-unstable-manifest` freezes the manifest and generates
+  nothing.
+* **`schema/unstable-v1.json`**, 166,338 bytes, written by `go run ./cmd/generate -write-unstable-manifest`, once. A second run
+  refuses: "… exists; the manifest is frozen once and never rewritten". It holds:
+  * `schema` `1.25.0`;
+  * 16 methods (15 agent, 1 client);
+  * 102 definitions, 56 renamed, from 100 distinct `$defs` keys: two keys give both a prefixed copy and an unprefixed one;
+  * 8 changes, of 12 properties (10 added, 2 changed) and 6 frozen entries in 2 unions;
+  * 107 fragments.
+
+  The writer's own check, that merging through it reproduces the merge, passed when it wrote.
+* **Regenerated:** every `*_gen.go` is byte-identical. `schema_gen_test.go` differs in 112 lines, each only
+  `"schema.unstable.json"` → `"unstable-v1.json"`: 110 type entries and the 2 absolute-path rules of
+  `UnstableForkSessionRequest`. This was checked line by line against `HEAD` by a scratch script.
+* **`instances_test.go`:** `schemaDefs` adds `unstable-v1.json`, the manifest's `$defs` over `schema.json`'s. **`model/gates.go`:**
+  `ruleTypes` accepts a copy whose origin is the manifest.
+* **Tests:**
+  * `load/manifest_test.go`, new:
+    * `TestWriteUnstableManifest`: the definitions, changes and order frozen; the round trip through `sameMerge`; an unescaped
+      fragment; the refusals of a second write and of missing unstable files;
+    * `TestApplyChange`: the union order, a dropped stable entry, an unkeyed stable entry, and the five refusals;
+    * `TestManifestChangeRefusesUnkeyedEntries`.
+  * `cmd/generate/manifest_test.go`, new: `TestUnstableManifestComplete`.
+    * The model's unstable types, fields, variants and methods equal the manifest's.
+    * Every listed property and frozen entry is generated, and every unstable type comes from the manifest.
+    * While `schema/version` equals the manifest's `schema`, `load.ManifestReproduces` holds. Without that half, a manifest
+      entry dropped from both the model and the manifest would go unseen. It was added when the first planted break showed this.
+  * 12 engine cases, each written by a scratch script that freezes the manifest with `-write-unstable-manifest`:
+    * `accept-unstable-manifest-kept`, `-changed`, `-removed` (with `accept-unstable-merge`'s `behaviour_test.go`) and
+      `accept-unstable-stable-addition`. Each takes `accept-unstable-merge`'s `want.api`, unchanged, as its oracle; none was
+      `-update`d.
+    * `accept-unstable-union-order`, whose `want.api` was written by `-update` and read: `Pick` holds `A, N, B, C`.
+    * `refuse-unstable-manifest-not-json`, `-version`, `-unknown-key`, `-stable-name`, `-missing-fragment`, `-change-not-stable`
+      and `-change-property`.
+* **The bump, simulated in scratch copies:**
+  * With `NesCapabilities` removed from `schema.unstable.json`, regeneration leaves every generated file unchanged, and the
+    root tests pass. They failed there before this sub-step (the deviation entry).
+  * With the real `schema-v1.26.0` unstable files, regeneration again leaves every generated file unchanged, and the root tests
+    pass. 2a measured 115 incompatible changes for the same files without the manifest.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | 2c's row: `nes` dropped from the manifest's `AgentCapabilities` change | `manifest_test.go:77: the manifest is not what schema 1.25.0's merge gives: definition "AgentCapabilities" differs`; `main_test.go:64: types_gen.go is out of date` |
+  | 2c's row: the merge applies the live unstable version (`loadSchema` merges through the manifest only without live files) | `--- FAIL: TestEngineCases/accept-unstable-manifest-changed` and `…/accept-unstable-stable-addition` |
+  | 2c's row: a frozen method not rebuilt | `--- FAIL: TestEngineCases/accept-unstable-manifest-removed`, and its behaviour case: `definition UnstableNewRequest: linked … to agent method "x/new", which no meta file lists` |
+  | 2c's row: added entries in stable order | `accept-unstable-union-order`: `type Pick struct{A …; B …; N …; C …}` against `A, N, B, C` |
+  | one listed property not applied | `manifest_test.go:38: PromptResponse.usage is in the manifest and not generated` |
+  | origins naming the unstable schema | `manifest_test.go:37: ClientNesCapabilities: … want a generated type from unstable-v1.json`; `schema_gen_test.go is out of date` |
+  | the stable-name refusal removed | `--- FAIL: TestEngineCases/refuse-unstable-manifest-stable-name` |
+  | the version check removed | `refuse-unstable-manifest-version`: `run accepted the schema` |
+  | the frozen-once refusal removed | `manifest_test.go:98: second write: <nil>, want a refusal` |
+  | fragments HTML-escaped | `manifest_test.go:65: the manifest escapes its fragments' text` |
+  | an unkeyed entry frozen | `manifest_test.go:204: unkeyed: <nil>, want "union entry 1 has no key"` |
+  | the root's frozen `$defs` without `schema.json` under them | `--- FAIL: TestConformanceRoundTrip/UnstableStartNesResponse` |
+
+  Two first attempts did not fail on the intended line, and both were corrected:
+  * `nes` dropped from the manifest did not fail `TestUnstableManifestComplete` as first written. Its comparison was then
+    extended with `ManifestReproduces`.
+  * Applying only the first property failed in `model.Build`, since the protocol table needs `ClientCapabilities.subagents`.
+    It was replaced by skipping `usage`, which nothing else needs.
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "185 file(s) clean". `gocognit` first refused `TestUnstableManifestComplete` at 56, and the test was
+    split into `modelMarks` and `manifestMarks`.
+  * `(cd cmd/generate && go test -count=1 ./...)`; `go test -count=1 .` at the root.
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `newfiles` covered the three new Go
+    files, and `api` reported "0 incompatible, 0 compatible" against `v1.22.0`.
+  * `make disclosure-check`; `tools/idscan.py --paths` over the 24 changed and new files: 0 matches.

@@ -128,16 +128,17 @@ func (m *Model) resolveGates(r *rules) error {
 }
 
 // ruleTypes returns the types a capability rule names: its definition's, and
-// each copy the merge made of that definition from the unstable schema under
-// another name, as it does for a changed definition an unstable one reaches
-// (0019-PLAN-behaviour-fixes.md, B6). It is empty when the schema has none.
+// each copy the merge made of that definition from the unstable schema, or
+// from the manifest's fragment of it, under another name, as it does for a
+// changed definition an unstable one reaches (0019-PLAN-behaviour-fixes.md,
+// B6). It is empty when the schema has none.
 func (m *Model) ruleTypes(def string) []*Type {
 	var out []*Type
 	if t := m.Type(def); t != nil {
 		out = append(out, t)
 	}
 	for _, t := range m.Types {
-		if t.Name != def && t.Origin.File == load.UnstableSchemaFile && t.Origin.Key == def {
+		if t.Name != def && (t.Origin.File == load.UnstableSchemaFile || t.Origin.File == load.ManifestFile) && t.Origin.Key == def {
 			out = append(out, t)
 		}
 	}

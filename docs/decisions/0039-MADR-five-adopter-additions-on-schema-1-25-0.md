@@ -221,6 +221,21 @@ outcome; this is the mechanism, read from the generator, within the owner's answ
   with its schema fragment as of the first release with this item. The generator builds `acp`'s unstable-origin API from those
   fragments, not from the live unstable schema, so a later schema that changes or removes one changes nothing in `acp`. This is
   question 3's frozen stubs, and it makes "kept" and "removed" one rule; no second file of frozen fragments is needed.
+* **The manifest is also where a frozen type's schema is read** (*amended 2026-10-25, by the PLAN's 2c deviation entry, before
+  its code*).
+  * *What was found:* the root conformance tests (`instances_test.go`, `conformance_test.go`, `encodings_test.go`) build each
+    generated type's JSON instances from `schema/<File>` at `<Key>`. They read both from the type's origin, which the generated
+    registry in `schema_gen_test.go` holds. 112 of those entries name `schema.unstable.json`: 110 types and 2 absolute-path
+    rules. A schema that drops a frozen
+    definition therefore leaves the tests reading a key that is gone. Deleting `NesCapabilities` alone from a scratch copy's
+    `schema.unstable.json` fails `TestConformanceRoundTrip`, `TestConformanceLenient` and `TestEncodingsUnchanged`.
+  * *What changes:* the manifest holds its fragments as a frozen `$defs`, under the keys they have in `schema.unstable.json`:
+    each kept definition's source, and the whole unstable version of each replaced one. With them it holds the names `acp` gives
+    the definitions, the entries applied to each replaced definition, and the methods. Each type built from the manifest takes
+    the manifest as its origin, and the root tests read its `$defs` over `schema.json`'s, as the merge resolves a frozen
+    fragment's references.
+  * *What it costs:* the generated `*_gen.go` files are still byte-identical. `schema_gen_test.go` differs only in the `File` of
+    those 112 entries.
 * **The merge stops growing stable-named types.** For a stable-reachable definition, the merge takes the stable definition with
   the manifest's entries for it applied, not the whole unstable version. An entry is a property the unstable version adds, a
   property it changes (its whole fragment, so a changed default is carried), or a union entry it adds or changes. At `1.25.0`
@@ -477,6 +492,7 @@ The owner chose, out of three options for each:
 | 5. New unstable fields, variants and methods | As recommended: untyped until stable, with `Decode…` in `unstable` for a new variant | a registry in `acp`; the `Unstable` prefix rule only |
 | 6. Notification or request in the mux | As recommended: `IsNotification(ctx)` in `connection.go` | an `ExtensionNotificationHandler` interface; no distinction |
 | 7. When to build package `unstable`'s generation (added by the second assessment) | Not the recommendation: the owner chose "build the emissions now". The generator emits into `unstable` in this record, proved by synthetic engine cases until a schema bump brings a real definition | the policy now and the emission later; no package `unstable` |
+| 8. Where a frozen type's schema is read (found in the PLAN's 2c; two options) | As recommended: the manifest holds a frozen `$defs`; each type built from it names the manifest as its origin; the root conformance tests read it | keep the origin on `schema.unstable.json` in 2c and repoint it before the first unstable bump |
 
 The PLAN's own question, P1, the releases: as recommended, two minors, one after the boundary and `acptest`, one after the three
 runtimes. Not chosen: one minor at the end; a minor per phase.
