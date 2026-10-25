@@ -436,3 +436,46 @@ its row are `complete`.
   is `complete`, with `v1.22.0` published.
 * **Checks** on the records, each exit 0: `make check-records`, `make markdownlint`, `make disclosure-check`, and
   `tools/idscan.py --paths` over the three files.
+
+### 2a, inventory and re-measure, 2026-10-25
+
+Read-only: nothing in the tree was written but this entry and the MADR's G2 correction. Every measurement ran in the session's
+scratch directory.
+
+* **How.** Rather than a reimplementation of `MergeStableAndUnstable`, a scratch test was dropped into a `git archive` copy of
+  `4be1e0f`'s `cmd/generate`. It ran the generator's own `loadSchema` and `model.Build` over the committed schemas, then
+  type-checked the root with `enginetest.LoadPackage`. Each exported package-level object of the `*_gen.go` files was attributed
+  to the model type that declares it: the type itself, its inline variant types, its enum constants and its constructors.
+* **G2, the merge:** 102 unstable-only definitions, 56 prefixed and 46 not; 15 unstable-only wire methods, giving 16 methods (15
+  agent, 1 client: `mcp/message` is on both sides), the list G2 names. As G2 states.
+* **G2, the declarations:** 174 exported package-level declarations, not 172: 102 types, 25 inline variant types (no nested
+  struct), 21 enum constants and 26 constructors. Every attributed name is declared, and no `Unstable*` name is unattributed.
+  The 23 came from a name-prefix match corrected by hand; the model's attribution, which leaves no name unplaced, finds 25. They also carry
+  169 exported methods (`MarshalJSON`, `UnmarshalJSON`, `Validate`). The MADR's G2 is corrected, with the old figures struck
+  through. No step of this PLAN depends on the count: `TestUnstableManifestComplete` (2c) compares the manifest with what is
+  generated.
+* **G10, the replaced definitions:** 13 definitions differ under the loader's `reflect.DeepEqual`, the same 13 as the raw-JSON
+  diff. The merge replaces 8: `AgentCapabilities`, `ClientCapabilities`, `InitializeResponse`, `McpCapabilities`, `McpServer`,
+  `PromptResponse`, `SessionCapabilities` and `SessionUpdate`. They differ in 18 entries and no other keyword: 10 added
+  properties, 2 changed (`AgentCapabilities.mcpCapabilities`, `InitializeResponse.agentCapabilities`), and 6 added union entries
+  (`SessionUpdate` at indexes 6, 7, 16, 17 and 18; `McpServer` at 2). As G10 states.
+* **What the 18 entries yield in `acp`:**
+  * 10 added fields, at the `types_gen.go` lines G2 cites, which were read again;
+  * 2 changed fields, whose Go declaration the default does not change;
+  * 6 variant fields, each with an inline variant type: `SessionPlanUpdate`, `SessionUpdatePlanRemoved`,
+    `SessionUpdateSessionMessage`, `SessionUpdateSessionMessageChunk`, `SessionSubagentUpdate` and `McpServerAcpInline`;
+  * one constructor, `NewMcpServerAcp` (`helpers_gen.go:224`).
+
+  The six types and the constructor are manifest declarations under 2d's "every manifest declaration", so 2d deprecates them with
+  the 10 fields and 6 variant fields. The 2 changed properties declare no new name and are not deprecated.
+* **1.26.0 re-measure.**
+  * Setup: a local `git clone` in the scratch directory. The four `schema-v1.26.0` files were downloaded into it: `meta.json` and
+    `schema.json` are byte-identical to `1.25.0`, and the two unstable files differ.
+  * Regeneration first failed in `output.Check`, with 30 type errors in root `*_test.go` files that name NES types 1.26.0
+    removes (from `acp_test.go:145`). The 63 root test files were moved out of the clone, as `apidiff` reads only the package. The
+    regeneration then succeeded.
+  * Result: `scripts/check_api.py` against `v1.22.0`, the newest `v1` tag, exits 1 with **115 incompatible, 16 compatible**. 40 of
+    the 115 name no `Unstable` identifier: 19 NES capability types (`NesCapabilities`, `ClientNesCapabilities` and 17 more),
+    `PositionEncodingKind` and `TextDocumentSyncKind` with their 5 constants, the ten `AgentMethodDocument*` and
+    `AgentMethodNes*` constants, and the four capability fields. These are the same counts as 0025's
+    against `v1.17.1`.
