@@ -11,19 +11,27 @@ else
 endif
 .SHELLFLAGS := -eu -o pipefail -c
 
-.PHONY: check-records markdownlint check-tools
+.PHONY: check-records markdownlint check-tools disclosure-check
 
 check-records:
 	python3 scripts/check_records.py --check-all
 
-# The verification tools: each compiles, and their offline tests pass
-# (docs/decisions/0031-MADR-verification-tools-in-repository.md).
+# The verification tools and the scripts: each compiles, and their offline
+# tests pass (docs/decisions/0031-MADR-verification-tools-in-repository.md,
+# docs/decisions/0037-PLAN-align-docs-ci-and-disclosure-gates.md).
 check-tools:
-	python3 -m py_compile tools/*.py
+	python3 -m py_compile tools/*.py scripts/*.py
 	python3 -B -m unittest discover -s tools -p 'test_*.py'
+	python3 -B -m unittest discover -s scripts -p 'test_*.py'
 
 markdownlint:
 	npx --yes markdownlint-cli2@0.23.2
+
+# Real user-home paths in tracked text, with no private data; the private
+# deny list stays with push-guard
+# (docs/decisions/0037-MADR-align-docs-ci-and-disclosure-gates.md).
+disclosure-check:
+	python3 -B scripts/check_disclosure.py
 
 ACP_VERSION := $(file < ./schema/version)
 GOCACHE ?= $(CURDIR)/.gocache

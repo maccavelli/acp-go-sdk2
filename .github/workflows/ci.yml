@@ -123,11 +123,14 @@ jobs:
           ( cd cmd/generate && go mod tidy -diff )
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
           GOLANGCI_LINT="$(go env GOPATH)/bin/golangci-lint" make lint
-      - name: markdownlint, actionlint, records, tools
+      # The documentation gates are the Makefile's targets, so the pins live in
+      # one place (0037-PLAN-align-docs-ci-and-disclosure-gates.md).
+      - name: markdownlint, actionlint, records, disclosure, tools
         if: runner.os == 'Linux' && !matrix.floor
         run: |
           set -euo pipefail
-          npx --yes markdownlint-cli2@0.23.2
+          make markdownlint
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
           make check-records
+          make disclosure-check
           make check-tools

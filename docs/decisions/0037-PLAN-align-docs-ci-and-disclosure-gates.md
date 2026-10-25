@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-25
 associated-madr: "0037-MADR-align-docs-ci-and-disclosure-gates.md"
 ---
@@ -51,4 +51,110 @@ Boundary: Do not filter schedule or `v*` tags. Preserve the Go floor/current mat
 ## Rollout and Rollback
 
 Land gates before relying on the filters. If routing misclassifies a change, revert the routing commit through a new reviewed commit so full CI runs for every push again. Keep the shared gates while repairing the audit. This PLAN does not authorize a push or tag.
+
+## Execution record
+
+### Approval, 2026-10-25
+
+The owner: "approve 0037 and proceed". The MADR is `accepted`, with `decision-makers` and a dated note; this PLAN is `in-progress`.
+The two rows in `docs/README.md` say so, and the blank line that split them from the records table is removed.
+
+### Phase 1, step 1: the inventory, 2026-10-25
+
+Read at `9b20468`, read-only.
+
+**The workflow.** `.github/workflows/ci.yml` is the only workflow. It runs on `push` to `main` and to `v*` tags, on every
+`pull_request`, and on a weekly `schedule`. It has no `workflow_dispatch`, no path filter, `permissions: contents: read`, and one
+job, `validate`, over `ubuntu-24.04`, `macos-15` and `windows-2025` at Go `1.26.10` and `1.27.3`. Its last step, on the Linux
+current-Go job alone, runs `npx --yes markdownlint-cli2@0.23.2`, `actionlint@v1.7.12`, `make check-records` and `make check-tools`.
+GitHub does not evaluate path filters for tag pushes, so a filter on `push` leaves `v*` tags running full CI.
+
+**The documentation commands.**
+
+* `make markdownlint` runs `npx --yes markdownlint-cli2@0.23.2`, the same pin as CI. `.markdownlint-cli2.jsonc` lints `**/*.md`
+  and excludes records named `*MADR*`, `*PLAN*` and `*[Pp]lan*`.
+* `make check-records` runs `python3 scripts/check_records.py --check-all`: record names, pairing and placement, and the relative
+  links and anchors of the records, `docs/guides/**`, `docs/README.md`, `docs/architecture.md` and the root `README.md`.
+* There is no disclosure target. `tools/idscan.py` and `make push-guard` read the owner's private deny list, which CI does not have.
+
+**Tracked Markdown,** 109 files of 546 tracked: 100 under `docs/`; `README.md`, `AGENTS.md`, `RELEASING.md` and `tools/README.md`;
+and one agent-rule file each in `.claude/rules/`, `.codex/rules/`, `.grok/rules/`, `.kilo/agent/` and `.opencode/rules.md`. No
+Markdown is tracked under `testdata/` or as a test fixture.
+
+**Code that reads tracked Markdown,** by a scan of every tracked non-Markdown file for a string literal or glob that names a `.md`
+file, and of every `os.ReadFile`, `os.ReadDir`, `filepath.Glob` and `go:embed` in Go:
+
+| Reader | Reads | Runs in |
+| :--- | :--- | :--- |
+| `docs_test.go:164`, `:190` | the root `README.md`'s quickstart and `agentproc` example blocks | full CI, `go test` |
+| `Makefile`'s `README.md` and `version` targets, by `mdsh` | the root `README.md`, which they rewrite | by hand, never in CI |
+| `scripts/check_records.py` | every Markdown file it checks, above | `make check-records` |
+| `markdownlint-cli2` | `**/*.md`, less the records | `make markdownlint` |
+| `tools/release_body.py` | a release-notes report, at a commit | by hand, at a release |
+
+No Go test, generator check or tool reads any other tracked Markdown file. The other hits of the scan are record names inside
+strings and doc comments, such as `cmd/generate/internal/emit/dispatch.go`'s, which no code opens.
+
+**The docs-safe path set,** each a path that only the Docs gates read:
+
+* `docs/**`;
+* `AGENTS.md` and `RELEASING.md`;
+* `tools/README.md`;
+* `.claude/rules/**`, `.codex/rules/**`, `.grok/rules/**`, `.kilo/agent/**` and `.opencode/rules.md`.
+
+Left out: the root `README.md`, which `docs_test.go` reads; `.markdownlint-cli2.jsonc`, `scripts/**`, the `Makefile`, the
+workflows and every other file. A change to any of them runs full CI.
+
+**Required status checks.** `gh api repos/<owner>/acp-go-sdk2/branches/main/protection`: "Branch not protected" (404). The
+repository's rulesets and the rules for `main`: `[]` each. No check is required, so a full-CI job a filter skips cannot leave a pull
+request pending, and no migration is needed before the filters change.
+
+### Phase 1, steps 2 to 4: the shared checks, 2026-10-25
+
+What changed:
+
+* **`Makefile`:**
+  * a new target, `disclosure-check`, runs `python3 -B scripts/check_disclosure.py`;
+  * `check-tools` also compiles `scripts/*.py` and runs `scripts/`' tests, `python3 -B -m unittest discover -s scripts -p
+    'test_*.py'`;
+  * `check-records` and `markdownlint` were already the record/link and Markdownlint targets, and are unchanged.
+* **`.github/workflows/ci.yml`:** the documentation step runs `make markdownlint` in place of its own `npx --yes
+  markdownlint-cli2@0.23.2`, so the pin lives in the `Makefile` alone, and `make disclosure-check` after `make check-records`. The
+  Docs workflow, in phase 2, runs the same targets.
+* **`scripts/check_disclosure.py`, new, standard library only.** Over every file `git ls-files` lists, it refuses a macOS
+  (`/Users/<name>`), Linux (`/home/<name>`) or Windows (`<drive>:\Users\<name>`, either separator, JSON-escaped or not) home path
+  whose account is not a placeholder. A placeholder is an account in angle brackets, `<user>`, or JSON-escaped, `\u003cuser\u003e`;
+  one that starts with `$` or `%`; or `user` or `u`, the generic names the tree's examples and tests use. A path inside a longer path
+  or a URL, such as `/tmp/home/...`, is not a home path. A tracked file that cannot be read, or is not UTF-8 and holds no NUL byte, is
+  "unreadable"; one with a NUL byte is binary, and skipped. Each finding prints as `FILE:LINE: CATEGORY`, never the text found. Exit
+  1 on a finding, 2 when `git` fails.
+* **`scripts/test_check_disclosure.py`, new:** seven tests, over each form and its line, each placeholder on each form, paths that
+  are not home paths, unreadable and binary files, and `main` over a scratch git repository: its output names file, line and
+  category and not the account, a clean tree passes, and an untracked file is not read. The test builds each real-looking path from
+  split strings, so it passes the check itself.
+
+The first test run failed one subtest: `C:\Users\` followed by a JSON-escaped placeholder was found as `windows-home`, because the
+separator pattern took a double backslash first and left `u003cuser` as the account. The pattern now tries one backslash first.
+
+**Checks,** each exit 0:
+
+* `make disclosure-check`: "check-disclosure: 546 tracked file(s), 0 finding(s)";
+* `make check-tools`: the tools' "Ran 53 tests", "OK", and the scripts' "Ran 7 tests", "OK";
+* `actionlint@v1.7.12` over the workflow.
+
+**Planted breaks,** each in its own scratch copy of the tree with its `.git`, from a script in the session's scratch directory; four
+of four failed as required, each with exit 2 from `make`:
+
+| Break | What failed |
+| :--- | :--- |
+| a Linux home path with a real-looking account added to `docs/architecture.md` | `make disclosure-check`: "docs/architecture.md:610: linux-home" |
+| a Windows home path, JSON-escaped, added to `docs_test.go` | `make disclosure-check`: "docs_test.go:302: windows-home" |
+| a byte that is not UTF-8 added to `RELEASING.md` | `make disclosure-check`: "RELEASING.md:0: unreadable" |
+| `placeholder()` returns true for every account | `make check-tools`: "FAIL: test_main_prints_file_line_category_only" and the other scan tests |
+
+In the three `disclosure-check` breaks, the output did not hold the planted account name. The first run of the script required that of
+the fourth break too, and called it not as required: `unittest`'s failure text quotes the test's inputs. That requirement belongs to
+the check's own output only, and was dropped for the fourth.
+
+Not checked locally: what the changed CI step does on GitHub, until a push.
 
