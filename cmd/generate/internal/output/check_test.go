@@ -30,7 +30,7 @@ func dirWith(t *testing.T, files map[string]string) string {
 
 func TestCheckAcceptsHandWrittenPackage(t *testing.T) {
 	t.Parallel()
-	if err := Check(dirWith(t, map[string]string{"hand.go": stub}), uses); err != nil {
+	if err := Check(dirWith(t, map[string]string{"hand.go": stub}), "acp", uses); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -93,7 +93,7 @@ func TestCheckRefuses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := Check(tt.dir(t), tt.files)
+			err := Check(tt.dir(t), "acp", tt.files)
 			if err == nil {
 				t.Fatal("Check accepted the output")
 			}
@@ -121,7 +121,7 @@ func TestCheckSelectsLikeTheGoCommand(t *testing.T) {
 		".types_gen.go.1": "package acp\n\nvar _ = undefinedInDotFile\n",
 		"other_plan9.go":  "package acp\n\nvar _ = undefinedOnPlan9\n",
 	})
-	if err := Check(dir, uses); err != nil {
+	if err := Check(dir, "acp", uses); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -133,7 +133,7 @@ func TestCheckReportsAtMostTen(t *testing.T) {
 	for i := range 12 {
 		src.WriteString("\nvar _ = undefined" + string(rune('A'+i)) + "\n")
 	}
-	err := Check(t.TempDir(), []emit.File{{Name: "types_gen.go", Src: []byte(src.String())}})
+	err := Check(t.TempDir(), "acp", []emit.File{{Name: "types_gen.go", Src: []byte(src.String())}})
 	if err == nil {
 		t.Fatal("Check accepted the output")
 	}
@@ -160,7 +160,7 @@ func TestCheckConcurrently(t *testing.T) {
 	errs := make(chan error, 8)
 	for range 8 {
 		dir := dirWith(t, map[string]string{"hand.go": stub})
-		go func() { errs <- Check(dir, importing) }()
+		go func() { errs <- Check(dir, "acp", importing) }()
 	}
 	for range 8 {
 		if err := <-errs; err != nil {
@@ -177,7 +177,7 @@ func TestCheckIncludesHandWrittenTestFiles(t *testing.T) {
 	t.Parallel()
 	gen := append(slices.Clone(uses), emit.File{Name: "schema_gen_test.go", Src: []byte("package acp\n\ntype recordingAgent struct{}\n")})
 	dir := dirWith(t, map[string]string{"hand.go": stub, "agent_test.go": "package acp\n\ntype recordingAgent struct{}\n"})
-	err := Check(dir, gen)
+	err := Check(dir, "acp", gen)
 	if err == nil || !strings.Contains(err.Error(), "recordingAgent redeclared") {
 		t.Errorf("Check = %v, want it to refuse recordingAgent redeclared", err)
 	}
@@ -188,7 +188,7 @@ func TestCheckIncludesHandWrittenTestFiles(t *testing.T) {
 		{Name: "types_gen.go", Src: []byte("package acp\n\nvar _ = helperInTests\n")},
 		{Name: "schema_gen_test.go", Src: []byte("package acp\n\nvar helperInTests int\n")},
 	}
-	if err := Check(dirWith(t, map[string]string{"hand.go": stub}), onlyInTests); err == nil || !strings.Contains(err.Error(), "undefined: helperInTests") {
+	if err := Check(dirWith(t, map[string]string{"hand.go": stub}), "acp", onlyInTests); err == nil || !strings.Contains(err.Error(), "undefined: helperInTests") {
 		t.Errorf("Check = %v, want it to refuse a built file that needs a test file's name", err)
 	}
 }
@@ -200,11 +200,11 @@ func TestCheckIncludesGeneratedTestFiles(t *testing.T) {
 	t.Parallel()
 	dir := dirWith(t, map[string]string{"hand.go": stub})
 	bad := append(slices.Clone(uses), emit.File{Name: "schema_gen_test.go", Src: []byte("package acp\n\nvar _ = missingName\n")})
-	if err := Check(dir, bad); err == nil || !strings.Contains(err.Error(), "schema_gen_test.go") || !strings.Contains(err.Error(), "undefined: missingName") {
+	if err := Check(dir, "acp", bad); err == nil || !strings.Contains(err.Error(), "schema_gen_test.go") || !strings.Contains(err.Error(), "undefined: missingName") {
 		t.Errorf("Check = %v, want it to refuse undefined: missingName in schema_gen_test.go", err)
 	}
 	good := append(slices.Clone(uses), emit.File{Name: "schema_gen_test.go", Src: []byte("package acp\n\nvar _ = F\n\nvar _ U\n")})
-	if err := Check(dir, good); err != nil {
+	if err := Check(dir, "acp", good); err != nil {
 		t.Errorf("Check refused a test file that uses the package: %v", err)
 	}
 }

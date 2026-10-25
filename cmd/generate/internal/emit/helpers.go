@@ -28,7 +28,7 @@ func emitHelperConstructors(f *goFile, t *model.Type) {
 			// with, which converts to it.
 			value := ast.Expr(id(h.Params[0].Name))
 			if h.Params[0].Type.String() != vi.TypeName {
-				body = append(body, define(exprs(id("v")), call(id(vi.TypeName), value)))
+				body = append(body, define(exprs(id("v")), call(f.typeName(vi.TypeName), value)))
 				value = id("v")
 			}
 			body = append(body, ret(composite(id(t.Name), kv(id(vi.FieldName), addr(value)))))
@@ -46,7 +46,7 @@ func emitHelperConstructors(f *goFile, t *model.Type) {
 			for _, field := range slices.Sorted(maps.Keys(assigns)) {
 				elts = append(elts, kv(id(field), assigns[field]))
 			}
-			body = append(body, ret(composite(id(t.Name), kv(id(vi.FieldName), addr(composite(id(vi.TypeName), elts...))))))
+			body = append(body, ret(composite(id(t.Name), kv(id(vi.FieldName), addr(composite(f.typeName(vi.TypeName), elts...))))))
 		}
 
 		f.comment(withNotice(helperDoc(h, t, vi), schemaVariantPlace(t, vi), vi.Deprecation)...)

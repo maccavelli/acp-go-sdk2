@@ -44,8 +44,9 @@ RELEASE = re.compile(r"^v1\.(\d+)\.(\d+)$")
 SECTIONS = {"Incompatible changes:": "incompatible", "Compatible changes:": "compatible"}
 # The module's gated packages, by directory: "" is the root.
 PACKAGES = ("", "agentproc")
-# The packages whose changes are reported and not gated, by directory.
-REPORTED: tuple[str, ...] = ()
+# The packages whose changes are reported and not gated, by directory: package
+# unstable (docs/decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+REPORTED: tuple[str, ...] = ("unstable",)
 
 
 def fail(msg: str) -> None:

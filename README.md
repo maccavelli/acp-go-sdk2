@@ -854,6 +854,31 @@ For a complete, production‑ready integration, see the
 ACP interface. The Go example client `example/gemini` demonstrates connecting
 to it via stdio.
 
+## Stability
+
+Package `acp` keeps Go's compatibility promise for `v1`: a minor release adds
+API and removes none. That holds for the names the ACP unstable schema gave it
+too. They are frozen in `schema/unstable-v1.json` and stay as they are,
+whatever later unstable schemas change or drop. Each carries a `Deprecated:`
+notice that says so, so staticcheck's SA1019 reports a use of one. Implementing
+`acp.AgentExperimental` or `acp.ClientExperimental` is one such use.
+
+What the unstable schema adds after that goes to package `unstable`. Like
+`golang.org/x/exp`, it is not subject to the compatibility promise: a name
+there may change or go away in a minor release when the unstable schema changes
+it, and `make api` lists those changes without gating them.
+
+- A new definition is a type there, under its schema key, with its
+  constructors.
+- A new method is its types and its method-name constant. `acp`'s dispatch
+  answers a received one as a method it does not know.
+- A new variant of a stable union is a `Decode<Union><Variant>` function,
+  which decodes the payload `acp`'s union keeps in its `Unknown`.
+- A new field of an `acp` type is not emitted.
+
+When a definition stabilizes, it moves to `acp` under the same name. The policy
+is [0039-MADR-five-adopter-additions-on-schema-1-25-0.md](docs/decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+
 ## Resources
 
 - [Go package docs](https://pkg.go.dev/github.com/maccavelli/acp-go-sdk2)

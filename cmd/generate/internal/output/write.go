@@ -27,11 +27,19 @@ const fileMode = 0o644
 // replaced. Each is then renamed into place in the order of files. A rename
 // that fails ends the run with an error naming the files already replaced and
 // those left as they were.
+//
+// Each file goes into its package's directory under dir, which is made when
+// missing. Once every file is in place, a generated file, *_gen.go or
+// *_gen_test.go, that a package directory of emit.Dirs holds and files do not
+// is removed: a schema that stops adding to package unstable leaves its
+// directory with its hand-written files only
+// (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
 func Write(dir string, files []emit.File) error {
 	return writeWith(dir, files, os.CreateTemp, os.Rename)
 }
 
-// staged is a file written to its temporary path and not yet renamed.
+// staged is a file written to its temporary path and not yet renamed; name
+// is its path under the output directory.
 type staged struct {
 	name, tmp string
 }
@@ -42,23 +50,32 @@ func writeWith(dir string, files []emit.File, createTemp func(dir, pattern strin
 	rename func(oldpath, newpath string) error) error {
 	var changed []emit.File
 	for _, f := range files {
-		old, err := os.ReadFile(filepath.Join(dir, f.Name)) //nolint:gosec // G304: dir is the generator's explicit output directory.
+		old, err := os.ReadFile(filepath.Join(dir, f.Path())) //nolint:gosec // G304: dir is the generator's explicit output directory.
 		switch {
 		case err == nil && bytes.Equal(old, f.Src):
 			continue
 		case err != nil && !errors.Is(err, fs.ErrNotExist):
-			return fmt.Errorf("compare %s: %w", f.Name, err)
+			return fmt.Errorf("compare %s: %w", f.Path(), err)
 		}
 		changed = append(changed, f)
+	}
+	stale, err := staleFiles(dir, files)
+	if err != nil {
+		return err
 	}
 
 	temps := make([]staged, 0, len(changed))
 	for _, f := range changed {
-		tmp, err := stage(dir, f, createTemp)
-		if err != nil {
-			return errors.Join(fmt.Errorf("stage %s: %w", f.Name, err), remove(temps))
+		if f.Dir != "" {
+			if err := os.MkdirAll(filepath.Join(dir, f.Dir), 0o755); err != nil { //nolint:gosec // G301: a package directory of committed source.
+				return errors.Join(fmt.Errorf("stage %s: %w", f.Path(), err), remove(temps))
+			}
 		}
-		temps = append(temps, staged{name: f.Name, tmp: tmp})
+		tmp, err := stage(filepath.Join(dir, f.Dir), f, createTemp)
+		if err != nil {
+			return errors.Join(fmt.Errorf("stage %s: %w", f.Path(), err), remove(temps))
+		}
+		temps = append(temps, staged{name: f.Path(), tmp: tmp})
 	}
 
 	for i, s := range temps {
@@ -69,7 +86,41 @@ func writeWith(dir string, files []emit.File, createTemp func(dir, pattern strin
 				s.name, err, nameList(temps[:i]), nameList(temps[i:])), remove(temps[i:]))
 		}
 	}
+	for _, name := range stale {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+			return fmt.Errorf("remove the stale %s: %w", name, err)
+		}
+	}
 	return nil
+}
+
+// staleFiles lists, by path under dir, the generated files the package
+// directories of emit.Dirs hold that files do not.
+func staleFiles(dir string, files []emit.File) ([]string, error) {
+	rendered := map[string]bool{}
+	for _, f := range files {
+		rendered[f.Path()] = true
+	}
+	var stale []string
+	for _, d := range emit.Dirs {
+		entries, err := os.ReadDir(filepath.Join(dir, d))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range entries {
+			name := e.Name()
+			if e.IsDir() || (!strings.HasSuffix(name, "_gen.go") && !strings.HasSuffix(name, "_gen_test.go")) {
+				continue
+			}
+			if path := (emit.File{Dir: d, Name: name}).Path(); !rendered[path] {
+				stale = append(stale, path)
+			}
+		}
+	}
+	return stale, nil
 }
 
 // stage writes f to a new temporary file in dir and returns its path. The

@@ -1,0 +1,250 @@
+A new unstable property of the stable Shared is emitted nowhere: acp's API is
+accept-unstable-merge's, unchanged, and there is no package unstable
+(0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"old": "x/old"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Shared": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "OldRequest": {"type": "object", "properties": {"s": {"$ref": "#/$defs/Shared"}}, "required": ["s"], "x-side": "agent", "x-method": "x/old"},
+  "OldResponse": {"type": "object", "x-side": "agent", "x-method": "x/old"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- meta.unstable.json --
+{"version": 1, "agentMethods": {"old": "x/old", "new": "x/new"}, "clientMethods": {"watch": "x/watch"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.unstable.json --
+{
+  "$defs": {
+    "Shared": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "OldRequest": {
+      "type": "object",
+      "properties": {
+        "s": {
+          "$ref": "#/$defs/Shared"
+        }
+      },
+      "required": [
+        "s"
+      ],
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "OldResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "NewRequest": {
+      "type": "object",
+      "properties": {
+        "extra": {
+          "$ref": "#/$defs/Extra"
+        }
+      },
+      "required": [
+        "extra"
+      ],
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "NewResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "Extra": {
+      "type": "object",
+      "properties": {
+        "z": {
+          "type": "string"
+        }
+      }
+    },
+    "WatchRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "WatchResponse": {
+      "type": "object",
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "CancelRequestNotification": {
+      "type": "object",
+      "x-side": "protocol",
+      "x-method": "$/cancel_request"
+    }
+  }
+}
+-- unstable-v1.json --
+{
+  "version": 1,
+  "schema": "",
+  "methods": {
+    "agent": {
+      "new": "x/new"
+    },
+    "client": {
+      "watch": "x/watch"
+    }
+  },
+  "definitions": {
+    "UnstableExtra": "Extra",
+    "UnstableNewRequest": "NewRequest",
+    "UnstableNewResponse": "NewResponse",
+    "UnstableWatchRequest": "WatchRequest",
+    "UnstableWatchResponse": "WatchResponse"
+  },
+  "changes": {
+    "Shared": {
+      "properties": [
+        "b"
+      ]
+    }
+  },
+  "$defs": {
+    "Extra": {
+      "type": "object",
+      "properties": {
+        "z": {
+          "type": "string"
+        }
+      }
+    },
+    "NewRequest": {
+      "type": "object",
+      "properties": {
+        "extra": {
+          "$ref": "#/$defs/Extra"
+        }
+      },
+      "required": [
+        "extra"
+      ],
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "NewResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "Shared": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        }
+      }
+    },
+    "WatchRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "WatchResponse": {
+      "type": "object",
+      "x-side": "client",
+      "x-method": "x/watch"
+    }
+  }
+}
+-- want.api --
+type Agent interface{Old(ctx context.Context, params OldRequest) (OldResponse, error)}
+type AgentExperimental interface{UnstableNew(ctx context.Context, params UnstableNewRequest) (UnstableNewResponse, error)}
+const AgentMethodNew untyped string = "x/new"
+const AgentMethodOld untyped string = "x/old"
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{UnstableWatch(ctx context.Context, params UnstableWatchRequest) (UnstableWatchResponse, error)}
+const ClientMethodWatch untyped string = "x/watch"
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+type OldRequest struct{S Shared "json:\"s\""}
+type OldResponse struct{}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Shared struct{A string "json:\"a,omitempty\""; B string "json:\"b,omitempty\""}
+type UnstableExtra struct{Z string "json:\"z,omitempty\""}
+type UnstableNewRequest struct{Extra UnstableExtra "json:\"extra\""}
+type UnstableNewResponse struct{}
+type UnstableWatchRequest struct{Path string "json:\"path\""}
+type UnstableWatchResponse struct{}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).UnstableWatch(ctx context.Context, params UnstableWatchRequest) (UnstableWatchResponse, error)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).Old(ctx context.Context, params OldRequest) (OldResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).UnstableNew(ctx context.Context, params UnstableNewRequest) (UnstableNewResponse, error)
+func (*ClientSideConnection).Wait() error
+func (*OldRequest).UnmarshalJSON(b []byte) error
+func (*OldRequest).Validate() error
+func (*OldResponse).Validate() error
+func (*UnstableNewRequest).UnmarshalJSON(b []byte) error
+func (*UnstableNewRequest).Validate() error
+func (*UnstableNewResponse).Validate() error
+func (*UnstableWatchRequest).UnmarshalJSON(b []byte) error
+func (*UnstableWatchRequest).Validate() error
+func (*UnstableWatchResponse).Validate() error
+-- want.deprecated --
+const AgentMethodNew: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+const ClientMethodWatch: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+field Shared.B: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+method (*AgentSideConnection).UnstableWatch: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+method (*ClientSideConnection).UnstableNew: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+method AgentExperimental.UnstableNew: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+method ClientExperimental.UnstableWatch: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type AgentExperimental: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type ClientExperimental: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableExtra: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableNewRequest: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableNewResponse: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableWatchRequest: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+type UnstableWatchResponse: Deprecated: this declaration comes from the unstable ACP schema; it stays under v1 for compatibility only (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).

@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/format"
 	"go/token"
+	"go/types"
 	"maps"
 	"path"
 	"slices"
@@ -39,8 +40,51 @@ type goFile struct {
 	// keeps no Extra: a union decodes such a variant from the keys it holds
 	// (0019-PLAN-idioms-performance.md, D2).
 	keyDecoders map[string]bool
+	// root and local are set for a file of package unstable: root is the
+	// import path of the root package, acp, and local names the types the
+	// file declares. Every other type, and the runtime's names, are acp's
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, questions 9 and
+	// 10).
+	root  string
+	local map[string]bool
+	// aliases names an import whose package name is not its path's last
+	// element.
+	aliases map[string]string
 	// err is the first failure recorded while the file was built.
 	err error
+}
+
+// external reports whether the type named name is acp's, from a file of
+// package unstable: one the file does not declare and Go does not predeclare.
+func (f *goFile) external(name string) bool {
+	return f.local != nil && !f.local[name] && types.Universe.Lookup(name) == nil
+}
+
+// typeName is the type named name as f's code writes it: unqualified, or
+// acp's through the root's import path.
+func (f *goFile) typeName(name string) ast.Expr {
+	if f.external(name) {
+		return f.rootName(name)
+	}
+	return id(name)
+}
+
+// runtimeName is a name the root's hand-written runtime declares, such as
+// ValidationError, as f's code writes it.
+func (f *goFile) runtimeName(name string) ast.Expr {
+	if f.local != nil {
+		return f.rootName(name)
+	}
+	return id(name)
+}
+
+// rootName is acp.name, importing the root under the name acp.
+func (f *goFile) rootName(name string) ast.Expr {
+	f.imports[f.root] = true
+	if path.Base(f.root) != sdkPackage {
+		f.aliases[f.root] = sdkPackage
+	}
+	return dot(sdkPackage, name)
 }
 
 // fileItem is one comment line, one blank line, or one declaration.
@@ -51,7 +95,7 @@ type fileItem struct {
 }
 
 func newFile() *goFile {
-	return &goFile{pkg: sdkPackage, imports: map[string]bool{}, uses: map[string]bool{}}
+	return &goFile{pkg: sdkPackage, imports: map[string]bool{}, uses: map[string]bool{}, aliases: map[string]string{}}
 }
 
 // comment adds one comment line per argument. Comment lines directly above a
@@ -82,12 +126,26 @@ func (f *goFile) qual(importPath, name string) ast.Expr {
 	return dot(path.Base(importPath), name)
 }
 
-// File is one generated file: its name in the output directory and its
-// formatted source.
+// File is one generated file: its package's directory under the output
+// directory, "" for the root and UnstableDir for package unstable, its name
+// there, and its formatted source.
 type File struct {
+	Dir  string
 	Name string
 	Src  []byte
 }
+
+// Path is f's path relative to the output directory.
+func (f File) Path() string {
+	if f.Dir == "" {
+		return f.Name
+	}
+	return f.Dir + "/" + f.Name
+}
+
+// Dirs are the package directories the generator writes into, under the
+// output directory: the root's and package unstable's.
+var Dirs = []string{"", UnstableDir}
 
 // fileBuild is one generated file: its name and the function that builds it.
 type fileBuild struct {
@@ -153,7 +211,11 @@ func (f *goFile) importDecl() *ast.GenDecl {
 	}
 	d := &ast.GenDecl{Tok: token.IMPORT}
 	for _, p := range slices.Sorted(maps.Keys(f.imports)) {
-		d.Specs = append(d.Specs, &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(p)}})
+		spec := &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(p)}}
+		if name, ok := f.aliases[p]; ok {
+			spec.Name = id(name)
+		}
+		d.Specs = append(d.Specs, spec)
 	}
 	return d
 }

@@ -70,12 +70,39 @@ func (l *lockedImporter) ImportFrom(path, dir string, mode types.ImportMode) (*t
 // LoadPackage type-checks the non-test Go files the go command would build in
 // dir, reading imports from source, and returns every error it finds.
 func LoadPackage(dir string) (*types.Package, *token.FileSet, error) {
+	return loadWith(dir, shared())
+}
+
+// LoadPackageImporting is LoadPackage for a package that imports the root:
+// the import of rootPath is root, a package LoadPackage returned, and any
+// other is read from source. Package unstable is listed so, against the
+// case's own root (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+func LoadPackageImporting(dir, rootPath string, root *types.Package) (*types.Package, *token.FileSet, error) {
+	return loadWith(dir, serving{path: rootPath, pkg: root, next: shared()})
+}
+
+// serving returns pkg for path and defers every other import to next.
+type serving struct {
+	path string
+	pkg  *types.Package
+	next *lockedImporter
+}
+
+func (s serving) Import(path string) (*types.Package, error) { return s.ImportFrom(path, "", 0) }
+
+func (s serving) ImportFrom(path, dir string, mode types.ImportMode) (*types.Package, error) {
+	if path == s.path {
+		return s.pkg, nil
+	}
+	return s.next.ImportFrom(path, dir, mode)
+}
+
+func loadWith(dir string, imp types.Importer) (*types.Package, *token.FileSet, error) {
 	bp, err := build.Default.ImportDir(dir, 0)
 	if err != nil {
 		return nil, nil, err
 	}
-	imp := shared()
-	fset := imp.fset
+	fset := shared().fset
 	files := make([]*ast.File, 0, len(bp.GoFiles))
 	for _, name := range bp.GoFiles {
 		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)

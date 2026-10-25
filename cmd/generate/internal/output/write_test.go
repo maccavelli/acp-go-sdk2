@@ -240,3 +240,58 @@ func TestWriteCompareFailureReplacesNothing(t *testing.T) {
 	requireContents(t, dir, old[:4])
 	requireNoTemporaryFiles(t, dir)
 }
+
+// TestWritePackageDirectories requires a file of package unstable to go into
+// its directory, made when missing, and a generated file the run does not
+// render to be removed from a package directory, its hand-written files and
+// any other directory left alone
+// (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+func TestWritePackageDirectories(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	unstable := emit.File{Dir: emit.UnstableDir, Name: "unstable_gen.go", Src: []byte("package unstable\n")}
+	if err := Write(dir, append(generated("v1"), unstable)); err != nil {
+		t.Fatal(err)
+	}
+	requireContents(t, filepath.Join(dir, emit.UnstableDir), []emit.File{unstable})
+
+	udir := filepath.Join(dir, emit.UnstableDir)
+	other := filepath.Join(dir, "other")
+	if err := os.Mkdir(other, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	kept := map[string]string{
+		filepath.Join(udir, "doc.go"):             "package unstable\n",
+		filepath.Join(udir, "notes.txt"):          "notes\n",
+		filepath.Join(other, "stray_gen.go"):      "package other\n",
+		filepath.Join(dir, "handwritten.go"):      "package acp\n",
+		filepath.Join(dir, "handwritten_test.go"): "package acp\n",
+	}
+	for path, text := range kept {
+		if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stale := []string{filepath.Join(udir, "old_gen.go"), filepath.Join(dir, "old_gen_test.go")}
+	for _, path := range stale {
+		if err := os.WriteFile(path, []byte("package x\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The schema stops adding to package unstable: its generated files go.
+	if err := Write(dir, generated("v2")); err != nil {
+		t.Fatal(err)
+	}
+	requireContents(t, dir, generated("v2"))
+	for _, path := range append(stale, filepath.Join(udir, "unstable_gen.go")) {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("%s: Stat = %v, want it removed", path, err)
+		}
+	}
+	for path, text := range kept {
+		if b, err := os.ReadFile(path); err != nil || string(b) != text {
+			t.Errorf("%s: %q, %v; want it kept", path, b, err)
+		}
+	}
+	requireNoTemporaryFiles(t, udir)
+}

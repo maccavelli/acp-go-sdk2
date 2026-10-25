@@ -70,6 +70,15 @@ before changing the generator.
 `make fuzz` and `make mutation-engine` / `make mutation-generated` are
 optional before a release. They report; neither gates.
 
+A schema bump never rewrites `schema/unstable-v1.json`. `make version`
+downloads the four schema files and not the manifest, and
+`-write-unstable-manifest` refuses to replace it, so `acp`'s unstable-origin
+API stays as it was frozen. What the new unstable schema adds goes to package
+`unstable`. After the bump, `make api` lists `unstable`'s changes under their
+own heading, and they do not gate. Read that report and record it in the
+bump's record, with what `unstable` gained and lost
+(0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+
 ## Review and Commit
 
 1. Inspect the changes: `git status` and `git diff` should show updated schema

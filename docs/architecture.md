@@ -8,8 +8,10 @@ and [README.md](README.md) points at the ones people ask for most.
 ## What it is
 
 This repository is the Go module `github.com/maccavelli/acp-go-sdk2`, package
-`acp`, at the repository root, and package `agentproc` in `agentproc/`, which
-starts an agent as a child process and stops it (below).
+`acp`, at the repository root, package `agentproc` in `agentproc/`, which
+starts an agent as a child process and stops it, and package `unstable` in
+`unstable/`, the API the unstable schema adds beyond the frozen manifest (both
+below).
 
 - Hand-written: `connection.go` (JSON-RPC over a reader and a writer, and
   `ChainRewrites`), `errors.go` (the error types and constructors, and
@@ -470,10 +472,76 @@ Checks that guard this:
   change, such as a removed declaration or a method added to an interface,
   fails; the compatible ones are listed. `apidiff` exits 0 either way, so the
   script reads its report. It needs the tags, so CI's Linux job at the newest
-  Go fetches every commit and tag.
+  Go fetches every commit and tag. `unstable` is a reported package: its
+  incompatible changes are listed under a heading of their own and do not fail
+  (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2e).
 
 The schema stamp lives in `schema/version`. The `go` line lives in `go.mod` and
 `cmd/generate/go.mod`.
+
+## The unstable boundary
+
+[0039-MADR-five-adopter-additions-on-schema-1-25-0.md](decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md),
+item 1, keeps package `acp` on its `v1` promise while the unstable schema moves.
+
+- **The merge and its provenance.** Without a manifest, `load.MergeStableAndUnstable`
+  works in three ways:
+  - it replaces a stable definition that a stable method reaches with its unstable version;
+  - it adds a definition only the unstable schema has under its own name;
+  - it copies an unstable-only method's subgraph under the `Unstable` prefix.
+
+  `Provenance` names what came from the unstable schema: the definitions, the
+  wires, each definition's origin, and, in `Changes`, the properties and union
+  entries each replaced definition gains or changes. An entry is matched to
+  the stable one by `UnionEntryKey`. The model's `Field.Unstable` and
+  `Variant.Unstable` come from it.
+- **The manifest.** `schema/unstable-v1.json` is the unstable-origin API `acp`
+  exports, frozen once, from schema `1.25.0`, by
+  `go run ./cmd/generate -write-unstable-manifest`. That command refuses an existing
+  manifest, and refuses unless the manifest reproduces the merge. The manifest holds:
+  - the methods;
+  - the name `acp` gives each kept definition;
+  - for each replaced definition, the properties and the union order to apply;
+  - the fragments, as a `$defs` under `schema.unstable.json`'s keys.
+
+  When the manifest is present, `load.MergeManifest` builds `acp` from the stable files and the
+  manifest alone. A union keeps the frozen entry order, then the entries the stable schema
+  adds. Each definition built from the manifest names it as its origin, so the
+  root conformance tests read the frozen fragments, laid over
+  `schema.json`'s (`instances_test.go`). `TestUnstableManifestComplete`
+  requires the model and the manifest to name each other, and, while
+  `schema/version` is the one the manifest was frozen from, the manifest to be
+  what that schema's merge gives.
+- **The deprecation source.** Every declaration built from the manifest carries the notice "Deprecated:
+  this declaration comes from the unstable ACP schema; it stays under v1 for
+  compatibility only (…)". That covers:
+  - the types, inline types, constants and constructors;
+  - the fields and variants the manifest adds to a stable type;
+  - the frozen methods' interface methods, constants and outbound methods;
+  - an interface every method of which is frozen.
+
+  The mark is `model.Deprecation.Frozen`. It is applied after the schema's
+  marks, which it never replaces.
+- **Package `unstable`.** `load.NewUnstable` compares the live unstable files
+  with the manifest. What they add goes to `unstable/unstable_gen.go`:
+  - a new definition, under its schema key, with its constructors;
+  - a new method's types and constant;
+  - a new variant of a stable union, as its inline type and a
+    `Decode<Union><Variant>` that decodes the `Unknown` `acp` keeps for it.
+
+  A new field of a stable type is emitted nowhere. The package's model is
+  `acp`'s with the additions, so a name that collides with `acp`'s is refused.
+  Its file refers to `acp` through the root's import path, which `main.go` takes
+  from the `go.mod` above `-out`, with `acp` when there is none. It uses `acp`'s
+  exported API only:
+  - a failed check is an `*acp.ValidationError` without the message only `acp` sets;
+  - an `acp` value is checked with its `Validate`;
+  - an `acp` variant is decoded with `json.Unmarshal`.
+
+  `output.Check` type-checks the root, then `unstable` through an importer that serves the root
+  just checked. `output.Write` writes each package's directory, and removes a generated file a
+  package directory holds that the run did not render. At `1.25.0`, `unstable/` holds only
+  `doc.go`.
 
 ## The agent process helper
 
@@ -595,6 +663,7 @@ Makefile                  version, test, lint, pre-add-check, fuzz, mutation, do
 go.mod                    the SDK module
 *.go                      package acp: hand-written and *_gen.go files
 agentproc/                package agentproc: an agent as a child process, started and stopped
+unstable/                 package unstable: doc.go, and unstable_gen.go when the unstable schema adds API
 schema_gen_test.go        generated list of types, unions, and methods for tests
 cmd/generate/             the generator, its own module
   internal/load/          schema loading
@@ -606,7 +675,7 @@ cmd/generate/             the generator, its own module
   internal/mutate/        the mutation tool
   testdata/engine/        synthetic engine cases, one txtar each
   testdata/fuzz/          FuzzBuild seeds kept from crashers
-schema/                   schema files and the version stamp
+schema/                   schema files, the version stamp, and the frozen unstable-v1.json
 example/                  agent, client, claude-code, gemini programs
 testdata/json_golden/     JSON goldens
 testdata/fuzz/            FuzzRoundTrip seeds kept from crashers
@@ -614,6 +683,7 @@ scripts/go-precheck.sh    the pre-add gate
 scripts/check_records.py  record numbering and link check
 scripts/check_disclosure.py  real user-home paths in tracked text
 scripts/check_ci_filters.py  CI's and Docs' paths, gates and pins agree
+scripts/check_api.py      the API gate: apidiff against the newest v1 tag
 tools/                    the verification tools; tools/README.md
 .github/workflows/ci.yml  CI
 .github/workflows/docs.yml  the documentation gates, for docs-only changes

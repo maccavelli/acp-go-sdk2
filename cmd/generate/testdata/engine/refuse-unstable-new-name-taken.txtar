@@ -1,0 +1,175 @@
+A new unstable definition keyed UnstableExtra, a name acp declares from the manifest,
+is refused; the live files drop x/new, so their own merge makes no copy of that name
+(0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"old": "x/old"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Shared": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "OldRequest": {"type": "object", "properties": {"s": {"$ref": "#/$defs/Shared"}}, "required": ["s"], "x-side": "agent", "x-method": "x/old"},
+  "OldResponse": {"type": "object", "x-side": "agent", "x-method": "x/old"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- meta.unstable.json --
+{
+  "version": 1,
+  "agentMethods": {
+    "old": "x/old"
+  },
+  "clientMethods": {
+    "watch": "x/watch"
+  },
+  "protocolMethods": {
+    "cancel_request": "$/cancel_request"
+  }
+}
+-- schema.unstable.json --
+{
+  "$defs": {
+    "Shared": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        },
+        "taken": {
+          "$ref": "#/$defs/UnstableExtra"
+        }
+      }
+    },
+    "OldRequest": {
+      "type": "object",
+      "properties": {
+        "s": {
+          "$ref": "#/$defs/Shared"
+        }
+      },
+      "required": [
+        "s"
+      ],
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "OldResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "WatchRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "WatchResponse": {
+      "type": "object",
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "CancelRequestNotification": {
+      "type": "object",
+      "x-side": "protocol",
+      "x-method": "$/cancel_request"
+    },
+    "UnstableExtra": {
+      "type": "string"
+    }
+  }
+}
+-- unstable-v1.json --
+{
+  "version": 1,
+  "schema": "",
+  "methods": {
+    "agent": {
+      "new": "x/new"
+    },
+    "client": {
+      "watch": "x/watch"
+    }
+  },
+  "definitions": {
+    "UnstableExtra": "Extra",
+    "UnstableNewRequest": "NewRequest",
+    "UnstableNewResponse": "NewResponse",
+    "UnstableWatchRequest": "WatchRequest",
+    "UnstableWatchResponse": "WatchResponse"
+  },
+  "changes": {
+    "Shared": {
+      "properties": [
+        "b"
+      ]
+    }
+  },
+  "$defs": {
+    "Extra": {
+      "type": "object",
+      "properties": {
+        "z": {
+          "type": "string"
+        }
+      }
+    },
+    "NewRequest": {
+      "type": "object",
+      "properties": {
+        "extra": {
+          "$ref": "#/$defs/Extra"
+        }
+      },
+      "required": [
+        "extra"
+      ],
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "NewResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "Shared": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        }
+      }
+    },
+    "WatchRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "WatchResponse": {
+      "type": "object",
+      "x-side": "client",
+      "x-method": "x/watch"
+    }
+  }
+}
+-- want.err --
+unstable: new definition "UnstableExtra" has a name acp already declares

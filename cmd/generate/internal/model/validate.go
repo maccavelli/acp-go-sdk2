@@ -52,6 +52,11 @@ type Check struct {
 	// NamedString is true for a CheckMinLength on a named type over string,
 	// whose length is taken of its conversion to string.
 	NamedString bool
+	// Type is, for a CheckNested, the validated type the field holds, so a
+	// type of package unstable checks one of acp's through its exported
+	// Validate (0039-MADR-five-adopter-additions-on-schema-1-25-0.md,
+	// question 9).
+	Type string
 }
 
 // goRange is the range of each sized Go number type.
@@ -113,7 +118,8 @@ func (m *Model) buildValidations() error {
 			if sh, ok, err := m.nested(s.name, f); err != nil {
 				return err
 			} else if ok {
-				v.Checks = append(v.Checks, Check{Kind: CheckNested, Field: f.Name, Key: f.Key, Shape: sh, InPatch: f.Type.Kind == RefPatch})
+				v.Checks = append(v.Checks, Check{Kind: CheckNested, Field: f.Name, Key: f.Key, Shape: sh, InPatch: f.Type.Kind == RefPatch,
+					Type: nestedType(f.Type)})
 			}
 		}
 		s.set(v)
@@ -230,6 +236,18 @@ func (m *Model) nested(owner string, f *Field) (RefKind, bool, error) {
 		return 0, false, fmt.Errorf("%s.%s: %s holds a validated type in a shape Validate does not descend into", owner, f.Key, r)
 	}
 	return 0, false, nil
+}
+
+// nestedType is the named type r holds, as nested resolves it: r itself, or
+// its element, looking through a Patch.
+func nestedType(r TypeRef) string {
+	if r.Kind == RefPatch {
+		r = *r.Elem
+	}
+	if r.Kind != RefNamed && r.Elem != nil {
+		r = *r.Elem
+	}
+	return r.Name
 }
 
 // holdsValidated reports whether r holds, at any depth, a type that validates.

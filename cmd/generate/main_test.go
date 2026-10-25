@@ -36,27 +36,28 @@ var generatedFiles = []string{
 // requires the generated files, in order, to match the committed *_gen.go
 // files byte for byte.
 func TestGeneratedFilesUpToDate(t *testing.T) {
-	meta, schema, prov, err := loadSchema(filepath.Join(repoRoot, "schema"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov, Protocol: &model.ACP})
-	if err != nil {
-		t.Fatal(err)
-	}
-	files, err := emit.Render(m)
-	if err != nil {
-		t.Fatal(err)
-	}
+	files, _ := repositoryFiles(t)
 	var names []string
 	for _, f := range files {
-		names = append(names, f.Name)
+		names = append(names, f.Path())
 	}
+	// At schema 1.25.0 the manifest holds every unstable definition, so
+	// package unstable has no generated file
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, G9).
 	if !slices.Equal(names, generatedFiles) {
-		t.Fatalf("Render returned %v, want %v", names, generatedFiles)
+		t.Fatalf("run renders %v, want %v", names, generatedFiles)
+	}
+	entries, err := os.ReadDir(filepath.Join(repoRoot, emit.UnstableDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), "_gen.go") || strings.HasSuffix(e.Name(), "_gen_test.go") {
+			t.Errorf("%s/%s is a generated file run would remove", emit.UnstableDir, e.Name())
+		}
 	}
 	for _, f := range files {
-		want, err := os.ReadFile(filepath.Join(repoRoot, f.Name))
+		want, err := os.ReadFile(filepath.Join(repoRoot, f.Path()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -299,11 +300,24 @@ func TestRunRefusesMissingOutputDirectory(t *testing.T) {
 	}
 }
 
-// TestCheckAcceptsRepository renders the committed schema and checks it with
-// the repository's hand-written package, as run does before writing.
+// TestCheckAcceptsRepository renders the committed schema, package unstable's
+// files included, and checks them with the repository's hand-written
+// packages, as run does before writing.
 func TestCheckAcceptsRepository(t *testing.T) {
 	t.Parallel()
-	meta, schema, prov, err := loadSchema(filepath.Join(repoRoot, "schema"))
+	files, root := repositoryFiles(t)
+	if err := output.Check(repoRoot, root, files); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// repositoryFiles renders the committed schema as run does, package
+// unstable's files after the root's, and returns them with the root's import
+// path.
+func repositoryFiles(t *testing.T) ([]emit.File, string) {
+	t.Helper()
+	dir := filepath.Join(repoRoot, "schema")
+	meta, schema, prov, err := loadSchema(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,8 +329,50 @@ func TestCheckAcceptsRepository(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := output.Check(repoRoot, files); err != nil {
+	root, err := rootImportPath(repoRoot)
+	if err != nil {
 		t.Fatal(err)
+	}
+	unstable, err := renderUnstable(dir, root, meta, schema, prov)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return append(files, unstable...), root
+}
+
+// TestRootImportPath requires the root's import path to be the module path of
+// the go.mod that holds the output directory, joined with the directory
+// relative to it, and the package name, acp, with no go.mod
+// (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+func TestRootImportPath(t *testing.T) {
+	t.Parallel()
+	mod := t.TempDir()
+	if err := os.WriteFile(filepath.Join(mod, "go.mod"), []byte("// A module.\nmodule \"example.invalid/m\" // the path\n\ngo 1.26\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(mod, "a", "b")
+	if err := os.MkdirAll(nested, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := rootImportPath(repoRoot); err != nil || got != "github.com/maccavelli/acp-go-sdk2" {
+		t.Errorf("the repository: %q, %v", got, err)
+	}
+	for _, tt := range []struct{ dir, want string }{{mod, "example.invalid/m"}, {nested, "example.invalid/m/a/b"}} {
+		if got, err := rootImportPath(tt.dir); err != nil || got != tt.want {
+			t.Errorf("%s: %q, %v; want %q", tt.dir, got, err, tt.want)
+		}
+	}
+	// The engine cases' output directories rely on this too: no go.mod above
+	// a temporary directory.
+	if got, err := rootImportPath(t.TempDir()); err != nil || got != "acp" {
+		t.Errorf("no go.mod: %q, %v; want acp", got, err)
+	}
+	broken := t.TempDir()
+	if err := os.WriteFile(filepath.Join(broken, "go.mod"), []byte("go 1.26\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rootImportPath(broken); err == nil || !strings.Contains(err.Error(), "no module line") {
+		t.Errorf("a go.mod with no module line: %v", err)
 	}
 }
 

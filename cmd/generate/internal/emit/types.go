@@ -296,7 +296,7 @@ func emitStruct(f *goFile, name, place string, fields []*model.Field, members []
 		}
 		doc = append(doc, "Its keys share this struct's JSON object; exactly one member is set.")
 		st.comment(withNotice(doc, "the "+mb.Field+" member of "+place, mb.Deprecation)...)
-		st.add(structField(mb.Field, star(id(mb.Type)), "-"))
+		st.add(structField(mb.Field, star(f.typeName(mb.Type)), "-"))
 	}
 	if keepExtra {
 		st.comment("Extra holds the keys of the payload this struct does not declare, as received.",
@@ -333,7 +333,7 @@ func typeAST(f *goFile, r model.TypeRef) ast.Expr {
 	case model.RefPatch:
 		return index(id(typePatch), typeAST(f, *r.Elem))
 	default:
-		return id(r.Name)
+		return f.typeName(r.Name)
 	}
 }
 
@@ -658,7 +658,7 @@ func memberDecode(f *goFile, name string, members []*model.Member) ast.Stmt {
 			}
 		}
 		cases = append(cases, caseOf(exprs(cond),
-			varStmt("x", id(mb.Type)),
+			varStmt("x", f.typeName(mb.Type)),
 			ifStmt(define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("x")))), errNotNil(),
 				ret(call(f.qual(pkgFmt, "Errorf"), str(name+": "+mb.Field+": %w"), id("err")))),
 			assign(exprs(dot("a", mb.Field)), addr(id("x"))),
@@ -845,7 +845,7 @@ func unionUnmarshalBody(f *goFile, name string, variants []*model.Variant, discK
 			continue
 		}
 		stmts := []ast.Stmt{
-			varStmt("v", id(vi.TypeName)),
+			varStmt("v", f.typeName(vi.TypeName)),
 			define(exprs(id("match")), boolLit(true)),
 		}
 		for _, rk := range vi.Required {
@@ -886,7 +886,7 @@ func arrayMatch(f *goFile, name string, variants []*model.Variant) []ast.Stmt {
 			loop = append(loop, keyMatch("elem", rk))
 		}
 		array = append(array, block(
-			varStmt("v", id(vi.TypeName)),
+			varStmt("v", f.typeName(vi.TypeName)),
 			define(exprs(id("match")), boolLit(true)),
 			rangeStmt(id("_"), id("item"), id("arr"), loop...),
 			ifStmt(nil, id("match"), decodeStrict(f, vi, variantPlace(name, vi))...),
@@ -904,7 +904,7 @@ func arrayMatch(f *goFile, name string, variants []*model.Variant) []ast.Stmt {
 	// Fallback: try each variant in turn.
 	for _, vi := range variants {
 		body = append(body, block(
-			varStmt("v", id(vi.TypeName)),
+			varStmt("v", f.typeName(vi.TypeName)),
 			ifStmt(nil, binary(unmarshal(id("b"), addr(id("v"))), token.EQL, nilExpr()), setVariant(vi)...),
 		))
 	}
@@ -920,7 +920,7 @@ func discUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKe
 	for _, vi := range variants {
 		if vi.DiscValue != "" {
 			cases = append(cases, caseOf(exprs(str(vi.DiscValue)),
-				append([]ast.Stmt{varStmt("v", id(vi.TypeName))},
+				append([]ast.Stmt{varStmt("v", f.typeName(vi.TypeName))},
 					decodeChosen(f, vi, name+": "+discKey+" "+strconv.Quote(vi.DiscValue), true)...)...))
 		}
 	}
@@ -981,10 +981,10 @@ func keyLessBody(f *goFile, name string, keyLess []*model.Variant, discKey strin
 	var body []ast.Stmt
 	for _, vi := range keyLess {
 		if len(vi.FitKeys) == 0 {
-			return append(append(body, varStmt("v", id(vi.TypeName))), decodeChosen(f, vi, variantPlace(name, vi), true)...)
+			return append(append(body, varStmt("v", f.typeName(vi.TypeName))), decodeChosen(f, vi, variantPlace(name, vi), true)...)
 		}
 		stmts := []ast.Stmt{
-			varStmt("v", id(vi.TypeName)),
+			varStmt("v", f.typeName(vi.TypeName)),
 			define(exprs(id("match")), boolLit(true)),
 		}
 		for _, k := range vi.FitKeys {
@@ -994,7 +994,7 @@ func keyLessBody(f *goFile, name string, keyLess []*model.Variant, discKey strin
 	}
 	for _, vi := range keyLess {
 		body = append(body, block(
-			varStmt("v", id(vi.TypeName)),
+			varStmt("v", f.typeName(vi.TypeName)),
 			ifStmt(nil, binary(call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v"))), token.EQL, nilExpr()), setVariant(vi)...),
 		))
 	}
@@ -1023,7 +1023,7 @@ func fitBody(f *goFile, name string, variants []*model.Variant, discKey string, 
 			matches = append(matches, block(append(stmts, ifStmt(nil, id("match"), add))...))
 		}
 		cases = append(cases, caseOf(exprs(str(vi.FieldName)),
-			append([]ast.Stmt{varStmt("v", id(vi.TypeName))}, decodeChosen(f, vi, variantPlace(name, vi), true)...)...))
+			append([]ast.Stmt{varStmt("v", f.typeName(vi.TypeName))}, decodeChosen(f, vi, variantPlace(name, vi), true)...)...))
 	}
 	body := []ast.Stmt{varStmt("fit", sliceOf(id("string")))}
 	if len(always) > 0 {
@@ -1108,7 +1108,7 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 		body = append(body, ifStmt(nil, binary(dot("u", unknownField), token.NEQ, nilExpr()), incr(id("count"))))
 	}
 	body = append(body, ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
-		ret(validationError(name, nil, nil, "RuleOneVariant", str(name+" must have exactly one variant set")))))
+		ret(validationError(f, name, nil, nil, "RuleOneVariant", str(name+" must have exactly one variant set")))))
 	if ca := catchAllOf(t); ca != nil && len(ca.Excluded) > 0 {
 		// The schema's not excludes these values from the catch-all; the
 		// peer would read them as another variant
@@ -1120,7 +1120,7 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 		}
 		body = append(body, ifStmt(nil, binary(dot("u", ca.FieldName), token.NEQ, nilExpr()),
 			switchOrIf(value, caseOf(list,
-				ret(validationError(name, str(t.DiscKey), value, "RuleExcludedValue",
+				ret(validationError(f, name, str(t.DiscKey), value, "RuleExcludedValue",
 					call(f.qual(pkgFmt, "Sprintf"), str(name+": variant "+ca.FieldName+": "+t.DiscKey+" %q names another variant"), value)))))))
 	}
 	for _, vi := range variants {
@@ -1128,7 +1128,7 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 			continue
 		}
 		body = append(body, ifStmt(nil, binary(dot("u", vi.FieldName), token.NEQ, nilExpr()),
-			validateCall(f, dot("u", vi.FieldName), name+": variant "+vi.FieldName+": %w")))
+			validateCall(f, vi.TypeName, dot("u", vi.FieldName), name+": variant "+vi.FieldName+": %w")))
 	}
 	return append(body, ret(nilExpr()))
 }
@@ -1147,9 +1147,16 @@ func addValidate(f *goFile, recv, name, place string, body ...ast.Stmt) {
 	f.add(method(param(recv, star(id(name))), "validate", funcType([]*ast.Field{param("abs", abs)}, param("", id("error"))), body...))
 }
 
-// validateCall is if err := x.Validate(); err != nil { return fmt.Errorf(format, args..., err) }.
-func validateCall(f *goFile, x ast.Expr, format string, args ...ast.Expr) ast.Stmt {
-	return ifStmt(define(exprs(id("err")), call(sel(x, "validate"), id("abs"))), errNotNil(),
+// validateCall is if err := x.validate(abs); err != nil { return fmt.Errorf(format, args..., err) }, for x
+// of the type named typeName. From package unstable, a type of acp's is
+// checked through its exported Validate, by the host's rule
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, question 9).
+func validateCall(f *goFile, typeName string, x ast.Expr, format string, args ...ast.Expr) ast.Stmt {
+	check := call(sel(x, "validate"), id("abs"))
+	if f.external(typeName) {
+		check = call(sel(x, "Validate"))
+	}
+	return ifStmt(define(exprs(id("err")), check), errNotNil(),
 		ret(call(f.qual(pkgFmt, "Errorf"), append(append([]ast.Expr{str(format)}, args...), id("err"))...)))
 }
 
@@ -1166,11 +1173,11 @@ func emitValidate(f *goFile, name, place string, val *model.Validation) {
 			body = append(body, ifStmt(nil, binary(dot("v", mb.Field), token.NEQ, nilExpr()), incr(id("count"))))
 		}
 		body = append(body, ifStmt(nil, binary(id("count"), token.NEQ, intLit(1)),
-			ret(validationError(name, nil, nil, "RuleOneMember", str(name+" must have exactly one member set")))))
+			ret(validationError(f, name, nil, nil, "RuleOneMember", str(name+" must have exactly one member set")))))
 		for _, mb := range val.Members {
 			if mb.Validates {
 				body = append(body, ifStmt(nil, binary(dot("v", mb.Field), token.NEQ, nilExpr()),
-					validateCall(f, dot("v", mb.Field), name+": member "+mb.Field+": %w")))
+					validateCall(f, mb.Type, dot("v", mb.Field), name+": member "+mb.Field+": %w")))
 			}
 		}
 	}
@@ -1189,9 +1196,9 @@ func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
 		if c.InPatch {
 			// A patch's value is checked when it holds one.
 			return ifStmt(define(exprs(id("pv"), id("ok")), call(sel(field, "Value"))), id("ok"),
-				nestedStmt(f, func() ast.Expr { return id("pv") }, c.Shape, where))
+				nestedStmt(f, c.Type, func() ast.Expr { return id("pv") }, c.Shape, where))
 		}
-		return nestedStmt(f, func() ast.Expr { return dot("v", c.Field) }, c.Shape, where)
+		return nestedStmt(f, c.Type, func() ast.Expr { return dot("v", c.Field) }, c.Shape, where)
 	}
 	value := field
 	if c.Shape == model.RefPointer {
@@ -1218,25 +1225,25 @@ func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
 	if c.Shape == model.RefPointer {
 		cond = binary(binary(dot("v", c.Field), token.NEQ, nilExpr()), token.LAND, cond)
 	}
-	return ifStmt(nil, cond, ret(validationError(name, str(c.Key), value, rule, str(msg))))
+	return ifStmt(nil, cond, ret(validationError(f, name, str(c.Key), value, rule, str(msg))))
 }
 
 // nestedStmt calls the Validate of what x holds, by its shape: a value, a
 // pointer when set, each element of a slice, or each value of a map in key
 // order.
-func nestedStmt(f *goFile, x func() ast.Expr, shape model.RefKind, where string) ast.Stmt {
+func nestedStmt(f *goFile, typeName string, x func() ast.Expr, shape model.RefKind, where string) ast.Stmt {
 	switch shape {
 	case model.RefPointer:
-		return ifStmt(nil, binary(x(), token.NEQ, nilExpr()), validateCall(f, x(), where+": %w"))
+		return ifStmt(nil, binary(x(), token.NEQ, nilExpr()), validateCall(f, typeName, x(), where+": %w"))
 	case model.RefSlice:
-		return rangeStmt(id("i"), nil, x(), validateCall(f, index(x(), id("i")), where+"[%d]: %w", id("i")))
+		return rangeStmt(id("i"), nil, x(), validateCall(f, typeName, index(x(), id("i")), where+"[%d]: %w", id("i")))
 	case model.RefMap:
 		keys := call(f.qual("slices", "Sorted"), call(f.qual("maps", "Keys"), x()))
 		return rangeStmt(id("_"), id("k"), keys,
 			define(exprs(id("x")), index(x(), id("k"))),
-			validateCall(f, id("x"), where+"[%q]: %w", id("k")))
+			validateCall(f, typeName, id("x"), where+"[%q]: %w", id("k")))
 	default:
-		return validateCall(f, x(), where+": %w")
+		return validateCall(f, typeName, x(), where+": %w")
 	}
 }
 
@@ -1250,7 +1257,7 @@ func absPathStmt(f *goFile, name string, c model.Check) ast.Stmt {
 	}
 	where := name + ": " + c.Key
 	fail := func(value ast.Expr) ast.Stmt {
-		return ret(validationError(name, str(c.Key), value, "RuleAbsolutePath", sprintf(where+": %q is not an absolute path", value)))
+		return ret(validationError(f, name, str(c.Key), value, "RuleAbsolutePath", sprintf(where+": %q is not an absolute path", value)))
 	}
 	field := dot("v", c.Field)
 	switch c.Shape {
@@ -1259,7 +1266,7 @@ func absPathStmt(f *goFile, name string, c model.Check) ast.Stmt {
 	case model.RefSlice:
 		elem := sprintf(c.Key+"[%d]", id("i"))
 		return rangeStmt(id("i"), id("x"), field, ifStmt(nil, not(call(id("abs"), id("x"))),
-			ret(validationError(name, elem, id("x"), "RuleAbsolutePath", sprintf(where+"[%d]: %q is not an absolute path", id("i"), id("x"))))))
+			ret(validationError(f, name, elem, id("x"), "RuleAbsolutePath", sprintf(where+"[%d]: %q is not an absolute path", id("i"), id("x"))))))
 	default:
 		return ifStmt(nil, not(call(id("abs"), field)), fail(field))
 	}
@@ -1270,7 +1277,7 @@ func absPathStmt(f *goFile, name string, c model.Check) ast.Stmt {
 // (nil for a count), the rule, and the message, which is the text Validate
 // returned before the type existed
 // (0015-PLAN-validate-absolute-protocol-paths.md, step 3).
-func validationError(typeName string, field, value ast.Expr, rule string, msg ast.Expr) ast.Expr {
+func validationError(f *goFile, typeName string, field, value ast.Expr, rule string, msg ast.Expr) ast.Expr {
 	elts := []ast.Expr{kv(id("Type"), str(typeName))}
 	if field != nil {
 		elts = append(elts, kv(id("Field"), field))
@@ -1278,8 +1285,14 @@ func validationError(typeName string, field, value ast.Expr, rule string, msg as
 	if value != nil {
 		elts = append(elts, kv(id("Value"), value))
 	}
-	elts = append(elts, kv(id("Rule"), id(rule)), kv(id("msg"), msg))
-	return addr(composite(id("ValidationError"), elts...))
+	elts = append(elts, kv(id("Rule"), f.runtimeName(rule)))
+	if f.local == nil {
+		// Only acp's own code can set the message; a ValidationError of
+		// package unstable reads as its fallback, "Type: Field: Rule"
+		// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, question 9).
+		elts = append(elts, kv(id("msg"), msg))
+	}
+	return addr(composite(f.runtimeName("ValidationError"), elts...))
 }
 
 // boundLit is a check's bound as a literal: an integer, or a float written
@@ -1319,7 +1332,7 @@ func emitUnion(f *goFile, t *model.Type) {
 	var st fieldSet
 	for _, vi := range variants {
 		st.comment(withNotice(vi.Doc, schemaVariantPlace(t, vi), vi.Deprecation)...)
-		st.add(structField(vi.FieldName, star(id(vi.TypeName)), "-"))
+		st.add(structField(vi.FieldName, star(f.typeName(vi.TypeName)), "-"))
 	}
 	if t.HasUnknown {
 		st.comment(

@@ -1,0 +1,199 @@
+A new unstable variant of the stable union Pick is in no listing as a field: its
+type and DecodePickN are in package unstable, and decode the Unknown that acp's Pick
+keeps for it (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"old": "x/old"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{
+  "$defs": {
+    "OldRequest": {
+      "type": "object",
+      "properties": {
+        "p": {
+          "$ref": "#/$defs/Pick"
+        }
+      },
+      "required": [
+        "p"
+      ],
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "OldResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "CancelRequestNotification": {
+      "type": "object",
+      "x-side": "protocol",
+      "x-method": "$/cancel_request"
+    },
+    "Pick": {
+      "discriminator": {
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "a",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    }
+  }
+}
+-- meta.unstable.json --
+{"version": 1, "agentMethods": {"old": "x/old"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.unstable.json --
+{
+  "$defs": {
+    "OldRequest": {
+      "type": "object",
+      "properties": {
+        "p": {
+          "$ref": "#/$defs/Pick"
+        }
+      },
+      "required": [
+        "p"
+      ],
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "OldResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "CancelRequestNotification": {
+      "type": "object",
+      "x-side": "protocol",
+      "x-method": "$/cancel_request"
+    },
+    "Pick": {
+      "discriminator": {
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "a",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "n",
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    }
+  }
+}
+-- unstable-v1.json --
+{
+  "version": 1,
+  "schema": "",
+  "methods": {},
+  "definitions": {},
+  "changes": {},
+  "$defs": {}
+}
+-- want.api --
+type Agent interface{Old(ctx context.Context, params OldRequest) (OldResponse, error)}
+type AgentExperimental interface{}
+const AgentMethodOld untyped string = "x/old"
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewPickA() Pick
+type OldRequest struct{P Pick "json:\"p\""}
+type OldResponse struct{}
+type Pick struct{A *PickA "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type PickA struct{Kind string "json:\"kind\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).Old(ctx context.Context, params OldRequest) (OldResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+func (*OldRequest).UnmarshalJSON(b []byte) error
+func (*OldRequest).Validate() error
+func (*OldResponse).Validate() error
+func (Pick).MarshalJSON() ([]byte, error)
+func (*Pick).UnmarshalJSON(b []byte) error
+func (*Pick).Validate() error
+-- want.api.unstable --
+func DecodePickN(raw json.RawMessage) (PickN, error)
+type PickN struct{Kind string "json:\"kind\""; Text string "json:\"text,omitempty\""}
+-- behaviour_test.go --
+package acp_test
+
+import (
+	"encoding/json"
+	"testing"
+
+	acp "enginetest/accept-unstable-variant-decode"
+	"enginetest/accept-unstable-variant-decode/unstable"
+)
+
+// acp's Pick keeps a variant it does not declare in Unknown; package
+// unstable's DecodePickN decodes it, and refuses a payload of another
+// variant.
+func TestDecodeNewVariant(t *testing.T) {
+	var p acp.Pick
+	if err := json.Unmarshal([]byte(`{"kind":"n","text":"hi"}`), &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.Unknown == nil {
+		t.Fatalf("acp's Pick did not keep the variant it does not declare: %+v", p)
+	}
+	n, err := unstable.DecodePickN(p.Unknown)
+	if err != nil || n.Text != "hi" {
+		t.Fatalf("DecodePickN: %+v, %v", n, err)
+	}
+	if _, err := unstable.DecodePickN(json.RawMessage(`{"kind":"a"}`)); err == nil {
+		t.Error("DecodePickN decoded a payload of the a variant")
+	}
+}

@@ -35,8 +35,22 @@ const maxReported = 10
 // names; dir must exist (G16). The language version is the go line of
 // dir/go.mod, when there is one. Imports are read from source, by one
 // importer that every call in the process shares.
-func Check(dir string, files []emit.File) error {
-	hand, handTests, err := handWritten(dir, files)
+//
+// The files of package unstable, in emit.UnstableDir, are then checked with
+// its hand-written files, when its directory exists, through an importer
+// that returns the root package just checked for root, its import path, and
+// the shared importer's for any other path: the root exists only in memory
+// until Write (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+func Check(dir, root string, files []emit.File) error {
+	var rootFiles, unstableFiles []emit.File
+	for _, f := range files {
+		if f.Dir == emit.UnstableDir {
+			unstableFiles = append(unstableFiles, f)
+		} else {
+			rootFiles = append(rootFiles, f)
+		}
+	}
+	hand, handTests, err := handWritten(dir, rootFiles)
 	if err != nil {
 		return err
 	}
@@ -44,26 +58,58 @@ func Check(dir string, files []emit.File) error {
 	if err != nil {
 		return err
 	}
-	built := slices.DeleteFunc(slices.Clone(files), func(f emit.File) bool { return strings.HasSuffix(f.Name, "_test.go") })
-	if err := checkPackage(dir, version, hand, built); err != nil {
+	imp := sharedImporter()
+	built := slices.DeleteFunc(slices.Clone(rootFiles), func(f emit.File) bool { return strings.HasSuffix(f.Name, "_test.go") })
+	pkg, err := checkPackage(dir, version, hand, built, imp)
+	if err != nil {
 		return err
 	}
-	if len(built) == len(files) && len(handTests) == 0 {
+	if len(built) != len(rootFiles) || len(handTests) > 0 {
+		if _, err := checkPackage(dir, version, slices.Concat(hand, handTests), rootFiles, imp); err != nil {
+			return err
+		}
+	}
+	if len(unstableFiles) == 0 {
 		return nil
 	}
-	return checkPackage(dir, version, slices.Concat(hand, handTests), files)
+	udir := filepath.Join(dir, emit.UnstableDir)
+	var uhand []string
+	if _, err := os.Stat(udir); err == nil {
+		if uhand, _, err = handWritten(udir, unstableFiles); err != nil {
+			return err
+		}
+	}
+	_, err = checkPackage(udir, version, uhand, unstableFiles, servingImporter{path: root, pkg: pkg, next: imp})
+	return err
+}
+
+// servingImporter returns pkg for path and defers every other import to next.
+type servingImporter struct {
+	path string
+	pkg  *types.Package
+	next *lockedImporter
+}
+
+func (s servingImporter) Import(path string) (*types.Package, error) {
+	return s.ImportFrom(path, "", 0)
+}
+
+func (s servingImporter) ImportFrom(path, dir string, mode types.ImportMode) (*types.Package, error) {
+	if path == s.path {
+		return s.pkg, nil
+	}
+	return s.next.ImportFrom(path, dir, mode)
 }
 
 // checkPackage type-checks the hand-written files named hand, in dir, with
-// the generated files.
-func checkPackage(dir, version string, hand []string, files []emit.File) error {
-	imp := sharedImporter()
-	fset := imp.fset
+// the generated files, importing through imp, and returns the package.
+func checkPackage(dir, version string, hand []string, files []emit.File, imp types.ImporterFrom) (*types.Package, error) {
+	fset := sharedImporter().fset
 	parsed := make([]*ast.File, 0, len(hand)+len(files))
 	for _, name := range hand {
 		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		parsed = append(parsed, f)
 	}
@@ -71,7 +117,7 @@ func checkPackage(dir, version string, hand []string, files []emit.File) error {
 	for _, gf := range files {
 		f, err := parser.ParseFile(fset, filepath.Join(dir, gf.Name), gf.Src, parser.SkipObjectResolution)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		pkg = f.Name.Name
 		parsed = append(parsed, f)
@@ -89,15 +135,15 @@ func checkPackage(dir, version string, hand []string, files []emit.File) error {
 			errs = append(errs, te)
 		},
 	}
-	_, _ = conf.Check(pkg, fset, parsed, nil) //nolint:errcheck // Error collects every error, including the one returned.
+	checked, _ := conf.Check(pkg, fset, parsed, nil) //nolint:errcheck // Error collects every error, including the one returned.
 	if len(errs) == 0 {
-		return nil
+		return checked, nil
 	}
 	generated := map[string]bool{}
 	for _, gf := range files {
 		generated[filepath.Join(dir, gf.Name)] = true
 	}
-	return report(dir, fset, errs, generated)
+	return nil, report(dir, fset, errs, generated)
 }
 
 // sharedImporter is the source importer every Check uses. It keeps what it

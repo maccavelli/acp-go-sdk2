@@ -109,5 +109,15 @@ class CompareTest(unittest.TestCase):
                 self.assertEqual(raised.exception.code, 2)
 
 
+class PackagesTest(unittest.TestCase):
+    def test_unstable_is_reported_and_not_gated(self) -> None:
+        # Package unstable may change in a minor release
+        # (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+        self.assertIn("unstable", check_api.REPORTED)
+        self.assertNotIn("unstable", check_api.PACKAGES)
+        self.assertIn("", check_api.PACKAGES)
+        self.assertIn("agentproc", check_api.PACKAGES)
+
+
 if __name__ == "__main__":
     unittest.main()

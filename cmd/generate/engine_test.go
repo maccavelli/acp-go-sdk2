@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"go/build"
+	"go/types"
 	"maps"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/emit"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/enginetest"
 )
 
@@ -103,10 +105,17 @@ func runEngineCase(t *testing.T, path string) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		gotUnstable, gotUnstableDeprecated := unstableListings(t, out, pkg)
 		if *update {
 			a.Set("want.api", []byte(got))
 			if gotDeprecated != "" {
 				a.Set("want.deprecated", []byte(gotDeprecated))
+			}
+			if gotUnstable != "" {
+				a.Set("want.api.unstable", []byte(gotUnstable))
+			}
+			if gotUnstableDeprecated != "" {
+				a.Set("want.deprecated.unstable", []byte(gotUnstableDeprecated))
 			}
 			if err := os.WriteFile(path, enginetest.Format(a), 0o600); err != nil {
 				t.Fatal(err)
@@ -122,7 +131,54 @@ func runEngineCase(t *testing.T, path string) {
 			t.Errorf("deprecation notices differ from want.deprecated (rerun with -update to accept):\ngot:\n%s\nwant:\n%s",
 				gotDeprecated, wantDeprecated)
 		}
+		requireUnstable(t, a, out, gotUnstable, gotUnstableDeprecated)
 	}
+}
+
+// requireUnstable requires package unstable's listings to equal the case's
+// want.api.unstable and want.deprecated.unstable, and a case without the
+// first to leave no unstable/ under out
+// (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+func requireUnstable(t *testing.T, a *enginetest.Archive, out, api, deprecated string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(out, emit.UnstableDir)); api == "" && err == nil {
+		t.Errorf("the run made %s/ and generated no package unstable", emit.UnstableDir)
+	}
+	if want, _ := a.File("want.api.unstable"); api != string(want) {
+		t.Errorf("package unstable's API differs from want.api.unstable (rerun with -update to accept):\ngot:\n%s\nwant:\n%s", api, want)
+	}
+	if want, _ := a.File("want.deprecated.unstable"); deprecated != string(want) {
+		t.Errorf("package unstable's notices differ from want.deprecated.unstable (rerun with -update to accept):\ngot:\n%s\nwant:\n%s",
+			deprecated, want)
+	}
+}
+
+// unstableListings lists the API and the deprecation notices of the package
+// unstable generated under out, against root, the case's root package: ""
+// for each when the run generated none.
+func unstableListings(t *testing.T, out string, root *types.Package) (api, deprecated string) {
+	t.Helper()
+	dir := filepath.Join(out, emit.UnstableDir)
+	if _, err := os.Stat(filepath.Join(dir, "unstable_gen.go")); err != nil {
+		if !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		return "", ""
+	}
+	rootPath, err := rootImportPath(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, fset, err := enginetest.LoadPackageImporting(dir, rootPath, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated := func(name string) bool { return strings.HasSuffix(name, "_gen.go") }
+	deprecated, err = enginetest.Deprecations(dir, generated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return enginetest.API(pkg, fset, generated), deprecated
 }
 
 // snapshot returns the name and bytes of every file in dir.
