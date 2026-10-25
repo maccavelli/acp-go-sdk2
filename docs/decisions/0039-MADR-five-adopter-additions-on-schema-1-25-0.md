@@ -182,6 +182,9 @@ and a major; Rust isolates it with Cargo features; Go's corresponding pattern is
   paragraph naming this record and, where a counterpart exists, the `unstable` name.
 * When a later schema *removes* an unstable definition, the generator emits a deprecated stub in `acp` (and in `unstable` until
   that package's next minor) so a `v1` minor never deletes a previously exported root name. Removing the stub is a `/v2` change.
+  *Refined by the second assessment: the "stub" is the frozen declaration itself, built from the manifest's fragment, and a
+  schema that changes a manifest definition is handled the same way; see "How it is built". The `unstable` half applies only if
+  question 7 is answered "now".*
 * `scripts/check_api.py` continues to fail on an incompatible change in package `acp`. It compares `unstable` too, and treats
   incompatible changes there as a listed, non-failing report, so a Draft feature can leave `unstable` without forcing `/v2`.
 
@@ -205,6 +208,42 @@ Two further constraints:
   not a protocol-table note.
 * Where no `unstable` counterpart exists, as for `AgentExperimental` until question 5's mechanism does, the notice names this
   record and says the name stays under `v1`; it names no replacement.
+
+**How it is built** (second assessment, 2026-10-25; its findings G1 to G9 are under More Information). The draft named the
+outcome; this is the mechanism, read from the generator, within the owner's answers to questions 3 and 5:
+
+* **Where unstable API comes from.** The merge (`cmd/generate/internal/load/merge.go`) does three things (G1): a stable
+  definition that a stable method reaches is replaced by its unstable version when the two differ (`:329`–`:331`), which is how
+  `AgentCapabilities.Nes` and `SessionUpdate`'s unstable variants arrive; a definition only the unstable schema has is added under
+  its own name; and the subgraph of an unstable-only method is copied under the `Unstable` prefix (`:102`–`:105`). At `1.25.0`
+  that is 102 definitions, 10 fields on 8 stable-named types, 6 union variants and 16 methods (G2).
+* **The manifest is the frozen `v1` contract.** `schema/unstable-v1.json` records every unstable-origin name `acp` exports, each
+  with its schema fragment as of the first release with this item. The generator builds `acp`'s unstable-origin API from those
+  fragments, not from the live unstable schema, so a later schema that changes or removes one changes nothing in `acp`. This is
+  question 3's frozen stubs, and it makes "kept" and "removed" one rule; no second file of frozen fragments is needed.
+* **The merge stops growing stable-named types.** For a stable-reachable definition, the merge takes the stable definition with
+  the manifest's entries for it applied, not the whole unstable version. An entry is a property the unstable version adds, a
+  property it changes (its whole fragment, so a changed default is carried), or a union entry it adds or changes. At `1.25.0`
+  the eight replaced definitions differ from their stable versions in exactly 18 such entries, and in nothing else (no
+  description or other keyword): G2's ten added fields and six added variants, and the defaults of
+  `AgentCapabilities.mcpCapabilities` and `InitializeResponse.agentCapabilities`, which the unstable schema changes to include
+  `acp: false`. Applying the 18 to the stable definitions gives the merge's present output, so the generated code does not
+  change. An unstable change the manifest does not list reaches no stable-named type. A new unstable-only definition, not in the
+  manifest, goes where question 5's answer sends it.
+* **Provenance must reach fields and variants.** The model records origin for types (`Type.Unstable`, `Type.Origin`,
+  `model/model.go:112`–`:116`) and methods (`Method.Unstable`), not for fields or variants; only the merge holds both versions
+  (G3). The merge records which properties and variants of a replaced definition are unstable, and the model carries it.
+* **Deprecation needs a source of its own.** Nothing today can mark a declaration the schema does not, and the emitted text, "the
+  ACP schema marks … deprecated", would be false here (G5). The manifest is the new source, with its own text.
+* **`example/agent` changes with it.** It asserts `acp.AgentExperimental` and implements all 15 `Unstable*` methods
+  (`example/agent/main.go:41`). staticcheck's SA1019, which CI runs, flags a deprecated name's use from any other package (G6), so
+  the example stops implementing them in the same commit.
+* **A second generated package is real work.** The generator writes one package, `acp`, to one directory, type-checks one package
+  per call against the source on disk, and an engine case has one output and one API listing (G4). Package `unstable` needs all
+  four extended. At `1.25.0` every unstable definition is in the manifest, so `unstable` would start with no generated
+  declaration, and that machinery would be exercised only by synthetic engine cases (G9). Question 7 asks whether to build it now.
+* **The API gate gains a non-gating package.** `scripts/check_api.py` pools every package's incompatible changes into one list and
+  fails on any (G7); it gains a list of packages whose changes are reported and not gated, and its first tests.
 
 **Adopter benefit.** Default importers stay on the stable 1.25.0 contract as the schema's unstable set moves. This module can
 absorb 1.26.0's NES removal and system-prompt addition later without a major, by stubbing the removed root names and placing the
@@ -417,6 +456,14 @@ package is also how items 2–4 get their black-box tests without 124 more `io.P
    * Alternative: no distinction. An unregistered method answers `NewMethodNotFound` for both; the connection already drops a
      notification's answer. A request to a `Notify` registration is then run and answered with a `null` result.
 
+7. **When to build package `unstable`'s generation (item 1).** Added by the second assessment (G4, G9).
+   * Recommended: now, the policy and the frozen contract; later, the emission. Phase 2 ships the manifest, the merge restriction,
+     the deprecations, `example/agent`'s change and the non-gating API gate, and creates `unstable/` with its `doc.go` only. The
+     generator does not emit a new unstable-only definition, and lists each one it leaves out. Emitting into `unstable` becomes a
+     phase of the first schema-bump record that brings one, which then has a real definition to build and test against.
+   * Alternative: build the emission now, as the PLAN first had it, proved by synthetic engine cases only.
+   * Alternative: no package `unstable` at all; every new unstable definition stays untyped until it is stable.
+
 #### Decided with the owner, 2026-10-25
 
 The owner chose, out of three options for each:
@@ -484,6 +531,10 @@ A later PLAN shows each of the following, every new check first seen to fail on 
 * `go doc` of package `acp` still shows existing `Unstable*` names; a new unstable definition added in a synthetic engine case
   appears only under `unstable`
 * a new unstable field, union variant and method, each in a synthetic engine case, follow question 5's answer
+* at `1.25.0`, adding the manifest and the merge restriction changes no generated declaration but the deprecation paragraphs;
+  a synthetic case that changes or removes a manifest definition leaves its `acp` API listing identical; one whose unstable
+  schema adds a property to a stable definition leaves that definition's fields as they were
+* `example/agent` builds and lints with every unstable name deprecated
 * `ExtensionMux` runs a `Notify` handler for a notification and not for a request of the same name, by question 6's answer
 
 ## Pros and Cons of the Options
@@ -587,6 +638,31 @@ decision and its five items are unchanged. What changed:
 | `ExtensionMux` answers an unregistered request and ignores an unregistered notification | `HandleExtensionMethod` cannot tell them apart; nothing exported reads the connection's mark | `IsNotification` added; question 6 added |
 | `CompactionTimeline` | 0035 F lists "a session-state reducer" as not recommended | item 3 says why one entity type differs |
 
+### Assessment, second pass, 2026-10-25
+
+At the owner's request ("re-evaluate the 0039 plan related to the boundry and generator changes … with precision"), item 1 and
+the PLAN's phase 2 were checked against the generator's code and against outside sources. Four read-only investigations were
+run; every claim below that the PLAN rests on was then read again directly, and G10 was computed directly.
+
+| | Finding | Source |
+| :--- | :--- | :--- |
+| G1 | The merge replaces a stable definition a stable method reaches with its unstable version when they differ; adds an unstable-only definition unprefixed; copies an unstable-only method's subgraph under `Unstable` | `cmd/generate/internal/load/merge.go:102`–`:105`, `:302`–`:346` (`promoteChangedSharedDefs`, the replacement at `:329`–`:331`) |
+| G2 | At `1.25.0`: 102 unstable-only definitions (56 prefixed, 46 not), giving 172 exported package-level declarations (102 types, 23 nested or inline types, 21 enum constants, 26 constructors); 2 stable properties whose default only the unstable schema changes (`AgentCapabilities.mcpCapabilities`, `InitializeResponse.agentCapabilities`); 10 fields on 8 stable-named types (`AgentCapabilities.Nes`, `.PositionEncoding`, `.Providers`; `ClientCapabilities.Nes`, `.Plan`, `.PositionEncodings`, `.Subagents`; `McpCapabilities.Acp`; `PromptResponse.Usage`; `SessionCapabilities.Fork`); 6 union-variant fields (5 on `SessionUpdate`, `McpServer.Acp`); 16 methods (15 agent, 1 client), each an interface method, a dispatch case, a method constant and an outbound method | the merge re-run over the schema files; the ten fields read at `types_gen.go:98`, `:104`, `:117`, `:1533`, `:1542`, `:1548`, `:1564`, `:7868`, `:11119`, `:12359` |
+| G3 | Origin is recorded for types (`Type.Unstable`, `Type.Origin`) and methods (`Method.Unstable`), not for fields, variants or members; `Type.Unstable` is false for a replaced stable-named definition | `model/model.go:112`–`:116`, `:355`–`:361`; `load/merge.go:12`–`:24` (`Provenance`) |
+| G4 | The generator emits one package: `sdkPackage = "acp"`; `output.Check` type-checks one directory per call, resolving imports from disk; `output.Write` writes one directory; `TestGeneratedFilesUpToDate` and `TestCheckAcceptsRepository` cover the root only; an engine case has one output directory and one `want.api`, and a section name may not contain `/` | `emit/file.go:20`–`:21`, `:54`; `output/check.go:38`–`:101`; `output/write.go`; `main_test.go`; `enginetest/archive.go:60`–`:64` |
+| G5 | A deprecation mark comes only from the schema's `deprecated` keyword; a protocol-table note on an unmarked node is refused; the notice text is "Deprecated: the ACP schema marks <place> deprecated." | `model/model.go:256`–`:268`; `model/protocol.go:909`–`:916`; `emit/types.go:177`–`:190` |
+| G6 | SA1019 exempts the declaring package and its external tests, and flags any other package; `.golangci.yml` enables staticcheck with no SA1019 exclusion; `example/agent/main.go` asserts `acp.AgentExperimental` and implements the 15 methods | the staticcheck source, `staticcheck/sa1019/sa1019.go` (`checkIdentObj`); `.golangci.yml`; `example/agent/main.go:41` |
+| G7 | `check_api.py` pools every package's incompatible changes and fails on any; a package missing from the base tag is stubbed, one missing from the working tree is a tool error; it has no tests | `scripts/check_api.py:43`, `:113`–`:127` |
+| G8 | Precedent: grpc-go marks experimental APIs in place and exempts them from minor-release compatibility; the MCP Go SDK gated client OAuth behind a temporary build tag; build-tag API is not shown on pkg.go.dev, and `apidiff` sees only the default build | grpc-go `Documentation/versioning.md`; modelcontextprotocol/go-sdk issue #833; pkg.go.dev/about; `golang.org/x/exp/cmd/apidiff` |
+| G9 | Every unstable definition at `1.25.0` would be in the manifest, so `unstable` would start with no generated declaration | G2 and item 1's manifest |
+| G10 | 13 definitions both schemas have differ. The 8 the merge replaces differ only in added properties (10), properties with a changed `default` (2: `AgentCapabilities.mcpCapabilities`, `InitializeResponse.agentCapabilities`) and added union entries (5 on `SessionUpdate`, 1 on `McpServer`). The other 5, `AgentRequest`, `ClientRequest` and `ClientNotification` (a property's `anyOf`) and `AgentResponse` and `ClientResponse` (one `anyOf` entry each), no stable method reaches, so they are generated from the stable schema. No description or other top-level keyword differs | a key-by-key diff of the 13 over `schema/schema.json` and `schema/schema.unstable.json`, in the session's scratch directory; the merge re-run for which are replaced |
+
+Consequences for the draft: item 1 gains "How it is built", which states the mechanism; the PLAN's phase 2 is rewritten from it
+(the PLAN's "Revision, 2026-10-25"); question 7 is added; and "Confirmation" gains three items. The decisions recorded in
+"Decided with the owner" are unchanged.
+
+### Assessment, first pass
+
 Confirmed as written, with the source read: the counts of `$defs` (178, 277) and `meta.json` methods (13, 11, one protocol method);
 `schema/version`, `go` and `toolchain` lines; every other line citation; 124 `io.Pipe()` calls in 27 test files; the schema
 release's four items and its date; the Notices RFD's shape, gate, fallback and replay rule; the compaction patch, chunk,
@@ -616,4 +692,5 @@ These stay as 0035 numbered them. They are the natural record after this one lan
 * Changing `PromptOverlapRefuse`'s code (0021)
 * Adding methods to `Agent` or `Client` (that is an incompatible `apidiff` change for every embedder)
 
-The owner answered questions 1–6 on 2026-10-25 ("Decided with the owner"). Implementation waits on an approved PLAN.
+The owner answered questions 1–6 on 2026-10-25 ("Decided with the owner"). Question 7, from the second assessment, is open.
+Implementation waits on its answer and an approved PLAN.
