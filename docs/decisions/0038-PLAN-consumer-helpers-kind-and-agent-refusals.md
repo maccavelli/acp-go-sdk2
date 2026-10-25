@@ -442,3 +442,44 @@ The first `go vet` failed: `initializeWith`, the step's helper, was already decl
 * `make check-records`, `make markdownlint`, `make disclosure-check`, and `tools/idscan.py --paths` over the step's files.
 
 Step 3 was committed by the owner as `79038ac`. Step 4's files are staged for the owner.
+
+### Step 5, `Kind()` on four unions, 2026-10-25
+
+What changed:
+
+* **`helpers.go`:** four constants beside `rawInputContentKey`, `outcomeCancelled`, `outcomeSelected`, `configOptionSelect` and
+  `configOptionBoolean`; `unknownSessionUpdateKind` became `unknownKind(b, key)`, and `SessionUpdate.Kind()` calls it with
+  `"sessionUpdate"`; after it, `ContentBlock.Kind`, `ToolCallContent.Kind`, `RequestPermissionOutcome.Kind` and
+  `SessionConfigOption.Kind`. Each switches on its pointer fields in its generated `MarshalJSON`'s order, read from
+  `types_gen.go` before the edit, which is the struct's field order for all four; the block and tool-content values reuse
+  `blockTypeText` to `blockTypeTerminal`.
+* **`kind_test.go`:** `TestUnionKinds`, a subtest per union driven by `schemaUnions()` through reflection: every variant, every
+  pointer field among them, an `Unknown` with a named, folded, last-of-two, empty, numeric, empty-object, array and non-JSON key,
+  decoding agreeing for the four string keys, the empty one included, and the zero value; and `TestKindCoversKeyedStableUnions`,
+  which finds every union in `schema/schema.json` with a key, no key-less variant and no catch-all, requires a `Kind() string` on
+  each, and pins the set as the five that have one today.
+* **`README.md`:** the "Session updates" item names the four.
+
+The first run left the empty key's decoding unasserted; asserting it, it agreed for all four unions, and the case stays in.
+
+**Tests,** `go test -count=1 -race`, exit 0: `TestUnionKinds` and its four subtests, `TestKindCoversKeyedStableUnions`, and
+`TestSessionUpdateKind` with the renamed helper.
+
+**Planted breaks,** `tools/plants.py`, each in its own copy of the tree; four of four failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `ContentBlock.Kind`'s `ResourceLink` case removed | "kind_test.go:177: ContentBlock.ResourceLink: Kind() = \"\", want \"resource_link\"" |
+| `RequestPermissionOutcome.Kind` reads `"type"` from `Unknown` | "kind_test.go:178: RequestPermissionOutcome {\"outcome\":\"future\"}: Kind() = \"unknown\", want \"future\"" |
+| `SessionConfigOption`'s `Kind` method made a function | "kind_test.go:276: SessionConfigOption: every variant carries \"type\" and it is stable, but it has no Kind() string" |
+| `unknownKind` returns an empty key | "kind_test.go:123: {\"sessionUpdate\":\"\"}: decoded Kind() = \"\", want \"unknown\"" |
+
+**Gates,** each exit 0:
+
+* `make pre-add-check`: "183 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", before and after the empty-key
+  case was asserted;
+* `(cd cmd/generate && go test -count=1 ./...)`: every package `ok`;
+* `make api`: "against v1.21.0: 0 incompatible, 21 compatible", the seventeen before and the four `Kind` methods;
+* `make check-records`, `make markdownlint`, `make disclosure-check`, and `tools/idscan.py --paths` over the step's files.
+
+Step 4 was committed by the owner as `b4ca784`. Step 5's files are staged for the owner.

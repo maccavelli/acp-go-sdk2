@@ -21,6 +21,11 @@ const (
 	rawInputPathKey       = "path"
 	rawInputContentKey    = "content"
 
+	outcomeCancelled    = "cancelled"
+	outcomeSelected     = "selected"
+	configOptionSelect  = "select"
+	configOptionBoolean = "boolean"
+
 	sessionUpdateUserMessage         = "user_message_chunk"
 	sessionUpdateAgentMessage        = "agent_message_chunk"
 	sessionUpdateAgentThought        = "agent_thought_chunk"
@@ -318,24 +323,96 @@ func (u SessionUpdate) Kind() string {
 	case u.SessionMessageChunk != nil:
 		return sessionUpdateSessionMessageChunk
 	case u.Unknown != nil:
-		return unknownSessionUpdateKind(u.Unknown)
+		return unknownKind(u.Unknown, "sessionUpdate")
 	}
 	return ""
 }
 
-// unknownSessionUpdateKind reads the "sessionUpdate" of b as
-// SessionUpdate.UnmarshalJSON reads it, folding keys, the last match winning.
-func unknownSessionUpdateKind(b json.RawMessage) string {
+// unknownKind reads the discriminator key of b as a union's UnmarshalJSON
+// reads it, folding keys, the last match winning, and returns "unknown" when
+// that is not a non-empty string.
+func unknownKind(b json.RawMessage, key string) string {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err != nil {
 		return sessionUpdateUnknownKind
 	}
-	foldKeys(b, m, "sessionUpdate")
+	foldKeys(b, m, key)
 	var kind string
-	if err := json.Unmarshal(m["sessionUpdate"], &kind); err != nil || kind == "" {
+	if err := json.Unmarshal(m[key], &kind); err != nil || kind == "" {
 		return sessionUpdateUnknownKind
 	}
 	return kind
+}
+
+// Kind returns the type value of the content block b sends: the first set
+// variant, in the order MarshalJSON checks them, such as "text" or
+// "resource_link". With no variant set, it returns the "type" of Unknown, read
+// as UnmarshalJSON reads it, when that is a non-empty string, and "unknown"
+// when Unknown holds anything else. The zero ContentBlock returns ""
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func (b ContentBlock) Kind() string {
+	switch {
+	case b.Text != nil:
+		return blockTypeText
+	case b.Image != nil:
+		return blockTypeImage
+	case b.Audio != nil:
+		return blockTypeAudio
+	case b.ResourceLink != nil:
+		return blockTypeResourceLink
+	case b.Resource != nil:
+		return blockTypeResource
+	case b.Unknown != nil:
+		return unknownKind(b.Unknown, "type")
+	}
+	return ""
+}
+
+// Kind returns the type value of the tool-call content c sends, "content",
+// "diff" or "terminal", as ContentBlock.Kind does for a content block
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func (c ToolCallContent) Kind() string {
+	switch {
+	case c.Content != nil:
+		return blockTypeContent
+	case c.Diff != nil:
+		return blockTypeDiff
+	case c.Terminal != nil:
+		return blockTypeTerminal
+	case c.Unknown != nil:
+		return unknownKind(c.Unknown, "type")
+	}
+	return ""
+}
+
+// Kind returns the outcome value o sends, "cancelled" or "selected", as
+// ContentBlock.Kind does for a content block, reading an unknown one's
+// "outcome" (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func (o RequestPermissionOutcome) Kind() string {
+	switch {
+	case o.Cancelled != nil:
+		return outcomeCancelled
+	case o.Selected != nil:
+		return outcomeSelected
+	case o.Unknown != nil:
+		return unknownKind(o.Unknown, "outcome")
+	}
+	return ""
+}
+
+// Kind returns the type value the config option o sends, "select" or
+// "boolean", as ContentBlock.Kind does for a content block
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func (o SessionConfigOption) Kind() string {
+	switch {
+	case o.Select != nil:
+		return configOptionSelect
+	case o.Boolean != nil:
+		return configOptionBoolean
+	case o.Unknown != nil:
+		return unknownKind(o.Unknown, "type")
+	}
+	return ""
 }
 
 // ErrRepeatedCursor is the error AllSessions yields when the agent answers

@@ -144,7 +144,9 @@ Helper constructors are provided to reduce boilerplate when working with union t
   keys; optional fields are set on the variant it returns. `UpdateNotice` and
   the compaction updates are refused unless the client advertised
   `session.notices` or `session.compaction`. `SessionUpdate.Kind()` names the
-  variant a value sends, or the `sessionUpdate` of an unknown one received.
+  variant a value sends, or the `sessionUpdate` of an unknown one received;
+  `ContentBlock`, `ToolCallContent`, `RequestPermissionOutcome` and
+  `SessionConfigOption` have the same `Kind()`, reading `type` or `outcome`.
 - Tool calls: `acp.StartToolCall`, `acp.UpdateToolCall`, and their options.
   `rawInput` and `rawOutput` are raw JSON, so `acp.WithStartRawInput`,
   `acp.WithStartRawOutput`, `acp.WithUpdateRawInput`, `acp.WithUpdateRawOutput`,
