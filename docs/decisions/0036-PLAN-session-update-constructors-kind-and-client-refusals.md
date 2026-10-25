@@ -433,4 +433,32 @@ scratch directory, which copies the tree, makes the same edit, and runs the test
 * `floor`: passed at go1.26.10, `cmd/generate` included.
 * `nojsonv2`, `windows` and `linux`: passed.
 
-Step 3 was committed by the owner as `e0f4854`. Step 4's files are staged for the owner.
+Step 3 was committed by the owner as `e0f4854`. Step 4 was committed by the owner as `4152eb7`.
+
+### Step 5, close the implementation, 2026-10-25
+
+Over the commits since `7581822` and step 4's staged files:
+
+* **`make api`:** "against v1.20.0: 0 incompatible, 11 compatible", step 4's gate run. The step expected the nine functions,
+  `Kind`, `ClientRefusals` and its nine methods; `apidiff` lists `ClientRefusals` once, as "added", and not its methods.
+* **`tools/gates.py --all`:** 18 of 18, step 4's run, on the code staged now.
+* **The README and `docs/architecture.md`,** read again against the code: the "Session updates" item names the fourteen
+  constructors and `SessionUpdate.Kind()`; the client section names `acp.ClientRefusals`; the "Hand-written" list names
+  `refusals.go` and `SessionUpdate.Kind`.
+* **The execution record** holds steps 1 to 4, each with its tests, planted breaks, gates and deviations.
+
+Issue #11's "Acceptance", item by item:
+
+| Item | Met by |
+| :--- | :--- |
+| Every stable variant not covered before has an `Update*` constructor, `UpdateSessionTitle` included; `go/doc` and the README name them | `TestStableSessionUpdateConstructors`, over `schema/schema.json`'s 14; a script over `go doc -all .` and `README.md` found all nine constructors, `Kind` and `ClientRefusals` in each |
+| Each helper's encoding equals the composite literal; `Validate` passes | the eight new subtests of `TestJSONGolden_SessionUpdates`, and `TestStableSessionUpdateConstructors` |
+| `Kind()` matches the issue's comment; decoding an unknown discriminator becomes `u.Kind()` | `TestSessionUpdateKind`, and `ExampleSessionUpdate_Kind`, which decodes `future_update` and prints `u.Kind()`. One difference, decided as the MADR's question 2: an `Unknown` whose `sessionUpdate` is `""` gives `"unknown"`, where the issue's comment would give `""` |
+| Embedding `ClientRefusals` and implementing only `SessionUpdate` and `RequestPermission` satisfies `Client`; each refused method answers `-32601` naming itself; `CompleteElicitation` returns nil | `var _ Client = refusingClient{}`, `TestClientRefusalsAnswers`, `TestClientRefusalsMethodSet` and `TestClientRefusalsOverTheWire` |
+| `apidiff` against `v1.20.0` is additions only | `make api`, above |
+| The generator does not emit `SessionUpdate` constructors; `HandWrittenHelpers` unchanged | no `*_gen.go` among the 22 files changed since `7581822`; no change to `cmd/generate/internal/model/acp.go`; under `cmd/generate`, only `engine_test.go`, step 4's deviation; the `regen` gate passed |
+| Root `go test ./...` and `-race`; `cmd/generate` tests; `make pre-add-check` on changed `.go` files | the `precheck`, `newfiles`, `race3` and `floor` gates, and the `windows` and `linux` gates, which run both modules |
+| No identifier in the commits | `tools/idscan.py --range 7581822..HEAD`, "18 file(s), 17 pattern(s), 0 match(es)", and `--paths` over the staged files, "8 file(s), 17 pattern(s), 0 match(es)" |
+
+Not done in this step: the push and its checks (`git fetch`, `make push-guard`, `tools/idscan.py --range origin/main..main`,
+`tools/watch_ci.py`), which wait for the owner's ask, and step 6. This PLAN stays `in-progress` until the release is published.
