@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-25
 associated-madr: "0038-MADR-consumer-helpers-kind-and-agent-refusals.md"
 ---
@@ -597,6 +597,27 @@ Checks before the tag, each in the session's scratch directory:
   tidy` and `go run` exit 0, and its output equals the tool's expected output exactly. The tool's own run, through the proxy,
   follows the tag.
 
-Not done yet, each on the owner's ask: the commit of this record; `tools/release_body.py v1.22.0 <that commit>`; the annotated
+~~Not done yet, each on the owner's ask: the commit of this record; `tools/release_body.py v1.22.0 <that commit>`; the annotated
 tag and its push; the GitHub release; `tools/publication.py`; `tools/consumer.py v1.22.0`. When the release is published, this
-PLAN and its row are `complete`.
+PLAN and its row are `complete`.~~ Done, as follows.
+
+The owner committed the record as `67c7a8e`.
+
+* **`tools/release_body.py v1.22.0 67c7a8e`:** exit 0, "67 lines, 2 links". Both links name a file under `blob/v1.22.0/`, the 0038
+  and 0037 MADRs, each in the tagged tree. `make api` on `67c7a8e`: "against v1.21.0: 0 incompatible, 22 compatible".
+* **The push of `67c7a8e`.** Before it: `make push-guard`, "1 outgoing commit(s), df0462e..67c7a8e", "the guard passed (exit 0)";
+  `tools/idscan.py --range origin/main..main`, "5 file(s), 17 pattern(s), 0 match(es)". The owner pushed. CI run `40214167180`
+  and Docs run `40214167168`, each "completed success", CI's six jobs at Go `1.27.3` and `1.26.10` on the three systems.
+* **The tag.** The owner pushed the annotated tag `v1.22.0`, message `v1.22.0`, at `67c7a8e` (`git cat-file -t v1.22.0`: "tag").
+  CI on it, run `40214891900`: "completed success", six jobs, so a tag runs full CI under 0037's filters, as that record expected.
+* **`tools/consumer.py v1.22.0`:** exit 0, "as required": `go1.26.10`, `go get` of `v1.22.0` from the proxy, the run's output
+  ending "agent refuses list true", "pick once true", "block text", the Windows build, and a `go.mod` with `go 1.26.10` and no
+  toolchain line.
+* **The GitHub release.** The owner ran `gh release create v1.22.0 --verify-tag --title v1.22.0 --notes-file <the body>`, which
+  created `https://github.com/maccavelli/acp-go-sdk2/releases/tag/v1.22.0`.
+* **`tools/publication.py v1.22.0 67c7a8e <the body>`:** exit 0, "10 of 10 checks hold": the release exists, not a draft or
+  prerelease; its body is the extracted text; it is marked latest; the tag is annotated, names `67c7a8e`, which is on origin's
+  `main`; CI on `main`'s head and on the tag; the proxy serves the `.info`, with origin the tag at that commit; `go list -m
+  @latest` gives `v1.22.0`; `go mod download` passes with the checksum database on.
+
+The release is published, so this PLAN and its row are `complete`.
