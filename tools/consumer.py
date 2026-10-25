@@ -6,9 +6,11 @@ OutputTap, closes it, and prints DroppedTapBytes; it also builds the program
 for Windows. Its client embeds ClientRefusals and implements only
 SessionUpdate and RequestPermission, and it prints UpdateNotice's Kind and the
 answer to a file read
-(0036-PLAN-session-update-constructors-kind-and-client-refusals.md, step 6), so
-VERSION is v1.21.0 or later. Its go.mod must keep the `go` line and gain no
-toolchain line.
+(0036-PLAN-session-update-constructors-kind-and-client-refusals.md, step 6). Its
+agent embeds AgentRefusals and implements only the seven ungated methods, and it
+prints what IsMethodNotFound, PickPermissionOption and ContentBlock.Kind give
+(0038-PLAN-consumer-helpers-kind-and-agent-refusals.md, step 8), so VERSION is
+v1.22.0 or later. Its go.mod must keep the `go` line and gain no toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
 Usage: consumer.py VERSION
@@ -47,6 +49,36 @@ func (client) RequestPermission(context.Context, acp.RequestPermissionRequest) (
 	return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
 }
 
+type agent struct{ acp.AgentRefusals }
+
+func (agent) Authenticate(context.Context, acp.AuthenticateRequest) (acp.AuthenticateResponse, error) {
+	return acp.AuthenticateResponse{}, nil
+}
+
+func (agent) Initialize(context.Context, acp.InitializeRequest) (acp.InitializeResponse, error) {
+	return acp.InitializeResponse{ProtocolVersion: acp.ProtocolVersionNumber}, nil
+}
+
+func (agent) Cancel(context.Context, acp.CancelNotification) error { return nil }
+
+func (agent) NewSession(context.Context, acp.NewSessionRequest) (acp.NewSessionResponse, error) {
+	return acp.NewSessionResponse{SessionId: "s"}, nil
+}
+
+func (agent) Prompt(context.Context, acp.PromptRequest) (acp.PromptResponse, error) {
+	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
+}
+
+func (agent) SetSessionConfigOption(context.Context, acp.SetSessionConfigOptionRequest) (acp.SetSessionConfigOptionResponse, error) {
+	return acp.SetSessionConfigOptionResponse{}, nil
+}
+
+func (agent) SetSessionMode(context.Context, acp.SetSessionModeRequest) (acp.SetSessionModeResponse, error) {
+	return acp.SetSessionModeResponse{}, nil
+}
+
+var _ acp.Agent = agent{}
+
 func main() {
 	cmd := exec.Command("sh", "-c", "cat >/dev/null")
 	p, err := (&agentproc.Command{Cmd: cmd, OutputTap: io.Discard}).Start(client{})
@@ -61,10 +93,20 @@ func main() {
 	fmt.Println("kind", acp.UpdateNotice(acp.NoticeSeverityInfo, "t").Kind())
 	_, err = client{}.ReadTextFile(context.Background(), acp.ReadTextFileRequest{})
 	fmt.Println("refused", err)
+	_, err = agent{}.ListSessions(context.Background(), acp.ListSessionsRequest{})
+	fmt.Println("agent refuses list", acp.IsMethodNotFound(err))
+	opts := []acp.PermissionOption{
+		{OptionId: "trap", Name: "Allow", Kind: acp.PermissionOptionKindRejectOnce},
+		{OptionId: "once", Name: "Once", Kind: acp.PermissionOptionKindAllowOnce},
+	}
+	o, ok := acp.PickPermissionOption(opts, acp.PermissionOptionKindAllowOnce)
+	fmt.Println("pick", o.OptionId, ok)
+	fmt.Println("block", acp.TextBlock("x").Kind())
 }
 '''
 WANT_RUN = ("Close: <nil>\ndropped 0 0\nprotocol version 1\nkind notice\n"
-            'refused {"code":-32601,"message":"Method not found","data":{"method":"fs/read_text_file"}}')
+            'refused {"code":-32601,"message":"Method not found","data":{"method":"fs/read_text_file"}}\n'
+            "agent refuses list true\npick once true\nblock text")
 
 
 def go_mod_ok(text: str, go: str, mod: str, version: str) -> bool:

@@ -567,3 +567,36 @@ origin/main..main` before it and `tools/watch_ci.py` after; and step 8, the rele
 Step 6 was committed by the owner as `b039e6b`. Before any push: `git fetch`; `make push-guard`, "9 outgoing commit(s),
 ea09a07..b039e6b, main to origin", "the guard passed (exit 0)"; `tools/idscan.py --range origin/main..main`, "18 file(s), 17
 pattern(s), 0 match(es)". Step 7's files are staged for the owner.
+
+Step 7 was committed by the owner as `df0462e`. Before the push, over the ten outgoing commits: `make push-guard`, "10 outgoing
+commit(s), ea09a07..df0462e, main to origin", "the guard passed (exit 0)"; `tools/idscan.py --range origin/main..main`, "18
+file(s), 17 pattern(s), 0 match(es)". The owner pushed. `tools/watch_ci.py df0462e --branch main`: CI run `40210644204`,
+"completed success", six jobs on Ubuntu, Windows and macOS at Go `1.27.3` and `1.26.10`; Docs run `40210644229`, "completed
+success". The code of steps 2 to 6 is on `origin/main`, and CI passed on it.
+
+### Step 8, release `v1.22.0`, 2026-10-25
+
+The owner asked for it: "proceed", after CI passed. Done before the tag, in one commit for the owner:
+
+* **The report,** [0038-REPORT-release-notes-v1-22-0.md](../reports/0038-REPORT-release-notes-v1-22-0.md), and its row in
+  `docs/README.md`, written from `git log v1.21.0..df0462e`, the Go files changed, `make api` on `df0462e` and the two CI runs.
+  Unlike `v1.21.0`'s, it is committed before the tag, so the tagged tree holds it.
+* **`tools/consumer.py`,** extended as this step names: its program gains `agent`, which embeds `acp.AgentRefusals` and implements
+  the seven ungated methods, with `var _ acp.Agent = agent{}`, and prints `IsMethodNotFound` of the agent's refused
+  `ListSessions`, `PickPermissionOption` over an option named "Allow" of kind `reject_once` and one of kind `allow_once`, and
+  `TextBlock("x").Kind()`. The expected output gains "agent refuses list true", "pick once true" and "block text"; the docstring
+  says the version is `v1.22.0` or later; `tools/README.md`'s row names what the module uses.
+
+Checks before the tag, each in the session's scratch directory:
+
+* `make check-tools`: the tools' "Ran 53 tests", "OK"; the scripts' "Ran 23 tests", "OK"; "check-ci-filters: 0 problem(s)".
+* `tools/consumer.py v1.21.0`, as a planted break that needs no edit: exit 1, "NOT AS REQUIRED", the build refused with
+  "undefined: acp.AgentRefusals", "undefined: acp.IsMethodNotFound", "undefined: acp.PickPermissionOption" and
+  "acp.TextBlock(\"x\").Kind undefined".
+* The extended program against this tree, by a scratch module with a `replace` directive, at `GOTOOLCHAIN=go1.26.10`: `go mod
+  tidy` and `go run` exit 0, and its output equals the tool's expected output exactly. The tool's own run, through the proxy,
+  follows the tag.
+
+Not done yet, each on the owner's ask: the commit of this record; `tools/release_body.py v1.22.0 <that commit>`; the annotated
+tag and its push; the GitHub release; `tools/publication.py`; `tools/consumer.py v1.22.0`. When the release is published, this
+PLAN and its row are `complete`.
