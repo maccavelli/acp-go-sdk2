@@ -110,11 +110,13 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0037 | PLAN | [Implement aligned docs-only CI and disclosure gates](decisions/0037-PLAN-align-docs-ci-and-disclosure-gates.md) | complete |
 | 0038 | MADR | [Add the consumers' protocol helpers, Kind() on four more unions, and an AgentRefusals embed](decisions/0038-MADR-consumer-helpers-kind-and-agent-refusals.md) | accepted |
 | 0038 | PLAN | [Implement 0038: the consumers' protocol helpers, Kind() on four more unions, and AgentRefusals](decisions/0038-PLAN-consumer-helpers-kind-and-agent-refusals.md) | proposed |
+| 0039 | MADR | [Add five adopter capabilities on schema 1.25.0: unstable boundary, presentation, compaction timeline, extension mux, acptest](decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md) | proposed |
 
 ## I want to…
 
 | I want to… | Start here |
 | :--- | :--- |
+| know which five additions to make next for 1.25.0 adopters | [0039-MADR-five-adopter-additions-on-schema-1-25-0.md](decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md) |
 | see whether a Go 1.27.1 floor fits this SDK | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |
 | see how the generated API lines up with the current ACP spec | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |
 | see what the current ACP v1 spec audit found | [0016-REPORT-acp-v1-conformance-audit.md](reports/0016-REPORT-acp-v1-conformance-audit.md) |
