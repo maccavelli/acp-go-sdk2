@@ -397,6 +397,8 @@ type Connection struct {
 	onNotificationDropped func(method string, totalDropped uint64)
 	// droppedNotifications counts notifications dropped under OverflowDropNewest.
 	droppedNotifications atomic.Uint64
+	// refusedMessages counts received messages checkInbound refused.
+	refusedMessages atomic.Uint64
 	// rewrite and inbound are the consumer's hooks on received messages
 	// (WithInboundRewrite, WithInboundValidation).
 	rewrite func(ctx context.Context, method string, params any) error
@@ -863,6 +865,18 @@ func sameValue(a, b any) bool {
 // policy.
 func (c *Connection) DroppedNotifications() uint64 {
 	return c.droppedNotifications.Load()
+}
+
+// RefusedMessages reports how many received messages this connection has
+// refused after decoding them: a request, notification, extension message or
+// response that the WithInboundRewrite hook refused, that broke the schema
+// and the WithInboundValidation hook did not accept, or that what initialize
+// agreed does not allow. A message held until initialize ends is counted
+// once, if it is then refused. A line that does not decode, or a method the
+// side does not handle, is answered as before and not counted
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md, question 3).
+func (c *Connection) RefusedMessages() uint64 {
+	return c.refusedMessages.Load()
 }
 
 // dropNotification records a notification discarded under OverflowDropNewest.
@@ -2330,8 +2344,20 @@ func (c *Connection) checkResult(method string, result any, gate gateFunc) (any,
 // gate checks the message against what initialize agreed; the hook rules on
 // the validation error first and, only if it accepts that, on the gate's, so
 // accepting one never accepts the other
-// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1). Each refusal
+// adds one to RefusedMessages; every received message is checked once here
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md, question 3).
 func (c *Connection) checkInbound(ctx context.Context, method string, params any, gate gateFunc) error {
+	err := c.judgeInbound(ctx, method, params, gate)
+	if err != nil {
+		c.refusedMessages.Add(1)
+	}
+	return err
+}
+
+// judgeInbound is checkInbound's judgement, without its count: the rewrite
+// hook, validation and the gate, then the validation hook.
+func (c *Connection) judgeInbound(ctx context.Context, method string, params any, gate gateFunc) error {
 	if c.rewrite != nil {
 		if err := c.rewrite(ctx, method, params); err != nil {
 			return err

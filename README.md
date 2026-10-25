@@ -338,10 +338,14 @@ refused. In order:
    is, a method that what `initialize` negotiated does not allow as `-32601`,
    any other error as `-32602`), a notification is dropped and logged, and
    a response's error is returned to the caller, wrapping the
-   `*acp.ValidationError` when the error is the SDK's.
+   `*acp.ValidationError` when the error is the SDK's. Each message refused
+   at steps 2 to 4, or by what `initialize` negotiated, adds one to the
+   connection's `RefusedMessages()`; one that never decodes does not.
 
 A rewrite hook can resolve what a peer sends as a bare name, or translate a
-path from another host, such as a Windows client's path for an agent in WSL:
+path from another host, such as a Windows client's path for an agent in WSL.
+`acp.ResolveStdioCommands(exec.LookPath)` is the first, for every request that
+carries MCP servers; a hook of your own looks like this:
 
 ```go
 asc := acp.NewAgentSideConnection(agent, os.Stdout, os.Stdin,

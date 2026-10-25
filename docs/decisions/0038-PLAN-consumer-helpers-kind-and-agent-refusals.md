@@ -483,3 +483,44 @@ The first run left the empty key's decoding unasserted; asserting it, it agreed 
 * `make check-records`, `make markdownlint`, `make disclosure-check`, and `tools/idscan.py --paths` over the step's files.
 
 Step 4 was committed by the owner as `b4ca784`. Step 5's files are staged for the owner.
+
+### Step 6, `RefusedMessages`, 2026-10-25
+
+Before the edit, every caller of `checkInbound` was read: 28 in `agent_gen.go` and 12 in `client_gen.go`, one per dispatch case;
+`sendRequestSent` and `sendRequestCommit` in `connection.go`, one each, on the two paths a result takes; and `handleExtension` in
+`extensions.go`. Each calls it once for a message, and a held message is judged inside the same call, by `heldGate`.
+
+What changed:
+
+* **`connection.go`:** `refusedMessages atomic.Uint64` beside `droppedNotifications`; `checkInbound` now calls
+  `judgeInbound`, its former body unchanged, and adds one when it returns an error; `RefusedMessages()` beside
+  `DroppedNotifications()`. Counting at the one return keeps the count to one a message, whichever of the rewrite hook,
+  validation and the gate refused it.
+* **`refused_messages_test.go`, new:** `TestRefusedMessages`, over `rawWire`: a rewrite hook's error, a validation error, a gate's
+  refusal, a refused `_` notification and a refused response each count one; a validation error the hook accepted, a line that
+  is not JSON, and an unknown method count none; fifty refusals sent at once count fifty, under `-race`.
+* **`README.md`:** "the order" of the inbound checks says what `RefusedMessages()` counts, and the rewrite-hook passage names
+  `ResolveStdioCommands` before its hand-written example.
+
+The first `make pre-add-check` failed, exit 2, on `perfsprint`: "fmt.Sprint can be replaced with faster strconv.Itoa". It uses
+`strconv.Itoa`.
+
+**Tests,** `go test -count=1 -race -run '^TestRefusedMessages$'`, exit 0: the eight subtests.
+
+**Planted breaks,** `tools/plants.py`, each in its own copy of the tree; three of three failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| a gate's refusal not counted | "refused_messages_test.go:113: gate: RefusedMessages() = 0, want 1" |
+| a rewrite refusal counted at the hook as well as at the return | "refused_messages_test.go:80: rewrite: RefusedMessages() = 2, want 1" |
+| a validation error counted before the hook accepts it | "refused_messages_test.go:102: accepted: RefusedMessages() = 1, want 0" |
+
+**Gates,** each exit 0:
+
+* `make pre-add-check`: "183 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `(cd cmd/generate && go test -count=1 ./...)`: every package `ok`, so the synthetic cases compile with the new `connection.go`;
+* `make api`: "against v1.21.0: 0 incompatible, 22 compatible", the twenty-one before and `(*Connection).RefusedMessages`;
+* `tools/gates.py --all`, with `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set: "all gates passed", 18 of 18;
+* `make check-records`, `make markdownlint`, `make disclosure-check`, and `tools/idscan.py --paths` over the step's files.
+
+Step 5 was committed by the owner as `cb1a763`. Step 6's files are staged for the owner.
