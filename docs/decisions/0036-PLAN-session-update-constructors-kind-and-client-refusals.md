@@ -38,6 +38,7 @@ changes: question 1 changes step 2, question 2 step 3, question 3 step 4, and qu
 * **The records:** this pair and their rows in `docs/README.md`;
   [0035-REPORT-consumer-acp-code-for-the-sdk.md](../reports/0035-REPORT-consumer-acp-code-for-the-sdk.md), already aligned with
   issue #11; and, at step 6, `docs/reports/0036-REPORT-release-notes-v1-21-0.md`.
+* **Tools,** added 2026-10-25 at step 6: `tools/consumer.py` and its row in `tools/README.md`.
 * **Not in scope:**
   * any generated file, `cmd/generate`, `HandWrittenHelpers`, or the schema; *amended 2026-10-25, see step 4's deviation:
     `cmd/generate/engine_test.go`'s `TestRuntimeFilesCoverHandWritten` excludes `refusals.go`, and nothing else under
@@ -220,6 +221,10 @@ Through `RELEASING.md`, "Tag and Publish":
 * the GitHub release;
 * `tools/publication.py`;
 * `tools/consumer.py v1.21.0`, a module at the floor that calls `UpdateNotice`, `Kind()` and embeds `ClientRefusals`.
+
+*Amended 2026-10-25, see step 6's deviations:* the owner pushed the tag before the report was written, so the report is committed
+after the tag; and `tools/consumer.py` and its row in `tools/README.md` are extended to build that module, since the tool's
+program did not use the three.
 
 Commenting on issue #11 and closing it, and telling the consumer issues, are outward-facing, and need the owner's ask too. When the
 release is published, this PLAN and its row are `complete`.
@@ -462,3 +467,56 @@ Issue #11's "Acceptance", item by item:
 
 Not done in this step: the push and its checks (`git fetch`, `make push-guard`, `tools/idscan.py --range origin/main..main`,
 `tools/watch_ci.py`), which wait for the owner's ask, and step 6. This PLAN stays `in-progress` until the release is published.
+
+Step 5's record was committed by the owner as `2452f31`. The owner committed the 0037 records as `7f3b210`, and pushed the six
+commits. The agent did not run `make push-guard` or the range scan before that push, which the owner made. After it, `tools/watch_ci.py 7f3b210`: run `40192665703`, "completed success", six jobs, on Ubuntu, Windows and macOS at Go
+`1.27.3` and `1.26.10`.
+
+### Step 6, release `v1.21.0`, 2026-10-25
+
+The owner pushed the annotated tag `v1.21.0`, message `v1.21.0`, at `7f3b210`, the commit CI passed (`git cat-file -t v1.21.0`:
+"tag"). No GitHub release existed (`gh release view v1.21.0`: "release not found").
+
+**Deviation 1, 2026-10-25: the report after the tag.** The step writes the release-notes report before the tag, and `v1.20.0`'s
+tagged tree holds its report (`4fa7204`). The tag was pushed first, so `v1.21.0`'s tree holds no report. Moving a published tag was
+not offered. Two resolutions were put to the owner, and the owner took the first: the report describes `7f3b210`, says it was written
+after the tag, and is committed on `main` after it; `tools/release_body.py` reads it from that later commit.
+
+**Deviation 2, 2026-10-25: `tools/consumer.py` extended.** The step's consumer calls `UpdateNotice` and `Kind()` and embeds
+`ClientRefusals`. The tool's program used none of them (`tools/consumer.py:43`, an `agentproc` program with an `OutputTap`). Of two
+resolutions, running the tool unchanged with a separate module in the session's scratch directory, or extending the tool, the owner
+chose the second. The scope above gains `tools/consumer.py` and its row in `tools/README.md`.
+
+* **`tools/consumer.py`:** the program's client embeds `acp.ClientRefusals` in place of `acp.Client` and implements
+  `SessionUpdate` and `RequestPermission`, so passing it to `agentproc`'s `Start` asserts at compile time that the two and the embed
+  satisfy `Client`. It prints `UpdateNotice(acp.NoticeSeverityInfo, "t").Kind()` and the answer to `ReadTextFile`, and the expected
+  output gains "kind notice" and "refused {"code":-32601,...,"data":{"method":"fs/read_text_file"}}". Its docstring says that the
+  version is `v1.21.0` or later.
+* **Found and fixed in the same file:** after a failed build, the tool went on to run `./consumer`, which did not exist, and ended
+  with a traceback ("FileNotFoundError: [Errno 2] No such file or directory: './consumer'"), exit 1, without its verdict. It was so
+  before this change, for any failed build. It now stops at the first failed command and prints "NOT AS REQUIRED".
+* **`tools/README.md`:** the tool's row names what the module uses, and `v1.21.0` or later.
+
+Checks:
+
+* `tools/consumer.py v1.21.0`, exit 0, "as required": `go version go1.26.10`, `go get` of `v1.21.0` from the proxy, the run's output
+  "Close: <nil>", "dropped 0 0", "protocol version 1", "kind notice", "refused {"code":-32601,"message":"Method not
+  found","data":{"method":"fs/read_text_file"}}", the Windows build, and a `go.mod` with `go 1.26.10` and no toolchain line.
+* **Planted breaks,** each failed as required:
+  * the tool against `v1.20.0`, exit 1, "NOT AS REQUIRED": "./main.go:13:25: undefined: acp.ClientRefusals", and likewise
+    `acp.UpdateNotice` and `ReadTextFile`;
+  * in a scratch copy of the tree, the expected "kind notice" changed to "kind plan", against `v1.21.0`: exit 1, "NOT AS REQUIRED".
+* `make check-tools`: "Ran 53 tests", "OK".
+
+**The report,** `docs/reports/0036-REPORT-release-notes-v1-21-0.md`, and its row in `docs/README.md`. `make api` on `7f3b210`, with
+nothing uncommitted, `scripts/check_api.py v1.20.0`: exit 0, "against v1.20.0: 0 incompatible, 11 compatible".
+
+The tool change was committed by the owner as `9fc22d9`.
+
+Not done yet, each waiting for the owner:
+
+* the commit of the report;
+* `tools/release_body.py v1.21.0 <the report's commit>`;
+* the GitHub release, outward-facing, on the owner's ask;
+* `tools/publication.py`, once the release exists;
+* commenting on issue #11 and closing it, and telling the consumer issues, on the owner's ask.
