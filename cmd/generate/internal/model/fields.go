@@ -141,7 +141,10 @@ type Field struct {
 	// Patch is true for a property a patch rule names: its type is RefPatch,
 	// omitted when absent (0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md).
 	Patch bool
-	Facts Facts
+	// Unstable is true for a field of a stable definition whose property
+	// only the definition's unstable version has (load.Changes).
+	Unstable bool
+	Facts    Facts
 	// prop is the schema property the field is built from; every type that
 	// holds the property, an inline allOf variant included, shares it.
 	prop *load.Definition

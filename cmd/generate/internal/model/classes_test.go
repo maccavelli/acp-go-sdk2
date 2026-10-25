@@ -12,6 +12,18 @@ import (
 // committedModel builds the model of the schema in the repository.
 func committedModel(t *testing.T) *Model {
 	t.Helper()
+	in := committedInput(t)
+	m, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+// committedInput is the merged schema in the repository, with its provenance
+// and the ACP protocol table.
+func committedInput(t *testing.T) Input {
+	t.Helper()
 	dir := filepath.Join("..", "..", "..", "..", "schema")
 	sm, err := load.ReadMeta(dir)
 	if err != nil {
@@ -33,11 +45,7 @@ func committedModel(t *testing.T) *Model {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := Build(Input{Meta: meta, Schema: schema, Provenance: prov, Protocol: &ACP})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return m
+	return Input{Meta: meta, Schema: schema, Provenance: prov, Protocol: &ACP}
 }
 
 // TestUnionClassesOfCommittedSchema checks the classes of

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -21,6 +22,22 @@ type Provenance struct {
 	// renamed with the Unstable prefix. A definition not listed is the stable
 	// schema's, under its own name.
 	Origins map[string]Origin
+	// Changes names, for each stable definition the merge replaced with its
+	// unstable version, what that version adds to it or changes in it. A
+	// definition not listed was not replaced.
+	Changes map[string]*Changes
+}
+
+// Changes is what the unstable version of a stable definition adds to it or
+// changes in it: properties by key, in key order, and the entries of its
+// anyOf, or its oneOf when it has no anyOf, by index in the unstable
+// version's list. An entry is matched to the stable one it changes by
+// unionEntryKey. What the unstable version removes is not recorded.
+type Changes struct {
+	AddedProperties   []string
+	ChangedProperties []string
+	AddedEntries      []int
+	ChangedEntries    []int
 }
 
 // Origin is the file and key of the definition a merged definition was
@@ -47,7 +64,8 @@ const (
 //   - definitions those replacements reference that the stable schema lacks, unprefixed.
 //
 // The Provenance result names the definitions and wire methods that did not come from
-// the stable inputs.
+// the stable inputs, and what each replacement adds to or changes in the stable
+// definition it replaces.
 func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta *Meta, unstableSchema *Schema) (*Meta, *Schema, *Provenance, error) {
 	if stableMeta == nil {
 		return nil, nil, nil, errors.New("stable meta is nil")
@@ -130,7 +148,12 @@ func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta
 		combinedSchema.Defs[newName] = copyDef
 	}
 
-	prov := &Provenance{UnstableDefs: map[string]bool{}, UnstableWires: map[string]bool{}, Origins: map[string]Origin{}}
+	prov := &Provenance{UnstableDefs: map[string]bool{}, UnstableWires: map[string]bool{}, Origins: map[string]Origin{}, Changes: map[string]*Changes{}}
+	for name := range promotedSharedDefs {
+		if sdef := stableSchema.Defs[name]; sdef != nil {
+			prov.Changes[name] = changesOf(sdef, unstableSchema.Defs[name])
+		}
+	}
 	copiedFrom := make(map[string]string, len(dupMap))
 	for oldName, newName := range dupMap {
 		copiedFrom[newName] = oldName
@@ -343,6 +366,78 @@ func promoteChangedSharedDefs(combinedSchema *Schema, stableSchema *Schema, unst
 	}
 
 	return promoted
+}
+
+// changesOf compares the unstable version u of the stable definition s.
+func changesOf(s, u *Definition) *Changes {
+	c := &Changes{}
+	for _, key := range slices.Sorted(maps.Keys(u.Properties)) {
+		sp, ok := s.Properties[key]
+		switch {
+		case !ok:
+			c.AddedProperties = append(c.AddedProperties, key)
+		case !reflect.DeepEqual(sp, u.Properties[key]):
+			c.ChangedProperties = append(c.ChangedProperties, key)
+		}
+	}
+	stableList, unstableList := s.OneOf, u.OneOf
+	if len(u.AnyOf) > 0 {
+		stableList, unstableList = s.AnyOf, u.AnyOf
+	}
+	disc := ""
+	if u.Discriminator != nil {
+		disc = u.Discriminator.PropertyName
+	}
+	for i, e := range unstableList {
+		if slices.ContainsFunc(stableList, func(se *Definition) bool { return reflect.DeepEqual(se, e) }) {
+			continue
+		}
+		key := unionEntryKey(e, disc)
+		if key != "" && slices.ContainsFunc(stableList, func(se *Definition) bool { return unionEntryKey(se, disc) == key }) {
+			c.ChangedEntries = append(c.ChangedEntries, i)
+		} else {
+			c.AddedEntries = append(c.AddedEntries, i)
+		}
+	}
+	return c
+}
+
+// unionEntryKey names what a union entry stands for, so that a changed entry
+// is matched to the stable one it changes: the value of the union's declared
+// discriminator disc, or without one its const-valued properties, as a
+// discriminated variant's tag; else its title, else its reference, else the
+// references its allOf composes. It is "" for an entry with none of them.
+func unionEntryKey(e *Definition, disc string) string {
+	if e == nil {
+		return ""
+	}
+	if p := e.Properties[disc]; disc != "" && p != nil && p.Const != nil {
+		return fmt.Sprintf("const %s=%v", disc, p.Const)
+	}
+	var consts []string
+	for _, key := range slices.Sorted(maps.Keys(e.Properties)) {
+		if p := e.Properties[key]; p != nil && p.Const != nil {
+			consts = append(consts, fmt.Sprintf("%s=%v", key, p.Const))
+		}
+	}
+	switch {
+	case len(consts) > 0:
+		return "const " + strings.Join(consts, ",")
+	case e.Title != "":
+		return "title " + e.Title
+	case e.Ref != "":
+		return "ref " + e.Ref
+	}
+	var refs []string
+	for _, a := range e.AllOf {
+		if a != nil && a.Ref != "" {
+			refs = append(refs, a.Ref)
+		}
+	}
+	if len(refs) > 0 {
+		return "allOf " + strings.Join(refs, ",")
+	}
+	return ""
 }
 
 func ensureRefsAvailable(combinedSchema *Schema, unstableSchema *Schema, roots map[string]struct{}) {

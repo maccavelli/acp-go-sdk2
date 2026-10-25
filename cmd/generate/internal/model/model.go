@@ -188,6 +188,9 @@ type Variant struct {
 	Skip bool
 	// Inline is the type emitted for a variant without a $ref, or nil.
 	Inline *Inline
+	// Unstable is true for a variant of a stable union whose entry only the
+	// union's unstable version has (load.Changes).
+	Unstable bool
 	// Doc is the variant's description, for its wrapper field.
 	Doc []string
 	// Deprecation marks a variant the schema marks deprecated: its wrapper
@@ -358,6 +361,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 			if o, ok := prov.Origins[name]; ok {
 				t.Origin = o
 			}
+			if c := prov.Changes[name]; c != nil {
+				markUnstableEntries(t, c)
+			}
 		}
 		if t.Unstable && t.Kind != KindNone {
 			t.Doc = markUnstable(t.Doc)
@@ -456,6 +462,20 @@ func classify(def *load.Definition) Kind {
 		return KindEmptyObject
 	default:
 		return KindAny
+	}
+}
+
+// markUnstableEntries marks the fields and variants of the stable type t that
+// only its definition's unstable version has. Variants hold one entry per
+// union entry, so an entry's index is its variant's.
+func markUnstableEntries(t *Type, c *load.Changes) {
+	for _, f := range t.Fields {
+		f.Unstable = slices.Contains(c.AddedProperties, f.Key)
+	}
+	for _, i := range c.AddedEntries {
+		if i < len(t.Variants) {
+			t.Variants[i].Unstable = true
+		}
 	}
 }
 

@@ -479,3 +479,56 @@ scratch directory.
     `PositionEncodingKind` and `TextDocumentSyncKind` with their 5 constants, the ten `AgentMethodDocument*` and
     `AgentMethodNes*` constants, and the four capability fields. These are the same counts as 0025's
     against `v1.17.1`.
+
+### 2b, provenance for properties and union entries, 2026-10-25
+
+* **`load`** (`merge.go`):
+  * `Provenance.Changes` maps each stable definition the merge replaced to a `Changes`, holding the properties the unstable
+    version adds and changes, by key, and the union entries it adds and changes, by index in its list. The list is the `anyOf`,
+    or the `oneOf` when there is no `anyOf`, the rule by which the model sets `ExactlyOne`.
+  * An entry equal to a stable one is unchanged. Otherwise `unionEntryKey` matches it to the stable entry it changes, by:
+    1. the value of the union's declared discriminator;
+    2. else its `const` properties;
+    3. else its title, its reference, or its `allOf` references.
+
+    An entry with no match is added. What the unstable version removes is not recorded: the merge removes nothing from a stable
+    definition at `1.25.0`, and 2c builds stable definitions from the stable schema.
+  * *Where it is computed:* `MergeStableAndUnstable` computes `Changes` from the set `promoteChangedSharedDefs` returns, over the
+    stable and unstable schemas it holds. That is the same pair of versions the replacement at `:329`–`:331` compares, so
+    `promoteChangedSharedDefs` and its edge tests are unchanged.
+* **`model`:** `Field.Unstable` and `Variant.Unstable` are set by `markUnstableEntries` from `Changes`, for added properties and
+  added entries only. A changed property's field and a changed entry's variant are a stable declaration.
+* **Tests:**
+  * `load/changes_test.go`, new:
+    * `TestMergeChanges`, over a synthetic pair: an added and a changed property, union entries added (one with no key) and
+      changed, in a `oneOf` with a discriminator and in an `anyOf` without one, and a definition the merge kept;
+    * `TestUnionEntryKey`, the key's order.
+  * `model/unstable_test.go`:
+    * `TestUnstableEntries`, synthetic;
+    * `TestUnstableEntriesOfCommittedSchema`, which finds the 8 replaced definitions, the 2 changed properties, no changed
+      entry, the 10 fields and the 6 variants with their inline types, as 2a measured.
+
+    `committedModel` in `classes_test.go` is split so that `committedInput` returns the provenance.
+* **No generated file changed:** `TestGeneratedFilesUpToDate` passes, the `regen` gate leaves the files as they were, and
+  `make api` reports 0 incompatible, 0 compatible against `v1.22.0`.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | the changed-property case dropped (the PLAN's 2b row) | `unstable_test.go:172: changed properties:` … `want ["AgentCapabilities.mcpCapabilities" "InitializeResponse.agentCapabilities"]` |
+  | the added-entry case dropped | `changes_test.go:66: Update: Changes {… AddedEntries:[] ChangedEntries:[2]}, want {… AddedEntries:[1 4] ChangedEntries:[2]}` |
+  | the same, against the committed schemas | `unstable_test.go:172: unstable variants:` … `"SessionUpdate.PlanUpdate SessionPlanUpdate"` |
+  | the declared discriminator ignored | `changes_test.go:95: case 0: unionEntryKey(entry, "kind") = "const kind=a,other=z", want "const kind=a"` |
+  | a changed entry read as added | `changes_test.go:66: Update: Changes {… AddedEntries:[1 2 4] ChangedEntries:[]}, want …` |
+  | variants not marked | `unstable_test.go:117: Update variant 1 (new): Unstable = false, want true` |
+  | every field marked | `unstable_test.go:111: Caps.a: Unstable = true, want false` |
+
+  The first attempt at "a changed entry read as added" did not compile: the plant left `key` unused. It was corrected to keep
+  the variable. Two failure messages were then made to name values rather than pointers.
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "184 file(s) clean";
+  * `(cd cmd/generate && go test -count=1 ./...)`;
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 gates `ok`, `newfiles` over
+    `changes_test.go`;
+  * `make disclosure-check`;
+  * `tools/idscan.py --paths` over the six Go files: 0 matches.
