@@ -1,0 +1,12 @@
+{
+  "sessionUpdate": "available_commands_update",
+  "availableCommands": [
+    {
+      "name": "web",
+      "description": "Search the web for information",
+      "input": {
+        "hint": "query to search for"
+      }
+    }
+  ]
+}

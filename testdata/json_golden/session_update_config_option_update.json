@@ -1,0 +1,22 @@
+{
+  "sessionUpdate": "config_option_update",
+  "configOptions": [
+    {
+      "id": "mode",
+      "name": "Session Mode",
+      "category": "mode",
+      "type": "select",
+      "currentValue": "code",
+      "options": [
+        {
+          "value": "ask",
+          "name": "Ask"
+        },
+        {
+          "value": "code",
+          "name": "Code"
+        }
+      ]
+    }
+  ]
+}

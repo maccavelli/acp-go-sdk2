@@ -1,0 +1,5 @@
+{
+  "sessionUpdate": "notice",
+  "severity": "warning",
+  "title": "Rate limited; retrying in 30 seconds"
+}

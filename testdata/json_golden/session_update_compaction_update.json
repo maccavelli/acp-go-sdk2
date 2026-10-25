@@ -1,0 +1,5 @@
+{
+  "sessionUpdate": "compaction_update",
+  "compactionId": "compact_001",
+  "status": "in_progress"
+}

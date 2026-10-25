@@ -13,6 +13,15 @@ const (
 	blockTypeTerminal     = "terminal"
 	rawInputPathKey       = "path"
 	rawInputContentKey    = "content"
+
+	sessionUpdateAvailableCommands = "available_commands_update"
+	sessionUpdateCurrentMode       = "current_mode_update"
+	sessionUpdateConfigOptions     = "config_option_update"
+	sessionUpdateSessionInfo       = "session_info_update"
+	sessionUpdateUsage             = "usage_update"
+	sessionUpdateNotice            = "notice"
+	sessionUpdateCompaction        = "compaction_update"
+	sessionUpdateCompactionSummary = "compaction_summary_chunk"
 )
 
 // TextBlock constructs a text content block.
@@ -153,6 +162,95 @@ func UpdateAgentThoughtText(text string) SessionUpdate {
 // UpdatePlan constructs a plan update with the provided entries.
 func UpdatePlan(entries ...PlanEntry) SessionUpdate {
 	return SessionUpdate{Plan: &SessionUpdatePlan{Entries: entries}}
+}
+
+// UpdateAvailableCommands constructs an available_commands_update update with
+// the agent's commands; nil is sent as [].
+func UpdateAvailableCommands(commands []AvailableCommand) SessionUpdate {
+	return SessionUpdate{AvailableCommandsUpdate: &SessionAvailableCommandsUpdate{
+		AvailableCommands: commands,
+		SessionUpdate:     sessionUpdateAvailableCommands,
+	}}
+}
+
+// UpdateCurrentMode constructs a current_mode_update update naming the
+// session's current mode.
+func UpdateCurrentMode(id SessionModeId) SessionUpdate {
+	return SessionUpdate{CurrentModeUpdate: &SessionCurrentModeUpdate{
+		CurrentModeId: id,
+		SessionUpdate: sessionUpdateCurrentMode,
+	}}
+}
+
+// UpdateConfigOptions constructs a config_option_update update with the full
+// set of the session's configuration options; nil is sent as [].
+func UpdateConfigOptions(opts []SessionConfigOption) SessionUpdate {
+	return SessionUpdate{ConfigOptionUpdate: &SessionConfigOptionUpdate{
+		ConfigOptions: opts,
+		SessionUpdate: sessionUpdateConfigOptions,
+	}}
+}
+
+// UpdateSessionTitle constructs a session_info_update update with the given
+// title patch: PatchValue sets the title, PatchNull clears it, and the zero
+// Patch leaves it unchanged. UpdatedAt and Meta are set on the returned
+// variant.
+func UpdateSessionTitle(title Patch[string]) SessionUpdate {
+	return SessionUpdate{SessionInfoUpdate: &SessionSessionInfoUpdate{
+		SessionUpdate: sessionUpdateSessionInfo,
+		Title:         title,
+	}}
+}
+
+// UpdateUsage constructs a usage_update update: used is the tokens currently
+// in context, size the context window's size. Cost is set on the returned
+// variant.
+func UpdateUsage(used, size uint64) SessionUpdate {
+	return SessionUpdate{UsageUpdate: &SessionUsageUpdate{
+		SessionUpdate: sessionUpdateUsage,
+		Size:          size,
+		Used:          used,
+	}}
+}
+
+// UpdateNotice constructs a notice update. Sending it fails with a
+// *CapabilityError unless the client advertised session.notices, and an
+// empty title fails Validate, so it is not sent either. Description and Meta
+// are set on the returned variant.
+func UpdateNotice(severity NoticeSeverity, title string) SessionUpdate {
+	return SessionUpdate{Notice: &SessionUpdateNotice{
+		SessionUpdate: sessionUpdateNotice,
+		Severity:      severity,
+		Title:         title,
+	}}
+}
+
+// UpdateCompaction constructs a compaction_update update for the compaction
+// id. Sending it fails with a *CapabilityError unless the client advertised
+// session.compaction. Summary, Error and Meta are set on the returned variant.
+func UpdateCompaction(id CompactionId, status CompactionStatus) SessionUpdate {
+	return SessionUpdate{CompactionUpdate: &SessionCompactionUpdate{
+		CompactionId:  id,
+		SessionUpdate: sessionUpdateCompaction,
+		Status:        status,
+	}}
+}
+
+// UpdateCompactionSummary constructs a compaction_summary_chunk update that
+// appends content to the compaction id's summary. Sending it fails with a
+// *CapabilityError unless the client advertised session.compaction.
+func UpdateCompactionSummary(id CompactionId, content ContentBlock) SessionUpdate {
+	return SessionUpdate{CompactionSummaryChunk: &SessionUpdateCompactionSummaryChunk{
+		CompactionId:  id,
+		Content:       content,
+		SessionUpdate: sessionUpdateCompactionSummary,
+	}}
+}
+
+// UpdateCompactionSummaryText constructs a compaction_summary_chunk update
+// from text, as UpdateCompactionSummary does with a text block.
+func UpdateCompactionSummaryText(id CompactionId, text string) SessionUpdate {
+	return UpdateCompactionSummary(id, TextBlock(text))
 }
 
 // ToolCallStartOpt modifies a tool_call start update before it is built.

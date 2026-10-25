@@ -224,6 +224,68 @@ func TestJSONGolden_SessionUpdates(t *testing.T) {
 			)
 		},
 	))
+	commands := func() []AvailableCommand {
+		in := NewAvailableCommandInputUnstructured("query to search for")
+		return []AvailableCommand{{Name: "web", Description: "Search the web for information", Input: &in}}
+	}
+	t.Run("session_update_available_commands_update", runGolden(
+		func() SessionUpdate {
+			return SessionUpdate{AvailableCommandsUpdate: &SessionAvailableCommandsUpdate{AvailableCommands: commands()}}
+		},
+		func() SessionUpdate { return UpdateAvailableCommands(commands()) },
+	))
+	t.Run("session_update_current_mode_update", runGolden(
+		func() SessionUpdate {
+			return SessionUpdate{CurrentModeUpdate: &SessionCurrentModeUpdate{CurrentModeId: "code"}}
+		},
+		func() SessionUpdate { return UpdateCurrentMode("code") },
+	))
+	options := func() []SessionConfigOption {
+		o := NewSessionConfigOptionSelect("mode", "Session Mode", "code", NewSessionConfigSelectOptionsUngrouped(
+			[]SessionConfigSelectOption{{Value: "ask", Name: "Ask"}, {Value: "code", Name: "Code"}}))
+		o.Select.Category = new(SessionConfigOptionCategoryMode)
+		return []SessionConfigOption{o}
+	}
+	t.Run("session_update_config_option_update", runGolden(
+		func() SessionUpdate {
+			return SessionUpdate{ConfigOptionUpdate: &SessionConfigOptionUpdate{ConfigOptions: options()}}
+		},
+		func() SessionUpdate { return UpdateConfigOptions(options()) },
+	))
+	t.Run("session_update_session_info_update", runGolden(
+		func() SessionUpdate {
+			return SessionUpdate{SessionInfoUpdate: &SessionSessionInfoUpdate{Title: PatchValue("Implement user authentication")}}
+		},
+		func() SessionUpdate { return UpdateSessionTitle(PatchValue("Implement user authentication")) },
+	))
+	t.Run("session_update_usage_update", runGolden(
+		func() SessionUpdate {
+			return SessionUpdate{UsageUpdate: &SessionUsageUpdate{Used: 53000, Size: 200000}}
+		},
+		func() SessionUpdate { return UpdateUsage(53000, 200000) },
+	))
+	t.Run("session_update_notice", runGolden(
+		func() SessionUpdate {
+			return SessionUpdate{Notice: &SessionUpdateNotice{Severity: NoticeSeverityWarning, Title: "Rate limited; retrying in 30 seconds"}}
+		},
+		func() SessionUpdate {
+			return UpdateNotice(NoticeSeverityWarning, "Rate limited; retrying in 30 seconds")
+		},
+	))
+	t.Run("session_update_compaction_update", runGolden(
+		func() SessionUpdate {
+			return SessionUpdate{CompactionUpdate: &SessionCompactionUpdate{CompactionId: "compact_001", Status: CompactionStatusInProgress}}
+		},
+		func() SessionUpdate { return UpdateCompaction("compact_001", CompactionStatusInProgress) },
+	))
+	const summary = "The user asked for authentication; the agent added a login handler."
+	t.Run("session_update_compaction_summary_chunk", runGolden(
+		func() SessionUpdate {
+			return SessionUpdate{CompactionSummaryChunk: &SessionUpdateCompactionSummaryChunk{CompactionId: "compact_001", Content: TextBlock(summary)}}
+		},
+		func() SessionUpdate { return UpdateCompactionSummary("compact_001", TextBlock(summary)) },
+		func() SessionUpdate { return UpdateCompactionSummaryText("compact_001", summary) },
+	))
 }
 
 func TestJSONGolden_MethodPayloads(t *testing.T) {

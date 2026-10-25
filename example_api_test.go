@@ -26,6 +26,23 @@ func ExampleStartToolCall() {
 	// {"kind":"read","sessionUpdate":"tool_call","status":"pending","title":"Read notes.txt","toolCallId":"call_1"}
 }
 
+// ExampleUpdateSessionTitle sets a session's title and clears it, and prints
+// each update as it is sent
+// (0036-PLAN-session-update-constructors-kind-and-client-refusals.md, step 2).
+func ExampleUpdateSessionTitle() {
+	for _, title := range []acp.Patch[string]{acp.PatchValue("Refactor"), acp.PatchNull[string]()} {
+		b, err := json.Marshal(acp.UpdateSessionTitle(title))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println(string(b))
+	}
+	// Output:
+	// {"sessionUpdate":"session_info_update","title":"Refactor"}
+	// {"sessionUpdate":"session_info_update","title":null}
+}
+
 // ExampleRequestError reads the code and message of the error a peer's
 // handler answered with (0024-PLAN-documentation.md, A8).
 func ExampleRequestError() {

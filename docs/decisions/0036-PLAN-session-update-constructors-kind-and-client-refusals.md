@@ -95,7 +95,8 @@ Tests:
   * It reads `schema/schema.json`'s `SessionUpdate` variants, the `sessionUpdate` constant of each, and requires that each has a
     builder in the test's table of the fourteen. The table names the six existing helpers and the eight new ones.
   * Every builder's value must `Validate`, and must round-trip through `json.Marshal` and `json.Unmarshal` to a value
-    `reflect.DeepEqual` to itself, with its field set.
+    `reflect.DeepEqual` to itself, with its field set. *Amended 2026-10-24, see the step's deviation: the eight new constructors
+    round-trip to an equal value; the six existing helpers, which leave the field empty by question 1, round-trip to the same JSON.*
   * `UpdateNotice(NoticeSeverityInfo, "")` must fail `Validate`, naming `title`.
 * **`TestGatedConstructorsRefused`**, in the same file. It uses `gates_test.go`'s helpers for a pair whose client advertises neither
   `session.notices` nor `session.compaction`. `AgentSideConnection.SessionUpdate` with `UpdateNotice`, `UpdateCompaction` and
@@ -259,3 +260,66 @@ failing line.
   * `make check-records`;
   * `make markdownlint`, 30 files, 0 issues;
   * `tools/idscan.py --paths` over the four files, "4 file(s), 17 pattern(s), 0 match(es)".
+* The four files are staged for the owner.
+
+### Step 2, the constructors, 2026-10-24
+
+What changed:
+
+* **`helpers.go`:**
+  * eight unexported constants, `sessionUpdateAvailableCommands` to `sessionUpdateCompactionSummary`, in the block beside
+    `blockTypeText`;
+  * after `UpdatePlan`, `UpdateAvailableCommands`, `UpdateCurrentMode`, `UpdateConfigOptions`, `UpdateSessionTitle`, `UpdateUsage`,
+    `UpdateNotice`, `UpdateCompaction`, `UpdateCompactionSummary` and `UpdateCompactionSummaryText`. Each sets its variant's
+    `SessionUpdate` field (question 1), and each doc comment says what the step requires.
+* **`testdata/json_golden/`:** `session_update_available_commands_update.json`, `_current_mode_update`, `_config_option_update`,
+  `_session_info_update`, `_usage_update` (`used` 53000, `size` 200000), `_notice`, `_compaction_update` and
+  `_compaction_summary_chunk`, each written by hand.
+* **`json_parity_test.go`:** eight subtests in `TestJSONGolden_SessionUpdates`, each with the composite literal and the constructor;
+  the last has `UpdateCompactionSummaryText` as a third builder.
+* **`session_update_helpers_test.go`, new:**
+  * `TestStableSessionUpdateConstructors`, over the 14 variants that `schema/schema.json` lists;
+  * `TestGatedConstructorsRefused`.
+* **`example_api_test.go`:** `ExampleUpdateSessionTitle`.
+* **`README.md`:** the helper list's "Session updates" item.
+
+**Deviation, 2026-10-24.** The step required every builder's value to round-trip to a `reflect.DeepEqual` copy of itself, "with its
+field set". The six existing helpers leave the variant's `SessionUpdate` field empty, as question 1 decided, and a decoded value has it
+set, so for them that requirement cannot hold. The test requires it of the eight new constructors. For the six, it requires that the
+decoded value re-encodes to the same JSON. The step's text is annotated. The MADR is unchanged: it decides the six stay as they are.
+
+**Tests,** `go test -count=1 -v` on the step's tests, exit 0:
+
+* the 8 new golden subtests among `TestJSONGolden_SessionUpdates`' 19;
+* `TestStableSessionUpdateConstructors`, `TestGatedConstructorsRefused` and `ExampleUpdateSessionTitle`;
+* `TestExportedDeclarationsDocumented` and `TestExportedTypeDocsStartWithName`.
+
+The first build failed, exit 1: "cannot call pointer method Validate on SessionUpdate". The test now calls `Validate` through a
+variable.
+
+**Planted breaks,** `tools/plants.py`, each in its own copy of the tree, the list in the session's scratch directory. Six of six
+failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `UpdateUsage` swaps `used` and `size` | "json_parity_test.go:261: session_update_usage_update marshal mismatch" |
+| `UpdateNotice` leaves `Title` empty | "json_parity_test.go:267: session_update_notice marshal mismatch" |
+| the same | "session_update_helpers_test.go:90: notice: Validate: SessionUpdate: variant Notice: SessionUpdateNotice: title: shorter than minLength 1" |
+| `UpdateCompaction` writes `compaction_summary_chunk` | "session_update_helpers_test.go:108: compaction_update: round trip differs" |
+| a stable variant `example_update` added to `schema/schema.json` | "session_update_helpers_test.go:85: stable variant \"example_update\" has no constructor" |
+| `UpdateNotice` returns a `CompactionUpdate` | "session_update_helpers_test.go:145: notice: send = session/update: capability session.compaction not advertised: variant compaction_update, want *CapabilityError{session/update, session.notices, Variant \"notice\"}" |
+
+The last break was first written as a `return` followed by an unreachable statement, which did not compile ("helpers.go:227:1:
+missing return"), so it proved nothing. It was rewritten to return the other variant behind `if title != ""`, and failed as required.
+
+**Gates,** `tools/gates.py --all`, with `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set, every gate exit 0: "all gates passed", 18 of 18.
+
+* `precheck`: "176 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)".
+* `newfiles`: `session_update_helpers_test.go`, "1 file(s) clean".
+* `api`: "against v1.20.0: 0 incompatible, 9 compatible". The nine are the nine constructors, each "added".
+* `idscan`: "17 file(s), 17 pattern(s), 0 match(es)".
+* `floor`: passed at go1.26.10.
+* `nojsonv2`, `windows` and `linux`: passed.
+
+Step 1 was committed by the owner as `f171b3a`. Step 2's files are staged for the owner, without the docs index change and the 0037
+records that appeared in the tree meanwhile, which are not this PLAN's.

@@ -115,6 +115,15 @@ Helper constructors are provided to reduce boilerplate when working with union t
 - Content blocks: `acp.TextBlock`, `acp.ImageBlock`, `acp.AudioBlock`,
   `acp.ResourceLinkBlock`, `acp.ResourceBlock`.
 - Tool content: `acp.ToolContent`, `acp.ToolDiffContent`, `acp.ToolTerminalRef`.
+- Session updates: `acp.UpdateUserMessage`, `acp.UpdateAgentMessage` and
+  `acp.UpdateAgentThought`, each with a `Text` form; `acp.UpdatePlan`;
+  `acp.UpdateAvailableCommands`, `acp.UpdateCurrentMode`,
+  `acp.UpdateConfigOptions`, `acp.UpdateSessionTitle`, `acp.UpdateUsage`,
+  `acp.UpdateNotice`, `acp.UpdateCompaction`, `acp.UpdateCompactionSummary`
+  and `acp.UpdateCompactionSummaryText`. Each takes the variant's required
+  keys; optional fields are set on the variant it returns. `UpdateNotice` and
+  the compaction updates are refused unless the client advertised
+  `session.notices` or `session.compaction`.
 - Tool calls: `acp.StartToolCall`, `acp.UpdateToolCall`, and their options.
   `rawInput` and `rawOutput` are raw JSON, so `acp.WithStartRawInput`,
   `acp.WithStartRawOutput`, `acp.WithUpdateRawInput`, `acp.WithUpdateRawOutput`,
