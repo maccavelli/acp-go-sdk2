@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-25
 associated-madr: "0038-MADR-consumer-helpers-kind-and-agent-refusals.md"
 ---
@@ -275,4 +275,11 @@ Commenting on the consumer issues needs the owner's ask too. When the release is
 
 ## Execution record
 
-Not started: this PLAN is `proposed`.
+### Step 1, records, 2026-10-25
+
+* **The pair** was written from a read-only investigation at `ea09a07`, every finding in the MADR's R1 to R12.
+* **The owner's answers:** questions 1 to 4 were put as three options each, and the owner chose the recommended one each time; the
+  MADR records them in "Decided with the owner, 2026-10-25" and is `accepted`. The owner committed the pair, decided, as
+  `8b6d65f`, then approved execution: "committed, proceed". This PLAN is `in-progress`.
+* **Checks** on the records, each exit 0: `make check-records`, `make markdownlint`, `make disclosure-check`, and `tools/idscan.py
+  --paths` over the three files, "0 match(es)".
