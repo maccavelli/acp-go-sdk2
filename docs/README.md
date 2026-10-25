@@ -104,7 +104,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0034 | PLAN | [Implement 0034: run the race detector on CI's Windows jobs, once the tap drain test no longer depends on the machine's speed](decisions/0034-PLAN-race-detector-on-windows-ci.md) | complete |
 | 0035 | REPORT | [ACP code in the two consumers: what belongs in the SDK](reports/0035-REPORT-consumer-acp-code-for-the-sdk.md); aligned 2026-10-24 with issue #11 | observed |
 | 0036 | MADR | [Complete the stable SessionUpdate constructors, add SessionUpdate.Kind(), and a ClientRefusals embed](decisions/0036-MADR-session-update-constructors-kind-and-client-refusals.md) | accepted |
-| 0036 | PLAN | [Implement 0036: the stable SessionUpdate constructors, SessionUpdate.Kind(), and ClientRefusals](decisions/0036-PLAN-session-update-constructors-kind-and-client-refusals.md) | in-progress |
+| 0036 | PLAN | [Implement 0036: the stable SessionUpdate constructors, SessionUpdate.Kind(), and ClientRefusals](decisions/0036-PLAN-session-update-constructors-kind-and-client-refusals.md) | complete |
 | 0036 | REPORT | [Release notes for v1.21.0, against v1.20.0](reports/0036-REPORT-release-notes-v1-21-0.md) | observed |
 
 | 0037 | MADR | [Align docs-only CI and disclosure gates](decisions/0037-MADR-align-docs-ci-and-disclosure-gates.md) | proposed |

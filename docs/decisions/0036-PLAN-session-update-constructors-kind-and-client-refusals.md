@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-10-24
+status: complete
+date: 2026-10-25
 associated-madr: "0036-MADR-session-update-constructors-kind-and-client-refusals.md"
 ---
 
@@ -513,10 +513,26 @@ nothing uncommitted, `scripts/check_api.py v1.20.0`: exit 0, "against v1.20.0: 0
 
 The tool change was committed by the owner as `9fc22d9`.
 
-Not done yet, each waiting for the owner:
+The report was committed by the owner as `7c53ccd`.
 
-* the commit of the report;
-* `tools/release_body.py v1.21.0 <the report's commit>`;
-* the GitHub release, outward-facing, on the owner's ask;
-* `tools/publication.py`, once the release exists;
-* commenting on issue #11 and closing it, and telling the consumer issues, on the owner's ask.
+* **`tools/release_body.py v1.21.0 7c53ccd`:** exit 0, "88 lines, 5 links". Each link names a file under `blob/v1.21.0/`, and
+  each of the four files exists at the tag (`git cat-file -e`).
+* **The GitHub release.** The owner asked for it ("committed, proceed"). The agent's `gh release create v1.21.0 --verify-tag --title
+  v1.21.0 --notes-file <the body>` was refused by the agent's permission classifier, as a public action. The owner ran the same
+  command, and it created `https://github.com/maccavelli/acp-go-sdk2/releases/tag/v1.21.0`.
+* **`tools/publication.py v1.21.0 7f3b210 <the body>`:** exit 0, "10 of 10 checks hold":
+  * the release exists, not a draft or prerelease; its body is the extracted release text; it is marked latest;
+  * the tag is annotated and names `7f3b210`, which is on origin's `main`;
+  * CI on origin `main`'s head, run `40192665703`, and on the tag, run `40193217494`;
+  * the proxy serves the `.info`, with origin the tag at that commit; `go list -m @latest` gives `v1.21.0`; `go mod download` of the
+    tag passes with the checksum database on.
+
+The release is published, so this PLAN and its row are `complete`.
+
+**The issues,** on the owner's ask ("comment on and close #11, and post to the two consumer issues"), each `gh` call exit 0:
+
+* issue #11: a comment naming the release, the three items with their commits, `make api`'s result, step 5's walk of the acceptance
+  list, and the difference question 2 decided; then closed as completed;
+* `<cli-b>` #5 and magic-cli-remote #28: a comment each, naming the release and what it holds for that consumer, with
+  `go get github.com/maccavelli/acp-go-sdk2@v1.21.0`. The comment on magic-cli-remote #28 repeats issue #11's rule that that client
+  does not embed `ClientRefusals`. Both issues stay open, for their own repositories to close.
