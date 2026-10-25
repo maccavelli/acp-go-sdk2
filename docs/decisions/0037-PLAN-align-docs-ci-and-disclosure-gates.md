@@ -264,7 +264,7 @@ file(s), 17 pattern(s), 0 match(es)". The owner pushed.
 | Push | Changes | Workflows started | Runs and conclusions |
 | :--- | :--- | :--- | :--- |
 | `9b20468..5f0cb2b` | mixed: workflows, `Makefile`, `scripts/`, records and docs | CI and Docs | CI `40197791734`, "completed success", six jobs; Docs `40197791752`, "completed success", job `docs` |
-| this record, alone | docs-only: this PLAN | to be observed: Docs alone | |
+| `5f0cb2b..72879af`, this record alone | docs-only: this PLAN | Docs alone | Docs `40198771543`, "completed success", job `docs`; no CI run, by `gh run list --commit` after `tools/watch_ci.py` settled |
 | the next `v*` tag or weekly schedule | none | to be observed: CI | |
 
 In the mixed push's logs (`gh run view --log`), CI's job `validate (ubuntu-24.04, 1.27.3)`, step "markdownlint, actionlint,
@@ -272,4 +272,10 @@ records, disclosure, tools", printed "Summary: 0 issues", "check-disclosure: 551
 "check-ci-filters: 0 problem(s)"; Docs' step "markdownlint, records, disclosure" printed "Summary: 0 issues in 0 files" and
 "check-disclosure: 551 tracked file(s), 0 finding(s)". So both run the gates on GitHub, and the `Makefile` evaluated on Docs'
 runner without error.
+
+The owner committed the record above as `72879af` and pushed it; the agent ran no `make push-guard` before that push. Only Docs
+started, so a docs-only push routes as intended.
+
+Still to be observed: full CI on the next weekly schedule, `17 6 * * 1`, Monday 2026-10-26 at 06:17 UTC, or on a `v*` tag if one
+comes first. This PLAN stays `in-progress` until that run is recorded.
 
