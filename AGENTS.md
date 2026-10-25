@@ -107,11 +107,27 @@ docs/reports/NNNN-GATES-short-slug.md
   `go test -race`; `go mod tidy -diff`; and `govulncheck` at the version pinned
   in `.github/workflows/ci.yml`. `GO_PRECHECK_SKIP_VULN=1` skips the
   vulnerability check offline. A file that fails is not committed.
-- Before every commit, run `make check-records` and `make markdownlint`.
+- Before every commit, run `make check-records`, `make markdownlint` and
+  `make disclosure-check`.
 - The verification tools a PLAN's steps run, the gate set, the test hosts,
   planted breaks and the release checks, are in `tools/`; `tools/README.md`
-  says how. Before committing a change to them, run `make check-tools`.
+  says how. Before committing a change to them, to `scripts/`, or to a
+  workflow, run `make check-tools`.
 - A file that fails is not committed.
+
+## CI routing
+
+- `.github/workflows/ci.yml` runs every check. A change to the docs-safe paths
+  alone, its `paths-ignore` (`docs/**`, `AGENTS.md`, `RELEASING.md`,
+  `tools/README.md` and the agent-rule files), runs
+  `.github/workflows/docs.yml` instead: `make markdownlint`,
+  `make check-records` and `make disclosure-check`, the targets CI runs too. A
+  change to any other file runs CI; a `v*` tag and the schedule always do.
+- The root `README.md` is not docs-safe: `docs_test.go` reads it. A Markdown
+  file that code starts to read leaves the set, in both workflows.
+  `scripts/check_ci_filters.py`, in `make check-tools`, fails when the two
+  workflows' paths, gates or pins disagree, or when CI ignores a file that Go
+  code names (0037-MADR-align-docs-ci-and-disclosure-gates.md).
 
 ## Identifiers
 
@@ -128,6 +144,10 @@ real-machine absolute path. Use placeholders (`<user>`, `/home/<user>/...`).
   status, and 1 when the guard is missing.
 
 - Never bypass it with `--no-verify`.
+- `make disclosure-check` (`scripts/check_disclosure.py`) is the portable part,
+  run in CI and in the Docs workflow: it refuses a real user-home path in any
+  tracked file, and prints only file, line and category. It carries no private
+  data, so it does not replace `make push-guard`.
 
 ## Commits
 

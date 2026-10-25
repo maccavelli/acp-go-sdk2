@@ -212,3 +212,46 @@ Each was found by `RepositoryTest`, the scripts' test of this repository, before
 Not checked locally: that GitHub starts Docs alone for a docs-only push, both for a mixed one, and full CI for a tag. Phase 3, step 3
 observes them after an authorized push.
 
+### Phase 3, steps 1 and 2: documentation and the final checks, 2026-10-25
+
+What changed:
+
+* **`AGENTS.md`:**
+  * "Pre-add checks": `make disclosure-check` before every commit, beside `make check-records` and `make markdownlint`; and
+    `make check-tools` before a change to `scripts/` or a workflow too;
+  * a new section, "CI routing": the docs-safe paths, what the Docs workflow runs, that any other file, a `v*` tag and the schedule
+    run CI, why the root `README.md` is not docs-safe, and what `scripts/check_ci_filters.py` fails on;
+  * "Identifiers": `make disclosure-check` is the portable part, and does not replace `make push-guard`.
+* **`docs/architecture.md`:** the checks list names `make disclosure-check` and the routing, with the contract check and its YAML
+  reader; "Verification tools" says what `make check-tools` runs now; the tree names `scripts/check_disclosure.py`,
+  `scripts/check_ci_filters.py` and `.github/workflows/docs.yml`.
+* **The records index:** the pair's rows name both files exactly, with `accepted` and `in-progress`, as phase 1 left them. The index
+  is written by hand; `scripts/check_records.py` generates none.
+
+`AGENTS.md` and `docs/architecture.md` were read in full after the edit. The read found one fault: the new "Identifiers" bullet sat
+between the push guard's bullet and "Never bypass it with `--no-verify`", whose "it" then read as the disclosure check. It now
+follows that line.
+
+**Checks,** each exit 0 and taken before any output was read:
+
+* `make check-records markdownlint check-tools disclosure-check`: Markdownlint "0 issues"; the tools' 53 tests and the scripts' 23,
+  "OK"; "check-ci-filters: 0 problem(s)"; "check-disclosure: 551 tracked file(s), 0 finding(s)";
+* `actionlint@v1.7.12`;
+* `tools/idscan.py --paths` over `AGENTS.md` and `docs/architecture.md`, and earlier over every file phases 1 and 2 changed:
+  0 matches each.
+
+**Planted breaks,** the six step 2 names, each in its own scratch copy of the tree with its `.git`, from a script in the session's
+scratch directory; six of six failed as required, each with exit 2 from `make`:
+
+| Break | Target | What failed |
+| :--- | :--- | :--- |
+| `#No space after the hash` added to `RELEASING.md` | `markdownlint` | "RELEASING.md:133:1 error MD018/no-missing-space-atx" |
+| a link to `0099-MADR-gone.md` added to the 0037 MADR | `check-records` | "broken relative link: docs/decisions/0037-MADR-align-docs-ci-and-disclosure-gates.md:73: 0099-MADR-gone.md" |
+| a Linux home path with a real-looking account added to `AGENTS.md` | `disclosure-check` | "AGENTS.md:166: linux-home", without the account |
+| the root `README.md` added to CI's ignored paths and Docs' paths | `check-tools` | "readers: CI ignores README.md, which Go code reads" |
+| Docs' `push` paths lose `RELEASING.md` | `check-tools` | "docs: Docs' push and pull_request paths differ" |
+| Docs no longer runs `make check-records` | `check-tools` | "gates: Docs does not run make check-records" |
+
+Step 3 is not done: it observes GitHub's routing after a push, which needs the owner's authorization in that turn. Until it is
+recorded, this PLAN stays `in-progress`.
+

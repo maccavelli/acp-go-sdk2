@@ -439,9 +439,21 @@ Checks that guard this:
   govulncheck, for both modules. golangci-lint covers the generated files too,
   except for `goconst`, `gocognit` and `gocyclo`, which `.golangci.yml` excludes
   for `_gen.go` files with the reason. `make check-records` and `make markdownlint`
-  check the docs. GitHub Actions runs `.github/workflows/ci.yml`, which also runs
+  check the docs, and `make disclosure-check` the tracked text for a real
+  user-home path. GitHub Actions runs `.github/workflows/ci.yml`, which also runs
   the root tests with `GOEXPERIMENT=nojsonv2` on Linux, and both modules' tests
   with `-race` on the Linux and Windows jobs.
+- CI ignores a change to the docs-safe paths alone: `docs/**`, `AGENTS.md`,
+  `RELEASING.md`, `tools/README.md` and the agent-rule files under `.claude/`,
+  `.codex/`, `.grok/`, `.kilo/` and `.opencode/`. Those paths, and the workflow
+  itself, run `.github/workflows/docs.yml`, which runs the same three targets
+  as CI's documentation step. A mixed change runs both; a `v*` tag and the
+  schedule run CI. The root `README.md` is not docs-safe, since `docs_test.go`
+  reads it. `scripts/check_ci_filters.py`, in `make check-tools`, reads both
+  workflows with a YAML reader of its own, for the subset they use, and fails
+  when their paths, gates, checkout pin or permissions disagree, or when CI
+  ignores a Markdown file that Go code names
+  (0037-MADR-align-docs-ci-and-disclosure-gates.md).
 - `make api` and CI's "API compatibility" step run `scripts/check_api.py`:
   `apidiff`, pinned there, compares the working tree's root package and
   `agentproc` with the newest `v1` tag's, a package missing from the tag
@@ -559,9 +571,10 @@ markdownlint` and `scripts/check_records.py` would otherwise walk them.
   failed job's step, seed and crash, and a variable's value in each step's
   environment, each log read by its job id, so from that job's own attempt.
 - `find.py` and `procs.py` search files and processes.
-- `make check-tools` compiles every tool and runs `tools/test_tools.py`, their
-  offline parts, in CI's records step too; what needs a host or the network
-  each step runs, and its record says.
+- `make check-tools` compiles every tool and script, runs `tools/test_tools.py`,
+  the tools' offline parts, and `scripts/`' tests, and runs
+  `scripts/check_ci_filters.py`, in CI's records step too; what needs a host or
+  the network each step runs, and its record says.
 
 ## Tree
 
@@ -590,8 +603,11 @@ testdata/json_golden/     JSON goldens
 testdata/fuzz/            FuzzRoundTrip seeds kept from crashers
 scripts/go-precheck.sh    the pre-add gate
 scripts/check_records.py  record numbering and link check
+scripts/check_disclosure.py  real user-home paths in tracked text
+scripts/check_ci_filters.py  CI's and Docs' paths, gates and pins agree
 tools/                    the verification tools; tools/README.md
 .github/workflows/ci.yml  CI
+.github/workflows/docs.yml  the documentation gates, for docs-only changes
 .markdownlint-cli2.jsonc  fleet Markdown style
 .gitattributes            LF on every platform
 docs/
