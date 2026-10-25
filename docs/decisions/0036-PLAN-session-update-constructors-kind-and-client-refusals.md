@@ -536,3 +536,9 @@ The release is published, so this PLAN and its row are `complete`.
 * `<cli-b>` #5 and magic-cli-remote #28: a comment each, naming the release and what it holds for that consumer, with
   `go get github.com/maccavelli/acp-go-sdk2@v1.21.0`. The comment on magic-cli-remote #28 repeats issue #11's rule that that client
   does not embed `ClientRefusals`. Both issues stay open, for their own repositories to close.
+
+**The last push.** The owner committed this record as `9b20468`, after `9fc22d9` and `7c53ccd`. Before the push: `git fetch`, `main`
+three ahead of `origin/main` and none behind; `make push-guard`, "3 outgoing commit(s), 7f3b210..9b20468, main to origin", "the
+guard passed (exit 0)"; `tools/idscan.py --range origin/main..main`, "5 file(s), 17 pattern(s), 0 match(es)". The owner pushed.
+After it, `tools/watch_ci.py 9b20468 --branch main`: run `40195337860`, "completed success", six jobs, on Ubuntu, Windows and macOS
+at Go `1.27.3` and `1.26.10`.
