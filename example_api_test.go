@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	acp "github.com/maccavelli/acp-go-sdk2"
 )
@@ -134,6 +135,67 @@ func ExamplePickPermissionOption() {
 	}
 	// Output:
 	// deny
+}
+
+// ExampleResolveStdioCommands resolves a client's bare MCP server command
+// before the SDK checks that it is absolute. An agent installs the hook with
+// WithInboundRewrite(acp.ResolveStdioCommands(exec.LookPath)); here a lookup
+// in the temporary directory stands in for exec.LookPath, so the output is
+// the same on every host (0038-PLAN-consumer-helpers-kind-and-agent-refusals.md,
+// step 4).
+func ExampleResolveStdioCommands() {
+	lookPath := func(name string) (string, error) { return filepath.Join(os.TempDir(), "bin", name), nil }
+	hook := acp.ResolveStdioCommands(lookPath)
+	req := acp.NewSessionRequest{Cwd: os.TempDir(), McpServers: []acp.McpServer{acp.NewMcpServerStdio("tools", "npx", nil, nil)}}
+	if err := hook(context.Background(), acp.AgentMethodSessionNew, &req); err != nil {
+		fmt.Println(err)
+		return
+	}
+	command := req.McpServers[0].Stdio.Command
+	fmt.Println(filepath.IsAbs(command), filepath.Base(command))
+	// Output:
+	// true npx
+}
+
+// promptOnlyAgent offers no session listing, resuming, closing, deleting or
+// logout: it embeds AgentRefusals for them and implements the seven it must.
+type promptOnlyAgent struct{ acp.AgentRefusals }
+
+func (promptOnlyAgent) Authenticate(context.Context, acp.AuthenticateRequest) (acp.AuthenticateResponse, error) {
+	return acp.AuthenticateResponse{}, nil
+}
+
+func (promptOnlyAgent) Initialize(context.Context, acp.InitializeRequest) (acp.InitializeResponse, error) {
+	return acp.InitializeResponse{ProtocolVersion: acp.ProtocolVersionNumber}, nil
+}
+
+func (promptOnlyAgent) Cancel(context.Context, acp.CancelNotification) error { return nil }
+
+func (promptOnlyAgent) NewSession(context.Context, acp.NewSessionRequest) (acp.NewSessionResponse, error) {
+	return acp.NewSessionResponse{SessionId: "s"}, nil
+}
+
+func (promptOnlyAgent) Prompt(context.Context, acp.PromptRequest) (acp.PromptResponse, error) {
+	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
+}
+
+func (promptOnlyAgent) SetSessionConfigOption(context.Context, acp.SetSessionConfigOptionRequest) (acp.SetSessionConfigOptionResponse, error) {
+	return acp.SetSessionConfigOptionResponse{}, nil
+}
+
+func (promptOnlyAgent) SetSessionMode(context.Context, acp.SetSessionModeRequest) (acp.SetSessionModeResponse, error) {
+	return acp.SetSessionModeResponse{}, nil
+}
+
+// ExampleAgentRefusals is an agent that embeds AgentRefusals, and the answer
+// it gives session/list
+// (0038-PLAN-consumer-helpers-kind-and-agent-refusals.md, step 4).
+func ExampleAgentRefusals() {
+	var a acp.Agent = promptOnlyAgent{}
+	_, err := a.ListSessions(context.Background(), acp.ListSessionsRequest{})
+	fmt.Println(err)
+	// Output:
+	// {"code":-32601,"message":"Method not found","data":{"method":"session/list"}}
 }
 
 // ExampleClientRefusals is a client that embeds ClientRefusals, and the answer

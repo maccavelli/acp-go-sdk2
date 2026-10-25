@@ -11,12 +11,21 @@ This repository is the Go module `github.com/maccavelli/acp-go-sdk2`, package
 `acp`, at the repository root, and package `agentproc` in `agentproc/`, which
 starts an agent as a child process and stops it (below).
 
-- Hand-written: `connection.go` (JSON-RPC over a reader and a writer),
-  `errors.go`, `extensions.go` (`_`-prefixed methods), `helpers.go` (the
-  constructors of the three unions the protocol table names,
-  `SessionUpdate.Kind`, `Ptr`, and `Roots`), `refusals.go` (`ClientRefusals`,
-  which answers method-not-found for the `Client` methods a client may leave
-  unadvertised), and `doc.go`. None of them holds protocol state.
+- Hand-written: `connection.go` (JSON-RPC over a reader and a writer, and
+  `ChainRewrites`), `errors.go` (the error types and constructors, and
+  `IsMethodNotFound`, `IsAuthRequired`, `IsCancelled` and `Reason`),
+  `extensions.go` (`_`-prefixed methods), `helpers.go` (the constructors of the
+  three unions the protocol table names, `SessionUpdate.Kind`, `Ptr`, `Roots`,
+  and the helpers of
+  [0038-MADR-consumer-helpers-kind-and-agent-refusals.md](decisions/0038-MADR-consumer-helpers-kind-and-agent-refusals.md):
+  `AllSessions`, `PickPermissionOption`, `MetaObject`, `DecodeMeta`,
+  `ResolveStdioCommands`, `OfferedAuthMethods`, `ConfigOptionByCategory` and
+  the methods beside them), `refusals.go` (`ClientRefusals` and
+  `AgentRefusals`, which answer method-not-found for the `Client` and `Agent`
+  methods a side may leave unadvertised), and `doc.go`. None of them holds
+  protocol state. A helper that takes a side connection is a package-level
+  function: every method of a side connection that takes a context is a
+  protocol method, as `TestSideConnectionMethodsAreProtocolMethods` requires.
 - Generated from `schema/`: `constants_gen.go`, `types_gen.go`, `agent_gen.go`
   and `client_gen.go` (the two connection types, `AgentSideConnection` and
   `ClientSideConnection`, with the state the protocol table's rules need:

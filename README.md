@@ -92,7 +92,17 @@ Browse the Go package docs on pkg.go.dev for detailed API documentation:
 If you're building an [Agent](https://agentclientprotocol.com/protocol/overview#agent):
 
 - Implement the `acp.Agent` interface (and optionally `acp.AgentLoader` for `session/load`).
+  An agent that offers none of `session/list`, `session/delete`,
+  `session/resume`, `session/close` and `logout` embeds `acp.AgentRefusals`,
+  which answers each with method-not-found, and implements the other seven; an
+  agent that implements some of the five implements all five instead.
 - Create a connection with `acp.NewAgentSideConnection(agent, os.Stdout, os.Stdin)`.
+  `acp.WithInboundRewrite(acp.ResolveStdioCommands(exec.LookPath))` resolves a
+  client's bare MCP server command, such as `npx`, before the SDK refuses it
+  as not absolute; `acp.ChainRewrites` combines it with rewrites of your own.
+  Answer `initialize` with `acp.OfferedAuthMethods(req.ClientCapabilities,
+  methods)` so a client without `auth.terminal` is not offered a terminal
+  method, which the SDK would refuse to send.
 - Send updates and make client requests using the returned connection. An agent
   that keeps the connection for its handlers implements `acp.AgentConnAware`:
   the constructor calls its `SetAgentConnection` before it reads anything, so a

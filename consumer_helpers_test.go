@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"slices"
@@ -316,4 +317,190 @@ func TestSelectOptionsAll(t *testing.T) {
 	if got := (SessionConfigSelectOptions{}).All(); got != nil {
 		t.Errorf("neither: %v, want nil", got)
 	}
+}
+
+// fakeLookPath resolves "npx" to an absolute path, "rel" to a relative one,
+// and fails for anything else, counting its calls.
+func fakeLookPath(calls *atomic.Int32) func(string) (string, error) {
+	return func(name string) (string, error) {
+		calls.Add(1)
+		switch name {
+		case "npx":
+			return testAbsPath("bin", "npx"), nil
+		case "rel":
+			return "bin/rel", nil
+		}
+		return "", errors.New("not found")
+	}
+}
+
+// TestResolveStdioCommands requires each of the four requests' stdio
+// commands to be resolved when bare, and left when absolute, unresolved or
+// not stdio (0038-PLAN-consumer-helpers-kind-and-agent-refusals.md, step 4).
+func TestResolveStdioCommands(t *testing.T) {
+	t.Parallel()
+	npx := testAbsPath("bin", "npx")
+	abs := testAbsPath("opt", "tool")
+	stable := func() []McpServer {
+		return []McpServer{NewMcpServerStdio("a", "npx", nil, nil), NewMcpServerStdio("b", abs, nil, nil),
+			NewMcpServerStdio("c", "rel", nil, nil), NewMcpServerStdio("d", "missing", nil, nil),
+			NewMcpServerHttp("e", "https://example.invalid", nil)}
+	}
+	newReq := &NewSessionRequest{Cwd: testAbsPath("w"), McpServers: stable()}
+	loadReq := &LoadSessionRequest{Cwd: testAbsPath("w"), SessionId: "s", McpServers: stable()}
+	resumeReq := &ResumeSessionRequest{Cwd: testAbsPath("w"), SessionId: "s", McpServers: stable()}
+	forkReq := &UnstableForkSessionRequest{Cwd: testAbsPath("w"), SessionId: "s", McpServers: []UnstableMcpServer{
+		NewUnstableMcpServerStdio("a", "npx", nil, nil), NewUnstableMcpServerStdio("b", abs, nil, nil)}}
+	calls := new(atomic.Int32)
+	hook := ResolveStdioCommands(fakeLookPath(calls))
+	for method, params := range map[string]any{AgentMethodSessionNew: newReq, AgentMethodSessionLoad: loadReq,
+		AgentMethodSessionResume: resumeReq, "session/fork": forkReq} {
+		if err := hook(t.Context(), method, params); err != nil {
+			t.Errorf("%s: hook returned %v", method, err)
+		}
+	}
+	want := []string{npx, abs, "rel", "missing"}
+	for name, servers := range map[string][]McpServer{"new": newReq.McpServers, "load": loadReq.McpServers, "resume": resumeReq.McpServers} {
+		for i, w := range want {
+			if got := servers[i].Stdio.Command; got != w {
+				t.Errorf("%s server %d: command %q, want %q", name, i, got, w)
+			}
+		}
+		if servers[4].Http == nil || servers[4].Http.Url != "https://example.invalid" {
+			t.Errorf("%s: the http server changed: %+v", name, servers[4])
+		}
+	}
+	if got := forkReq.McpServers[0].Stdio.Command; got != npx {
+		t.Errorf("fork: command %q, want %q", got, npx)
+	}
+	// Three bare commands in each of three requests, one in fork; never an absolute one.
+	if got := calls.Load(); got != 10 {
+		t.Errorf("lookPath called %d times, want 10, never for an absolute command", got)
+	}
+	other := &PromptRequest{SessionId: "s"}
+	if err := hook(t.Context(), AgentMethodSessionPrompt, other); err != nil || calls.Load() != 10 {
+		t.Errorf("another method's params: %v, %d calls", err, calls.Load())
+	}
+}
+
+// TestResolveStdioCommandsOverTheWire requires an agent with the hook to see
+// a client's bare command resolved, and to refuse one it cannot resolve.
+func TestResolveStdioCommandsOverTheWire(t *testing.T) {
+	t.Parallel()
+	seen := make(chan string, 1)
+	c2aR, c2aW := io.Pipe()
+	a2cR, a2cW := io.Pipe()
+	agent := agentFuncs{NewSessionFunc: func(_ context.Context, req NewSessionRequest) (NewSessionResponse, error) {
+		seen <- req.McpServers[0].Stdio.Command
+		return NewSessionResponse{SessionId: "s"}, nil
+	}}
+	asc := NewAgentSideConnection(agent, a2cW, c2aR, WithInboundRewrite(ResolveStdioCommands(fakeLookPath(new(atomic.Int32)))))
+	csc := NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
+	t.Cleanup(func() { _ = csc.Close(); _ = asc.Close() })
+	negotiate(t, asc, allAdvertised())
+	negotiate(t, csc, allAdvertised())
+	ctx := listCtx(t)
+	// A client in another language sends "npx" as it is; this SDK's own client
+	// would refuse to, so the request goes out untyped.
+	send := func(command string) error {
+		_, err := SendRequest[json.RawMessage](csc.Connection(), ctx, AgentMethodSessionNew, map[string]any{
+			"cwd": testAbsPath("w"), "mcpServers": []any{map[string]any{"name": "s", "command": command, "args": []any{}, "env": []any{}}},
+		})
+		return err
+	}
+	if err := send("npx"); err != nil {
+		t.Fatalf("session/new with npx: %v", err)
+	}
+	if got := <-seen; got != testAbsPath("bin", "npx") {
+		t.Errorf("the handler saw %q, want the resolved path", got)
+	}
+	re, ok := errors.AsType[*RequestError](send("missing"))
+	if !ok || re.Code != -32602 {
+		t.Errorf("session/new with an unresolvable command: %v, want -32602", re)
+	}
+}
+
+// TestChainRewrites requires the hooks in order, the first error stopping
+// the rest, and no hooks to do nothing.
+func TestChainRewrites(t *testing.T) {
+	t.Parallel()
+	var order []int
+	hook := func(n int, err error) func(context.Context, string, any) error {
+		return func(context.Context, string, any) error {
+			order = append(order, n)
+			return err
+		}
+	}
+	stop := errors.New("stop")
+	if err := ChainRewrites(hook(1, nil), hook(2, nil))(t.Context(), "m", nil); err != nil || !slices.Equal(order, []int{1, 2}) {
+		t.Errorf("in order: %v, %v; want nil, [1 2]", err, order)
+	}
+	order = nil
+	if err := ChainRewrites(hook(1, stop), hook(2, nil))(t.Context(), "m", nil); !errors.Is(err, stop) || !slices.Equal(order, []int{1}) {
+		t.Errorf("first error: %v, %v; want stop, [1]", err, order)
+	}
+	if err := ChainRewrites()(t.Context(), "m", nil); err != nil {
+		t.Errorf("no hooks: %v", err)
+	}
+}
+
+// TestOfferedAuthMethods requires terminal methods dropped without
+// auth.terminal and kept with it, the others kept in order, the input
+// unchanged, and the filtered list accepted by a client the unfiltered one
+// is refused by.
+func TestOfferedAuthMethods(t *testing.T) {
+	t.Parallel()
+	all := []AuthMethod{NewAuthMethodTerminal("term", "Terminal"), NewAuthMethodAgent("agent", "Agent"),
+		{Unknown: json.RawMessage(`{"type":"future","id":"f","name":"F"}`)}}
+	ids := func(ms []AuthMethod) []string {
+		var out []string
+		for _, m := range ms {
+			switch {
+			case m.Terminal != nil:
+				out = append(out, "terminal")
+			case m.Agent != nil:
+				out = append(out, "agent")
+			default:
+				out = append(out, "unknown")
+			}
+		}
+		return out
+	}
+	if got := ids(OfferedAuthMethods(ClientCapabilities{}, all)); !slices.Equal(got, []string{"agent", "unknown"}) {
+		t.Errorf("without auth.terminal: %v", got)
+	}
+	if got := ids(OfferedAuthMethods(ClientCapabilities{Auth: AuthCapabilities{Terminal: true}}, all)); !slices.Equal(got, []string{"terminal", "agent", "unknown"}) {
+		t.Errorf("with auth.terminal: %v", got)
+	}
+	if got := ids(all); !slices.Equal(got, []string{"terminal", "agent", "unknown"}) {
+		t.Errorf("the input changed: %v", got)
+	}
+	known := all[:2]
+	if _, err := initializeOffering(t, known, false); err == nil {
+		t.Error("the unfiltered list was accepted by a client without auth.terminal; the test proves nothing")
+	}
+	resp, err := initializeOffering(t, known, true)
+	if err != nil || !slices.Equal(ids(resp.AuthMethods), []string{"agent"}) {
+		t.Errorf("filtered: %v, %v; want [agent], nil", ids(resp.AuthMethods), err)
+	}
+}
+
+// initializeOffering runs initialize from a client without auth.terminal
+// against an agent offering methods, through OfferedAuthMethods when filter
+// is set.
+func initializeOffering(t *testing.T, methods []AuthMethod, filter bool) (InitializeResponse, error) {
+	t.Helper()
+	c2aR, c2aW := io.Pipe()
+	a2cR, a2cW := io.Pipe()
+	agent := agentFuncs{InitializeFunc: func(_ context.Context, req InitializeRequest) (InitializeResponse, error) {
+		offered := methods
+		if filter {
+			offered = OfferedAuthMethods(req.ClientCapabilities, methods)
+		}
+		return InitializeResponse{ProtocolVersion: ProtocolVersionNumber, AuthMethods: offered}, nil
+	}}
+	asc := NewAgentSideConnection(agent, a2cW, c2aR)
+	csc := NewClientSideConnection(&clientFuncs{}, c2aW, a2cR)
+	t.Cleanup(func() { _ = csc.Close(); _ = asc.Close() })
+	return csc.Initialize(listCtx(t), InitializeRequest{ProtocolVersion: ProtocolVersionNumber})
 }

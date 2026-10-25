@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"iter"
+	"path/filepath"
 	"time"
 )
 
@@ -492,6 +493,64 @@ func (o SessionConfigSelectOptions) All() []SessionConfigSelectOption {
 	var out []SessionConfigSelectOption
 	for _, g := range *o.Grouped {
 		out = append(out, g.Options...)
+	}
+	return out
+}
+
+// ResolveStdioCommands returns a WithInboundRewrite hook that resolves a
+// stdio MCP server's command with lookPath, typically exec.LookPath, before
+// the SDK validates it, since the protocol requires the command to be
+// absolute and a client may send a bare name such as "npx". It reads the
+// servers of session/new, session/load, session/resume and the unstable
+// session/fork. A command filepath.IsAbs accepts is left as it is; one
+// lookPath answers with an absolute path is replaced by it; any other,
+// including a lookPath error, is left for the SDK to refuse -32602. The hook
+// never refuses a message itself. Combine it with other rewrites through
+// ChainRewrites (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func ResolveStdioCommands(lookPath func(string) (string, error)) func(ctx context.Context, method string, params any) error {
+	resolve := func(s *McpServerStdio) {
+		if s == nil || filepath.IsAbs(s.Command) {
+			return
+		}
+		if path, err := lookPath(s.Command); err == nil && filepath.IsAbs(path) {
+			s.Command = path
+		}
+	}
+	return func(_ context.Context, _ string, params any) error {
+		switch p := params.(type) {
+		case *NewSessionRequest:
+			for _, s := range p.McpServers {
+				resolve(s.Stdio)
+			}
+		case *LoadSessionRequest:
+			for _, s := range p.McpServers {
+				resolve(s.Stdio)
+			}
+		case *ResumeSessionRequest:
+			for _, s := range p.McpServers {
+				resolve(s.Stdio)
+			}
+		case *UnstableForkSessionRequest:
+			for _, s := range p.McpServers {
+				resolve(s.Stdio)
+			}
+		}
+		return nil
+	}
+}
+
+// OfferedAuthMethods returns methods, in order, without its terminal auth
+// methods unless caps advertises auth.terminal, so an initialize answer built
+// from it is one the SDK sends to that client. Agent and unknown methods are
+// kept. It returns a new slice and leaves methods as it was
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func OfferedAuthMethods(caps ClientCapabilities, methods []AuthMethod) []AuthMethod {
+	out := make([]AuthMethod, 0, len(methods))
+	for _, m := range methods {
+		if m.Terminal != nil && !caps.Auth.Terminal {
+			continue
+		}
+		out = append(out, m)
 	}
 	return out
 }

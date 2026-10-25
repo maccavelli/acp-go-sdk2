@@ -63,3 +63,47 @@ func (ClientRefusals) ReleaseTerminal(context.Context, ReleaseTerminalRequest) (
 func (ClientRefusals) WaitForTerminalExit(context.Context, WaitForTerminalExitRequest) (WaitForTerminalExitResponse, error) {
 	return WaitForTerminalExitResponse{}, NewMethodNotFound(ClientMethodTerminalWaitForExit)
 }
+
+// AgentRefusals answers method-not-found (-32601) for the five Agent methods
+// an agent may leave unadvertised, each gated on one of its own capabilities:
+// CloseSession, DeleteSession, ListSessions, ResumeSession and Logout. Embed
+// it in an agent that offers none of them; the seven ungated methods,
+// Authenticate, Initialize, Cancel, NewSession, Prompt, SetSessionConfigOption
+// and SetSessionMode, it does not provide, so the compiler still requires
+// them.
+//
+// The SDK refuses a method whose capability the agent did not advertise
+// before the agent's method runs, so these answer only for a capability the
+// agent did advertise. A method the embedding type declares itself takes
+// precedence over the one promoted from AgentRefusals.
+//
+// An agent that implements some of these methods for real should implement
+// all of them itself rather than embed AgentRefusals: a real method renamed
+// or removed would otherwise be refused without a compile error
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+type AgentRefusals struct{}
+
+// CloseSession refuses session/close with method-not-found.
+func (AgentRefusals) CloseSession(context.Context, CloseSessionRequest) (CloseSessionResponse, error) {
+	return CloseSessionResponse{}, NewMethodNotFound(AgentMethodSessionClose)
+}
+
+// DeleteSession refuses session/delete with method-not-found.
+func (AgentRefusals) DeleteSession(context.Context, DeleteSessionRequest) (DeleteSessionResponse, error) {
+	return DeleteSessionResponse{}, NewMethodNotFound(AgentMethodSessionDelete)
+}
+
+// ListSessions refuses session/list with method-not-found.
+func (AgentRefusals) ListSessions(context.Context, ListSessionsRequest) (ListSessionsResponse, error) {
+	return ListSessionsResponse{}, NewMethodNotFound(AgentMethodSessionList)
+}
+
+// ResumeSession refuses session/resume with method-not-found.
+func (AgentRefusals) ResumeSession(context.Context, ResumeSessionRequest) (ResumeSessionResponse, error) {
+	return ResumeSessionResponse{}, NewMethodNotFound(AgentMethodSessionResume)
+}
+
+// Logout refuses logout with method-not-found.
+func (AgentRefusals) Logout(context.Context, LogoutRequest) (LogoutResponse, error) {
+	return LogoutResponse{}, NewMethodNotFound(AgentMethodLogout)
+}

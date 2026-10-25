@@ -387,3 +387,58 @@ The step lists no docs item; the README line follows the MADR's "Documentation",
 * `make check-records`, `make markdownlint`, `make disclosure-check`, and `tools/idscan.py --paths` over the step's files.
 
 Step 2 was committed by the owner as `0ac866b`. Step 3's files are staged for the owner.
+
+### Step 4, the agent-side helpers, 2026-10-25
+
+What changed:
+
+* **`helpers.go`:** `path/filepath` imported; after `SessionConfigSelectOptions.All`, `ResolveStdioCommands` and
+  `OfferedAuthMethods`. `ResolveStdioCommands` switches on `*NewSessionRequest`, `*LoadSessionRequest`,
+  `*ResumeSessionRequest` and `*UnstableForkSessionRequest`; it looks up a command only when `filepath.IsAbs` refuses it, and
+  keeps an answer only when `filepath.IsAbs` accepts it.
+* **`connection.go`:** `ChainRewrites`, after `WithInboundRewrite`, with no ACP type.
+* **`refusals.go`:** `AgentRefusals` and its five methods, `CloseSession`, `DeleteSession`, `ListSessions`, `ResumeSession` and
+  `Logout`, with the doc comment the MADR requires.
+* **`consumer_helpers_test.go`:** `TestResolveStdioCommands`, over all four requests with a counting fake `lookPath`;
+  `TestResolveStdioCommandsOverTheWire`, which sends `session/new` with `"npx"` through the untyped `Connection`, as a client in
+  another language would, since this SDK's own client refuses to send a relative command; `TestChainRewrites`;
+  `TestOfferedAuthMethods`, whose wire half first checks that the unfiltered list is refused, so that the filtered one passing
+  proves something.
+* **`refusals_test.go`:** `refusingAgent`, with `var _ Agent = refusingAgent{}`; `TestAgentRefusalsAnswers`,
+  `TestAgentRefusalsMethodSet` and `TestAgentRefusalsOverTheWire`.
+* **`example_api_test.go`:** `ExampleResolveStdioCommands`, whose output, `true npx`, is the same on every host, and
+  `ExampleAgentRefusals` with `promptOnlyAgent`.
+* **`README.md`:** the agent section names `AgentRefusals`, `ResolveStdioCommands`, `ChainRewrites` and `OfferedAuthMethods`.
+* **`docs/architecture.md`:** the hand-written list says what `connection.go`, `errors.go`, `helpers.go` and `refusals.go` hold
+  after steps 2 to 4, and states the rule of step 2's deviation.
+
+The first `go vet` failed: `initializeWith`, the step's helper, was already declared in `initialize_test.go`. It is
+`initializeOffering`.
+
+**Tests,** `go test -count=1 -race`, exit 0: the seven tests, the two examples, `TestExportedDeclarationsDocumented`,
+`TestExportedTypeDocsStartWithName` and `TestSideConnectionMethodsAreProtocolMethods`.
+
+**Planted breaks,** `tools/plants.py`, each in its own copy of the tree; six of six failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `ResolveStdioCommands` skips `*UnstableForkSessionRequest` | "consumer_helpers_test.go:374: fork: command \"npx\", want \"`<temp>`/bin/npx\"" |
+| `ResolveStdioCommands` takes a relative `lookPath` answer | "consumer_helpers_test.go:366: load server 2: command \"bin/rel\", want \"rel\"" |
+| `ChainRewrites` runs every hook after an error | "consumer_helpers_test.go:440: first error: <nil>, [1 2]; want stop, [1]" |
+| `OfferedAuthMethods` drops `Unknown` | "consumer_helpers_test.go:470: without auth.terminal: [agent]" |
+| `Logout` answers with `AgentMethodSessionList` | "refusals_test.go:166: Logout: {\"code\":-32601,…,\"data\":{\"method\":\"session/list\"}}, want -32601 naming logout" |
+| a `Prompt` method added to `AgentRefusals` | "refusals_test.go:181: methods = [CloseSession DeleteSession ListSessions Logout Prompt ResumeSession], want [CloseSession DeleteSession ListSessions Logout ResumeSession]" |
+
+`<temp>` stands for the host's temporary directory, which the scratch copy's failure line printed in full.
+
+**Gates,** each exit 0:
+
+* `make pre-add-check`: "183 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `(cd cmd/generate && go test -count=1 ./...)`: every package `ok`, so the synthetic cases compile with the new `connection.go`;
+* `make api`: "against v1.21.0: 0 incompatible, 17 compatible", steps 2's and 3's thirteen and `AgentRefusals`, `ChainRewrites`,
+  `OfferedAuthMethods` and `ResolveStdioCommands`; `apidiff` lists the type once, without its methods;
+* `tools/gates.py --all`, with `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set: "all gates passed", 18 of 18, `floor`, `nojsonv2`,
+  `windows` and `linux` among them, on the working tree of steps 2 to 4;
+* `make check-records`, `make markdownlint`, `make disclosure-check`, and `tools/idscan.py --paths` over the step's files.
+
+Step 3 was committed by the owner as `79038ac`. Step 4's files are staged for the owner.

@@ -581,6 +581,21 @@ func WithInboundRewrite(fn func(ctx context.Context, method string, params any) 
 	}
 }
 
+// ChainRewrites returns one rewrite hook that runs fns in order and stops at
+// the first error, which it returns. A connection keeps one
+// WithInboundRewrite hook, the last given, so hooks that should all run are
+// chained into one (0038-MADR-consumer-helpers-kind-and-agent-refusals.md).
+func ChainRewrites(fns ...func(ctx context.Context, method string, params any) error) func(ctx context.Context, method string, params any) error {
+	return func(ctx context.Context, method string, params any) error {
+		for _, fn := range fns {
+			if err := fn(ctx, method, params); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
 // WithInboundValidation installs a hook that decides the outcome of every
 // request, notification and response the connection receives, after the SDK
 // validates it: err is the SDK's result, nil when the message is valid, and
