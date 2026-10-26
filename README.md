@@ -109,6 +109,16 @@ If you're building an [Agent](https://agentclientprotocol.com/protocol/overview#
   handler always finds the connection set. The method only stores it.
   Assigning the returned connection after the constructor instead races a
   handler that is already running.
+- `acp.PresentNotice(ctx, conn, sessionId, notice)` sends a notice the way
+  the client can show it. A client that advertised `session.notices` gets the
+  notice update. Any other client gets an agent message of the title, and of
+  the description on a line after it, which becomes conversation history.
+  `acp.PresentCompaction` does the same for a compaction's state, sending
+  "Compaction completed" and its error, if any, as the fallback.
+  `acp.PresentCompactionSummary` sends a summary chunk only to a client that
+  advertised `session.compaction`. To send the dedicated update or nothing,
+  use `SessionUpdate` with `acp.UpdateNotice` or `acp.UpdateCompaction`, which
+  fail with a `*CapabilityError` without the capability.
 
 If you're building a [Client](https://agentclientprotocol.com/protocol/overview#client):
 

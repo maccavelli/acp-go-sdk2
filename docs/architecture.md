@@ -35,7 +35,12 @@ and `make api` gates it with the root and `agentproc`.
   [0038-MADR-consumer-helpers-kind-and-agent-refusals.md](decisions/0038-MADR-consumer-helpers-kind-and-agent-refusals.md):
   `AllSessions`, `PickPermissionOption`, `MetaObject`, `DecodeMeta`,
   `ResolveStdioCommands`, `OfferedAuthMethods`, `ConfigOptionByCategory` and
-  the methods beside them), `refusals.go` (`ClientRefusals` and
+  the methods beside them, and those of
+  [0039-MADR-five-adopter-additions-on-schema-1-25-0.md](decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md):
+  `PresentNotice`, `PresentCompaction` and `PresentCompactionSummary`, which
+  send a notice or a compaction's state as its variant to a client that
+  advertised it and as the protocol's agent-message fallback to one that did
+  not), `refusals.go` (`ClientRefusals` and
   `AgentRefusals`, which answer method-not-found for the `Client` and `Agent`
   methods a side may leave unadvertised), and `doc.go`. None of them holds
   protocol state. A helper that takes a side connection is a package-level

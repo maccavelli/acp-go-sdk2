@@ -36,6 +36,9 @@ questions 3 and 5 phase 2, question 4 this PLAN's shape, question 6 phase 6, and
 **Answered 2026-10-25.** The owner took the recommended answer to each of the MADR's questions 1 to 6 and to P1, as the MADR's
 "Decided with the owner, 2026-10-25" records, so this PLAN needs no amendment for them.
 
+**P1 changed, 2026-10-25, after phase 3.** The owner: "we will do 1 release when done". One minor at the end, after phase 7, carries
+all five additions; phase 8 and "Rollout" are amended for it.
+
 **Question 7, answered 2026-10-25.** The MADR's second assessment added question 7, when to build package `unstable`'s
 generation. The owner chose "build the emissions now", not the recommendation; 2f was amended for that answer before it starts,
 as its first text required.
@@ -462,11 +465,17 @@ The owner commits. A push needs the owner's ask in that turn: before it, `git fe
 
 ### 8. Releases, only on the owner's ask in that turn
 
-Under P1's answer, after phase 3 and after phase 7. Each through `RELEASING.md`, "Tag and Publish": the release-notes report and its
-row committed before the tag; `tools/release_body.py`; the annotated tag and its push; the GitHub release; `tools/publication.py`;
-`tools/consumer.py`, extended in that release's commit to use what it adds (`acptest.Connect` for the first; `PresentNotice`,
-`CompactionTimeline` and `ExtensionMux` for the second), with `make check-tools`. When the last release is published, this PLAN and
-its row are `complete`.
+~~Under P1's answer, after phase 3 and after phase 7.~~ *Amended 2026-10-25, P1 changed:* one release, after phase 7. Through
+`RELEASING.md`, "Tag and Publish":
+* the release-notes report and its row, committed before the tag;
+* `tools/release_body.py`;
+* the annotated tag and its push;
+* the GitHub release;
+* `tools/publication.py`;
+* `tools/consumer.py`, extended in the release's commit to use what it adds (`acptest.Connect`, `PresentNotice`,
+  `CompactionTimeline` and `ExtensionMux`), with `make check-tools`.
+
+When the release is published, this PLAN and its row are `complete`.
 
 ## Verification
 
@@ -488,9 +497,10 @@ its row are `complete`.
 
 ## Rollout and Rollback
 
-* **Rollout.** Phases 2 to 6 are separate commits, and phase 2 several. Under P1, the first release carries the boundary and
-  `acptest`; the second the three runtimes. Each consumer adopts a tag under its own issue.
-* **What a consumer meets on the first release.** Every unstable-origin name is deprecated, so a consumer whose staticcheck runs
+* **Rollout.** Phases 2 to 6 are separate commits, and phase 2 several. ~~Under P1, the first release carries the boundary and
+  `acptest`; the second the three runtimes.~~ *Amended 2026-10-25, P1 changed:* one release carries all five additions. Each
+  consumer adopts the tag under its own issue.
+* **What a consumer meets on the release.** Every unstable-origin name is deprecated, so a consumer whose staticcheck runs
   SA1019 sees a report for each use; the API and the wire are unchanged. The release notes say so, and list the names by kind.
 * **Rollback before a tag:** revert the phase's commits.
 * **Rollback after a tag:** a name in `acp`, `agentproc` or `acptest` cannot be removed under `v1`; a defect is fixed forward in a
@@ -1018,3 +1028,54 @@ scratch directory.
   * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `newfiles` covered the nine files of
     `acptest/`;
   * `make disclosure-check`; `tools/idscan.py --paths` over the 13 changed and new files: 0 matches.
+
+### P1 changed, 2026-10-25
+
+After phase 3, the owner: "we will do 1 release when done". The MADR records it under P1, and phase 8 and "Rollout" are amended in
+place. No release was cut after phase 3.
+
+### Phase 4, `PresentNotice` and `PresentCompaction`, 2026-10-25
+
+* **`helpers.go`:** `PresentNotice`, `PresentCompaction` and `PresentCompactionSummary`, package-level, each taking the connection
+  after the context, and `present`, which they share.
+  * Before `initialize` (`Negotiated()` reports none), each sends its variant through `SessionUpdate`, which refuses with
+    `ErrNotInitialized` and writes nothing. A nil connection is `errNilConnection`.
+  * With the capability in the client's `initialize` (`Session.Notices`, `Session.Compaction`), the variant is sent, built from the
+    definition type, `Meta` included.
+  * Without it, the fallback is `UpdateAgentMessageText`:
+    * for a notice, the title, then a newline and the description when it is set and not empty;
+    * for a compaction, "Compaction <status>", then a newline and the error when it is set and not empty;
+    * for a summary chunk, nothing, and nil is returned.
+
+  The parameter is `sessionID`, as revive's `var-naming` requires; the name is not API.
+* **`present_test.go`**, `package acp_test`, over `acptest.Connect` and `MemoryClient`. A final agent message marks the end of what
+  was sent, so a test reads every update before it, in order.
+  * `TestPresentNotice`: with `session.notices`, the variant; without it, the two fallback texts, with and without a description.
+    `UpdateNotice` sent directly without it is a `*CapabilityError`.
+  * `TestPresentCompaction`: with `session.compaction`, the three terminal statuses (`failed` with its error) and the summary
+    chunk as variants; without it, the three as "Compaction completed", "Compaction failed\nout of memory" and "Compaction
+    cancelled", and the summary as nothing.
+  * `TestPresentBeforeInitialize`: each of the three is `ErrNotInitialized` with no frame written (an `acptest.Recorder` on the
+    agent's writer), and a nil connection is an error.
+  * `ExamplePresentNotice`, run: the fallback of a notice with a description.
+* **Docs:** `README.md`'s agent section, and the helpers line of `docs/architecture.md`.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | the row's: `PresentNotice` reads `Session.Compaction` | `present_test.go:85: with session.notices: …`; `:90: session/update: capability session.notices not advertised: variant notice` |
+  | the row's: the fallback drops the description | `present_test.go:99: without session.notices: ["…Quota low…" …]`; `--- FAIL: ExamplePresentNotice` |
+  | the row's: `PresentCompactionSummary` falls back to an agent message | `present_test.go:158: without session.compaction:`, its got ending in the agent message `"summary"` |
+  | the row's: `PresentNotice` sends before `initialize` (through `Connection().SendNotification`) | `present_test.go:195: PresentNotice before initialize: <nil>, want ErrNotInitialized`; `:202: the agent wrote 3 frames before initialize` |
+  | a nil connection accepted | `TestPresentBeforeInitialize` panics, at `present_test.go:185` |
+
+  Two of the first runs failed on the right case, but missed their expected text: the message reads "capability … not
+  advertised", and the log escapes the JSON. The expected text was corrected; the checks were not changed.
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "202 file(s) clean";
+  * `make lint`, after revive's `var-naming` and modernize's `newexpr`;
+  * `go test -count=1 ./...`;
+  * `make markdownlint`; `make check-records`;
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `newfiles` covered `present_test.go`,
+    and `api` reported "0 incompatible, 10 compatible": the three functions, and `acptest`'s seven;
+  * `make disclosure-check`; `tools/idscan.py --paths` over the six changed and new files: 0 matches.

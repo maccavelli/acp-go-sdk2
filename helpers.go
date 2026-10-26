@@ -812,3 +812,93 @@ func StartEditToolCall(id ToolCallId, title string, path string, content json.Ra
 	base = append(base, opts...)
 	return StartToolCall(id, title, base...)
 }
+
+// PresentNotice shows n to the user of session sessionID on whatever the
+// client can display. With session.notices in the client's initialize, it
+// sends the notice update; without it, an agent message of n's title, and of
+// its description on a line after the title when n has one, which is the
+// fallback the protocol gives and becomes conversation history. Before
+// initialize has completed it returns the error SessionUpdate does, wrapping
+// ErrNotInitialized, and sends nothing; a nil a is an error. To send the
+// notice or nothing, call SessionUpdate with UpdateNotice, which fails with
+// a *CapabilityError without the capability
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 2).
+//
+// It is a function, not a method of AgentSideConnection: every method of a
+// side connection that takes a context is a protocol method
+// (0038-PLAN-consumer-helpers-kind-and-agent-refusals.md, step 2's deviation).
+func PresentNotice(ctx context.Context, a *AgentSideConnection, sessionID SessionId, n Notice) error {
+	update := SessionUpdate{Notice: &SessionUpdateNotice{
+		Meta:          n.Meta,
+		Description:   n.Description,
+		SessionUpdate: sessionUpdateNotice,
+		Severity:      n.Severity,
+		Title:         n.Title,
+	}}
+	text := n.Title
+	if n.Description != nil && *n.Description != "" {
+		text += "\n" + *n.Description
+	}
+	return present(ctx, a, sessionID, update, func(s *ClientSessionCapabilities) bool { return s.Notices != nil }, &text)
+}
+
+// PresentCompaction shows u, the state of a context compaction, to the user
+// of session sessionID. With session.compaction in the client's initialize,
+// it sends the compaction_update update; without it, an agent message of
+// "Compaction <status>", and of u's error on a line after it when u has one,
+// the protocol's fallback for compaction. Before initialize has completed,
+// and for a nil a, it fails as PresentNotice does
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 2 and
+// question 1).
+func PresentCompaction(ctx context.Context, a *AgentSideConnection, sessionID SessionId, u CompactionUpdate) error {
+	update := SessionUpdate{CompactionUpdate: &SessionCompactionUpdate{
+		Meta:          u.Meta,
+		CompactionId:  u.CompactionId,
+		Error:         u.Error,
+		SessionUpdate: sessionUpdateCompaction,
+		Status:        u.Status,
+		Summary:       u.Summary,
+	}}
+	text := "Compaction " + string(u.Status)
+	if e, ok := u.Error.Value(); ok && e != "" {
+		text += "\n" + e
+	}
+	return present(ctx, a, sessionID, update, func(s *ClientSessionCapabilities) bool { return s.Compaction != nil }, &text)
+}
+
+// PresentCompactionSummary sends chunk, a part of a compaction's summary, as
+// the compaction_summary_chunk update when the client advertised
+// session.compaction, and sends nothing and returns nil when it did not: a
+// summary has no fallback, since the agent message PresentCompaction sends
+// already stands for the compaction. Before initialize has completed, and for
+// a nil a, it fails as PresentNotice does
+// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 2 and
+// question 1).
+func PresentCompactionSummary(ctx context.Context, a *AgentSideConnection, sessionID SessionId, chunk CompactionSummaryChunk) error {
+	update := SessionUpdate{CompactionSummaryChunk: &SessionUpdateCompactionSummaryChunk{
+		Meta:          chunk.Meta,
+		CompactionId:  chunk.CompactionId,
+		Content:       chunk.Content,
+		SessionUpdate: sessionUpdateCompactionSummary,
+	}}
+	return present(ctx, a, sessionID, update, func(s *ClientSessionCapabilities) bool { return s.Compaction != nil }, nil)
+}
+
+// present sends update when the client's session capabilities allow it, and
+// otherwise the agent message fallback, or nothing for a nil fallback. Before
+// initialize, it sends update, which SessionUpdate refuses with
+// ErrNotInitialized and does not write.
+func present(ctx context.Context, a *AgentSideConnection, sessionID SessionId, update SessionUpdate,
+	allowed func(*ClientSessionCapabilities) bool, fallback *string) error {
+	if a == nil {
+		return errNilConnection
+	}
+	n, ok := a.Negotiated()
+	if !ok || (n.Request.ClientCapabilities.Session != nil && allowed(n.Request.ClientCapabilities.Session)) {
+		return a.SessionUpdate(ctx, SessionNotification{SessionId: sessionID, Update: update})
+	}
+	if fallback == nil {
+		return nil
+	}
+	return a.SessionUpdate(ctx, SessionNotification{SessionId: sessionID, Update: UpdateAgentMessageText(*fallback)})
+}

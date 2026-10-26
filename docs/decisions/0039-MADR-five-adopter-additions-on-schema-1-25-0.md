@@ -499,6 +499,9 @@ The owner chose, out of three options for each:
 The PLAN's own question, P1, the releases: as recommended, two minors, one after the boundary and `acptest`, one after the three
 runtimes. Not chosen: one minor at the end; a minor per phase.
 
+*Amended 2026-10-25, after the PLAN's phase 3:* the owner changed P1's answer to one minor at the end, "we will do 1 release when
+done". The release carries all five additions.
+
 #### Specification notes that are not questions
 
 * Item 1 does not adopt schema `1.26.0`.
