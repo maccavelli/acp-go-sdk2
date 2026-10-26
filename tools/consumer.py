@@ -9,8 +9,12 @@ answer to a file read
 (0036-PLAN-session-update-constructors-kind-and-client-refusals.md, step 6). Its
 agent embeds AgentRefusals and implements only the seven ungated methods, and it
 prints what IsMethodNotFound, PickPermissionOption and ContentBlock.Kind give
-(0038-PLAN-consumer-helpers-kind-and-agent-refusals.md, step 8), so VERSION is
-v1.22.0 or later. Its go.mod must keep the `go` line and gain no toolchain line.
+(0038-PLAN-consumer-helpers-kind-and-agent-refusals.md, step 8). It prints what
+a CompactionTimeline and an ExtensionMux give, and its test, run with `go test`,
+joins a ScriptAgent and a MemoryClient with acptest.Connect and requires
+PresentNotice's fallback to arrive
+(0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, phase 8), so VERSION is
+v1.23.0 or later. Its go.mod must keep the `go` line and gain no toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
 Usage: consumer.py VERSION
@@ -33,6 +37,7 @@ PROGRAM = '''package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os/exec"
@@ -102,11 +107,49 @@ func main() {
 	o, ok := acp.PickPermissionOption(opts, acp.PermissionOptionKindAllowOnce)
 	fmt.Println("pick", o.OptionId, ok)
 	fmt.Println("block", acp.TextBlock("x").Kind())
+	var timeline acp.CompactionTimeline
+	timeline.Apply(acp.UpdateCompaction("c", acp.CompactionStatusInProgress))
+	e, ok := timeline.Apply(acp.UpdateCompactionSummaryText("c", "sum"))
+	fmt.Println("compaction", e.Id, e.Status, len(e.Summary), ok, len(timeline.Open()))
+	var mux acp.ExtensionMux
+	acp.Handle(&mux, "_x/echo", func(_ context.Context, p map[string]string) (string, error) { return p["s"], nil })
+	r, err := mux.HandleExtensionMethod(context.Background(), "_x/echo", json.RawMessage(`{"s":"hi"}`))
+	fmt.Println("mux", r, err, mux.Methods(), len(acp.TraceMeta("00-a-b-01", "", "")))
+}
+'''
+TEST = '''package main
+
+import (
+	"testing"
+	"time"
+
+	acp "MODULE"
+	"MODULE/acptest"
+)
+
+func TestPresentNotice(t *testing.T) {
+	client := &acptest.MemoryClient{}
+	pair := acptest.Connect(t, &acptest.ScriptAgent{}, client)
+	if _, err := pair.Client.Initialize(t.Context(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
+		t.Fatal(err)
+	}
+	if err := acp.PresentNotice(t.Context(), pair.Agent, "s", acp.Notice{Severity: acp.NoticeSeverityInfo, Title: "hello"}); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(5 * time.Second); len(client.Updates()) == 0; time.Sleep(5 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the notice did not arrive")
+		}
+	}
+	if kind := client.Updates()[0].Update.Kind(); kind != "agent_message_chunk" {
+		t.Fatalf("a client without session.notices got %q, want the agent message fallback", kind)
+	}
 }
 '''
 WANT_RUN = ("Close: <nil>\ndropped 0 0\nprotocol version 1\nkind notice\n"
             'refused {"code":-32601,"message":"Method not found","data":{"method":"fs/read_text_file"}}\n'
-            "agent refuses list true\npick once true\nblock text")
+            "agent refuses list true\npick once true\nblock text\n"
+            "compaction c in_progress 1 true 1\nmux hi <nil> [_x/echo] 1")
 
 
 def go_mod_ok(text: str, go: str, mod: str, version: str) -> bool:
@@ -126,6 +169,7 @@ def main(argv: list[str]) -> int:
     d.mkdir(parents=True)
     (d / "go.mod").write_text(f"module example.invalid/consumer\n\ngo {go}\n", encoding="utf-8")
     (d / "main.go").write_text(PROGRAM.replace("MODULE", mod), encoding="utf-8")
+    (d / "consumer_test.go").write_text(TEST.replace("MODULE", mod), encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if k not in ("GONOSUMDB", "GOEXPERIMENT", "GOFLAGS", "GOPRIVATE")}
     env.update(GOTOOLCHAIN=f"go{go}", GOPATH=str(cache / "gopath"), GOMODCACHE=str(cache / "gopath" / "pkg" / "mod"),
                GOCACHE=str(cache / "gocache"), GOPROXY="https://proxy.golang.org,direct", GOFLAGS="-modcacherw")
@@ -133,7 +177,7 @@ def main(argv: list[str]) -> int:
     try:
         for name, cmd, extra in (("version", ["go", "version"], {}), ("get", ["go", "get", f"{mod}@{args.version}"], {}),
                                  ("tidy", ["go", "mod", "tidy"], {}), ("build", ["go", "build", "-o", "consumer", "."], {}),
-                                 ("run", ["./consumer"], {}),
+                                 ("run", ["./consumer"], {}), ("test", ["go", "test", "-count=1", "."], {}),
                                  ("windows", ["go", "build", "-o", "consumer.exe", "."], {"GOOS": "windows", "GOARCH": "amd64"})):
             p = subprocess.run(cmd, cwd=d, env={**env, **extra}, capture_output=True, text=True, timeout=1200)
             outs[name] = (p.stdout + p.stderr).strip()
