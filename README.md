@@ -847,6 +847,45 @@ and `baggage` SHOULD be reserved, for interop with MCP implementations and
 OpenTelemetry tooling. W3C Trace Context defines the first two; W3C Baggage
 defines `baggage`.
 
+### Testing with acptest
+
+Package `acptest` stands up a connection pair for a test, with no pipes to
+wire by hand. `acptest.Connect(t, agent, client)` joins the two sides through
+the public constructors and closes and waits for both when the test ends, so
+the pair holds no goroutine past it. It also provides:
+
+- `ScriptAgent`, which plays a scripted prompt turn, its updates and then its
+  stop reason;
+- `MemoryClient`, which serves files from memory, with 1-based `line` and
+  `limit`, and answers permission requests from a script;
+- `Recorder`, which keeps each frame a side writes or reads, in canonical
+  `encoding/json` form, for goldens;
+- `Abs`, which makes a fixture path such as `/work/a.txt` absolute on the
+  host, as the SDK requires of a path it receives.
+
+```go
+func TestPrompt(t *testing.T) {
+    agent := &acptest.ScriptAgent{Turns: []acptest.Turn{{
+        Updates:    []acp.SessionUpdate{acp.UpdateAgentMessageText("hello")},
+        StopReason: acp.StopReasonEndTurn,
+    }}}
+    client := &acptest.MemoryClient{}
+    pair := acptest.Connect(t, agent, client)
+    ctx := t.Context()
+    if _, err := pair.Client.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
+        t.Fatal(err)
+    }
+    sess, err := pair.Client.NewSession(ctx, acp.NewSessionRequest{Cwd: acptest.Abs("/work")})
+    if err != nil {
+        t.Fatal(err)
+    }
+    if _, err := pair.Client.Prompt(ctx, acp.PromptRequest{SessionId: sess.SessionId, Prompt: []acp.ContentBlock{acp.TextBlock("hi")}}); err != nil {
+        t.Fatal(err)
+    }
+    // client.Updates() holds the agent's one update.
+}
+```
+
 ### Study a Production Implementation
 
 For a complete, production‑ready integration, see the

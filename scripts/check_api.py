@@ -6,8 +6,9 @@ go-llmprovider-sdk and go-selfupdate-lib gate theirs: apidiff, pinned below
 and run with `go run`, writes the API of each package in PACKAGES from the
 base's tree, taken with `git archive`, and from the working tree, then
 compares them. PACKAGES are the module's API: the root package and agentproc
-(docs/decisions/0027-PLAN-agent-process-helper.md, step 2); the examples'
-main packages are not compared. REPORTED are packages whose API is listed and
+(docs/decisions/0027-PLAN-agent-process-helper.md, step 2), and acptest
+(docs/decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md,
+phase 3); the examples' main packages are not compared. REPORTED are packages whose API is listed and
 not gated: their incompatible changes are reported under a heading of their
 own and do not fail the gate
 (docs/decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 1).
@@ -43,7 +44,7 @@ APIDIFF = "golang.org/x/exp/cmd/apidiff@v0.0.0-20261014143641-f0251eb4aa3e"
 RELEASE = re.compile(r"^v1\.(\d+)\.(\d+)$")
 SECTIONS = {"Incompatible changes:": "incompatible", "Compatible changes:": "compatible"}
 # The module's gated packages, by directory: "" is the root.
-PACKAGES = ("", "agentproc")
+PACKAGES = ("", "agentproc", "acptest")
 # The packages whose changes are reported and not gated, by directory: package
 # unstable (docs/decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
 REPORTED: tuple[str, ...] = ("unstable",)

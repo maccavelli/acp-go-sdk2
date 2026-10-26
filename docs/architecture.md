@@ -9,9 +9,22 @@ and [README.md](README.md) points at the ones people ask for most.
 
 This repository is the Go module `github.com/maccavelli/acp-go-sdk2`, package
 `acp`, at the repository root, package `agentproc` in `agentproc/`, which
-starts an agent as a child process and stops it, and package `unstable` in
+starts an agent as a child process and stops it, package `unstable` in
 `unstable/`, the API the unstable schema adds beyond the frozen manifest (both
-below).
+below), and package `acptest` in `acptest/`, which stands up a connection pair
+for a test (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 5):
+
+- `Connect` joins an `acp.Agent` and an `acp.Client` over two `io.Pipe`s
+  through the public constructors, and the test's cleanup closes and waits for
+  both, failing the test on an end that is not a close.
+- `Recorder` keeps each newline-ended frame, re-encoded by `encoding/json` v1,
+  and forwards `Close` to what it wraps.
+- `ScriptAgent` embeds `AgentRefusals` and plays scripted turns.
+- `MemoryClient` embeds `ClientRefusals` and serves files and permission outcomes from memory.
+- `Abs` makes a fixture path absolute on the host.
+
+Its tests run under a goroutine-leak guard of their own, a copy of the root's,
+and `make api` gates it with the root and `agentproc`.
 
 - Hand-written: `connection.go` (JSON-RPC over a reader and a writer, and
   `ChainRewrites`), `errors.go` (the error types and constructors, and
@@ -466,8 +479,8 @@ Checks that guard this:
   ignores a Markdown file that Go code names
   (0037-MADR-align-docs-ci-and-disclosure-gates.md).
 - `make api` and CI's "API compatibility" step run `scripts/check_api.py`:
-  `apidiff`, pinned there, compares the working tree's root package and
-  `agentproc` with the newest `v1` tag's, a package missing from the tag
+  `apidiff`, pinned there, compares the working tree's root package,
+  `agentproc` and `acptest` with the newest `v1` tag's, a package missing from the tag
   against an empty one, taken with `git archive`, or with `BASE`. An incompatible
   change, such as a removed declaration or a method added to an interface,
   fails; the compatible ones are listed. `apidiff` exits 0 either way, so the
@@ -664,6 +677,7 @@ go.mod                    the SDK module
 *.go                      package acp: hand-written and *_gen.go files
 agentproc/                package agentproc: an agent as a child process, started and stopped
 unstable/                 package unstable: doc.go, and unstable_gen.go when the unstable schema adds API
+acptest/                  package acptest: a connection pair, a frame recorder, a scripted agent, a memory client
 schema_gen_test.go        generated list of types, unions, and methods for tests
 cmd/generate/             the generator, its own module
   internal/load/          schema loading

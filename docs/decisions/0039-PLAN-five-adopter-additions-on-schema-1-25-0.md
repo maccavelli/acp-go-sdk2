@@ -949,3 +949,72 @@ scratch directory.
   * `make disclosure-check`; `tools/idscan.py --paths` over the 28 changed and new files: 0 matches.
 
   This closes phase 2.
+
+### Deviation, 2026-10-25: phase 3, the check a cleanup without `Wait` fails
+
+* **Found** by the planted break. Phase 3's table gives "`Connect`'s cleanup does not `Wait`" to the leak guard in `TestMain`.
+  Planted in a scratch copy, the cleanup that closes and does not wait passes every test, guard included: after `Close`, the
+  pair's goroutines end on their own, and the goroutineleak profile counts only a goroutine blocked forever. The guard sees a
+  cleanup that does not close, which was planted as well: "goroutines leaked by the tests".
+* **Resolved** by a test of what `Wait` adds. `TestConnectCleanupWaits` runs a pair in a subtest whose agent's `session/new`
+  handler runs until its context ends, then takes 100 ms to return. After the subtest, the test requires the handler to have
+  returned. The row's check is now that test. No code, scope or decision changes; the table row is amended in the record below.
+
+### Phase 3, package `acptest`, 2026-10-25
+
+* **`acptest/`, new:**
+  * `doc.go`;
+  * `pair.go`: `Connect(tb testing.TB, agent, client, opts...)` and `Pair` with `Agent`, `Client`, `Close` and `Wait`. Its
+    cleanup closes both, and fails the test when either side's `Wait` gives an end that is neither `ErrConnectionClosed` nor
+    `ErrPeerDisconnected`. The parameter is `tb`, as `thelper` requires; the name is not API;
+  * `abs.go`: `Abs`. It returns a host-absolute path cleaned, and any other path under `os.TempDir()`, as `testAbsPath` does;
+  * `recorder.go`: `Recorder` with `Writer(io.Writer) io.WriteCloser`, `Reader(io.Reader) io.ReadCloser` and `Frames()`.
+    * A newline-ended line that is one JSON value is re-encoded by `encoding/json` v1, from `UseNumber`; any other line is kept
+      as it was.
+    * Each wrapper forwards `Close` to what it wraps, so a connection's `Close` still ends the pipe.
+  * `script.go`: `ScriptAgent`, embedding `AgentRefusals`, and `Turn`.
+    * It receives its connection through `AgentConnAware`.
+    * `NewSession` answers `session-1`, `session-2` and so on, and a prompt past the script is `-32603`.
+    * `Authenticate`, `Cancel`, `SetSessionMode` and `SetSessionConfigOption` do nothing.
+  * `client.go`: `MemoryClient`, embedding `ClientRefusals`, with `SetFile`, `File`, `SetPermission` and `Updates`.
+    * `line` is 1-based, and `line` 0 is `-32602`. A line past the last answers no content.
+    * A missing path is `NewResourceNotFound`, `-32002`, and a tool call with no scripted outcome is cancelled.
+* **Tests** in `package acptest_test`:
+  * `leak_test.go`: `TestMain` with a copy of the root's guard, bound 7 s, the root's drain timeout and two seconds;
+  * `TestConnectRoundTrip`, `TestConnectCleanupWaits`, `TestAbs`, `TestRecorder`, `TestScriptAgent` and `TestMemoryClient`;
+  * `ExampleRecorder`, run, whose output is the canonical `initialize` request and response;
+  * `ExampleConnect`, compiled and not run, since an example has no `*testing.T`; `TestConnectRoundTrip` runs the same calls.
+
+  Each passes 30 times under `-race`, without JSON v2 (the `nojsonv2` gate), at `go1.26.10` (the `floor` gate), and on the
+  Linux and Windows hosts.
+* **`scripts/check_api.py`:** `PACKAGES` gains `acptest`, and `test_unstable_is_reported_and_not_gated` asserts it. `make api`:
+  "check_api: against v1.22.0: 0 incompatible, 7 compatible", the seven being `acptest`'s `Abs`, `Connect`, `MemoryClient`,
+  `Pair`, `Recorder`, `ScriptAgent` and `Turn`, all added.
+* **Docs:**
+  * `README.md` gains "Testing with acptest";
+  * `docs/architecture.md`'s opening paragraph describes the package, its API gate bullet names it, and the tree lists it.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | the row's: `Connect`'s cleanup does not `Wait` (by the deviation above) | `acptest_test.go:104: Connect's cleanup returned while a handler of the pair was still running` |
+  | `Connect`'s cleanup does nothing | "goroutines leaked by the tests"; "the pair was not closed" |
+  | the row's: `Recorder` returns the frames it holds | `acptest_test.go:114: frames ["X\"a\":…" "changed" "not json"], want …` |
+  | the row's: `line` read as 0-based | `acptest_test.go:203: first line: "two\nthree", <nil>; want "one\ntwo\nthree"` |
+  | the row's: a missing path answered `-32603` | `acptest_test.go:210: a missing path: {"code":-32603,…}, want resource not found` |
+  | the row's: `Abs` returns its argument unchanged on Windows, run on the Windows host | `acptest_test.go:132: Abs("/work/a.txt") = "\\work\\a.txt", not absolute on this host`; `:138: … want it under C:\Users\<user>\AppData\Local\Temp` |
+  | frames kept as written, not canonical | `--- FAIL: TestRecorder`, `--- FAIL: ExampleRecorder` |
+  | `Initialize` drops the capabilities | `acptest_test.go:152: Initialize: …` |
+  | a recorder's `Close` not forwarded | `TestRecorder` fails: the read after `Close` does not end |
+
+  The first attempt at `TestConnectCleanupWaits` hung. `authenticate` for a method the agent did not offer is refused by the
+  client's gate before it is sent, and a cleanup registered after `Connect`'s ran first. It now uses `session/new`, selects on
+  the handler's start or the call's end, and waits for the call after the subtest, for at most 10 s.
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "193 file(s) clean";
+  * `make lint`: "0 issues." on both OSes, after `thelper`'s two findings;
+  * `make check-tools`: 53 tools tests, 31 scripts tests;
+  * `make markdownlint`; `make check-records`;
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `newfiles` covered the nine files of
+    `acptest/`;
+  * `make disclosure-check`; `tools/idscan.py --paths` over the 13 changed and new files: 0 matches.
