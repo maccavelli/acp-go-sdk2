@@ -834,6 +834,34 @@ func (a MyAgent) HandleExtensionMethod(ctx context.Context, method string, param
 > This SDK suppresses noisy logs for unhandled extension notifications that return
 > “Method not found”.
 
+`acp.ExtensionMux` does that switch for you, with typed params and results.
+`acp.Handle` registers a request method and `acp.Notify` a notification
+method; each decodes the params into its type with `encoding/json`, answering
+`-32602` when they do not fit. A request for a name not registered with
+`Handle` is answered `-32601`, and a notification for a name not registered
+with `Notify` is ignored. A name without the `_` prefix, or one already
+registered, panics, as a conflicting `http.ServeMux` pattern does.
+
+```go
+type MuxAgent struct {
+    acp.ExtensionMux
+    // ...
+}
+
+agent := &MuxAgent{}
+acp.Handle(&agent.ExtensionMux, "_example.com/hello", func(ctx context.Context, p HelloParams) (HelloResult, error) {
+    return HelloResult{Greeting: "hello " + p.Name}, nil
+})
+acp.Notify(&agent.ExtensionMux, "_example.com/progress", func(ctx context.Context, p Progress) error {
+    return nil
+})
+```
+
+The mux tells a notification from a request with `acp.IsNotification(ctx)`,
+which is true in the context the connection makes for a received
+notification; a handler of your own can use it too. `Methods()` lists the
+registered names.
+
 #### Calling extension methods
 
 From either side, use `CallExtension` / `NotifyExtension` on the connection.
@@ -868,6 +896,17 @@ The ACP specification says the root-level `_meta` keys `traceparent`, `tracestat
 and `baggage` SHOULD be reserved, for interop with MCP implementations and
 OpenTelemetry tooling. W3C Trace Context defines the first two; W3C Baggage
 defines `baggage`.
+
+`acp.AdvertiseMeta` returns a copy of a `_meta` object with your features set
+under your namespace, and `acp.TraceMeta` returns the reserved trace keys,
+leaving out the empty ones:
+
+```go
+caps := acp.AgentCapabilities{
+    Meta: acp.AdvertiseMeta(nil, "zed.dev", map[string]any{"workspace": true, "fileNotifications": true}),
+}
+params.Meta = acp.TraceMeta(traceparent, tracestate, "")
+```
 
 ### Testing with acptest
 

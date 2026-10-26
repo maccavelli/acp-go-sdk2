@@ -91,6 +91,13 @@ func sentAsNotification(ctx context.Context) bool {
 	return ok && m.notification
 }
 
+// IsNotification reports whether the connection made ctx, or the context ctx
+// derives from, for a received notification, so a handler that receives both
+// kinds, such as an ExtensionMethodHandler, can tell a notification from a
+// request. It is false for a request's context and for one the connection
+// did not make (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 4).
+func IsNotification(ctx context.Context) bool { return sentAsNotification(ctx) }
+
 func sentAsRequest(ctx context.Context) bool {
 	m, ok := markOf(ctx)
 	return ok && !m.notification

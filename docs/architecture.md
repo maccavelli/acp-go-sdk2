@@ -29,7 +29,9 @@ and `make api` gates it with the root and `agentproc`.
 - Hand-written: `connection.go` (JSON-RPC over a reader and a writer, and
   `ChainRewrites`), `errors.go` (the error types and constructors, and
   `IsMethodNotFound`, `IsAuthRequired`, `IsCancelled` and `Reason`),
-  `extensions.go` (`_`-prefixed methods), `helpers.go` (the constructors of the
+  `extensions.go` (`_`-prefixed methods, and `ExtensionMux`, `TraceMeta` and
+  `AdvertiseMeta`, the typed extension mux and the reserved `_meta` keys of
+  0039, item 4), `helpers.go` (the constructors of the
   three unions the protocol table names, `SessionUpdate.Kind`, `Ptr`, `Roots`,
   and the helpers of
   [0038-MADR-consumer-helpers-kind-and-agent-refusals.md](decisions/0038-MADR-consumer-helpers-kind-and-agent-refusals.md):
@@ -300,7 +302,7 @@ and the gate, then the `WithInboundValidation` hook with the validation
 error and, only if it accepts that, the gate's. The generated dispatch
 first refuses a method received as the other kind, a request sent without an
 id or a notification sent with one, by the mark `connection.go` puts in the
-handler's context; it then decodes the params, absent ones as `{}`
+handler's context, which `IsNotification` exports for `ExtensionMux`; it then decodes the params, absent ones as `{}`
 (`decodeParams`), and calls `checkInbound`; `sendRequest` calls it on a
 decoded result. `extensions.go` calls it on a received `_` message, with its
 params as a `*json.RawMessage` and the side's `inboundGate`, the side's `gate`

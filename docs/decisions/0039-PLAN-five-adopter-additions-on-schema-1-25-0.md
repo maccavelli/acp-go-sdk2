@@ -1,6 +1,6 @@
 ---
 status: in-progress
-date: 2026-10-25
+date: 2026-10-26
 associated-madr: "0039-MADR-five-adopter-additions-on-schema-1-25-0.md"
 ---
 
@@ -1154,4 +1154,71 @@ place. No release was cut after phase 3.
   * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok` on the second run. The first failed
     `linux`, as the deviation above records. `newfiles` covered `compaction.go` and `compaction_test.go`, and `api` reported
     "0 incompatible, 12 compatible";
+  * `make disclosure-check`; `tools/idscan.py --paths` over the changed and new files: 0 matches.
+
+### Phase 6, `ExtensionMux` and the `_meta` helpers, 2026-10-26
+
+* **`extensions.go`**, a runtime file, uses no ACP type:
+  * `ExtensionMux`, with `HandleExtensionMethod` and `Methods`, and the package functions `Handle[P, R]` and `Notify[P]`.
+  * Registration panics, with an `acp: ` message, on a name `validateExtensionMethodName` refuses (empty, or without `_`), on
+    a name already registered by either function, and on a nil function.
+  * Params are decoded by `decodeParams`, absent ones as `{}`, as the generated dispatch decodes them. A decode failure is
+    `NewInvalidParams` with the `error` field. A function's error is returned as it is, so `handleExtension`'s `toReqErr`
+    passes a `*RequestError` through and makes anything else `-32603`.
+  * Routing is by `IsNotification(ctx)`:
+    * a request for an unregistered name, or a `Notify` name, is answered `NewMethodNotFound`;
+    * a notification for an unregistered name, or a `Handle` name, returns nothing and runs nothing;
+    * a call not made by a connection is taken for a request.
+  * The zero mux is ready, and it is safe for concurrent use.
+  * `TraceMeta` returns a non-nil map of the non-empty keys. `AdvertiseMeta` copies `meta` shallowly into a new map, `nil`
+    included, and sets `namespace` only when it is non-empty.
+* **`connection.go`:** `IsNotification(ctx)`, which returns `sentAsNotification(ctx)`.
+* **Tests**, `extensions_mux_test.go`, `package acp_test`, over `acptest.Connect` with a `ScriptAgent` and a `MemoryClient`,
+  logging at Warn and above to a buffer:
+  * `TestExtensionMuxRequests`: a typed answer; a mismatch answered `-32602`; a handler's `-32050` passed through; an
+    unregistered `_` request answered `-32601`; nothing logged.
+  * `TestExtensionMuxNotifications`: notifications to a `Notify` name, an unregistered name and a `Handle` name, then a
+    request.
+    * Only the `Notify` handler runs, and the mux returns nothing for the other two.
+    * A request to the `Notify` name is answered `-32601` and does not run it.
+    * Nothing is logged.
+  * `TestIsNotification`: true in the typed `Cancel`, false in the typed `NewSession` and in the test's own context.
+  * `TestExtensionMuxDirect`, `TestExtensionMuxRegistration` (eight panics; `Methods` sorted before and after them),
+    `TestTraceMeta` and `TestAdvertiseMeta`.
+  * The notification cases check what the mux returned, which a wrapper around it records. The wire and the log cannot show
+    it: `connection.go:1723` drops a `-32601` answer to a `_` notification without logging it. So the row's break, an
+    unregistered notification answered, is caught only by that check.
+  * The first `make pre-add-check` failed `TestExtensionMuxNotifications` on a defect in the test. It kept one answer per
+    method, so the synchronizing request to `_test/echo` could overwrite the notification's answer: requests and notifications
+    run concurrently, and only a response waits for earlier notifications. Answers are now kept per method and kind. The tests
+    then passed 50 times under `-race`.
+* **Docs:**
+  * `README.md`'s "Extension methods": `ExtensionMux`, `Handle`, `Notify`, `IsNotification` and `Methods`; `AdvertiseMeta`
+    and `TraceMeta` in the `_meta` subsection.
+  * Not named by the step: `docs/architecture.md`'s hand-written list gives `extensions.go`'s new names. Its account of the
+    generated dispatch says `IsNotification` exports the mark. Without them, phase 7's reading of it against the code would
+    find it out of date.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | the row's: `IsNotification` always false | `extensions_mux_test.go:223: the ping handler ran with [], want ["note _test/ping"]` |
+  | the same, against the typed handlers | `IsNotification in the typed handlers was map[session/cancel:false session/new:false], want map[session/cancel:true …]` |
+  | the row's: an unregistered notification answered | `:210: the mux answered the notification _test/unknown with (<nil>, {"code":-32601,…}), received true, want nothing` |
+  | the row's: `AdvertiseMeta` writes into its input | `:345: AdvertiseMeta changed its input to map[other:1 zed.dev:map[…]], want map[other:1]` |
+  | the row's: `Handle` accepts a name without `_` | `:311: Handle without _: panicked with "", want an acp: panic containing "must start with '_' …"` |
+  | a `Handle` name run for a notification | `:214: the echo handler ran with ["note _test/echo" "sync"], want only ["sync"]` |
+  | a name registered twice | `:311: Handle of a Handle name: panicked with "", …` |
+  | a decode failure not `NewInvalidParams` | `:172: a params mismatch answered -32603, want -32602` |
+  | a handler's `*RequestError` wrapped | `:176: a handler's *RequestError answered -32603, want -32050` |
+  | `Methods` unsorted, run 20 times | `:293: Methods is ["_b" "_a" "_c"], want ["_a" "_b" "_c"]` |
+  | `TraceMeta` keeps empty values | `:332: TraceMeta("00-trace-span-01", "", "user=a") = map[… tracestate:], want …` |
+
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "205 file(s) clean";
+  * `make markdownlint`; `make check-records`;
+  * `tools/gates.py --all`: 16 gates `ok` on the first run. `windows` and `linux` failed there before running anything,
+    because the host variables were not set in that shell ("ACP_WINDOWS_HOST is not set"). Rerun with them set, both were
+    `ok`, so all 18 passed. `newfiles` covered `extensions_mux_test.go`. `api` reported "against v1.22.0: 0 incompatible, 18
+    compatible", the six new names of this phase among them, and `unstable` "0 incompatible, not gated";
   * `make disclosure-check`; `tools/idscan.py --paths` over the changed and new files: 0 matches.
