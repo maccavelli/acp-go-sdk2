@@ -302,9 +302,9 @@ and the gate, then the `WithInboundValidation` hook with the validation
 error and, only if it accepts that, the gate's. The generated dispatch
 first refuses a method received as the other kind, a request sent without an
 id or a notification sent with one, by the mark `connection.go` puts in the
-handler's context, which `IsNotification` exports for `ExtensionMux`; it then decodes the params, absent ones as `{}`
-(`decodeParams`), and calls `checkInbound`; `sendRequest` calls it on a
-decoded result. `extensions.go` calls it on a received `_` message, with its
+handler's context, which `IsNotification` exports for `ExtensionMux`; it then
+decodes the params, absent ones as `{}` (`decodeParams`), and calls
+`checkInbound`; `sendRequest` calls it on a decoded result. `extensions.go` calls it on a received `_` message, with its
 params as a `*json.RawMessage` and the side's `inboundGate`, the side's `gate`
 when the schema has `initialize`, before the message reaches
 `HandleExtensionMethod`.
@@ -703,6 +703,7 @@ schema/                   schema files, the version stamp, and the frozen unstab
 example/                  agent, client, claude-code, gemini programs
 testdata/json_golden/     JSON goldens
 testdata/fuzz/            FuzzRoundTrip seeds kept from crashers
+testdata/compaction/      CompactionTimeline replay fixtures, one session/update a line
 scripts/go-precheck.sh    the pre-add gate
 scripts/check_records.py  record numbering and link check
 scripts/check_disclosure.py  real user-home paths in tracked text

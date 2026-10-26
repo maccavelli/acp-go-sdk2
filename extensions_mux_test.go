@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	acp "github.com/maccavelli/acp-go-sdk2"
 	"github.com/maccavelli/acp-go-sdk2/acptest"
@@ -133,8 +134,39 @@ func muxPair(t *testing.T) (acptest.Pair, *muxAgent, *muxLog) {
 	return pair, agent, log
 }
 
-// echo calls _test/echo with text and requires its answer. The answer comes
-// after every notification sent before it has been handled.
+// waitFor polls until done is true, failing the test, with what, after 5 s.
+func waitFor(t *testing.T, what func() string, done func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !done() {
+		if time.Now().After(deadline) {
+			t.Fatal(what())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// pingSync sends a _test/ping notification of text and waits until its
+// handler has run. An agent handles notifications one at a time, in the order
+// received, so every notification sent before it has been handled by then. A
+// request is no such mark: it runs beside the notification queue, and only
+// its caller's side waits for notifications before taking the answer.
+func pingSync(t *testing.T, pair acptest.Pair, agent *muxAgent, text string) {
+	t.Helper()
+	if err := pair.Client.NotifyExtension(t.Context(), "_test/ping", echoParams{Text: text}); err != nil {
+		t.Fatal(err)
+	}
+	pinged := func() []string {
+		_, _, p, _ := agent.state()
+		return p
+	}
+	what := func() string {
+		return fmt.Sprintf("the ping handler did not run with %q; it ran with %q", text, pinged())
+	}
+	waitFor(t, what, func() bool { return slices.Contains(pinged(), text) })
+}
+
+// echo calls _test/echo with text and requires its answer.
 func echo(t *testing.T, pair acptest.Pair, text string) {
 	t.Helper()
 	raw, err := pair.Client.CallExtension(t.Context(), "_test/echo", echoParams{Text: text})
@@ -203,15 +235,15 @@ func TestExtensionMuxNotifications(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	echo(t, pair, "sync")
+	pingSync(t, pair, agent, "sync")
 	answers, echoed, _, _ := agent.state()
 	for _, method := range []string{"_test/unknown", "_test/echo"} {
 		if a, ok := answers[muxCall{method, true}]; !ok || a.result != nil || a.err != nil {
 			t.Errorf("the mux answered the notification %s with (%v, %v), received %v, want nothing", method, a.result, a.err, ok)
 		}
 	}
-	if want := []string{"sync"}; !slices.Equal(echoed, want) {
-		t.Errorf("the echo handler ran with %q, want only %q: a notification of a Handle name ran it", echoed, want)
+	if len(echoed) != 0 {
+		t.Errorf("the echo handler ran with %q, want nothing: a notification of a Handle name ran it", echoed)
 	}
 
 	_, err := pair.Client.CallExtension(ctx, "_test/ping", echoParams{Text: "request"})
@@ -219,7 +251,7 @@ func TestExtensionMuxNotifications(t *testing.T) {
 		t.Errorf("a request of a Notify name answered %d, want -32601", code)
 	}
 	_, _, pinged, _ := agent.state()
-	if want := []string{"note _test/ping"}; !slices.Equal(pinged, want) {
+	if want := []string{"note _test/ping", "sync"}; !slices.Equal(pinged, want) {
 		t.Errorf("the ping handler ran with %q, want %q", pinged, want)
 	}
 	if s := log.String(); s != "" {
@@ -240,6 +272,12 @@ func TestIsNotification(t *testing.T) {
 	if _, err := pair.Client.NewSession(ctx, acp.NewSessionRequest{Cwd: acptest.Abs("/work"), McpServers: []acp.McpServer{}}); err != nil {
 		t.Fatal(err)
 	}
+	// The cancel runs on the notification queue, beside the request.
+	waitFor(t, func() string { return "the agent's Cancel did not run" }, func() bool {
+		_, _, _, kinds := agent.state()
+		_, ok := kinds["session/cancel"]
+		return ok
+	})
 	_, _, _, kinds := agent.state()
 	if want := map[string]bool{"session/cancel": true, "session/new": false}; !maps.Equal(kinds, want) {
 		t.Errorf("IsNotification in the typed handlers was %v, want %v", kinds, want)

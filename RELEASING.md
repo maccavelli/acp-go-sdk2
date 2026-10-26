@@ -96,9 +96,12 @@ bump's record, with what `unstable` gained and lost
    ```
 
    `make api` runs `apidiff`, through `scripts/check_api.py`, on the root
-   package and `agentproc` against the newest `v1` tag. It fails on an incompatible change,
+   package, `agentproc` and `acptest` against the newest `v1` tag, a package
+   the tag lacks against an empty one. It fails on an incompatible change,
    and lists the compatible ones: when there are any, the release is a minor
-   (`vX.Y+1.0`), otherwise a patch. It needs the tags.
+   (`vX.Y+1.0`), otherwise a patch. It compares `unstable` too, and lists its
+   incompatible changes under their own heading without failing. It needs the
+   tags.
 
 2. Tag the release commit with an annotated, Go-compatible tag whose message
    is its name:

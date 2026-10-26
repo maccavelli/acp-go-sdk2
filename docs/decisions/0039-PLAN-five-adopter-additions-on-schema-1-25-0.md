@@ -1178,11 +1178,13 @@ place. No release was cut after phase 3.
   * `TestExtensionMuxRequests`: a typed answer; a mismatch answered `-32602`; a handler's `-32050` passed through; an
     unregistered `_` request answered `-32601`; nothing logged.
   * `TestExtensionMuxNotifications`: notifications to a `Notify` name, an unregistered name and a `Handle` name, then a
-    request.
+    request. *Amended 2026-10-26, by the deviation "phase 6's mux test reads the agent too early": that request is not a
+    sync point for the agent's notifications; a final `_test/ping` is now.*
     * Only the `Notify` handler runs, and the mux returns nothing for the other two.
     * A request to the `Notify` name is answered `-32601` and does not run it.
     * Nothing is logged.
   * `TestIsNotification`: true in the typed `Cancel`, false in the typed `NewSession` and in the test's own context.
+    *Amended 2026-10-26, by the same deviation: it now waits for `Cancel` to have run.*
   * `TestExtensionMuxDirect`, `TestExtensionMuxRegistration` (eight panics; `Methods` sorted before and after them),
     `TestTraceMeta` and `TestAdvertiseMeta`.
   * The notification cases check what the mux returned, which a wrapper around it records. The wire and the log cannot show
@@ -1191,7 +1193,8 @@ place. No release was cut after phase 3.
   * The first `make pre-add-check` failed `TestExtensionMuxNotifications` on a defect in the test. It kept one answer per
     method, so the synchronizing request to `_test/echo` could overwrite the notification's answer: requests and notifications
     run concurrently, and only a response waits for earlier notifications. Answers are now kept per method and kind. The tests
-    then passed 50 times under `-race`.
+    then passed 50 times under `-race`. *Amended 2026-10-26:* the same fact means the request was no sync point at all, since
+    only the caller's side waits; phase 7's gates found it (the deviation "phase 6's mux test reads the agent too early").
 * **Docs:**
   * `README.md`'s "Extension methods": `ExtensionMux`, `Handle`, `Notify`, `IsNotification` and `Methods`; `AdvertiseMeta`
     and `TraceMeta` in the `_meta` subsection.
@@ -1222,3 +1225,89 @@ place. No release was cut after phase 3.
     `ok`, so all 18 passed. `newfiles` covered `extensions_mux_test.go`. `api` reported "against v1.22.0: 0 incompatible, 18
     compatible", the six new names of this phase among them, and `unstable` "0 incompatible, not gated";
   * `make disclosure-check`; `tools/idscan.py --paths` over the changed and new files: 0 matches.
+
+### Deviation, 2026-10-26: phase 6's mux test reads the agent too early
+
+* **Found** by phase 7's first `tools/gates.py --all`. The `nojsonv2` gate failed `TestExtensionMuxNotifications`:
+  `extensions_mux_test.go:210: the mux answered the notification _test/unknown with (<nil>, <nil>), received false, want
+  nothing`, and the same for `_test/echo`. The mux had not yet been called for either notification when the test read the
+  agent's state. The other 17 gates were `ok`.
+* **Cause.** The test sent its notifications, then a `_test/echo` request, and read the agent's state once the answer came. That
+  assumed the agent answers a request only after handling the notifications received before it. It does not. The barrier
+  (`connection.go:1435`) is on the side that receives a response: a caller takes an answer only after its own side has handled
+  the notifications received before it. On the agent, a request runs beside the notification queue. `TestIsNotification`
+  had the same flaw: it read the `Cancel` mark once `NewSession` returned.
+* **Measured,** by a scratch script that pauses 50 ms in the test agent's extension handler for a notification other than
+  `_test/ping`, and in its `Cancel`:
+  * the test as `HEAD` has it fails all 6 runs (3 of each test), e.g. `IsNotification in the typed handlers was
+    map[session/new:false]`;
+  * the fixed test passes all 6.
+* **Pre-existing:** yes, since phase 6's commit.
+* **Decided** by the owner, out of three resolutions: "Wait on a final ping". Not chosen: counting the mux's answers on a
+  channel; the same fix as a commit of its own before phase 7.
+* **The fix.**
+  * `pingSync` sends a last `_test/ping` notification and waits, for at most 5 s, until its handler has run. Notifications
+    are handled one at a time, in order, so the earlier ones are done by then.
+  * `TestExtensionMuxNotifications` uses it in place of the `echo` request, and so expects no run of the echo handler and two
+    pings.
+  * `TestIsNotification` waits, for at most 5 s, for `Cancel` to have run.
+  * The `echo` helper's comment no longer claims the order. The phase 6 record is annotated where it relied on it.
+* **After the fix:**
+  * the mux tests passed 50 times under `-race` and 20 times under `GOEXPERIMENT=nojsonv2`;
+  * the 11 phase 6 plants were run again on the final file, and each failed as required. `IsNotification` always false now
+    fails at `extensions_mux_test.go:238: the ping handler did not run with "sync"; it ran with []`, and a `Handle` name run
+    for a notification at `:246: the echo handler ran with ["note _test/echo"], want nothing`. The other rows fail with the
+    texts the phase 6 table gives, at lines moved by the fix.
+* **Scope added to phase 7:** `extensions_mux_test.go`. No decision and no MADR fact changes.
+
+### Phase 7, closing the implementation, 2026-10-26
+
+* **`make api`** against `v1.22.0`, the newest `v1` tag: "0 incompatible, 18 compatible"; "reported packages unstable: 0
+  incompatible, not gated". The 18 are all additions:
+  * `acp`: `AdvertiseMeta`, `CompactionEntity`, `CompactionTimeline`, `ExtensionMux`, `Handle`, `IsNotification`,
+    `Notify`, `PresentCompaction`, `PresentCompactionSummary`, `PresentNotice` and `TraceMeta`;
+  * `acptest`, compared against an empty package since the tag lacks it: `Abs`, `Connect`, `MemoryClient`, `Pair`,
+    `Recorder`, `ScriptAgent` and `Turn`.
+
+  `agentproc` has no change. `unstable` is compared against an empty package too, and, with `doc.go` alone at `1.25.0`, it
+  declares nothing, so nothing is listed for it, as 2f recorded against its text.
+* **The docs, read in full against the code.** Four errors were found and fixed:
+  * `README.md`, the agent section, gave `PresentCompaction`'s fallback as "Compaction completed" only. `helpers.go:862` sends
+    "Compaction " and the status. It now gives "Compaction completed" as an example.
+  * `docs/architecture.md`: the tree lacked `testdata/compaction/`, phase 5's fixtures. One paragraph line from phase 6
+    ran past the file's width, and it is reflowed.
+  * `RELEASING.md`, "Tag and Publish": `make api` was said to compare "the root package and `agentproc`". It now names
+    `acptest`, the empty package a new one is compared against, and `unstable`, whose incompatible changes are reported and
+    do not fail.
+
+  Nothing else read was found out of date. That includes the unstable boundary in both files, "Stability", "Testing with
+  acptest", "Extension methods", and `RELEASING.md`'s paragraph on the manifest, whose claim about `make api`'s report
+  `check_api.py` bears out: a reported package's compatible changes are listed with the others, and its incompatible ones
+  under their own heading.
+* **The MADR's "Confirmation", item by item:**
+
+  | Item | Met by |
+  | :--- | :--- |
+  | `PresentNotice`: the variant with `session.notices`, the agent message without; `UpdateNotice` then a `*CapabilityError` | `TestPresentNotice` (phase 4) |
+  | `PresentCompaction` as question 1 answers it; the terminal statuses sent with the capability | `TestPresentCompaction`: `completed`, `failed` with its error, and `cancelled` as variants; "Compaction <status>" and the error without; the summary chunk as nothing |
+  | `CompactionTimeline.Apply`: first seen, patches, chunks, replace, clear on `[]` and `null`, an unknown status, replay | `TestCompactionTimeline`'s nine sequences, `TestCompactionTimelineOpen`, and `TestCompactionTimelineReplay` over `testdata/compaction/` (phase 5) |
+  | `ExtensionMux`: a typed request, `-32601` for an unknown `_` request, an unknown `_` notification ignored, a name without `_` refused | `TestExtensionMuxRequests`, `TestExtensionMuxNotifications`, `TestExtensionMuxRegistration` (phase 6, and the deviation above) |
+  | `TraceMeta` writes only the reserved keys; `AdvertiseMeta` copies and sets a namespace | `TestTraceMeta`, `TestAdvertiseMeta` |
+  | `acptest.Connect` round-trips `initialize` and a prompt under `GOEXPERIMENT=nojsonv2`; `Abs`; `Recorder` frames as the v1 pin | `TestConnectRoundTrip`, run by the `nojsonv2` gate; `TestAbs`, on the Windows host too; `TestRecorder`, whose canonical frame is `encoding/json` v1's, HTML-escaped and keys sorted as `json_v1_pin_test.go` pins, and `ExampleRecorder` (phase 3) |
+  | `make api`: only compatible changes in `acp`, the deprecated stubs included; `acptest` and `unstable` as new packages | `make api` above. The frozen names are unchanged, so none is listed. `acptest` reads as a new package's additions. `unstable` declares nothing at `1.25.0`, so it is compared and lists nothing. `test_check_api.py`'s package new since the tag shows a new package's names listed |
+  | `go doc` of `acp` still shows the `Unstable*` names; a new unstable definition appears only under `unstable` | `go doc -short .` lists 79 lines that name an `Unstable*` declaration; `accept-unstable-standalone`, whose `acp` listing is `accept-unstable-merge`'s and whose `unstable` listing holds the new definitions (2f) |
+  | a new unstable field, union variant and method follow question 5 | `accept-unstable-field-nowhere`, `accept-unstable-variant-decode` and `accept-unstable-method-types` (2f) |
+  | at `1.25.0`, no declaration changes but the notices; a changed or removed manifest definition leaves `acp`'s listing; a property added to a stable definition leaves its fields | 2c: every `*_gen.go` byte-identical; 2d: each file's token stream, comments skipped, identical; `accept-unstable-manifest-changed`, `-removed` and `accept-unstable-stable-addition`, each with `accept-unstable-merge`'s `want.api` (2c) |
+  | `example/agent` builds and lints with every unstable name deprecated | 2d's `make lint`, "0 issues." on both OSes; the `lint` gate here |
+  | `ExtensionMux` runs a `Notify` handler for a notification and not for a request of the same name | `TestExtensionMuxNotifications` |
+
+  One item is met in substance, not in its letter: `make api` prints no "new package" line. It lists a new package's names as
+  additions, and `unstable` has none at `1.25.0`.
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "206 file(s) clean". gofmt first refused a line of `pingSync`, and `gofmt -w` reformatted it;
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH. The first run is the deviation above: 17 `ok`,
+    `nojsonv2` failed. After the fix, all 18 were `ok`. `api` reported "0 incompatible, 18 compatible" again;
+  * `make markdownlint`; `make check-records`;
+  * `make disclosure-check`; `tools/idscan.py --paths` over the changed files: 0 matches.
+
+  The implementation is complete. This PLAN stays `in-progress` until phase 8's release, which waits for the owner's ask.

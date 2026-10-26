@@ -114,7 +114,8 @@ If you're building an [Agent](https://agentclientprotocol.com/protocol/overview#
   notice update. Any other client gets an agent message of the title, and of
   the description on a line after it, which becomes conversation history.
   `acp.PresentCompaction` does the same for a compaction's state, sending
-  "Compaction completed" and its error, if any, as the fallback.
+  "Compaction" and its status, such as "Compaction completed", and its error,
+  if any, as the fallback.
   `acp.PresentCompactionSummary` sends a summary chunk only to a client that
   advertised `session.compaction`. To send the dedicated update or nothing,
   use `SessionUpdate` with `acp.UpdateNotice` or `acp.UpdateCompaction`, which
