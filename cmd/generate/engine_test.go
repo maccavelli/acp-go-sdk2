@@ -201,7 +201,8 @@ func snapshot(t *testing.T, dir string) map[string][]byte {
 
 // TestRuntimeFilesCoverHandWritten requires every hand-written file of the
 // root to be either a runtime file, compiled with the code of each synthetic
-// case, or helpers.go or refusals.go, which use ACP types and are not.
+// case, or compaction.go, helpers.go or refusals.go, which use ACP types and
+// are not.
 func TestRuntimeFilesCoverHandWritten(t *testing.T) {
 	t.Parallel()
 	bp, err := build.Default.ImportDir(repoRoot, 0)
@@ -214,7 +215,7 @@ func TestRuntimeFilesCoverHandWritten(t *testing.T) {
 			hand = append(hand, name)
 		}
 	}
-	want := slices.Sorted(slices.Values(append(slices.Clone(enginetest.RuntimeFiles), "helpers.go", "refusals.go")))
+	want := slices.Sorted(slices.Values(append(slices.Clone(enginetest.RuntimeFiles), "compaction.go", "helpers.go", "refusals.go")))
 	if !slices.Equal(hand, want) {
 		t.Errorf("hand-written files of the root are %v, want %v: add a new file to enginetest.RuntimeFiles if it uses no ACP type, "+
 			"or exclude it here as helpers.go is", hand, want)

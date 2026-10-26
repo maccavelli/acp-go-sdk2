@@ -40,10 +40,13 @@ and `make api` gates it with the root and `agentproc`.
   `PresentNotice`, `PresentCompaction` and `PresentCompactionSummary`, which
   send a notice or a compaction's state as its variant to a client that
   advertised it and as the protocol's agent-message fallback to one that did
-  not), `refusals.go` (`ClientRefusals` and
+  not), `compaction.go` (`CompactionTimeline` and `CompactionEntity`, which
+  apply a session's compaction updates by the protocol's rules, live or
+  replayed, for a client; 0039, item 3), `refusals.go` (`ClientRefusals` and
   `AgentRefusals`, which answer method-not-found for the `Client` and `Agent`
   methods a side may leave unadvertised), and `doc.go`. None of them holds
-  protocol state. A helper that takes a side connection is a package-level
+  protocol state, but for the compactions a `CompactionTimeline` its caller
+  feeds; none holds a connection's. A helper that takes a side connection is a package-level
   function: every method of a side connection that takes a context is a
   protocol method, as `TestSideConnectionMethodsAreProtocolMethods` requires.
 - Generated from `schema/`: `constants_gen.go`, `types_gen.go`, `agent_gen.go`

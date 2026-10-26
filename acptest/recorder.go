@@ -19,7 +19,9 @@ type Recorder struct {
 	frames []json.RawMessage
 }
 
-// Writer returns a writer that writes to w and records what it writes.
+// Writer returns a writer that records what it is given and then writes it
+// to w, so frames are recorded in the order they are sent, a frame before
+// the peer's answer to it; a frame whose write fails is recorded too.
 // Closing it closes w when w is an io.Closer, so a connection's Close still
 // ends what it writes to.
 func (r *Recorder) Writer(w io.Writer) io.WriteCloser { return &recordingWriter{r: r, w: w} }
@@ -78,10 +80,13 @@ type recordingWriter struct {
 	partial []byte
 }
 
+// Write records b, then writes it. Recording first keeps the frames in the
+// order they were sent: a write to a pipe returns once the peer has read
+// it, and by then the peer may have answered and its writer recorded the
+// answer. A frame is so recorded even if the write then fails.
 func (w *recordingWriter) Write(b []byte) (int, error) {
-	n, err := w.w.Write(b)
-	w.r.add(&w.partial, b[:n])
-	return n, err
+	w.r.add(&w.partial, b)
+	return w.w.Write(b)
 }
 
 func (w *recordingWriter) Close() error {

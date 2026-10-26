@@ -1079,3 +1079,79 @@ place. No release was cut after phase 3.
   * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `newfiles` covered `present_test.go`,
     and `api` reported "0 incompatible, 10 compatible": the three functions, and `acptest`'s seven;
   * `make disclosure-check`; `tools/idscan.py --paths` over the six changed and new files: 0 matches.
+
+### Deviation, 2026-10-26: phase 3's `Recorder` reorders frames
+
+* **Found** by phase 5's first `tools/gates.py --all`: the `linux` gate failed, `--- FAIL: ExampleRecorder`, in `acptest`,
+  which phase 3 committed and phase 5 does not touch.
+* **Cause.** A recording writer recorded a frame only after the wrapped `Write` returned. A pipe's `Write` returns once the peer
+  has read the frame, and by then the peer may have answered and its own writer recorded the answer, so the answer can be
+  recorded first.
+* **Measured** before the fix, each in the session's scratch directory:
+  * 3,000 runs of the example passed locally, and 3,000 on the Linux host: the window is narrow.
+  * In a scratch copy with a 50 ms pause between `Write` returning and the frame being recorded, the example fails every time,
+    with the `result` frame before the `initialize` frame.
+  * The same copy with the write recorded first, the pause kept after the write, passes.
+* **Pre-existing:** yes, since phase 3's commit.
+* **Decided** by the owner, from three resolutions: "Record before writing". Not chosen: holding the recorder's lock across the
+  wrapped `Write`; the same fix staged alone before phase 5. The fix is in phase 5's change set.
+* **The fix.** `recordingWriter.Write` records the bytes it is given, then writes them. Its doc and `Writer`'s say a frame whose
+  write fails is recorded too. Readers are unchanged: they record what a read returned, which the peer wrote first.
+  `TestRecorderOrdersFramesAsSent`, new, has the wrapped writer answer through a second recording writer before it returns, and
+  requires the ask before the answer.
+* **Scope added to phase 5:** `acptest/recorder.go` and `acptest/acptest_test.go`.
+
+### Phase 5, `CompactionTimeline`, 2026-10-26
+
+* **`compaction.go`**, new, in the root: `CompactionEntity` and `CompactionTimeline`, with `Apply`, `Get` and `Open`.
+  * `CompactionEntity` has the fields the MADR names. The MADR does not define `Seen`; it is defined as true once a
+    `compaction_update` for the id has arrived, and false for an entity known only from summary chunks.
+  * `Id` keeps the MADR's spelling, which the generated types use (`CompactionUpdate.CompactionId`), under a
+    `//nolint:revive // var-naming` that says so.
+  * `Apply`'s rules:
+    * a first-seen id starts `in_progress`, with nothing else set;
+    * a `compaction_update` sets the status, an unknown one kept as it arrived;
+    * each patch, absent, `null` or a value, keeps, clears or replaces its field, and an empty `summary` clears it;
+    * a `compaction_summary_chunk` appends, first-seen-initializing an unknown id;
+    * any other update gives the zero entity and `false`.
+  * `Open` lists the ids neither `completed`, `failed` nor `cancelled`, in first-seen order. Entities returned are copies.
+  * The zero timeline is ready and safe for concurrent use.
+* **`cmd/generate/engine_test.go`:** `TestRuntimeFilesCoverHandWritten` names `compaction.go`. Before the edit, the test failed
+  on the tree as phase 5 left it: "hand-written files of the root are [compaction.go connection.go …], want [connection.go …]".
+* **Tests**, `compaction_test.go`, `package acp_test`:
+  * `TestCompactionTimeline`, nine sequences: first seen; each patch set, omitted and `null`; an empty summary; chunks in order;
+    a concrete summary replacing chunks; a chunk first seen; an unknown status;
+  * `TestCompactionTimelineOpen`: `Open`'s ids and order, a non-compaction update, an id never seen;
+  * `TestCompactionTimelineCopies`;
+  * `TestCompactionTimelineReplay`, over `testdata/compaction/lifecycle.jsonl` and `clear-and-unknown.jsonl`, one
+    `session/update` params object a line, each applied live and again into a fresh timeline. The entities are equal, and
+    equal to the expected JSON.
+* **Docs:**
+  * `README.md`'s client section;
+  * `docs/architecture.md`'s hand-written list names `compaction.go`. Its "None of them holds protocol state" now excepts the
+    compactions a timeline is fed, and says none holds a connection's state.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | the row's: `summary: null` treated as absent | `--- FAIL: TestCompactionTimeline/each_patch_null_clears_it`: `summary ["s"], want []`; `…Replay/clear-and-unknown.jsonl` |
+  | the row's: a concrete `summary` appended | `--- FAIL: …/a_concrete_summary_replaces_the_chunks`: `summary ["one" "two" "final"], want ["final"]` |
+  | the row's: an unknown status replaced by `in_progress` | `--- FAIL: …/an_unknown_status_is_kept`: `entity {… Status:in_progress …}, want {… Status:summarizing …}` |
+  | the row's: `Open` omits unknown statuses | `compaction_test.go:141: Open = ["z" "chunk"], want ["z" "odd" "chunk"]` |
+  | the row's: `compaction.go` not named in `TestRuntimeFilesCoverHandWritten` | `engine_test.go:220: hand-written files of the root are [compaction.go …]` |
+  | entities shared with the timeline | `compaction_test.go:164: the timeline shares what Apply returned` |
+  | a chunk first seen dropped | `--- FAIL: …/a_chunk_first_seen_starts_the_compaction`; `Open = ["z" "odd"]` |
+  | an empty summary kept | `--- FAIL: TestCompactionTimelineReplay/clear-and-unknown.jsonl` |
+  | the deviation's: a frame recorded after its write | `acptest_test.go:211: frames ["{\"answer\":1}" "{\"ask\":1}"], want ["{\"ask\":1}" "{\"answer\":1}"]` |
+
+  Phase 3's `frames-aliased`, `frames-not-canonical` and `recorder-close-dropped` were planted again against the changed
+  `Recorder`, and each failed as before.
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "203 file(s) clean";
+  * `make lint`;
+  * `go test ./...`; `(cd cmd/generate && go test ./...)`; the recorder's tests 500 times under `-race`;
+  * `make markdownlint`; `make check-records`;
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok` on the second run. The first failed
+    `linux`, as the deviation above records. `newfiles` covered `compaction.go` and `compaction_test.go`, and `api` reported
+    "0 incompatible, 12 compatible";
+  * `make disclosure-check`; `tools/idscan.py --paths` over the changed and new files: 0 matches.

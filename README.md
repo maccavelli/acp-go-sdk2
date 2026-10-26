@@ -139,6 +139,18 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
   functions, since a side connection's methods are its protocol methods.
 - `acp.PickPermissionOption` chooses a permission option by its kind, never by
   its name, so an option named "Don't allow" is never taken as an allow.
+- A client that advertises `session.compaction` keeps one
+  `acp.CompactionTimeline` per session and feeds it every `SessionUpdate`,
+  live or replayed by `session/load`. `Apply` handles the protocol's update
+  rules:
+  - a compaction first seen starts `in_progress`;
+  - an absent patch keeps a field, a `null` one clears it, and a value
+    replaces it;
+  - chunks append, a concrete `summary` replaces them, and `[]` clears it;
+  - an unknown status is kept as it arrived.
+
+  `Get` returns a compaction. `Open` lists those not known to have ended, so
+  they can be shown as unfinished when a turn ends without them.
 
 Helper constructors are provided to reduce boilerplate when working with union types:
 

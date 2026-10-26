@@ -1,0 +1,7 @@
+{"sessionId":"s","update":{"sessionUpdate":"compaction_update","compactionId":"c1","status":"in_progress"}}
+{"sessionId":"s","update":{"sessionUpdate":"compaction_summary_chunk","compactionId":"c1","content":{"type":"text","text":"Part one. "}}}
+{"sessionId":"s","update":{"sessionUpdate":"compaction_summary_chunk","compactionId":"c1","content":{"type":"text","text":"Part two."}}}
+{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"unrelated"}}}
+{"sessionId":"s","update":{"sessionUpdate":"compaction_update","compactionId":"c2","status":"in_progress","_meta":{"k":"v"}}}
+{"sessionId":"s","update":{"sessionUpdate":"compaction_update","compactionId":"c1","status":"completed","summary":[{"type":"text","text":"Final summary."}]}}
+{"sessionId":"s","update":{"sessionUpdate":"compaction_update","compactionId":"c2","status":"failed","error":"out of context"}}

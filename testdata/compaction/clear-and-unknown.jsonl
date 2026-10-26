@@ -1,0 +1,5 @@
+{"sessionId":"s","update":{"sessionUpdate":"compaction_update","compactionId":"c3","status":"summarizing","summary":[{"type":"text","text":"draft"}],"error":"transient","_meta":{"a":1}}}
+{"sessionId":"s","update":{"sessionUpdate":"compaction_update","compactionId":"c3","status":"summarizing","error":null,"_meta":null}}
+{"sessionId":"s","update":{"sessionUpdate":"compaction_update","compactionId":"c3","status":"summarizing","summary":[]}}
+{"sessionId":"s","update":{"sessionUpdate":"compaction_summary_chunk","compactionId":"c4","content":{"type":"text","text":"orphan"}}}
+{"sessionId":"s","update":{"sessionUpdate":"compaction_update","compactionId":"c4","status":"in_progress","summary":null}}

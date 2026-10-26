@@ -186,6 +186,31 @@ func TestRecorder(t *testing.T) {
 	}
 }
 
+// writerFunc is an io.Writer from a function.
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(b []byte) (int, error) { return f(b) }
+
+// TestRecorderOrdersFramesAsSent requires a frame to be recorded before an
+// answer the peer writes while the frame's write is still returning, as a
+// pipe's write returns only once the peer has read it
+// (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, phase 3's amendment).
+func TestRecorderOrdersFramesAsSent(t *testing.T) {
+	t.Parallel()
+	var rec acptest.Recorder
+	peer := rec.Writer(io.Discard)
+	side := rec.Writer(writerFunc(func(b []byte) (int, error) {
+		if _, err := peer.Write([]byte(`{"answer":1}` + "\n")); err != nil {
+			return 0, err
+		}
+		return len(b), nil
+	}))
+	if _, err := side.Write([]byte(`{"ask":1}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	requireFrames(t, rec.Frames(), []string{`{"ask":1}`, `{"answer":1}`})
+}
+
 func requireFrames(t *testing.T, got []json.RawMessage, want []string) {
 	t.Helper()
 	var s []string
