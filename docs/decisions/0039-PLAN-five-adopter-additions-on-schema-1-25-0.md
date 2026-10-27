@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-26
 associated-madr: "0039-MADR-five-adopter-additions-on-schema-1-25-0.md"
 ---
@@ -1332,6 +1332,20 @@ The owner asked for phase 8 ("proceed"). CI on `ac1e526`, the commit whose API t
 * **Checks**, each exit 0: `make check-tools`; `make api` on `ac1e526`'s Go tree, "0 incompatible, 18 compatible";
   `make markdownlint`; `make check-records`; `make disclosure-check`; `tools/idscan.py --paths` over the changed files.
 
-Next, after the owner commits and pushes this: `make api` on the release commit; the annotated tag `v1.23.0` and its push,
-on the owner's ask in that turn; the GitHub release from `tools/release_body.py`; `tools/publication.py`; `tools/consumer.py
-v1.23.0`.
+The owner committed and pushed it as `9e0baac`. Then:
+
+* **CI on `9e0baac`:** run `40422856860`, six jobs, and the Docs workflow's run `40422856728`, each "completed success".
+* **`make api` on `9e0baac`:** exit 0, "against v1.22.0: 0 incompatible, 18 compatible".
+* **The body:** `tools/release_body.py v1.23.0 9e0baac` extracted the report's "Release text", 97 lines with one link, which it
+  points at the tag; its identifier scan found 0 matches. The body was read in full.
+* **The tag.** The owner created and pushed `v1.23.0`. It is annotated, its message is `v1.23.0`, and it names `9e0baac` on
+  `origin`. CI on the tag, run `40424083198`, six jobs: "completed success".
+* **The release.** The agent's `gh release create v1.23.0 --verify-tag --title v1.23.0 --notes-file <the body>` was refused by
+  the session's permission check, as an action that publishes. The owner ran the same command.
+* **`tools/publication.py v1.23.0 9e0baac <the body>`:** "10 of 10 checks hold". The release is published, marked latest, and
+  its body is the extracted text. The proxy serves the tag at `9e0baac`, `go list -m @latest` gives `v1.23.0`, and `go mod
+  download` passes with the checksum database on.
+* **`tools/consumer.py v1.23.0`:** "as required". At `go1.26.10`, from the proxy, the program's output was as required, its
+  `go test` passed, and the Windows build passed. Its `go.mod` kept `go 1.26.10` and gained no toolchain line.
+
+The release is published, so this PLAN and its row are `complete`.

@@ -112,7 +112,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0038 | PLAN | [Implement 0038: the consumers' protocol helpers, Kind() on four more unions, and AgentRefusals](decisions/0038-PLAN-consumer-helpers-kind-and-agent-refusals.md) | complete |
 | 0038 | REPORT | [Release notes for v1.22.0, against v1.21.0](reports/0038-REPORT-release-notes-v1-22-0.md) | observed |
 | 0039 | MADR | [Add five adopter capabilities on schema 1.25.0: unstable boundary, presentation, compaction timeline, extension mux, acptest](decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md); assessed 2026-10-25, questions 5 and 6 added; second assessment of item 1 the same day, question 7 added and answered; question 8, from the PLAN's 2c, and questions 9 and 10, from its 2f, added and answered | accepted |
-| 0039 | PLAN | [Implement 0039: an unstable boundary, presentation and compaction runtimes, an extension mux, and acptest](decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md) | in-progress |
+| 0039 | PLAN | [Implement 0039: an unstable boundary, presentation and compaction runtimes, an extension mux, and acptest](decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md) | complete |
 | 0039 | REPORT | [Release notes for v1.23.0, against v1.22.0](reports/0039-REPORT-release-notes-v1-23-0.md) | observed |
 
 ## I want to…
