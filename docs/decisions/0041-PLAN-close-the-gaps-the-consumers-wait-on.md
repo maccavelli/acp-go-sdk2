@@ -187,7 +187,8 @@ Planted breaks: a goroutine per call; the cause lost.
   * `WaitForTerminalExit` under a context that ends;
   * an unknown id;
   * `Close` ending every terminal, under the leak guard;
-  * a client embedding `Terminals` and `ClientRefusals`, served over `acptest.Connect`.
+  * a client embedding `Terminals` and ~~`ClientRefusals`~~ `clienthost.Refusals`, served over `acptest.Connect`. (Deviation,
+    2026-10-27: the two at one depth do not compile. See the execution record.)
 
 Planted breaks: truncation at a byte; the tree not ended; an unknown id `-32603`.
 
@@ -662,5 +663,89 @@ API.
 * `make lint` failed once on `AttachDelay`'s doc form, which was corrected.
 * `tools/gates.py --all`, with both hosts set: all 18 passed. The Windows host ran `agentproc` in 18.4 s, the Linux host in
   5.0 s.
+* `make check-records`, `make markdownlint`, `make disclosure-check`, `make check-tools`: exit 0.
+* `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 8, `clienthost.Terminals` (2026-10-27)
+
+**Deviation, 2026-10-27, `Refusals`.**
+* **Found:** the step's last test, "a client embedding `Terminals` and `ClientRefusals`", cannot compile. Both declare the five
+  terminal methods, and Go promotes neither of two methods of one name at one depth. A scratch program printed: `cannot use
+  sameDepth{} … does not implement terminaler (ambiguous selector sameDepth.CreateTerminal)`.
+* **Offered:** a `clienthost.Refusals` that puts `acp.ClientRefusals` one level deeper; a documented pattern with no new name; or
+  forwarding methods instead of embedding.
+* **Decided:** the owner chose `clienthost.Refusals`. The MADR carries "Amended by the PLAN's phase 8, 2026-10-27".
+
+**Names and behaviours not in the step,** recorded in the same MADR amendment for the owner's review:
+* `DirectCommand`, the default `Command`.
+* `MaxOutputBytes` and `DefaultMaxOutputBytes`, 16 MiB, bounding an agent-chosen limit.
+* While a command runs, an unfinished character is held back.
+* A command's exit ends what is left of its tree, as `agentproc`'s does.
+* A terminal takes no death signal.
+
+**What changed:**
+* **`clienthost/`, new:**
+  * `doc.go`, the package doc, with the embedding of `Terminals` beside `Refusals`.
+  * `refusals.go`, `Refusals`.
+  * `output.go`, the output buffer:
+    * it cuts back to its limit once it has grown 64 KiB past it;
+    * `cut` moves a front cut past up to three continuation bytes;
+    * `complete` drops a trailing character not yet finished.
+  * `terminals.go`:
+    * `Terminals`, its five methods and `Close`, and `DirectCommand`;
+    * a `terminal` per command: its output to an `os.Pipe` the terminal reads, so `Cmd.Wait` returns at the exit;
+    * `wait` ends the tree under the lock that marks the exit, then waits up to 1 s for the rest of the output;
+    * `kill` sends nothing once the exit is marked;
+    * `release` kills, waits for the exit, and closes the pipe;
+    * ids are `terminal-1`, `terminal-2`, and so on.
+  * `exit_unix.go` names a signal through `golang.org/x/sys/unix`'s `SignalName`, for example `SIGKILL`, a package of the module
+    `go.mod` already requires. `exit_other.go` gives the exit code alone.
+* **The tests:**
+  * `main_test.go`: the test binary as the command, by `CLIENTHOST_TEST_CHILD`. Its modes are `write`, `repeat`, `sleep`,
+    `parent` and `beat`, with the leak guard.
+  * `output_test.go`: `TestOutputTruncatesAtCharacter` covers characters of 1 to 4 bytes, each limit offset into one, read and
+    compacted. `TestOutputHoldsBackUnfinishedCharacter`.
+  * `terminals_test.go`, ten tests:
+    * `TestTerminalOutputAndExit`;
+    * `TestTerminalOutputByteLimit`: 2-, 3- and 4-byte characters written in 7-byte writes, and `MaxOutputBytes`;
+    * `TestTerminalKill`: `SIGKILL` on Unix, status 1 on Windows;
+    * `TestTerminalEndsTree`, by kill and by release;
+    * `TestTerminalWaitContext`;
+    * `TestTerminalUnknownID`: four methods, a never-made id and a released one;
+    * `TestTerminalsClose`;
+    * `TestTerminalCommandRefused`;
+    * `TestDirectCommand`, not parallel, since it sets the environment;
+    * `TestTerminalsOverConnection`: a `hostClient` embedding `Terminals` and `Refusals`, over `acptest.Connect`.
+  * `example_test.go`, `ExampleTerminals`: a `Command` that refuses a cwd outside the project.
+* **`scripts/check_api.py`'s `PACKAGES` gains `clienthost`,** and `scripts/test_check_api.py` asserts it.
+* **`tools/platforms.py`'s `PKGS` gains `./clienthost/...`,** as phase 7's entry said. Its line in `tools/README.md` and
+  `docs/architecture.md` follows.
+* **The API:** `make api` against `v1.24.0` reports 9 compatible, 0 incompatible. The new ones are `clienthost`'s
+  `DefaultMaxOutputBytes`, `DirectCommand`, `Refusals` and `Terminals`.
+* **Left to phase 14:** `README.md`, and `docs/architecture.md`'s package list.
+
+Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 9 of 9 failed as required.
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| truncation at a byte | `TestOutputTruncatesAtCharacter` | `output_test.go:32: "é", limit 100, compacted false: the output is not valid UTF-8: "\xa9ééé\xc3"…` |
+| an unfinished character shown while running | `TestOutputHoldsBackUnfinishedCharacter` | `output_test.go:57: "é" split at 1, running: "ab\xc3", false; want "ab", false` |
+| the tree not ended by kill, nor at the exit | `TestTerminalEndsTree` | `terminals_test.go:215: the command's grandchild still runs after kill` |
+| the tree not ended by release, nor at the exit | `TestTerminalEndsTree` | `terminals_test.go:215: the command's grandchild still runs after release` |
+| the same, on the Windows host | `TestTerminalEndsTree` | `terminals_test.go:215: the command's grandchild still runs after release` |
+| an unknown id answered with a plain error, `-32603` on the wire | `TestTerminalUnknownID` | `terminals_test.go:272: terminal/wait_for_exit of terminal-none = unknown terminal "terminal-none", want resource-not-found (-32002)` |
+| the signal unnamed | `TestTerminalKill` | `terminals_test.go:171: WaitForTerminalExit after kill = {… ExitCode:<nil> Signal:0x…}, want signal SIGKILL` |
+| `Close` not waiting | `TestTerminalsClose` | `terminals_test.go:298: terminal 0's command runs after Close` |
+| `Refusals` at the same depth, an alias of `acp.ClientRefusals` | `TestTerminalsOverConnection` | `terminals_test.go:376:53: cannot use client (variable of type *hostClient) as acp.Client value …` |
+
+**What the first plants showed:**
+* **Kill alone is not the only path to the tree's end.** The first kill plant, which only made kill skip the tree, passed. The
+  killed command's exit ends what is left of its tree anyway. The plant that removes both, kill's tree and the exit's, fails.
+* **A plant was wrong as written:** the "`Close` not waiting" plant left a variable unused, and was rewritten.
+
+**Gates:**
+* `tools/gates.py --all`, with both hosts set: the first run failed `precheck`, `newfiles`, `lint` and `platforms` on one finding,
+  an unneeded `//nolint:gosec` in `terminals_test.go`, since the linter does not run gosec on tests. After its removal, all 18
+  passed. The Windows host ran `clienthost` in 1.9 s, the Linux host in 1.5 s.
 * `make check-records`, `make markdownlint`, `make disclosure-check`, `make check-tools`: exit 0.
 * `tools/idscan.py --paths` over the staged files: nothing found.

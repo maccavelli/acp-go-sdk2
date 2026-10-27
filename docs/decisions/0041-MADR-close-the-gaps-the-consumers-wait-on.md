@@ -340,6 +340,26 @@ The owner decided two points that item 6 did not foresee.
   `Wait` could wait for every goroutine. `WaitContext`'s goroutine runs `Wait`, so it cannot be one of them. The test now allows
   exactly one `go` statement, in `connection.go`'s `waitDone`, and still fails on any other, or on none there.
 
+#### Amended by the PLAN's phase 8, 2026-10-27
+
+* **`clienthost.Refusals`, decided by the owner.** Item 2 and question 1 said a client embeds `Terminals` "with `ClientRefusals`
+  for the rest". Both declare the five terminal methods, and Go promotes neither of two methods of one name at one depth: a
+  scratch program fails with "ambiguous selector". `Files`, in item 3, has the same clash. `clienthost.Refusals` is
+  `struct{ acp.ClientRefusals }`, whose methods are a level deeper, so `struct{ clienthost.Terminals; clienthost.Refusals }`
+  serves Terminals' methods and refuses the rest.
+* **Three names the phase added, which item 2 did not list:**
+  * `DirectCommand`, the `Command` a nil field means. It runs the request's command without a shell, with this process's
+    environment and the request's env after it, and refuses a relative cwd.
+  * `MaxOutputBytes`, which bounds what a terminal keeps whatever the agent's `outputByteLimit`.
+  * `DefaultMaxOutputBytes`, 16 MiB, its zero value's meaning, the clamp magic-cli-remote applies.
+* **Two behaviours item 2 did not state:**
+  * While a command runs, `terminal/output` holds back a character the command has not finished writing, so the output is
+    valid UTF-8 at both ends.
+  * When a command exits of itself, what is left of its process group or job is ended then, as `agentproc` ends an agent's. That
+    also keeps kill and release from signalling a group whose ID could have been reused.
+* **No death signal on a terminal.** A `Pdeathsig` follows the thread that started the process (0029), and a handler's thread is
+  not kept for the terminal's life. `Close` ends every terminal, and on Windows a terminal's job ends with this process.
+
 ### Consequences
 
 * Good, because the defect that loses an agent's last output before it exits is fixed, with the failing test as its regression

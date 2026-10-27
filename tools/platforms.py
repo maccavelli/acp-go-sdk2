@@ -1,5 +1,5 @@
-"""The per-platform checks of agentproc and the internal packages it shares
-its process code through
+"""The per-platform checks of agentproc, clienthost, and the internal
+packages they share their process code through
 (docs/decisions/0031-MADR-verification-tools-in-repository.md;
 docs/decisions/0041-PLAN-close-the-gaps-the-consumers-wait-on.md, phase 7):
 golangci-lint for GOOS=linux and GOOS=freebsd, which `make lint` builds for
@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _common  # noqa: E402
 
 # The packages with per-platform files.
-PKGS = ["./agentproc/...", "./internal/..."]
+PKGS = ["./agentproc/...", "./clienthost/...", "./internal/..."]
 
 VET = [("darwin", "arm64"), ("linux", "amd64"), ("linux", "arm64"), ("freebsd", "amd64"), ("openbsd", "amd64"), ("netbsd", "amd64"),
        ("illumos", "amd64"), ("windows", "amd64"), ("js", "wasm"), ("wasip1", "wasm"), ("plan9", "amd64")]

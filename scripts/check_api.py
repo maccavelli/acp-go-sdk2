@@ -8,7 +8,9 @@ base's tree, taken with `git archive`, and from the working tree, then
 compares them. PACKAGES are the module's API: the root package and agentproc
 (docs/decisions/0027-PLAN-agent-process-helper.md, step 2), and acptest
 (docs/decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md,
-phase 3); the examples' main packages are not compared. REPORTED are packages whose API is listed and
+phase 3), and clienthost
+(docs/decisions/0041-PLAN-close-the-gaps-the-consumers-wait-on.md, phase 8);
+the examples' main packages are not compared. REPORTED are packages whose API is listed and
 not gated: their incompatible changes are reported under a heading of their
 own and do not fail the gate
 (docs/decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 1).
@@ -44,7 +46,7 @@ APIDIFF = "golang.org/x/exp/cmd/apidiff@v0.0.0-20261014143641-f0251eb4aa3e"
 RELEASE = re.compile(r"^v1\.(\d+)\.(\d+)$")
 SECTIONS = {"Incompatible changes:": "incompatible", "Compatible changes:": "compatible"}
 # The module's gated packages, by directory: "" is the root.
-PACKAGES = ("", "agentproc", "acptest")
+PACKAGES = ("", "agentproc", "acptest", "clienthost")
 # The packages whose changes are reported and not gated, by directory: package
 # unstable (docs/decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
 REPORTED: tuple[str, ...] = ("unstable",)

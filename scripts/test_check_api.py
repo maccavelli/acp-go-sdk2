@@ -118,6 +118,7 @@ class PackagesTest(unittest.TestCase):
         self.assertIn("", check_api.PACKAGES)
         self.assertIn("agentproc", check_api.PACKAGES)
         self.assertIn("acptest", check_api.PACKAGES)
+        self.assertIn("clienthost", check_api.PACKAGES)
 
 
 if __name__ == "__main__":
