@@ -917,3 +917,50 @@ Go, so `TestToolCallTimeline` gained that case, and the plant fails it.
 * `tools/gates.py --all`, with both hosts set: all 18 passed.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
 * `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 12, `Kind()` on the remaining unions (2026-10-27)
+
+**Read first:** each union's decoder and encoder in `types_gen.go`, and its definition in `schema/schema.json`, or in
+`schema/schema.unstable.json` for `PlanUpdateContent`. Four variants are sent with no discriminator, and are told apart by their
+keys. The schema names each, and the MADR carries "Amended by the PLAN's phase 12, 2026-10-27".
+
+**What changed:**
+* **`helpers.go`:** `Kind()` on `AuthMethod`, `McpServer`, `CreateElicitationRequest`, `CreateElicitationResponse`,
+  `MultiSelectItems`, `SetSessionConfigOptionRequest` and `PlanUpdateContent`.
+  * Each checks its variants in the order its `MarshalJSON` does.
+  * The four variants with no discriminator give the schema's name.
+  * A typed catch-all gives the value it holds.
+  * An `Unknown` is read with `unknownKind`, as 0038's are.
+  * New constants sit beside the existing ones. `blockTypeTerminal`, `configOptionBoolean` and `propertyTypeString` are reused
+    where the value means the same.
+* **`kind_remaining_test.go`, new:**
+  * `TestRemainingUnionKinds` takes each union from `schemaUnions()`:
+    * every variant, by its discriminator value or, with none, by `keylessKinds`, the schema's names;
+    * the catch-all holding `_future`;
+    * every pointer field among the listed variants;
+    * the `Unknown` payloads, through 0038's `testUnionUnknown`;
+    * the zero value.
+  * `TestRemainingUnionKindsDecoded`: 25 payloads, every variant of the seven decoded from JSON, an unknown or catch-all one each.
+* **The count rerun.** The MADR's scratch script that counted the unions now reports `17 unions; 13 with Kind; 0 stable without`.
+  The unstable-origin unions other than `PlanUpdateContent` have none, as question 5 decided.
+* **The API:** `make api` against `v1.24.0` reports 21 compatible, 0 incompatible, the seven `Kind` methods among them.
+* **Left to phase 14:** `README.md`'s `Kind()` list.
+
+**The test's first run failed twice, on the test's own faults:**
+* `schemaUnions` lists the catch-all among the variants with an empty value, so the variant loop now leaves it to the catch-all
+  case;
+* two elicitation payloads lacked the `sessionId` their variants need.
+
+Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 4 of 4 failed as required.
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| one variant's name wrong | `TestRemainingUnionKinds` | `kind_remaining_test.go:66: McpServer.Acp: Kind() = "sse", want "acp"` |
+| a keyless variant's name not the schema's | `TestRemainingUnionKinds` | `kind_remaining_test.go:66: SetSessionConfigOptionRequest.ValueId: Kind() = "valueId", want "value_id"` |
+| a catch-all's value not kept | `TestRemainingUnionKinds` | `kind_remaining_test.go:77: CreateElicitationResponse.Other holding "_future": Kind() = "other", want it as it arrived` |
+| an unknown payload not read | `TestRemainingUnionKindsDecoded` | `kind_remaining_test.go:86: PlanUpdateContent {"type":"future"}: Kind() = "unknown", want "future"` |
+
+**Gates:**
+* `tools/gates.py --all`, with both hosts set: all 18 passed.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
+* `tools/idscan.py --paths` over the staged files: nothing found.

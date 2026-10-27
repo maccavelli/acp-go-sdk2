@@ -390,6 +390,18 @@ Item 9's rules, as the phase settled them where the schema is silent or this SDK
   applies: a null raw value is an absent one, as the notification decoder already makes it.
 * **The entity keeps no `_meta`.** A notification's `_meta` is the message's, and not part of the call's state.
 
+#### Amended by the PLAN's phase 12, 2026-10-27
+
+Item 10 said each `Kind()` returns "the discriminator of the set variant". Four variants are sent with no discriminator, and are
+told apart by their shape. For each, `Kind()` returns the schema's own name, its title:
+* `AuthMethod.Agent` is `"agent"`: "When no `type` is present, the method is treated as `agent`".
+* `McpServer.Stdio` is `"stdio"`.
+* `SetSessionConfigOptionRequest.ValueId` is `"value_id"`: "the default when `type` is absent on the wire".
+* `MultiSelectItems.Titled` is `"titled"`.
+
+A typed catch-all, the `Other` of `CreateElicitationRequest`, `CreateElicitationResponse` and `MultiSelectItems`, returns the
+value it holds as it arrived, as `ElicitationPropertySchema.Kind` does.
+
 ### Consequences
 
 * Good, because the defect that loses an agent's last output before it exits is fixed, with the failing test as its regression

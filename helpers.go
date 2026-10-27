@@ -26,6 +26,22 @@ const (
 	outcomeSelected     = "selected"
 	configOptionSelect  = "select"
 	configOptionBoolean = "boolean"
+	configValueID       = "value_id"
+
+	authTypeAgent      = "agent"
+	mcpTypeHTTP        = "http"
+	mcpTypeSSE         = "sse"
+	mcpTypeACP         = "acp"
+	mcpTypeStdio       = "stdio"
+	elicitationForm    = "form"
+	elicitationURL     = "url"
+	elicitationAccept  = "accept"
+	elicitationDecline = "decline"
+	elicitationCancel  = "cancel"
+	multiSelectTitled  = "titled"
+	planItems          = "items"
+	planFile           = "file"
+	planMarkdown       = "markdown"
 
 	sessionUpdateUserMessage         = "user_message_chunk"
 	sessionUpdateAgentMessage        = "agent_message_chunk"
@@ -412,6 +428,127 @@ func (o SessionConfigOption) Kind() string {
 		return configOptionBoolean
 	case o.Unknown != nil:
 		return unknownKind(o.Unknown, "type")
+	}
+	return ""
+}
+
+// Kind returns the type of the auth method a describes: "terminal", or
+// "agent", the schema's name for a method sent with no type, which is the
+// default; as ContentBlock.Kind does for a content block otherwise
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 10).
+func (a AuthMethod) Kind() string {
+	switch {
+	case a.Terminal != nil:
+		return blockTypeTerminal
+	case a.Agent != nil:
+		return authTypeAgent
+	case a.Unknown != nil:
+		return unknownKind(a.Unknown, "type")
+	}
+	return ""
+}
+
+// Kind returns the transport of the MCP server s describes: "http", "sse",
+// "acp", or "stdio", the schema's name for a server sent with no type; as
+// ContentBlock.Kind does for a content block otherwise
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 10).
+func (s McpServer) Kind() string {
+	switch {
+	case s.Http != nil:
+		return mcpTypeHTTP
+	case s.Sse != nil:
+		return mcpTypeSSE
+	case s.Acp != nil:
+		return mcpTypeACP
+	case s.Stdio != nil:
+		return mcpTypeStdio
+	case s.Unknown != nil:
+		return unknownKind(s.Unknown, "type")
+	}
+	return ""
+}
+
+// Kind returns the mode of the elicitation r requests: "form", "url", the
+// mode of one this package does not know, as it arrived, or "" when no
+// variant is set (0041-MADR-close-the-gaps-the-consumers-wait-on.md,
+// item 10).
+func (r CreateElicitationRequest) Kind() string {
+	switch {
+	case r.Form != nil:
+		return elicitationForm
+	case r.Url != nil:
+		return elicitationURL
+	case r.Other != nil:
+		return r.Other.Mode
+	}
+	return ""
+}
+
+// Kind returns the action of the elicitation answer r: "accept", "decline",
+// "cancel", the action of one this package does not know, as it arrived, or
+// "" when no variant is set
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 10).
+func (r CreateElicitationResponse) Kind() string {
+	switch {
+	case r.Accept != nil:
+		return elicitationAccept
+	case r.Decline != nil:
+		return elicitationDecline
+	case r.Cancel != nil:
+		return elicitationCancel
+	case r.Other != nil:
+		return r.Other.Action
+	}
+	return ""
+}
+
+// Kind returns the type of the multi-select items i holds: "string", the
+// type of items this package does not know, as it arrived, "titled", the
+// schema's name for items sent with no type, or "" when no variant is set
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 10).
+func (i MultiSelectItems) Kind() string {
+	switch {
+	case i.String != nil:
+		return propertyTypeString
+	case i.Other != nil:
+		return i.Other.Type
+	case i.Titled != nil:
+		return multiSelectTitled
+	}
+	return ""
+}
+
+// Kind returns the type of the value r sets: "boolean", or "value_id", the
+// schema's name for a value sent with no type, which is the default; as
+// ContentBlock.Kind does for a content block otherwise
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 10).
+func (r SetSessionConfigOptionRequest) Kind() string {
+	switch {
+	case r.Boolean != nil:
+		return configOptionBoolean
+	case r.ValueId != nil:
+		return configValueID
+	case r.Unknown != nil:
+		return unknownKind(r.Unknown, "type")
+	}
+	return ""
+}
+
+// Kind returns the type of the plan content c holds, "items", "file" or
+// "markdown", as ContentBlock.Kind does for a content block. Its type is the
+// unstable schema's, and the one unstable-origin union with Kind, which a
+// consumer reads (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 10
+// and question 5).
+func (c PlanUpdateContent) Kind() string {
+	switch {
+	case c.Items != nil:
+		return planItems
+	case c.File != nil:
+		return planFile
+	case c.Markdown != nil:
+		return planMarkdown
+	case c.Unknown != nil:
+		return unknownKind(c.Unknown, "type")
 	}
 	return ""
 }
