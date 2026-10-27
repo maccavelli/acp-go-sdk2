@@ -798,6 +798,77 @@ These rules are decided in
 and
 [0019-MADR-remediate-debugging-pass-findings.md](docs/decisions/0019-MADR-remediate-debugging-pass-findings.md).
 
+### Elicitation
+
+An agent asks the user for input with `elicitation/create`, in form mode or URL
+mode, and only in a mode the client advertised in `clientCapabilities.elicitation`,
+`form` or `url`: `CreateElicitation` returns a `*acp.CapabilityError` for any
+other, and a client answers one it receives `-32602`. Unlike MCP, an empty
+`elicitation: {}` advertises no mode. The specification asks the client to check
+a form's answer before sending it, and the agent to check it again; the helpers
+on `acp.ElicitationSchema` do both the same way
+([0040-MADR-check-elicitation-forms-answers-and-urls.md](docs/decisions/0040-MADR-check-elicitation-forms-answers-and-urls.md)).
+
+A client shows the form and checks the user's answer:
+
+```go
+func (c *MyClient) CreateElicitation(ctx context.Context, req acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
+    if req.Form == nil {
+        return acp.NewCreateElicitationResponseCancel(), nil
+    }
+    schema := req.Form.RequestedSchema
+    // Fields come in the order the agent wrote them; Defaults pre-fill them.
+    answers, ok := c.ask(ctx, req.Form.Message, schema.Fields(), schema.Defaults(), func(content map[string]acp.ElicitationContentValue) error {
+        return schema.Check(content) // shown to the user, who corrects the answer
+    })
+    if !ok {
+        return acp.NewCreateElicitationResponseDecline(), nil
+    }
+    resp := acp.NewCreateElicitationResponseAccept()
+    resp.Accept.Content = answers
+    return resp, nil
+}
+```
+
+- `Fields()` lists the properties in the order the form was sent, each with
+  whether it is required. `Kind()` names a field's type; a type this package
+  does not know is a field too, which a client must not render as a known
+  control.
+- `ParseValue(text...)` turns what a text interface collected into the value its
+  field takes, without rounding or trimming: `3.7` is not an integer.
+- `Check(content)` returns nil, or every problem at once, each a
+  `*acp.ValidationError` whose `Field` is `content["<name>"]` and whose message
+  never quotes the value. A required field must be present, though an empty
+  string or list is present; a key the form does not declare is refused;
+  lengths count characters; bounds compare exactly; `email` is an RFC 5321
+  mailbox, `uri` an absolute URI, `date` and `date-time` RFC 3339; and a
+  `pattern` is matched by Go's RE2, one RE2 cannot compile reported as
+  `acp.RuleUnsupported`, never as a match.
+- `CheckSchema()` reports a form no answer can satisfy, or that is ambiguous,
+  such as a `required` name with no property; nothing runs it unasked.
+
+An agent checks the answer it receives, and handles `decline` and `cancel`,
+which a client may send at any time:
+
+```go
+resp, err := conn.CreateElicitation(ctx, req)
+switch {
+case err != nil:
+    return err
+case resp.Accept != nil:
+    if err := req.Form.RequestedSchema.Check(resp.Accept.Content); err != nil {
+        return err
+    }
+    age, _ := resp.Accept.Content["age"].Int64() // an Integer, or 5.0 as a Number
+    _ = age
+}
+```
+
+Form mode must never ask for a password, a token or any secret: the specification
+requires URL mode for those, and no fallback to a form. An agent withdraws a
+pending elicitation by ending the context of its `CreateElicitation` call, which
+sends `$/cancel_request`.
+
 ### Extension methods
 
 ACP supports **extension methods** for custom JSON-RPC methods whose names start with `_`.

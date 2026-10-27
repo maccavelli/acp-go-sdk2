@@ -1,0 +1,16 @@
+{
+  "description": "A property of a type this package does not know: its value is not checked, but its presence is.",
+  "requestedSchema": {
+    "type": "object",
+    "properties": {
+      "color": {"type": "x-color", "palette": "web"},
+      "name": {"type": "string"}
+    },
+    "required": ["color"]
+  },
+  "answers": [
+    {"name": "a string", "content": {"color": "teal"}, "want": []},
+    {"name": "a number", "content": {"color": 5}, "want": []},
+    {"name": "missing", "content": {"name": "Ann"}, "want": [{"field": "color", "rule": "required"}]}
+  ]
+}

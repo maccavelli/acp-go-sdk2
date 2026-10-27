@@ -1,0 +1,26 @@
+{
+  "description": "The four formats, with the probe's cases (0040-MADR, What this SDK does now).",
+  "requestedSchema": {
+    "type": "object",
+    "properties": {
+      "email": {"type": "string", "format": "email"},
+      "site": {"type": "string", "format": "uri"},
+      "born": {"type": "string", "format": "date"},
+      "seen": {"type": "string", "format": "date-time"}
+    }
+  },
+  "answers": [
+    {"name": "an email", "content": {"email": "a@b.example"}, "want": []},
+    {"name": "an email with a display name", "content": {"email": "Ann <a@b.example>"}, "want": [{"field": "email", "rule": "format"}]},
+    {"name": "an http URI", "content": {"site": "https://example.com/a"}, "want": []},
+    {"name": "a URN", "content": {"site": "urn:isbn:1"}, "want": []},
+    {"name": "a relative URI", "content": {"site": "/relative"}, "want": [{"field": "site", "rule": "format"}]},
+    {"name": "a URI with a space", "content": {"site": "http://x/a b"}, "want": [{"field": "site", "rule": "format"}]},
+    {"name": "a leap day", "content": {"born": "2024-02-29"}, "want": []},
+    {"name": "not a leap year", "content": {"born": "2023-02-29"}, "want": [{"field": "born", "rule": "format"}]},
+    {"name": "an unpadded date", "content": {"born": "2026-1-1"}, "want": [{"field": "born", "rule": "format"}]},
+    {"name": "a lowercase date-time", "content": {"seen": "2026-10-26t12:00:00z"}, "want": []},
+    {"name": "a leap second", "content": {"seen": "2016-12-31T23:59:60Z"}, "want": []},
+    {"name": "a date-time without seconds", "content": {"seen": "2026-10-26T12:00Z"}, "want": [{"field": "seen", "rule": "format"}]}
+  ]
+}

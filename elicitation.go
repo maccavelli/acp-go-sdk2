@@ -26,6 +26,13 @@ const (
 	propertyTypeArray   = "array"
 )
 
+// The Type of the errors of the elicitation checks.
+const (
+	errTypeSchema   = "ElicitationSchema"
+	errTypeProperty = "ElicitationPropertySchema"
+	errTypeAnswer   = "CreateElicitationAccept"
+)
+
 // ElicitationField is one property of an elicitation form, as a client shows
 // it: its name, whether the form requires it, and its schema
 // (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 1).
@@ -142,8 +149,8 @@ func (s ElicitationSchema) CheckSchema() error {
 
 // schemaError is a problem CheckSchema reports.
 func schemaError(field string, value any, rule ValidationRule, text string) *ValidationError {
-	return &ValidationError{Type: "ElicitationSchema", Field: field, Value: value, Rule: rule,
-		msg: fmt.Sprintf("ElicitationSchema: %s: %s: %s", field, rule, text)}
+	return &ValidationError{Type: errTypeSchema, Field: field, Value: value, Rule: rule,
+		msg: fmt.Sprintf("%s: %s: %s: %s", errTypeSchema, field, rule, text)}
 }
 
 // checkPropertySchema returns the problems of the property schema p of name.
@@ -275,6 +282,141 @@ type defaultError struct {
 func (e *defaultError) Error() string { return e.outer.Error() }
 
 func (e *defaultError) Unwrap() []error { return append([]error{e.outer}, e.inner...) }
+
+// Check reports whether content, an accepted answer, answers the form s, by
+// every rule s states. Each field s requires is present: an empty string or
+// list counts as present, as in JSON Schema. Each value is of its field's
+// type: a number takes a Number or an Integer, and an integer an Integer or a
+// whole Number int64 holds, such as 5.0. Then the field's rules: lengths in
+// characters, not bytes; enum and oneOf; the pattern, matched by Go's RE2, one
+// RE2 cannot compile reported as RuleUnsupported, never taken to match; the
+// format, an email address as RFC 5321 defines it, an absolute URI, an RFC
+// 3339 date or date-time; bounds, compared exactly; and item counts and
+// choices. A key s does not declare is RuleUndeclared. A value of a type this
+// package does not know is not checked. Nothing is trimmed: the value checked
+// is the value sent.
+//
+// It returns nil, or each problem, in field order and then the undeclared
+// keys sorted, joined with errors.Join: a *ValidationError of Type
+// "CreateElicitationAccept" whose Field is content["<name>"]. Its message
+// names the field and the rule, never the value, which is in Value. A client
+// checks an answer before it sends accept, and gives the problems back to the
+// user; an agent checks the answer it receives, as the specification asks both
+// to (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 3).
+func (s ElicitationSchema) Check(content map[string]ElicitationContentValue) error {
+	var errs []error
+	for _, f := range s.Fields() {
+		field := fmt.Sprintf("content[%q]", f.Name)
+		v, ok := content[f.Name]
+		if !ok {
+			if f.Required {
+				errs = append(errs, answerError(field, nil, RuleRequired, "is required"))
+			}
+			continue
+		}
+		var re *regexp.Regexp
+		unsupported := false
+		if p := f.Schema.String; p != nil && p.Pattern != nil {
+			var err error
+			re, err = regexp.Compile(*p.Pattern)
+			unsupported = err != nil
+		}
+		problems := checkValue(f.Schema, v, re)
+		if unsupported && v.String != nil {
+			problems = append(problems, valueProblem{RuleUnsupported, "cannot be checked against its pattern, which Go's RE2 cannot compile"})
+		}
+		for _, pr := range problems {
+			errs = append(errs, answerError(field, v, pr.rule, pr.text))
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(content)) {
+		if _, ok := s.Properties[name]; !ok {
+			errs = append(errs, answerError(fmt.Sprintf("content[%q]", name), content[name], RuleUndeclared, "is not a field of the form"))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// answerError is a problem Check reports.
+func answerError(field string, value any, rule ValidationRule, text string) *ValidationError {
+	return &ValidationError{Type: errTypeAnswer, Field: field, Value: value, Rule: rule,
+		msg: fmt.Sprintf("%s: %s: %s: %s", errTypeAnswer, field, rule, text)}
+}
+
+// ParseValue returns the answer value of the property p from text, what a
+// text interface collected for it: one string, as it is; a number as
+// strconv.ParseFloat reads it, finite; an integer as strconv.ParseInt reads it
+// in base 10, so 3.7 and 1e20 are refused, not rounded; a boolean as
+// strconv.ParseBool reads it; and a list from every text given. Nothing is
+// trimmed. It checks no rule of p but the type; Check does the rest. A
+// property of a type this package does not know is refused. A failure is a
+// *ValidationError with Rule RuleType, whose message holds no text
+// (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 4).
+func (p ElicitationPropertySchema) ParseValue(text ...string) (ElicitationContentValue, error) {
+	parseError := func(what string) (ElicitationContentValue, error) {
+		return ElicitationContentValue{}, &ValidationError{Type: errTypeProperty, Rule: RuleType,
+			msg: errTypeProperty + ": " + string(RuleType) + ": " + what}
+	}
+	if p.Array != nil {
+		return NewElicitationContentValueStringArray(append([]string{}, text...)), nil
+	}
+	if p.String == nil && p.Number == nil && p.Integer == nil && p.Boolean == nil {
+		return parseError(fmt.Sprintf("a property of type %q cannot be parsed", p.Kind()))
+	}
+	if len(text) != 1 {
+		return parseError(fmt.Sprintf("a %s takes one text, not %d", p.Kind(), len(text)))
+	}
+	t := text[0]
+	switch {
+	case p.String != nil:
+		return NewElicitationContentValueString(t), nil
+	case p.Number != nil:
+		f, err := strconv.ParseFloat(t, 64)
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+			return parseError("the text is not a finite number")
+		}
+		return NewElicitationContentValueNumber(f), nil
+	case p.Integer != nil:
+		n, err := strconv.ParseInt(t, 10, 64)
+		if err != nil {
+			return parseError("the text is not a whole number int64 holds")
+		}
+		return NewElicitationContentValueInteger(n), nil
+	default:
+		b, err := strconv.ParseBool(t)
+		if err != nil {
+			return parseError("the text is not a boolean")
+		}
+		return NewElicitationContentValueBoolean(b), nil
+	}
+}
+
+// Float64 returns v as a float64 when it is a Number or an Integer, the
+// variant a client's encoder chooses for a whole number; an Integer beyond
+// 2^53 is rounded to the nearest float64
+// (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 4).
+func (v ElicitationContentValue) Float64() (float64, bool) {
+	switch {
+	case v.Number != nil:
+		return float64(*v.Number), true
+	case v.Integer != nil:
+		return float64(*v.Integer), true
+	}
+	return 0, false
+}
+
+// Int64 returns v as an int64 when it is an Integer, or a whole Number int64
+// holds exactly, such as 5.0, which an encoder may write for an integer field
+// (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 4).
+func (v ElicitationContentValue) Int64() (int64, bool) {
+	switch {
+	case v.Integer != nil:
+		return int64(*v.Integer), true
+	case v.Number != nil:
+		return integral(float64(*v.Number))
+	}
+	return 0, false
+}
 
 // valueProblem is a rule a value breaks, with what a message says of it.
 type valueProblem struct {

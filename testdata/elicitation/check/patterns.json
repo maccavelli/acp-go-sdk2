@@ -1,0 +1,19 @@
+{
+  "description": "A pattern matches by Go's RE2, unanchored, on the value as sent; one RE2 cannot compile is unsupported, never a match.",
+  "requestedSchema": {
+    "type": "object",
+    "properties": {
+      "slug": {"type": "string", "pattern": "^[a-z]+$"},
+      "token": {"type": "string", "pattern": "^\\S+$"},
+      "has": {"type": "string", "pattern": "[0-9]"},
+      "ahead": {"type": "string", "pattern": "(?=a)b"}
+    }
+  },
+  "answers": [
+    {"name": "a match", "content": {"slug": "abc"}, "want": []},
+    {"name": "a miss", "content": {"slug": "Abc1"}, "want": [{"field": "slug", "rule": "pattern"}]},
+    {"name": "unanchored", "content": {"has": "room 7"}, "want": []},
+    {"name": "surrounding space is not trimmed", "content": {"token": " ab "}, "want": [{"field": "token", "rule": "pattern"}]},
+    {"name": "a pattern RE2 cannot compile", "content": {"ahead": "bbbb"}, "want": [{"field": "ahead", "rule": "unsupported"}]}
+  ]
+}

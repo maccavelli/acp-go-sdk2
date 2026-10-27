@@ -1,0 +1,17 @@
+{
+  "description": "minLength and maxLength count characters, code points, not bytes; a value can break two rules at once.",
+  "requestedSchema": {
+    "type": "object",
+    "properties": {
+      "word": {"type": "string", "minLength": 2, "maxLength": 5},
+      "code": {"type": "string", "minLength": 5, "pattern": "^[0-9]+$"}
+    }
+  },
+  "answers": [
+    {"name": "five characters in six bytes", "content": {"word": "héllo"}, "want": []},
+    {"name": "two characters in eight bytes", "content": {"word": "👍🏽"}, "want": []},
+    {"name": "too short", "content": {"word": "q"}, "want": [{"field": "word", "rule": "minLength"}]},
+    {"name": "too long", "content": {"word": "héllos"}, "want": [{"field": "word", "rule": "maxLength"}]},
+    {"name": "two problems in one field", "content": {"code": "ab"}, "want": [{"field": "code", "rule": "minLength"}, {"field": "code", "rule": "pattern"}]}
+  ]
+}

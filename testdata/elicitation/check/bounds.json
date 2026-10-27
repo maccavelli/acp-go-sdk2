@@ -1,0 +1,22 @@
+{
+  "description": "Bounds are inclusive and exact: 9007199254740993 is above 9007199254740992, which float64 cannot tell apart.",
+  "requestedSchema": {
+    "type": "object",
+    "properties": {
+      "id": {"type": "integer", "minimum": -9007199254740992, "maximum": 9007199254740992},
+      "amount": {"type": "number", "minimum": 0.5, "maximum": 9007199254740992.0},
+      "picks": {"type": "array", "items": {"type": "string", "enum": ["a", "b", "c"]}, "minItems": 1, "maxItems": 2}
+    }
+  },
+  "answers": [
+    {"name": "at the integer maximum", "content": {"id": 9007199254740992}, "want": []},
+    {"name": "one above the integer maximum", "content": {"id": 9007199254740993}, "want": [{"field": "id", "rule": "maximum"}]},
+    {"name": "one below the integer minimum", "content": {"id": -9007199254740993}, "want": [{"field": "id", "rule": "minimum"}]},
+    {"name": "an Integer at the number maximum", "content": {"amount": 9007199254740992}, "want": []},
+    {"name": "an Integer one above the number maximum", "content": {"amount": 9007199254740993}, "want": [{"field": "amount", "rule": "maximum"}]},
+    {"name": "an Integer below the number minimum", "content": {"amount": 0}, "want": [{"field": "amount", "rule": "minimum"}]},
+    {"name": "at the number minimum", "content": {"amount": 0.5}, "want": []},
+    {"name": "too few items", "content": {"picks": []}, "want": [{"field": "picks", "rule": "minItems"}]},
+    {"name": "too many items", "content": {"picks": ["a", "b", "c"]}, "want": [{"field": "picks", "rule": "maxItems"}]}
+  ]
+}

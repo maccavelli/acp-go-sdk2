@@ -1,0 +1,24 @@
+{
+  "description": "Each value is of its field's type, as it decodes from the wire: 5 is an Integer, 5.0 and 1e20 are Numbers.",
+  "requestedSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string"},
+      "ratio": {"type": "number"},
+      "count": {"type": "integer"},
+      "ok": {"type": "boolean"},
+      "picks": {"type": "array", "items": {"type": "string", "enum": ["a", "b"]}}
+    }
+  },
+  "answers": [
+    {"name": "each type", "content": {"text": "hi", "ratio": 0.25, "count": 3, "ok": true, "picks": ["a"]}, "want": []},
+    {"name": "an Integer for a number", "content": {"ratio": 5}, "want": []},
+    {"name": "a whole Number for an integer", "content": {"count": 5.0}, "want": []},
+    {"name": "1e20 for an integer", "content": {"count": 1e20}, "want": [{"field": "count", "rule": "type"}]},
+    {"name": "a fraction for an integer", "content": {"count": 5.5}, "want": [{"field": "count", "rule": "type"}]},
+    {"name": "a number for a string", "content": {"text": 5}, "want": [{"field": "text", "rule": "type"}]},
+    {"name": "a string for a number", "content": {"ratio": "0.25"}, "want": [{"field": "ratio", "rule": "type"}]},
+    {"name": "a string for a boolean", "content": {"ok": "true"}, "want": [{"field": "ok", "rule": "type"}]},
+    {"name": "a string for a list", "content": {"picks": "a"}, "want": [{"field": "picks", "rule": "type"}]}
+  ]
+}

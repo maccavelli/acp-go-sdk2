@@ -1,0 +1,20 @@
+{
+  "description": "Required fields are present when the answer holds their key; an empty string or list is present, as in JSON Schema.",
+  "requestedSchema": {
+    "type": "object",
+    "properties": {
+      "name": {"type": "string"},
+      "tags": {"type": "array", "items": {"type": "string", "enum": ["red", "blue"]}},
+      "note": {"type": "string"}
+    },
+    "required": ["name", "tags"]
+  },
+  "answers": [
+    {"name": "every field", "content": {"name": "Ann", "tags": ["red"], "note": "hello"}, "want": []},
+    {"name": "empty values are present", "content": {"name": "", "tags": []}, "want": []},
+    {"name": "an optional field left out", "content": {"name": "Ann", "tags": ["blue"]}, "want": []},
+    {"name": "content null", "content": null, "want": [{"field": "name", "rule": "required"}, {"field": "tags", "rule": "required"}]},
+    {"name": "content empty", "content": {}, "want": [{"field": "name", "rule": "required"}, {"field": "tags", "rule": "required"}]},
+    {"name": "one required field missing", "content": {"name": "Ann"}, "want": [{"field": "tags", "rule": "required"}]}
+  ]
+}

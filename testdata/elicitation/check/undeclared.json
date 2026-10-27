@@ -1,0 +1,12 @@
+{
+  "description": "A key the form does not declare is refused, after the declared fields, sorted (0040-MADR question 1).",
+  "requestedSchema": {
+    "type": "object",
+    "properties": {"city": {"type": "string"}}
+  },
+  "answers": [
+    {"name": "declared only", "content": {"city": "Lyon"}, "want": []},
+    {"name": "two undeclared keys", "content": {"zone": "Europe", "city": "Lyon", "age": 4},
+      "want": [{"field": "age", "rule": "undeclared"}, {"field": "zone", "rule": "undeclared"}]}
+  ]
+}

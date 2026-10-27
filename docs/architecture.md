@@ -45,10 +45,12 @@ and `make api` gates it with the root and `agentproc`.
   not), `compaction.go` (`CompactionTimeline` and `CompactionEntity`, which
   apply a session's compaction updates by the protocol's rules, live or
   replayed, for a client; 0039, item 3), `elicitation.go` (an elicitation form's
-  fields in the order it is sent, their kinds and their defaults, for a client,
-  and `CheckSchema`, what makes a form impossible or ambiguous to fill;
+  fields in the order it is sent, their kinds and their defaults, for a client;
+  `CheckSchema`, what makes a form impossible or ambiguous to fill; `Check`, an
+  answer against its form, for either side; and `ParseValue`, `Float64` and
+  `Int64`, text input and numeric answers;
   [0040-MADR-check-elicitation-forms-answers-and-urls.md](decisions/0040-MADR-check-elicitation-forms-answers-and-urls.md),
-  items 1 and 2), `refusals.go` (`ClientRefusals` and
+  items 1 to 4), `refusals.go` (`ClientRefusals` and
   `AgentRefusals`, which answer method-not-found for the `Client` and `Agent`
   methods a side may leave unadvertised), and `doc.go`. None of them holds
   protocol state, but for the compactions a `CompactionTimeline` its caller

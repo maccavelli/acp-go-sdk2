@@ -1,0 +1,20 @@
+{
+  "description": "enum, oneOf, items.enum and items.anyOf membership; a repeated item is allowed, as the schema has no uniqueItems.",
+  "requestedSchema": {
+    "type": "object",
+    "properties": {
+      "size": {"type": "string", "enum": ["small", "large"]},
+      "plan": {"type": "string", "oneOf": [{"const": "free", "title": "Free"}, {"const": "paid", "title": "Paid"}]},
+      "colors": {"type": "array", "items": {"type": "string", "enum": ["red", "blue"]}},
+      "tiers": {"type": "array", "items": {"anyOf": [{"const": "gold", "title": "Gold"}, {"const": "iron", "title": "Iron"}]}}
+    }
+  },
+  "answers": [
+    {"name": "every choice valid", "content": {"size": "small", "plan": "paid", "colors": ["red", "blue"], "tiers": ["gold"]}, "want": []},
+    {"name": "an enum miss", "content": {"size": "medium"}, "want": [{"field": "size", "rule": "enum"}]},
+    {"name": "a oneOf miss", "content": {"plan": "Paid"}, "want": [{"field": "plan", "rule": "enum"}]},
+    {"name": "an items.enum miss", "content": {"colors": ["red", "green"]}, "want": [{"field": "colors", "rule": "enum"}]},
+    {"name": "an items.anyOf miss", "content": {"tiers": ["Gold"]}, "want": [{"field": "tiers", "rule": "enum"}]},
+    {"name": "a repeated item", "content": {"colors": ["red", "red"], "tiers": ["iron", "iron"]}, "want": []}
+  ]
+}

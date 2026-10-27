@@ -496,3 +496,74 @@ When the release is published, this PLAN and its row are `complete`.
     thirteen constants;
   * `make check-records`, `make markdownlint`, `make disclosure-check`; `tools/idscan.py --paths` over the changed and new
     files: 0 matches.
+
+### Phase 4, the answer check, text input and numeric values, 2026-10-26
+
+* **`elicitation.go`:**
+  * `ElicitationSchema.Check`, with `answerError`. Each field in `Fields` order: absent and required is `RuleRequired`;
+    present, `checkValue` from phase 3, the field's `pattern` compiled once. An uncompilable pattern adds `RuleUnsupported`
+    for a string value. The undeclared keys follow, sorted.
+  * `ElicitationPropertySchema.ParseValue`: `strconv.ParseFloat`, finite, for a number; `strconv.ParseInt` base 10 for an
+    integer; `strconv.ParseBool`; a copy of the texts for a list; one text, as it is, for a string. Its failures are `RuleType`
+    and quote no text.
+  * `ElicitationContentValue.Float64` and `Int64`, the latter through phase 3's `integral`.
+  * The errors' `Type` strings are constants, `errTypeSchema`, `errTypeProperty` and `errTypeAnswer`, as goconst asked.
+* **Fixtures**, `testdata/elicitation/check/`, nine files and 57 answers. Each answer's `content` is raw JSON, decoded by the
+  SDK, so `5.0` and `1e20` arrive as `Number`s. Each file covers one of the PLAN's lists:
+  * `presence.json`: an empty string and list as present, `content: null` and `{}` against required fields;
+  * `undeclared.json`: two undeclared keys after the declared field, sorted;
+  * `types.json`: each type, an `Integer` for `number`, `5.0` for `integer`, and `1e20` and `5.5` refused for `integer`;
+  * `lengths.json`: `héllo` and `👍🏽` by characters, and two problems in one field;
+  * `formats.json`: the probe's cases for the four formats;
+  * `patterns.json`: a match, a miss, unanchored matching, surrounding space untrimmed, and lookahead as `RuleUnsupported`;
+  * `choices.json`: the four kinds of choices, and repeated items;
+  * `bounds.json`: `9007199254740993` against an `integer` and a `number` maximum of `9007199254740992`, a minimum, and item
+    counts;
+  * `catchall.json`: a catch-all's value unchecked, and its presence checked.
+* **Tests**, `package acp_test`:
+  * `elicitation_check_test.go`:
+    * `TestElicitationCheckFixtures`: every answer, its problems in order, each of `Type` `"CreateElicitationAccept"`, no
+      message holding its value;
+    * `TestElicitationParseValue`: eight conversions, and eleven refusals, none quoting its text;
+    * `TestElicitationContentNumbers`: `Float64` and `Int64` over seven values and NaN.
+  * `elicitation_wire_test.go`, `TestElicitationFormRoundTrip`, over `acptest.Connect` with `elicitation.form` advertised:
+    * a `formClient` fills the agent's form through `Fields`, `ParseValue` and `Check`;
+    * its first attempt, `age` `200` against a maximum of 150, fails `Check` with `RuleMaximum` and is given back to the
+      script;
+    * the second is sent as `accept`, and the agent's `Check` of it is nil;
+    * the next elicitation is declined, and arrives as `decline`.
+
+    The first attempt was written as `two hundred`, which fails `ParseValue`, not `Check`. It was changed to `200` before the
+    planted breaks, so that the row "the test client sends without `Check`" tests what it names.
+* **Docs:**
+  * `README.md` gains "Elicitation", before "Extension methods": the modes and their capabilities; a client's
+    `CreateElicitation` with `Fields`, `Defaults` and `Check`; the rules `Check` applies; the agent's check, `decline` and
+    `cancel`; the ban on secrets in form mode; withdrawal by context.
+  * Not named by the step: `docs/architecture.md`'s entry for `elicitation.go` now names `Check`, `ParseValue`, `Float64` and
+    `Int64`, so it stays true of the file.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | the row's: lengths in bytes | `elicitation_check_test.go:78: lengths.json, five characters in six bytes: Check = [{content["word"] maxLength}], want []` |
+  | the row's: strings trimmed | `:78: patterns.json, surrounding space is not trimmed: Check = [], want [{content["token"] pattern}]` |
+  | the row's: an `Integer` refused for `number` | `:78: types.json, an Integer for a number: Check = [{content["ratio"] type}], want []` |
+  | the row's: integer bounds through `float64` | `:78: bounds.json, one above the integer maximum: Check = [], want [{content["id"] maximum}]` |
+  | the row's: an uncompilable pattern as a match | `:78: patterns.json, a pattern RE2 cannot compile: Check = [], want [{content["ahead"] unsupported}]` |
+  | the row's: lowercase `t` and `z` refused | `:78: formats.json, a lowercase date-time: Check = [{content["seen"] format}], want []` |
+  | the row's: `Ann <a@b.example>` accepted | `:78: formats.json, an email with a display name: Check = [], want [{content["email"] format}]` |
+  | the row's: an undeclared key accepted | `:78: undeclared.json, two undeclared keys: Check = [], want [… age … zone …]` |
+  | the row's: a value in a message | `:88: choices.json, an enum miss: the message "… is not one of its enum values: medium" holds the answer's value` |
+  | the row's: only the first problem | `:78: lengths.json, two problems in one field: Check = [{content["code"] minLength}], want [… minLength … pattern]` |
+  | the row's: `ParseValue` for `integer` through `ParseFloat` | `:150: a fraction for an integer: ParseValue(["3.7"]) = <nil>, want a RuleType *ValidationError` |
+  | the row's: `Int64` of a fractional `Number` true | `:188: Int64 of 5.5 = 5, true; want 0, false` |
+  | the row's: the test client sends without `Check` | `elicitation_wire_test.go:102: the agent's Check of the answer it received: … maximum: is greater than 150`; `:115: the client refused 0 attempts, want 1` |
+
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "209 file(s) clean", after goconst's finding; `scripts/go-precheck.sh` on the two new test files;
+  * the round trip three times under `-race`;
+  * `make markdownlint`;
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `newfiles` covered the two new
+    test files. `api` reported "against v1.23.0: 0 incompatible, 22 compatible": phase 3's eighteen, and `Check`, `ParseValue`,
+    `Float64` and `Int64`;
+  * `make check-records`, `make disclosure-check`; `tools/idscan.py --paths` over the changed and new files: 0 matches.
