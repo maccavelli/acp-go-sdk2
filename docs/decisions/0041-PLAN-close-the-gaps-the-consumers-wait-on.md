@@ -1093,3 +1093,37 @@ Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 
 * The root's README tests, `go test -run 'Readme|Docs|TestTypedMethodDocs' .`: ok.
 * `tools/gates.py`, the gates but the hosts', since no Go file changed: all 16 passed.
 * `tools/idscan.py --paths` over the staged files: nothing found.
+
+**After the phase:** the owner committed and pushed `db92e25`. Its CI passed on the first attempt:
+* run `40590168264`, Docs: `docs`;
+* run `40590168273`, CI: `validate` on `windows-2025`, `macos-15` and `ubuntu-24.04`, each at Go `1.26.10` and `1.27.3`.
+
+### Phase 15, the adoption report (2026-10-27)
+
+`docs/reports/0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md`, new, with its rows in `docs/README.md`: the index, and an "I
+want to…" row. It decides nothing.
+
+**Read at the heads:** magic-cli-remote at `5d1e7e2c`, and `<cli-b>` at `5fb6928`, with its uncommitted record edits. Both still
+pin `v1.20.0`.
+* A scratch script printed each site's lines, and every site the MADR found was there.
+* Another counted `<cli-b>`'s harness and its uses, and the calls that are its stubs, its extension dispatch and its command
+  resolution.
+
+**What it found that the MADR stated otherwise:**
+* **magic-cli-remote's 0207 MADR** at `:281`–`:286` now records `v1.21.0` to `v1.24.0` and a deferral to assess them. Only its D24
+  and D38 still call `v1.20.0` the newest tag.
+* **`<cli-b>`'s `acptest`** is 891 lines without its tests and 1,280 with them, and is used 385 times. The MADR gave 1,270 and
+  about 380.
+* **`<cli-b>`'s D6** asks for `ValidateGolden(t, path)`. The report gives the mapping from its goldens' `client→agent` and
+  `agent→client` prefixes to `Sent` and `Received`.
+
+These are observations of the consumers at a later head. They change no decision, so the MADR is not amended.
+
+**Redaction:** the report first quoted 0031's line with the second consumer's name in it. It was redacted to `<cli-b>`, and
+`tools/idscan.py` and a count of the name confirm none is left.
+
+**Gates:**
+* The first `make markdownlint` failed with 39 findings in the report, MD004 and MD032. A report is under the fleet's style, which
+  the records' MADR and PLAN files are excluded from, so its lists take `-` and a blank line before them. A scratch script made
+  both changes and asserted that nothing else in the text changed. The second run: 0 issues.
+* `make check-records` and `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files: nothing found.
