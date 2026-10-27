@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-10-26
+status: complete
+date: 2026-10-27
 associated-madr: "0040-MADR-check-elicitation-forms-answers-and-urls.md"
 ---
 
@@ -741,3 +741,50 @@ Next, after the owner commits and pushes this:
 * the annotated tag `v1.24.0` and its push, on the owner's ask in that turn;
 * the GitHub release from `tools/release_body.py`;
 * `tools/publication.py`, then `tools/consumer.py v1.24.0`.
+
+### Deviation, 2026-10-27: phase 8, an `agentproc` test fails in the tag's CI
+
+* **Found** after the owner pushed the release commit `2200989` and the tag `v1.24.0`. CI on `main` for `2200989`, run
+  `40514855278`, passed all six jobs, and the Docs run `40514855406` passed. CI on the tag, run `40516219662`, failed one job,
+  `validate (macos-15, 1.27.3)`, in step "Run go test -shuffle=on ./...", seed `1793109316312356000`:
+  `--- FAIL: TestDetachedTapIsPrefix`, `tap_test.go:335: the tap received 33554432 bytes and dropped 33488896, 67043328 in all;
+  the agent wrote 67108864`.
+* **Not this PLAN's:** `git diff --stat v1.23.0 -- agentproc/` is empty, and the same commit passed that job on `main`.
+* **Pre-existing and rare:**
+  * `tools/ci_jobs.py tally` over 40 runs of `main` since 2026-10-20 shows no failure of the macOS jobs;
+  * `go test -count=60 -run '^TestDetachedTapIsPrefix$' ./agentproc` passed 60 times locally.
+* **What is known of the cause.** Exactly 64 KiB, a macOS pipe buffer, is neither received nor counted as dropped. The test
+  reads `DroppedTapBytes` after `Close`, not after `Wait`, and does not establish whether `Close` returns before the last
+  buffered chunk is read and counted. It is either a race in the test or an `agentproc` defect against the README's "nothing the
+  agent writes before it exits is lost"; telling them apart is left to its own record.
+* **Decided** by the owner, out of three resolutions: "Rerun the job, record it". Rerun only the failed job of `40516219662`; if
+  it passes, publish the release and run the publication checks; investigate and fix the test, or `agentproc`, under a new
+  record, 0041. Not chosen: investigating before any release step; holding `v1.24.0` for a fix shipped as `v1.24.1`.
+* **Scope added to phase 8:** none. The fix is 0041's.
+* **The rerun.** `gh run rerun 40516219662 --failed`: attempt 2 of the run concluded "success", all six jobs, `validate
+  (macos-15, 1.27.3)` among them, every step passing.
+
+### Phase 8, the release published, 2026-10-27
+
+The owner committed and pushed the release commit as `2200989`, and created and pushed the tag. Then:
+
+* **CI:** on `main` for `2200989`, run `40514855278`, six jobs, and the Docs run `40514855406`, each "completed success". On the
+  tag, run `40516219662`: success on its second attempt, by the deviation above.
+* **The tag:** `v1.24.0` is annotated, its message `v1.24.0`, and names `2200989` on `origin`.
+* **`make api`:** against `v1.24.0`, now the newest tag, "0 incompatible, 0 compatible". Against `v1.23.0`, through
+  `scripts/check_api.py v1.23.0`, "0 incompatible, 25 compatible", as the release notes list.
+* **The body:** `tools/release_body.py v1.24.0 2200989` extracted the report's "Release text", 61 lines with one link, which it
+  points at the tag; its identifier scan found 0 matches. The body was read in full.
+* **The release:** the owner ran `gh release create v1.24.0 --verify-tag --title v1.24.0 --notes-file <the body>`.
+* **`tools/publication.py v1.24.0 2200989 <the body>`:** "10 of 10 checks hold". The release is published, marked latest, and
+  its body is the extracted text. CI holds on `main`'s head and on the tag. The proxy serves the tag at `2200989`, `go list -m
+  @latest` gives `v1.24.0`, and `go mod download` passes with the checksum database on.
+* **`tools/consumer.py v1.24.0`:** "as required". At `go1.26.10`, from the proxy:
+  * the program's output was as required, its last line `check CreateElicitationAccept: content["age"]: maximum: is greater
+    than 150`;
+  * its `go test`, with `WithElicitationCheck` set, passed;
+  * the Windows build passed;
+  * its `go.mod` kept `go 1.26.10` and gained no toolchain line.
+
+The release is published, so this PLAN and its row are `complete`. The flaky `agentproc` test the deviation found waits for its
+own record, 0041.
