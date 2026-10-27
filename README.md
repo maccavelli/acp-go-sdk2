@@ -878,6 +878,29 @@ requires URL mode for those, and no fallback to a form. An agent withdraws a
 pending elicitation by ending the context of its `CreateElicitation` call, which
 sends `$/cancel_request`.
 
+In URL mode the agent sends the user to a page: `accept` means only that the
+user agreed to open it. A client must not open or prefetch the URL without the
+user's consent, and shows the whole URL and its host first. `acp.ParseElicitationURL`
+refuses what no client should offer to open, a URL that is not absolute http or
+https, has no host, carries userinfo, or holds whitespace, and gives the host to
+show and whether to warn:
+
+```go
+u, err := acp.ParseElicitationURL(req.Url.Url)
+if err != nil {
+    return acp.NewCreateElicitationResponseDecline(), nil
+}
+if !c.consent(ctx, req.Url.Message, u.URL.String(), u.Host, !u.Secure || u.Punycode) {
+    return acp.NewCreateElicitationResponseDecline(), nil
+}
+```
+
+An agent gives each URL elicitation an id unique among those outstanding, such
+as `acp.ElicitationId(rand.Text())` from `crypto/rand`, and may send
+`elicitation/complete` with it when the user is done. A client ignores a
+`CompleteElicitation` for an id it does not hold or has already completed; the
+SDK keeps no record of them.
+
 ### Extension methods
 
 ACP supports **extension methods** for custom JSON-RPC methods whose names start with `_`.

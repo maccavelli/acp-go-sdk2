@@ -624,3 +624,43 @@ When the release is published, this PLAN and its row are `complete`.
     and `newfiles` covered `elicitation_option_test.go`. `api` reported "against v1.23.0: 0 incompatible, 23 compatible",
     `WithElicitationCheck` added;
   * `make check-records`, `make disclosure-check`; `tools/idscan.py --paths` over the changed and new files: 0 matches.
+
+### Phase 6, URL mode, 2026-10-26
+
+* **`elicitation.go`:** `ElicitationURL` and `ParseElicitationURL`. The rules run in order: whitespace or a control character,
+  a URL that does not parse, one not absolute, a scheme other than `http` and `https`, userinfo, no host. Then:
+  * `Host` is `Hostname()` lowercased;
+  * `Punycode` is a label of it starting with `xn--`;
+  * `Secure` is the `https` scheme.
+
+  A failure is `RuleFormat` of `CreateElicitationUrl`'s `url`. Beyond the PLAN, its `Value` is nil as well, since a refused URL
+  may carry a credential. `goconst` asked for `urlField`, `schemeHTTP` and `schemeHTTPS`.
+* **Tests**, `elicitation_url_test.go`, `TestParseElicitationURL`:
+  * 14 refused URLs, the PLAN's 12 and two more, each a `RuleFormat` of `url` with no `Value`, and no message holding the URL
+    or the credential `pw`;
+  * five accepted ones: `https` (`Secure`), `http://localhost:8080/cb` (not `Secure`), `XN--80AK6AA92E.com` (`Punycode`, `Host`
+    lowercased), a Punycode sub-label, and `[::1]:8443` (`Host` `::1`).
+
+  The two added refusals are `ftp://example.com/file` and `javascript://example.com/%0Aalert(1)`. Planting the PLAN's row "any
+  scheme accepted" showed `javascript:alert(1)` and `file:///etc/passwd` have no host, so the host rule refuses them whether or
+  not the scheme rule runs. Only a URL with a host tests the scheme rule. The row's check is now those two.
+* **Docs:**
+  * `README.md`'s "Elicitation" gains URL mode: what `accept` means, consent, `ParseElicitationURL` with an example, an id from
+    `crypto/rand`'s `rand.Text`, and the client's rule for an unknown or completed id on `elicitation/complete`;
+  * `docs/architecture.md`'s entry for `elicitation.go` names `ParseElicitationURL` and `WithElicitationCheck`, items 1 to 6.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | the row's: userinfo accepted | `elicitation_url_test.go:36: ParseElicitationURL("https://user:pw@example.com/") = {… Host:example.com …}, <nil>; want a RuleFormat …`; the same for `https://user@example.com/` |
+  | the row's: any scheme accepted | `:36: ParseElicitationURL("ftp://example.com/file") = …, <nil>`; the same for `javascript://example.com/%0Aalert(1)` |
+  | the row's: `xn--` matched case-sensitively | `:63: ParseElicitationURL("https://XN--80AK6AA92E.com/") = {… Punycode:false}, want … punycode true` |
+  | the row's: whitespace in the path accepted | `:36: ParseElicitationURL("https://example.com/a b") = {URL:https://example.com/a%20b …}, <nil>` |
+
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "212 file(s) clean"; `scripts/go-precheck.sh elicitation_url_test.go`;
+  * `make markdownlint`;
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `newfiles` covered
+    `elicitation_url_test.go`. `api` reported "against v1.23.0: 0 incompatible, 25 compatible", `ElicitationURL` and
+    `ParseElicitationURL` added;
+  * `make check-records`, `make disclosure-check`; `tools/idscan.py --paths` over the changed and new files: 0 matches.

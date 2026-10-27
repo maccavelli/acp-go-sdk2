@@ -31,6 +31,10 @@ const (
 	errTypeSchema   = "ElicitationSchema"
 	errTypeProperty = "ElicitationPropertySchema"
 	errTypeAnswer   = "CreateElicitationAccept"
+	errTypeURL      = "CreateElicitationUrl"
+	urlField        = "url"
+	schemeHTTP      = "http"
+	schemeHTTPS     = "https"
 )
 
 // ElicitationField is one property of an elicitation form, as a client shows
@@ -372,6 +376,60 @@ func checkElicitationAnswer(params, result any) error {
 		return nil
 	}
 	return req.Form.RequestedSchema.Check(resp.Accept.Content)
+}
+
+// ElicitationURL is a URL-mode elicitation's URL, as ParseElicitationURL reads
+// it for a client to show before it asks the user's consent: the URL, the host
+// to show, whether the scheme is https, and whether a label of the host is
+// Punycode, an internationalized name the user may misread
+// (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 5).
+type ElicitationURL struct {
+	URL      *url.URL
+	Host     string
+	Secure   bool
+	Punycode bool
+}
+
+// ParseElicitationURL reads raw, the URL of a URL-mode elicitation. It refuses
+// one that holds whitespace or a control character, does not parse, is not
+// absolute, has a scheme other than http and https, carries userinfo, which
+// the specification forbids an agent to put in it, or has no host. Host is the
+// host name, lowercased, without its port or brackets; Secure is true for
+// https; Punycode is true when a label of the host starts with "xn--". It opens
+// and fetches nothing: a client shows the whole URL and the host, warns when
+// Punycode is set or Secure is not, and opens the URL only with the user's
+// consent; an agent runs it on a URL before it sends one. A failure is a
+// *ValidationError of Type "CreateElicitationUrl", Field "url" and Rule
+// RuleFormat, whose message names the rule and holds nothing of the URL, which
+// may hold a credential; its Value is nil
+// (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 5).
+func ParseElicitationURL(raw string) (ElicitationURL, error) {
+	refuse := func(why string) (ElicitationURL, error) {
+		return ElicitationURL{}, &ValidationError{Type: errTypeURL, Field: urlField, Rule: RuleFormat,
+			msg: fmt.Sprintf("%s: %s: %s: %s", errTypeURL, urlField, RuleFormat, why)}
+	}
+	if strings.ContainsFunc(raw, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
+		return refuse("holds whitespace or a control character")
+	}
+	u, err := url.Parse(raw)
+	switch {
+	case err != nil:
+		return refuse("does not parse")
+	case u.Scheme == "":
+		return refuse("is not absolute")
+	case u.Scheme != schemeHTTP && u.Scheme != schemeHTTPS:
+		return refuse("has a scheme other than http and https")
+	case u.User != nil:
+		return refuse("carries userinfo")
+	case u.Hostname() == "":
+		return refuse("has no host")
+	}
+	host := strings.ToLower(u.Hostname())
+	punycode := false
+	for label := range strings.SplitSeq(host, ".") {
+		punycode = punycode || strings.HasPrefix(label, "xn--")
+	}
+	return ElicitationURL{URL: u, Host: host, Secure: u.Scheme == schemeHTTPS, Punycode: punycode}, nil
 }
 
 // answerError is a problem Check reports.
