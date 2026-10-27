@@ -814,3 +814,46 @@ The second row's line names a temporary directory of this machine, cut here.
 * The plants were rerun after the last change: 7 of 7.
 * `make check-records`, `make markdownlint`, `make disclosure-check`, `make check-tools`: exit 0.
 * `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 10, `Negotiation.AllowsValue` (2026-10-27)
+
+**Deviation, 2026-10-27, the planted break.** The step's break, "one rule left out", has nothing to act on. `AllowsValue` lists
+no rules: it runs the generated gates, the `gater` methods of `types_gen.go`, which `gateMessage` and `gateResult` run, so a rule
+the generator adds is covered with no change here. The breaks that can happen to it were planted instead:
+* the value gates skipped;
+* a value passed by value not reached;
+* the method gate skipped.
+
+The step's own words name the check this break must fail, so this is recorded as a deviation and not asked about first.
+
+**What changed:**
+* **`helpers.go`:** `func (n Negotiation) AllowsValue(method string, params any) error`.
+  * It returns `n.Allows(method)`'s error first, as `gateMessage` does.
+  * Then `params`' `gates(&n, method)`. A value passed by value is copied to a new pointer, through `reflect.TypeAssert`, since
+    the generated `gates` methods have pointer receivers.
+  * Its doc names what it returns: the method's `*CapabilityError`, a property's or variant's, and `ErrTerminalAuthMethod` for
+    authenticate. A result is checked as it is when answered or received.
+* **`allows_value_test.go`, new:** `TestAllowsValue`, over the tables the gate tests use, so a rule added to them is covered:
+  * for each of `valueGates`' 22 rules, the typed send's error from `sides` with a record that does not advertise it;
+    `AllowsValue` of the value, and of a pointer to it, is `reflect.DeepEqual` to it, and nil with a record that does;
+  * for each of `gatedMethods`' 15 method gates, `Allows`' error without the capability, and nil with only it;
+  * a `session/new` result with a boolean config option, equal to `gateResult`'s error;
+  * authenticate naming a terminal auth method, `ErrTerminalAuthMethod`, and an agent method, nil;
+  * nil params, nil.
+* **The API:** `make api` against `v1.24.0` reports 12 compatible, 0 incompatible, the new one `Negotiation.AllowsValue`.
+* **Left to phase 14:** `README.md`.
+
+Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 3 of 3 failed as required.
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| the value gates skipped | `TestAllowsValue` | `allows_value_test.go:34: sessionCapabilities.additionalDirectories additionalDirectories: AllowsValue = <nil>, want the send's error, session/new: capability sessionCapabilities.additionalDirectories …` |
+| a value passed by value not reached | `TestAllowsValue` | the same line: the value forms fail, the pointer forms pass |
+| the method gate skipped | `TestAllowsValue` | `allows_value_test.go:48: session/list: AllowsValue without its capability = <nil>, want Allows', session/list: capability sessionCapabilities.list not advertised` |
+
+**Gates:**
+* `tools/gates.py --all`, with both hosts set: the first run failed `precheck`, `newfiles` and `lint` on modernize's
+  `reflecttypeassert`. After `p.Interface().(gater)` became `reflect.TypeAssert[gater](p)`, the second passed all 18. The plants
+  were rerun after the change: 3 of 3.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
+* `tools/idscan.py --paths` over the staged files: nothing found.

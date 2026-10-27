@@ -6,6 +6,7 @@ import (
 	"errors"
 	"iter"
 	"path/filepath"
+	"reflect"
 	"time"
 )
 
@@ -882,6 +883,33 @@ func PresentCompactionSummary(ctx context.Context, a *AgentSideConnection, sessi
 		SessionUpdate: sessionUpdateCompactionSummary,
 	}}
 	return present(ctx, a, sessionID, update, func(s *ClientSessionCapabilities) bool { return s.Compaction != nil }, nil)
+}
+
+// AllowsValue reports whether the capabilities n records let params be sent
+// with method: nil, or the error the connection would return before it
+// sends, without sending. That is Allows' *CapabilityError when method's own
+// capability is not advertised, and otherwise the *CapabilityError naming
+// the property or variant of params whose capability is not, such as an
+// MCP server's transport, a prompt's content block or a session update, or
+// ErrTerminalAuthMethod for authenticate naming a terminal auth method. So a
+// caller can choose another value, or leave the property out, before it
+// sends. params is a request, a notification or a result, as a value or a
+// pointer; a result is checked as it is when answered or received
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 4).
+func (n Negotiation) AllowsValue(method string, params any) error {
+	if err := n.Allows(method); err != nil {
+		return err
+	}
+	g, ok := params.(gater)
+	if v := reflect.ValueOf(params); !ok && v.IsValid() && v.Kind() != reflect.Pointer {
+		p := reflect.New(v.Type())
+		p.Elem().Set(v)
+		g, ok = reflect.TypeAssert[gater](p)
+	}
+	if !ok {
+		return nil
+	}
+	return g.gates(&n, method)
 }
 
 // present sends update when the client's session capabilities allow it, and
