@@ -114,11 +114,14 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0039 | MADR | [Add five adopter capabilities on schema 1.25.0: unstable boundary, presentation, compaction timeline, extension mux, acptest](decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md); assessed 2026-10-25, questions 5 and 6 added; second assessment of item 1 the same day, question 7 added and answered; question 8, from the PLAN's 2c, and questions 9 and 10, from its 2f, added and answered | accepted |
 | 0039 | PLAN | [Implement 0039: an unstable boundary, presentation and compaction runtimes, an extension mux, and acptest](decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md) | complete |
 | 0039 | REPORT | [Release notes for v1.23.0, against v1.22.0](reports/0039-REPORT-release-notes-v1-23-0.md) | observed |
+| 0040 | MADR | [Check elicitation forms, answers and URLs with standard-library helpers on the generated types](decisions/0040-MADR-check-elicitation-forms-answers-and-urls.md); questions 1 to 5 answered 2026-10-26, question 2 as an opt-in connection check | accepted |
+| 0040 | PLAN | [Implement 0040: elicitation form fields, schema and answer checks, text input, URL checks, and an opt-in connection check](decisions/0040-PLAN-check-elicitation-forms-answers-and-urls.md) | proposed |
 
 ## I want to…
 
 | I want to… | Start here |
 | :--- | :--- |
+| know how the SDK checks an elicitation form, its answer and a URL elicitation | [0040-MADR-check-elicitation-forms-answers-and-urls.md](decisions/0040-MADR-check-elicitation-forms-answers-and-urls.md) |
 | know which five additions to make next for 1.25.0 adopters | [0039-MADR-five-adopter-additions-on-schema-1-25-0.md](decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md) |
 | see whether a Go 1.27.1 floor fits this SDK | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |
 | see how the generated API lines up with the current ACP spec | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |
