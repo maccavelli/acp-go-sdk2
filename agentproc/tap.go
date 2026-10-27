@@ -129,12 +129,16 @@ func (t *tap) run() {
 // 0030-MADR-record-initialize-on-arrival.md, the amendment of 2026-10-21, T2
 // and T3).
 type tapReader struct {
-	f *os.File
-	t *tap
+	f    *os.File
+	t    *tap
+	hook func() // Command.readHook
 }
 
 // Read reads the pipe, offers what it read, and returns the pipe's result.
 func (r *tapReader) Read(p []byte) (int, error) {
+	if r.hook != nil {
+		r.hook()
+	}
 	n, err := r.f.Read(p)
 	if n > 0 {
 		r.t.offer(p[:n])
@@ -177,12 +181,12 @@ func (w *tapWriter) Close() error {
 
 // streams returns what the connection writes to and reads from: the agent's
 // input and output as they are when no tap is set, or wrapped, each with its
-// tap, which it starts.
-func streams(stdin *sharedClose, outR *os.File, inputTap, outputTap io.Writer) (in io.Writer, out io.Reader, inTap, outTap *tap) {
+// tap, which it starts; the output's with readHook.
+func streams(stdin *sharedClose, outR *os.File, inputTap, outputTap io.Writer, readHook func()) (in io.Writer, out io.Reader, inTap, outTap *tap) {
 	in, out = stdin, outR
 	if outputTap != nil {
 		outTap = newTap(outputTap)
-		out = &tapReader{f: outR, t: outTap}
+		out = &tapReader{f: outR, t: outTap, hook: readHook}
 	}
 	if inputTap != nil {
 		inTap = newTap(inputTap)

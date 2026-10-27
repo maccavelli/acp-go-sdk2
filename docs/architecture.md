@@ -636,10 +636,14 @@ signalled, closes `Done`, gives the connection up to the grace to read to the
 end of the agent's output, and closes it. The monitor stops the agent when the
 connection ends first. `Close` runs, once, its steps: close the agent's input,
 which the connection shares through `sharedClose`, so the two closes never
-collide; wait up to the grace; on Unix SIGTERM and the grace again; kill; close
-the connection. `Kill` closes `hurry` and runs the same steps: a closed
-`hurry` ends each wait at once and skips SIGTERM, so a `Close` in progress
-kills too. `Wait` waits for both goroutines and the connection, drains the
+collide; wait up to the grace; on Unix SIGTERM and the grace again; kill.
+`Close` does not close the connection: the watcher does, once it has read to
+the end of the agent's output or the grace from the exit has passed, so that
+the agent's last output is not lost
+([0041-MADR-close-the-gaps-the-consumers-wait-on.md](decisions/0041-MADR-close-the-gaps-the-consumers-wait-on.md),
+item 1). `Kill` closes `hurry` and runs the same steps: a closed `hurry` ends
+each wait at once, the watcher's included, and skips SIGTERM, so a `Close` in
+progress kills too. `Wait` waits for both goroutines and the connection, drains the
 taps, and joins `ErrTerminated` or `ErrKilled` to `Cmd.Wait`'s error by the
 step that ended the agent.
 
@@ -664,9 +668,9 @@ Checks that guard it:
   `TestCloseIdempotent`, `TestDefaultGrace`, `TestCallersCommandKept`,
   `TestDescendantsEnded`, `TestConnectionEndStopsAgent`, `TestKill`, `TestKillCutsCloseShort`,
   `TestKillAfterExit`, and the taps' `TestOutputTapVerbatim`, `TestInputTapSeesWrites`,
-  `TestTapErrorIgnored`, `TestTapsUnset`, `TestBlockedTapDetached`, `TestDetachedTapIsPrefix` and
-  `TestTapDrainBoundedByGrace`; on Unix `TestStartRefusesSharedGroup` and
-  `TestEscapedDescendantDoesNotHoldWait`, `TestTapKeepsCloseEnding` and `TestClientDeathEndsAgentAtInputEnd`; on Linux and FreeBSD
+  `TestTapErrorIgnored`, `TestTapsUnset`, `TestBlockedTapDetached`, `TestDetachedTapIsPrefix`,
+  `TestCloseReadsTheAgentsLastOutput` and `TestTapDrainBoundedByGrace`; on Unix `TestStartRefusesSharedGroup` and
+  `TestEscapedDescendantDoesNotHoldWait`, `TestTapKeepsCloseEnding`, `TestKillClosesAtOnce` and `TestClientDeathEndsAgentAtInputEnd`; on Linux and FreeBSD
   `TestStartFromExitingLockedGoroutine`, `TestDefaultPdeathsig`, `TestCallersPdeathsigKept` and
   `TestClientDeathEndsAgent`; on Windows `TestClientDeathEndsTree`, `TestDescendantInJobDespiteSlowAttach`,
   `TestStartRefusesSuspended`, `TestCallersCreationFlagsKept` and `TestBreakawayLeavesJob`.

@@ -62,6 +62,12 @@ type Command struct {
 	// set as both taps is called from two goroutines, and must be safe for
 	// concurrent use; the two streams have no order between them.
 	InputTap io.Writer
+
+	// readHook, when set with OutputTap, is called before each read of the
+	// agent's output. Only this package's tests set it, to hold the
+	// connection's reader back behind the agent
+	// (0041-PLAN-close-the-gaps-the-consumers-wait-on.md, phase 3).
+	readHook func()
 }
 
 // Process is a running agent and the connection to it. Its methods are safe
@@ -189,7 +195,7 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 	}
 	p.stdin = &sharedClose{File: inW}
 	p.tree = t
-	in, out, inTap, outTap := streams(p.stdin, outR, c.InputTap, c.OutputTap)
+	in, out, inTap, outTap := streams(p.stdin, outR, c.InputTap, c.OutputTap, c.readHook)
 	p.inTap, p.outTap = inTap, outTap
 	p.conn = acp.NewClientSideConnection(client, in, out, c.ConnectionOptions...)
 	proceed <- true
@@ -255,7 +261,9 @@ func (f *sharedClose) Close() error {
 // agent's process group or job, since a launcher's descendants outlive it
 // (0027-MADR-agent-process-helper.md, P8), records the result, and closes
 // done; then it gives the connection up to the grace to read to the end of
-// the agent's output, and closes it.
+// the agent's output, or until Kill, and closes it. It alone closes the
+// connection once the agent has run, whether or not Close was called
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 1).
 func (p *Process) watch() {
 	err := p.cmd.Wait()
 	p.mu.Lock()
@@ -267,6 +275,7 @@ func (p *Process) watch() {
 	defer t.Stop()
 	select {
 	case <-p.conn.Done():
+	case <-p.hurry:
 	case <-t.C:
 	}
 	_ = p.conn.Close() //nolint:errcheck // Close of a connection reports nothing Wait does not.
@@ -357,8 +366,10 @@ func (p *Process) DroppedTapBytes() (output, input uint64) {
 // standard input and waits up to the grace for the agent to exit. On Unix it
 // then sends SIGTERM to the agent's process group and waits up to the grace
 // again. It then kills the group, or on Windows ends the job, or kills the
-// agent where there is neither, and closes the connection. A second call returns the same error.
-// Kill cuts a Close in progress short.
+// agent where there is neither. Once the agent has exited, the connection
+// reads to the end of the agent's output, up to the grace from the exit, and
+// is closed. A second call returns the same error. Kill cuts a Close in
+// progress short.
 func (p *Process) Close() error {
 	p.closeOnce.Do(p.stop)
 	return p.Wait()
@@ -391,7 +402,11 @@ func (p *Process) stop() {
 		p.signal(p.tree.kill, ErrKilled)
 		<-p.done // WaitDelay bounds it once the agent has exited
 	}
-	_ = p.conn.Close() //nolint:errcheck // Close of a connection reports nothing Wait does not.
+	// The watcher closes the connection: once it has read to the end of the
+	// agent's output, up to the grace from the agent's exit, or at once after
+	// Kill. Closing it here would lose what the agent wrote last and the
+	// connection had not yet read
+	// (0041-PLAN-close-the-gaps-the-consumers-wait-on.md, phase 2).
 }
 
 // exitedWithin reports whether the agent has exited within d, and false at

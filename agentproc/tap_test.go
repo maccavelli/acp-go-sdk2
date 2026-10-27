@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -80,6 +81,24 @@ func bulk() int {
 		return 1
 	}
 	_, _ = io.Copy(io.Discard, in)
+	return 0
+}
+
+// lastMiB is how many MiB of a bulkStream the "last" child writes: more than
+// a pipe holds.
+const lastMiB = 2
+
+// last is the "last" child: it says it is ready, waits for a line of input,
+// writes lastMiB of a bulkStream, and exits at once, without reading the rest
+// of its input.
+func last() int {
+	ready()
+	if _, err := bufio.NewReader(os.Stdin).ReadString('\n'); err != nil {
+		return 1
+	}
+	if _, err := os.Stdout.Write(bulkStream(lastMiB)); err != nil {
+		return 1
+	}
 	return 0
 }
 
@@ -249,7 +268,7 @@ func TestTapsUnset(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = r.Close(); _ = w.Close() })
 	stdin := &sharedClose{File: w}
-	in, out, inTap, outTap := streams(stdin, r, nil, nil)
+	in, out, inTap, outTap := streams(stdin, r, nil, nil, nil)
 	if in != io.Writer(stdin) || out != io.Reader(r) || inTap != nil || outTap != nil {
 		t.Errorf("streams with no tap = %T, %T, %v, %v; want the input and the output themselves, and no tap", in, out, inTap, outTap)
 	}
@@ -333,6 +352,52 @@ func TestDetachedTapIsPrefix(t *testing.T) {
 	out, _ := p.DroppedTapBytes()
 	if total := uint64(len(got)) + out; total != uint64(len(want)) {
 		t.Errorf("the tap received %d bytes and dropped %d, %d in all; the agent wrote %d", len(got), out, total, len(want))
+	}
+}
+
+// TestCloseReadsTheAgentsLastOutput requires Close, called as the agent
+// writes its last output and exits, to leave the connection to read that
+// output to its end: the output tap receives all of it, and nothing is
+// dropped. The connection's reader is held back, 5 ms before each read from
+// the agent's last write on, so that it is behind the agent when the agent
+// exits, as under the race detector in CI
+// (0041-PLAN-close-the-gaps-the-consumers-wait-on.md, phases 2 and 3).
+func TestCloseReadsTheAgentsLastOutput(t *testing.T) {
+	t.Parallel()
+	var slow atomic.Bool
+	cmd := agentCmd("last")
+	w := &readyWriter{ready: make(chan struct{})}
+	cmd.Stderr = w
+	tap := &capture{}
+	c := &Command{
+		Cmd:               cmd,
+		Grace:             5 * time.Second,
+		OutputTap:         tap,
+		ConnectionOptions: []acp.ConnectionOption{acp.WithLogger(slog.New(slog.DiscardHandler))},
+		readHook: func() {
+			if slow.Load() {
+				time.Sleep(5 * time.Millisecond)
+			}
+		},
+	}
+	p, err := c.Start(&testClient{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = p.Close() })
+	awaitReady(t, "last", w.ready)
+	slow.Store(true)
+	// The agent writes its last output once this arrives, and exits.
+	if err := p.Conn().Connection().SendNotification(t.Context(), "_test/go", map[string]any{}); err != nil {
+		t.Fatalf("SendNotification = %v", err)
+	}
+	if _, err := within(t, c.Grace+slack, "Close", p.Close); err != nil {
+		t.Fatalf("Close = %v, want nil: the agent exits of itself", err)
+	}
+	got, want := tap.bytes(), bulkStream(lastMiB)
+	if out, _ := p.DroppedTapBytes(); !bytes.Equal(got, want) || out != 0 {
+		t.Errorf("the tap received %d bytes and dropped %d of the agent's %d: the connection was closed before it read the agent's last output",
+			len(got), out, len(want))
 	}
 }
 

@@ -35,6 +35,8 @@ func child(mode string) int {
 		return 0
 	case "bulk": // writes a bulkStream in two parts, the second after a line of input (tap_test.go)
 		return bulk()
+	case "last": // writes a bulkStream after a line of input, and exits at once (tap_test.go)
+		return last()
 	case "eof": // exits 0 at its input's end
 		ready()
 		_, _ = io.Copy(io.Discard, os.Stdin)

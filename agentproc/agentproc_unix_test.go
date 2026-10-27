@@ -136,6 +136,34 @@ func TestTapKeepsCloseEnding(t *testing.T) {
 	}
 }
 
+// TestKillClosesAtOnce requires Kill to close the connection at once when a
+// process the agent started has left its process group and holds the agent's
+// output, at the default grace of 5 s: the wait for the output's end stops at
+// Kill (0041-PLAN-close-the-gaps-the-consumers-wait-on.md, phase 3). The
+// slack is shorter than the grace, so that the wait would fail it.
+func TestKillClosesAtOnce(t *testing.T) {
+	t.Parallel()
+	beat := filepath.Join(t.TempDir(), "beat")
+	p := startTapped(t, "parent-escape", []string{beatEnv + "=" + beat}, 0, nil, nil)
+	t.Cleanup(func() {
+		if b, err := os.ReadFile(beat + ".pid"); err == nil {
+			if pid, err := strconv.Atoi(string(b)); err == nil {
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+	})
+	if !beating(beat) {
+		t.Fatal("the escaped grandchild is not running: the test proves nothing")
+	}
+	// The agent may exit of itself before Kill, so Kill's error is not checked.
+	_, _ = within(t, slack, "Kill", p.Kill)
+	select {
+	case <-p.Conn().Done():
+	default:
+		t.Error("the connection is open after Kill")
+	}
+}
+
 // TestStartRefusesSharedGroup requires Start to refuse, starting nothing, a
 // Cmd that would join a process group other processes share
 // (0027-PLAN-agent-process-helper.md, "Start").

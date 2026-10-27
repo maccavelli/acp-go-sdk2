@@ -641,8 +641,9 @@ more ends them
 `Close`
 closes the agent's input and waits up to the grace, 5 seconds unless
 `Command.Grace` says otherwise; on Unix it then sends SIGTERM to the group and
-waits again; then it kills the group, or ends the job, and closes the
-connection. `Close` and `Wait` return the agent's exit error, joined with
+waits again; then it kills the group, or ends the job. Once the agent has
+exited, the connection reads to the end of the agent's output, up to the grace,
+and is closed. `Close` and `Wait` return the agent's exit error, joined with
 `agentproc.ErrTerminated` or `agentproc.ErrKilled` when `Close` had to
 escalate. `Kill` runs the same steps without their waits, ending the agent and
 the processes it started at once, with `agentproc.ErrKilled`, and an agent that

@@ -100,7 +100,9 @@ The record keeps the scratch script and its failing lines.
 
 * `agentproc.go`'s `stop`: in the case where the agent has exited within the grace, or after `SIGTERM`, it waits for
   `p.conn.Done()` or the rest of the grace, from the grace's start, before `p.conn.Close()`. After a kill it does the same, since
-  the kill ends the agent's output too. With `hurry` closed, by `Kill`, it closes at once.
+  the kill ends the agent's output too. With `hurry` closed, by `Kill`, it closes at once. (Deviation, 2026-10-27: the owner
+  chose the grace from the agent's exit, the watcher's rule, over the rest of a step's grace. `stop` no longer closes the
+  connection; the watcher does, and its wait also ends at `hurry`. See the execution record.)
 * `stop`'s comment and `Close`'s doc say what it waits for.
 * Tests:
   * `TestCloseReadsTheAgentsLastOutput`, new: a child mode that writes a known number of lines, more than a pipe buffer, and exits
@@ -116,7 +118,7 @@ Planted breaks:
 | Break | The check that must fail |
 | :--- | :--- |
 | `stop` closes at once, as before | the new test, at `-count=20`; `TestDetachedTapIsPrefix` with phase 2's slow reader, at `-count=20` |
-| the wait ignores `hurry` | `TestKillCutsCloseShort` |
+| the wait ignores `hurry` | ~~`TestKillCutsCloseShort`~~ `TestKillClosesAtOnce`, new, on Unix (deviation, 2026-10-27: `TestKillCutsCloseShort`'s agent leaves no process holding its output, so it cannot tell) |
 
 ### 4. `agentproc.LineTap` (MADR item 5)
 
@@ -287,7 +289,9 @@ As 0040's phase 8 ran:
 * **Rollout.** Phases 3 to 13 are separate commits. Under question 6's answer, one minor carries them, or a patch for phase 3 first.
   Each consumer adopts under its own records, from the adoption report.
 * **What a consumer meets on the release:** new names, a new package, and `agentproc.Close` waiting up to the grace for the
-  agent's output to end after the agent exits. That wait already bounded `Close`, so its longest time is unchanged.
+  agent's output to end after the agent exits. ~~That wait already bounded `Close`, so its longest time is unchanged.~~
+  (Corrected 2026-10-27, phase 3: `Close` can take up to one grace longer than before, and only when the agent's output stays
+  open after its exit, as when a process that left the agent's group or job holds it.)
 * **Rollback before a tag:** revert the phase's commits.
 * **Rollback after a tag:** a name cannot be removed under `v1`; a defect is fixed forward in a patch.
 
@@ -338,3 +342,76 @@ tap_test.go:335: the tap received 33554432 bytes and dropped 33488896, 67043328 
 * **Decided:** the owner accepted the result as confirming the MADR's cause. Phase 3 proceeds.
 * **Scope changes:** phase 3's new test holds the reader back through an unexported `Command` field, and its planted break runs at
   `-count=20`. The MADR carries "Amended by the PLAN's phase 2, 2026-10-27".
+
+### Phase 3, `agentproc` reads the output to its end (2026-10-27)
+
+**Deviation, 2026-10-27, the wait's bound.**
+* **Found:** the step said "the rest of the grace, from the grace's start", and the rollout said `Close`'s longest time was
+  unchanged. Those two do not fit the rule the MADR names, "as the watcher already does". The watcher counts its grace from the
+  agent's exit, and `Start`'s doc already promised that rule.
+* **Offered:** the grace from the exit; the rest of the step's grace, as phase 2's `slowfix` did, which leaves a late exit little
+  time to read; or a fixed half grace.
+* **Decided:** the owner chose the grace from the exit. The rollout line is corrected: `Close` can take up to one grace longer, and
+  only when the agent's output stays open after its exit.
+
+**Deviation, 2026-10-27, the `hurry` break's check.**
+* **Found:** `TestKillCutsCloseShort` cannot catch a wait that ignores `hurry`. Its agent leaves no process holding the output, so
+  the kill ends the output by itself.
+* **Done:** the check is `TestKillClosesAtOnce`, new, on Unix. It uses the `parent-escape` agent, whose grandchild leaves the group
+  and holds the output, at the default grace of 5 s. `Kill` must close the connection within the 3 s slack. The step's own words
+  name the check this break must fail, so this is recorded as a deviation and not asked about first.
+
+**What changed:**
+* **`agentproc/agentproc.go`:**
+  * `watch`'s wait for the connection's end also ends at `p.hurry`.
+  * `stop` no longer closes the connection. The watcher alone closes it, up to the grace after the agent's exit, or at once after
+    `Kill`.
+  * `Close`'s and `watch`'s docs say so.
+  * `Command` gains an unexported `readHook func()`, passed to `streams`.
+* **`agentproc/tap.go`:** `tapReader` calls the hook, when set, before each read. `streams` takes it.
+* **Tests:**
+  * `TestCloseReadsTheAgentsLastOutput`, new in `tap_test.go`. The new `last` child, in `child_test.go`, writes 2 MiB of a
+    `bulkStream` after a line of input and exits at once. The hook sleeps 5 ms before each read from just before that line is
+    sent. The test calls `Close`, and requires the tap's bytes to equal the stream, with nothing dropped.
+  * `TestKillClosesAtOnce`, new in `agentproc_unix_test.go`.
+  * `TestTapsUnset`'s call to `streams` gains the argument.
+* **Docs:**
+  * `README.md`'s `agentproc` section: the connection reads to the end of the output after the exit, up to the grace.
+  * `docs/architecture.md`: the watcher, not `Close`, closes the connection, and `hurry` ends the watcher's wait. The two new tests
+    are added to the test list.
+* **The API:** `make api` against `v1.24.0` reports `0 incompatible, 0 compatible`. The field is unexported.
+
+Planted breaks. Each ran in its own copy of the working tree, made by `git archive` of `8d30c43` with the changed files copied
+over, beside a control: the same copy and run with no break.
+
+| Break | Check | Broken | Control |
+| :--- | :--- | :--- | :--- |
+| `stop` closes the connection at once, as before | `TestCloseReadsTheAgentsLastOutput`, `-count=20` | 20 of 20 failed | 0 of 20 failed |
+| the same, with phase 2's slow reader | `TestDetachedTapIsPrefix`, `-count=20` | 19 of 20 failed | 0 of 20 failed |
+| the watcher's wait ignores `hurry` | `TestKillClosesAtOnce` | failed | passed |
+
+The broken runs' first failing lines:
+
+```text
+tap_test.go:399: the tap received 2031616 bytes and dropped 0 of the agent's 2097152: the connection was closed before it read the agent's last output
+tap_test.go:354: the tap received 33554432 bytes and dropped 33488896, 67043328 in all; the agent wrote 67108864
+agentproc_unix_test.go:159: Kill took longer than 3s
+```
+
+Both loss failures miss 65536 bytes, as the CI run did.
+
+**100 runs:**
+
+| Host | Tests | Result |
+| :--- | :--- | :--- |
+| macOS, `-race` | `TestDetachedTapIsPrefix`, `TestCloseReadsTheAgentsLastOutput`, `TestKillClosesAtOnce` | 300 passed, 0 failed, 711 s |
+| a Linux host reached over SSH | the same three | 300 passed, 0 failed |
+| a Windows host reached over SSH | `TestDetachedTapIsPrefix`, `TestCloseReadsTheAgentsLastOutput` | 200 passed, 0 failed |
+
+The first macOS run of 200 stopped at `go test`'s default 10-minute timeout. Its panic named `TestDetachedTapIsPrefix`, 3 s into a
+run and waiting for the agent's first 56 MiB. That is the time limit, not a hang. The run above used `-timeout=60m`.
+
+**Gates:**
+* `tools/gates.py --all`, with both hosts set: all 18 passed.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
+* `tools/idscan.py --paths` over the staged files: nothing found.
