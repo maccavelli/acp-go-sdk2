@@ -215,8 +215,8 @@ copy, and holds an unended line until its end, for `Command.OutputTap` and `Inpu
 
 #### 6. A bounded wait
 
-**Add** (question 2, which reopens 0026's question 4). `WaitContext(ctx) error` on `Connection`, both side connections and
-`agentproc.Process`. It returns `Wait()`'s error, or `context.Cause(ctx)` when ctx ends first. It starts at most one goroutine per
+**Add** (question 2, which reopens 0026's question 4). `WaitContext(ctx) error` on `Connection`, ~~both side connections~~ and
+`agentproc.Process` (amended 2026-10-27, "Amended by the PLAN's phase 6": a side connection's is its `Connection()`'s). It returns `Wait()`'s error, or `context.Cause(ctx)` when ctx ends first. It starts at most one goroutine per
 connection, which ends with the connection's goroutines, so it leaves none behind. `acptest.Connect`'s cleanup then waits for a
 bound of its own and fails the test when a handler outlives it.
 
@@ -325,6 +325,20 @@ every time. In a scratch copy of `8d30c43`, on macOS, 20 runs each:
 
 The loss needs a reader behind the agent when the agent exits, as under the race detector in CI. So phase 3's new test holds the
 reader back through a field of `Command` that is unexported and set only by the package's tests.
+
+#### Amended by the PLAN's phase 6, 2026-10-27
+
+The owner decided two points that item 6 did not foresee.
+
+* **No `WaitContext` on the side connections.** A method of `AgentSideConnection` or `ClientSideConnection` that takes a context
+  is a protocol method, by the rule of
+  [0038-MADR-consumer-helpers-kind-and-agent-refusals.md](0038-MADR-consumer-helpers-kind-and-agent-refusals.md)'s amendment,
+  which `side_methods_test.go` enforces. Three tests treat each such method as a wire call: `TestTypedMethodDocsNameErrors`,
+  `TestNotInitialized` and `TestConcurrentUseOfOneConnection`. A side connection's `Err` and `Wait` are its connection's, so a
+  caller writes `side.Connection().WaitContext(ctx)`. `Connection` and `agentproc.Process` keep the method.
+* **One goroutine that `Wait` does not count.** `TestGoStatementsCounted` refused any `go` statement in the root package, so that
+  `Wait` could wait for every goroutine. `WaitContext`'s goroutine runs `Wait`, so it cannot be one of them. The test now allows
+  exactly one `go` statement, in `connection.go`'s `waitDone`, and still fails on any other, or on none there.
 
 ### Consequences
 

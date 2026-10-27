@@ -5,6 +5,7 @@
 package agentproc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -109,6 +110,11 @@ type Process struct {
 	// them once, up to the grace (drainOnce).
 	outTap, inTap *tap
 	drainOnce     sync.Once
+
+	// waitOnce starts, once, the goroutine WaitContext waits through, which
+	// runs Wait and then closes waited.
+	waitOnce sync.Once
+	waited   chan struct{}
 }
 
 // Start starts the agent and connects client to it over the agent's
@@ -328,6 +334,33 @@ func (p *Process) Wait() error {
 		return p.ended
 	default:
 		return fmt.Errorf("%w: %w", p.ended, p.waitErr)
+	}
+}
+
+// WaitContext is Wait bounded by ctx: it returns Wait's error once Wait
+// would, or context.Cause(ctx) when ctx ends first, leaving the agent as it
+// was; it does not stop the agent. The first call starts one goroutine, which
+// runs Wait and ends when Wait returns; every later call shares it, so a
+// caller may wait again (0041-MADR-close-the-gaps-the-consumers-wait-on.md,
+// item 6).
+func (p *Process) WaitContext(ctx context.Context) error {
+	p.waitOnce.Do(func() {
+		p.waited = make(chan struct{})
+		go func() {
+			_ = p.Wait() //nolint:errcheck // WaitContext calls Wait again, which then returns at once.
+			close(p.waited)
+		}()
+	})
+	select {
+	case <-p.waited:
+		return p.Wait()
+	case <-ctx.Done():
+		select {
+		case <-p.waited:
+			return p.Wait()
+		default:
+			return context.Cause(ctx)
+		}
 	}
 }
 

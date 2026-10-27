@@ -270,8 +270,9 @@ alternative, a request after the end reporting the recorded end, was a behaviour
 
 The owner reopened question 4 in
 [0041-MADR-close-the-gaps-the-consumers-wait-on.md](0041-MADR-close-the-gaps-the-consumers-wait-on.md), question 2. `Wait()`
-stays as decided, unbounded. `WaitContext(ctx) error` is added beside it, on `Connection`, both side connections and
-`agentproc.Process`. It returns `Wait`'s error, or `context.Cause(ctx)` when ctx ends first. The pattern this record left to callers,
+stays as decided, unbounded. `WaitContext(ctx) error` is added beside it, on `Connection` and `agentproc.Process`; a side
+connection's is its `Connection()`'s (0041's "Amended by the PLAN's phase 6"). It returns `Wait`'s error, or
+`context.Cause(ctx)` when ctx ends first. The pattern this record left to callers,
 `Wait` on a goroutine and a select, had been written three times in one consumer and was needed by `acptest.Connect`'s cleanup.
 
 ## Pros and Cons of the Options

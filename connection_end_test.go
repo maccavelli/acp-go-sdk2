@@ -11,7 +11,9 @@ import (
 	"go/token"
 	"io"
 	"path/filepath"
+	"regexp"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -343,9 +345,110 @@ func waitingFor(wait func() error) <-chan error {
 	return done
 }
 
+// TestWaitContext requires WaitContext to return context.Cause(ctx) when ctx
+// ends before the connection's goroutines have returned, leaving the
+// connection running; Wait's error once they have, on each side connection's
+// Connection too; and its calls, however many, to share one goroutine, which is gone
+// once Wait has returned (0041-MADR-close-the-gaps-the-consumers-wait-on.md,
+// item 6).
+func TestWaitContext(t *testing.T) {
+	t.Parallel()
+	t.Run("ctx ends first", func(t *testing.T) {
+		t.Parallel()
+		c := NewConnection(nil, io.Discard, idleReader(t))
+		why := errors.New("the test's bound")
+		ctx, cancel := context.WithCancelCause(context.Background())
+		cancel(why)
+		if err := c.WaitContext(ctx); !errors.Is(err, why) {
+			t.Errorf("WaitContext with an ended ctx = %v, want its cause, %v", err, why)
+		}
+		if err := c.Err(); err != nil {
+			t.Errorf("Err after WaitContext = %v, want nil: the connection is left running", err)
+		}
+		_ = c.Close()
+		if err := c.WaitContext(context.Background()); !errors.Is(err, ErrConnectionClosed) {
+			t.Errorf("WaitContext after Close = %v, want ErrConnectionClosed", err)
+		}
+	})
+	for name, open := range map[string]func(io.Reader) *Connection{
+		"the connection": func(r io.Reader) *Connection { return NewConnection(nil, io.Discard, r) },
+		"the agent side's": func(r io.Reader) *Connection {
+			return NewAgentSideConnection(&agentFuncs{}, io.Discard, r).Connection()
+		},
+		"the client side's": func(r io.Reader) *Connection {
+			return NewClientSideConnection(&clientFuncs{}, io.Discard, r).Connection()
+		},
+	} {
+		t.Run(name+" ends first", func(t *testing.T) {
+			t.Parallel()
+			pr, pw := io.Pipe()
+			s := open(pr)
+			_ = pw.Close()
+			err := s.WaitContext(t.Context())
+			if !errors.Is(err, ErrPeerDisconnected) || !errors.Is(err, io.EOF) {
+				t.Errorf("WaitContext = %v, want the peer's end", err)
+			}
+			if want := s.Wait(); !errors.Is(err, want) {
+				t.Errorf("WaitContext = %v, want Wait's error, %v", err, want)
+			}
+		})
+	}
+	t.Run("one goroutine", func(t *testing.T) {
+		t.Parallel()
+		c := NewConnection(nil, io.Discard, idleReader(t))
+		const label = "TestWaitContext/one goroutine"
+		pprof.Do(context.Background(), pprof.Labels("test", label), func(context.Context) {
+			ended, cancel := context.WithCancel(context.Background())
+			cancel()
+			for range 100 {
+				_ = c.WaitContext(ended)
+			}
+		})
+		if n := waiters(label); n != 1 {
+			t.Errorf("100 calls of WaitContext left %d waiting goroutines, want 1", n)
+		}
+		_ = c.Close()
+		_ = c.WaitContext(context.Background())
+		deadline := time.Now().Add(2 * time.Second)
+		for waiters(label) != 0 {
+			if time.Now().After(deadline) {
+				t.Fatal("WaitContext's goroutine still runs 2s after Wait returned")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	})
+}
+
+// waiters counts the goroutines in waitDone that carry the label "test" with
+// value, which a goroutine inherits from the one that starts it.
+func waiters(value string) int {
+	var b bytes.Buffer
+	_ = pprof.Lookup("goroutine").WriteTo(&b, 1)
+	n := 0
+	for group := range strings.SplitSeq(b.String(), "\n\n") {
+		if !strings.Contains(group, `"test":"`+value+`"`) || !strings.Contains(group, "waitDone") {
+			continue
+		}
+		// The first group follows the profile's header line.
+		if m := profileCount.FindStringSubmatch(group); m != nil {
+			count, _ := strconv.Atoi(m[1])
+			n += count
+		}
+	}
+	return n
+}
+
+// profileCount is the count line of a group in a goroutine profile of
+// debug 1.
+var profileCount = regexp.MustCompile(`(?m)^(\d+) @`)
+
 // TestGoStatementsCounted fails on a go statement in the package's non-test
 // files: every goroutine the connection starts goes through its wait group's
 // Go, so Wait can wait for it (0026-MADR-connection-end-cause-and-wait.md).
+// The one exception is WaitContext's waiter, which runs Wait and so cannot be
+// one of the goroutines Wait waits for: exactly one go statement, in
+// connection.go's waitDone method
+// (0041-PLAN-close-the-gaps-the-consumers-wait-on.md, phase 6).
 func TestGoStatementsCounted(t *testing.T) {
 	t.Parallel()
 	names, err := filepath.Glob("*.go")
@@ -353,6 +456,7 @@ func TestGoStatementsCounted(t *testing.T) {
 		t.Fatal(err)
 	}
 	fset := token.NewFileSet()
+	waiters := 0
 	for _, name := range names {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
@@ -361,11 +465,23 @@ func TestGoStatementsCounted(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			if g, ok := n.(*ast.GoStmt); ok {
-				t.Errorf("%s: a go statement; start it with the connection's goroutines.Go", fset.Position(g.Go))
-			}
-			return true
-		})
+		for _, d := range f.Decls {
+			fn, ok := d.(*ast.FuncDecl)
+			waiter := ok && name == "connection.go" && fn.Recv != nil && fn.Name.Name == "waitDone"
+			ast.Inspect(d, func(n ast.Node) bool {
+				g, ok := n.(*ast.GoStmt)
+				switch {
+				case !ok:
+				case waiter:
+					waiters++
+				default:
+					t.Errorf("%s: a go statement; start it with the connection's goroutines.Go", fset.Position(g.Go))
+				}
+				return true
+			})
+		}
+	}
+	if waiters != 1 {
+		t.Errorf("%d go statements in connection.go's waitDone, want 1: WaitContext's waiter", waiters)
 	}
 }

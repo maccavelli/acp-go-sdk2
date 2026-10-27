@@ -54,7 +54,7 @@ would change:
   * `helpers.go` (`AllowsValue`, the `Kind()` methods);
   * `tooltimeline.go`, new (`ToolCallTimeline`), which `TestRuntimeFilesCoverHandWritten` names.
 * **Generated:** none. `WaitContext` on the side connections is hand-written beside them if the generator owns no part of it;
-  otherwise phase 6 is amended first.
+  otherwise phase 6 is amended first. (Phase 6: the side connections take no `WaitContext`; see its deviation.)
 * **`acptest/`:** `pair.go`, `recorder.go`, `script.go`, `client.go`, a new `golden.go`.
 * **Scripts:** `scripts/check_api.py`'s `PACKAGES` gains `clienthost` (phase 8), with `scripts/test_check_api.py`.
 * **Records:** this pair and their rows; `docs/reports/0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md` (phase 15); the
@@ -151,7 +151,8 @@ Planted breaks: overflow counted as clean; the order recorded the wrong way roun
 * `connection.go`: `Connection.WaitContext(ctx) error`. The first call starts one goroutine that runs `Wait` and closes a channel;
   every call selects on that channel and `ctx.Done()`. The goroutine is counted by nothing the connection waits for, and ends when
   `Wait` returns, as `Wait` does once the connection has ended.
-* The side connections and `agentproc.Process` gain the same, over their `Wait`.
+* ~~The side connections and~~ `agentproc.Process` gains the same, over its `Wait`. (Deviation, 2026-10-27: a side connection's is
+  its `Connection()`'s, and `TestGoStatementsCounted` names the one waiter. See the execution record.)
 * `acptest.Connect`'s cleanup uses it with a bound, 10 s, and fails the test with what is still running when it passes.
 * Tests:
   * the cause returned when ctx ends before `Wait` would;
@@ -508,5 +509,82 @@ Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 
 
 **Gates:**
 * `tools/gates.py --all`, with both hosts set: all 18 passed.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
+* `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 6, `WaitContext` (2026-10-27)
+
+**Deviation, 2026-10-27, the one waiter.**
+* **Found:** `TestGoStatementsCounted` (`connection_end_test.go`) failed on any `go` statement in the root package's non-test
+  files. `WaitContext`'s goroutine runs `Wait`, so it cannot be one of the goroutines `Wait` counts. The step had said so, but not
+  that this test forbids it.
+* **Offered:** name the one exception in the test; replace the connection's `sync.WaitGroup` with a counter that closes a channel,
+  so no goroutine is needed; or bound `acptest` alone, question 2's alternative.
+* **Decided:** the owner chose to name the exception. The test now allows exactly one `go` statement, in `connection.go`'s
+  `waitDone`, and fails on any other, and on none there.
+
+**Deviation, 2026-10-27, the side connections.**
+* **Found:** the first gate run failed `TestSideConnectionMethodsAreProtocolMethods` and `TestTypedMethodDocsNameErrors` on the two
+  side-connection methods. Under 0038's rule, a side-connection method that takes a context is a protocol method. Generating
+  them would not help: `TestNotInitialized` and the typed-method count would then treat them as wire calls.
+* **Offered:** none on the side connections, the caller using `Connection().WaitContext`; a package-level function; or the methods
+  kept, with the three tests exempting them.
+* **Decided:** the owner chose `Connection().WaitContext`. The MADR carries "Amended by the PLAN's phase 6, 2026-10-27", and
+  `0026-MADR-connection-end-cause-and-wait.md`'s amendment says the same.
+
+**What changed:**
+* **`connection.go`:**
+  * `Connection` gains `waitOnce` and `waited`.
+  * `WaitContext` selects on `waitDone()` and `ctx.Done()`. When both are ready, the end wins: it returns `Err`, or else
+    `context.Cause(ctx)`.
+  * `waitDone` starts, once, the goroutine that runs `Wait` and closes `waited`.
+* **`agentproc/agentproc.go`:** `Process.WaitContext`, the same over `Process.Wait`. It returns `Wait()` again once `waited` is
+  closed, which then returns at once.
+* **`acptest/pair.go`:**
+  * `Connect` calls `connectWithin(tb, cleanupWait, …)`, with `cleanupWait = 10 * time.Second`.
+  * The cleanup closes the pair, then waits on each side's `Connection().WaitContext` under one 10 s deadline.
+  * When the deadline passes, the test fails naming the side, with the stacks of this module's goroutines from the goroutine
+    profile, `running()`.
+* **Tests:**
+  * `TestWaitContext`, root, covers four things:
+    * an ended ctx's cause, the connection left running;
+    * `ErrConnectionClosed` after `Close`;
+    * the peer's end, equal to `Wait`'s error, for the connection and each side's `Connection()`;
+    * 100 calls leaving one goroutine, found by its `pprof` label, and none after `Wait`.
+  * `TestProcessWaitContext`, in a new `agentproc/waitcontext_test.go`, covers the same for a process, and `ExitedFirst` true
+    once `WaitContext` has returned for `parent-exit`.
+  * `TestConnectCleanupBounded`, in a new `acptest/pair_internal_test.go`, uses a `testing.TB` that keeps the cleanups and errors.
+    A handler that ignores its context makes the cleanup return at the 300 ms bound, naming the agent side and
+    `stuckAgent).NewSession`. A pair with no stuck handler reports nothing.
+  * `TestGoStatementsCounted`, amended as above.
+* **The API:** `make api` against `v1.24.0` reports `(*Connection).WaitContext` and `agentproc: (*Process).WaitContext` added, with
+  phases 4 and 5's three: 5 compatible, 0 incompatible.
+* **Left to phase 14:** `README.md` and `docs/architecture.md`.
+
+**Checks corrected during the phase:**
+* **The goroutine counters undercounted.** A goroutine profile of debug 1 begins with a header line, and the largest group follows
+  it, so `Sscanf("%d @")` missed that group. The goroutine-per-call break reported 2 waiting goroutines, not 100. The counters now
+  find the count line with a regexp, and the break reports 100.
+* **Two plants were wrong as written,** a channel shared across calls and an unused variable, and were rewritten. The checks did
+  not change.
+* **The first gate run also failed `lint` and `go fix`:** `strings.SplitSeq`, `slices.Backward`, and revive's confusing-naming on
+  `connect`, renamed `connectWithin`.
+
+Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 8 of 8 failed as required.
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| a goroutine per call, the connection | `TestWaitContext` | `connection_end_test.go:408: 100 calls of WaitContext left 100 waiting goroutines, want 1` |
+| the cause lost, the connection | `TestWaitContext` | `connection_end_test.go:363: WaitContext with an ended ctx = context canceled, want its cause, the test's bound` |
+| a `go` statement outside `waitDone` | `TestGoStatementsCounted` | `connection_end_test.go:478: connection.go:829:2: a go statement; start it with the connection's goroutines.Go` |
+| the waiter moved out of `waitDone` | `TestGoStatementsCounted` | `connection_end_test.go:478: connection.go:883:3: a go statement; …`, and `0 go statements in connection.go's waitDone, want 1` |
+| a goroutine per call, the process | `TestProcessWaitContext` | `waitcontext_test.go:68: 100 calls of WaitContext left 100 waiting goroutines, want 1` |
+| the cause lost, the process | `TestProcessWaitContext` | `waitcontext_test.go:30: WaitContext with an ended ctx = context canceled, want its cause, the test's bound` |
+| the bound's report dropped | `TestConnectCleanupBounded` | `pair_internal_test.go:86: the cleanup reported "", want the agent side named, …` |
+| the cleanup unbounded | `TestConnectCleanupBounded` | `panic: test timed out after 20s`, at the plant's `-timeout=20s` |
+
+**Gates:**
+* `tools/gates.py --all`, with both hosts set: the first run failed 10, on the side-connection rule and the lint above. The second
+  run, after the fixes, passed all 18.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
 * `tools/idscan.py --paths` over the staged files: nothing found.

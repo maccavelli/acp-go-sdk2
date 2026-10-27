@@ -353,6 +353,14 @@ type Connection struct {
 	// reached zero (0026-MADR-connection-end-cause-and-wait.md).
 	goroutines sync.WaitGroup
 
+	// waitOnce starts, once, the goroutine WaitContext waits through, which
+	// runs Wait and then closes waited. It is the one goroutine goroutines
+	// does not count: it runs Wait, which waits for them, and it ends when
+	// Wait returns (0041-PLAN-close-the-gaps-the-consumers-wait-on.md,
+	// phase 6).
+	waitOnce sync.Once
+	waited   chan struct{}
+
 	// endErr is why the connection ended, recorded once, by the first of
 	// closeWith and shutdownReceive, before the context ends; Err returns it
 	// (0026-MADR-connection-end-cause-and-wait.md).
@@ -842,6 +850,42 @@ func (c *Connection) Wait() error {
 	<-c.Done()
 	c.goroutines.Wait()
 	return c.Err()
+}
+
+// WaitContext is Wait bounded by ctx: it returns Wait's error once the
+// connection has ended and every goroutine it started has returned, or
+// context.Cause(ctx) when ctx ends first, leaving the connection as it was.
+// The first call starts one goroutine, which runs Wait and ends when Wait
+// returns; every later call shares it, so a caller may wait again. A side
+// connection's is its Connection's: side.Connection().WaitContext(ctx), since
+// a method of a side connection that takes a context is a protocol method
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 6, as amended).
+func (c *Connection) WaitContext(ctx context.Context) error {
+	done := c.waitDone()
+	select {
+	case <-done:
+		return c.Err()
+	case <-ctx.Done():
+		select {
+		case <-done:
+			return c.Err()
+		default:
+			return context.Cause(ctx)
+		}
+	}
+}
+
+// waitDone returns a channel closed once Wait has returned, starting, the
+// first time, the goroutine that runs it.
+func (c *Connection) waitDone() <-chan struct{} {
+	c.waitOnce.Do(func() {
+		c.waited = make(chan struct{})
+		go func() {
+			_ = c.Wait() //nolint:errcheck // WaitContext reads Err, which Wait returns.
+			close(c.waited)
+		}()
+	})
+	return c.waited
 }
 
 // Close ends the connection: its context ends with ErrConnectionClosed, so
