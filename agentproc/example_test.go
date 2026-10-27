@@ -37,6 +37,21 @@ func ExampleCommand() {
 	}
 }
 
+// The agent's output as frames, its lines, as the connection reads them: a
+// line too long for the connection, or not JSON, included.
+func ExampleLineTap() {
+	cmd := exec.Command("my-agent", "--acp")
+	cmd.Stderr = os.Stderr
+	tap := agentproc.LineTap(func(frame []byte) { log.Printf("agent → client: %s", frame) })
+	p, err := (&agentproc.Command{Cmd: cmd, OutputTap: tap}).Start(client{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := p.Close(); err != nil {
+		log.Printf("agent: %v", err)
+	}
+}
+
 // The agent's output copied, byte for byte, to a file as the connection
 // reads it: a record of the wire. The tap writes on a goroutine of its own,
 // and DroppedTapBytes says whether it kept up.

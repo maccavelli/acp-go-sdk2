@@ -415,3 +415,44 @@ run and waiting for the agent's first 56 MiB. That is the time limit, not a hang
 * `tools/gates.py --all`, with both hosts set: all 18 passed.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
 * `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 4, `agentproc.LineTap` (2026-10-27)
+
+**What changed:**
+* **`agentproc/linetap.go`, new:** `LineTap(fn func(frame []byte)) io.Writer`, the MADR's signature.
+  * Each frame is a fresh copy, without its newline. A `\r` before the newline is kept.
+  * A line split across writes is joined. An unended line is held, whole, and never given to `fn`.
+  * The writer is also an `io.Closer`, whose `Close` drops the held line and returns nil.
+  * `LineTap` panics on a nil `fn`, so the mistake surfaces at the call and not on the tap's goroutine. The step did not name
+    this.
+  * The doc says one `LineTap` per tap, since a tap is written from one goroutine.
+* **`agentproc/linetap_test.go`, new:**
+  * `TestLineTapFrames`: the stream whole, a byte at a time, and split at every pair of points.
+  * `TestLineTapCopies`: `fn` changes each frame; the caller spoils its buffer after each write.
+  * `TestLineTapHoldsUnended`: nothing before the newline or after `Close`, and a line after `Close` is its own.
+  * `TestLineTapNilFn`.
+  * `TestLineTapAsOutputTap`: the "frames" child's three lines through `Command.OutputTap`, the one too long for the 1 MiB limit
+    and the one that is not JSON included.
+* **`agentproc/example_test.go`:** `ExampleLineTap`.
+* **The API:** `make api` against `v1.24.0` reports `compatible: agentproc: LineTap: added`, 0 incompatible.
+* **Left to phase 14:** `README.md` and `docs/architecture.md`, as the step order says.
+
+**Not bounded:** an unended line is held whole, however long, as the consumer's splitter holds it. The tap's own 32 MiB bound
+applies before `LineTap` sees the bytes, but not to what `LineTap` holds. Neither record asks for a bound, so none was added.
+
+Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 6 of 6 failed as required.
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| a frame aliases the caller's buffer | `TestLineTapCopies` | `linetap_test.go:103: frames kept after the caller reused its buffer = ["ZZZ" "two" "ZZZZZ"]` |
+| a frame shares the held line's storage | `TestLineTapCopies` | `linetap_test.go:103: frames kept after the caller reused its buffer = ["thr" "thr" "three"]` |
+| `Close` delivers the unended line | `TestLineTapHoldsUnended` | `linetap_test.go:125: frames after Close = ["partial"], want none` |
+| a write delivers its unended end | `TestLineTapFrames` | `linetap_test.go:63: … gave frames ["a" "bb\r" "" "{\"x\":1}" "ccc"]` |
+| the newline kept in the frame | `TestLineTapFrames` | `linetap_test.go:63: … gave frames ["a\n" "bb\r\n" "\n" "{\"x\":1}\n"]` |
+| a nil `fn` accepted | `TestLineTapNilFn` | `linetap_test.go:139: LineTap(nil) did not panic` |
+
+**Gates:**
+* `tools/gates.py --all`, with both hosts set: all 18 passed. The `newfiles` gate ran `scripts/go-precheck.sh` on the two new
+  files.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
+* `tools/idscan.py --paths` over the staged files: nothing found.
