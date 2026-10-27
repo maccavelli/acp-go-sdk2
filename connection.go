@@ -410,6 +410,12 @@ type Connection struct {
 	// (WithInboundRewrite, WithInboundValidation).
 	rewrite func(ctx context.Context, method string, params any) error
 	inbound func(ctx context.Context, method string, params any, err error) error
+	// resultChecks holds, per method, a check of a result against the params
+	// it answers, run on a handler's result before it is sent and on a
+	// response as it arrives; nil unless an option sets one, such as
+	// WithElicitationCheck (0040-MADR-check-elicitation-forms-answers-and-urls.md,
+	// item 6). It names no type of the protocol.
+	resultChecks map[string]func(params, result any) error
 }
 
 // ConnectionOption configures optional parameters for a Connection.
@@ -429,6 +435,7 @@ type connectionConfig struct {
 	logger                 *slog.Logger
 	rewrite                func(ctx context.Context, method string, params any) error
 	inbound                func(ctx context.Context, method string, params any, err error) error
+	resultChecks           map[string]func(params, result any) error
 	maxConcurrentRequests  int
 	promptOverlap          PromptOverlapPolicy
 }
@@ -699,6 +706,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		onNotificationDropped: cfg.onNotificationDropped,
 		rewrite:               cfg.rewrite,
 		inbound:               cfg.inbound,
+		resultChecks:          cfg.resultChecks,
 	}
 	if cfg.maxConcurrentRequests > 0 {
 		c.requestSlots = make(chan struct{}, cfg.maxConcurrentRequests)
@@ -1856,6 +1864,10 @@ func sendRequestSent[T any](c *Connection, ctx context.Context, method string, p
 			var zero T
 			return zero, true, fmt.Errorf("%s response: %w", method, err)
 		}
+		if err := c.checkPair(method, params, &result); err != nil {
+			var zero T
+			return zero, true, fmt.Errorf("%s response: %w", method, err)
+		}
 	}
 	return result, true, nil
 }
@@ -1883,6 +1895,10 @@ func sendRequestCommit[T any](c *Connection, ctx context.Context, method string,
 				return result, NewInternalError(map[string]any{jsonErrorField: err.Error()})
 			}
 			if err := c.checkInbound(ctx, method, &result, gate); err != nil {
+				var zero T
+				return zero, fmt.Errorf("%s response: %w", method, err)
+			}
+			if err := c.checkPair(method, params, &result); err != nil {
 				var zero T
 				return zero, fmt.Errorf("%s response: %w", method, err)
 			}
@@ -2332,16 +2348,30 @@ func (c *Connection) SendNotification(ctx context.Context, method string, params
 // checkResult returns a handler's result to send, after validating it as
 // sent: a result that fails is not sent, the peer gets -32603 naming the type
 // and property, and the connection logs it (0015-MADR-validate-absolute-protocol-paths.md, E1).
-func (c *Connection) checkResult(method string, result any, gate gateFunc) (any, *RequestError) {
+// params, the request the result answers, is for the method's result check,
+// which runs last (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 6).
+func (c *Connection) checkResult(method string, params, result any, gate gateFunc) (any, *RequestError) {
 	err := validateOutbound(result)
 	if err == nil && gate != nil {
 		err = gate(method, addressable(result))
+	}
+	if err == nil {
+		err = c.checkPair(method, params, result)
 	}
 	if err != nil {
 		c.loggerOrDefault().Error("handler result fails validation; not sent", "method", method, "err", err)
 		return nil, NewInternalError(map[string]any{jsonErrorField: err.Error()})
 	}
 	return result, nil
+}
+
+// checkPair runs the result check an option set for method on result, the
+// answer to params, and returns nil when none is set.
+func (c *Connection) checkPair(method string, params, result any) error {
+	if check := c.resultChecks[method]; check != nil {
+		return check(params, result)
+	}
+	return nil
 }
 
 // checkInbound runs the receiving order on a decoded message: the rewrite hook,

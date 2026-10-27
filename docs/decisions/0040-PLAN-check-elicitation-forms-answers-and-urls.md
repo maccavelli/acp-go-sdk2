@@ -567,3 +567,60 @@ When the release is published, this PLAN and its row are `complete`.
     test files. `api` reported "against v1.23.0: 0 incompatible, 22 compatible": phase 3's eighteen, and `Check`, `ParseValue`,
     `Float64` and `Int64`;
   * `make check-records`, `make disclosure-check`; `tools/idscan.py --paths` over the changed and new files: 0 matches.
+
+### Phase 5, the opt-in connection check, 2026-10-26
+
+* **`connection.go`**, still naming no ACP type:
+  * `connectionConfig` and `Connection` hold `resultChecks map[string]func(params, result any) error`, which
+    `buildConnection` copies;
+  * `checkResult(method, params, result, gate)` runs the method's check, through `checkPair`, after `validateOutbound` and the
+    gate, so a refusal is answered and logged as theirs is;
+  * `sendRequestSent` and `sendRequestCommit` run it after `checkInbound` on a decoded response, returning
+    `"<method> response: %w"` and the zero result.
+* **The generator:**
+  * `checkedResult` (`emit/dispatch_helpers.go`) and `initialize`'s case (`emit/dispatch.go`) pass `&p` as `checkResult`'s
+    second argument; their doc comment says why;
+  * `dispatch_test.go`'s two expected lines follow;
+  * regenerated with `go run .` in `cmd/generate`.
+
+  A scratch script compared every generated file with `HEAD` line by line. `agent_gen.go` has 19 changed lines and
+  `client_gen.go` 10, each a `checkResult` call gaining `&p`. No other line is added, removed or changed, in those or in
+  `types_gen.go`, `helpers_gen.go`, `constants_gen.go` and `schema_gen_test.go`.
+* **`elicitation.go`:** `WithElicitationCheck()`, which sets `checkElicitationAnswer` for `ClientMethodElicitationCreate`:
+  `Check` of a `Form`'s `Accept` against the form, and nil for anything else, a type it does not expect included.
+* **Tests**, `elicitation_option_test.go`, `package acp_test`, over a pair built from the public constructors, as
+  `present_test.go`'s is, so the client's writes are recorded and its log captured. Both elicitation modes are advertised:
+  * `TestElicitationCheckOptionClient`: the client sets the option, and its handler accepts with no content. The agent gets a
+    `-32603` whose `Reason()` holds `content["name"]: required`. No frame the client wrote holds an `"action"`, and its log has
+    "handler result fails validation; not sent".
+  * `TestElicitationCheckOptionAgent`: the agent sets it, and a client without it accepts with no content. `CreateElicitation`
+    returns `elicitation/create response: …` wrapping `RuleRequired`, and the zero response.
+  * `TestElicitationCheckOptionPasses`, with the option on both sides: a passing `accept`, a `decline`, a `cancel` and a
+    URL-mode `accept` arrive as sent. With it on neither, a failing `accept` arrives unchecked.
+  * The three passed three times under `-race`. `cmd/generate`'s tests pass, the engine cases and their behaviour cases
+    included.
+* **Docs:**
+  * `README.md`'s "Elicitation": the option, on each side, and that a client calls `Check` first;
+  * `docs/architecture.md`: the result check in its account of `connection.go`'s checks.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | the row's: the client side's check not run | `elicitation_option_test.go:84: the agent got <nil>, want a -32603 naming content["name"] and required` |
+  | the row's: the agent side's check not run | `:106: the agent got <nil>, want an elicitation/create response error wrapping RuleRequired` |
+  | the row's: the check run for a `decline` | `:143: a decline: {"code":-32603,…"required: is required"}}`; the same for `a cancel` |
+  | the row's: the check set without the option | `:143: no option, a failing accept: {"code":-32603,…}` |
+  | the row's: `checkedResult` emitted without `&p` | `dispatch_test.go:165: agent_gen.go lacks "a.conn.checkResult(method, &p, &resp, a.resultGate)"` |
+  | the same, regenerated, for the row's build of the root | `go run .`: `generate: generated code does not type-check …`, `agent_gen.go:251:56: not enough arguments in call to a.conn.checkResult` |
+  | the row's: a generated line other than `checkResult`'s changed | the scratch script: `client_gen.go: an unexpected change: + case ClientMethodElicitationCreate: // changed` |
+
+  The regenerating plant's first run failed as required, but its expected text named `c.conn`, while the first error is on
+  `a.conn`. The text was corrected; the check was not changed.
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "211 file(s) clean"; `scripts/go-precheck.sh elicitation_option_test.go`;
+  * `(cd cmd/generate && go test -count=1 ./...)`;
+  * `make markdownlint`;
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `regen` left the tree as generated,
+    and `newfiles` covered `elicitation_option_test.go`. `api` reported "against v1.23.0: 0 incompatible, 23 compatible",
+    `WithElicitationCheck` added;
+  * `make check-records`, `make disclosure-check`; `tools/idscan.py --paths` over the changed and new files: 0 matches.

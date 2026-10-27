@@ -248,7 +248,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodDocumentDidChange:
 		if sentAsRequest(ctx) {
 			return nil, NewMethodNotFound(method)
@@ -380,7 +380,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 			a.conn.loggerOrDefault().Error("initialize answer not sent", "method", method, "err", verr)
 			return nil, NewInternalError(map[string]any{"error": verr.Error()})
 		}
-		result, rerr := a.conn.checkResult(method, &resp, func(method string, result any) error {
+		result, rerr := a.conn.checkResult(method, &p, &resp, func(method string, result any) error {
 			return gateResult(&Negotiation{
 				Request:  p,
 				Response: resp,
@@ -414,7 +414,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodMcpMessage:
 		if sentAsRequest(ctx) {
 			return nil, NewMethodNotFound(method)
@@ -478,7 +478,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodNesReject:
 		if sentAsRequest(ctx) {
 			return nil, NewMethodNotFound(method)
@@ -521,7 +521,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodNesSuggest:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -543,7 +543,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodProvidersDisable:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -565,7 +565,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodProvidersList:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -587,7 +587,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodProvidersSet:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -609,7 +609,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodSessionCancel:
 		if sentAsRequest(ctx) {
 			return nil, NewMethodNotFound(method)
@@ -650,7 +650,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodSessionDelete:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -666,7 +666,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodSessionFork:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -688,7 +688,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodSessionList:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -704,7 +704,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodSessionLoad:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -724,7 +724,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodSessionNew:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -740,7 +740,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodSessionPrompt:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -786,7 +786,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodSessionResume:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -802,7 +802,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodSessionSetConfigOption:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -818,7 +818,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	case AgentMethodSessionSetMode:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -834,7 +834,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return a.conn.checkResult(method, &resp, a.resultGate)
+		return a.conn.checkResult(method, &p, &resp, a.resultGate)
 	default:
 		return nil, NewMethodNotFound(method)
 	}

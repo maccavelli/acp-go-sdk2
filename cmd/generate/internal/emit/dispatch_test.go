@@ -117,9 +117,9 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 			"func (a *AgentSideConnection) gate(method string, params any) error {\n\treturn gateMessage(a.negotiation.Load(), method, params)",
 			"func (a *AgentSideConnection) resultGate(method string, result any) error {\n\treturn gateResult(a.negotiation.Load(), method, result)",
 			"if err := a.conn.checkInbound(ctx, method, &p, a.gate); err != nil {",
-			"a.conn.checkResult(method, &resp, a.resultGate)",
+			"a.conn.checkResult(method, &p, &resp, a.resultGate)",
 			"if err := a.gate(ClientMethodAsk, &params); err != nil {\n\t\treturn AskResponse{}, err\n\t}\n\treturn sendRequest[AskResponse](a.conn, ctx, ClientMethodAsk, &params, a.resultGate)\n}",
-			"result, rerr := a.conn.checkResult(method, &resp, func(method string, result any) error {\n\t\t\treturn gateResult(&Negotiation{",
+			"result, rerr := a.conn.checkResult(method, &p, &resp, func(method string, result any) error {\n\t\t\treturn gateResult(&Negotiation{",
 		},
 		"client_gen.go": {
 			"if sent && ctx.Err() != nil {\n\t\t\tif cerr := c.Stop(context.WithoutCancel(ctx), StopNotification{ConversationId: params.ConversationId}); cerr != nil {\n\t\t\t\tc.conn.loggerOrDefault().Debug(\"failed to send the cancel of a prompt turn\", \"method\", AgentMethodStop, \"err\", cerr)",

@@ -121,10 +121,12 @@ func callWithResult(conn, recv ast.Expr, methodName string, gate ast.Expr) []ast
 	}
 }
 
-// checkedResult is return conn.checkResult(method, &resp): a result that fails
-// validation as sent is answered -32603 instead
-// (0015-MADR-validate-absolute-protocol-paths.md, E1). A pointer, so the
-// result is not copied (0019-PLAN-idioms-performance.md, D6).
+// checkedResult is return conn.checkResult(method, &p, &resp): a result that
+// fails validation as sent is answered -32603 instead
+// (0015-MADR-validate-absolute-protocol-paths.md, E1), and so is one the
+// connection's result check for the method refuses against the params
+// (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 6). Pointers,
+// so nothing is copied (0019-PLAN-idioms-performance.md, D6).
 func checkedResult(conn, gate ast.Expr) ast.Stmt {
-	return ret(call(sel(conn, "checkResult"), id("method"), addr(id("resp")), gate))
+	return ret(call(sel(conn, "checkResult"), id("method"), addr(id("p")), addr(id("resp")), gate))
 }

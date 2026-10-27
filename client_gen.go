@@ -175,7 +175,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, &resp, c.resultGate)
+		return c.conn.checkResult(method, &p, &resp, c.resultGate)
 	case ClientMethodFsReadTextFile:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -191,7 +191,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, &resp, c.resultGate)
+		return c.conn.checkResult(method, &p, &resp, c.resultGate)
 	case ClientMethodFsWriteTextFile:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -207,7 +207,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, &resp, c.resultGate)
+		return c.conn.checkResult(method, &p, &resp, c.resultGate)
 	case ClientMethodMcpMessage:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -229,7 +229,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, &resp, c.resultGate)
+		return c.conn.checkResult(method, &p, &resp, c.resultGate)
 	case ClientMethodSessionRequestPermission:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -249,7 +249,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, &resp, c.resultGate)
+		return c.conn.checkResult(method, &p, &resp, c.resultGate)
 	case ClientMethodSessionUpdate:
 		if sentAsRequest(ctx) {
 			return nil, NewMethodNotFound(method)
@@ -280,7 +280,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, &resp, c.resultGate)
+		return c.conn.checkResult(method, &p, &resp, c.resultGate)
 	case ClientMethodTerminalKill:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -296,7 +296,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, &resp, c.resultGate)
+		return c.conn.checkResult(method, &p, &resp, c.resultGate)
 	case ClientMethodTerminalOutput:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -312,7 +312,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, &resp, c.resultGate)
+		return c.conn.checkResult(method, &p, &resp, c.resultGate)
 	case ClientMethodTerminalRelease:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -328,7 +328,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, &resp, c.resultGate)
+		return c.conn.checkResult(method, &p, &resp, c.resultGate)
 	case ClientMethodTerminalWaitForExit:
 		if sentAsNotification(ctx) {
 			return nil, NewInvalidRequest(map[string]any{"error": method + " is a request, and it was sent without an id"})
@@ -344,7 +344,7 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 		if err != nil {
 			return nil, toReqErr(err)
 		}
-		return c.conn.checkResult(method, &resp, c.resultGate)
+		return c.conn.checkResult(method, &p, &resp, c.resultGate)
 	default:
 		return nil, NewMethodNotFound(method)
 	}

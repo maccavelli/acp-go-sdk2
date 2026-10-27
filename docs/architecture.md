@@ -318,6 +318,17 @@ params as a `*json.RawMessage` and the side's `inboundGate`, the side's `gate`
 when the schema has `initialize`, before the message reaches
 `HandleExtensionMethod`.
 
+A connection may also hold a result check per method, `resultChecks`, a
+`func(params, result any) error` that relates an answer to the request it
+answers; only an option sets one, `WithElicitationCheck` for
+`elicitation/create` (0040, item 6). `checkResult`, which the generated
+dispatch calls with the request's params as well as the handler's result, runs
+it after `Validate` and the gate, so a refused result is answered `-32603` as
+one that fails them is; `sendRequestSent` and `sendRequestCommit` run it after
+`checkInbound` on a decoded response, which the caller then gets as an error.
+`connection.go` names no type of the protocol for it: `elicitation.go` holds
+the check.
+
 Gates are generated and passed in, never stored: `connection.go` holds no
 record. `gateMessage` in `types_gen.go` lets `initialize` through, refuses
 anything else before a record with `ErrNotInitialized`, then applies

@@ -337,6 +337,43 @@ func (s ElicitationSchema) Check(content map[string]ElicitationContentValue) err
 	return errors.Join(errs...)
 }
 
+// WithElicitationCheck makes the connection run Check on every accept of a
+// form-mode elicitation/create, against the form it answers, on the side that
+// sets it. On a client, an answer its CreateElicitation handler returns that
+// fails is not sent: the agent is answered -32603 with the problems, and the
+// connection logs "handler result fails validation; not sent", as for a
+// result that fails Validate. On an agent, CreateElicitation returns an error
+// wrapping the problems, and the zero response, for an answer that fails.
+// Anything else, a decline, a cancel, a URL-mode accept or another action, is
+// not checked. It runs after Validate and the capability gates.
+//
+// A refused answer cannot go back to the user who wrote it, which the
+// specification requires of a client; a client calls Check itself first, and
+// keeps the option as a backstop
+// (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 6).
+func WithElicitationCheck() ConnectionOption {
+	return func(cfg *connectionConfig) {
+		if cfg.resultChecks == nil {
+			cfg.resultChecks = make(map[string]func(params, result any) error)
+		}
+		cfg.resultChecks[ClientMethodElicitationCreate] = checkElicitationAnswer
+	}
+}
+
+// checkElicitationAnswer is WithElicitationCheck's check: Check of a form's
+// accept against the form, and nil for anything else.
+func checkElicitationAnswer(params, result any) error {
+	req, ok := params.(*CreateElicitationRequest)
+	if !ok || req.Form == nil {
+		return nil
+	}
+	resp, ok := result.(*CreateElicitationResponse)
+	if !ok || resp.Accept == nil {
+		return nil
+	}
+	return req.Form.RequestedSchema.Check(resp.Accept.Content)
+}
+
 // answerError is a problem Check reports.
 func answerError(field string, value any, rule ValidationRule, text string) *ValidationError {
 	return &ValidationError{Type: errTypeAnswer, Field: field, Value: value, Rule: rule,

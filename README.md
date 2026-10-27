@@ -864,6 +864,15 @@ case resp.Accept != nil:
 }
 ```
 
+`acp.WithElicitationCheck()` makes the connection run `Check` itself, on the
+side that sets it, on every `accept` of a form; a `decline`, a `cancel` and a
+URL-mode `accept` pass as before. On a client, an answer that fails is not
+sent: the agent is answered `-32603` with the problems. On an agent,
+`CreateElicitation` returns an error wrapping them, and the zero response. A
+refused answer cannot go back to the user who wrote it, so a client still calls
+`Check` first, where the user can correct the answer, and keeps the option as
+a backstop.
+
 Form mode must never ask for a password, a token or any secret: the specification
 requires URL mode for those, and no fallback to a form. An agent withdraws a
 pending elicitation by ending the context of its `CreateElicitation` call, which

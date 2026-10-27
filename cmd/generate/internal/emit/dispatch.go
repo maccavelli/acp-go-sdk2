@@ -665,7 +665,7 @@ func initializeCase(recv ast.Expr, mi *model.Method) []ast.Stmt {
 			exprStmt(call(sel(call(dot("a", "conn", "loggerOrDefault")), "Error"), str("initialize answer not sent"), str("method"), id("method"), str("err"), id("verr"))),
 			ret(nilExpr(), call(id("NewInternalError"), composite(rawMap(id("any")), kv(str("error"), call(dot("verr", "Error")))))),
 		),
-		define(exprs(id("result"), id("rerr")), call(dot("a", "conn", "checkResult"), id("method"), addr(id("resp")), gate)),
+		define(exprs(id("result"), id("rerr")), call(dot("a", "conn", "checkResult"), id("method"), addr(id("p")), addr(id("resp")), gate)),
 		ifStmt(nil, binary(id("rerr"), token.NEQ, nilExpr()), ret(nilExpr(), id("rerr"))),
 		// The record is the JSON form of the request and the answer, sharing
 		// no memory with the handler's values (0019-PLAN-behaviour-fixes.md, B13).
