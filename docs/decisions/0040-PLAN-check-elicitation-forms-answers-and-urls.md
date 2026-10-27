@@ -710,3 +710,34 @@ When the release is published, this PLAN and its row are `complete`.
     matches.
 
   The implementation is complete. This PLAN stays `in-progress` until phase 8's release, which waits for the owner's ask.
+
+### Phase 8, the release `v1.24.0`, 2026-10-27
+
+The owner asked for phase 8 ("committed, proceed"). The eight commits since `v1.23.0` were not yet on `origin`, and the release
+notes cite CI on the commit whose API the release tags. So `make push-guard` and `tools/idscan.py --range origin/main..main` ran
+first: the guard passed on the eight, `9e0baac..8baf2e5`, with 0 matches over 30 files. The owner pushed. CI on `8baf2e5`: run
+`40513229624`, six jobs, and the Docs workflow's run `40513230078`, each "completed success".
+
+* **The release commit** changes records and `tools/` only:
+  * [0040-REPORT-release-notes-v1-24-0.md](../reports/0040-REPORT-release-notes-v1-24-0.md), new, with its row in
+    `docs/README.md`, taking this record's number as 0039's notes took theirs. Its lists were checked against the tree: the eight
+    commits and their files, the seven changed Go files, the unchanged areas, and the 25 additions `make api` lists.
+  * `tools/consumer.py`:
+    * the program decodes a form, reads its field with `Fields()`, parses `200` with `ParseValue`, and prints `Check`'s
+      `maximum` problem;
+    * its test's pair is connected with `WithElicitationCheck()`;
+    * `VERSION` is `v1.24.0` or later, and `tools/README.md`'s row says so.
+* **The consumer before the tag.** The scratch script of 0039's phase 8 ran the program and test against the tree, through a
+  `replace`, at `go1.26.10`:
+  * the output equals `WANT_RUN`, its last line `check CreateElicitationAccept: content["age"]: maximum: is greater than 150`,
+    and the test passes;
+  * with the test's expected kind changed, it fails: `consumer_test.go:26: a client without session.notices got
+    "agent_message_chunk", want the agent message fallback`.
+* **Checks**, each exit 0: `make check-tools`; `make api` on `8baf2e5`'s Go tree, "0 incompatible, 25 compatible";
+  `make markdownlint`; `make check-records`; `make disclosure-check`; `tools/idscan.py --paths` over the changed files.
+
+Next, after the owner commits and pushes this:
+* `make api` on the release commit;
+* the annotated tag `v1.24.0` and its push, on the owner's ask in that turn;
+* the GitHub release from `tools/release_body.py`;
+* `tools/publication.py`, then `tools/consumer.py v1.24.0`.

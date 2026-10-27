@@ -13,8 +13,11 @@ prints what IsMethodNotFound, PickPermissionOption and ContentBlock.Kind give
 a CompactionTimeline and an ExtensionMux give, and its test, run with `go test`,
 joins a ScriptAgent and a MemoryClient with acptest.Connect and requires
 PresentNotice's fallback to arrive
-(0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, phase 8), so VERSION is
-v1.23.0 or later. Its go.mod must keep the `go` line and gain no toolchain line.
+(0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, phase 8). It also checks
+an elicitation answer through Fields, ParseValue and Check, and its test's pair
+sets WithElicitationCheck
+(0040-PLAN-check-elicitation-forms-answers-and-urls.md, phase 8), so VERSION is
+v1.24.0 or later. Its go.mod must keep the `go` line and gain no toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
 Usage: consumer.py VERSION
@@ -115,6 +118,15 @@ func main() {
 	acp.Handle(&mux, "_x/echo", func(_ context.Context, p map[string]string) (string, error) { return p["s"], nil })
 	r, err := mux.HandleExtensionMethod(context.Background(), "_x/echo", json.RawMessage(`{"s":"hi"}`))
 	fmt.Println("mux", r, err, mux.Methods(), len(acp.TraceMeta("00-a-b-01", "", "")))
+	var form acp.ElicitationSchema
+	if err := json.Unmarshal([]byte(`{"type":"object","required":["age"],"properties":{"age":{"type":"integer","maximum":150}}}`), &form); err != nil {
+		fmt.Println("form:", err)
+		return
+	}
+	field := form.Fields()[0]
+	age, err := field.Schema.ParseValue("200")
+	fmt.Println("elicitation", field.Name, field.Required, field.Schema.Kind(), err)
+	fmt.Println("check", form.Check(map[string]acp.ElicitationContentValue{field.Name: age}))
 }
 '''
 TEST = '''package main
@@ -129,7 +141,7 @@ import (
 
 func TestPresentNotice(t *testing.T) {
 	client := &acptest.MemoryClient{}
-	pair := acptest.Connect(t, &acptest.ScriptAgent{}, client)
+	pair := acptest.Connect(t, &acptest.ScriptAgent{}, client, acp.WithElicitationCheck())
 	if _, err := pair.Client.Initialize(t.Context(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +161,9 @@ func TestPresentNotice(t *testing.T) {
 WANT_RUN = ("Close: <nil>\ndropped 0 0\nprotocol version 1\nkind notice\n"
             'refused {"code":-32601,"message":"Method not found","data":{"method":"fs/read_text_file"}}\n'
             "agent refuses list true\npick once true\nblock text\n"
-            "compaction c in_progress 1 true 1\nmux hi <nil> [_x/echo] 1")
+            "compaction c in_progress 1 true 1\nmux hi <nil> [_x/echo] 1\n"
+            "elicitation age true integer <nil>\n"
+            'check CreateElicitationAccept: content["age"]: maximum: is greater than 150')
 
 
 def go_mod_ok(text: str, go: str, mod: str, version: str) -> bool:
