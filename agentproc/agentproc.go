@@ -83,10 +83,12 @@ type Process struct {
 	// calls (os/exec: "Wait must not be called concurrently").
 	done chan struct{}
 
-	mu      sync.Mutex
-	exited  bool  // Cmd.Wait has returned: no signal is sent from then on
-	waitErr error // what Cmd.Wait returned
-	ended   error // ErrTerminated or ErrKilled, when Close ended the agent so
+	mu          sync.Mutex
+	exited      bool  // Cmd.Wait has returned: no signal is sent from then on
+	waitErr     error // what Cmd.Wait returned
+	ended       error // ErrTerminated or ErrKilled, when Close ended the agent so
+	exitedFirst bool  // the connection was still open when the agent's exit was seen
+	returned    bool  // Wait has returned once
 
 	// goroutines counts the watcher and the monitor, which Wait waits for.
 	goroutines sync.WaitGroup
@@ -267,6 +269,13 @@ func (f *sharedClose) Close() error {
 func (p *Process) watch() {
 	err := p.cmd.Wait()
 	p.mu.Lock()
+	// Seen before the tree's end, which can end what a process the agent
+	// started holds of its output.
+	select {
+	case <-p.conn.Done():
+	default:
+		p.exitedFirst = true
+	}
 	p.tree.end()
 	p.exited, p.waitErr = true, err
 	p.mu.Unlock()
@@ -311,6 +320,7 @@ func (p *Process) Wait() error {
 	p.drainOnce.Do(p.drainTaps)
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.returned = true
 	switch {
 	case p.ended == nil:
 		return p.waitErr
@@ -319,6 +329,21 @@ func (p *Process) Wait() error {
 	default:
 		return fmt.Errorf("%w: %w", p.ended, p.waitErr)
 	}
+}
+
+// ExitedFirst reports whether the agent's exit was seen while the connection
+// was still open: the agent exited, of itself or stopped by Close or Kill,
+// before the connection ended. It is false when the connection ended first,
+// as when the agent closed its output, or the client the connection, while
+// the agent ran; then the agent was stopped as Close stops it, and its exit
+// status says how it took that. An agent's output ends as it exits, unless a
+// process it started holds it, so the two ends can come together, and either
+// can be seen first. ExitedFirst is false until Wait has returned, and final
+// from then on (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 7).
+func (p *Process) ExitedFirst() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.returned && p.exitedFirst
 }
 
 // drainTaps ends the taps' streams and waits, from one timer of the grace,

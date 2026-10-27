@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -184,6 +185,58 @@ func stillWaiting(t *testing.T, done <-chan error, why string) {
 	case err := <-done:
 		t.Fatalf("Wait returned %v while %s", err, why)
 	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// TestEndedCleanly requires EndedCleanly to be true for the Err of each clean
+// end, Close and the peer's end of output, wrapped or not, and false for each
+// other end, a notification overflow's close and a read's error; for a
+// request's error after the peer's end, which names the peer but not its EOF;
+// for an error that is no connection's end; and for nil
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 7).
+func TestEndedCleanly(t *testing.T) {
+	t.Parallel()
+	closed := NewConnection(nil, io.Discard, idleReader(t))
+	_ = closed.Close()
+	pr, pw := io.Pipe()
+	eof := NewConnection(nil, io.Discard, pr)
+	_ = pw.Close()
+	reset := NewConnection(nil, io.Discard, errOnRead{errors.New("read: connection reset")})
+	opr, opw := io.Pipe()
+	t.Cleanup(func() { _ = opw.Close() })
+	block := func(ctx context.Context, _ string, _ json.RawMessage) (any, *RequestError) {
+		<-ctx.Done()
+		return nil, nil
+	}
+	overflow := NewConnection(block, io.Discard, opr, WithMaxQueuedNotifications(1))
+	go func() {
+		for range 4 {
+			if _, err := opw.Write([]byte(`{"jsonrpc":"2.0","method":"_x/n","params":{}}` + "\n")); err != nil {
+				return
+			}
+		}
+	}()
+	eofErr := ended(t, eof)
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"Close", ended(t, closed), true},
+		{"Close, wrapped", fmt.Errorf("session: %w", ended(t, closed)), true},
+		{"the peer's end of output", eofErr, true},
+		{"Wait after the peer's end", eof.Wait(), true},
+		{"a read's error", ended(t, reset), false},
+		{"a notification overflow", ended(t, overflow), false},
+		{"a request after the peer's end", eof.SendRequestNoResult(context.Background(), "_x/r", map[string]any{}), false},
+		{"io.EOF alone", io.EOF, false},
+		{"another error", errors.New("acp: something else"), false},
+		{"nil", nil, false},
+	}
+	for _, c := range cases {
+		if got := EndedCleanly(c.err); got != c.want {
+			t.Errorf("EndedCleanly(%v), %s, = %v, want %v", c.err, c.name, got, c.want)
+		}
 	}
 }
 

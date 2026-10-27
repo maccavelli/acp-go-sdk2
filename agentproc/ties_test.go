@@ -94,6 +94,47 @@ func TestDescendantsEnded(t *testing.T) {
 	})
 }
 
+// TestExitedFirst requires ExitedFirst to be false until Wait has returned,
+// and then to say which end came first: true for an agent that exits of
+// itself while the beat grandchild it started still holds its output, false
+// for one that closes its output and exits only at its input's end, which
+// comes once the connection has ended. Each runs 50 times
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 7).
+func TestExitedFirst(t *testing.T) {
+	t.Parallel()
+	run := func(t *testing.T, mode string, want bool) {
+		t.Helper()
+		for i := range 50 {
+			cmd := agentCmd(mode)
+			cmd.Env = append(cmd.Env, beatEnv+"="+filepath.Join(t.TempDir(), "beat"))
+			p := startCmd(t, cmd, mode, &testClient{})
+			select {
+			case <-p.Done():
+			case <-time.After(readyWait):
+				t.Fatalf("run %d: the %s agent had not exited %v after it was ready", i, mode, readyWait)
+			}
+			// The exit is recorded once Done is closed, and Wait has not run.
+			if p.ExitedFirst() {
+				t.Fatalf("run %d: ExitedFirst before Wait = true, want false", i)
+			}
+			if _, err := within(t, testGrace+slack, "Wait", p.Wait); err != nil {
+				t.Fatalf("run %d: Wait = %v, want nil", i, err)
+			}
+			if got := p.ExitedFirst(); got != want {
+				t.Fatalf("run %d: ExitedFirst after Wait = %v, want %v", i, got, want)
+			}
+		}
+	}
+	t.Run("the agent exits first", func(t *testing.T) {
+		t.Parallel()
+		run(t, "parent-exit", true)
+	})
+	t.Run("the connection ends first", func(t *testing.T) {
+		t.Parallel()
+		run(t, "closeout", false)
+	})
+}
+
 // TestCallersCommandKept requires the agent to run with the Env and Dir the
 // caller set on its Cmd (0027-MADR-agent-process-helper.md, question 8, and
 // the README's "Closing and limits").

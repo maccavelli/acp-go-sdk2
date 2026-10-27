@@ -811,6 +811,23 @@ func (c *Connection) Err() error {
 	return c.endError()
 }
 
+// EndedCleanly reports whether err, a connection's Err or Wait's error, says
+// the connection ended cleanly: this side closed it with Close, or the peer
+// ended its output. It is false for the close a notification overflow makes,
+// for a read's error, for any other error, and for nil, the Err of a
+// connection that has not ended. A side connection's Err is its connection's
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 7).
+func EndedCleanly(err error) bool {
+	switch {
+	case errors.Is(err, ErrNotificationQueueOverflow):
+		return false
+	case errors.Is(err, ErrConnectionClosed):
+		return true
+	default:
+		return errors.Is(err, ErrPeerDisconnected) && errors.Is(err, io.EOF)
+	}
+}
+
 // Wait blocks until the connection has ended and every goroutine it
 // started has returned, its handlers' included, and then returns Err. It
 // does not end the connection: call Close first to stop it. A reader that

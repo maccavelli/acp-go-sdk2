@@ -158,6 +158,13 @@ func tieChild(mode string) (int, bool) {
 		}
 		ready()
 		return 0, true
+	case "closeout": // closes its output, then exits at its input's end
+		if err := os.Stdout.Close(); err != nil {
+			return 1, true
+		}
+		ready()
+		_, _ = io.Copy(io.Discard, os.Stdin)
+		return 0, true
 	case "where": // writes its working directory and AGENTPROC_TEST_VALUE to the file beatEnv names, then exits at its input's end
 		wd, err := os.Getwd()
 		if err != nil {

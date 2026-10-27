@@ -456,3 +456,57 @@ Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 
   files.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
 * `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 5, end causes (2026-10-27)
+
+**What changed:**
+* **`connection.go`:** `EndedCleanly(err error) bool`, after `Err`.
+  * It is true for an error that wraps `ErrConnectionClosed` and not `ErrNotificationQueueOverflow`, or that wraps
+    `ErrPeerDisconnected` and `io.EOF`. It is false otherwise, nil included.
+  * Its doc names what it reads: a connection's `Err` or `Wait`'s error. A request made after the peer's end wraps
+    `ErrPeerDisconnected` without `io.EOF`, so it is not a clean end.
+* **`agentproc/agentproc.go`:**
+  * `Process` gains `exitedFirst` and `returned`, under `p.mu`.
+  * `watch` checks `p.conn.Done()` as it records the exit, before `p.tree.end()`. Ending the tree can end what a process the
+    agent started holds of its output, so a check after it could see the connection end that the agent's exit caused.
+  * `Wait` sets `returned`. `ExitedFirst` returns `returned && exitedFirst`.
+  * Its doc says that an agent's own exit ends its output, so the two ends can come together and either can be seen first.
+* **How the order is recorded, against the step:** the step said `watch` and the connection's end would each record their order.
+  One check in `watch`, under the lock that marks the exit, decides the order alone. The monitor records nothing.
+* **Tests:**
+  * `TestEndedCleanly`, in `connection_end_test.go`, covers ten cases:
+    * `Close`, and `Close` wrapped by `fmt.Errorf`;
+    * the peer's end of output, and `Wait` after it;
+    * a read's error, and a notification overflow;
+    * a request after the peer's end;
+    * `io.EOF` alone, another error, and nil.
+  * `TestExitedFirst`, in `ties_test.go`, runs each case 50 times:
+    * `parent-exit`, whose beat grandchild holds the output past the agent's exit, gives true;
+    * the new `closeout` child closes its output and exits at its input's end, and gives false.
+
+    Each run checks `ExitedFirst` false once `Done` is closed and before `Wait`, then the order after `Wait`.
+* **The API:** `make api` against `v1.24.0` reports `EndedCleanly`, `(*Process).ExitedFirst` and `LineTap` added: 3 compatible, 0
+  incompatible.
+* **Left to phase 14:** `README.md` and `docs/architecture.md`.
+
+**A check corrected during the phase.** The first form of `TestExitedFirst` read `ExitedFirst` as soon as the agent was ready.
+The "final before Wait" break passed it, since the agent's exit had seldom been recorded by then. The check now runs once `Done`
+is closed, and the break fails it.
+
+Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 6 of 6 failed as required.
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| overflow counted as clean | `TestEndedCleanly` | `connection_end_test.go:238: EndedCleanly(acp: connection closed: notification queue overflow), a notification overflow, = true, want false` |
+| any peer end counted as clean | `TestEndedCleanly` | `connection_end_test.go:238: EndedCleanly(acp: peer disconnected: read: connection reset), a read's error, = true, want false` |
+| the order recorded the wrong way round | `TestExitedFirst` | `ties_test.go:134: run 0: ExitedFirst after Wait = true, want false` |
+| the same, on the Windows host | `TestExitedFirst` | `ties_test.go:134: run 0: ExitedFirst after Wait = true, want false` |
+| `ExitedFirst` final before `Wait` | `TestExitedFirst` | `ties_test.go:130: run 0: ExitedFirst before Wait = true, want false` |
+| the order checked after the tree's end | `TestExitedFirst` | `ties_test.go:130: run 0: ExitedFirst after Wait = false, want true` |
+
+`run` is a `t.Helper`, so line 130 is the exits-first case and line 134 the connection-first case.
+
+**Gates:**
+* `tools/gates.py --all`, with both hosts set: all 18 passed.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
+* `tools/idscan.py --paths` over the staged files: nothing found.
