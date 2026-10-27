@@ -1042,3 +1042,54 @@ Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 
   the second passed all 18. The plants were rerun after the change: 8 of 8.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
 * `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 14, the docs (2026-10-27)
+
+**`README.md`,** each addition in the section its subject already has:
+* **"Explore the API", for a client:**
+  * a bullet for `clienthost.Terminals`, `clienthost.Files` and `clienthost.Refusals`, with the three-way embedding and how a
+    client's own method applies a path policy;
+  * a bullet for `ToolCallTimeline`, after `CompactionTimeline`'s.
+* **The union constructors:** the `Kind()` list names the seven new unions, `mode` and `action` among the keys read, and the four
+  names the schema gives a variant with no discriminator.
+* **"Initialization and capabilities":** `Negotiation.AllowsValue`, after `Allows`.
+* **"Closing and limits":**
+  * `agentproc.LineTap`, after the taps;
+  * `Process.ExitedFirst` and `Process.WaitContext`;
+  * `acp.EndedCleanly` and `Connection.WaitContext`, after `Err` and `Wait`, with a side connection's through its
+    `Connection()`.
+* **"Errors on the wire":** `acp.IsResourceNotFound` among the classifiers.
+* **"Testing with acptest":**
+  * `Connect`'s 10 s bound;
+  * `ScriptAgent`'s `Err`, `Usage` and `WaitCancel`;
+  * `MemoryClient`'s `SetElicitation` and `Terminals`;
+  * `Recorder`'s directions and `Wait`, and `ConnectRecorded`;
+  * `ValidateGolden`.
+
+**`docs/architecture.md`:**
+* **The opening:** names `clienthost` and `internal/proctree`, and its `acptest` bullets give:
+  * `Connect`'s bound and `ConnectRecorded`;
+  * the `Recorder`'s directions and `Wait`;
+  * `ValidateGolden` and `TestMethodTables`;
+  * the turns, and `MemoryClient`'s script and `TerminalHost`, with why it is an interface.
+* **The hand-written files:** `connection.go` names `EndedCleanly` and `WaitContext`, `errors.go` `IsResourceNotFound`, and
+  `helpers.go` `AllowsValue` and the `Kind()` methods. `tooltimeline.go` is added.
+* **"The agent process helper":**
+  * the tree code in `internal/proctree`, with its exported names and `agentproc/tree.go`'s `prepare`;
+  * which packages build `golang.org/x/sys` where;
+  * `ExitedFirst` and `WaitContext`, `readHook` and `LineTap`;
+  * the new tests in its list, and `tools/platforms.py` among its checks.
+* **A new section, "The client hosts":** `Refusals`, `Terminals`, the output buffer, the exit status, `Files`, and the tests.
+* **The tree:** `clienthost/`, `internal/proctree/` and `testdata/toolcalls/`.
+
+**Checked against the code as written:**
+* The sentence the architecture doc first gave, "`golang.org/x/sys` is built for Windows alone, and its `unix` package for
+  `clienthost`'s signal names", contradicted itself. It now says `agentproc` builds the module for Windows alone and
+  `clienthost` builds its `unix` package on Unix.
+* The README's line for `agentproc`, that it needs the module on Windows only, stays true and stays.
+
+**Gates:**
+* `make markdownlint`, `make check-records` and `make disclosure-check`: exit 0.
+* The root's README tests, `go test -run 'Readme|Docs|TestTypedMethodDocs' .`: ok.
+* `tools/gates.py`, the gates but the hosts', since no Go file changed: all 16 passed.
+* `tools/idscan.py --paths` over the staged files: nothing found.

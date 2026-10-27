@@ -129,6 +129,27 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
   `acp.ClientRefusals`, which answers each with method-not-found, and
   implements only `SessionUpdate` and `RequestPermission`; a client that
   implements some of them implements all of them instead.
+- Package `clienthost` serves those methods for you. `clienthost.Terminals`
+  runs each `terminal/create`'s command in a process group, or a job on
+  Windows, keeps its output to `outputByteLimit` at a character boundary, and
+  ends the processes it started on kill and release; its `Command` field
+  builds the command, and is where your policy checks it. `clienthost.Files`
+  reads and writes text files, by 1-based `line` and `limit`, answering a
+  missing file `-32002`. Embed them beside `clienthost.Refusals`, which refuses
+  the rest one level deeper, so that their methods win:
+
+  ```go
+  type client struct {
+      clienthost.Terminals
+      clienthost.Files
+      clienthost.Refusals
+  }
+  ```
+
+  Your own `ReadTextFile` or `WriteTextFile` wins over the embedded one, to
+  check the path against the session's roots before calling it; `Close` ends
+  every terminal
+  ([0041-MADR-close-the-gaps-the-consumers-wait-on.md](docs/decisions/0041-MADR-close-the-gaps-the-consumers-wait-on.md)).
 - Launch or connect to your Agent process (stdio), then create a connection with
   `acp.NewClientSideConnection(client, stdin, stdout)`.
 - Call `Initialize`, `NewSession`, and `Prompt` to run a turn and stream updates.
@@ -152,6 +173,11 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
 
   `Get` returns a compaction. `Open` lists those not known to have ended, so
   they can be shown as unfinished when a turn ends without them.
+- `acp.ToolCallTimeline` does the same for tool calls: a `tool_call` is the
+  call, and a `tool_call_update` changes only the fields it carries, its
+  `content` and `locations` replacing the collections, an empty one clearing
+  them; an update for a call never seen starts it `pending`. `Get` and `Open`,
+  the calls neither `completed` nor `failed`, read it back.
 
 Helper constructors are provided to reduce boilerplate when working with union types:
 
@@ -168,8 +194,13 @@ Helper constructors are provided to reduce boilerplate when working with union t
   the compaction updates are refused unless the client advertised
   `session.notices` or `session.compaction`. `SessionUpdate.Kind()` names the
   variant a value sends, or the `sessionUpdate` of an unknown one received;
-  `ContentBlock`, `ToolCallContent`, `RequestPermissionOutcome` and
-  `SessionConfigOption` have the same `Kind()`, reading `type` or `outcome`.
+  `ContentBlock`, `ToolCallContent`, `RequestPermissionOutcome`,
+  `SessionConfigOption`, `AuthMethod`, `McpServer`,
+  `CreateElicitationRequest`, `CreateElicitationResponse`, `MultiSelectItems`,
+  `SetSessionConfigOptionRequest` and the unstable `PlanUpdateContent` have
+  the same `Kind()`, reading `type`, `outcome`, `mode` or `action`. A variant
+  sent with no discriminator is named as the schema names it: `agent`,
+  `stdio`, `value_id` or `titled`.
 - Tool calls: `acp.StartToolCall`, `acp.UpdateToolCall`, and their options.
   `rawInput` and `rawOutput` are raw JSON, so `acp.WithStartRawInput`,
   `acp.WithStartRawOutput`, `acp.WithUpdateRawInput`, `acp.WithUpdateRawOutput`,
@@ -508,7 +539,10 @@ terminal method is run, not authenticated; received, it is answered `-32602`.
 
 `Negotiation.Allows(method)` reports whether the record lets a method be sent,
 for an application that shows or hides features: nil, or the
-`*acp.CapabilityError`.
+`*acp.CapabilityError`. `Negotiation.AllowsValue(method, params)` runs every
+check a send runs, the method's and those of its values, such as an MCP
+server's transport or a prompt's image block, and returns the error the send
+would, without sending, so a caller can choose another value first.
 
 A validation hook sees these errors after the SDK's own validation: a message
 that fails validation reaches the hook with that error first and, only if the
@@ -681,7 +715,15 @@ never waits for it, and its errors are ignored. A tap that falls 32 MiB behind
 is detached: what it received is the stream's beginning, and
 `Process.DroppedTapBytes` counts the rest. `Wait` gives the taps up to the
 grace to write what they hold. `ExampleCommand_outputTap` records the agent's
-output to a file.
+output to a file. `agentproc.LineTap(fn)` is a tap that calls `fn` with each
+line, a copy without its newline, as the connection reads or writes it, and
+holds a line not yet ended.
+
+`Process.ExitedFirst()` reports, once `Wait` has returned, whether the agent
+exited while its connection was still open, rather than after the connection
+ended; when the agent's own exit closes its output, the two can come together.
+`Process.WaitContext(ctx)` is `Wait` bounded by a context: it returns
+`context.Cause(ctx)` when ctx ends first, and leaves the agent running.
 
 When the input ends cleanly, at end of file, as when a script closes a stdio
 agent's standard input after writing its requests, the requests already received
@@ -703,7 +745,12 @@ every goroutine it started has returned, its handlers' included, and then return
 `Err()`. It does not end the connection, so close it first. A reader that does
 not implement `io.Closer` keeps `Wait()` waiting until its `Read` returns, and so
 does a handler that ignores its context. Either side connection has both
-([0026-MADR-connection-end-cause-and-wait.md](docs/decisions/0026-MADR-connection-end-cause-and-wait.md)):
+([0026-MADR-connection-end-cause-and-wait.md](docs/decisions/0026-MADR-connection-end-cause-and-wait.md)).
+`acp.EndedCleanly(err)` is true for an `Err()` of this side's `Close` or of the
+peer's end of output, and false for an overflow's close, a read's error and
+nil. `Connection.WaitContext(ctx)` is `Wait` bounded by a context; a side
+connection's is its `Connection()`'s, since its own methods that take a
+context are protocol methods:
 
 ```go
 select {
@@ -784,8 +831,9 @@ prompt turn is cancelled, they are answered cancelled, whatever they return.
 To classify an error a call returned, wrapped or not: `acp.IsMethodNotFound`
 is true for a peer's `-32601` and for a method the peer did not advertise,
 which this side refuses before sending; `acp.IsAuthRequired` for `-32000`;
-and `acp.IsCancelled` for `context.Canceled`, `acp.ErrPromptCancelled` and
-`-32800`. `(*acp.RequestError).Reason()` gives the `"error"` of its `data`,
+`acp.IsResourceNotFound` for `-32002`, a file or terminal the client does not
+have; and `acp.IsCancelled` for `context.Canceled`, `acp.ErrPromptCancelled`
+and `-32800`. `(*acp.RequestError).Reason()` gives the `"error"` of its `data`,
 where this SDK writes why it refused, or else its message.
 
 A malformed message is logged by its fault, its size and, when it has a valid
@@ -1018,14 +1066,26 @@ params.Meta = acp.TraceMeta(traceparent, tracestate, "")
 Package `acptest` stands up a connection pair for a test, with no pipes to
 wire by hand. `acptest.Connect(t, agent, client)` joins the two sides through
 the public constructors and closes and waits for both when the test ends, so
-the pair holds no goroutine past it. It also provides:
+the pair holds no goroutine past it; a handler that ignores its context fails
+the test after 10 seconds, with what still runs, rather than hanging it. It
+also provides:
 
-- `ScriptAgent`, which plays a scripted prompt turn, its updates and then its
-  stop reason;
+- `ScriptAgent`, which plays scripted prompt turns, each its updates and then
+  its stop reason, or an `Err`, with a `Usage`, or, with `WaitCancel`, waiting
+  for the client's `session/cancel` and answering `cancelled`;
 - `MemoryClient`, which serves files from memory, with 1-based `line` and
-  `limit`, and answers permission requests from a script;
-- `Recorder`, which keeps each frame a side writes or reads, in canonical
-  `encoding/json` form, for goldens;
+  `limit`, answers permission requests and, through `SetElicitation`,
+  elicitations from a script, a form's answer checked against the form, and
+  serves terminals through its `Terminals`, such as a `*clienthost.Terminals`
+  with a scripted `Command`;
+- `Recorder`, which keeps each frame a side writes or reads, `Sent` or
+  `Received`, in canonical `encoding/json` form, for goldens, and whose
+  `Wait(ctx, n)` waits for `n` frames; `ConnectRecorded` records the client
+  side of a pair into one;
+- `ValidateGolden(t, rec.Records())`, which decodes each recorded frame into
+  its method's type, a response by its request's, and fails the test on one
+  the schema's `Validate` refuses, an unknown method, or a response to no
+  recorded request;
 - `Abs`, which makes a fixture path such as `/work/a.txt` absolute on the
   host, as the SDK requires of a path it receives.
 
