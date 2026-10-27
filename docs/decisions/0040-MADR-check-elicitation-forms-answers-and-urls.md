@@ -114,7 +114,9 @@ the `go 1.26.10` floor, and hand-written code beside the generated types?
 * **Compatibility.** Additions only, under `make api`; no change to what the SDK sends or accepts on the wire unless a side asks
   for one.
 * **No dependency.** `AGENTS.md`: "No dependency may be added without a MADR in this repository that names it." The standard
-  library has what the rules need: `regexp`, `net/mail`, `net/url`, `time`, `unicode/utf8`, `strconv`, `math/big`.
+  library has what the rules need: `regexp`, ~~`net/mail`~~, `net/url`, `time`, `unicode/utf8`, `strconv`, `math/big`.
+  *Amended 2026-10-26, by the PLAN's phase 3 deviation: `net/mail` imports `net`, which package `acp` did not import, so the
+  email rule is written by hand, with `net/netip` for address literals, and package `acp` stays off `net`.*
 * **The user stays in the loop.** "Clients MUST let users review and modify responses": a failed check goes back to the user, so
   the SDK must hand it to the client, not decide the answer.
 * **Idiomatic Go.** Methods on the generated types, from a hand-written file, as `helpers.go` adds `SessionUpdate.Kind` and
@@ -197,7 +199,10 @@ field and the rule, never the value, which stays in `Value` for the caller: an a
 * **String.** `minLength` and `maxLength` in code points (`utf8.RuneCountInString`); membership in `enum` and in `oneOf`'s
   `const`s, whichever are set; `pattern` by RE2, unanchored as ECMA-262's `test`, with a pattern RE2 cannot compile reported as
   `RuleUnsupported`, never a pass; and `format`:
-  * `email`: `net/mail.ParseAddress` succeeds with no display name and returns the input unchanged;
+  * `email`: ~~`net/mail.ParseAddress` succeeds with no display name and returns the input unchanged~~ *amended 2026-10-26,
+    by the PLAN's phase 3 deviation:* an RFC 5321 §4.1.2 Mailbox, the grammar JSON Schema's `email` names, checked by hand: a
+    Dot-string or Quoted-string local part, `@`, and a domain of letter-digit-hyphen labels or an address literal; ASCII only,
+    since non-ASCII addresses are the separate `idn-email` format; no length limits;
   * `uri`: an absolute URI, `url.Parse` with a scheme, and no whitespace or control character;
   * `date`: RFC 3339 `full-date`, `time.DateOnly`;
   * `date-time`: RFC 3339 `date-time`, with `t` and `z` accepted in lowercase and a leap second `60` accepted, as RFC 3339 §5.6
@@ -332,8 +337,11 @@ The owner was asked each question with three options, the recommendation first, 
   holds to the emitter.
 * Bad, because a client that relies on the option alone sends `-32603` for a failing answer instead of returning it to the user,
   which the specification's review MUST asks the client to do; the documentation says to call `Check` first.
-* Neutral, because `email` is checked as `net/mail` parses it, which accepts `a@b`; JSON Schema's RFC 5321 mailbox is not
-  checked further. The rule is documented.
+* Neutral, because ~~`email` is checked as `net/mail` parses it, which accepts `a@b`; JSON Schema's RFC 5321 mailbox is not
+  checked further~~ *(amended 2026-10-26)* `email` is checked by RFC 5321's grammar, which accepts a one-label domain such as
+  `a@b` and checks no length. The rule is documented.
+* Good, because package `acp` imports no `net`, so a program that imports it links no resolver for it
+  (*added 2026-10-26, by the PLAN's phase 3 deviation*).
 * Neutral, because RE2 and ECMA-262 differ beyond what fails to compile, for example in Unicode classes; the rule is documented as
   RE2's.
 * Bad, because the root package grows by twelve names (`ElicitationField`, `Fields`, `Kind`, `Defaults`, `CheckSchema`, `Check`,

@@ -45,9 +45,10 @@ and `make api` gates it with the root and `agentproc`.
   not), `compaction.go` (`CompactionTimeline` and `CompactionEntity`, which
   apply a session's compaction updates by the protocol's rules, live or
   replayed, for a client; 0039, item 3), `elicitation.go` (an elicitation form's
-  fields in the order it is sent, their kinds and their defaults, for a client;
+  fields in the order it is sent, their kinds and their defaults, for a client,
+  and `CheckSchema`, what makes a form impossible or ambiguous to fill;
   [0040-MADR-check-elicitation-forms-answers-and-urls.md](decisions/0040-MADR-check-elicitation-forms-answers-and-urls.md),
-  item 1), `refusals.go` (`ClientRefusals` and
+  items 1 and 2), `refusals.go` (`ClientRefusals` and
   `AgentRefusals`, which answer method-not-found for the `Client` and `Agent`
   methods a side may leave unadvertised), and `doc.go`. None of them holds
   protocol state, but for the compactions a `CompactionTimeline` its caller
@@ -293,7 +294,10 @@ one the Go type cannot reach is refused;
 and it checks the table's absolute paths. Each exported `Validate` calls an
 unexported `validate(abs func(string) bool)` with the host's `filepath.IsAbs`,
 and passes `abs` to the nested values; every check returns a
-`*ValidationError` naming the type, the property and the rule.
+`*ValidationError` naming the type, the property and the rule. The elicitation
+checks in `elicitation.go` return the same type, under rules of their own in
+`errors.go`, each problem joined with `errors.Join`; their messages never quote
+an answer's value, and a refused default also holds the rule it breaks.
 
 `connection.go` applies that check in both directions. Before sending, the
 params of a generated type, and a handler's result, are validated with

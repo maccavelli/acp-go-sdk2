@@ -62,7 +62,8 @@ func (e *RequestError) Error() string {
 	return fmt.Sprintf("code %d: %s", e.Code, e.Message)
 }
 
-// ValidationRule names the rule a generated Validate check enforces.
+// ValidationRule names the rule a generated Validate check, or an elicitation
+// check, enforces.
 type ValidationRule string
 
 // The rules of the generated Validate checks
@@ -86,16 +87,57 @@ const (
 	RuleExcludedValue ValidationRule = "excludedValue"
 )
 
-// ValidationError is the error a generated Validate check returns. Type is
-// the Go type checked; Field is the JSON key, with an index for an element
-// such as "additionalDirectories[1]", and is empty for a check of the whole
-// value; Value is the offending value when it is a single value; Rule is the
-// rule broken. A Validate error that wraps a nested type's error keeps this
-// one reachable with errors.As.
+// The rules of the elicitation checks, ElicitationSchema's CheckSchema and
+// Check (0040-MADR-check-elicitation-forms-answers-and-urls.md). RuleMinLength,
+// RuleMinimum and RuleMaximum serve them too.
+const (
+	// RuleRequired: a field the form requires is absent from the answer.
+	RuleRequired ValidationRule = "required"
+	// RuleUndeclared: a name the form does not declare: a key of the answer,
+	// or a name its required list gives.
+	RuleUndeclared ValidationRule = "undeclared"
+	// RuleType: a value is not of the type its field takes.
+	RuleType ValidationRule = "type"
+	// RuleMaxLength: a string is longer, in characters, than its maxLength.
+	RuleMaxLength ValidationRule = "maxLength"
+	// RulePattern: a string does not match its pattern.
+	RulePattern ValidationRule = "pattern"
+	// RuleFormat: a string is not of its format, or a format or URL is not
+	// one the protocol allows.
+	RuleFormat ValidationRule = "format"
+	// RuleEnum: a value is not one of its choices, or a list of choices is
+	// empty or given twice.
+	RuleEnum ValidationRule = "enum"
+	// RuleMinItems: a list has fewer items than its minItems.
+	RuleMinItems ValidationRule = "minItems"
+	// RuleMaxItems: a list has more items than its maxItems.
+	RuleMaxItems ValidationRule = "maxItems"
+	// RuleUnsupported: a rule this package cannot check, such as a pattern
+	// Go's RE2 cannot compile; the value is not taken to pass it.
+	RuleUnsupported ValidationRule = "unsupported"
+	// RuleBounds: a lower bound is greater than its upper bound.
+	RuleBounds ValidationRule = "bounds"
+	// RuleDuplicate: a choice is listed twice.
+	RuleDuplicate ValidationRule = "duplicate"
+	// RuleDefault: a default its own field's rules refuse; the error also
+	// holds the rule it breaks.
+	RuleDefault ValidationRule = "default"
+)
+
+// ValidationError is the error a generated Validate check returns, and each
+// problem an elicitation check reports. Type is the Go type checked; Field is
+// the JSON key, with an index for an element such as
+// "additionalDirectories[1]", and is empty for a check of the whole value;
+// Value is the offending value when it is a single value; Rule is the rule
+// broken. A Validate error that wraps a nested type's error keeps this one
+// reachable with errors.As.
 //
 // The message of an absolute-path or excluded-value check quotes the value it
 // refuses, so a value the peer sent reaches the answer's data and the logs as
-// it was (0024-PLAN-behaviour-fixes.md, A14).
+// it was (0024-PLAN-behaviour-fixes.md, A14). The message of an elicitation
+// check names the field and the rule and never the value, which may be
+// personal data; Value holds it
+// (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 3).
 type ValidationError struct {
 	Type  string
 	Field string

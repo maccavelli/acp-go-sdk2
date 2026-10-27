@@ -412,3 +412,87 @@ When the release is published, this PLAN and its row are `complete`.
     added;
   * `make check-records`, `make markdownlint`, `make disclosure-check`; `tools/idscan.py --paths` over the changed and new
     files: 0 matches.
+
+### Deviation, 2026-10-26: phase 3, `net/mail` brings package `net` into `acp`
+
+* **Found** by phase 3's first `tools/gates.py --all`. 17 gates were `ok`. `platforms` failed eight of its 13 checks with C
+  compile errors in Go's runtime while cross-building `agentproc` for linux, freebsd, openbsd, netbsd and illumos, such as "`note:
+  'setreuid' declared here`" and "`error: use of undeclared identifier '_SIG_WORDS'`".
+* **Cause.** The MADR's `email` rule used `net/mail`, which imports `net`. `go list -deps .` showed that package `acp` did not
+  depend on `net` before the phase, and did after it, with `mime`, `net/textproto` and the DNS packages; `agentproc` imports
+  `acp`. The host's Go environment file has set `CGO_ENABLED=1` since 2026-10-20, so `net`'s cgo resolver was compiled for each
+  cross target with the macOS clang, which fails.
+* **Measured.** A copy of `HEAD` vets for linux with the same environment: exit 0. The working tree with `CGO_ENABLED=0`: exit 0.
+  `net/url` and `net/netip` do not import `net`.
+* **Consequence beyond the gate:** every program that imports `acp` would have linked `net`, and on Unix with cgo on, its
+  resolver. The MADR did not state it.
+* **Pre-existing:** no; introduced by this phase, before any commit.
+* **Decided** by the owner, out of three resolutions: "Hand-written addr-spec". Not chosen: keeping `net/mail` and setting
+  `CGO_ENABLED=0` in `tools/platforms.py`; both.
+* **The fix.**
+  * `elicitation.go`'s `isMailbox` checks an RFC 5321 §4.1.2 Mailbox, the grammar JSON Schema's `email` names, by hand: a
+    Dot-string or Quoted-string local part, `@`, and letter-digit-hyphen labels or an address literal, `net/netip` parsing an
+    IPv4 or IPv6 literal. It is ASCII only, as `idn-email` is a separate format, and checks no length.
+  * `TestElicitationEmailFormat` covers 28 addresses, the probe's among them. Unlike `net/mail`, the rule now refuses
+    `a@-bad.com`, and accepts `"x y"@b.example`, which RFC 5321 allows.
+  * `TestRootDoesNotImportNet` walks package `acp`'s imports with `go/build` and fails when `net` is reached, so the guard does
+    not depend on a host's cgo setting.
+* **The MADR** is amended where it named `net/mail`: the decision driver listing the standard-library packages, item 3's `email`
+  rule, and the `email` consequence, with a new consequence that `acp` imports no `net`.
+* **Scope added to phase 3:** `TestElicitationEmailFormat` and `TestRootDoesNotImportNet`, in `elicitation_schema_test.go`.
+
+### Phase 3, the schema check, 2026-10-26
+
+* **`errors.go`:** the thirteen constants, `RuleRequired` to `RuleDefault`, in a block of their own citing the MADR, each with a
+  one-line comment. `ValidationRule`'s and `ValidationError`'s doc comments name the elicitation checks, and say their messages
+  never quote a value. `errors.go` is a runtime file; the engine cases' API listings cover generated files only
+  (`cmd/generate/internal/enginetest/api_test.go:41`), so none changed.
+* **`elicitation.go`:**
+  * `ElicitationSchema.CheckSchema`, with `schemaError` and `checkPropertySchema`. Problems come in `Fields` order, then the
+    undeclared `required` names. Within a property: bounds, empty or repeated choices, both `enum` and `oneOf`, `format`,
+    `pattern`, `default`.
+  * A refused default is one `defaultError`, whose `Unwrap` gives the `RuleDefault` problem first, then each rule broken, so
+    `errors.As` finds `RuleDefault`.
+  * The per-value rules phase 4's `Check` will share: `checkValue`, `checkString`, `checkNumber` (an `Integer` against a
+    `float64` bound through `math/big`), `checkInteger` (`integral` takes a whole `Number` within `int64`), `checkArray`,
+    `knownFormat`, `matchesFormat` and `rfc3339Strict` (a lowercase `t` and `z`, and seconds `60`).
+  * Lengths are compared as `int64`, which gosec accepts for a rune count where a `uint64` conversion is flagged (G115).
+* **Tests**, `elicitation_schema_test.go`, `package acp_test`:
+  * `TestElicitationCheckSchema`: 25 cases, one defect each, each read by its `Field` and `Rule` with `errors.As` over the
+    joined errors. They cover an undeclared `required` name; the four bounds; the four empty lists of choices; the four
+    duplicates; `enum` and `oneOf` together; an unknown `format`; a lookahead and a backreference `pattern`; and eight refused
+    defaults, each also by the rule it breaks (`maxLength` with `héllo`, `enum`, `format`, `pattern`, `maximum`, an exact
+    `minimum` at `9007199254740993`, an item not a choice, too many items);
+  * `TestElicitationCheckSchemaValid`: a form of every kind with every keyword set validly, a catch-all among them: nil. Three
+    defects, written `c`, `a`, `b`, come back in that order. `errors.As` of an uncompilable pattern finds `RuleUnsupported`;
+  * `TestElicitationEmailFormat` and `TestRootDoesNotImportNet`, from the deviation.
+* **Docs:** `docs/architecture.md`'s hand-written list gains `CheckSchema`, and its account of `ValidationError` the elicitation
+  checks.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required, on the
+  final code:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | the row's: undeclared `required` names accepted | `elicitation_schema_test.go:97: undeclared required: CheckSchema = [] (<nil>), want {required[1] undeclared}` |
+  | the row's: `minimum > maximum` accepted | `:97: number bounds: CheckSchema = [] (<nil>), want {properties["n"].maximum bounds}` |
+  | the row's: a duplicate `const` accepted | `:97: duplicate oneOf: CheckSchema = [] (<nil>), want {properties["s"].oneOf[1].const duplicate}` |
+  | the row's: an uncompilable `pattern` accepted | `:97: lookahead pattern: CheckSchema = [] (<nil>), want {properties["s"].pattern unsupported}` |
+  | the row's: an unknown `format` accepted | `:97: unknown format: CheckSchema = [] (<nil>), want {properties["s"].format format}` |
+  | the row's: only the first defect returned | `:136: CheckSchema of three defects = [{properties["c"].enum enum}], want […3 problems…]` |
+  | a default not checked | `:97: default too long: CheckSchema = [] (<nil>), want {properties["s"].default default}` |
+  | a lowercase `t` and `z` refused | `:127: CheckSchema of a valid form = … properties["seen"].default: default: … is not a valid date-time, want nil` |
+  | the deviation's: `net/mail` imported | `:211: package acp imports net, through [net/mail net]` |
+  | the deviation's: a hyphen-edged domain label accepted | `:188: email "a@-bad.com": accepted true, want false`; the same for `a@bad-.com` |
+  | the deviation's: a display name accepted | `:188: email "Ann <a@b.example>": accepted true, want false` |
+
+* **Fixes the checks asked for:** `errorlint`, on the test's error walk, rewritten with `errors.AsType`; `gosec` G115 on a rune
+  count; and, on the hand-written email code, `gocritic` `initClause`, `intrange`, `modernize` `stringsseq` and staticcheck
+  QF1001.
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "208 file(s) clean"; `scripts/go-precheck.sh elicitation_schema_test.go`, the new file;
+  * `tools/platforms.py`: "13 of 13 passed";
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok` on the second run, the first being the
+    deviation's. `api` reported "against v1.23.0: 0 incompatible, 18 compatible": phase 2's four names, `CheckSchema`, and the
+    thirteen constants;
+  * `make check-records`, `make markdownlint`, `make disclosure-check`; `tools/idscan.py --paths` over the changed and new
+    files: 0 matches.
