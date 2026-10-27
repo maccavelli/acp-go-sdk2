@@ -749,3 +749,68 @@ Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 
   passed. The Windows host ran `clienthost` in 1.9 s, the Linux host in 1.5 s.
 * `make check-records`, `make markdownlint`, `make disclosure-check`, `make check-tools`: exit 0.
 * `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 9, `clienthost.Files` and `IsResourceNotFound` (2026-10-27)
+
+**The specification,** read on 2026-10-27:
+* "The Client **MUST** create the file if it doesn't exist."
+* `line` is "1-based", and `limit` the "maximum number of lines to read".
+* Clients SHOULD "check requested paths against the session's" roots, and SHOULD "ask the user before `fs/write_text_file`
+  changes files that control execution or approval".
+* It names no error codes, and says nothing of parent directories or of a line past the end.
+
+The MADR's "Amended by the PLAN's phase 9, 2026-10-27" records what the phase decided where the specification is silent.
+
+**What changed:**
+* **`errors.go`:** `IsResourceNotFound(err)`, a `*RequestError` of `-32002`, and `codeResourceNotFound` beside the other codes.
+  `TestErrorCodesPinned` pins it to `ErrorCodeResourceNotFound`.
+* **`clienthost/files.go`, new:** `Files`, with `MkdirAll`, `ReadTextFile` and `WriteTextFile`.
+  * `regular` refuses a relative path as invalid params, a missing path as resource-not-found when reading, and a path that is
+    not a regular file.
+  * `selectLines` splits after each `"\n"`, so `"\r\n"` stays as it is, and drops the empty piece after a final newline.
+  * A missing directory without `MkdirAll` is resource-not-found, naming the directory.
+* **`clienthost/doc.go` and `refusals.go`:** they name `Files` beside `Terminals`.
+* **Tests:**
+  * `errors_classify_test.go`: `TestIsResourceNotFound`, a peer's `-32002` and wrapped, and not `-32601`, `-32603` or nil.
+  * `clienthost/files_test.go`:
+    * `TestReadTextFileLines`, twelve cases of `line` and `limit`, with `"\r\n"` kept, and line 0 refused;
+    * `TestReadTextFileRefused`;
+    * `TestWriteTextFile`: create, replace keeping mode 0600, a missing directory with and without `MkdirAll`, relative, a
+      directory;
+    * `TestFilesRefuseDevice`: `os.DevNull` on Unix;
+    * `TestFilesOverConnection`: a client embedding `Terminals`, `Files` and `Refusals`, the package doc's form, over
+      `acptest.Connect`, a missing file read by the agent through `acp.IsResourceNotFound`.
+  * `clienthost/example_test.go`: the example client embeds `Files` too, and `ExampleFiles` shows a client whose own methods
+    check the project's root and call `Files`'.
+* **The API:** `make api` against `v1.24.0` reports 11 compatible, 0 incompatible. The new ones are `IsResourceNotFound` and
+  `clienthost: Files`.
+* **Left to phase 14:** `README.md` and `docs/architecture.md`.
+
+Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 7 of 7 failed as required.
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| `line` read as 0-based | `TestReadTextFileLines` | `files_test.go:58: line 1: ReadTextFile = "two\r\nthree\nfour", <nil>; want "one\ntwo\r\nthree\nfour"` |
+| a missing file answered with a plain error, `-32603` on the wire | `TestReadTextFileRefused` | `files_test.go:74: ReadTextFile of a missing file = clienthost: stat …, want resource-not-found (-32002)` |
+| parent directories always created | `TestWriteTextFile` | `files_test.go:117: WriteTextFile under a missing directory = <nil>, want resource-not-found (-32002)` |
+| line ends normalised to `"\n"` | `TestReadTextFileLines` | `files_test.go:58: line 1: ReadTextFile = "one\ntwo\nthree\nfour", <nil>; …` |
+| a line past the end read as the last | `TestReadTextFileLines` | `files_test.go:58: past the end: ReadTextFile = "four", <nil>; want ""` |
+| a device read and written | `TestFilesRefuseDevice` | `files_test.go:143: ReadTextFile of /dev/null = nil, want a refusal: it is not a regular file` |
+| `IsResourceNotFound` true for any code | `TestIsResourceNotFound` | `errors_classify_test.go:97: method not found: IsResourceNotFound(…-32601…) = true, want false` |
+
+The second row's line names a temporary directory of this machine, cut here.
+
+**What the first plants showed:**
+* **The first "past the end" plant was an equivalent mutation.** It changed `>=` to `>`, after which `lines[first:]` is empty
+  anyway, so no test could tell. It was replaced by one that reads the last line instead.
+* **The first device plant passed every test.** A directory fails in `os.ReadFile` and `os.WriteFile` with the regular-file check
+  or without it. `TestFilesRefuseDevice` was added, and fails without the check.
+
+**Gates:**
+* `tools/gates.py --all`, with both hosts set, ran three times:
+  * the first failed `precheck`, `newfiles`, `lint`, `fix` and `platforms` on modernize's `newexpr` for the test's pointer helper;
+  * the second failed the same gates on vet's `inline`, since the helper's `//go:fix inline` asks every call to be inlined;
+  * after `go fix` inlined the calls and the helper was removed, the third passed all 18.
+* The plants were rerun after the last change: 7 of 7.
+* `make check-records`, `make markdownlint`, `make disclosure-check`, `make check-tools`: exit 0.
+* `tools/idscan.py --paths` over the staged files: nothing found.

@@ -1,7 +1,8 @@
 // Package clienthost holds ready implementations of the client methods an
 // ACP client runs on the agent's behalf: Terminals runs the commands of the
-// five terminal methods (0041-MADR-close-the-gaps-the-consumers-wait-on.md,
-// item 2).
+// five terminal methods, and Files reads and writes text files for the two
+// file-system methods (0041-MADR-close-the-gaps-the-consumers-wait-on.md,
+// items 2 and 3).
 //
 // Each is a type a client embeds. Embedded beside Refusals, which refuses
 // every optional client method with method-not-found one level deeper, its
@@ -9,6 +10,7 @@
 //
 //	type client struct {
 //		clienthost.Terminals
+//		clienthost.Files
 //		clienthost.Refusals
 //	}
 //

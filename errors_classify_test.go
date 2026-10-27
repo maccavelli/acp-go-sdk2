@@ -22,6 +22,7 @@ func TestErrorCodesPinned(t *testing.T) {
 		{"method not found", codeMethodNotFound, int(ErrorCodeMethodNotFound)},
 		{"authentication required", codeAuthenticationRequired, int(ErrorCodeAuthenticationRequired)},
 		{"request cancelled", codeRequestCancelled, int(ErrorCodeRequestCancelled)},
+		{"resource not found", codeResourceNotFound, int(ErrorCodeResourceNotFound)},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s: %d, want %d", c.name, c.got, c.want)
@@ -71,6 +72,29 @@ func TestIsMethodNotFound(t *testing.T) {
 	} {
 		if got := IsMethodNotFound(c.err); got != c.want {
 			t.Errorf("%s: IsMethodNotFound(%v) = %v, want %v", c.name, c.err, got, c.want)
+		}
+	}
+}
+
+// TestIsResourceNotFound requires a peer's -32002, wrapped or not, and
+// nothing else (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 3).
+func TestIsResourceNotFound(t *testing.T) {
+	t.Parallel()
+	peer := peerAnswer(t, NewResourceNotFound("/work/missing.txt"))
+	for _, c := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"peer's -32002", peer, true},
+		{"peer's -32002, wrapped", fmt.Errorf("reading: %w", peer), true},
+		{"local", NewResourceNotFound("/work/missing.txt"), true},
+		{"method not found", NewMethodNotFound("fs/read_text_file"), false},
+		{"internal error", NewInternalError(nil), false},
+		{"nil", nil, false},
+	} {
+		if got := IsResourceNotFound(c.err); got != c.want {
+			t.Errorf("%s: IsResourceNotFound(%v) = %v, want %v", c.name, c.err, got, c.want)
 		}
 	}
 }

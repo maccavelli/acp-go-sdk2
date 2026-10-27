@@ -299,6 +299,7 @@ const (
 	codeMethodNotFound         = -32601 // ErrorCodeMethodNotFound
 	codeAuthenticationRequired = -32000 // ErrorCodeAuthenticationRequired
 	codeRequestCancelled       = -32800 // ErrorCodeRequestCancelled
+	codeResourceNotFound       = -32002 // ErrorCodeResourceNotFound
 )
 
 // IsMethodNotFound reports whether err, or an error it wraps, is a
@@ -321,6 +322,15 @@ func IsMethodNotFound(err error) bool {
 func IsAuthRequired(err error) bool {
 	re, ok := errors.AsType[*RequestError](err)
 	return ok && re != nil && re.Code == codeAuthenticationRequired
+}
+
+// IsResourceNotFound reports whether err, or an error it wraps, is a
+// resource-not-found answer (-32002), such as a client's for a file that
+// does not exist, or a terminal id it does not know
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 3).
+func IsResourceNotFound(err error) bool {
+	re, ok := errors.AsType[*RequestError](err)
+	return ok && re != nil && re.Code == codeResourceNotFound
 }
 
 // IsCancelled reports whether err, or an error it wraps, is a cancellation:

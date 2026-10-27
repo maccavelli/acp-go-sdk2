@@ -360,6 +360,25 @@ The owner decided two points that item 6 did not foresee.
 * **No death signal on a terminal.** A `Pdeathsig` follows the thread that started the process (0029), and a handler's thread is
   not kept for the terminal's life. `Close` ends every terminal, and on Windows a terminal's job ends with this process.
 
+#### Amended by the PLAN's phase 9, 2026-10-27
+
+Item 3 named `ReadTextFile` and `WriteTextFile` with 1-based `line` and `limit`, `-32002` for a missing file, and an option for
+parent directories. The phase also decided the following, which item 3 did not state. The specification's file-system page names
+no error codes, and says nothing of parent directories or of a line past the end.
+
+* **No policy hook.** The specification asks a client to check each path against the session's roots, and to ask its user before
+  a write changes a file that controls execution or approval. A client does that in a `ReadTextFile` or `WriteTextFile` of its
+  own, which wins over the embedded one, and calls `Files`'. `ExampleFiles` shows it. Unlike `Terminals`, which needs `Command`
+  to build the process, `Files` needs no field for it.
+* **Refusals beyond a missing file:**
+  * a path that is not absolute is invalid params;
+  * `line` 0 is invalid params, since lines are numbered from 1;
+  * a path that is not a regular file is refused. A device such as `/dev/zero` would never finish a read, and a FIFO would block
+    it.
+* **A write without `MkdirAll` under a missing directory** is resource-not-found, naming the directory.
+* **A write replaces the file's content and keeps its mode.** It is not an atomic rename, which would change the file's inode and
+  ownership.
+
 ### Consequences
 
 * Good, because the defect that loses an agent's last output before it exits is fixed, with the failing test as its regression
