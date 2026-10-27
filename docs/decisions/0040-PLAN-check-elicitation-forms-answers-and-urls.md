@@ -664,3 +664,49 @@ When the release is published, this PLAN and its row are `complete`.
     `elicitation_url_test.go`. `api` reported "against v1.23.0: 0 incompatible, 25 compatible", `ElicitationURL` and
     `ParseElicitationURL` added;
   * `make check-records`, `make disclosure-check`; `tools/idscan.py --paths` over the changed and new files: 0 matches.
+
+### Phase 7, closing the implementation, 2026-10-26
+
+* **`make api`** against `v1.23.0`, the newest `v1` tag: "0 incompatible, 25 compatible"; "reported packages unstable: 0
+  incompatible, not gated". The 25 are all added: the MADR's twelve names, `ElicitationContentValue.Float64` and `Int64`,
+  `ElicitationField`, `ElicitationPropertySchema.Kind` and `ParseValue`, `ElicitationSchema.Check`, `CheckSchema`, `Defaults`
+  and `Fields`, `ElicitationURL`, `ParseElicitationURL` and `WithElicitationCheck`; and the thirteen constants, `RuleBounds` to
+  `RuleUnsupported`. `agentproc` and `acptest` are unchanged.
+* **The generated files against `v1.23.0`:** the phase 5 script, given the ref, finds 19 changed lines in `agent_gen.go` and 10
+  in `client_gen.go`, each a `checkResult` call gaining `&p`, and no other change in any generated file.
+  `git diff --stat v1.23.0` agrees: 29 lines in and 29 out, in the two files.
+* **The Scope:** `git diff --name-only v1.23.0` lists only files the Scope names, and one more,
+  `docs/decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md`. That is 0039's own closing commit, `e908875`, made
+  after its release and before this PLAN began.
+* **The docs, read in full against the code.**
+  * `README.md`: its diff against `v1.23.0` is the 103 lines of "Elicitation". The section holds against the code. The rest was
+    read again for claims the phase 5 change to `connection.go` touches, the result paths and the receiving order, and holds:
+    the option's refusal is an addition to "a handler's result that fails is not sent".
+  * `docs/architecture.md`: the entries this PLAN wrote hold. One gap was found and filled: "Checks that guard this" named none
+    of the elicitation tests, nor `TestRootDoesNotImportNet`, phase 3's invariant. It now has a bullet for them.
+  * `errors.go`, `ValidationError`'s doc, read as `go doc` renders it, was inexact. It said an elicitation check's message never
+    holds the value and that `Value` holds it. `CheckSchema`'s message for a pattern RE2 cannot compile quotes part of the
+    pattern, and `ParseValue` and `ParseElicitationURL` leave `Value` nil. It now says which check does what.
+* **The MADR's "Confirmation", item by item:**
+
+  | Item | Met by |
+  | :--- | :--- |
+  | `Fields` in `PropertyOrder`'s order, the rest sorted, as `MarshalJSON` writes; `Required`; a catch-all included; `Kind` of each variant and a catch-all's type | `TestElicitationFields`, `TestElicitationFieldsMatchWire` (20 seeded orders) and `TestElicitationPropertyKind` (phase 2) |
+  | `Defaults`: each declared default, typed, and nothing else | `TestElicitationDefaults` (phase 2) |
+  | `CheckSchema` reports each listed defect once; a schema without one is nil | `TestElicitationCheckSchema`, 25 cases, and `TestElicitationCheckSchemaValid` (phase 3) |
+  | `Check` accepts a valid answer; reports each rule, in field order, all together: presence, an undeclared key, each type, code-point lengths, the probe's format cases, a pattern match and an uncompilable pattern, the choices, exact integer and mixed bounds, item counts; messages hold no value | `TestElicitationCheckFixtures`, 57 answers in nine files (phase 4) |
+  | `ParseValue` converts each kind losslessly and refuses what it cannot; `Float64` and `Int64` read both numeric variants | `TestElicitationParseValue` and `TestElicitationContentNumbers` (phase 4) |
+  | `ParseElicitationURL` refuses each listed URL and reports `Host`, `Secure` and `Punycode` | `TestParseElicitationURL`, 14 refusals and five acceptances (phase 6) |
+  | a round trip over `acptest.Connect`: the client fills the form with `Fields`, `ParseValue` and `Check`, and the agent's `Check` passes; a failing answer goes back to the client's caller before anything is sent | `TestElicitationFormRoundTrip` (phase 4) |
+  | under `WithElicitationCheck()`: a client's failing `accept` sends nothing and the agent gets `-32603`; an agent receiving one gets a `*ValidationError` and the zero response; `decline`, `cancel`, a URL-mode `accept`, and a side without the option, as before | `TestElicitationCheckOptionClient`, `TestElicitationCheckOptionAgent` and `TestElicitationCheckOptionPasses` (phase 5) |
+  | `make api` only compatible; the generated files differ only by `checkResult`'s params argument; `TestRuntimeFilesCoverHandWritten` names `elicitation.go` | `make api` above; the generated-file comparison above; that test (phase 2) |
+  | every new check first seen to fail on a planted break in a scratch copy | 42 planted breaks: 7 in phase 2, 11 in phase 3, 13 in phase 4, 7 in phase 5, 4 in phase 6, each failing line recorded with its phase |
+
+  Every item is met as written.
+* **Checks**, each exit 0:
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`;
+  * after the two doc edits made while the gates ran, `make pre-add-check` again: "213 file(s) clean";
+  * `make markdownlint`, `make check-records`, `make disclosure-check`; `tools/idscan.py --paths` over the changed files: 0
+    matches.
+
+  The implementation is complete. This PLAN stays `in-progress` until phase 8's release, which waits for the owner's ask.

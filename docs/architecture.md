@@ -490,6 +490,15 @@ Checks that guard this:
   `Wait` with a reader `Close` cannot close and with a handler that ignores its
   context, and both on the side connections; its `TestGoStatementsCounted` fails
   on a `go` statement in the root package's non-test files.
+- The elicitation tests cover `elicitation.go`: `elicitation_fields_test.go` the
+  field order against what `MarshalJSON` writes; `elicitation_schema_test.go`
+  each defect `CheckSchema` reports and the `email` rule;
+  `elicitation_check_test.go` the answers of `testdata/elicitation/check/`,
+  decoded as the wire decodes them; `elicitation_wire_test.go` and
+  `elicitation_option_test.go` a form over a pair, with and without
+  `WithElicitationCheck`; and `elicitation_url_test.go` `ParseElicitationURL`.
+  `TestRootDoesNotImportNet` fails when package `acp` reaches package `net`
+  through any import.
 - `make pre-add-check` runs `scripts/go-precheck.sh`: gofmt, golangci-lint for the
   host and for `GOOS=windows`, vet, tests with `-race`, `go mod tidy -diff`, and
   govulncheck, for both modules. golangci-lint covers the generated files too,

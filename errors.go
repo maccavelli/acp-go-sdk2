@@ -135,9 +135,11 @@ const (
 // The message of an absolute-path or excluded-value check quotes the value it
 // refuses, so a value the peer sent reaches the answer's data and the logs as
 // it was (0024-PLAN-behaviour-fixes.md, A14). The message of an elicitation
-// check names the field and the rule and never the value, which may be
-// personal data; Value holds it
-// (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 3).
+// check of an answer, a text input or a URL names the field and the rule and
+// never the value, which may be personal data or a credential: Value holds an
+// answer's value, and is nil for a text input or a URL. CheckSchema's messages
+// may quote the schema, such as the part of a pattern RE2 cannot compile
+// (0040-MADR-check-elicitation-forms-answers-and-urls.md, items 2 to 5).
 type ValidationError struct {
 	Type  string
 	Field string
