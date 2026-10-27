@@ -115,7 +115,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0039 | PLAN | [Implement 0039: an unstable boundary, presentation and compaction runtimes, an extension mux, and acptest](decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md) | complete |
 | 0039 | REPORT | [Release notes for v1.23.0, against v1.22.0](reports/0039-REPORT-release-notes-v1-23-0.md) | observed |
 | 0040 | MADR | [Check elicitation forms, answers and URLs with standard-library helpers on the generated types](decisions/0040-MADR-check-elicitation-forms-answers-and-urls.md); questions 1 to 5 answered 2026-10-26, question 2 as an opt-in connection check | accepted |
-| 0040 | PLAN | [Implement 0040: elicitation form fields, schema and answer checks, text input, URL checks, and an opt-in connection check](decisions/0040-PLAN-check-elicitation-forms-answers-and-urls.md) | proposed |
+| 0040 | PLAN | [Implement 0040: elicitation form fields, schema and answer checks, text input, URL checks, and an opt-in connection check](decisions/0040-PLAN-check-elicitation-forms-answers-and-urls.md) | in-progress |
 
 ## I want to…
 

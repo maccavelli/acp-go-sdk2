@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-26
 associated-madr: "0040-MADR-check-elicitation-forms-answers-and-urls.md"
 ---
@@ -364,4 +364,51 @@ When the release is published, this PLAN and its row are `complete`.
 
 ## Execution record
 
-None yet.
+### Phase 1, records, 2026-10-26
+
+* The pair and its rows were written, then amended for the owner's answers to questions 1 to 5 and P1, each asked with three
+  options. The MADR is `accepted`, with item 6 and option O6 added for question 2; this PLAN gained phase 5. The owner committed
+  them as `52c9ee8` and approved execution: "committed, proceed".
+* Checks, each exit 0: `make check-records`, `make markdownlint`, `make disclosure-check`; `tools/idscan.py --paths` over the
+  three files: 0 matches.
+
+### Phase 2, fields, kinds and defaults, 2026-10-26
+
+* **`elicitation.go`**, new: `ElicitationField`; `ElicitationSchema.Fields`, whose order is computed as `orderedObject`'s;
+  `ElicitationPropertySchema.Kind`; `ElicitationSchema.Defaults`, which clones an array default and is nil when no property has
+  one. Unexported constants name the five property types.
+* **`cmd/generate/engine_test.go`:** `TestRuntimeFilesCoverHandWritten` and its doc comment name `elicitation.go`. Before the
+  edit the test failed on the new file: "hand-written files of the root are [compaction.go connection.go doc.go elicitation.go
+  …], want [compaction.go connection.go doc.go errors.go …]".
+* **Tests**, `elicitation_fields_test.go`, `package acp_test`:
+  * `TestElicitationFields`: the decoded form (`b`, `a`, `c`; only `c` required; nothing for `zz`), a form built in Go
+    (sorted), and a repeated and missing `PropertyOrder` name, each also compared with the key order `json.Marshal` writes,
+    read back by a `json.Decoder`;
+  * `TestElicitationFieldsMatchWire`: 20 property sets and orders from a fixed PCG seed, repeats and missing names among them;
+  * `TestElicitationPropertyKind`: each variant, a catch-all, the zero value, and a decoded catch-all property kept by
+    `Fields`, required, of kind `x-color`;
+  * `TestElicitationDefaults`: five typed defaults, `9007199254740993` kept exactly as `Integer`; a property without one and a
+    catch-all with one left out; the array copied; nil for a form without defaults.
+* **Docs:** `docs/architecture.md`'s hand-written list names `elicitation.go`.
+* **Planted breaks:** each was planted in its own copy of the tree through a scratch script, and each failed as required:
+
+  | Break | Failing line |
+  | :--- | :--- |
+  | the row's: `Fields` sorted, ignoring `PropertyOrder` | `elicitation_fields_test.go:90: decoded: Fields = ["a" "b" "c"] …`; `:93: … but MarshalJSON writes ["b" "a" "c"]` |
+  | the row's: a repeated name kept twice | `:90: repeated and missing: Fields = ["c" "c" "a" "b"] …`; `:93` the same against MarshalJSON |
+  | the row's: `Required` not set | `:90: decoded: Fields = ["b" "a" "c"], required []; want … required ["c"]` |
+  | the row's: a catch-all property dropped | `:141: Fields of a form with an unknown property type = [{Name:name …}]` |
+  | the row's: `Kind` of a catch-all `""` | `:135: Kind = "", want "x-color"` |
+  | the row's: `Defaults` returns the schema's slice | `:170: changing a default changed the schema: ["changed"]` |
+  | the row's: `elicitation.go` not named | `engine_test.go:220: hand-written files of the root are [compaction.go connection.go doc.go elicitation.go …]` |
+
+* **Checks**, each exit 0:
+  * `make pre-add-check`: "206 file(s) clean". It runs `gofmt` over tracked files only, so `scripts/go-precheck.sh` was run on
+    the two new files as well: "2 file(s) clean";
+  * `(cd cmd/generate && go test -count=1 -run '^TestRuntimeFilesCoverHandWritten$' .)`; the new tests under `-race`;
+  * `tools/gates.py --all`, with the Linux and Windows hosts reached over SSH: all 18 `ok`. `newfiles` covered
+    `elicitation.go` and `elicitation_fields_test.go`. `api` reported "against v1.23.0: 0 incompatible, 4 compatible":
+    `ElicitationField`, `ElicitationPropertySchema.Kind`, `ElicitationSchema.Defaults` and `ElicitationSchema.Fields`, each
+    added;
+  * `make check-records`, `make markdownlint`, `make disclosure-check`; `tools/idscan.py --paths` over the changed and new
+    files: 0 matches.
