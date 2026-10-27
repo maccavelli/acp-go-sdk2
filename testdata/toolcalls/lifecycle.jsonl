@@ -1,0 +1,9 @@
+{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"Read a.go","kind":"read","status":"pending","locations":[{"path":"/work/a.go"}],"rawInput":{"path":"/work/a.go"}}}
+{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t1","status":"in_progress"}}
+{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t1","content":[{"type":"content","content":{"type":"text","text":"part one"}}]}}
+{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t1","content":[{"type":"content","content":{"type":"text","text":"whole"}}],"title":null,"rawInput":null}}
+{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"unrelated"}}}
+{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t1","status":"completed","rawOutput":{"ok":true},"locations":[]}}
+{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t2","title":"Unseen","status":"in_progress"}}
+{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"t3","title":"Edit","kind":"edit","status":"pending","name":"edit_file"}}
+{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t3","status":"failed","name":null}}

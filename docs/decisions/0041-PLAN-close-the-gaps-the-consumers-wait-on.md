@@ -857,3 +857,63 @@ Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 
   were rerun after the change: 3 of 3.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
 * `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 11, `ToolCallTimeline` (2026-10-27)
+
+**A probe first,** in a scratch module outside the tree, decoding three `tool_call_update`s:
+* `"content": []` and `"locations": []` decode as empty, non-nil slices;
+* an absent or `null` `content` decodes as nil;
+* `title`, `status` and `name`, absent or `null`, decode as nil.
+
+So `Apply` can keep the schema's "Replace the content collection" apart from an update that leaves it. The MADR carries "Amended
+by the PLAN's phase 11, 2026-10-27".
+
+**What changed:**
+* **`tooltimeline.go`, new:**
+  * `ToolCallEntity`: `Id`, `Title`, `Kind`, `Status`, `Name`, `Content`, `Locations`, `RawInput` and `RawOutput`.
+  * `ToolCallTimeline` with `Apply`, `Get` and `Open`, shaped as `CompactionTimeline` is.
+  * A `tool_call` replaces the entity whole.
+  * A `tool_call_update` sets each pointer field that is non-nil and each collection that is non-nil, an empty one clearing it,
+    and each raw value that is neither absent nor `null`.
+  * An update for an id never seen starts it pending.
+  * `Open` lists every status but completed and failed, in first-seen order.
+  * Each entity returned is a copy of the name, the collections and the raw values.
+* **`cmd/generate/engine_test.go`:** `TestRuntimeFilesCoverHandWritten` names `tooltimeline.go`.
+* **`testdata/toolcalls/lifecycle.jsonl`, new:** nine notifications:
+  * `t1` has single-field updates, content replaced, a `null` title and `rawInput`, an empty `locations`, and an unrelated
+    `agent_message_chunk` between them;
+  * `t2` is an update for an id never seen;
+  * `t3` is a named `tool_call` and then a `null` name.
+* **`tooltimeline_test.go`, new:**
+  * `TestToolCallTimeline`: eight updates of one field each, each changing exactly one of the entity's fields. Then an empty
+    update and a `null` raw pair built in Go, changing none, a second `tool_call` replacing the call, and a non-tool update
+    returning false.
+  * `TestToolCallTimelineUnseen`.
+  * `TestToolCallTimelineOpen`, an unknown status `waiting` included.
+  * `TestToolCallTimelineCopies`, covering both what `Apply` was given and what it returned.
+  * `TestToolCallTimelineReplay`: the fixture live and replayed, equal to entities written out from the rules.
+* **The API:** `make api` against `v1.24.0` reports 14 compatible, 0 incompatible. The new ones are `ToolCallEntity` and
+  `ToolCallTimeline`.
+* **Left to phase 14:** `README.md` and `docs/architecture.md`.
+
+Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 8 of 8 failed as required.
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| content appended | `TestToolCallTimeline` | `tooltimeline_test.go:63: content: Apply(tool_call_update) = {…}` |
+| an absent field cleared | `TestToolCallTimeline` | `tooltimeline_test.go:81: status: 2 fields changed, want 1: …` |
+| an unseen id dropped | `TestToolCallTimelineUnseen` | `tooltimeline_test.go:110: Apply(an update for an unseen id) = {Id: …}, false; want it started pending, titled` |
+| an empty collection ignored | `TestToolCallTimeline` | `tooltimeline_test.go:63: empty content: Apply(tool_call_update) = {…}` |
+| a `null` raw value replacing | `TestToolCallTimeline` | `tooltimeline_test.go:92: a null rawInput and rawOutput changed the call: …` |
+| a second `tool_call` merged | `TestToolCallTimeline` | `tooltimeline_test.go:96: a second tool_call = {… Title:Again Kind:search …}, want it to replace the call whole` |
+| the entities shared | `TestToolCallTimelineCopies` | `tooltimeline_test.go:159: the timeline shares what Apply was given or returned: …` |
+| an unknown status counted as ended | `TestToolCallTimelineOpen` | `tooltimeline_test.go:136: Open = ["a"], want ["a" "d"]` |
+
+**What the first plants showed.** The `null` raw value plant passed at first. The fixture's `"rawInput": null` never reaches
+`Apply` as `null`, since the notification decoder makes a null raw value absent. The guard can be seen only on a value built in
+Go, so `TestToolCallTimeline` gained that case, and the plant fails it.
+
+**Gates:**
+* `tools/gates.py --all`, with both hosts set: all 18 passed.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
+* `tools/idscan.py --paths` over the staged files: nothing found.

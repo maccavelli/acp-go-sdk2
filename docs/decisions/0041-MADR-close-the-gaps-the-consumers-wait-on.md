@@ -379,6 +379,17 @@ no error codes, and says nothing of parent directories or of a line past the end
 * **A write replaces the file's content and keeps its mode.** It is not an atomic rename, which would change the file's inode and
   ownership.
 
+#### Amended by the PLAN's phase 11, 2026-10-27
+
+Item 9's rules, as the phase settled them where the schema is silent or this SDK's decoding decides:
+
+* **A `tool_call` for an id already seen replaces the call whole,** since a `tool_call` announces the whole call.
+* **An empty `content` or `locations` clears the collection;** an absent or `null` one leaves it. A probe found that the SDK
+  decodes `[]` as an empty, non-nil slice and an absent or `null` array as nil, so `Apply` can tell them apart.
+* **A `null` name, `rawInput` or `rawOutput` leaves the field.** The schema says so of the name. Of the raw values, 0012's rule
+  applies: a null raw value is an absent one, as the notification decoder already makes it.
+* **The entity keeps no `_meta`.** A notification's `_meta` is the message's, and not part of the call's state.
+
 ### Consequences
 
 * Good, because the defect that loses an agent's last output before it exits is fixed, with the failing test as its regression
