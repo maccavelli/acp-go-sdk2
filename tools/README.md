@@ -28,7 +28,7 @@ cache directory, outside the tree.
 | :--- | :--- |
 | `gates.py [--all] [GATE...]` | the gate set, one gate at a time; no gate named, every gate but the hosts' |
 | `floor.py` | `go vet` and `go test -race` in both modules at the `go` line's toolchain |
-| `platforms.py` | `golangci-lint` for Linux and FreeBSD, and `go vet ./agentproc` per platform |
+| `platforms.py` | `golangci-lint` for Linux and FreeBSD, and `go vet` per platform, over `./agentproc/...` and `./internal/...` |
 | `remote.py tree --host H` | the tree's tests on a test host |
 | `remote.py pkg --host H PKG [FLAG...]` | one package's test binary, built here, run there with the flags |
 | `leftovers.py` | test binaries left running on the Windows host |

@@ -692,7 +692,8 @@ markdownlint` and `scripts/check_records.py` would otherwise walk them.
 
 - `gates.py` runs the gate set, one gate at a time, each exit status taken
   before its output is read; `floor.py` the tests at the `go` line;
-  `platforms.py` `agentproc`'s lint and vet per platform; `remote.py` the tests
+  `platforms.py` the lint and vet per platform of `agentproc` and `internal/`;
+  `remote.py` the tests
   on a test host, in a fresh directory removed after, and `leftovers.py` the
   Windows host's process list.
 - `idscan.py` scans for identifiers with the push guard's deny list

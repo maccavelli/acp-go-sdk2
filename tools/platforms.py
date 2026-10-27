@@ -1,7 +1,9 @@
-"""The per-platform checks of agentproc
-(docs/decisions/0031-MADR-verification-tools-in-repository.md): golangci-lint
-for GOOS=linux and GOOS=freebsd, which `make lint` builds for neither, and
-`go vet ./agentproc` for each platform its files are built for.
+"""The per-platform checks of agentproc and the internal packages it shares
+its process code through
+(docs/decisions/0031-MADR-verification-tools-in-repository.md;
+docs/decisions/0041-PLAN-close-the-gaps-the-consumers-wait-on.md, phase 7):
+golangci-lint for GOOS=linux and GOOS=freebsd, which `make lint` builds for
+neither, and `go vet` for each platform their files are built for.
 
 Usage: platforms.py [--tree DIR] [--out DIR]
 Exit 1 if any check fails.
@@ -16,6 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _common  # noqa: E402
+
+# The packages with per-platform files.
+PKGS = ["./agentproc/...", "./internal/..."]
 
 VET = [("darwin", "arm64"), ("linux", "amd64"), ("linux", "arm64"), ("freebsd", "amd64"), ("openbsd", "amd64"), ("netbsd", "amd64"),
        ("illumos", "amd64"), ("windows", "amd64"), ("js", "wasm"), ("wasip1", "wasm"), ("plan9", "amd64")]
@@ -37,8 +42,8 @@ def main(argv: list[str]) -> int:
     tree = Path(args.tree).resolve() if args.tree else _common.repo()
     out = _common.out_dir("platforms", args.out)
     lint = golangci_lint()
-    checks = [(f"lint-{goos}", {"GOOS": goos}, [lint, "run", "-c", ".golangci.yml", "./agentproc/..."]) for goos in ("linux", "freebsd")]
-    checks += [(f"vet-{goos}-{arch}", {"GOOS": goos, "GOARCH": arch}, ["go", "vet", "./agentproc"]) for goos, arch in VET]
+    checks = [(f"lint-{goos}", {"GOOS": goos}, [lint, "run", "-c", ".golangci.yml", *PKGS]) for goos in ("linux", "freebsd")]
+    checks += [(f"vet-{goos}-{arch}", {"GOOS": goos, "GOARCH": arch}, ["go", "vet", *PKGS]) for goos, arch in VET]
     failed = []
     for name, env, cmd in checks:
         log = out / f"{name}.log"

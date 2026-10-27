@@ -168,7 +168,8 @@ Planted breaks: a goroutine per call; the cause lost.
   calls it, and its exported API, behaviour and tests are unchanged.
 * Checks: `git diff` shows the moved functions identical, by a scratch script comparing their token streams; `agentproc`'s tests on
   macOS and on the Linux and Windows hosts; `tools/platforms.py`, all 13.
-* No planted break: the move adds no check. Its proof is the unchanged tests passing on every platform.
+* No planted break: the move adds no check. Its proof is the unchanged tests passing on every platform. (Deviation, 2026-10-27:
+  `tools/platforms.py` is widened to `./internal/...`, which is a new check, and is planted. See the execution record.)
 
 ### 8. `clienthost.Terminals` (MADR item 2)
 
@@ -587,4 +588,79 @@ Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 
 * `tools/gates.py --all`, with both hosts set: the first run failed 10, on the side-connection rule and the lint above. The second
   run, after the fixes, passed all 18.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
+* `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 7, `internal/proctree` (2026-10-27)
+
+**Deviation, 2026-10-27, `tools/platforms.py`.**
+* **Found:** the tool linted and vetted `./agentproc` alone. The moved code in `internal/proctree`, and `clienthost` in phase 8,
+  would have had no per-platform lint, though step 7 and the gate list rely on the tool. Its `go vet ./agentproc` type-checks the
+  package as a dependency, but runs no analyzer on it.
+* **Offered:** widen the tool now; check `internal/proctree` by a scratch script this phase alone; or widen it in a later change.
+* **Decided:** the owner chose to widen it now.
+  * `PKGS = ["./agentproc/...", "./internal/..."]` feeds both the lint and the vet commands. Phase 8 adds `clienthost`.
+  * The tool's docstring, its line in `tools/README.md`, and the tools paragraph of `docs/architecture.md` say so.
+  * `make check-tools` exits 0.
+
+**What moved,** by `git mv`, so history follows:
+`agentproc/{tree_unix,tree_windows,tree_other,deathsig_none,deathsig_pdeathsig}.go` to `internal/proctree/`.
+
+**What changed in them, beyond the package:**
+* **Exported names** for `agentproc`'s and `clienthost`'s use: `HasGroups`, `HasTree`, `Prepare`, `Attach`, `Tree` with
+  `Terminate`, `Kill` and `End`, and on Windows `AttachDelay`. The unexported `setDeathSignal` is now `defaultDeathSignal`, after
+  revive's confusing-naming finding beside the new `SetDeathSignal`, which the widened tool reported first.
+* **`Prepare` no longer sets the death signal.** `SetDeathSignal(cmd)` does, on Unix, and is a no-op on Windows and elsewhere. A
+  `Pdeathsig` follows the thread that started the process (0029), and `agentproc` keeps that thread for the agent's life. So the
+  two are apart, for phase 8 to decide whether a terminal takes one. `agentproc`'s `prepare`, in a new `agentproc/tree.go`,
+  calls both, in the old order, so the agent's start is as before.
+* **The refusals are sentinels,** `ErrPgidSet` and `ErrSuspended` in a new `internal/proctree/proctree.go`, with the package doc.
+  `agentproc`'s `prepare` returns its exact old texts for them. `TestStartRefusesSharedGroup` and the Windows suspended test pass
+  unchanged.
+* **Four Windows error texts** now say "the process" for "the agent", for example "creating the process's job object". These are
+  failures of Windows calls, which `Start` wraps with `agentproc:`. No test reads them.
+* **The tests' names stay in `agentproc`.** `hasGroups` and `hasTree` move to a new `agentproc/tree_test.go`, and `attachDelay`
+  to `agentproc/tree_windows_test.go`, as `&proctree.AttachDelay`. No existing test changed.
+
+**The token comparison.** A scratch script compares each moved file's Go tokens at `HEAD` with the new file's, comments
+dropped and the renames above mapped. Ten differences are left, each one listed above:
+
+```text
+== tree_unix.go: 300 tokens at HEAD, 325 now, 3 difference(s)
+  replace: 'errors . New ( "agentproc: Command.Cmd.SysProcAttr.Pgid is set; the agent needs a process group of its own" )' -> 'ErrPgidSet'
+  insert: '' -> 'return nil } func SetDeathSignal ( cmd * exec . Cmd ) { if cmd . SysProcAttr = = nil { cmd . SysProcAttr = & syscall . SysProcAttr { } }'
+  delete: 'return nil' -> ''
+== tree_windows.go: 763 tokens at HEAD, 768 now, 6 difference(s)
+  replace: 'errors . New ( "agentproc: Command.Cmd.SysProcAttr.CreationFlags has CREATE_SUSPENDED; Start starts the agent suspended itself" )' -> 'ErrSuspended'
+  insert: '' -> '} func SetDeathSignal ( * exec . Cmd ) {'
+  replace: '"creating the agent\'s job object: %w"' -> '"creating the process\'s job object: %w"'
+  replace: '"limiting the agent\'s job object: %w"' -> '"limiting the process\'s job object: %w"'
+  replace: '"assigning the agent to its job object: %w"' -> '"assigning the process to its job object: %w"'
+  replace: '"resuming the agent: %w"' -> '"resuming the process: %w"'
+== tree_other.go: 112 tokens at HEAD, 122 now, 1 difference(s)
+  insert: '' -> '} func SetDeathSignal ( * exec . Cmd ) {'
+== deathsig_none.go: 14 tokens at HEAD, 14 now, 0 difference(s)
+== deathsig_pdeathsig.go: 31 tokens at HEAD, 31 now, 0 difference(s)
+10 difference(s) in all
+```
+
+**The widened tool's planted breaks.** Each ran in a copy of the working tree, with the working tree's `platforms.py` and with
+`HEAD`'s:
+
+| Break in `internal/proctree/deathsig_pdeathsig.go` | The widened tool | `HEAD`'s tool |
+| :--- | :--- | :--- |
+| a variable declared and not used | `8 of 13 passed; failed: lint-linux, lint-freebsd, vet-linux-amd64, vet-linux-arm64, vet-freebsd-amd64` | the same: `agentproc`'s vet type-checks the package |
+| an exported function without a doc comment | `11 of 13 passed; failed: lint-linux, lint-freebsd`, with `deathsig_pdeathsig.go:7:1: exported: exported function Planted should have comment or be unexported (revive)` | `13 of 13 passed` |
+
+The second row is the widening's proof: a lint finding in a Linux-only file of the package, which the old tool passed.
+
+**The API:** `make api` reports no change from phase 6, 5 compatible and 0 incompatible. `internal/proctree` is not part of the
+API.
+
+**Gates:**
+* `tools/platforms.py`: the first run failed `lint-linux` and `lint-freebsd`, on the confusing-naming finding above. After the
+  rename, `13 of 13 passed`.
+* `make lint` failed once on `AttachDelay`'s doc form, which was corrected.
+* `tools/gates.py --all`, with both hosts set: all 18 passed. The Windows host ran `agentproc` in 18.4 s, the Linux host in
+  5.0 s.
+* `make check-records`, `make markdownlint`, `make disclosure-check`, `make check-tools`: exit 0.
 * `tools/idscan.py --paths` over the staged files: nothing found.

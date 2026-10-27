@@ -16,6 +16,7 @@ import (
 	"time"
 
 	acp "github.com/maccavelli/acp-go-sdk2"
+	"github.com/maccavelli/acp-go-sdk2/internal/proctree"
 )
 
 // defaultGrace is how long each step of Close waits for the agent when
@@ -77,8 +78,8 @@ type Process struct {
 	cmd   *exec.Cmd
 	grace time.Duration
 	conn  *acp.ClientSideConnection
-	stdin *sharedClose // the write end of the agent's standard input
-	tree  *tree        // the agent's process group or job, per platform
+	stdin *sharedClose   // the write end of the agent's standard input
+	tree  *proctree.Tree // the agent's process group or job, per platform
 
 	// done is closed once Cmd.Wait has returned, which the watcher alone
 	// calls (os/exec: "Wait must not be called concurrently").
@@ -197,7 +198,7 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 	if err := errors.Join(inR.Close(), outW.Close()); err != nil {
 		return nil, p.abandon(proceed, err, inW, outR)
 	}
-	t, err := attach(cmd)
+	t, err := proctree.Attach(cmd)
 	if err != nil {
 		return nil, p.abandon(proceed, err, inW, outR)
 	}
@@ -282,7 +283,7 @@ func (p *Process) watch() {
 	default:
 		p.exitedFirst = true
 	}
-	p.tree.end()
+	p.tree.End()
 	p.exited, p.waitErr = true, err
 	p.mu.Unlock()
 	close(p.done)
@@ -455,9 +456,9 @@ func (p *Process) stop() {
 	_ = p.stdin.Close() //nolint:errcheck // a failed close leaves the agent to the next steps.
 	switch {
 	case p.exitedWithin(p.grace):
-	case !p.hurried() && p.signal(p.tree.terminate, ErrTerminated) && p.exitedWithin(p.grace):
+	case !p.hurried() && p.signal(p.tree.Terminate, ErrTerminated) && p.exitedWithin(p.grace):
 	default:
-		p.signal(p.tree.kill, ErrKilled)
+		p.signal(p.tree.Kill, ErrKilled)
 		<-p.done // WaitDelay bounds it once the agent has exited
 	}
 	// The watcher closes the connection: once it has read to the end of the
