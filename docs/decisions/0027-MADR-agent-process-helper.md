@@ -396,6 +396,19 @@ Each has a recommended answer.
 
 This record names `golang.org/x/sys` as the dependency `AGENTS.md` requires a record for.
 
+#### Amended by 0041, 2026-10-27: the exit order, and the output read to its end
+
+Decided by the owner in [0041-MADR-close-the-gaps-the-consumers-wait-on.md](0041-MADR-close-the-gaps-the-consumers-wait-on.md):
+
+* **`Process.ExitedFirst() bool`** is added (0041's question 3). It reports whether the agent's exit was seen before the connection's
+  end, and is final once `Wait` has returned.
+* **`Close` reads the agent's output to its end** (0041's item 1). Once the agent has exited, `Close` waits up to the grace for the
+  connection's own end before closing it, as the watcher in
+  [0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md) already does. `Kill` still closes at once. Question 6's
+  answer stands: the agent's exit ends what is left of its tree, then its connection.
+* **The tree code moves to `internal/proctree`,** unchanged, so that `clienthost.Terminals` can end a terminal's tree too (0041's
+  question 1). `agentproc`'s API and behaviour are otherwise unchanged.
+
 ### Consequences
 
 * Good, because a client starts an agent and stops all of it, launcher and descendants, in a few lines, with every wait bounded.

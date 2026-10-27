@@ -117,11 +117,14 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0040 | MADR | [Check elicitation forms, answers and URLs with standard-library helpers on the generated types](decisions/0040-MADR-check-elicitation-forms-answers-and-urls.md); questions 1 to 5 answered 2026-10-26, question 2 as an opt-in connection check | accepted |
 | 0040 | PLAN | [Implement 0040: elicitation form fields, schema and answer checks, text input, URL checks, and an opt-in connection check](decisions/0040-PLAN-check-elicitation-forms-answers-and-urls.md) | complete |
 | 0040 | REPORT | [Release notes for v1.24.0, against v1.23.0](reports/0040-REPORT-release-notes-v1-24-0.md) | observed |
+| 0041 | MADR | [Close the gaps the two consumers wait on: client hosts, end causes, a fuller acptest, a tool-call timeline, and agentproc's lost output](decisions/0041-MADR-close-the-gaps-the-consumers-wait-on.md) | accepted |
+| 0041 | PLAN | [Implement 0041: client hosts, end causes, a fuller acptest, a tool-call timeline, and agentproc's lost output](decisions/0041-PLAN-close-the-gaps-the-consumers-wait-on.md) | in-progress |
 
 ## I want to…
 
 | I want to… | Start here |
 | :--- | :--- |
+| know what the two consumers still wait on from this SDK, and the ten items that close it | [0041-MADR-close-the-gaps-the-consumers-wait-on.md](decisions/0041-MADR-close-the-gaps-the-consumers-wait-on.md) |
 | know how the SDK checks an elicitation form, its answer and a URL elicitation | [0040-MADR-check-elicitation-forms-answers-and-urls.md](decisions/0040-MADR-check-elicitation-forms-answers-and-urls.md) |
 | know which five additions to make next for 1.25.0 adopters | [0039-MADR-five-adopter-additions-on-schema-1-25-0.md](decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md) |
 | see whether a Go 1.27.1 floor fits this SDK | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |

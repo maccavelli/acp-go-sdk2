@@ -266,6 +266,14 @@ alternative, a request after the end reporting the recorded end, was a behaviour
 
 [0026-PLAN-connection-end-cause-and-wait.md](0026-PLAN-connection-end-cause-and-wait.md) implements it.
 
+#### Amended by 0041, 2026-10-27: a bounded wait beside `Wait`
+
+The owner reopened question 4 in
+[0041-MADR-close-the-gaps-the-consumers-wait-on.md](0041-MADR-close-the-gaps-the-consumers-wait-on.md), question 2. `Wait()`
+stays as decided, unbounded. `WaitContext(ctx) error` is added beside it, on `Connection`, both side connections and
+`agentproc.Process`. It returns `Wait`'s error, or `context.Cause(ctx)` when ctx ends first. The pattern this record left to callers,
+`Wait` on a goroutine and a select, had been written three times in one consumer and was needed by `acptest.Connect`'s cleanup.
+
 ## Pros and Cons of the Options
 
 ### O1. Both accessors
