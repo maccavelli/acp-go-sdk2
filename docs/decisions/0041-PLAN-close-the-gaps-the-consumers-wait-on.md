@@ -964,3 +964,81 @@ Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 
 * `tools/gates.py --all`, with both hosts set: all 18 passed.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
 * `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 13, `acptest`'s additions (2026-10-27)
+
+**Deviations, 2026-10-27,** recorded in the MADR's "Amended by the PLAN's phase 13, 2026-10-27":
+* **`ValidateGolden` takes records with their direction.** `mcp/message` goes both ways with different types, and both sides
+  number their requests. A scratch script listed each method constant with its typed method's params and result types, from
+  `agent_gen.go` and `client_gen.go`: 40 constants, 40 typed methods.
+* **`MemoryClient.Terminals` is a `TerminalHost` interface.** The step's `*clienthost.Terminals` would make an import cycle, since
+  `clienthost`'s in-package tests import `acptest`.
+
+The step's own words were met in substance, and each change follows from a fact in the code, so they were recorded and not asked
+about first.
+
+**What changed:**
+* **`acptest/recorder.go`:**
+  * `Direction`, with `Sent` and `Received`, and `Record{Direction, Frame}`, with JSON keys.
+  * The recorder keeps records. `Frames()` returns their frames, as before, and `Records()` returns copies.
+  * `Wait(ctx, n)` waits on a channel closed when a frame is recorded.
+* **`acptest/pair.go`:** `ConnectRecorded(tb, agent, client, rec, opts...)` records the client side's writer and reader into
+  `rec`. `connectWithin` takes the recorder, nil for `Connect`.
+* **`acptest/golden.go`, new:**
+  * `ValidateGolden(tb, records)`;
+  * a direction-keyed table, built from generic `request[P, R]` and `notification[P]`, of each method's types, `Validate` run
+    through a pointer constraint;
+  * per frame, it checks JSON-RPC 2.0, the method known its way, request against notification, the params' or result's
+    `Validate`, and a response matched by id to a request that went the other way;
+  * an extension method's frame is checked only as JSON-RPC;
+  * an error answer needs an integer code and a string message.
+* **`acptest/script.go`:**
+  * `Turn` gains `Err`, `Usage` and `WaitCancel`.
+  * `ScriptAgent` keeps a one-slot cancel channel a session. `Cancel` fills it, and a `WaitCancel` turn waits on it or on its
+    context, then answers `cancelled`.
+* **`acptest/client.go`:**
+  * `MemoryClient` gains `SetElicitation`. `CreateElicitation` answers from it, checking a form's accept with the form's
+    `RequestedSchema.Check`, as `acp.WithElicitationCheck` does.
+  * It gains the `Terminals` field, a `TerminalHost`, which the five terminal methods use when it is set.
+  * Without either, it refuses as before.
+* **`acptest/doc.go`:** the package doc names the additions.
+* **Tests:**
+  * `acptest/additions_test.go`, new:
+    * `TestConnectRecorded`: seven records of a session in order, with directions, `Frames` equal, and `ValidateGolden` passing
+      them;
+    * `TestRecorderWait`;
+    * `TestValidateGoldenRefuses`: thirteen kinds of bad frame, each reported once and named, and extension frames, an error
+      answer and a `$/cancel_request` passing;
+    * `TestScriptAgentTurns`: `Err` as `-32602`, `Usage` reported, and `WaitCancel` holding 300 ms and then answering
+      `cancelled` after the cancel;
+    * `TestMemoryClientElicitation`: method-not-found with no script, the script's accept, and a refused answer reaching the
+      agent as `-32603`;
+    * `TestMemoryClientTerminals`, with a recording `TerminalHost`, and an assertion that `*clienthost.Terminals` is one.
+  * `acptest/golden_internal_test.go`, new: `TestMethodTables`, against the constants of `constants_gen.go`.
+* **The API:** `make api` against `v1.24.0` reports 35 compatible, 0 incompatible. `acptest` adds:
+  * `ConnectRecorded`, `Direction`, `Sent`, `Received` and `Record`;
+  * `(*Recorder).Records` and `(*Recorder).Wait`;
+  * `ValidateGolden`;
+  * `TerminalHost`, `MemoryClient.Terminals` and `(*MemoryClient).SetElicitation`;
+  * `Turn.Err`, `Turn.Usage` and `Turn.WaitCancel`.
+* **Left to phase 14:** `README.md`.
+
+Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 8 of 8 failed as required.
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| a frame's direction swapped | `TestConnectRecorded` | `additions_test.go:71: records: …` |
+| `ValidateGolden` accepting a broken frame | `TestValidateGoldenRefuses` | `additions_test.go:175: a value its type refuses: ValidateGolden reported [], want one error naming "session/new params:"` |
+| `WaitCancel` not waiting | `TestScriptAgentTurns` | `additions_test.go:227: the WaitCancel turn answered {… StopReason:cancelled …} before the cancel` |
+| `Wait` not waiting for n | `TestRecorderWait` | `additions_test.go:99: Wait(2) returned <nil> after one frame` |
+| a response matched the same way as its request | `TestValidateGoldenRefuses` | `additions_test.go:175: a response the same way as its request: ValidateGolden reported [… initialize result: …]` |
+| a method left out of the table | `TestMethodTables` | `golden_internal_test.go:44: received: the table holds [...], want the constants' [...]` |
+| the scripted answer not checked | `TestMemoryClientElicitation` | `additions_test.go:273: CreateElicitation answered without a required field = <nil>, want an internal error (-32603)` |
+| `Terminals` not served | `TestMemoryClientTerminals` | `additions_test.go:335: terminal/create = {…}, {"code":-32601,…}` |
+
+**Gates:**
+* `tools/gates.py --all`, with both hosts set: the first run failed `precheck`, `newfiles` and `lint` on `staticcheck`'s SA1019
+  for `PromptResponse.Usage`, which is deprecated too, in two lines of `script.go` and one of the test. After the exemptions,
+  the second passed all 18. The plants were rerun after the change: 8 of 8.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0.
+* `tools/idscan.py --paths` over the staged files: nothing found.

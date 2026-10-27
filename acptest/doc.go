@@ -10,9 +10,14 @@
 // dependency.
 //
 // Connect is the entry point: it joins an acp.Agent and an acp.Client over
-// two pipes and closes and waits for both when the test ends. Recorder copies
-// the frames of a reader or a writer, in a canonical form for goldens.
-// ScriptAgent plays a scripted prompt turn; MemoryClient serves files from
-// memory and answers permission requests from a script. Abs makes a fixture
-// path absolute on the host, as the SDK requires of a path it receives.
+// two pipes and closes and waits for both when the test ends, within a bound;
+// ConnectRecorded records the client side's frames as it does so. Recorder
+// copies the frames of a reader or a writer, each with the way it passed, in
+// a canonical form for goldens, and ValidateGolden checks recorded frames
+// against the schema's types. ScriptAgent plays scripted prompt turns, one
+// that fails, reports usage or waits for a cancel among them; MemoryClient
+// serves files from memory, answers permission requests and elicitations from
+// a script, and serves terminals through a TerminalHost. Abs makes a fixture
+// path absolute on the host, as the SDK requires of a path it receives
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 8).
 package acptest

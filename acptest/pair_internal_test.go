@@ -66,7 +66,7 @@ func TestConnectCleanupBounded(t *testing.T) {
 		t.Parallel()
 		tb := &recordingTB{TB: t}
 		agent := &stuckAgent{started: make(chan struct{}), release: make(chan struct{})}
-		pair := connectWithin(tb, bound, agent, &MemoryClient{})
+		pair := connectWithin(tb, bound, agent, &MemoryClient{}, nil)
 		if _, err := pair.Client.Initialize(t.Context(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
 			t.Fatal(err)
 		}
@@ -93,7 +93,7 @@ func TestConnectCleanupBounded(t *testing.T) {
 	t.Run("no stuck handler", func(t *testing.T) {
 		t.Parallel()
 		tb := &recordingTB{TB: t}
-		pair := connectWithin(tb, bound, &ScriptAgent{}, &MemoryClient{})
+		pair := connectWithin(tb, bound, &ScriptAgent{}, &MemoryClient{}, nil)
 		if _, err := pair.Client.Initialize(t.Context(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
 			t.Fatal(err)
 		}

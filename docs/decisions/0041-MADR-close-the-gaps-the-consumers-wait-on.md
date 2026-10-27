@@ -402,6 +402,25 @@ told apart by their shape. For each, `Kind()` returns the schema's own name, its
 A typed catch-all, the `Other` of `CreateElicitationRequest`, `CreateElicitationResponse` and `MultiSelectItems`, returns the
 value it holds as it arrived, as `ElicitationPropertySchema.Kind` does.
 
+#### Amended by the PLAN's phase 13, 2026-10-27
+
+Two of item 8's shapes changed, for reasons found in the code:
+
+* **`ValidateGolden(tb, records []Record)`, not `(tb, frames)`.** A frame's method alone does not name its type: `mcp/message`
+  is a notification to the agent and a request to the client, with different types. And both sides number their own requests,
+  so a response's id can match a request of either side. Each record therefore carries its direction, `Sent` or `Received`, as
+  `ConnectRecorded` records the client side. `Frames()` stays as it was. A `Record` is JSON with the keys `direction` and `frame`,
+  for a golden file of records.
+* **`MemoryClient.Terminals` is a `TerminalHost`, an interface in `acptest`,** not a `*clienthost.Terminals`. `clienthost`'s
+  in-package tests import `acptest`, so `acptest` importing `clienthost` would be an import cycle. A `*clienthost.Terminals`
+  is a `TerminalHost`, which a test in `acptest` asserts.
+
+Two of item 8's parts rest on unstable-schema declarations. `Turn.Usage` is a `*acp.Usage`, and `PromptResponse.Usage` carries
+it. Both are deprecated under v1, so their uses carry a `staticcheck` exemption with its reason.
+
+`ValidateGolden` has a table of its own, keyed by direction, of the 40 methods and `$/cancel_request`, since package `acp`
+exports none. `TestMethodTables` requires it to hold exactly the method constants of `constants_gen.go`.
+
 ### Consequences
 
 * Good, because the defect that loses an agent's last output before it exits is fixed, with the failing test as its regression

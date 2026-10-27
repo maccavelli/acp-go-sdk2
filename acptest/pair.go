@@ -35,17 +35,34 @@ const cleanupWait = 10 * time.Second
 // (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 6).
 func Connect(tb testing.TB, agent acp.Agent, client acp.Client, opts ...acp.ConnectionOption) Pair {
 	tb.Helper()
-	return connectWithin(tb, cleanupWait, agent, client, opts...)
+	return connectWithin(tb, cleanupWait, agent, client, nil, opts...)
 }
 
-// connectWithin is Connect, its cleanup waiting up to bound.
-func connectWithin(tb testing.TB, bound time.Duration, agent acp.Agent, client acp.Client, opts ...acp.ConnectionOption) Pair {
+// ConnectRecorded is Connect with the client side's streams recorded into
+// rec: a Sent record is a frame the client sent the agent, a Received one a
+// frame the agent sent the client, in the order the client wrote and read
+// them. ValidateGolden reads records so
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 8).
+func ConnectRecorded(tb testing.TB, agent acp.Agent, client acp.Client, rec *Recorder, opts ...acp.ConnectionOption) Pair {
+	tb.Helper()
+	return connectWithin(tb, cleanupWait, agent, client, rec, opts...)
+}
+
+// connectWithin is Connect, its cleanup waiting up to bound, and the client
+// side's streams recorded into rec unless it is nil.
+func connectWithin(tb testing.TB, bound time.Duration, agent acp.Agent, client acp.Client, rec *Recorder,
+	opts ...acp.ConnectionOption) Pair {
 	tb.Helper()
 	agentReads, clientWrites := io.Pipe()
 	clientReads, agentWrites := io.Pipe()
+	var w io.Writer = clientWrites
+	var r io.Reader = clientReads
+	if rec != nil {
+		w, r = rec.Writer(clientWrites), rec.Reader(clientReads)
+	}
 	p := Pair{
 		Agent:  acp.NewAgentSideConnection(agent, agentWrites, agentReads, opts...),
-		Client: acp.NewClientSideConnection(client, clientWrites, clientReads, opts...),
+		Client: acp.NewClientSideConnection(client, w, r, opts...),
 	}
 	tb.Cleanup(func() {
 		if err := p.Close(); err != nil {
