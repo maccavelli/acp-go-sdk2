@@ -863,3 +863,89 @@ written again with the Edit tool, and the file was not restored from git.
 * `make api`: "against v1.25.0: 0 incompatible, 18 compatible", unchanged by this phase.
 * `tools/gates.py --all`, with both hosts set: all 18 passed.
 * `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 10, the implementation closed (2026-10-28)
+
+The owner committed phase 9 as `2a053e9` and asked for phase 10 ("committed proceed").
+
+**The docs, read in full against the code.** Every new name's doc was read as `go doc` renders it:
+* the root's `Connection.Shutdown`, `ErrShutdown` and `ServeAgent`;
+* `agentproc`'s `InProcess`, `ErrAbandoned`, `StderrError` and its `Error`, `Transcript` and its methods, `NewTranscript`,
+  `Process.StderrTail`, `Command`, and the `Process`, `ErrTerminated` and `ErrKilled` docs phase 4 widened;
+* `acptest`'s `ReadRecords`, `WriteRecords`, `Decode`, `Golden`, `ReplayAgent` and its `Serve`, `ConnectReplay` and
+  `ValidateGolden`.
+
+So was each passage phases 9 and 4 added to `README.md`, `docs/architecture.md` and the package doc. Two statements were wrong or
+missing, and were corrected:
+
+| Where | Was | Now |
+| :--- | :--- | :--- |
+| `StderrError.Error`'s doc | "Error returns the tail, its last newline left out", though it returns "agentproc: the agent's standard error ended: " and the tail | it says the agent's standard error ended so, and gives the tail |
+| `ReplayAgent`'s doc | silent on records it cannot play | such records, a Received record that is not a JSON object or a response to an id no Sent record asks, make `Serve` return an error at once, before it reads or writes |
+
+Everything else read matches the code.
+
+**Deviation, 2026-10-28, two parts of the Confirmation not yet shown.** Walking the MADR's "Confirmation" found two parts of item 1
+that no phase had shown. They are this phase's to close, since the step walks the Confirmation, so they were done here and not
+asked about first:
+* **"`TestDetachedTapIsPrefix` … repeated for an in-process agent."** Phase 4's `TestInProcessTaps` repeats
+  `TestCloseReadsTheAgentsLastOutput`'s case, not a detached tap's. `TestInProcessDetachedTapIsPrefix`, new in
+  `agentproc/inprocess_test.go`, does: `Serve` writes 56 MiB of `bulk64()` through a tap blocked until it is detached, waits for
+  the test's word, and writes the last 8 MiB. The tap's bytes must be the stream's beginning, and with the dropped count the
+  whole.
+* **"The leak guard (F4) passing, and failing on a planted runner that leaves its watcher running."** It had passed in every phase,
+  but no break had shown it failing for an in-process agent. The second break below does.
+
+`docs/architecture.md`'s test list names the new test.
+
+**Planted breaks**, each in its own copy through `tools/plants.py`, 2 of 2 as required:
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| a detached tap queuing again (`tap.offer` without its `detached` test) | `TestInProcessDetachedTapIsPrefix` | `the detached tap received 63963136 bytes that are not the stream's beginning` |
+| the in-process watcher started outside `goroutines` and left blocked | the leak guard, under `TestInProcessEndsAtInputEnd` | `goroutines leaked by the tests …`, `goroutineleak profile: total 1`, in `(*InProcess).Start.func1` |
+
+**The MADR's "Confirmation", item by item:**
+
+| Item | Shown by |
+| :--- | :--- |
+| Item 1: each row of the mapping table, by a serve function of its kind | phase 4: `TestInProcessEndsAtInputEnd`, `TestInProcessTerminate`, `TestInProcessKill`, `TestInProcessAbandon`, `TestInProcessReturnsFirst`, with `TestInProcessKillAtOnce`, `TestInProcessClientWriteAfterReturn` and `TestInProcessEndClosesInput` |
+| Item 1: `TestDetachedTapIsPrefix` and `TestCloseReadsTheAgentsLastOutput` repeated in-process | this phase's `TestInProcessDetachedTapIsPrefix`, and phase 4's `TestInProcessTaps` |
+| Item 1: every existing `agentproc` test unchanged after A2, with the 100-run suites | phase 3: 300, 300 and 200 passing runs on macOS under `-race`, the Linux host and the Windows host |
+| Item 1: the leak guard passing, and failing on a planted runner | every phase's runs; this phase's second break |
+| Item 1: `make api`, `InProcess` with its `Start`, and `ErrAbandoned` | phase 4 |
+| Item 1: `tools/consumer.py` running an in-process agent | not yet: phase 11, the release, extends `tools/consumer.py`, as this PLAN's step 11 says |
+| Item 2: a prompt answered `cancelled` at `ServeAgent`'s context's end, its handler reading `ErrShutdown` | phase 5: `TestServeAgentContextEnd`, and `TestShutdownAnswersRunningPrompt` for the cause |
+| Item 2: a late request answered `-32603`, the agent's own request still answered | phase 5: `TestShutdownRefusesLateRequest` |
+| Item 2: `Shutdown` returning its context's cause past the bound | phase 5: `TestShutdownBound` |
+| Item 2: `TestGoStatementsCounted` unchanged | phase 5, with a planted `go` statement |
+| Item 2: an `InProcess` agent on `ServeAgent`, closed in step 2, answering `cancelled` | phase 5: `TestInProcessServeAgentStep2` |
+| Item 2: the example agent on `ServeAgent` | phase 5 |
+| Item 3: the caps, a long line's end, every byte forwarded | phase 6: `TestTailWriterCaps`, `TestTailWriterForwards` |
+| Item 3: a failing agent's words in `StderrTail()` | phase 6: `TestStderrTailOfFailedAgent`, whose child writes 100 lines and exits 1 before any `initialize`, which an agent that fails it does in the same way |
+| Item 3: the join through `errors.As`, `ErrKilled` kept, nothing joined without the field | phase 6: `TestStderrTailOfFailedAgent`, `TestStderrTailOfKilledAgent`, `TestStderrTailNotJoined` |
+| Item 4: a real session's `Transcript` read back, validated and decoded | phase 7: `TestTranscriptOfSession` |
+| Item 4: a response recorded before its request validating | phase 7: `TestValidateGoldenResponseFirst` |
+| Item 4: `Golden`'s three paths | phase 7: `TestGolden` |
+| Item 4: `ReplayAgent` playing a session, and reporting drift | phase 8: `TestReplayAgentPlays`, `TestReplayAgentExtraRequest`, `TestReplayAgentStopsEarly` |
+| Item 4: an out-of-order transcript replaying | phase 8: `TestReplayAgentUnordered` |
+| Every new check seen to fail on a planted break; `make api` only this record's names | 31 breaks across phases 4 to 10, each failing as required: 6, 5, 5, 6, 4, 3 and 2; `make api` below |
+
+**`make api` against the newest `v1` tag, `v1.25.0`:** "0 incompatible, 18 compatible":
+* **the root:** `(*Connection).Shutdown`, `ErrShutdown`, `ServeAgent`;
+* **`agentproc`:** `(*Process).StderrTail`, `Command.JoinStderrTail`, `Command.StderrTail`, `Command.StderrTailLines`,
+  `ErrAbandoned`, `InProcess`, `NewTranscript`, `StderrError`, `Transcript`;
+* **`acptest`:** `ConnectReplay`, `Decode`, `Golden`, `ReadRecords`, `ReplayAgent`, `WriteRecords`.
+
+A new type's methods are counted in it: `(*InProcess).Start`, `StderrError.Error`, `Transcript`'s three and `ReplayAgent.Serve`.
+Nothing else in any package; `unstable`'s report: "0 incompatible".
+
+**Checks:**
+* `TestInProcessDetachedTapIsPrefix`, `-count=10`: 10 passed on macOS under `-race`, 10 on the Linux host, 10 on the Windows host.
+* `make pre-add-check`: "253 file(s) clean".
+* `tools/gates.py --all`, with both hosts set: all 18 passed.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
+  nothing found.
+
+**The PLAN stays `in-progress`:** phase 11, the release, runs only on the owner's ask, and with it the Confirmation's last part,
+`tools/consumer.py` running an in-process agent.

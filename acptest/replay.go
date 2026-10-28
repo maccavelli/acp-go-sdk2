@@ -41,7 +41,9 @@ import (
 // input's end: nil when every Received record was played and no request went
 // unrecorded, and otherwise an error listing how the client departed from the
 // recording. It returns context.Cause(ctx) when ctx ends first; its reader
-// then ends when in does.
+// then ends when in does. Records it cannot play, a Received record that is
+// not a JSON object or a response to an id no Sent record asks, make it
+// return an error at once, before it reads or writes.
 //
 // A replay does not reproduce timing, nor the agent's choices: a client that
 // branches on what it receives meets the recorded content whatever it asked.

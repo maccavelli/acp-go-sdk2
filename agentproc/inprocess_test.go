@@ -358,6 +358,52 @@ func rootDir(t *testing.T) string {
 	return t.TempDir()
 }
 
+// TestInProcessDetachedTapIsPrefix is TestDetachedTapIsPrefix for an
+// in-process agent: its tap blocks until it is detached, is released while
+// Serve still has 8 MiB to write, and what it received is the stream's
+// beginning, the rest counted as dropped
+// (0042-MADR-in-process-agent-runner.md, "Confirmation").
+func TestInProcessDetachedTapIsPrefix(t *testing.T) {
+	t.Parallel()
+	tap, release := blockedTap(t)
+	more := make(chan struct{})
+	stream := bulk64()
+	const first = 56 << 20
+	p := startInProcess(t, &InProcess{Grace: 5 * time.Second, OutputTap: tap, Serve: func(ctx context.Context, _ io.Reader, out io.Writer) error {
+		if _, err := out.Write(stream[:first]); err != nil {
+			return err
+		}
+		select {
+		case <-more:
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		}
+		_, err := out.Write(stream[first:])
+		return err
+	}})
+	t.Cleanup(release)
+	deadline := time.Now().Add(readyWait)
+	for out, _ := p.DroppedTapBytes(); out == 0; out, _ = p.DroppedTapBytes() {
+		if time.Now().After(deadline) {
+			t.Fatalf("the tap, blocked through 56 MiB, was not detached within %v", readyWait)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	release()
+	close(more)
+	if err := p.Close(); err != nil {
+		t.Fatalf("Close = %v", err)
+	}
+	got := tap.bytes()
+	if !bytes.HasPrefix(stream, got) {
+		t.Errorf("the detached tap received %d bytes that are not the stream's beginning", len(got))
+	}
+	out, _ := p.DroppedTapBytes()
+	if total := uint64(len(got)) + out; total != uint64(len(stream)) {
+		t.Errorf("the tap received %d bytes and dropped %d, %d in all; Serve wrote %d", len(got), out, total, len(stream))
+	}
+}
+
 // TestInProcessStartRefuses requires Start to refuse, starting nothing, a nil
 // Serve or client.
 func TestInProcessStartRefuses(t *testing.T) {

@@ -16,7 +16,8 @@ type StderrError struct {
 	Tail string
 }
 
-// Error returns the tail, its last newline left out.
+// Error says the agent's standard error ended so, and gives the tail, its
+// last newline left out.
 func (e *StderrError) Error() string {
 	return "agentproc: the agent's standard error ended: " + strings.TrimSuffix(e.Tail, "\n")
 }

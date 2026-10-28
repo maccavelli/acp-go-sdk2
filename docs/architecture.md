@@ -773,8 +773,9 @@ Checks that guard it:
   `TestTapErrorIgnored`, `TestTapsUnset`, `TestBlockedTapDetached`, `TestDetachedTapIsPrefix`,
   `TestCloseReadsTheAgentsLastOutput` and `TestTapDrainBoundedByGrace`, `LineTap`'s `TestLineTapFrames`,
   `TestLineTapCopies`, `TestLineTapHoldsUnended`, `TestLineTapNilFn` and `TestLineTapAsOutputTap`, and
-  `TestExitedFirst` and `TestProcessWaitContext`, `InProcess`'s ten in `inprocess_test.go` with
-  `TestInProcessServeAgentStep2`, the stderr tail's six in `stderr_test.go`, and the transcript's three
+  `TestExitedFirst` and `TestProcessWaitContext`, `InProcess`'s eleven in `inprocess_test.go`,
+  `TestInProcessDetachedTapIsPrefix` among them, with `TestInProcessServeAgentStep2`, the stderr tail's six in
+  `stderr_test.go`, and the transcript's three
   in `transcript_test.go`; on Unix `TestStartRefusesSharedGroup` and
   `TestEscapedDescendantDoesNotHoldWait`, `TestTapKeepsCloseEnding`, `TestKillClosesAtOnce` and `TestClientDeathEndsAgentAtInputEnd`; on Linux and FreeBSD
   `TestStartFromExitingLockedGoroutine`, `TestDefaultPdeathsig`, `TestCallersPdeathsigKept` and
