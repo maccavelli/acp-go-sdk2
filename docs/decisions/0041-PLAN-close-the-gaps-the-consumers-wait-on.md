@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-27
 associated-madr: "0041-MADR-close-the-gaps-the-consumers-wait-on.md"
 ---
@@ -1217,3 +1217,35 @@ Next, after the owner commits and pushes this:
 * the annotated tag `v1.25.0` and its push, on the owner's ask in that turn;
 * the GitHub release from `tools/release_body.py`;
 * `tools/publication.py`, then `tools/consumer.py v1.25.0`.
+
+### Phase 17, the release published (2026-10-27)
+
+The owner committed and pushed the release commit as `8505722`, then created and pushed the tag. Then:
+
+* **CI:**
+  * on `main` for `8505722`: run `40611386819`, six jobs, and the Docs run `40611386815`, each "completed success";
+  * on the tag: run `40612497033`, six jobs, "completed success" on its first attempt, `validate (macos-15, 1.27.3)` among them.
+* **`make api` on `8505722`, before the tag:** against `v1.24.0`, "0 incompatible, 35 compatible", as the release notes list.
+* **The tag:** `v1.25.0` is annotated, its message `v1.25.0`, and names `8505722` on `origin`.
+* **`make api` after the tag:**
+  * against `v1.25.0`, now the newest tag, "0 incompatible, 0 compatible";
+  * against `v1.24.0`, through `scripts/check_api.py v1.24.0`, "0 incompatible, 35 compatible".
+* **The body:** `tools/release_body.py v1.25.0 8505722` extracted the report's "Release text". It is 138 lines with one link,
+  which the tool points at the tag, and its identifier scan found 0 matches. The body was read in full.
+* **The release:** the owner ran `gh release create v1.25.0 --verify-tag --title v1.25.0 --notes-file <the body>`.
+* **`tools/publication.py v1.25.0 8505722 <the body>`:** "10 of 10 checks hold":
+  * the release is published, marked latest, and its body is the extracted text;
+  * CI holds on `main`'s head and on the tag;
+  * the proxy serves the tag at `8505722`;
+  * `go list -m @latest` gives `v1.25.0`;
+  * `go mod download` passes with the checksum database on.
+* **`tools/consumer.py v1.25.0`:** "as required". At `go1.26.10`, from the proxy:
+  * the program's output was as required, its last lines `terminal 3 hi false <nil>` and `release <nil> true <nil>`;
+  * its `go test` passed;
+  * the Windows build passed;
+  * its `go.mod` kept `go 1.26.10` and gained no toolchain line.
+  * It requires `golang.org/x/sys v0.49.0` as indirect, which `clienthost` imports. That is the requirement this repository's
+    `go.mod` already had at `v1.24.0`, so the SDK gained no dependency.
+
+The release is published, so this PLAN and its row are `complete`. Each consumer adopts `v1.25.0` under its own records, from
+[0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md](../reports/0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md).
