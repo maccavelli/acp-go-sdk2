@@ -56,6 +56,11 @@ func child(mode string) int {
 		return 0
 	case "burst": // answers initialize, writes burstCount session updates, and exits at once
 		return burst()
+	case "stderr-fail": // writes "line 1" to "line 100" to stderr, and exits 1 (stderr_test.go)
+		for i := 1; i <= 100; i++ {
+			fmt.Fprintf(os.Stderr, "line %d\n", i)
+		}
+		return 1
 	case "parent-stderr": // starts a heartbeat on its stderr, then exits at its input's end
 		g := exec.Command(testBinary(), "-test.run=^$")
 		g.Env = append(os.Environ(), childEnv+"=heartbeat-stderr")

@@ -69,6 +69,24 @@ type Command struct {
 	// concurrent use; the two streams have no order between them.
 	InputTap io.Writer
 
+	// StderrTail and StderrTailLines, when either is positive, keep the end
+	// of what the agent writes to its standard error, for Process.StderrTail:
+	// at most StderrTail bytes and at most StderrTailLines lines, a cap of zero
+	// being no cap. The tail starts at a line's beginning, unless its last line
+	// alone is longer than the byte cap, which keeps that line's end; so the
+	// byte cap bounds the memory the tail holds. Start then sets Cmd.Stderr to
+	// a writer of its own, which forwards every byte to the caller's
+	// Cmd.Stderr when that is set, and returns its result; os/exec copies to
+	// it on a goroutine, which Cmd.WaitDelay bounds
+	// (0042-MADR-in-process-agent-runner.md, item 3).
+	StderrTail      int
+	StderrTailLines int
+
+	// JoinStderrTail, with a cap set, joins a *StderrError holding the tail to
+	// Wait's error, when that error is not nil and the tail is not empty;
+	// errors.Is and errors.As read the rest of the error as before.
+	JoinStderrTail bool
+
 	// readHook, when set with OutputTap, is called before each read of the
 	// agent's output. Only this package's tests set it, to hold the
 	// connection's reader back behind the agent
@@ -118,6 +136,11 @@ type Process struct {
 	// runs Wait and then closes waited.
 	waitOnce sync.Once
 	waited   chan struct{}
+
+	// stderr keeps the end of a Command's agent's standard error, nil unless
+	// a cap is set; joinStderr is Command.JoinStderrTail.
+	stderr     *tailWriter
+	joinStderr bool
 }
 
 // Start starts the agent and connects client to it over the agent's
@@ -181,6 +204,11 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 		return nil, errors.Join(fmt.Errorf("agentproc: %w", err), inR.Close(), inW.Close())
 	}
 	cmd.Stdin, cmd.Stdout = inR, outW
+	var stderr *tailWriter
+	if c.StderrTail > 0 || c.StderrTailLines > 0 {
+		stderr = &tailWriter{next: cmd.Stderr, bytes: c.StderrTail, lines: c.StderrTailLines}
+		cmd.Stderr = stderr
+	}
 	// Half the grace: an agent seen to exit only after WaitDelay is seen
 	// within Close's first step, not reported as killed
 	// (0027-PLAN-agent-process-helper.md, the deviation during step 4).
@@ -188,7 +216,8 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 		cmd.WaitDelay = grace / 2
 	}
 	ch := &childAgent{cmd: cmd}
-	p := &Process{agent: ch, grace: grace, done: make(chan struct{}), hurry: make(chan struct{})}
+	p := &Process{agent: ch, grace: grace, done: make(chan struct{}), hurry: make(chan struct{}),
+		stderr: stderr, joinStderr: c.JoinStderrTail}
 	started, proceed := make(chan error, 1), make(chan bool, 1)
 	p.goroutines.Go(func() { p.run(ch, started, proceed) })
 	if err := <-started; err != nil {
@@ -351,7 +380,9 @@ func (p *Process) Done() <-chan struct{} { return p.done }
 // time: nil for an exit of status 0 of its own, otherwise the error
 // exec.Cmd.Wait returned, joined with ErrTerminated or ErrKilled when Close
 // or Kill ended the agent so. For an InProcess agent, the agent's error is
-// Serve's, or ErrAbandoned, joined the same way. It does not stop the agent.
+// Serve's, or ErrAbandoned, joined the same way. Under
+// Command.JoinStderrTail, a non-nil error also has a *StderrError holding the
+// tail joined. It does not stop the agent.
 func (p *Process) Wait() error {
 	<-p.done
 	p.goroutines.Wait()
@@ -360,14 +391,34 @@ func (p *Process) Wait() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.returned = true
+	var err error
 	switch {
 	case p.ended == nil:
-		return p.waitErr
+		err = p.waitErr
 	case p.waitErr == nil:
-		return p.ended
+		err = p.ended
 	default:
-		return fmt.Errorf("%w: %w", p.ended, p.waitErr)
+		err = fmt.Errorf("%w: %w", p.ended, p.waitErr)
 	}
+	// The tail is final: Cmd.Wait has returned, and with it os/exec's copy to
+	// the tail's writer.
+	if err != nil && p.joinStderr && p.stderr != nil {
+		if tail := p.stderr.tail(); tail != "" {
+			err = errors.Join(err, &StderrError{Tail: tail})
+		}
+	}
+	return err
+}
+
+// StderrTail returns the end of the agent's standard error that
+// Command.StderrTail and StderrTailLines kept, final once Wait has returned:
+// empty when neither is set, and for an InProcess agent, which has no
+// standard error (0042-MADR-in-process-agent-runner.md, item 3).
+func (p *Process) StderrTail() string {
+	if p.stderr == nil {
+		return ""
+	}
+	return p.stderr.tail()
 }
 
 // WaitContext is Wait bounded by ctx: it returns Wait's error once Wait

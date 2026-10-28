@@ -613,3 +613,64 @@ met, and is recorded here rather than asked about.
 * `tools/gates.py --all`, with both hosts set: all 18 passed.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
   nothing found.
+
+### Phase 6, the stderr tail (2026-10-28)
+
+The owner committed phase 5 as `5da0d0f` and asked for phase 6 ("committed, proceed").
+
+**What changed:**
+* **`agentproc/stderr.go`, new:**
+  * `StderrError{Tail}`, whose `Error` reads "agentproc: the agent's standard error ended: " and the tail, without its last
+    newline;
+  * `tailWriter`, which holds the tail under a mutex:
+    * `Write` keeps at most one byte more than the byte cap of each write, so that `trim` sees whether its cut falls mid-line;
+      it forwards every byte to the caller's `Cmd.Stderr`, and returns that writer's result;
+    * `trim` applies the line cap, counting an unended last line, then the byte cap, moving a mid-line cut to the next line
+      unless the last line is all that is left; it lets go of the cut bytes once the buffer's capacity is twice what it holds.
+* **`agentproc/agentproc.go`:**
+  * `Command` gains `StderrTail`, `StderrTailLines` and `JoinStderrTail`, documented as the MADR's item 3 states them;
+  * `Start`, with either cap set, wraps `Cmd.Stderr` in a `tailWriter` after its checks, beside its `Stdin` and `Stdout`;
+  * `Process` gains `stderr` and `joinStderr`, and the exported `StderrTail()`;
+  * `Wait` computes its error as before, then, under the join, a non-nil error with a non-empty tail has `&StderrError{tail}`
+    joined. The tail is final there, since `Cmd.Wait` has returned and with it `os/exec`'s copy. `Wait`'s doc says so.
+* **`agentproc/child_test.go`:** the child mode `stderr-fail` writes "line 1" to "line 100" to stderr and exits 1.
+* **`agentproc/stderr_test.go`, new:** `TestTailWriterCaps`, ten cases; `TestTailWriterForwards`; `TestStderrTailOfFailedAgent`;
+  `TestStderrTailNotJoined`; `TestStderrTailOfKilledAgent`, on the `stubborn` child; `TestInProcessHasNoStderrTail`.
+
+**Deviation, 2026-10-28, a defect found by reading, and its break.** `Write` first trimmed each write to exactly the byte cap. The
+tail of a write longer than the cap then began wherever the cut fell, since `trim` could no longer see the byte before it: a
+mid-line start the MADR's design refuses. It was read in the code before the tests first ran, and fixed to keep one byte more. So
+that the check is seen to fail on it, the old trimming is a fifth planted break below, beyond the step's four. The failing case is
+`TestTailWriterCaps`' "the byte cap mid-line".
+
+**Planted breaks**, each in its own copy through `tools/plants.py`, 5 of 5 as required, run again after the lint fix below:
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| the byte cap not applied to a long line | `TestTailWriterCaps` | `a line longer than the byte cap keeps its end: the tail is "0123456789\n", want "789\n"` |
+| the line cap ignored | `TestTailWriterCaps` | `the line cap: the tail is "a\nb\nc\n", want "b\nc\n"` |
+| `Cmd.Stderr` not forwarded | `TestTailWriterForwards` | `the caller's writer received "", want every byte` |
+| the join made without the field | `TestStderrTailNotJoined` | `Wait = exit status 1` and the tail, `want no *StderrError without JoinStderrTail` |
+| the write trimmed to the byte cap exactly | `TestTailWriterCaps` | `the byte cap mid-line, moved to the next line: the tail is "a\nbbbb\ncccc\n", want "bbbb\ncccc\n"` |
+
+**Checks:**
+* **Repeated runs**, `-run '^(TestTailWriter|TestStderrTail|TestInProcessHasNoStderrTail)' -count=20`, the child mode on every
+  host:
+
+  | Host | Result |
+  | :--- | :--- |
+  | macOS, `-race` | 120 passed, 0 failed |
+  | the Linux host | 120 passed, 0 failed |
+  | the Windows host | 120 passed, 0 failed |
+
+  A first run of the two hosts wrote both logs to one file, a shell variable named wrong. Both passed, and they were run again
+  into their own logs, with the results above.
+* **`make pre-add-check`:** its first run found one lint issue, `stderr_test.go:114:5: errorsastype: errors.As can be simplified
+  using AsType[*StderrError] (modernize)`. It was fixed; then "244 file(s) clean". `scripts/go-precheck.sh` on the two new files:
+  "2 file(s) clean".
+* **`make api`:** "against v1.25.0: 0 incompatible, 10 compatible". This phase's five are `(*Process).StderrTail`,
+  `Command.JoinStderrTail`, `Command.StderrTail`, `Command.StderrTailLines` and `StderrError`, with its `Error` counted in the
+  type.
+* `tools/gates.py --all`, with both hosts set: all 18 passed.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
+  nothing found.
