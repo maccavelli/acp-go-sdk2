@@ -399,7 +399,8 @@ The shape, as the owner's answers settled it:
    * Alternative: a type of its own (O3). It leaves `Process` untouched, but a client needs an interface of its own to treat both
      alike, and the type gives little over C6's 35 lines.
 3. **Which pipes?**
-   * Recommended: `io.Pipe`. It uses no file descriptors, closes each direction on its own, and carries `ErrKilled` to a blocked read
+   * (Corrected 2026-10-28, "Amended by the PLAN's phase 2": the cause reaches a blocked read or write only from the pipe's other
+    end.) Recommended: `io.Pipe`. It uses no file descriptors, closes each direction on its own, and carries `ErrKilled` to a blocked read
      or write (G1). It is what `acptest` and `<cli-b>` use. The cost is the taps' reader generalized from `*os.File`.
    * Alternative: `os.Pipe`, byte for byte a child's pipes, with kernel buffering. It reuses the taps unchanged, but costs four
      descriptors per agent, and a close cannot carry a cause.
@@ -673,6 +674,27 @@ Each question was put with three options. The owner chose the recommended one fo
 
 The designs above follow these answers. All four items are decided, so this record is `accepted`. The PLAN,
 [0042-PLAN-in-process-agent-runner.md](0042-PLAN-in-process-agent-runner.md), carries all four.
+
+#### Amended by the PLAN's phase 2, 2026-10-28
+
+The PLAN's probes, run on macOS and on the Linux and Windows hosts, confirmed the mapping table and the reproduction (the PLAN's
+phase 2 entry). They corrected one statement of fact, and changed no decision.
+
+* **Which end carries the cause.** Question 3's recommendation says `io.Pipe` "carries `ErrKilled` to a blocked read or write".
+  The probe P5 found that a read or write blocked on a pipe end returns:
+  * the error given to `CloseWithError` when the **other** end is closed with it;
+  * `io.ErrClosedPipe` when its **own** end is closed, whatever the error given.
+
+  Step 3 closes the agent's own ends, so the agent's blocked reads and writes return `io.ErrClosedPipe`, and the step still
+  unblocks them, as the table says. `ErrKilled` reaches the agent through its context's cause, which step 3 cancels with it first.
+  On the client's side, the agent's output is closed with a plain `Close`, so the client reads `io.EOF` as at a child's exit.
+* **Two consequences for item 1's design, which the PLAN's phase 4 follows:**
+  * a connection whose writer fails does not end: P1's client stayed open 2 s after the pipe it wrote to lost its reader. So
+    when `Serve` returns, the runner closes the agent's output, which ends the client's connection (P3), and not only its input;
+  * a write to an `io.Pipe` whose reader is never closed blocks for ever. P4's first run overflowed the client's notification
+    queue of 1024, the client closed its connection, and the agent's next write blocked, since the client's reader was wrapped in
+    a type that does not close. So the runner closes its pipe ends itself whenever the connection ends, and does not rely on the
+    connection's `Close` reaching them.
 
 ### Consequences
 

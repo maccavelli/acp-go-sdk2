@@ -149,6 +149,10 @@ A refactor adds no check, so it has no planted break. The existing tests are its
     `ErrAbandoned` joined.
   * `ErrTerminated` and `ErrKilled` are joined only when their step found `Serve` running.
 * **No panic is recovered,** and the doc says so, with the MADR's O5 pattern for isolation.
+* **From phase 2's probes** (the MADR's "Amended by the PLAN's phase 2"):
+  * the agent's output is closed with a plain `Close`, so the client reads `io.EOF`;
+  * `ErrKilled` reaches the agent through its context's cause, and its blocked reads and writes return `io.ErrClosedPipe`;
+  * the runner closes its pipe ends itself whenever the connection ends.
 
 `inprocess_test.go`, a `Serve` of each kind:
 
@@ -352,3 +356,66 @@ The owner committed the pair as `2a3ea34` and approved execution ("committed. pr
   * its "Not chosen" entry is annotated, not rewritten, with a pointer to that amendment.
 * Checks, each exit 0: `make check-records`, `make markdownlint`, `make disclosure-check`; `tools/idscan.py --paths` over the
   changed files, nothing found.
+
+### Phase 2, the probes and the reproductions (2026-10-28)
+
+The owner committed phase 1 as `5b09afc` and asked for phase 2 ("committed, proceed").
+
+**How it ran.** One test package, `probe0042`, was added to a scratch copy of the tree made by `git archive` of `5b09afc`. Nothing
+in the tree changed. It ran three ways, each exit 0:
+* on macOS under `-race`;
+* on the Linux host, through `tools/remote.py pkg --host linux --tree <the copy> ./probe0042`;
+* on the Windows host, the same with `--host windows`.
+
+Its agent and client are the SDK's own: an agent embedding `AgentRefusals` and a client embedding `ClientRefusals`.
+
+**The pipes.** The same results on all three hosts:
+
+| Probe | Result |
+| :--- | :--- |
+| P1 | A write to an `io.Pipe` with no reader blocked, and `CloseWithError(errKilled)` on the read end returned it with `errKilled`. A client whose writer had no reader failed its `initialize` at its context's deadline, `-32603` "context deadline exceeded"; after that writer's reader was closed, the connection was **still open 2 s later**. |
+| P2 | A serve written as a program's main, `NewAgentSideConnection` then `<-Done()`, returned at once, "0s", when its input was closed; its connection's `Err` was "acp: peer disconnected: peer connection closed". |
+| P3 | With the agent's output then closed, the client's `Err` was the same: `ErrPeerDisconnected` true, `io.EOF` true, `EndedCleanly` true. |
+| P4 | A serve that answered `initialize`, wrote 1000 `session/update` frames and returned at once: 158946 bytes written, 158946 read through a tap, 1000 of 1000 updates handled. |
+| P5 | Blocked reads and writes returned once a pipe end was closed: with `errKilled` when the **other** end was closed with it, and with `io: read/write on closed pipe` when their **own** end was. |
+
+**Two findings beyond the probes' questions:**
+* **P1:** a connection whose writer fails does not end. So when `Serve` returns, the runner closes the agent's output, which ends
+  the client's connection (P3), and not only the agent's input.
+* **P4's first run** wrote 2000 frames. The client's notification queue holds 1024, so it logged "notification queue overflow" and
+  closed its connection, as `OverflowClose` does. Its reader was wrapped in an `io.TeeReader`, which does not close, so the
+  serve's next write blocked for ever: `P4 serve stuck: client handled 1507, tapped 240226`. The probe was rerun with 1000 frames,
+  under the queue. The finding: the runner closes its pipe ends itself whenever the connection ends.
+
+**Item 2, the lost answer, reproduced** on all three hosts:
+* `TestReproLostCancelled` serves as the MADR's S1 does, and cancels the serve's context during a prompt whose handler waits for its
+  context and answers `cancelled`. The client's `Prompt` returned no stop reason and the error `{"code":-32603,"message":"Internal
+  error","data":{"error":"input ended before a response"}}`. The handler's context cause was "acp: connection closed", and the
+  agent's connection `Err` the same.
+* `TestControlSessionCancel`, the same agent cancelled through `session/cancel`, returned stop reason `"cancelled"` with no error;
+  the handler's cause was "acp: prompt turn cancelled". So the handler is right, and the connection's close loses its answer.
+
+**Item 4, the order.** `TestTranscriptOrder` ran 50 sessions with a child agent through `agentproc`. The child was the test binary
+itself, in an agent mode. Each session had five prompts of three updates and a permission request, with two `LineTap`s as the
+taps, and the records were counted in one pass:
+
+| Host | Responses recorded before their request |
+| :--- | :--- |
+| macOS | 3 of 600, in 1950 records (4 of 600 in the first run) |
+| Linux | 4 of 600, in 1950 records |
+| Windows | 0 of 600, in 1950 records |
+
+So the taps' order between the directions does reorder a request and its response, and phase 7's two-pass pairing is needed.
+
+**Against the MADR.** The probes confirmed every row of the mapping table and S3. They corrected one statement: question 3's
+recommendation said `io.Pipe` "carries `ErrKilled` to a blocked read or write", which P5 shows holds only from the pipe's other
+end. No decision changes:
+* step 3 still unblocks the agent;
+* `ErrKilled` reaches it through its context's cause;
+* the client reads `io.EOF` from a plain `Close`.
+
+The MADR gains "Amended by the PLAN's phase 2, 2026-10-28", and question 3's text is annotated, not rewritten. Phase 4 lists the
+three consequences.
+
+**Checks**, each exit 0: `make check-records`, `make markdownlint`, `make disclosure-check`; `tools/idscan.py --paths` over the
+changed files, nothing found.
