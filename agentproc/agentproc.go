@@ -1,7 +1,9 @@
 // Package agentproc starts an ACP agent as a child process, connects to it
 // over the child's standard input and output, and stops it, with the
 // processes it started, in bounded steps
-// (0027-MADR-agent-process-helper.md).
+// (0027-MADR-agent-process-helper.md). It runs an agent written in Go in this
+// process too, on a goroutine joined by pipes, with the same lifecycle
+// (0042-MADR-in-process-agent-runner.md, item 1).
 package agentproc
 
 import (
@@ -24,12 +26,14 @@ import (
 const defaultGrace = 5 * time.Second
 
 // ErrTerminated is joined to Wait's error when the agent exited after Close
-// sent SIGTERM to its process group.
+// sent SIGTERM to its process group, or, for an InProcess agent, after Close
+// cancelled Serve's context with it.
 var ErrTerminated = errors.New("agentproc: agent terminated")
 
 // ErrKilled is joined to Wait's error when Close or Kill killed the agent's
 // process group or ended its job, or killed the agent itself where there is
-// neither.
+// neither, or, for an InProcess agent, cancelled Serve's context with it and
+// closed its pipes.
 var ErrKilled = errors.New("agentproc: agent killed")
 
 // Command is an agent to start as a child process.
@@ -75,7 +79,7 @@ type Command struct {
 // Process is a running agent and the connection to it. Its methods are safe
 // for concurrent use.
 type Process struct {
-	agent agent // the child process, the one kind of agent so far
+	agent agent // a child process, or an InProcess's serve function
 	grace time.Duration
 	conn  *acp.ClientSideConnection
 
@@ -337,7 +341,8 @@ func (p *Process) monitor() {
 func (p *Process) Conn() *acp.ClientSideConnection { return p.conn }
 
 // Done returns a channel that is closed once the agent process has exited
-// and what was left of its process group or job has been killed.
+// and what was left of its process group or job has been killed; for an
+// InProcess agent, once Serve has returned, or been abandoned.
 func (p *Process) Done() <-chan struct{} { return p.done }
 
 // Wait blocks until the agent process has exited and the connection's
@@ -345,7 +350,8 @@ func (p *Process) Done() <-chan struct{} { return p.done }
 // or the grace has passed, and then returns the agent's error, the same each
 // time: nil for an exit of status 0 of its own, otherwise the error
 // exec.Cmd.Wait returned, joined with ErrTerminated or ErrKilled when Close
-// or Kill ended the agent so. It does not stop the agent.
+// or Kill ended the agent so. For an InProcess agent, the agent's error is
+// Serve's, or ErrAbandoned, joined the same way. It does not stop the agent.
 func (p *Process) Wait() error {
 	<-p.done
 	p.goroutines.Wait()
@@ -398,8 +404,9 @@ func (p *Process) WaitContext(ctx context.Context) error {
 // the agent ran; then the agent was stopped as Close stops it, and its exit
 // status says how it took that. An agent's output ends as it exits, unless a
 // process it started holds it, so the two ends can come together, and either
-// can be seen first. ExitedFirst is false until Wait has returned, and final
-// from then on (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 7).
+// can be seen first. For an InProcess agent, the exit is Serve's return.
+// ExitedFirst is false until Wait has returned, and final from then on
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 7).
 func (p *Process) ExitedFirst() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -454,7 +461,7 @@ func (p *Process) DroppedTapBytes() (output, input uint64) {
 // agent where there is neither. Once the agent has exited, the connection
 // reads to the end of the agent's output, up to the grace from the exit, and
 // is closed. A second call returns the same error. Kill cuts a Close in
-// progress short.
+// progress short. For an InProcess agent, the steps are InProcess's.
 func (p *Process) Close() error {
 	p.closeOnce.Do(p.stop)
 	return p.Wait()
@@ -468,7 +475,8 @@ func (p *Process) Close() error {
 // has already exited is sent nothing. A Close in progress stops waiting and
 // kills, and Close and Kill, called during or after it, return the same error
 // (0030-MADR-record-initialize-on-arrival.md, the amendment of 2026-10-21,
-// question 7).
+// question 7). For an InProcess agent, Kill waits up to the grace for Serve
+// to return before it abandons it.
 func (p *Process) Kill() error {
 	p.hurryOnce.Do(func() { close(p.hurry) })
 	p.closeOnce.Do(p.stop)

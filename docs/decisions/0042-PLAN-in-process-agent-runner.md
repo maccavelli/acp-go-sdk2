@@ -464,3 +464,78 @@ The owner committed phase 2 as `4d84311`, which also accepted the MADR's amendme
 As the step says, a refactor adds no check, so there is no planted break; the existing tests above are its check.
 `docs/architecture.md` still describes a child's steps truly, through `Cmd.Wait` and `sharedClose`. The seam is written into it
 in phase 9, as planned.
+
+### Phase 4, `InProcess` (2026-10-28)
+
+The owner committed phase 3 as `5293572` and asked for phase 4 ("committed, proceed").
+
+**What changed:**
+* **`agentproc/inprocess.go`, new:**
+  * `InProcess{Serve, Grace, ConnectionOptions, OutputTap, InputTap}`, with an unexported `readHook` as `Command` has;
+  * `(*InProcess).Start` and `ErrAbandoned`;
+  * `inProcessAgent`, the second implementation of phase 3's `agent`:
+    * `closeInput` closes the client's end of the agent's input;
+    * `terminate` cancels `Serve`'s context with `ErrTerminated`;
+    * `kill` cancels it with `ErrKilled`, closes the agent's input end with `CloseWithError(ErrKilled)` and its output end with
+      `Close`, and starts the abandonment's grace;
+    * `wait` returns `Serve`'s error, or `ErrAbandoned` when the grace after `kill` passes first;
+    * `end` closes the agent's output and input ends and ends the context.
+  * `Serve` runs on a goroutine outside `Process`'s goroutine group, so that `Wait` does not wait for an abandoned one. The
+    watcher and the monitor run as for a child, through `p.goroutines`.
+  * It follows phase 2's three consequences, as this PLAN's phase 4 lists them.
+* **`agentproc/agentproc.go`:** docs only.
+  * The package doc gains the in-process agent.
+  * `ErrTerminated`, `ErrKilled`, `Done`, `Wait`, `ExitedFirst`, `Close` and `Kill` each gain the in-process case.
+  * `Process.agent`'s comment names both kinds.
+* **`agentproc/inprocess_test.go`, new:** a `serveAgent` embedding `AgentRefusals`, `startInProcess`, `readUntilFailure`, and ten
+  tests, the step's nine and one more (the deviation below). Each passed on its first run under `-race`.
+
+**Deviation, 2026-10-28, a check the step's table did not name.**
+* **Found:** the planted break "Serve's return not closing the agent's input" passed `TestInProcessClientWriteAfterReturn` and a
+  first form of a direct check:
+  * closing the agent's output ends the client's connection at once, through its end of input (phase 2, P3);
+  * the watcher then closes the connection, which closes the client's end of the input too;
+  * so a write of the client's fails either way, and cannot tell whether the agent's end was closed.
+* **Done:** `TestInProcessEndClosesInput`, new. After `Wait`, a read of the agent's end returns `io.ErrClosedPipe` when that end was
+  closed, and `io.EOF` when only the client's was. The break now fails it. The step's own list names the break this check must
+  fail, so this is recorded as a deviation and was not asked about first, as 0041's phase 3 recorded its `TestKillClosesAtOnce`.
+* The close stays, as the MADR's table and A3 state it. It is what makes a client's write fail at once in the moment between
+  `Serve`'s return and the connection's end.
+
+**Deviation, 2026-10-28, a test that could hang.** The planted break "the abandonment bound removed" first passed for the wrong
+reason. `TestInProcessAbandon` failed with "Close took longer than", but its cleanup's `Close` then waited for ever, and the run
+ended at `go test`'s 5-minute timeout without printing the failure. The test now releases its `Serve` in a cleanup registered after
+`startInProcess`'s, so that it runs first, and the break fails with "Close took longer than 3.9s".
+
+**Planted breaks**, each in its own copy through `tools/plants.py`, 6 of 6 as required, run again after the lint fix below:
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| `Serve`'s return not closing the agent's input | `TestInProcessEndClosesInput` | `the read = EOF, want io.ErrClosedPipe: the agent's end was not closed` |
+| step 2 cancelling with no cause | `TestInProcessTerminate` | `Serve's context's cause = context canceled, want ErrTerminated` |
+| step 3 not closing the pipes | `TestInProcessKill` | `Close = agentproc: agent killed: agentproc: in-process agent abandoned, want ErrKilled joined to Serve's io.ErrClosedPipe, and not ErrAbandoned` |
+| the abandonment bound removed | `TestInProcessAbandon` | `Close took longer than 3.9s` |
+| `ExitedFirst` recorded after the connection is closed | `TestInProcessReturnsFirst` | `ExitedFirst = false, want true: Serve returned while the connection was open` |
+| the output tap left off the in-process reader | `TestInProcessTaps` | `the tap received 0 bytes and dropped 0 of the agent's 67108864` |
+
+The step named the fifth break "`ExitedFirst` recorded after `Done`". It was planted as recorded after the connection's close,
+which `Done` precedes, since a check moved only past `Done` races the client's reading of the output's end and would not fail every
+time.
+
+**Checks:**
+* **Repeated runs**, `-run '^TestInProcess' -count=20`, built from the working tree:
+
+  | Host | Result |
+  | :--- | :--- |
+  | macOS, `-race` | 240 passed, 0 failed |
+  | the Linux host | 240 passed, 0 failed |
+  | the Windows host | 240 passed, 0 failed |
+
+* **`make pre-add-check`:** its first run found one lint issue, `inprocess.go:134:38: directive //nolint:errcheck // CloseWithError
+  returns nil. is unused for linter "errcheck" (nolintlint)`. The directive was removed; then "240 file(s) clean".
+  `scripts/go-precheck.sh` on the two new files: "2 file(s) clean".
+* **`make api`:** "against v1.25.0: 0 incompatible, 2 compatible": `ErrAbandoned` and `InProcess`. `apidiff` reports a new type's
+  methods with the type, so `(*InProcess).Start`, which this PLAN's Verification lists apart, is counted in `InProcess`.
+* **`tools/gates.py --all`**, with both hosts set: all 18 passed, `newfiles`, `platforms`, `windows` and `linux` among them.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
+  nothing found.
