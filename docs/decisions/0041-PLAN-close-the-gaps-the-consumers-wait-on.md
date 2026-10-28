@@ -1127,3 +1127,51 @@ These are observations of the consumers at a later head. They change no decision
   the records' MADR and PLAN files are excluded from, so its lists take `-` and a blank line before them. A scratch script made
   both changes and asserted that nothing else in the text changed. The second run: 0 issues.
 * `make check-records` and `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files: nothing found.
+
+### Phase 16, the implementation closed (2026-10-27)
+
+**The docs, read in full against the code.** Every new name's doc was read as `go doc` renders it: `go doc -all ./clienthost`
+and `./acptest`, and each new name of the root and `agentproc`. So was each `README.md` passage and `docs/architecture.md`
+section that names them. Five statements were wrong or unclear, and were corrected:
+
+| Where | Was | Now |
+| :--- | :--- | :--- |
+| `clienthost.Files`' doc | "A path that does not exist is answered with `acp.NewResourceNotFound`", though `WriteTextFile` creates a missing file | a read of a missing file, and a write under a missing directory without `MkdirAll`, are not found |
+| `clienthost.Files`' doc | "An editor that holds unsaved changes returns them instead" | the specification has `fs/read_text_file` return the editor's unsaved changes, and a client holding them answers from them, since `Files` reads the disk |
+| `acptest.Turn.Err`'s doc | "any other error as an internal error" | as the connection answers a handler's error: `-32603`, or `-32800` when it wraps `context.Canceled` |
+| `README.md`'s acptest list | a turn's "stop reason, or an `Err`, with a `Usage`", as if an `Err` turn reported usage | a stop reason, with a `Usage` when set; or an `Err` instead |
+| `docs/architecture.md`, "The client hosts" | `Files` "answers a missing one `NewResourceNotFound`" | as `Files`' doc now says |
+
+Everything else read matches the code. `ToolCallEntity.Id`'s `//nolint:revive` shows in `go doc`, as `CompactionEntity.Id`'s
+does, and is kept as that precedent.
+
+**The MADR's "Confirmation", item by item:**
+
+| Item | Shown by |
+| :--- | :--- |
+| the lost output reproduced before the fix, and not after; the two tests passing many times on every host | phase 2: 37 of 40 runs failed with a slow reader, and 20 of 20 passed with the fix. Phase 3: 300, 300 and 200 passing runs on macOS with `-race`, the Linux host and the Windows host |
+| `Terminals`: a character boundary across a 2-, 3- and 4-byte character; exit codes and signals per platform; a tree ended by kill and release; an unknown id `-32002` | phase 8, the tree break also on the Windows host, and the package's tests on both hosts in every later gate run |
+| `Files`: `line` and `limit` at their edges; a missing file `-32002`; directories only by the option; `IsResourceNotFound` of a peer's `-32002` | phase 9 |
+| `AllowsValue` agreeing with what a send refuses, for every value gate | phase 10: the 22 rules of `valueGates`, the 15 method gates, a result's, and the terminal auth method's |
+| `LineTap`: split and joined writes, copies, an unended line held | phase 4 |
+| `WaitContext`: the cause, `Wait`'s error, no goroutine left behind | phase 6, on the connection and the process, under both leak guards |
+| `EndedCleanly` for each end; `ExitedFirst` both ways | phase 5, 50 runs each way |
+| `acptest`'s additions; `ValidateGolden` refusing a broken frame | phase 13, thirteen kinds of bad frame, and a real session's records passing |
+| `ToolCallTimeline`'s rules; a replay equal to the live sequence | phase 11 |
+| `Kind()` on each named union; a catch-all's and an unknown variant's | phase 12 |
+| the adoption report's sites read again in both consumers | phase 15 |
+| `make api`: only compatible changes, and the new package as new | below |
+
+Every new check was first seen to fail on a planted break, each in its own copy of the tree: 64 breaks across phases 3 to 13.
+
+**`make api` against the newest `v1` tag, `v1.24.0`:** `0 incompatible, 35 compatible`.
+* **The root:** `(*Connection).WaitContext`, `EndedCleanly`, `IsResourceNotFound` and `Negotiation.AllowsValue`; the seven
+  `Kind` methods; `ToolCallEntity` and `ToolCallTimeline`.
+* **`agentproc`:** `LineTap`, `(*Process).ExitedFirst` and `(*Process).WaitContext`.
+* **`acptest`:** fourteen names.
+* **`clienthost`:** its five names, all added, so the package is new.
+
+**Gates:** `tools/gates.py --all`, with both hosts set, ran before the corrections and again after them, and passed all 18 both
+times.
+
+**The PLAN stays `in-progress`:** phase 17, the release, runs only on the owner's ask.

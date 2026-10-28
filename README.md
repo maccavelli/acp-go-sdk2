@@ -1071,8 +1071,9 @@ the test after 10 seconds, with what still runs, rather than hanging it. It
 also provides:
 
 - `ScriptAgent`, which plays scripted prompt turns, each its updates and then
-  its stop reason, or an `Err`, with a `Usage`, or, with `WaitCancel`, waiting
-  for the client's `session/cancel` and answering `cancelled`;
+  its stop reason, with a `Usage` when set; or an `Err` instead; or, with
+  `WaitCancel`, waiting for the client's `session/cancel` and answering
+  `cancelled`;
 - `MemoryClient`, which serves files from memory, with 1-based `line` and
   `limit`, answers permission requests and, through `SetElicitation`,
   elicitations from a script, a form's answer checked against the form, and

@@ -21,17 +21,20 @@ import (
 // a line keeps its end, "\n" or "\r\n", as the file has it, and a line past
 // the file's end gives no content. WriteTextFile writes content to the
 // file, creating it when it does not exist, as the specification requires,
-// and replacing what it held. A path that does not exist is answered with
-// acp.NewResourceNotFound, a path that is not absolute with
-// acp.NewInvalidParams, and a path that is not a regular file, such as a
-// directory or a device, is refused.
+// and replacing what it held. ReadTextFile answers a file that does not exist
+// with acp.NewResourceNotFound, and WriteTextFile a file whose directory does
+// not exist, unless MkdirAll; both answer a path that is not absolute with
+// acp.NewInvalidParams, and refuse a path that is not a regular file, such as
+// a directory or a device.
 //
 // Files applies no policy. The specification asks a client to check each
 // path against the session's roots, and to ask its user before a write
 // changes a file that controls execution or approval; a client does so in a
 // ReadTextFile or WriteTextFile of its own, which wins over the embedded
-// one, and calls Files' when it allows the request. An editor that holds
-// unsaved changes returns them instead. The zero Files is ready to use.
+// one, and calls Files' when it allows the request. The specification has
+// fs/read_text_file return a file's unsaved changes in the client's editor;
+// a client that holds such changes answers from them, not from Files, which
+// reads only what is on disk. The zero Files is ready to use.
 type Files struct {
 	// MkdirAll has WriteTextFile create the missing directories of a path,
 	// with permission 0755 before the umask. False answers such a path with

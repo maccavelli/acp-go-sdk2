@@ -17,8 +17,9 @@ type Turn struct {
 	StopReason acp.StopReason
 
 	// Err, when set, is the turn's answer after its updates: the prompt
-	// fails with it, an *acp.RequestError as it is and any other error as an
-	// internal error.
+	// fails with it as the connection answers a handler's error, an
+	// *acp.RequestError as it is, and any other -32603, or -32800 when it
+	// wraps context.Canceled.
 	Err error
 
 	// Usage is the token usage the turn's answer reports.

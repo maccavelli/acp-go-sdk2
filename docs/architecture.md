@@ -751,7 +751,8 @@ promoted at all.
 - `Files` (`files.go`) reads a file's lines by 1-based `line` and `limit`, each
   with its end, and writes a file, creating it, and its directories under
   `MkdirAll`; it refuses a relative path, `line` 0 and a path that is not a
-  regular file, and answers a missing one `NewResourceNotFound`. It applies no
+  regular file, and answers `NewResourceNotFound` for a read of a missing file
+  and a write under a missing directory without `MkdirAll`. It applies no
   policy: a client's own `ReadTextFile` or `WriteTextFile` wins over it and
   calls it.
 
