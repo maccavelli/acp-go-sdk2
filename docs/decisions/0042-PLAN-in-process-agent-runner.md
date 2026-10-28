@@ -744,3 +744,70 @@ with "invalid memory address or nil pointer dereference".
 * `tools/gates.py --all`, with both hosts set, on the final code: all 18 passed.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
   nothing found.
+
+### Phase 8, `ReplayAgent` and `ConnectReplay` (2026-10-28)
+
+The owner committed phase 7 as `1bb1eeb` and asked for phase 8 ("committed proceed").
+
+**What changed: `acptest/replay.go`, new.**
+* **`planReplay`** reads the records once:
+  * the Sent requests, by id, give each recorded client request its method and which of that method's requests it was;
+  * the Received records become the steps: a notification, a request of the agent's own, or a response tagged with the method
+    and position of the client request it answered;
+  * a Received record that is not a JSON object, or a response to an id no Sent record asks, is an error, and `Serve` returns it.
+* **`Serve`** starts one reader goroutine and plays the steps on its own:
+  * The reader queues each live client request by method. A request beyond the recorded ones of its method is recorded as drift
+    and answered `-32603`, "the replay has no recorded answer to" its method, written after the lock is released. The reader
+    marks the agent's own requests answered, and notes an answer that is neither a result nor an error. It ends when its input
+    does.
+  * The player sends a notification at its turn. It sends an agent request under a fresh id, `"replay-1"` on, and waits for its
+    answer. It sends a response once the client's request of the same method and position has arrived, under that request's
+    live id.
+  * `Serve` returns at the input's end: nil, or an error naming the extra requests, the bad answers, and the steps not played,
+    each by kind and method. When its context ends first it returns the context's cause, and its reader ends when its input does,
+    which the doc says.
+  * The two goroutines' writes share a mutex.
+* **`ConnectReplay`** runs `Serve` over two pipes, joins the client to it, and in the test's cleanup closes the connection and
+  fails the test with `Serve`'s error, or when the replay has not ended within `cleanupWait`, 10 s.
+* **`acptest/replay_test.go`, new:**
+  * `TestReplayAgentPlays`, a real session recorded with `ConnectRecorded`: initialize, two sessions, a prompt of three updates
+    and a permission request. It is replayed to a new client, which gets session-1 then session-2, the updates, and the request
+    under `"replay-1"`, and `Serve` returns nil;
+  * `TestReplayAgentLiveIDs`, a hand-written recording whose ids start at 100;
+  * `TestReplayAgentExtraRequest`, `TestReplayAgentStopsEarly` and `TestReplayAgentUnordered`, the last with every Sent record
+    after every Received one;
+  * `TestConnectReplay`.
+
+  Each passed on its first run under `-race`.
+
+**A design point settled in the code, not a deviation.** The reader at first answered an extra request from a goroutine of its own,
+to avoid writing under the replay's lock. It now decides under the lock, in `unrecorded`, and writes after releasing it, so the
+replay starts no goroutine but its reader.
+
+**Planted breaks**, each in its own copy through `tools/plants.py`, 4 of 4 as required, run again after the lint fix below:
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| the live id not substituted | `TestReplayAgentLiveIDs` | `Initialize = {"code":-32603,…"context deadline exceeded"}, want the recorded answer under the live id` |
+| the k-th matching taken as the first | `TestReplayAgentPlays` | `NewSession = {"code":-32603,…"context deadline exceeded"}` |
+| drift not reported | `TestReplayAgentExtraRequest` | `Serve = <nil>, want the extra request named` |
+| the agent's request sent under its recorded id | `TestReplayAgentPlays` | `Prompt = {"code":-32603,…"context deadline exceeded"}` |
+
+**Checks:**
+* **Repeated runs**, `-run '^(TestReplayAgent|TestConnectReplay)' -count=20`:
+
+  | Host | Result |
+  | :--- | :--- |
+  | macOS, `-race` | 120 passed, 0 failed |
+  | the Linux host | 120 passed, 0 failed |
+  | the Windows host | 120 passed, 0 failed |
+
+* `go test -race -count=3 ./acptest`, which runs its leak guard: ok.
+* **`make pre-add-check`:** its first run found one lint issue, `replay.go:330:3: mapsloop: Replace m[k]=v loop with maps.Copy
+  (modernize)`. `withID` now uses `maps.Clone`. The planted breaks were run again, 4 of 4. Then "250 file(s) clean", and
+  `scripts/go-precheck.sh` on the two new files, "2 file(s) clean".
+* **`make api`:** "against v1.25.0: 0 incompatible, 18 compatible". This phase's two are `acptest`'s `ConnectReplay` and
+  `ReplayAgent`, with `Serve` counted in the type.
+* `tools/gates.py --all`, with both hosts set, on the final code: all 18 passed.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
+  nothing found.
