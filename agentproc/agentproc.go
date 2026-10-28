@@ -75,19 +75,17 @@ type Command struct {
 // Process is a running agent and the connection to it. Its methods are safe
 // for concurrent use.
 type Process struct {
-	cmd   *exec.Cmd
+	agent agent // the child process, the one kind of agent so far
 	grace time.Duration
 	conn  *acp.ClientSideConnection
-	stdin *sharedClose   // the write end of the agent's standard input
-	tree  *proctree.Tree // the agent's process group or job, per platform
 
-	// done is closed once Cmd.Wait has returned, which the watcher alone
-	// calls (os/exec: "Wait must not be called concurrently").
+	// done is closed once the agent's wait has returned, which the watcher
+	// alone calls (os/exec: "Wait must not be called concurrently").
 	done chan struct{}
 
 	mu          sync.Mutex
-	exited      bool  // Cmd.Wait has returned: no signal is sent from then on
-	waitErr     error // what Cmd.Wait returned
+	exited      bool  // the agent's wait has returned: no signal is sent from then on
+	waitErr     error // what the agent's wait returned
 	ended       error // ErrTerminated or ErrKilled, when Close ended the agent so
 	exitedFirst bool  // the connection was still open when the agent's exit was seen
 	returned    bool  // Wait has returned once
@@ -185,9 +183,10 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 	if cmd.WaitDelay == 0 {
 		cmd.WaitDelay = grace / 2
 	}
-	p := &Process{cmd: cmd, grace: grace, done: make(chan struct{}), hurry: make(chan struct{})}
+	ch := &childAgent{cmd: cmd}
+	p := &Process{agent: ch, grace: grace, done: make(chan struct{}), hurry: make(chan struct{})}
 	started, proceed := make(chan error, 1), make(chan bool, 1)
-	p.goroutines.Go(func() { p.run(started, proceed) })
+	p.goroutines.Go(func() { p.run(ch, started, proceed) })
 	if err := <-started; err != nil {
 		p.goroutines.Wait()
 		return nil, errors.Join(fmt.Errorf("agentproc: starting the agent: %w", err), inR.Close(), inW.Close(),
@@ -202,9 +201,10 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 	if err != nil {
 		return nil, p.abandon(proceed, err, inW, outR)
 	}
-	p.stdin = &sharedClose{File: inW}
-	p.tree = t
-	in, out, inTap, outTap := streams(p.stdin, outR, c.InputTap, c.OutputTap, c.readHook)
+	// Set before proceed, which run receives before it watches.
+	ch.stdin = &sharedClose{File: inW}
+	ch.tree = t
+	in, out, inTap, outTap := streams(ch.stdin, outR, c.InputTap, c.OutputTap, c.readHook)
 	p.inTap, p.outTap = inTap, outTap
 	p.conn = acp.NewClientSideConnection(client, in, out, c.ConnectionOptions...)
 	proceed <- true
@@ -218,21 +218,21 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 // process ends (0029-MADR-unix-client-death-pdeathsig.md, D12 to D14). It
 // reports Cmd.Start's error on started; then, as proceed says, it watches
 // the agent, or kills it and reaps it.
-func (p *Process) run(started chan<- error, proceed <-chan bool) {
+func (p *Process) run(ch *childAgent, started chan<- error, proceed <-chan bool) {
 	runtime.LockOSThread()
 	// Unlocked only once Cmd.Wait has returned, so the thread is the agent's
 	// until it is reaped. An earlier unlock would leave it free while run
 	// waits for Start's word, which no test can catch
 	// (0029-PLAN-unix-client-death-pdeathsig.md, the deviation during step 2).
 	defer runtime.UnlockOSThread()
-	if err := p.cmd.Start(); err != nil {
+	if err := ch.cmd.Start(); err != nil {
 		started <- err
 		return
 	}
 	started <- nil
 	if !<-proceed {
-		_ = p.cmd.Process.Kill() //nolint:errcheck // the agent may have exited; Wait reaps it either way.
-		_ = p.cmd.Wait()         //nolint:errcheck // its exit is not why Start failed.
+		_ = ch.cmd.Process.Kill() //nolint:errcheck // the agent may have exited; Wait reaps it either way.
+		_ = ch.cmd.Wait()         //nolint:errcheck // its exit is not why Start failed.
 		return
 	}
 	p.watch()
@@ -266,15 +266,41 @@ func (f *sharedClose) Close() error {
 	return f.err
 }
 
-// watch owns Cmd.Wait, on run's locked thread. When it returns, watch kills what is left of the
-// agent's process group or job, since a launcher's descendants outlive it
+// agent is what a Process runs and stops, through the steps of Close and the
+// watcher: a child process, or a serve function run in this process
+// (0042-MADR-in-process-agent-runner.md, item 1, A2).
+type agent interface {
+	closeInput() error // Close's first step: end the agent's input
+	terminate() error  // its second: ask the agent to stop
+	kill() error       // its third: stop the agent
+	wait() error       // block until the agent has ended; the watcher alone calls it, once
+	end()              // end what is left of the agent once it has ended
+}
+
+// childAgent is a Command's agent: the child process, its input, and its
+// process group or job.
+type childAgent struct {
+	cmd   *exec.Cmd
+	stdin *sharedClose   // the write end of the agent's standard input
+	tree  *proctree.Tree // the agent's process group or job, per platform
+}
+
+func (c *childAgent) closeInput() error { return c.stdin.Close() }
+func (c *childAgent) terminate() error  { return c.tree.Terminate() }
+func (c *childAgent) kill() error       { return c.tree.Kill() }
+func (c *childAgent) wait() error       { return c.cmd.Wait() }
+func (c *childAgent) end()              { c.tree.End() }
+
+// watch owns the agent's wait, on run's locked thread for a child. When it
+// returns, watch ends what is left of the agent, the child's process group or
+// job, since a launcher's descendants outlive it
 // (0027-MADR-agent-process-helper.md, P8), records the result, and closes
 // done; then it gives the connection up to the grace to read to the end of
 // the agent's output, or until Kill, and closes it. It alone closes the
 // connection once the agent has run, whether or not Close was called
 // (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 1).
 func (p *Process) watch() {
-	err := p.cmd.Wait()
+	err := p.agent.wait()
 	p.mu.Lock()
 	// Seen before the tree's end, which can end what a process the agent
 	// started holds of its output.
@@ -283,7 +309,7 @@ func (p *Process) watch() {
 	default:
 		p.exitedFirst = true
 	}
-	p.tree.End()
+	p.agent.end()
 	p.exited, p.waitErr = true, err
 	p.mu.Unlock()
 	close(p.done)
@@ -453,12 +479,12 @@ func (p *Process) Kill() error {
 func (p *Process) stop() {
 	// The agent's input only: the connection keeps reading what the agent
 	// writes before it exits (0027-MADR-agent-process-helper.md, A6).
-	_ = p.stdin.Close() //nolint:errcheck // a failed close leaves the agent to the next steps.
+	_ = p.agent.closeInput() //nolint:errcheck // a failed close leaves the agent to the next steps.
 	switch {
 	case p.exitedWithin(p.grace):
-	case !p.hurried() && p.signal(p.tree.Terminate, ErrTerminated) && p.exitedWithin(p.grace):
+	case !p.hurried() && p.signal(p.agent.terminate, ErrTerminated) && p.exitedWithin(p.grace):
 	default:
-		p.signal(p.tree.Kill, ErrKilled)
+		p.signal(p.agent.kill, ErrKilled)
 		<-p.done // WaitDelay bounds it once the agent has exited
 	}
 	// The watcher closes the connection: once it has read to the end of the

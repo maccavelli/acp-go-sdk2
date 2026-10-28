@@ -3,7 +3,6 @@ package agentproc
 import (
 	"bytes"
 	"io"
-	"os"
 	"sync"
 )
 
@@ -127,9 +126,10 @@ func (t *tap) run() {
 // each read offered to t. Its Close closes the pipe, so that the
 // connection's Close still ends a read (0027-MADR-agent-process-helper.md;
 // 0030-MADR-record-initialize-on-arrival.md, the amendment of 2026-10-21, T2
-// and T3).
+// and T3). The pipe is any that closes, so that an agent of either kind has
+// its taps (0042-MADR-in-process-agent-runner.md, item 1, A3).
 type tapReader struct {
-	f    *os.File
+	f    io.ReadCloser
 	t    *tap
 	hook func() // Command.readHook
 }
@@ -158,7 +158,7 @@ func (r *tapReader) Close() error {
 // tapWriter is the agent's input as the connection writes it, with a copy of
 // each write offered to t.
 type tapWriter struct {
-	w *sharedClose
+	w io.WriteCloser
 	t *tap
 }
 
@@ -173,7 +173,7 @@ func (w *tapWriter) Write(p []byte) (int, error) {
 }
 
 // Close ends the tap's stream and closes the agent's input, once with
-// Close's own close of it (sharedClose).
+// Close's own close of it (a child's sharedClose).
 func (w *tapWriter) Close() error {
 	w.t.end()
 	return w.w.Close()
@@ -182,7 +182,7 @@ func (w *tapWriter) Close() error {
 // streams returns what the connection writes to and reads from: the agent's
 // input and output as they are when no tap is set, or wrapped, each with its
 // tap, which it starts; the output's with readHook.
-func streams(stdin *sharedClose, outR *os.File, inputTap, outputTap io.Writer, readHook func()) (in io.Writer, out io.Reader, inTap, outTap *tap) {
+func streams(stdin io.WriteCloser, outR io.ReadCloser, inputTap, outputTap io.Writer, readHook func()) (in io.Writer, out io.Reader, inTap, outTap *tap) {
 	in, out = stdin, outR
 	if outputTap != nil {
 		outTap = newTap(outputTap)

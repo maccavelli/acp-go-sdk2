@@ -419,3 +419,48 @@ three consequences.
 
 **Checks**, each exit 0: `make check-records`, `make markdownlint`, `make disclosure-check`; `tools/idscan.py --paths` over the
 changed files, nothing found.
+
+### Phase 3, `agentproc`'s seam (2026-10-28)
+
+The owner committed phase 2 as `4d84311`, which also accepted the MADR's amendment, and asked for phase 3 ("committed, proceed").
+
+**What changed**, in two files, with no exported change:
+* **`agentproc/agentproc.go`:**
+  * `Process`'s `cmd`, `stdin` and `tree` fields became one, `agent`, of an unexported interface, `agent`, of the five operations
+    `stop` and `watch` use:
+    * `closeInput`, Close's first step;
+    * `terminate`, its second;
+    * `kill`, its third;
+    * `wait`, which the watcher alone calls;
+    * `end`, which ends what is left once the agent has ended.
+  * `childAgent` holds the child's `cmd`, its `sharedClose` input and its `proctree.Tree`, and implements the five by
+    `sharedClose.Close`, `Tree.Terminate`, `Tree.Kill`, `Cmd.Wait` and `Tree.End`.
+  * `run`, still on its locked thread, takes the `*childAgent` it starts.
+  * `Start` sets the child's input and tree before it sends `proceed`, which `run` receives before it watches, as it set
+    `Process`'s before.
+  * The comments on `done`, `exited` and `waitErr` say "the agent's wait" for `Cmd.Wait`.
+  * The type was first named `child`, which `child_test.go` already declares for its child modes. The build failed with "child
+    redeclared in this block", so it is `childAgent`.
+* **`agentproc/tap.go`:** `tapReader` reads an `io.ReadCloser` and `tapWriter` writes an `io.WriteCloser`, not an `*os.File` and a
+  `*sharedClose`, and `streams` takes the same two. A child passes the same values as before, so `TestTapsUnset`'s call is
+  unchanged.
+
+**Checks:**
+* `go test -race -count=1 ./agentproc/...`: ok, 11.4 s.
+* **The 100-run suites**, built from the working tree:
+
+  | Host | Tests | Result |
+  | :--- | :--- | :--- |
+  | macOS, `-race` | `TestDetachedTapIsPrefix`, `TestCloseReadsTheAgentsLastOutput`, `TestKillClosesAtOnce`, `-count=100 -timeout=60m` | 300 passed, 0 failed, 681.9 s |
+  | the Linux host | the same three, through `tools/remote.py pkg --host linux` | 300 passed, 0 failed |
+  | the Windows host | `TestDetachedTapIsPrefix`, `TestCloseReadsTheAgentsLastOutput` | 200 passed, 0 failed |
+
+* `make api`: "against v1.25.0: 0 incompatible, 0 compatible".
+* `make pre-add-check`: "240 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)".
+* `tools/gates.py --all`, with both hosts set: all 18 passed, `platforms`, `windows` and `linux` among them.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
+  nothing found.
+
+As the step says, a refactor adds no check, so there is no planted break; the existing tests above are its check.
+`docs/architecture.md` still describes a child's steps truly, through `Cmd.Wait` and `sharedClose`. The seam is written into it
+in phase 9, as planned.
