@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-28
 associated-madr: "0042-MADR-in-process-agent-runner.md"
 ---
@@ -341,4 +341,14 @@ As 0041's phase 17 ran:
 
 ## Execution record
 
-Nothing has been executed. The PLAN awaits the owner's approval.
+### Phase 1, the records (2026-10-28)
+
+The owner committed the pair as `2a3ea34` and approved execution ("committed. proceed.").
+
+* This PLAN is `in-progress`, and its row in `docs/README.md` says so. The MADR was already `accepted` in `2a3ea34`.
+* [0041-MADR-close-the-gaps-the-consumers-wait-on.md](0041-MADR-close-the-gaps-the-consumers-wait-on.md):
+  * it gains "Amended by 0042-MADR-in-process-agent-runner.md, 2026-10-28", which says that 0042 decides the in-process runner, that
+    the exported process-tree primitive stays declined, and that 0042's item 4 widens `ValidateGolden`'s pairing;
+  * its "Not chosen" entry is annotated, not rewritten, with a pointer to that amendment.
+* Checks, each exit 0: `make check-records`, `make markdownlint`, `make disclosure-check`; `tools/idscan.py --paths` over the
+  changed files, nothing found.

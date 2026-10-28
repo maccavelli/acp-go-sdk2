@@ -117,12 +117,12 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0040 | MADR | [Check elicitation forms, answers and URLs with standard-library helpers on the generated types](decisions/0040-MADR-check-elicitation-forms-answers-and-urls.md); questions 1 to 5 answered 2026-10-26, question 2 as an opt-in connection check | accepted |
 | 0040 | PLAN | [Implement 0040: elicitation form fields, schema and answer checks, text input, URL checks, and an opt-in connection check](decisions/0040-PLAN-check-elicitation-forms-answers-and-urls.md) | complete |
 | 0040 | REPORT | [Release notes for v1.24.0, against v1.23.0](reports/0040-REPORT-release-notes-v1-24-0.md) | observed |
-| 0041 | MADR | [Close the gaps the two consumers wait on: client hosts, end causes, a fuller acptest, a tool-call timeline, and agentproc's lost output](decisions/0041-MADR-close-the-gaps-the-consumers-wait-on.md) | accepted |
+| 0041 | MADR | [Close the gaps the two consumers wait on: client hosts, end causes, a fuller acptest, a tool-call timeline, and agentproc's lost output](decisions/0041-MADR-close-the-gaps-the-consumers-wait-on.md); amended by 0042 2026-10-28 | accepted |
 | 0041 | PLAN | [Implement 0041: client hosts, end causes, a fuller acptest, a tool-call timeline, and agentproc's lost output](decisions/0041-PLAN-close-the-gaps-the-consumers-wait-on.md) | complete |
 | 0041 | REPORT | [Consumer adoption of v1.21.0 to v1.25.0: each site and the API that replaces it](reports/0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md) | observed |
 | 0041 | REPORT | [Release notes for v1.25.0, against v1.24.0](reports/0041-REPORT-release-notes-v1-25-0.md) | observed |
 | 0042 | MADR | [Run an agent in the client's process with agentproc's lifecycle; serve agents gracefully, keep their stderr, and record their transcripts](decisions/0042-MADR-in-process-agent-runner.md); item 1's questions answered 2026-10-28; items 2 to 4 added and answered the same day | accepted |
-| 0042 | PLAN | [Implement 0042: an in-process agent runner, graceful serving, the agent's stderr tail, and transcripts](decisions/0042-PLAN-in-process-agent-runner.md) | proposed |
+| 0042 | PLAN | [Implement 0042: an in-process agent runner, graceful serving, the agent's stderr tail, and transcripts](decisions/0042-PLAN-in-process-agent-runner.md) | in-progress |
 
 ## I want to…
 

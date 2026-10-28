@@ -421,6 +421,17 @@ it. Both are deprecated under v1, so their uses carry a `staticcheck` exemption 
 `ValidateGolden` has a table of its own, keyed by direction, of the 40 methods and `$/cancel_request`, since package `acp`
 exports none. `TestMethodTables` requires it to hold exactly the method constants of `constants_gen.go`.
 
+#### Amended by 0042-MADR-in-process-agent-runner.md, 2026-10-28
+
+[0042-MADR-in-process-agent-runner.md](0042-MADR-in-process-agent-runner.md), `accepted` on 2026-10-28, decides two things this
+record left as they were:
+
+* **The in-process agent runner** in "Not chosen" is decided there, as `agentproc.InProcess`, whose `Start` returns the same
+  `*agentproc.Process` a child gets. The exported process-tree primitive in the same entry stays declined.
+* **`ValidateGolden`'s pairing,** item 8 here, is widened by 0042's item 4: a response is paired with its request wherever the
+  request is recorded, so a transcript built from two taps, which have no order between them, validates. It refuses nothing it
+  accepted before.
+
 ### Consequences
 
 * Good, because the defect that loses an agent's last output before it exits is fixed, with the failing test as its regression
@@ -490,7 +501,8 @@ A later PLAN shows each of the following, every new check first seen to fail on 
 
 ### Not chosen, and why
 
-* **An in-process agent runner** (`<cli-b>`'s `acpclient.Start`) and **an exported process-tree primitive** (its
+* (The in-process runner was decided on 2026-10-28 by 0042; see "Amended by 0042-MADR-in-process-agent-runner.md, 2026-10-28".)
+  **An in-process agent runner** (`<cli-b>`'s `acpclient.Start`) and **an exported process-tree primitive** (its
   `internal/proctree`): 0035 F, "`ServeAgent` and an in-process `agentproc`", not recommended; the tree primitive is not ACP's.
 * **Session-state reducers** beyond tool calls, **routing updates by session**, **chunk coalescing**: 0035 F, each consumer's
   policy.
