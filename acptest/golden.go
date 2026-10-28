@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -29,9 +31,16 @@ import (
 // only as JSON-RPC, as its params are the extension's own. The canonical form
 // is encoding/json v1's, as Recorder keeps it
 // (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 8).
+//
+// A response is matched to its request wherever the request is among the
+// records, before it or after it: the records of two taps, as
+// agentproc.Transcript writes them, have no order between the two ways, so a
+// response can be recorded before its request. Requests that share a way and
+// an id are matched to their responses in order
+// (0042-MADR-in-process-agent-runner.md, item 4).
 func ValidateGolden(tb testing.TB, records []Record) {
 	tb.Helper()
-	pending := map[Direction]map[string]string{Sent: {}, Received: {}}
+	pending := requestsOf(records)
 	for i, r := range records {
 		if err := validateRecord(r, pending); err != nil {
 			tb.Errorf("acptest: record %d, %s: %v: %s", i, r.Direction, err, r.Frame)
@@ -39,9 +48,102 @@ func ValidateGolden(tb testing.TB, records []Record) {
 	}
 }
 
-// validateRecord checks one record, and keeps a request it holds in pending,
-// by its direction and id, until its response.
-func validateRecord(r Record, pending map[Direction]map[string]string) error {
+// requestsOf is the first of ValidateGolden's two passes: the method of each
+// request among records, by the way it went and its id, in the records'
+// order. Only a request validateRecord can pass is kept: an extension
+// method's, or a method the way's table has as a request. Any other is
+// refused there, and a response to it is a response to no recorded request.
+func requestsOf(records []Record) map[Direction]map[string][]string {
+	pending := map[Direction]map[string][]string{Sent: {}, Received: {}}
+	for _, r := range records {
+		if _, ok := pending[r.Direction]; !ok {
+			continue
+		}
+		var m struct {
+			ID     json.RawMessage `json:"id"`
+			Method *string         `json:"method"`
+		}
+		if json.Unmarshal(r.Frame, &m) != nil || m.Method == nil || *m.Method == "" || m.ID == nil {
+			continue
+		}
+		if types, known := methodTables[r.Direction][*m.Method]; !strings.HasPrefix(*m.Method, "_") && (!known || types.result == nil) {
+			continue
+		}
+		id := string(bytes.TrimSpace(m.ID))
+		pending[r.Direction][id] = append(pending[r.Direction][id], *m.Method)
+	}
+	return pending
+}
+
+// updateEnv names the environment variable that has Golden write its file:
+// a variable, not a flag, since a test binary's own -update would collide
+// with a flag this package defined (0042-MADR-in-process-agent-runner.md,
+// item 4, W6).
+const updateEnv = "ACPTEST_UPDATE"
+
+// Golden compares records with the golden file at path, in the form
+// WriteRecords writes, each frame in the canonical form Recorder keeps, so
+// that the order of a frame's keys never changes the file. Equal, it passes.
+// With ACPTEST_UPDATE=1 set it writes path instead. Otherwise it writes the
+// records to tb.ArtifactDir() and fails tb, naming the first record that
+// differs, or the reason path cannot be read. A golden file's CRLF line ends
+// read as LF (0042-MADR-in-process-agent-runner.md, item 4).
+func Golden(tb testing.TB, path string, records []Record) {
+	tb.Helper()
+	canon := make([]Record, len(records))
+	for i, r := range records {
+		canon[i] = Record{Direction: r.Direction, Frame: canonical(r.Frame)}
+	}
+	var got bytes.Buffer
+	if err := WriteRecords(&got, canon); err != nil {
+		tb.Errorf("acptest: writing the records: %v", err)
+		return
+	}
+	if os.Getenv(updateEnv) == "1" {
+		if err := os.WriteFile(path, got.Bytes(), 0o644); err != nil { //nolint:gosec // G306: a golden file is meant to be read.
+			tb.Errorf("acptest: updating the golden %s: %v", path, err)
+		}
+		return
+	}
+	want, err := os.ReadFile(path) //nolint:gosec // G304: the test names its golden file.
+	want = bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
+	if err == nil && bytes.Equal(want, got.Bytes()) {
+		return
+	}
+	out := filepath.Join(tb.ArtifactDir(), filepath.Base(path))
+	if werr := os.WriteFile(out, got.Bytes(), 0o600); werr != nil {
+		tb.Errorf("acptest: writing the records to %s: %v", out, werr)
+	}
+	if err != nil {
+		tb.Errorf("acptest: golden %s: %v; the records are in %s, and %s=1 writes the golden", path, err, out, updateEnv)
+		return
+	}
+	i, g, w := firstDiff(got.Bytes(), want)
+	tb.Errorf("acptest: record %d differs from the golden %s\n got: %s\nwant: %s\nthe records are in %s, and %s=1 rewrites the golden",
+		i, path, g, w, out, updateEnv)
+}
+
+// firstDiff returns the index of the first line that differs between got and
+// want, and the two lines, "(none)" for a line one of them lacks.
+func firstDiff(got, want []byte) (int, string, string) {
+	g := strings.Split(strings.TrimSuffix(string(got), "\n"), "\n")
+	w := strings.Split(strings.TrimSuffix(string(want), "\n"), "\n")
+	line := func(lines []string, i int) string {
+		if i < len(lines) {
+			return lines[i]
+		}
+		return "(none)"
+	}
+	i := 0
+	for i < len(g) && i < len(w) && g[i] == w[i] {
+		i++
+	}
+	return i, line(g, i), line(w, i)
+}
+
+// validateRecord checks one record. A response takes the first request of
+// pending it answers, by the other way and its id.
+func validateRecord(r Record, pending map[Direction]map[string][]string) error {
 	table, ok := methodTables[r.Direction]
 	if !ok {
 		return fmt.Errorf("direction %q is neither %q nor %q", r.Direction, Sent, Received)
@@ -62,9 +164,6 @@ func validateRecord(r Record, pending map[Direction]map[string]string) error {
 			return errors.New("the method is not a non-empty string")
 		}
 		if strings.HasPrefix(method, "_") {
-			if hasID {
-				pending[r.Direction][id] = method
-			}
 			return nil
 		}
 		types, known := table[method]
@@ -75,9 +174,6 @@ func validateRecord(r Record, pending map[Direction]map[string]string) error {
 			return fmt.Errorf("%s is a notification, and was sent as a request", method)
 		case !hasID && types.result != nil:
 			return fmt.Errorf("%s is a request, and was sent without an id", method)
-		}
-		if hasID {
-			pending[r.Direction][id] = method
 		}
 		params, ok := m["params"]
 		if !ok {
@@ -95,11 +191,12 @@ func validateRecord(r Record, pending map[Direction]map[string]string) error {
 	if r.Direction == Sent {
 		asked = Received
 	}
-	method, ok := pending[asked][id]
-	if !ok {
+	queue := pending[asked][id]
+	if len(queue) == 0 {
 		return fmt.Errorf("a response to no recorded request: id %s", id)
 	}
-	delete(pending[asked], id)
+	method := queue[0]
+	pending[asked][id] = queue[1:]
 	if raw, ok := m["error"]; ok {
 		var e struct {
 			Code    *int    `json:"code"`

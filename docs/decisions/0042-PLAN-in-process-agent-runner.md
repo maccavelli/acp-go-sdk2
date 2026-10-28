@@ -674,3 +674,73 @@ that the check is seen to fail on it, the old trimming is a fifth planted break 
 * `tools/gates.py --all`, with both hosts set: all 18 passed.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
   nothing found.
+
+### Phase 7, transcripts, records and `Golden` (2026-10-28)
+
+The owner committed phase 6 as `ad56dc2` and asked for phase 7 ("committed proceed").
+
+**What changed:**
+* **`agentproc/transcript.go`, new:** `NewTranscript(w)` and `Transcript`:
+  * `Input` and `Output` are two `lineTap`s, the type `LineTap` returns, recording "sent" and "received";
+  * each frame is written under a mutex as `{"direction":…,"frame":…}`, compact through `json.Marshal`, and a line that is not
+    JSON as a JSON string;
+  * `Close` drops either stream's unended line and returns the first write error, and does not close `w`.
+* **`acptest/records.go`, new:**
+  * `ReadRecords`, which skips blank lines and names the line of a bad record or an unknown direction;
+  * `WriteRecords`, which writes a frame that is not JSON as a JSON string;
+  * `Decode[T]`, the params of the records that went one way with one method, absent params read as `null`.
+* **`acptest/golden.go`:**
+  * `ValidateGolden` pairs in two passes. `requestsOf` first collects every request it could pass, by way and id, queued, so
+    that a reused id pairs in order. Then each record is validated, and a response takes its request's method from that queue.
+    The registrations inside `validateRecord` are gone.
+  * `Golden(tb, path, records)` canonicalizes each frame with `canonical`, the form `Recorder` keeps, so that key order never
+    changes a file. Equal, it passes. Under `ACPTEST_UPDATE=1` it writes `path`. Otherwise it writes the records to
+    `tb.ArtifactDir()` and fails, naming the first differing record by `firstDiff`, or why `path` cannot be read. CRLF reads as
+    LF.
+* **Tests:**
+  * `acptest/records_test.go`, new: `TestRecordsRoundTrip`, `TestReadRecordsRefuses`, `TestDecode`,
+    `TestValidateGoldenResponseFirst`, `TestGolden`;
+  * `agentproc/transcript_test.go`, new: `TestTranscriptLines`, `TestTranscriptWriteError`, and `TestTranscriptOfSession`. The
+    last runs a real session: an `InProcess` agent served by `acp.ServeAgent`, which sends three updates and asks a permission,
+    with a `Transcript` as both taps, read back, validated and decoded.
+
+**Deviation, 2026-10-28, a hole found by reading, and its break.** The first pass at first kept every frame with a method and an id.
+A notification sent as a request, or an unknown method, was then kept too. A response to it called that method's result check,
+which a notification has none of, and panicked. `validateRecord` had refused such a request before registering it. `requestsOf`
+now keeps only an extension method's request or one the way's table has with a result. `TestValidateGoldenResponseFirst` checks
+it: such a pair is two errors, not a panic. A sixth planted break, beyond the step's five, removes the filter, and the test panics
+with "invalid memory address or nil pointer dereference".
+
+**Planted breaks**, each in its own copy through `tools/plants.py`, 6 of 6 as required, run again after the lint fix below:
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| the direction swapped in `Transcript` | `TestTranscriptLines` | `record 0 = received {"jsonrpc":"2.0","id":1,"method":"_x/a"}, want sent …` |
+| a line split across writes recorded as two | `TestTranscriptLines` | `the transcript has 3 records, want 2` |
+| `ValidateGolden` back to one pass | `TestValidateGoldenResponseFirst` | `ValidateGolden refused ["acptest: record 0, received: a response to no recorded request: id 1: …"], want a response recorded first, and a reused id, to pass` |
+| `Golden` updating without the variable | `TestGolden` | `Golden = [], want record 1 named` |
+| `Decode` skipping the direction | `TestDecode` | `Decode = [{… SessionId:a …} …], want the received updates of a and b` |
+| `requestsOf` keeping a request `validateRecord` refuses | `TestValidateGoldenResponseFirst` | `panic: runtime error: invalid memory address or nil pointer dereference` |
+
+**Checks:**
+* **Repeated runs**, `-count=20`, built from the working tree. The `acptest` pattern also matches the existing
+  `TestValidateGoldenRefuses`:
+
+  | Host | `acptest`'s six | `agentproc`'s three |
+  | :--- | :--- | :--- |
+  | macOS, `-race` | 120 passed, 0 failed | 60 passed, 0 failed |
+  | the Linux host | 120 passed, 0 failed | 60 passed, 0 failed |
+  | the Windows host | 120 passed, 0 failed | 60 passed, 0 failed |
+
+* **`make pre-add-check`:** its first run found two lint issues, `transcript.go:34:9` and `:35:10`, "Error return value is not
+  checked (errcheck)": the type assertions of `LineTap`'s result to `io.WriteCloser`. `NewTranscript` now builds the two
+  `*lineTap`s directly. The repeated runs above predate that change, which changes no behaviour; the gates' runs below cover the
+  final code. Two planted breaks edited the changed lines, and all six were run again. Then "246 file(s) clean", and
+  `scripts/go-precheck.sh` on the four new files, "4 file(s) clean".
+* **The Transcript's doc** said it was safe for concurrent use. Each of `Input` and `Output` is for one stream, written from one
+  goroutine, as a tap is, and the doc now says so.
+* **`make api`:** "against v1.25.0: 0 incompatible, 16 compatible". This phase's six are `agentproc`'s `NewTranscript` and
+  `Transcript`, its methods counted in the type, and `acptest`'s `Decode`, `Golden`, `ReadRecords` and `WriteRecords`.
+* `tools/gates.py --all`, with both hosts set, on the final code: all 18 passed.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
+  nothing found.
