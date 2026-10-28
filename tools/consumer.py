@@ -16,8 +16,12 @@ PresentNotice's fallback to arrive
 (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, phase 8). It also checks
 an elicitation answer through Fields, ParseValue and Check, and its test's pair
 sets WithElicitationCheck
-(0040-PLAN-check-elicitation-forms-answers-and-urls.md, phase 8), so VERSION is
-v1.24.0 or later. Its go.mod must keep the `go` line and gain no toolchain line.
+(0040-PLAN-check-elicitation-forms-answers-and-urls.md, phase 8). It waits for
+the agent with WaitContext and prints EndedCleanly of its connection's end,
+prints what a ToolCallTimeline gives, and writes and reads a file and runs a
+terminal through clienthost
+(0041-PLAN-close-the-gaps-the-consumers-wait-on.md, phase 17), so VERSION is
+v1.25.0 or later. Its go.mod must keep the `go` line and gain no toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
 Usage: consumer.py VERSION
@@ -43,10 +47,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"time"
 
 	acp "MODULE"
 	"MODULE/agentproc"
+	"MODULE/clienthost"
 )
 
 type client struct{ acp.ClientRefusals }
@@ -87,6 +95,12 @@ func (agent) SetSessionMode(context.Context, acp.SetSessionModeRequest) (acp.Set
 
 var _ acp.Agent = agent{}
 
+type host struct {
+	clienthost.Terminals
+	clienthost.Files
+	clienthost.Refusals
+}
+
 func main() {
 	cmd := exec.Command("sh", "-c", "cat >/dev/null")
 	p, err := (&agentproc.Command{Cmd: cmd, OutputTap: io.Discard}).Start(client{})
@@ -95,6 +109,9 @@ func main() {
 		return
 	}
 	fmt.Println("Close:", p.Close())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	fmt.Println("wait", p.WaitContext(ctx), acp.EndedCleanly(p.Conn().Err()))
 	out, in := p.DroppedTapBytes()
 	fmt.Println("dropped", out, in)
 	fmt.Println("protocol version", acp.ProtocolVersionNumber)
@@ -127,6 +144,39 @@ func main() {
 	age, err := field.Schema.ParseValue("200")
 	fmt.Println("elicitation", field.Name, field.Required, field.Schema.Kind(), err)
 	fmt.Println("check", form.Check(map[string]acp.ElicitationContentValue{field.Name: age}))
+	var tools acp.ToolCallTimeline
+	tools.Apply(acp.StartToolCall("t", "Read", acp.WithStartStatus(acp.ToolCallStatusPending)))
+	call, ok := tools.Apply(acp.UpdateToolCall("t", acp.WithUpdateStatus(acp.ToolCallStatusCompleted)))
+	fmt.Println("tool", call.Title, call.Status, ok, len(tools.Open()))
+	dir, err := os.MkdirTemp("", "consumer")
+	if err != nil {
+		fmt.Println("temp:", err)
+		return
+	}
+	defer os.RemoveAll(dir)
+	h := &host{}
+	h.MkdirAll = true
+	path := filepath.Join(dir, "a", "f.txt")
+	_, err = h.WriteTextFile(ctx, acp.WriteTextFileRequest{SessionId: "s", Path: path, Content: "one\\ntwo\\n"})
+	read, rerr := h.ReadTextFile(ctx, acp.ReadTextFileRequest{SessionId: "s", Path: path, Line: new(uint32(2)), Limit: new(uint32(1))})
+	fmt.Printf("files %v %v %q\\n", err, rerr, read.Content)
+	_, err = h.ReadTextFile(ctx, acp.ReadTextFileRequest{SessionId: "s", Path: filepath.Join(dir, "missing")})
+	fmt.Println("missing", acp.IsResourceNotFound(err))
+	term, err := h.CreateTerminal(ctx, acp.CreateTerminalRequest{SessionId: "s", Command: "sh", Args: []string{"-c", "printf hi; exit 3"}})
+	if err != nil {
+		fmt.Println("terminal:", err)
+		return
+	}
+	st, err := h.WaitForTerminalExit(ctx, acp.WaitForTerminalExitRequest{SessionId: "s", TerminalId: term.TerminalId})
+	if err != nil || st.ExitCode == nil {
+		fmt.Println("exit:", err, st.Signal)
+		return
+	}
+	shown, err := h.TerminalOutput(ctx, acp.TerminalOutputRequest{SessionId: "s", TerminalId: term.TerminalId})
+	fmt.Println("terminal", *st.ExitCode, shown.Output, shown.Truncated, err)
+	_, err = h.ReleaseTerminal(ctx, acp.ReleaseTerminalRequest{SessionId: "s", TerminalId: term.TerminalId})
+	_, gone := h.TerminalOutput(ctx, acp.TerminalOutputRequest{SessionId: "s", TerminalId: term.TerminalId})
+	fmt.Println("release", err, acp.IsResourceNotFound(gone), h.Close())
 }
 '''
 TEST = '''package main
@@ -158,12 +208,15 @@ func TestPresentNotice(t *testing.T) {
 	}
 }
 '''
-WANT_RUN = ("Close: <nil>\ndropped 0 0\nprotocol version 1\nkind notice\n"
+WANT_RUN = ("Close: <nil>\nwait <nil> true\ndropped 0 0\nprotocol version 1\nkind notice\n"
             'refused {"code":-32601,"message":"Method not found","data":{"method":"fs/read_text_file"}}\n'
             "agent refuses list true\npick once true\nblock text\n"
             "compaction c in_progress 1 true 1\nmux hi <nil> [_x/echo] 1\n"
             "elicitation age true integer <nil>\n"
-            'check CreateElicitationAccept: content["age"]: maximum: is greater than 150')
+            'check CreateElicitationAccept: content["age"]: maximum: is greater than 150\n'
+            "tool Read completed true 0\n"
+            'files <nil> <nil> "two\\n"\nmissing true\n'
+            "terminal 3 hi false <nil>\nrelease <nil> true <nil>")
 
 
 def go_mod_ok(text: str, go: str, mod: str, version: str) -> bool:

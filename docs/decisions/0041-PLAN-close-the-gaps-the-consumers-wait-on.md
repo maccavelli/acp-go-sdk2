@@ -1175,3 +1175,45 @@ Every new check was first seen to fail on a planted break, each in its own copy 
 times.
 
 **The PLAN stays `in-progress`:** phase 17, the release, runs only on the owner's ask.
+
+### Phase 17, the release `v1.25.0` (2026-10-27)
+
+The owner pushed phase 16's commit, `43a76cc`, and asked for phase 17 ("proceed"). The release notes cite CI on the commit whose API
+the release tags. CI on `43a76cc`: run `40609495195`, six jobs, and the Docs workflow's run `40609495196`, each "completed success".
+
+* **The release commit** changes records and `tools/` only:
+  * [0041-REPORT-release-notes-v1-25-0.md](../reports/0041-REPORT-release-notes-v1-25-0.md), new, with its row in `docs/README.md`.
+    It takes this record's number, as 0040's notes took theirs. Its lists were checked against the tree:
+    * the sixteen commits and their files;
+    * the 31 Go files changed, and the unchanged areas;
+    * the 35 additions `make api` lists, 13 in the root, 3 in `agentproc`, 14 in `acptest` and 5 in `clienthost`.
+  * `tools/consumer.py`:
+    * the program waits for its agent with `Process.WaitContext` under a 10-second bound, and prints `EndedCleanly` of its
+      connection's `Err`;
+    * it applies a `tool_call` and its completing update to a `ToolCallTimeline`;
+    * through a client of `clienthost.Terminals`, `Files` and `Refusals`, it writes a file under a missing directory with
+      `MkdirAll`, reads its line 2, and requires `IsResourceNotFound` of a missing file's read;
+    * it runs `sh -c "printf hi; exit 3"` as a terminal, reads its exit code and output, releases it, and requires
+      `IsResourceNotFound` of the released id;
+    * `VERSION` is `v1.25.0` or later, and `tools/README.md`'s row says so.
+* **The consumer before the tag.** A scratch script ran the program and test against the tree, through a `replace`, at
+  `go1.26.10`:
+  * the output equals `WANT_RUN`, its new lines `wait <nil> true`, `tool Read completed true 0`, `files <nil> <nil> "two\n"`,
+    `missing true`, `terminal 3 hi false <nil>` and `release <nil> true <nil>`;
+  * `go vet`, the test and the Windows build pass.
+* **Planted breaks**, each in its own copy of the tree, through the same script:
+
+  | Break | Broken |
+  | :--- | :--- |
+  | `EndedCleanly` returns false | `wait <nil> false`; the output differs from `WANT_RUN` |
+  | `ToolCallTimeline.Open` lists a call that is not open | `tool Read completed true 1`; the output differs from `WANT_RUN` |
+  | the test's expected kind changed | `consumer_test.go:26: a client without session.notices got "agent_message_chunk", want the agent message fallback` |
+
+* **Checks**, each exit 0: `make check-tools`; `make api` on `43a76cc`'s Go tree, "0 incompatible, 35 compatible";
+  `make markdownlint`; `make check-records`; `make disclosure-check`; `tools/idscan.py --paths` over the changed files.
+
+Next, after the owner commits and pushes this:
+* CI on the release commit, and `make api` on it;
+* the annotated tag `v1.25.0` and its push, on the owner's ask in that turn;
+* the GitHub release from `tools/release_body.py`;
+* `tools/publication.py`, then `tools/consumer.py v1.25.0`.

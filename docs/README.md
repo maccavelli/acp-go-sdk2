@@ -120,6 +120,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0041 | MADR | [Close the gaps the two consumers wait on: client hosts, end causes, a fuller acptest, a tool-call timeline, and agentproc's lost output](decisions/0041-MADR-close-the-gaps-the-consumers-wait-on.md) | accepted |
 | 0041 | PLAN | [Implement 0041: client hosts, end causes, a fuller acptest, a tool-call timeline, and agentproc's lost output](decisions/0041-PLAN-close-the-gaps-the-consumers-wait-on.md) | in-progress |
 | 0041 | REPORT | [Consumer adoption of v1.21.0 to v1.25.0: each site and the API that replaces it](reports/0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md) | observed |
+| 0041 | REPORT | [Release notes for v1.25.0, against v1.24.0](reports/0041-REPORT-release-notes-v1-25-0.md) | observed |
 
 ## I want to…
 
