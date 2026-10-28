@@ -369,14 +369,11 @@ func main() {
 		in = stdout
 	}
 
-	ag := newExampleAgent()
-	asc := acp.NewAgentSideConnection(ag, out, in)
-	asc.SetLogger(slog.Default())
-
-	// Block until the peer disconnects or the agent is interrupted.
-	select {
-	case <-asc.Done():
-	case <-ctx.Done():
+	// Serve until the peer ends the agent's input, or the interrupt ends ctx:
+	// then a running prompt is answered cancelled before the connection
+	// closes (0042-MADR-in-process-agent-runner.md, item 2).
+	if err := acp.ServeAgent(ctx, newExampleAgent(), in, out, acp.WithLogger(slog.Default())); err != nil && ctx.Err() == nil {
+		fmt.Fprintf(os.Stderr, "serve: %v\n", err)
 	}
 
 	// A client this agent started has disconnected, or is killed by the

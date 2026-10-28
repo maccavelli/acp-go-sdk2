@@ -187,6 +187,13 @@ var ErrPeerDisconnected = errors.New("acp: peer disconnected")
 // (0019-MADR-remediate-debugging-pass-findings.md, decision 4).
 var ErrConnectionClosed = errors.New("acp: connection closed")
 
+// ErrShutdown is the cause every handler's context ends with under
+// Connection.Shutdown, so that a handler can tell its connection's shutdown
+// from a client's cancel, and the cause Err wraps, beside ErrConnectionClosed,
+// once Shutdown has closed the connection
+// (0042-MADR-in-process-agent-runner.md, item 2).
+var ErrShutdown = errors.New("acp: connection shut down")
+
 // ErrNotificationQueueOverflow is why a connection closed itself under
 // OverflowCloseConnection: an inbound notification found its queue full.
 // Err and the errors of later calls wrap it, beside ErrConnectionClosed, read

@@ -379,6 +379,21 @@ type Connection struct {
 	inboundCtx    context.Context
 	inboundCancel context.CancelCauseFunc
 
+	// handlersCtx is the parent of every request handler's context. It is a
+	// child of ctx, so Close ends it; Shutdown ends it alone, with
+	// ErrShutdown, so that the handlers stop while their answers can still be
+	// written (0042-MADR-in-process-agent-runner.md, item 2).
+	handlersCtx    context.Context
+	handlersCancel context.CancelCauseFunc
+
+	// shuttingDown is set, under mu, once Shutdown has begun: a request
+	// received from then on is refused. idle is closed, once (idleOnce), when
+	// shuttingDown is set and no request received before it is in flight, as
+	// inflightReceipts counts them.
+	shuttingDown bool
+	idle         chan struct{}
+	idleOnce     sync.Once
+
 	// inputDone is closed when the input ends cleanly, at end of file; the
 	// requests received before it, which inboundRequests counts, are then
 	// answered before the connection ends (0019-PLAN-issue-fixes.md, B23).
@@ -693,6 +708,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 
 	ctx, cancel := context.WithCancelCause(context.Background())
 	inboundCtx, inboundCancel := context.WithCancelCause(context.Background())
+	handlersCtx, handlersCancel := context.WithCancelCause(ctx)
 	c := &Connection{
 		w:                   peerInput,
 		r:                   peerOutput,
@@ -706,6 +722,9 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		cancel:              cancel,
 		inboundCtx:          inboundCtx,
 		inboundCancel:       inboundCancel,
+		handlersCtx:         handlersCtx,
+		handlersCancel:      handlersCancel,
+		idle:                make(chan struct{}),
 		inputDone:           make(chan struct{}),
 		notificationQueue:   make(chan queuedNotification, cfg.maxQueuedNotifications),
 		maxMessageSize:      cfg.maxMessageSize,
@@ -897,6 +916,46 @@ func (c *Connection) waitDone() <-chan struct{} {
 // it was called before (0019-PLAN-api-decisions.md, B17).
 func (c *Connection) Close() error {
 	return c.closeWith(ErrConnectionClosed)
+}
+
+// Shutdown ends the connection gracefully, as http.Server.Shutdown ends a
+// server. It ends every handler's context with ErrShutdown, and keeps
+// writing until every request received before it has been answered; then it
+// closes the connection, as Close does, and Err wraps ErrShutdown beside
+// ErrConnectionClosed. A request received after it is answered at once with
+// an internal error, -32603, saying the connection is shutting down, and the
+// connection keeps reading, so the answers to this side's own requests still
+// arrive. A handler that honours its context answers as it would at a cancel:
+// an agent's prompt, cancelled, as the protocol asks after session/cancel.
+// When ctx ends first, Shutdown closes the connection at once and returns
+// context.Cause(ctx), joined with Close's error; it returns Close's error
+// otherwise, also when the connection ended some other way first. A side
+// connection's is its Connection's: side.Connection().Shutdown(ctx), since a
+// method of a side connection that takes a context is a protocol method
+// (0042-MADR-in-process-agent-runner.md, item 2).
+func (c *Connection) Shutdown(ctx context.Context) error {
+	c.mu.Lock()
+	c.shuttingDown = true
+	c.signalIdle()
+	c.mu.Unlock()
+	c.handlersCancel(ErrShutdown)
+	c.inboundCancel(ErrShutdown)
+	var err error
+	select {
+	case <-c.idle:
+	case <-c.ctx.Done():
+	case <-ctx.Done():
+		err = context.Cause(ctx)
+	}
+	return errors.Join(err, c.closeWith(ErrShutdown))
+}
+
+// signalIdle closes idle once Shutdown has begun and no request received
+// before it is in flight. The caller holds mu.
+func (c *Connection) signalIdle() {
+	if c.shuttingDown && len(c.inflightReceipts) == 0 {
+		c.idleOnce.Do(func() { close(c.idle) })
+	}
 }
 
 // closeWith is Close, ending the context with cause. It marks the connection
@@ -1451,7 +1510,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 
 	*received++
 	if msg.ID != nil {
-		base := context.WithValue(context.WithValue(c.ctx, receiptKey{}, *received), messageKey{}, messageMark{})
+		base := context.WithValue(context.WithValue(c.handlersCtx, receiptKey{}, *received), messageKey{}, messageMark{})
 		reqCtx, cancel := context.WithCancelCause(base)
 		// A null id names no single request, so $/cancel_request cannot
 		// reach it, and it is not registered. A request that reuses the id
@@ -1461,6 +1520,18 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		own := &inflightRequest{cancel: cancel}
 		receipt := *received
 		c.mu.Lock()
+		// Checked under the lock Shutdown sets shuttingDown under, so a
+		// request is either refused or counted among those it waits for
+		// (0042-MADR-in-process-agent-runner.md, item 2).
+		if c.shuttingDown {
+			c.mu.Unlock()
+			cancel(nil)
+			if c.requestSlots != nil {
+				<-c.requestSlots
+			}
+			c.answer(id, NewInternalError(map[string]any{jsonErrorField: "the connection is shutting down"}))
+			return true
+		}
 		c.inflightReceipts[receipt] = struct{}{}
 		c.mu.Unlock()
 		if string(*msg.ID) != jsonNull {
@@ -1493,6 +1564,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 					delete(c.inflight, idKey)
 				}
 				delete(c.inflightReceipts, receipt)
+				c.signalIdle()
 				c.mu.Unlock()
 				own.cancel(nil)
 			}()

@@ -539,3 +539,77 @@ time.
 * **`tools/gates.py --all`**, with both hosts set: all 18 passed, `newfiles`, `platforms`, `windows` and `linux` among them.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
   nothing found.
+
+### Phase 5, `Shutdown` and `ServeAgent` (2026-10-28)
+
+The owner committed phase 4 as `a5ff41f` and asked for phase 5 ("committed proceed").
+
+**What the code showed first.** A request handler's context derived from the connection's own context (`connection.go`, in
+`receiveLine`). Ending it to stop the handlers would also end every write, which is why `Close` loses the answers (phase 2). And
+`inboundRequests`, the wait group `drainInput` waits on, takes its `Add` outside any lock. A `Wait` on it while requests still
+arrive would race that `Add`, so `Shutdown` does not use it.
+
+**What changed:**
+* **`errors.go`:** `ErrShutdown`, beside `ErrConnectionClosed`.
+* **`connection.go`:**
+  * `handlersCtx` and `handlersCancel`: a context between the connection's and each request's. Close still ends it, as its
+    parent's child; `Shutdown` ends it alone, with `ErrShutdown`.
+  * `shuttingDown`, `idle` and `idleOnce`:
+    * `receiveLine` checks `shuttingDown` under `mu`, where it already registers each request's receipt in `inflightReceipts`,
+      a null id's included;
+    * a request received after it is refused there. Its context is released, its concurrency slot given back, and it is
+      answered `-32603` with the data "the connection is shutting down";
+    * the cleanup that removes a receipt after its answer is written calls `signalIdle`, which closes `idle` once shutting down
+      and no receipt is left. So no `go` statement and no wait group are added.
+  * `Shutdown(ctx)`:
+    * it sets the flag, ends `handlersCtx` and the notification handlers' context with `ErrShutdown`, and waits for `idle`, the
+      connection's end, or `ctx`;
+    * then it closes through `closeWith(ErrShutdown)`, so `Err` wraps `ErrShutdown` beside `ErrConnectionClosed` and
+      `EndedCleanly` is true;
+    * it returns `context.Cause(ctx)` when `ctx` ended first, joined with the close's error.
+* **`serve.go`, new:** `ServeAgent(ctx, agent, in, out, opts...)`, waiting on the caller's goroutine.
+  * At the input's end it waits for the connection's goroutines through `WaitContext` within `notificationQueueDrainTimeout`,
+    5 s. It returns nil when `EndedCleanly`, the error otherwise, or an error naming the handlers still running.
+  * At `ctx`'s end it returns `context.Cause(ctx)` joined with `Shutdown`'s error, under the same bound.
+* **`cmd/generate/engine_test.go`:** `TestRuntimeFilesCoverHandWritten` names `serve.go`, which uses ACP types, beside
+  `helpers.go`.
+* **`example/agent/main.go`:** its `NewAgentSideConnection`, `SetLogger` and `select` became one `ServeAgent` call, with the
+  logger given at construction through `WithLogger`.
+* **Tests:**
+  * `shutdown_test.go`, new: the step's five, with a `shutdownAgent` and a `shutdownClient` embedding the refusals;
+  * `agentproc/inprocess_test.go`: `TestInProcessServeAgentStep2`.
+
+**Deviation, 2026-10-28, how phase 2's reproduction is rerun.** The step says phase 2's reproduction, "run against this phase,
+returns `cancelled`". That probe's serve calls `Close`, which this phase leaves as it was by design, so run unchanged it still loses
+the answer. Its scenario, served through `ServeAgent`, is `TestServeAgentContextEnd`, which returns `cancelled`. And the planted
+break that makes `Shutdown` close at once fails with phase 2's own message, `input ended before a response`. The step's intent is
+met, and is recorded here rather than asked about.
+
+**Planted breaks**, each in its own copy through `tools/plants.py`, 5 of 5 as required:
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| `Shutdown` closing at once, as `Close` does | `TestShutdownAnswersRunningPrompt` | `Prompt = "", {"code":-32603,"message":"Internal error","data":{"error":"input ended before a response"}}; want cancelled, nil` |
+| the late request left unanswered | `TestShutdownRefusesLateRequest` | `the late request = {"code":-32603,…"input ended before a response"}, want -32603 saying the connection is shutting down` |
+| the handlers' context ended with no cause | `TestShutdownAnswersRunningPrompt` | `the handler's cause = context canceled, want ErrShutdown` |
+| `ServeAgent` ignoring its context | `TestServeAgentContextEnd` | `the client's Prompt: nothing within 5 s` |
+| a `go` statement added to wait for the requests | `TestGoStatementsCounted` | `connection.go:943:2: a go statement; start it with the connection's goroutines.Go` |
+
+**Checks:**
+* `go test -race` of the root, the examples, `agentproc` and `acptest`: ok. In `cmd/generate`, `TestRuntimeFilesCoverHandWritten`:
+  ok. `TestGoStatementsCounted`, `TestSideConnectionMethodsAreProtocolMethods` and `TestExportedDeclarationsDocumented`: ok.
+* **Repeated runs**, `-count=20`, built from the working tree. The root's pattern `^(TestShutdown|TestServeAgent)` also matches
+  the existing `TestShutdownDrainsNotifications_WithBarrier`:
+
+  | Host | The root's six | `TestInProcessServeAgentStep2` |
+  | :--- | :--- | :--- |
+  | macOS, `-race` | 120 passed, 0 failed | 20 passed, 0 failed |
+  | the Linux host | 120 passed, 0 failed | 20 passed, 0 failed |
+  | the Windows host | 120 passed, 0 failed | 20 passed, 0 failed |
+
+* `make pre-add-check`: "242 file(s) clean". `scripts/go-precheck.sh serve.go shutdown_test.go`: "2 file(s) clean".
+* `make api`: "against v1.25.0: 0 incompatible, 5 compatible": `(*Connection).Shutdown`, `ErrShutdown` and `ServeAgent`, with
+  phase 4's `agentproc` `ErrAbandoned` and `InProcess`.
+* `tools/gates.py --all`, with both hosts set: all 18 passed.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
+  nothing found.

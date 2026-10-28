@@ -294,6 +294,70 @@ func TestInProcessTaps(t *testing.T) {
 	}
 }
 
+// promptAgent is serveAgent whose Prompt says it has started, then waits for
+// its context's end and answers cancelled, as a handler that honours it does.
+type promptAgent struct {
+	serveAgent
+	started chan struct{}
+}
+
+func (a promptAgent) Prompt(ctx context.Context, _ acp.PromptRequest) (acp.PromptResponse, error) {
+	close(a.started)
+	<-ctx.Done()
+	return acp.PromptResponse{StopReason: acp.StopReasonCancelled}, nil
+}
+
+// TestInProcessServeAgentStep2 requires an InProcess agent served by
+// acp.ServeAgent, stopped by Close's second step during a prompt, to answer
+// the prompt cancelled: the step cancels Serve's context, and ServeAgent
+// shuts its connection down gracefully
+// (0042-MADR-in-process-agent-runner.md, item 2, S4).
+func TestInProcessServeAgentStep2(t *testing.T) {
+	t.Parallel()
+	agent := promptAgent{started: make(chan struct{})}
+	p := startInProcess(t, &InProcess{Serve: func(ctx context.Context, in io.Reader, out io.Writer) error {
+		return acp.ServeAgent(ctx, agent, in, out, acp.WithLogger(slog.New(slog.DiscardHandler)))
+	}})
+	if _, err := p.Conn().Initialize(t.Context(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
+		t.Fatalf("Initialize = %v", err)
+	}
+	if _, err := p.Conn().NewSession(t.Context(), acp.NewSessionRequest{Cwd: rootDir(t), McpServers: []acp.McpServer{}}); err != nil {
+		t.Fatalf("NewSession = %v", err)
+	}
+	type result struct {
+		r   acp.PromptResponse
+		err error
+	}
+	res := make(chan result, 1)
+	go func() {
+		r, err := p.Conn().Prompt(context.Background(), acp.PromptRequest{SessionId: "s", Prompt: []acp.ContentBlock{acp.TextBlock("hi")}})
+		res <- result{r, err}
+	}()
+	select {
+	case <-agent.started:
+	case <-time.After(slack):
+		t.Fatal("the prompt's handler did not start")
+	}
+	_, err := within(t, 3*testGrace+slack, "Close", p.Close)
+	if !errors.Is(err, ErrTerminated) || errors.Is(err, ErrKilled) {
+		t.Errorf("Close = %v, want ErrTerminated: ServeAgent returns in the second step", err)
+	}
+	select {
+	case got := <-res:
+		if got.err != nil || got.r.StopReason != acp.StopReasonCancelled {
+			t.Errorf("Prompt = %q, %v; want cancelled, nil", got.r.StopReason, got.err)
+		}
+	case <-time.After(slack):
+		t.Fatal("the client's Prompt did not return")
+	}
+}
+
+// rootDir is an absolute directory on the host, for a session's cwd.
+func rootDir(t *testing.T) string {
+	t.Helper()
+	return t.TempDir()
+}
+
 // TestInProcessStartRefuses requires Start to refuse, starting nothing, a nil
 // Serve or client.
 func TestInProcessStartRefuses(t *testing.T) {
