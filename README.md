@@ -645,6 +645,23 @@ returns nil. When the peer ends the connection, the same holds, but for the
 transport, which is the application's to close. The default overflow policy,
 `acp.OverflowCloseConnection`, closes the connection as `Close` does.
 
+`Connection.Shutdown(ctx)` is the graceful close, as `http.Server.Shutdown` is
+a server's. Every handler's context ends with `acp.ErrShutdown`, and the
+connection keeps writing until each request it received before is answered:
+an agent's prompt whose handler honours its context is answered `cancelled`,
+as after `session/cancel`. Then it closes, and `Err()` wraps `acp.ErrShutdown`
+beside `acp.ErrConnectionClosed`. A request received meanwhile is answered
+`-32603`, and the connection keeps reading, so the answers to this side's own
+requests still arrive. When ctx ends first, it closes at once and returns
+ctx's cause. A side connection's is its `Connection()`'s.
+
+`acp.ServeAgent(ctx, agent, in, out, opts...)` is an agent's main. It serves
+until the input ends, waits up to 5 seconds for the handlers, and returns nil
+at a clean end; when ctx ends, as at an interrupt, it shuts the connection
+down within the same 5 seconds and returns ctx's cause (`ExampleServeAgent`;
+[0042-MADR-in-process-agent-runner.md](docs/decisions/0042-MADR-in-process-agent-runner.md),
+item 2).
+
 The SDK closes no connection on a timer: an idle connection is normal in ACP,
 and the protocol has no ping to tell an idle peer from a dead one. The
 application decides how long a connection lives. A request's deadline is its
@@ -724,6 +741,29 @@ exited while its connection was still open, rather than after the connection
 ended; when the agent's own exit closes its output, the two can come together.
 `Process.WaitContext(ctx)` is `Wait` bounded by a context: it returns
 `context.Cause(ctx)` when ctx ends first, and leaves the agent running.
+
+`agentproc.InProcess{Serve: …}.Start(client)` runs an agent written in Go in
+this process. `Serve(ctx, in, out)` is what the agent's own main runs, such as
+`acp.ServeAgent`, here on a goroutine joined to the client by two `io.Pipe`s,
+and the `*Process` is the one a child gets. When `Serve` returns, its output
+and input are closed, as at a child's exit. `Close`'s steps are mapped onto a
+goroutine: the first closes `Serve`'s input; the second cancels its context
+with `agentproc.ErrTerminated`; the third cancels it with `agentproc.ErrKilled`
+and closes its pipes. A `Serve` that still runs a grace later is abandoned, and
+`Wait`'s error holds `agentproc.ErrAbandoned`, since Go cannot stop a
+goroutine. A panic in `Serve` is not recovered: an agent that must not take
+its client down with it runs as a child (`ExampleInProcess`; 0042, item 1).
+
+`Command.StderrTail` and `Command.StderrTailLines` keep the end of the agent's
+standard error, at most so many bytes and lines, from a line's beginning, while
+`Cmd.Stderr` still receives every byte. `Process.StderrTail()` returns it once
+`Wait` has returned, and `Command.JoinStderrTail` joins a
+`*agentproc.StderrError` holding it to a `Wait` error that is not nil (0042,
+item 3).
+
+`agentproc.NewTranscript(w)`, its `Input()` and `Output()` set as the two taps,
+records both ways of the wire, one `{"direction","frame"}` object a line, the
+form `acptest.ReadRecords` reads (`ExampleTranscript`; 0042, item 4).
 
 When the input ends cleanly, at end of file, as when a script closes a stdio
 agent's standard input after writing its requests, the requests already received
@@ -1084,9 +1124,20 @@ also provides:
   `Wait(ctx, n)` waits for `n` frames; `ConnectRecorded` records the client
   side of a pair into one;
 - `ValidateGolden(t, rec.Records())`, which decodes each recorded frame into
-  its method's type, a response by its request's, and fails the test on one
-  the schema's `Validate` refuses, an unknown method, or a response to no
-  recorded request;
+  its method's type, a response by its request's wherever that request is
+  among the records, and fails the test on one the schema's `Validate`
+  refuses, an unknown method, or a response to no recorded request;
+- `ReadRecords`, `WriteRecords` and `Decode[T]`, which read, write and decode
+  records one JSON object a line, the form `agentproc.Transcript` writes; and
+  `Golden(t, path, records)`, which compares records with a golden file in
+  canonical form, rewrites it under `ACPTEST_UPDATE=1`, and otherwise writes
+  the records to the test's artifact directory and names the first that
+  differs;
+- `ReplayAgent`, which plays a recorded session's agent side to a client under
+  test, each recorded answer under the live request's id and the agent's own
+  requests under fresh ids, and reports where the client departed from the
+  recording; `ConnectReplay` joins one to a client, and fails the test on such
+  a departure (`ExampleReplayAgent`);
 - `Abs`, which makes a fixture path such as `/work/a.txt` absolute on the
   host, as the SDK requires of a path it receives.
 

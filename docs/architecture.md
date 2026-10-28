@@ -32,7 +32,26 @@ up a connection pair for a test
   each response matched by id to a request that went the other way and decoded
   into its result type, and `Validate` run on each. Its table, by direction,
   holds the method constants of `constants_gen.go`, as `TestMethodTables`
-  requires.
+  requires. It pairs in two passes: `requestsOf` first queues every request it
+  can pass by way and id, so that a response recorded before its request, as
+  two taps can record it, still pairs
+  ([0042-MADR-in-process-agent-runner.md](decisions/0042-MADR-in-process-agent-runner.md),
+  item 4).
+- `records.go` reads and writes records one JSON object a line, the form
+  `agentproc.Transcript` writes, and `Decode[T]` decodes the params of one
+  way's method. `Golden` (`golden.go`) compares records with a golden file in
+  the canonical form `Recorder` keeps, rewrites it under `ACPTEST_UPDATE=1`, an
+  environment variable since a flag would collide with a test binary's own
+  `-update`, and otherwise writes the records to `tb.ArtifactDir()`.
+- `ReplayAgent` (`replay.go`) is a serve function. `planReplay` reads the
+  Received records as steps, each response tagged, through the Sent requests'
+  ids, with the method and position of the client request it answered. Its
+  reader queues the client's live requests by method, answers one beyond the
+  recorded `-32603`, and marks the agent's own requests answered; the player
+  sends each step, a response under the matching live id and an agent's
+  request under a fresh `"replay-N"` id. `Serve` returns the drift at the
+  input's end. `ConnectReplay` runs it over two pipes and fails the test on
+  drift.
 - `ScriptAgent` embeds `AgentRefusals` and plays scripted turns, one that fails
   with `Err`, reports `Usage` or, with `WaitCancel`, waits for `session/cancel`.
 - `MemoryClient` embeds `ClientRefusals` and serves files and permission
@@ -48,7 +67,8 @@ and `make api` gates it with the root, `agentproc` and `clienthost`.
 - Hand-written: `connection.go` (JSON-RPC over a reader and a writer,
   `ChainRewrites`, `EndedCleanly`, which tells a clean end from another, and
   `WaitContext`, `Wait` bounded by a context, through the one goroutine
-  `TestGoStatementsCounted` lets `Wait` not count; 0041, items 6 and 7),
+  `TestGoStatementsCounted` lets `Wait` not count; 0041, items 6 and 7; and
+  `Shutdown`, the graceful close; 0042, item 2),
   `errors.go` (the error types and constructors, and `IsMethodNotFound`,
   `IsAuthRequired`, `IsCancelled`, `IsResourceNotFound` and `Reason`),
   `extensions.go` (`_`-prefixed methods, and `ExtensionMux`, `TraceMeta` and
@@ -81,7 +101,9 @@ and `make api` gates it with the root, `agentproc` and `clienthost`.
   `AgentRefusals`, which answer method-not-found for the `Client` and `Agent`
   methods a side may leave unadvertised), `tooltimeline.go` (`ToolCallTimeline`
   and `ToolCallEntity`, which apply a session's tool-call updates by the
-  schema's rules, live or replayed, for a client; 0041, item 9), and `doc.go`.
+  schema's rules, live or replayed, for a client; 0041, item 9), `serve.go`
+  (`ServeAgent`, an agent's main over a reader and a writer; 0042, item 2), and
+  `doc.go`.
   None of them holds protocol state, but for the compactions and tool calls
   the two timelines' callers feed; none holds a connection's. A helper that takes a side connection is a package-level
   function: every method of a side connection that takes a context is a
@@ -428,6 +450,20 @@ implement `io.Closer`. A `*RequestError` the connection makes for a local
 failure keeps that failure as its cause, which `Unwrap` returns; one a peer
 answered has none.
 
+A request handler's context is a child of `handlersCtx`, itself a child of the
+connection's context, so `Close` ends it. `Shutdown` ends `handlersCtx` alone,
+with `ErrShutdown`, and the notification handlers' context too, while the
+connection's own context, and so its writes, stays live. It first sets
+`shuttingDown` under `mu`, where `receiveLine` registers each request's receipt
+in `inflightReceipts`: a request received after it is refused there and
+answered `-32603`. The cleanup that removes a receipt once its answer is
+written calls `signalIdle`, which closes `idle` when none is left; `Shutdown`
+waits for `idle`, the connection's end or its context, and closes through
+`closeWith(ErrShutdown)`. It starts no goroutine and uses no wait group: a
+`Wait` on `inboundRequests` would race its `Add`, which takes no lock
+([0042-MADR-in-process-agent-runner.md](decisions/0042-MADR-in-process-agent-runner.md),
+item 2).
+
 At a clean end of input (`io.EOF`), `receive` drains before it shuts down: it
 closes `inputDone`, so a request waiting in `waitForResponse` returns at once
 unless its answer was read first, and `sendRequestSent` and
@@ -627,7 +663,12 @@ item 1, keeps package `acp` on its `v1` promise while the unstable schema moves.
 ## The agent process helper
 
 `agentproc` (0027-MADR-agent-process-helper.md) wraps an `*exec.Cmd` the
-caller configures. `Command.Start` refuses a `Cmd` already started or whose
+caller configures, or, through `InProcess`, a serve function run in this
+process (0042-MADR-in-process-agent-runner.md, item 1). `Process` holds either
+behind the unexported `agent` interface of the five operations its steps and
+its watcher use: `closeInput`, `terminate`, `kill`, `wait` and `end`.
+`childAgent` holds a child's `Cmd`, `sharedClose` input and tree, and
+`inProcessAgent` a serve function's goroutine and pipe ends. `Command.Start` refuses a `Cmd` already started or whose
 `Stdin` or `Stdout` is set, then gives the agent two `os.Pipe`s it owns: with
 `StdoutPipe`, `Cmd.Wait` would close the connection's reader once the agent
 exits, before its last output is read. A zero `WaitDelay` becomes half the
@@ -699,7 +740,27 @@ goroutine starts. `Command`'s unexported `readHook`, which only the package's
 tests set, runs before each read of the output tap's reader, to hold the
 connection behind the agent. `LineTap` (`linetap.go`) is a tap writer that
 calls a function with each line, a copy without its newline, and holds a line
-not yet ended (0041, item 5).
+not yet ended (0041, item 5). The tap reader and writer take any
+`io.ReadCloser` and `io.WriteCloser`, so an in-process agent's pipes have taps
+too.
+
+`InProcess` (`inprocess.go`) makes two `io.Pipe`s and `Serve`'s context, from
+`context.Background()`, and runs `Serve` on a goroutine outside `goroutines`,
+so that `Wait` never waits for an abandoned one; the watcher and the monitor
+run as for a child. `inProcessAgent`'s `closeInput` closes the client's end of
+the agent's input; `terminate` cancels the context with `ErrTerminated`; `kill`
+cancels it with `ErrKilled`, closes the agent's two pipe ends, and starts the
+abandonment's grace; `wait` returns `Serve`'s error, or `ErrAbandoned` once
+that grace passes; `end` closes the agent's output, so the client reads its
+end as at a child's exit, and its input, so that a write of the client's fails
+rather than waits.
+
+`stderr.go`'s `tailWriter`, which `Start` sets as `Cmd.Stderr` when
+`Command.StderrTail` or `StderrTailLines` is set, keeps the end of the agent's
+standard error under its two caps and forwards every byte to the caller's
+writer; `Wait` joins a `StderrError` holding it under `JoinStderrTail` (0042,
+item 3). `transcript.go`'s `Transcript` writes two `lineTap`s' frames, one
+record a line, under a mutex (0042, item 4).
 
 Checks that guard it:
 
@@ -712,7 +773,9 @@ Checks that guard it:
   `TestTapErrorIgnored`, `TestTapsUnset`, `TestBlockedTapDetached`, `TestDetachedTapIsPrefix`,
   `TestCloseReadsTheAgentsLastOutput` and `TestTapDrainBoundedByGrace`, `LineTap`'s `TestLineTapFrames`,
   `TestLineTapCopies`, `TestLineTapHoldsUnended`, `TestLineTapNilFn` and `TestLineTapAsOutputTap`, and
-  `TestExitedFirst` and `TestProcessWaitContext`; on Unix `TestStartRefusesSharedGroup` and
+  `TestExitedFirst` and `TestProcessWaitContext`, `InProcess`'s ten in `inprocess_test.go` with
+  `TestInProcessServeAgentStep2`, the stderr tail's six in `stderr_test.go`, and the transcript's three
+  in `transcript_test.go`; on Unix `TestStartRefusesSharedGroup` and
   `TestEscapedDescendantDoesNotHoldWait`, `TestTapKeepsCloseEnding`, `TestKillClosesAtOnce` and `TestClientDeathEndsAgentAtInputEnd`; on Linux and FreeBSD
   `TestStartFromExitingLockedGoroutine`, `TestDefaultPdeathsig`, `TestCallersPdeathsigKept` and
   `TestClientDeathEndsAgent`; on Windows `TestClientDeathEndsTree`, `TestDescendantInJobDespiteSlowAttach`,
@@ -804,11 +867,11 @@ AGENTS.md                 agent instructions
 Makefile                  version, test, lint, pre-add-check, fuzz, mutation, docs gates, check-tools
 go.mod                    the SDK module
 *.go                      package acp: hand-written and *_gen.go files
-agentproc/                package agentproc: an agent as a child process, started and stopped
+agentproc/                package agentproc: an agent as a child process or in this process, started and stopped
 clienthost/               package clienthost: terminals and files a client serves for the agent
 internal/proctree/        package proctree: a process group or job, for agentproc and clienthost
 unstable/                 package unstable: doc.go, and unstable_gen.go when the unstable schema adds API
-acptest/                  package acptest: a connection pair, a frame recorder and golden check, a scripted agent, a memory client
+acptest/                  package acptest: a connection pair, a frame recorder, records, goldens and their check, a replay agent, a scripted agent, a memory client
 schema_gen_test.go        generated list of types, unions, and methods for tests
 cmd/generate/             the generator, its own module
   internal/load/          schema loading

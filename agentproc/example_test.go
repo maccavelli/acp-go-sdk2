@@ -1,12 +1,17 @@
 package agentproc_test
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 
 	acp "github.com/maccavelli/acp-go-sdk2"
+	"github.com/maccavelli/acp-go-sdk2/acptest"
 	"github.com/maccavelli/acp-go-sdk2/agentproc"
 )
 
@@ -83,4 +88,65 @@ func ExampleCommand_outputTap() {
 	if _, err := p.Conn().Initialize(ctx, acp.InitializeRequest{}); err != nil {
 		log.Printf("initialize: %v", err)
 	}
+}
+
+// An agent written in Go, run in this process: Serve is what the agent's own
+// main runs over its standard input and output, here over pipes, and the
+// Process is the one a child gets. Close's first step ends Serve's input, and
+// acp.ServeAgent returns at its end. A panic in Serve is not recovered; an
+// agent that must not take its client down with it runs as a child.
+func ExampleInProcess() {
+	agent := &acptest.ScriptAgent{} // the agent's acp.Agent
+	p, err := (&agentproc.InProcess{Serve: func(ctx context.Context, in io.Reader, out io.Writer) error {
+		return acp.ServeAgent(ctx, agent, in, out)
+	}}).Start(client{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp, err := p.Conn().Initialize(context.Background(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("protocol version", resp.ProtocolVersion)
+	fmt.Println("close:", p.Close())
+	// Output:
+	// protocol version 1
+	// close: <nil>
+}
+
+// Both ways of the wire recorded, one record a frame, as a test reads them
+// back with acptest.ReadRecords, validates them with acptest.ValidateGolden,
+// and decodes them with acptest.Decode. Close drains the taps, so the
+// transcript is whole once it returns.
+func ExampleTranscript() {
+	var record bytes.Buffer
+	tr := agentproc.NewTranscript(&record)
+	agent := &acptest.ScriptAgent{}
+	p, err := (&agentproc.InProcess{
+		Serve: func(ctx context.Context, in io.Reader, out io.Writer) error {
+			return acp.ServeAgent(ctx, agent, in, out)
+		},
+		InputTap:  tr.Input(),
+		OutputTap: tr.Output(),
+	}).Start(client{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if _, err := p.Conn().Initialize(context.Background(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
+		log.Fatal(err)
+	}
+	if err := errors.Join(p.Close(), tr.Close()); err != nil {
+		log.Fatal(err)
+	}
+	records, err := acptest.ReadRecords(&record)
+	if err != nil {
+		log.Fatal(err)
+	}
+	sent, err := acptest.Decode[acp.InitializeRequest](records, acptest.Sent, acp.AgentMethodInitialize)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(len(records), "records; the client asked for protocol version", sent[0].ProtocolVersion)
+	// Output:
+	// 2 records; the client asked for protocol version 1
 }

@@ -2,6 +2,7 @@ package acptest_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -66,4 +67,35 @@ func ExampleRecorder() {
 	// closed: true
 	// {"id":1,"jsonrpc":"2.0","method":"initialize","params":{"clientCapabilities":{"auth":{},"fs":{}},"protocolVersion":1}}
 	// {"id":1,"jsonrpc":"2.0","result":{"agentCapabilities":{"auth":{},"mcpCapabilities":{},"promptCapabilities":{},"sessionCapabilities":{}},"authMethods":[],"protocolVersion":1}}
+}
+
+// A ReplayAgent plays a recorded session's agent side to a client: here a
+// recorded initialize, answered under the client's own id, 7 in the
+// recording. Serve returns nil when the client repeated the recording. In a
+// test, ConnectReplay does the wiring, and fails the test on any departure.
+func ExampleReplayAgent() {
+	records := []acptest.Record{
+		{Direction: acptest.Sent, Frame: json.RawMessage(`{"jsonrpc":"2.0","id":7,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}`)},
+		{Direction: acptest.Received, Frame: json.RawMessage(`{"jsonrpc":"2.0","id":7,"result":{"protocolVersion":1,"agentInfo":{"name":"recorded-agent","version":"1.0"}}}`)},
+	}
+	agentReads, clientWrites := io.Pipe()
+	clientReads, agentWrites := io.Pipe()
+	served := make(chan error, 1)
+	go func() {
+		err := (&acptest.ReplayAgent{Records: records}).Serve(context.Background(), agentReads, agentWrites)
+		_ = agentWrites.Close()
+		served <- err
+	}()
+	client := acp.NewClientSideConnection(&acptest.MemoryClient{}, clientWrites, clientReads)
+	resp, err := client.Initialize(context.Background(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println("the agent:", resp.AgentInfo.Name)
+	_ = client.Close()
+	fmt.Println("replay:", <-served)
+	// Output:
+	// the agent: recorded-agent
+	// replay: <nil>
 }

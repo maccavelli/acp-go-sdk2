@@ -811,3 +811,55 @@ replay starts no goroutine but its reader.
 * `tools/gates.py --all`, with both hosts set, on the final code: all 18 passed.
 * `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files:
   nothing found.
+
+### Phase 9, the docs (2026-10-28)
+
+The owner committed phase 8 as `5828c46` and asked for phase 9 ("committed proceed").
+
+**What changed:**
+* **`README.md`:**
+  * "Closing and limits" gains two paragraphs, one for `Connection.Shutdown`, beside `Close`, and one for `acp.ServeAgent`;
+  * after `WaitContext`, three more: `InProcess` with its mapped steps, `ErrAbandoned` and the panic rule; the stderr tail; and
+    `Transcript`;
+  * "Testing with acptest" widens the `ValidateGolden` item to its two-pass pairing, and gains two items: records, `Decode` and
+    `Golden`; and `ReplayAgent` with `ConnectReplay`.
+
+  Each paragraph names its example and cites the MADR by item. No new code block is pinned to an example, since only the two
+  `docs_test.go` pins today, and each needs a test of its own.
+* **`docs/architecture.md`:**
+  * `acptest`'s list: `ValidateGolden`'s two passes, `records.go` and `Golden` with the reason for its environment variable, and
+    `replay.go`;
+  * the root's hand-written files: `Shutdown` in `connection.go`, and `serve.go`;
+  * the connection: a paragraph on `handlersCtx`, `shuttingDown`, `signalIdle` and `idle`, and why `Shutdown` does not wait on
+    `inboundRequests`;
+  * the agent process helper: the `agent` interface and its two implementations; the taps over any closer; `InProcess`; the
+    stderr tail; and `Transcript`;
+  * the test list and the tree.
+* **The package doc** of `agentproc` already names the in-process agent, from phase 4.
+* **Examples, each run by `go test`:**
+  * `ExampleInProcess` and `ExampleTranscript` in `agentproc/example_test.go`;
+  * `ExampleReplayAgent` in `acptest/example_test.go`;
+  * `ExampleServeAgent`, new in `example_serve_test.go`. It has no output, since it serves the process's own standard input, so
+    it is compiled, not run.
+
+**A slip, put right before anything was checked.** The first write of `ExampleReplayAgent` went through a shell command whose
+backquoted JSON the shell ran as commands. Two record lines were left garbled in `acptest/example_test.go`, which `go vet` refused at
+`example_test.go:78:52: illegal character U+005C`. That file's only uncommitted change was the example, so its two lines were
+written again with the Edit tool, and the file was not restored from git.
+
+**Planted breaks**, one for each runnable example, each in its own copy through `tools/plants.py`, 3 of 3 as required:
+
+| Break | Check | Failing line |
+| :--- | :--- | :--- |
+| `ServeAgent` failing a clean end | `ExampleInProcess` | `--- FAIL: ExampleInProcess`, its `close:` line an error |
+| the `Transcript`'s directions swapped | `ExampleTranscript` | `index out of range`, no Sent `initialize` to decode |
+| a replay reporting drift always | `ExampleReplayAgent` | `--- FAIL: ExampleReplayAgent`, its last line `replay: drift` |
+
+**Checks:**
+* `make markdownlint` and `make check-records`: exit 0.
+* `go test` of the root, `agentproc` and `acptest`, `TestReadmeQuickstartIsTheExample` and `TestReadmeAgentprocIsTheExample`
+  among them: ok.
+* `make pre-add-check`: "252 file(s) clean". `scripts/go-precheck.sh example_serve_test.go`: "1 file(s) clean".
+* `make api`: "against v1.25.0: 0 incompatible, 18 compatible", unchanged by this phase.
+* `tools/gates.py --all`, with both hosts set: all 18 passed.
+* `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the staged files: nothing found.
