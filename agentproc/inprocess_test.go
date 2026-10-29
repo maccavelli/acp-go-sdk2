@@ -359,20 +359,24 @@ func rootDir(t *testing.T) string {
 }
 
 // TestInProcessDetachedTapIsPrefix is TestDetachedTapIsPrefix for an
-// in-process agent: its tap blocks until it is detached, is released while
-// Serve still has 8 MiB to write, and what it received is the stream's
-// beginning, the rest counted as dropped
-// (0042-MADR-in-process-agent-runner.md, "Confirmation").
+// in-process agent: its tap blocks until it is detached, is released once the
+// connection has read Serve's first 56 MiB, while Serve still has 8 MiB to
+// write, and what it received is the stream's beginning, the rest counted as
+// dropped (0042-MADR-in-process-agent-runner.md, "Confirmation"). As the
+// child test waits for its agent's ready, this waits for the first Write to
+// return, so that Close's grace covers the last 8 MiB alone
+// (0042-PLAN-in-process-agent-runner.md, phase 11's deviation).
 func TestInProcessDetachedTapIsPrefix(t *testing.T) {
 	t.Parallel()
 	tap, release := blockedTap(t)
-	more := make(chan struct{})
+	more, wrote := make(chan struct{}), make(chan struct{})
 	stream := bulk64()
 	const first = 56 << 20
 	p := startInProcess(t, &InProcess{Grace: 5 * time.Second, OutputTap: tap, Serve: func(ctx context.Context, _ io.Reader, out io.Writer) error {
 		if _, err := out.Write(stream[:first]); err != nil {
 			return err
 		}
+		close(wrote)
 		select {
 		case <-more:
 		case <-ctx.Done():
@@ -382,6 +386,12 @@ func TestInProcessDetachedTapIsPrefix(t *testing.T) {
 		return err
 	}})
 	t.Cleanup(release)
+	// An io.Pipe's Write returns once its reader has read all of it.
+	select {
+	case <-wrote:
+	case <-time.After(readyWait):
+		t.Fatalf("the connection did not read Serve's first 56 MiB within %v", readyWait)
+	}
 	deadline := time.Now().Add(readyWait)
 	for out, _ := p.DroppedTapBytes(); out == 0; out, _ = p.DroppedTapBytes() {
 		if time.Now().After(deadline) {

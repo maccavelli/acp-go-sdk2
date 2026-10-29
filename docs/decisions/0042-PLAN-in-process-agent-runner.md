@@ -991,3 +991,31 @@ commits, `26a7242..dd0d498`, eleven: "the guard passed (exit 0)".
 * **Checks**, each exit 0: `make check-tools`, its 31 tests "OK"; `make api` on `dd0d498`'s Go tree, "0 incompatible, 18
   compatible"; `make markdownlint`, "0 issues"; `make check-records`; `make disclosure-check`, "0 finding(s)"; `tools/idscan.py
   --paths` over the five changed files, "0 match(es)".
+
+**Deviation, 2026-10-29, phase 10's new test failing in CI.** The owner committed the release commit as `d8badcb` and pushed it with
+the eleven before it. Its CI run, `40812671975`, failed: `TestInProcessDetachedTapIsPrefix` failed in all four Linux and Windows
+jobs, at Go `1.26.10` and `1.27.3`, at `inprocess_test.go:395`, with `Close = agentproc: agent terminated` in three and `Close =
+agentproc: agent killed: io: read/write on closed pipe` in one. Both macOS jobs passed, and so did the Docs run, `40812671932`. The
+test is new in phase 10, where it passed 10 times run alone on each of the three hosts; the failure is pre-existing in `dd0d498`.
+
+* **Cause, measured in a scratch copy.** The test released its tap and closed `more` as soon as it saw the tap detached. That is
+  when the connection has read about 33 of `Serve`'s first 56 MiB. So `Close`'s first step, 5 s, had to cover the rest of the
+  first write and the last 8 MiB, about 31 MiB decoded under `-race`. On macOS that `Close` took 2.90 to 3.00 s in 5 runs of 5,
+  60% of the grace; the CI runners are slower. The child test it repeats, `TestDetachedTapIsPrefix`, waits for its agent's ready
+  after the 56 MiB first, so only 8 MiB remain. The library behaves as its docs say; the test's wait was missing.
+* **Resolution, the owner's choice of two offered** (the other the same fix with 100 runs a host and a slowed reader): `Serve`
+  closes a channel once its first `Write` returns, which an `io.Pipe` does once its reader has read all of it, and the test waits
+  for it, within `readyWait`, before it waits for the detachment. With that, in the same scratch copy, `Close` took 0.83 to
+  0.85 s in 5 runs of 5. Raising the test's grace, or removing the test, were not offered: each loosens what the test shows.
+* **Files added to the phase's scope:** `agentproc/inprocess_test.go`, the test and its doc comment. No API, doc or MADR change: the
+  MADR's "Confirmation" item stands, shown by the fixed test.
+* **Checks, on the fix:**
+  * `TestInProcessDetachedTapIsPrefix`, `-count=10`: 10 passed on macOS under `-race`, 10 on the Linux host, 10 on the Windows
+    host;
+  * `go test -race -shuffle=on -count=3 ./agentproc` with `GOMAXPROCS=2`: ok;
+  * phase 10's planted break, a detached tap queuing again, through `tools/plants.py`, still fails as required:
+    `inprocess_test.go:409: the detached tap received 41943040 bytes that are not the stream's beginning`;
+  * `make pre-add-check`, "253 file(s) clean"; `tools/gates.py --all`, with both hosts set: all 18 passed.
+
+Next: the owner commits and pushes the fix. On its CI, the release notes are updated to cite that run, to name the fix's commit as
+the one whose API the release tags, and to count it among the commits; then the tag on the owner's ask.
