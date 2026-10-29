@@ -124,11 +124,13 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0042 | MADR | [Run an agent in the client's process with agentproc's lifecycle; serve agents gracefully, keep their stderr, and record their transcripts](decisions/0042-MADR-in-process-agent-runner.md); item 1's questions answered 2026-10-28; items 2 to 4 added and answered the same day; amended by the PLAN's phase 2 | accepted |
 | 0042 | PLAN | [Implement 0042: an in-process agent runner, graceful serving, the agent's stderr tail, and transcripts](decisions/0042-PLAN-in-process-agent-runner.md) | complete |
 | 0042 | REPORT | [Release notes for v1.26.0, against v1.25.0](reports/0042-REPORT-release-notes-v1-26-0.md) | observed |
+| 0043 | MADR | [Add ACP's remote transport, Streamable HTTP and WebSocket, as an experimental package, chosen over an MCP-over-ACP binding and a registry client](decisions/0043-MADR-remote-http-and-websocket-transport.md); questions answered 2026-10-29 | accepted |
 
 ## I want to…
 
 | I want to… | Start here |
 | :--- | :--- |
+| know why the next ACP feature is the remote transport, and what it would take | [0043-MADR-remote-http-and-websocket-transport.md](decisions/0043-MADR-remote-http-and-websocket-transport.md) |
 | know what the two consumers still wait on from this SDK, and the ten items that close it | [0041-MADR-close-the-gaps-the-consumers-wait-on.md](decisions/0041-MADR-close-the-gaps-the-consumers-wait-on.md) |
 | find, for a consumer's code, the SDK API that replaces it and the release it came in | [0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md](reports/0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md) |
 | know how the SDK checks an elicitation form, its answer and a URL elicitation | [0040-MADR-check-elicitation-forms-answers-and-urls.md](decisions/0040-MADR-check-elicitation-forms-answers-and-urls.md) |
