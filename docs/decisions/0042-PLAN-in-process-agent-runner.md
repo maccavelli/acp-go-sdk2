@@ -1019,3 +1019,17 @@ test is new in phase 10, where it passed 10 times run alone on each of the three
 
 Next: the owner commits and pushes the fix. On its CI, the release notes are updated to cite that run, to name the fix's commit as
 the one whose API the release tags, and to count it among the commits; then the tag on the owner's ask.
+
+### Phase 11, the fix's CI and the notes (2026-10-29)
+
+The owner committed the fix as `8d9994a` and pushed it.
+* **CI on `8d9994a`:** run `40884074796`, "completed success", its six jobs each "success", the four Linux and Windows jobs that
+  failed on `d8badcb` among them; the Docs run `40884074976`, "completed success".
+* **The release notes**, updated: observed also on `8d9994a`, the commit CI passed on, whose API is `dd0d498`'s; fourteen commits
+  since `v1.25.0`, `d8badcb` and `8d9994a` among them; the 12 Go files outside the tests, as before; and a "CI" entry citing the
+  two runs above and the failed run on `d8badcb`, with its cause and this deviation.
+* **Checks**, each exit 0: `make api` on `8d9994a`, "0 incompatible, 18 compatible"; `make check-records`; `make markdownlint`;
+  `make disclosure-check`; `tools/idscan.py --paths` over the two changed files, "0 match(es)".
+
+Next: the annotated tag `v1.26.0` on the release-notes commit, and its push, on the owner's ask; CI on the tag; the GitHub release
+from `tools/release_body.py`; `tools/publication.py`; then `tools/consumer.py v1.26.0`.

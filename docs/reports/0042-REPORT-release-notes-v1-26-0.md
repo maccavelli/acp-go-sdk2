@@ -1,16 +1,17 @@
 # Release notes for v1.26.0, against v1.25.0
 
-Observed 2026-10-28 on `dd0d498`, for
+Observed 2026-10-28 on `dd0d498`, and 2026-10-29 on `8d9994a`, for
 [0042-PLAN-in-process-agent-runner.md](../decisions/0042-PLAN-in-process-agent-runner.md), phase 11. This report drafts the text of
 the GitHub release for `v1.26.0`, as `RELEASING.md` describes it. It decides nothing. It is committed before the tag, so the tagged
-tree holds it. The commit that holds it changes only records and `tools/`, so the API it tags is `dd0d498`'s.
+tree holds it. The commits after `dd0d498` change records, `tools/` and one test file, so the API it tags is `dd0d498`'s, and
+`8d9994a`'s, the commit CI passed on.
 
 Each statement names its source:
 
 - a record;
 - a commit;
 - or `make api`, run on `dd0d498` with only `tools/consumer.py`, `tools/README.md`, `docs/README.md` and the records uncommitted,
-  which hold no Go package.
+  which hold no Go package, and again on `8d9994a`.
 
 Summary:
 
@@ -135,14 +136,16 @@ p, err := (&agentproc.InProcess{
 
 ## Sources not in the release text
 
-- **Commits since `v1.25.0`** (`git log v1.25.0..dd0d498`), twelve:
+- **Commits since `v1.25.0`** (`git log v1.25.0..8d9994a`), fourteen:
   - `5293572`, `a5ff41f`, `5da0d0f`, `ad56dc2`, `1bb1eeb`, `5828c46` and `dd0d498` change the packages, as above;
   - `5da0d0f` also `cmd/generate/engine_test.go` and `example/agent/main.go`;
   - `2a053e9` changes `README.md`, `docs/architecture.md`, the examples in `acptest/example_test.go`,
     `agentproc/example_test.go` and `example_serve_test.go`, and the PLAN;
   - `dd0d498` also `docs/architecture.md`;
+  - `d8badcb` changes `tools/consumer.py`, `tools/README.md`, this report, its row and the PLAN;
+  - `8d9994a` changes `agentproc/inprocess_test.go` and the PLAN;
   - `26a7242`, `2a3ea34`, `5b09afc` and `4d84311` change records only (`git show --name-only`).
-- **Go files changed.** `git diff --name-status -M v1.25.0 dd0d498 -- '*.go' ':!*_test.go'` lists 12 files.
+- **Go files changed.** `git diff --name-status -M v1.25.0 8d9994a -- '*.go' ':!*_test.go'` lists 12 files, as for `dd0d498`.
   - Added: `serve.go`, `acptest/records.go`, `acptest/replay.go`, `agentproc/inprocess.go`, `agentproc/stderr.go` and
     `agentproc/transcript.go`.
   - Changed: `connection.go`, `errors.go`, `acptest/golden.go`, `agentproc/agentproc.go`, `agentproc/tap.go` and
@@ -151,7 +154,7 @@ p, err := (&agentproc.InProcess{
   - `go.mod`, `go.sum`, `cmd/generate/go.mod` and `cmd/generate/go.sum`;
   - the schema, the workflows, the `Makefile`, `RELEASING.md`, `scripts/`, `clienthost/` and `internal/`;
   - every `*_gen.go` file.
-- **`make api` on `dd0d498`:** exit 0, "against v1.25.0: 0 incompatible, 18 compatible", each "added":
+- **`make api` on `dd0d498` and on `8d9994a`:** exit 0, "against v1.25.0: 0 incompatible, 18 compatible", each "added":
   - the root package's three: `(*Connection).Shutdown`, `ErrShutdown` and `ServeAgent`;
   - `agentproc`'s nine: `(*Process).StderrTail`, `Command.JoinStderrTail`, `Command.StderrTail`, `Command.StderrTailLines`,
     `ErrAbandoned`, `InProcess`, `NewTranscript`, `StderrError` and `Transcript`;
@@ -159,11 +162,17 @@ p, err := (&agentproc.InProcess{
   - and "reported packages unstable: 0 incompatible, not gated".
 - **New types' methods.** `(*InProcess).Start`, `StderrError.Error`, `Transcript`'s `Input`, `Output` and `Close`, and
   `(*ReplayAgent).Serve` are not in `make api`'s list: it counts a new type's methods in the type.
+- **CI.**
+  - On `8d9994a`: run `40884074796`, "completed success", six jobs on Ubuntu, Windows and macOS at Go `1.27.3` and `1.26.10`;
+    and the Docs workflow's run `40884074976`, "completed success".
+  - On `d8badcb`: run `40812671975` failed, `TestInProcessDetachedTapIsPrefix` in the four Linux and Windows jobs. The test
+    released its tap before the connection had read the first 56 MiB, so `Close`'s grace had to cover them under `-race`;
+    `8d9994a` waits for them, as the child test does. The PLAN's phase 11 records the deviation.
 - **The evidence:**
   - the 0042 PLAN's phases 2 to 10: the probes of `io.Pipe` and the connection in phase 2, and the 31 planted breaks of phases 4
     to 10;
   - after the seam, `TestDetachedTapIsPrefix`, `TestCloseReadsTheAgentsLastOutput` and `TestKillClosesAtOnce` passing 100 times
     each on macOS under `-race` and on the Linux host, and the first two on the Windows host;
-  - `TestInProcessDetachedTapIsPrefix` passing 10 times on each of the three;
+  - `TestInProcessDetachedTapIsPrefix`, as fixed in `8d9994a`, passing 10 times on each of the three;
   - the gates on macOS and on the Linux and Windows hosts;
   - the deviation entries, each recorded in the PLAN and, where a decision or a fact changed, in the MADR.
