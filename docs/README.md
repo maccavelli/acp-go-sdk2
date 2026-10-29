@@ -123,6 +123,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0041 | REPORT | [Release notes for v1.25.0, against v1.24.0](reports/0041-REPORT-release-notes-v1-25-0.md) | observed |
 | 0042 | MADR | [Run an agent in the client's process with agentproc's lifecycle; serve agents gracefully, keep their stderr, and record their transcripts](decisions/0042-MADR-in-process-agent-runner.md); item 1's questions answered 2026-10-28; items 2 to 4 added and answered the same day; amended by the PLAN's phase 2 | accepted |
 | 0042 | PLAN | [Implement 0042: an in-process agent runner, graceful serving, the agent's stderr tail, and transcripts](decisions/0042-PLAN-in-process-agent-runner.md) | in-progress |
+| 0042 | REPORT | [Release notes for v1.26.0, against v1.25.0](reports/0042-REPORT-release-notes-v1-26-0.md) | observed |
 
 ## I want to…
 

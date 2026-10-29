@@ -20,8 +20,13 @@ sets WithElicitationCheck
 the agent with WaitContext and prints EndedCleanly of its connection's end,
 prints what a ToolCallTimeline gives, and writes and reads a file and runs a
 terminal through clienthost
-(0041-PLAN-close-the-gaps-the-consumers-wait-on.md, phase 17), so VERSION is
-v1.25.0 or later. Its go.mod must keep the `go` line and gain no toolchain line.
+(0041-PLAN-close-the-gaps-the-consumers-wait-on.md, phase 17). It runs an
+agent in process through InProcess and ServeAgent, a Transcript as both taps,
+and prints the tail of a failing child's standard error; its test reads a
+transcript back with ReadRecords, validates and decodes it, and replays it
+with ConnectReplay (0042-PLAN-in-process-agent-runner.md, phase 11), so
+VERSION is v1.26.0 or later. Its go.mod must keep the `go` line and gain no
+toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
 Usage: consumer.py VERSION
@@ -43,8 +48,10 @@ import floor  # noqa: E402
 PROGRAM = '''package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -94,6 +101,10 @@ func (agent) SetSessionMode(context.Context, acp.SetSessionModeRequest) (acp.Set
 }
 
 var _ acp.Agent = agent{}
+
+func serve(ctx context.Context, in io.Reader, out io.Writer) error {
+	return acp.ServeAgent(ctx, agent{}, in, out)
+}
 
 type host struct {
 	clienthost.Terminals
@@ -177,16 +188,37 @@ func main() {
 	_, err = h.ReleaseTerminal(ctx, acp.ReleaseTerminalRequest{SessionId: "s", TerminalId: term.TerminalId})
 	_, gone := h.TerminalOutput(ctx, acp.TerminalOutputRequest{SessionId: "s", TerminalId: term.TerminalId})
 	fmt.Println("release", err, acp.IsResourceNotFound(gone), h.Close())
+	var log bytes.Buffer
+	tr := agentproc.NewTranscript(&log)
+	ip, err := (&agentproc.InProcess{Serve: serve, InputTap: tr.Input(), OutputTap: tr.Output()}).Start(client{})
+	if err != nil {
+		fmt.Println("InProcess:", err)
+		return
+	}
+	res, err := ip.Conn().Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
+	fmt.Println("in-process", res.ProtocolVersion, err, ip.Close(), acp.EndedCleanly(ip.Conn().Err()))
+	fmt.Println("transcript", tr.Close(), bytes.Count(log.Bytes(), []byte("\\n")))
+	failing := exec.Command("sh", "-c", "echo starting >&2; echo failed >&2; exit 2")
+	fp, err := (&agentproc.Command{Cmd: failing, StderrTailLines: 1, JoinStderrTail: true}).Start(client{})
+	if err != nil {
+		fmt.Println("Start:", err)
+		return
+	}
+	var se *agentproc.StderrError
+	joined := errors.As(fp.Wait(), &se) && se.Tail == fp.StderrTail()
+	fmt.Printf("stderr %q %v\\n", fp.StderrTail(), joined)
 }
 '''
 TEST = '''package main
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
 	acp "MODULE"
 	"MODULE/acptest"
+	"MODULE/agentproc"
 )
 
 func TestPresentNotice(t *testing.T) {
@@ -207,6 +239,38 @@ func TestPresentNotice(t *testing.T) {
 		t.Fatalf("a client without session.notices got %q, want the agent message fallback", kind)
 	}
 }
+
+func TestTranscriptReplay(t *testing.T) {
+	var log bytes.Buffer
+	tr := agentproc.NewTranscript(&log)
+	p, err := (&agentproc.InProcess{Serve: serve, InputTap: tr.Input(), OutputTap: tr.Output()}).Start(client{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Conn().Initialize(t.Context(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Close(); err != nil {
+		t.Fatal(err)
+	}
+	records, err := acptest.ReadRecords(&log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acptest.ValidateGolden(t, records)
+	sent, err := acptest.Decode[acp.InitializeRequest](records, acptest.Sent, "initialize")
+	if err != nil || len(sent) != 1 {
+		t.Fatalf("decoded %d initialize requests from %d records: %v", len(sent), len(records), err)
+	}
+	replay := acptest.ConnectReplay(t, records, client{})
+	res, err := replay.Initialize(t.Context(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
+	if err != nil || res.ProtocolVersion != acp.ProtocolVersionNumber {
+		t.Fatalf("the replay answered %v, %v", res.ProtocolVersion, err)
+	}
+}
 '''
 WANT_RUN = ("Close: <nil>\nwait <nil> true\ndropped 0 0\nprotocol version 1\nkind notice\n"
             'refused {"code":-32601,"message":"Method not found","data":{"method":"fs/read_text_file"}}\n'
@@ -216,7 +280,9 @@ WANT_RUN = ("Close: <nil>\nwait <nil> true\ndropped 0 0\nprotocol version 1\nkin
             'check CreateElicitationAccept: content["age"]: maximum: is greater than 150\n'
             "tool Read completed true 0\n"
             'files <nil> <nil> "two\\n"\nmissing true\n'
-            "terminal 3 hi false <nil>\nrelease <nil> true <nil>")
+            "terminal 3 hi false <nil>\nrelease <nil> true <nil>\n"
+            "in-process 1 <nil> <nil> true\ntranscript <nil> 2\n"
+            'stderr "failed\\n" true')
 
 
 def go_mod_ok(text: str, go: str, mod: str, version: str) -> bool:

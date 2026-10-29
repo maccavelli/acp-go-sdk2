@@ -949,3 +949,45 @@ Nothing else in any package; `unstable`'s report: "0 incompatible".
 
 **The PLAN stays `in-progress`:** phase 11, the release, runs only on the owner's ask, and with it the Confirmation's last part,
 `tools/consumer.py` running an in-process agent.
+
+### Phase 11, the release `v1.26.0` (2026-10-28)
+
+The owner committed phase 10 as `dd0d498` and asked for phase 11 ("committed proceed"). `make push-guard` over the outgoing
+commits, `26a7242..dd0d498`, eleven: "the guard passed (exit 0)".
+
+* **The release commit** changes records and `tools/` only:
+  * [0042-REPORT-release-notes-v1-26-0.md](../reports/0042-REPORT-release-notes-v1-26-0.md), new, with its row in `docs/README.md`.
+    It takes this record's number, as 0041's notes took theirs. Its lists were checked against the tree:
+    * the twelve commits since `v1.25.0` and their files;
+    * the 12 Go files changed outside the tests, and the unchanged areas;
+    * the 18 additions `make api` lists, 3 in the root, 9 in `agentproc` and 6 in `acptest`.
+    * Read against the `go doc` of the names it describes, three statements were corrected before it was staged: `Kill` keeps the
+      abandonment's grace; `Transcript.Close` drops an unended line and does not close `w`; `TestGoStatementsCounted` is unchanged,
+      not changed.
+  * `tools/consumer.py`:
+    * the program runs an `InProcess` agent whose `Serve` is `acp.ServeAgent`, a `Transcript` as both taps, initializes it, and
+      prints the protocol version, `Close`'s error and `EndedCleanly`, then the transcript's `Close` and its line count;
+    * it starts `sh -c "echo starting >&2; echo failed >&2; exit 2"` with `StderrTailLines: 1` and `JoinStderrTail`, and prints
+      `StderrTail()` and whether `Wait`'s error holds a `*StderrError` with the same tail;
+    * its new test, `TestTranscriptReplay`, records an in-process session in a `Transcript`, reads it with `ReadRecords`, checks it
+      with `ValidateGolden`, decodes the `initialize` request with `Decode`, and replays it with `ConnectReplay`;
+    * `VERSION` is `v1.26.0` or later, and `tools/README.md`'s row says so.
+* **The consumer before the tag.** A scratch script ran the program and test against the tree, through a `replace`, at
+  `go1.26.10`:
+  * the output equals `WANT_RUN`, its new lines `in-process 1 <nil> <nil> true`, `transcript <nil> 2` and
+    `stderr "failed\n" true`;
+  * `go vet`, the test and the Windows build pass.
+* **Planted breaks**, each in its own copy of the tree, through the same script, 3 of 3 as required:
+
+  | Break | Broken |
+  | :--- | :--- |
+  | the stderr tail never joined (`Wait`'s join behind `false &&`) | `stderr "failed\n" false`; the output differs from `WANT_RUN` |
+  | the transcript drops the client's frames (`Input`'s line tap writes nothing) | `transcript <nil> 1`; the output differs from `WANT_RUN`; `consumer_test.go:55: decoded 0 initialize requests from 1 records: <nil>` |
+  | the test's expected count changed | `consumer_test.go:55: decoded 1 initialize requests from 2 records: <nil>` |
+
+* **The Confirmation's last part.** Phase 10's row "`tools/consumer.py` running an in-process agent", "not yet", is shown by the
+  program's `in-process` line and `TestTranscriptReplay` against the tree; after the tag, `tools/consumer.py v1.26.0` shows it from
+  the proxy.
+* **Checks**, each exit 0: `make check-tools`, its 31 tests "OK"; `make api` on `dd0d498`'s Go tree, "0 incompatible, 18
+  compatible"; `make markdownlint`, "0 issues"; `make check-records`; `make disclosure-check`, "0 finding(s)"; `tools/idscan.py
+  --paths` over the five changed files, "0 match(es)".
