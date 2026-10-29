@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-10-28
+status: complete
+date: 2026-10-29
 associated-madr: "0042-MADR-in-process-agent-runner.md"
 ---
 
@@ -1033,3 +1033,34 @@ The owner committed the fix as `8d9994a` and pushed it.
 
 Next: the annotated tag `v1.26.0` on the release-notes commit, and its push, on the owner's ask; CI on the tag; the GitHub release
 from `tools/release_body.py`; `tools/publication.py`; then `tools/consumer.py v1.26.0`.
+
+### Phase 11, the release published (2026-10-29)
+
+The owner committed and pushed the notes as `59a43be`, then created and pushed the tag. Then:
+
+* **CI:**
+  * on `main` for `59a43be`, which changes docs-safe paths only: the Docs run `40885263186`, "completed success";
+  * on the tag: run `40885851122`, six jobs, "completed success" on its first attempt.
+* **The tag:** `v1.26.0` is annotated, its message `v1.26.0`, and names `59a43be` on `origin`.
+* **`make api` after the tag:**
+  * against `v1.26.0`, now the newest tag, "0 incompatible, 0 compatible";
+  * against `v1.25.0`, through `scripts/check_api.py v1.25.0`, "0 incompatible, 18 compatible".
+* **The body:** `tools/release_body.py v1.26.0 59a43be` extracted the report's "Release text". It is 103 lines with one link, which
+  the tool points at the tag, and its identifier scan found 0 matches. The body was read in full.
+* **The release:** the owner ran `gh release create v1.26.0 --verify-tag --title v1.26.0 --notes-file <the body>`.
+* **`tools/publication.py v1.26.0 59a43be <the body>`:** "10 of 10 checks hold":
+  * the release is published, marked latest, and its body is the extracted text;
+  * CI holds on `main`'s head and on the tag;
+  * the proxy serves the tag at `59a43be`;
+  * `go list -m @latest` gives `v1.26.0`;
+  * `go mod download` passes with the checksum database on.
+* **`tools/consumer.py v1.26.0`:** "as required". At `go1.26.10`, from the proxy:
+  * the program's output was as required, its last lines `in-process 1 <nil> <nil> true`, `transcript <nil> 2` and
+    `stderr "failed\n" true`, the Confirmation's last part;
+  * its `go test`, `TestTranscriptReplay` among it, passed;
+  * the Windows build passed;
+  * its `go.mod` kept `go 1.26.10` and gained no toolchain line. It requires `golang.org/x/sys v0.49.0` as indirect, as at
+    `v1.25.0`, so the SDK gained no dependency.
+
+The release is published and every item of the MADR's "Confirmation" is shown, so this PLAN and its row are `complete`. Each
+consumer adopts `v1.26.0` under its own records, as "Rollout and Rollback" says.
