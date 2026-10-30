@@ -1409,3 +1409,43 @@ observable is left for it to change. Each was read against `agentproc/agentproc.
 docs/architecture.md`, "2 file(s), 17 pattern(s), 0 match(es)"; `go test -count=1 -run 'Readme|Doc|Example' . ./agentproc`, which
 runs `TestReadmeAgentprocIsTheExample` and the examples, `ok` for both packages. No Go file changed, so `make pre-add-check` and the
 gate set wait for phase 17, which runs them all.
+
+### Phase 17, the close (2026-10-30)
+
+The owner committed phase 16 as `6b78036` and answered "committed, proceed". This entry covers the phase's first item; the release
+items wait for the owner's ask, as phase 11's did.
+
+**Gates,** `tools/gates.py --all` at `6b78036`, the hosts named per command: "all gates passed", 18 of 18; among them `make
+pre-add-check`, "277 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)", on the host's own `PATH` since the owner's
+`gofmt` link was repaired; `newfiles`, "no new .go files"; `platforms`, "13 of 13 passed"; the floor gate at go1.26.10, passed;
+`windows` and `linux`, passed.
+
+**`make api`** against `v1.27.0`, from the gate's log, as phase 17 expects:
+
+```text
+check_api: compatible: ErrHandlersRunning: added
+check_api: compatible: agentproc: (*Process).CloseContext: added
+check_api: compatible: agentproc: (*Process).KillContext: added
+check_api: against v1.27.0: 0 incompatible, 3 compatible
+```
+
+**Run,** at `6b78036`: `go test -race -count=1 -v -run
+'^(TestCloseContext.*|TestWaitErrorSaysTheCauseOnce|ExampleProcess_CloseContext)$' ./agentproc`, 21 PASS, 0 FAIL; `go test -race
+-count=1 -v -run '^TestServeAgentHandlersStillRun$' .`, 3 PASS, 0 FAIL.
+
+**The amendment's "Confirmation", item by item.** Each check was first seen to fail on a planted break, in phase 13, 14 or 15's
+entry:
+
+| Item | Shown by | State |
+| :--- | :--- | :--- |
+| `CloseContext` and `KillContext`, child and in process, a handler that ignores its context: within the bound and the slack, the cause and `acp.ErrHandlersRunning`, the agent's error joined, `Done` closed; `Wait`, once the handler is released, `Close`'s error | `TestCloseContextBoundsHandlers`, four cases; `TestCloseContextJoinsTheAgentsError` | shown |
+| a handler that returns within the bound: `Wait`'s error, nothing joined | `TestCloseContextWaitsForHandlers` | shown |
+| a context that ends during the steps hurries them: a `stubborn` child under a 5 s grace killed, without SIGTERM, near the context's end | `TestCloseContextHurriesTheSteps`, both cases | shown |
+| `context.WithTimeoutCause`'s cause is the one returned | `TestCloseContextCause` | shown |
+| no goroutine left once the handler returns, under the leak guard | `TestCloseContextOneGoroutine`, none left after the release; the package's `TestMain` leak guard, clean in `precheck` and `race3` | shown |
+| `ServeAgent` wraps `ErrHandlersRunning` at its input's end, its text unchanged, in a `synctest` bubble; and at its context's end | `TestServeAgentHandlersStillRun`, both cases | shown |
+| `Wait`'s error for each of I9's rows says its cause once, `errors.Is` holding; a child's unchanged | `TestWaitErrorSaysTheCauseOnce`, six cases | shown |
+| `make api`: the three additions, nothing else | the log above | shown |
+| `tools/consumer.py` closing an in-process agent through `CloseContext` | phase 17's release items, on the owner's ask: `consumer.py` extended, then run against `v1.28.0` | open |
+
+This PLAN stays `in-progress` until the last item is shown and the release is published.
