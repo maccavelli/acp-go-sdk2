@@ -18,7 +18,9 @@ type DialOptions struct {
 	// Streamable HTTP's requests. Nil is a new http.Client. Its Jar, when nil,
 	// is a new cookie jar of the connection's own, as the RFD requires a
 	// client to keep the server's cookies. For WebSocket, an *http.Transport
-	// is copied and limited to HTTP/1.1, which the handshake needs.
+	// is copied and limited to HTTP/1.1, which the handshake needs. Leave its
+	// Timeout zero: it bounds reading a response's whole body, and so would
+	// end Streamable HTTP's long-lived event streams.
 	HTTPClient *http.Client
 
 	// Header is sent on every request the connection makes, the handshake

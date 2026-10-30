@@ -134,8 +134,8 @@ func (h *Handler) servePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The POST is answered once its line is queued, before the agent can read
-	// it, as the official servers queue it: the agent's answer cannot overtake
-	// it. A full queue makes the POST wait.
+	// it, as the official servers queue it: the 202 is sent before the agent
+	// can answer. A full queue makes the POST wait.
 	select {
 	case <-hc.sc.ending:
 	default:

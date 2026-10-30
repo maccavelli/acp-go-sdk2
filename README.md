@@ -856,7 +856,9 @@ A client calls `remote.Dial(ctx, url, opts)`.
   - `HTTPClient` makes the requests; nil is a new client. A nil `Jar` becomes a
     cookie jar of the connection's own, since the RFD requires a client to
     keep the server's cookies. For WebSocket, an `*http.Transport` is copied
-    and limited to HTTP/1.1, which the handshake needs.
+    and limited to HTTP/1.1, which the handshake needs. Leave its `Timeout`
+    zero: it bounds reading a whole response body, so it would end the event
+    streams.
   - `Header` goes on every request, the handshake included. Authentication
     goes there.
   - `MaxMessageSize` defaults to 10 MiB.
@@ -867,9 +869,10 @@ Over Streamable HTTP, the client follows the three official servers:
 
 - **Order:** messages are POSTed one at a time, in order, each waiting for its
   `202`.
-- **`Acp-Session-Id`:** a message naming a session carries the header. A POST
-  answered `404` with it is sent once more without it, as Python's server
-  wants.
+- **`Acp-Session-Id`:** a request or notification for a session carries the
+  header, unless its method is a `$/` one, and so does an answer to the
+  agent's request that named a session. A POST answered `404` with it is sent
+  once more without it, as Python's server wants.
 - **Session streams:** a session's stream is opened before a `session/new`
   answer naming it is delivered, and before a `session/load` or
   `session/resume` is sent.
@@ -890,8 +893,9 @@ the endpoint.
   of its event streams, and a DELETE ends it. Any other method, a browser's
   CORS preflight included, is `405`.
 - **Answers to a POST:** `202` once its message is queued for `serve`, before
-  `serve` reads it, so the agent's answer cannot overtake it. While 256
-  messages wait, a POST waits for room.
+  `serve` reads it, so the `202` is sent before the agent can answer. The two
+  travel on different connections, so a client may still read the answer
+  first. While 256 messages wait, a POST waits for room.
 - **`initialize`:** answered with the agent's own answer and the connection's
   id. An answer with an error is sent without an id, and the connection ends.
   A `serve` that returns first gets `500` with `-32603`, and no answer within
@@ -932,9 +936,9 @@ A `serve` still running is then abandoned. Its context's cause, which
 | `remote.ErrHandlerClosed` | the handler was closed |
 | `remote.ErrOverflow` | the messages held past `MaxBuffered` |
 
-`Handler.Close(ctx)` ends every connection at once, answers each later request
-`503`, and returns an error wrapping `remote.ErrAbandoned` when a `serve` had
-to be abandoned. A WebSocket's close handshake waits up to 5 seconds for a
+`Handler.Close(ctx)` ends every connection at once and answers each later
+request `503`. It returns `ctx`'s cause when `ctx` ends first, and an error
+wrapping `remote.ErrAbandoned` when a `serve` had to be abandoned. A WebSocket's close handshake waits up to 5 seconds for a
 client that does not answer it.
 
 The host's part is the rest, as the RFD layers it on the transport:

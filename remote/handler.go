@@ -134,8 +134,8 @@ func resolveHandlerOptions(opts *HandlerOptions) HandlerOptions {
 // message, initialize opening a Streamable HTTP connection; a GET opens one of
 // its event streams; a DELETE ends it. A POST is answered 202 once its
 // message is queued for the connection's serve, before serve reads it, so the
-// answer cannot arrive after the agent's reply; while 256 messages wait, a
-// POST waits for room. Any other method is answered 405, a browser's CORS
+// 202 is sent before the agent can reply; while 256 messages wait, a POST
+// waits for room. Any other method is answered 405, a browser's CORS
 // preflight included, which is the host's middleware. After Close, every
 // request is answered 503.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

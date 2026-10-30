@@ -192,6 +192,14 @@ func TestHTTPClientSessionStream(t *testing.T) {
 // the session on a second, whose client it returns.
 func loadOnFresh(t *testing.T, f *fakeServer) (*acp.ClientSideConnection, *acptest.MemoryClient, acp.SessionId) {
 	t.Helper()
+	return attachOnFresh(t, f, acp.AgentMethodSessionLoad)
+}
+
+// attachOnFresh makes a session on one connection to f, closes it, and
+// loads or resumes the session, as method says, on a second, whose client it
+// returns.
+func attachOnFresh(t *testing.T, f *fakeServer, method string) (*acp.ClientSideConnection, *acptest.MemoryClient, acp.SessionId) {
+	t.Helper()
 	first, c1 := dialClient(t, f.ts.URL, &acptest.MemoryClient{}, nil)
 	sid := startSession(t, first)
 	_ = c1.Close()
@@ -201,41 +209,49 @@ func loadOnFresh(t *testing.T, f *fakeServer) (*acp.ClientSideConnection, *acpte
 	if _, err := conn.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.LoadSession(ctx, acp.LoadSessionRequest{SessionId: sid, Cwd: acptest.Abs("/work")}); err != nil {
-		t.Fatalf("%s: LoadSession = %v", f.mode, err)
+	var err error
+	if method == acp.AgentMethodSessionResume {
+		_, err = conn.ResumeSession(ctx, acp.ResumeSessionRequest{SessionId: sid, Cwd: acptest.Abs("/work")})
+	} else {
+		_, err = conn.LoadSession(ctx, acp.LoadSessionRequest{SessionId: sid, Cwd: acptest.Abs("/work")})
+	}
+	if err != nil {
+		t.Fatalf("%s: %s = %v", f.mode, method, err)
 	}
 	return conn, client, sid
 }
 
-// TestHTTPClientLoadStreamFirst requires session/load to open its session's
-// stream before its POST, and a 404 to that GET to be retried after the
-// answer.
+// TestHTTPClientLoadStreamFirst requires session/load and session/resume to
+// open their session's stream before their POST, and a 404 to that GET to be
+// retried after the answer.
 func TestHTTPClientLoadStreamFirst(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []fakeMode{tsMode, pyMode} {
-		f := newFakeServer(t, mode, newLoadAgent).start(false)
-		_, _, sid := loadOnFresh(t, f)
-		var gets []fakeRequest
-		firstGet, firstLoad := -1, -1
-		for i, r := range f.all() {
-			if r.connID != "conn-2" {
-				continue
-			}
-			if r.method == http.MethodGet && r.session == string(sid) {
-				gets = append(gets, r)
-				if firstGet < 0 {
-					firstGet = i
+	for _, method := range []string{acp.AgentMethodSessionLoad, acp.AgentMethodSessionResume} {
+		for _, mode := range []fakeMode{tsMode, pyMode} {
+			f := newFakeServer(t, mode, newLoadAgent).start(false)
+			_, _, sid := attachOnFresh(t, f, method)
+			var gets []fakeRequest
+			firstGet, firstPost := -1, -1
+			for i, r := range f.all() {
+				if r.connID != "conn-2" {
+					continue
+				}
+				if r.method == http.MethodGet && r.session == string(sid) {
+					gets = append(gets, r)
+					if firstGet < 0 {
+						firstGet = i
+					}
+				}
+				if r.method == http.MethodPost && strings.Contains(r.body, `"`+method+`"`) && firstPost < 0 {
+					firstPost = i
 				}
 			}
-			if r.method == http.MethodPost && strings.Contains(r.body, `"session/load"`) && firstLoad < 0 {
-				firstLoad = i
+			if firstGet < 0 || firstPost < 0 || firstGet > firstPost {
+				t.Errorf("%s %s: the session's first GET at %d, the first POST at %d; want the GET first", mode, method, firstGet, firstPost)
 			}
-		}
-		if firstGet < 0 || firstLoad < 0 || firstGet > firstLoad {
-			t.Errorf("%s: the session's first GET at %d, session/load's first POST at %d; want the GET first", mode, firstGet, firstLoad)
-		}
-		if mode == pyMode && (len(gets) != 2 || gets[0].status != http.StatusNotFound || gets[1].status != http.StatusOK) {
-			t.Errorf("pyMode: the session's GETs = %+v, want 404 before the load, then 200 after its answer", gets)
+			if mode == pyMode && (len(gets) != 2 || gets[0].status != http.StatusNotFound || gets[1].status != http.StatusOK) {
+				t.Errorf("pyMode %s: the session's GETs = %+v, want 404 before it, then 200 after its answer", method, gets)
+			}
 		}
 	}
 }

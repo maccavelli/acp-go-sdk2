@@ -1,6 +1,6 @@
 ---
 status: accepted
-date: 2026-10-29
+date: 2026-10-30
 decision-makers: the repository owner
 consulted: the ACP specification and its RFDs; the official TypeScript, Rust, Python and Kotlin SDKs and the ACP registry, at the revisions named under "Sources"; both known consumers' code and records
 informed: the consumers, through their own records
@@ -26,6 +26,9 @@ client), which one should this SDK implement next, and in what shape?
 **Status.** Accepted. The owner answered the five questions under "Questions for the owner" on 2026-10-29, each as recommended
 ("Decided with the owner, 2026-10-29"). Nothing is implemented. Writing the PLAN, and checking it against the official servers'
 code, fixed seven details and changed two ("Amended by the PLAN, 2026-10-29").
+
+*2026-10-30:* implemented by the PLAN's phases 3 to 8, and closed by its phase 9. "Confirmation"'s first item was reworded then
+("Amended in the PLAN's phase 9, 2026-10-30"). The release is the PLAN's phase 10.
 
 ### Findings in this repository
 
@@ -424,6 +427,21 @@ changed two of its details (7, 8). No owner's decision above changes.
    * An answer that is a JSON-RPC error is returned as it is, with `200`. No connection is kept, and no `Acp-Connection-Id` is
      sent, as Rust does.
 
+#### Amended in the PLAN's phase 9, 2026-10-30
+
+Walking "Confirmation" against what was built found its first item unmeetable as written. No decision changes.
+
+1. **Examples: every exported function and type, not every exported name.** The first item asked for "a doc comment and an
+   example" for every exported name. Go attaches an example to a function, a type or a method, never to a variable, so
+   `ErrDeleted`, `ErrDisconnected`, `ErrHandlerClosed`, `ErrOverflow` and `ErrAbandoned` cannot have one. The owner chose to
+   require an example for every exported function and type:
+   * the functions: `ExampleDial` and `ExampleNewHandler`;
+   * the types: `ExampleConn`, `ExampleDialOptions`, `ExampleHandler` and `ExampleHandlerOptions`;
+   * one method, `ExampleHandler_Close`;
+   * the five errors, shown in `ExampleHandlerOptions` and `ExampleHandler_Close`.
+
+   Every exported name still has a doc comment. The item is annotated in place.
+
 ### Consequences
 
 * Good, because a Go program can serve an agent over the network and reach any agent served by an official SDK, with the client
@@ -442,7 +460,8 @@ changed two of its details (7, 8). No owner's decision above changes.
 
 ### Confirmation
 
-* Every exported name of `remote` has a doc comment and an example; `go doc ./remote` names the RFD revision.
+* Every exported name of `remote` has a doc comment and an example; `go doc ./remote` names the RFD revision. *(Amended in the
+  PLAN's phase 9, 2026-10-30, 1: an example for every exported function and type, since Go attaches none to a variable.)*
 * Tests, in the package, without a network beyond loopback:
   * a round trip over each profile with `httptest.Server`, HTTP/1.1 and HTTP/2 over TLS and unencrypted HTTP/2: `initialize`,
     `session/new`, a prompt with updates, a permission request answered, `session/cancel`, `$/cancel_request`, and `DELETE`;

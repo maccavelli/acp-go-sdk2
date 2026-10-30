@@ -1268,3 +1268,124 @@ its revision of 2026-07-02 and commit `2bb9fac`.
 * Precheck: "275 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)".
 * The root package and `remote` on the Windows host: `10.165s` and `5.673s`. On the Linux host: `12.969s` and `5.704s`.
 * `make api`: "0 incompatible, 11 compatible"; "reported packages unstable, remote: 0 incompatible, not gated".
+
+### Phase 9, close the implementation (2026-10-30)
+
+Approved with "committed, proceed" after `b9e93c3`.
+
+#### Deviation, 2026-10-30, phase 9's untested `session/fork` and `session/resume` routes
+
+* **Found.** Walking the MADR's "Confirmation" item "outbound routing: each row of K3's table", two routes have no test.
+  * The server sends `session/fork`'s and `session/resume`'s answers to the connection stream (`remote/httpserver.go:186`,
+    `:188`).
+  * The client opens a session's stream before it sends `session/resume` (`remote/httpclient.go:133`).
+  * Each method sits in a case list beside a tested one, `session/new` or `session/load`. Removing it fails no test.
+* **Not pre-existing:** phases 5 and 6. Their test tables named `session/new` and `session/load` only.
+* **Resolution.** The owner chose "Test both sides now".
+  * `TestHTTPServerRouting` gains a `session/fork` answer and a `session/resume` answer, each required on the connection stream.
+  * `TestHTTPClientLoadStreamFirst` gains `session/resume` opening its stream before its POST.
+  * Each gets a planted break.
+  * The other option was the server side alone.
+* **No MADR change:** the item stands as written, and is now met.
+
+#### Deviation, 2026-10-30, phase 9's examples for every exported name
+
+* **Found.** The MADR's "Confirmation" asks for "a doc comment and an example" for every exported name of `remote`.
+  * Every name has its doc comment.
+  * Only `Dial` and `NewHandler` had an example: the PLAN's phase 8 read the item that way.
+  * Read as written, the item cannot be met: Go attaches an example to a function, a type or a method, never to a variable, and
+    the five errors are variables.
+* **Resolution.** The owner chose "Add per-type examples, amend wording".
+  * `ExampleConn`, `ExampleDialOptions`, `ExampleHandler`, `ExampleHandlerOptions` and `ExampleHandler_Close` are added, so every
+    exported function and type has one. The five errors are shown in two of them.
+  * The owner's option named three examples. Checking them against `go doc`'s list found `DialOptions` and the `Handler` type
+    still without one, since `ExampleHandler_Close` attaches to the method. So `ExampleDialOptions` and `ExampleHandler` were
+    added, which the chosen wording, "every exported function and type", requires.
+
+#### What phase 9 did
+
+**Docs read in full against the code.** `README.md`'s "Remote agents", `docs/architecture.md`'s "The remote transport" and
+`remote/doc.go` were read whole. Six statements were corrected:
+
+| Where | Was | Now |
+| :--- | :--- | :--- |
+| README; `ServeHTTP`'s doc; `servePost`'s comment; architecture | the agent's answer "cannot overtake" the POST's `202` | the `202` is sent before the agent can answer. The README adds that the two travel on different connections, so a client may still read the answer first |
+| README | "a message naming a session carries the header" | a request or notification for a session does, unless its method is a `$/` one, and so does an answer to the agent's request that named a session |
+| README | `Handler.Close` returns `ErrAbandoned` | also returns `ctx`'s cause when `ctx` ends first |
+| architecture | the tests wait "never on a sleep" | each event a test requires is waited for under a named bound. The fixed waits are deliberate: the fake server's injected delays, the 300 ms a stream must outlive a `WriteTimeout`, and the windows in which a test requires that something does not happen |
+| `DialOptions.HTTPClient`'s doc; README | nothing on `Timeout` | leave it zero: `http.Client.Timeout` covers reading a whole response body, so it would end the event streams |
+
+`remote/doc.go` needed no change.
+
+**Files:**
+* `remote/httpserver_test.go`: `TestHTTPServerRouting` gains `session/fork` and `session/resume`. Each answer is required on the
+  connection stream, and the resumed session's update on its own stream, opened before the POST.
+* `remote/httpclient_test.go`: `attachOnFresh`, which `loadOnFresh` now calls. `TestHTTPClientLoadStreamFirst` runs
+  `session/load` and `session/resume` in `tsMode` and `pyMode`.
+* `remote/fakeserver_test.go`: `loadAgent` advertises `sessionCapabilities.resume` and answers `ResumeSession`.
+* `remote/example_test.go`: `ExampleDialOptions`, `ExampleHandler`, `ExampleConn`, `ExampleHandlerOptions` and
+  `ExampleHandler_Close`.
+  * `ExampleHandler` checks the bearer token with `subtle.ConstantTimeCompare` on every request.
+  * `ExampleHandlerOptions` reads the cause through `context.AfterFunc`. The ladder cancels the serve's context with its cause
+    at its end, so a serve that returned at its input's end still gets the cause, though it has already returned when that
+    happens.
+* `remote/client.go`, `remote/handler.go`, `remote/httpserver.go`: the doc and comment corrections above.
+* `README.md`, `docs/architecture.md`: the corrections above.
+* [0043-MADR-remote-http-and-websocket-transport.md](0043-MADR-remote-http-and-websocket-transport.md): "Amended in the PLAN's
+  phase 9, 2026-10-30", the item annotated in place, and a dated note in its Status.
+* `docs/README.md`: the MADR's row names the amendment.
+
+**Planted breaks**, `python3 tools/plants.py`, "3/3 as required":
+
+| Plant | Failing line |
+| :--- | :--- |
+| `session/fork` dropped from the server's connection-stream answers | `httpserver_test.go:378: no event within 10s` |
+| `session/resume` dropped from the server's connection-stream answers | `httpserver_test.go:383: no event within 10s` |
+| `session/resume` dropped from the client's stream-first rule | `httpclient_test.go:250: ts session/resume: the session's first GET at -1, the first POST at 7; want the GET first` |
+
+The examples are compiled, not run, and have no `Output:`, so no planted break applies to them. `go vet ./remote/` and `go test
+-run Example ./remote/` compile them.
+
+**The MADR's "Confirmation", item by item:**
+
+| Item | Held by |
+| :--- | :--- |
+| a doc comment for every exported name, an example for every exported function and type (amended), the RFD's revision in `go doc ./remote` | `revive`'s `exported` rule in the lint gate; the seven examples in `remote/example_test.go`; `go doc ./remote` (phase 8's record) |
+| a round trip over each profile and HTTP version: `initialize`, `session/new`, a prompt with updates, a permission, `session/cancel`, `$/cancel_request`, `DELETE` | `TestWebSocketRoundTrip`, `…Permission` and `…Cancel`; `TestHTTPServerRoundTrip`'s `http1`, `tls-h2` and `h2c`, whose cleanup closes each `Conn` with `DELETE`; `TestHTTPServerDelete` |
+| each status code of the RFD's table (S4) | `TestHTTPServerStatuses` (`415`, `413`, `400`, `501`, `404`, `405`, `406`, `409`); `TestHTTPServerInitialize` (`200`, `500`, `504`); `TestHTTPServerOrigin` (`403`); `TestHandlerClose` (`503`). The RFD's `404` for an unknown session is not sent, by the MADR's amendment 2: a session a connection has never named is accepted |
+| a message over 32 KiB, one at the limit over WebSocket, and one past it refused | `TestWebSocketLargeMessage`, both sides |
+| outbound routing: K3's rows, two sessions, `session/new`'s answer before its stream is open | `TestHTTPServerRouting` (two sessions, `$/`, and `session/fork` and `session/resume` from this phase); `TestHTTPServerClientShapes` (`session/load`); `TestHTTPServerInitialize` (the POST's body); `TestHTTPClientSessionStream` |
+| endings: `DELETE`, `Handler.Close`, a client gone, a serve that ignores its context, each bounded by `Grace` | `TestHTTPServerDelete`; `TestHandlerClose`; `TestHandlerLadderCause`, `TestWebSocketKeepAlive` and `TestHTTPServerIdle`; `TestHandlerLadderAbandon` |
+| a transcript read back with `ReadRecords` and passed through `ValidateGolden` | `TestWebSocketTranscript`, `TestHTTPServerTranscript` |
+| the client against each official server's mode, `session/load` on a fresh connection; the handler against each official client's requests | `TestHTTPClientLoadEachMode`, `…LoadStreamFirst` and `…HeaderRetry`; `TestHTTPServerClientShapes` |
+| `-race` on macOS, Linux and Windows, and the leak guard | macOS: every precheck runs `go test -race` with `remote`'s `TestMain` guard. Linux and Windows: CI's "race detector" step runs `go test -race ./...` on both. The 0043 commits are not pushed yet (`main` is 9 ahead of `origin` at `b9e93c3`), so this half is held at the push, in phase 10 |
+| each new check seen to fail on a planted break | each phase's "Planted breaks" in this record |
+| `make api` reports and gates nothing in `remote`; `go mod tidy -diff`; `govulncheck` | the api, tidy and precheck gates, below |
+| interoperability with the TypeScript and Python SDKs | phase 7's run, all eight pairs |
+
+**The PLAN's own "Verification":**
+* `go.mod` requires `golang.org/x/sys v0.49.0` and `github.com/coder/websocket v1.8.15`, and nothing else.
+* `github.com/coder/websocket` is imported by `remote` alone (phase 8's `go list`).
+* No generated file changed: the regen gate passed.
+
+**Gates:**
+* The ladder tests (`TestHandlerLadder…`, `TestHandlerClose`, `TestHandlerServeReturnsFirst`, `TestWebSocketKeepAlive`), with
+  phase 6's and 7's timing-sensitive server tests and `TestHTTPClientLoadStreamFirst`, `-count=20`:
+  * on macOS under `-race`: ok in `104.921s`;
+  * through `tools/remote.py pkg`: exit 0 on the Linux host and on the Windows host.
+* `tools/gates.py --all`: all 18 `ok`.
+  * Precheck: "276 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)".
+  * `remote` on the Windows host `5.662s`, on the Linux host `5.631s`.
+* `make api`: "against v1.26.0: 0 incompatible, 11 compatible"; "reported packages unstable, remote: 0 incompatible, not gated".
+  The four gated packages are unchanged.
+
+**What remains** is phase 10, only on the owner's ask in that turn:
+* the release-notes report;
+* `tools/consumer.py` extended;
+* the push, and with it CI's `-race` on Linux and Windows;
+* the tag.
+
+This PLAN stays `in-progress` until then.
+  * The MADR's item is amended ("Amended in the PLAN's phase 9, 2026-10-30", 1) and annotated in place. Its Status gains a dated
+    note that the decision is implemented.
+  * The other option was to amend the wording alone.

@@ -532,7 +532,8 @@ func (f *fakeServer) get(w http.ResponseWriter, r *http.Request) {
 }
 
 // loadAgent is a ScriptAgent that advertises loadSession and replays one
-// update when a session is loaded.
+// update when a session is loaded; it advertises session/resume too, and
+// resumes a session without a replay.
 type loadAgent struct {
 	acptest.ScriptAgent
 	conn *acp.AgentSideConnection
@@ -540,7 +541,10 @@ type loadAgent struct {
 
 func newLoadAgent() acp.Agent {
 	a := &loadAgent{}
-	a.Capabilities = acp.AgentCapabilities{LoadSession: true}
+	a.Capabilities = acp.AgentCapabilities{
+		LoadSession:         true,
+		SessionCapabilities: acp.SessionCapabilities{Resume: &acp.SessionResumeCapabilities{}},
+	}
 	a.Turns = []acptest.Turn{{Updates: []acp.SessionUpdate{acp.UpdateAgentMessageText("after load")}, StopReason: acp.StopReasonEndTurn}}
 	return a
 }
@@ -553,6 +557,10 @@ func (a *loadAgent) SetAgentConnection(c *acp.AgentSideConnection) {
 func (a *loadAgent) LoadSession(ctx context.Context, p acp.LoadSessionRequest) (acp.LoadSessionResponse, error) {
 	err := a.conn.SessionUpdate(ctx, acp.SessionNotification{SessionId: p.SessionId, Update: acp.UpdateAgentMessageText("replayed")})
 	return acp.LoadSessionResponse{}, err
+}
+
+func (a *loadAgent) ResumeSession(context.Context, acp.ResumeSessionRequest) (acp.ResumeSessionResponse, error) {
+	return acp.ResumeSessionResponse{}, nil
 }
 
 // jsonLine is v as one line, for raw writes to a Conn.

@@ -895,8 +895,8 @@ Each profile drives a `serverConn`:
     which takes the session from the header or the params, as Rust's server
     does. It queues the line on `inbox`, up to the handler's `inboxLimit`
     (256), and answers `202`.
-  - `feed` writes `inbox` into the input, so an answer cannot overtake its
-    POST's `202`.
+  - `feed` writes `inbox` into the input, so a POST's `202` is sent before the
+    agent can answer it.
   - `serveInitialize` waits up to `initBound` (30 s) for the answer.
   - `route` reads the output, and `dispatch` holds each line for its stream.
     `routes`, `attaching`, `agentReqs` and `named` map ids and sessions to
@@ -913,8 +913,13 @@ Each profile drives a `serverConn`:
 
 Checks that guard it:
 
-- `remote`'s 55 tests run on loopback through `httptest`, each waiting on an
-  event under a named bound, never on a sleep:
+- `remote`'s 55 tests run on loopback through `httptest`. Each event a test
+  requires is waited for under a named bound. Its fixed waits are deliberate:
+  - a delay the fake server injects;
+  - the 300 ms a stream must outlive a `WriteTimeout` by;
+  - a short window in which a test requires that something does not happen.
+
+  The tests, by file:
   - `frame_test.go`'s three and `route_test.go`'s four;
   - `ws_test.go`'s twelve and `handler_test.go`'s six;
   - `httpclient_test.go`'s fifteen, against `fakeserver_test.go`'s fake in the

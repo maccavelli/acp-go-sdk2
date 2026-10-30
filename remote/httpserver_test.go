@@ -317,7 +317,16 @@ func TestHTTPServerInitialize(t *testing.T) {
 func TestHTTPServerRouting(t *testing.T) {
 	t.Parallel()
 	ts := testServer(t, NewHandler(scripted(func(m message, _ []byte, write func(string)) bool {
-		if m.method != "session/prompt" {
+		switch m.method {
+		case "session/fork":
+			write(`{"jsonrpc":"2.0","id":` + m.idKey + `,"result":{"sessionId":"forked"}}`)
+			return true
+		case "session/resume":
+			write(`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"` + m.sessionID + `","update":{}}}`)
+			write(`{"jsonrpc":"2.0","id":` + m.idKey + `,"result":{}}`)
+			return true
+		case "session/prompt":
+		default:
 			return false
 		}
 		s := m.sessionID
@@ -360,6 +369,22 @@ func TestHTTPServerRouting(t *testing.T) {
 		if m := classify([]byte(conn.next(t))); m.method != "$/cancel_request" {
 			t.Errorf("the connection stream's event = %+v, want the $/ notification", m)
 		}
+	}
+
+	// session/fork's and session/resume's answers go to the connection
+	// stream, as session/new's and session/load's do; the resumed session's
+	// update goes to its own.
+	forkID, status := c.request("session/fork", `{"sessionId":"`+sessions[0]+`","cwd":"/w","mcpServers":[]}`, sessions[0])
+	if m := classify([]byte(conn.next(t))); status != http.StatusAccepted || m.kind != kindResponse || m.idKey != forkID {
+		t.Errorf("session/fork = %d, the connection stream's event %+v; want 202 and its answer", status, m)
+	}
+	resumed := c.stream("resumed")
+	resumeID, status := c.request("session/resume", `{"sessionId":"resumed","cwd":"/w","mcpServers":[]}`, "resumed")
+	if m := classify([]byte(conn.next(t))); status != http.StatusAccepted || m.kind != kindResponse || m.idKey != resumeID {
+		t.Errorf("session/resume = %d, the connection stream's event %+v; want 202 and its answer", status, m)
+	}
+	if m := classify([]byte(resumed.next(t))); m.method != "session/update" || m.sessionID != "resumed" {
+		t.Errorf("the resumed session's stream = %+v, want its update", m)
 	}
 }
 
