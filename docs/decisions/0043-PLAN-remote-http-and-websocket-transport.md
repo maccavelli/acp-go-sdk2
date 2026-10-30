@@ -1386,6 +1386,44 @@ The examples are compiled, not run, and have no `Output:`, so no planted break a
 * the tag.
 
 This PLAN stays `in-progress` until then.
+
+### Phase 10, the release (2026-10-30)
+
+Asked for with "committed, proceed" after `00c37a3`. That ask covers the steps that stay in this tree. The push and the tag
+each wait for an explicit ask naming them (`AGENTS.md`, "Commits").
+
+**Files:**
+* [0043-REPORT-release-notes-v1-27-0.md](../reports/0043-REPORT-release-notes-v1-27-0.md): the release text for `v1.27.0`, a
+  minor release that adds a package, and its sources. Its row is in `docs/README.md`.
+* `tools/consumer.py`:
+  * its program also serves an `acptest.ScriptAgent` through `remote.NewHandler` on an `httptest` server;
+  * it dials that server over `ws://` and `http://`, runs `initialize`, `session/new` and a prompt on each, and closes the
+    handler;
+  * `WANT_RUN` gains `remote ws <nil> <nil> <nil> end_turn <nil>`, `remote http <nil> <nil> <nil> end_turn <nil>` and
+    `handler <nil>`;
+  * its doc names `v1.27.0` as the version floor.
+* `tools/README.md`: `consumer.py`'s row says so.
+
+**The consumer, checked before the release exists.** A scratch script wrote the program and its test into a module that reaches
+`00c37a3`'s tree through a `replace`, at `GOTOOLCHAIN=go1.26.10`.
+* `go mod tidy`, `go build`, the run, `go test` and the Windows build each exited 0.
+* The output equalled `WANT_RUN`.
+* The first build failed: the program already names its `clienthost` host `h`, so the handler became `rh`.
+
+**Planted break**, in a scratch copy of the tree whose server sends binary frames (`remote/ws.go`'s `pumpWebSocket`): "output
+equals WANT_RUN: False". The first difference is at line 21:
+
+```text
+remote ws {"code":-32603,"message":"Internal error","data":{"error":"context deadline exceeded"}} …
+```
+
+**Waiting for the owner's ask:**
+* the commit of these files;
+* the push, and its CI, which also runs the MADR's `-race` item on Linux and Windows. The report then gains its CI run;
+* the tag `v1.27.0`, the GitHub release from the report's "Release text" through `tools/release_body.py`, `tools/publication.py`,
+  and `tools/consumer.py v1.27.0`.
+
+The PLAN becomes `complete` once the last of these passes.
   * The MADR's item is amended ("Amended in the PLAN's phase 9, 2026-10-30", 1) and annotated in place. Its Status gains a dated
     note that the decision is implemented.
   * The other option was to amend the wording alone.

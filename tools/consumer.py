@@ -24,8 +24,12 @@ terminal through clienthost
 agent in process through InProcess and ServeAgent, a Transcript as both taps,
 and prints the tail of a failing child's standard error; its test reads a
 transcript back with ReadRecords, validates and decodes it, and replays it
-with ConnectReplay (0042-PLAN-in-process-agent-runner.md, phase 11), so
-VERSION is v1.26.0 or later. Its go.mod must keep the `go` line and gain no
+with ConnectReplay (0042-PLAN-in-process-agent-runner.md, phase 11). It
+serves a ScriptAgent through remote.NewHandler on loopback, dials it over
+ws:// and http://, runs a prompt on each, and closes the handler, so the
+proxy's copy of github.com/coder/websocket is fetched with the checksum
+database on (0043-PLAN-remote-http-and-websocket-transport.md, phase 10). So
+VERSION is v1.27.0 or later. Its go.mod must keep the `go` line and gain no
 toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
@@ -54,14 +58,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	acp "MODULE"
+	"MODULE/acptest"
 	"MODULE/agentproc"
 	"MODULE/clienthost"
+	"MODULE/remote"
 )
 
 type client struct{ acp.ClientRefusals }
@@ -207,6 +215,26 @@ func main() {
 	var se *agentproc.StderrError
 	joined := errors.As(fp.Wait(), &se) && se.Tail == fp.StderrTail()
 	fmt.Printf("stderr %q %v\\n", fp.StderrTail(), joined)
+	rh := remote.NewHandler(func(ctx context.Context, in io.Reader, out io.Writer) error {
+		return acp.ServeAgent(ctx, &acptest.ScriptAgent{Turns: []acptest.Turn{{StopReason: acp.StopReasonEndTurn}}}, in, out)
+	}, nil)
+	srv := httptest.NewServer(rh)
+	defer srv.Close()
+	for _, url := range []string{"ws" + strings.TrimPrefix(srv.URL, "http"), srv.URL} {
+		rc, err := remote.Dial(ctx, url, nil)
+		if err != nil {
+			fmt.Println("Dial:", err)
+			return
+		}
+		rconn := acp.NewClientSideConnection(client{}, rc, rc)
+		_, ierr := rconn.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
+		sess, serr := rconn.NewSession(ctx, acp.NewSessionRequest{Cwd: dir})
+		res, perr := rconn.Prompt(ctx, acp.PromptRequest{SessionId: sess.SessionId, Prompt: []acp.ContentBlock{acp.TextBlock("hi")}})
+		scheme, _, _ := strings.Cut(url, ":")
+		fmt.Println("remote", scheme, ierr, serr, perr, res.StopReason, rc.Close())
+		<-rconn.Done()
+	}
+	fmt.Println("handler", rh.Close(ctx))
 }
 '''
 TEST = '''package main
@@ -282,7 +310,8 @@ WANT_RUN = ("Close: <nil>\nwait <nil> true\ndropped 0 0\nprotocol version 1\nkin
             'files <nil> <nil> "two\\n"\nmissing true\n'
             "terminal 3 hi false <nil>\nrelease <nil> true <nil>\n"
             "in-process 1 <nil> <nil> true\ntranscript <nil> 2\n"
-            'stderr "failed\\n" true')
+            'stderr "failed\\n" true\n'
+            "remote ws <nil> <nil> <nil> end_turn <nil>\nremote http <nil> <nil> <nil> end_turn <nil>\nhandler <nil>")
 
 
 def go_mod_ok(text: str, go: str, mod: str, version: str) -> bool:
