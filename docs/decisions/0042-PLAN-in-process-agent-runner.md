@@ -1449,3 +1449,45 @@ entry:
 | `tools/consumer.py` closing an in-process agent through `CloseContext` | phase 17's release items, on the owner's ask: `consumer.py` extended, then run against `v1.28.0` | open |
 
 This PLAN stays `in-progress` until the last item is shown and the release is published.
+
+### Phase 17, the release notes and the consumer (2026-10-30)
+
+The owner committed phase 17's checks as `29d1097`, pushed `1457073` to `29d1097`, and chose, of the release's steps, the release
+notes and the consumer, staged, with no push or tag.
+
+**CI on `29d1097`,** `tools/watch_ci.py --branch main 29d1097`, exit 0: run `41142221134`, "completed success", the six `validate`
+jobs on macOS, Ubuntu and Windows at Go `1.27.3` and `1.26.10`; the Docs workflow's run `41142220171`, "completed success".
+
+**Files:**
+* `docs/reports/0042-REPORT-release-notes-v1-28-0.md`, new, and its row in `docs/README.md`: the release text for the minor
+  `v1.28.0`, three compatible additions and one defect fixed, each statement naming its commit, a record or `make api`; and its
+  sources: the ten commits since `v1.27.0` and their files, the three Go files changed outside the tests, the unchanged areas, the
+  CI runs above, and the consumer's run before the tag. Read against the commits before staging, four statements were corrected:
+  the three test fixes of `70cf30c` and `f771373` are a grace each for two and a closed pipe allowed for the third, not three
+  margins; `1457073` changes the MADR too; the planted breaks of phases 13 to 15 number ten, not twelve; and `Close`, `Kill`, `Wait`
+  and `WaitContext` behave as before only outside the changed error text.
+* `tools/consumer.py`:
+  * the program closes an `InProcess` agent through `CloseContext` and prints its error;
+  * a client, `hung`, whose `SessionUpdate` ignores its context until released; a `ScriptAgent` served in process whose turn sends
+    one update, prompted; `CloseContext` under a 300 ms bound; and, the handler released, `errors.Is` of the error for
+    `context.DeadlineExceeded` and `acp.ErrHandlersRunning`, and `Wait`'s error;
+  * `WANT_RUN` gains `close-context <nil>` and `bounded true true <nil>`; the docstring says `VERSION` is `v1.28.0` or later.
+* `tools/README.md`: `consumer.py`'s row names the two closes and `v1.28.0`.
+
+**The consumer before the tag.** The scratch script of phase 11 built the program and test against the tree through a `replace`,
+at `go1.26.10`: `go mod tidy`, the build, the run, `go test` and the Windows build, each exit 0; "output equals WANT_RUN: True".
+
+**Planted breaks,** each in its own copy of the tree, through the same script; 2 of 2 as required:
+
+| Break | Broken |
+| :--- | :--- |
+| the sentinel never joined (`waitBounded`'s condition `false`) | "first difference at line 21: got 'bounded true false <nil>', want 'bounded true true <nil>'" |
+| the bound's cause dropped (`errs` begun empty) | "first difference at line 21: got 'bounded false true <nil>', want 'bounded true true <nil>'" |
+
+**Checks**, each exit 0: `make check-tools`, "Ran 58 tests" and "Ran 32 tests", both "OK", "check-ci-filters: 0 problem(s)";
+`make api` on `29d1097`, "against v1.27.0: 0 incompatible, 3 compatible"; `make check-records`; `make markdownlint`; `make
+disclosure-check`; `tools/idscan.py --paths` over the five changed files, "0 match(es)".
+
+**Left, each on the owner's ask:** the push of this commit and its CI; the tag `v1.28.0`, the GitHub release from
+`tools/release_body.py`, `tools/publication.py`, and `tools/consumer.py v1.28.0`, which shows the Confirmation's last item; then
+issue #12 answered and closed with the release's link, and this PLAN and its row `complete`.

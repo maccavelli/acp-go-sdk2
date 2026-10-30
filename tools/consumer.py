@@ -28,8 +28,12 @@ with ConnectReplay (0042-PLAN-in-process-agent-runner.md, phase 11). It
 serves a ScriptAgent through remote.NewHandler on loopback, dials it over
 ws:// and http://, runs a prompt on each, and closes the handler, so the
 proxy's copy of github.com/coder/websocket is fetched with the checksum
-database on (0043-PLAN-remote-http-and-websocket-transport.md, phase 10). So
-VERSION is v1.27.0 or later. Its go.mod must keep the `go` line and gain no
+database on (0043-PLAN-remote-http-and-websocket-transport.md, phase 10). It
+closes an in-process agent through Process.CloseContext, and, with a client
+whose SessionUpdate ignores its context, closes another under a 300 ms bound
+and prints errors.Is of its error for the bound's cause and
+acp.ErrHandlersRunning (0042-PLAN-in-process-agent-runner.md, phase 17). So
+VERSION is v1.28.0 or later. Its go.mod must keep the `go` line and gain no
 toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
@@ -63,6 +67,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	acp "MODULE"
@@ -78,6 +83,20 @@ func (client) SessionUpdate(context.Context, acp.SessionNotification) error { re
 
 func (client) RequestPermission(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
+}
+
+// hung is a client whose SessionUpdate ignores its context until release
+// closes; entered closes at its first call.
+type hung struct {
+	client
+	entered, release chan struct{}
+	once             sync.Once
+}
+
+func (h *hung) SessionUpdate(context.Context, acp.SessionNotification) error {
+	h.once.Do(func() { close(h.entered) })
+	<-h.release
+	return nil
 }
 
 type agent struct{ acp.AgentRefusals }
@@ -206,6 +225,41 @@ func main() {
 	res, err := ip.Conn().Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
 	fmt.Println("in-process", res.ProtocolVersion, err, ip.Close(), acp.EndedCleanly(ip.Conn().Err()))
 	fmt.Println("transcript", tr.Close(), bytes.Count(log.Bytes(), []byte("\\n")))
+	cp, err := (&agentproc.InProcess{Serve: serve}).Start(client{})
+	if err != nil {
+		fmt.Println("InProcess:", err)
+		return
+	}
+	fmt.Println("close-context", cp.CloseContext(ctx))
+	hc := &hung{entered: make(chan struct{}), release: make(chan struct{})}
+	hp, err := (&agentproc.InProcess{Grace: 300 * time.Millisecond, Serve: func(ctx context.Context, in io.Reader, out io.Writer) error {
+		turn := acptest.Turn{Updates: []acp.SessionUpdate{acp.UpdateAgentMessageText("hi")}, StopReason: acp.StopReasonEndTurn}
+		return acp.ServeAgent(ctx, &acptest.ScriptAgent{Turns: []acptest.Turn{turn}}, in, out)
+	}}).Start(hc)
+	if err != nil {
+		fmt.Println("InProcess:", err)
+		return
+	}
+	_, ierr := hp.Conn().Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
+	hs, serr := hp.Conn().NewSession(ctx, acp.NewSessionRequest{Cwd: dir})
+	if ierr != nil || serr != nil {
+		fmt.Println("hung:", ierr, serr)
+		return
+	}
+	go func() {
+		_, _ = hp.Conn().Prompt(ctx, acp.PromptRequest{SessionId: hs.SessionId, Prompt: []acp.ContentBlock{acp.TextBlock("hi")}})
+	}()
+	select {
+	case <-hc.entered:
+	case <-ctx.Done():
+		fmt.Println("hung: the update never came")
+		return
+	}
+	bound, cancelBound := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancelBound()
+	berr := hp.CloseContext(bound)
+	close(hc.release)
+	fmt.Println("bounded", errors.Is(berr, context.DeadlineExceeded), errors.Is(berr, acp.ErrHandlersRunning), hp.Wait())
 	failing := exec.Command("sh", "-c", "echo starting >&2; echo failed >&2; exit 2")
 	fp, err := (&agentproc.Command{Cmd: failing, StderrTailLines: 1, JoinStderrTail: true}).Start(client{})
 	if err != nil {
@@ -310,6 +364,7 @@ WANT_RUN = ("Close: <nil>\nwait <nil> true\ndropped 0 0\nprotocol version 1\nkin
             'files <nil> <nil> "two\\n"\nmissing true\n'
             "terminal 3 hi false <nil>\nrelease <nil> true <nil>\n"
             "in-process 1 <nil> <nil> true\ntranscript <nil> 2\n"
+            "close-context <nil>\nbounded true true <nil>\n"
             'stderr "failed\\n" true\n'
             "remote ws <nil> <nil> <nil> end_turn <nil>\nremote http <nil> <nil> <nil> end_turn <nil>\nhandler <nil>")
 
