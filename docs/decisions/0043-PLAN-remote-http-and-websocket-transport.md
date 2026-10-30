@@ -914,3 +914,85 @@ required an error naming the stream's end; it now requires the clean end its doc
 * `golangci-lint` for `darwin` and `windows`: 0 issues, after one `//nolint:bodyclose` on the retried POST, which `refused` or
   `drain` closes.
 * `make api`: "0 incompatible, 11 compatible", the same eleven names as phase 4. Phase 5 adds no exported name.
+
+### Phase 6, the Streamable HTTP server (2026-10-29)
+
+Approved with "committed, proceed" after `7e57c81`.
+
+**Files:**
+* `remote/httpserver.go`:
+  * `httpConn` and `sseStream`;
+  * `servePost` and `admit`, Rust's session rule;
+  * `serveInitialize` and `fail`;
+  * `run`, `check` and `closeStreamLocked`;
+  * `route`, `dispatch`, `isErrorAnswer` and `settleAttach`;
+  * `serveStream`, `attach`, `detach` and `stream`;
+  * `serveDelete`, and `maxIDLength`, 1024.
+* `remote/handler.go`:
+  * `ServeHTTP` routes `POST`, `GET` and `DELETE`, after `originAllowed`, which copies `websocket.Accept`'s rule (`accept.go:228`–`:264`, with its lower-casing `path.Match`); any other method is `405` with `Allow`;
+  * the handler gains `httpConns`, and the unexported `initBound` (30 s) and `idleBound` (60 s) that the tests shorten.
+* `remote/sse.go`: `writeEvent` and `keepAliveComment` (`":\n\n"`, as Rust's empty comment).
+* `remote/httpserver_helpers_test.go`:
+  * `scripted`, a serve that answers each message as a test says, so routing is checked line by line;
+  * `rawConn` and `rawStream`, for the requests the client never sends;
+  * `countComments`.
+* `remote/httpserver_test.go`. `remote/handler_test.go`'s `TestHandlerRefusals` now requires `405` and `Allow` for a `PUT`, in
+  place of phase 4's interim `501`.
+
+**How a connection runs.** `serveInitialize` starts the serve through phase 4's `Handler.start`, and `httpConn.run` owns the
+connection from then on:
+* the router reads the agent's output through phase 4's `pump`;
+* a ticker, a quarter of the shorter of `Grace` and the idle bound and at least 10 ms, checks the idle bound and closes the
+  provisional streams;
+* when the ladder is done and the router has read to the end, `done` closes, and each stream sends what it holds, then
+  ends.
+
+Every end goes through phase 4's ladder: `DELETE`, the idle bound, an overflow, `Handler.Close`, the serve's own end and a failed
+`initialize`. A connection is in `httpConns` only once `initialize` has a result, so every request before that is `404`.
+
+**Tests**, the PLAN's fourteen:
+
+| Test | Result |
+| :--- | :--- |
+| `TestHTTPServerRoundTrip` | pass, in three subtests: `http1`, `tls-h2` and `h2c`. The round trip, the permission, `session/cancel`, and `SetSessionMode` ended by `$/cancel_request`, its `-32800` read on the wire |
+| `TestHTTPServerStatuses` | pass: `415`; `413` at a 1024-byte limit; `400` for not JSON, not JSON-RPC, an over-long id or header, no connection header, `initialize` on a connection, a session method with no session, a header differing from params, a GET with no connection header and a DELETE with none; `501` for a batch; `404` for an unknown connection on POST, GET and DELETE; `405` for `PUT` and `OPTIONS`; `406`; `409` for a second connection stream |
+| `TestHTTPServerClientShapes` | pass: on fresh connections, `session/load` with the header and with `params.sessionId` alone, each `202`, its replay on the session stream opened before it and its answer on the connection stream; the prompt after it; the permission answer `202` with the header and without it, `400` with another session's |
+| `TestHTTPServerInitialize` | pass: a result `200` with the id; an error `200` without it; a serve that returns first `500` with `"id":7,"error":{"code":-32603`; no answer in 100 ms `504`; the last three ending the serve |
+| `TestHTTPServerRouting` | pass: two sessions, each prompt's update, permission request and answer on its own stream; both `session/new` answers and both `$/cancel_request` notifications naming a session on the connection stream |
+| `TestHTTPServerHeld`, `TestHTTPServerOverflow`, `TestHTTPServerProvisional`, `TestHTTPServerDelete`, `TestHTTPServerIdle`, `TestHTTPServerKeepAlive` | pass |
+| `TestHTTPServerWriteTimeout` | pass: an event 300 ms into a stream under a 100 ms `WriteTimeout` |
+| `TestHTTPServerOrigin` | pass: a foreign `Origin` `403` on POST, GET and DELETE, and on the WebSocket upgrade; served with a host pattern and with a `https://` pattern; served with no `Origin` |
+| `TestHTTPServerTranscript` | pass, over `http://` |
+
+`go test -race -count=3 -shuffle=on ./remote/`: ok. The timing-sensitive tests (`…Idle`, `…KeepAlive`, `…WriteTimeout`,
+`…Overflow`, `…Provisional`, `…Initialize`, `…Delete`, `…Held`, `…Routing`), `-count=20`: macOS under `-race` ok in `11.798s`;
+`tools/remote.py pkg` on the Linux host and on the Windows host, each exit 0.
+
+**One test fix, from a measurement.** `TestHTTPServerRoundTrip` first took 5.05 s in each subtest. A temporary
+`zz_timing_test.go`, deleted after, timed each part at under 110 ms. The 5 s was the teardown: the test closed the connection
+before the agent had read the `$/cancel_request`, so `acp.ServeAgent`'s 5 s handler drain waited for `SetSessionMode`'s handler,
+as 0042's item 2 designed. The test now waits for the `-32800` answer on the wire, as `TestWebSocketCancel` does and as the
+PLAN's row requires, and each subtest takes 0.04–0.06 s.
+
+**Planted breaks**, `python3 tools/plants.py` over nine plants, "9/9 as required":
+
+| Plant | Failing line |
+| :--- | :--- |
+| the `409` check removed | `httpserver_test.go:187: a second receiver for the connection stream = 200, want 409` |
+| `session/new`'s answer routed to a session stream | `httpserver_test.go:333: no event within 10s` |
+| held lines sent out of order | `httpserver_test.go:384: held event 0 = {…"id":101,"result":{"stopReason":"end_turn"}}, want n 0` |
+| the overflow bound not applied | `httpserver_test.go:420: holding over MaxBuffered did not end the connection` |
+| the idle bound not started | `httpserver_test.go:521: a connection with no stream was not ended` |
+| the write deadline left in place | `httpserver_test.go:555: the stream ended before its next event` |
+| the origin check skipped for `DELETE` | `httpserver_test.go:590: patterns [], origin "https://app.example": DELETE = 202, want refused true` |
+| the header required whenever `params.sessionId` is present | `httpserver_test.go:223: params alone: session/load = 400, want 202` |
+| the `initialize` bound removed | `httpserver_test.go:297: Post "http://127.0.0.1:…": context deadline exceeded` |
+
+**Gates:**
+* `tools/gates.py --all`: all 18 `ok`.
+* Precheck: "270 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)".
+* `remote`'s tests: ok at the floor (`8.682s`), on the Windows host (`5.671s`) and on the Linux host (`5.798s`).
+* `golangci-lint` for `darwin` and `windows`: 0 issues, after `errors.AsType` for the body limit's `*http.MaxBytesError`,
+  `strconv.Itoa` and `t.Helper()` in the tests, and one `//nolint:bodyclose` on the raw stream, whose reading goroutine closes
+  it.
+* `make api`: "0 incompatible, 11 compatible". Phase 6 adds no exported name.

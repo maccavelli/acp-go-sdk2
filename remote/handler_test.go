@@ -183,8 +183,7 @@ func TestHandlerServeReturnsFirst(t *testing.T) {
 }
 
 // TestHandlerRefusals requires NewHandler to panic on a nil serve, and a
-// request that is not a WebSocket upgrade to be answered 501 until the
-// Streamable HTTP server lands.
+// method the endpoint does not serve to be answered 405 with Allow.
 func TestHandlerRefusals(t *testing.T) {
 	t.Parallel()
 	func() {
@@ -196,12 +195,16 @@ func TestHandlerRefusals(t *testing.T) {
 		NewHandler(nil, nil)
 	}()
 	ts := testServer(t, NewHandler(serveAgents(func() acp.Agent { return &acptest.ScriptAgent{} }), nil))
-	resp, err := http.Post(ts.URL, "application/json", strings.NewReader(`{}`))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, ts.URL, strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusNotImplemented {
-		t.Errorf("a POST = %d, want 501", resp.StatusCode)
+	if resp.StatusCode != http.StatusMethodNotAllowed || resp.Header.Get("Allow") != "GET, POST, DELETE" {
+		t.Errorf("a PUT = %d, Allow %q; want 405 and GET, POST, DELETE", resp.StatusCode, resp.Header.Get("Allow"))
 	}
 }

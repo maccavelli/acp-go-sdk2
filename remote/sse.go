@@ -8,6 +8,18 @@ import (
 	"io"
 )
 
+// writeEvent writes data, one line with no newline, as one event.
+func writeEvent(w io.Writer, data []byte) error {
+	b := make([]byte, 0, len(data)+len("data: \n\n"))
+	b = append(append(append(b, "data: "...), data...), "\n\n"...)
+	_, err := w.Write(b)
+	return err
+}
+
+// keepAliveComment is the event-stream comment sent on an idle stream, as the
+// Rust server's empty one.
+const keepAliveComment = ":\n\n"
+
 // sseReader reads the events of a text/event-stream body, the format
 // Streamable HTTP's GET streams carry (https://html.spec.whatwg.org/multipage/server-sent-events.html):
 // lines end in LF, CR or CRLF; an event's data lines are joined with "\n";

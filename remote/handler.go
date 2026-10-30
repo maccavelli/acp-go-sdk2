@@ -8,6 +8,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -63,12 +65,20 @@ type Handler struct {
 	opts  HandlerOptions
 	log   *slog.Logger
 
-	mu     sync.Mutex
-	closed bool
-	conns  map[*serverConn]struct{}
-	active sync.WaitGroup // each connection, from its start to its ending's end
+	mu        sync.Mutex
+	closed    bool
+	conns     map[*serverConn]struct{}
+	httpConns map[string]*httpConn // the Streamable HTTP connections, by Acp-Connection-Id
+	active    sync.WaitGroup       // each connection, from its start to its ending's end
 
 	abandoned atomic.Int64
+
+	// initBound and idleBound are the Streamable HTTP bounds: how long
+	// initialize waits for its answer, and how long a connection lives with no
+	// connection-scoped stream (0043-MADR-remote-http-and-websocket-transport.md,
+	// "Amended by the PLAN, 2026-10-29", 3 and 9). Only this package's tests
+	// change them.
+	initBound, idleBound time.Duration
 }
 
 // NewHandler returns a Handler that runs serve once for each connection, on
@@ -82,7 +92,10 @@ func NewHandler(serve func(ctx context.Context, in io.Reader, out io.Writer) err
 		panic("remote: NewHandler: nil serve")
 	}
 	o := resolveHandlerOptions(opts)
-	return &Handler{serve: serve, opts: o, log: o.Logger, conns: make(map[*serverConn]struct{})}
+	return &Handler{
+		serve: serve, opts: o, log: o.Logger, conns: make(map[*serverConn]struct{}), httpConns: make(map[string]*httpConn),
+		initBound: 30 * time.Second, idleBound: 60 * time.Second,
+	}
 }
 
 // resolveHandlerOptions returns opts with its defaults set.
@@ -109,9 +122,12 @@ func resolveHandlerOptions(opts *HandlerOptions) HandlerOptions {
 	return o
 }
 
-// ServeHTTP serves one request to the endpoint: a GET with "Upgrade:
-// websocket" opens a WebSocket connection. After Close, every request is
-// answered 503.
+// ServeHTTP serves one request to the endpoint, as the RFD routes it: a GET
+// with "Upgrade: websocket" opens a WebSocket connection; a POST sends a
+// message, initialize opening a Streamable HTTP connection; a GET opens one of
+// its event streams; a DELETE ends it. Any other method is answered 405, a
+// browser's CORS preflight included, which is the host's middleware. After
+// Close, every request is answered 503.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.isClosed() {
 		h.refuse(w, http.StatusServiceUnavailable, "remote: the handler is closed")
@@ -121,7 +137,55 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveWebSocket(w, r)
 		return
 	}
-	h.refuse(w, http.StatusNotImplemented, "remote: Streamable HTTP is not implemented yet")
+	switch r.Method {
+	case http.MethodPost, http.MethodGet, http.MethodDelete:
+	default:
+		w.Header().Set("Allow", "GET, POST, DELETE")
+		h.refuse(w, http.StatusMethodNotAllowed, "remote: the method is not one the endpoint serves")
+		return
+	}
+	if !originAllowed(r, h.opts.OriginPatterns) {
+		h.refuse(w, http.StatusForbidden, "remote: the request's origin is not allowed")
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		h.servePost(w, r)
+	case http.MethodGet:
+		h.serveStream(w, r)
+	default:
+		h.serveDelete(w, r)
+	}
+}
+
+// originAllowed applies the WebSocket upgrade's origin rule to a request
+// (0043-MADR-remote-http-and-websocket-transport.md, "Amended by the PLAN,
+// 2026-10-29", 7): a request with no Origin passes, as a program sends none;
+// so does one whose Origin's host is the request's Host, or matches one of
+// patterns, against the Origin's scheme and host when the pattern holds
+// "://", as websocket.Accept matches them.
+func originAllowed(r *http.Request, patterns []string) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if strings.EqualFold(r.Host, u.Host) {
+		return true
+	}
+	for _, p := range patterns {
+		target := u.Host
+		if strings.Contains(p, "://") {
+			target = u.Scheme + "://" + u.Host
+		}
+		if ok, err := path.Match(strings.ToLower(p), strings.ToLower(target)); err == nil && ok {
+			return true
+		}
+	}
+	return false
 }
 
 // refuse answers a request with status and text, and logs it.
