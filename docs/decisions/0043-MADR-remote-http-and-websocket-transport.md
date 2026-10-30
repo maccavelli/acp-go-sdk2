@@ -24,7 +24,8 @@ tree: their methods and types are generated, and those with behaviour beyond the
 client), which one should this SDK implement next, and in what shape?
 
 **Status.** Accepted. The owner answered the five questions under "Questions for the owner" on 2026-10-29, each as recommended
-("Decided with the owner, 2026-10-29"). Nothing is implemented; the PLAN is not yet written.
+("Decided with the owner, 2026-10-29"). Nothing is implemented. Writing the PLAN, and checking it against the official servers'
+code, fixed seven details and changed two ("Amended by the PLAN, 2026-10-29").
 
 ### Findings in this repository
 
@@ -92,8 +93,9 @@ Read at `agentclientprotocol/agent-client-protocol` `2bb9fac` and on agentclient
   * auth is "orthogonal and layered on top via HTTP headers, query parameters, or WebSocket subprotocols";
   * v1 leaves reconnect, retry and liveness to the implementer, and does not replay in-flight messages; `Last-Event-ID`
     resumption and a standard keepalive are deferred to v2; `Acp-Protocol-Version` is a SHOULD, "Not yet implemented".
-* **S5. The RFD leaves points open.** Its session/load diagram sends the replay on the session stream and the response on the
-  connection stream; the Python SDK sends both on the connection stream (K3). Its WebSocket section says the server "cleans up
+* **S5. The RFD leaves points open.** Its `session/load` diagram sends the replay on the session stream and the response on the
+  connection stream. The Python SDK sends both on the connection stream, and the Rust SDK sends the response on the session
+  stream (K3). Its WebSocket section says the server "cleans up
   the connection and any associated sessions" on disconnect, while its v1 section says "Sessions survive disconnects". The name of
   the `initialize` body's connection field, `connectionId`, appears in a diagram only.
 * **S6. The working group.** "Transports Working Group", published 2026-04-22: "Remote Agent support is a key focus of ACP, and in
@@ -132,6 +134,24 @@ Read at the revisions under "Sources".
   the session from `params.sessionId`. Rust keeps `$/` messages connection-scoped, and rejects an `Acp-Session-Id` that differs from
   `params.sessionId`. Python's server table: the `initialize` response in the POST body; a response carrying a new `sessionId`, and
   `session/load` and `session/resume`, on the connection stream; others on their session's stream when known.
+
+  They differ where a client meets a session the connection has not named. Read in `src/transports/server.ts` and
+  `connection.ts`, `src/agent-client-protocol-http/src/http_server.rs` and `protocol.rs`, and `src/acp/http/server.py` and
+  `protocol.py`:
+
+  | | TypeScript | Rust | Python |
+  | :--- | :--- | :--- | :--- |
+  | session stream `GET` for a session not yet named | creates it (`acquireSessionStream`) | creates it (`subscribe_session_stream`) | `404` until `session/new`'s result or a `session/load` or `session/resume` POST names it |
+  | a second receiver for a stream | `409` | `409` | no `409` in `server.py` |
+  | the session of a session-scoped POST | `Acp-Session-Id` required for the ten methods and whenever `params.sessionId` is present | the header or `params.sessionId`, either; `400` when neither or when they differ | the header required for five methods (`session/prompt`, `cancel`, `close`, `set_mode`, `set_config_option`); `404` when the header names an unknown session |
+  | a client's response to the agent's request | `Acp-Session-Id` must match the request's session | not checked | not checked |
+  | `session/load`'s answer | the connection stream | the session stream | the connection stream |
+  | `initialize` that fails | `500` with a `-32603` body, `499` when the request is aborted | the agent's error answer, without `Acp-Connection-Id` | `504` after 30 s (`INITIALIZE_TIMEOUT_SECONDS`), `500` on failure |
+  | a POST body over the limit | — | `413` over 16 MiB | — |
+  | the SSE keepalive | — | an empty comment every 15 s | `": keepalive"` every 15 s, "in sync with the TypeScript reference (15s)" |
+
+  So no single client header rule satisfies every server. A `session/load` on a fresh connection needs `Acp-Session-Id` for
+  TypeScript, and that header is a `404` for Python.
 * **K4. Not all of them serve HTTP/2.** Rust's workspace builds `axum` with `features = ["http1", "tokio", "tracing",
   "tower-log"]` (`Cargo.toml:69`), and the 3.0.0 notes "Limit Axum to HTTP1"; its client applies "HTTP/1.1 and disables redirects"
   for WebSocket URLs. Python follows the RFD and says so: "For a spec-compliant Streamable HTTP server, run an HTTP/2-capable ASGI
@@ -182,6 +202,8 @@ Read at `<cli-b>` `ccd8aa8` and magic-cli-remote `0e84b1f0`. Nothing in either t
   "Zero dependencies", "First class context.Context support", "Concurrent writes", a ping API and a close handshake;
   `Accept(w, r, *AcceptOptions)` checks the origin by default, `OriginPatterns` widens it, compression defaults to disabled;
   `Dial` takes an `*http.Client` and handshake headers; "By default, the connection has a message read limit of 32768 bytes".
+  On 2026-10-29, neither OSV (`api.osv.dev`, any version) nor the Go vulnerability database's module index lists a vulnerability for
+  `github.com/coder/websocket` or its former path, `nhooyr.io/websocket`.
 * **G4. `github.com/gorilla/websocket` v1.5.3** (2024-06-14): BSD-2-Clause; no release since.
 
 ## Decision Drivers
@@ -278,8 +300,10 @@ http.Handle("/acp", h)
   input, wait up to `Grace` (5 s by default, as `InProcess`), then cancel its context with a cause, and after a further `Grace`
   abandon it, as `InProcess` does (0042-MADR-in-process-agent-runner.md, item 1).
 * Liveness, which the RFD leaves to the implementer (S4): an SSE comment and a WebSocket ping every `KeepAlive`, 30 s by default.
+  *(Changed by "Amended by the PLAN, 2026-10-29", 8: 15 s by default.)*
 * Security: no authentication is built in; the host wraps the handler (S4). The WebSocket upgrade keeps G3's same-origin check
   unless `HandlerOptions.OriginPatterns` widens it, and the other methods run behind `http.CrossOriginProtection` (G1, C1).
+  *(Changed by "Amended by the PLAN, 2026-10-29", 7: the other methods apply the WebSocket upgrade's origin rule instead.)*
 * The handler accepts HTTP/1.1, HTTP/2 and, where the server's `Protocols` allows it, unencrypted HTTP/2 (Q4).
 
 **WebSocket** is `github.com/coder/websocket` v1.8.15, the module's second dependency (Q2). It is the only third-party import, in
@@ -339,6 +363,67 @@ The owner was asked each question with three options and chose the recommended o
 
 "The design" above already describes these answers, so it is unchanged.
 
+#### Amended by the PLAN, 2026-10-29
+
+Writing [0043-PLAN-remote-http-and-websocket-transport.md](0043-PLAN-remote-http-and-websocket-transport.md), and checking it
+against the three official servers' code (K3's second table), fixed details that "The design" left open (1 to 6, and 9). It also
+changed two of its details (7, 8). No owner's decision above changes.
+
+1. **Names the design needs and did not list.** `HandlerOptions.Logger`, an `*slog.Logger` for what the handler cannot return:
+   a serve's error, an abandonment, a refused request. Following Rust's diagnostic privacy rule (`md/http-transport.md`), it logs
+   byte counts, message kinds and fixed labels, never a body, a method's parameters, an id or a session id. There are four end
+   causes, which `context.Cause` reports to a serve: `ErrDeleted`, `ErrDisconnected`, `ErrHandlerClosed` and `ErrOverflow`.
+   `Handler.Close` returns `ErrAbandoned` for a serve that outlived the ladder. `Conn` has no method beyond `Read`, `Write` and
+   `Close`.
+2. **Server rules, where the RFD is silent or the official servers depart from it.** The rule is to accept what any of the three
+   official clients sends (K3's second table):
+   * A session stream may be opened for a session the connection has not named yet, as TypeScript and Rust allow. The RFD's `404`
+     therefore applies to an unknown connection, not to an unknown session. This lets a client open the stream before
+     `session/load`, as the RFD's diagram does.
+   * A second receiver for a stream that has one is answered `409`, as TypeScript and Rust answer it.
+   * A session-scoped method takes its session from `Acp-Session-Id` or from `params.sessionId`, Rust's rule. Neither is `400`, and
+     both, differing, are `400`. TypeScript's stricter rule, the header whenever `params.sessionId` is present, would refuse the
+     Python client's `session/load`, which carries no header.
+   * A client's response to the agent's request may omit `Acp-Session-Id`, as Rust and Python accept it. When present, it must be
+     the session of that request (`400`), as TypeScript requires.
+   * `initialize` on an existing connection is `400`, and so is an id or session id longer than 1024 bytes (TypeScript's
+     `DEFAULT_MAX_ID_LENGTH`).
+   * `MaxBuffered` defaults to 64 MiB, TypeScript's `DEFAULT_MAX_BUFFERED_BYTES`.
+3. **A Streamable HTTP connection ends** with `ErrDisconnected` once no connection-scoped stream has been attached for 60 s. v1
+   leaves liveness to the implementer (S4). Without this bound, a client that leaves without `DELETE` would hold its serve for
+   ever. TypeScript's `DEFAULT_MAX_OUTPUT_STALL_MS` is the same 60 s.
+4. **The WebSocket handshake is HTTP/1.1.** `websocket.Accept` refuses a request below HTTP/1.1 and needs an `http.Hijacker`
+   (`accept.go:185`, `:130` at v1.8.15), which an HTTP/2 `ResponseWriter` is not. `Dial` therefore uses HTTP/1.1 for `ws://` and
+   `wss://`, as Rust's client does (K4), whatever the caller's `HTTPClient` would negotiate.
+5. **The client works with each official server's routing** (K3's second table):
+   * Its streams feed one reader, so an answer may arrive on whichever stream a server sends it. `session/load`'s answer arrives on
+     the connection stream from TypeScript and Python, and on the session stream from Rust.
+   * It sends `Acp-Session-Id` on every session-scoped method and whenever `params.sessionId` is present, which TypeScript
+     requires.
+   * A POST answered `404` while it carried `Acp-Session-Id` is sent once more without the header. That is the Python server's
+     answer to a `session/load`, `session/resume` or `session/delete` naming a session the connection has not seen. Without the
+     header, Python accepts the POST; for `session/load` and `session/resume` it opens the session's stream from
+     `params.sessionId` (`SESSION_ATTACH_METHODS`).
+   * A `404` to a session stream opened before `session/load` or `session/resume` is retried once that request's answer has
+     arrived, which is when the Python client opens it.
+6. **A received message that is not JSON** is delivered as one line, its CR and LF bytes replaced by spaces. The connection then
+   answers it as it answers an unparsable line on stdio.
+7. **One origin rule for every method, not `http.CrossOriginProtection`.** "The design" put the HTTP methods behind
+   `http.CrossOriginProtection`. Its `AddTrustedOrigin` takes exact origins, while `OriginPatterns` are host patterns, which
+   `websocket.Accept` matches against the `Origin`'s host, or its scheme and host when a pattern holds `://` (`accept.go:228`–`:259`
+   at v1.8.15). One option cannot configure both. So `POST`, `GET` and `DELETE` apply the WebSocket rule. A request without
+   `Origin` passes, as non-browser clients send none. So does one whose `Origin` host is the request's `Host`, or matches a pattern.
+   Any other is `403`.
+8. **`KeepAlive` defaults to 15 s, not 30 s.** Rust's server sends an SSE keepalive every 15 s, and Python's every 15 s, "in sync
+   with the TypeScript reference (15s)" (K3's second table). An intermediary that times out an idle stream at 30 s would end a
+   30 s stream before its first keepalive.
+9. **An `initialize` that fails.** The handler waits up to 30 s for the agent's answer, Python's `INITIALIZE_TIMEOUT_SECONDS`.
+   * No answer by then: `504`.
+   * A serve that returns or fails before answering: `500`, with a JSON-RPC `-32603` body, as TypeScript does.
+   * Either way the connection is ended through the ladder, and no `Acp-Connection-Id` is sent.
+   * An answer that is a JSON-RPC error is returned as it is, with `200`. No connection is kept, and no `Acp-Connection-Id` is
+     sent, as Rust does.
+
 ### Consequences
 
 * Good, because a Go program can serve an agent over the network and reach any agent served by an official SDK, with the client
@@ -367,7 +452,9 @@ The owner was asked each question with three options and chose the recommended o
     before that session's stream is open;
   * ending: `DELETE`, `Handler.Close`, a client gone without a close, and a serve that ignores its context, each bounded by
     `Grace`;
-  * a transcript of a remote session read back with `acptest.ReadRecords` and passed through `ValidateGolden`.
+  * a transcript of a remote session read back with `acptest.ReadRecords` and passed through `ValidateGolden`;
+  * the client against a fake server in each official server's mode of K3's second table, `session/load` on a fresh connection
+    included, and the handler against requests shaped as each official client sends them.
 * The package passes under `-race` on macOS, Linux and Windows, and the goroutine-leak check that `agentproc` runs.
 * Each new check is seen to fail on a planted break in a scratch copy, as `AGENTS.md` requires.
 * `make api` reports `remote`'s additions and gates nothing in it; `go mod tidy -diff` is clean; `govulncheck` covers the new
@@ -431,7 +518,7 @@ The owner was asked each question with three options and chose the recommended o
 
 ### What would follow
 
-A PLAN, `0043-PLAN-remote-http-and-websocket-transport.md`, in phases: the package skeleton and
+[0043-PLAN-remote-http-and-websocket-transport.md](0043-PLAN-remote-http-and-websocket-transport.md), in phases: the package skeleton and
 the dependency; the WebSocket client and server; the Streamable HTTP client; its server; the interoperability check; the docs and a
 release. Each consumer then adopts it under its own records.
 
