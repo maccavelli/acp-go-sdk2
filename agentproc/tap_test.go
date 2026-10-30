@@ -185,11 +185,14 @@ func blockedTap(t *testing.T) (*capture, func()) {
 
 // tappedFrames runs the "frames" agent with both taps, a 1 MiB limit, and an
 // output tap that takes 1 ms a write, so that Wait must wait for it to drain,
-// and returns what each tap received once Close has returned.
+// and returns what each tap received once Close has returned. Its grace is
+// slack, not testGrace: Wait gives the taps up to the grace to drain, and a
+// loaded runner under -race has held this tap past 300 ms
+// (0030-PLAN-record-initialize-on-arrival.md, step 12).
 func tappedFrames(t *testing.T) (output, input []byte, p *Process) {
 	t.Helper()
 	out, in := &capture{delay: time.Millisecond}, &capture{}
-	p = startTapped(t, "frames", nil, testGrace, out, in, acp.WithMaxMessageSize(1<<20))
+	p = startTapped(t, "frames", nil, slack, out, in, acp.WithMaxMessageSize(1<<20))
 	// The connection has read and answered the two lines it refuses.
 	deadline := time.Now().Add(readyWait)
 	for strings.Count(string(in.bytes()), "\n") < 2 {

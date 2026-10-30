@@ -394,7 +394,14 @@ func TestHeldNotificationsFillQueue(t *testing.T) {
 	select {
 	case <-c.Done():
 	default:
-		p.send(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":%s}`, req.ID, initializeAnswer))
+		// The overflow can end the connection, and close its input, between the
+		// check above and this write, which then fails on the closed pipe; the
+		// checks below require that end
+		// (0030-PLAN-record-initialize-on-arrival.md, step 12).
+		answer := fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":%s}`, req.ID, initializeAnswer)
+		if err := p.trySend(answer); err != nil && !errors.Is(err, io.ErrClosedPipe) {
+			t.Fatal(err)
+		}
 	}
 	if err := within(t, done, "Initialize"); err == nil {
 		t.Error("Initialize = nil, want an error: the connection ended before the answer")

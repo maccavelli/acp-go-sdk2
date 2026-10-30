@@ -24,9 +24,16 @@ type wire struct {
 // send writes s and a newline.
 func (p wire) send(s string) {
 	p.t.Helper()
-	if _, err := io.WriteString(p.w, s+"\n"); err != nil {
+	if err := p.trySend(s); err != nil {
 		p.t.Fatal(err)
 	}
+}
+
+// trySend writes s and a newline, and returns the write's error, for a test
+// whose connection may have ended, and closed its input, first.
+func (p wire) trySend(s string) error {
+	_, err := io.WriteString(p.w, s+"\n")
+	return err
 }
 
 // answer is a received JSON-RPC response, its id raw.

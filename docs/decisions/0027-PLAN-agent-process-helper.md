@@ -861,3 +861,35 @@ agent's exit must be *seen* within the margin, as the amendment's analysis was c
 
 **Waiting for the owner:** the commit, and the push; then CI's six jobs, whose run this step records before this PLAN and its row are
 `complete` again.
+
+**The push.** The owner committed the step as `70cf30c` and pushed `main`.
+
+### Deviation, 2026-10-30, during step 9: CI failed in two of 0030's tests
+
+**Found.** `tools/watch_ci.py 70cf30c --branch main`: the Docs run `41100695388`, "completed success"; CI run `41100695380`, "completed
+failure", four jobs of six "completed success" and two failed, each in its "race detector" step, `go test -race -shuffle=on ./...`:
+
+* `validate (ubuntu-24.04, 1.27.3)`: `agentproc`'s `TestOutputTapVerbatim`, after 0.65 s, at `tap_test.go:216` and `:219`: "the output
+  tap received 1638400 bytes, want the agent's 2097208, equal" and "DroppedTapBytes = 393272, 0; want 0, 0".
+* `validate (windows-2025, 1.27.3)`: the root package's `TestHeldNotificationsFillQueue`, after 0.53 s, at `initialize_test.go:397`:
+  "io: read/write on closed pipe".
+
+**Evidence.**
+
+* Neither test, nor what it tests, changed in `70cf30c`; both are
+  [0030-PLAN-record-initialize-on-arrival.md](0030-PLAN-record-initialize-on-arrival.md)'s. `TestStderrHeldByDescendant`, this step's
+  test, failed in no job.
+* `TestOutputTapVerbatim` closes its agent under `testGrace`, and `Wait` gives the taps up to the grace to write what they were given;
+  its output tap, which takes 1 ms a write, was still writing 300 ms later, so the rest was dropped. The margin is this step's kind.
+* `TestHeldNotificationsFillQueue` checks that the connection has not ended (`initialize_test.go:395`), then writes the initialize
+  answer (`:397`), and fails the test on any error of that write. The overflow the test waits for can end the connection, and close its
+  input, between the check and the write: a race in the test, not a margin.
+* CI on `main`, from `gh run list`: before `remote` landed, about 17 first attempts in a row succeeded, but for `d8badcb`'s, a defect
+  [0042-PLAN-in-process-agent-runner.md](0042-PLAN-in-process-agent-runner.md) records and fixed. Since, two runs of three on `main` and
+  the tag have failed on timing: `4ae65b8`'s first attempt and this one. That `remote`'s tests add load to the race step is plausible
+  and was not measured: `tools/ci_jobs.py tally` and `gh run view --log` failed on GitHub's `502` for the runs before.
+
+**Decided (owner, 2026-10-30), the recommended resolution.** Amend 0030's PLAN with a step that fixes both causes, each with a
+reproduction, planted breaks, repeats on the hosts and the gates; then push, and let CI decide. The other options were a new record that
+audits every grace-bound wait in the suite against `slack` under load, and rerunning the failed jobs with the follow-up left for later.
+This PLAN stays `in-progress` until CI's six jobs pass on the commit that carries 0030's step, which then closes this step too.

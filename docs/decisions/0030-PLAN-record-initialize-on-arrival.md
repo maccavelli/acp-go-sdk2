@@ -1,6 +1,6 @@
 ---
-status: complete
-date: 2026-10-21
+status: in-progress
+date: 2026-10-30
 associated-madr: "0030-MADR-record-initialize-on-arrival.md"
 ---
 
@@ -179,7 +179,8 @@ At the root, a fake agent over `io.Pipe`s, as the MADR's probe:
 (Added 2026-10-21.) In `agentproc`, with the test binary as the agent:
 
 * **`TestOutputTapVerbatim`** (T1): a child mode `frames` writes a 2 MiB line, a line that is not JSON and a notification, then exits at
-  its input's end; with `WithMaxMessageSize(1 << 20)`, the output tap's bytes after `Close` equal what the agent wrote.
+  its input's end; with `WithMaxMessageSize(1 << 20)`, the output tap's bytes after `Close` equal what the agent wrote. (Amended
+  2026-10-30, step 12: under a grace of `slack`, not `testGrace`.)
 * **`TestInputTapSeesWrites`** (T1): in the same run, the input tap holds the `-32600` and `-32700` answers, each a whole line.
 * **`TestTapKeepsCloseEnding`** (T2, Unix): `parent-escape` with an output tap; `Wait` returns within `testGrace` and the slack.
 * **`TestTapErrorIgnored`:** both taps return an error on every `Write`; the `burst` agent's 1000 updates all arrive, as in
@@ -209,7 +210,8 @@ At the root, a fake agent over `io.Pipe`s, as the MADR's probe:
 (Added 2026-10-21, during step 9.) At the root, in `initialize_test.go`, the MADR's M1, M3 and M4:
 
 * **`TestHeldNotificationsFillQueue`:** `WithMaxQueuedNotifications(1)`; three extension notifications before the answer, each in its
-  own write 100 ms apart; the connection ends with `ErrNotificationQueueOverflow`, and `Initialize` returns an error.
+  own write 100 ms apart; the connection ends with `ErrNotificationQueueOverflow`, and `Initialize` returns an error. (Amended
+  2026-10-30, step 12: the answer's write may find the connection already ended.)
 * **`TestHeldRequestsKeepSlots`:** `WithMaxConcurrentRequests(1)`; two extension requests before the answer, 100 ms apart, then the
   answer; the second is answered `-32603` before the answer is sent, and the first with a result after it.
 * **`TestInitializeHookHoldsReader`:** a rewrite hook that blocks on the answer, and a line that is not JSON after it in the same write;
@@ -247,6 +249,9 @@ it is relied on.
     this PLAN and its row `complete`, and 0029's if it waits on the release; the owner tags `v1.20.0` and publishes its release; the
     publication checks and a consumer on the floor. (Was step 6; amended 2026-10-21: the owner closes issue #10 with the release;
     renumbered from 10, during step 5.)
+12. **(Added 2026-10-30) Two tests that lose races under load:** `tappedFrames` under `slack`; `TestHeldNotificationsFillQueue`'s answer
+    written through `wire.trySend`, allowing `io.ErrClosedPipe` alone; each failure reproduced, the planted breaks run again, CI's six
+    jobs after the push. See "Amendment, 2026-10-30" in the execution record.
 
 ## Verification
 
@@ -981,3 +986,160 @@ database on.
 * The consumer's `go.mod` kept `go 1.26.10`, gained no `toolchain` line, and lists `golang.org/x/sys v0.49.0 // indirect`.
 
 Nothing of this PLAN is left open.
+
+### Amendment, 2026-10-30, after the publication of `v1.20.0`: step 12, two tests that lose races under load
+
+**Found.** CI run `41100695380`, on `main` at `70cf30c`, which changes only `agentproc`'s `TestStderrHeldByDescendant` and records, failed
+two jobs of six, each in its "race detector" step, `go test -race -shuffle=on ./...`, each in a test of this PLAN's
+([0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md), "Deviation, 2026-10-30, during step 9", records the run):
+
+* `validate (ubuntu-24.04, 1.27.3)`: `TestOutputTapVerbatim`, after 0.65 s:
+
+  ```text
+  tap_test.go:216: the output tap received 1638400 bytes, want the agent's 2097208, equal
+  tap_test.go:219: DroppedTapBytes = 393272, 0; want 0, 0
+  ```
+
+* `validate (windows-2025, 1.27.3)`: `TestHeldNotificationsFillQueue`, after 0.53 s:
+
+  ```text
+  initialize_test.go:397: io: read/write on closed pipe
+  ```
+
+Neither test, nor the code it tests, has changed since `v1.26.0` (`git log v1.26.0..HEAD` of their files). Each passed in the run's
+other five jobs.
+
+**Why each can fail.**
+
+* **`TestOutputTapVerbatim`** runs the `frames` agent through `tappedFrames`, under `testGrace`, 300 ms, with an output tap that takes
+  1 ms a write, "so that Wait must wait for it to drain". `Wait` gives the taps up to the grace to write what they were given, then
+  abandons them and counts the rest as dropped (`drainTaps`; "`Wait` gives the taps up to the grace", step 9's table). The tap had
+  written 1,638,400 bytes, 25 times 64 KiB, of 2,097,208 when the grace ran out, which at 1 ms a write a runner that does not stall
+  finishes well within it: a stall of the runner, not a defect. The test leaves 300 ms for a drain the suite elsewhere would allow
+  `slack`, 3 s, "how long past its expected time a step may take on a busy runner" (`agentproc/agentproc_test.go:22`).
+* **`TestHeldNotificationsFillQueue`** writes three held notifications 100 ms apart to a connection whose queue holds one, then:
+
+  ```go
+  select {
+  case <-c.Done():
+  default:
+      p.send(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":%s}`, req.ID, initializeAnswer))
+  }
+  ```
+
+  The overflow ends the connection, which closes its input, `io.Pipe`'s read end. When it does so after the check and before the write,
+  the write fails with `io.ErrClosedPipe`, and `send` fails the test on any write error (`jsonrpc_test.go:27`). The select narrows the
+  window and cannot close it: a race in the test. The checks after it, that `Initialize` fails and the connection ends with
+  `ErrNotificationQueueOverflow`, are what the test claims, and the race does not touch them.
+
+**Options**, each leaving the code and its tests correct:
+
+1. **Fix each cause, recommended.**
+   * `tappedFrames` closes under `slack`, not `testGrace`. The frames agent exits at its input's end, and every wait the grace bounds
+     there returns once its event comes, so the tests take no longer; they wait longer only on a runner that stalls.
+   * `wire` gains `trySend`, which returns the write's error; `send` calls it and fails the test as before. The test writes the answer
+     with `trySend`, and allows `io.ErrClosedPipe` alone, the connection having ended first; any other error still fails it.
+   * Good, because the claims and the planted breaks of step 5 and of the deviation during step 9 stay as they are.
+   * Bad, because the tap test's 300 ms bound is gone: it no longer shows that a 1 ms tap drains within 300 ms. That bound is
+     `TestTapDrainBoundedByGrace`'s to show, which is unchanged.
+2. **Wait for the connection's end before deciding whether to answer,** in `TestHeldNotificationsFillQueue`.
+   * Bad, because with the gate refusing at once (the planted break), the connection never ends, and the test would wait its bound
+     before failing; it is slower and says less than option 1's write.
+3. **A larger `testGrace` in `agentproc`.**
+   * Bad, because every ladder test that waits a grace or two slows by as much: the option
+     [0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md)'s step 9 declined.
+
+Retrying the tests, or skipping them under `-race`, would hide the failures rather than remove their causes, and is not offered. Nor is
+lowering CI's parallelism, which would hide margins rather than widen them.
+
+**Decided (owner, 2026-10-30).** "Amend 0030, fix both", the recommended option 1. Step 12 below carries it. This PLAN is `in-progress`
+until step 12 closes, after its push and CI.
+
+**The MADR is unchanged.** It decides that `Wait` gives the taps up to the grace, and that held notifications fill the queue and its
+overflow ends the connection ("Amendment 2026-10-21, step 9: what a held message holds", M1). Both hold, and the tests still show them.
+It names no test grace and no test's way of writing.
+
+### Step 12, two tests that lose races under load, as proposed 2026-10-30
+
+**Files:**
+
+* `agentproc/tap_test.go`: `tappedFrames` starts its agent under `slack`, its doc saying why and citing this step.
+* `jsonrpc_test.go`: `wire.trySend`; `send` calls it.
+* `initialize_test.go`: `TestHeldNotificationsFillQueue` writes the answer through `trySend`, allowing `io.ErrClosedPipe` alone, with
+  a comment that cites this step.
+* This PLAN: this amendment; its status; Tests and Implementation Steps annotated in place. `docs/README.md`: its row.
+* [0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md): its step 9's deviation, which this step answers.
+
+Nothing else: no exported name, no behaviour, no CI change, no release.
+
+**Verification:**
+
+* **Each failure, reproduced, in a scratch copy:**
+  * the tap's first write held 1 s by its gate, standing for the runner's stall: `TestOutputTapVerbatim` as it is fails, with CI's
+    message; as amended it passes; held 4 s, past `slack`, it fails, so the margin is the one claimed;
+  * the connection's end awaited between the check and the write, so the write always loses the race: `TestHeldNotificationsFillQueue`
+    as it is fails with CI's message; as amended it passes. (Corrected during the step: the check is made to miss the end too, or on
+    a runner that does not stall the write is never reached; see the step's record.)
+* **Planted breaks,** each in a scratch copy, against the amended tests:
+  * `Wait` not waiting for the taps' drain: `TestOutputTapVerbatim` must fail, bytes missing at `Wait` (step 5's);
+  * the output tap given `p[:n-1]`: the same (step 5's);
+  * the gate refusing at once, as before: `TestHeldNotificationsFillQueue` must fail, "Initialize = nil" (the deviation during step 9's);
+  * the answer's write failing with another error than the closed pipe: `TestHeldNotificationsFillQueue` must fail with that error, so
+    the closed pipe alone is allowed.
+* **Repeats:** each test 20 times under `-race` on macOS, and its package's test binary 20 times on the Linux and Windows test hosts.
+* **Gates:** `tools/gates.py --all`, `make check-records`, `make markdownlint`, `make disclosure-check`, and the identifier scan of the
+  changed files.
+* **After the owner's push:** CI's six jobs, with `tools/watch_ci.py`. Their passing also closes
+  [0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md)'s step 9.
+
+**Rollout and rollback:** test-only, with no release of its own. Reverting its commit restores both tests as they were.
+
+### Step 12, two tests that lose races under load, 2026-10-30
+
+The owner chose "Amend 0030, fix both". What changed:
+
+* **`agentproc/tap_test.go`:** `tappedFrames` starts its agent under `slack`, not `testGrace`; its doc says why and cites this step.
+  `TestInputTapSeesWrites`, which shares it, runs under `slack` too.
+* **`jsonrpc_test.go`:** `wire.trySend` writes a line and returns the write's error; `send` calls it and fails the test as before.
+* **`initialize_test.go`:** `TestHeldNotificationsFillQueue` writes the answer through `trySend`, and fails on any error but
+  `io.ErrClosedPipe`, with a comment that cites this step.
+* **This PLAN:** the amendment above; Tests and Implementation Steps annotated in place; its status `in-progress`. **`docs/README.md`:**
+  its row, `in-progress`, with the amendment named.
+* **[0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md):** its step 9's deviation, which this step answers.
+
+**Reproductions, planted breaks,** each in a scratch copy of the working tree, on macOS under `-race`; 9 of 9 as required:
+
+| Case | Result |
+| :--- | :--- |
+| `TestOutputTapVerbatim` at `HEAD`, the tap's first write held 1 s | failed as required, after 0.37 s: "the output tap received 0 bytes, want the agent's 2097208, equal", "DroppedTapBytes = 2031672, 0; want 0, 0" |
+| the amended test, held 1 s | passed, 1.06 s |
+| the amended test, held 4 s, past `slack` | failed as required, after 3.08 s, with the same two messages |
+| `TestHeldNotificationsFillQueue` at `HEAD`, the check missing the end, which comes before the write | failed as required, after 0.31 s: "initialize_test.go:398: io: read/write on closed pipe", CI's message |
+| the amended test, the same order | passed, 0.31 s |
+| `Wait` not waiting for the taps' drain (step 5's) | `TestOutputTapVerbatim` failed as required: "the output tap received 1114112 bytes, want the agent's 2097208, equal" |
+| the output tap given `p[:n-1]` (step 5's) | `TestOutputTapVerbatim` failed as required: "the output tap received 2097175 bytes, want the agent's 2097208, equal" |
+| the gate refusing at once, as before (the deviation during step 9's) | `TestHeldNotificationsFillQueue` failed as required, after 10.31 s: "Initialize = nil, want an error: the connection ended before the answer", then "the connection's end did not happen" |
+| the answer's write failing with another error, in the reproduction's order | `TestHeldNotificationsFillQueue` failed as required: "planted write error" |
+
+The held tap writes nothing until it is released, so with the drain abandoned, the bytes received are 0 rather than CI's part, and the
+rest is counted as dropped; what is in flight when the drain is abandoned is counted too, hence 2,031,672 of 2,097,208 dropped.
+
+**A first run of the reproductions missed two cases.** As the PLAN worded it, the reproduction awaited the connection's end inside the
+select's `default` branch. On macOS the overflow had always ended the connection before the select, so the branch never ran: the test
+at `HEAD` passed, and so did the plant of another error, neither reaching the write. 7 of 9 were as required. The reproduction was
+corrected to CI's order, made certain: the select's check misses the end (its `case` a channel that never fires), and the end is awaited
+before the write. Run again, the four root cases above were as required, 4 of 4. The amended test's own select is unchanged: on a runner
+that does not stall, the end comes before the check, and nothing is written.
+
+**Repeats,** each exit 0: macOS, `go test -race -count=20` of each test, 20 "PASS" of 20 each (`agentproc` 4.2 s, the root 8.3 s); the
+Linux and Windows test hosts, each package's test binary with `-test.run` the test and `-test.count=20`, 20 "PASS" of 20 for each test on
+each host.
+
+**Gates,** `tools/gates.py --all` on the final tree, the hosts named per command: "all gates passed", 18 of 18, among them
+`make pre-add-check`, "276 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make check-tools`, "Ran 58 tests" and
+"Ran 32 tests"; `platforms`, "13 of 13 passed"; `make api`, "against v1.27.0: 0 incompatible, 0 compatible"; the floor gate at
+go1.26.10, passed; `windows` and `linux`, `go test -count=1 -shuffle=on ./...` in both modules on each host, passed.
+
+**Waiting for the owner:** the commit and the push; then CI's six jobs, which this step and
+[0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md)'s step 9 record before both PLANs and their rows are `complete`
+again.
