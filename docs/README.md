@@ -85,7 +85,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0026 | MADR | [Report why a connection ended, and wait for its goroutines to exit](decisions/0026-MADR-connection-end-cause-and-wait.md) | accepted |
 | 0026 | PLAN | [Implement 0026: report why a connection ended, and wait for its goroutines to exit](decisions/0026-PLAN-connection-end-cause-and-wait.md) | complete |
 | 0026 | REPORT | [Release notes for v1.18.0, against v1.17.1](reports/0026-REPORT-release-notes-v1-18-0.md) | observed |
-| 0027 | MADR | [Start an agent process, and stop it with its descendants in bounded steps](decisions/0027-MADR-agent-process-helper.md) | accepted |
+| 0027 | MADR | [Start an agent process, and stop it with its descendants in bounded steps](decisions/0027-MADR-agent-process-helper.md); a consequence corrected 2026-10-30 by 0042's amendment for issue #12 | accepted |
 | 0027 | PLAN | [Implement 0027: start an agent process, and stop it with its descendants in bounded steps](decisions/0027-PLAN-agent-process-helper.md) | complete |
 | 0027 | REPORT | [Release notes for v1.19.0, against v1.18.0](reports/0027-REPORT-release-notes-v1-19-0.md) | observed |
 | 0028 | MADR | [Pin Go 1.27.3 as the toolchain and Go 1.26.10 as the floor](decisions/0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md) | accepted |
@@ -121,8 +121,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0041 | PLAN | [Implement 0041: client hosts, end causes, a fuller acptest, a tool-call timeline, and agentproc's lost output](decisions/0041-PLAN-close-the-gaps-the-consumers-wait-on.md) | complete |
 | 0041 | REPORT | [Consumer adoption of v1.21.0 to v1.25.0: each site and the API that replaces it](reports/0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md) | observed |
 | 0041 | REPORT | [Release notes for v1.25.0, against v1.24.0](reports/0041-REPORT-release-notes-v1-25-0.md) | observed |
-| 0042 | MADR | [Run an agent in the client's process with agentproc's lifecycle; serve agents gracefully, keep their stderr, and record their transcripts](decisions/0042-MADR-in-process-agent-runner.md); item 1's questions answered 2026-10-28; items 2 to 4 added and answered the same day; amended by the PLAN's phase 2 | accepted |
-| 0042 | PLAN | [Implement 0042: an in-process agent runner, graceful serving, the agent's stderr tail, and transcripts](decisions/0042-PLAN-in-process-agent-runner.md) | complete |
+| 0042 | MADR | [Run an agent in the client's process with agentproc's lifecycle; serve agents gracefully, keep their stderr, and record their transcripts](decisions/0042-MADR-in-process-agent-runner.md); item 1's questions answered 2026-10-28; items 2 to 4 added and answered the same day; amended by the PLAN's phase 2; amendment for issue #12 proposed 2026-10-30 | accepted |
+| 0042 | PLAN | [Implement 0042: an in-process agent runner, graceful serving, the agent's stderr tail, and transcripts](decisions/0042-PLAN-in-process-agent-runner.md); phases 12 to 17, issue #12, proposed 2026-10-30 | complete |
 | 0042 | REPORT | [Release notes for v1.26.0, against v1.25.0](reports/0042-REPORT-release-notes-v1-26-0.md) | observed |
 | 0043 | MADR | [Add ACP's remote transport, Streamable HTTP and WebSocket, as an experimental package, chosen over an MCP-over-ACP binding and a registry client](decisions/0043-MADR-remote-http-and-websocket-transport.md); questions answered 2026-10-29; amended by the PLAN 2026-10-29 and in its phase 9 2026-10-30 | accepted |
 | 0043 | PLAN | [Implement 0043: ACP's remote transport, Streamable HTTP and WebSocket, in package `remote`](decisions/0043-PLAN-remote-http-and-websocket-transport.md) | complete |

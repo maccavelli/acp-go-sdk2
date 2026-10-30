@@ -30,6 +30,8 @@ shape?
 
 **Status.** Item 1, the in-process runner, was decided with the owner on 2026-10-28. On the same day the owner asked for three more
 items, 2 to 4, and answered their questions ("Decided with the owner, items 2 to 4, 2026-10-28"). The record is `accepted`.
+On 2026-10-30, issue #12 brought an amendment, `proposed` until the owner approves it: a bounded close, a testable handlers error,
+and `Wait`'s error said once ("Amended 2026-10-30, issue #12").
 
 ### Findings in this repository
 
@@ -696,6 +698,195 @@ phase 2 entry). They corrected one statement of fact, and changed no decision.
     a type that does not close. So the runner closes its pipe ends itself whenever the connection ends, and does not rely on the
     connection's `Close` reaching them.
 
+#### Amended 2026-10-30, issue #12: a bounded close, a testable handlers error, and `Wait`'s error said once
+
+**Status of this amendment: proposed.** The owner set its direction on 2026-10-30: the issue's second option, a bounded close beside
+`Close` and `Kill`; this record amended, rather than a new one; an error `errors.Is` can test for `ServeAgent`'s handlers; and the
+repeated text in `Wait`'s error scoped and fixed. The choices below that the owner did not name are this amendment's, each with its
+alternative, for the owner to accept with the PLAN's phases 12 to 17.
+
+##### Findings, 2026-10-30
+
+Read at `03b57e9` (`v1.27.0` and its records), and reproduced in scratch copies of the tree; nothing in the tree changed.
+
+* **I1. The issue.** [#12](https://github.com/maccavelli/acp-go-sdk2/issues/12), filed 2026-10-30: "`Process.Close` waits without
+  bound for a client handler that never returns (v1.26.0)". `<cli-b>` held its move to `InProcess` on it: its 0035 PLAN,
+  deviation 9, read on GitHub at `6c5eb02`, waits for "a tag [that] carries one of those", the issue's three asks. It pins `v1.26.0`
+  (`go.mod:16`).
+* **I2. Why `Close` waits without bound.**
+  * `Close` is `p.closeOnce.Do(p.stop)` then `p.Wait()`, and `Kill` the same after `hurry` (`agentproc/agentproc.go:516`–`:519`,
+    `:531`–`:535`).
+  * `Wait` waits for the agent (`<-p.done`), the watcher and the monitor, then the connection, `_ = p.conn.Wait()` (`:389`), then
+    drains the taps (`:390`).
+  * `Connection.Wait` waits for every goroutine the connection started, "its handlers' included", and says that "a handler that
+    ignores its context" keeps it waiting (`connection.go:858`–`:872`), as
+    [0026-MADR-connection-end-cause-and-wait.md](0026-MADR-connection-end-cause-and-wait.md) decided (questions 4 and 5).
+  * A client's notification handlers, `SessionUpdate` among them, run one at a time on the connection's `processNotifications`
+    goroutine (`connection.go:1748`–`:1768`). The watcher's close of the connection ends their context
+    (`closeWith`, `:966`–`:988`); one that ignores it holds that goroutine, and so every `Wait` above it.
+* **I3. Reproduced, grace 300 ms.** A `ScriptAgent` served in process sends one update, and the client's `SessionUpdate` blocks until
+  released:
+  * `Close` had not returned 10 s later; `Done` was closed, the agent ended. Released, `Close` returned `nil` within 1.5 ms. Its
+    error never says that a handler held it.
+  * The same with a child, the test binary's `burst` mode: not returned after 5 s; `nil` once released.
+  * `go p.Close()` then `p.WaitContext(ctx)` returned `context.DeadlineExceeded` at its bound, but lost `Close`'s error and left two
+    goroutines blocked until the handler returned. `<cli-b>`'s deviation 9 declined to bound the SDK's close itself so.
+* **I4. The records claim otherwise.** "every wait bounded": `README.md:682`; the 0027 MADR, Consequences
+  ([0027-MADR-agent-process-helper.md](0027-MADR-agent-process-helper.md)); this record's Consequences, "the shutdown rules a child
+  needed, the output read to its end and every wait bounded, hold in-process too". Neither `Process.Close`'s doc nor `Process.Wait`'s
+  names the handlers' unbounded wait; `Connection.Wait`'s does.
+* **I5. This record's own finding was not carried into the design.** C2 records that `<cli-b>`'s runner bounds its handlers' wait
+  with `closeTimeout`, and C6 that `WaitContext` replaces its helper. `InProcess` returns a `*Process`, whose `Close` never uses
+  `WaitContext`, so that bound was lost.
+* **I6. The agent's side is already bounded.** `ServeAgent` waits at most 5 s for its connection's handlers at its input's end, and
+  then returns `fmt.Errorf("acp: the connection's handlers still run %v after its end", notificationQueueDrainTimeout)`
+  (`serve.go:33`–`:38`): a text, which `errors.Is` cannot test. No test reaches that branch: `TestServeAgentInputEnd` and
+  `TestServeAgentContextEnd` (`shutdown_test.go:275`, `:301`) do not.
+* **I7. Bounding `Wait` itself costs a guarantee.** A scratch prototype bounded `Wait`'s connection wait by the grace and joined an
+  error past it. It met the issue's case: `Close` returned after 0.30 s, the same error again, and a handler that returned within the
+  grace was waited for. Under the whole suite's load, `TestNoLostOutput` then failed: "Wait = agentproc: the connection's handlers
+  still run, want nil". Nothing hung: the client was still handling 1000 queued updates when 300 ms passed. Alone, the test passed
+  10 times of 10, about 0.17 s each, in the tree and in the prototype. A bound cannot tell a busy client from a hung one.
+* **I8. A bound beside `Close` costs nothing else.** A second prototype added `CloseContext` and `KillContext`, Close's and Kill's
+  steps then `WaitContext`. Both returned `context.DeadlineExceeded` 0.30 s into a 300 ms bound, the agent ended; with a handler that
+  returned within the bound, `CloseContext` waited and returned `nil`. The whole `agentproc` suite passed under `-race`,
+  `TestNoLostOutput` among it, since `Wait` is unchanged.
+* **I9. `Wait`'s error repeats its cause.** `Wait` joins the step's sentinel as `fmt.Errorf("%w: %w", p.ended, p.waitErr)`
+  (`agentproc.go:401`), whether or not the agent's error already wraps it. An `InProcess` agent's context ends with that sentinel as
+  its cause (`inprocess.go:121`–`:138`), and `InProcess.Serve`'s doc says `context.Cause` reports it; a `Serve` that returns it,
+  `ServeAgent` among them, gives it twice. On the unmodified tree:
+
+  | The agent's end | `Wait`'s error |
+  | :--- | :--- |
+  | `Kill`, `Serve` returning `context.Cause(ctx)` | `agentproc: agent killed: agentproc: agent killed` |
+  | `Close`, step 2, the same `Serve` | `agentproc: agent terminated: agentproc: agent terminated` |
+  | `Close`, step 2, `Serve` returning `fmt.Errorf("serve: %w", context.Cause(ctx))` | `agentproc: agent terminated: serve: agentproc: agent terminated` |
+  | a child, the `stubborn` mode, killed (the control) | `agentproc: agent killed: signal: killed` |
+
+  `errors.Is` holds in each; only the text repeats. No test, example or doc pins either text.
+
+##### Decided
+
+* **X1. `CloseContext` and `KillContext`.** `Close` and `Kill` bounded by a context, after `WaitContext` beside `Wait` (0041, item 6)
+  and `Shutdown(ctx)` beside `Close` (item 2). `Wait`, `Close`, `Kill` and `WaitContext` are unchanged: a `Wait` that returns still
+  means that every handler the connection ran has returned (I7).
+* **X2. `acp.ErrHandlersRunning`,** in the root package beside `ErrShutdown`:
+  * `ServeAgent` wraps it at its input's end, its text unchanged, so `errors.Is` can test what a text said;
+  * `ServeAgent` wraps it too at its context's end, when `Shutdown`'s 5 s pass with requests unanswered, whose handlers still run;
+  * `CloseContext` and `KillContext` join it when their context ends while `Wait` waits on the connection's goroutines, the agent
+    ended and the connection closed.
+* **X3. `Wait`'s error says its cause once.** When the agent's error already wraps the step's sentinel, `Wait` returns the agent's
+  error as it is; otherwise it joins the sentinel as before. `errors.Is` and `errors.As` give what they gave.
+* **X4. The docs say what is bounded.** The README, `Process.Close`'s, `Kill`'s and `Wait`'s docs, and `docs/architecture.md` name
+  the handlers' unbounded wait and the methods that bound it. I4's claims in the 0027 MADR and here are annotated in place.
+
+##### The specification
+
+```go
+// In the root package, errors.go.
+
+// ErrHandlersRunning is why a wait for a connection's handlers ended before
+// they had returned: a handler that ignores its context, or one still at
+// work, holds them. ServeAgent wraps it when its bound passes with handlers
+// still running, and agentproc's CloseContext and KillContext join it when
+// their context ends with the connection's handlers still running; read
+// with errors.Is.
+var ErrHandlersRunning = errors.New("acp: the connection's handlers still run")
+```
+
+```go
+// In agentproc.
+
+// CloseContext is Close bounded by ctx. It runs Close's steps and returns
+// Wait's error once Wait would return. Should ctx end during the steps, the
+// steps left run as Kill's do: no more waiting, no SIGTERM, the kill. Should
+// it end before Wait would return, CloseContext returns context.Cause(ctx),
+// joined with acp.ErrHandlersRunning when the connection's handlers are what
+// still runs, and with the agent's error, final once the agent has ended, as
+// Wait gives it. The agent has ended by then, and Done is closed; what still
+// runs is left to finish, and Wait, or WaitContext, returns the whole error
+// once it has. CloseContext returns at most the kill's own bound, a grace,
+// after ctx ends. When ctx ends, a Close in progress elsewhere is cut short
+// too, as Kill cuts it.
+func (p *Process) CloseContext(ctx context.Context) error
+
+// KillContext is Kill bounded by ctx, as CloseContext is Close: Kill's steps,
+// then Wait's error, or, should ctx end first, context.Cause(ctx) joined as
+// CloseContext's is.
+func (p *Process) KillContext(ctx context.Context) error
+```
+
+`Wait`'s doc gains: "When the agent's error already wraps that sentinel, as a `Serve` that returns its context's cause does, it is
+returned as it is. `Wait` waits for the connection's goroutines without bound: a client handler that ignores its context holds it,
+and `Close` and `Kill`, until the handler returns. `CloseContext` and `KillContext` bound that wait." `Close`'s and `Kill`'s docs
+point to their bounded forms. `ServeAgent`'s doc names `ErrHandlersRunning` at both ends.
+
+How the parts work, for the PLAN:
+
+* **The agent's error** is `Wait`'s composition without the waits: the step's sentinel and the agent's own error (X3), and the
+  stderr tail under `JoinStderrTail`. Factored out, `Wait` and the bounded methods give the same text. It is final once `Done` is
+  closed: the watcher records it under the lock before it closes `Done`, and Close's steps return only once `Done` is closed.
+* **The bound** reuses `WaitContext`'s one goroutine (0041, item 6), so a call starts none of its own.
+* **The steps cut short** by a context run `Kill`'s `hurry`, through `context.AfterFunc` registered for the steps alone, so a
+  context that ends once the steps are done changes nothing in the process.
+* **"The handlers still run"** is read from where `Wait` is, not guessed: `Wait` marks the span in which it waits on the connection,
+  after the watcher has closed it. A context that ends earlier, while the connection reads to the end of the agent's output, or later,
+  while the taps drain, joins only its cause; each of those waits is bounded by the grace already.
+
+##### Alternatives considered
+
+* **For X1:**
+  * `Wait` bounded by the grace, the issue's first option: rejected on I7, since it changes every caller's `Wait` and reports a
+    busy client as a hung one.
+  * The docs alone, the issue's third option: they state the problem without solving it; `<cli-b>` asked for a library bound (I1).
+  * `ctx` bounding the wait alone, the steps left to the grace: a `CloseContext` whose context has ended would still wait up to two
+    or three graces, where `Shutdown(ctx)` closes at once. Not chosen.
+  * `context.Cause(ctx)` alone, as `WaitContext` returns: the agent's error would be lost exactly when a handler hangs, since `Wait`
+    cannot be called then. `<cli-b>`'s close returns both today (C2).
+* **For X2:**
+  * The sentinel in `agentproc`: `ServeAgent`, in the root package, could not wrap it, and a caller would test two errors.
+  * `WaitContext` joining it too: rejected, since `WaitContext` is released and returns `context.Cause(ctx)`, which a caller may
+    compare with `==`; joining would break that comparison.
+  * The sentinel joined whenever the context ends after the steps: rejected, since the output's read and the taps' drain would then
+    be reported as handlers.
+* **For X3:**
+  * The duplicate stripped in `InProcess` alone, where it arises: a `Command` whose agent's error could wrap the sentinel would keep
+    it, and the rule belongs to `Wait`, which composes the error.
+  * Leaving it: the text, which logs show, misleads, and a wrapping `Serve` doubles a word of its own.
+
+##### Consequences of the amendment
+
+* Good, because a client bounds its close, child or in-process, with one call, and learns what a hung handler left behind, which
+  `<cli-b>` needs to move to `InProcess` (I1).
+* Good, because `ServeAgent`'s and the bounded close's handler errors are one sentinel that `errors.Is` reads.
+* Good, because `Wait` keeps its meaning, every received message handled, and `TestNoLostOutput` its guarantee (I7).
+* Good, because `Wait`'s error reads once per cause.
+* Neutral, because `Close` and `Kill` still wait without bound for a hung handler. Their docs say so, and point to the bounded forms.
+* Neutral, because a bounded method that returns leaves the handler's goroutine, and `WaitContext`'s, running until the handler
+  returns, as `ErrAbandoned` leaves `Serve`'s. Go cannot stop a goroutine (G2).
+* Bad, because `Process` gains two methods where one rule could have served, and a caller must choose the bounded form.
+* Bad, because `ServeAgent`'s error at its context's end gains the sentinel's text when `Shutdown`'s bound passes; a caller that
+  matched that text sees more of it.
+* Bad, because `Wait`'s error text changes for an agent whose error wraps the sentinel; `errors.Is` and `errors.As` are unchanged.
+
+##### Confirmation of the amendment
+
+The PLAN's phases 12 to 17 show, each new check first seen to fail on a planted break in a copy of the tree:
+
+* `CloseContext` and `KillContext`, for a child and an in-process agent with a client handler that ignores its context, return
+  within their bound and the slack, with `errors.Is` true for the bound's cause and `acp.ErrHandlersRunning`, the agent's error
+  joined, and `Done` closed; `Wait` then returns, once the handler is released, `Close`'s error;
+* with a handler that returns within the bound, they return `Wait`'s error, and nothing is joined;
+* a context that ends during the steps hurries them: a `stubborn` child under a 5 s grace is killed, without SIGTERM, near the
+  context's end;
+* a cause given with `context.WithTimeoutCause` is the one returned;
+* no goroutine is left once the handler returns, under `agentproc`'s leak guard;
+* `ServeAgent`'s error at its input's end wraps `ErrHandlersRunning`, its text unchanged, in a `synctest` bubble; and at its
+  context's end, when `Shutdown`'s bound passes;
+* `Wait`'s error for each row of I9's table says its cause once, and `errors.Is` holds; a child's is unchanged;
+* `make api`: `ErrHandlersRunning`, `(*Process).CloseContext` and `(*Process).KillContext` added, nothing else;
+* `tools/consumer.py` closing an in-process agent through `CloseContext`.
+
 ### Consequences
 
 * Good, because a client that serves its own agent gets the lifecycle and the taps a child has, and can switch between the two kinds
@@ -703,6 +894,8 @@ phase 2 entry). They corrected one statement of fact, and changed no decision.
 * Good, because the agent's serve function gets a stop signal beyond its input's end, a cancelled context with a cause, which C3's
   agent never gets.
 * Good, because the shutdown rules a child needed, the output read to its end and every wait bounded, hold in-process too (D3).
+  (Corrected 2026-10-30: every wait of the agent's is bounded, but `Wait`, and so `Close` and `Kill`, waits without bound for a
+  client handler that ignores its context, in-process and for a child alike; see "Amended 2026-10-30, issue #12", I2 to I4.)
 * Good, because no dependency is added and no platform code is written (D7, A7).
 * Neutral, because `<cli-b>`'s own runner shrinks by about 35 lines, and its handshake and options stay its own.
 * Bad, because `Process`'s internals change behind a seam (D6), in code whose stop sequence four records hardened.

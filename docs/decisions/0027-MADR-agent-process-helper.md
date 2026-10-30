@@ -412,6 +412,9 @@ Decided by the owner in [0041-MADR-close-the-gaps-the-consumers-wait-on.md](0041
 ### Consequences
 
 * Good, because a client starts an agent and stops all of it, launcher and descendants, in a few lines, with every wait bounded.
+  (Corrected 2026-10-30: every wait on the agent is bounded, but `Wait`, and so `Close`, also waits for the connection's goroutines,
+  without bound, so a client handler that ignores its context holds them; see
+  [0042-MADR-in-process-agent-runner.md](0042-MADR-in-process-agent-runner.md), "Amended 2026-10-30, issue #12".)
 * Good, because no message the agent writes before it exits is lost (P1, P2, A6).
 * Good, because on Windows the agent's tree ends even when the client process dies (P18).
 * Good, because the protocol package and its supported platforms are unchanged (A4).

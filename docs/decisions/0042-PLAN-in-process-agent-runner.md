@@ -1,6 +1,6 @@
 ---
 status: complete
-date: 2026-10-29
+date: 2026-10-30
 associated-madr: "0042-MADR-in-process-agent-runner.md"
 ---
 
@@ -57,6 +57,11 @@ The MADR's four items ship with no new dependency, and `make api` lists only add
   [0041-MADR-close-the-gaps-the-consumers-wait-on.md](0041-MADR-close-the-gaps-the-consumers-wait-on.md)'s "Not chosen"; the
   release-notes report (phase 11).
 * **Tools:** `tools/consumer.py` (phase 11).
+* **(Added 2026-10-30, phases 12 to 17, issue #12.)** `agentproc/agentproc.go`, `agentproc/example_test.go`, a new
+  `agentproc/closecontext_test.go` and `TestWaitErrorSaysTheCauseOnce`; `errors.go`, `serve.go` and `shutdown_test.go`; `README.md`
+  and `docs/architecture.md`; `tools/consumer.py` and its row in `tools/README.md`; the release notes
+  `0042-REPORT-release-notes-v1-28-0.md`; the 0027 MADR's annotation. Not in scope: `Connection.Wait` and `WaitContext`, unchanged
+  (0026, 0041); `Process.Wait`'s bound, which the MADR rejects (I7); any change in `<cli-b>`.
 * **Not in scope:**
   * `clienthost` and `internal/proctree`;
   * a handshake inside `InProcess.Start`;
@@ -316,6 +321,111 @@ As 0041's phase 17 ran:
 * the push and its CI, before the report cites it;
 * the tag on the owner's ask, the GitHub release, `tools/publication.py`, and `tools/consumer.py`.
 
+### Phases 12 to 17, issue #12 (added 2026-10-30, proposed)
+
+The MADR's "Amended 2026-10-30, issue #12" (X1 to X4). Nothing is changed until the owner approves; every code phase keeps the gates
+above, and each new check is seen to fail on a planted break in its own copy of the tree.
+
+#### 12. Records
+
+On the owner's approval: this PLAN and its row `in-progress`; the MADR's amendment `accepted`, dated; its row and this PLAN's name
+the amendment.
+
+#### 13. `Wait`'s error said once (X3)
+
+* `agentproc/agentproc.go`:
+  * `agentError`, factored out of `Wait` and called under `p.mu`: the composition `Wait` makes today, with one case added, the agent's
+    error returned as it is when it already wraps the step's sentinel (`errors.Is(p.waitErr, p.ended)`); the stderr tail joined
+    after, as now. `Wait` calls it, so its result is unchanged but for that case.
+  * `Wait`'s doc, as the MADR's specification gives it.
+* Test, `TestWaitErrorSaysTheCauseOnce`: the MADR's I9 table, each row's `Wait` error by its exact text, with `errors.Is` true for
+  the step's sentinel; the child's row unchanged, its text beginning `agentproc: agent killed: `; and a `Serve` that returns
+  `ErrAbandoned`'s case unchanged, `agentproc: agent killed: agentproc: in-process agent abandoned`.
+* Planted break: the added case removed. The test must fail with the repeated text.
+
+#### 14. `acp.ErrHandlersRunning` and `ServeAgent` (X2)
+
+* `errors.go`: `ErrHandlersRunning`, beside `ErrShutdown`, with the specification's doc.
+* `serve.go`:
+  * at the input's end, `fmt.Errorf("%w %v after its end", ErrHandlersRunning, notificationQueueDrainTimeout)`, the same text as
+    today;
+  * at the context's end, `Shutdown`'s own error, when it wraps `context.DeadlineExceeded`, the bound having passed with requests
+    unanswered, wrapped as `fmt.Errorf("%w %v after the context's end: %w", ErrHandlersRunning, notificationQueueDrainTimeout, err)`,
+    then joined after `context.Cause(ctx)` as now. Only `Shutdown`'s error is tested, so a caller's context whose own cause is
+    `context.DeadlineExceeded` is not mistaken for the bound;
+  * `ServeAgent`'s doc names the sentinel at both ends.
+* Tests, in `shutdown_test.go`, each in a `synctest` bubble, so the 5 s bound passes on the bubble's clock:
+  * `TestServeAgentHandlersStillRun`, "the input's end": a prompt handler that ignores its context until released; the input ends;
+    `ServeAgent`'s error wraps `ErrHandlersRunning`, and its text is `acp: the connection's handlers still run 5s after its end`;
+  * "the context's end": the same handler, the context cancelled with a cause; the error wraps both `ErrHandlersRunning` and the
+    cause;
+  * each releases its handler before the bubble ends.
+* Planted breaks: `%w` made `%v` at the input's end; the context's-end wrapping removed. Each must fail its case.
+
+#### 15. `CloseContext` and `KillContext` (X1)
+
+* `agentproc/agentproc.go`:
+  * `hurryUp`, the `hurry` close `Kill` makes today, now a method that `Kill`, `KillContext` and `CloseContext`'s
+    `context.AfterFunc` call;
+  * `waitDone`, factored out of `WaitContext`, as `Connection`'s is: the channel its one goroutine closes once `Wait` has returned;
+  * two monotonic flags, `connWaitBegan` and `connWaitEnded` (`atomic.Bool`), set by `Wait` around its wait on the connection, so
+    that "the handlers still run" is true exactly while `Wait` is past the watcher, whose close of the connection ends the handlers'
+    context, and the connection's goroutines have not returned;
+  * `CloseContext`: `context.AfterFunc(ctx, p.hurryUp)` for the steps alone, `p.closeOnce.Do(p.stop)`, the `AfterFunc` stopped,
+    then the bounded wait; `KillContext`: `p.hurryUp()`, the steps, the bounded wait;
+  * the bounded wait: `waitDone()` or `ctx.Done()`, the end winning when both are ready, as `WaitContext` does; at the context's end,
+    `errors.Join` of `context.Cause(ctx)`, of `acp.ErrHandlersRunning` when the flags say so, and of `p.agentError()`, in that order;
+  * the docs of `Close`, `Kill`, `CloseContext` and `KillContext`, as the specification gives them.
+* `agentproc/example_test.go`: `ExampleProcess_CloseContext`, an in-process `ScriptAgent` closed under a 5 s bound, with
+  `// Output:`; and a comment showing `context.WithTimeoutCause`.
+* Tests, a new `agentproc/closecontext_test.go`:
+  * `TestCloseContextBoundsHandlers`: for an `InProcess` agent and a child (the `burst` mode), and for `CloseContext` and
+    `KillContext`, a client `SessionUpdate` that ignores its context until released. The call returns within its bound and the
+    slack; `errors.Is` holds for `context.DeadlineExceeded` and `acp.ErrHandlersRunning`; `Done` is closed. Released, `Wait` returns
+    what `Close`, or `Kill`, returns for that agent.
+  * `TestCloseContextJoinsTheAgentsError`: a `Serve` that returns its own error after `ServeAgent`, and a hung handler; the error
+    holds it.
+  * `TestCloseContextWaitsForHandlers`: a handler that returns half a grace into a 5 s bound; `CloseContext` returns `Wait`'s
+    error, `nil`, after the handler has returned, and joins nothing: `<cli-b>`'s `TestCloseWaitsForHandlers` in this repository.
+  * `TestCloseContextHurriesTheSteps`: a `stubborn` child under a 5 s grace and a 300 ms context; `CloseContext` returns well within
+    one grace, `errors.Is(err, ErrKilled)` and not `ErrTerminated`; `KillContext` likewise.
+  * `TestCloseContextCause`: `context.WithTimeoutCause` with the test's own error; the error holds it.
+  * `TestCloseContextNotHandlers`: an output tap held by its gate past a 100 ms context, under a 2 s grace, after a clean exit; the
+    error holds the context's cause and not `acp.ErrHandlersRunning`: a drain is not a handler.
+  * `TestCloseContextOneGoroutine`: 100 calls with an ended context leave one waiting goroutine, as `TestProcessWaitContext` counts
+    them.
+* Planted breaks, each in its own copy:
+  * `CloseContext` calling `Close`: `TestCloseContextBoundsHandlers` by its bound;
+  * the `AfterFunc` removed: `TestCloseContextHurriesTheSteps` by its duration;
+  * `KillContext` without `hurryUp`: the same, its `KillContext` case;
+  * `agentError` not joined: `TestCloseContextJoinsTheAgentsError`;
+  * the sentinel joined at any context's end: `TestCloseContextNotHandlers`;
+  * the sentinel never joined: `TestCloseContextBoundsHandlers`;
+  * a goroutine per call, not `waitDone`: `TestCloseContextOneGoroutine`.
+* Repeats: the new tests 20 times under `-race` on macOS, and 20 times on the Linux and Windows hosts.
+
+#### 16. Docs (X4)
+
+* `README.md`:
+  * the `agentproc` paragraph's "every wait bounded" says what is bounded;
+  * `Close`'s paragraph: `Close`, `Kill` and `Wait` also wait for the connection's handlers, without bound, and
+    `CloseContext` and `KillContext` bound that wait, joining `acp.ErrHandlersRunning`;
+  * `Wait`'s error said once;
+  * `ServeAgent`'s paragraph: `acp.ErrHandlersRunning` at both ends.
+* `docs/architecture.md`: `Wait`'s description, `agentError`, the bounded methods and their flags, and the new tests in the
+  package's checks; `ServeAgent`'s sentinel.
+* Each claim mapped to the test that makes it; every changed doc comment read in full against the code.
+
+#### 17. Close, and the release on the owner's ask
+
+* `make api` against `v1.27.0`: "0 incompatible, 3 compatible", `ErrHandlersRunning`, `(*Process).CloseContext` and
+  `(*Process).KillContext`; `tools/gates.py --all`; the amendment's "Confirmation" walked item by item.
+* On the owner's ask, as phase 11 ran: the release-notes report
+  `0042-REPORT-release-notes-v1-28-0.md`, a minor; `tools/consumer.py` extended to close an in-process agent through
+  `CloseContext` and to test `acp.ErrHandlersRunning` with `errors.Is`, with `make check-tools`; the push and its CI; the tag
+  `v1.28.0`, the GitHub release, `tools/publication.py` and `tools/consumer.py v1.28.0`.
+* Issue #12 answered and closed, on the owner's ask, with the release's link.
+
 ## Verification
 
 * Every item of the MADR's "Confirmation" holds, each by its phase's tests.
@@ -329,6 +439,9 @@ As 0041's phase 17 ran:
 * `make pre-add-check`, `make lint`, `tools/platforms.py` and `tools/gates.py --all` at every code phase.
 * `make disclosure-check` and `tools/idscan.py`: nothing found.
 * Every planted break fails its check, each in its own copy of the tree.
+* (Added 2026-10-30, phases 12 to 17.) The amendment's "Confirmation" holds, each item by its phase's tests; `make api` lists only
+  `ErrHandlersRunning`, `CloseContext` and `KillContext`; every existing test passes unchanged but for the texts phase 13 corrects,
+  which none pins; `TestNoLostOutput` among them, since `Wait` is unchanged.
 
 ## Rollout and Rollback
 
@@ -342,6 +455,10 @@ As 0041's phase 17 ran:
   before its request. A `Command`, a connection that never calls `Shutdown`, and today's goldens behave as before.
 * **Rollback before a tag:** revert the phase's commits. Phase 4 reverts without phase 3, and phases 5 to 8 revert independently.
 * **Rollback after a tag:** a name cannot be removed under `v1`; a defect is fixed forward in a patch.
+* **(Added 2026-10-30, phases 12 to 17.)** One minor, `v1.28.0`. Phases 13 and 14 are independent commits; phase 15 needs both.
+  Before a tag, each reverts by its commit, phase 15 first. A consumer meets three names, and two changed texts: `Wait`'s error for an
+  agent whose error wraps the step's sentinel, and `ServeAgent`'s at its context's end when `Shutdown`'s bound passes. `<cli-b>`
+  runs its held P12 with `CloseContext` in place of `Close` then `WaitContext`, under its own records.
 
 ## Execution record
 
@@ -1064,3 +1181,22 @@ The owner committed and pushed the notes as `59a43be`, then created and pushed t
 
 The release is published and every item of the MADR's "Confirmation" is shown, so this PLAN and its row are `complete`. Each
 consumer adopts `v1.26.0` under its own records, as "Rollout and Rollback" says.
+
+### Amendment, 2026-10-30, after the publication of `v1.26.0`: phases 12 to 17 proposed, issue #12
+
+**Found.** Issue #12: `Process.Close` waits without bound for a client handler that ignores its context, so `<cli-b>` cannot move its
+runner to `InProcess`. The MADR's "Amended 2026-10-30, issue #12" holds the findings, I1 to I9, each read in the tree at `03b57e9`
+or reproduced in a scratch copy:
+
+* `Close`, and `Kill`, end in `Wait`, whose wait on the connection has no bound (I2); reproduced in process and with a child (I3);
+* the README and two MADRs say "every wait bounded" (I4), and this record's C2 had found the bound `<cli-b>` keeps (I5);
+* `ServeAgent`'s handler error is a text, and no test reaches it (I6);
+* a prototype that bounds `Wait` broke `TestNoLostOutput` under load (I7); one that adds `CloseContext` and `KillContext` passed the
+  whole package (I8);
+* `Wait`'s error repeats its cause when the agent's error wraps it: three in-process cases, reproduced on the unmodified tree (I9).
+
+**The owner's direction, 2026-10-30.** The issue's second option, a bounded close; this record amended; `errors.Is` for
+`ServeAgent`'s handlers; the repeated message scoped and fixed. Phases 12 to 17 above carry it.
+
+**Proposed.** Phases 12 to 17, their tests and planted breaks. Nothing is changed until the owner approves; this PLAN then returns to
+`in-progress` until phase 17 closes.
