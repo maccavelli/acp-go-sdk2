@@ -445,14 +445,17 @@ func transcriptOf(t *testing.T, url string) {
 }
 
 // TestDialSchemes requires Dial to refuse a scheme it does not speak, and to
-// refuse http:// until the Streamable HTTP client lands.
+// make no request for http://, whose first request is the first Write's.
 func TestDialSchemes(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 	if _, err := Dial(ctx, "ftp://example.com/acp", nil); err == nil || !strings.Contains(err.Error(), `"ftp"`) {
 		t.Errorf("Dial(ftp://…) = %v, want an error naming the scheme", err)
 	}
-	if _, err := Dial(ctx, "http://127.0.0.1:1/acp", nil); !errors.Is(err, errHTTPNotYet) {
-		t.Errorf("Dial(http://…) = %v, want errHTTPNotYet", err)
+	c, err := Dial(ctx, "http://127.0.0.1:1/acp", nil)
+	if err != nil {
+		t.Errorf("Dial(http://…) to a closed port = %v, want nil: no request until a Write", err)
+	} else if err := c.Close(); err != nil {
+		t.Errorf("Close before any Write = %v, want nil", err)
 	}
 }

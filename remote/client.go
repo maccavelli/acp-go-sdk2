@@ -2,7 +2,6 @@ package remote
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
@@ -12,11 +11,6 @@ import (
 // defaultMaxMessageSize is the largest message either side takes unless its
 // options set another: the connection's own default, 10 MiB.
 const defaultMaxMessageSize = 10 * 1024 * 1024
-
-// errHTTPNotYet is Dial's error for an http:// or https:// URL until the
-// Streamable HTTP client lands (0043-PLAN-remote-http-and-websocket-transport.md,
-// phase 4).
-var errHTTPNotYet = errors.New("remote: Streamable HTTP is not implemented yet")
 
 // DialOptions configure Dial. The zero value, or nil, is ready to use.
 type DialOptions struct {
@@ -58,8 +52,8 @@ func (c *Conn) Read(p []byte) (int, error) { return c.t.Read(p) }
 // MaxMessageSize is not sent, and Write returns an error for it.
 func (c *Conn) Write(p []byte) (int, error) { return c.t.Write(p) }
 
-// Close ends the connection: a WebSocket's close handshake. Read then
-// returns io.EOF.
+// Close ends the connection: a WebSocket's close handshake, or Streamable
+// HTTP's DELETE, which waits up to 5 seconds. Read then returns io.EOF.
 func (c *Conn) Close() error { return c.t.Close() }
 
 // Dial connects to the agent at rawURL. A ws:// or wss:// URL is the
@@ -81,7 +75,7 @@ func Dial(ctx context.Context, rawURL string, opts *DialOptions) (*Conn, error) 
 		}
 		return &Conn{t: t}, nil
 	case "http", "https":
-		return nil, errHTTPNotYet
+		return &Conn{t: newHTTPClient(rawURL, o)}, nil
 	default:
 		return nil, fmt.Errorf("remote: the URL's scheme is %q, not ws, wss, http or https", u.Scheme)
 	}

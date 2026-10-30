@@ -844,3 +844,73 @@ required".
 * **Why not the others.** A fixed bound would end a connection whose message takes more than 5 s to send, with no way for the
   caller to raise it. A new option is API that the MADR's amendment 1 did not list.
 * **No MADR change:** the MADR names no bound on a client's writes.
+
+### Phase 5, the Streamable HTTP client (2026-10-29)
+
+Approved with "committed proceed" after `9e8def2`.
+
+**Files:**
+* `remote/sse.go`: `sseReader` with `next` and `readLine`.
+  * Lines end in LF, CR or CRLF. `data:` lines are joined with `\n`.
+  * Comments and the `event`, `id` and `retry` fields are ignored.
+  * An event over `MaxMessageSize`, or a line over it and the field's name, is `errLineTooLong`. A last line with no ending is
+    no event.
+  * The writer is phase 6's.
+* `remote/httpclient.go`:
+  * `httpClient` and the steps of the PLAN's phase 5 in `post`, `sessionOf`, `initialize`, `openStream`, `readStream` and `do`;
+  * `refused` and `refusedText`, quoting at most 512 bytes;
+  * `drain`, `isType`, and the `Acp-Session-Id`, `Acp-Protocol-Version`, media-type and `deleteBound` constants.
+* `remote/client.go`:
+  * `Dial` returns the Streamable HTTP `Conn` for `http://` and `https://`, and sends nothing until the first `Write`;
+  * phase 4's `errHTTPNotYet` is gone;
+  * `Conn.Close`'s doc names the `DELETE` and its 5 s bound.
+* `remote/fakeserver_test.go`: the PLAN's fake, in `tsMode`, `rustMode` and `pyMode`, with K3's second table's rules.
+  * It routes on POST and GET, holds lines for streams with no receiver, and records every request: method, protocol, the
+    three ACP headers, the cookie, `X-Test`, the body and the status.
+  * Hooks: `initFail`, `failNext`, `setCookie`, `getDelay`, `forget`, `closeStream`.
+  * Its `loadAgent` advertises `loadSession` and replays one update.
+* `remote/httpclient_test.go`. `remote/ws_test.go`'s `TestDialSchemes` now requires `http://` to make no request until a
+  `Write`.
+
+**One choice made in the code.** The connection stream's clean end, the SSE body's `io.EOF`, ends the `Conn` with `io.EOF`.
+So the client's connection ends cleanly (`acp.EndedCleanly`), as at a WebSocket's normal closure or the end of a child's
+output: a server ends its streams so when its agent's serve has returned. Any other end of the stream ends the `Conn` with that
+error. The PLAN's step 6, "The connection-scoped stream's end … ends the `Conn`", holds. `TestHTTPClientStreamEnds` first
+required an error naming the stream's end; it now requires the clean end its doc gives the reason for.
+
+**Tests**, the PLAN's fifteen:
+
+| Test | Result |
+| :--- | :--- |
+| `TestHTTPClientInitialize`, `TestHTTPClientNotInitializeFirst` | pass |
+| `TestHTTPClientInitializeRefused` | pass: a `200` with the agent's error and no id, and a `500` with `-32603`, reach `Initialize` as `*acp.RequestError` `-32603`; a `504` as an error naming it; each ends the connection |
+| `TestHTTPClientHeaders` | pass, in `tsMode`, which refuses a response to the agent's session request without its session: the id, `Acp-Protocol-Version: 1` and `X-Test` after `initialize`; the session on `session/prompt`, the permission answer and `session/cancel`; none on `session/new` or on a `$/cancel_request` whose params name a session |
+| `TestHTTPClientSessionStream` | pass: with the session `GET` delayed 200 ms, the stream is attached when `NewSession` returns |
+| `TestHTTPClientLoadStreamFirst` | pass: the first session `GET` before the first `session/load` POST in `tsMode` and `pyMode`; in `pyMode`, `404`, then `200` after the answer |
+| `TestHTTPClientLoadEachMode` | pass: in each mode, the updates `replayed,after load` and `end_turn` |
+| `TestHTTPClientHeaderRetry` | pass: in `pyMode`, `session/load` POSTed `404` with the header then `202` without; after the fake forgets the connection, a prompt's two `404`s end it; in `tsMode`, one POST |
+| `TestHTTPClientOrder` | pass: 200 notifications in order, the fake answering each after 0–2 ms |
+| `TestHTTPClientPostRefused` | pass: `Write` answered `400` returns an error naming it; `session/new`'s answer, queued before, is read; then the error |
+| `TestHTTPClientStreamEnds`, `TestHTTPClientClose`, `TestHTTPClientCookies`, `TestSSEReader` | pass |
+| `TestHTTPClientProtocols` | pass: every request `HTTP/1.1` on `http://`, `HTTP/2.0` over TLS with `EnableHTTP2`, and `HTTP/2.0` unencrypted when the caller's transport asks |
+
+`go test -race -count=3 -shuffle=on ./remote/`: ok. The client's tests, `-race -count=10 -shuffle=on`: ok.
+
+**Planted breaks**, `python3 tools/plants.py` over six plants, "6/6 as required":
+
+| Plant | Failing line |
+| :--- | :--- |
+| `Acp-Session-Id` sent on `$/cancel_request` | `httpclient_test.go:164: the POST holding "$/cancel_request" = [{… session:session-1 …}]` |
+| the session stream opened after the `session/new` answer is delivered | `httpclient_test.go:181: NewSession returned before the session's stream was open` |
+| POSTs sent concurrently | `httpclient_test.go:312: notification 0 to arrive = {…"n":13}, want n 0` |
+| the CR ending not handled | `httpclient_test.go:455: events = ["one" "twodata:threedata: four"], want "one\|two\nthree\|four"` |
+| `Close` without `DELETE` | `httpclient_test.go:410: requests = […], want a DELETE with conn-1` |
+| the header retry removed | `httpclient_test.go:274: py: LoadSession = {"code":-32603,…"remote: POST answered 404: "}` |
+
+**Gates:**
+* `tools/gates.py --all`: all 18 `ok`.
+* Precheck: "266 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)".
+* `remote`'s tests: ok at the floor (`8.518s`), on the Windows host (`5.666s`) and on the Linux host (`5.845s`).
+* `golangci-lint` for `darwin` and `windows`: 0 issues, after one `//nolint:bodyclose` on the retried POST, which `refused` or
+  `drain` closes.
+* `make api`: "0 incompatible, 11 compatible", the same eleven names as phase 4. Phase 5 adds no exported name.
