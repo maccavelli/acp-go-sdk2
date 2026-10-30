@@ -23,6 +23,13 @@ const testGrace = 300 * time.Millisecond
 // runner.
 const slack = 3 * time.Second
 
+// descendantGrace is TestStderrHeldByDescendant's grace. Start sets WaitDelay
+// to half of it, and the agent is seen to exit only once WaitDelay has passed
+// after its exit, so its exit must be seen within the other half of Close's
+// first step: slack, where testGrace would leave 150 ms, which a loaded runner
+// under -race has exceeded (0027-PLAN-agent-process-helper.md, step 9).
+const descendantGrace = 2 * slack
+
 // readyWait bounds how long a child may take to start and set itself up. It
 // bounds the test's setup, not the helper: a loaded machine has taken over
 // 3 s to start the test binary.
@@ -220,16 +227,18 @@ func TestCloseLadder(t *testing.T) {
 // TestStderrHeldByDescendant requires a Cmd.Stderr writer that a process the
 // agent started still holds neither to keep Close waiting nor to make it
 // escalate: WaitDelay, which Start sets to half the grace, closes it, so the
-// agent's exit is seen within Close's first step
+// agent's exit is seen within Close's first step. It runs under
+// descendantGrace, which leaves slack for the agent's exit to be seen
 // (0027-MADR-agent-process-helper.md, P10, P11;
-// 0027-PLAN-agent-process-helper.md, the deviation during step 4).
+// 0027-PLAN-agent-process-helper.md, the deviation during step 4, and step 9).
 func TestStderrHeldByDescendant(t *testing.T) {
 	t.Parallel()
-	p := start(t, "parent-stderr", &testClient{}) // its Stderr is a readyWriter, not a file
+	// Its Stderr is a readyWriter, not a file; it has no taps.
+	p := startTapped(t, "parent-stderr", nil, descendantGrace, nil, nil)
 	// The agent exits at its input's end; the heartbeat it started ignores
 	// SIGTERM and holds the writer. Without WaitDelay, Wait would hold until
 	// a kill ended the heartbeat, or for its minute where nothing can.
-	_, err := within(t, testGrace*3+slack, "Close", p.Close)
+	_, err := within(t, descendantGrace*3+slack, "Close", p.Close)
 	if !errors.Is(err, exec.ErrWaitDelay) || errors.Is(err, ErrTerminated) || errors.Is(err, ErrKilled) {
 		t.Errorf("Close = %v, want exec.ErrWaitDelay, and no signal", err)
 	}

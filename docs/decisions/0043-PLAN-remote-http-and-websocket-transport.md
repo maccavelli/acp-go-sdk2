@@ -1450,7 +1450,7 @@ The PLAN becomes `complete` once the last of these passes.
   * The failure and the rerun are recorded in the release-notes report's "CI".
   * The test's margin under the race step's load is left to a later amendment of
     [0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md), outside this PLAN. A second failure would have
-    stopped the release for a fix first.
+    stopped the release for a fix first. (Followed up 2026-10-30 by that PLAN's "Amendment, 2026-10-30" and its step 9.)
   * The other options were to fix the margin before the tag, or to measure the failure rate under load first.
 * **No MADR change:** the MADR asserts nothing about `agentproc`'s tests.
   * The MADR's item is amended ("Amended in the PLAN's phase 9, 2026-10-30", 1) and annotated in place. Its Status gains a dated

@@ -1,6 +1,6 @@
 ---
-status: complete
-date: 2026-10-20
+status: in-progress
+date: 2026-10-30
 associated-madr: "0027-MADR-agent-process-helper.md"
 ---
 
@@ -115,6 +115,8 @@ just before it exits.
 * **`TestDescendantsEnded`:** for `parent` and `parent-wait`, the `heartbeat` grandchild's output ends after `Close`, and after the
   agent's own exit (P8, P9, P14, P17).
 * **`TestStderrHeldByDescendant`:** a non-file `Cmd.Stderr` a grandchild holds does not keep `Wait` past `WaitDelay` (P10, P11).
+  (Amended 2026-10-30, step 9: it runs under a grace of its own, `2 * slack`, so that the agent's exit has `slack` to be seen; see
+  "Amendment, 2026-10-30".)
 * **`TestConnectionEndStopsAgent`:** a connection ended by an overflow stops the agent.
 * **`TestCloseIdempotent`:** concurrent and repeated `Close` calls return the same error.
 * **`TestOtherPlatformsBuild`,** not a test but a gate: `GOOS=js GOARCH=wasm`, `GOOS=wasip1 GOARCH=wasm` and `GOOS=plan9` vet the
@@ -142,6 +144,8 @@ before it is relied on.
 7. **Release notes:** `docs/reports/0027-REPORT-release-notes-v1-19-0.md` and its row, with `make api`'s report.
 8. **Verification and close:** the gates over the tree; the Windows and Linux hosts reached over SSH and `make push-guard` before the push;
    after CI's six jobs pass, this PLAN and its row `complete`; the owner tags `v1.19.0` and publishes its release.
+9. **`TestStderrHeldByDescendant`'s margin** (added 2026-10-30; see "Amendment, 2026-10-30" in the execution record): the test under a
+   grace of its own, `2 * slack`; the failure reproduced and the planted breaks of step 4 run again; CI's six jobs after the push.
 
 ## Verification
 
@@ -199,7 +203,8 @@ The release is proposed as the minor `v1.19.0`, which the owner confirms at the 
 
 * **`golang.org/x/sys` is updated by hand** (F11): nothing in the repository proposes its updates.
 * **The child modes live in a `_test.go` file,** so they ship in no binary.
-* **The grace in tests is 300 ms,** to keep the suite fast; the default stays 5 seconds.
+* **The grace in tests is 300 ms,** to keep the suite fast; the default stays 5 seconds. (Amended 2026-10-30, step 9:
+  `TestStderrHeldByDescendant` alone runs under `2 * slack`, 6 s.)
 * **The Linux host joins the Windows host** in the pre-push checks from step 2.
 
 ## Execution record
@@ -691,3 +696,168 @@ database on.
 
 This PLAN and its `docs/README.md` row are `complete`. Nothing of it is left open. Not in it, and left to records of their own: schema
 `1.26.0`, deferred by the owner; `Pdeathsig` on Linux; anything on the agent side.
+
+### Amendment, 2026-10-30, after the publication of `v1.19.0`: step 9, `TestStderrHeldByDescendant`'s margin
+
+**Found.** CI run `41069406511`, on `main` at `4ae65b8` (the `v1.27.0` release commit of
+[0043-PLAN-remote-http-and-websocket-transport.md](0043-PLAN-remote-http-and-websocket-transport.md)), attempt 1, failed one job of
+six: `validate (windows-2025, 1.27.3)`, its step "race detector", `go test -race -shuffle=on ./...`. The failing test was this PLAN's
+`TestStderrHeldByDescendant`, at `agentproc/agentproc_test.go:234` in that commit, after 0.38 s:
+
+```text
+Close = agentproc: agent killed: exec: WaitDelay expired before I/O complete, want exec.ErrWaitDelay, and no signal
+```
+
+* **Pre-existing.** `agentproc/` is unchanged since `v1.26.0`; the failing commit changed `remote/` and records. The other five jobs,
+  and every other package in the same step, passed. The failed job, rerun alone as attempt 2, passed, and so did all six jobs of the tag's
+  run, `41095125360`.
+* **Rare.** `tools/ci_jobs.py tally --runs 15`: the test's only failure in the last 15 runs of `main`.
+
+**Why it can fail.** The test starts the `parent-stderr` agent under `testGrace`, 300 ms, with a `Cmd.Stderr` that is not a file.
+The agent starts the `heartbeat-stderr` grandchild, which holds that writer for a minute and ignores SIGTERM, then exits at its input's
+end. `Close` closes the input and waits one grace for `Done`. `Cmd.Wait` returns only once `WaitDelay`, which `Start` sets to half the
+grace (the deviation during step 4), has passed after the agent's exit, since the grandchild still holds the writer. So the agent's exit
+must be seen within the other half of the grace, **150 ms**, of its input's end: whatever delays it, the agent's own exit or this
+process's goroutines that wait for it, shares those 150 ms. When it is not, `Close`'s first step runs out, the kill ends the job, and a
+clean exit reads as a kill. CI's message joins the kill and the expired `WaitDelay`, so there the agent had exited and its `WaitDelay`
+had run out, but `Close` had not seen it within the step: the delay was at least partly in seeing the exit, and the record cannot say
+which side stalled. Nothing in the helper is wrong. The test leaves 150 ms for a step the suite elsewhere allows `slack`, 3 s, "how long
+past its expected time a step may take on a busy runner" (`agentproc_test.go:22`).
+
+**Measured, 2026-10-30.** A scratch copy of the tree gained a test, never committed, that runs the same agent under `testGrace` 60
+times and logs `Close`'s time less `WaitDelay`: how long after its input's end the agent's exit was seen:
+
+| Where | Mode | Median | 90th percentile | Max | Killed |
+| :--- | :--- | ---: | ---: | ---: | ---: |
+| macOS | `-race`, with `go test -race ./...` of the same copy running beside it | 3 ms | 11 ms | 37 ms | 0 of 60 |
+| the Linux test host | no `-race`: its binaries are cross-compiled without cgo | 2.5 ms | 6 ms | 14 ms | 0 of 60 |
+| the Windows test host | no `-race`, as Linux | 2 ms | 3 ms | 4 ms | 0 of 60 |
+
+The exit is seen fast everywhere it could be measured. CI's Windows runner, under the race step's load, once took over 150 ms: a stall
+of the runner, which a test cannot prevent and must tolerate. No machine reachable here runs Windows under `-race`, so the stall itself was
+not reproduced; step 9 reproduces its effect, a late exit, instead.
+
+**Options**, each leaving the helper and its tests correct:
+
+1. **This test takes a grace of its own, `2 * slack`, recommended.** `WaitDelay` is then `slack`, and the agent's exit has `slack` to be
+   seen: the bound the suite already gives a step on a busy runner, twenty times the 150 ms it has today and about eighty times the
+   slowest exit measured.
+   * Good, because `Start`'s default `WaitDelay` stays under test: both planted breaks of step 4 keep failing.
+   * Good, because only this test changes; `testGrace` and every other bound stay as they are.
+   * Bad, because the test then takes about `slack`, 3 s, a run, since `WaitDelay` always expires in it. It runs in parallel with the
+     package's others, the longest of which takes 14.7 s under `-race` on macOS (`go test -race -json ./agentproc`, 17.1 s for the
+     package), so the package's time does not grow.
+2. **A larger `testGrace` for the whole package,** such as 1 s.
+   * Good, because every ladder test gains margin at once.
+   * Bad, because every test that waits a grace or two slows by as much, for a failure only this test has shown.
+3. **The test sets a short `WaitDelay` itself,** which `Start` keeps.
+   * Bad, because the test then no longer tests `Start`'s default, which is what it is for; the plant "`WaitDelay` the whole grace" would
+     no longer fail. It weakens the check, so it is not offered.
+4. **`Start` sets a smaller default, such as a quarter of the grace.**
+   * Bad, because it changes the helper's behaviour, and the MADR's decision, for a test's margin: a caller's `Stderr` copy gets less
+     time, and no caller has reported a problem.
+
+Retrying the test, or skipping it under `-race`, would hide the failure rather than remove its cause, and is not offered.
+
+**Decided (owner, 2026-10-30).** The owner asked for this amendment, detailed, and approved proceeding with it: option 1. Step 9 below
+carries it. This PLAN is `in-progress` until step 9 closes, after its push and CI.
+
+**The MADR is unchanged.** It decides that `Start` sets a zero `WaitDelay` to half the grace, so that an agent that exits within half the
+grace is seen to exit within `Close`'s first step ("Start, in order", step 4, as amended 2026-10-21). That holds, and step 9 relies on
+it. The MADR names no test grace, and its "Confirmation" item, "a `Stderr` writer held by a descendant (P10, P11)", is still made by
+the same test.
+
+### Step 9, `TestStderrHeldByDescendant`'s margin, as proposed 2026-10-30
+
+**Files:**
+
+* `agentproc/agentproc_test.go`:
+  * a constant, `descendantGrace = 2 * slack`, whose comment gives the arithmetic above and cites this step;
+  * `TestStderrHeldByDescendant` starts its agent through `startTapped`, which takes a grace and gives the agent a `Cmd.Stderr` that is
+    not a file, a `readyWriter`, as `start` does, with no taps; and bounds `Close` by `descendantGrace*3+slack`, as it bounded it by
+    `testGrace*3+slack`;
+  * its doc names the margin.
+* This PLAN: this amendment; its status; Tests, Implementation Steps and "Points for the owner's review" annotated in place.
+* `docs/README.md`: this PLAN's row, `in-progress`, then `complete`.
+* [0043-PLAN-remote-http-and-websocket-transport.md](0043-PLAN-remote-http-and-websocket-transport.md): its deviation for this failure
+  annotated in place with a pointer here.
+
+Nothing else: no exported name, no behaviour of `agentproc`, no other test, no CI change, no release.
+
+**Verification:**
+
+* **The failure, reproduced, in a scratch copy.** The `parent-stderr` child sleeps 250 ms after its input's end before it exits,
+  standing for the runner's stall:
+  * the test as it is fails, with CI's message;
+  * the test as amended passes;
+  * with a 2.5 s sleep, within `slack`, the amended test passes; with 3.5 s, past it, it fails, so the margin is the one claimed.
+* **Planted breaks,** each in a scratch copy, on macOS and on the Windows test host, where `Close` has no SIGTERM step:
+  * `Start` setting no `WaitDelay`: the test must fail, "want exec.ErrWaitDelay, and no signal";
+  * `Start` setting `WaitDelay` to the whole grace, as before the deviation during step 4: the same.
+* **Repeats:** `go test -race -count=20 -run '^TestStderrHeldByDescendant$' ./agentproc` on macOS; the test binary 20 times on the Linux
+  and Windows test hosts.
+* **Gates:** `make pre-add-check`, `tools/gates.py --all`, `make check-records`, `make markdownlint`, `make disclosure-check`, and the
+  identifier scan of the changed files.
+* **After the owner's push:** CI's six jobs, the Linux and Windows "race detector" steps among them, with `tools/watch_ci.py`.
+
+**Acceptance:** each check above passes, and its output is recorded below.
+
+**Rollout and rollback:** a test-only change, with no release of its own; the next release's notes may mention it under maintenance.
+Reverting its commit restores the 300 ms grace for the test and nothing else.
+
+### Step 9, `TestStderrHeldByDescendant`'s margin, 2026-10-30
+
+The owner asked for this amendment and approved proceeding with it in the same turn. What changed:
+
+* **`agentproc/agentproc_test.go`:** `descendantGrace = 2 * slack`, with its comment; `TestStderrHeldByDescendant` starts its agent
+  through `startTapped(t, "parent-stderr", nil, descendantGrace, nil, nil)` and bounds `Close` by `descendantGrace*3+slack`; its doc
+  names the margin and this step. `startTapped` also discards the connection's log, as its other callers do; this agent writes nothing
+  to its output, so nothing is lost. No other test, and nothing outside the test files, changed.
+* **This PLAN:** the amendment above; Tests, Implementation Steps and "Points for the owner's review" annotated in place; its status
+  `in-progress`.
+* **`docs/README.md`:** this PLAN's row `in-progress`.
+* **[0043-PLAN-remote-http-and-websocket-transport.md](0043-PLAN-remote-http-and-websocket-transport.md):** its deviation
+  "phase 10's CI failure in `agentproc`" annotated with a pointer here.
+
+**The failure, reproduced.** Each case ran in a scratch copy of the working tree, whose `parent-stderr` child slept after its input's
+end before it exited; macOS under `-race`, the Windows test host through `tools/remote.py pkg`. 6 of 6 as required:
+
+| Case | Where | Result |
+| :--- | :--- | :--- |
+| the test at `HEAD`, 250 ms late | macOS | failed as required, after 0.43 s: "Close = agentproc: agent terminated: exec: WaitDelay expired before I/O complete, want exec.ErrWaitDelay, and no signal" |
+| the test at `HEAD`, 250 ms late | Windows | failed as required, after 0.37 s: "Close = agentproc: agent killed, want exec.ErrWaitDelay, and no signal" |
+| the amended test, 250 ms late | macOS | passed, 3.29 s |
+| the amended test, 250 ms late | Windows | passed, 3.31 s |
+| the amended test, 2.5 s late, within `slack` | macOS | passed, 5.54 s |
+| the amended test, 3.5 s late, past `slack` | macOS | failed as required, after 6.53 s, with the first case's message |
+
+On macOS the first step's end sends SIGTERM, so the error names `ErrTerminated`; on Windows there is no such step. On Windows the
+agent, 250 ms late, is still running when the job is killed, so the error lacks CI's "WaitDelay expired": in CI the agent had exited
+but its exit was not seen in time, which the same margin covers (the amendment's "Why it can fail").
+
+**Planted breaks,** step 4's two, each in a scratch copy, run again against the amended test. 4 of 4 failed as required:
+
+| Break | Where | The check that failed |
+| :--- | :--- | :--- |
+| `Start` sets no `WaitDelay` | macOS | `TestStderrHeldByDescendant`, after 12.05 s: "Close = agentproc: agent killed, want exec.ErrWaitDelay, and no signal" |
+| `Start` sets no `WaitDelay` | Windows | the same, after 6.06 s: "Close = agentproc: agent killed, want exec.ErrWaitDelay, and no signal" |
+| `WaitDelay` the whole grace | macOS | the same, after 6.05 s: "Close = agentproc: agent terminated: exec: WaitDelay expired before I/O complete, want exec.ErrWaitDelay, and no signal" |
+| `WaitDelay` the whole grace | Windows | the same, after 6.06 s: "Close = agentproc: agent killed: exec: WaitDelay expired before I/O complete, want exec.ErrWaitDelay, and no signal", CI's message word for word |
+
+**Repeats** of the amended test, each exit 0: macOS, `go test -race -count=20 -run '^TestStderrHeldByDescendant$' -v ./agentproc`, 20
+"PASS" of 20 in 64.0 s; the Linux and Windows test hosts, the test binary with `-test.count=20`, 20 "PASS" of 20 each.
+
+The reproduction, the plants and the repeats ran before two comments were reworded, the constant's and the test's, to say that the
+agent's exit must be *seen* within the margin, as the amendment's analysis was corrected to say; the code they ran is the code staged.
+
+**Gates,** `tools/gates.py --all` on the final tree, the hosts named per command: "all gates passed", 18 of 18:
+
+* `make pre-add-check`: "276 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)";
+* `make lint`, "0 issues." four times; `platforms`, "13 of 13 passed"; `make check-tools`, "Ran 58 tests" and "Ran 32 tests", OK;
+* `make api`: "against v1.27.0: 0 incompatible, 0 compatible";
+* the floor gate at go1.26.10, passed; `race3`, the root package three times under `-race`; `GOEXPERIMENT=nojsonv2`;
+  `GOOS=windows go vet`; regeneration; `go fix -diff`, `go mod tidy -diff`, `make check-records`, `make markdownlint` and the identifier scan, each exit 0;
+* `windows` and `linux`: `go test -count=1 -shuffle=on ./...` in both modules on each test host, passed.
+
+**Waiting for the owner:** the commit, and the push; then CI's six jobs, whose run this step records before this PLAN and its row are
+`complete` again.
