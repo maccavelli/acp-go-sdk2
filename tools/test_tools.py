@@ -601,6 +601,72 @@ class ReadmeTest(unittest.TestCase):
             self.assertTrue((readme.parent / link.split("#")[0]).is_file(), f"tools/README.md links {link}, which does not exist")
 
 
+class InteropTest(unittest.TestCase):
+    """interop.py's parts that need neither the SDKs nor the network
+    (0043-PLAN-remote-http-and-websocket-transport.md, phase 7)."""
+
+    def setUp(self) -> None:
+        import interop
+        self.interop = interop
+
+    def test_pair_table(self) -> None:
+        b, ts, py, python, clients = Path("/b/remote-example"), Path("/ts"), Path("/py"), Path("/v/bin/python"), Path("/c")
+        pairs = {p.name: p for p in self.interop.pairs(b, ts, python, py, clients, 1111, 2222)}
+        self.assertEqual(sorted(pairs), ["go-py-http", "go-py-ws", "go-ts-http", "go-ts-ws", "py-http", "py-ws", "ts-http", "ts-ws"])
+        self.assertEqual(pairs["ts-http"].server, ["npx", "tsx", "src/examples/http-server.ts"])
+        self.assertEqual(pairs["ts-http"].server_env, {"PORT": "1111"})
+        self.assertEqual(pairs["ts-ws"].client, [str(b), "dial", "ws://127.0.0.1:1111/acp"])
+        self.assertEqual(pairs["ts-ws"].want, ["stop reason: end_turn", "loaded: 1 updates"])
+        self.assertEqual(pairs["py-http"].server, [str(python), "examples/http_server.py"])
+        self.assertEqual(pairs["py-ws"].client, [str(b), "dial", "ws://localhost:8000/acp"])
+        self.assertEqual(pairs["go-ts-http"].client_env, {"ACP_HTTP_URL": "http://127.0.0.1:2222/acp"})
+        self.assertEqual(pairs["go-ts-ws"].server, [str(b), "serve", "-addr", "127.0.0.1:2222"])
+        self.assertEqual(pairs["go-ts-ws"].want, ["Done: end_turn"])
+        self.assertEqual(pairs["go-py-http"].server, [str(b), "serve", "-addr", "localhost:8000"])
+        self.assertEqual(pairs["go-py-http"].client, [str(python), str(clients / "http_client.py")])
+        self.assertEqual(pairs["go-py-ws"].client, [str(python), str(clients / "ws_client.py")])
+        for p in pairs.values():
+            self.assertEqual(p.interrupt, p.name.startswith("go-"), f"{p.name}: only the Go server is ended by an interrupt")
+
+    def test_lines_in_order(self) -> None:
+        want = ["stop reason: end_turn", "loaded: 1 updates"]
+        self.assertTrue(self.interop.lines_in_order("echo: hello\nstop reason: end_turn\r\nx\nloaded: 1 updates\n", want))
+        for out, why in (("loaded: 1 updates\nstop reason: end_turn\n", "out of order"),
+                         ("stop reason: end_turn\n", "one missing"),
+                         ("x stop reason: end_turn\nloaded: 1 updates\n", "a whole line, not a part of one")):
+            self.assertFalse(self.interop.lines_in_order(out, want), why)
+
+    def test_free_port(self) -> None:
+        import socket
+        port = self.interop.free_port()
+        self.assertTrue(1024 <= port <= 65535, port)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", port))
+
+    def test_missing_tool_stops(self) -> None:
+        import contextlib
+        import io
+        err = io.StringIO()
+        with self.assertRaises(SystemExit) as cm, contextlib.redirect_stderr(err):
+            self.interop.require_tools(which=lambda cmd: None if cmd == "uv" else f"/bin/{cmd}")
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("uv is not on PATH", err.getvalue())
+        self.interop.require_tools(which=lambda cmd: f"/bin/{cmd}")
+
+    def test_patch_cwd(self) -> None:
+        import contextlib
+        import io
+        text = 'import asyncio\nfrom acp import x\n\n    s = await conn.new_session(cwd=".", mcp_servers=[])\n'
+        got = self.interop.patch_cwd(text, "c.py")
+        self.assertEqual(got, 'import asyncio\nimport os\nfrom acp import x\n\n    s = await conn.new_session(cwd=os.getcwd(), '
+                              'mcp_servers=[])\n')
+        for bad in (text.replace('cwd="."', 'cwd="/w"'), text + 'other(cwd=".")\n', text.replace("import asyncio\n", "")):
+            err = io.StringIO()
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(err):
+                self.interop.patch_cwd(bad, "c.py")
+            self.assertIn("c.py", err.getvalue())
+
+
 class HostTest(unittest.TestCase):
     def test_unset_names_the_variable(self) -> None:
         saved = os.environ.pop("ACP_LINUX_HOST", None)

@@ -115,6 +115,41 @@ func (c *rawConn) post(body, session string) int {
 	return status
 }
 
+// postResult is what a POST sent by postAsync got.
+type postResult struct {
+	status int
+	err    error
+}
+
+func (r postResult) String() string { return fmt.Sprintf("status %d, error %v", r.status, r.err) }
+
+// postAsync POSTs body on a goroutine of its own, under waitBound, and sends
+// what it got on the channel returned: rawConn.do fails the test, which a
+// goroutine must not.
+func (c *rawConn) postAsync(body string) <-chan postResult {
+	got := make(chan postResult, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), waitBound)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, strings.NewReader(body))
+		if err != nil {
+			got <- postResult{err: err}
+			return
+		}
+		req.Header.Set("Content-Type", jsonType)
+		req.Header.Set(connectionIDHeader, c.id)
+		resp, err := c.client.Do(req)
+		if err != nil {
+			got <- postResult{err: err}
+			return
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		got <- postResult{status: resp.StatusCode}
+	}()
+	return got
+}
+
 // request POSTs a request of method with params, a fresh id, and session as
 // the header when not "", and returns the id's key and the status.
 func (c *rawConn) request(method, params, session string) (string, int) {

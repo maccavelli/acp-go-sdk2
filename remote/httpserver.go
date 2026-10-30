@@ -33,6 +33,9 @@ type httpConn struct {
 	initID  string      // initialize's id key, until its answer arrives
 	initAns chan []byte // the answer to initialize
 
+	inbox chan []byte   // the client's lines, queued for the agent's input
+	fed   chan struct{} // closed when feed has returned
+
 	mu           sync.Mutex
 	streams      map[string]*sseStream // "" is the connection's
 	held         int                   // bytes held across streams
@@ -130,11 +133,22 @@ func (h *Handler) servePost(w http.ResponseWriter, r *http.Request) {
 		h.refuse(w, http.StatusBadRequest, text)
 		return
 	}
-	if _, err := hc.sc.inW.Write(toLine(trimmed)); err != nil {
-		h.refuse(w, http.StatusNotFound, "remote: the connection has ended")
-		return
+	// The POST is answered once its line is queued, before the agent can read
+	// it, as the official servers queue it: the agent's answer cannot overtake
+	// it. A full queue makes the POST wait.
+	select {
+	case <-hc.sc.ending:
+	default:
+		select {
+		case hc.inbox <- toLine(trimmed):
+			w.WriteHeader(http.StatusAccepted)
+			return
+		case <-hc.sc.ending:
+		case <-r.Context().Done():
+			return
+		}
 	}
-	w.WriteHeader(http.StatusAccepted)
+	h.refuse(w, http.StatusNotFound, "remote: the connection has ended")
 }
 
 // admit checks a message's session, Rust's rule: a request or notification
@@ -202,13 +216,12 @@ func (h *Handler) serveInitialize(w http.ResponseWriter, r *http.Request, body [
 		h: h, sc: sc, id: rand.Text(), initID: m.idKey, initAns: make(chan []byte, 1),
 		streams: map[string]*sseStream{}, routes: map[string]string{}, attaching: map[string]string{},
 		agentReqs: map[string]string{}, named: map[string]bool{}, idleSince: time.Now(),
+		inbox: make(chan []byte, max(h.inboxLimit, 1)), fed: make(chan struct{}),
 		routed: make(chan struct{}), done: make(chan struct{}),
 	}
+	// The queue is empty: no other request can name the connection yet.
+	hc.inbox <- toLine(body)
 	go hc.run()
-	if _, err := sc.inW.Write(toLine(body)); err != nil {
-		hc.fail(w, m)
-		return
-	}
 	t := time.NewTimer(h.initBound)
 	defer t.Stop()
 	select {
@@ -258,12 +271,13 @@ func (hc *httpConn) fail(w http.ResponseWriter, m message) {
 	_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%s,"error":{"code":-32603,"message":"Internal error","data":{"error":"the agent ended before it answered initialize"}}}`, m.idKey) //nolint:errcheck // The client may have gone.
 }
 
-// run owns the connection: the router reads the agent's output; the idle
-// bound and the provisional streams are checked on a ticker; and when the
-// ending is done and the router has read to the end, the streams send what is
-// held and close.
+// run owns the connection: the queue feeds the agent's input; the router
+// reads the agent's output; the idle bound and the provisional streams are
+// checked on a ticker; and when the ending is done, the queue has stopped and
+// the router has read to the end, the streams send what is held and close.
 func (hc *httpConn) run() {
 	h, sc := hc.h, hc.sc
+	go hc.feed()
 	go hc.route()
 	tick := min(h.opts.Grace, h.idleBound) / 4
 	tick = max(tick, 10*time.Millisecond)
@@ -278,6 +292,7 @@ func (hc *httpConn) run() {
 		}
 		break
 	}
+	<-hc.fed
 	<-hc.routed
 	h.mu.Lock()
 	if h.httpConns[hc.id] == hc {
@@ -314,6 +329,23 @@ func (hc *httpConn) closeStreamLocked(key string, st *sseStream) {
 	}
 	close(st.stop)
 	delete(hc.streams, key)
+}
+
+// feed writes the queued lines into the agent's input, in the order they were
+// queued, until the connection's ending starts or the input fails. Lines still
+// queued then are dropped, as the RFD drops what is in flight.
+func (hc *httpConn) feed() {
+	defer close(hc.fed)
+	for {
+		select {
+		case line := <-hc.inbox:
+			if _, err := hc.sc.inW.Write(line); err != nil {
+				return
+			}
+		case <-hc.sc.ending:
+			return
+		}
+	}
 }
 
 // route reads the agent's output, one line each, and holds each line for its

@@ -1,8 +1,10 @@
 package remote
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -616,4 +618,95 @@ func TestHTTPServerTranscript(t *testing.T) {
 		}}}
 	}), nil))
 	transcriptOf(t, ts.URL)
+}
+
+// TestHTTPServerQueued requires a POST answered 202 once its line is queued,
+// before the agent reads it, so the agent's answer cannot overtake it; the
+// queued lines read in order; a POST past the queue's bound waiting for the
+// agent; and a POST waiting so answered 404 when the connection ends
+// (0043-PLAN-remote-http-and-websocket-transport.md, "Deviation, 2026-10-30,
+// phase 7's 202 after the agent's answer").
+func TestHTTPServerQueued(t *testing.T) {
+	t.Parallel()
+	note := func(n int) string { return fmt.Sprintf(`{"jsonrpc":"2.0","method":"_test/%d"}`, n) }
+	// With the limit at 2, the feed holds one line the agent has not read and
+	// the queue two more: the fourth POST waits.
+	fill := func(c *rawConn) <-chan postResult {
+		t.Helper()
+		for n := range 3 {
+			if status := c.post(note(n), ""); status != http.StatusAccepted {
+				t.Fatalf("POST %d while the agent reads nothing = %d, want 202", n, status)
+			}
+		}
+		waiting := c.postAsync(note(3))
+		select {
+		case r := <-waiting:
+			t.Fatalf("a POST past the queue's bound was answered (%v) before the agent read", r)
+		case <-time.After(300 * time.Millisecond):
+		}
+		return waiting
+	}
+
+	release := make(chan struct{})
+	got := make(chan string, 8)
+	c := rawInit(t, blockedServer(t, release, got), nil)
+	waiting := fill(c)
+	close(release)
+	select {
+	case r := <-waiting:
+		if r.err != nil || r.status != http.StatusAccepted {
+			t.Errorf("the waiting POST, once the agent read: %v, want 202", r)
+		}
+	case <-time.After(waitBound):
+		t.Fatalf("the waiting POST was not answered within %v of the agent's reading", waitBound)
+	}
+	for n := range 4 {
+		select {
+		case method := <-got:
+			if want := fmt.Sprintf("_test/%d", n); method != want {
+				t.Errorf("the agent read %s at %d, want %s", method, n, want)
+			}
+		case <-time.After(waitBound):
+			t.Fatalf("the agent did not read line %d within %v", n, waitBound)
+		}
+	}
+
+	ended := rawInit(t, blockedServer(t, make(chan struct{}), nil), nil)
+	waiting = fill(ended)
+	if status, _, _ := ended.do(http.MethodDelete, "", nil); status != http.StatusAccepted {
+		t.Fatalf("DELETE = %d, want 202", status)
+	}
+	select {
+	case r := <-waiting:
+		if r.err != nil || r.status != http.StatusNotFound {
+			t.Errorf("the waiting POST, once the connection ended: %v, want 404", r)
+		}
+	case <-time.After(waitBound):
+		t.Fatalf("the waiting POST was not answered within %v of the connection's end", waitBound)
+	}
+}
+
+// blockedServer serves connections whose agent answers initialize, then
+// reads nothing until release is closed or its context ends, and then sends
+// each method it reads on got.
+func blockedServer(t *testing.T, release <-chan struct{}, got chan<- string) string {
+	t.Helper()
+	h := NewHandler(func(ctx context.Context, in io.Reader, out io.Writer) error {
+		sc := bufio.NewScanner(in)
+		if !sc.Scan() {
+			return sc.Err()
+		}
+		_, _ = io.WriteString(out, `{"jsonrpc":"2.0","id":`+classify(sc.Bytes()).idKey+`,"result":{"protocolVersion":1}}`+"\n")
+		select {
+		case <-release:
+		case <-ctx.Done():
+			return nil
+		}
+		for sc.Scan() {
+			got <- classify(sc.Bytes()).method
+		}
+		return sc.Err()
+	}, &HandlerOptions{Grace: 50 * time.Millisecond})
+	h.inboxLimit = 2
+	return testServer(t, h).URL
 }

@@ -1,6 +1,6 @@
 ---
 status: in-progress
-date: 2026-10-29
+date: 2026-10-30
 associated-madr: "0043-MADR-remote-http-and-websocket-transport.md"
 ---
 
@@ -402,7 +402,10 @@ accepts what any official client sends (the MADR's amendment, 2):
     method with neither: `400`. Both, differing: `400`. A session the connection has not seen is not refused: `session/load` and
     `session/resume` name sessions this connection has never had.
   * A response to the agent's request may omit `Acp-Session-Id`. When it is present and is not the session of that request: `400`.
-  * Otherwise the line goes to `serve`'s input, and the POST is answered `202` once the pipe has taken it.
+  * Otherwise the line goes to `serve`'s input, and the POST is answered `202` once the pipe has taken it. *(Amended in phase
+    7's execution: the line goes on the connection's bounded inbound queue, and the POST is answered `202` once it is there,
+    before the agent can read it. A goroutine writes the queue into the pipe. See "Deviation, 2026-10-30, phase 7's `202` after
+    the agent's answer".)*
 * **GET, SSE:**
   * no `text/event-stream` in `Accept`: `406`;
   * without a connection header: `400`; an unknown connection: `404`;
@@ -505,6 +508,10 @@ Planted breaks:
   The two Python lines print `result.stop_reason` as formatted text. If the first run shows the enum's name rather than
   `end_turn`, the required line is corrected in the tool and the record says so.
 
+  *(Amended in phase 7's execution: go-py-http and go-py-ws run copies of `http_client.py` and `ws_client.py` that the tool
+  writes into its cache, with `cwd="."` made the absolute working directory. See "Deviation, 2026-10-30, phase 7's Python
+  clients' relative `cwd`".)*
+
   * The Python examples hard-code `localhost:8000`, so the tool refuses to start when that port is taken. It serves the Go side
     on `localhost:8000`, and records whether `localhost` resolved to IPv4 or IPv6.
   * `tools/test_tools.py` gains offline tests: the pair table's commands, the success-line match, the free-port helper, and the
@@ -516,7 +523,8 @@ Planted breaks:
 Planted breaks, in copies of the tree, each run as the one pair that shows it:
 * phase 6's `session/new` routing changed to the session stream, for go-ts-http;
 * phase 5's `Acp-Session-Id` dropped from the prompt, for ts-http;
-* phase 4's `Acp-Connection-Id` dropped from the `101`, for go-ts-ws.
+* ~~phase 4's `Acp-Connection-Id` dropped from the `101`, for go-ts-ws~~ *(replaced in execution by "the server's lines sent
+  as binary frames", for go-ts-ws: see "Deviation, 2026-10-30, phase 7's WebSocket plant")*.
 
 `make check-tools` passes.
 
@@ -996,3 +1004,201 @@ PLAN's row requires, and each subtest takes 0.04–0.06 s.
   `strconv.Itoa` and `t.Helper()` in the tests, and one `//nolint:bodyclose` on the raw stream, whose reading goroutine closes
   it.
 * `make api`: "0 incompatible, 11 compatible". Phase 6 adds no exported name.
+
+### Phase 7, the interoperability check and `example/remote` (2026-10-30)
+
+Approved with "committed, proceed" after `8451cab`.
+
+The first run of `tools/interop.py`, before the two deviations below were resolved:
+* ts-http and ts-ws first failed because the tool did not pass `PORT` to the TypeScript server. That was the tool's own bug,
+  fixed before the run that counts, and not a deviation.
+* py-http, py-ws and go-ts-ws passed.
+* go-ts-http and both go-py pairs failed, as the two deviations below record.
+
+#### Deviation, 2026-10-30, phase 7's `202` after the agent's answer
+
+* **Found.** go-ts-http failed in about two runs of five.
+  * The TypeScript example client printed `Done: end_turn`. Then its `finally` threw at `stream.writable.close()`
+    (`http-client.ts:114`): `TypeError [ERR_INVALID_STATE]: Invalid state: WritableStream is locked`. It exited 1.
+  * Against its own server, both TypeScript clients exit 0.
+* **Evidence.** A scratch copy of `example/remote`, its handler wrapped to log each request, status and SSE write with its time,
+  served five runs of the TypeScript client. Two failed.
+  * In run 2, which failed, the prompt's POST arrived at 2776.1 ms. The `session/update` event was written at 2776.2 ms, and
+    the POST's `202` and the prompt's answer at 2776.3 ms.
+  * In each passing run, the `202` was written before the events, and a `DELETE` followed.
+  * The TypeScript client holds its stream's writer lock until its POST is answered (`src/core/jsonrpc.ts:1610`–`:1614`).
+    `connectWith` closes when the answer arrives, so an answer that overtakes its POST's `202` leaves the lock held.
+  * The cause is phase 6's own code, not pre-existing. `servePost` (`remote/httpserver.go:133`–`:137`) answered `202` after
+    `io.PipeWriter.Write` had returned, and that returns only once the agent has read the line. So the agent may already be
+    answering.
+  * The TypeScript server also hands the line over before its `202` (`src/transports/server.ts:241`–`:251`). But its hand-off
+    is a write into a `TransformStream` (`src/transports/connection.ts:368`, `:646`), which completes once the line is queued,
+    before the agent runs.
+* **Resolution.** The owner chose "Bounded inbound queue", as the TypeScript server queues. The other option was to write and
+  flush the `202`, then write the pipe, under a per-connection lock.
+  * Each Streamable HTTP connection queues the client's lines, up to `queueLimit` (256) lines, the bound of `lineQueue`.
+  * A POST is answered `202` once its line is queued. A goroutine writes the queue into the agent's input, in order.
+  * A POST that finds the queue full waits. It is answered `404` if the connection begins to end meanwhile, and gets no answer
+    if its own request ends first.
+  * `initialize` goes through the same queue.
+  * Lines still queued when the connection ends are dropped, as the RFD's "In-flight messages are not replayed" allows.
+  * A new test and its planted breaks are in the phase's record below.
+  * The phase 6 step is annotated in place.
+* **Not offered**, as a workaround: requiring only `Done: end_turn`, whatever the client's exit status.
+* **No MADR change:** the MADR asserts nothing about when a POST is answered.
+
+#### Deviation, 2026-10-30, phase 7's Python clients' relative `cwd`
+
+* **Found.** go-py-http and go-py-ws failed on every run.
+  * The Python example clients send `new_session(cwd=".", mcp_servers=[])` (`examples/http_client.py:45`, and the same call in
+    `examples/ws_client.py`).
+  * The SDK checks every path it receives
+    ([0015-MADR-validate-absolute-protocol-paths.md](0015-MADR-validate-absolute-protocol-paths.md)) and answers `-32602`. The
+    schema's `cwd` reads "The working directory for this session. Must be an absolute path."
+  * The client raised `acp.exceptions.RequestError: Invalid params`.
+* **Evidence.** Scratch copies of the two clients, with `cwd="."` alone changed to `os.getcwd()`, passed three runs of three on
+  each profile against `example/remote`. Each printed `stop reason: end_turn`, the formatted text the PLAN asked the first run
+  to settle.
+* **Resolution.** The owner chose "Patched copy of the examples".
+  * `tools/interop.py` writes copies of the two clients into its cache. It requires `import asyncio` and `cwd="."` to occur
+    exactly once in each, adds `import os`, and makes the `cwd` `os.getcwd()`.
+  * The pairs run the copies. Python's transport and connection code run unchanged.
+  * The other option was a client script of the tool's own.
+  * The phase 7 step is annotated in place.
+* **Not offered**, as a workaround: an inbound rewrite in `example/remote` that makes a relative `cwd` absolute against the
+  server's own directory. It would teach hosts to accept a path the schema forbids, and resolve it on the wrong host.
+* **No MADR change:** the MADR names no client command.
+
+#### Deviation, 2026-10-30, phase 7's WebSocket plant
+
+* **Found.** The planted break "phase 4's `Acp-Connection-Id` dropped from the `101`, for go-ts-ws" cannot fail. Run in a copy
+  of the tree, go-ts-ws passed: `Done: end_turn`, client exit 0.
+* **Evidence.** Neither official WebSocket client reads the header:
+  * TypeScript's `src/transports/ws-stream.ts` never names it.
+  * Python's `src/acp/` reads `Acp-Connection-Id` only in its HTTP client (`http/client.py:144`), never in its WebSocket
+    client.
+
+  So no pair can show its absence. The header itself is held by phase 4's unit plant, "`Acp-Connection-Id` set after
+  `Accept`", which failed `TestWebSocketConnectionID`. The cause is not the code: the PLAN assumed a client that reads it.
+* **Resolution.** The owner chose "Binary frames, for go-ts-ws".
+  * The replacement plant sends each of the server's lines as a binary frame: `remote/ws.go`'s `pumpWebSocket` writes
+    `websocket.MessageBinary`.
+  * The TypeScript client drops a binary message (`src/transports/ws-utils.ts:73`–`:75`), as the RFD tells a receiver to. So
+    `initialize`'s answer never arrives, and the pair fails at its bound.
+  * The other option was to record the plant as unattainable, leaving phase 7 with no plant on the WebSocket server's path.
+  * The original plant is struck through, not removed.
+* **No MADR change:** the MADR names no planted break.
+
+#### What phase 7 built
+
+**Files:**
+* `example/remote/main.go`:
+  * `serve -addr ADDR` runs an `http.Server` with `ReadHeaderTimeout` and with HTTP/1.1 and unencrypted HTTP/2 enabled. It serves
+    `echoAgent` at `/acp` through `NewHandler` and `acp.ServeAgent`.
+    * The agent embeds `acp.AgentRefusals` and advertises `loadSession`. It answers each text block with `echo: <text>`.
+    * It keeps every session's updates in one `store`, which every connection shares, and replays them on `session/load`.
+    * On an interrupt, serve calls `Handler.Close` and then `Shutdown`.
+  * `dial URL` runs `initialize`, `session/new` with the working directory and a prompt of `hello`. It prints each agent
+    message chunk's text and `stop reason: <reason>`.
+    * When the agent advertises `loadSession`, it loads the session on a second `Conn` and prints `loaded: <n> updates`.
+    * It waits up to 5 s for as many updates as the first connection saw. Over Streamable HTTP, the replay comes on the
+      session's stream and the answer on the connection's, in no order (phase 5, step 5).
+  * Every write to standard output is checked, as `errcheck` requires.
+* `example/remote/main_test.go`: `TestServeAndDial` and `TestRunUsage`.
+* `remote/httpserver.go` and `remote/handler.go`: the inbound queue, from the first deviation above.
+  * `httpConn` gains `inbox` and `fed`, and `feed`. `servePost` queues the line and then answers `202`. `serveInitialize`
+    queues `initialize` too.
+  * `serverConn` gains `ending`, closed as `end` starts the ladder. `Handler` gains the unexported `inboxLimit`, `queueLimit`
+    by default.
+  * `ServeHTTP`'s doc says when a POST is answered.
+* `remote/httpserver_test.go`: `TestHTTPServerQueued`, and `blockedServer`.
+* `remote/httpserver_helpers_test.go`: `postAsync` and `postResult`.
+* `tools/interop.py`: the eight pairs.
+  * `require_tools`, `free_port`, `localhost_families`, `listening`, `pairs`, `lines_in_order`, `patch_cwd`, `checkout`,
+    `setup`, `stop` and `run_pair`.
+  * `--tree` builds `example/remote` from another tree, so that a planted break can run as its pair.
+  * Each server and each client runs in a process group of its own, so a bound ends `npx`'s `node` child too.
+* `tools/test_tools.py`: `InteropTest`, with five tests.
+* `tools/README.md`: the row for `interop.py`.
+
+**Tests:**
+
+| Test | Result |
+| :--- | :--- |
+| `TestServeAndDial` | pass: over `http://` and `ws://`, `echo: hello`, `stop reason: end_turn`, `loaded: 1 updates`; serve returns nil after its context ends |
+| `TestRunUsage` | pass |
+| `TestHTTPServerQueued` | pass: with the limit at 2, three POSTs `202` while the agent reads nothing; a fourth unanswered for 300 ms, then `202` once the agent reads; the agent reads the four in order; a POST waiting so on a second connection `404` after its `DELETE` |
+| `InteropTest` | pass: the pair table; whole lines in order; a free port that binds; `uv` missing stops with status 2, naming it; `patch_cwd`'s copy, and its stop on a text found zero times or twice |
+
+`go test -race -count=3 ./example/remote/ ./remote/`: ok.
+
+**The run**, `python3 tools/interop.py`, exit 0:
+* It printed "TypeScript 08a0d30f023bf86574d49d59c4154e44d4386f55, Python 9853d8b514d6340000bcbd01ec07808436db80cf;
+  localhost resolves to IPv6, IPv4".
+* The Go server, given `localhost:8000`, listened on `127.0.0.1:8000`. Both Python clients reached it.
+* `tools/procs.py` found no server or client left running afterwards.
+
+| Pair | The client's last lines | Server |
+| :--- | :--- | :--- |
+| ts-http | `stop reason: end_turn`, `loaded: 1 updates` | terminated, exit 143 |
+| ts-ws | `stop reason: end_turn`, `loaded: 1 updates` | terminated, exit 143 |
+| py-http | `echo: hello`, `stop reason: end_turn` | exit 0 |
+| py-ws | `echo: hello`, `stop reason: end_turn` | exit 0 |
+| go-ts-http | `Done: end_turn` | interrupted, exit 0 |
+| go-ts-ws | `Done: end_turn` | interrupted, exit 0 |
+| go-py-http | `<< echo: hello over http`, `stop reason: end_turn` | interrupted, exit 0 |
+| go-py-ws | `<< echo: hello over websocket`, `stop reason: end_turn` | interrupted, exit 0 |
+
+* The Python lines print `end_turn`, the formatted text, so the required lines stand as the PLAN wrote them.
+* go-ts-http under the inbound queue: the TypeScript client, run 20 times against the logging copy of `example/remote`, exited 0
+  each time. In each run the prompt's `202` was logged before its `session/update` event. Before the queue, two of five runs
+  failed.
+
+**Planted breaks.**
+
+The interop plants, each in a copy of the tree, run with `tools/interop.py --tree COPY PAIR`:
+
+| Plant | Pair | Failing line |
+| :--- | :--- | :--- |
+| phase 6's `session/new` answer routed to the session stream | go-ts-http | `client exit timed out`, no `Done: end_turn` |
+| phase 5's `Acp-Session-Id` dropped from `session/prompt` | ts-http | `remote: session/prompt: {"code":-32603,…"remote: POST answered 400: Missing Acp-Session-Id"}` |
+| the server's lines sent as binary frames (the third deviation) | go-ts-ws | `client exit timed out`, no `Done: end_turn` |
+| ~~phase 4's `Acp-Connection-Id` dropped from the `101`~~ | go-ts-ws | passed, `Done: end_turn`: the third deviation |
+
+The Go checks, `python3 tools/plants.py` over five plants, "5/5 as required", run again after the `errcheck` changes:
+
+| Plant | Failing line |
+| :--- | :--- |
+| the line written to the agent before the `202` | `httpserver_test.go:653: Post "http://127.0.0.1:…": context deadline exceeded` |
+| the queue's bound not applied | `httpserver_test.go:653: a POST past the queue's bound was answered (status 202, error <nil>) before the agent read` |
+| a waiting POST not released when the connection ends | `httpserver_test.go:682: the waiting POST, once the connection ended: status 0, error Post "…": context deadline exceeded, want 404` |
+| the example's load replaying nothing | `main_test.go:41: dial = the load replayed no update, output "echo: hello\nstop reason: end_turn\nloaded: 0 updates\n"` |
+| no usage error without a mode | `TestRunUsage` panics: `index out of range`, at `main_test.go:54` |
+
+The tool's offline tests, five plants in copies of `tools/`, each run as `test_tools.py InteropTest`, "5/5 as required":
+
+| Plant | Failing line |
+| :--- | :--- |
+| go-ts-http's server not interrupted | `AssertionError` from `test_pair_table`: "only the Go server is ended by an interrupt" |
+| lines matched as parts of lines | `AssertionError: True is not false : a whole line, not a part of one` |
+| `free_port` returning 0 | `AssertionError: False is not true : 0` |
+| `require_tools` checking nothing | `AssertionError: SystemExit not raised` |
+| `patch_cwd` not requiring each text once | `AssertionError: SystemExit not raised` |
+
+**Gates:**
+* The timing-sensitive tests, `-count=20`:
+  * which tests: `TestHTTPServerQueued`, phase 6's nine, `…RoundTrip` and `…ClientShapes`, all for the changed server; and
+    `example/remote`'s;
+  * on macOS under `-race`: ok, `remote` in `15.621s` and `example/remote` in `1.988s`;
+  * through `tools/remote.py pkg`: exit 0 on the Linux host and on the Windows host, for each package.
+* `tools/gates.py --all`: 15 of 18 `ok` on the first run. precheck, newfiles and lint failed on five `errcheck` findings in
+  `example/remote/main.go`:
+  * four unchecked writes to standard output, which now return their errors;
+  * a blank `rc.Close()`, now with a reasoned `//nolint:errcheck`.
+
+  After the change, `tools/gates.py precheck newfiles lint idscan windows linux`: all `ok`.
+  * Precheck: "273 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)".
+  * The Windows host: `remote` `5.663s`, `example/remote` `0.045s`.
+  * The Linux host: `remote` `5.745s`, `example/remote` `0.067s`.
+* `make check-tools`: 58 and 32 tests ok; "check-ci-filters: 0 problem(s)".
+* `make api`: "0 incompatible, 11 compatible", the same eleven names. Phase 7 adds no exported name.

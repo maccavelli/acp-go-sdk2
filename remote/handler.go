@@ -79,6 +79,12 @@ type Handler struct {
 	// "Amended by the PLAN, 2026-10-29", 3 and 9). Only this package's tests
 	// change them.
 	initBound, idleBound time.Duration
+	// inboxLimit is how many lines a Streamable HTTP connection queues for its
+	// agent's input before a POST waits for room
+	// (0043-PLAN-remote-http-and-websocket-transport.md, "Deviation,
+	// 2026-10-30, phase 7's 202 after the agent's answer"). Only this package's
+	// tests change it.
+	inboxLimit int
 }
 
 // NewHandler returns a Handler that runs serve once for each connection, on
@@ -94,7 +100,7 @@ func NewHandler(serve func(ctx context.Context, in io.Reader, out io.Writer) err
 	o := resolveHandlerOptions(opts)
 	return &Handler{
 		serve: serve, opts: o, log: o.Logger, conns: make(map[*serverConn]struct{}), httpConns: make(map[string]*httpConn),
-		initBound: 30 * time.Second, idleBound: 60 * time.Second,
+		initBound: 30 * time.Second, idleBound: 60 * time.Second, inboxLimit: queueLimit,
 	}
 }
 
@@ -125,9 +131,12 @@ func resolveHandlerOptions(opts *HandlerOptions) HandlerOptions {
 // ServeHTTP serves one request to the endpoint, as the RFD routes it: a GET
 // with "Upgrade: websocket" opens a WebSocket connection; a POST sends a
 // message, initialize opening a Streamable HTTP connection; a GET opens one of
-// its event streams; a DELETE ends it. Any other method is answered 405, a
-// browser's CORS preflight included, which is the host's middleware. After
-// Close, every request is answered 503.
+// its event streams; a DELETE ends it. A POST is answered 202 once its
+// message is queued for the connection's serve, before serve reads it, so the
+// answer cannot arrive after the agent's reply; while 256 messages wait, a
+// POST waits for room. Any other method is answered 405, a browser's CORS
+// preflight included, which is the host's middleware. After Close, every
+// request is answered 503.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.isClosed() {
 		h.refuse(w, http.StatusServiceUnavailable, "remote: the handler is closed")
@@ -267,7 +276,7 @@ func (h *Handler) start() (*serverConn, bool) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 	sc := &serverConn{
 		h: h, cancel: cancel, inR: inR, inW: inW, outR: outR, outW: outW,
-		returned: make(chan struct{}), ended: make(chan struct{}),
+		returned: make(chan struct{}), ending: make(chan struct{}), ended: make(chan struct{}),
 	}
 	h.conns[sc] = struct{}{}
 	h.active.Add(1)
@@ -298,6 +307,7 @@ type serverConn struct {
 	err      error         // what serve returned
 
 	endOnce sync.Once
+	ending  chan struct{} // closed when the ending starts
 	ended   chan struct{} // closed when the ending's last step is done
 }
 
@@ -311,9 +321,12 @@ func (sc *serverConn) run(ctx context.Context) {
 }
 
 // end starts the connection's ending with cause, once; later calls do
-// nothing. ended closes when it is done.
+// nothing. ending closes as it starts, and ended when it is done.
 func (sc *serverConn) end(cause error) {
-	sc.endOnce.Do(func() { go sc.ladder(cause) })
+	sc.endOnce.Do(func() {
+		close(sc.ending)
+		go sc.ladder(cause)
+	})
 }
 
 // ladder is the ending, the same for every cause, as agentproc.InProcess's
