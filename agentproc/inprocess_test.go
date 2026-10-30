@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -182,6 +184,68 @@ func TestInProcessKillAtOnce(t *testing.T) {
 	if d >= time.Second {
 		t.Errorf("Kill took %v: it waits for no step", d)
 	}
+}
+
+// causeServe ignores its input's end and returns its context's cause, as
+// acp.ServeAgent does at its context's end.
+func causeServe(ctx context.Context, _ io.Reader, _ io.Writer) error {
+	<-ctx.Done()
+	return context.Cause(ctx)
+}
+
+// TestWaitErrorSaysTheCauseOnce requires Wait's error to say the step's
+// sentinel once: as it is when the agent's error wraps it already, and joined
+// before the agent's error otherwise, as for a child or an abandonment
+// (0042-MADR-in-process-agent-runner.md, the amendment of 2026-10-30, I9, X3).
+func TestWaitErrorSaysTheCauseOnce(t *testing.T) {
+	t.Parallel()
+	release := make(chan struct{})
+	free := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(free)
+	for _, tc := range []struct {
+		name  string
+		serve func(context.Context, io.Reader, io.Writer) error
+		kill  bool
+		want  string
+		is    error
+	}{
+		{"Kill, Serve returning its cause", causeServe, true, "agentproc: agent killed", ErrKilled},
+		{"step 2, Serve returning its cause", causeServe, false, "agentproc: agent terminated", ErrTerminated},
+		{"step 2, Serve wrapping its cause", func(ctx context.Context, _ io.Reader, _ io.Writer) error {
+			<-ctx.Done()
+			return fmt.Errorf("serve: %w", context.Cause(ctx))
+		}, false, "serve: agentproc: agent terminated", ErrTerminated},
+		{"step 2, Serve returning its own error", func(ctx context.Context, _ io.Reader, _ io.Writer) error {
+			<-ctx.Done()
+			return errServe
+		}, false, "agentproc: agent terminated: serve's own error", ErrTerminated},
+		{"abandoned", func(context.Context, io.Reader, io.Writer) error {
+			<-release
+			return nil
+		}, false, "agentproc: agent killed: agentproc: in-process agent abandoned", ErrAbandoned},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := startInProcess(t, &InProcess{Serve: tc.serve})
+			stop := p.Close
+			if tc.kill {
+				stop = p.Kill
+			}
+			_, err := within(t, 3*testGrace+slack, "the stop", stop)
+			if err == nil || err.Error() != tc.want || !errors.Is(err, tc.is) {
+				t.Errorf("Wait's error = %v, want %q, and errors.Is %v", err, tc.want, tc.is)
+			}
+		})
+	}
+	t.Run("a child, killed", func(t *testing.T) {
+		t.Parallel()
+		p := start(t, "stubborn", &testClient{})
+		_, err := within(t, 2*testGrace+slack, "Close", p.Close)
+		if !errors.Is(err, ErrKilled) || !strings.HasPrefix(err.Error(), ErrKilled.Error()) ||
+			strings.Count(err.Error(), ErrKilled.Error()) != 1 {
+			t.Errorf("Close = %v, want ErrKilled said once, first", err)
+		}
+	})
 }
 
 // TestInProcessReturnsFirst requires ExitedFirst to report whether Serve

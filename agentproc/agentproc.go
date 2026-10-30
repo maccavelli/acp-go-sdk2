@@ -380,7 +380,9 @@ func (p *Process) Done() <-chan struct{} { return p.done }
 // time: nil for an exit of status 0 of its own, otherwise the error
 // exec.Cmd.Wait returned, joined with ErrTerminated or ErrKilled when Close
 // or Kill ended the agent so. For an InProcess agent, the agent's error is
-// Serve's, or ErrAbandoned, joined the same way. Under
+// Serve's, or ErrAbandoned, joined the same way. An agent's error that
+// already wraps that sentinel, as a Serve that returns its context's cause
+// does, is returned as it is, so the sentinel is said once. Under
 // Command.JoinStderrTail, a non-nil error also has a *StderrError holding the
 // tail joined. It does not stop the agent.
 func (p *Process) Wait() error {
@@ -391,12 +393,24 @@ func (p *Process) Wait() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.returned = true
+	return p.agentError()
+}
+
+// agentError is the error Wait returns, made from what the watcher recorded,
+// so it is final once done is closed. The caller holds mu.
+func (p *Process) agentError() error {
 	var err error
 	switch {
 	case p.ended == nil:
 		err = p.waitErr
 	case p.waitErr == nil:
 		err = p.ended
+	case errors.Is(p.waitErr, p.ended):
+		// The agent's own error says it already: a Serve that returns its
+		// context's cause, as acp.ServeAgent does
+		// (0042-MADR-in-process-agent-runner.md, the amendment of 2026-10-30,
+		// X3).
+		err = p.waitErr
 	default:
 		err = fmt.Errorf("%w: %w", p.ended, p.waitErr)
 	}

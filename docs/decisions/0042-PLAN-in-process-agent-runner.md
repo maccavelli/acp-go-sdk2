@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 date: 2026-10-30
 associated-madr: "0042-MADR-in-process-agent-runner.md"
 ---
@@ -1200,3 +1200,46 @@ or reproduced in a scratch copy:
 
 **Proposed.** Phases 12 to 17, their tests and planted breaks. Nothing is changed until the owner approves; this PLAN then returns to
 `in-progress` until phase 17 closes.
+
+**Approved (owner, 2026-10-30).** The owner committed the amendment as `9a3ff81` and answered "committed, proceed".
+
+### Phase 12, the records (2026-10-30)
+
+* The MADR's amendment `accepted`, its status line and the record's own status paragraph saying so.
+* This PLAN `in-progress`; its row and the MADR's in `docs/README.md` updated.
+* Its files ride with phase 13's, staged together, since this phase changes records alone.
+
+Checks: `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py --paths`, run with phase 13's.
+
+### Phase 13, `Wait`'s error said once (2026-10-30)
+
+**Files:**
+* `agentproc/agentproc.go`: `agentError`, factored out of `Wait`, which calls it under `mu` once it has set `returned`. One case is
+  added, before the join: when `errors.Is(p.waitErr, p.ended)`, the agent's error is returned as it is. The stderr tail is joined
+  after, as before. `Wait`'s doc says the sentinel is said once.
+* `agentproc/inprocess_test.go`: `causeServe`, and `TestWaitErrorSaysTheCauseOnce`, six cases in parallel, each by its exact text and
+  `errors.Is`:
+
+  | Case | `Wait`'s error |
+  | :--- | :--- |
+  | `Kill`, `Serve` returning its cause | `agentproc: agent killed` |
+  | step 2, `Serve` returning its cause | `agentproc: agent terminated` |
+  | step 2, `Serve` wrapping its cause | `serve: agentproc: agent terminated` |
+  | step 2, `Serve` returning its own error | `agentproc: agent terminated: serve's own error`, unchanged |
+  | abandoned | `agentproc: agent killed: agentproc: in-process agent abandoned`, unchanged |
+  | a child, `stubborn`, killed | begins with `agentproc: agent killed`, which it holds once, unchanged; the rest is the platform's |
+
+**Run:** `go test -race -run '^TestWaitErrorSaysTheCauseOnce$' ./agentproc`, every case PASS.
+
+**Planted break,** in a scratch copy: the added case made `false && errors.Is(…)`. The test failed as required, on the three cases
+whose `Serve` wraps the sentinel and on no other:
+
+```text
+inprocess_test.go:236: Wait's error = agentproc: agent killed: agentproc: agent killed, want "agentproc: agent killed", and errors.Is agentproc: agent killed
+inprocess_test.go:236: Wait's error = agentproc: agent terminated: agentproc: agent terminated, want "agentproc: agent terminated", and errors.Is agentproc: agent terminated
+inprocess_test.go:236: Wait's error = agentproc: agent terminated: serve: agentproc: agent terminated, want "serve: agentproc: agent terminated", and errors.Is agentproc: agent terminated
+```
+
+**Gates,** `tools/gates.py --all`, the hosts named per command: "all gates passed", 18 of 18; among them `make pre-add-check`, "276
+file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make api`, "against v1.27.0: 0 incompatible, 0 compatible";
+`platforms`, "13 of 13 passed"; the floor gate at go1.26.10, passed; `windows` and `linux`, passed.

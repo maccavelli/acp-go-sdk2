@@ -30,8 +30,8 @@ shape?
 
 **Status.** Item 1, the in-process runner, was decided with the owner on 2026-10-28. On the same day the owner asked for three more
 items, 2 to 4, and answered their questions ("Decided with the owner, items 2 to 4, 2026-10-28"). The record is `accepted`.
-On 2026-10-30, issue #12 brought an amendment, `proposed` until the owner approves it: a bounded close, a testable handlers error,
-and `Wait`'s error said once ("Amended 2026-10-30, issue #12").
+On 2026-10-30, issue #12 brought an amendment, accepted the same day: a bounded close, a testable handlers error, and `Wait`'s error
+said once ("Amended 2026-10-30, issue #12").
 
 ### Findings in this repository
 
@@ -700,10 +700,11 @@ phase 2 entry). They corrected one statement of fact, and changed no decision.
 
 #### Amended 2026-10-30, issue #12: a bounded close, a testable handlers error, and `Wait`'s error said once
 
-**Status of this amendment: proposed.** The owner set its direction on 2026-10-30: the issue's second option, a bounded close beside
-`Close` and `Kill`; this record amended, rather than a new one; an error `errors.Is` can test for `ServeAgent`'s handlers; and the
-repeated text in `Wait`'s error scoped and fixed. The choices below that the owner did not name are this amendment's, each with its
-alternative, for the owner to accept with the PLAN's phases 12 to 17.
+**Status of this amendment: accepted, 2026-10-30.** The owner set its direction on 2026-10-30: the issue's second option, a bounded
+close beside `Close` and `Kill`; this record amended, rather than a new one; an error `errors.Is` can test for `ServeAgent`'s
+handlers; and the repeated text in `Wait`'s error scoped and fixed. The choices below that the owner did not name are this amendment's,
+each with its alternative; the owner accepted them with the PLAN's phases 12 to 17, committed as `9a3ff81` and approved with
+"committed, proceed" the same day.
 
 ##### Findings, 2026-10-30
 
