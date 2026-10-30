@@ -77,6 +77,10 @@ You can run them from your terminal or connect to external ACP agents.
   prompt, and prints the streamed turn and its stop reason.
 - `go run ./example/gemini` bridges to the Gemini CLI in ACP mode, `gemini --acp`
   (flags: -model, -sandbox, -yolo, -debug, -gemini /path/to/gemini).
+- `go run ./example/remote serve -addr 127.0.0.1:7331` serves an echo agent over
+  the network, and `go run ./example/remote dial http://127.0.0.1:7331/acp`
+  (or `ws://…`) prompts it and loads the session again
+  ([Remote agents](#remote-agents)).
 
 The example clients advertise the file-system capability and not the terminal
 one, and write only inside the session's working directory. You can watch the
@@ -103,6 +107,9 @@ If you're building an [Agent](https://agentclientprotocol.com/protocol/overview#
   Answer `initialize` with `acp.OfferedAuthMethods(req.ClientCapabilities,
   methods)` so a client without `auth.terminal` is not offered a terminal
   method, which the SDK would refuse to send.
+- To serve over the network instead, mount `remote.NewHandler` on your
+  `http.Server`, with `acp.ServeAgent` as its serve function
+  ([Remote agents](#remote-agents)).
 - Send updates and make client requests using the returned connection. An agent
   that keeps the connection for its handlers implements `acp.AgentConnAware`:
   the constructor calls its `SetAgentConnection` before it reads anything, so a
@@ -151,7 +158,9 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
   every terminal
   ([0041-MADR-close-the-gaps-the-consumers-wait-on.md](docs/decisions/0041-MADR-close-the-gaps-the-consumers-wait-on.md)).
 - Launch or connect to your Agent process (stdio), then create a connection with
-  `acp.NewClientSideConnection(client, stdin, stdout)`.
+  `acp.NewClientSideConnection(client, stdin, stdout)`. For an agent on the
+  network, `remote.Dial` returns a `*remote.Conn` that is both streams:
+  `acp.NewClientSideConnection(client, c, c)` ([Remote agents](#remote-agents)).
 - Call `Initialize`, `NewSession`, and `Prompt` to run a turn and stream updates.
   A client that keeps its connection implements `acp.ClientConnAware`, whose
   `SetClientConnection` the constructor calls the same way.
@@ -816,6 +825,180 @@ run; the reader never waits for a handler, since a running one may be waiting
 for a response only the reader delivers. Notifications and `$/cancel_request`
 do not count. The default is no limit.
 
+### Remote agents
+
+Package `remote` runs ACP over the network. It implements the RFD
+["Streamable HTTP & WebSocket Transport"](https://agentclientprotocol.com/rfds/streamable-http-websocket-transport)
+at its revision of 2026-07-02, on both sides and in both of its profiles,
+which share one endpoint:
+
+- **Streamable HTTP:** a POST for each message to the agent, and server-sent
+  event streams, one for the connection and one for each session, for the
+  messages from it.
+- **WebSocket:** one socket that carries every message both ways, one text
+  frame each.
+
+Both sides present the remote connection as the byte stream the rest of the
+module reads and writes, one JSON-RPC message a line, as stdio carries it. So
+connections, `acp.ServeAgent`, the taps and transcripts work over the network
+as they do over a child's pipes
+([0043-MADR-remote-http-and-websocket-transport.md](docs/decisions/0043-MADR-remote-http-and-websocket-transport.md)).
+
+A client calls `remote.Dial(ctx, url, opts)`.
+
+- **The URL:** `ws://` and `wss://` dial WebSocket, and `ctx` bounds the
+  handshake. `http://` and `https://` dial Streamable HTTP, which sends nothing
+  until the first message: it must be `initialize`. `ctx` never bounds the
+  connection itself.
+- **Joining it:** the `*remote.Conn` it returns is both of a connection's
+  streams: `acp.NewClientSideConnection(client, c, c)`.
+- **`DialOptions`:**
+  - `HTTPClient` makes the requests; nil is a new client. A nil `Jar` becomes a
+    cookie jar of the connection's own, since the RFD requires a client to
+    keep the server's cookies. For WebSocket, an `*http.Transport` is copied
+    and limited to HTTP/1.1, which the handshake needs.
+  - `Header` goes on every request, the handshake included. Authentication
+    goes there.
+  - `MaxMessageSize` defaults to 10 MiB.
+- **`Close`:** a WebSocket's close handshake, or Streamable HTTP's `DELETE`,
+  waiting up to 5 seconds; `Read` then returns `io.EOF`.
+
+Over Streamable HTTP, the client follows the three official servers:
+
+- **Order:** messages are POSTed one at a time, in order, each waiting for its
+  `202`.
+- **`Acp-Session-Id`:** a message naming a session carries the header. A POST
+  answered `404` with it is sent once more without it, as Python's server
+  wants.
+- **Session streams:** a session's stream is opened before a `session/new`
+  answer naming it is delivered, and before a `session/load` or
+  `session/resume` is sent.
+- **No order between streams:** the streams are read together, and the RFD
+  orders nothing between them. A `session/load` answer can arrive before the
+  replay its session's stream still carries, so wait for the updates you
+  expect, as `example/remote` does.
+- **Ends:** the connection stream's end ends the `Conn`, cleanly when the
+  server ended it cleanly.
+
+An agent is served by `remote.NewHandler(serve, opts)`, an `http.Handler` for
+the endpoint.
+
+- **Per connection:** it runs `serve(ctx, in, out)` once, on a goroutine of its
+  own. `serve` is what an agent's main runs, usually `acp.ServeAgent`.
+- **Methods:** a GET with `Upgrade: websocket` opens a WebSocket. A POST sends a
+  message, and `initialize` opens a Streamable HTTP connection. A GET opens one
+  of its event streams, and a DELETE ends it. Any other method, a browser's
+  CORS preflight included, is `405`.
+- **Answers to a POST:** `202` once its message is queued for `serve`, before
+  `serve` reads it, so the agent's answer cannot overtake it. While 256
+  messages wait, a POST waits for room.
+- **`initialize`:** answered with the agent's own answer and the connection's
+  id. An answer with an error is sent without an id, and the connection ends.
+  A `serve` that returns first gets `500` with `-32603`, and no answer within
+  30 seconds gets `504`.
+- **The session rule:** a message's session comes from `Acp-Session-Id` or from
+  `params.sessionId`, as Rust's server takes it. So the TypeScript, Python
+  and Rust clients are all served.
+- **`HandlerOptions`:**
+  - `Grace`, 5 seconds by default, bounds each step of a connection's ending
+    and each WebSocket message written to a client.
+  - `KeepAlive`, 15 seconds, is how often each WebSocket is pinged and each
+    event stream sent a comment, traffic or none. A ping not answered within
+    it ends the connection.
+  - `MaxMessageSize` is 10 MiB.
+  - `MaxBuffered`, 64 MiB, bounds what a Streamable HTTP connection holds for
+    streams no client is receiving.
+  - `OriginPatterns` allows browser origins besides the request's own host,
+    on every method, as the WebSocket upgrade matches them. A request with no
+    `Origin`, as a program sends, is always allowed.
+  - `Logger` gets byte counts and fixed labels, never a message, an id or a
+    session id.
+- **Event streams:** the handler clears their write deadline, so the server's
+  `WriteTimeout` does not cut them.
+
+A connection ends through one ladder, as `agentproc.InProcess` does:
+
+1. close `serve`'s input, and wait up to `Grace`;
+2. cancel its context with the cause, and wait again;
+3. close its pipes, and wait a last time.
+
+A `serve` still running is then abandoned. Its context's cause, which
+`context.Cause` reports, says why the connection ended:
+
+| Cause | When |
+| :--- | :--- |
+| `remote.ErrDeleted` | the client sent `DELETE` |
+| `remote.ErrDisconnected` | the client closed its socket, stopped answering pings, or left its Streamable HTTP connection with no connection stream for 60 seconds |
+| `remote.ErrHandlerClosed` | the handler was closed |
+| `remote.ErrOverflow` | the messages held past `MaxBuffered` |
+
+`Handler.Close(ctx)` ends every connection at once, answers each later request
+`503`, and returns an error wrapping `remote.ErrAbandoned` when a `serve` had
+to be abandoned. A WebSocket's close handshake waits up to 5 seconds for a
+client that does not answer it.
+
+The host's part is the rest, as the RFD layers it on the transport:
+
+- **Authentication**, as middleware before the handler, on every request. The
+  RFD says `Acp-Connection-Id` is not a credential, so checking `initialize`
+  alone is not enough.
+- **Limits** on how many connections one client may open.
+- **CORS** for browsers, the preflight included.
+- **TLS.**
+- **Shutdown order:** `Handler.Close` before `http.Server.Shutdown`, which waits
+  for every open connection, an event stream included.
+
+<!-- example: remote ExampleNewHandler -->
+```go
+h := remote.NewHandler(func(ctx context.Context, in io.Reader, out io.Writer) error {
+    return acp.ServeAgent(ctx, agent{}, in, out)
+}, nil)
+mux := http.NewServeMux()
+// Authenticate every request here, not only initialize: the connection's
+// id is not a credential.
+mux.Handle("/acp", h)
+srv := &http.Server{Addr: "127.0.0.1:7331", Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+go func() {
+    if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+        log.Fatal(err)
+    }
+}()
+ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+defer stop()
+<-ctx.Done()
+// Close first: Shutdown waits for every open connection, and an open
+// event stream is one until the handler ends it.
+bound, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+if err := h.Close(bound); err != nil {
+    log.Printf("handler: %v", err)
+}
+if err := srv.Shutdown(bound); err != nil {
+    log.Printf("server: %v", err)
+}
+```
+<!-- /example -->
+
+`example/remote` is a program of both sides.
+
+- `remote serve -addr ADDR` serves an echo agent that can load its sessions. It
+  enables HTTP/1.1 and unencrypted HTTP/2, so a client that speaks HTTP/2 with
+  prior knowledge over `http://` is served too.
+- `remote dial URL` runs a prompt and, when the agent can, loads the session on
+  a second connection.
+- `tools/interop.py` runs both against the official TypeScript and Python
+  SDKs, at pinned commits, over both profiles.
+
+Not supported:
+
+- resuming an event stream with `Last-Event-ID`, and reconnecting
+  automatically. A client dials again and loads its session.
+- batches, answered `501`;
+- WebSocket subprotocols and compression, and WebSocket over HTTP/2;
+- Unix sockets.
+
+The package is outside the compatibility promise ([Stability](#stability)).
+
 ### Errors on the wire
 
 The connection reads one JSON-RPC message per line and answers what JSON-RPC
@@ -1195,6 +1378,12 @@ it, and `make api` lists those changes without gating them.
 
 When a definition stabilizes, it moves to `acp` under the same name. The policy
 is [0039-MADR-five-adopter-additions-on-schema-1-25-0.md](docs/decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
+
+Package `remote` is outside the promise too. The RFD it implements is Active,
+not Completed, so a name there may change or go away in a minor release when
+the RFD changes, and `make api` lists its changes without gating them
+([0043-MADR-remote-http-and-websocket-transport.md](docs/decisions/0043-MADR-remote-http-and-websocket-transport.md)).
+The packages the promise covers do not import it.
 
 ## Resources
 

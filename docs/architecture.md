@@ -13,7 +13,8 @@ starts an agent as a child process and stops it, package `clienthost` in
 `clienthost/`, the terminal and file-system methods a client runs for the
 agent, package `internal/proctree`, the process-tree code the two share,
 package `unstable` in `unstable/`, the API the unstable schema adds beyond the
-frozen manifest (all below), and package `acptest` in `acptest/`, which stands
+frozen manifest, package `remote` in `remote/`, ACP over Streamable HTTP and
+WebSocket (all below), and package `acptest` in `acptest/`, which stands
 up a connection pair for a test
 (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 5;
 0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 8):
@@ -825,6 +826,107 @@ environment variable names, under a goroutine-leak guard, and serve the
 methods over `acptest.Connect` with `Terminals`, `Files` and `Refusals`
 embedded together, as the package doc shows.
 
+## The remote transport
+
+`remote` (0043-MADR-remote-http-and-websocket-transport.md) implements the RFD
+"Streamable HTTP & WebSocket Transport" at its revision of 2026-07-02, both
+profiles on both sides. It is outside the compatibility promise:
+`scripts/check_api.py` reports it beside `unstable` without gating it. It alone
+imports `github.com/coder/websocket`.
+
+**The seam.** Every remote message becomes one compact line, and every line
+written becomes one message. So `acp`'s connections, `ServeAgent`, the taps and
+`Transcript` run unchanged on either side. Two files hold it:
+
+- `frame.go`:
+  - `lineSplitter` cuts what is written into lines, joining a line split across
+    writes, and refuses one over `MaxMessageSize`.
+  - `toLine` makes a message one compact line. One that is not JSON has its CR
+    and LF made spaces.
+  - `lineQueue` holds received lines for a reader, up to `queueLimit` (256)
+    before a push waits.
+- `route.go`'s `classify` reads a line's kind, its id key, its method, and its
+  `params.sessionId` and `result.sessionId`.
+  - The id key is the id's raw bytes, which an answer repeats exactly.
+  - `sessionScoped` lists the methods that need a session; a `$/` method is the
+    connection's.
+
+**The client.** `Dial` returns a `Conn` over the unexported `transport` of its
+profile:
+
+- `ws.go`'s `wsClient`: a handshake through an HTTP/1.1-only copy of the
+  caller's transport (`http1Only`), and one reader under the connection's
+  context (`readLoop`), since a read whose context ends closes the socket.
+- `httpclient.go`'s `httpClient`:
+  - `post` sends each line in order, waiting for its `202`, with
+    `Acp-Session-Id` from `sessionOf`. A `404` with the header is retried once
+    without it.
+  - `initialize` reads the first answer from the POST's body.
+  - `openStream` opens the connection's stream and each session's, and each
+    stream's `readStream` feeds one `lineQueue`.
+  - `Close` sends `DELETE`.
+  - `sse.go`'s `sseReader` reads the events, within `MaxMessageSize`.
+
+**The server.** `handler.go`'s `Handler` routes a request by method and
+`Upgrade`, after `originAllowed`, which copies `websocket.Accept`'s origin rule
+for every method. Each connection is a `serverConn`:
+
+- `serve` runs on a goroutine outside `Handler.active`, as `InProcess` keeps
+  its agent outside `Process`'s group, between two `io.Pipe`s.
+- `end` closes `ending` and starts `ladder`, whatever the cause:
+  1. close the input;
+  2. cancel the context with the cause;
+  3. close the pipes.
+
+  Each step waits up to `Grace`, and a serve still running is then counted and
+  left. `ended` closes when the ladder is done.
+- `Close` ends every connection and waits for `active`.
+
+Each profile drives a `serverConn`:
+
+- `ws.go`'s `runWebSocket`:
+  - `readWebSocket` pushes text frames into the input, and drops binary frames,
+    logging the first.
+  - `pumpWebSocket` writes each output line as a text frame under `Grace`.
+  - `keepAlive` pings every `KeepAlive`.
+- `httpserver.go`'s `httpConn`, one per Streamable HTTP connection, in
+  `Handler.httpConns` once `initialize` has a result:
+  - `servePost` applies the routing tree's statuses and `admit`'s session rule,
+    which takes the session from the header or the params, as Rust's server
+    does. It queues the line on `inbox`, up to the handler's `inboxLimit`
+    (256), and answers `202`.
+  - `feed` writes `inbox` into the input, so an answer cannot overtake its
+    POST's `202`.
+  - `serveInitialize` waits up to `initBound` (30 s) for the answer.
+  - `route` reads the output, and `dispatch` holds each line for its stream.
+    `routes`, `attaching`, `agentReqs` and `named` map ids and sessions to
+    streams, and `session/new`, `session/fork`, `session/load` and
+    `session/resume` answers go to the connection's stream.
+  - Lines held past `MaxBuffered` end the connection with `ErrOverflow`.
+  - `check`, on a ticker, ends a connection with no connection stream for
+    `idleBound` (60 s), and closes a provisional session stream nothing has
+    named within `Grace`.
+  - `serveStream` attaches one receiver per stream (`409` for a second), clears
+    the write deadline, and `stream` writes the held lines and a comment every
+    `KeepAlive`.
+  - `serveDelete` ends the connection with `ErrDeleted`.
+
+Checks that guard it:
+
+- `remote`'s 55 tests run on loopback through `httptest`, each waiting on an
+  event under a named bound, never on a sleep:
+  - `frame_test.go`'s three and `route_test.go`'s four;
+  - `ws_test.go`'s twelve and `handler_test.go`'s six;
+  - `httpclient_test.go`'s fifteen, against `fakeserver_test.go`'s fake in the
+    modes of the three official servers;
+  - `httpserver_test.go`'s fifteen, its round trip over HTTP/1.1, HTTP/2 over
+    TLS and unencrypted HTTP/2.
+- Its `TestMain` runs the goroutine-leak guard.
+- `TestReadmeRemoteIsTheExample` at the root requires the README's example to
+  be `ExampleNewHandler`'s body.
+- `tools/interop.py` runs `example/remote` against the official TypeScript and
+  Python SDKs.
+
 ## Verification tools
 
 `tools/` (0031-MADR-verification-tools-in-repository.md) holds what a PLAN's
@@ -853,6 +955,11 @@ markdownlint` and `scripts/check_records.py` would otherwise walk them.
 - `ci_jobs.py` reads CI's job history: every job's first attempt tallied, a
   failed job's step, seed and crash, and a variable's value in each step's
   environment, each log read by its job id, so from that job's own attempt.
+- `interop.py` runs `example/remote` against the official TypeScript and
+  Python SDKs, cloned at pinned revisions into the cache, over both profiles:
+  eight pairs, each server and client in a process group of its own and the
+  client under a 60 s bound. It runs copies of the Python clients with an
+  absolute `cwd`, and `--tree` builds the example from a planted break's copy.
 - `find.py` and `procs.py` search files and processes.
 - `make check-tools` compiles every tool and script, runs `tools/test_tools.py`,
   the tools' offline parts, and `scripts/`' tests, and runs
@@ -872,6 +979,7 @@ agentproc/                package agentproc: an agent as a child process or in t
 clienthost/               package clienthost: terminals and files a client serves for the agent
 internal/proctree/        package proctree: a process group or job, for agentproc and clienthost
 unstable/                 package unstable: doc.go, and unstable_gen.go when the unstable schema adds API
+remote/                   package remote: ACP over Streamable HTTP and WebSocket, client and server
 acptest/                  package acptest: a connection pair, a frame recorder, records, goldens and their check, a replay agent, a scripted agent, a memory client
 schema_gen_test.go        generated list of types, unions, and methods for tests
 cmd/generate/             the generator, its own module
@@ -885,7 +993,7 @@ cmd/generate/             the generator, its own module
   testdata/engine/        synthetic engine cases, one txtar each
   testdata/fuzz/          FuzzBuild seeds kept from crashers
 schema/                   schema files, the version stamp, and the frozen unstable-v1.json
-example/                  agent, client, claude-code, gemini programs
+example/                  agent, client, claude-code, gemini, remote programs
 testdata/json_golden/     JSON goldens
 testdata/fuzz/            FuzzRoundTrip seeds kept from crashers
 testdata/compaction/      CompactionTimeline replay fixtures, one session/update a line

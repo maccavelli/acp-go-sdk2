@@ -1202,3 +1202,69 @@ The tool's offline tests, five plants in copies of `tools/`, each run as `test_t
   * The Linux host: `remote` `5.745s`, `example/remote` `0.067s`.
 * `make check-tools`: 58 and 32 tests ok; "check-ci-filters: 0 problem(s)".
 * `make api`: "0 incompatible, 11 compatible", the same eleven names. Phase 7 adds no exported name.
+
+### Phase 8, docs (2026-10-30)
+
+Approved with "committed proceed" after `d302ec7`.
+
+**Files:**
+* `remote/example_test.go`: `ExampleNewHandler` and `ExampleDial`, compiled and not run, as `agentproc`'s are.
+  * `ExampleNewHandler` mounts the handler on the host's `http.Server` at `/acp`, with `acp.ServeAgent` as the serve. It says to
+    authenticate every request, and closes the handler before `Shutdown`.
+  * `ExampleDial` sends an `Authorization` header through `DialOptions.Header`, and joins the `Conn` with
+    `acp.NewClientSideConnection(client{}, c, c)`.
+* `docs_test.go`: `TestReadmeRemoteIsTheExample`, in `TestReadmeAgentprocIsTheExample`'s shape.
+* `README.md`:
+  * "Remote agents", after "Closing and limits". It covers:
+    * the two profiles and the seam;
+    * `Dial`, its options and the Streamable HTTP client's rules, with the warning that a `session/load` answer can arrive
+      before its replay;
+    * `NewHandler`, its routing, the `202` on queueing, `initialize`'s answers, the session rule and `HandlerOptions` with
+      their defaults;
+    * the ladder, and the four causes in a table; `Handler.Close` and `ErrAbandoned`;
+    * the host's part: authentication on every request, connection limits, CORS, TLS, and `Close` before `Shutdown`;
+    * the tested example, between `<!-- example: remote ExampleNewHandler -->` and `<!-- /example -->`;
+    * `example/remote` and `tools/interop.py`, and what is not supported.
+  * "Try the Examples" gains `example/remote`.
+  * "Explore the API" gains `remote.NewHandler` for an agent and `remote.Dial` for a client.
+  * "Stability" says `remote` is outside the promise, and `make api` reports it without gating it.
+* `docs/architecture.md`:
+  * `remote` in "What it is";
+  * a new section, "The remote transport": the seam, the client, the server, the ladder, the limits and the checks;
+  * `interop.py` in "Verification tools";
+  * the tree entries for `remote/` and `example/remote`.
+* `remote/handler.go`: two option docs corrected after reading them against the code.
+  * `KeepAlive` said "how often an idle connection is pinged". `keepAlive` and `stream` tick every `KeepAlive` whether messages
+    flow or not, so the doc now says so.
+  * `Grace` said it bounds "each message written to a client". Only a WebSocket write is bounded by it; an event stream's write
+    deadline is cleared (phase 6). The doc now says "each WebSocket message".
+
+**Docs read against the code.** Every exported doc of `remote` was read against its code, and the two above were wrong. The
+README's section and the architecture section were written from the code and read against it:
+* the defaults: `resolveHandlerOptions` and `resolveDialOptions`;
+* the statuses: `servePost`, `serveInitialize`, `serveStream` and `serveDelete`;
+* the causes and the bounds: `errors.go`, `initBound`, `idleBound` and `inboxLimit`;
+* the client's rules: `post`, `sessionOf` and `openStream`.
+
+`revive`'s `exported` rule, in the lint gate, found no exported name without a doc comment.
+
+**Imports**, `go list -json ./...` read by a scratch Python script:
+* `github.com/coder/websocket` is imported by `remote` alone;
+* `remote` is imported by `example/remote` and by its own external test package.
+
+So the packages under the compatibility promise do not import it, as "Stability" now says. `go doc ./remote` opens with the RFD,
+its revision of 2026-07-02 and commit `2bb9fac`.
+
+**Planted break**, `python3 tools/plants.py`, "1/1 as required":
+
+| Plant | Failing line |
+| :--- | :--- |
+| the README's block changed by one line (`handler:` made `close:`) | `docs_test.go:232: README.md's remote example is not ExampleNewHandler's body.` |
+
+**Gates:**
+* `make markdownlint` first found seven lists in the new README section without a blank line before them (MD032). They were
+  fixed, and it then reported "0 issues in 0 files".
+* `tools/gates.py --all`: all 18 `ok`.
+* Precheck: "275 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)".
+* The root package and `remote` on the Windows host: `10.165s` and `5.673s`. On the Linux host: `12.969s` and `5.704s`.
+* `make api`: "0 incompatible, 11 compatible"; "reported packages unstable, remote: 0 incompatible, not gated".

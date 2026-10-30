@@ -26,12 +26,13 @@ const connectionIDHeader = "Acp-Connection-Id"
 // use.
 type HandlerOptions struct {
 	// Grace is how long each step of a connection's ending waits for its serve
-	// to return, and the bound on each message written to a client. Zero or
-	// less is 5 seconds.
+	// to return, and the bound on each WebSocket message written to a client.
+	// Zero or less is 5 seconds.
 	Grace time.Duration
 
-	// KeepAlive is how often an idle connection is pinged, a WebSocket ping
-	// or an event-stream comment, and how long a ping waits for its answer.
+	// KeepAlive is how often a connection is pinged, whether messages flow
+	// or not: a WebSocket ping, or a comment on each event stream. It is also
+	// how long a WebSocket ping waits for its answer.
 	// Zero or less is 15 seconds, the official servers' interval
 	// (0043-MADR-remote-http-and-websocket-transport.md, "Amended by the PLAN,
 	// 2026-10-29", 8).
