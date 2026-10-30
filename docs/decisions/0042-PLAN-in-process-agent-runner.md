@@ -1243,3 +1243,40 @@ inprocess_test.go:236: Wait's error = agentproc: agent terminated: serve: agentp
 **Gates,** `tools/gates.py --all`, the hosts named per command: "all gates passed", 18 of 18; among them `make pre-add-check`, "276
 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make api`, "against v1.27.0: 0 incompatible, 0 compatible";
 `platforms`, "13 of 13 passed"; the floor gate at go1.26.10, passed; `windows` and `linux`, passed.
+
+### Phase 14, `acp.ErrHandlersRunning` and `ServeAgent` (2026-10-30)
+
+The owner committed phases 12 and 13 as `1457073` and answered "committed, proceed".
+
+**Files:**
+* `errors.go`: `ErrHandlersRunning`, "acp: the connection's handlers still run", beside `ErrShutdown`. Its doc names `ServeAgent`
+  alone; phase 15 adds the `agentproc` methods to it once they exist.
+* `serve.go`:
+  * at the input's end, `fmt.Errorf("%w %v after its end", ErrHandlersRunning, notificationQueueDrainTimeout)`, whose text is the
+    one it had;
+  * at the context's end, `Shutdown`'s own error, when it wraps `context.DeadlineExceeded`, wrapped as
+    `fmt.Errorf("%w %v after the context's end: %w", …)`, then joined after `context.Cause(ctx)` as before;
+  * the doc names the sentinel at both ends.
+* `shutdown_test.go`: `TestServeAgentHandlersStillRun`, two cases, each in a `synctest` bubble with a prompt handler that runs until
+  released:
+  * "the input's end": the error wraps `ErrHandlersRunning`, its text `acp: the connection's handlers still run 5s after its end`;
+  * "the context's end": the error wraps the context's cause, `ErrHandlersRunning` and `context.DeadlineExceeded`, and says
+    "acp: the connection's handlers still run 5s after the context's end".
+
+  Each reads `ServeAgent`'s result from its channel without a timer, so a hang is the bubble's deadlock, and releases its handler
+  before the bubble ends. Both run in about 10 ms, the 5 s bounds passing on the bubble's clock.
+
+**Run:** `go test -race -run '^(TestServeAgentHandlersStillRun|TestServeAgentInputEnd|TestServeAgentContextEnd)$' .`, all PASS;
+`go test -race -count=20 -run '^TestServeAgent' .`, exit 0.
+
+**Planted breaks,** each in its own scratch copy; 2 of 2 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `%w` made `%v` at the input's end | "the input's end": `ServeAgent = acp: the connection's handlers still run 5s after its end, want "acp: the connection's handlers still run 5s after its end", wrapping ErrHandlersRunning`: the same text, no longer testable |
+| the context's-end wrapping disabled | "the context's end": `ServeAgent = the test's signal` and `Shutdown`'s deadline, without the sentinel |
+
+**Gates,** `tools/gates.py --all`, the hosts named per command: "all gates passed", 18 of 18; among them `make pre-add-check`, "276
+file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make api`, "compatible: ErrHandlersRunning: added", "against
+v1.27.0: 0 incompatible, 1 compatible"; `platforms`, "13 of 13 passed"; the floor gate at go1.26.10, passed; `windows` and `linux`,
+passed.

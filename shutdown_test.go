@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -320,4 +321,62 @@ func TestServeAgentContextEnd(t *testing.T) {
 	if err := await(t, served, "ServeAgent"); !errors.Is(err, stop) {
 		t.Errorf("ServeAgent = %v, want the context's cause", err)
 	}
+}
+
+// TestServeAgentHandlersStillRun requires ServeAgent's error to wrap
+// ErrHandlersRunning when its 5 s bound passes with a prompt handler that
+// ignores its context still running: at its input's end, with the text it
+// has always had; and at its context's end, beside the context's cause. Each
+// runs in a synctest bubble, so the bounds pass on the bubble's clock, and
+// releases its handler before the bubble ends
+// (0042-MADR-in-process-agent-runner.md, the amendment of 2026-10-30, X2).
+func TestServeAgentHandlersStillRun(t *testing.T) {
+	t.Parallel()
+	// serve starts ServeAgent under ctx with a prompt that runs until
+	// released, and returns once the prompt's handler runs.
+	serve := func(t *testing.T, ctx context.Context, release <-chan struct{}) (shutdownPipes, <-chan error) {
+		t.Helper()
+		started := make(chan struct{})
+		agent := &shutdownAgent{prompt: func(context.Context, *shutdownAgent) (PromptResponse, error) {
+			close(started)
+			<-release
+			return PromptResponse{StopReason: StopReasonEndTurn}, nil
+		}}
+		p := newShutdownPipes(t, &shutdownClient{})
+		served := serveAgentAsync(ctx, agent, p)
+		handshake(t, p.client)
+		startPrompt(p.client)
+		<-started
+		return p, served
+	}
+	t.Run("the input's end", func(t *testing.T) {
+		t.Parallel()
+		synctest.Test(t, func(t *testing.T) {
+			release := make(chan struct{})
+			p, served := serve(t, t.Context(), release)
+			_ = p.inW.Close() // the end of the agent's input
+			err := <-served
+			close(release)
+			const want = "acp: the connection's handlers still run 5s after its end"
+			if !errors.Is(err, ErrHandlersRunning) || err.Error() != want {
+				t.Errorf("ServeAgent = %v, want %q, wrapping ErrHandlersRunning", err, want)
+			}
+		})
+	})
+	t.Run("the context's end", func(t *testing.T) {
+		t.Parallel()
+		synctest.Test(t, func(t *testing.T) {
+			release := make(chan struct{})
+			stop := errors.New("the test's signal")
+			ctx, cancel := context.WithCancelCause(t.Context())
+			_, served := serve(t, ctx, release)
+			cancel(stop)
+			err := <-served
+			close(release)
+			if !errors.Is(err, stop) || !errors.Is(err, ErrHandlersRunning) || !errors.Is(err, context.DeadlineExceeded) ||
+				!strings.Contains(err.Error(), "acp: the connection's handlers still run 5s after the context's end") {
+				t.Errorf("ServeAgent = %v, want the context's cause and ErrHandlersRunning, the 5 s bound passed", err)
+			}
+		})
+	})
 }

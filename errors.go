@@ -194,6 +194,13 @@ var ErrConnectionClosed = errors.New("acp: connection closed")
 // (0042-MADR-in-process-agent-runner.md, item 2).
 var ErrShutdown = errors.New("acp: connection shut down")
 
+// ErrHandlersRunning is why a wait for a connection's handlers ended before
+// they had returned: a handler that ignores its context, or one still at
+// work, holds them. ServeAgent wraps it when its bound passes with handlers
+// still running; read with errors.Is
+// (0042-MADR-in-process-agent-runner.md, the amendment of 2026-10-30, X2).
+var ErrHandlersRunning = errors.New("acp: the connection's handlers still run")
+
 // ErrNotificationQueueOverflow is why a connection closed itself under
 // OverflowCloseConnection: an inbound notification found its queue full.
 // Err and the errors of later calls wrap it, beside ErrConnectionClosed, read
