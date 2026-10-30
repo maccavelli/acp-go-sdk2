@@ -86,14 +86,14 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0026 | PLAN | [Implement 0026: report why a connection ended, and wait for its goroutines to exit](decisions/0026-PLAN-connection-end-cause-and-wait.md) | complete |
 | 0026 | REPORT | [Release notes for v1.18.0, against v1.17.1](reports/0026-REPORT-release-notes-v1-18-0.md) | observed |
 | 0027 | MADR | [Start an agent process, and stop it with its descendants in bounded steps](decisions/0027-MADR-agent-process-helper.md) | accepted |
-| 0027 | PLAN | [Implement 0027: start an agent process, and stop it with its descendants in bounded steps](decisions/0027-PLAN-agent-process-helper.md) | in-progress |
+| 0027 | PLAN | [Implement 0027: start an agent process, and stop it with its descendants in bounded steps](decisions/0027-PLAN-agent-process-helper.md) | complete |
 | 0027 | REPORT | [Release notes for v1.19.0, against v1.18.0](reports/0027-REPORT-release-notes-v1-19-0.md) | observed |
 | 0028 | MADR | [Pin Go 1.27.3 as the toolchain and Go 1.26.10 as the floor](decisions/0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md) | accepted |
 | 0028 | PLAN | [Implement 0028: pin Go 1.27.3 as the toolchain and Go 1.26.10 as the floor](decisions/0028-PLAN-pin-go-1-27-3-and-floor-1-26-10.md) | complete |
 | 0029 | MADR | [End an agent with its client on Linux and FreeBSD, and start it from a thread that lives as long as it](decisions/0029-MADR-unix-client-death-pdeathsig.md) | accepted |
 | 0029 | PLAN | [Implement 0029: end an agent with its client on Linux and FreeBSD, and start it from a thread that lives as long as it](decisions/0029-PLAN-unix-client-death-pdeathsig.md) | complete |
 | 0030 | MADR | [Record a client's initialize when its answer arrives, and hold what comes before it](decisions/0030-MADR-record-initialize-on-arrival.md); amended 2026-10-21: issue #10's taps, `Kill` and job breakaway, and the reader's 128 KiB buffer | accepted |
-| 0030 | PLAN | [Implement 0030: record a client's initialize when its answer arrives, and hold what comes before it](decisions/0030-PLAN-record-initialize-on-arrival.md); amended 2026-10-21: issue #10's taps, `Kill` and job breakaway, and the reader's 128 KiB buffer; amended 2026-10-30: two tests that lose races under load | in-progress |
+| 0030 | PLAN | [Implement 0030: record a client's initialize when its answer arrives, and hold what comes before it](decisions/0030-PLAN-record-initialize-on-arrival.md); amended 2026-10-21: issue #10's taps, `Kill` and job breakaway, and the reader's 128 KiB buffer; amended 2026-10-30: two tests that lose races under load | complete |
 | 0030 | REPORT | [Release notes for v1.20.0, against v1.19.0](reports/0030-REPORT-release-notes-v1-20-0.md) | observed |
 | 0031 | MADR | [Keep the maintainer's verification tools in the repository, in `tools/`, with every identifier kept out](decisions/0031-MADR-verification-tools-in-repository.md) | accepted |
 | 0031 | PLAN | [Implement 0031: keep the maintainer's verification tools in the repository, in `tools/`, with every identifier kept out](decisions/0031-PLAN-verification-tools-in-repository.md) | complete |

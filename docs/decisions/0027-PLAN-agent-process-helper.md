@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-30
 associated-madr: "0027-MADR-agent-process-helper.md"
 ---
@@ -893,3 +893,12 @@ failure", four jobs of six "completed success" and two failed, each in its "race
 reproduction, planted breaks, repeats on the hosts and the gates; then push, and let CI decide. The other options were a new record that
 audits every grace-bound wait in the suite against `slack` under load, and rerunning the failed jobs with the follow-up left for later.
 This PLAN stays `in-progress` until CI's six jobs pass on the commit that carries 0030's step, which then closes this step too.
+
+### Step 9, closed, 2026-10-30
+
+[0030-PLAN-record-initialize-on-arrival.md](0030-PLAN-record-initialize-on-arrival.md)'s step 12 fixed both tests; the owner committed
+it as `f771373` and pushed `main`. CI run `41109142621`, attempt 1: "completed success" in all six jobs, the Linux and Windows "race
+detector" steps among them; `TestStderrHeldByDescendant` passed in each. The Docs run `41109142273`: "completed success". That PLAN's
+step 12 records the watch.
+
+Every acceptance criterion of step 9 is met; this PLAN and its row in `docs/README.md` are `complete` again.

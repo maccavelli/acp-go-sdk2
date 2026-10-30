@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-30
 associated-madr: "0030-MADR-record-initialize-on-arrival.md"
 ---
@@ -1143,3 +1143,16 @@ go1.26.10, passed; `windows` and `linux`, `go test -count=1 -shuffle=on ./...` i
 **Waiting for the owner:** the commit and the push; then CI's six jobs, which this step and
 [0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md)'s step 9 record before both PLANs and their rows are `complete`
 again.
+
+**The push and CI.** The owner committed the step as `f771373` and pushed `main`. Then:
+
+* the Docs run `41109142273`, "completed success";
+* CI run `41109142621`, attempt 1, "completed success" in all six jobs, the Linux and Windows "race detector" steps among them, at
+  `1.26.10` and `1.27.3`.
+
+`tools/watch_ci.py f771373 --branch main`, run first, ended before the jobs had settled ("jobs not settled after 180 s"); run again with
+`--settle 1500`, it printed every job "completed success" but exited 1, the status of its `gh run watch --exit-status`, on a day GitHub's
+API answered several reads with `502`. Run a third time on the finished run, it exited 0, "completed success; watch exit 0", with the six
+jobs and the Docs run as above. `gh run view 41109142621` gives attempt 1, `completed`, `success`, at `f771373`.
+
+Every acceptance criterion of step 12 is met; this PLAN and its row in `docs/README.md` are `complete` again.
