@@ -198,7 +198,9 @@ A result that contradicts the MADR or its amendment stops the phase. The MADR is
   * A `$/` method is connection-scoped, as Rust's is.
   * The id key is exact. The connection writes `anyMessage.ID` as a `*json.RawMessage` (`connection.go:36`–`:38`), so an answer
     carries the request's id as it was received. `toLine` compacts the request and `json.Marshal` compacts a `RawMessage` again,
-    so the bytes match.
+    so the bytes match. *(Amended in phase 3's execution: a `json.RawMessage` decoded from a member holds a scalar's bytes with no
+    space around or inside them, so the id's bytes are the key, uncompacted. See "Deviation, 2026-10-29, phase 3's id-key
+    break".)*
 * `scripts/check_api.py`: `REPORTED = ("unstable", "remote")`. `scripts/test_check_api.py` asserts `"remote"` in `REPORTED` and
   not in `PACKAGES`.
 * `leak_test.go`: `TestMain` and `waitForLeaks`, as `agentproc/leak_test.go`.
@@ -217,7 +219,8 @@ Planted breaks:
 * the line join removed, so a split line becomes two;
 * `toLine` not compacting;
 * `$/` treated as session-scoped;
-* the id key taken before compaction.
+* ~~the id key taken before compaction~~ *(replaced in execution by "answers not keyed", with `TestIDKeyBytesExact` and its break
+  "id keys that normalize a number" added: see "Deviation, 2026-10-29, phase 3's id-key break")*.
 
 `make api`: `remote`'s additions reported, the rest "0 incompatible, 0 compatible".
 
@@ -655,3 +658,84 @@ gives the table's answers. The first run is kept in the scratch log and is not e
 * Phase 7's Python setup was amended: an inline-dependency `uv run` would test PyPI's release, not the pinned commit.
 
 Checks: `make check-records`, `make markdownlint`, `make disclosure-check`; the identifier scan over the changed records.
+
+### Phase 3, the seam and the skeleton (2026-10-29)
+
+Approved with "committed, proceed" after `36e2c45`. No dependency was added: `go.mod` is unchanged.
+
+**Files:**
+* `remote/doc.go`: the package doc, naming the RFD, its revision of 2026-07-02, the specification commit `2bb9fac`, the two
+  profiles and the seam, and that the package is outside the Go 1 compatibility promise. It names no function yet; phases 4 to 6
+  add what they build, and phase 8 reads it whole.
+* `remote/errors.go`: `ErrDeleted`, `ErrDisconnected`, `ErrHandlerClosed`, `ErrOverflow`, `ErrAbandoned`.
+* `remote/frame.go`: `lineSplitter` (`newLineSplitter`, `Write`, `Close`), `toLine` and `lineQueue` (`push`, `end`, `Read`).
+  * `lineQueue.push` waits while 256 lines are queued (`queueLimit`), so a reader that falls behind slows its transport.
+  * `lineSplitter.Write` drops an over-long line, returns `errLineTooLong`, and sends the lines after it.
+* `remote/route.go`: `kind`, `message`, `classify`, `sessionIDOf`, `connectionScoped`, `sessionScopedMethods` and
+  `sessionScoped`, and `message.session`. `"session/fork"` is spelled out, for SA1019.
+* `remote/leak_test.go`, `remote/frame_test.go`, `remote/route_test.go`.
+* `scripts/check_api.py`: `REPORTED = ("unstable", "remote")`. `scripts/test_check_api.py`:
+  `test_remote_is_reported_and_not_gated`.
+
+The 10 MiB default message size (`defaultMaxMessageSize`) moved to phase 4. In this phase nothing used it, and the linter's
+`unused` reported it.
+
+**Tests**, the PLAN's five and `TestLineQueue`, added for `lineQueue`, which the PLAN names and gives no test:
+
+| Test | Result |
+| :--- | :--- |
+| `TestLineSplitter` | pass |
+| `TestToLine` | pass |
+| `TestLineQueue` | pass: order across one-byte reads; `end`'s error after the queued lines; a refused late `push`; a `push` past 256 waiting for a read |
+| `TestClassify` | pass, with the ids `1`, `"a b"` and `2.50`, a `$/cancel_request` carrying `sessionId`, array params, a non-string `sessionId`, a batch, `"method": null` and text that is not JSON |
+| `TestSessionScoped` | pass |
+| `TestIDKeyRoundTrip` | pass: `acp.ServeAgent` with an `acptest.ScriptAgent` answered the ids `7` (pretty-printed request), `"a b"` and `123456789012345678901234567890` with the same bytes |
+
+**Planted breaks**, `python3 tools/plants.py` over seven plants, "7/7 as required". Each failing line:
+
+| Plant | Failing line |
+| :--- | :--- |
+| line join removed | `frame_test.go:33: lines sent = [":1}" "x" "y"], want ["{\"a\":1}" "x" "y"]` |
+| `toLine` not compacting | `frame_test.go:79: toLine("{\n  \"id\": 1, …}") = "{   \"id\": 1,   \"method\": \"x\" }\n", want "{\"id\":1,\"method\":\"x\"}\n"` |
+| `$/` treated as session-scoped | `route_test.go:48: a $/ notification's session = "s1", want none: it is connection-scoped` |
+| answers not keyed (the deviation below) | `route_test.go:105: request id key "7", answer {"jsonrpc":"2.0","id":7,…}: …want a response keyed "7"` |
+| `lineQueue` ending before its queued lines | `frame_test.go:98: read = "", <nil>, want the two lines and io.EOF` |
+| `lineQueue.push` not waiting at its limit | `frame_test.go:109: a push past queueLimit returned before any read` |
+| a goroutine leaked by a test | the guard's profile, `remote.TestToLine.func1+0x23 … frame_test.go:73` |
+
+**Gates:**
+* `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set, `tools/gates.py --all`: all 18 gates `ok`, "all gates passed".
+* Precheck: "253 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)".
+* `remote`'s tests passed at the floor (`go1.26.10`, `ok github.com/maccavelli/acp-go-sdk2/remote 4.184s`), on the Windows host
+  (`0.576s`) and on the Linux host (`0.587s`).
+* `golangci-lint` for `darwin` and `windows` over `./remote/...`: 0 issues.
+* `make check-tools`: OK.
+* `make api`: `remote`'s five errors listed as "compatible: remote: … added", then "against v1.26.0: 0 incompatible, 5
+  compatible" and "reported packages unstable, remote: 0 incompatible, not gated". The script's summary counts the reported
+  package's additions. The four gated packages have none.
+
+#### Deviation, 2026-10-29, phase 3's id-key break
+
+* **Found.** The planted break "the id key taken before compaction" cannot fail, and the compaction it would remove does
+  nothing. `classify` decodes `id` into a `json.RawMessage`, which holds the member's value bytes without the whitespace around
+  them. A JSON-RPC id is a scalar, and a scalar has no whitespace inside.
+* **Evidence.** A scratch probe, `TestRawID`, decoded `7`, `"a b"`, `123456789012345678901234567890` and `2.50e3`, each set off
+  by spaces, tabs and newlines in a pretty-printed object. It logged `equal=true` for the raw and compacted bytes of each. Not
+  pre-existing: phase 3's own code.
+* **Resolution.** The owner chose "Substitute, plus a numeric-form check" from three options, the others being the substitute
+  alone and a revert to compaction. Applied:
+  * `classify` takes the id's bytes as the key, without `json.Compact`, with a comment saying why. The route step above is
+    annotated.
+  * The planted break is replaced by "answers not keyed": `classify` clears the key of a response. It fails `TestIDKeyRoundTrip`
+    as shown. It breaks what the test exists to catch, a request and its answer keying differently.
+  * The original break is struck through, not removed.
+  * The numeric-form check, `TestIDKeyBytesExact`: the answer to id `1.0` keys as the request with id `1.0` does, and the answer
+    to id `1` keys differently. `TestIDKeyRoundTrip` gained a fourth request, `session/new` with id `1.0`. Its pass shows that the
+    agent connection answers `1.0` with `1.0`, so byte-exact keys are what routing needs. Its planted break, "id keys that
+    normalize a number" (`strings.TrimSuffix(string(env.ID), ".0")`), failed as required: `route_test.go:90: the answer to id 1
+    keys "1", as the request with id 1.0 does: want byte-exact keys, which differ`.
+  * After the change: both linters 0 issues; `go test -race -count=3 -shuffle=on ./remote/` ok; `tools/gates.py precheck newfiles
+    idscan windows linux` all passed, `remote` ok on the Windows host (`0.578s`) and the Linux host (`0.571s`).
+* **The alternative not taken:** a revert to compaction would leave a check that cannot fail standing in the record as seen to
+  fail, against `AGENTS.md`'s rule.
+* **No MADR change:** the MADR asserts no compaction of the id.

@@ -120,6 +120,12 @@ class PackagesTest(unittest.TestCase):
         self.assertIn("acptest", check_api.PACKAGES)
         self.assertIn("clienthost", check_api.PACKAGES)
 
+    def test_remote_is_reported_and_not_gated(self) -> None:
+        # Package remote follows an Active RFD and may change in a minor release
+        # (0043-PLAN-remote-http-and-websocket-transport.md, phase 3).
+        self.assertIn("remote", check_api.REPORTED)
+        self.assertNotIn("remote", check_api.PACKAGES)
+
 
 if __name__ == "__main__":
     unittest.main()

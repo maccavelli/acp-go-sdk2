@@ -48,8 +48,10 @@ SECTIONS = {"Incompatible changes:": "incompatible", "Compatible changes:": "com
 # The module's gated packages, by directory: "" is the root.
 PACKAGES = ("", "agentproc", "acptest", "clienthost")
 # The packages whose changes are reported and not gated, by directory: package
-# unstable (docs/decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
-REPORTED: tuple[str, ...] = ("unstable",)
+# unstable (docs/decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f)
+# and package remote (docs/decisions/0043-PLAN-remote-http-and-websocket-transport.md,
+# phase 3).
+REPORTED: tuple[str, ...] = ("unstable", "remote")
 
 
 def fail(msg: str) -> None:
