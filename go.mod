@@ -7,3 +7,5 @@ toolchain go1.27.3
 retract v1.13.0 // Published accidentally from an unfinished commit.
 
 require golang.org/x/sys v0.49.0
+
+require github.com/coder/websocket v1.8.15

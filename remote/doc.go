@@ -23,4 +23,11 @@
 // A message received becomes one compact line, and each line written becomes
 // one message. So a connection, a serve function, the taps and the transcripts
 // work over the network as they do over a child's pipes.
+//
+// A client calls Dial and joins the Conn it returns to its client:
+// acp.NewClientSideConnection(client, conn, conn). A server mounts the Handler
+// NewHandler returns on its own http.Server, with acp.ServeAgent as the usual
+// serve function, and calls Handler.Close before the server's Shutdown.
+// Authentication, TLS, CORS and limits on connections are the server's: the
+// RFD layers them on the transport, and Acp-Connection-Id is not a credential.
 package remote

@@ -245,7 +245,8 @@ This phase adds `github.com/coder/websocket v1.8.15` (`go get github.com/coder/w
     `toLine`. A binary frame is ignored, as the RFD says, and the handler logs the first one. A normal closure is `io.EOF` to the
     reader; any other close or error ends the reader with that error;
   * `SetReadLimit(MaxMessageSize)`, since the library's default is 32768 bytes (`read.go:91`, `:107`);
-  * a write sends each line as one text frame, without its newline, under a bound of `Grace`;
+  * a write sends each line as one text frame, without its newline, under a bound of `Grace` *(on the server; a client's writes
+    run for the connection's life, by "Deviation, 2026-10-29, phase 4's client write bound")*;
   * on the server, a keepalive goroutine pings every `KeepAlive` while the reader runs (P4), and a ping that fails ends the
     connection with `ErrDisconnected`. The client sends no ping, since `DialOptions` has no `KeepAlive`: its reader answers the
     server's pings, as the library answers every ping it reads.
@@ -739,3 +740,107 @@ The 10 MiB default message size (`defaultMaxMessageSize`) moved to phase 4. In t
 * **The alternative not taken:** a revert to compaction would leave a check that cannot fail standing in the record as seen to
   fail, against `AGENTS.md`'s rule.
 * **No MADR change:** the MADR asserts no compaction of the id.
+
+### Phase 4, WebSocket, client and server (2026-10-29)
+
+Approved with "committed, proceed" after `924c12a`.
+
+**The dependency.** `go get github.com/coder/websocket@v1.8.15`, then `go mod tidy`. `go.mod` gains `require
+github.com/coder/websocket v1.8.15`, and `go.sum` its two lines. `ws.go` and `handler.go`, its first imports, are in the same
+change, as `AGENTS.md`'s "Dependencies" requires. `go mod tidy -diff`: clean.
+
+**Files:**
+* `remote/client.go`:
+  * `Dial`, `DialOptions` (`HTTPClient`, `Header`, `MaxMessageSize`) and `Conn` (`Read`, `Write`, `Close`) over the unexported
+    `transport`;
+  * `resolveDialOptions`: a copy of the caller's client, a fresh `cookiejar` when its `Jar` is nil, and 10 MiB;
+  * `defaultMaxMessageSize`, moved here from phase 3;
+  * `errHTTPNotYet` for `http://` and `https://` until phase 5.
+* `remote/ws.go`:
+  * the client side: `wsClient`, `dialWebSocket`, `http1Only` and `readLoop`;
+  * the server's per-connection parts: `runWebSocket`, `readWebSocket`, `pumpWebSocket`, `keepAlive` and `pump`;
+  * `socketEnd`: a normal closure is `io.EOF`.
+* `remote/handler.go`: `HandlerOptions`, `Handler`, `NewHandler`, `ServeHTTP`, `Close`, `serverConn`, and the ladder in
+  `serverConn.ladder`. Other methods are answered `501` until phase 6.
+* `remote/doc.go`: a paragraph on `Dial`, `NewHandler`, `Handler.Close` before `Shutdown`, and the host's part.
+* `remote/helpers_test.go`, `remote/ws_test.go`, `remote/handler_test.go`.
+
+**How the server ends a connection.** Every end runs one ladder. `runWebSocket` waits for it, then for the pump, then closes
+the socket and stops the keepalive:
+* the socket's end, from the reader, starts it with `ErrDisconnected`;
+* a ping not answered within `KeepAlive` starts it with `ErrDisconnected`;
+* `Handler.Close` starts it with `ErrHandlerClosed`;
+* a serve that returns first ends its output. The pump then sends the last line, closes the socket normally, and the reader's
+  end starts the ladder, which finds the serve returned in step 1.
+
+The serve's goroutine is outside `Handler.active`, as `InProcess` keeps it outside `Process`'s group, so that `Close` does not
+wait for an abandoned serve.
+
+**Tests**, the PLAN's sixteen, with `TestDialSchemes` and `TestHandlerRefusals` added:
+
+| Test | Result |
+| :--- | :--- |
+| `TestWebSocketRoundTrip`, `TestWebSocketPermission` | pass |
+| `TestWebSocketCancel` | pass: `session/cancel` and `$/cancel_request` (sent by `Connection().SendNotification` with the second prompt's recorded id) each stop a `WaitCancel` turn `cancelled`; a cancelled `SetSessionMode` is answered `-32800` on the wire and `$/cancel_request` was sent |
+| `TestWebSocketLargeMessage` | pass: 64 KiB both ways under a 128 KiB limit; on the server, a frame at the limit read and one byte past it ending the connection; on the client, a line at its limit read and one byte past it ending `Read` with an error |
+| `TestWebSocketConnectionID`, `TestWebSocketBinaryIgnored`, `TestWebSocketOrigin` (`403`, then `101` with `OriginPatterns`) | pass |
+| `TestWebSocketHTTP2Client` | pass, through a caller's transport limited to unencrypted HTTP/2 |
+| `TestWebSocketCookies` | pass: the handshakes' cookies `["" "node-7" "" ""]`, a shared `Jar` carrying it and two default clients each keeping their own |
+| `TestHandlerLadderInputEnd`, `TestHandlerLadderCause`, `TestHandlerLadderAbandon`, `TestHandlerClose`, `TestHandlerServeReturnsFirst`, `TestWebSocketKeepAlive`, `TestWebSocketTranscript` | pass |
+| `TestDialSchemes`, `TestHandlerRefusals` | pass |
+
+`go test -race -count=3 -shuffle=on ./remote/`: ok. The ladder tests (`TestHandlerLadder…`, `TestHandlerClose`,
+`TestWebSocketKeepAlive`, `TestHandlerServeReturnsFirst`), `-count=20`: macOS under `-race` ok in `104.190s`; `tools/remote.py
+pkg` on the Linux host and on the Windows host, each exit 0.
+
+**Planted breaks**, `python3 tools/plants.py` over eight plants, "8/8 as required":
+
+| Plant | Failing line |
+| :--- | :--- |
+| `SetReadLimit` removed from `Dial` | `ws_test.go:181: a 64 KiB prompt and a 64 KiB update: {"code":-32603,…"connection ended before response"}` |
+| `SetReadLimit` removed from the handler | the same line |
+| the client's read context made per read | `ws_test.go:38: Initialize = {"code":-32603,…"connection ended before response"}` |
+| `Acp-Connection-Id` set after `Accept` | `ws_test.go:245: Acp-Connection-Id = "", want 26 or more base32 characters, new each time` |
+| step 2's cause dropped | `handler_test.go:77: the serve's cause = context canceled, want ErrDisconnected` |
+| the abandonment bound removed | `handler_test.go:107: Close = context deadline exceeded, want ErrAbandoned` |
+| the HTTP/1 clone removed | `ws_test.go:321: Dial(ws://…) = … http2: invalid Upgrade request header: ["websocket"]` |
+| the ping loop never started | `ws_test.go:395: a client answering no ping was not ended` |
+
+The two read-limit plants were run again after the client-side at-limit case was added to `TestWebSocketLargeMessage`: "2/2 as
+required".
+
+**Gates:**
+* `tools/gates.py --all`: all 18 `ok`.
+* Precheck: "260 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)".
+* `remote`'s tests: ok at the floor (`7.514s`), on the Windows host (`5.659s`) and on the Linux host (`5.683s`).
+* After the last test and doc edits, `tools/gates.py precheck newfiles idscan lint windows linux`: all `ok`. `remote` was ok on
+  Windows (`5.661s`) and Linux (`5.634s`), and the precheck was again "260 file(s) clean".
+* `make api`: `remote`'s eleven names "added", then "0 incompatible, 11 compatible" and "reported packages unstable, remote: 0
+  incompatible, not gated". The four gated packages have none.
+
+**Observations:**
+* A WebSocket's graceful close after its serve has returned waits for the client's answer. `websocket.Conn.Close` bounds that
+  at 5 seconds of its own. `TestHandlerClose`, whose raw clients never read, takes 5.1 s for that reason. `Handler.Close`'s doc
+  says so.
+* The server's writes are bounded by `Grace`, as the PLAN says. A message that takes longer than `Grace` to write, such as
+  10 MiB at under 2 MiB/s with the default 5 s, ends its connection. A host that sends large messages over slow links raises
+  `Grace`.
+
+#### Deviation, 2026-10-29, phase 4's client write bound
+
+* **Found.** Phase 4 says "a write sends each line as one text frame, without its newline, under a bound of `Grace`", of
+  `ws.go`'s both sides. `Grace` is a `HandlerOptions` field. `DialOptions` has none, by the MADR's design and its amendment 1
+  ("`Conn` has no method beyond `Read`, `Write` and `Close`").
+* **Built.** The client's writes run under the connection's own context, which `Conn.Close` ends. The server's writes are
+  bounded by `Grace`, as written.
+* **Resolution.** The owner chose "Connection's life" from three options, the others being a fixed 5 s bound per message and a
+  new `DialOptions.WriteTimeout`. So:
+  * a client's write runs until it completes or the connection ends, as a write to a child's stdin does;
+  * a stuck server holds it until the caller closes the `Conn`;
+  * a large message on a slow link is not ended by the transport;
+  * no exported name changes.
+
+  The PLAN's step is annotated in place.
+* **Why not the others.** A fixed bound would end a connection whose message takes more than 5 s to send, with no way for the
+  caller to raise it. A new option is API that the MADR's amendment 1 did not list.
+* **No MADR change:** the MADR names no bound on a client's writes.
