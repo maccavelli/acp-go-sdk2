@@ -103,7 +103,11 @@ and `make api` gates it with the root, `agentproc` and `clienthost`.
   methods a side may leave unadvertised), `tooltimeline.go` (`ToolCallTimeline`
   and `ToolCallEntity`, which apply a session's tool-call updates by the
   schema's rules, live or replayed, for a client; 0041, item 9), `serve.go`
-  (`ServeAgent`, an agent's main over a reader and a writer; 0042, item 2), and
+  (`ServeAgent`, an agent's main over a reader and a writer; 0042, item 2;
+  its error wraps `ErrHandlersRunning` when its 5 s bound passes with
+  handlers still running, at its input's end or, through `Shutdown`'s
+  deadline, at its context's, as `TestServeAgentHandlersStillRun` requires;
+  0042, the amendment of 2026-10-30, X2), and
   `doc.go`.
   None of them holds protocol state, but for the compactions and tool calls
   the two timelines' callers feed; none holds a connection's. A helper that takes a side connection is a package-level
@@ -716,15 +720,36 @@ collide; wait up to the grace; on Unix SIGTERM and the grace again; kill.
 the end of the agent's output or the grace from the exit has passed, so that
 the agent's last output is not lost
 ([0041-MADR-close-the-gaps-the-consumers-wait-on.md](decisions/0041-MADR-close-the-gaps-the-consumers-wait-on.md),
-item 1). `Kill` closes `hurry` and runs the same steps: a closed `hurry` ends
-each wait at once, the watcher's included, and skips SIGTERM, so a `Close` in
-progress kills too. `Wait` waits for both goroutines and the connection, drains the
-taps, and joins `ErrTerminated` or `ErrKilled` to `Cmd.Wait`'s error by the
-step that ended the agent. The watcher records, under the same lock and before
-it ends the tree, whether the connection was still open at the exit, which
-`ExitedFirst` reports once `Wait` has returned; `WaitContext` is `Wait`
-bounded by a context, through one goroutine shared by its calls (0041, items 6
-and 7).
+item 1). `Kill` closes `hurry`, through `hurryUp`, and runs the same steps: a
+closed `hurry` ends each wait at once, the watcher's included, and skips
+SIGTERM, so a `Close` in progress kills too. `Wait` waits for both goroutines
+and the connection, drains the taps, and returns `agentError`: the agent's
+error, `Cmd.Wait`'s for a child and `Serve`'s in process, with `ErrTerminated` or `ErrKilled` joined before it by
+the step that ended the agent, unless it wraps that sentinel already, as an
+in-process `Serve` that returns its context's cause does; and the stderr tail
+under `JoinStderrTail`. `agentError` reads only what was recorded under the
+lock before the watcher closed `Done`, the step's sentinel and the agent's
+wait, so it is final from then on. The watcher records,
+under the same lock and before it ends the tree, whether the connection was
+still open at the exit, which `ExitedFirst` reports once `Wait` has returned;
+`WaitContext` is `Wait` bounded by a context, through one goroutine shared by
+its calls, which `waitDone` starts (0041, items 6 and 7).
+
+`Wait`'s wait on the connection has no bound, since `Connection.Wait` waits
+for every handler, and a handler that ignores its context holds it.
+`CloseContext` and `KillContext` bound it without changing `Wait`
+(0042-MADR-in-process-agent-runner.md, the amendment of 2026-10-30, X1).
+`CloseContext` registers `context.AfterFunc(ctx, hurryUp)` for Close's steps
+alone, so a context that ends during them cuts them short as `Kill` does, and
+one that ends after them changes nothing in the process; `KillContext` calls
+`hurryUp` first. Each then waits, in `waitBounded`, on `waitDone`'s channel or
+the context, `Wait`'s return winning when both are ready (`endedFirst`). At
+the context's end it joins `context.Cause(ctx)`, `ErrHandlersRunning` when
+`Wait` is between `connWaitBegan` and `connWaitEnded`, two `atomic.Bool`s set
+once around its `conn.Wait`, and `agentError` under the lock. A context that
+ends before that span, while the connection reads to the end of the agent's
+output, or after it, while the taps drain, joins no sentinel: the grace bounds
+each of those already.
 
 The taps are in `tap.go` (0030-MADR-record-initialize-on-arrival.md, the
 amendment for issue #10). `streams` hands the connection, for an output tap, a
@@ -774,10 +799,14 @@ Checks that guard it:
   `TestTapErrorIgnored`, `TestTapsUnset`, `TestBlockedTapDetached`, `TestDetachedTapIsPrefix`,
   `TestCloseReadsTheAgentsLastOutput` and `TestTapDrainBoundedByGrace`, `LineTap`'s `TestLineTapFrames`,
   `TestLineTapCopies`, `TestLineTapHoldsUnended`, `TestLineTapNilFn` and `TestLineTapAsOutputTap`, and
-  `TestExitedFirst` and `TestProcessWaitContext`, `InProcess`'s eleven in `inprocess_test.go`,
-  `TestInProcessDetachedTapIsPrefix` among them, with `TestInProcessServeAgentStep2`, the stderr tail's six in
-  `stderr_test.go`, and the transcript's three
-  in `transcript_test.go`; on Unix `TestStartRefusesSharedGroup` and
+  `TestExitedFirst` and `TestProcessWaitContext`, `InProcess`'s thirteen in `inprocess_test.go`,
+  `TestInProcessDetachedTapIsPrefix`, `TestInProcessServeAgentStep2` and `TestWaitErrorSaysTheCauseOnce`, which
+  requires `Wait`'s error to say its cause once, among them, the stderr tail's six in
+  `stderr_test.go`, the transcript's three
+  in `transcript_test.go`, and the bounded close's seven in `closecontext_test.go`:
+  `TestCloseContextBoundsHandlers`, in process and for a child, `TestCloseContextJoinsTheAgentsError`,
+  `TestCloseContextWaitsForHandlers`, `TestCloseContextHurriesTheSteps`, `TestCloseContextCause`,
+  `TestCloseContextNotHandlers` and `TestCloseContextOneGoroutine`; on Unix `TestStartRefusesSharedGroup` and
   `TestEscapedDescendantDoesNotHoldWait`, `TestTapKeepsCloseEnding`, `TestKillClosesAtOnce` and `TestClientDeathEndsAgentAtInputEnd`; on Linux and FreeBSD
   `TestStartFromExitingLockedGoroutine`, `TestDefaultPdeathsig`, `TestCallersPdeathsigKept` and
   `TestClientDeathEndsAgent`; on Windows `TestClientDeathEndsTree`, `TestDescendantInJobDespiteSlowAttach`,

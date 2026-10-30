@@ -669,7 +669,9 @@ until the input ends, waits up to 5 seconds for the handlers, and returns nil
 at a clean end; when ctx ends, as at an interrupt, it shuts the connection
 down within the same 5 seconds and returns ctx's cause (`ExampleServeAgent`;
 [0042-MADR-in-process-agent-runner.md](docs/decisions/0042-MADR-in-process-agent-runner.md),
-item 2).
+item 2). When the 5 seconds pass with handlers still running, at either end,
+its error wraps `acp.ErrHandlersRunning`, which `errors.Is` reads (0042, the
+amendment of 2026-10-30).
 
 The SDK closes no connection on a timer: an idle connection is normal in ACP,
 and the protocol has no ping to tell an idle peer from a dead one. The
@@ -679,8 +681,10 @@ client's to end, which the `agentproc` package does
 ([0023-MADR-connection-lifetime-and-test-leaks.md](docs/decisions/0023-MADR-connection-lifetime-and-test-leaks.md)).
 
 `agentproc` starts an agent as a child process and stops it with the processes
-it started, every wait bounded
-([0027-MADR-agent-process-helper.md](docs/decisions/0027-MADR-agent-process-helper.md)).
+it started, every wait for the agent bounded
+([0027-MADR-agent-process-helper.md](docs/decisions/0027-MADR-agent-process-helper.md));
+the wait for the client's own handlers is bounded by `CloseContext` and
+`KillContext`, below.
 `Command.Start` connects a `ClientSideConnection` over the agent's standard
 input and output, through pipes it owns, so nothing the agent writes before it
 exits is lost; the command's `Stderr`, `Env` and `Dir` stay the caller's. On
@@ -751,6 +755,18 @@ ended; when the agent's own exit closes its output, the two can come together.
 `Process.WaitContext(ctx)` is `Wait` bounded by a context: it returns
 `context.Cause(ctx)` when ctx ends first, and leaves the agent running.
 
+`Close`, `Kill` and `Wait` also wait for the connection's handlers, the
+client's own methods, without bound: a handler that ignores its context holds
+them until it returns, as it holds `Connection.Wait`. `Process.CloseContext(ctx)`
+and `Process.KillContext(ctx)` are `Close` and `Kill` bounded by a context.
+Should ctx end during `Close`'s steps, the steps left kill at once, as `Kill`'s
+do; should it end before `Wait` would return, they return ctx's cause, joined
+with `acp.ErrHandlersRunning` when a handler is what still runs, and with the
+agent's error. The agent has ended by then, and `Wait` returns the whole error
+once the handler has (`ExampleProcess_CloseContext`;
+[0042-MADR-in-process-agent-runner.md](docs/decisions/0042-MADR-in-process-agent-runner.md),
+the amendment of 2026-10-30).
+
 `agentproc.InProcess{Serve: …}.Start(client)` runs an agent written in Go in
 this process. `Serve(ctx, in, out)` is what the agent's own main runs, such as
 `acp.ServeAgent`, here on a goroutine joined to the client by two `io.Pipe`s,
@@ -760,7 +776,9 @@ goroutine: the first closes `Serve`'s input; the second cancels its context
 with `agentproc.ErrTerminated`; the third cancels it with `agentproc.ErrKilled`
 and closes its pipes. A `Serve` that still runs a grace later is abandoned, and
 `Wait`'s error holds `agentproc.ErrAbandoned`, since Go cannot stop a
-goroutine. A panic in `Serve` is not recovered: an agent that must not take
+goroutine. A `Serve` that returns its context's cause, as `acp.ServeAgent`
+does, already says how it was stopped, and `Wait` returns its error as it is,
+rather than join the sentinel a second time. A panic in `Serve` is not recovered: an agent that must not take
 its client down with it runs as a child (`ExampleInProcess`; 0042, item 1).
 
 `Command.StderrTail` and `Command.StderrTailLines` keep the end of the agent's

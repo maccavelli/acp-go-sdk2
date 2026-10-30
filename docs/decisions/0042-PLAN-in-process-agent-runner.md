@@ -1356,3 +1356,56 @@ incompatible, 3 compatible", the count phase 17 expects; `platforms`, "13 of 13 
 clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and `scripts/go-precheck.sh agentproc/closecontext_test.go`, "1 file(s)
 clean", each run with the active toolchain's `bin` first on `PATH`, since the host's `gofmt` link had come to name a toolchain no
 longer installed.
+
+### Phase 16, the docs (2026-10-30)
+
+The owner committed phase 15 as `82f421b` and answered "committed, proceed".
+
+**Files:**
+* `README.md`:
+  * `ServeAgent`'s paragraph: its error wraps `acp.ErrHandlersRunning` when the 5 seconds pass with handlers still running, at
+    either end;
+  * the `agentproc` paragraph's "every wait bounded" now reads "every wait for the agent bounded", and says that `CloseContext` and
+    `KillContext` bound the wait for the client's own handlers;
+  * a paragraph after `WaitContext`'s: `Close`, `Kill` and `Wait` wait for the connection's handlers without bound; what
+    `CloseContext` and `KillContext` do at a context's end during the steps and after them; the agent ended by then, and `Wait`'s
+    whole error once the handler has returned;
+  * `InProcess`'s paragraph: a `Serve` that returns its context's cause has its error returned as it is, the sentinel not joined a
+    second time.
+* `docs/architecture.md`:
+  * `serve.go`'s entry: `ServeAgent`'s error and `ErrHandlersRunning` at both ends;
+  * the `agentproc` section: `hurryUp`; `Wait` returning `agentError`, the sentinel said once, final once `Done` is closed;
+    `waitDone`; a new paragraph on the unbounded wait, `CloseContext`'s `AfterFunc`, `waitBounded`, `endedFirst`, the two flags, and
+    why the output's read and the taps' drain join no sentinel;
+  * the checks: `InProcess`'s count, eleven with `TestInProcessServeAgentStep2` beside them, is now thirteen, which names
+    `TestWaitErrorSaysTheCauseOnce`, phase 13's, which the list had not yet named; and the seven tests of `closecontext_test.go`.
+    The counts were taken from the files: 13 in `inprocess_test.go` (12 at `9a3ff81`), 6 in `stderr_test.go`, 3 in
+    `transcript_test.go`, 7 in `closecontext_test.go`.
+
+**Each claim and what makes it:**
+
+| Claim | Made by |
+| :--- | :--- |
+| `ServeAgent`'s error wraps `acp.ErrHandlersRunning` at either end | `TestServeAgentHandlersStillRun`, its two cases (phase 14) |
+| `Close`, `Kill` and `Wait` wait for a hung handler without bound | the MADR's I3, reproduced; and phase 15's planted break "`CloseContext` calling `Close`", which held past 3.6 s. No test waits for ever, so none pins it |
+| a context that ends during the steps kills at once, without SIGTERM | `TestCloseContextHurriesTheSteps` |
+| at the context's end: its cause, `acp.ErrHandlersRunning` while a handler runs, the agent's error | `TestCloseContextBoundsHandlers`, `TestCloseContextJoinsTheAgentsError`, `TestCloseContextCause` |
+| no sentinel while the taps drain | `TestCloseContextNotHandlers` |
+| the agent ended, `Done` closed, and `Wait`'s whole error once the handler returns | `TestCloseContextBoundsHandlers`, after the release |
+| one goroutine shared by `WaitContext`, `CloseContext` and `KillContext` | `TestCloseContextOneGoroutine`, `TestProcessWaitContext` |
+| a handler that returns within the bound is waited for | `TestCloseContextWaitsForHandlers` |
+| a `Serve` returning its context's cause: its error as it is | `TestWaitErrorSaysTheCauseOnce` (phase 13) |
+| the README's bounded-close example | `ExampleProcess_CloseContext`, by its `// Output:` |
+
+Two claims in `docs/architecture.md` describe the code without a test of their own: `Wait`'s return winning when it and the
+context's end are both ready, `WaitContext`'s rule since 0041, which no test can make simultaneous; and a context that ends after
+`CloseContext`'s steps changing nothing in the process, since the `AfterFunc` is stopped by then and the agent has ended, so nothing
+observable is left for it to change. Each was read against `agentproc/agentproc.go` at `82f421b`.
+
+**Doc comments:** phase 15's, `Wait`'s, `WaitContext`'s, `Close`'s, `CloseContext`'s, `Kill`'s, `KillContext`'s, `hurryUp`'s,
+`waitBounded`'s, `endedFirst`'s, `waitDone`'s and `ErrHandlersRunning`'s, read in full against the code; none changed in this phase.
+
+**Checks:** `make check-records`, `make markdownlint` and `make disclosure-check`, each exit 0; `tools/idscan.py --paths README.md
+docs/architecture.md`, "2 file(s), 17 pattern(s), 0 match(es)"; `go test -count=1 -run 'Readme|Doc|Example' . ./agentproc`, which
+runs `TestReadmeAgentprocIsTheExample` and the examples, `ok` for both packages. No Go file changed, so `make pre-add-check` and the
+gate set wait for phase 17, which runs them all.
