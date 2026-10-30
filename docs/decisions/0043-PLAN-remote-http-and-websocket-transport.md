@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-29
 associated-madr: "0043-MADR-remote-http-and-websocket-transport.md"
 ---
@@ -479,7 +479,10 @@ Planted breaks:
   * `main_test.go` runs both modes in process over loopback, for `ws://` and `http://`, the load included.
 * **`tools/interop.py [--ts REV] [--py REV]`:** the TypeScript revision defaults to `08a0d30`, the Python one to `9853d8b`.
   * It clones each SDK into the tool's cache directory and checks out the revision.
-  * It runs `npm ci` in the TypeScript clone, and lets `uv run` resolve the Python examples' inline dependencies.
+  * It runs `npm ci` in the TypeScript clone, and lets `uv run` resolve the Python examples' inline dependencies. *(Amended by
+    phase 2: the inline dependencies name `agent-client-protocol[http]` from PyPI, not the pinned commit. So the tool makes a venv
+    with `uv venv`, installs the clone with `uv pip install '.[http]' 'hypercorn>=0.17'`, and runs each example with that venv's
+    `python`, as phase 2's probes did.)*
   * It stops, naming the command, when `node`, `npm` or `uv` is missing.
   * Each pair runs under a 60 s bound. Its output goes to `.cache/tools/interop/<pair>.log`, and the tool checks for the line
     each program prints on success:
@@ -599,4 +602,56 @@ As 0042's phase 11 ran:
 
 ## Execution record
 
-Nothing has been executed. The PLAN is `proposed`.
+### Phase 1, the records (2026-10-29)
+
+The owner approved the PLAN with "committed, proceed" after `a3d3b99`. This PLAN is `in-progress`, and its row says so.
+[0039-MADR-five-adopter-additions-on-schema-1-25-0.md](0039-MADR-five-adopter-additions-on-schema-1-25-0.md) gained "Amended by
+0043-MADR-remote-http-and-websocket-transport.md, 2026-10-29". Its "Out of scope" entry for a WebSocket or Unix-socket transport
+is annotated in place, and its row says "amended by 0043 2026-10-29".
+
+### Phase 2, the probes (2026-10-29)
+
+Nothing in the tree changed. The Go probes ran in a scratch module outside the tree, requiring `github.com/coder/websocket
+v1.8.15`, under `GOTOOLCHAIN=go1.26.10`, the floor: `go test -v -count=1 .`, exit 0. The peer probes ran against clones in the
+tools' cache directory:
+* `agentclientprotocol/typescript-sdk` at `08a0d30f023bf86574d49d59c4154e44d4386f55`, after `npm ci`;
+* `agentclientprotocol/python-sdk` at `9853d8b514d6340000bcbd01ec07808436db80cf`, installed into a venv with
+  `uv pip install '.[http]' 'hypercorn>=0.17'`.
+
+Each probe is a raw HTTP or WebSocket exchange from a scratch Python script, run with that venv's `python`. Afterwards
+`tools/procs.py http-server.ts http_server.py hypercorn` printed "none".
+
+**Go and the WebSocket library**, each line as the probe logged it:
+
+| Probe | Output | Against the PLAN |
+| :--- | :--- | :--- |
+| P1 | default (HTTP/2-capable) transport: `err=<nil> resp.Proto="HTTP/1.1"`; HTTP/1-only clone: `err=<nil> resp.Proto="HTTP/1.1"` | Go's transport sends the upgrade over HTTP/1.1 even with HTTP/2 enabled, so the default does not fail. See P1b. |
+| P1b | `ws://` with an unencrypted-HTTP/2-only transport: `failed to send handshake request: … http2: invalid Upgrade request header: ["websocket"]`; `wss://` with an HTTP/2-only transport: `err=<nil> proto="HTTP/1.1"` | A caller's transport set for prior-knowledge HTTP/2, as Streamable HTTP over `http://` may use, breaks the handshake. Phase 4's HTTP/1 clone is needed, and its planted break is kept. |
+| P2 | `status=101 Acp-Connection-Id="probe-conn"` | as assumed |
+| P3 | read: `failed to get reader: context deadline exceeded`; write after it: `failed to write msg: use of closed network connection` | as assumed: one reader context per connection |
+| P4 | no reader: `failed to ping: failed to wait for pong: context deadline exceeded`; with a reader: `err=<nil> in 0s` | as assumed |
+| P5 | deadline not cleared: events `[0 1]`, `unexpected EOF`; cleared: `[0 1 2 3 4 5]`, `err=<nil>` | as assumed: `WriteTimeout` 100 ms ends an uncleared stream |
+| P6 | `GET proto HTTP/2.0; POST codes [202 ×10]; distinct client addresses 1; protos map[HTTP/2.0:true]` | as assumed |
+| P7 | no `Origin`: `101`; foreign: `403`; host pattern: `101`; `https://` pattern: `101` | as assumed |
+| P8 | `cookie on the handshake: "node-7"` | as assumed |
+
+**The peer servers:**
+
+| Probe | TypeScript | Python | Against the MADR |
+| :--- | :--- | :--- | :--- |
+| P9 | session `GET` for a session never named: `200` | `404` | as K3 reads |
+| P10 | `session/new`'s answer on the connection stream; a prompt's update and answer on the session stream; `session/load` on a fresh connection: its replay on the session stream, its answer on the connection stream | `session/new`'s answer on the connection stream; a prompt's update and answer on the session stream; `session/load`'s answers on the connection stream | as K3 reads; TypeScript's load matches the RFD's diagram |
+| P11 | `101` carries `Acp-Connection-Id`; `initialize` as the first frame answered | the same | as assumed |
+| P12 | `initialize` over HTTP/1.1: `200`, `Acp-Connection-Id` set; `text/plain`: `415`; batch: `501` | the same `200`; batch: `501`; `text/plain` with a JSON body: `415`; `text/plain` with a body that is not JSON: `400` | Python parses before it checks the media type. The handler checks the media type first, `415`, as the RFD's order puts it. No change. |
+| P13 | fresh connection, `session/load` with the header: `202`; without: `400 Missing Acp-Session-Id` | with the header: `404 {"error":"Unknown session id"}`; without: `202`; session `GET` before any load: `404` | as the MADR's amendment, 2 and 5, read: a server must accept both shapes, and a client must retry without the header |
+
+The first P13 run sent the headerless `session/load` before the one with the header. The headerless load named the session on
+Python's connection, so the header was then accepted (`202`). The second run, with the header first on a fresh connection,
+gives the table's answers. The first run is kept in the scratch log and is not evidence.
+
+**Findings for later phases:**
+* No result contradicts the MADR or its amendment, so the phase stands.
+* P1's assumption was wrong in the safe direction. The clone stays, for P1b's reason.
+* Phase 7's Python setup was amended: an inline-dependency `uv run` would test PyPI's release, not the pinned commit.
+
+Checks: `make check-records`, `make markdownlint`, `make disclosure-check`; the identifier scan over the changed records.

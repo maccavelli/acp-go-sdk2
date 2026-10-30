@@ -111,7 +111,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0038 | MADR | [Add the consumers' protocol helpers, Kind() on four more unions, and an AgentRefusals embed](decisions/0038-MADR-consumer-helpers-kind-and-agent-refusals.md) | accepted |
 | 0038 | PLAN | [Implement 0038: the consumers' protocol helpers, Kind() on four more unions, and AgentRefusals](decisions/0038-PLAN-consumer-helpers-kind-and-agent-refusals.md) | complete |
 | 0038 | REPORT | [Release notes for v1.22.0, against v1.21.0](reports/0038-REPORT-release-notes-v1-22-0.md) | observed |
-| 0039 | MADR | [Add five adopter capabilities on schema 1.25.0: unstable boundary, presentation, compaction timeline, extension mux, acptest](decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md); assessed 2026-10-25, questions 5 and 6 added; second assessment of item 1 the same day, question 7 added and answered; question 8, from the PLAN's 2c, and questions 9 and 10, from its 2f, added and answered | accepted |
+| 0039 | MADR | [Add five adopter capabilities on schema 1.25.0: unstable boundary, presentation, compaction timeline, extension mux, acptest](decisions/0039-MADR-five-adopter-additions-on-schema-1-25-0.md); assessed 2026-10-25, questions 5 and 6 added; second assessment of item 1 the same day, question 7 added and answered; question 8, from the PLAN's 2c, and questions 9 and 10, from its 2f, added and answered; amended by 0043 2026-10-29 | accepted |
 | 0039 | PLAN | [Implement 0039: an unstable boundary, presentation and compaction runtimes, an extension mux, and acptest](decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md) | complete |
 | 0039 | REPORT | [Release notes for v1.23.0, against v1.22.0](reports/0039-REPORT-release-notes-v1-23-0.md) | observed |
 | 0040 | MADR | [Check elicitation forms, answers and URLs with standard-library helpers on the generated types](decisions/0040-MADR-check-elicitation-forms-answers-and-urls.md); questions 1 to 5 answered 2026-10-26, question 2 as an opt-in connection check | accepted |
@@ -125,7 +125,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0042 | PLAN | [Implement 0042: an in-process agent runner, graceful serving, the agent's stderr tail, and transcripts](decisions/0042-PLAN-in-process-agent-runner.md) | complete |
 | 0042 | REPORT | [Release notes for v1.26.0, against v1.25.0](reports/0042-REPORT-release-notes-v1-26-0.md) | observed |
 | 0043 | MADR | [Add ACP's remote transport, Streamable HTTP and WebSocket, as an experimental package, chosen over an MCP-over-ACP binding and a registry client](decisions/0043-MADR-remote-http-and-websocket-transport.md); questions answered 2026-10-29; amended by the PLAN 2026-10-29 | accepted |
-| 0043 | PLAN | [Implement 0043: ACP's remote transport, Streamable HTTP and WebSocket, in package `remote`](decisions/0043-PLAN-remote-http-and-websocket-transport.md) | proposed |
+| 0043 | PLAN | [Implement 0043: ACP's remote transport, Streamable HTTP and WebSocket, in package `remote`](decisions/0043-PLAN-remote-http-and-websocket-transport.md) | in-progress |
 
 ## I want to…
 

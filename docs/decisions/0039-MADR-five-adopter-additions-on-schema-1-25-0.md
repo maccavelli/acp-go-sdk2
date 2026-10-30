@@ -709,10 +709,19 @@ These stay as 0035 numbered them. They are the natural record after this one lan
 
 * Schema `1.26.0` and protocol v2
 * `encoding/json/v2`
-* A WebSocket or Unix-socket transport (0035 F: needs a dependency, needs its own MADR)
+* A WebSocket or Unix-socket transport (0035 F: needs a dependency, needs its own MADR). *(WebSocket decided by 0043; see
+  "Amended by 0043-MADR-remote-http-and-websocket-transport.md, 2026-10-29".)*
 * Bounded `Wait` (0026 question 4)
 * Changing `PromptOverlapRefuse`'s code (0021)
 * Adding methods to `Agent` or `Client` (that is an incompatible `apidiff` change for every embedder)
 
 The owner answered questions 1–6 on 2026-10-25 ("Decided with the owner"), and question 7, from the second assessment, the same
 day: "build the emissions now". The PLAN is approved: "committed, proceed".
+
+#### Amended by 0043-MADR-remote-http-and-websocket-transport.md, 2026-10-29
+
+[0043-MADR-remote-http-and-websocket-transport.md](0043-MADR-remote-http-and-websocket-transport.md), `accepted` on 2026-10-29,
+is the MADR of its own that "Out of scope" asked for. It decides the WebSocket half of "A WebSocket or Unix-socket transport": ACP's
+remote transport, Streamable HTTP and WebSocket, in package `remote`. Its WebSocket implementation, `github.com/coder/websocket`
+v1.8.15, is the dependency named there. Unix sockets stay out of scope; 0043 lists them under "Not in this record". Like
+`unstable`, item 1 here, `remote` is outside the compatibility promise, and `make api` reports its changes without gating them.
