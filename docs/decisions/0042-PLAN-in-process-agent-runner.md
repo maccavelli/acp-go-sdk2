@@ -403,6 +403,8 @@ the amendment.
   * the sentinel never joined: `TestCloseContextBoundsHandlers`;
   * a goroutine per call, not `waitDone`: `TestCloseContextOneGoroutine`.
 * Repeats: the new tests 20 times under `-race` on macOS, and 20 times on the Linux and Windows hosts.
+* (Added 2026-10-30, during the phase: `agentproc/waitcontext_test.go`'s `processWaiters`, which matched the waiter by the function
+  `waitDone` renames; see the execution record's deviation.)
 
 #### 16. Docs (X4)
 
@@ -1280,3 +1282,77 @@ The owner committed phases 12 and 13 as `1457073` and answered "committed, proce
 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make api`, "compatible: ErrHandlersRunning: added", "against
 v1.27.0: 0 incompatible, 1 compatible"; `platforms`, "13 of 13 passed"; the floor gate at go1.26.10, passed; `windows` and `linux`,
 passed.
+
+### Phase 15, `CloseContext` and `KillContext` (2026-10-30)
+
+The owner committed phase 14 as `1b61f33` and answered "committed, proceed".
+
+**Files:**
+* `agentproc/agentproc.go`:
+  * `hurryUp`, the close of `hurry` that `Kill` made inline, now a method that `Kill`, `KillContext` and `CloseContext`'s
+    `context.AfterFunc` call;
+  * `waitDone`, factored out of `WaitContext` as `Connection`'s is, and `endedFirst`, `WaitContext`'s select, which reports whether
+    the context ended first, `Wait`'s return winning when both are ready. `WaitContext` is the two, its behaviour unchanged;
+  * `connWaitBegan` and `connWaitEnded`, two `atomic.Bool`s that `Wait` sets around its `p.conn.Wait()`, after the watcher and the
+    monitor have returned, so after the watcher's close of the connection;
+  * `CloseContext`: `context.AfterFunc(ctx, p.hurryUp)`, `p.closeOnce.Do(p.stop)`, the `AfterFunc` stopped, then `waitBounded`.
+    `KillContext`: `p.hurryUp()`, the steps, `waitBounded`;
+  * `waitBounded`: `Wait`'s error when `endedFirst` says `Wait` returned; otherwise `errors.Join` of `context.Cause(ctx)`, of
+    `acp.ErrHandlersRunning` when `connWaitBegan` is set and `connWaitEnded` is not, read in that order, and of `p.agentError()`
+    under `mu`;
+  * the docs: `Wait`'s gains the specification's paragraph, its unbounded wait for the connection's goroutines and the methods that
+    bound it; `Close`'s and `Kill`'s each point to its bounded form; `CloseContext`'s and `KillContext`'s are the specification's,
+    `CloseContext`'s citing the amendment; `WaitContext`'s says that the first call of the three starts the goroutine they share;
+    the `hurry` and `waitOnce` fields name their new callers.
+* `errors.go`: `ErrHandlersRunning`'s doc names `agentproc`'s `CloseContext` and `KillContext`, as the specification gives it.
+* `agentproc/example_test.go`: `ExampleProcess_CloseContext`, a `ScriptAgent` served in process and closed under a 5 s bound, which
+  tests `acp.ErrHandlersRunning` with `errors.Is`, and names `context.WithTimeoutCause` in a comment; `// Output: close: <nil>`.
+* `agentproc/closecontext_test.go`, new: `hungClient`, whose `SessionUpdate` ignores its context until released; `hang`, which
+  registers the release to run before the agent's `Close` and returns once the handler is blocked; `hungInProcess`, a `ScriptAgent`
+  whose turn sends one update, prompted, as I3 reproduced it; `hungChild`, the `burst` mode. The seven tests:
+
+  | Test | What it requires |
+  | :--- | :--- |
+  | `TestCloseContextBoundsHandlers` | in process and a child, by `CloseContext` and `KillContext`, a 300 ms bound: the call returns within the bound, a grace and the slack; `errors.Is` holds for `context.DeadlineExceeded` and `acp.ErrHandlersRunning`; `Done` is closed; released, `Wait` returns `nil`, or `ErrKilled` after `KillContext`, and the bounded error is exactly the cause, the sentinel and that error, joined in that order |
+  | `TestCloseContextJoinsTheAgentsError` | a `Serve` that returns `errServe` after `ServeAgent`: the error is exactly the cause, the sentinel and `errServe` |
+  | `TestCloseContextWaitsForHandlers` | a handler released half a grace into a 5 s bound: `nil`, and the handler had returned |
+  | `TestCloseContextHurriesTheSteps` | a `stubborn` child under a 5 s grace, a 300 ms bound: `CloseContext` from 300 ms to 3.3 s, `KillContext` under 3.3 s, each `ErrKilled` and not `ErrTerminated` |
+  | `TestCloseContextCause` | `context.WithTimeoutCause`: the test's cause, not `context.DeadlineExceeded`, and the sentinel |
+  | `TestCloseContextNotHandlers` | a `burst` child that has exited 0, its connection ended cleanly and its goroutines returned, an output tap held by its gate, a 2 s grace, a 100 ms bound: the error is the cause alone, without the sentinel; released, `Wait` returns `nil` |
+  | `TestCloseContextOneGoroutine` | 50 calls each of `CloseContext` and `KillContext` with an ended context leave one waiting goroutine, and none once the handler is released |
+
+**Deviation, 2026-10-30: `agentproc/waitcontext_test.go` changed, a file the phase did not list.** `processWaiters`, which
+`TestProcessWaitContext` and now `TestCloseContextOneGoroutine` count with, matched the waiter by its function's name,
+`(*Process).WaitContext.func`. `waitDone`, which the phase factors out, renames that function `(*Process).waitDone.func`, and the
+match would find none: `TestProcessWaitContext`'s "one goroutine" would fail, "left 0 waiting goroutines, want 1". The match now
+names `waitDone`, and the doc says the waiter is shared. Nothing the test requires changed; it passed after the change, as before.
+
+**Not done, and why:** the "a child, KillContext" case can log the connection's `WARN failed to parse incoming message`: the kill can
+land while the `burst` child is still writing, and the connection reads a partial last line. That is a killed writer's output, as
+`Kill` gives it today; `start`, which that case shares with `TestNoLostOutput`, keeps the connection's default log, and no check reads
+it.
+
+**Run:** `go test -race -count=1 ./agentproc`, the whole package with its leak guard: `ok`. `go test -race -count=20 -run
+'^(TestCloseContext.*|TestProcessWaitContext|ExampleProcess_CloseContext)$' ./agentproc`: exit 0. The same pattern, `-test.count=20`,
+through `tools/remote.py pkg` on the Linux host and the Windows host, its binary cross-compiled without `-race`: exit 0 on each.
+
+**Planted breaks,** each in its own scratch copy; 7 of 7 failed as required:
+
+| Break | The check that failed |
+| :--- | :--- |
+| `CloseContext` calling `Close` | `TestCloseContextBoundsHandlers`: "CloseContext took longer than 3.6s" |
+| the `AfterFunc` removed | `TestCloseContextHurriesTheSteps`: "CloseContext took 10.004506875s, want from 300ms to the bound and the slack, 3.3s, well within one grace, 5s" |
+| `KillContext` without `hurryUp` | `TestCloseContextHurriesTheSteps`: "KillContext took 10.003439375s, …" |
+| `agentError` not joined | `TestCloseContextJoinsTheAgentsError`: "CloseContext = context deadline exceeded", the first line of the joined error, and the message's "Serve's own error joined" |
+| the sentinel joined at any context's end | `TestCloseContextNotHandlers`: "want the bound's cause alone, without acp.ErrHandlersRunning" |
+| the sentinel never joined | `TestCloseContextBoundsHandlers`, its four cases: "CloseContext = context deadline exceeded after 300.434083ms, want the bound's cause and acp.ErrHandlersRunning" |
+| a goroutine per call, `waitDone` without its `sync.Once` | `TestCloseContextOneGoroutine`: "100 calls of CloseContext and KillContext left 100 waiting goroutines, want 1" |
+
+**Gates,** `tools/gates.py --all`, the hosts named per command: "all gates passed", 18 of 18; among them `make pre-add-check`, "276
+file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; `make api`, "compatible: ErrHandlersRunning: added",
+"compatible: agentproc: (*Process).CloseContext: added", "compatible: agentproc: (*Process).KillContext: added", "against v1.27.0: 0
+incompatible, 3 compatible", the count phase 17 expects; `platforms`, "13 of 13 passed"; the floor gate at go1.26.10, passed;
+`windows` and `linux`, passed. `WaitContext`'s doc changed after the gates, a comment alone; `make pre-add-check` then, "276 file(s)
+clean (gofmt, golangci-lint, go vet, go test, govulncheck)", and `scripts/go-precheck.sh agentproc/closecontext_test.go`, "1 file(s)
+clean", each run with the active toolchain's `bin` first on `PATH`, since the host's `gofmt` link had come to name a toolchain no
+longer installed.

@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	acp "github.com/maccavelli/acp-go-sdk2"
@@ -121,10 +122,18 @@ type Process struct {
 	// (0027-PLAN-agent-process-helper.md, the deviation during step 2).
 	closeOnce sync.Once
 
-	// hurry is closed, once (hurryOnce), by Kill: Close's steps then wait no
+	// hurry is closed, once (hurryOnce), by Kill, KillContext, and the end of
+	// CloseContext's context during the steps: Close's steps then wait no
 	// more, and send no SIGTERM, but kill.
 	hurry     chan struct{}
 	hurryOnce sync.Once
+
+	// connWaitBegan and connWaitEnded mark the span in which Wait waits on
+	// the connection's goroutines, after the watcher has closed it: what
+	// still runs in that span is the connection's handlers. Each is set once
+	// and never cleared (0042-MADR-in-process-agent-runner.md, the amendment
+	// of 2026-10-30, X2).
+	connWaitBegan, connWaitEnded atomic.Bool
 
 	// outTap and inTap are the taps of the agent's output and input, nil
 	// when unset; their goroutines are not in goroutines, and Wait drains
@@ -132,8 +141,8 @@ type Process struct {
 	outTap, inTap *tap
 	drainOnce     sync.Once
 
-	// waitOnce starts, once, the goroutine WaitContext waits through, which
-	// runs Wait and then closes waited.
+	// waitOnce starts, once, the goroutine WaitContext, CloseContext and
+	// KillContext wait through, which runs Wait and then closes waited.
 	waitOnce sync.Once
 	waited   chan struct{}
 
@@ -385,10 +394,17 @@ func (p *Process) Done() <-chan struct{} { return p.done }
 // does, is returned as it is, so the sentinel is said once. Under
 // Command.JoinStderrTail, a non-nil error also has a *StderrError holding the
 // tail joined. It does not stop the agent.
+//
+// Wait waits for the connection's goroutines without bound, as
+// acp.Connection.Wait does: a client handler that ignores its context holds
+// it, and Close and Kill, until the handler returns. CloseContext and
+// KillContext bound that wait.
 func (p *Process) Wait() error {
 	<-p.done
 	p.goroutines.Wait()
+	p.connWaitBegan.Store(true)
 	_ = p.conn.Wait() //nolint:errcheck // the connection's end is not the agent's; Conn().Err() reports it.
+	p.connWaitEnded.Store(true)
 	p.drainOnce.Do(p.drainTaps)
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -437,29 +453,45 @@ func (p *Process) StderrTail() string {
 
 // WaitContext is Wait bounded by ctx: it returns Wait's error once Wait
 // would, or context.Cause(ctx) when ctx ends first, leaving the agent as it
-// was; it does not stop the agent. The first call starts one goroutine, which
-// runs Wait and ends when Wait returns; every later call shares it, so a
-// caller may wait again (0041-MADR-close-the-gaps-the-consumers-wait-on.md,
-// item 6).
+// was; it does not stop the agent. The first call, of WaitContext,
+// CloseContext or KillContext, starts one goroutine, which runs Wait and ends
+// when Wait returns; every later call shares it, so a caller may wait again
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 6).
 func (p *Process) WaitContext(ctx context.Context) error {
+	if p.endedFirst(ctx) {
+		return context.Cause(ctx)
+	}
+	return p.Wait()
+}
+
+// endedFirst waits until Wait has returned or ctx has ended, and reports
+// whether ctx ended first; when both have, Wait's return wins.
+func (p *Process) endedFirst(ctx context.Context) bool {
+	done := p.waitDone()
+	select {
+	case <-done:
+		return false
+	case <-ctx.Done():
+		select {
+		case <-done:
+			return false
+		default:
+			return true
+		}
+	}
+}
+
+// waitDone returns a channel closed once Wait has returned, starting, the
+// first time, the goroutine that runs it.
+func (p *Process) waitDone() <-chan struct{} {
 	p.waitOnce.Do(func() {
 		p.waited = make(chan struct{})
 		go func() {
-			_ = p.Wait() //nolint:errcheck // WaitContext calls Wait again, which then returns at once.
+			_ = p.Wait() //nolint:errcheck // its callers call Wait again, which then returns at once.
 			close(p.waited)
 		}()
 	})
-	select {
-	case <-p.waited:
-		return p.Wait()
-	case <-ctx.Done():
-		select {
-		case <-p.waited:
-			return p.Wait()
-		default:
-			return context.Cause(ctx)
-		}
-	}
+	return p.waited
 }
 
 // ExitedFirst reports whether the agent's exit was seen while the connection
@@ -526,10 +558,33 @@ func (p *Process) DroppedTapBytes() (output, input uint64) {
 // agent where there is neither. Once the agent has exited, the connection
 // reads to the end of the agent's output, up to the grace from the exit, and
 // is closed. A second call returns the same error. Kill cuts a Close in
-// progress short. For an InProcess agent, the steps are InProcess's.
+// progress short. For an InProcess agent, the steps are InProcess's. Like
+// Wait, Close waits without bound for a client handler that ignores its
+// context; CloseContext bounds it.
 func (p *Process) Close() error {
 	p.closeOnce.Do(p.stop)
 	return p.Wait()
+}
+
+// CloseContext is Close bounded by ctx. It runs Close's steps and returns
+// Wait's error once Wait would return. Should ctx end during the steps, the
+// steps left run as Kill's do: no more waiting, no SIGTERM, the kill. Should
+// it end before Wait would return, CloseContext returns context.Cause(ctx),
+// joined with acp.ErrHandlersRunning when the connection's handlers are what
+// still runs, and with the agent's error, final once the agent has ended, as
+// Wait gives it. The agent has ended by then, and Done is closed; what still
+// runs is left to finish, and Wait, or WaitContext, returns the whole error
+// once it has. CloseContext returns at most the kill's own bound, a grace,
+// after ctx ends. When ctx ends, a Close in progress elsewhere is cut short
+// too, as Kill cuts it (0042-MADR-in-process-agent-runner.md, the amendment
+// of 2026-10-30, X1).
+func (p *Process) CloseContext(ctx context.Context) error {
+	// For the steps alone: a context that ends once they are done changes
+	// nothing in the process.
+	stop := context.AfterFunc(ctx, p.hurryUp)
+	p.closeOnce.Do(p.stop)
+	stop()
+	return p.waitBounded(ctx)
 }
 
 // Kill stops the agent at once and returns Wait's error. It runs Close's
@@ -541,11 +596,47 @@ func (p *Process) Close() error {
 // kills, and Close and Kill, called during or after it, return the same error
 // (0030-MADR-record-initialize-on-arrival.md, the amendment of 2026-10-21,
 // question 7). For an InProcess agent, Kill waits up to the grace for Serve
-// to return before it abandons it.
+// to return before it abandons it. Like Wait, Kill waits without bound for a
+// client handler that ignores its context; KillContext bounds it.
 func (p *Process) Kill() error {
-	p.hurryOnce.Do(func() { close(p.hurry) })
+	p.hurryUp()
 	p.closeOnce.Do(p.stop)
 	return p.Wait()
+}
+
+// KillContext is Kill bounded by ctx, as CloseContext is Close: Kill's steps,
+// then Wait's error, or, should ctx end first, context.Cause(ctx) joined as
+// CloseContext's is.
+func (p *Process) KillContext(ctx context.Context) error {
+	p.hurryUp()
+	p.closeOnce.Do(p.stop)
+	return p.waitBounded(ctx)
+}
+
+// hurryUp makes Close's steps, in progress or to come, wait no more and send
+// no SIGTERM, but kill, and the watcher close the connection at once.
+func (p *Process) hurryUp() { p.hurryOnce.Do(func() { close(p.hurry) }) }
+
+// waitBounded is the wait CloseContext and KillContext end with, once the
+// steps have run and Done is closed: Wait's error, or, should ctx end first,
+// its cause joined with acp.ErrHandlersRunning while Wait waits on the
+// connection's goroutines, and with the agent's error. A context that ends
+// before that wait, while the connection reads to the end of the agent's
+// output, or after it, while the taps drain, joins no sentinel: each of those
+// is bounded by the grace already.
+func (p *Process) waitBounded(ctx context.Context) error {
+	if !p.endedFirst(ctx) {
+		return p.Wait()
+	}
+	errs := []error{context.Cause(ctx)}
+	// Began, then ended: each is set once and never cleared, so the wait had
+	// begun, and had not ended, when ended was read.
+	if p.connWaitBegan.Load() && !p.connWaitEnded.Load() {
+		errs = append(errs, acp.ErrHandlersRunning)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return errors.Join(append(errs, p.agentError())...)
 }
 
 // stop runs Close's steps once.

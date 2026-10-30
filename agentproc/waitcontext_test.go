@@ -80,7 +80,8 @@ func TestProcessWaitContext(t *testing.T) {
 	})
 }
 
-// processWaiters counts the goroutines in WaitContext's waiter that carry the
+// processWaiters counts the goroutines in the waiter that WaitContext,
+// CloseContext and KillContext share, started by waitDone, that carry the
 // label "test" with value, which a goroutine inherits from the one that
 // starts it.
 func processWaiters(value string) int {
@@ -88,7 +89,7 @@ func processWaiters(value string) int {
 	_ = pprof.Lookup("goroutine").WriteTo(&b, 1)
 	n := 0
 	for group := range strings.SplitSeq(b.String(), "\n\n") {
-		if !strings.Contains(group, `"test":"`+value+`"`) || !strings.Contains(group, "(*Process).WaitContext.func") {
+		if !strings.Contains(group, `"test":"`+value+`"`) || !strings.Contains(group, "(*Process).waitDone.func") {
 			continue
 		}
 		// The first group follows the profile's header line.

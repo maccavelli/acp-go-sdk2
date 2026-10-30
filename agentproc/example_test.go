@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"time"
 
 	acp "github.com/maccavelli/acp-go-sdk2"
 	"github.com/maccavelli/acp-go-sdk2/acptest"
@@ -111,6 +112,30 @@ func ExampleInProcess() {
 	fmt.Println("close:", p.Close())
 	// Output:
 	// protocol version 1
+	// close: <nil>
+}
+
+// An agent closed within a bound. Close waits for the client's handlers,
+// and a handler that ignores its context would hold it; CloseContext is
+// Close bounded by ctx. Should the bound pass, the steps left end in the
+// kill, and the error says what still ran, with errors.Is.
+func ExampleProcess_CloseContext() {
+	agent := &acptest.ScriptAgent{}
+	p, err := (&agentproc.InProcess{Serve: func(ctx context.Context, in io.Reader, out io.Writer) error {
+		return acp.ServeAgent(ctx, agent, in, out)
+	}}).Start(client{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	// context.WithTimeoutCause gives the error a cause of the caller's own.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = p.CloseContext(ctx)
+	if errors.Is(err, acp.ErrHandlersRunning) {
+		log.Printf("a client handler still runs; Wait returns once it has: %v", err)
+	}
+	fmt.Println("close:", err)
+	// Output:
 	// close: <nil>
 }
 
