@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-30
 associated-madr: "0043-MADR-remote-http-and-websocket-transport.md"
 ---
@@ -1456,3 +1456,42 @@ The PLAN becomes `complete` once the last of these passes.
   * The MADR's item is amended ("Amended in the PLAN's phase 9, 2026-10-30", 1) and annotated in place. Its Status gains a dated
     note that the decision is implemented.
   * The other option was to amend the wording alone.
+
+#### The release published (2026-10-30)
+
+The owner committed and pushed the CI record as `913575f`, then created and pushed the tag. Then:
+
+* **CI:**
+  * on `main` for `913575f`, which changes docs-safe paths only: the Docs run `41094873565`, "completed success";
+  * on the tag: run `41095125360`, six jobs, "completed success" on its first attempt. `validate (windows-2025, 1.27.3)`'s
+    "race detector" step passed, `agentproc` included.
+* **The tag:** `v1.27.0` is annotated, its message `v1.27.0`, and names `913575f` on `origin`.
+* **`make api` after the tag:**
+  * against `v1.27.0`, now the newest tag, "0 incompatible, 0 compatible";
+  * against `v1.26.0`, through `scripts/check_api.py v1.26.0`, "0 incompatible, 11 compatible", as the report says;
+  * both: "reported packages unstable, remote: 0 incompatible, not gated".
+* **The body:** `tools/release_body.py v1.27.0 v1.27.0` extracted the report's "Release text". It is 78 lines with two links;
+  the tool pointed the relative one at the tag, and its identifier scan found 0 matches. The body was read in full.
+* **The release:** the owner tried `gh release create` through the shell, and it stopped on an unbalanced quote before
+  reaching `gh`. The agent then ran `gh release create v1.27.0 --verify-tag --title v1.27.0 --notes-file <the body>`, which
+  printed the release's URL. No release existed for the tag before.
+* **`tools/publication.py v1.27.0 913575f <the body>`:** "10 of 10 checks hold":
+  * the release is published, not a draft or prerelease, marked latest, and its body is the extracted text;
+  * the tag is annotated, names `913575f`, and that commit is on `origin`'s `main`;
+  * CI holds on `main`'s head (run `41094873565`) and on the tag (run `41095125360`);
+  * the proxy serves the tag at `913575f`;
+  * `go list -m @latest` gives `v1.27.0`;
+  * `go mod download` passes with the checksum database on.
+* **`tools/consumer.py v1.27.0`:** "as required". At `go1.26.10`, from the proxy:
+  * `go get` fetched `v1.27.0`, and `go mod tidy` fetched `github.com/coder/websocket v1.8.15` with the checksum database on;
+  * the program's output equalled `WANT_RUN`, its last lines the three that `remote` adds (`remote ws`, `remote http` and
+    `handler`). The tool prints only the first 700 characters of the output, but it compares all of it;
+  * its `go test` passed;
+  * the Windows build passed;
+  * its `go.mod` kept `go 1.26.10` and gained no toolchain line. It requires `github.com/coder/websocket v1.8.15` and
+    `golang.org/x/sys v0.49.0` as indirect, so the SDK's only new requirement is the one the MADR names.
+
+The release is published and every item of the MADR's "Confirmation" is shown, so this PLAN and its row are `complete`. Each
+consumer adopts `v1.27.0` under its own records, as "Rollout and Rollback" says. The margin of `agentproc`'s
+`TestStderrHeldByDescendant` waits for its own amendment of
+[0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md), as the deviation above records.

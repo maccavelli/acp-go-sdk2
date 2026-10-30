@@ -125,7 +125,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0042 | PLAN | [Implement 0042: an in-process agent runner, graceful serving, the agent's stderr tail, and transcripts](decisions/0042-PLAN-in-process-agent-runner.md) | complete |
 | 0042 | REPORT | [Release notes for v1.26.0, against v1.25.0](reports/0042-REPORT-release-notes-v1-26-0.md) | observed |
 | 0043 | MADR | [Add ACP's remote transport, Streamable HTTP and WebSocket, as an experimental package, chosen over an MCP-over-ACP binding and a registry client](decisions/0043-MADR-remote-http-and-websocket-transport.md); questions answered 2026-10-29; amended by the PLAN 2026-10-29 and in its phase 9 2026-10-30 | accepted |
-| 0043 | PLAN | [Implement 0043: ACP's remote transport, Streamable HTTP and WebSocket, in package `remote`](decisions/0043-PLAN-remote-http-and-websocket-transport.md) | in-progress |
+| 0043 | PLAN | [Implement 0043: ACP's remote transport, Streamable HTTP and WebSocket, in package `remote`](decisions/0043-PLAN-remote-http-and-websocket-transport.md) | complete |
 | 0043 | REPORT | [Release notes for v1.27.0, against v1.26.0](reports/0043-REPORT-release-notes-v1-27-0.md) | observed |
 
 ## I want to…
