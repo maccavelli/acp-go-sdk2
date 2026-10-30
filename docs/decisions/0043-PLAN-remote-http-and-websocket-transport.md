@@ -1424,6 +1424,35 @@ remote ws {"code":-32603,"message":"Internal error","data":{"error":"context dea
   and `tools/consumer.py v1.27.0`.
 
 The PLAN becomes `complete` once the last of these passes.
+
+**The push.** The owner committed these files as `4ae65b8` and pushed `main`, 11 commits, `0170641` to `4ae65b8`.
+
+#### Deviation, 2026-10-30, phase 10's CI failure in `agentproc`
+
+* **Found.** CI run `41069406511` on `4ae65b8`, attempt 1, failed one job of six: `validate (windows-2025, 1.27.3)`, step "race
+  detector". The failing test was `agentproc`'s `TestStderrHeldByDescendant` (`agentproc_test.go:234`), and the job printed:
+  `Close = agentproc: agent killed: exec: WaitDelay expired before I/O complete, want exec.ErrWaitDelay, and no signal`.
+  * `remote` and `example/remote` passed in the same step, and the other five jobs passed.
+  * The Docs run, `41069406598`, passed.
+* **Evidence.**
+  * The failure is pre-existing in kind: `agentproc` is unchanged since `v1.26.0`, and the test is
+    [0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md)'s.
+  * The test's grace is 300 ms, so `Start` sets `WaitDelay` to 150 ms (0027's deviation of 2026-10-21). The agent must be seen
+    to exit within `Close`'s first 300 ms step. The test failed after 0.38 s.
+  * `tools/ci_jobs.py tally --runs 15`: its only failure in the last 15 runs of `main`. Longer tallies stopped on a GitHub
+    `502` for one older run.
+  * `tools/remote.py pkg --host windows ./agentproc -test.run '^TestStderrHeldByDescendant$' -test.count=50`: exit 0. That host
+    has no cgo, so the run was without `-race`.
+  * The race step runs every package at once, and `remote`'s tests add load beside this one. That is a plausible trigger,
+    inferred, not reproduced.
+* **Resolution.** The owner chose "Rerun once, record, follow up".
+  * Only the failed job was rerun (`gh run rerun 41069406511 --failed`). Attempt 2: "completed success", all six jobs.
+  * The failure and the rerun are recorded in the release-notes report's "CI".
+  * The test's margin under the race step's load is left to a later amendment of
+    [0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md), outside this PLAN. A second failure would have
+    stopped the release for a fix first.
+  * The other options were to fix the margin before the tag, or to measure the failure rate under load first.
+* **No MADR change:** the MADR asserts nothing about `agentproc`'s tests.
   * The MADR's item is amended ("Amended in the PLAN's phase 9, 2026-10-30", 1) and annotated in place. Its Status gains a dated
     note that the decision is implemented.
   * The other option was to amend the wording alone.

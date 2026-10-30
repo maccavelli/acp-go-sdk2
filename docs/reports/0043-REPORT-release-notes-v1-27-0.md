@@ -133,8 +133,22 @@ compression and WebSocket over HTTP/2, and Unix sockets.
   `Dial`, `DialOptions`, `ErrAbandoned`, `ErrDeleted`, `ErrDisconnected`, `ErrHandlerClosed`, `ErrOverflow`, `Handler`,
   `HandlerOptions` and `NewHandler`; and "reported packages unstable, remote: 0 incompatible, not gated". `make api` counts a
   new type's methods in the type, so `Conn`'s and `Handler`'s are not listed.
-- **CI.** Recorded after the push, before the tag, as the PLAN's phase 10 requires. CI's "race detector" step is the
-  `-race` run on Linux and Windows that the MADR's "Confirmation" names (the PLAN's phase 9).
+- **CI on `4ae65b8`**, the commit that adds this report, pushed with the 0043 commits before it:
+  - Run `41069406511`, attempt 1: five of six jobs succeeded. `validate (windows-2025, 1.27.3)` failed in its "race detector"
+    step, in `agentproc`'s `TestStderrHeldByDescendant` (`agentproc_test.go:234`): `Close = agentproc: agent killed: exec:
+    WaitDelay expired before I/O complete, want exec.ErrWaitDelay, and no signal`. `remote` and `example/remote` passed in the
+    same step.
+    - `agentproc` is unchanged since `v1.26.0`; the test is 0027's.
+    - Its grace is 300 ms, so the agent's `WaitDelay` is 150 ms, and the agent must be seen to exit within `Close`'s first
+      step.
+    - It was the test's only failure in the last 15 runs of `main`, and it passed 50 times of 50 on the Windows test host
+      without `-race`.
+  - Attempt 2, the failed job rerun on the owner's choice: "completed success", all six jobs.
+  - The Docs workflow's run `41069406598`: "completed success".
+  - The "race detector" step is the `-race` run on Linux and Windows that the MADR's "Confirmation" names (the PLAN's
+    phase 9). Every 0043 package passed it in both attempts.
+  - The test's margin under the race step's load is left to a later amendment of
+    [0027-PLAN-agent-process-helper.md](../decisions/0027-PLAN-agent-process-helper.md).
 - **The consumer.** `tools/consumer.py`'s program and test, built against `00c37a3`'s tree through a `replace` at `go1.26.10`,
   printed `WANT_RUN` exactly, the two `remote` lines included, and built for Windows. With the server's frames made binary in a
   scratch copy, its output differed, as required. `consumer.py v1.27.0` runs after the tag.
