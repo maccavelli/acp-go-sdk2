@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-31
 decision-makers: the repository owner
 consulted: the MCP Go SDK, gRPC-Go, connect-go, golang.org/x/tools jsonrpc2 and jsonrpc2_v2, sourcegraph/jsonrpc2, the ACP TypeScript, Rust and Python SDKs, coder/acp-go-sdk, and the OpenTelemetry RPC semantic conventions, at the revisions under "Sources"
@@ -174,7 +174,7 @@ findings, whose line numbers were taken at `9fcbb6f`, before 0045 moved them (se
 
 ## Decision Outcome
 
-Chosen option (proposed): **"Sending and receiving middleware, raw, one type"**.
+Chosen option: **"Sending and receiving middleware, raw, one type"**.
 
 It answers 0015's need in the SDK's existing vocabulary. `MethodHandler` is already exported and raw, and a middleware is a
 function from one to another. On the sending side its `*RequestError` carries every error the exchange can return (F1, Errors).
@@ -239,8 +239,15 @@ The parts of the decision:
   * The name follows Go's `FromContext` idiom, and avoids `RequestID` beside the generated `RequestId` type, which differ only
     in case.
   * It returns a copy of the id, and `false` for a notification or a context the connection did not make.
-  * **Receiving:** the id from the request, `null` included. It is kept in `messageMark` as a pointer to the message's existing
-    `*json.RawMessage`, so no allocation is added and the value grows by one word (F11). Handlers can read it too.
+  * **Receiving:** the id from the request, `null` included. ~~It is kept in `messageMark` as a pointer to the message's existing
+    `*json.RawMessage`, so no allocation is added and the value grows by one word (F11).~~ Handlers can read it too.
+
+    *Amended 2026-10-31, in phase 1 (the PLAN's deviation 1):* it is kept **beside the request's receipt**, as a pointer to the
+    message's existing `*json.RawMessage`. In `messageMark` it added one allocation per received request: a request's mark is
+    the zero literal `messageMark{}`, which Go boxes from static data without allocating, and any mark holding an id
+    allocates. The receipt's value allocates already. `BenchmarkPromptRoundTrip` went from 99 to 100 allocations with the id in
+    the mark, and stays at 99 beside the receipt, with one word more per received request. A notification's receipt is
+    unchanged.
   * **Sending:** the id the SDK allocated before the chain (D4). Allocating it there changes nothing else: the registration
     still precedes the write, and no answer can arrive before the write. A short-circuited request leaves a gap in the ids,
     which JSON-RPC allows.
@@ -325,6 +332,9 @@ The parts of the decision:
 * Q2: **(b) An observer option as well**, not the recommended (a). D9 states its design, and D6 points to it.
 
 The decision stays `proposed` until the owner accepts it.
+
+*2026-10-31:* asked to accept the revised MADR and approve the PLAN before phase 1, the owner answered "committed, proceed".
+The decision is `accepted`; D5 was amended the same day, in phase 1.
 
 ### Revision, 2026-10-31
 

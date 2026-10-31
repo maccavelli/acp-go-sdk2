@@ -63,13 +63,27 @@ type queuedNotification struct {
 // and notifications of the connection.
 type receiptKey struct{}
 
+// requestReceipt is what receiptKey holds for a received request: its receipt
+// number and its id, by the message's own pointer. A notification's receipt is
+// a bare uint64. The id rides beside the receipt, whose value allocates
+// anyway, because a request's messageMark is the zero literal, which is boxed
+// without allocating, and any other mark would allocate
+// (0046-PLAN-sending-and-receiving-middleware.md, deviation 1).
+type requestReceipt struct {
+	receipt uint64
+	id      *json.RawMessage
+}
+
 // receiptOf returns ctx's receipt number, or 0 for a context receive did not
 // make, such as a test's call of a handler. Generated code orders a prompt
 // turn and a session/cancel by it
 // (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 5 deviation).
 func receiptOf(ctx context.Context) uint64 {
-	if r, ok := ctx.Value(receiptKey{}).(uint64); ok {
+	switch r := ctx.Value(receiptKey{}).(type) {
+	case uint64:
 		return r
+	case requestReceipt:
+		return r.receipt
 	}
 	return 0
 }
@@ -1653,7 +1667,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 
 	*received++
 	if msg.ID != nil {
-		base := context.WithValue(context.WithValue(c.handlersCtx, receiptKey{}, *received), messageKey{}, messageMark{})
+		base := context.WithValue(context.WithValue(c.handlersCtx, receiptKey{}, requestReceipt{receipt: *received, id: msg.ID}), messageKey{}, messageMark{})
 		reqCtx, cancel := context.WithCancelCause(base)
 		// A null id names no single request, so $/cancel_request cannot
 		// reach it, and it is not registered. A request that reuses the id
@@ -2409,7 +2423,14 @@ func (c *Connection) exchange(ctx context.Context, method string, params any, pr
 	if err != nil {
 		return responseEnvelope{}, false, err
 	}
+	return c.exchangePrepared(ctx, msg, idKey, pr)
+}
 
+// exchangePrepared is exchange from the registration on: it registers msg,
+// prepared with the id idKey, as pr, writes it, and returns its answer, and
+// whether it was handed to the writer goroutine
+// (0046-PLAN-sending-and-receiving-middleware.md, step 1.3).
+func (c *Connection) exchangePrepared(ctx context.Context, msg anyMessage, idKey string, pr *pendingResponse) (responseEnvelope, bool, error) {
 	c.mu.Lock()
 	c.pending[idKey] = pr
 	c.mu.Unlock()
@@ -2522,7 +2543,7 @@ func (c *Connection) sendCancelRequests() {
 				c.mu.Unlock()
 
 				requestID := json.RawMessage(append([]byte(nil), idKey...))
-				if err := c.SendNotification(context.Background(), ProtocolMethodCancelRequest, cancelRequestParams{RequestID: requestID}); err != nil {
+				if err := c.notifyDirect(context.Background(), ProtocolMethodCancelRequest, cancelRequestParams{RequestID: requestID}); err != nil {
 					c.loggerOrDefault().Debug("failed to send "+ProtocolMethodCancelRequest, "err", err)
 				}
 			}
@@ -2719,37 +2740,9 @@ func (c *Connection) cleanupPending(idKey string) {
 // SendRequestNoResult sends a JSON-RPC request that returns no result payload.
 // Like SendRequest, it does not check what initialize negotiated.
 func (c *Connection) SendRequestNoResult(ctx context.Context, method string, params any) error {
-	if ctx.Err() != nil {
-		return toReqErr(context.Cause(ctx))
-	}
-	if c.inputEnded() {
-		return inputEndedError()
-	}
-	msg, idKey, err := c.prepareRequest(method, params)
-	if err != nil {
-		return err
-	}
-
-	pr := &pendingResponse{ch: make(chan responseEnvelope, 1)}
-	c.mu.Lock()
-	c.pending[idKey] = pr
-	c.mu.Unlock()
-
-	// As in exchange (0044-MADR-notification-queue-back-pressure.md, D3).
-	if c.inRunningNotification(ctx) {
-		end := c.beginPeerWait()
-		defer end()
-	}
-
-	if err := c.sendMessage(ctx, msg); err != nil {
-		c.cleanupPending(idKey)
-		if ctx.Err() != nil {
-			c.sendCancelRequest(idKey)
-		}
-		return toReqErr(err)
-	}
-
-	resp, err := c.waitForResponse(ctx, pr, idKey)
+	// exchange takes the steps sendRequestSent takes, the decode aside
+	// (0046-PLAN-sending-and-receiving-middleware.md, step 1.2).
+	resp, _, err := c.exchange(ctx, method, params, &pendingResponse{ch: make(chan responseEnvelope, 1)})
 	if err != nil {
 		return err
 	}
@@ -2766,6 +2759,13 @@ func (c *Connection) SendRequestNoResult(ctx context.Context, method string, par
 // SendNotification sends a JSON-RPC notification. It does not wait for a response.
 // Like SendRequest, it does not check what initialize negotiated.
 func (c *Connection) SendNotification(ctx context.Context, method string, params any) error {
+	return c.notifyDirect(ctx, method, params)
+}
+
+// notifyDirect is SendNotification's direct path, which the connection's own
+// $/cancel_request takes too
+// (0046-PLAN-sending-and-receiving-middleware.md, step 1.4).
+func (c *Connection) notifyDirect(ctx context.Context, method string, params any) error {
 	select {
 	case <-ctx.Done():
 		return NewInternalError(map[string]any{jsonErrorField: ctx.Err().Error()}).withCause(context.Cause(ctx))

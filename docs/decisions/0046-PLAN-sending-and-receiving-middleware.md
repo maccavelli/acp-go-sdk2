@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-10-31
 associated-madr: "0046-MADR-sending-and-receiving-middleware.md"
 ---
@@ -92,8 +92,9 @@ The seams D4 and D5 need, made first, so that the existing suite proves them alo
    * `sendCancelRequests` (`:2525`) calls `sendNotification` too, so phase 3 can put the chain in `SendNotification` alone
      (D4).
 5. **The received id in the context.**
-   * `messageMark` gains `id *json.RawMessage`. `receiveLine` sets it to `msg.ID` for a request (`:1656`), and notifications
-     leave it nil.
+   * ~~`messageMark` gains `id *json.RawMessage`. `receiveLine` sets it to `msg.ID` for a request (`:1656`), and notifications
+     leave it nil.~~ *Amended by deviation 1:* a request's `receiptKey` value becomes `requestReceipt{receipt, id}`, with `id`
+     the message's `msg.ID`. A notification's stays a `uint64`, and `receiptOf` reads both.
    * Nothing reads it until phase 2.
 6. **Checks.**
    * `go test -race -count=1 ./...`: every package `ok`, no test changed.
@@ -410,3 +411,81 @@ As [0045-PLAN-notification-queue-byte-budget.md](0045-PLAN-notification-queue-by
 * **Rollback after the release.** The type, options, function, sentinel and observer stay, under the compatibility promise. A
   defect in a chain is fixed in a patch. A defect only in the sending chain can be contained in a patch by documenting
   `WithSendingMiddleware` as inert and skipping the chain, while it is fixed.
+
+## Execution record
+
+*2026-10-31:* the owner committed the revised pair as `fbbbd5c` and, asked to accept the MADR and approve this PLAN, said
+"committed, proceed". The MADR is `accepted` and this PLAN `in-progress`.
+
+**Deviation 1, 2026-10-31, step 1.5: the received id is kept beside the receipt, not in `messageMark`.**
+
+* *Found.* With step 1.5 as written, step 1.6's benchmark gave `BenchmarkPromptRoundTrip` 100 allocations per operation
+  against the baseline's 99, on each of three alternating rounds, with time within −1.3% to +2.3%.
+  `BenchmarkSessionUpdateNotify` gained about 8 bytes per operation, since the mark grew from 16 to 24 bytes.
+  * The cause, from a scratch probe of `context.WithValue` with `testing.AllocsPerRun` on `go1.27.3` and `go1.26.10`: a
+    request's mark is the zero literal `messageMark{}`, which Go boxes from static data without allocating. Any mark holding an
+    id allocates.
+  * The probe measured 3 allocations for today's request context, 4 with the id in the mark, and 3 with the id beside the
+    receipt, whose value allocates already.
+  * This contradicted the MADR's D5, "no allocation is added", and D11, and step 1.6's "`allocs/op` equal".
+* *Options put to the owner:*
+  * keep the id beside the receipt (recommended), for one word more per received request;
+  * keep it in the mark, and accept an allocation per request and a word per notification on every connection;
+  * set it only when a receiving chain is registered, which leaves handlers without it otherwise.
+* *Decided.* The owner chose the first. The MADR's D5 carries an annotated amendment. Step 1.5 above is annotated. No file is
+  added to the phase's scope.
+
+### Phase 1, 2026-10-31
+
+**What changed,** all in `connection.go`, 34 lines added and 34 removed:
+
+* **Step 1.2.** `SendRequestNoResult` is `exchange`, then the barrier, then the error answer.
+  * Before the change, eight tests called it: `TestSendRequestNoResultAnswers`, `TestSendRequestNoResultHeldBehindNotification`,
+    `TestConcurrentUse`, `TestEndedCleanly`, `TestErr`, `TestParamsNeverSentAsNull`, `TestRequestAfterEndOfInputNotWritten`,
+    and `testRequestWithEndedContextWritesNothing`.
+  * Its checks and errors keep their order. On a failed write, `claimedAnswer` returns false for a response without a commit,
+    so the path is the one it had.
+* **Step 1.3.** `exchange` keeps its checks and `prepareRequest`, and calls `exchangePrepared(ctx, msg, idKey, pr)`, which
+  registers, counts the peer wait, writes and waits.
+* **Step 1.4.** `SendNotification` calls `notifyDirect`, its former body, and so does `sendCancelRequests`.
+  * *Refinement, not a deviation:* the PLAN's name, `sendNotification`, failed `make pre-add-check`: "confusing-naming: Method
+    'sendNotification' differs only by capitalization to method 'SendNotification' in the same source file (revive)".
+  * It is `notifyDirect`, and the later phases' `sendNotification` means it.
+* **Step 1.5, as amended by deviation 1.**
+  * `requestReceipt{receipt uint64; id *json.RawMessage}` is a received request's `receiptKey` value, with `msg.ID`.
+  * `receiptOf` reads it or a bare `uint64`, which notifications and `cancel_test.go`'s direct calls keep.
+  * `messageMark` is unchanged.
+
+**Step 1.1, the baseline:** a `git archive 523f319` in the scratch directory, `go test -run '^$' -bench
+'PromptRoundTrip|SessionUpdateNotify' -benchmem -count=10 .`. Medians:
+
+| Benchmark | ns/op | B/op | allocs/op |
+| :--- | ---: | ---: | ---: |
+| `BenchmarkPromptRoundTrip` | 26696 | 5426 | 99 |
+| `BenchmarkSessionUpdateNotify` | 14483 | 4878 | 65 |
+
+**Step 1.6, the checks.**
+
+* `go test -race -count=1 ./...`: every package `ok`. No test changed.
+* **The benchmark,** the base and the tree alternately, three rounds of `-count=5`, on the final code:
+
+  | Round | `PromptRoundTrip` ns/op | B/op | allocs/op | `SessionUpdateNotify` ns/op | B/op | allocs/op |
+  | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+  | 1 | 28212 → 28084 (−0.5%) | +7 | 99 → 99 | 19980 → 15456 (−22.6%) | +2 | 65 → 65 |
+  | 2 | 34128 → 27350 (−19.9%) | +4 | 99 → 99 | 16832 → 14640 (−13.0%) | −1 | 65 → 65 |
+  | 3 | 26100 → 26628 (+2.0%) | +9 | 99 → 99 | 13459 → 13493 (+0.3%) | +0 | 65 → 65 |
+
+  * Allocations are equal.
+  * Bytes rise by about one word per round trip, which receives one request, and are unchanged for notifications.
+  * The base's slower rounds 1 and 2 are the machine's noise: the base is the slower side. Round 3 is within 2%.
+* **Seen to fail,** `tools/plants.py`, four plants in its copies, on the final code, "4/4 as required":
+
+  | Break | Test | Failure seen |
+  | :--- | :--- | :--- |
+  | `exchangePrepared` without its peer wait | `TestOverflowBlockRequestFromNotificationHandler` | "the handler's request is not answered: the reader paused while the handler waited on it" |
+  | `notifyDirect` writes nothing | `TestNotifyExtensionNames` | "the notification did not happen" |
+  | `SendRequestNoResult` drops the peer's error | `TestSendRequestNoResultAnswers` | "SendRequestNoResult = <nil>, want code -32602" |
+  | `receiptOf` misses a request's receipt | `TestPromptCancelRightAfterPrompt` | "answer {…"result":{"stopReason":""}}, want stopReason cancelled" |
+
+* `make pre-add-check`: "go-precheck: 279 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+* `make api`: "against v1.30.0: 0 incompatible, 0 compatible".
