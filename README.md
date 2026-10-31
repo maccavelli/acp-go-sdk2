@@ -266,7 +266,9 @@ follow the schema:
   or several fit, it is kept in `Unknown`; a union with a catch-all instead
   fails with an error such as `StateUpdate: missing discriminator "state"`.
 - Decoding JSON `null` into a union leaves it unchanged, except `RequestId`, which
-  takes it as its `Null` variant. Any other payload replaces what the union
+  takes it as its `Null` variant. `RequestId` takes only what JSON-RPC allows an id
+  to be, a string, a number or `null`: an object, an array or a boolean fails with
+  `RequestId: no variant matches`. Any other payload replaces what the union
   held, so a reused value holds only the last one decoded.
 - A number takes the Go type of its schema `format` (`uint64`, `uint32`,
   `uint16`, `int64`, `int32`, `float64`), so a value outside that range fails

@@ -41,6 +41,31 @@ func TestUnionDecodeErrorsNameTheirPlace(t *testing.T) {
 	}
 }
 
+// TestRequestIdRefusesObjects requires RequestId to take only what JSON-RPC
+// allows an id to be, a string, a number or null, and to refuse an object as
+// it refuses an array or a boolean
+// (0011-MADR-harden-code-generator-engine.md, the amendment of 2026-10-31,
+// D-A1).
+func TestRequestIdRefusesObjects(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{`null`: "Null", `"a"`: "Str", `7`: "Number"} {
+		var id RequestId
+		if err := json.Unmarshal([]byte(in), &id); err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		if got := setVariants(&id); !reflect.DeepEqual(got, []string{want}) {
+			t.Errorf("%s decoded as %v, want %s", in, got, want)
+		}
+	}
+	for _, in := range []string{`{}`, `{"x":1}`, `[1]`, `true`} {
+		var id RequestId
+		err := json.Unmarshal([]byte(in), &id)
+		if err == nil || err.Error() != "RequestId: no variant matches" {
+			t.Errorf("%s: err %v, variants %v, want RequestId: no variant matches", in, err, setVariants(&id))
+		}
+	}
+}
+
 // TestUnionKeepsIntegerDigits requires an integer above 2^53 to keep every
 // digit through a union, alone and nested in another union.
 func TestUnionKeepsIntegerDigits(t *testing.T) {

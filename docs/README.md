@@ -28,9 +28,9 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0009 | PLAN | [Implement the generated-output fixes](decisions/0009-PLAN-fix-generated-output-on-json-v1.md) | complete |
 | 0010 | MADR | [Bring the user-facing docs in line with the current tree](decisions/0010-MADR-align-docs-with-current-tree.md); amendment proposed 2026-10-31: remove `communique.toml` | accepted |
 | 0010 | PLAN | [Implement the docs update](decisions/0010-PLAN-align-docs-with-current-tree.md); a phase proposed 2026-10-31 for the amendment | complete |
-| 0011 | MADR | [Harden the code generator into a validated, schema-driven engine](decisions/0011-MADR-harden-code-generator-engine.md); amendment proposed 2026-10-31: `RequestId` refuses objects, the dead trial decode removed | accepted |
+| 0011 | MADR | [Harden the code generator into a validated, schema-driven engine](decisions/0011-MADR-harden-code-generator-engine.md); amendment accepted 2026-10-31: `RequestId` refuses objects, the dead trial decode removed | accepted |
 | 0011 | PLAN | [Implement phase 1: the resolved schema model](decisions/0011-PLAN-resolved-schema-model.md) | complete |
-| 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md); a phase proposed 2026-10-31 for the amendment | complete |
+| 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md); the amendment's phase of 2026-10-31 complete, its release on the owner's ask | complete |
 | 0011 | PLAN | [Implement phase 3: the protocol table](decisions/0011-PLAN-protocol-table.md) | complete |
 | 0011 | PLAN | [Implement phase 5: safe output](decisions/0011-PLAN-safe-output.md) | complete |
 | 0011 | PLAN | [Implement phase 6: tests of the engine](decisions/0011-PLAN-engine-tests.md) | complete |

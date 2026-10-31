@@ -1,0 +1,88 @@
+A union with a null variant, as RequestId has: only JSON null decodes into
+it. An object, an array or a boolean fits no variant and is refused, where the
+trial decode into the null variant's empty struct took any object
+(0011-MADR-harden-code-generator-engine.md, the amendment of 2026-10-31,
+D-A1). The meta declares $/cancel_request and the schema its smallest
+definition, which the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Id": {"anyOf": [{"title": "Null", "type": "null"}, {"title": "Number", "type": "integer", "format": "int64"}, {"title": "Str", "type": "string"}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+type Id struct{Null *IdNull "json:\"-\""; Number *IdNumber "json:\"-\""; Str *IdStr "json:\"-\""}
+type IdNull struct{}
+type IdNumber int64
+type IdStr string
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewIdNull() Id
+func NewIdNumber(value int64) Id
+func NewIdStr(value string) Id
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+func (Id).MarshalJSON() ([]byte, error)
+func (*Id).UnmarshalJSON(b []byte) error
+func (*Id).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// JSON null, a number and a string each take their variant; an object, an
+// array and a boolean are refused.
+func TestNullVariant(t *testing.T) {
+	for in, want := range map[string]string{`null`: "Null", `7`: "Number", `"a"`: "Str"} {
+		var id Id
+		if err := json.Unmarshal([]byte(in), &id); err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		got := "none"
+		switch {
+		case id.Null != nil:
+			got = "Null"
+		case id.Number != nil:
+			got = "Number"
+		case id.Str != nil:
+			got = "Str"
+		}
+		if got != want {
+			t.Errorf("%s decoded as %s, want %s", in, got, want)
+		}
+	}
+	for _, in := range []string{`{}`, `{"x":1}`, `[1]`, `true`} {
+		var id Id
+		err := json.Unmarshal([]byte(in), &id)
+		if err == nil || err.Error() != "Id: no variant matches" {
+			t.Errorf("%s: err %v, want Id: no variant matches", in, err)
+		}
+	}
+}

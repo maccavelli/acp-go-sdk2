@@ -901,8 +901,14 @@ func arrayMatch(f *goFile, name string, variants []*model.Variant) []ast.Stmt {
 		)
 	}
 
-	// Fallback: try each variant in turn.
+	// Fallback: try each variant in turn. A null variant is not tried: JSON
+	// null took it already, and its empty struct would take any object
+	// (0011-MADR-harden-code-generator-engine.md, the amendment of
+	// 2026-10-31, D-A1).
 	for _, vi := range variants {
+		if vi.IsNull {
+			continue
+		}
 		body = append(body, block(
 			varStmt("v", f.typeName(vi.TypeName)),
 			ifStmt(nil, binary(unmarshal(id("b"), addr(id("v"))), token.EQL, nilExpr()), setVariant(vi)...),
@@ -975,8 +981,12 @@ func discUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKe
 }
 
 // keyLessBody decodes the variants the schema means when the discriminator is
-// absent: each by its required keys, then each by a trial decode, in schema
-// order. A variant without required keys takes every payload that reaches it.
+// absent: each by its required keys, in schema order. A variant without
+// required keys takes every payload that reaches it. No trial decode follows:
+// a variant's fit keys are its required keys, which its own decoder requires,
+// so a payload its match refused it would refuse too
+// (0011-MADR-harden-code-generator-engine.md, the amendment of 2026-10-31,
+// D-A2).
 func keyLessBody(f *goFile, name string, keyLess []*model.Variant, discKey string) []ast.Stmt {
 	var body []ast.Stmt
 	for _, vi := range keyLess {
@@ -991,12 +1001,6 @@ func keyLessBody(f *goFile, name string, keyLess []*model.Variant, discKey strin
 			stmts = append(stmts, keyMatch("m", k))
 		}
 		body = append(body, block(append(stmts, ifStmt(nil, id("match"), decodeChosen(f, vi, variantPlace(name, vi), true)...))...))
-	}
-	for _, vi := range keyLess {
-		body = append(body, block(
-			varStmt("v", f.typeName(vi.TypeName)),
-			ifStmt(nil, binary(call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v"))), token.EQL, nilExpr()), setVariant(vi)...),
-		))
 	}
 	return append(body, missingDisc(f, name, discKey))
 }

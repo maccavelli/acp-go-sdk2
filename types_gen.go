@@ -766,13 +766,6 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 			return nil
 		}
 	}
-	{
-		var v AuthMethodAgent
-		if json.Unmarshal(b, &v) == nil {
-			u.Agent = &v
-			return nil
-		}
-	}
 	return errors.New("AuthMethod: missing discriminator \"type\"")
 }
 
@@ -8302,13 +8295,6 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 			return nil
 		}
 	}
-	{
-		var v McpServerStdio
-		if json.Unmarshal(b, &v) == nil {
-			u.Stdio = &v
-			return nil
-		}
-	}
 	return errors.New("McpServer: missing discriminator \"type\"")
 }
 
@@ -8823,13 +8809,6 @@ func (u *MultiSelectItems) UnmarshalJSON(b []byte) error {
 			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("MultiSelectItems: variant Titled: %w", err)
 			}
-			u.Titled = &v
-			return nil
-		}
-	}
-	{
-		var v TitledMultiSelectItems
-		if json.Unmarshal(b, &v) == nil {
 			u.Titled = &v
 			return nil
 		}
@@ -11756,13 +11735,6 @@ func (u *RequestId) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &m); err == nil {
 	} else if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
 		return err
-	}
-	{
-		var v RequestIdNull
-		if json.Unmarshal(b, &v) == nil {
-			u.Null = &v
-			return nil
-		}
 	}
 	{
 		var v RequestIdNumber
@@ -16382,13 +16354,6 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 			return nil
 		}
 	}
-	{
-		var v SetSessionConfigOptionValueId
-		if json.Unmarshal(b, &v) == nil {
-			u.ValueId = &v
-			return nil
-		}
-	}
 	return errors.New("SetSessionConfigOptionRequest: missing discriminator \"type\"")
 }
 
@@ -20073,13 +20038,6 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 			if err := v.decodeKeys(b, m); err != nil {
 				return fmt.Errorf("UnstableMcpServer: variant Stdio: %w", err)
 			}
-			u.Stdio = &v
-			return nil
-		}
-	}
-	{
-		var v McpServerStdio
-		if json.Unmarshal(b, &v) == nil {
 			u.Stdio = &v
 			return nil
 		}

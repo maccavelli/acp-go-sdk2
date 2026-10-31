@@ -762,9 +762,10 @@ Findings along the way changed the SDK, each decided by the owner and recorded a
 definitions as `json.RawMessage`, an optional raw `null` as absent, keys read under case folding, the variant facts of a direct `$ref`, and the
 refusals of lossy shapes, keys that differ only in case, integer `const` values outside their format, and a catch-all with members.
 
-## Amendment 2026-10-31, two decoder findings left open (proposed)
+## Amendment 2026-10-31, two decoder findings left open
 
-**Status of this amendment: proposed.** It awaits the owner's decision. The decisions above are unchanged until it is accepted.
+**Status of this amendment: accepted** by the owner on 2026-10-31 ("accept and approve, proceed with 0011 then 0045"). It was
+written as proposed the same day.
 
 Two findings were recorded during this decision's phases and left for "an amendment of this pair". A read-only audit of every
 record's open items on 2026-10-31 found both still open at `9fcbb6f` (`v1.29.0`).

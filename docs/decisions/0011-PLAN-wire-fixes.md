@@ -749,10 +749,10 @@ Every acceptance criterion in Verification holds, the table test as three table 
 is unchanged; its consequence that the exported API "gains `Unknown` on eleven unions and `Extra` on six variant types" holds, with the methods above in
 addition. Phase 3 of [0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md), the protocol table, needs its own PLAN.
 
-## Phase added 2026-10-31: the amendment's two decoder fixes (proposed)
+## Phase added 2026-10-31: the amendment's two decoder fixes
 
-**Status of this phase: proposed**, for the MADR's amendment of 2026-10-31 (D-A1 and D-A2). It starts only when the owner
-approves it. The steps above stay as executed.
+**Status of this phase: complete**, staged for the owner's commit. Approved by the owner on 2026-10-31, for the MADR's amendment
+of 2026-10-31 (D-A1 and D-A2). The steps above stay as executed. The release, `v1.29.1`, is on the owner's ask.
 
 **Goal.** `RequestId` refuses a JSON object, as JSON-RPC 2.0 requires, and the generated unions lose a trial decode that can
 never succeed.
@@ -792,3 +792,77 @@ never succeed.
    tag, `v1.29.1`, only on the owner's ask.
 
 **Rollback.** Revert the phase's commit. The change is confined to the generator's emit code and its output.
+
+### Execution record, 2026-10-31
+
+The owner accepted the amendment and approved this phase: "accept and approve, proceed with 0011 then 0045". Base: `fd8e586`,
+whose `types_gen.go` is `9fcbb6f`'s.
+
+**Step 1, grounding.** A scratch script over `types_gen.go`, read against `classifyUnion`:
+
+* **Null variants.** `RequestId` is the only union whose `arrayMatch` fallback trial-decodes a null variant, `RequestIdNull`.
+* **Trailing trials.** `keyLessBody`'s second loop is emitted in five unions. The first loop returns early for a key-less variant
+  with no fit keys, so the second runs only where every key-less variant has them. For each, the keys its match block checks
+  against the keys its own decoder requires (`requireKeys`):
+
+  | Union | Trial variant | Match keys | `requireKeys` |
+  | :--- | :--- | :--- | :--- |
+  | `AuthMethod` | `AuthMethodAgent` | `id`, `name` | `id`, `name` |
+  | `McpServer` | `McpServerStdio` | `name`, `command`, `args`, `env` | `args`, `command`, `env`, `name` |
+  | `UnstableMcpServer` | `McpServerStdio` | the same | the same |
+  | `MultiSelectItems` | `TitledMultiSelectItems` | `anyOf` | `anyOf` |
+  | `SetSessionConfigOptionRequest` | `SetSessionConfigOptionValueId` | `value` | `configId`, `sessionId`, `value` |
+
+* In each, the match keys are among the required keys. `requireKeys` folds them as the union's `foldKeys` does. So a payload the
+  match refused, the trial's decoder refuses too.
+* That holds by construction: `FitKeys` are the variant's required keys other than the discriminator (`model.go:1252-1256`), and
+  a key-less variant has no discriminator value.
+* **D-A2's rule, decided by this step:** remove the second loop entirely. No key-less variant's trial can succeed.
+
+**Step 2, tests first.**
+
+* `TestRequestIdRefusesObjects` in `union_wire_test.go`: `null`, `"a"` and `7` take `Null`, `Str` and `Number`; `{}`,
+  `{"x":1}`, `[1]` and `true` fail with `RequestId: no variant matches`.
+* Engine case `cmd/generate/testdata/engine/accept-null-variant.txtar`: a union `Id` of null, `int64` and string, with the same
+  behaviour test. Its `want.api` was written by `go test -run 'TestEngineCases/accept-null-variant$' -update`.
+* Run against the unfixed generator, both failed on the objects only:
+  * `union_wire_test.go:64: {}: err <nil>, variants [Null], want RequestId: no variant matches`, and the same for `{"x":1}`;
+  * `TestEngineBehaviour/accept-null-variant`: `behaviour_test.go:33: {}: err <nil>, want Id: no variant matches`, and the same
+    for `{"x":1}`.
+
+**Steps 3 and 4.** In `emit/types.go`:
+
+* `arrayMatch`'s fallback skips a variant with `vi.IsNull`;
+* `keyLessBody`'s second loop is removed;
+* both comments cite the amendment.
+
+Regenerated with `go run .` in `cmd/generate`. The `types_gen.go` diff is 42 lines removed and none added: six blocks of seven
+lines, one each in `AuthMethod`, `McpServer`, `MultiSelectItems`, `RequestId`, `SetSessionConfigOptionRequest` and
+`UnstableMcpServer`. Both new tests then passed.
+
+**Step 5, planted breaks and the behaviour check.**
+
+* **The null variant's trial restored** in a scratch copy, then regenerated: `TestRequestIdRefusesObjects` failed with the two
+  object lines above. `TestEngineBehaviour/accept-null-variant` failed with "the package's tests did not pass", and its two
+  object lines.
+* **D-A2's behaviour, compared instead of planted.** A scratch module decoded 18 inputs into each of the six unions, against a
+  `git archive` of `HEAD` and against the tree, and printed each error and re-encoding. The inputs:
+  * objects with and without each union's keys, and in another case;
+  * an unknown and a `null` discriminator;
+  * `null`, an array, a boolean, a string and a number.
+
+  Of 108 lines, 13 differ, all `RequestId` given an object: `err=<nil> | null` before, `RequestId: no variant matches` after. The
+  90 lines of the five unions that lost their dead trial are identical, error texts included.
+
+**Step 6, checks.**
+
+* `go test -race -count=1 ./...` at the root: every package `ok`. `go test -count=1 ./...` in `cmd/generate`: every package `ok`.
+* `tools/gates.py --all`, all 18 gates, exit 0:
+  * `regen` found the generated files unchanged by a second run;
+  * `precheck`: "go-precheck: 278 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck).";
+  * `api`: "against v1.29.0: 0 incompatible, 0 compatible";
+  * `nojsonv2`, `race3`, `floor`, `platforms` and the `windows` and `linux` hosts: every package `ok`.
+* `README.md`, "Wire encoding": `RequestId` takes only a string, a number or `null`, and an object, an array or a boolean fails
+  with `RequestId: no variant matches`.
+
+**Not done:** the release. A patch, `v1.29.1`, with release notes in a REPORT, waits on the owner's ask.
