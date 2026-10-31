@@ -204,12 +204,14 @@ var ErrShutdown = errors.New("acp: connection shut down")
 var ErrHandlersRunning = errors.New("acp: the connection's handlers still run")
 
 // ErrNotificationQueueOverflow is why a connection closed itself: under
-// OverflowCloseConnection, an inbound notification found its queue full;
-// under OverflowBlock, the default, one arrived past the read-on limit, twice
-// the queue's size, while the notification loop waited on the connection.
-// Err and the errors of later calls wrap it, beside ErrConnectionClosed, read
-// with errors.Is (0026-MADR-connection-end-cause-and-wait.md;
-// 0044-MADR-notification-queue-back-pressure.md, D4).
+// OverflowCloseConnection, an inbound notification found its queue full, at
+// the count or the byte budget; under OverflowBlock, the default, one arrived
+// past the read-on limit, twice the queue's size or twice the byte budget,
+// while the notification loop waited on the connection. Err and the errors of
+// later calls wrap it, beside ErrConnectionClosed, read with errors.Is
+// (0026-MADR-connection-end-cause-and-wait.md;
+// 0044-MADR-notification-queue-back-pressure.md, D4;
+// 0045-MADR-notification-queue-byte-budget.md, D3).
 var ErrNotificationQueueOverflow = errors.New("notification queue overflow")
 
 // peerEOF is why a connection ended at the end of the peer's output. Its text

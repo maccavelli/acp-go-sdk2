@@ -21,6 +21,9 @@ import (
 const (
 	notificationQueueDrainTimeout = 5 * time.Second
 	defaultMaxQueuedNotifications = 1024
+	// defaultMaxQueuedBytes is WithMaxQueuedBytes' default budget
+	// (0045-MADR-notification-queue-byte-budget.md, D5).
+	defaultMaxQueuedBytes = 64 * 1024 * 1024
 	// pauseWarnAfter is how long the reader waits for room under
 	// OverflowBlock before the pause is logged at Warn
 	// (0044-MADR-notification-queue-back-pressure.md, D5).
@@ -50,6 +53,9 @@ type queuedNotification struct {
 	seq     uint64
 	receipt uint64
 	msg     *anyMessage
+	// size is the notification's line length, counted in queuedBytes until
+	// its handler returns (0045-MADR-notification-queue-byte-budget.md, D2).
+	size int64
 }
 
 // receiptKey is the context key of a received request's or notification's
@@ -441,6 +447,14 @@ type Connection struct {
 	// OverflowBlock does not pause (0044-MADR-notification-queue-back-pressure.md,
 	// D3).
 	peerWaits int
+	// queuedBytes counts, under notifyMu, the line lengths of the received
+	// messages whose handlers have not returned: the notifications queued or
+	// running, and the requests running. notifBytes is the notifications'
+	// share; a notification meets the byte budget only while it is above
+	// zero, so a pause never waits on a request's handler. byteLimit is
+	// WithMaxQueuedBytes' budget (0045-MADR-notification-queue-byte-budget.md,
+	// D2, D3 as amended, and D6).
+	queuedBytes, notifBytes, byteLimit int64
 
 	// maxMessageSize is the largest line receive accepts (WithMaxMessageSize).
 	maxMessageSize int
@@ -470,14 +484,16 @@ type Connection struct {
 // ConnectionOption configures optional parameters for a Connection.
 //
 // Options apply in the order given, so the last of a repeated option wins. A
-// value n <= 0 keeps the value already set for WithMaxQueuedNotifications and
-// WithMaxMessageSize, the default unless an earlier option set one, but sets
+// value n <= 0 keeps the value already set for WithMaxQueuedNotifications,
+// WithMaxQueuedBytes and WithMaxMessageSize, the default unless an earlier
+// option set one, but sets
 // WithMaxConcurrentRequests back to no limit. A nil option panics
 // (0024-PLAN-documentation.md, A10).
 type ConnectionOption func(*connectionConfig)
 
 type connectionConfig struct {
 	maxQueuedNotifications int
+	maxQueuedBytes         int
 	maxMessageSize         int
 	notificationOverflow   NotificationOverflowPolicy
 	onNotificationDropped  func(method string, totalDropped uint64)
@@ -496,11 +512,40 @@ type connectionConfig struct {
 // on this connection. The default is 1024. Increase this value when
 // multiplexing many concurrent sessions over a single connection, as the
 // combined notification rate may exceed the processing speed of the
-// single-threaded notification consumer.
+// single-threaded notification consumer. WithMaxQueuedBytes bounds the same
+// queue in bytes; whichever is reached first, the policy acts.
 func WithMaxQueuedNotifications(n int) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		if n > 0 {
 			cfg.maxQueuedNotifications = n
+		}
+	}
+}
+
+// WithMaxQueuedBytes sets the budget, in bytes, for what the connection holds
+// of its peer's unfinished messages: the lines of the notifications queued or
+// running and of the requests whose handlers run, each counted from its
+// receipt until its handler returns. The default is 64 MiB; a budget below
+// WithMaxMessageSize is raised to it, so one message always fits.
+//
+// A notification that would take the counted bytes past the budget, while a
+// notification is counted, meets the overflow policy as at
+// WithMaxQueuedNotifications' count: under OverflowBlock the reader pauses,
+// and reads on to twice the budget while the notification loop waits on this
+// connection; OverflowCloseConnection closes the connection, and
+// OverflowDropNewest drops the notification. Requests' bytes alone never
+// pause the reader, since a request's handler may wait for a response only
+// the reader delivers.
+//
+// A request that would take the counted bytes past the budget, while anything
+// is counted, is answered at once with -32603 and data {"error": "too many
+// queued bytes", "limit": n}, and its handler does not run, as
+// WithMaxConcurrentRequests refuses one; the reader never waits for a request
+// (0045-MADR-notification-queue-byte-budget.md).
+func WithMaxQueuedBytes(n int) ConnectionOption {
+	return func(cfg *connectionConfig) {
+		if n > 0 {
+			cfg.maxQueuedBytes = n
 		}
 	}
 }
@@ -548,7 +593,8 @@ func WithPromptOverlapPolicy(p PromptOverlapPolicy) ConnectionOption {
 // waits for a handler to end: a running handler may be waiting for a response
 // only the reader can deliver. Notifications and $/cancel_request are not
 // counted. n <= 0, the default, leaves requests unbounded
-// (0019-PLAN-api-decisions.md, B18).
+// (0019-PLAN-api-decisions.md, B18). WithMaxQueuedBytes refuses a request the
+// same way when its bytes would pass the connection's byte budget.
 func WithMaxConcurrentRequests(n int) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		cfg.maxConcurrentRequests = n
@@ -575,12 +621,13 @@ type NotificationOverflowPolicy int
 
 const (
 	// OverflowCloseConnection closes the connection when a notification cannot
-	// be queued, as Close does, its transport included, and in-flight requests
+	// be queued, at WithMaxQueuedNotifications' count or WithMaxQueuedBytes'
+	// budget, as Close does, its transport included, and in-flight requests
 	// fail, with ErrNotificationQueueOverflow.
 	OverflowCloseConnection NotificationOverflowPolicy = iota
 
-	// OverflowDropNewest discards the notification that could not be queued and
-	// keeps the connection open. Notifications that are delivered keep their
+	// OverflowDropNewest discards the notification that could not be queued,
+	// at the count or the byte budget, and keeps the connection open. Notifications that are delivered keep their
 	// relative order; the dropped one is never delivered and is not retried.
 	//
 	// Choosing it means accepting loss, so observe it: install a handler with
@@ -596,9 +643,10 @@ const (
 	//     agent working on a turn its client has abandoned.
 	OverflowDropNewest
 
-	// OverflowBlock stops reading the peer while the queue is full, until a
-	// notification handler returns, so the peer's writes wait and nothing is
-	// dropped or closed. This is the default.
+	// OverflowBlock stops reading the peer while the queue is full, at the
+	// count or the byte budget, until a notification handler returns, so the
+	// peer's writes wait and nothing is dropped or closed. This is the
+	// default.
 	//
 	// While the queue is full nothing else is read either: a response, a
 	// request and a $/cancel_request wait behind it. A request still returns
@@ -608,8 +656,9 @@ const (
 	// While the notification loop waits on this connection, for the answer to
 	// a request the running notification handler sent under its context, or
 	// for the answer to an initialize in flight, which held notifications wait
-	// for, the reader reads on, to twice the queue's size. Past that it closes
-	// the connection as OverflowCloseConnection does. A pause that lasts five
+	// for, the reader reads on, to twice the queue's size or twice the byte
+	// budget. Past that it closes the connection as OverflowCloseConnection
+	// does. A pause that lasts five
 	// seconds is logged at Warn.
 	//
 	// A notification handler must therefore not wait for a request or a
@@ -753,12 +802,16 @@ type ClientConnAware interface {
 func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *Connection {
 	cfg := connectionConfig{
 		maxQueuedNotifications: defaultMaxQueuedNotifications,
+		maxQueuedBytes:         defaultMaxQueuedBytes,
 		maxMessageSize:         defaultMaxMessageSize,
 		notificationOverflow:   OverflowBlock,
 	}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	// One message the reader accepts always fits the byte budget
+	// (0045-MADR-notification-queue-byte-budget.md, D4).
+	cfg.maxQueuedBytes = max(cfg.maxQueuedBytes, cfg.maxMessageSize)
 	if p := cfg.notificationOverflow; p != OverflowCloseConnection && p != OverflowDropNewest && p != OverflowBlock {
 		// An undefined policy is the default
 		// (0044-MADR-notification-queue-back-pressure.md, D9).
@@ -791,6 +844,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		inputDone:           make(chan struct{}),
 		notificationQueue:   make(chan queuedNotification, queueCap),
 		queueLimit:          cfg.maxQueuedNotifications,
+		byteLimit:           int64(cfg.maxQueuedBytes),
 		maxMessageSize:      cfg.maxMessageSize,
 
 		notificationOverflow:  cfg.notificationOverflow,
@@ -1077,6 +1131,17 @@ func (c *Connection) DroppedNotifications() uint64 {
 // (0038-MADR-consumer-helpers-kind-and-agent-refusals.md, question 3).
 func (c *Connection) RefusedMessages() uint64 {
 	return c.refusedMessages.Load()
+}
+
+// QueuedBytes reports the bytes this connection holds of its peer's unfinished
+// messages, as WithMaxQueuedBytes counts them: the lines of the notifications
+// queued or running and of the requests whose handlers run. It is 0 when
+// every handler has returned (0045-MADR-notification-queue-byte-budget.md,
+// D7).
+func (c *Connection) QueuedBytes() int64 {
+	c.notifyMu.Lock()
+	defer c.notifyMu.Unlock()
+	return c.queuedBytes
 }
 
 // dropNotification records a notification discarded under OverflowDropNewest.
@@ -1511,6 +1576,9 @@ func requestFault(env *envelope) (json.RawMessage, string) {
 // answered (0017-MADR-remediate-acp-v1-conformance-violations.md, J1). It
 // returns false when the connection has shut down.
 func (c *Connection) receiveLine(line []byte, received *uint64) bool {
+	// size is what the message counts against the byte budget until its
+	// handler returns (0045-MADR-notification-queue-byte-budget.md, D2).
+	size := int64(len(line))
 	// A message's content is never logged: it may hold prompt text or file
 	// contents. Its size, the fault and a valid id are
 	// (0019-PLAN-behaviour-fixes.md, B15).
@@ -1572,6 +1640,16 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 			return true
 		}
 	}
+	// A request past the byte budget is refused the same way, never waited
+	// for (0045-MADR-notification-queue-byte-budget.md, D6).
+	if msg.ID != nil && !c.admitRequestBytes(size) {
+		if c.requestSlots != nil {
+			<-c.requestSlots
+		}
+		c.loggerOrDefault().Debug("refused a request over the byte budget", "method", msg.Method, "size", size, "byte_limit", c.byteLimit)
+		c.answer(id, NewInternalError(map[string]any{jsonErrorField: "too many queued bytes", "limit": c.byteLimit}))
+		return true
+	}
 
 	*received++
 	if msg.ID != nil {
@@ -1591,6 +1669,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		if c.shuttingDown {
 			c.mu.Unlock()
 			cancel(nil)
+			c.releaseRequestBytes(size)
 			if c.requestSlots != nil {
 				<-c.requestSlots
 			}
@@ -1618,10 +1697,15 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		c.inboundRequests.Add(1)
 		c.goroutines.Go(func() {
 			defer c.inboundRequests.Done()
-			release := func() {}
-			if c.requestSlots != nil {
-				release = sync.OnceFunc(func() { <-c.requestSlots })
-			}
+			// release frees the request's slot and its bytes once, when its
+			// handler returns, before its answer is written
+			// (0045-MADR-notification-queue-byte-budget.md, D2).
+			release := sync.OnceFunc(func() {
+				c.releaseRequestBytes(size)
+				if c.requestSlots != nil {
+					<-c.requestSlots
+				}
+			})
 			defer func() {
 				release()
 				c.mu.Lock()
@@ -1638,55 +1722,72 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		return true
 	}
 
-	// Queue the notification for sequential processing. The sequence number marks
-	// the response-scoped barrier boundary for requests that observe later responses.
-	m := msg
+	return c.queueNotification(msg, *received, size)
+}
+
+// queueNotification queues a received notification for sequential processing,
+// or meets the overflow policy, and reports whether receive goes on. The
+// sequence number marks the response-scoped barrier boundary for requests that
+// observe later responses.
+func (c *Connection) queueNotification(m anyMessage, receipt uint64, size int64) bool {
 	c.notifyMu.Lock()
 	// Under OverflowBlock the reader waits for room before the notification
 	// takes a sequence number, so no response's watermark counts one it has
 	// not queued; past the wait, the select below queues it, or, at twice
 	// queueLimit, closes (0044-MADR-notification-queue-back-pressure.md, D2
-	// to D4).
-	if c.notificationOverflow == OverflowBlock && !c.waitForRoom() {
+	// to D4). The byte budget acts as the count does: the wait covers it, and
+	// past it the notification meets the policy, at twice the budget under
+	// OverflowBlock (0045-MADR-notification-queue-byte-budget.md, D3 as
+	// amended).
+	if c.notificationOverflow == OverflowBlock && !c.waitForRoom(size) {
 		c.notifyMu.Unlock()
 		c.shutdownReceive(context.Cause(c.ctx))
 		return false
 	}
 	c.lastEnqueuedNotificationSeq++
 	seq := c.lastEnqueuedNotificationSeq
-	select {
-	case c.notificationQueue <- queuedNotification{seq: seq, receipt: *received, msg: &m}:
-		c.notifyMu.Unlock()
-	default:
-		if c.lastEnqueuedNotificationSeq != seq {
-			c.notifyMu.Unlock()
-			panic("notification sequence advanced while receive goroutine was queueing")
+	queued := false
+	if !c.overByteBudget(size, c.notificationOverflow == OverflowBlock) {
+		select {
+		case c.notificationQueue <- queuedNotification{seq: seq, receipt: receipt, msg: &m, size: size}:
+			c.queuedBytes += size
+			c.notifBytes += size
+			queued = true
+		default:
 		}
-		c.lastEnqueuedNotificationSeq--
-		// invariant: completedNotificationSeq never exceeds the highest accepted enqueue.
-		if c.completedNotificationSeq > c.lastEnqueuedNotificationSeq {
-			c.notifyMu.Unlock()
-			panic("completed notification sequence exceeded enqueued notification sequence")
-		}
-		c.notifyMu.Unlock()
-		if c.notificationOverflow == OverflowDropNewest {
-			// The rollback above released this notification's sequence
-			// number, so the next one reuses it and ordering stays
-			// contiguous. The reader must not block here: responses are
-			// dispatched on this goroutine too.
-			c.dropNotification(m.Method)
-			return true
-		}
-		c.loggerOrDefault().Error("failed to queue notification; closing connection", "err", ErrNotificationQueueOverflow, "capacity", c.queueLimit, "queued", len(c.notificationQueue))
-		// The policy closes the connection, its transport included
-		// (0019-PLAN-api-decisions.md, B17).
-		if err := c.closeWith(ErrNotificationQueueOverflow); err != nil {
-			c.loggerOrDefault().Debug("closing the transport after a notification overflow", "err", err)
-		}
-		c.shutdownReceive(ErrNotificationQueueOverflow)
-		return false
 	}
-	return true
+	if queued {
+		c.notifyMu.Unlock()
+		return true
+	}
+	if c.lastEnqueuedNotificationSeq != seq {
+		c.notifyMu.Unlock()
+		panic("notification sequence advanced while receive goroutine was queueing")
+	}
+	c.lastEnqueuedNotificationSeq--
+	// invariant: completedNotificationSeq never exceeds the highest accepted enqueue.
+	if c.completedNotificationSeq > c.lastEnqueuedNotificationSeq {
+		c.notifyMu.Unlock()
+		panic("completed notification sequence exceeded enqueued notification sequence")
+	}
+	counted := c.queuedBytes
+	c.notifyMu.Unlock()
+	if c.notificationOverflow == OverflowDropNewest {
+		// The rollback above released this notification's sequence
+		// number, so the next one reuses it and ordering stays
+		// contiguous. The reader must not block here: responses are
+		// dispatched on this goroutine too.
+		c.dropNotification(m.Method)
+		return true
+	}
+	c.loggerOrDefault().Error("failed to queue notification; closing connection", "err", ErrNotificationQueueOverflow, "capacity", c.queueLimit, "queued", len(c.notificationQueue), "bytes", counted, "size", size, "byte_limit", c.byteLimit)
+	// The policy closes the connection, its transport included
+	// (0019-PLAN-api-decisions.md, B17).
+	if err := c.closeWith(ErrNotificationQueueOverflow); err != nil {
+		c.loggerOrDefault().Debug("closing the transport after a notification overflow", "err", err)
+	}
+	c.shutdownReceive(ErrNotificationQueueOverflow)
+	return false
 }
 
 // keepCancel keeps receipt, a session/cancel's or a session close's, as the
@@ -1833,6 +1934,10 @@ func (c *Connection) processNotifications() {
 			panic("notification sequence completed out of order")
 		}
 		c.completedNotificationSeq = queued.seq
+		// The bytes are let go with the count, as the handler returns
+		// (0045-MADR-notification-queue-byte-budget.md, D2).
+		c.queuedBytes -= queued.size
+		c.notifBytes -= queued.size
 		if c.completedNotificationSeq > c.lastEnqueuedNotificationSeq {
 			c.notifyMu.Unlock()
 			panic("completed notification sequence exceeded enqueued notification sequence")
@@ -1853,14 +1958,20 @@ func (c *Connection) processNotifications() {
 // A pause that lasts pauseWarnAfter is logged once. The caller holds notifyMu,
 // which the wait releases and takes again. It reports whether the connection
 // still lives (0044-MADR-notification-queue-back-pressure.md, D2, D3 and D5).
-func (c *Connection) waitForRoom() bool {
+//
+// It also waits while a notification of size bytes would pass the byte
+// budget, as overByteBudget tells; requests' release of their bytes wakes it
+// too (0045-MADR-notification-queue-byte-budget.md, D3 as amended).
+func (c *Connection) waitForRoom(size int64) bool {
 	full := func() bool {
-		return c.lastEnqueuedNotificationSeq-c.completedNotificationSeq > uint64(c.queueLimit) && c.peerWaits == 0 && c.ctx.Err() == nil //nolint:gosec // G115: queueLimit is at least 1, since WithMaxQueuedNotifications ignores n <= 0.
+		countFull := c.lastEnqueuedNotificationSeq-c.completedNotificationSeq > uint64(c.queueLimit) //nolint:gosec // G115: queueLimit is at least 1, since WithMaxQueuedNotifications ignores n <= 0.
+		return (countFull || c.overByteBudget(size, false)) && c.peerWaits == 0 && c.ctx.Err() == nil
 	}
 	if full() {
 		start := time.Now()
+		counted := c.queuedBytes
 		warn := time.AfterFunc(pauseWarnAfter, func() {
-			c.loggerOrDefault().Warn("notification queue full; reading paused", "capacity", c.queueLimit, "paused", time.Since(start))
+			c.loggerOrDefault().Warn("notification queue full; reading paused", "capacity", c.queueLimit, "paused", time.Since(start), "bytes", counted, "size", size, "byte_limit", c.byteLimit)
 		})
 		for full() {
 			c.notifyCond.Wait()
@@ -1868,6 +1979,43 @@ func (c *Connection) waitForRoom() bool {
 		warn.Stop()
 	}
 	return c.ctx.Err() == nil
+}
+
+// overByteBudget reports whether a notification of size bytes would take the
+// counted bytes past the byte budget while a notification is counted, or,
+// when readOn is set, past twice the budget, OverflowBlock's read-on limit.
+// Requests' bytes count toward the total but never trigger it alone: a
+// notification is admitted when none is counted. The caller holds notifyMu
+// (0045-MADR-notification-queue-byte-budget.md, D3 as amended).
+func (c *Connection) overByteBudget(size int64, readOn bool) bool {
+	limit := c.byteLimit
+	if readOn {
+		limit *= 2
+	}
+	return c.notifBytes > 0 && c.queuedBytes+size > limit
+}
+
+// admitRequestBytes counts a request's size bytes against the byte budget and
+// reports true, or, when they would take the counted bytes past it while
+// anything is counted, counts nothing and reports false, for the request to be
+// refused at once (0045-MADR-notification-queue-byte-budget.md, D6).
+func (c *Connection) admitRequestBytes(size int64) bool {
+	c.notifyMu.Lock()
+	defer c.notifyMu.Unlock()
+	if c.queuedBytes > 0 && c.queuedBytes+size > c.byteLimit {
+		return false
+	}
+	c.queuedBytes += size
+	return true
+}
+
+// releaseRequestBytes lets go of a request's size bytes as its handler
+// returns, and wakes a reader paused on the budget.
+func (c *Connection) releaseRequestBytes(size int64) {
+	c.notifyMu.Lock()
+	c.queuedBytes -= size
+	c.notifyCond.Broadcast()
+	c.notifyMu.Unlock()
 }
 
 // beginPeerWait counts a wait of the notification loop on this connection and

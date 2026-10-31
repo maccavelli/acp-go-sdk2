@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-31
 decision-makers: the repository owner
 consulted: the sources of Codex, Kilo Code, opencode and Grok Build; the ACP TypeScript, Rust and Python SDKs; golang.org/x/net/http2, gRPC-Go, net/http, coder/websocket, golang.org/x/tools jsonrpc2, the MCP Go SDK and vscode-jsonrpc, at the revisions under "Sources"
@@ -121,6 +121,20 @@ The parts of the decision:
     then closes with `ErrNotificationQueueOverflow`, as 0044 D4 does at twice the count.
   * `OverflowCloseConnection`: the connection closes with `ErrNotificationQueueOverflow`.
   * `OverflowDropNewest`: the notification is dropped, counted by `DroppedNotifications` and passed to the drop handler.
+
+  *Amended 2026-10-31, before phase 1's code (the PLAN's deviation 1): "while anything is counted" becomes "while a
+  notification is counted".*
+  * A notification triggers its policy when the counted bytes, requests' and notifications' together, plus its line would pass
+    the budget, **and** a notification is counted.
+  * As written, with requests counted (D6), a reader under `OverflowBlock` could pause on a request's bytes. That request's
+    handler may await a response from the peer, which only the reader delivers (`connection.go:1529`). 0044 D3's guard
+    covers requests sent from a notification handler's context, and `initialize`, but not those a request handler sends. So the
+    reader would wait for the handler and the handler for the reader, until the connection ended.
+  * Gated on notifications, a pause ends as notification handlers return, which is 0044's model, with its guard unchanged.
+  * Requests are still refused at once past the budget (D6). The bound stays the budget plus one line, at most
+    `WithMaxMessageSize`, or twice the budget while reading on.
+  * The owner chose this over keeping separate accounts for requests and notifications, which loosens the bound to about twice
+    the budget, and over extending 0044's guard to request handlers, under which the budget would rarely bind.
 * **D4. The budget is never smaller than one message.** A budget below `WithMaxMessageSize` is raised to it, so a single message
   the reader accepts always fits when nothing else is counted (F8; the invariant Codex's and TypeScript's two-to-one sizing
   gives).
@@ -156,7 +170,8 @@ The parts of the decision:
 * Q1: **(a) 64 MiB.**
 * Q2: **(a) One budget for requests and notifications.**
 
-Both are the recommended answers; D5 and D6 above state them. The decision stays `proposed` until the owner accepts it.
+Both are the recommended answers; D5 and D6 above state them. The owner accepted the decision on 2026-10-31 ("accept and
+approve, proceed with 0011 then 0045"), and D3 was amended the same day, before phase 1's code.
 
 ### Consequences
 
@@ -187,9 +202,12 @@ new test is seen to fail on a planted break in a scratch copy.
 4. A budget below `WithMaxMessageSize` is raised to it, and a single maximum-size line is accepted when nothing is counted.
 5. The bytes counted return to 0 when every handler has returned, and `QueuedBytes()` reports them.
 6. With Q2 (a), a request past the budget is answered `-32603` with the limit, and its handler does not run.
-7. The existing queue, barrier, overflow and hold tests pass unchanged.
-8. `make api` reports only compatible additions.
-9. `tools/gates.py --all` and CI pass.
+7. Requests' bytes alone never pause or refuse a notification (D3 as amended). With requests holding the budget and no
+   notification counted, a notification is admitted. A request handler that awaits the peer's response while notifications
+   arrive gets it.
+8. The existing queue, barrier, overflow and hold tests pass unchanged.
+9. `make api` reports only compatible additions.
+10. `tools/gates.py --all` and CI pass.
 
 ## Pros and Cons of the Options
 
