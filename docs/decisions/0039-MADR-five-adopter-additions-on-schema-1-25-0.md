@@ -355,7 +355,7 @@ lives here, once.
 
 **Problem.** ACP's supported extension surface is `_` methods plus `_meta`. This SDK's API for it is one
 `HandleExtensionMethod` that takes `json.RawMessage`, and `CallExtension` that returns `json.RawMessage`. Callers switch on
-strings and decode by hand. 0035 recorded `<cli-b>`'s mux, on `encoding/json/v2`, which this module's floor (Go 1.26.10) and
+strings and decode by hand. 0035 recorded gobble-cli's mux, on `encoding/json/v2`, which this module's floor (Go 1.26.10) and
 CI's `GOEXPERIMENT=nojsonv2` job do not build. 0035 F listed "an extension-method mux" among shapes "not recommended now", because
 each consumer's policy differs. This item reverses that, for its dispatch core only: the extensibility page fixes the `_` prefix,
 the method-not-found answer to an unknown request, and that implementations "SHOULD ignore unrecognized notifications", so the
@@ -395,10 +395,10 @@ not collide with a vendor field at the root.
 
 #### 5. Package `acptest`
 
-**Problem.** 0035 D1: `<cli-b>`'s `acptest` is about 1,300 lines (`Connect` over two `io.Pipe`s, a frame recorder with goldens, host
+**Problem.** 0035 D1: gobble-cli's `acptest` is about 1,300 lines (`Connect` over two `io.Pipe`s, a frame recorder with goldens, host
 `Abs` because this SDK checks received paths with the host's `filepath.IsAbs`, a fake Client, a scripted Agent). magic-cli-remote
 has a byte-level scripted peer and an initialize fixture. This repository's tests call `io.Pipe()` 124 times across 27 files.
-`<cli-b>`'s recorder imports `encoding/json/v2` and `jsontext`, which fail at this module's Go 1.26.10 floor and under
+gobble-cli's recorder imports `encoding/json/v2` and `jsontext`, which fail at this module's Go 1.26.10 floor and under
 `GOEXPERIMENT=nojsonv2`. 0024 listed "easy to test" as already true of the transport (`io.Reader` / `io.Writer`) and false of the
 package surface: there is no supported way to stand up a pair, record frames, or script a peer.
 
@@ -407,7 +407,7 @@ package surface: there is no supported way to stand up a pair, record frames, or
 * `func Connect(t testing.TB, agent acp.Agent, client acp.Client, opts ...acp.ConnectionOption) Pair` — two pipes, both side
   connections, cleanup that `Close`s and `Wait`s both, so the root leak guard stays green
 * `type Pair struct` with `Agent *acp.AgentSideConnection`, `Client *acp.ClientSideConnection`, `Close() error`, `Wait() error`
-* `func Abs(path string) string` — makes a POSIX-looking fixture path absolute on the host, as `<cli-b>`'s `acptest` does (0035
+* `func Abs(path string) string` — makes a POSIX-looking fixture path absolute on the host, as gobble-cli's `acptest` does (0035
   D1), because inbound `Validate` uses `filepath.IsAbs`; this repository's tests have the same helper, `testAbsPath`
   (`paths_test.go:24`)
 * `type Recorder struct` — an `io.Writer` / `io.Reader` pair that copies each newline-terminated frame; `Frames() []json.RawMessage`
@@ -530,7 +530,7 @@ done". The release carries all five additions.
 * Bad, because package `unstable` is a new import path whose contents will churn, and a user who imports it must read that
   documentation.
 * Bad, because deprecated stubs for removed unstable names accumulate in `acp` until a `/v2`.
-* Bad, because `acptest` is a new exported package that `make api` must compare from an empty baseline, and `<cli-b>` would still
+* Bad, because `acptest` is a new exported package that `make api` must compare from an empty baseline, and gobble-cli would still
   need to amend its import rule or keep a wrapper (0035 D1).
 
 ### Confirmation
@@ -652,8 +652,8 @@ decision and its five items are unchanged. What changed:
 | PR #1154 closed compactions left open at turn end | it is in `claude-agent-acp`, merged 2026-09-22, and closes compactions on interrupted prompts | corrected |
 | Rust `agent-client-protocol` minors track schema tags; `unstable_nes` a current feature | the schema crate is `agent-client-protocol-schema`, one release per tag under its own numbers; `unstable_nes` was removed in `1.12.0` | corrected |
 | 0025's 115 / 40 | confirmed, measured against `v1.17.1` | baseline named; a PLAN re-measures |
-| 0035 recorded both consumers built a mux | 0035 names `<cli-b>`'s only, and lists a mux as "not recommended now" (0035 F) | corrected; item 4 states the reversal and its reason |
-| `Abs` is a helper 0035 recorded both consumers need | 0035 names `<cli-b>`'s; this repository has `testAbsPath` | corrected |
+| 0035 recorded both consumers built a mux | 0035 names gobble-cli's only, and lists a mux as "not recommended now" (0035 F) | corrected; item 4 states the reversal and its reason |
+| `Abs` is a helper 0035 recorded both consumers need | 0035 names gobble-cli's; this repository has `testAbsPath` | corrected |
 | `ScriptAgent`'s "ungated methods embed `AgentRefusals`" | `AgentRefusals` holds the five gated methods | corrected; the dependency on 0038's step 4 named |
 | new unstable definitions emit only into `unstable` | a separate package cannot add a field, a variant or a method to an `acp` type | item 1 states the limit; question 5 added |
 | existing unstable names get `Deprecated:` paragraphs | the generator refuses a note on a node the schema does not mark | item 1 names the generator change |
@@ -725,3 +725,5 @@ is the MADR of its own that "Out of scope" asked for. It decides the WebSocket h
 remote transport, Streamable HTTP and WebSocket, in package `remote`. Its WebSocket implementation, `github.com/coder/websocket`
 v1.8.15, is the dependency named there. Unix sockets stay out of scope; 0043 lists them under "Not in this record". Like
 `unstable`, item 1 here, `remote` is outside the compatibility promise, and `make api` reports its changes without gating them.
+
+*Note, 2026-10-31: gobble-cli was written `<cli-b>` in this record until the owner lifted that redaction ([0044-PLAN-notification-queue-back-pressure.md](0044-PLAN-notification-queue-back-pressure.md), phase 5).*

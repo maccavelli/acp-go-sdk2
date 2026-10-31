@@ -1103,24 +1103,25 @@ Planted breaks, by `tools/plants.py`, each in its own copy of the working tree: 
 `docs/reports/0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md`, new, with its rows in `docs/README.md`: the index, and an "I
 want to…" row. It decides nothing.
 
-**Read at the heads:** magic-cli-remote at `5d1e7e2c`, and `<cli-b>` at `5fb6928`, with its uncommitted record edits. Both still
+**Read at the heads:** magic-cli-remote at `5d1e7e2c`, and gobble-cli at `5fb6928`, with its uncommitted record edits. Both still
 pin `v1.20.0`.
 * A scratch script printed each site's lines, and every site the MADR found was there.
-* Another counted `<cli-b>`'s harness and its uses, and the calls that are its stubs, its extension dispatch and its command
+* Another counted gobble-cli's harness and its uses, and the calls that are its stubs, its extension dispatch and its command
   resolution.
 
 **What it found that the MADR stated otherwise:**
 * **magic-cli-remote's 0207 MADR** at `:281`–`:286` now records `v1.21.0` to `v1.24.0` and a deferral to assess them. Only its D24
   and D38 still call `v1.20.0` the newest tag.
-* **`<cli-b>`'s `acptest`** is 891 lines without its tests and 1,280 with them, and is used 385 times. The MADR gave 1,270 and
+* **gobble-cli's `acptest`** is 891 lines without its tests and 1,280 with them, and is used 385 times. The MADR gave 1,270 and
   about 380.
-* **`<cli-b>`'s D6** asks for `ValidateGolden(t, path)`. The report gives the mapping from its goldens' `client→agent` and
+* **gobble-cli's D6** asks for `ValidateGolden(t, path)`. The report gives the mapping from its goldens' `client→agent` and
   `agent→client` prefixes to `Sent` and `Received`.
 
 These are observations of the consumers at a later head. They change no decision, so the MADR is not amended.
 
 **Redaction:** the report first quoted 0031's line with the second consumer's name in it. It was redacted to `<cli-b>`, and
-`tools/idscan.py` and a count of the name confirm none is left.
+`tools/idscan.py` and a count of the name confirm none is left. *Note, 2026-10-31: the owner lifted that redaction, and the records now name gobble-cli
+([0044-PLAN-notification-queue-back-pressure.md](0044-PLAN-notification-queue-back-pressure.md), phase 5).*
 
 **Gates:**
 * The first `make markdownlint` failed with 39 findings in the report, MD004 and MD032. A report is under the fleet's style, which

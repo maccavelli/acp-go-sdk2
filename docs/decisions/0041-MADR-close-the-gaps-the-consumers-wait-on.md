@@ -9,14 +9,14 @@ decision-makers: Repository owner
 ## Context and Problem Statement
 
 The owner asked, on 2026-10-27, which units of work across this repository's records are still not done, especially those
-magic-cli-remote and `<cli-b>` wait on, and for ten items that would close the gaps between this SDK and those two consumers,
+magic-cli-remote and gobble-cli wait on, and for ten items that would close the gaps between this SDK and those two consumers,
 including the `TestDetachedTapIsPrefix` failure found in
 [0040-PLAN-check-elicitation-forms-answers-and-urls.md](0040-PLAN-check-elicitation-forms-answers-and-urls.md)'s release.
-`<cli-b>` stands for the second consumer, as in
+gobble-cli is the second consumer, as in
 [0035-REPORT-consumer-acp-code-for-the-sdk.md](../reports/0035-REPORT-consumer-acp-code-for-the-sdk.md).
 
 Findings, from a read-only investigation at `2200989` (`v1.24.0`) on 2026-10-27, of this repository's records and of both
-consumers: magic-cli-remote at its current `main`, and `<cli-b>` at its current `main`, including its uncommitted records.
+consumers: magic-cli-remote at its current `main`, and gobble-cli at its current `main`, including its uncommitted records.
 
 ### What this repository has left open
 
@@ -29,7 +29,7 @@ is what the records deferred:
 | 0035 C5 | client file reads and writes with `line` and `limit`, a missing file as `-32002` | unbuilt |
 | 0035 C6 | `Negotiation.AllowsValue`, the value gates exposed | unbuilt |
 | 0035 C7 | `agentproc.LineTap`, a tap's bytes as frames | unbuilt |
-| 0035 D1, `<cli-b>`'s 0016 D6 | `acptest.ValidateGolden`, and the parts of `<cli-b>`'s harness 0039's `acptest` lacks | unbuilt |
+| 0035 D1, gobble-cli's 0016 D6 | `acptest.ValidateGolden`, and the parts of gobble-cli's harness 0039's `acptest` lacks | unbuilt |
 | 0035 E1 | a bounded `Wait` | decided against in [0026-MADR-connection-end-cause-and-wait.md](0026-MADR-connection-end-cause-and-wait.md), question 4 |
 | 0035 E4 | the agent's exit versus the connection's end | would amend [0027-MADR-agent-process-helper.md](0027-MADR-agent-process-helper.md) |
 | 0035 E2, E3 | the refuse code; `session/close` waiting for its turns | E2 reopens 0021; E3 no record decides |
@@ -41,7 +41,7 @@ Schema `1.26.0` stays deferred by the owner, and is not counted.
 
 ### What the consumers wait on, and what they have not adopted
 
-Both consumers pin `v1.20.0` (magic-cli-remote `go.mod:11`, `<cli-b>` `go.mod:15`), four minor releases behind, and call none of
+Both consumers pin `v1.20.0` (magic-cli-remote `go.mod:11`, gobble-cli `go.mod:15`), four minor releases behind, and call none of
 the API `v1.21.0` to `v1.24.0` added. That gap is theirs to close, under their own records, and most of it needs nothing new here:
 
 * **magic-cli-remote** still has, among others:
@@ -50,7 +50,7 @@ the API `v1.21.0` to `v1.24.0` added. That gap is theirs to close, under their o
   * a 300-line elicitation checker (`elicitation.go:151`–`:454`), which 0040's helpers replace;
   * grouped config options silently dropped (`session.go:2288`), which `SessionConfigSelectOptions.All()` covers;
   * error classification by literal code (`runtime.go:342`–`:347`).
-* **`<cli-b>`** still has, among others:
+* **gobble-cli** still has, among others:
   * a 1,270-line `acptest` of its own (`acpclient/acptest/`), used about 380 times;
   * eleven refusal stubs, which `ClientRefusals` and `AgentRefusals` cover;
   * an extension dispatcher, which `ExtensionMux` covers, though its agent side decodes with `encoding/json/v2`;
@@ -60,26 +60,26 @@ Records of theirs are stale against this repository:
 * magic-cli-remote's `0207-MADR-move-to-current-library-releases-and-close-the-adoption-gaps.md` still says `v1.20.0` "is the
   newest tag";
 * its 0184 PLAN lists issue #4 as open, though #4 was closed on 2026-10-15;
-* `<cli-b>`'s 0034 pair targets `v1.21.0`.
+* gobble-cli's 0034 pair targets `v1.21.0`.
 
 What the consumers wait on from this SDK, in their own words or code, is a shorter list:
 
 * **A default client for the file system and terminals.**
-  * `<cli-b>`'s `0031-MADR-sdk-current-releases-and-adoption.md:98`–`:99`: "acp-go-sdk2: … a default client for fs, terminal and
-    elicitation (`<cli-b>`'s stubs stay). `<cli-b>` keeps these until the SDKs have them."
+  * gobble-cli's `0031-MADR-sdk-current-releases-and-adoption.md:98`–`:99`: "acp-go-sdk2: … a default client for fs, terminal and
+    elicitation (gobble-cli's stubs stay). gobble-cli keeps these until the SDKs have them."
   * magic-cli-remote's terminal host (`terminal.go:20`–`:330`) breaks the schema's "The Client MUST ensure truncation happens at a
     character boundary" (`types_gen.go:4126`). Its own comment at `:278` says: "Drop from the front at a byte boundary (may split
     UTF-8; acceptable for tool output)."
   * Its file reads answer a missing file `-32603`, not `-32002` (`session.go:2648`–`:2673`).
-* **A bounded wait for a connection's goroutines.** `<cli-b>` keeps three copies of `handlersDone(wait, limit)`:
+* **A bounded wait for a connection's goroutines.** gobble-cli keeps three copies of `handlersDone(wait, limit)`:
   `acpclient/conn.go:207`, `acpserver/serve.go:71` and `acpclient/acptest/pair.go:65`. This SDK's own `acptest.Connect` cleanup
   waits with no bound (`acptest/pair.go:34`).
 * **Knowing why a connection or an agent ended.**
-  * `<cli-b>`'s `acpserver/serve.go:58`–`:66` takes `io.EOF` and `ErrConnectionClosed` as a normal end. That also takes the
+  * gobble-cli's `acpserver/serve.go:58`–`:66` takes `io.EOF` and `ErrConnectionClosed` as a normal end. That also takes the
     overflow policy's close, which wraps `ErrConnectionClosed`, as normal.
   * magic-cli-remote waits a fixed `exitPreference = 500 * time.Millisecond` (`session.go:1304`) so that the agent's exit status
     wins over the connection's end. Its 0207 PLAN saw the connection end first in 28 of 30 runs (0035 E4).
-* **The rest of a test harness.** `<cli-b>`'s 0016 MADR D6 asks for `ValidateGolden`. Its harness records each frame's
+* **The rest of a test harness.** gobble-cli's 0016 MADR D6 asks for `ValidateGolden`. Its harness records each frame's
   direction, waits for a number of frames, and scripts terminals and error turns (`acpclient/acptest/recorder.go:101`–`:191`,
   `client.go:154`–`:284`). This SDK's `acptest` does none of these, and its `Connect` cannot attach a `Recorder`.
 * **Checking a value before it is sent.** magic-cli-remote drops MCP servers and image blocks the agent did not advertise before it
@@ -89,7 +89,7 @@ What the consumers wait on from this SDK, in their own words or code, is a short
   (`plans.go:73`). Of the 17 generated unions, 6 have `Kind()`. Six stable ones do not: `AuthMethod`, `CreateElicitationRequest`,
   `CreateElicitationResponse`, `McpServer`, `MultiSelectItems` and `SetSessionConfigOptionRequest`. Nor do five unstable-origin
   ones, among them `PlanUpdateContent` (counted by a script over `types_gen.go`).
-* **Tool-call state.** `<cli-b>`'s CLI merges `tool_call` and `tool_call_update` by hand (`internal/cli/view.go:146`–`:165`). The
+* **Tool-call state.** gobble-cli's CLI merges `tool_call` and `tool_call_update` by hand (`internal/cli/view.go:146`–`:165`). The
   schema states the rules: `ToolCallUpdate` is "An update to an existing tool call"; "All fields except the tool call ID are
   optional - only changed fields need to be included"; its `content` and `locations` each "Replace the … collection". The
   v1 tool-calls page adds that omission and `null` leave a `name` unchanged, and the raw values too, and is silent on an update for
@@ -144,7 +144,7 @@ shape?
   5. `agentproc.LineTap`;
   6. a bounded wait;
   7. end causes: a clean-end classifier, and the agent's exit order;
-  8. `acptest` for what `<cli-b>`'s harness does;
+  8. `acptest` for what gobble-cli's harness does;
   9. a tool-call timeline;
   10. `Kind()` on the remaining unions.
 * **O2.** The same ten, as four records: `agentproc` (1, 5, 7's exit order), the client hosts (2, 3), the core helpers (4, 6, 7's
@@ -200,7 +200,7 @@ An unknown terminal id is `NewResourceNotFound`.
 * a write that creates the file and, by an option, its parent directories.
 
 Confining paths to a session's roots stays the consumer's (0035 C5); `Roots()` gives them. In the root package,
-`IsResourceNotFound(err)` beside `IsMethodNotFound`, for an agent reading a client's answer (`<cli-b>`'s `acpserver/clientfs.go`).
+`IsResourceNotFound(err)` beside `IsMethodNotFound`, for an agent reading a client's answer (gobble-cli's `acpserver/clientfs.go`).
 
 #### 4. `Negotiation.AllowsValue`
 
@@ -228,18 +228,18 @@ bound of its own and fails the test when a handler outlives it.
 * `func (p *Process) ExitedFirst() bool` in `agentproc` (question 3, which amends 0027). It is true when the agent's exit was seen
   before the connection's end, final once `Wait` has returned, so a client reports the exit status without waiting on a timer.
 
-#### 8. `acptest` for what `<cli-b>`'s harness does
+#### 8. `acptest` for what gobble-cli's harness does
 
 **Add.**
 * `ConnectRecorded(tb, agent, client, rec, opts...)`, which records both directions into `rec`.
 * `Recorder` frames carry their direction; `Recorder.Wait(ctx, n)` waits for `n` frames.
 * `ValidateGolden(tb, frames)`: each frame decoded into its method's type, a response by its request's, then `Validate`, failing
-  on an error or an unknown method (`<cli-b>`'s 0016 D6).
+  on an error or an unknown method (gobble-cli's 0016 D6).
 * `ScriptAgent` turns that answer an error, report `Usage`, or wait for `session/cancel`.
 * `MemoryClient` answering elicitations from a script, through 0040's helpers, and terminals through item 2's `Terminals` with a
   scripted command builder.
 
-The canonical form stays `encoding/json` v1, as 0039 decided. `<cli-b>`'s RFC 8785 transcript and its goldens' file layout stay
+The canonical form stays `encoding/json` v1, as 0039 decided. gobble-cli's RFC 8785 transcript and its goldens' file layout stay
 its own.
 
 #### 9. A tool-call timeline
@@ -277,7 +277,7 @@ repository. It decides nothing; each consumer adopts under its own records.
      process, not the client's host.
 2. **A bounded wait (item 6), reopening 0026's question 4.**
    * Recommended: `WaitContext(ctx)`, as item 6 states. 0026 rejected `Wait(ctx)` because "a caller that needs a bound runs it on
-     a goroutine and selects". `<cli-b>`'s three copies are that pattern, and this SDK's own `acptest` needs it too.
+     a goroutine and selects". gobble-cli's three copies are that pattern, and this SDK's own `acptest` needs it too.
    * Alternative: no new method; `acptest.Connect`'s cleanup alone gains a bound. 0026 stands.
    * Alternative: leave both as they are.
 3. **The agent's exit order (item 7), amending 0027.**
@@ -436,7 +436,7 @@ record left as they were:
 
 * Good, because the defect that loses an agent's last output before it exits is fixed, with the failing test as its regression
   test.
-* Good, because a client gets a file system and terminals that follow the schema's MUSTs by embedding two types, which `<cli-b>`'s
+* Good, because a client gets a file system and terminals that follow the schema's MUSTs by embedding two types, which gobble-cli's
   records wait for and magic-cli-remote's terminal host breaks.
 * Good, because the consumers' hand-written waits, end checks, exit timers, tap splitters, value pre-checks and harness pieces each
   get one implementation here.
@@ -502,7 +502,7 @@ A later PLAN shows each of the following, every new check first seen to fail on 
 ### Not chosen, and why
 
 * (The in-process runner was decided on 2026-10-28 by 0042; see "Amended by 0042-MADR-in-process-agent-runner.md, 2026-10-28".)
-  **An in-process agent runner** (`<cli-b>`'s `acpclient.Start`) and **an exported process-tree primitive** (its
+  **An in-process agent runner** (gobble-cli's `acpclient.Start`) and **an exported process-tree primitive** (its
   `internal/proctree`): 0035 F, "`ServeAgent` and an in-process `agentproc`", not recommended; the tree primitive is not ACP's.
 * **Session-state reducers** beyond tool calls, **routing updates by session**, **chunk coalescing**: 0035 F, each consumer's
   policy.
@@ -510,7 +510,7 @@ A later PLAN shows each of the following, every new check first seen to fail on 
   record.
 * **The refuse code (E2)** and **`session/close` waiting for its turns (E3)**: E2 reopens 0021, and neither consumer's records
   wait on E3.
-* **`RequestError.Reason` reading a `reason` key:** `<cli-b>`'s own agent writes it; this SDK writes `error`.
+* **`RequestError.Reason` reading a `reason` key:** gobble-cli's own agent writes it; this SDK writes `error`.
 * **Schema `1.26.0`:** deferred by the owner.
 
 ### Sources
@@ -528,3 +528,5 @@ A later PLAN shows each of the following, every new check first seen to fail on 
 * `types_gen.go:4126`, the terminal truncation MUST
 * `acptest/pair.go:34`, `Connect`'s unbounded cleanup
 * `errors.go:310`, `:321`, `:330`: `IsMethodNotFound`, `IsAuthRequired`, `IsCancelled`; no `IsResourceNotFound`
+
+*Note, 2026-10-31: gobble-cli was written `<cli-b>` in this record until the owner lifted that redaction ([0044-PLAN-notification-queue-back-pressure.md](0044-PLAN-notification-queue-back-pressure.md), phase 5).*

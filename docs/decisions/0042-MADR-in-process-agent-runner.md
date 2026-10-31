@@ -19,7 +19,7 @@ Two earlier records declined this:
 * [0035-REPORT-consumer-acp-code-for-the-sdk.md](../reports/0035-REPORT-consumer-acp-code-for-the-sdk.md), section F: "`ServeAgent`
   and an in-process `agentproc`", among the items "generic in shape, but each consumer's policy differs".
 * [0041-MADR-close-the-gaps-the-consumers-wait-on.md](0041-MADR-close-the-gaps-the-consumers-wait-on.md), "Not chosen": "An in-process
-  agent runner (`<cli-b>`'s `acpclient.Start`)", not recommended, citing 0035 F.
+  agent runner (gobble-cli's `acpclient.Start`)", not recommended, citing 0035 F.
 
 The owner asked for an assessment of one shape of it, here O2: a runner for a serve function, whose `Start` returns the same
 `*agentproc.Process` a child process gets. This record collects the findings and the decision. The owner answered its seven questions on
@@ -58,20 +58,20 @@ said once ("Amended 2026-10-30, issue #12").
 
 ### Findings in the consumers
 
-* **C1. `<cli-b>` runs its own agent in-process, in production.** Read at `5fb6928`:
+* **C1. gobble-cli runs its own agent in-process, in production.** Read at `5fb6928`:
   * `acpclient.Start(ctx, serve ServeFunc, opts Options) (*Conn, error)` (`acpclient/conn.go:116`), with
     `type ServeFunc func(ctx context.Context, in io.Reader, out io.Writer) error` (`:33`);
   * the CLI's modes call it with `agentServe(e)`, which wraps `acpserver.Serve` (`internal/cli/agent.go:243`, `:263`). The same
-    `acpserver.Serve(ctx, in, out, opts)` (`acpserver/serve.go:28`) serves `<cli-b> acp` on stdio;
+    `acpserver.Serve(ctx, in, out, opts)` (`acpserver/serve.go:28`) serves `gobble acp` on stdio;
   * five test files call `acpclient.Start`.
-* **C2. What `<cli-b>`'s runner does:**
+* **C2. What gobble-cli's runner does:**
   * two `io.Pipe`s; `serve` runs on a goroutine with `context.WithoutCancel(ctx)`; when it returns, the pipe the client reads is
     closed with `CloseWithError(cmp.Or(err, io.EOF))`, so the client's reads end (`conn.go:117`–`:125`);
   * `Close` (`:179`–`:202`): close the agent's input, wait up to `closeTimeout` (5 s) for `serve`; then close the connection and wait
     up to `closeTimeout` again for its handlers (`handlersDone`, `:207`). It returns the agent's error joined with the connection's.
 * **C3. Its serve function's context is never cancelled.** `Start` passes `context.WithoutCancel(ctx)` (`conn.go:122`), and neither
   `Start` nor `Close` cancels it. The only stop signals the agent gets are its input's end and the pipes closing.
-* **C4. `<cli-b>`'s own design names the choice.** Its 0002 MADR: interactive commands "are `ClientSideConnection` calls, in-process
+* **C4. gobble-cli's own design names the choice.** Its 0002 MADR: interactive commands "are `ClientSideConnection` calls, in-process
   over pipes or to a spawned stdio child … The PLAN picks in-process vs child transport; this record requires that the bytes are
   ACP" (`docs/decisions/0002-MADR-cli-acp-headless-mcp-v1.md:200`–`:204`). Its 0031 MADR's D5 bounds every wait on the connection's
   end, since its notification handlers do not read their context
@@ -207,7 +207,7 @@ items 2 to 4, set out under "Items 2 to 4, added 2026-10-28".
   * It pins `v1.20.0` (`go.mod:11`). Its staged change moves `golang.org/x/net` only.
   * ACP serves grok alone: `acpagent.New` is called at `internal/provider/grok/grok.go:146`. Its 0214 MADR, `proposed`, plans
     OpenCode over ACP.
-* **K2. `<cli-b>`** at `5fb6928`.
+* **K2. gobble-cli** at `5fb6928`.
   * It is eight commits ahead of its remote's `6ee20140`, none of them touching ACP code.
   * It pins `v1.20.0`.
   * An untracked 0034 pair, `proposed`, plans `v1.21.0`'s constructors, `Kind()` and `ClientRefusals`. It keeps `session.golden`
@@ -218,13 +218,13 @@ items 2 to 4, set out under "Items 2 to 4, added 2026-10-28".
     MADR. Part of its premise is out of date: it says elicitation "is still method-not-found until L3". Form elicitation is now
     implemented and advertised (`internal/provider/acpagent/elicitation.go:31`–`:107`, `acpagent.go:1087`–`:1090`); only URL mode's
     `CompleteElicitation` refuses.
-  * **`<cli-b>` #5** is the agent-side twin. Its comments record `v1.21.0`'s release and that the adoption waits on its 0034 pair.
-  * **`<cli-b>` #3 and #4** concern go-llmprovider-sdk, not this SDK.
+  * **gobble-cli [#5](https://github.com/maccavelli/gobble-cli/issues/5)** is the agent-side twin. Its comments record `v1.21.0`'s release and that the adoption waits on its 0034 pair.
+  * **gobble-cli [#3](https://github.com/maccavelli/gobble-cli/issues/3) and [#4](https://github.com/maccavelli/gobble-cli/issues/4)** concern go-llmprovider-sdk, not this SDK.
   * Neither repository has an open pull request.
 
 #### Findings for item 2: serving an agent
 
-* **S1. `<cli-b>`'s `acpserver.Serve`** (`acpserver/serve.go:28`–`:53`):
+* **S1. gobble-cli's `acpserver.Serve`** (`acpserver/serve.go:28`–`:53`):
   * builds the side connection;
   * selects on `Done` or its context, and closes the connection when the context ends;
   * waits for the handlers within a bound (`handlersDone`);
@@ -234,7 +234,7 @@ items 2 to 4, set out under "Items 2 to 4, added 2026-10-28".
 * **S2. A second copy** is its harness's `ScriptAgent.Serve` (`acpclient/acptest/script.go:75`–`:91`), used as a serve function by
   three tests.
 * **S3. Its signal path loses the answers.**
-  * `<cli-b> acp` cancels its context on SIGINT, SIGTERM or SIGHUP (`internal/cli/signal.go:60`–`:89`). `Serve` then closes the
+  * `gobble acp` cancels its context on SIGINT, SIGTERM or SIGHUP (`internal/cli/signal.go:60`–`:89`). `Serve` then closes the
     connection at once (`serve.go:46`–`:52`).
   * By R3, a running `session/prompt` is then never answered, and the client sees only the end of the output.
   * This is inferred from the code and R3; it was not run.
@@ -273,15 +273,15 @@ items 2 to 4, set out under "Items 2 to 4, added 2026-10-28".
 * **W3. Its 0214 MADR's gate G1** asks for "One real ACP turn on a free model, recorded": text and thinking, a tool call with a
   permission, a form elicitation, a subagent, and usage (`0214-MADR-run-opencode-v2-over-acp-with-a-lease-bound-http-control-plane.md:563`–`:569`).
   A one-way capture records half of that turn.
-* **W4. `<cli-b>`'s goldens** are one line per frame: `client→agent` or `agent→client`, then RFC 8785 canonical JSON
+* **W4. gobble-cli's goldens** are one line per frame: `client→agent` or `agent→client`, then RFC 8785 canonical JSON
   (`acpclient/acptest/recorder.go:121`–`:133`). Its `Golden` (`:135`–`:162`):
   * rewrites the file when `ACPTEST_UPDATE=1` is set;
   * otherwise writes the actual transcript to `t.ArtifactDir()` and reports the first differing line.
-* **W5. `<cli-b>`'s 0016 MADR, D6:** "`acptest` gains `ValidateGolden(t, path)`"
+* **W5. gobble-cli's 0016 MADR, D6:** "`acptest` gains `ValidateGolden(t, path)`"
   (`0016-MADR-acp-go-sdk2-v0.15.0-and-stable-surface.md:207`). The SDK's `ValidateGolden` takes records, not a path, and reads
   neither consumer's files.
-* **W6. `<cli-b>`'s other test packages define `-update` flags** (`internal/cli/main_test.go:20` and two more). A package that
-  defined `-update` when imported would collide with them in any test binary that imports both. `<cli-b>`'s harness uses an
+* **W6. gobble-cli's other test packages define `-update` flags** (`internal/cli/main_test.go:20` and two more). A package that
+  defined `-update` when imported would collide with them in any test binary that imports both. gobble-cli's harness uses an
   environment variable instead.
 * **W7. RFC 8785 needs `encoding/json/v2`'s `jsontext.Canonicalize`.** This repository keeps off `encoding/json/v2` (its
   `nojsonv2` gate), and `acptest`'s canonical form is v1's
@@ -373,7 +373,7 @@ How each step of `Command`'s lifecycle maps onto a goroutine:
 What does not carry over, and is not offered: process groups and jobs, `Pdeathsig`, `Stderr` (the agent logs through its own
 logger), and an exit status.
 
-The handshake stays the client's, as with `Command`: `Start` sends no `initialize`. `<cli-b>`'s refusal wording and its connection
+The handshake stays the client's, as with `Command`: `Start` sends no `initialize`. gobble-cli's refusal wording and its connection
 options (C2) stay its own.
 
 The shape, as the owner's answers settled it:
@@ -403,7 +403,7 @@ The shape, as the owner's answers settled it:
 3. **Which pipes?**
    * (Corrected 2026-10-28, "Amended by the PLAN's phase 2": the cause reaches a blocked read or write only from the pipe's other
     end.) Recommended: `io.Pipe`. It uses no file descriptors, closes each direction on its own, and carries `ErrKilled` to a blocked read
-     or write (G1). It is what `acptest` and `<cli-b>` use. The cost is the taps' reader generalized from `*os.File`.
+     or write (G1). It is what `acptest` and gobble-cli use. The cost is the taps' reader generalized from `*os.File`.
    * Alternative: `os.Pipe`, byte for byte a child's pipes, with kernel buffering. It reuses the taps unchanged, but costs four
      descriptors per agent, and a close cannot carry a cause.
 4. **A `Serve` that never returns.**
@@ -479,7 +479,7 @@ func ServeAgent(ctx context.Context, agent Agent, in io.Reader, out io.Writer, o
 * The agent's own cleanup, S1's `agent.Close()`, stays the caller's, after `ServeAgent` returns.
 
 **What it replaces:**
-* S1's select, close and end check, about 25 lines once `<cli-b>` is on `v1.25.0`;
+* S1's select, close and end check, about 25 lines once gobble-cli is on `v1.25.0`;
 * S2's copy in its harness;
 * the SDK's own example loop (R2), and probe agents like S6's.
 
@@ -634,12 +634,12 @@ func ConnectReplay(tb testing.TB, records []Record, client acp.Client, opts ...a
   * the writer of its wire capture (W1), about 45 lines;
   * its five scanners (W2), with `Decode`;
   * and it gives 0214's G1 both directions (W3);
-* in `<cli-b>`:
+* in gobble-cli:
   * its `Golden`, `Transcript` and `firstDiff` (W4), about 90 lines;
   * and it meets its 0016 D6 (W5), as `ValidateGolden(t, records)` over `ReadRecords`.
-* With item 1, `<cli-b>`'s in-process agent's taps can write the same transcript.
+* With item 1, gobble-cli's in-process agent's taps can write the same transcript.
 
-The cost: `<cli-b>`'s two goldens are rewritten once, into the record form and v1's canonical JSON. Its 0034 D3, which keeps
+The cost: gobble-cli's two goldens are rewritten once, into the record form and v1's canonical JSON. Its 0034 D3, which keeps
 `session.golden` byte-identical, would record that.
 
 **Questions:**
@@ -649,7 +649,7 @@ The cost: `<cli-b>`'s two goldens are rewritten once, into the record form and v
     included, can use it.
   * Alternative: a small new package, `transcript`.
 * **4b. How `Golden` is told to update.**
-  * Recommended: the environment variable `ACPTEST_UPDATE=1`, as `<cli-b>`'s harness does, since a flag can collide (W6).
+  * Recommended: the environment variable `ACPTEST_UPDATE=1`, as gobble-cli's harness does, since a flag can collide (W6).
   * Alternative: a namespaced flag, `-acptest.update`, which every test binary importing `acptest` then carries.
   * Alternative: no update; `Golden` compares only, and the caller writes the file with `WriteRecords`.
 * **4c. A replay agent.**
@@ -711,7 +711,7 @@ each with its alternative; the owner accepted them with the PLAN's phases 12 to 
 Read at `03b57e9` (`v1.27.0` and its records), and reproduced in scratch copies of the tree; nothing in the tree changed.
 
 * **I1. The issue.** [#12](https://github.com/maccavelli/acp-go-sdk2/issues/12), filed 2026-10-30: "`Process.Close` waits without
-  bound for a client handler that never returns (v1.26.0)". `<cli-b>` held its move to `InProcess` on it: its 0035 PLAN,
+  bound for a client handler that never returns (v1.26.0)". gobble-cli held its move to `InProcess` on it: its 0035 PLAN,
   deviation 9, read on GitHub at `6c5eb02`, waits for "a tag [that] carries one of those", the issue's three asks. It pins `v1.26.0`
   (`go.mod:16`).
 * **I2. Why `Close` waits without bound.**
@@ -731,12 +731,12 @@ Read at `03b57e9` (`v1.27.0` and its records), and reproduced in scratch copies 
     error never says that a handler held it.
   * The same with a child, the test binary's `burst` mode: not returned after 5 s; `nil` once released.
   * `go p.Close()` then `p.WaitContext(ctx)` returned `context.DeadlineExceeded` at its bound, but lost `Close`'s error and left two
-    goroutines blocked until the handler returned. `<cli-b>`'s deviation 9 declined to bound the SDK's close itself so.
+    goroutines blocked until the handler returned. gobble-cli's deviation 9 declined to bound the SDK's close itself so.
 * **I4. The records claim otherwise.** "every wait bounded": `README.md:682`; the 0027 MADR, Consequences
   ([0027-MADR-agent-process-helper.md](0027-MADR-agent-process-helper.md)); this record's Consequences, "the shutdown rules a child
   needed, the output read to its end and every wait bounded, hold in-process too". Neither `Process.Close`'s doc nor `Process.Wait`'s
   names the handlers' unbounded wait; `Connection.Wait`'s does.
-* **I5. This record's own finding was not carried into the design.** C2 records that `<cli-b>`'s runner bounds its handlers' wait
+* **I5. This record's own finding was not carried into the design.** C2 records that gobble-cli's runner bounds its handlers' wait
   with `closeTimeout`, and C6 that `WaitContext` replaces its helper. `InProcess` returns a `*Process`, whose `Close` never uses
   `WaitContext`, so that bound was lost.
 * **I6. The agent's side is already bounded.** `ServeAgent` waits at most 5 s for its connection's handlers at its input's end, and
@@ -839,11 +839,11 @@ How the parts work, for the PLAN:
 * **For X1:**
   * `Wait` bounded by the grace, the issue's first option: rejected on I7, since it changes every caller's `Wait` and reports a
     busy client as a hung one.
-  * The docs alone, the issue's third option: they state the problem without solving it; `<cli-b>` asked for a library bound (I1).
+  * The docs alone, the issue's third option: they state the problem without solving it; gobble-cli asked for a library bound (I1).
   * `ctx` bounding the wait alone, the steps left to the grace: a `CloseContext` whose context has ended would still wait up to two
     or three graces, where `Shutdown(ctx)` closes at once. Not chosen.
   * `context.Cause(ctx)` alone, as `WaitContext` returns: the agent's error would be lost exactly when a handler hangs, since `Wait`
-    cannot be called then. `<cli-b>`'s close returns both today (C2).
+    cannot be called then. gobble-cli's close returns both today (C2).
 * **For X2:**
   * The sentinel in `agentproc`: `ServeAgent`, in the root package, could not wrap it, and a caller would test two errors.
   * `WaitContext` joining it too: rejected, since `WaitContext` is released and returns `context.Cause(ctx)`, which a caller may
@@ -858,7 +858,7 @@ How the parts work, for the PLAN:
 ##### Consequences of the amendment
 
 * Good, because a client bounds its close, child or in-process, with one call, and learns what a hung handler left behind, which
-  `<cli-b>` needs to move to `InProcess` (I1).
+  gobble-cli needs to move to `InProcess` (I1).
 * Good, because `ServeAgent`'s and the bounded close's handler errors are one sentinel that `errors.Is` reads.
 * Good, because `Wait` keeps its meaning, every received message handled, and `TestNoLostOutput` its guarantee (I7).
 * Good, because `Wait`'s error reads once per cause.
@@ -898,7 +898,7 @@ The PLAN's phases 12 to 17 show, each new check first seen to fail on a planted 
   (Corrected 2026-10-30: every wait of the agent's is bounded, but `Wait`, and so `Close` and `Kill`, waits without bound for a
   client handler that ignores its context, in-process and for a child alike; see "Amended 2026-10-30, issue #12", I2 to I4.)
 * Good, because no dependency is added and no platform code is written (D7, A7).
-* Neutral, because `<cli-b>`'s own runner shrinks by about 35 lines, and its handshake and options stay its own.
+* Neutral, because gobble-cli's own runner shrinks by about 35 lines, and its handshake and options stay its own.
 * Bad, because `Process`'s internals change behind a seam (D6), in code whose stop sequence four records hardened.
 * Bad, because two documented behaviours have no counterpart in a child: an abandoned goroutine (A4), and a panic that ends the
   client (A5).
@@ -918,7 +918,7 @@ Items 2 to 4:
 * Neutral, because `ValidateGolden` accepts more than before: a response recorded before its request (item 4).
 * Bad, because `Connection` gains a shutting-down state, in which it still reads but refuses new requests, in a hardened shutdown
   path (item 2; R3).
-* Bad, because `<cli-b>`'s goldens are rewritten once (item 4; W4, W7).
+* Bad, because gobble-cli's goldens are rewritten once (item 4; W4, W7).
 * Bad, because `ReplayAgent` puts a matching policy in the SDK, the k-th request of a method meeting the k-th recorded answer,
   which a client that reorders its calls defeats (item 4, question 4c).
 * Bad, because item 3 adds three fields and a type where one field would have served the recommended design (questions 3a, 3b).
@@ -1000,9 +1000,9 @@ For items 2 to 4:
 ### O5. The client's own binary, as a child
 
 * Good, because it needs no new API: `agentproc.Command` with `os.Executable()` and the stdio mode the agent already has (C1's
-  `<cli-b> acp`).
+  `gobble acp`).
 * Good, because the agent's panics and leaks stay in the child, with every guarantee of F2.
-* Bad, because the agent no longer shares the client's memory: what `<cli-b>` passes as Go values (`agentOptions()`, its logger)
+* Bad, because the agent no longer shares the client's memory: what gobble-cli passes as Go values (`agentOptions()`, its logger)
   must cross as flags or environment.
 * Bad, because each start costs a process, and on Windows a job.
 
@@ -1026,7 +1026,7 @@ carries all four items.
 
 * This repository at `26a7242`: `agentproc/agentproc.go`, `agentproc/tap.go`, `agentproc/leak_test.go`, `acptest/pair.go`,
   `connection_end_test.go`.
-* `<cli-b>` at `5fb6928`: `acpclient/conn.go`, `acpclient/acptest/recorder.go`, `acpclient/acptest/script.go`,
+* gobble-cli at `5fb6928`: `acpclient/conn.go`, `acpclient/acptest/recorder.go`, `acpclient/acptest/script.go`,
   `acpserver/serve.go`, `internal/cli/agent.go`, `internal/cli/signal.go`; its 0002, 0016, 0031 and 0034 MADRs; its issues #3, #4
   and #5.
 * magic-cli-remote at `5d1e7e2c` for item 1, and at `3cc402fb` for items 2 to 4:
@@ -1046,3 +1046,5 @@ carries all four items.
 
 Line numbers were read at the commits and tags named. Where a source was read through a web page rather than its code, the
 quotation is as the page renders it: Go Code Review Comments, Dave Cheney's article, and golang/go#25245.
+
+*Note, 2026-10-31: gobble-cli was written `<cli-b>` in this record until the owner lifted that redaction ([0044-PLAN-notification-queue-back-pressure.md](0044-PLAN-notification-queue-back-pressure.md), phase 5).*

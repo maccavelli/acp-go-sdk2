@@ -1,7 +1,7 @@
 # ACP code in the two consumers: what belongs in the SDK
 
 Observed 2026-10-24 on `7581822`, at the owner's request. This report reads the ACP code that the SDK's two known consumers,
-`magic-cli-remote` (at `f27b743f`) and `<cli-b>` (at `1d2d95e`), both on `v1.20.0`, wrote for themselves, and sorts it into what
+`magic-cli-remote` (at `f27b743f`) and gobble-cli (at `1d2d95e`), both on `v1.20.0`, wrote for themselves, and sorts it into what
 would be better developed here and what stays with them. The owner's rule is that anything ACP-related that is idempotent belongs
 in the SDK. The report decides nothing: each move it recommends needs a MADR in this repository, and where one would reopen a
 decided record, it says which.
@@ -12,13 +12,13 @@ settles three items here, C1, A4 and B3, and it settles them more narrowly than 
 issue and name it. [0036-MADR-session-update-constructors-kind-and-client-refusals.md](../decisions/0036-MADR-session-update-constructors-kind-and-client-refusals.md)
 decides them.
 
-`<cli-b>` stands for the second consumer, as in
-[0025-REPORT-schema-1-26-0-adoption-assessment.md](0025-REPORT-schema-1-26-0-adoption-assessment.md). Its own extension methods and
-`_meta` key carry its name, so this report calls them "its `_`-prefixed methods" and "its `_meta` key".
+gobble-cli is the second consumer, as in
+[0025-REPORT-schema-1-26-0-adoption-assessment.md](0025-REPORT-schema-1-26-0-adoption-assessment.md). Its extension methods are
+`_gobble/`-prefixed and its `_meta` key is `gobble`; this report calls them "its `_`-prefixed methods" and "its `_meta` key".
 
 ## Answer
 
-**Yes, a fair amount, and most of it is small.** The two consumers' ACP code is about 39,000 lines: in `<cli-b>`, its client
+**Yes, a fair amount, and most of it is small.** The two consumers' ACP code is about 39,000 lines: in gobble-cli, its client
 (`acpclient/`, `acpclient/acptest/`) and its agent (`acpserver/`); in `magic-cli-remote`, its client (`internal/provider/acpagent/`).
 Most of it is application policy and stays: model catalogs, the phone round trip, replay, prompt queues, tool-text rendering. What is
 left is a set of protocol-generic pieces, and these are the ones that should come here:
@@ -46,10 +46,10 @@ Nothing recommended needs a new dependency. Everything in A, B and C is additive
 | A3 | classify a `*RequestError` / `*CapabilityError` | both clients | `errors.go` | small |
 | A4 | name the set variant of `SessionUpdate`; other unions later | both clients | `SessionUpdate.Kind()`, hand-written (issue #11) | small |
 | A5 | read a namespaced `_meta` object, typed | both, 7 sites | `helpers.go` | small |
-| B1 | resolve a bare stdio MCP command before the absolute-path rule | `<cli-b>` agent | opt-in inbound rewrite | small |
-| B2 | auth methods filtered by `auth.terminal` | `<cli-b>` agent | `helpers.go` | small |
-| B3 | `ClientRefusals`, an embed for the nine fs, terminal and elicitation methods; agent side later | `<cli-b>`, 4 places | hand-written (issue #11) | small |
-| C1 | constructors for the eight stable `SessionUpdate` variants `helpers.go` lacks | `<cli-b>` agent, magic tests | `helpers.go` (issue #11) | small |
+| B1 | resolve a bare stdio MCP command before the absolute-path rule | gobble-cli agent | opt-in inbound rewrite | small |
+| B2 | auth methods filtered by `auth.terminal` | gobble-cli agent | `helpers.go` | small |
+| B3 | `ClientRefusals`, an embed for the nine fs, terminal and elicitation methods; agent side later | gobble-cli, 4 places | hand-written (issue #11) | small |
+| C1 | constructors for the eight stable `SessionUpdate` variants `helpers.go` lacks | gobble-cli agent, magic tests | `helpers.go` (issue #11) | small |
 | C2 | select config option by category; grouped options flattened | magic client | `helpers.go` | small |
 | C3 | elicitation form: field order and answer check | magic client | methods on `ElicitationSchema` | medium |
 | C4 | client terminal host, char-boundary truncation | magic client | `agentproc` | medium |
@@ -57,19 +57,19 @@ Nothing recommended needs a new dependency. Everything in A, B and C is additive
 | C6 | pre-check a value against the negotiation | magic client | `Negotiation` method | small |
 | C7 | split a tap's bytes into frames | magic client | `agentproc` | small |
 | C8 | count of messages refused inbound | magic client | `Connection` method | small |
-| D1 | in-memory test harness | `<cli-b>` `acptest`, magic fixtures, this repo's tests | new `acptest` package | large |
+| D1 | in-memory test harness | gobble-cli `acptest`, magic fixtures, this repo's tests | new `acptest` package | large |
 | E1–E4 | bounded `Wait`; refuse code; close waits for turns; exit vs connection cause | see E | reopen 0026, 0021 | — |
 
 ## How it was assessed
 
-- **Reading.** Three read-only reviews read, in full, every non-test file of the scope: `<cli-b>` `acpclient/`, `acpclient/acptest/`,
+- **Reading.** Three read-only reviews read, in full, every non-test file of the scope: gobble-cli `acpclient/`, `acpclient/acptest/`,
   `exp/acpws/`, `internal/archtest/check.go` and `acpserver/`; and `magic-cli-remote` `internal/provider/acpagent/`,
   `internal/provider/acpcommon/` and `internal/wirecap/`. Each also read the consumer's records that explain why the code exists.
-  Some files were only skimmed for the lines that touch ACP: in `<cli-b>`, `compact.go`, `autocompact.go`, `personality.go`,
+  Some files were only skimmed for the lines that touch ACP: in gobble-cli, `compact.go`, `autocompact.go`, `personality.go`,
   `rules.go` and `history.go` outside its replay; in `magic-cli-remote`, the grok-only `quota.go`, `xaiusage.go` and
   `subagents.go`. Test files were read only for harness code.
 - **Checking.** Every claim this report rests on was checked directly against both trees and this one before it was written: the
-  three copies of `handlersDone`; `<cli-b>` `ListSessions` ignoring `NextCursor`; magic's substring permission match, literal
+  three copies of `handlersDone`; gobble-cli `ListSessions` ignoring `NextCursor`; magic's substring permission match, literal
   `-32000`, byte-boundary truncation and 500 ms exit preference; the seven `_meta` assertions; the hand-built `Type: "select"`; the
   variant-name switches; the `encoding/json/v2` imports; `McpServerStdio.command` in `AbsolutePaths` (`acp.go:152`); and the
   absence here of `Unimplemented*`, of builders for the other update variants, and of a bounded `Wait`.
@@ -95,7 +95,7 @@ Code that passes the test only in part is listed by its generic core; the policy
 ### A1. Paging `session/list`, and its timestamp
 
 - **magic-cli-remote** `sessioncaps.go:64-106` follows `NextCursor` for up to 20 pages, and stops on a cursor that repeats.
-- **`<cli-b>`** `acpclient/sessions.go:168-191` makes one call and never reads `NextCursor`. Against an agent that pages, it shows
+- **gobble-cli** `acpclient/sessions.go:168-191` makes one call and never reads `NextCursor`. Against an agent that pages, it shows
   only the first page. Its own agent answers in one page, so its tests do not catch this.
 - **Both** parse `SessionInfo.UpdatedAt` with `time.Parse(time.RFC3339, …)` (`sessions.go:183`, `sessioncaps.go:207-216`), and
   both drop a value that does not parse.
@@ -106,7 +106,7 @@ below the floor.
 
 ### A2. Choosing a permission option
 
-- **`<cli-b>`** `acpclient/conn.go:503-511` declines by kind: the first `reject_once`, else `reject_always`, else `cancelled`. Its
+- **gobble-cli** `acpclient/conn.go:503-511` declines by kind: the first `reject_once`, else `reject_always`, else `cancelled`. Its
   fake client allows with the first `allow_once` or `allow_always`.
 - **magic-cli-remote** `session.go:2593-2642` (`autoAllow`, `pickAllowOptionID`) matches by substring on the kind *or the name*:
   `strings.Contains(k, "allow") || strings.Contains(n, "allow") || … "approve"`. Failing that, it takes the first option.
@@ -127,7 +127,7 @@ requests.
   - `isAuthRequired` (`runtime.go:344-349`) compares `re.Code == -32000` as a literal, although the SDK has
     `ErrorCodeAuthenticationRequired`;
   - `isBenignPromptErr` (`session.go:2836-2859`) handles cancellation.
-- **`<cli-b>`** matches `ErrorCodeAuthenticationRequired` at `acpclient/conn.go:329`. Its `sessionError` (`sessions.go:37-58`)
+- **gobble-cli** matches `ErrorCodeAuthenticationRequired` at `acpclient/conn.go:329`. Its `sessionError` (`sessions.go:37-58`)
   reads a refusal's reason from `data.error`, which is this SDK's own convention for what it refuses.
 
 Proposed, in `errors.go`:
@@ -141,20 +141,20 @@ The string-matching fallbacks stay in the consumers.
 
 ### A4. Naming a union's variant
 
-- **`<cli-b>`** `acpclient/update.go:304-318` (`blockText`) switches on `ContentBlock`'s pointer fields to name `image`, `audio`,
+- **gobble-cli** `acpclient/update.go:304-318` (`blockText`) switches on `ContentBlock`'s pointer fields to name `image`, `audio`,
   `resource_link` and so on.
 - **magic-cli-remote** does the same in `compaction.go:89` (`blockKind`). It also decodes the discriminator out of `Unknown` by
   hand, at `session.go:2076-2082` and in `plans.go:73` (`unknownPlanKind`), to name what it declines.
 
 Issue #11 settles this for `SessionUpdate` alone, as a hand-written `func (u SessionUpdate) Kind() string`. It returns the set
 variant's discriminator; for `Unknown`, the payload's `sessionUpdate`; and `""` for the zero value. That covers magic-cli-remote's
-`session.go` case. Its `blockKind`, its `unknownPlanKind`, and `<cli-b>`'s `blockText` name `ContentBlock` and plan variants, so they
+`session.go` case. Its `blockKind`, its `unknownPlanKind`, and gobble-cli's `blockText` name `ContentBlock` and plan variants, so they
 stay until a later issue extends `Kind()` to those unions. The first draft proposed a generated `Variant()` on every union. That was
 broader, and a generator change; the issue chose the smaller step.
 
 ### A5. Reading a namespaced `_meta` object
 
-- **`<cli-b>`** repeats `meta[key].(map[string]any)` seven times, at `acpclient/conn.go:336, 517`, `sessions.go:149` and
+- **gobble-cli** repeats `meta[key].(map[string]any)` seven times, at `acpclient/conn.go:336, 517`, `sessions.go:149` and
   `acpserver/config.go:405`, `question.go:161`, `grants.go:138`, `mentions.go:120`.
 - **magic-cli-remote** `acpagent.go:1214-1232` round-trips through JSON to get a typed view: "The SDK decodes _meta as
   map[string]any, so the typed view is recovered by a JSON round trip".
@@ -169,7 +169,7 @@ string) (T, bool, error)`, both on `encoding/json` v1.
 ### B1. A bare stdio MCP command
 
 The protocol table requires `McpServerStdio.command` to be absolute (`cmd/generate/internal/model/acp.go:152`). Real clients send
-`"npx"`. `<cli-b>` `acpserver/rewrite.go:17-36` installs `resolveBareCommands` through `WithInboundRewrite` (`serve.go:44`). It
+`"npx"`. gobble-cli `acpserver/rewrite.go:17-36` installs `resolveBareCommands` through `WithInboundRewrite` (`serve.go:44`). It
 replaces a bare command with `exec.LookPath`'s answer on `session/new`, `load` and `resume`, and leaves what it cannot resolve
 for the SDK to refuse `-32602`. It does not cover the unstable fork request, which carries the same list. Every agent behind such
 a client needs this.
@@ -181,7 +181,7 @@ a small `ChainRewrites`.
 ### B2. Auth methods for a client without `auth.terminal`
 
 This SDK refuses an `initialize` answer that offers a terminal auth method to a client that did not advertise `auth.terminal`.
-`<cli-b>` `acpserver/auth.go:43-64` and `agent.go:394` filter the list to avoid that refusal. Proposed:
+gobble-cli `acpserver/auth.go:43-64` and `agent.go:394` filter the list to avoid that refusal. Proposed:
 `func OfferedAuthMethods(caps ClientCapabilities, methods []AuthMethod) []AuthMethod`.
 
 ### B3. Stubs for the methods a side does not offer
@@ -189,11 +189,11 @@ This SDK refuses an `initialize` answer that offers a terminal auth method to a 
 `Agent` and `Client` require every method, and the gates already answer `-32601` for one the peer did not negotiate. Every
 implementation still writes a stub for it:
 
-- `<cli-b>` writes nine client stubs (`acpclient/conn.go:552-600`) and two agent stubs (`acpserver/agent.go:1179, 1245`). The
+- gobble-cli writes nine client stubs (`acpclient/conn.go:552-600`) and two agent stubs (`acpserver/agent.go:1179, 1245`). The
   comment on the second says "the SDK answers -32601 before this runs".
 - `acptest/client.go` and `acptest/script.go` write their stubs again.
 
-`<cli-b>`'s `0031-MADR-sdk-current-releases-and-adoption.md` lists "a default client for fs, terminal and elicitation" as
+gobble-cli's `0031-MADR-sdk-current-releases-and-adoption.md` lists "a default client for fs, terminal and elicitation" as
 something this SDK lacks.
 
 Issue #11 settles the client half, and settles the trade-off. It is `ClientRefusals`, a hand-written struct to embed:
@@ -204,7 +204,7 @@ Issue #11 settles the client half, and settles the trade-off. It is `ClientRefus
 - A full method-not-found `Client` was rejected: a forgotten method would compile and answer `-32601` without anyone having decided
   that.
 
-The agent side is not in the issue. `<cli-b>`'s two agent stubs stay until a later one.
+The agent side is not in the issue. gobble-cli's two agent stubs stay until a later one.
 
 An outer type's own methods take precedence over promoted ones, so embedding `ClientRefusals` would not hide magic-cli-remote's
 real fs and terminal methods. The issue's reason for magic not to embed it is a different one: a real method later renamed or
@@ -215,7 +215,7 @@ removed would be replaced by a refusal without a compile error. Recorded in the 
 ### C1. Builders for the remaining `SessionUpdate` variants
 
 `helpers.go` builds the message, thought, plan and tool-call variants. The protocol table leaves `SessionUpdate` to it, so
-`helpers_gen.go` writes none. `<cli-b>` builds the rest by hand:
+`helpers_gen.go` writes none. gobble-cli builds the rest by hand:
 
 - config options at `acpserver/commands.go:531`;
 - session info at `:597`;
@@ -321,7 +321,7 @@ Proposed: `func (c *Connection) RefusedMessages() uint64`, beside the existing c
 
 Both consumers and this repository build in-memory ACP peers by hand:
 
-- **`<cli-b>`** `acpclient/acptest`, about 1,300 lines:
+- **gobble-cli** `acpclient/acptest`, about 1,300 lines:
   - `Connect` joins an agent and a client with two `io.Pipe`s;
   - a `Recorder` splits each direction into frames and writes a canonical transcript with golden files;
   - `Abs` makes fixture paths absolute on every host, because this SDK checks received paths with the host's rule;
@@ -334,21 +334,21 @@ Proposed: a new `acptest` package with `Connect`, the recorder, `Abs`, a fake cl
 for three reasons:
 
 - **It is a new exported package.**
-- **It cannot be copied as it is.** `<cli-b>`'s recorder and script import `encoding/json/v2` and `jsontext`. These build by
+- **It cannot be copied as it is.** gobble-cli's recorder and script import `encoding/json/v2` and `jsontext`. These build by
   default at Go 1.27.3, but not at this module's floor, Go 1.26.10, or under CI's `GOEXPERIMENT=nojsonv2`. The canonical form
   needs a rewrite on v1.
-- **`<cli-b>` would need to amend a rule.** Its architecture rule 2 (`internal/archtest/check.go:221-237`) lets only `acpserver`
+- **gobble-cli would need to amend a rule.** Its architecture rule 2 (`internal/archtest/check.go:221-237`) lets only `acpserver`
   and `acpclient/...` import this module, test files included. Its 13 `internal/cli` test files that use `acptest` would need that
   rule amended, or a thin wrapper kept.
 
-`<cli-b>`'s 0016 MADR D6 also proposes a `ValidateGolden`, which decodes each recorded frame into its type and calls `Validate`.
+gobble-cli's 0016 MADR D6 also proposes a `ValidateGolden`, which decodes each recorded frame into its type and calls `Validate`.
 It belongs in this package.
 
 ## E. Proposals that would reopen a decided record
 
 ### E1. A bounded `Wait`
 
-`<cli-b>` keeps three copies of `handlersDone`, which waits for `Wait` under a time limit: at `acpclient/conn.go:207`,
+gobble-cli keeps three copies of `handlersDone`, which waits for `Wait` under a time limit: at `acpclient/conn.go:207`,
 `acpclient/acptest/pair.go:65` and `acpserver/serve.go:71`. Each cites a handler that ignores its context.
 
 [0026-MADR-connection-end-cause-and-wait.md](../decisions/0026-MADR-connection-end-cause-and-wait.md), question 4, decided on
@@ -360,19 +360,19 @@ reopening 0026.
 
 ### E2. The code `PromptOverlapRefuse` answers
 
-`<cli-b>` runs `PromptOverlapConcurrent` and refuses an overlap itself, with `-32600` (`acpserver/agent.go:760-777`). Two
+gobble-cli runs `PromptOverlapConcurrent` and refuses an overlap itself, with `-32600` (`acpserver/agent.go:760-777`). Two
 differences stop it from using `PromptOverlapRefuse`:
 
 - Refuse answers `-32603`, decided in
   [0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md](../decisions/0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md).
-- A cancelled turn stops counting at its cancel, not when its handler returns. `<cli-b>` also counts its own extension methods
+- A cancelled turn stops counting at its cancel, not when its handler returns. gobble-cli also counts its own extension methods
   as turns.
 
 A configurable code would reopen 0021. The extension turns are the consumer's own policy.
 
 ### E3. `session/close` waiting for the cancelled turn
 
-`<cli-b>` `acpserver/agent.go:1182-1213` waits up to 5 s (`closeWait`) for a turn that the SDK cancelled before `CloseSession`
+gobble-cli `acpserver/agent.go:1182-1213` waits up to 5 s (`closeWait`) for a turn that the SDK cancelled before `CloseSession`
 ran, so that the turn's last entries are written. The SDK holds the turns, so it could offer
 `func (c *AgentSideConnection) TurnsDone(id SessionId) <-chan struct{}`. That is a change in a generated path. No record decides
 it either way.
@@ -391,7 +391,7 @@ which came first.
 These hold no generic core beyond the builders they already use:
 
 - the translation of updates into each consumer's own event types;
-- `<cli-b>`'s `_`-prefixed methods and its `_meta` key;
+- gobble-cli's `_`-prefixed methods and its `_meta` key;
 - magic-cli-remote's `_x.ai` handlers and grok fallbacks;
 - model catalogs, prewarm and auth selection;
 - the phone permission round trip, the timeouts and the auto mode;
@@ -400,27 +400,27 @@ These hold no generic core beyond the builders they already use:
 - tool-text rendering, cost, and the plan vocabulary;
 - the mode sets and the model and thought config state machines;
 - permission requests used as yes/no questions;
-- `<cli-b>`'s 50 ms / 4 KiB chunk coalescer. The batching is a phone-legibility policy; its generic core, flushing before any other
+- gobble-cli's 50 ms / 4 KiB chunk coalescer. The batching is a phone-legibility policy; its generic core, flushing before any other
   update, is too small to carry an API;
 - the import rules of `internal/archtest`.
 
 The following are generic in shape, but each consumer's policy differs. They are not recommended now:
 
 - a session-state reducer, which no consumer has as one unit;
-- routing updates by `SessionId`. `<cli-b>` attributes early updates by a heuristic, and magic-cli-remote drops every session but
+- routing updates by `SessionId`. gobble-cli attributes early updates by a heuristic, and magic-cli-remote drops every session but
   the live one;
 - a session-bound sender that mirrors every client method;
-- an extension-method mux. `<cli-b>`'s is on `encoding/json/v2`;
+- an extension-method mux. gobble-cli's is on `encoding/json/v2`;
 - `ServeAgent` and an in-process `agentproc`.
 
-`<cli-b>`'s `exp/acpws/` is a declared, empty package for ACP over WebSocket and Unix sockets. It would fit here once it is built.
+gobble-cli's `exp/acpws/` is a declared, empty package for ACP over WebSocket and Unix sockets. It would fit here once it is built.
 A WebSocket implementation needs a dependency, so it would need a MADR.
 
 ## G. Seen in passing: consumer fixes that need nothing new here
 
 These are the consumers' own to fix. The SDK already has what they need:
 
-- **`<cli-b>`:**
+- **gobble-cli:**
   - `acpserver/config.go:204, 229` writes `Type: "select"` by hand, where `NewSessionConfigOptionSelect` exists.
   - `ErrImagesUnsupported` (`acpclient/conn.go:313`) repeats the SDK's `promptCapabilities.image` gate.
   - `acpserver/agent.go:387` keeps its own copy of the client's capabilities beside `Negotiated()`.
@@ -447,3 +447,5 @@ If the owner accepts the direction, these are natural units, each one MADR and P
 7. E3 and E4, only if the owner reopens them.
 
 Each consumer would then remove its copy in its own repository, under its own records.
+
+*Note, 2026-10-31: gobble-cli was written `<cli-b>` in this record until the owner lifted that redaction ([0044-PLAN-notification-queue-back-pressure.md](../decisions/0044-PLAN-notification-queue-back-pressure.md), phase 5).*

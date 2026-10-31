@@ -9,10 +9,10 @@ against this repository.
 
 It decides nothing. Each consumer adopts under its own records, and this report is the list for them.
 
-- **The consumers:** magic-cli-remote at `5d1e7e2c`, and `<cli-b>` at `5fb6928`, with uncommitted edits to four records and an
-  untracked 0034 pair. `<cli-b>` stands for the second consumer, as in
+- **The consumers:** magic-cli-remote at `5d1e7e2c`, and gobble-cli at `5fb6928`, with uncommitted edits to four records and an
+  untracked 0034 pair. gobble-cli is the second consumer, as in
   [0035-REPORT-consumer-acp-code-for-the-sdk.md](0035-REPORT-consumer-acp-code-for-the-sdk.md).
-- **Their pins:** both still pin `v1.20.0`, magic-cli-remote at `go.mod:11` and `<cli-b>` at `go.mod:15`.
+- **Their pins:** both still pin `v1.20.0`, magic-cli-remote at `go.mod:11` and gobble-cli at `go.mod:15`.
 - **`v1.25.0`** names the release 0041's PLAN makes in its phase 17, which is not yet tagged. The other releases are tagged, and
   each one's release-notes report names the API listed against it here:
   [0036-REPORT-release-notes-v1-21-0.md](0036-REPORT-release-notes-v1-21-0.md),
@@ -31,7 +31,7 @@ It decides nothing. Each consumer adopts under its own records, and this report 
   - value checks before sending;
   - a tap's frames;
   - the plan content's kind.
-- **`<cli-b>`:** ten sites. Four are met by `v1.21.0` to `v1.23.0`. Six wait for `v1.25.0`.
+- **gobble-cli:** ten sites. Four are met by `v1.21.0` to `v1.23.0`. Six wait for `v1.25.0`.
   - the bounded wait;
   - the clean-end check;
   - tool-call merging;
@@ -42,7 +42,7 @@ It decides nothing. Each consumer adopts under its own records, and this report 
 Two of the MADR's statements about the consumers' records no longer hold as written:
 
 - magic-cli-remote's 0207 MADR now records the releases after `v1.20.0`;
-- `<cli-b>`'s harness is 891 lines without its tests, not 1,270.
+- gobble-cli's harness is 891 lines without its tests, not 1,270.
 
 Both are given below.
 
@@ -85,7 +85,7 @@ All its sites are under `internal/provider/acpagent/` unless named otherwise.
 - **`0184-PLAN-adopt-acp-go-sdk2-and-offload-protocol-handling.md`** still says of `maccavelli/acp-go-sdk2#4`, at `:913`, "It is
   open". The issue was closed on 2026-10-15 at 02:56:56 UTC, and its MADR, at `:438`, says the adoption "resolves" it.
 
-## `<cli-b>`
+## gobble-cli
 
 | Site, at `5fb6928` | What it does today | Replaced by | Since |
 | :--- | :--- | :--- | :--- |
@@ -98,9 +98,9 @@ All its sites are under `internal/provider/acpagent/` unless named otherwise.
 | `internal/cli/view.go:146`–`:166` | keeps each tool call's title and status, and shows each update's content as it comes | `acp.ToolCallTimeline`: content replaced, never appended, and an unseen id started `pending` | `v1.25.0` |
 | `acpclient/acptest/`: 891 lines without its tests, 1,280 with them, used 385 times outside it | its own harness: a pair, a recorder of direction, `Recorder.Wait(ctx, n)` (`recorder.go:101`), scripted terminals (`client.go:154`) and error turns | `acptest.ConnectRecorded`, `Recorder.Records` and `Recorder.Wait` (the same signature); `MemoryClient.Terminals` with a `*clienthost.Terminals`; `Turn.Err`, `Usage` and `WaitCancel`; `MemoryClient.SetElicitation` | `v1.25.0`; `Connect` since `v1.23.0` |
 | `docs/decisions/0016-MADR-acp-go-sdk2-v0.15.0-and-stable-surface.md:207`, D6 | asks for `ValidateGolden(t, path)`: each recorded frame decoded into its method's type, a response by its request's, failing on a decode error, a `Validate` error, or a method with no type | `acptest.ValidateGolden(t, records)`, with its table of every method, by direction | `v1.25.0` |
-| `docs/decisions/0031-MADR-sdk-current-releases-and-adoption.md:98`–`:99` | waits for "a default client for fs, terminal and elicitation"; "`<cli-b>` keeps these until the SDKs have them" | `clienthost.Files` and `clienthost.Terminals`; for elicitation, the form helpers, since showing a form is the client's own | `v1.25.0`; `v1.24.0` |
+| `docs/decisions/0031-MADR-sdk-current-releases-and-adoption.md:98`–`:99` | waits for "a default client for fs, terminal and elicitation"; "gobble-cli keeps these until the SDKs have them" | `clienthost.Files` and `clienthost.Terminals`; for elicitation, the form helpers, since showing a form is the client's own | `v1.25.0`; `v1.24.0` |
 
-**How D6's golden files map.** `ValidateGolden` takes records with their direction, where D6 takes a path. `<cli-b>`'s goldens,
+**How D6's golden files map.** `ValidateGolden` takes records with their direction, where D6 takes a path. gobble-cli's goldens,
 such as `acpclient/acptest/testdata/initialize.golden`, are a line a frame, prefixed `client→agent` or `agent→client`. Those are
 `acptest.Sent` and `acptest.Received` as `ConnectRecorded` records the client side, so reading a golden into `[]acptest.Record`
 is a few lines of its own. Its file layout stays its own, as the MADR's item 8 said.
@@ -118,3 +118,5 @@ is a few lines of its own. Its file layout stays its own, as the MADR's item 8 s
 - **Adoption itself:** each consumer's pin, code and records, under its own process.
 - **Sites in the consumers the MADR's investigation did not find.** 0035's report lists what else is protocol-generic in them.
 - **Anything that needs schema `1.26.0`,** which stays deferred.
+
+*Note, 2026-10-31: gobble-cli was written `<cli-b>` in this record until the owner lifted that redaction ([0044-PLAN-notification-queue-back-pressure.md](../decisions/0044-PLAN-notification-queue-back-pressure.md), phase 5).*

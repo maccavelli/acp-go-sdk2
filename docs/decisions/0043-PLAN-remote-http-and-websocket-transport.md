@@ -601,7 +601,7 @@ As 0042's phase 11 ran:
 
 * **Rollout.** Phases 3 to 8 are separate commits, so the seam lands without the dependency, and the dependency arrives with its
   first import. One minor release, `v1.27.0`, carries them. Each consumer adopts under its own records:
-  * `<cli-b>`: its `exp/acpws` placeholder becomes a use of `remote`, or is removed;
+  * gobble-cli: its `exp/acpws` placeholder becomes a use of `remote`, or is removed;
   * magic-cli-remote: its next ACP-over-HTTP agent dials through `remote` instead of rebuilding `acphttp`. It already requires
     `github.com/coder/websocket v1.8.15`, so its module graph does not grow.
 * **What a consumer meets on the release:** a new package, and one new requirement in its module graph, compiled only when it
@@ -1495,3 +1495,5 @@ The release is published and every item of the MADR's "Confirmation" is shown, s
 consumer adopts `v1.27.0` under its own records, as "Rollout and Rollback" says. The margin of `agentproc`'s
 `TestStderrHeldByDescendant` waits for its own amendment of
 [0027-PLAN-agent-process-helper.md](0027-PLAN-agent-process-helper.md), as the deviation above records.
+
+*Note, 2026-10-31: gobble-cli was written `<cli-b>` in this record until the owner lifted that redaction ([0044-PLAN-notification-queue-back-pressure.md](0044-PLAN-notification-queue-back-pressure.md), phase 5).*

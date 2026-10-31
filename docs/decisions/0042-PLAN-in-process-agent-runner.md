@@ -61,7 +61,7 @@ The MADR's four items ship with no new dependency, and `make api` lists only add
   `agentproc/closecontext_test.go` and `TestWaitErrorSaysTheCauseOnce`; `errors.go`, `serve.go` and `shutdown_test.go`; `README.md`
   and `docs/architecture.md`; `tools/consumer.py` and its row in `tools/README.md`; the release notes
   `0042-REPORT-release-notes-v1-28-0.md`; the 0027 MADR's annotation. Not in scope: `Connection.Wait` and `WaitContext`, unchanged
-  (0026, 0041); `Process.Wait`'s bound, which the MADR rejects (I7); any change in `<cli-b>`.
+  (0026, 0041); `Process.Wait`'s bound, which the MADR rejects (I7); any change in gobble-cli.
 * **Not in scope:**
   * `clienthost` and `internal/proctree`;
   * a handshake inside `InProcess.Start`;
@@ -386,7 +386,7 @@ the amendment.
   * `TestCloseContextJoinsTheAgentsError`: a `Serve` that returns its own error after `ServeAgent`, and a hung handler; the error
     holds it.
   * `TestCloseContextWaitsForHandlers`: a handler that returns half a grace into a 5 s bound; `CloseContext` returns `Wait`'s
-    error, `nil`, after the handler has returned, and joins nothing: `<cli-b>`'s `TestCloseWaitsForHandlers` in this repository.
+    error, `nil`, after the handler has returned, and joins nothing: gobble-cli's `TestCloseWaitsForHandlers` in this repository.
   * `TestCloseContextHurriesTheSteps`: a `stubborn` child under a 5 s grace and a 300 ms context; `CloseContext` returns well within
     one grace, `errors.Is(err, ErrKilled)` and not `ErrTerminated`; `KillContext` likewise.
   * `TestCloseContextCause`: `context.WithTimeoutCause` with the test's own error; the error holds it.
@@ -449,7 +449,7 @@ the amendment.
 
 * **Rollout.** Phases 3 to 8 are separate commits, so the seam lands alone and is seen to change nothing. One minor carries
   them. Each consumer adopts under its own records:
-  * `<cli-b>`: its `acpclient.Start` runs its agent through `InProcess`, and its `acpserver.Serve` through `ServeAgent`. Its
+  * gobble-cli: its `acpclient.Start` runs its agent through `InProcess`, and its `acpserver.Serve` through `ServeAgent`. Its
     goldens move to `Golden` and the record form, which its 0034 D3 would record.
   * magic-cli-remote: its ACP path sets the stderr tail and a `Transcript` as both taps. Its fixture tests use `ReadRecords` and
     `Decode`, and its 0214 G1 recording can replay through `ReplayAgent`.
@@ -459,7 +459,7 @@ the amendment.
 * **Rollback after a tag:** a name cannot be removed under `v1`; a defect is fixed forward in a patch.
 * **(Added 2026-10-30, phases 12 to 17.)** One minor, `v1.28.0`. Phases 13 and 14 are independent commits; phase 15 needs both.
   Before a tag, each reverts by its commit, phase 15 first. A consumer meets three names, and two changed texts: `Wait`'s error for an
-  agent whose error wraps the step's sentinel, and `ServeAgent`'s at its context's end when `Shutdown`'s bound passes. `<cli-b>`
+  agent whose error wraps the step's sentinel, and `ServeAgent`'s at its context's end when `Shutdown`'s bound passes. gobble-cli
   runs its held P12 with `CloseContext` in place of `Close` then `WaitContext`, under its own records.
 
 ## Execution record
@@ -1186,12 +1186,12 @@ consumer adopts `v1.26.0` under its own records, as "Rollout and Rollback" says.
 
 ### Amendment, 2026-10-30, after the publication of `v1.26.0`: phases 12 to 17 proposed, issue #12
 
-**Found.** Issue #12: `Process.Close` waits without bound for a client handler that ignores its context, so `<cli-b>` cannot move its
+**Found.** Issue #12: `Process.Close` waits without bound for a client handler that ignores its context, so gobble-cli cannot move its
 runner to `InProcess`. The MADR's "Amended 2026-10-30, issue #12" holds the findings, I1 to I9, each read in the tree at `03b57e9`
 or reproduced in a scratch copy:
 
 * `Close`, and `Kill`, end in `Wait`, whose wait on the connection has no bound (I2); reproduced in process and with a child (I3);
-* the README and two MADRs say "every wait bounded" (I4), and this record's C2 had found the bound `<cli-b>` keeps (I5);
+* the README and two MADRs say "every wait bounded" (I4), and this record's C2 had found the bound gobble-cli keeps (I5);
 * `ServeAgent`'s handler error is a text, and no test reaches it (I6);
 * a prototype that bounds `Wait` broke `TestNoLostOutput` under load (I7); one that adds `CloseContext` and `KillContext` passed the
   whole package (I8);
@@ -1518,3 +1518,5 @@ The owner committed the release notes and the consumer as `b390bdf` and pushed i
 **The amendment's "Confirmation"'s last item,** "`tools/consumer.py` closing an in-process agent through `CloseContext`", open in
 phase 17's walk above, is shown by the consumer's run against `v1.28.0`. Every item is shown, the release is published, and the
 issue is closed, so this PLAN and its row are `complete`.
+
+*Note, 2026-10-31: gobble-cli was written `<cli-b>` in this record until the owner lifted that redaction ([0044-PLAN-notification-queue-back-pressure.md](0044-PLAN-notification-queue-back-pressure.md), phase 5).*

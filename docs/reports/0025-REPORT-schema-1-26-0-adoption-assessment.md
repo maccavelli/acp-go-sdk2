@@ -1,7 +1,7 @@
 # Schema 1.26.0: what adopting it would bring, what it would cost, and whether to adopt it now
 
 Observed 2026-10-20 on `2965021`, at the owner's request. This report assesses adopting ACP schema `1.26.0` in place of the pinned
-`1.25.0` (`schema/version`), against the SDK and its two known consumers, `magic-cli-remote` and `<cli-b>`. It decides nothing:
+`1.25.0` (`schema/version`), against the SDK and its two known consumers, `magic-cli-remote` and gobble-cli. It decides nothing:
 the decision belongs to the record question 16 of
 [0019-MADR-remediate-debugging-pass-findings.md](../decisions/0019-MADR-remediate-debugging-pass-findings.md) calls for, which a
 `0025` MADR can be.
@@ -21,13 +21,14 @@ makes the cost worth paying. The reasons and the conditions follow.
   downloaded and quoted.
 - **This SDK:** the four schema files of `1.26.0`, downloaded and compared with the committed ones; the tree regenerated from them in
   a scratch clone; `scripts/check_api.py` (`apidiff`) against `v1.17.1` there.
-- **Consumers:** the working trees of `magic-cli-remote` and `<cli-b>`, read: their `go.mod` requirement on this module, every
+- **Consumers:** the working trees of `magic-cli-remote` and gobble-cli, read: their `go.mod` requirement on this module, every
   identifier of it they name, and every line naming an identifier 1.26.0 removes.
 
 Nothing in this repository, the consumers or `$HOME` was written but this report and its row.
 
-`<cli-b>` stands for the second consumer, a CLI the owner named in the request, whose name this repository's identifier scan keeps
-out of committed files.
+The second consumer is gobble-cli, a CLI the owner named in the request. *Note, 2026-10-31: this report first called it
+`<cli-b>`, while this repository's identifier scan kept its name out of committed files. The scan no longer does, and the owner
+lifted the redaction ([0044-PLAN-notification-queue-back-pressure.md](../decisions/0044-PLAN-notification-queue-back-pressure.md), phase 5).*
 
 ## What 1.26.0 is
 
@@ -114,11 +115,11 @@ build. `README.md:448`–`:449` names `nes` and `positionEncoding`. The generato
 | :--- | :--- | ---: | ---: | :--- | :--- |
 | `acp-go-sdk2` itself (tests, examples) | — | — | — | 38 lines in 4 files | no |
 | `magic-cli-remote` | `v1.15.0` | 47 | 180 | no: 0 lines | no |
-| `<cli-b>` | `v1.16.3` | 76 | 212 | no: 0 lines | no |
+| gobble-cli | `v1.16.3` | 76 | 212 | no: 0 lines | no |
 
 - **Neither consumer would break** from the removal: neither names an `Unstable`, NES, document-event or position-encoding identifier.
   The breakage is to the module's promise, and to any importer this report does not know of.
-- **Neither consumer would gain** from the addition today. `<cli-b>` builds its system prompt itself (`acpserver/sysprompt.go`) and
+- **Neither consumer would gain** from the addition today. gobble-cli builds its system prompt itself (`acpserver/sysprompt.go`) and
   takes none over ACP. `magic-cli-remote` has no system prompt handling, and launches `codex`, `grok`, `kilo` and `opencode`, not
   `claude-agent-acp`; whether those agents implement the unstable field was not checked.
 - **Neither is on the latest release** (`v1.17.1`), so no change here reaches them before they upgrade. A `/v2` would make each change

@@ -9,7 +9,7 @@ decision-makers: Repository owner
 ## Context and Problem Statement
 
 [0035-REPORT-consumer-acp-code-for-the-sdk.md](../reports/0035-REPORT-consumer-acp-code-for-the-sdk.md) sorts the ACP code that
-the SDK's two consumers, magic-cli-remote and `<cli-b>`, wrote for themselves. Its "What would follow" lists the work as units.
+the SDK's two consumers, magic-cli-remote and gobble-cli, wrote for themselves. Its "What would follow" lists the work as units.
 Unit 1, issue #11, shipped in `v1.21.0`
 ([0036-MADR-session-update-constructors-kind-and-client-refusals.md](0036-MADR-session-update-constructors-kind-and-client-refusals.md)).
 The owner asked for units 2 and 3 as one record:
@@ -30,7 +30,7 @@ Findings, from a read-only investigation at `ea09a07`:
 * **R1. `session/list` pages.** `ListSessionsResponse` carries `NextCursor *string` and `ListSessionsRequest` takes `Cursor *string`
   (`types_gen.go:7416`, `:7476`). `ClientSideConnection.ListSessions` (`client_gen.go:910`) sends one page. The method is gated on
   the agent's `sessionCapabilities.list` (`cmd/generate/internal/model/acp.go:57`): sent to an agent that did not advertise it, it
-  fails with a `*CapabilityError` and writes nothing. `SessionInfo.UpdatedAt` is a `*string` (`types_gen.go:13242`). `<cli-b>` reads
+  fails with a `*CapabilityError` and writes nothing. `SessionInfo.UpdatedAt` is a `*string` (`types_gen.go:13242`). gobble-cli reads
   one page only; magic-cli-remote follows the cursor and stops on one that repeats (the report's A1).
 * **R2. Permission options.** `PermissionOption` has `Kind PermissionOptionKind`, a closed enum of `allow_once`, `allow_always`,
   `reject_once` and `reject_always` (`types_gen.go:10022`, `:10082`). `RequestPermissionResponse.Outcome` is a union of `Cancelled`
@@ -42,17 +42,17 @@ Findings, from a read-only investigation at `ea09a07`:
   (`-32000`) and `ErrorCodeRequestCancelled` (`-32800`) (`types_gen.go:6194`, `:6198`); `ErrPromptCancelled` is a cause
   (`errors.go:122`). What this SDK refuses carries its reason in `data.error`. magic-cli-remote compares `-32000` as a literal (A3).
 * **R4. `_meta`.** Every `Meta` field is `map[string]any`, which
-  [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md) keeps on purpose. `<cli-b>` repeats
+  [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md) keeps on purpose. gobble-cli repeats
   `meta[key].(map[string]any)` at seven sites; magic-cli-remote round-trips through JSON for a typed view (A5).
 * **R5. Stdio MCP commands.** The protocol table requires `McpServerStdio.command` to be absolute (`acp.go:152`), and the agent
   refuses a relative one `-32602`. `McpServer` and the unstable `UnstableMcpServer` both hold it as `Stdio *McpServerStdio`
   (`types_gen.go:8116`, `:19471`), in `NewSessionRequest`, `LoadSessionRequest`, `ResumeSessionRequest` and
   `UnstableForkSessionRequest`. `WithInboundRewrite` (`connection.go:578`) gives a hook the decoded params as a pointer before they
-  are validated, so it can rewrite the command; a second `WithInboundRewrite` replaces the first. `<cli-b>`'s
+  are validated, so it can rewrite the command; a second `WithInboundRewrite` replaces the first. gobble-cli's
   `acpserver/rewrite.go` resolves a bare command with `exec.LookPath` for the three stable requests, and leaves what does not resolve
   for the SDK to refuse. It does not cover fork. The root package imports no `os/exec`.
 * **R6. Terminal auth.** The SDK refuses an `initialize` answer that offers a terminal auth method, `AuthMethod.Terminal`, to a
-  client whose `ClientCapabilities.Auth.Terminal` is false (`acp.go:188`; `types_gen.go:591`, `:698`). `<cli-b>` filters its list to
+  client whose `ClientCapabilities.Auth.Terminal` is false (`acp.go:188`; `types_gen.go:591`, `:698`). gobble-cli filters its list to
   avoid that refusal (B2).
 * **R7. Config options.** `SessionConfigOption` is a union of `Select` and `Boolean` (`types_gen.go:12621`).
   `SessionConfigOptionSelect.Category` is a `*SessionConfigOptionCategory`, and its `Options` is a union of `Ungrouped`, a list of
@@ -65,7 +65,7 @@ Findings, from a read-only investigation at `ea09a07`:
 * **R9. The agent's unadvertised methods.** Of the 12 `Agent` methods (`types_gen.go:22452`), five are gated on the agent's own
   capabilities: `ListSessions` (`sessionCapabilities.list`), `DeleteSession` (`.delete`), `ResumeSession` (`.resume`),
   `CloseSession` (`.close`) and `Logout` (`auth.logout`) (`acp.go:57`–`:72`). `LoadSession` is already optional, through
-  `AgentLoader`. The agent's dispatch refuses a gated method it did not advertise before the handler runs. `<cli-b>` stubs
+  `AgentLoader`. The agent's dispatch refuses a gated method it did not advertise before the handler runs. gobble-cli stubs
   `DeleteSession` and `Logout` with `NewMethodNotFound(acp.AgentMethod…)`, the second with the comment "the SDK answers -32601 before
   this runs". The other seven are ungated, and every agent implements them.
 * **R10. Unions with a discriminator.** `schemaUnions()` lists 24 unions; 17 have a discriminator key. Of those, every variant
@@ -73,7 +73,7 @@ Findings, from a read-only investigation at `ea09a07`:
   `SessionUpdate`, and the unstable `PlanUpdateContent` and `UnstableNesSuggestion`. The other ten have a key-less variant, such as
   `AuthMethod.Agent` or `McpServer`'s stdio, or a catch-all `Other`, so the value a `Kind()` would name for it is not the wire's.
   `SessionUpdate.Kind()` exists (0036). Of the four stable unions left, `ContentBlock` is the one both consumers switch on
-  (`<cli-b>`'s `blockText`, magic-cli-remote's `blockKind`); the other three are the remaining stable unions of the same shape.
+  (gobble-cli's `blockText`, magic-cli-remote's `blockKind`); the other three are the remaining stable unions of the same shape.
 * **R11. Where code may go.** `cmd/generate/engine_test.go`'s `TestRuntimeFilesCoverHandWritten` requires a new hand-written root
   file to be listed as a runtime file or excluded by name, as step 4 of the 0036 PLAN found. `connection.go` is a runtime file,
   compiled into the generator's synthetic cases, and may use no ACP type; `helpers.go`, `errors.go` and `refusals.go` may.
@@ -108,7 +108,7 @@ it hand-written and additive, with no generator change. `Kind()` goes only where
 
 * O2 would put a generator change, engine cases and the regeneration gates on 17 unions. For the ten with a key-less or catch-all
   variant it would have to invent a value the wire does not carry (R10).
-* O3 leaves `<cli-b>`'s agent stubs and the `ContentBlock` switches in both consumers for no saving: unit 3 is the smaller unit.
+* O3 leaves gobble-cli's agent stubs and the `ContentBlock` switches in both consumers for no saving: unit 3 is the smaller unit.
 * O4 leaves A1's single page, A2's misread "Don't allow" and A3's literal `-32000` in the consumers.
 
 ### Specification, as proposed
@@ -254,3 +254,5 @@ The PLAN shows each of the following, every new check first seen to fail on a pl
   the unstable unions waits for a policy.
 * Not in this record: the report's units 4 to 7 (C3, C6; C4, C5, C7; D1; E3, E4).
 * The implementation is [0038-PLAN-consumer-helpers-kind-and-agent-refusals.md](0038-PLAN-consumer-helpers-kind-and-agent-refusals.md).
+
+*Note, 2026-10-31: gobble-cli was written `<cli-b>` in this record until the owner lifted that redaction ([0044-PLAN-notification-queue-back-pressure.md](0044-PLAN-notification-queue-back-pressure.md), phase 5).*

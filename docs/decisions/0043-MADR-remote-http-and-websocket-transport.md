@@ -171,9 +171,9 @@ Read at the revisions under "Sources".
 
 ### Findings in the consumers
 
-Read at `<cli-b>` `ccd8aa8` and magic-cli-remote `0e84b1f0`. Nothing in either tree was written.
+Read at gobble-cli `ccd8aa8` and magic-cli-remote `0e84b1f0`. Nothing in either tree was written.
 
-* **C1. `<cli-b>` reserved the package and deferred it.** `exp/acpws/doc.go`: "Package acpws is the experimental ACP WebSocket
+* **C1. gobble-cli reserved the package and deferred it.** `exp/acpws/doc.go`: "Package acpws is the experimental ACP WebSocket
   transport. … Phase 1 declares the package only." Its `0004-MADR-go-module-architecture.md` places it under `exp/` as "ACP over
   WebSocket / Unix socket (remote-agent transport)", guarded by `http.CrossOriginProtection`. Its `0005-PLAN-v1-feature-scope.md`
   lists it under `exp/`, where "Each item is off by default, enabled by a setting, and needs a later MADR to promote it".
@@ -184,9 +184,9 @@ Read at `<cli-b>` `ccd8aa8` and magic-cli-remote `0e84b1f0`. Nothing in either t
   `0029-MADR-provider-platform-canonicalization.md` keeps `coder/websocket` direct for "daemon WS, relay splice, ACP-over-HTTP
   engine".
 * **C3. magic-cli-remote already requires `github.com/coder/websocket v1.8.15`** and this module at `v1.26.0` (`go.mod`).
-  `<cli-b>` requires this module at `v1.20.0` and no WebSocket module.
+  gobble-cli requires this module at `v1.20.0` and no WebSocket module.
 * **C4. Neither consumer wants MCP-over-ACP now.** magic-cli-remote's `0167-REPORT-acp-go-sdk2-integration-assessment.md`:
-  `mcp/message` "decline (method-not-found) unless MCP-over-ACP is adopted". `<cli-b>` refuses a `type: "acp"` server
+  `mcp/message` "decline (method-not-found) unless MCP-over-ACP is adopted". gobble-cli refuses a `type: "acp"` server
   (`acpserver/mcp_test.go:200`) and lists `mcpCapabilities.acp` as out of its v1 plan.
 * **C5. Neither consumer reads the registry.** A scan of both trees for `registry.json`, `cdn.agentclientprotocol` and
   `agentclientprotocol.com/registry` found nothing.
@@ -446,7 +446,7 @@ Walking "Confirmation" against what was built found its first item unmeetable as
 
 * Good, because a Go program can serve an agent over the network and reach any agent served by an official SDK, with the client
   and agent code it has today (R2).
-* Good, because the consumers can drop their own: `<cli-b>`'s placeholder becomes an import, and magic-cli-remote's next
+* Good, because the consumers can drop their own: gobble-cli's placeholder becomes an import, and magic-cli-remote's next
   ACP-over-HTTP agent does not rebuild 6,301 lines (C1, C2).
 * Good, because nothing stable changes: the new names are outside the compatibility promise, and `make api` keeps gating the
   four stable packages (R8).
@@ -559,7 +559,9 @@ release. Each consumer then adopts it under its own records.
 * <https://go.dev/doc/go1.24>; <https://pkg.go.dev/golang.org/x/net/websocket>;
   <https://pkg.go.dev/github.com/coder/websocket@v1.8.15>; the Go module proxy for `github.com/coder/websocket`,
   `github.com/gorilla/websocket` and `github.com/modelcontextprotocol/go-sdk@v1.8.0`.
-* The consumers, read-only: `<cli-b>` at `ccd8aa8` (`exp/acpws/doc.go`, `go.mod`, its module-architecture and v1-scope records,
+* The consumers, read-only: gobble-cli at `ccd8aa8` (`exp/acpws/doc.go`, `go.mod`, its module-architecture and v1-scope records,
   `acpserver/mcp_test.go`); magic-cli-remote at `0e84b1f0` (`go.mod`, `0025-MADR-goose-provider.md`,
   `0029-MADR-provider-platform-canonicalization.md`, `0160-MADR-remove-goose-cli-support.md`,
   `0167-REPORT-acp-go-sdk2-integration-assessment.md`).
+
+*Note, 2026-10-31: gobble-cli was written `<cli-b>` in this record until the owner lifted that redaction ([0044-PLAN-notification-queue-back-pressure.md](0044-PLAN-notification-queue-back-pressure.md), phase 5).*

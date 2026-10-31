@@ -245,6 +245,22 @@ As [0042-PLAN-in-process-agent-runner.md](0042-PLAN-in-process-agent-runner.md)'
 4. On the owner's ask, a comment on issue #13 with the release link, and the issue closed.
 5. The PLAN `complete`, and the MADR's status line.
 
+### Phase 5: the consumers, on the owner's ask (added 2026-10-31)
+
+Added after the release, when the owner asked for the consumers to be checked against the new default, the check written up, and an
+issue opened in each consumer.
+
+1. Read-only: every connection each consumer builds, its policy, and what `v1.29.0`'s default changes for it; the notification
+   handlers behind them, against `OverflowBlock`'s rule.
+2. In scratch copies, never the consumers' trees: each suite at its pin and at `v1.29.0`; then, on `v1.29.0`, its one
+   `OverflowDropNewest` replaced by `OverflowBlock`.
+3. `docs/reports/0044-REPORT-consumer-check-of-the-v1-29-0-default.md`, and its row in `docs/README.md`. ~~The second consumer is
+   `<cli-b>` there, its issue cited by number alone.~~ *Amended 2026-10-31 by step 5.5: it is named gobble-cli there, and its issue
+   is linked.*
+4. One issue in each consumer, proposing `OverflowBlock`, each body scanned with `tools/idscan.py` before it is opened.
+5. *Added 2026-10-31.* The `<cli-b>` redaction lifted in every record that uses it: gobble-cli named, its command `gobble acp`, its
+   issues linked, the sentences that defined the placeholder reworded, and a dated note in each record changed.
+
 ## Verification
 
 * Every test of step 1.7 passes under `-race` on macOS, and with `-count=3` on the Linux and Windows hosts, and was seen to fail on its
@@ -545,3 +561,55 @@ Items 1 to 11 were shown in phase 3.
 
 Every item of the MADR's Confirmation is shown, the release is published, and the issue is closed, so this PLAN and its row are
 `complete`.
+
+The owner committed this record as `3d552f4` and pushed it.
+
+### Phase 5, 2026-10-31: the consumers
+
+The owner asked "check the consumers for the new default", then "write the report. also open a detailed, informative, explanatory
+issue about adopting the new default in each repo to eliminate the need to drop updates." Phase 5 above was added for it.
+
+* **Step 5.1.** Both consumers pin `v1.28.0`. Their production client connections name `OverflowDropNewest`, so the default does
+  not reach them. It reaches gobble-cli's agent side and test connections. No handler read waits for a request the agent sends
+  later. The report gives each site.
+* **Step 5.2.**
+  * The bump: build, vet and tests give the same results on `v1.28.0` and `v1.29.0` in each consumer. One magic-cli-remote test
+    fails on both, because the copy had no git index.
+  * magic-cli-remote's stalled-pump and drop tests: 5 of 5 under `-race` on `v1.29.0`.
+  * The switch to `OverflowBlock` breaks one test in each consumer, the one that asserts a drop. magic-cli-remote's
+    `TestDropHandlerRecordsTheDroppedMethod` hangs to the timeout, and 409 others pass. gobble-cli's `TestDropReported` fails, and
+    the other packages pass.
+* **Step 5.3.**
+  [0044-REPORT-consumer-check-of-the-v1-29-0-default.md](../reports/0044-REPORT-consumer-check-of-the-v1-29-0-default.md), and its
+  index row.
+* **Step 5.4.** Each body scanned, "2 file(s), 17 pattern(s), 0 match(es)", then opened: magic-cli-remote
+  [#32](https://github.com/maccavelli/magic-cli-remote/issues/32), and gobble-cli
+  [#8](https://github.com/maccavelli/gobble-cli/issues/8). Each issue covers:
+  * why the consumer drops, with its records;
+  * what `OverflowBlock` does;
+  * why its handlers keep the rule;
+  * the trade-off and the evidence above;
+  * the steps to adopt it and its acceptance criteria.
+
+**Deviation, 2026-10-31, step 5.3: the redaction lifted (step 5.5).**
+* *Found.* The owner found `<cli-b>` "vague, confusing, and not at all informative". It began in
+  [0025-REPORT-schema-1-26-0-adoption-assessment.md](../reports/0025-REPORT-schema-1-26-0-adoption-assessment.md), when this
+  repository's identifier scan kept the name out of committed files, and each consumer record since followed it. The scan no
+  longer does: `tools/idscan.py` found 0 matches in gobble-cli's issue body, which names it throughout. gobble-cli is a public
+  repository, and magic-cli-remote's records name it.
+* *Decision.* The owner chose to name it in every record, the older ones included.
+* *Done.* A scratch script replaced 161 uses in 16 records, each special edit required to match once:
+  * `` `<cli-b> acp` `` became `gobble acp`, the binary's name;
+  * an issue of it became a link;
+  * the five sentences that defined the placeholder were reworded, or, in this phase's report, removed;
+  * every other use became gobble-cli.
+
+  A dated note was added in each older record. The one in
+  [0025-REPORT-schema-1-26-0-adoption-assessment.md](../reports/0025-REPORT-schema-1-26-0-adoption-assessment.md) and the one in
+  [0041-PLAN-close-the-gaps-the-consumers-wait-on.md](0041-PLAN-close-the-gaps-the-consumers-wait-on.md) are in place, where the
+  redaction was explained. Those notes and this entry keep the placeholder as history; no other `<cli-b>` remains. Step 5.3 is
+  annotated.
+* *Before the push.* The owner's pre-push guard holds patterns of its own; `make push-guard` after the commit shows whether it
+  accepts the name.
+
+No consumer file was changed. Adoption is each consumer's, under its own records, so this PLAN stays `complete`.

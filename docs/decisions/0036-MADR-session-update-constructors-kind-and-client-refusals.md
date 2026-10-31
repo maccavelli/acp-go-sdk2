@@ -14,7 +14,7 @@ Issue #11, opened by the owner, asks for three things:
 * an exported accessor for a `SessionUpdate`'s discriminator;
 * an embeddable type that answers method-not-found for the `Client` methods a host may leave unadvertised.
 
-Both consumers have an issue that pins the tag shipping them: `<cli-b>` issue #5 for its agent's send path and its client's stubs,
+Both consumers have an issue that pins the tag shipping them: gobble-cli issue [#5](https://github.com/maccavelli/gobble-cli/issues/5) for its agent's send path and its client's stubs,
 and magic-cli-remote issue #28 for its client's receive path and its tests.
 [0035-REPORT-consumer-acp-code-for-the-sdk.md](../reports/0035-REPORT-consumer-acp-code-for-the-sdk.md) found the same three gaps
 in the consumers' code, as its C1, A4 and B3.
@@ -93,7 +93,7 @@ Every finding below was read on 2026-10-24 at `7581822`, the tree only read, aga
   hazard is different: a real method renamed or removed later would be replaced by a refusal without a compile error. The issue's
   rule stands, for that reason.
 * **R8. What the consumers copy.**
-  * `<cli-b>` writes five `SessionUpdate` literals in its agent: `acpserver/commands.go:531, 597, 728`, `modes.go:84`–`:86` and
+  * gobble-cli writes five `SessionUpdate` literals in its agent: `acpserver/commands.go:531, 597, 728`, `modes.go:84`–`:86` and
     `prompt.go:312`–`:320`.
   * It writes nine client stubs (`acpclient/conn.go:552`–`:600`): eight return `NewMethodNotFound(acp.ClientMethod…)`, and
     `CompleteElicitation` returns nil.
@@ -268,7 +268,7 @@ The other resolution, putting `ClientRefusals` in `helpers.go`, would have rever
 
 ### Consequences
 
-* Good, because `<cli-b>` can drop its five literals and nine stubs, and magic-cli-remote its `Unknown` decoding, once they pin the
+* Good, because gobble-cli can drop its five literals and nine stubs, and magic-cli-remote its `Unknown` decoding, once they pin the
   tag.
 * Good, because a schema bump that adds a stable variant, or any variant, fails a test until a constructor or a `Kind()` case is
   written.
@@ -294,7 +294,7 @@ The PLAN shows each of the following, every new check first seen to fail on a pl
 
 ## More Information
 
-* Issue #11, and the consumer issues `<cli-b>` #5 and magic-cli-remote #28.
+* Issue #11, and the consumer issues gobble-cli [#5](https://github.com/maccavelli/gobble-cli/issues/5) and magic-cli-remote #28.
 * [0035-REPORT-consumer-acp-code-for-the-sdk.md](../reports/0035-REPORT-consumer-acp-code-for-the-sdk.md), C1, A4 and B3: the
   consumers' copies.
 * [0014-MADR-union-constructors-take-every-required-key.md](0014-MADR-union-constructors-take-every-required-key.md): constructor
@@ -305,3 +305,5 @@ The PLAN shows each of the following, every new check first seen to fail on a pl
   waits for a policy.
 * Later issues, out of this record: constructors for the unstable variants; `Kind()` on the other unions (0035's A4); an agent-side
   counterpart to `ClientRefusals` (0035's B3).
+
+*Note, 2026-10-31: gobble-cli was written `<cli-b>` in this record until the owner lifted that redaction ([0044-PLAN-notification-queue-back-pressure.md](0044-PLAN-notification-queue-back-pressure.md), phase 5).*

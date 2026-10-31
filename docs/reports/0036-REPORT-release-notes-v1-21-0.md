@@ -134,5 +134,7 @@ func (client) RequestPermission(context.Context, acp.RequestPermissionRequest) (
   (`tools/watch_ci.py`).
 - **The evidence:** the 0036 PLAN's steps 1 to 5, with their planted breaks, the gates on macOS and on the Linux and Windows hosts,
   and their deviations: the six old constructors' round trip, the named constants of `Kind`, and the generator test's exclusion.
-- **Issue #11** is open (`gh issue view 11`); the owner closes it with the release. Its consumers' issues, `<cli-b>` #5 and
+- **Issue #11** is open (`gh issue view 11`); the owner closes it with the release. Its consumers' issues, gobble-cli [#5](https://github.com/maccavelli/gobble-cli/issues/5) and
   magic-cli-remote #28, are to pin this tag.
+
+*Note, 2026-10-31: gobble-cli was written `<cli-b>` in this record until the owner lifted that redaction ([0044-PLAN-notification-queue-back-pressure.md](../decisions/0044-PLAN-notification-queue-back-pressure.md), phase 5).*
