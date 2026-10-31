@@ -357,3 +357,39 @@ the final code:
   class fails on a clean export of `24e88d1` through `--tree`, so it is the harness, not this change. Which of them a run reports
   varies, because one of them panics and ends the binary. No connection test is among them. CI runs the whole suite from source on
   all three systems (phase 3).
+
+The owner committed the records as `d9ff0c4` and phase 1 as `c4dcb77`.
+
+### Phase 2, 2026-10-31
+
+**What changed.**
+* `example_api_test.go`: `ExampleWithNotificationOverflowPolicy`. A connection under `OverflowBlock` with a queue of 1 and a first
+  handler that sleeps 10 ms. Four notifications are written on the example's own goroutine, whose writes wait while the reader is
+  paused. It prints `handled 1` to `handled 4` and `dropped: 0`.
+* `README.md`:
+  * The hold paragraph: under the default the connection reads on while `Initialize` waits; under `OverflowCloseConnection`, the
+    held notifications close it.
+  * "Closing and limits":
+    * Its first paragraph no longer names the close as the default.
+    * New paragraphs on the queue's limit and the three policies, with the default and its version: what a pause holds, the rule,
+      the read-on limit, the log, `remote`'s bounds, and the opt-out in a code block.
+  * The `Err` section: an overflow's close is `OverflowCloseConnection`'s, or `OverflowBlock`'s past its read-on limit. The
+    example's message is "the client's notifications overflowed the queue's limit".
+* `docs/architecture.md`:
+  * A paragraph and list on the policies' mechanism: `queueLimit`, the channel at `2n`, `waitForRoom` on the sequence count,
+    `peerWaits` and the three places that count, and the log.
+  * `endError`'s "an overflow's close".
+  * The checks list names `connection_overflow_block_test.go`.
+
+No step was skipped and nothing deviated.
+
+**Seen to fail.** In a scratch copy, the example given `OverflowCloseConnection` in place of `OverflowBlock` fails. It got
+`write: io: read/write on closed pipe`, `handled 1`, `handled 2`, `dropped: 0`, against the four `handled` lines it wants.
+
+**Checks.**
+* `go test -race -count=1 ./...`: every package `ok`.
+* `go vet ./...`: clean.
+* `make pre-add-check`: "go-precheck: 278 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+* `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0.
+* A search of the Markdown outside the records for the old default's wording ("closes the connection by", "default overflow")
+  finds none.

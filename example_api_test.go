@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	acp "github.com/maccavelli/acp-go-sdk2"
 )
@@ -245,4 +246,39 @@ func ExampleConnection_Close() {
 	fmt.Println(errors.Is(err, acp.ErrConnectionClosed))
 	// Output:
 	// true
+}
+
+// ExampleWithNotificationOverflowPolicy names OverflowBlock, the default, with
+// a queue of one notification. While the first handler is slow, the connection
+// stops reading, so the peer's writes below wait, and nothing is dropped or
+// closed. WithNotificationOverflowPolicy(acp.OverflowCloseConnection) would
+// close the connection instead (0044-MADR-notification-queue-back-pressure.md).
+func ExampleWithNotificationOverflowPolicy() {
+	r, w := io.Pipe()
+	c := acp.NewConnection(func(_ context.Context, _ string, params json.RawMessage) (any, *acp.RequestError) {
+		var p struct{ N int }
+		_ = json.Unmarshal(params, &p)
+		if p.N == 1 {
+			time.Sleep(10 * time.Millisecond) // a slow handler: the queue fills
+		}
+		fmt.Println("handled", p.N)
+		return nil, nil
+	}, io.Discard, r,
+		acp.WithMaxQueuedNotifications(1),
+		acp.WithNotificationOverflowPolicy(acp.OverflowBlock))
+
+	for n := 1; n <= 4; n++ {
+		if _, err := fmt.Fprintf(w, `{"jsonrpc":"2.0","method":"_example/progress","params":{"n":%d}}`+"\n", n); err != nil {
+			fmt.Println("write:", err)
+		}
+	}
+	_ = w.Close() // the end of the peer's output
+	_ = c.Wait()  // the connection ends at the end of input, its handlers done
+	fmt.Println("dropped:", c.DroppedNotifications())
+	// Output:
+	// handled 1
+	// handled 2
+	// handled 3
+	// handled 4
+	// dropped: 0
 }

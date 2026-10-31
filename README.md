@@ -498,8 +498,10 @@ called nothing is held. A held notification waits in the notification queue,
 with the notifications behind it, and a held request keeps its request slot,
 so an agent that sends more of them before its answer than
 `acp.WithMaxQueuedNotifications` or `acp.WithMaxConcurrentRequests` allows
-meets those limits: the overflow policy, which closes the connection by
-default, or `-32603`. After the record, the SDK checks what each side sends and
+meets those limits: the overflow policy, or `-32603`. Under
+`acp.OverflowBlock`, the default, the connection reads on while `Initialize`
+waits, to twice the queue's size, so held notifications do not stop it; under
+`acp.OverflowCloseConnection` they close it. After the record, the SDK checks what each side sends and
 receives against the capabilities in the record:
 
 - Methods: `session/load` needs `loadSession`; `session/list`, `session/delete`,
@@ -651,8 +653,9 @@ without writing, every handler's context ends, a request's and a
 notification's alike, and the reader and the writer are closed when they
 implement `io.Closer`, which also ends a read in progress. A second `Close`
 returns nil. When the peer ends the connection, the same holds, but for the
-transport, which is the application's to close. The default overflow policy,
-`acp.OverflowCloseConnection`, closes the connection as `Close` does.
+transport, which is the application's to close. A full notification queue
+pauses the connection by default, and closes it only under the overflow
+policies below that say so.
 
 `Connection.Shutdown(ctx)` is the graceful close, as `http.Server.Shutdown` is
 a server's. Every handler's context ends with `acp.ErrShutdown`, and the
@@ -802,7 +805,9 @@ written, for at most five seconds, after which their contexts are cancelled and
 
 `Err()` says why a connection ended. It is nil until `Done()` closes, and then
 the same error each time: `acp.ErrConnectionClosed` when this side ended it, by
-`Close` or by the overflow policy, which wraps `acp.ErrNotificationQueueOverflow`;
+`Close` or by a notification overflow, under `acp.OverflowCloseConnection` or
+past `acp.OverflowBlock`'s read-on limit, which wraps
+`acp.ErrNotificationQueueOverflow`;
 otherwise `acp.ErrPeerDisconnected`, wrapping `io.EOF` when the peer ended its
 output, or the read's error. The first end is the one kept: a `Close` after the
 peer's end leaves `Err()` as it was, though a notification sent then fails with
@@ -827,7 +832,7 @@ case <-asc.Done():
 _ = asc.Close() // Err keeps an earlier end
 switch err := asc.Wait(); {
 case errors.Is(err, acp.ErrNotificationQueueOverflow):
-    log.Print("the client sent notifications faster than they were handled")
+    log.Print("the client's notifications overflowed the queue's limit")
 case errors.Is(err, io.EOF):
     log.Print("the client closed its output")
 }
@@ -835,6 +840,42 @@ case errors.Is(err, io.EOF):
 
 Every send returns when its context ends, even while the peer does not read.
 A message whose write has begun may still reach the peer.
+
+`acp.WithMaxQueuedNotifications(n)` sets how many received notifications may
+wait while a notification handler runs, 1024 by default.
+`acp.WithNotificationOverflowPolicy(p)` sets what happens past that
+([0044-MADR-notification-queue-back-pressure.md](docs/decisions/0044-MADR-notification-queue-back-pressure.md)):
+
+- `acp.OverflowBlock`, the default since v1.29.0: the connection stops reading
+  the peer until a handler returns, so the peer's writes wait. Nothing is
+  dropped, and the connection stays open. An agent whose client is slow is
+  slowed at its `SessionUpdate` calls, and `session/cancel` still ends its turn.
+- `acp.OverflowCloseConnection`, the default before v1.29.0: the connection
+  closes as `Close` does, and `Err()` wraps `acp.ErrNotificationQueueOverflow`.
+- `acp.OverflowDropNewest`: the notification is dropped and counted by
+  `DroppedNotifications()`, and the connection stays open.
+
+While the reader is paused, nothing else is read either. A request from the
+peer, such as a permission request, waits behind the queue, and so does a
+`$/cancel_request`. A request this side sent still returns no later than it
+would otherwise, since it returns only once the notifications received before
+its answer are handled. So, under `acp.OverflowBlock`, a notification handler
+must not wait for a request or a `$/cancel_request` the peer sends later.
+
+The connection reads on, to twice the queue's size, while a notification
+handler waits for the answer to a request it sent under its context, or for
+`initialize`'s answer, since only the reader can deliver either. Past that, it
+closes with `acp.ErrNotificationQueueOverflow`. A pause that lasts 5 seconds
+is logged at `Warn`.
+
+Over package `remote`, the server's own bounds still apply to a long pause: a
+WebSocket write waits at most `Grace`, and Streamable HTTP holds at most
+`MaxBuffered`. To keep the close that was the default before v1.29.0:
+
+```go
+conn := acp.NewClientSideConnection(client, stdin, stdout,
+    acp.WithNotificationOverflowPolicy(acp.OverflowCloseConnection))
+```
 
 `acp.WithMaxConcurrentRequests(n)` bounds the received requests whose handlers
 run at once. Over the limit, a request is answered at once, `-32603` with

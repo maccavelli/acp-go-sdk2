@@ -442,13 +442,39 @@ stops before it. A message's params are left out when they encode as `null`,
 refused when they encode as neither an object nor an array, and a request
 whose context has ended is not written.
 
+What a full queue does is the overflow policy
+([0044-MADR-notification-queue-back-pressure.md](decisions/0044-MADR-notification-queue-back-pressure.md)).
+`queueLimit` is `WithMaxQueuedNotifications`' `n`. `receiveLine` queues each
+notification with a non-blocking send, whose `default` closes
+(`OverflowCloseConnection`) or drops (`OverflowDropNewest`) once the channel is
+full. `OverflowBlock`, the default, and also what an undefined policy becomes in
+`buildConnection`, works this way:
+
+- Its channel holds `2n`.
+- Before a notification takes its sequence number, `waitForRoom` waits on
+  `notifyCond` while more than `n` are received and not completed, as
+  `lastEnqueuedNotificationSeq - completedNotificationSeq` counts them, so the
+  pause is decided by what the notification loop has finished, not by the
+  channel's length.
+- `processNotifications` wakes it as each handler returns, and the
+  connection's end wakes it through `wakeNotificationWaits`. Woken by the end,
+  the reader shuts down as at a failed read.
+- `peerWaits`, under `notifyMu`, counts the waits the notification loop has on
+  the reader. `exchange` and `SendRequestNoResult` count a request sent under
+  the running notification's context (`inRunningNotification`), and
+  `sendRequestCommit` counts `initialize` until `settled` runs. `beginPeerWait`
+  wakes the reader as it counts one.
+- While any is counted, the reader does not pause, and reads on until the
+  channel's `2n` are full, where the same `default` closes.
+- A pause that lasts `pauseWarnAfter`, 5 s, is logged once at `Warn`.
+
 One writer goroutine, started by `start`, writes every message, in the order
 `sendMessage` hands them over through an unbuffered channel; a sender returns
 when its context ends, even while a write is blocked, and a write that has
 finished is reported in preference to the context. Once the connection's
 context has ended, `sendMessage` writes nothing and returns `endError`:
-`ErrConnectionClosed` when this side closed it, through `Close` or the
-overflow policy (`closeWith`), and otherwise `ErrPeerDisconnected` wrapping how
+`ErrConnectionClosed` when this side closed it, through `Close` or an
+overflow's close (`closeWith`), and otherwise `ErrPeerDisconnected` wrapping how
 the reader ended. `Close` runs once: it marks the connection closed, ends its
 context with `ErrConnectionClosed`, and closes the reader and the writer that
 implement `io.Closer`. A `*RequestError` the connection makes for a local
@@ -505,6 +531,20 @@ Checks that guard this:
 - `paths_test.go` covers the absolute-path rule: sending, receiving, a
   handler's result, the two hooks and their order, and `Roots`; the engine
   case `accept-absolute-paths` covers the generated checks.
+- `connection_overflow_block_test.go` covers `OverflowBlock`, each test in a
+  `synctest` bubble:
+  - the pause at the queue's limit, and the default it is;
+  - a response behind a paused queue, returned as with room for all;
+  - a notification handler's own request, and the `initialize` hold, read past
+    the limit;
+  - the read-on limit's close;
+  - `Close` and `Shutdown` ending a paused reader, one with a handler that
+    ignores its context, which is why that test is not parallel;
+  - an agent slowed at `SessionUpdate`, whose turn `session/cancel` still ends;
+  - the `Warn` after 5 s.
+
+  `connection_overflow_policy_test.go` covers the close and drop policies, each
+  named.
 - `connection_close_test.go` covers a send that returns on its context, `Close`,
   a send after either end, and the overflow close; `errors_test.go` the
   causes of local errors; `conn_aware_test.go` the hand-off before reading,
