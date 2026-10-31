@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-31
 associated-madr: "0044-MADR-notification-queue-back-pressure.md"
 ---
@@ -514,3 +514,34 @@ consumer before the tag.
 **Left, each on the owner's ask:** the push of this commit and its CI; the tag `v1.29.0`, the GitHub release from
 `tools/release_body.py`, `tools/publication.py`, and `tools/consumer.py v1.29.0`, which with the notes shows the Confirmation's
 item 12; then issue #13 answered and closed with the release's link, and this PLAN and its row `complete`.
+
+### Phase 4, 2026-10-31: the release
+
+The owner committed the release notes and the consumer as `f2c53b9` and pushed it.
+
+* **CI on `f2c53b9`,** `tools/watch_ci.py --branch main f2c53b9`, exit 0: run `41208877236`, "completed success", the six
+  `validate` jobs on macOS, Ubuntu and Windows at Go `1.27.3` and `1.26.10`; run `41208877323`, the Docs workflow, "completed
+  success".
+* **The body,** `tools/release_body.py v1.29.0 f2c53b9`: "53 lines, 2 links", its identifier scan "0 match(es)".
+* **The tag.** The owner pushed `v1.29.0`, annotated, naming `f2c53b9`, as `git ls-remote` shows. Its CI,
+  `tools/watch_ci.py --branch v1.29.0 f2c53b9`, exit 0: run `41209567306`, "completed success", the same six jobs.
+* **`tools/consumer.py v1.29.0`,** exit 0, "as required". At `go1.26.10`, from the proxy: `go get` of `v1.29.0`, `go mod tidy`,
+  the build, the run, whose output equals `WANT_RUN`, `overflow true 1 <nil> <nil> <nil>` among its lines, `go test` and the
+  Windows build, each exit 0. The consumer's `go.mod` keeps `go 1.26.10` and has no toolchain line.
+* **The release.** The owner ran `gh release create v1.29.0 --verify-tag --title v1.29.0 --notes-file` with the extracted body:
+  <https://github.com/maccavelli/acp-go-sdk2/releases/tag/v1.29.0>.
+* **`tools/publication.py v1.29.0 f2c53b9`,** exit 0, "10 of 10 checks hold": the release exists, not a draft or prerelease; its
+  body is the extracted release text; it is marked latest; the tag is annotated and names `f2c53b9`, which is on origin's `main`;
+  CI passed on `main`'s head, run `41208877323`, and on the tag, run `41209567306`; the proxy serves the `.info`, its origin the
+  tag at that commit; `go list -m @latest` gives `v1.29.0`; `go mod download` of the tag passes with the checksum database on.
+
+**The Confirmation's item 12,** "The `v1.29.0` release notes lead with the change of default and its opt-out", is shown by the
+published release, whose first section is "Changed: a full notification queue pauses reading, by default", ending in the opt-out.
+Items 1 to 11 were shown in phase 3.
+
+* **Issue #13,** on the owner's "post and close": answered with the release's link, the new default and what it pauses, the rule,
+  the reading on, the 5 s log, the opt-out, and the MADR's link at the tag
+  (<https://github.com/maccavelli/acp-go-sdk2/issues/13#issuecomment-6544689241>); closed as completed, 2026-10-31T14:27:51Z.
+
+Every item of the MADR's Confirmation is shown, the release is published, and the issue is closed, so this PLAN and its row are
+`complete`.

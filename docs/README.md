@@ -129,7 +129,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0043 | PLAN | [Implement 0043: ACP's remote transport, Streamable HTTP and WebSocket, in package `remote`](decisions/0043-PLAN-remote-http-and-websocket-transport.md) | complete |
 | 0043 | REPORT | [Release notes for v1.27.0, against v1.26.0](reports/0043-REPORT-release-notes-v1-27-0.md) | observed |
 | 0044 | MADR | [Add back-pressure as a third notification overflow policy, and make it the default: pause the reader at the queue's capacity, and read on while the notification loop waits on the reader](decisions/0044-MADR-notification-queue-back-pressure.md); issue #13; questions answered 2026-10-31 | accepted |
-| 0044 | PLAN | [Implement 0044: `OverflowBlock`, back-pressure for the notification queue, as the default](decisions/0044-PLAN-notification-queue-back-pressure.md) | in-progress |
+| 0044 | PLAN | [Implement 0044: `OverflowBlock`, back-pressure for the notification queue, as the default](decisions/0044-PLAN-notification-queue-back-pressure.md) | complete |
 | 0044 | REPORT | [Release notes for v1.29.0, against v1.28.0](reports/0044-REPORT-release-notes-v1-29-0.md) | observed |
 
 ## I want to…
