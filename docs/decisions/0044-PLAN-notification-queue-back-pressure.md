@@ -393,3 +393,93 @@ No step was skipped and nothing deviated.
 * `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0.
 * A search of the Markdown outside the records for the old default's wording ("closes the connection by", "default overflow")
   finds none.
+
+The owner committed phase 2 as `3845b28`.
+
+### Phase 3, 2026-10-31
+
+**Step 3.1, the gates.** `tools/gates.py --all` on `3845b28`, the tree clean, exit 0:
+
+```text
+ok   regen (exit 0)
+ok   precheck (exit 0)
+  newfiles: no new .go files
+ok   newfiles (exit 0)
+ok   nojsonv2 (exit 0)
+ok   winvet (exit 0)
+ok   records (exit 0)
+ok   mdlint (exit 0)
+ok   idscan (exit 0)
+ok   tools (exit 0)
+ok   lint (exit 0)
+ok   fix (exit 0)
+ok   tidy (exit 0)
+ok   api (exit 0)
+ok   race3 (exit 0)
+ok   floor (exit 0)
+ok   platforms (exit 0)
+ok   windows (exit 0)
+ok   linux (exit 0)
+all gates passed
+```
+
+* `precheck`: "go-precheck: 278 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+* `api`: "compatible: OverflowBlock: added"; "against v1.28.0: 0 incompatible, 1 compatible".
+* `windows` and `linux` run `tools/remote.py tree`, the whole tree from source, `go1.27.3` on each host: every package `ok`, the
+  root package included. Phase 1's runs of the root package there failed only the tests that read the source, since `pkg` sends
+  the test binary alone; from source, nothing fails.
+
+`make push-guard`, after a fetch: "3 outgoing commit(s), 24e88d1..3845b28, main to origin"; "the guard passed (exit 0)".
+
+**Step 3.2, CI.** The owner pushed `d9ff0c4`, `c4dcb77` and `3845b28`; `origin/main` is `3845b28`. `tools/watch_ci.py 3845b28`,
+exit 0:
+
+```text
+watch_ci: 2 run(s) for 3845b28: 41207967212, 41207967160
+watch_ci: run 41207967212 (main, push): completed success; watch exit 0
+  completed success: docs
+watch_ci: run 41207967160 (main, push): completed success; watch exit 0
+  completed success: validate (windows-2025, 1.27.3)
+  completed success: validate (ubuntu-24.04, 1.26.10)
+  completed success: validate (macos-15, 1.26.10)
+  completed success: validate (windows-2025, 1.26.10)
+  completed success: validate (ubuntu-24.04, 1.27.3)
+  completed success: validate (macos-15, 1.27.3)
+```
+
+**Step 3.3, the MADR's Confirmation.**
+
+| # | Item | Shown by |
+| :--- | :--- | :--- |
+| 1 | The reader stops at a full queue; every notification delivered in order, none dropped, the connection open | `TestOverflowBlockPausesReading` |
+| 2 | A response behind a full queue returns as under a queue with room | `TestOverflowBlockResponseAsWithRoom` |
+| 3 | A notification handler's request under its own context is answered while the queue is full | `TestOverflowBlockRequestFromNotificationHandler` |
+| 4 | Notifications held for `initialize` past the capacity do not stop `Initialize` | `TestOverflowBlockHeldInitialize` |
+| 5 | While the loop waits on the reader, the reader reads on to `2n`, then closes with `ErrNotificationQueueOverflow` | `TestOverflowBlockReadOnLimit` |
+| 6 | `Close` and `Shutdown` end a paused reader; `Done` closes, `Wait` returns | `TestOverflowBlockEndsOnClose`: `Close`, `Shutdown`, and `Close` with a handler ignoring its context |
+| 7 | An agent whose client pauses is slowed at `SessionUpdate`, and `session/cancel` still ends its turn | `TestOverflowBlockSlowsAgent` |
+| 8 | A pause of 5 s logs one `Warn` | `TestOverflowBlockLogsLongPause` |
+| 9 | No policy or an undefined one pauses; `OverflowCloseConnection` closes as before; the barrier and hold tests unchanged | `TestOverflowBlockIsTheDefault`; the thirteen tests of step 1.8 with `OverflowCloseConnection` named; `connection_notification_barrier_test.go` and `initialize_test.go`'s hold tests, unchanged, in `race3` |
+| 10 | `make api`: one compatible addition, `OverflowBlock`, no incompatible change | the `api` gate above |
+| 11 | `tools/gates.py --all`, the new tests on the Linux and Windows hosts, and CI pass | step 3.1; phase 1's `tools/remote.py pkg` runs; CI on `3845b28` (step 3.2) |
+| 12 | The `v1.29.0` release notes lead with the change of default and its opt-out | phase 4 |
+
+**Deviation, 2026-10-31, step 1.9: two tests had no break of their own.** Building the table showed that step 1.9's breaks cover
+items 1, 3, 4, 5, 6, 8 and 9, but not `TestOverflowBlockResponseAsWithRoom` (item 2) or `TestOverflowBlockSlowsAgent` (item 7),
+although the MADR's Confirmation requires each new test to be seen to fail. Both were planted now, in a scratch copy, on `3845b28`:
+
+| Break | Test | Failure seen |
+| :--- | :--- | :--- |
+| the response barrier skipped (`waitNotificationsUpTo` returns at once) | `TestOverflowBlockResponseAsWithRoom/room_for_all` | "the request returned `<nil>` while notification 0 was held" |
+| the pause never lifts | `TestOverflowBlockResponseAsWithRoom/OverflowBlock,_a_queue_of_two` | "the request did not return once the notifications before its response were handled" |
+| no pause | `TestOverflowBlockSlowsAgent` | "6 updates returned while the client was held, want at most 4"; the overflow's close |
+
+The `OverflowBlock` case passes with the barrier skipped: at a queue of two the pause holds the response unread until the held
+handler returns, so the order holds without the barrier. The control case catches that break, and the `OverflowBlock` case catches
+a pause that does not lift. A paused reader that `Close` does not wake passes `TestOverflowBlockSlowsAgent`, which ends without a
+`Close`; `TestOverflowBlockEndsOnClose` catches it (step 1.9). No test or code changed.
+
+Every item from 1 to 9 is now shown by a test seen to fail on a planted break, and the example was seen to fail in phase 2.
+
+**Step 3.4, the status lines.** The MADR stays `accepted` and the index rows unchanged: the MADR `accepted`, this PLAN
+`in-progress` until phase 4 ends.
