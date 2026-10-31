@@ -30,7 +30,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0010 | PLAN | [Implement the docs update](decisions/0010-PLAN-align-docs-with-current-tree.md); a phase proposed 2026-10-31 for the amendment | complete |
 | 0011 | MADR | [Harden the code generator into a validated, schema-driven engine](decisions/0011-MADR-harden-code-generator-engine.md); amendment accepted 2026-10-31: `RequestId` refuses objects, the dead trial decode removed | accepted |
 | 0011 | PLAN | [Implement phase 1: the resolved schema model](decisions/0011-PLAN-resolved-schema-model.md) | complete |
-| 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md); the amendment's phase of 2026-10-31 complete, its release on the owner's ask | complete |
+| 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md); the amendment's phase of 2026-10-31 complete, released in v1.30.0 | complete |
 | 0011 | PLAN | [Implement phase 3: the protocol table](decisions/0011-PLAN-protocol-table.md) | complete |
 | 0011 | PLAN | [Implement phase 5: safe output](decisions/0011-PLAN-safe-output.md) | complete |
 | 0011 | PLAN | [Implement phase 6: tests of the engine](decisions/0011-PLAN-engine-tests.md) | complete |
@@ -133,7 +133,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0044 | REPORT | [Release notes for v1.29.0, against v1.28.0](reports/0044-REPORT-release-notes-v1-29-0.md) | observed |
 | 0044 | REPORT | [Consumer check of v1.29.0's default: neither consumer is affected, and both can stop dropping](reports/0044-REPORT-consumer-check-of-the-v1-29-0-default.md) | observed |
 | 0045 | MADR | [Bound what a connection keeps of its peer's messages in bytes as well as in count](decisions/0045-MADR-notification-queue-byte-budget.md); questions answered 2026-10-31: 64 MiB, one budget for requests and notifications; D3 amended 2026-10-31: the trigger gated on notifications | accepted |
-| 0045 | PLAN | [Implement 0045: a byte budget beside the notification count](decisions/0045-PLAN-notification-queue-byte-budget.md) | in-progress |
+| 0045 | PLAN | [Implement 0045: a byte budget beside the notification count](decisions/0045-PLAN-notification-queue-byte-budget.md) | complete |
 | 0045 | REPORT | [Release notes for v1.30.0, against v1.29.0](reports/0045-REPORT-release-notes-v1-30-0.md); with 0011's `RequestId` fix | observed |
 | 0046 | MADR | [Add sending and receiving middleware around the connection's method handler, and an observer for the messages it does not see](decisions/0046-MADR-sending-and-receiving-middleware.md); questions answered 2026-10-31: both directions, and an observer | proposed |
 | 0046 | PLAN | [Implement 0046: sending and receiving middleware, and an observer](decisions/0046-PLAN-sending-and-receiving-middleware.md) | proposed |

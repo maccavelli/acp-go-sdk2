@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-31
 associated-madr: "0045-MADR-notification-queue-byte-budget.md"
 ---
@@ -407,3 +407,27 @@ unchanged areas, `make api` on `70b947f` ("0 incompatible, 2 compatible"), CI on
 **Left, each on the owner's ask:** the push of this commit and its CI; the tag `v1.30.0`, the GitHub release from
 `tools/release_body.py`, `tools/publication.py`, and `tools/consumer.py v1.30.0`; then this PLAN and its row `complete`, and 0011's
 added phase noted as released.
+
+### Phase 4, 2026-10-31: the release
+
+The owner committed the release notes and the consumer as `d65819a` and pushed it.
+
+* **CI on `d65819a`,** `tools/watch_ci.py --branch main d65819a`, exit 0: run `41244428589`, "completed success", the six
+  `validate` jobs on macOS, Ubuntu and Windows at Go `1.27.3` and `1.26.10`; run `41244428578`, the Docs workflow, "completed
+  success".
+* **The body,** `tools/release_body.py v1.30.0 d65819a`: "70 lines, 3 links", its identifier scan "0 match(es)".
+* **The tag.** The owner pushed `v1.30.0`, annotated, naming `d65819a`, as `git ls-remote` shows. Its CI,
+  `tools/watch_ci.py --branch v1.30.0 d65819a`, exit 0: run `41244992731`, "completed success", the same six jobs.
+* **`tools/consumer.py v1.30.0`,** exit 0, "as required". At `go1.26.10`, from the proxy: `go get` of `v1.30.0`, `go mod tidy`,
+  the build, the run, whose output equals `WANT_RUN`, `queued bytes 0` and `request id RequestId: no variant matches` among its
+  lines, `go test` and the Windows build, each exit 0. The consumer's `go.mod` keeps `go 1.26.10` and has no toolchain line.
+* **The release.** The owner ran `gh release create v1.30.0 --verify-tag --title v1.30.0 --notes-file` with the extracted body:
+  <https://github.com/maccavelli/acp-go-sdk2/releases/tag/v1.30.0>.
+* **`tools/publication.py v1.30.0 d65819a`,** exit 0, "10 of 10 checks hold": the release exists, not a draft or prerelease; its
+  body is the extracted release text; it is marked latest; the tag is annotated and names `d65819a`, which is on origin's `main`;
+  CI passed on `main`'s head, run `41244428589`, and on the tag, run `41244992731`; the proxy serves the `.info`, its origin the
+  tag at that commit; `go list -m @latest` gives `v1.30.0`; `go mod download` of the tag passes with the checksum database on.
+* **0011's added phase** is released in `v1.30.0` (deviation 2); its PLAN and its row say so.
+
+Every item of the MADR's Confirmation was shown in phase 3, and the release notes lead with the new default bound, as the MADR's
+"More Information" asks. The release is published, so this PLAN and its row are `complete`.

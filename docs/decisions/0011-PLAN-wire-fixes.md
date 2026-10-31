@@ -874,3 +874,7 @@ release". There is no `v1.29.1`. The fix ships in `v1.30.0`, and its notes are a
 decodes `{}` into a `RequestId` and requires the refusal, run from the proxy after the tag by
 [0045-PLAN-notification-queue-byte-budget.md](0045-PLAN-notification-queue-byte-budget.md)'s phase 4. No file of this phase
 changes.
+
+*Released, 2026-10-31.* `v1.30.0` is published, at `d65819a`:
+<https://github.com/maccavelli/acp-go-sdk2/releases/tag/v1.30.0>. Its notes carry the fix under "Fixed: `RequestId` refuses a JSON
+object". `tools/consumer.py v1.30.0`, from the proxy, printed `request id RequestId: no variant matches`, as required.
