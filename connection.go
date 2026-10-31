@@ -505,6 +505,9 @@ type Connection struct {
 	// it would without the option (0046-MADR-sending-and-receiving-middleware.md,
 	// D4 and D11).
 	sending MethodHandler
+	// observer is WithObserver's function, or nil; observe reads it
+	// (0046-MADR-sending-and-receiving-middleware.md, D9).
+	observer func(Observation)
 }
 
 // ConnectionOption configures optional parameters for a Connection.
@@ -536,6 +539,9 @@ type connectionConfig struct {
 	// WithSendingMiddleware's middleware, in the order registered
 	// (0046-MADR-sending-and-receiving-middleware.md, D2).
 	receiving, sending []Middleware
+	// observer is WithObserver's function, the last given
+	// (0046-MADR-sending-and-receiving-middleware.md, D9).
+	observer func(Observation)
 }
 
 // WithMaxQueuedNotifications sets how many notifications may wait in the
@@ -900,6 +906,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		rewrite:               cfg.rewrite,
 		inbound:               cfg.inbound,
 		resultChecks:          cfg.resultChecks,
+		observer:              cfg.observer,
 	}
 	if cfg.maxConcurrentRequests > 0 {
 		c.requestSlots = make(chan struct{}, cfg.maxConcurrentRequests)
@@ -1167,7 +1174,7 @@ func sameValue(a, b any) bool {
 
 // DroppedNotifications reports how many inbound notifications this connection
 // has dropped under OverflowDropNewest. It is always zero under the default
-// policy.
+// policy. WithObserver reports each as an ObservedDropped.
 func (c *Connection) DroppedNotifications() uint64 {
 	return c.droppedNotifications.Load()
 }
@@ -1179,7 +1186,9 @@ func (c *Connection) DroppedNotifications() uint64 {
 // agreed does not allow. A message held until initialize ends is counted
 // once, if it is then refused. A line that does not decode, or a method the
 // side does not handle, is answered as before and not counted
-// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md, question 3).
+// (0038-MADR-consumer-helpers-kind-and-agent-refusals.md, question 3). Nor is a
+// request refused by a limit or by Shutdown, which WithObserver reports as an
+// ObservedRefused (0046-MADR-sending-and-receiving-middleware.md, D9).
 func (c *Connection) RefusedMessages() uint64 {
 	return c.refusedMessages.Load()
 }
@@ -1195,14 +1204,16 @@ func (c *Connection) QueuedBytes() int64 {
 	return c.queuedBytes
 }
 
-// dropNotification records a notification discarded under OverflowDropNewest.
-// It runs on the receive goroutine, after notifyMu has been released.
-func (c *Connection) dropNotification(method string) {
+// dropNotification records a notification of size bytes discarded under
+// OverflowDropNewest, and reports it to the drop handler and the observer. It
+// runs on the receive goroutine, after notifyMu has been released.
+func (c *Connection) dropNotification(method string, size int64) {
 	total := c.droppedNotifications.Add(1)
 	c.loggerOrDefault().Debug("failed to queue notification; dropping it", "method", method, "capacity", cap(c.notificationQueue), "queued", len(c.notificationQueue), "dropped_total", total)
 	if fn := c.onNotificationDropped; fn != nil {
 		fn(method, total)
 	}
+	c.observe(ObservedDropped, method, nil, int(size), nil)
 }
 
 // SetLogger installs a logger used for internal connection diagnostics.
@@ -1476,24 +1487,28 @@ func formatCanonicalJSONRPCNumericID(negative bool, digits string, exp10 int) (s
 }
 
 // readLine reads one line from r, without its newline. A line longer than max
-// bytes is read through its newline and discarded, and tooLong is true. err is
-// r's error, io.EOF at the end; a last line without a newline comes with it.
-func readLine(r *bufio.Reader, maxBytes int) (line []byte, tooLong bool, err error) {
+// bytes is read through its newline and discarded, and tooLong is true;
+// discarded is then its length without the newline, for the observer
+// (0046-MADR-sending-and-receiving-middleware.md, D9). err is r's error,
+// io.EOF at the end; a last line without a newline comes with it.
+func readLine(r *bufio.Reader, maxBytes int) (line []byte, tooLong bool, discarded int, err error) {
 	for {
 		chunk, err := r.ReadSlice('\n')
-		if !tooLong {
+		if tooLong {
+			discarded += len(chunk)
+		} else {
 			line = append(line, chunk...)
 			if len(bytes.TrimSuffix(line, []byte("\n"))) > maxBytes {
-				line, tooLong = nil, true
+				discarded, line, tooLong = len(line), nil, true
 			}
 		}
 		if errors.Is(err, bufio.ErrBufferFull) {
 			continue
 		}
 		if tooLong {
-			return nil, true, err
+			return nil, true, discarded - (len(chunk) - len(bytes.TrimRight(chunk, "\r\n"))), err
 		}
-		return bytes.TrimRight(line, "\r\n"), false, err
+		return bytes.TrimRight(line, "\r\n"), false, 0, err
 	}
 }
 
@@ -1502,11 +1517,11 @@ func (c *Connection) receive() {
 	var received uint64
 	cause := errPeerEOF
 	for {
-		line, tooLong, err := readLine(r, c.maxMessageSize)
+		line, tooLong, discarded, err := readLine(r, c.maxMessageSize)
 		switch {
 		case tooLong:
 			c.loggerOrDefault().Warn("incoming message exceeds the size limit; answered and skipped", "limit", c.maxMessageSize)
-			c.answer(nil, NewInvalidRequest(map[string]any{jsonErrorField: fmt.Sprintf("message exceeds %d bytes", c.maxMessageSize)}))
+			c.answerObserved(ObservedFault, "", nil, int64(discarded), NewInvalidRequest(map[string]any{jsonErrorField: fmt.Sprintf("message exceeds %d bytes", c.maxMessageSize)}))
 		case len(bytes.TrimSpace(line)) > 0:
 			if !c.receiveLine(line, &received) {
 				return
@@ -1635,24 +1650,24 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 	// (0019-PLAN-behaviour-fixes.md, B15).
 	if !json.Valid(line) {
 		c.loggerOrDefault().Warn("failed to parse incoming message", "size", len(line))
-		c.answer(nil, NewParseError(nil))
+		c.answerObserved(ObservedFault, "", nil, size, NewParseError(nil))
 		return true
 	}
 	line = bytes.TrimSpace(line)
 	var env envelope
 	if line[0] != '{' || json.Unmarshal(line, &env) != nil {
 		c.loggerOrDefault().Warn("incoming message is not a JSON-RPC object", "size", len(line))
-		c.answer(nil, NewInvalidRequest(map[string]any{jsonErrorField: "not a JSON-RPC object"}))
+		c.answerObserved(ObservedFault, "", nil, size, NewInvalidRequest(map[string]any{jsonErrorField: "not a JSON-RPC object"}))
 		return true
 	}
 	if env.Method == nil && (env.Result != nil || env.Error != nil || c.isPending(env.ID)) {
-		c.receiveResponse(&env, line)
+		c.receiveResponse(&env, line, size)
 		return true
 	}
 	id, fault := requestFault(&env)
 	if fault != "" {
 		c.loggerOrDefault().Warn("invalid request", "fault", fault, "size", len(line), "id", string(id))
-		c.answer(id, NewInvalidRequest(map[string]any{jsonErrorField: fault}))
+		c.answerObserved(ObservedFault, "", id, size, NewInvalidRequest(map[string]any{jsonErrorField: fault}))
 		return true
 	}
 	msg := anyMessage{JSONRPC: jsonRPCVersion, Params: env.Params}
@@ -1663,7 +1678,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		msg.Params = nil
 	}
 	if err := json.Unmarshal(env.Method, &msg.Method); err != nil {
-		c.answer(id, NewInvalidRequest(map[string]any{jsonErrorField: "method must be a string"}))
+		c.answerObserved(ObservedFault, "", id, size, NewInvalidRequest(map[string]any{jsonErrorField: "method must be a string"}))
 		return true
 	}
 	if env.ID != nil {
@@ -1673,7 +1688,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 	// Handle $/cancel_request notifications synchronously so cancellations take effect
 	// immediately and do not participate in notification ordering.
 	if msg.ID == nil && msg.Method == ProtocolMethodCancelRequest {
-		c.handleCancelRequest(&msg)
+		c.observe(ObservedCancelReceived, msg.Method, c.handleCancelRequest(&msg), int(size), nil)
 		return true
 	}
 
@@ -1687,7 +1702,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 		default:
 			limit := cap(c.requestSlots)
 			c.loggerOrDefault().Debug("refused a request over the concurrency limit", "method", msg.Method, "limit", limit)
-			c.answer(id, NewInternalError(map[string]any{jsonErrorField: "too many concurrent requests", "limit": limit}))
+			c.answerObserved(ObservedRefused, msg.Method, id, size, NewInternalError(map[string]any{jsonErrorField: "too many concurrent requests", "limit": limit}))
 			return true
 		}
 	}
@@ -1698,7 +1713,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 			<-c.requestSlots
 		}
 		c.loggerOrDefault().Debug("refused a request over the byte budget", "method", msg.Method, "size", size, "byte_limit", c.byteLimit)
-		c.answer(id, NewInternalError(map[string]any{jsonErrorField: "too many queued bytes", "limit": c.byteLimit}))
+		c.answerObserved(ObservedRefused, msg.Method, id, size, NewInternalError(map[string]any{jsonErrorField: "too many queued bytes", "limit": c.byteLimit}))
 		return true
 	}
 
@@ -1724,7 +1739,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 			if c.requestSlots != nil {
 				<-c.requestSlots
 			}
-			c.answer(id, NewInternalError(map[string]any{jsonErrorField: "the connection is shutting down"}))
+			c.answerObserved(ObservedRefused, msg.Method, id, size, NewInternalError(map[string]any{jsonErrorField: "the connection is shutting down"}))
 			return true
 		}
 		c.inflightReceipts[receipt] = struct{}{}
@@ -1828,10 +1843,11 @@ func (c *Connection) queueNotification(m anyMessage, receipt uint64, size int64)
 		// number, so the next one reuses it and ordering stays
 		// contiguous. The reader must not block here: responses are
 		// dispatched on this goroutine too.
-		c.dropNotification(m.Method)
+		c.dropNotification(m.Method, size)
 		return true
 	}
 	c.loggerOrDefault().Error("failed to queue notification; closing connection", "err", ErrNotificationQueueOverflow, "capacity", c.queueLimit, "queued", len(c.notificationQueue), "bytes", counted, "size", size, "byte_limit", c.byteLimit)
+	c.observe(ObservedDropped, m.Method, nil, int(size), ErrNotificationQueueOverflow)
 	// The policy closes the connection, its transport included
 	// (0019-PLAN-api-decisions.md, B17).
 	if err := c.closeWith(ErrNotificationQueueOverflow); err != nil {
@@ -1895,10 +1911,17 @@ func (c *Connection) isPending(raw json.RawMessage) bool {
 // receiveResponse delivers a response to the call it answers. A response that
 // breaks JSON-RPC, with jsonrpc other than "2.0", both or neither of result and
 // error, or an error that is not an error object, fails the call. A response is
-// never answered, so two peers cannot answer each other's errors.
-func (c *Connection) receiveResponse(env *envelope, line []byte) {
+// never answered, so two peers cannot answer each other's errors. A response
+// no pending call takes, size bytes long, is reported to the observer
+// (0046-MADR-sending-and-receiving-middleware.md, D9).
+func (c *Connection) receiveResponse(env *envelope, line []byte, size int64) {
 	if env.ID == nil || !validID(env.ID) || string(env.ID) == jsonNull {
 		c.loggerOrDefault().Warn("received a response without a request id", "size", len(line))
+		var carried error
+		if re := new(RequestError); env.Error != nil && json.Unmarshal(env.Error, re) == nil {
+			carried = re
+		}
+		c.observe(ObservedUnmatchedResponse, "", nil, int(size), carried)
 		return
 	}
 	id := env.ID
@@ -1925,7 +1948,9 @@ func (c *Connection) receiveResponse(env *envelope, line []byte) {
 		c.loggerOrDefault().Warn("malformed response", "fault", fault, "size", len(line), "id", string(id))
 		msg.Error = NewInternalError(map[string]any{jsonErrorField: "malformed response: " + fault})
 	}
-	c.handleResponse(&msg)
+	if !c.handleResponse(&msg) {
+		c.observe(ObservedUnmatchedResponse, "", id, int(size), requestErr(msg.Error))
+	}
 }
 
 // answer writes an error response with id, or with "id": null when id is nil.
@@ -2098,7 +2123,9 @@ func (c *Connection) inRunningNotification(ctx context.Context) bool {
 	return c.completedNotificationSeq < m.seq
 }
 
-func (c *Connection) handleResponse(msg *anyMessage) {
+// handleResponse hands msg to the pending call it answers, and reports
+// whether one took it.
+func (c *Connection) handleResponse(msg *anyMessage) bool {
 	idStr, err := canonicalJSONRPCIDKey(*msg.ID)
 	if err != nil {
 		c.loggerOrDefault().Warn("failed to canonicalize response id", "err", err, "size", len(*msg.ID))
@@ -2114,38 +2141,42 @@ func (c *Connection) handleResponse(msg *anyMessage) {
 	if pr == nil {
 		// A late answer to a call its caller gave up on is expected.
 		c.loggerOrDefault().Debug("received a response to no pending request", "id", string(*msg.ID))
+		return false
 	}
 
-	if pr != nil {
-		c.notifyMu.Lock()
-		watermark := c.lastEnqueuedNotificationSeq
-		if c.completedNotificationSeq > watermark {
-			c.notifyMu.Unlock()
-			panic("completed notification sequence exceeded response watermark")
-		}
+	c.notifyMu.Lock()
+	watermark := c.lastEnqueuedNotificationSeq
+	if c.completedNotificationSeq > watermark {
 		c.notifyMu.Unlock()
-		env := responseEnvelope{msg: *msg, notificationWatermark: watermark}
-		// The commit runs before the reader reads on, so every later message
-		// is judged by what it recorded (0030-MADR-record-initialize-on-arrival.md, O1).
-		if pr.commit != nil && msg.Error == nil {
-			env.committed, env.commitErr = pr.commit(msg.Result)
-		}
-		if pr.settle != nil {
-			pr.settle()
-		}
-		pr.ch <- env
+		panic("completed notification sequence exceeded response watermark")
 	}
+	c.notifyMu.Unlock()
+	env := responseEnvelope{msg: *msg, notificationWatermark: watermark}
+	// The commit runs before the reader reads on, so every later message
+	// is judged by what it recorded (0030-MADR-record-initialize-on-arrival.md, O1).
+	if pr.commit != nil && msg.Error == nil {
+		env.committed, env.commitErr = pr.commit(msg.Result)
+	}
+	if pr.settle != nil {
+		pr.settle()
+	}
+	pr.ch <- env
+	return true
 }
 
-func (c *Connection) handleCancelRequest(msg *anyMessage) {
+// handleCancelRequest cancels the in-flight request a received
+// $/cancel_request names, and returns the requestId it named, nil when its
+// params do not decode, for the observer
+// (0046-MADR-sending-and-receiving-middleware.md, D9).
+func (c *Connection) handleCancelRequest(msg *anyMessage) json.RawMessage {
 	var p cancelRequestParams
 	if err := json.Unmarshal(msg.Params, &p); err != nil {
 		c.loggerOrDefault().Warn("failed to parse "+ProtocolMethodCancelRequest+" params", "err", err)
-		return
+		return nil
 	}
 	if len(bytes.TrimSpace(p.RequestID)) == 0 {
 		c.loggerOrDefault().Warn("received " + ProtocolMethodCancelRequest + " without requestId")
-		return
+		return nil
 	}
 
 	idKey, err := canonicalJSONRPCIDKey(p.RequestID)
@@ -2157,11 +2188,10 @@ func (c *Connection) handleCancelRequest(msg *anyMessage) {
 	c.mu.Lock()
 	r := c.inflight[idKey]
 	c.mu.Unlock()
-	if r == nil {
-		return
+	if r != nil {
+		r.cancel(context.Canceled)
 	}
-
-	r.cancel(context.Canceled)
+	return p.RequestID
 }
 
 // handleInbound runs the handler for req and answers it when it is a request.
@@ -2606,9 +2636,11 @@ func (c *Connection) sendCancelRequests() {
 				c.mu.Unlock()
 
 				requestID := json.RawMessage(append([]byte(nil), idKey...))
-				if err := c.notifyDirect(context.Background(), ProtocolMethodCancelRequest, cancelRequestParams{RequestID: requestID}); err != nil {
+				err := c.notifyDirect(context.Background(), ProtocolMethodCancelRequest, cancelRequestParams{RequestID: requestID})
+				if err != nil {
 					c.loggerOrDefault().Debug("failed to send "+ProtocolMethodCancelRequest, "err", err)
 				}
+				c.observe(ObservedCancelSent, ProtocolMethodCancelRequest, requestID, 0, err)
 			}
 		}
 	}

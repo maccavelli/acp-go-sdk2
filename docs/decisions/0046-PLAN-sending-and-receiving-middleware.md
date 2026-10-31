@@ -655,3 +655,98 @@ spec guessed; with its `want` corrected, it ran alone, "1/1 as required".
   | `BenchmarkSessionUpdateNotify` | 19395 → 18488 (−4.7%) | +0 | 65 → 65 |
 
   The machine was busier than in phase 2, with both sides slower, and the rounds ranged from −11.6% to +4.5%.
+
+The owner committed phase 3 as `f23e107`.
+
+### Phase 4, 2026-10-31
+
+The owner said "committed, proceed".
+
+**What changed.**
+
+* **`observer.go`, new, 129 lines:**
+  * `ObservationKind`, from 1, with its six constants, each documented with its sites and fields, and `String`, which gives
+    `fault`, `cancel_received`, `cancel_sent`, `refused`, `unmatched_response` and `dropped`, or `ObservationKind(n)`;
+  * `Observation`;
+  * `WithObserver`, with D9's rules;
+  * `observe`, which returns before copying anything when no observer is set;
+  * `answerObserved`, which answers and then reports, so each answered site stays one call;
+  * `requestErr`, a `*RequestError` as an `error` that is never a typed nil.
+* **`connection.go`,** 85 lines added and 53 removed:
+  * `connectionConfig.observer` and `Connection.observer`;
+  * `readLine` returns the length of a line it discards, newline excluded;
+  * the sites of step 4.4:
+    * the five faults;
+    * `$/cancel_request` received, through `handleCancelRequest`, which now returns the id it named;
+    * the cancel sender;
+    * the three refusals;
+    * `receiveResponse`'s no-id branch, with the error the response carried if it decodes, and a response `handleResponse`
+      reports it did not hand over (it now returns whether it did);
+    * `dropNotification`, which takes the size;
+    * the overflow close, before `closeWith`.
+  * godoc of `DroppedNotifications` and `RefusedMessages`, which name the observer.
+* **`connection_observer_test.go`, new:**
+  * `TestObserverReportsEachKind`, fifteen subtests, one per site, with the size taken from each line;
+  * `TestObserverNoLockHeld`, `TestObserverAndChainsDisjoint`, `TestObserverUnset` and `TestObservationKindString`;
+  * two not in step 4.6: `TestObserverCopiesID` and `TestWithObserverLastWins` (below).
+
+**Refinements, not deviations.**
+
+* *`gocognit`* (step 4.2), measured with a scratch config at a minimum of 1, here and at `523f319`:
+  * `receiveLine` is 43 before and after;
+  * `receiveResponse` went from 10 to 14, and `handleResponse` from 11 to 7;
+  * `sendCancelRequests` is 14 before and after.
+
+  The limit is 50.
+* *`TestObserverCopiesID`, added.* No test through the connection can see whether `ID` is copied. Each id comes from a line
+  `readLine` allocates afresh, or from the cancel sender's own copy, and the connection does not use it after the report. The
+  plant "`ID` not copied" therefore needed a test of `observe` itself: it reports an id, changes the bytes it passed, and
+  requires the observer's copy unchanged.
+* *`TestWithObserverLastWins`, added,* for the option's rule, the last given winning and `nil` removing it, which step 4.1 states
+  and no test covered.
+* *One site has no test.* `receiveLine`'s "method must be a string" fault (`json.Unmarshal` of the method) cannot be reached by any
+  input. The line has passed `json.Valid`, and `requestFault` has required the method to begin with a quote, so it is a valid
+  JSON string, which decodes. The site reports like the other four faults, through `answerObserved`, and no plant can make it
+  fail a test.
+* *A late answer* is not a case of its own. It takes the same branch, `handleResponse`'s `pr == nil`, as the unknown id, which
+  the subtest covers.
+* *Before the first green run,* the hand-counted sizes of nine subtests were wrong, by one or two bytes. The subtests now take
+  `len` of named lines. A failure message printed a nil id as `null` (`jsontext.Value`'s `String`); it prints `string(o.ID)`.
+  `errOf` clashed with a test helper and is `requestErr`. `thelper` asked for `t.Helper()` in six table closures.
+
+**Step 4.7, seen to fail.** `tools/plants.py`, twenty plants:
+
+* The first run had nineteen as required. "ID not copied" did not compile: dropping `slices.Clone` left `slices` unused. It
+  became `slices.Clip(id)`, which keeps the import and shares the bytes, and ran alone, "1/1 as required".
+* After `t.Helper()` was added, all twenty were run again on the final code: "20/20 as required".
+
+| Break | Test | Failure seen |
+| :--- | :--- | :--- |
+| each of the thirteen reporting sites removed, one plant each | `TestObserverReportsEachKind`, the site's subtest | "fault did not happen", "cancel_received did not happen", "cancel_sent did not happen", "refused did not happen", "unmatched_response did not happen", "dropped did not happen" |
+| the observer called under `notifyMu` at a drop | `TestObserverNoLockHeld` | the reader deadlocked on the observer's `QueuedBytes`; "test timed out" |
+| a matched response reported | `TestObserverAndChainsDisjoint` | `"observe unmatched_response"` twice in what was seen, "want each message once" |
+| `ID` not copied | `TestObserverCopiesID` | `the observer's ID became "xyz" with the connection's bytes, want its own copy "abc"` |
+| the copy made before the nil check | `TestObserverUnset` | "observe without an observer allocated 1 times, want 0" |
+| a typed nil reported as `Err` | `TestObserverReportsEachKind/a_response_to_an_unknown_id` | "observed Err <nil>, want nil" |
+| a kind misnamed | `TestObservationKindString` | `2: "cancel-received", want "cancel_received"` |
+| the first `WithObserver` winning | `TestWithObserverLastWins` | `observers called ["first" "first"], want only the last given, and none after nil` |
+
+The thirteen sites: the line over the limit, invalid JSON, not an object, an invalid request, a cancel received, a cancel sent,
+the three refusals, an unmatched response, a response without an id, a drop, and the overflow close.
+
+**Step 4.8, the checks.**
+
+* `go test -race -count=3 -run 'Observer|Observation' .`: `ok`. At the floor, with `GOEXPERIMENT=goroutineleakprofile`, once:
+  `ok`. `TestObserverUnset`'s `testing.AllocsPerRun` gives 0 under `-race` too.
+* `tools/remote.py pkg` on the Linux and Windows hosts, `-test.run 'Observer|Observation' -test.count=3`: "PASS", exit 0, on
+  each.
+* `make pre-add-check`: "go-precheck: 282 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; with the new
+  files named, "2 file(s) clean".
+* `make api`: nine more compatible additions, `Observation`, `ObservationKind`, its six constants and `WithObserver`; "against
+  v1.30.0: 0 incompatible, 14 compatible".
+* **The benchmark,** nothing registered, three alternating rounds of `-count=5`. Allocations are equal in every round. Pooled:
+
+  | Benchmark | ns/op | B/op | allocs/op |
+  | :--- | :--- | :--- | :--- |
+  | `BenchmarkPromptRoundTrip` | 26454 → 26422 (−0.1%) | +7 | 99 → 99 |
+  | `BenchmarkSessionUpdateNotify` | 14113 → 14167 (+0.4%) | −1 | 65 → 65 |
