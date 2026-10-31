@@ -132,4 +132,6 @@ Base: `476d765`, the tree clean.
    * `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0.
 4. **Records.** The MADR's amendment is `accepted`; this phase is `complete`; the two index rows say so.
 
-**Left:** CI on the pushed commit, which runs the full workflow, since `communique.toml` is outside the docs-only paths.
+**CI.** The owner committed the phase as `dd63f56` and pushed it. `tools/watch_ci.py --branch main dd63f56`, exit 0: run
+`41246970344`, "completed success", the six `validate` jobs on macOS, Ubuntu and Windows at Go `1.27.3` and `1.26.10`; run
+`41246970302`, the Docs workflow, "completed success". The MADR's Confirmation holds.
