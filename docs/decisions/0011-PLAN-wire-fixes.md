@@ -866,3 +866,11 @@ lines, one each in `AuthMethod`, `McpServer`, `MultiSelectItems`, `RequestId`, `
   with `RequestId: no variant matches`.
 
 **Not done:** the release. A patch, `v1.29.1`, with release notes in a REPORT, waits on the owner's ask.
+
+**Deviation, 2026-10-31, step 7: released in `v1.30.0`, not a patch.** The owner committed this phase as `04d6673`, and 0045's
+byte budget followed it on `main`. Asked for 0045's release, the owner said: "proceed with phase 4 include the 0011 fix in this
+release". There is no `v1.29.1`. The fix ships in `v1.30.0`, and its notes are a section of
+[0045-REPORT-release-notes-v1-30-0.md](../reports/0045-REPORT-release-notes-v1-30-0.md), under "Fixed". `tools/consumer.py`
+decodes `{}` into a `RequestId` and requires the refusal, run from the proxy after the tag by
+[0045-PLAN-notification-queue-byte-budget.md](0045-PLAN-notification-queue-byte-budget.md)'s phase 4. No file of this phase
+changes.

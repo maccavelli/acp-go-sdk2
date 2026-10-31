@@ -134,6 +134,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0044 | REPORT | [Consumer check of v1.29.0's default: neither consumer is affected, and both can stop dropping](reports/0044-REPORT-consumer-check-of-the-v1-29-0-default.md) | observed |
 | 0045 | MADR | [Bound what a connection keeps of its peer's messages in bytes as well as in count](decisions/0045-MADR-notification-queue-byte-budget.md); questions answered 2026-10-31: 64 MiB, one budget for requests and notifications; D3 amended 2026-10-31: the trigger gated on notifications | accepted |
 | 0045 | PLAN | [Implement 0045: a byte budget beside the notification count](decisions/0045-PLAN-notification-queue-byte-budget.md) | in-progress |
+| 0045 | REPORT | [Release notes for v1.30.0, against v1.29.0](reports/0045-REPORT-release-notes-v1-30-0.md); with 0011's `RequestId` fix | observed |
 | 0046 | MADR | [Add sending and receiving middleware around the connection's method handler, and an observer for the messages it does not see](decisions/0046-MADR-sending-and-receiving-middleware.md); questions answered 2026-10-31: both directions, and an observer | proposed |
 | 0046 | PLAN | [Implement 0046: sending and receiving middleware, and an observer](decisions/0046-PLAN-sending-and-receiving-middleware.md) | proposed |
 

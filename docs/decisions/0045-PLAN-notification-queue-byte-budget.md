@@ -365,3 +365,45 @@ code changed. With CI on `1e4a198`, every item of the Confirmation is shown.
 
 **Step 3.4, the status lines.** The MADR stays `accepted`; its "Chosen option (proposed)" loses the leftover "(proposed)". The
 index rows are unchanged: this PLAN stays `in-progress` until phase 4 ends, as 0044's did.
+
+The owner committed phase 3's record and asked for phase 4: "committed, proceed with phase 4 include the 0011 fix in this
+release".
+
+**Deviation 2, 2026-10-31, phase 4: the release carries 0011's fix.**
+
+* *Found.* `04d6673`, 0011's added phase, sits between `v1.29.0` and this PLAN's commits. Its own PLAN left a patch, `v1.29.1`,
+  to the owner's ask, which never came.
+* *Decided.* The owner chose to ship it in `v1.30.0`.
+* *Changed here.* The release notes gain a "Fixed" section for `RequestId`, beside the byte budget. `tools/consumer.py` also
+  decodes `{}` into an `acp.RequestId` and prints the error, so the published release is checked for the fix from the proxy.
+  0011's PLAN carries the matching entry. No file is added to the phase's scope; the MADR is unchanged, since no decision of
+  0045 moves.
+
+### Phase 4, 2026-10-31: before the tag
+
+**Step 4.1, `tools/consumer.py`.**
+
+* The overflow connection also sets `acp.WithMaxQueuedBytes(256<<20)`. Once it is initialized, the program reads
+  `oc.Connection().QueuedBytes()`, and after the overflow line prints `queued bytes 0`. It then decodes `{}` into an
+  `acp.RequestId` and prints the error, `request id RequestId: no variant matches` (deviation 2).
+* `WANT_RUN` gains those two lines; the docstring names this PLAN and says `VERSION` is `v1.30.0` or later.
+* `tools/README.md`: `consumer.py`'s row names the budget, `QueuedBytes`, `RequestId`, and `v1.30.0`.
+* *Before the tag.* A scratch script built the program and test against `70b947f`'s tree through a `replace`, at `go1.26.10`,
+  three times: `go mod tidy`, the build, the run, `go test` and the Windows build, each exit 0; "output equals WANT_RUN: True".
+* *Seen to fail, twice.*
+  * `tools/consumer.py v1.29.0`, the published release without the budget: exit 1, `go build` "./main.go:241:7: undefined:
+    acp.WithMaxQueuedBytes" and "oc.Connection().QueuedBytes undefined", "NOT AS REQUIRED".
+  * A scratch export of `70b947f` with `fd8e586`'s `types_gen.go`, 0011's fix reverted: "first difference at line 29: got
+    'request id <nil>', want 'request id RequestId: no variant matches'", "NOT AS REQUIRED". Lines 1 to 28 equal `WANT_RUN`.
+* `make check-tools`, exit 0: "Ran 58 tests" and "Ran 32 tests", both "OK"; "check-ci-filters: 0 problem(s)".
+
+**Step 4.2, the release notes.**
+[0045-REPORT-release-notes-v1-30-0.md](../reports/0045-REPORT-release-notes-v1-30-0.md), and its row in `docs/README.md`. Its first
+section is the new default bound: what counts, the default and its raise to the message size, each policy at it, requests' bytes
+never pausing the reader, a request's refusal, the logs, `QueuedBytes`, and raising it in a code block. A "Fixed" section follows
+for `RequestId` (deviation 2). Its sources: the eight commits since `v1.29.0`, the five Go files changed outside the tests, the
+unchanged areas, `make api` on `70b947f` ("0 incompatible, 2 compatible"), CI on `1e4a198`, and the consumer before the tag.
+
+**Left, each on the owner's ask:** the push of this commit and its CI; the tag `v1.30.0`, the GitHub release from
+`tools/release_body.py`, `tools/publication.py`, and `tools/consumer.py v1.30.0`; then this PLAN and its row `complete`, and 0011's
+added phase noted as released.

@@ -36,9 +36,11 @@ acp.ErrHandlersRunning (0042-PLAN-in-process-agent-runner.md, phase 17). It
 opens a client connection with
 WithNotificationOverflowPolicy(acp.OverflowCloseConnection), the opt-out from
 the default OverflowBlock, initializes it, and prints that the two policies
-differ (0044-PLAN-notification-queue-back-pressure.md, phase 4). So VERSION is
-v1.29.0 or later. Its go.mod must keep the `go` line and gain no toolchain
-line.
+differ (0044-PLAN-notification-queue-back-pressure.md, phase 4). That
+connection also sets WithMaxQueuedBytes, and the program prints its
+QueuedBytes once initialized, and the error of decoding {} into a RequestId
+(0045-PLAN-notification-queue-byte-budget.md, phase 4). So VERSION is v1.30.0
+or later. Its go.mod must keep the `go` line and gain no toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
 Usage: consumer.py VERSION
@@ -296,9 +298,14 @@ func main() {
 	ar, cw := io.Pipe()
 	cr, aw := io.Pipe()
 	oa := acp.NewAgentSideConnection(agent{}, aw, ar)
-	oc := acp.NewClientSideConnection(client{}, cw, cr, acp.WithNotificationOverflowPolicy(acp.OverflowCloseConnection))
+	oc := acp.NewClientSideConnection(client{}, cw, cr, acp.WithNotificationOverflowPolicy(acp.OverflowCloseConnection),
+		acp.WithMaxQueuedBytes(256<<20))
 	ores, oerr := oc.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
+	queued := oc.Connection().QueuedBytes()
 	fmt.Println("overflow", acp.OverflowBlock != acp.OverflowCloseConnection, ores.ProtocolVersion, oerr, oc.Close(), oa.Close())
+	fmt.Println("queued bytes", queued)
+	var id acp.RequestId
+	fmt.Println("request id", json.Unmarshal([]byte(`{}`), &id))
 }
 '''
 TEST = '''package main
@@ -377,7 +384,7 @@ WANT_RUN = ("Close: <nil>\nwait <nil> true\ndropped 0 0\nprotocol version 1\nkin
             "close-context <nil>\nbounded true true <nil>\n"
             'stderr "failed\\n" true\n'
             "remote ws <nil> <nil> <nil> end_turn <nil>\nremote http <nil> <nil> <nil> end_turn <nil>\nhandler <nil>\n"
-            "overflow true 1 <nil> <nil> <nil>")
+            "overflow true 1 <nil> <nil> <nil>\nqueued bytes 0\nrequest id RequestId: no variant matches")
 
 
 def go_mod_ok(text: str, go: str, mod: str, version: str) -> bool:
