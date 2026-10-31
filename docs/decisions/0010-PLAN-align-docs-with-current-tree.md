@@ -105,3 +105,15 @@ Verification:
 * The identifier scan of the changed and new files found nothing.
 
 Every acceptance criterion in Verification holds. The status is `complete`, and `docs/README.md` shows it. The owner commits on `main`.
+
+## Phase added 2026-10-31: remove `communique.toml` (proposed)
+
+**Status of this phase: proposed**, for the MADR's amendment of 2026-10-31. It starts only when the owner approves it.
+
+1. `git rm communique.toml`.
+2. A scan of the tracked files finds communique named only in this MADR and this PLAN.
+3. `make pre-add-check`, `make check-records`, `make markdownlint` and `make disclosure-check` pass.
+4. The execution record, the amendment's status, and the index rows. The change is staged for the owner; CI runs on the
+   pushed commit.
+
+**Rollback.** Restore the file from `9fcbb6f`.

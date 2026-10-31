@@ -83,3 +83,30 @@ Implementation is [0010-PLAN-align-docs-with-current-tree.md](0010-PLAN-align-do
 
 Found and left alone: `communique.toml`, the release-notes tool's configuration, describes the project as `acp-go-sdk`. It is product configuration, not
 documentation, and is outside this decision.
+
+## Amendment 2026-10-31, remove `communique.toml` (proposed)
+
+**Status of this amendment: proposed.** It awaits the owner's decision.
+
+The "Found and left alone" note above kept `communique.toml` out of this decision, as product configuration rather than
+documentation. A read-only audit of every record's open items on 2026-10-31 found it still in the tree at `9fcbb6f`:
+
+* It is 15 lines of configuration for the communique release-notes tool. It came from the previous project in `75b462e`
+  ("[codex] Add communique release notes workflow (#32)"). Its `context` still says "acp-go-sdk is the Go SDK for the Agent
+  Client Protocol".
+* Nothing reads it. The workflow that ran the tool, `.github/workflows/release-notes.yaml`, was deleted by
+  [0003-PLAN-install-fleet-agent-workspace.md](0003-PLAN-install-fleet-agent-workspace.md) (`9fb9ae5`). No tracked file names
+  communique except this MADR and its PLAN.
+* Release notes are written another way: a release-notes REPORT for each release, extracted by `tools/release_body.py`
+  ([0031-MADR-verification-tools-in-repository.md](0031-MADR-verification-tools-in-repository.md)).
+
+**Decision (proposed): delete `communique.toml`.** No configuration, workflow or document refers to it, so nothing else
+changes.
+
+* Good, because the tree no longer carries configuration for a tool it does not run, under the previous project's name.
+* Neutral, because `communique.toml` sits outside the docs-only paths, so the commit that deletes it runs the full CI, not
+  the Docs workflow.
+
+**Confirmation.** After the deletion, no tracked file other than this record and its PLAN names communique. `make pre-add-check`
+and the CI on the commit pass. The PLAN is [0010-PLAN-align-docs-with-current-tree.md](0010-PLAN-align-docs-with-current-tree.md),
+phase "2026-10-31 amendment".

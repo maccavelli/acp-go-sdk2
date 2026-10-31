@@ -748,3 +748,47 @@ every other decode clears the union first; a non-object payload for a discrimina
 Every acceptance criterion in Verification holds, the table test as three table tests. The status is `complete`, and `docs/README.md` shows it. The MADR
 is unchanged; its consequence that the exported API "gains `Unknown` on eleven unions and `Extra` on six variant types" holds, with the methods above in
 addition. Phase 3 of [0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md), the protocol table, needs its own PLAN.
+
+## Phase added 2026-10-31: the amendment's two decoder fixes (proposed)
+
+**Status of this phase: proposed**, for the MADR's amendment of 2026-10-31 (D-A1 and D-A2). It starts only when the owner
+approves it. The steps above stay as executed.
+
+**Goal.** `RequestId` refuses a JSON object, as JSON-RPC 2.0 requires, and the generated unions lose a trial decode that can
+never succeed.
+
+**Scope.**
+* In scope:
+  * `cmd/generate/internal/emit/types.go`: `arrayMatch`'s fallback, and `keyLessBody`'s second loop;
+  * an engine case in `cmd/generate/testdata/engine/`;
+  * the regenerated `types_gen.go`;
+  * a root test of `RequestId`;
+  * `README.md`'s "Wire encoding", if it describes `RequestId`'s decoding;
+  * release notes in a REPORT, if the owner releases it.
+* Out of scope: the connection's envelope `id` check, which is already correct (`requestFault`); `cancelRequestParams`; any
+  other union's behaviour.
+
+**Steps.**
+
+1. **Ground the change.** In a scratch copy, list from the model every union with an `IsNull` variant, and every key-less
+   variant `keyLessBody`'s second loop emits for, with its fit keys. Record the lists in the execution record. If any
+   key-less variant's trial decode can succeed, record it, keep its trial, and say so. This step decides D-A2's exact rule.
+2. **Tests first.**
+   * A root test, `TestRequestIdRefusesObjects`, covers `{}`, `{"x":1}`, `[1]` and `true`, each refused with
+     `RequestId: no variant matches`, and `null`, `"a"` and `7` as today.
+   * An engine case covers a union with a null variant and an object payload.
+   * Both run against the current code, and fail as expected.
+3. **D-A1.** In `arrayMatch`'s fallback, skip a variant with `vi.IsNull`. Regenerate with `go run .` in `cmd/generate`.
+4. **D-A2.** In `keyLessBody`, emit the trial decode only where step 1 found it can succeed. Regenerate.
+5. **Planted breaks**, each in a scratch copy:
+   * the null variant's trial restored: the root test and the engine case fail;
+   * one of the five dead trials restored: the generated diff shows it, and behaviour is unchanged (recorded as such).
+6. **Checks.**
+   * `tools/gates.py regen` finds the generated files unchanged once the regeneration is committed.
+   * The `types_gen.go` diff from `9fcbb6f` contains only the removed blocks.
+   * `make pre-add-check`, `make api` (no change), `make check-records`, `make markdownlint`, `make disclosure-check`.
+   * `tools/gates.py --all`, which includes the `nojsonv2` run.
+7. **Records.** This phase's execution record, the MADR amendment's status, and the index rows. Release notes and a patch
+   tag, `v1.29.1`, only on the owner's ask.
+
+**Rollback.** Revert the phase's commit. The change is confined to the generator's emit code and its output.

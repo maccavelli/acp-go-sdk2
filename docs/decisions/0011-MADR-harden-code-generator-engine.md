@@ -762,6 +762,82 @@ Findings along the way changed the SDK, each decided by the owner and recorded a
 definitions as `json.RawMessage`, an optional raw `null` as absent, keys read under case folding, the variant facts of a direct `$ref`, and the
 refusals of lossy shapes, keys that differ only in case, integer `const` values outside their format, and a catch-all with members.
 
+## Amendment 2026-10-31, two decoder findings left open (proposed)
+
+**Status of this amendment: proposed.** It awaits the owner's decision. The decisions above are unchanged until it is accepted.
+
+Two findings were recorded during this decision's phases and left for "an amendment of this pair". A read-only audit of every
+record's open items on 2026-10-31 found both still open at `9fcbb6f` (`v1.29.0`).
+
+### Facts
+
+* **A1. `RequestId` decodes any JSON object as its `Null` variant.**
+  * Found in [0011-PLAN-wire-fixes.md](0011-PLAN-wire-fixes.md) step 8 ("Found and not changed"), and listed again in
+    [0012-PLAN-schema-fidelity-framework.md](0012-PLAN-schema-fidelity-framework.md)'s "Not done".
+  * Probed against `v1.29.0` at go1.27.3:
+
+    | Input | Result |
+    | :--- | :--- |
+    | `null` | `Null`, no error |
+    | `{}` and `{"x":1}` | `Null`, no error, encoded back as `null` |
+    | `[1]` and `true` | `RequestId: no variant matches` |
+    | `"a"` and `7` | `Str` and `Number` |
+
+  * JSON-RPC 2.0 says an id "MUST contain a String, Number, or NULL value if included".
+  * The cause is the fallback of `arrayMatch` (`cmd/generate/internal/emit/types.go:904-910`). It trial-decodes every variant
+    in turn, the null variant included. `RequestIdNull` is an empty struct, so `json.Unmarshal` accepts any object into it.
+    JSON `null` itself is already decoded before the trial (`types.go:803`).
+  * `RequestIdNull` is the only empty-struct union variant in `types_gen.go`. The other two empty structs,
+    `CompactionCapabilities` and `NoticeCapabilities`, are not variants.
+  * **Where it reaches.** The connection refuses a malformed envelope `id` itself (`requestFault`, "id must be a string, a
+    number or null"), so the transport is not affected. The generated fields of type `RequestId` are affected:
+    * `AgentRequest`, `AgentResult`, `AgentError`, `ClientRequest`, `ClientResult` and `ClientError`'s `id`, which
+      `acptest`'s `Decode` and `ValidateGolden` read. A recorded frame with `"id":{}` validates today.
+    * `ElicitationRequestScope.requestId`.
+    * `CancelRequestNotification.requestId`. The connection's own `$/cancel_request` path decodes into its own
+      `cancelRequestParams`, kept by this decision's phase 3.
+* **A2. A dead trial decode in five unions.**
+  * Found by [0012-PLAN-schema-fidelity-framework.md](0012-PLAN-schema-fidelity-framework.md) ("Not done") after its step 7.
+    In `AuthMethod`, `McpServer`, `UnstableMcpServer`, `SetSessionConfigOptionRequest` and `MultiSelectItems`, `keyLessBody`'s
+    second loop (`types.go:995-1000`) emits a trial `json.Unmarshal` of the key-less variant after its key-match block.
+  * The variant's own decoder requires the keys the match block has just found missing, so the trial can never succeed. It
+    runs only on the way to the error. `AuthMethod`'s decoder at `9fcbb6f` shows the shape: the `match` block for
+    `AuthMethodAgent` on `id` and `name`, then a trial decode of `AuthMethodAgent` that needs the same keys.
+  * It has no wire effect. It is dead code in generated output, and removing it changes the decoders of
+    [0011-PLAN-wire-fixes.md](0011-PLAN-wire-fixes.md), which is why 0012 left it here.
+
+### Decisions (proposed)
+
+* **D-A1. The null variant decodes only from JSON `null`.** The fallback of `arrayMatch` skips a variant whose model marks it
+  `IsNull`; JSON `null` keeps its own branch.
+  * `RequestId` then refuses an object, as it refuses an array or a boolean: `RequestId: no variant matches`.
+  * A received request whose params carry such an id is answered `-32602`, as for any params that fail to decode.
+  * `ValidateGolden` fails on a recorded frame with an object id.
+* **D-A2. The dead trial decode is removed.** `keyLessBody` emits the trial decode only for a key-less variant with no fit
+  keys, if any union has one. The phase's first step decides that from the model, not from these five names. A variant whose
+  match block already ran gets none.
+
+### Consequences (proposed)
+
+* Good, because `RequestId` follows JSON-RPC 2.0: an object is no longer accepted silently and sent back as `null`.
+* Good, because the generated decoders lose code that never runs, and the generator says what it means.
+* Neutral, because the exported API is unchanged: `make api` reports no change. Only invalid input behaves differently.
+* Bad, because a consumer that relied on an object decoding as `Null` now gets an error. JSON-RPC forbids such an id, so no
+  conforming peer sends one.
+* Neutral, because it is a fix for a patch release; the PLAN names it.
+
+### Confirmation (proposed)
+
+* A root test decodes `{}`, `{"x":1}`, `[1]` and `true` into `RequestId` and requires `RequestId: no variant matches` for
+  each, and `null`, a string and a number as before. The test is seen to fail on the code before the change.
+* An engine case pins a union with a null variant and requires the object to be refused. It is seen to fail with the null
+  variant's trial decode restored, in a scratch copy.
+* A2's change leaves every generated union's behaviour the same:
+  * the root tests, the engine tests and `FuzzRoundTrip`'s corpus pass unchanged;
+  * the regenerated `types_gen.go` differs from `9fcbb6f` only by the removed blocks and by D-A1's;
+  * a scratch decode of each of the five unions' error inputs gives the same error text before and after.
+* The PLAN is [0011-PLAN-wire-fixes.md](0011-PLAN-wire-fixes.md), phase "2026-10-31 amendment".
+
 ## More Information
 
 Implementation follows in one PLAN per phase, each written and approved before its work starts. The first is the resolved model.

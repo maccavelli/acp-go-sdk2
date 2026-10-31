@@ -26,11 +26,11 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0008 | REPORT | [Review of the self-contained SDK records, a go/ast generator, and encoding/json/v2](reports/0008-REPORT-self-contained-sdk-review.md) | observed |
 | 0009 | MADR | [Fix the generated output on encoding/json v1](decisions/0009-MADR-fix-generated-output-on-json-v1.md) | accepted |
 | 0009 | PLAN | [Implement the generated-output fixes](decisions/0009-PLAN-fix-generated-output-on-json-v1.md) | complete |
-| 0010 | MADR | [Bring the user-facing docs in line with the current tree](decisions/0010-MADR-align-docs-with-current-tree.md) | accepted |
-| 0010 | PLAN | [Implement the docs update](decisions/0010-PLAN-align-docs-with-current-tree.md) | complete |
-| 0011 | MADR | [Harden the code generator into a validated, schema-driven engine](decisions/0011-MADR-harden-code-generator-engine.md) | accepted |
+| 0010 | MADR | [Bring the user-facing docs in line with the current tree](decisions/0010-MADR-align-docs-with-current-tree.md); amendment proposed 2026-10-31: remove `communique.toml` | accepted |
+| 0010 | PLAN | [Implement the docs update](decisions/0010-PLAN-align-docs-with-current-tree.md); a phase proposed 2026-10-31 for the amendment | complete |
+| 0011 | MADR | [Harden the code generator into a validated, schema-driven engine](decisions/0011-MADR-harden-code-generator-engine.md); amendment proposed 2026-10-31: `RequestId` refuses objects, the dead trial decode removed | accepted |
 | 0011 | PLAN | [Implement phase 1: the resolved schema model](decisions/0011-PLAN-resolved-schema-model.md) | complete |
-| 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md) | complete |
+| 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md); a phase proposed 2026-10-31 for the amendment | complete |
 | 0011 | PLAN | [Implement phase 3: the protocol table](decisions/0011-PLAN-protocol-table.md) | complete |
 | 0011 | PLAN | [Implement phase 5: safe output](decisions/0011-PLAN-safe-output.md) | complete |
 | 0011 | PLAN | [Implement phase 6: tests of the engine](decisions/0011-PLAN-engine-tests.md) | complete |
@@ -132,6 +132,10 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0044 | PLAN | [Implement 0044: `OverflowBlock`, back-pressure for the notification queue, as the default](decisions/0044-PLAN-notification-queue-back-pressure.md); phase 5 added 2026-10-31 | complete |
 | 0044 | REPORT | [Release notes for v1.29.0, against v1.28.0](reports/0044-REPORT-release-notes-v1-29-0.md) | observed |
 | 0044 | REPORT | [Consumer check of v1.29.0's default: neither consumer is affected, and both can stop dropping](reports/0044-REPORT-consumer-check-of-the-v1-29-0-default.md) | observed |
+| 0045 | MADR | [Bound what a connection keeps of its peer's messages in bytes as well as in count](decisions/0045-MADR-notification-queue-byte-budget.md); questions answered 2026-10-31: 64 MiB, one budget for requests and notifications | proposed |
+| 0045 | PLAN | [Implement 0045: a byte budget beside the notification count](decisions/0045-PLAN-notification-queue-byte-budget.md) | proposed |
+| 0046 | MADR | [Add sending and receiving middleware around the connection's method handler, and an observer for the messages it does not see](decisions/0046-MADR-sending-and-receiving-middleware.md); questions answered 2026-10-31: both directions, and an observer | proposed |
+| 0046 | PLAN | [Implement 0046: sending and receiving middleware, and an observer](decisions/0046-PLAN-sending-and-receiving-middleware.md) | proposed |
 
 ## I want to…
 
