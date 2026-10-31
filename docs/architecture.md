@@ -468,6 +468,30 @@ full. `OverflowBlock`, the default, and also what an undefined policy becomes in
   channel's `2n` are full, where the same `default` closes.
 - A pause that lasts `pauseWarnAfter`, 5 s, is logged once at `Warn`.
 
+The byte budget sits beside the count
+([0045-MADR-notification-queue-byte-budget.md](decisions/0045-MADR-notification-queue-byte-budget.md)):
+
+- **The counters.** `queuedBytes`, under `notifyMu`, counts the line lengths of
+  the messages whose handlers have not returned: notifications queued or running,
+  and requests running. `notifBytes` is the notifications' share. `byteLimit` is
+  `WithMaxQueuedBytes`' budget, 64 MiB by default, raised to `maxMessageSize` in
+  `buildConnection`.
+- **A notification.** `queueNotification` adds its size to both counters as it
+  queues it. `processNotifications` subtracts it beside `completedNotificationSeq`,
+  so the bytes and the count release together.
+  - `overByteBudget` is true while `notifBytes > 0` and the line would take
+    `queuedBytes` past the budget, or past twice it for `OverflowBlock`'s
+    read-on.
+  - `waitForRoom` waits on it as on the count. Past the wait, it sends the
+    notification to the same overflow path as a full channel.
+- **A request.** `admitRequestBytes` adds its size after the concurrency limit's
+  check, or refuses it at once.
+  - `releaseRequestBytes` runs in the request's `release` callback, as its
+    handler returns, and broadcasts, so a paused reader re-checks.
+  - Requests' bytes count toward the total, but never trigger a notification's
+    policy alone, since a request's handler may wait for a response only the
+    reader delivers.
+
 One writer goroutine, started by `start`, writes every message, in the order
 `sendMessage` hands them over through an unbuffered channel; a sender returns
 when its context ends, even while a write is blocked, and a write that has
@@ -542,6 +566,16 @@ Checks that guard this:
     ignores its context, which is why that test is not parallel;
   - an agent slowed at `SessionUpdate`, whose turn `session/cancel` still ends;
   - the `Warn` after 5 s.
+
+  `connection_queue_bytes_test.go` covers the byte budget the same way. Its lines
+  are sized exactly, so only the bytes decide:
+  - the pause and the read-on limit;
+  - the close and drop policies at the budget;
+  - the raise to the message size, and a single line of that size;
+  - a request refused past the budget;
+  - the default;
+  - a request's bytes never pausing the reader while its handler waits for the
+    peer.
 
   `connection_overflow_policy_test.go` covers the close and drop policies, each
   named.

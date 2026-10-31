@@ -1,6 +1,7 @@
 package acp_test
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	acp "github.com/maccavelli/acp-go-sdk2"
@@ -281,4 +283,49 @@ func ExampleWithNotificationOverflowPolicy() {
 	// handled 3
 	// handled 4
 	// dropped: 0
+}
+
+// ExampleWithMaxQueuedBytes bounds, in bytes, what a connection holds of its
+// peer's unfinished messages. A notification whose handler is still running
+// counts its line; a request that would take the count past the budget is
+// refused at once, and its handler does not run
+// (0045-MADR-notification-queue-byte-budget.md).
+func ExampleWithMaxQueuedBytes() {
+	r, w := io.Pipe()
+	out, outW := io.Pipe()
+	entered, release := make(chan struct{}), make(chan struct{})
+	c := acp.NewConnection(func(_ context.Context, method string, _ json.RawMessage) (any, *acp.RequestError) {
+		if method == "_example/progress" {
+			close(entered)
+			<-release // a slow handler: its notification stays counted
+			return nil, nil
+		}
+		return map[string]any{}, nil
+	}, outW, r, acp.WithMaxMessageSize(200), acp.WithMaxQueuedBytes(200))
+	answers := bufio.NewScanner(out)
+
+	note := `{"jsonrpc":"2.0","method":"_example/progress","params":{"text":"` + strings.Repeat("x", 100) + `"}}`
+	if _, err := fmt.Fprintln(w, note); err != nil {
+		fmt.Println("write:", err)
+		return
+	}
+	<-entered
+	fmt.Println("held:", c.QueuedBytes())
+
+	req := `{"jsonrpc":"2.0","id":1,"method":"_example/read","params":{"path":"` + strings.Repeat("y", 60) + `"}}`
+	if _, err := fmt.Fprintln(w, req); err != nil {
+		fmt.Println("write:", err)
+		return
+	}
+	answers.Scan()
+	fmt.Println(answers.Text())
+
+	close(release)
+	_ = w.Close() // the end of the peer's output
+	_ = c.Wait()
+	fmt.Println("held after:", c.QueuedBytes())
+	// Output:
+	// held: 167
+	// {"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"Internal error","data":{"error":"too many queued bytes","limit":200}}}
+	// held after: 0
 }

@@ -241,3 +241,44 @@ refactor:
   file named: "go-precheck: 3 file(s) clean".
 * `make api`: "compatible: (*Connection).QueuedBytes: added"; "compatible: WithMaxQueuedBytes: added"; "against v1.29.0: 0
   incompatible, 2 compatible".
+
+The owner committed phase 1 as `7b87714`.
+
+### Phase 2, 2026-10-31
+
+**What changed.**
+
+* `README.md`, "Closing and limits":
+  * `WithMaxQueuedBytes` beside `WithMaxQueuedNotifications`, whichever limit is reached first counting.
+  * The read-on limit and the `Warn` name the budget.
+  * A new subsection, "The byte budget":
+    * why it exists, about 10 GiB under the count alone;
+    * what counts and until when;
+    * the 64 MiB default and its raise to `WithMaxMessageSize`;
+    * each policy at it, and that requests' bytes alone never pause the reader;
+    * a request's refusal;
+    * `QueuedBytes()`, through `Connection()` on a side connection;
+    * a code block that raises the budget.
+* `docs/architecture.md`:
+  * a paragraph and list on the counters, `queueNotification`, `overByteBudget`, `admitRequestBytes` and
+    `releaseRequestBytes`, and why requests' bytes never trigger a notification's policy;
+  * the checks list names `connection_queue_bytes_test.go`.
+* `example_api_test.go`: `ExampleWithMaxQueuedBytes`, with the `bufio` and `strings` imports.
+  * It sets a connection to `WithMaxMessageSize(200)` and `WithMaxQueuedBytes(200)`.
+  * It holds a 167-byte notification in its handler, prints `QueuedBytes()`, then sends a request that would pass the budget,
+    and prints the refusal the connection writes.
+  * It releases the handler and prints `QueuedBytes()` after `Wait`.
+  * Its output is fixed, and it passed `-race -count=3`.
+
+No step was skipped and nothing deviated.
+
+**Seen to fail.** In a scratch copy, with `acp.WithMaxQueuedBytes(200)` removed, the example fails: the budget is the 64 MiB
+default, and the request is answered `{"jsonrpc":"2.0","id":1,"result":{}}`, against the refusal it wants.
+
+**Checks.**
+
+* `go test -race -count=1 ./...`: every package `ok`.
+* `go vet ./...`: clean.
+* `make pre-add-check`: "go-precheck: 279 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+* `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0.
+* `tools/idscan.py --paths` over the three changed files: 0 matches.

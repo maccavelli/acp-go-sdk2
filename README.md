@@ -867,7 +867,9 @@ A message whose write has begun may still reach the peer.
 
 `acp.WithMaxQueuedNotifications(n)` sets how many received notifications may
 wait while a notification handler runs, 1024 by default.
-`acp.WithNotificationOverflowPolicy(p)` sets what happens past that
+`acp.WithMaxQueuedBytes(n)` bounds the same queue in bytes, 64 MiB by default;
+whichever limit is reached first counts (see "The byte budget", below).
+`acp.WithNotificationOverflowPolicy(p)` sets what happens past either
 ([0044-MADR-notification-queue-back-pressure.md](docs/decisions/0044-MADR-notification-queue-back-pressure.md)):
 
 - `acp.OverflowBlock`, the default since v1.29.0: the connection stops reading
@@ -886,11 +888,12 @@ would otherwise, since it returns only once the notifications received before
 its answer are handled. So, under `acp.OverflowBlock`, a notification handler
 must not wait for a request or a `$/cancel_request` the peer sends later.
 
-The connection reads on, to twice the queue's size, while a notification
-handler waits for the answer to a request it sent under its context, or for
-`initialize`'s answer, since only the reader can deliver either. Past that, it
-closes with `acp.ErrNotificationQueueOverflow`. A pause that lasts 5 seconds
-is logged at `Warn`.
+The connection reads on, to twice the queue's size or twice the byte budget,
+while a notification handler waits for the answer to a request it sent under
+its context, or for `initialize`'s answer, since only the reader can deliver
+either. Past that, it closes with `acp.ErrNotificationQueueOverflow`. A pause
+that lasts 5 seconds is logged at `Warn`, with the bytes counted and the
+budget.
 
 Over package `remote`, the server's own bounds still apply to a long pause: a
 WebSocket write waits at most `Grace`, and Streamable HTTP holds at most
@@ -907,6 +910,38 @@ run at once. Over the limit, a request is answered at once, `-32603` with
 run; the reader never waits for a handler, since a running one may be waiting
 for a response only the reader delivers. Notifications and `$/cancel_request`
 do not count. The default is no limit.
+
+#### The byte budget
+
+`acp.WithMaxQueuedBytes(n)` bounds what a connection holds of its peer's
+unfinished messages
+([0045-MADR-notification-queue-byte-budget.md](docs/decisions/0045-MADR-notification-queue-byte-budget.md)).
+Without it, the count alone allows 1024 notifications of up to 10 MiB each,
+about 10 GiB.
+
+- **What counts.** Each received message counts its line's length, from its
+  receipt until its handler returns: the notifications queued or running, and
+  the requests whose handlers run.
+- **The default is 64 MiB.** A budget below `WithMaxMessageSize` is raised to
+  it, so one message always fits.
+- **A notification** that would take the bytes counted past the budget, while
+  another notification is counted, meets the overflow policy as at the count:
+  - `acp.OverflowBlock` pauses the reader;
+  - `acp.OverflowCloseConnection` closes the connection;
+  - `acp.OverflowDropNewest` drops the notification.
+
+  Requests' bytes alone never pause the reader. A request's handler may be
+  waiting for a response only the reader delivers.
+- **A request** that would take the bytes counted past the budget is answered
+  at once with `-32603` and `{"error": "too many queued bytes", "limit": n}`,
+  and its handler does not run, as `WithMaxConcurrentRequests` refuses one.
+- **`QueuedBytes()`** on a `*acp.Connection` reports the bytes counted, for
+  metrics. On a side connection it is `conn.Connection().QueuedBytes()`.
+
+```go
+conn := acp.NewAgentSideConnection(agent, stdout, stdin,
+    acp.WithMaxQueuedBytes(256<<20)) // 256 MiB
+```
 
 ### Remote agents
 
