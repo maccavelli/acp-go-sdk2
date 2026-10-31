@@ -282,3 +282,86 @@ default, and the request is answered `{"jsonrpc":"2.0","id":1,"result":{}}`, aga
 * `make pre-add-check`: "go-precheck: 279 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
 * `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0.
 * `tools/idscan.py --paths` over the three changed files: 0 matches.
+
+The owner committed phase 2 as `1e4a198`.
+
+### Phase 3, 2026-10-31
+
+**Step 3.1, the gates.** `tools/gates.py --all` on `1e4a198`, the tree clean, exit 0:
+
+```text
+ok   regen (exit 0)
+ok   precheck (exit 0)
+  newfiles: no new .go files
+ok   newfiles (exit 0)
+ok   nojsonv2 (exit 0)
+ok   winvet (exit 0)
+ok   records (exit 0)
+ok   mdlint (exit 0)
+ok   idscan (exit 0)
+ok   tools (exit 0)
+ok   lint (exit 0)
+ok   fix (exit 0)
+ok   tidy (exit 0)
+ok   api (exit 0)
+ok   race3 (exit 0)
+ok   floor (exit 0)
+ok   platforms (exit 0)
+ok   windows (exit 0)
+ok   linux (exit 0)
+all gates passed
+```
+
+* `precheck`: "go-precheck: 279 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+* `api`: "compatible: (*Connection).QueuedBytes: added"; "compatible: WithMaxQueuedBytes: added"; "against v1.29.0: 0
+  incompatible, 2 compatible".
+* `windows` and `linux`: the whole tree from source, `go1.27.3` on each host, every package `ok`, the root package included.
+
+`make push-guard`, after a fetch: "4 outgoing commit(s), 9fcbb6f..1e4a198, main to origin"; "the guard passed (exit 0)".
+
+**Step 3.2, CI.** The owner pushed `fd8e586`, `04d6673`, `7b87714` and `1e4a198`; `origin/main` is `1e4a198`.
+`tools/watch_ci.py --branch main 1e4a198`, exit 0:
+
+```text
+watch_ci: 2 run(s) for 1e4a198: 41242795883, 41242795930
+watch_ci: run 41242795883 (main, push): completed success; watch exit 0
+  completed success: docs
+watch_ci: run 41242795930 (main, push): completed success; watch exit 0
+  completed success: validate (windows-2025, 1.27.3)
+  completed success: validate (macos-15, 1.27.3)
+  completed success: validate (macos-15, 1.26.10)
+  completed success: validate (ubuntu-24.04, 1.26.10)
+  completed success: validate (windows-2025, 1.26.10)
+  completed success: validate (ubuntu-24.04, 1.27.3)
+```
+
+**Step 3.3, the MADR's Confirmation.**
+
+| # | Item | Shown by |
+| :--- | :--- | :--- |
+| 1 | Under `OverflowBlock`, lines past the budget with count room pause the reader; all delivered in order, none dropped, open | `TestQueuedBytesPausesReading` |
+| 2 | Under 0044's guard the reader reads on to twice the budget, then closes with `ErrNotificationQueueOverflow` | `TestQueuedBytesReadOnLimit` |
+| 3 | `OverflowCloseConnection` and `OverflowDropNewest` close or drop at the budget | `TestQueuedBytesCloseAndDrop`, its two subtests |
+| 4 | A budget below `WithMaxMessageSize` is raised to it; one maximum-size line is accepted with nothing counted | `TestQueuedBytesClampAndSingleLine`, its two subtests; `TestQueuedBytesDefault/a_larger_message_size` |
+| 5 | The counted bytes return to 0 when every handler has returned, and `QueuedBytes()` reports them | `TestQueuedBytesPausesReading` (notifications), `TestQueuedBytesRequestsDoNotPause` (a request), `TestQueuedBytesRefusesRequest` (nothing counted for a refusal); `ExampleWithMaxQueuedBytes` |
+| 6 | A request past the budget is answered `-32603` with the limit, and its handler does not run | `TestQueuedBytesRefusesRequest`; `ExampleWithMaxQueuedBytes` |
+| 7 | Requests' bytes alone never pause or refuse a notification; a request handler awaiting the peer gets its response | `TestQueuedBytesRequestsDoNotPause` |
+| 8 | The existing queue, barrier, overflow and hold tests pass unchanged | `git diff --stat 04d6673..1e4a198 -- '*_test.go'`: only `connection_queue_bytes_test.go`, new, and `example_api_test.go`, one example added; those tests pass in `race3` and on both hosts |
+| 9 | `make api` reports only compatible additions | the `api` gate above |
+| 10 | `tools/gates.py --all` and CI pass | step 3.1; step 3.2 |
+
+*Refinement, not a deviation.* Building the table showed three cases that phase 1's breaks did not reach: one subtest, one
+assertion, and one subtest that the no-clamp break reached but was run only against its sibling. Each was planted now, in a
+scratch copy, on `1e4a198`:
+
+| Break | Test | Failure seen |
+| :--- | :--- | :--- |
+| the trigger without its notification gate, at `>=` | `TestQueuedBytesClampAndSingleLine/one_line_of_the_message_size` | "0 notifications queued, ended true (acp: connection closed: notification queue overflow); want 1 and open" |
+| a refused request's bytes counted | `TestQueuedBytesRefusesRequest` | "QueuedBytes = 1200 after the refusal, want 900" |
+| no clamp | `TestQueuedBytesDefault/a_larger_message_size` | "byte budget 67108864, want 104857600" |
+
+Every new test and subtest has now been seen to fail on a planted break, and the example was seen to fail in phase 2. No test or
+code changed. With CI on `1e4a198`, every item of the Confirmation is shown.
+
+**Step 3.4, the status lines.** The MADR stays `accepted`; its "Chosen option (proposed)" loses the leftover "(proposed)". The
+index rows are unchanged: this PLAN stays `in-progress` until phase 4 ends, as 0044's did.

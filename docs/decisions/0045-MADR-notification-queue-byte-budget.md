@@ -101,7 +101,7 @@ Measured at `9fcbb6f` (`v1.29.0`) unless stated. The external sources are under 
 
 ## Decision Outcome
 
-Chosen option (proposed): **"A byte budget beside the count, whichever is reached first"**.
+Chosen option: **"A byte budget beside the count, whichever is reached first"**.
 
 It bounds memory under every policy, keeps both existing options' meaning, and follows the strongest precedents: the TypeScript
 SDK's budget, the Rust polyfill's pairing of count and bytes, and this SDK's own `MaxBuffered`. Under `OverflowBlock` it is one
