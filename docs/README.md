@@ -128,11 +128,14 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0043 | MADR | [Add ACP's remote transport, Streamable HTTP and WebSocket, as an experimental package, chosen over an MCP-over-ACP binding and a registry client](decisions/0043-MADR-remote-http-and-websocket-transport.md); questions answered 2026-10-29; amended by the PLAN 2026-10-29 and in its phase 9 2026-10-30 | accepted |
 | 0043 | PLAN | [Implement 0043: ACP's remote transport, Streamable HTTP and WebSocket, in package `remote`](decisions/0043-PLAN-remote-http-and-websocket-transport.md) | complete |
 | 0043 | REPORT | [Release notes for v1.27.0, against v1.26.0](reports/0043-REPORT-release-notes-v1-27-0.md) | observed |
+| 0044 | MADR | [Add back-pressure as a third notification overflow policy, and make it the default: pause the reader at the queue's capacity, and read on while the notification loop waits on the reader](decisions/0044-MADR-notification-queue-back-pressure.md); issue #13; questions answered 2026-10-31 | accepted |
+| 0044 | PLAN | [Implement 0044: `OverflowBlock`, back-pressure for the notification queue, as the default](decisions/0044-PLAN-notification-queue-back-pressure.md) | in-progress |
 
 ## I want to…
 
 | I want to… | Start here |
 | :--- | :--- |
+| know how a connection can slow its peer when notifications arrive faster than they are handled, and why the reader pauses only where it cannot deadlock | [0044-MADR-notification-queue-back-pressure.md](decisions/0044-MADR-notification-queue-back-pressure.md) |
 | know why the next ACP feature is the remote transport, and what it would take | [0043-MADR-remote-http-and-websocket-transport.md](decisions/0043-MADR-remote-http-and-websocket-transport.md) |
 | know what the two consumers still wait on from this SDK, and the ten items that close it | [0041-MADR-close-the-gaps-the-consumers-wait-on.md](decisions/0041-MADR-close-the-gaps-the-consumers-wait-on.md) |
 | find, for a consumer's code, the SDK API that replaces it and the release it came in | [0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md](reports/0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md) |
