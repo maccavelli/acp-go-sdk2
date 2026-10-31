@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-10-30
 associated-madr: "0042-MADR-in-process-agent-runner.md"
 ---
@@ -1491,3 +1491,30 @@ disclosure-check`; `tools/idscan.py --paths` over the five changed files, "0 mat
 **Left, each on the owner's ask:** the push of this commit and its CI; the tag `v1.28.0`, the GitHub release from
 `tools/release_body.py`, `tools/publication.py`, and `tools/consumer.py v1.28.0`, which shows the Confirmation's last item; then
 issue #12 answered and closed with the release's link, and this PLAN and its row `complete`.
+
+### Phase 17, the release (2026-10-30)
+
+The owner committed the release notes and the consumer as `b390bdf` and pushed it.
+
+* **CI on `b390bdf`,** `tools/watch_ci.py --branch main b390bdf`, exit 0: run `41143445392`, the Docs workflow, "completed
+  success"; run `41143445606`, "completed success", the six `validate` jobs on macOS, Ubuntu and Windows at Go `1.27.3` and
+  `1.26.10`.
+* **The body,** `tools/release_body.py v1.28.0 b390bdf`: "67 lines, 2 links", its identifier scan "0 match(es)".
+* **The tag.** The owner pushed `v1.28.0`, annotated, naming `b390bdf`, as `git ls-remote` shows. Its CI,
+  `tools/watch_ci.py --branch v1.28.0 b390bdf`, exit 0: run `41145312381`, "completed success", the same six jobs.
+* **The release.** The owner ran `gh release create v1.28.0 --verify-tag --title v1.28.0 --notes-file` with the extracted body:
+  <https://github.com/maccavelli/acp-go-sdk2/releases/tag/v1.28.0>.
+* **`tools/publication.py v1.28.0 b390bdf`,** exit 0, "10 of 10 checks hold": the release exists, not a draft or prerelease; its
+  body is the extracted release text; it is marked latest; the tag is annotated and names `b390bdf`, which is on origin's `main`;
+  CI passed on `main`'s head, run `41143445606`, and on the tag, run `41145312381`; the proxy serves the `.info`, its origin the
+  tag at that commit; `go list -m @latest` gives `v1.28.0`; `go mod download` of the tag passes with the checksum database on.
+* **`tools/consumer.py v1.28.0`,** exit 0, "as required". At `go1.26.10`, from the proxy: `go get` of `v1.28.0`, `go mod tidy`,
+  the build, the run, whose output equals `WANT_RUN`, `close-context <nil>` and `bounded true true <nil>` among its lines, `go
+  test` and the Windows build, each exit 0. The consumer's `go.mod` keeps `go 1.26.10` and has no toolchain line.
+* **Issue #12,** on the owner's "post and close": answered with the release's link, the methods, the sentinel, the unchanged
+  `Wait` and the fixed text, and the amendment's link at the tag
+  (<https://github.com/maccavelli/acp-go-sdk2/issues/12#issuecomment-6536068425>); closed as completed, 2026-10-30T23:54:38Z.
+
+**The amendment's "Confirmation"'s last item,** "`tools/consumer.py` closing an in-process agent through `CloseContext`", open in
+phase 17's walk above, is shown by the consumer's run against `v1.28.0`. Every item is shown, the release is published, and the
+issue is closed, so this PLAN and its row are `complete`.
