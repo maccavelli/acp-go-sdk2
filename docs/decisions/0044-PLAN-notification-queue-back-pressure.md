@@ -483,3 +483,34 @@ Every item from 1 to 9 is now shown by a test seen to fail on a planted break, a
 
 **Step 3.4, the status lines.** The MADR stays `accepted` and the index rows unchanged: the MADR `accepted`, this PLAN
 `in-progress` until phase 4 ends.
+
+The owner committed phase 3's record as `934e33b`.
+
+### Phase 4, 2026-10-31: before the tag
+
+The owner asked for phase 4 ("committed, proceed with phase 4").
+
+**Step 4.1, `tools/consumer.py`.**
+* The program opens a client connection to an agent over a pipe with
+  `WithNotificationOverflowPolicy(acp.OverflowCloseConnection)`, initializes it, closes both ends, and prints
+  `acp.OverflowBlock != acp.OverflowCloseConnection`, the protocol version and the three errors.
+* `WANT_RUN` gains `overflow true 1 <nil> <nil> <nil>`; the docstring names this PLAN and says `VERSION` is `v1.29.0` or later.
+* `tools/README.md`: `consumer.py`'s row names the opt-out and `v1.29.0`.
+* *Before the tag.* A scratch script built the program and test against `934e33b`'s tree through a `replace`, at `go1.26.10`, three
+  times: `go mod tidy`, the build, the run, `go test` and the Windows build, each exit 0; "output equals WANT_RUN: True". The first
+  run, before `WANT_RUN` changed, differed first at line 27, the new line, so the 26 lines before it are unchanged under the new
+  default.
+* *Seen to fail.* `tools/consumer.py v1.28.0`, the published release without `OverflowBlock`, a consumer naming an undefined
+  identifier: exit 1, `go build` "./main.go:242:30: undefined: acp.OverflowBlock", "NOT AS REQUIRED".
+* `make check-tools`, exit 0: "Ran 58 tests" and "Ran 32 tests", both "OK"; "check-ci-filters: 0 problem(s)".
+
+**Step 4.2, the release notes.**
+[0044-REPORT-release-notes-v1-29-0.md](../reports/0044-REPORT-release-notes-v1-29-0.md), and its row in `docs/README.md`. Its first
+section is the change of default: what pauses now where it closed, what waits behind a pause, the rule, the reading on, the 5 s
+log, `remote`'s bounds, and the opt-out in a code block. Its sources: the five commits since `v1.28.0`, the three Go files changed
+outside the tests, the unchanged areas, `make api` on `934e33b` ("0 incompatible, 1 compatible"), CI on `3845b28`, and the
+consumer before the tag.
+
+**Left, each on the owner's ask:** the push of this commit and its CI; the tag `v1.29.0`, the GitHub release from
+`tools/release_body.py`, `tools/publication.py`, and `tools/consumer.py v1.29.0`, which with the notes shows the Confirmation's
+item 12; then issue #13 answered and closed with the release's link, and this PLAN and its row `complete`.
