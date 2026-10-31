@@ -489,3 +489,79 @@ As [0045-PLAN-notification-queue-byte-budget.md](0045-PLAN-notification-queue-by
 
 * `make pre-add-check`: "go-precheck: 279 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
 * `make api`: "against v1.30.0: 0 incompatible, 0 compatible".
+
+The owner committed phase 1 as `1de8d98`.
+
+### Phase 2, 2026-10-31
+
+The owner said "committed, proceed".
+
+**What changed.**
+
+* **`middleware.go`, new, 97 lines:**
+  * `Middleware`, with D1 and D7's rules;
+  * `WithReceivingMiddleware`, appending, with D2, D3 and D6 in its godoc;
+  * `chainMiddleware`, which wraps over `slices.Backward`, so `mw[0]` is outermost, and panics as step 2.2 says;
+  * `notFound`;
+  * `RequestIDFromContext`, its receiving half, which returns `slices.Clone` of the `requestReceipt`'s id.
+* **`connection.go`:**
+  * `connectionConfig.receiving`;
+  * `buildConnection` replaces the handler with the chain when one is registered, a `nil` handler first becoming `notFound`;
+  * godoc of `ConnectionOption` (the exception), `MethodHandler`, `WithInboundRewrite`, `WithInboundValidation` and
+    `NewConnection`.
+* **`options_test.go`:** `TestOptionSemantics` checks that two `WithReceivingMiddleware` calls keep all three middleware, the
+  first outermost, over a `nil` handler answering `-32601`.
+* **`connection_middleware_test.go`, new:** the eight tests of step 2.6, `TestReceivingMiddlewareKeepsOrdering` as two
+  subtests, each in a `synctest` bubble.
+
+**Refinements, not deviations.**
+
+* *`IsNotification`'s godoc.* The sentence about sending middleware (step 2.5) waits for phase 3, so no doc names an option that
+  does not exist yet.
+* *Two plants changed, and two added.*
+  * "The short-circuit calling the handler anyway" is the middleware's behaviour, in the test, not the SDK's. The SDK's break
+    that `TestReceivingMiddlewareShortCircuit` guards is a chain that is never built, which replaced it.
+  * "The chain inside the dispatch, after decoding" cannot be planted without generated code. The break planted in its place
+    is what that test sees of it: the result encoded before the chain sees it.
+  * `TestReceivingMiddlewareKeepsOrdering` gained plants of its own: completion before the chain returns, and the barrier
+    without B1's cap.
+* *A test's formatting.* `TestRequestIDFromContextReceiving` prints the id with `string(id)`. Under Go 1.27's default build
+  `json.RawMessage` is `jsontext.Value`, whose `String` prints a nil value as `null`. With `%s` the test passed at the floor and
+  failed at `go1.27.3`.
+
+**Step 2.7, seen to fail.** `tools/plants.py`, eleven plants, "11/11 as required". The first run had ten as required: the
+eleventh failed its test, but with "the handler's request's return did not happen", not the "deadlock" the spec guessed. The spec
+was corrected and all eleven rerun.
+
+| Break | Test | Failure seen |
+| :--- | :--- | :--- |
+| the chain built last-outermost, MCP's order | `TestReceivingMiddlewareOrder` | `request: "c b a handler a b c", want "a b c handler c b a"` |
+| a repeated option replacing the earlier | `TestOptionSemantics` | `repeated WithReceivingMiddleware ran "c c", want all three, the first outermost` |
+| the chain built per message | `TestReceivingMiddlewareConstruction` | no panic at construction, and "over ten messages, want once" |
+| no `nil` check on a middleware | `TestReceivingMiddlewareConstruction` | `panic runtime error: invalid memory address or nil pointer dereference, want "acp: WithReceivingMiddleware: middleware 1 is nil"` |
+| `notFound` answering notifications `-32601` | `TestReceivingMiddlewareNilHandler` | "the dropped notification was logged" |
+| no receiving chain at all | `TestReceivingMiddlewareShortCircuit` | `answer {ID:1 Result:{"sessionId":"s"} Error:<nil>}, want -32000` |
+| the result encoded before the chain sees it | `TestReceivingMiddlewareSeesRawAndResult` | `result jsontext.Value {"sessionId":"s"}, … want *NewSessionResponse s` |
+| `release` before the chain returns | `TestReceivingMiddlewareCountsInBudget` | "QueuedBytes = 0 while the middleware holds the request" |
+| `RequestIDFromContext` not copying | `TestRequestIDFromContextReceiving` | `"handler x true", want "handler 7 true"` |
+| notifications completed before their chain returns | `TestReceivingMiddlewareKeepsOrdering/the_response_barrier` | "SendRequestNoResult returned <nil> while the notification before its answer ran" |
+| the barrier without B1's cap | `TestReceivingMiddlewareKeepsOrdering/a_notification_handler's_own_request` | "the handler's request's return did not happen" |
+
+**Step 2.8, the checks.**
+
+* `go test -race -count=3 -run 'ReceivingMiddleware|RequestIDFromContext|OptionSemantics' .`: `ok`. At the floor,
+  `GOTOOLCHAIN=go1.26.10 GOEXPERIMENT=goroutineleakprofile`, once: `ok`.
+* `tools/remote.py pkg` on the Linux and Windows hosts, with that `-test.run` and `-test.count=3`: "PASS", exit 0, on each.
+* `make pre-add-check`: "279 file(s) clean"; with the new files named, "2 file(s) clean". The whole suite runs in it, and
+  `TestExportedDeclarationsDocumented` and `TestExportedTypeDocsStartWithName` pass.
+* `make api`: "compatible: Middleware: added", "compatible: RequestIDFromContext: added", "compatible: WithReceivingMiddleware:
+  added"; "against v1.30.0: 0 incompatible, 3 compatible".
+* **The benchmark,** three alternating rounds of `-count=5` against the baseline. Allocations are equal in every round (99 and
+  65). Pooled over the fifteen runs of each side:
+
+  | Benchmark | ns/op | B/op | allocs/op |
+  | :--- | :--- | :--- | :--- |
+  | `BenchmarkPromptRoundTrip` | 27166 → 27347 (+0.7%) | +7 | 99 → 99 |
+  | `BenchmarkSessionUpdateNotify` | 15608 → 15048 (−3.6%) | +0 | 65 → 65 |
+
+  The rounds alone ranged from −8.3% to +6.9%, in both directions, which is the machine's noise.

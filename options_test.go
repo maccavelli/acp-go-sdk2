@@ -1,6 +1,7 @@
 package acp
 
 import (
+	"context"
 	"io"
 	"strings"
 	"testing"
@@ -47,6 +48,17 @@ func TestOptionSemantics(t *testing.T) {
 		}()
 		build(nil)
 	}()
+
+	// WithReceivingMiddleware appends, the one exception to the last winning
+	// (0046-MADR-sending-and-receiving-middleware.md, D2).
+	var tr trail
+	c := build(WithReceivingMiddleware(named(&tr, "a"), named(&tr, "b")), WithReceivingMiddleware(named(&tr, "c")))
+	if _, err := c.handler(context.Background(), "m", nil); err == nil || err.Code != -32601 {
+		t.Errorf("the chain over a nil handler = %v, want -32601", err)
+	}
+	if got := tr.take(); got != "a b c c b a" {
+		t.Errorf("repeated WithReceivingMiddleware ran %q, want all three, the first outermost", got)
+	}
 
 	start := StartToolCall("c", "t", WithStartStatus(ToolCallStatusPending), WithStartStatus(ToolCallStatusCompleted))
 	if got := start.ToolCall.Status; got != ToolCallStatusCompleted {

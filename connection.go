@@ -344,6 +344,10 @@ func addressable(v any) any {
 // Under Go 1.27's default build json.RawMessage is jsontext.Value, so a
 // handler written with encoding/json/v2 may declare params as jsontext.Value
 // (0007-MADR-self-contained-acp-sdk.md, the amendment of 2026-10-31).
+//
+// WithReceivingMiddleware wraps the connection's handler in Middleware, which
+// takes and returns a MethodHandler
+// (0046-MADR-sending-and-receiving-middleware.md).
 type MethodHandler func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError)
 
 // Connection is a simple JSON-RPC 2.0 connection over line-delimited JSON.
@@ -497,7 +501,9 @@ type Connection struct {
 
 // ConnectionOption configures optional parameters for a Connection.
 //
-// Options apply in the order given, so the last of a repeated option wins. A
+// Options apply in the order given, so the last of a repeated option wins,
+// except WithReceivingMiddleware, whose repeated options append
+// (0046-MADR-sending-and-receiving-middleware.md, D2). A
 // value n <= 0 keeps the value already set for WithMaxQueuedNotifications,
 // WithMaxQueuedBytes and WithMaxMessageSize, the default unless an earlier
 // option set one, but sets
@@ -517,6 +523,9 @@ type connectionConfig struct {
 	resultChecks           map[string]func(params, result any) error
 	maxConcurrentRequests  int
 	promptOverlap          PromptOverlapPolicy
+	// receiving is WithReceivingMiddleware's middleware, in the order
+	// registered (0046-MADR-sending-and-receiving-middleware.md, D2).
+	receiving []Middleware
 }
 
 // WithMaxQueuedNotifications sets how many notifications may wait in the
@@ -729,7 +738,10 @@ func WithLogger(l *slog.Logger) ConnectionOption {
 // message as WithInboundValidation's does. A message that does not decode
 // reaches no hook (0015-MADR-validate-absolute-protocol-paths.md, H1). An
 // extension message's params is a *json.RawMessage
-// (0019-PLAN-api-decisions.md, B14).
+// (0019-PLAN-api-decisions.md, B14). The hook runs inside the dispatch, so
+// inside any WithReceivingMiddleware, after it, and a middleware that answers
+// in the handler's place reaches no hook
+// (0046-MADR-sending-and-receiving-middleware.md, D3).
 func WithInboundRewrite(fn func(ctx context.Context, method string, params any) error) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		cfg.rewrite = fn
@@ -762,7 +774,9 @@ func ChainRewrites(fns ...func(ctx context.Context, method string, params any) e
 // invalid params (-32602); a notification with an error is dropped and
 // logged; a response's error is returned to the caller. params is the same
 // pointer the rewrite hook saw, and this hook must not change it
-// (0015-MADR-validate-absolute-protocol-paths.md, H1).
+// (0015-MADR-validate-absolute-protocol-paths.md, H1). Like the rewrite hook,
+// it runs inside any WithReceivingMiddleware
+// (0046-MADR-sending-and-receiving-middleware.md, D3).
 func WithInboundValidation(fn func(ctx context.Context, method string, params any, err error) error) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		cfg.inbound = fn
@@ -775,7 +789,8 @@ func WithInboundValidation(fn func(ctx context.Context, method string, params an
 // Reading starts before NewConnection returns, so handler may be called
 // before then: it must not read a variable assigned from the result.
 //
-// A nil handler answers every request -32601 and drops every notification.
+// A nil handler answers every request -32601 and drops every notification,
+// with WithReceivingMiddleware too, which then wraps that behaviour.
 // NewConnection panics, naming the argument, when peerInput or peerOutput is
 // nil, as http.Handle does for a nil handler
 // (0024-PLAN-behaviour-fixes.md, A1).
@@ -834,6 +849,15 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 	queueCap := cfg.maxQueuedNotifications
 	if cfg.notificationOverflow == OverflowBlock {
 		queueCap *= 2
+	}
+	// The receiving chain replaces the handler, built once, so handleInbound
+	// is unchanged and a connection without one runs as before
+	// (0046-MADR-sending-and-receiving-middleware.md, D3).
+	if len(cfg.receiving) > 0 {
+		if handler == nil {
+			handler = notFound
+		}
+		handler = chainMiddleware("WithReceivingMiddleware", cfg.receiving, handler)
 	}
 
 	ctx, cancel := context.WithCancelCause(context.Background())
