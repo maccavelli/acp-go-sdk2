@@ -84,9 +84,9 @@ Implementation is [0010-PLAN-align-docs-with-current-tree.md](0010-PLAN-align-do
 Found and left alone: `communique.toml`, the release-notes tool's configuration, describes the project as `acp-go-sdk`. It is product configuration, not
 documentation, and is outside this decision.
 
-## Amendment 2026-10-31, remove `communique.toml` (proposed)
+## Amendment 2026-10-31, remove `communique.toml` (accepted)
 
-**Status of this amendment: proposed.** It awaits the owner's decision.
+**Status of this amendment: accepted** by the owner on 2026-10-31: "approved to delete the leftover file in 0010 amendment".
 
 The "Found and left alone" note above kept `communique.toml` out of this decision, as product configuration rather than
 documentation. A read-only audit of every record's open items on 2026-10-31 found it still in the tree at `9fcbb6f`:
@@ -100,7 +100,7 @@ documentation. A read-only audit of every record's open items on 2026-10-31 foun
 * Release notes are written another way: a release-notes REPORT for each release, extracted by `tools/release_body.py`
   ([0031-MADR-verification-tools-in-repository.md](0031-MADR-verification-tools-in-repository.md)).
 
-**Decision (proposed): delete `communique.toml`.** No configuration, workflow or document refers to it, so nothing else
+**Decision: delete `communique.toml`.** No configuration, workflow or document refers to it, so nothing else
 changes.
 
 * Good, because the tree no longer carries configuration for a tool it does not run, under the previous project's name.

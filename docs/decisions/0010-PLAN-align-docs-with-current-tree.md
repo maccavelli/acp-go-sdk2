@@ -106,9 +106,10 @@ Verification:
 
 Every acceptance criterion in Verification holds. The status is `complete`, and `docs/README.md` shows it. The owner commits on `main`.
 
-## Phase added 2026-10-31: remove `communique.toml` (proposed)
+## Phase added 2026-10-31: remove `communique.toml`
 
-**Status of this phase: proposed**, for the MADR's amendment of 2026-10-31. It starts only when the owner approves it.
+**Status of this phase: complete**, staged for the owner's commit, for the MADR's amendment of 2026-10-31. Approved by the
+owner on 2026-10-31: "approved to delete the leftover file in 0010 amendment".
 
 1. `git rm communique.toml`.
 2. A scan of the tracked files finds communique named only in this MADR and this PLAN.
@@ -117,3 +118,18 @@ Every acceptance criterion in Verification holds. The status is `complete`, and 
    pushed commit.
 
 **Rollback.** Restore the file from `9fcbb6f`.
+
+### Execution record, 2026-10-31
+
+Base: `476d765`, the tree clean.
+
+1. `git rm communique.toml`: the file's 15 lines, staged as a deletion.
+2. **The scan.** A script read every tracked file for "communique", ignoring case: 3 files, this MADR, this PLAN and
+   `docs/README.md`. The index's mention is the 0010 MADR row's note on this amendment, part of the record, so the MADR's
+   Confirmation holds as meant. No configuration, workflow, script or Go file names it.
+3. **The checks.**
+   * `make pre-add-check`: "go-precheck: 279 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+   * `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0.
+4. **Records.** The MADR's amendment is `accepted`; this phase is `complete`; the two index rows say so.
+
+**Left:** CI on the pushed commit, which runs the full workflow, since `communique.toml` is outside the docs-only paths.

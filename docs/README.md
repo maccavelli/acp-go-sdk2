@@ -26,8 +26,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0008 | REPORT | [Review of the self-contained SDK records, a go/ast generator, and encoding/json/v2](reports/0008-REPORT-self-contained-sdk-review.md) | observed |
 | 0009 | MADR | [Fix the generated output on encoding/json v1](decisions/0009-MADR-fix-generated-output-on-json-v1.md) | accepted |
 | 0009 | PLAN | [Implement the generated-output fixes](decisions/0009-PLAN-fix-generated-output-on-json-v1.md) | complete |
-| 0010 | MADR | [Bring the user-facing docs in line with the current tree](decisions/0010-MADR-align-docs-with-current-tree.md); amendment proposed 2026-10-31: remove `communique.toml` | accepted |
-| 0010 | PLAN | [Implement the docs update](decisions/0010-PLAN-align-docs-with-current-tree.md); a phase proposed 2026-10-31 for the amendment | complete |
+| 0010 | MADR | [Bring the user-facing docs in line with the current tree](decisions/0010-MADR-align-docs-with-current-tree.md); amendment accepted 2026-10-31: remove `communique.toml` | accepted |
+| 0010 | PLAN | [Implement the docs update](decisions/0010-PLAN-align-docs-with-current-tree.md); the amendment's phase of 2026-10-31 complete | complete |
 | 0011 | MADR | [Harden the code generator into a validated, schema-driven engine](decisions/0011-MADR-harden-code-generator-engine.md); amendment accepted 2026-10-31: `RequestId` refuses objects, the dead trial decode removed | accepted |
 | 0011 | PLAN | [Implement phase 1: the resolved schema model](decisions/0011-PLAN-resolved-schema-model.md) | complete |
 | 0011 | PLAN | [Implement phase 2: the wire fixes](decisions/0011-PLAN-wire-fixes.md); the amendment's phase of 2026-10-31 complete, released in v1.30.0 | complete |
