@@ -86,7 +86,9 @@ Out of scope, as the MADR's "Not in this decision": a byte budget; queues per se
    * The overflow log line (`:1605`) reports `queueLimit` as `capacity`.
 4. **The pause.** In `receiveLine`, after `c.notifyMu.Lock()` and before `lastEnqueuedNotificationSeq++` (`:1579`-`:1580`), under
    `OverflowBlock`, call `waitForRoom`. It is entered and left with `notifyMu` held:
-   * while `len(c.notificationQueue) >= c.queueLimit`, `c.peerWaits == 0` and `c.ctx.Err() == nil`, it waits on `notifyCond`;
+   * while `len(c.notificationQueue) >= c.queueLimit`, `c.peerWaits == 0` and `c.ctx.Err() == nil`, it waits on `notifyCond`.
+     *Amended 2026-10-31* (see "Deviation, 2026-10-31, step 1.4"): the count is
+     `lastEnqueuedNotificationSeq - completedNotificationSeq > queueLimit`, not the channel's length;
    * the first wait starts a `time.AfterFunc` of `pauseWarnAfter`, a new constant of 5 s beside `notificationQueueDrainTimeout`
      (`:22`). It logs `Warn` "notification queue full; reading paused", with `capacity` and `paused`. The timer is stopped when the
      wait ends;
@@ -273,3 +275,85 @@ As [0042-PLAN-in-process-agent-runner.md](0042-PLAN-in-process-agent-runner.md)'
 
 *2026-10-31:* the owner accepted the MADR and approved this PLAN ("acccepted, approved, proceed"). The records are committed
 alone, as `AGENTS.md`'s bootstrap exception requires, before phase 1's source.
+
+### Phase 1, 2026-10-31
+
+**What changed.**
+
+* `connection.go`:
+  * `OverflowBlock`, the default: the `connectionConfig` literal, and an undefined value mapped to it.
+  * `queueLimit` and `peerWaits`; the channel at `2n` under `OverflowBlock`.
+  * `waitForRoom`, called in `receiveLine` before the sequence advances.
+  * `beginPeerWait` and `inRunningNotification`; the guard in `exchange`, `SendRequestNoResult` and `sendRequestCommit`.
+  * `pauseWarnAfter`, and the overflow log's `capacity` as `queueLimit`.
+  * The godoc of D8: `MethodHandler`, `WithMaxQueuedNotifications`, the three policies, `WithNotificationOverflowPolicy`, `Err` and
+    `EndedCleanly`.
+* `errors.go` (`ErrNotificationQueueOverflow`) and `doc.go` ("How a connection ends").
+* `connection_overflow_block_test.go`, new: the nine tests of step 1.7.
+* The thirteen tests of step 1.8.
+
+**Step 1.8, the run before the tests changed.** `go test -race -count=1 ./...` on the phase's code with the existing tests
+unchanged failed exactly the list:
+* `TestConnectionFailsFastOnNotificationQueueOverflow`;
+* `TestConnection_NotificationOverflowPolicyClosesByDefault/no_option` and `/undefined_policy`;
+* the five `TestWithMaxQueuedNotifications_*`, and `TestOptionSemantics`;
+* `TestEndedCleanly`, `TestOverflowCloseClosesTransport`, `TestHeldNotificationsFillQueue` and `TestErr/notification_overflow`;
+* `agentproc`'s `TestConnectionEndStopsAgent/a_notification_overflow`.
+
+Every other package passed: `acptest`, `clienthost`, `remote` and the four examples. After the changes of step 1.8, the whole suite
+passed.
+
+**Deviation, 2026-10-31, step 1.4: the pause counted the channel's length.**
+* *Found.* `tools/remote.py pkg` on the Linux and Windows hosts. On Linux, `TestOverflowBlockPausesReading` and
+  `TestOverflowBlockIsTheDefault` failed with "2 notifications queued while the handler is held, want 3" and "3 writes returned, want
+  4". On Windows, `TestOverflowBlockEndsOnClose` failed with "1 notifications queued, want 2: the reader paused". macOS never showed it.
+* *Cause.* The worker frees a slot when it takes a notification from the channel, but broadcasts only when a handler returns. When
+  the reader filled the queue before the worker had taken notification 0, it paused one early, and stayed paused, with room, until the
+  held handler returned.
+* *Resolution.* Count the notifications received and not completed, `lastEnqueuedNotificationSeq - completedNotificationSeq`, which
+  change only under `notifyMu` and with a broadcast at each completion. Pause while that count exceeds `queueLimit`: `n` waiting
+  besides the one running, which is the MADR's D2 unchanged. No file was added to the phase.
+* *Evidence.* On Linux, `TestOverflowBlockPausesReading` with `-test.count=30` failed 18 of 30 times on the old condition, from a
+  scratch copy through `--tree`, and 0 of 30 times on the new.
+* *Gosec.* The comparison's `uint64(c.queueLimit)` drew gosec's G115. It carries a `//nolint:gosec` with its reason, that
+  `queueLimit` is at least 1, as `clienthost/terminals.go:117` does.
+
+**Refinements within step 1.7.**
+* `TestOverflowBlockEndsOnClose` gained a third case, "Close, the handler ignoring its context". In the first two, `Close` and
+  `Shutdown` end the held handler, so the queue drains and the reader resumes, whether or not the connection's end woke it. The
+  break "the wait not ended by the connection's end" would then pass. The new case holds a handler that ignores its context and
+  requires that no goroutine is left in `waitForRoom` after `Close`. It reads every goroutine's stack, so the test is not parallel.
+* `blockPeer` releases its held handler in a cleanup, through `releaseOnce`. A test that stops early still lets the handler return
+  before its `synctest` bubble ends. The Windows failure above had ended in "deadlock: main bubble goroutine has exited but blocked
+  goroutines remain".
+
+**Step 1.9, the planted breaks**, each in a scratch copy, by a script that requires each break's text to match exactly once, rerun on
+the final code:
+
+| Break | Test | Failure seen |
+| :--- | :--- | :--- |
+| the default left at `OverflowCloseConnection` | `TestOverflowBlockIsTheDefault/no_option` | "the connection ended while paused: acp: connection closed: notification queue overflow" |
+| an undefined value not mapped to `OverflowBlock` | `TestOverflowBlockIsTheDefault/undefined_policy` | the same |
+| no pause | `TestOverflowBlockPausesReading` | "5 notifications queued while the handler is held, want 3"; "6 writes returned, want 4"; the overflow's close |
+| the pause one notification early | `TestOverflowBlockPausesReading` | "2 notifications queued … want 3"; "3 writes returned, want 4" |
+| no guard in `exchange` | `TestOverflowBlockRequestFromNotificationHandler` | "the handler's request is not answered: the reader paused while the handler waited on it" |
+| the guard's end not called | `TestOverflowBlockRequestFromNotificationHandler` | "5 notifications queued after the request returned, want 4: the reader pauses again" |
+| no guard in `sendRequestCommit` | `TestOverflowBlockHeldInitialize` | "Initialize did not return: the reader paused on the held notifications" |
+| the channel's capacity `n` under `OverflowBlock` | `TestOverflowBlockReadOnLimit` | "3 notifications queued, ended true (acp: connection closed: notification queue overflow); want 5 and open" |
+| the wait not ended by the connection's end | `TestOverflowBlockEndsOnClose/Close,_the_handler_ignoring_its_context` | "the reader still waits for room after Close" |
+| no `Warn` timer | `TestOverflowBlockLogsLongPause` | "0 warnings after a pause of 5 s, want 1" |
+
+**Step 1.10, the checks.**
+* `make pre-add-check`: "go-precheck: 277 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+* `go test -race -count=1 ./...`: every package `ok`.
+* `go test -race -count=3 -run 'OverflowBlock|Overflow|Barrier|Held|QueueSize|EndedCleanly|ConnectionEnd|TestErr|OptionSemantics|FailsFast' ./...`:
+  every package `ok`.
+* `make api`: "compatible: OverflowBlock: added"; "against v1.28.0: 0 incompatible, 1 compatible".
+* `tools/remote.py pkg`, after the deviation's fix, both exit 0 on each host:
+  * `.` with `-test.run 'OverflowBlock|Overflow|Held|QueueSize|EndedCleanly|TestErr|OptionSemantics|FailsFast' -test.count=3`;
+  * `./agentproc` with `-test.run ConnectionEndStopsAgent -test.count=3`.
+* *Beyond the step.* The whole root package was also run once on each host. It fails only tests that read the source tree, the
+  schema, `testdata/`, a golden file or `types_gen.go`, or build an example; the binary runs there without the source. The same
+  class fails on a clean export of `24e88d1` through `--tree`, so it is the harness, not this change. Which of them a run reports
+  varies, because one of them panics and ends the binary. No connection test is among them. CI runs the whole suite from source on
+  all three systems (phase 3).

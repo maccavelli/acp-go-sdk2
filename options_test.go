@@ -19,7 +19,7 @@ func TestOptionSemantics(t *testing.T) {
 	}
 	check := func(what string, c *Connection, queue, size, limit int) {
 		t.Helper()
-		if got := cap(c.notificationQueue); got != queue {
+		if got := c.queueLimit; got != queue {
 			t.Errorf("%s: notification queue %d, want %d", what, got, queue)
 		}
 		if c.maxMessageSize != size {

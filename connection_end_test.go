@@ -112,7 +112,9 @@ func TestErr(t *testing.T) {
 			<-ctx.Done()
 			return nil, nil
 		}
-		c := NewConnection(h, io.Discard, pr, WithMaxQueuedNotifications(1))
+		// The close is OverflowCloseConnection's, which is no longer the
+		// default (0044-MADR-notification-queue-back-pressure.md, D9).
+		c := NewConnection(h, io.Discard, pr, WithMaxQueuedNotifications(1), WithNotificationOverflowPolicy(OverflowCloseConnection))
 		go func() {
 			for range 4 {
 				if _, err := pw.Write([]byte(`{"jsonrpc":"2.0","method":"_x/n","params":{}}` + "\n")); err != nil {
@@ -210,7 +212,9 @@ func TestEndedCleanly(t *testing.T) {
 		<-ctx.Done()
 		return nil, nil
 	}
-	overflow := NewConnection(block, io.Discard, opr, WithMaxQueuedNotifications(1))
+	// The close is OverflowCloseConnection's, which is no longer the default
+	// (0044-MADR-notification-queue-back-pressure.md, D9).
+	overflow := NewConnection(block, io.Discard, opr, WithMaxQueuedNotifications(1), WithNotificationOverflowPolicy(OverflowCloseConnection))
 	go func() {
 		for range 4 {
 			if _, err := opw.Write([]byte(`{"jsonrpc":"2.0","method":"_x/n","params":{}}` + "\n")); err != nil {

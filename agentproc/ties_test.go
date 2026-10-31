@@ -196,7 +196,11 @@ func TestConnectionEndStopsAgent(t *testing.T) {
 		client := &blockingClient{release: make(chan struct{})}
 		t.Cleanup(func() { close(client.release) })
 		cmd := agentCmd("flood")
-		p, err := (&Command{Cmd: cmd, Grace: testGrace, ConnectionOptions: []acp.ConnectionOption{acp.WithMaxQueuedNotifications(1)}}).Start(client)
+		// The close is OverflowCloseConnection's, which is no longer the
+		// default (0044-MADR-notification-queue-back-pressure.md, D9).
+		p, err := (&Command{Cmd: cmd, Grace: testGrace, ConnectionOptions: []acp.ConnectionOption{
+			acp.WithMaxQueuedNotifications(1), acp.WithNotificationOverflowPolicy(acp.OverflowCloseConnection),
+		}}).Start(client)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -26,8 +26,10 @@
 //
 // Done is closed when the connection ends: when the peer disconnects or its
 // output ends, when Close is called, or when a full notification queue
-// closes it under [OverflowCloseConnection]. Close ends every call waiting
-// for a response, and every handler's context.
+// closes it under [OverflowCloseConnection], or under [OverflowBlock] past
+// its read-on limit. Under OverflowBlock, the default, a full queue pauses
+// reading instead. Close ends every call waiting for a response, and every
+// handler's context.
 //
 // # Errors
 //

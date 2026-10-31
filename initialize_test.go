@@ -377,10 +377,12 @@ func TestNotHeldBeforeInitialize(t *testing.T) {
 // write 100 ms apart, overflow a queue of one, and the connection ends, where
 // refused at once each would have left it
 // (0030-MADR-record-initialize-on-arrival.md, "Amendment 2026-10-21, step 9:
-// what a held message holds", M1).
+// what a held message holds", M1). The close is OverflowCloseConnection's,
+// which is no longer the default; TestOverflowBlockHeldInitialize covers the
+// default (0044-MADR-notification-queue-back-pressure.md, D9).
 func TestHeldNotificationsFillQueue(t *testing.T) {
 	t.Parallel()
-	c, p, _ := initializeClient(t, WithMaxQueuedNotifications(1))
+	c, p, _ := initializeClient(t, WithMaxQueuedNotifications(1), WithNotificationOverflowPolicy(OverflowCloseConnection))
 	done := make(chan error, 1)
 	go func() {
 		_, err := c.Initialize(t.Context(), InitializeRequest{})

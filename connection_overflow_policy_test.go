@@ -128,18 +128,18 @@ func waitForDroppedNotifications(t *testing.T, c *Connection, want uint64, timeo
 	t.Fatalf("DroppedNotifications() = %d, want %d", c.DroppedNotifications(), want)
 }
 
-// TestConnection_NotificationOverflowPolicyClosesByDefault pins the default:
-// without the option, and with any policy other than OverflowDropNewest, an
-// overflow closes the connection exactly as it did before the option existed,
-// and nothing is counted or reported as dropped.
-func TestConnection_NotificationOverflowPolicyClosesByDefault(t *testing.T) {
+// TestConnection_NotificationOverflowPolicyClose pins OverflowCloseConnection:
+// an overflow closes the connection exactly as it did before the option
+// existed, and nothing is counted or reported as dropped. It was the default
+// until OverflowBlock; TestOverflowBlockIsTheDefault pins the default now,
+// without the option and for an undefined policy
+// (0044-MADR-notification-queue-back-pressure.md, D9).
+func TestConnection_NotificationOverflowPolicyClose(t *testing.T) {
 	cases := []struct {
 		name string
 		opts []ConnectionOption
 	}{
-		{"no option", nil},
 		{"explicit close", []ConnectionOption{WithNotificationOverflowPolicy(OverflowCloseConnection)}},
-		{"undefined policy", []ConnectionOption{WithNotificationOverflowPolicy(NotificationOverflowPolicy(99))}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -153,7 +153,7 @@ func TestConnection_NotificationOverflowPolicyClosesByDefault(t *testing.T) {
 			select {
 			case <-f.c.Done():
 			case <-time.After(overflowWait):
-				t.Fatal("connection stayed open after overflow; the default must close it")
+				t.Fatal("connection stayed open after overflow; OverflowCloseConnection must close it")
 			}
 			if cause := context.Cause(f.c.ctx); !errors.Is(cause, ErrNotificationQueueOverflow) {
 				t.Fatalf("close cause = %v, want ErrNotificationQueueOverflow", cause)

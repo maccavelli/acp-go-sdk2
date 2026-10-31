@@ -896,13 +896,15 @@ func TestConnectionFailsFastOnNotificationQueueOverflow(t *testing.T) {
 	releaseFirst := make(chan struct{})
 	var handled atomic.Int64
 
+	// The close is OverflowCloseConnection's, which is no longer the default
+	// (0044-MADR-notification-queue-back-pressure.md, D9).
 	c := NewConnection(func(context.Context, string, json.RawMessage) (any, *RequestError) {
 		if handled.Add(1) == 1 {
 			close(firstStarted)
 			<-releaseFirst
 		}
 		return nil, nil
-	}, io.Discard, incomingR)
+	}, io.Discard, incomingR, WithNotificationOverflowPolicy(OverflowCloseConnection))
 
 	if _, err := io.WriteString(incomingW, `{"jsonrpc":"2.0","method":"test/notify","params":{}}`+"\n"); err != nil {
 		t.Fatalf("write first notification: %v", err)

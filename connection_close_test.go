@@ -182,10 +182,11 @@ func TestSendAfterPeerEndFails(t *testing.T) {
 // TestOverflowCloseClosesTransport requires OverflowCloseConnection to close
 // the connection as Close does: its reader is closed, and a later send fails
 // with ErrConnectionClosed, wrapping the overflow that closed it
-// (0019-PLAN-api-decisions.md, B17).
+// (0019-PLAN-api-decisions.md, B17). The policy is named, since it is no
+// longer the default (0044-MADR-notification-queue-back-pressure.md, D9).
 func TestOverflowCloseClosesTransport(t *testing.T) {
 	t.Parallel()
-	f := newOverflowFixture(t, 1)
+	f := newOverflowFixture(t, 1, WithNotificationOverflowPolicy(OverflowCloseConnection))
 	for n := 1; n <= 2; n++ { // 1 fills the queue, 2 overflows
 		f.notify(t, n)
 	}

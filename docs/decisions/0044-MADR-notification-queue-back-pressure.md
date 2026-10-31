@@ -193,7 +193,10 @@ memory stays bounded (E2, E4 to E6). A consumer that wants the close passes `Ove
   * When `n` notifications wait in the queue, the reader waits before reading on. The one whose handler is running is not counted, as
     today: of 1 to 5 sent while a handler is held, 1 to 4 fill a queue of 4.
   * It waits until one of these happens:
-    * the loop takes a notification (it is woken as each handler returns);
+    * the loop takes a notification (it is woken as each handler returns). *Amended 2026-10-31, PLAN phase 1:* until a handler
+      returns. The count is the notifications received and not completed, so a notification the loop takes but has not finished
+      still counts as the running one. Counting the channel's length paused one early on Linux and Windows (the PLAN's "Deviation,
+      2026-10-31, step 1.4"); the F9 prototype counted it so;
     * the loop waits on the reader (D3);
     * the connection ends, by `Close` or a read-on overflow (D4). The reader then ends as at a failed read, through `shutdownReceive`
       with the connection's cause, and the notification in hand is not handled, as with `Close` today.

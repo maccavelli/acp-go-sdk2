@@ -21,6 +21,10 @@ import (
 const (
 	notificationQueueDrainTimeout = 5 * time.Second
 	defaultMaxQueuedNotifications = 1024
+	// pauseWarnAfter is how long the reader waits for room under
+	// OverflowBlock before the pause is logged at Warn
+	// (0044-MADR-notification-queue-back-pressure.md, D5).
+	pauseWarnAfter = 5 * time.Second
 	// defaultMaxMessageSize is the largest line receive accepts unless
 	// WithMaxMessageSize sets another.
 	defaultMaxMessageSize = 10 * 1024 * 1024
@@ -307,6 +311,12 @@ func addressable(v any) any {
 // under an unrelated context, such as context.Background(), it waits for that
 // handler, which is waiting for it (0019-PLAN-behaviour-fixes.md, B1).
 //
+// Under the default overflow policy, OverflowBlock, a notification handler
+// must not wait for a request or a $/cancel_request the peer sends later, nor
+// for code that waits for one: while the notification queue is full, the
+// connection does not read it (0044-MADR-notification-queue-back-pressure.md,
+// D7).
+//
 // A handler that panics ends the process, as an unrecovered panic in any
 // goroutine does. The connection does not recover it
 // (0024-PLAN-behaviour-fixes.md, A1).
@@ -413,8 +423,20 @@ type Connection struct {
 	completedNotificationSeq    uint64
 
 	// notificationQueue serializes notification processing to maintain order.
-	// It is bounded to keep memory usage predictable.
+	// It is bounded to keep memory usage predictable: its capacity is
+	// queueLimit, or twice it under OverflowBlock, which reads on past
+	// queueLimit while the notification loop waits on this connection.
 	notificationQueue chan queuedNotification
+	// queueLimit is WithMaxQueuedNotifications' n: how many notifications may
+	// wait while a handler runs before the overflow policy acts.
+	queueLimit int
+	// peerWaits counts, under notifyMu, the waits of the notification loop on
+	// this connection that are running: a request a notification handler
+	// sent under its context, and an initialize in flight, which held
+	// notifications wait for. While it is above zero, a reader under
+	// OverflowBlock does not pause (0044-MADR-notification-queue-back-pressure.md,
+	// D3).
+	peerWaits int
 
 	// maxMessageSize is the largest line receive accepts (WithMaxMessageSize).
 	maxMessageSize int
@@ -463,11 +485,14 @@ type connectionConfig struct {
 	promptOverlap          PromptOverlapPolicy
 }
 
-// WithMaxQueuedNotifications sets the maximum number of queued notifications
-// before the connection is closed with a notification queue overflow error.
-// The default is 1024. Increase this value when multiplexing many concurrent
-// sessions over a single connection, as the combined notification rate may
-// exceed the processing speed of the single-threaded notification consumer.
+// WithMaxQueuedNotifications sets how many notifications may wait in the
+// queue while a notification handler runs; past it, the overflow policy acts
+// (WithNotificationOverflowPolicy). Under OverflowBlock, the default, the
+// reader then pauses, and reads on to 2n while the notification loop waits
+// on this connection. The default is 1024. Increase this value when
+// multiplexing many concurrent sessions over a single connection, as the
+// combined notification rate may exceed the processing speed of the
+// single-threaded notification consumer.
 func WithMaxQueuedNotifications(n int) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		if n > 0 {
@@ -547,7 +572,7 @@ type NotificationOverflowPolicy int
 const (
 	// OverflowCloseConnection closes the connection when a notification cannot
 	// be queued, as Close does, its transport included, and in-flight requests
-	// fail. This is the default.
+	// fail, with ErrNotificationQueueOverflow.
 	OverflowCloseConnection NotificationOverflowPolicy = iota
 
 	// OverflowDropNewest discards the notification that could not be queued and
@@ -566,12 +591,36 @@ const (
 	//     connection that includes session/cancel; dropping one leaves the
 	//     agent working on a turn its client has abandoned.
 	OverflowDropNewest
+
+	// OverflowBlock stops reading the peer while the queue is full, until a
+	// notification handler returns, so the peer's writes wait and nothing is
+	// dropped or closed. This is the default.
+	//
+	// While the queue is full nothing else is read either: a response, a
+	// request and a $/cancel_request wait behind it. A request still returns
+	// no later than under the other policies, since it returns only once the
+	// notifications received before its response are handled.
+	//
+	// While the notification loop waits on this connection, for the answer to
+	// a request the running notification handler sent under its context, or
+	// for the answer to an initialize in flight, which held notifications wait
+	// for, the reader reads on, to twice the queue's size. Past that it closes
+	// the connection as OverflowCloseConnection does. A pause that lasts five
+	// seconds is logged at Warn.
+	//
+	// A notification handler must therefore not wait for a request or a
+	// $/cancel_request the peer sends later, nor for code that waits for one:
+	// while the queue is full, it is not read. Over package remote, the
+	// server's own bounds still apply to a pause
+	// (0044-MADR-notification-queue-back-pressure.md).
+	OverflowBlock
 )
 
 // WithNotificationOverflowPolicy sets what the connection does with a
 // notification that arrives when its notification queue is full. The default
-// is OverflowCloseConnection, and any value this package does not define is
-// treated as the default.
+// is OverflowBlock, and any value this package does not define is treated as
+// the default. OverflowCloseConnection closes the connection instead, as the
+// default did before v1.29.0.
 func WithNotificationOverflowPolicy(p NotificationOverflowPolicy) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		cfg.notificationOverflow = p
@@ -701,9 +750,19 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 	cfg := connectionConfig{
 		maxQueuedNotifications: defaultMaxQueuedNotifications,
 		maxMessageSize:         defaultMaxMessageSize,
+		notificationOverflow:   OverflowBlock,
 	}
 	for _, opt := range opts {
 		opt(&cfg)
+	}
+	if p := cfg.notificationOverflow; p != OverflowCloseConnection && p != OverflowDropNewest && p != OverflowBlock {
+		// An undefined policy is the default
+		// (0044-MADR-notification-queue-back-pressure.md, D9).
+		cfg.notificationOverflow = OverflowBlock
+	}
+	queueCap := cfg.maxQueuedNotifications
+	if cfg.notificationOverflow == OverflowBlock {
+		queueCap *= 2
 	}
 
 	ctx, cancel := context.WithCancelCause(context.Background())
@@ -726,7 +785,8 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		handlersCancel:      handlersCancel,
 		idle:                make(chan struct{}),
 		inputDone:           make(chan struct{}),
-		notificationQueue:   make(chan queuedNotification, cfg.maxQueuedNotifications),
+		notificationQueue:   make(chan queuedNotification, queueCap),
+		queueLimit:          cfg.maxQueuedNotifications,
 		maxMessageSize:      cfg.maxMessageSize,
 
 		notificationOverflow:  cfg.notificationOverflow,
@@ -820,7 +880,8 @@ func (c *Connection) recordEnd(kind, cause error) {
 
 // Err returns nil until the connection ends, and then why it ended, the
 // same each time: ErrConnectionClosed when this side ended it, by Close or
-// by a notification overflow, wrapping ErrNotificationQueueOverflow for the
+// by a notification overflow, under OverflowCloseConnection or past
+// OverflowBlock's read-on limit, wrapping ErrNotificationQueueOverflow for the
 // latter; otherwise ErrPeerDisconnected, wrapping how the peer ended it,
 // io.EOF at the end of its output or the read's error. It is non-nil exactly
 // when Done is closed. A call made after the end returns its own error:
@@ -841,7 +902,7 @@ func (c *Connection) Err() error {
 // EndedCleanly reports whether err, a connection's Err or Wait's error, says
 // the connection ended cleanly: this side closed it with Close, or the peer
 // ended its output. It is false for the close a notification overflow makes,
-// for a read's error, for any other error, and for nil, the Err of a
+// under either policy that closes, for a read's error, for any other error, and for nil, the Err of a
 // connection that has not ended. A side connection's Err is its connection's
 // (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 7).
 func EndedCleanly(err error) bool {
@@ -1577,6 +1638,16 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 	// the response-scoped barrier boundary for requests that observe later responses.
 	m := msg
 	c.notifyMu.Lock()
+	// Under OverflowBlock the reader waits for room before the notification
+	// takes a sequence number, so no response's watermark counts one it has
+	// not queued; past the wait, the select below queues it, or, at twice
+	// queueLimit, closes (0044-MADR-notification-queue-back-pressure.md, D2
+	// to D4).
+	if c.notificationOverflow == OverflowBlock && !c.waitForRoom() {
+		c.notifyMu.Unlock()
+		c.shutdownReceive(context.Cause(c.ctx))
+		return false
+	}
 	c.lastEnqueuedNotificationSeq++
 	seq := c.lastEnqueuedNotificationSeq
 	select {
@@ -1602,7 +1673,7 @@ func (c *Connection) receiveLine(line []byte, received *uint64) bool {
 			c.dropNotification(m.Method)
 			return true
 		}
-		c.loggerOrDefault().Error("failed to queue notification; closing connection", "err", ErrNotificationQueueOverflow, "capacity", cap(c.notificationQueue), "queued", len(c.notificationQueue))
+		c.loggerOrDefault().Error("failed to queue notification; closing connection", "err", ErrNotificationQueueOverflow, "capacity", c.queueLimit, "queued", len(c.notificationQueue))
 		// The policy closes the connection, its transport included
 		// (0019-PLAN-api-decisions.md, B17).
 		if err := c.closeWith(ErrNotificationQueueOverflow); err != nil {
@@ -1765,6 +1836,63 @@ func (c *Connection) processNotifications() {
 		c.notifyCond.Broadcast()
 		c.notifyMu.Unlock()
 	}
+}
+
+// waitForRoom is the reader's pause under OverflowBlock. It waits while
+// queueLimit notifications wait besides the one whose handler runs, no wait of
+// the notification loop on this connection is counted, and the connection
+// lives. The notifications are counted by the sequence, received and not
+// completed, not by the channel's length: both counters change under notifyMu,
+// and processNotifications wakes the wait as each handler returns, while a
+// notification it takes from the channel wakes nothing. beginPeerWait wakes it
+// as it counts a wait, and the connection's end through wakeNotificationWaits.
+// A pause that lasts pauseWarnAfter is logged once. The caller holds notifyMu,
+// which the wait releases and takes again. It reports whether the connection
+// still lives (0044-MADR-notification-queue-back-pressure.md, D2, D3 and D5).
+func (c *Connection) waitForRoom() bool {
+	full := func() bool {
+		return c.lastEnqueuedNotificationSeq-c.completedNotificationSeq > uint64(c.queueLimit) && c.peerWaits == 0 && c.ctx.Err() == nil //nolint:gosec // G115: queueLimit is at least 1, since WithMaxQueuedNotifications ignores n <= 0.
+	}
+	if full() {
+		start := time.Now()
+		warn := time.AfterFunc(pauseWarnAfter, func() {
+			c.loggerOrDefault().Warn("notification queue full; reading paused", "capacity", c.queueLimit, "paused", time.Since(start))
+		})
+		for full() {
+			c.notifyCond.Wait()
+		}
+		warn.Stop()
+	}
+	return c.ctx.Err() == nil
+}
+
+// beginPeerWait counts a wait of the notification loop on this connection and
+// wakes a paused reader, which reads on while any is counted; end ends it,
+// once (0044-MADR-notification-queue-back-pressure.md, D3).
+func (c *Connection) beginPeerWait() (end func()) {
+	c.notifyMu.Lock()
+	c.peerWaits++
+	c.notifyCond.Broadcast()
+	c.notifyMu.Unlock()
+	return sync.OnceFunc(func() {
+		c.notifyMu.Lock()
+		c.peerWaits--
+		c.notifyMu.Unlock()
+	})
+}
+
+// inRunningNotification reports whether ctx is, or derives from, the context
+// of the notification whose handler is running, by the test
+// waitNotificationsUpTo's cap uses: the notification loop waits on a request
+// sent under it (0019-PLAN-behaviour-fixes.md, B1).
+func (c *Connection) inRunningNotification(ctx context.Context) bool {
+	m, ok := markOf(ctx)
+	if !ok || !m.notification {
+		return false
+	}
+	c.notifyMu.Lock()
+	defer c.notifyMu.Unlock()
+	return c.completedNotificationSeq < m.seq
 }
 
 func (c *Connection) handleResponse(msg *anyMessage) {
@@ -2021,6 +2149,17 @@ func sendRequestSent[T any](c *Connection, ctx context.Context, method string, p
 // may be among what waits (0030-MADR-record-initialize-on-arrival.md,
 // question 2).
 func sendRequestCommit[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc, commit func(result *T) error, settled func()) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
+	// The messages held for want of a record wait for settled, which the
+	// reader runs, so the notification loop may wait on the reader until it
+	// has run: the wait is counted until then, and a return that never
+	// settles ends it too (0044-MADR-notification-queue-back-pressure.md, D3).
+	end := c.beginPeerWait()
+	defer end()
+	held := settled
+	settled = func() {
+		end()
+		held()
+	}
 	pr := &pendingResponse{ch: make(chan responseEnvelope, 1), settle: settled, commit: func(raw json.RawMessage) (any, error) {
 		var result T
 		if len(raw) > 0 {
@@ -2122,6 +2261,14 @@ func (c *Connection) exchange(ctx context.Context, method string, params any, pr
 	c.mu.Lock()
 	c.pending[idKey] = pr
 	c.mu.Unlock()
+
+	// A request the running notification handler sends under its context is
+	// one the notification loop waits on (0044-MADR-notification-queue-back-pressure.md,
+	// D3).
+	if c.inRunningNotification(ctx) {
+		end := c.beginPeerWait()
+		defer end()
+	}
 
 	sent, err := c.sendMessageSent(ctx, msg)
 	if err != nil {
@@ -2435,6 +2582,12 @@ func (c *Connection) SendRequestNoResult(ctx context.Context, method string, par
 	c.mu.Lock()
 	c.pending[idKey] = pr
 	c.mu.Unlock()
+
+	// As in exchange (0044-MADR-notification-queue-back-pressure.md, D3).
+	if c.inRunningNotification(ctx) {
+		end := c.beginPeerWait()
+		defer end()
+	}
 
 	if err := c.sendMessage(ctx, msg); err != nil {
 		c.cleanupPending(idKey)

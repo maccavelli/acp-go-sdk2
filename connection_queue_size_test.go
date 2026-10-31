@@ -22,8 +22,13 @@ func TestWithMaxQueuedNotifications_DefaultSize(t *testing.T) {
 	client := &clientFuncs{}
 	csc := NewClientSideConnection(client, c2aW, a2cR)
 
-	if cap(csc.conn.notificationQueue) != defaultMaxQueuedNotifications {
-		t.Fatalf("default queue capacity = %d, want %d", cap(csc.conn.notificationQueue), defaultMaxQueuedNotifications)
+	if csc.conn.queueLimit != defaultMaxQueuedNotifications {
+		t.Fatalf("default queue capacity = %d, want %d", csc.conn.queueLimit, defaultMaxQueuedNotifications)
+	}
+	// Under OverflowBlock, the default, the channel holds twice the limit, for
+	// the reader's read-on (0044-MADR-notification-queue-back-pressure.md, D4).
+	if got := cap(csc.conn.notificationQueue); got != 2*defaultMaxQueuedNotifications {
+		t.Fatalf("default queue channel capacity = %d, want %d", got, 2*defaultMaxQueuedNotifications)
 	}
 }
 
@@ -41,8 +46,8 @@ func TestWithMaxQueuedNotifications_CustomSize(t *testing.T) {
 	client := &clientFuncs{}
 	csc := NewClientSideConnection(client, c2aW, a2cR, WithMaxQueuedNotifications(customSize))
 
-	if cap(csc.conn.notificationQueue) != customSize {
-		t.Fatalf("custom queue capacity = %d, want %d", cap(csc.conn.notificationQueue), customSize)
+	if csc.conn.queueLimit != customSize {
+		t.Fatalf("custom queue capacity = %d, want %d", csc.conn.queueLimit, customSize)
 	}
 }
 
@@ -59,8 +64,8 @@ func TestWithMaxQueuedNotifications_AgentSide(t *testing.T) {
 	const customSize = 4096
 	asc := NewAgentSideConnection(agentFuncs{}, a2cW, c2aR, WithMaxQueuedNotifications(customSize))
 
-	if cap(asc.conn.notificationQueue) != customSize {
-		t.Fatalf("agent queue capacity = %d, want %d", cap(asc.conn.notificationQueue), customSize)
+	if asc.conn.queueLimit != customSize {
+		t.Fatalf("agent queue capacity = %d, want %d", asc.conn.queueLimit, customSize)
 	}
 }
 
@@ -77,8 +82,8 @@ func TestWithMaxQueuedNotifications_ZeroIgnored(t *testing.T) {
 	client := &clientFuncs{}
 	csc := NewClientSideConnection(client, c2aW, a2cR, WithMaxQueuedNotifications(0))
 
-	if cap(csc.conn.notificationQueue) != defaultMaxQueuedNotifications {
-		t.Fatalf("zero option should keep default: got %d, want %d", cap(csc.conn.notificationQueue), defaultMaxQueuedNotifications)
+	if csc.conn.queueLimit != defaultMaxQueuedNotifications {
+		t.Fatalf("zero option should keep default: got %d, want %d", csc.conn.queueLimit, defaultMaxQueuedNotifications)
 	}
 }
 
@@ -95,8 +100,8 @@ func TestWithMaxQueuedNotifications_NegativeIgnored(t *testing.T) {
 	client := &clientFuncs{}
 	csc := NewClientSideConnection(client, c2aW, a2cR, WithMaxQueuedNotifications(-5))
 
-	if cap(csc.conn.notificationQueue) != defaultMaxQueuedNotifications {
-		t.Fatalf("negative option should keep default: got %d, want %d", cap(csc.conn.notificationQueue), defaultMaxQueuedNotifications)
+	if csc.conn.queueLimit != defaultMaxQueuedNotifications {
+		t.Fatalf("negative option should keep default: got %d, want %d", csc.conn.queueLimit, defaultMaxQueuedNotifications)
 	}
 }
 
