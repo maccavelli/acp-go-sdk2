@@ -10,152 +10,403 @@ Associated MADR: [0046-MADR-sending-and-receiving-middleware.md](0046-MADR-sendi
 
 ## Goal
 
-A connection runs registered middleware around every message that reaches its handler, and around every call the application
-sends, and reports every other message to an observer, as the MADR's D1 to D9 state. The owner answered on 2026-10-31: both
-directions (Q1 a), and an observer for the messages outside the chain (Q2 b).
+A connection runs registered middleware around every message that reaches its handler, and around every message the
+application sends, and reports every other message to an observer, as the MADR's D1 to D11 state. The owner answered on
+2026-10-31: both directions (Q1 a), and an observer for the messages outside the chains (Q2 b). With nothing registered, a
+connection runs as it does at `v1.30.0`, with no allocation added.
+
+Base: `523f319`, whose Go code is `v1.30.0`'s. Every file and line named below is at that commit. The MADR's "Revision" says
+what the assessment of 2026-10-31 changed in the first draft of this pair.
 
 ## Scope
 
 In scope:
 
-* `connection.go`:
-  * the `Middleware` type;
-  * `WithReceivingMiddleware` and `WithSendingMiddleware`;
-  * the receiving chain in `buildConnection`;
-  * the sending chain between `encodeParams` and the exchange, for each sending path;
-  * `RequestID` (D5);
-  * the observer: `WithObserver`, `Observation` and `ObservationKind` with its six constants, and the report at each site D9
-    lists (D9);
-  * the godoc of `MethodHandler`, the two hooks and the sending functions.
-* `extensions.go`: `CallExtension` and `NotifyExtension` reach the chain through the same sending functions.
-* A new test file, `connection_middleware_test.go`, and a benchmark.
-* `README.md`, a "Middleware" section; `docs/architecture.md`; `example_api_test.go`, `ExampleWithReceivingMiddleware` and
-  `ExampleWithSendingMiddleware`.
-* The release, on the owner's ask.
+* **New files:**
+  * `middleware.go`: the `Middleware` type, `WithReceivingMiddleware`, `WithSendingMiddleware`, the chain builder,
+    `RequestIDFromContext`, the sending call's state and the sending chain's innermost step;
+  * `observer.go`: `WithObserver`, `Observation`, `ObservationKind`, its six constants and `String`, and the connection's
+    `observe` helper;
+  * `connection_middleware_test.go`, `connection_sending_middleware_test.go` and `connection_observer_test.go`.
+* **Changed files:**
+  * `connection.go`, at the seams only:
+    * `connectionConfig` and `Connection` gain the chains and the observer;
+    * `buildConnection` builds the chains;
+    * `messageMark` gains the received id;
+    * `exchange` is split at the write;
+    * `SendRequestNoResult` uses `exchange`;
+    * `SendNotification` and the cancel sender share an unexported direct path;
+    * `sendRequestSent`, `sendRequestCommit`, `SendRequestNoResult` and `SendNotification` call the sending chain when one is
+      set;
+    * `readLine` counts a discarded line;
+    * the observer's sites;
+    * godoc.
+  * `errors.go`: `ErrSendingMiddleware`.
+  * `options_test.go`: the append rule in `TestOptionSemantics`.
+  * `bench_test.go`: the benchmarks with middleware and an observer.
+  * `example_api_test.go`: `ExampleWithReceivingMiddleware`, `ExampleWithSendingMiddleware`, `ExampleWithObserver`.
+  * `docs_test.go`: `TestReadmeMiddlewareIsTheExample`.
+  * `README.md`, `docs/architecture.md`, `docs/README.md`.
+* The release, `v1.31.0`, on the owner's ask: `tools/consumer.py`, `tools/README.md`, the release notes.
 
 Out of scope:
 
 * typed middleware;
-* an OpenTelemetry integration or any dependency;
+* an OpenTelemetry integration, or any dependency;
 * recovering panics;
 * middleware on F2's messages: they go to the observer instead (D9);
 * an observer able to change or stop a message;
-* registering middleware on a live connection;
-* any change to the hooks.
+* registering middleware or an observer on a live connection;
+* any change to the hooks' behaviour;
+* any generated file. `Initialize`'s godoc is generated, so D4's rule for it is stated in `WithSendingMiddleware`'s godoc,
+  and `tools/gates.py regen` stays clean;
+* `remote`'s HTTP middleware, which the README's remote section already describes and this work does not touch.
 
 ## Implementation Steps
 
-### Phase 1: the chains
+Every phase ends with the owner's commit of what it staged. A phase does not begin until the owner says to proceed. Every new
+test is seen to fail on a planted break: each break is an entry in a scratch spec for `tools/plants.py`, whose `want` is the
+failing test's own message, run in the tool's copies of the tree, never in the tree.
 
-1. **Grounding.** In a scratch copy, trace each sending path to one function from the encoded params to the result:
-   `SendRequest[T]`, `SendRequestNoResult`, `SendNotification`, `sendRequestCommit` for `initialize`, `CallExtension` and
-   `NotifyExtension`. Record the function, and where the request id is allocated relative to `pending` registration and the
-   write.
-   * If allocating the id before the chain changes the order of registration and write, or the barrier, record it. D5 then
-     reports no id on the sending side, and the MADR is amended before step 4.
-   * Record how `sendRequestCommit`'s held-notification path (0044's `beginPeerWait`) composes with a chain around it.
-2. **The type and options.**
-   * `type Middleware func(MethodHandler) MethodHandler`.
-   * `connectionConfig.receiving` and `connectionConfig.sending`, `[]Middleware`, appended by each option call.
-   * The chain is built once, first registered outermost: a loop from the last to the first, so `mw[0]` wraps everything
-     after it.
-3. **Receiving.** In `buildConnection`, when `receiving` is not empty, `handler = chain(receiving, handlerOrNotFound)`, where a
-   `nil` handler becomes the function that answers `NewMethodNotFound` as `handleInbound` does today. `handleInbound` is
-   unchanged; it calls `c.handler`.
-4. **Sending.**
-   * The innermost sending handler is the step from step 1: given the method and the encoded params, it performs the exchange
-     or the notification write, and returns the raw result, or the `*RequestError` the peer answered.
-   * Each sending path calls the built chain in its place when `sending` is not empty, and calls the step directly otherwise.
-   * `SendRequest[T]` decodes what the chain returns.
-   * The SDK's own `$/cancel_request` keeps its direct path (D4).
-5. **`RequestID`.** A context key set before the chain on both sides: on receipt from the message's id, on sending from the id
-   allocated per step 1. A notification has none.
-6. **The observer (D9).**
-   * `connectionConfig.observer`; `WithObserver` sets it, a later call replacing an earlier one.
-   * `Observation` and `ObservationKind` with `ObservedFault`, `ObservedCancelReceived`, `ObservedCancelSent`,
-     `ObservedRefused`, `ObservedResponse` and `ObservedDropped`.
-   * One unexported `c.observe(ctx, Observation)` call, guarded by a nil check, at each site D9 lists:
-     * the line too long and the four faults in `receive` and `receiveLine`;
-     * the `$/cancel_request` branch;
-     * the concurrency-limit and shutdown refusals, and 0045's byte refusal if 0045 has landed;
-     * `receiveResponse`;
-     * `dropNotification` and the overflow close;
-     * the SDK's own `$/cancel_request` send.
-   * `ID` is copied, so the observer may keep it.
-   * If step 1 or this step finds a site where the method, id or answer is not known, record which fields stay empty there.
-7. **Godoc.** `MethodHandler`, the hooks (they run inside the receiving chain's innermost handler), the sending functions, D6's
-   list of what the chain does not see, and the observer: where it runs, that it must not block, and that it sees no message
-   the chain sees.
-8. **Tests**, in `connection_middleware_test.go`:
-   * `TestReceivingMiddlewareOrder`: three middlewares over two option calls, outermost first, for a request and a notification.
-   * `TestReceivingMiddlewareShortCircuit`: an error answers the request, and the handler and hooks do not run.
-   * `TestReceivingMiddlewareSeesRawAndResult`: raw params before the rewrite hook; a rewrite it passes on is what the hook sees;
-     the result before encoding.
-   * `TestSendingMiddlewareAllPaths`: one test per sending path, with `_meta.traceparent` added by the middleware and read by
-     the peer.
-   * `TestSendingMiddlewareResult`: the raw result and a peer's error, as returned to the caller.
-   * `TestRequestIDInMiddleware`: on both sides.
-   * `TestMiddlewareKeepsOrdering`: the response barrier and notification order with middleware on both sides, in a `synctest`
-     bubble.
-   * `TestObserverReportsEachKind`, one case per kind, with method, id, size and error as D9 states, in a `synctest` bubble
-     where a case waits.
-   * `TestObserverAndChainDisjoint`: a run with middleware and an observer, every message counted once across the two.
-   * `BenchmarkRoundTripNoMiddleware`, with neither middleware nor observer, against the same at `9fcbb6f`, recorded.
-9. **Planted breaks**, each in a scratch copy:
-   * the chain built in MCP's order (last outermost);
-   * the chain skipped for notifications;
-   * one sending path not routed through the chain;
-   * the id unset on the sending side;
-   * the short-circuit calling the handler anyway;
-   * one observer site removed, such as the concurrency refusal;
-   * the observer also called for a message that reaches the chain.
-10. **Checks.** `go test -race ./...`; the new tests with `-count=3` on the Linux and Windows hosts through `tools/remote.py pkg`;
-   `make pre-add-check`; `make api`, compatible additions only; `make check-records`, `make markdownlint` and
-   `make disclosure-check`. Then the execution record, and staging.
+### Phase 1: refactors with no change of behaviour
 
-If [0045-PLAN-notification-queue-byte-budget.md](0045-PLAN-notification-queue-byte-budget.md) lands after this phase, its byte
-refusal gains the observer's `ObservedRefused` report there, and its execution record says so.
+The seams D4 and D5 need, made first, so that the existing suite proves them alone.
 
-### Phase 2: documentation and examples
+1. **The baseline benchmark.**
+   * A `git archive 523f319` into the scratch directory runs `go test -run '^$' -bench
+     'PromptRoundTrip|SessionUpdateNotify' -benchmem -count=10 .`. Its output is kept for phases 2 to 4.
+   * A scratch script takes each benchmark's median `ns/op`, and its `B/op` and `allocs/op`.
+2. **`SendRequestNoResult` through `exchange`.**
+   * Its body (`connection.go:2721-2764`) repeats `exchange`'s. It becomes `exchange` with a fresh `pendingResponse`, then the
+     barrier, then the error answer, as `sendRequestSent` does without the decode.
+   * The order of its checks and their errors is unchanged: context, input, prepare, register, peer wait, write, wait.
+     `claimedAnswer` returns false for a `pendingResponse` without a commit, so the write-failure path is the same.
+   * Before the change, a scratch search lists the tests that call `SendRequestNoResult`; the record names them.
+3. **`exchange` split at the write.**
+   * `exchange` keeps its checks and `prepareRequest`, then calls a new `exchangePrepared(ctx, msg, idKey, pr)`: the
+     registration (`:2413-2415`), the peer wait (`:2420-2423`), the write and its failure path (`:2425-2437`), and
+     `waitForResponse`.
+   * Phase 3's innermost step calls `exchangePrepared`, so both paths share one copy of those steps.
+4. **A direct notification path.**
+   * `SendNotification`'s body moves to an unexported `sendNotification(ctx, method, params)`. `SendNotification` calls it.
+   * `sendCancelRequests` (`:2525`) calls `sendNotification` too, so phase 3 can put the chain in `SendNotification` alone
+     (D4).
+5. **The received id in the context.**
+   * `messageMark` gains `id *json.RawMessage`. `receiveLine` sets it to `msg.ID` for a request (`:1656`), and notifications
+     leave it nil.
+   * Nothing reads it until phase 2.
+6. **Checks.**
+   * `go test -race -count=1 ./...`: every package `ok`, no test changed.
+   * The benchmark of step 1 on the tree: `allocs/op` equal to the baseline; `B/op` up by at most 8 per received request (the
+     pointer, D5); median `ns/op` within 5%. If the time differs more, rerun both alternately, three times each, before
+     concluding. A difference that stays is recorded and stops the phase for the owner.
+   * **Seen to fail.** Each refactored path is still covered, each break a `tools/plants.py` entry:
+     * `exchangePrepared` without its peer wait (`:2420-2423`) fails `TestOverflowBlockRequestFromNotificationHandler`
+       (`connection_overflow_block_test.go:271`);
+     * a `sendNotification` that writes nothing fails a `SendNotification` test;
+     * a `SendRequestNoResult` that drops the peer's error fails its test.
 
-1. `README.md`, "Middleware":
-   * the type and the two options;
-   * the order rule;
-   * where each chain sits relative to the hooks, the queue and the barrier;
-   * what it does not see (D6);
-   * the rules it inherits (D7);
-   * a tracing sketch with `TraceMeta` and `RequestID`;
-   * the observer: its kinds, where it runs, that it must not block;
-   * a metrics sketch counting refusals.
-2. `docs/architecture.md`: the two chains and the observer's sites in the message path.
-3. Three examples with fixed output, each seen to fail with its option removed: `ExampleWithReceivingMiddleware`,
-   `ExampleWithSendingMiddleware` and `ExampleWithObserver`.
-4. The phase 1 checks again, then the record and staging.
+     The record names each test and its message.
+   * `make pre-add-check`; `make api`: no change; `make check-records`, `make markdownlint`, `make disclosure-check`;
+     `tools/idscan.py --paths` over the changed files.
+   * The execution record, then staging.
 
-### Phase 3: close
+### Phase 2: the receiving chain
 
-1. `tools/gates.py --all`, recorded.
-2. After the owner pushes, `tools/watch_ci.py`.
-3. A table of the MADR's ten Confirmation items.
-4. The MADR's status and the index rows.
+1. **The type and options** (`middleware.go`).
+   * `type Middleware func(next MethodHandler) MethodHandler`, documented with D1 and D7's rules.
+   * `connectionConfig.receiving`, `[]Middleware`. `WithReceivingMiddleware(mw ...Middleware)` **appends** (D2).
+     `WithSendingMiddleware` comes in phase 3, so no commit carries an option that does nothing.
+   * `ConnectionOption`'s doc (`connection.go:484-491`) states the exception.
+2. **The chain builder.**
+   * `chainMiddleware(option string, mw []Middleware, inner MethodHandler) MethodHandler` wraps from the last to the first, so
+     `mw[0]` is outermost.
+   * It panics with `acp: <option>: middleware <i> is nil` or `acp: <option>: middleware <i> returned a nil handler`, where
+     `i` is the position across repeated options.
+   * It is called once per chain, in `buildConnection`, and returns `inner` unchanged for an empty list.
+3. **Receiving.**
+   * In `buildConnection`, when `receiving` is not empty, the handler is replaced by the chain over the handler.
+   * A `nil` handler is first replaced by `notFound`, which answers a request `NewMethodNotFound(method)` and returns
+     `nil, nil` for a notification (`IsNotification(ctx)`), as `handleInbound`'s `nil` branch does (`:2126-2134`).
+   * `handleInbound` is unchanged.
+4. **`RequestIDFromContext`, receiving half.** It returns a copy of `*messageMark.id` and `true` for a request's context,
+   `json.RawMessage("null")` for a null id, and `nil, false` otherwise. Phase 3 adds the sending half before this check.
+5. **Godoc:**
+   * `MethodHandler`: middleware wraps it;
+   * `WithInboundRewrite` and `WithInboundValidation`: they run inside the receiving chain's innermost handler;
+   * `IsNotification`: inside a sending middleware it still describes the received message, and `RequestIDFromContext` is the
+     sending side's test;
+   * `NewConnection`: a `nil` handler under a chain.
+6. **Tests**, in `connection_middleware_test.go`, each in a `synctest` bubble where it waits:
+   * `TestReceivingMiddlewareOrder`: `a`, `b` in one option and `c` in a second each record their name before and after `next`.
+     For a request and a notification the log is `a b c handler c b a`. (Confirmation 1.)
+   * `TestReceivingMiddlewareConstruction`: a `nil` middleware, and one returning `nil`, panic with the messages of step 2.
+     Each middleware is called once across ten messages. (Confirmation 1.)
+   * `TestReceivingMiddlewareNilHandler`, through `NewConnection(nil, …)` with a pass-through middleware:
+     * a request is answered `-32601`;
+     * a notification is dropped, and a logger at `Debug` records nothing for it. (Confirmation 1.)
+   * `TestReceivingMiddlewareShortCircuit`: a middleware returning `NewAuthRequired(nil)` for one method:
+     * the request is answered `-32000`;
+     * the agent's method does not run;
+     * `RefusedMessages` stays 0, since the dispatch never ran;
+     * a rewrite hook set beside it is not called. (Confirmation 2.)
+   * `TestReceivingMiddlewareSeesRawAndResult`:
+     * The middleware records the raw params, which equal the bytes sent, before a rewrite hook runs.
+     * It passes params with one field changed; the rewrite hook and the handler see the change.
+     * It records the result, a `*NewSessionResponse` after `checkResult`, before it is encoded.
+     * A result that fails `checkResult` reaches the middleware as the `-32603` error. (Confirmation 3.)
+   * `TestReceivingMiddlewareCountsInBudget`: with `WithMaxConcurrentRequests(1)`, a middleware that holds a request keeps
+     the slot, and a second request is refused until it returns; with 0045's budget, `QueuedBytes` counts the request until the
+     middleware returns. (Confirmation 7.)
+   * `TestRequestIDFromContextReceiving`:
+     * a request's numeric, string and null ids are seen by a middleware and by the handler;
+     * a notification gives `false`;
+     * changing the returned slice does not change the id the answer carries. (Confirmation 6.)
+   * `TestReceivingMiddlewareKeepsOrdering`: with a pass-through middleware on both sides, the response barrier and the
+     notification order hold. It is 0019 B1's and 0044's existing barrier cases, run with the option, in a bubble.
+     (Confirmation 7.)
+   * `TestOptionSemantics` gains a case: two `WithReceivingMiddleware` calls keep all three middleware, and the existing
+     last-wins cases are unchanged.
+7. **Planted breaks** (`tools/plants.py` entries):
+   * the chain built last-outermost, MCP's order (`TestReceivingMiddlewareOrder`);
+   * the second option replacing the first (`TestOptionSemantics`, `TestReceivingMiddlewareOrder`);
+   * the chain built per message (`TestReceivingMiddlewareConstruction`'s count);
+   * no `nil` check (`TestReceivingMiddlewareConstruction`);
+   * `notFound` answering notifications `-32601` (`TestReceivingMiddlewareNilHandler`);
+   * the short-circuit calling the handler anyway (`TestReceivingMiddlewareShortCircuit`);
+   * the chain inside the dispatch, after decoding (`TestReceivingMiddlewareSeesRawAndResult`);
+   * `release` before the chain returns (`TestReceivingMiddlewareCountsInBudget`);
+   * `RequestIDFromContext` returning the id without copying it (`TestRequestIDFromContextReceiving`).
+8. **Checks:**
+   * phase 1's checks, the benchmark included, `allocs/op` equal to the baseline;
+   * the new tests with `-race -count=3`;
+   * `tools/remote.py pkg --host linux .` and `--host windows .` with
+     `-test.run 'ReceivingMiddleware|RequestIDFromContext|OptionSemantics' -test.count=3`;
+   * `make api`: `Middleware`, `WithReceivingMiddleware` and `RequestIDFromContext`, compatible additions only;
+   * `TestExportedDeclarationsDocumented` and `TestExportedTypeDocsStartWithName` pass.
 
-### Phase 4: release, on the owner's ask
+   Then the execution record, and staging.
 
-A minor. Release notes in `docs/reports/0046-REPORT-release-notes-vX-Y-0.md`, then `tools/consumer.py` extended to register one
-middleware each way, then the owner's tag and `tools/publication.py`. If 0045 is released first, this is the next minor.
+### Phase 3: the sending chain
+
+1. **The option.** `connectionConfig.sending`, `[]Middleware`, and `WithSendingMiddleware(mw ...Middleware)`, appending as
+   `WithReceivingMiddleware` does; `buildConnection` builds `c.sending` over `c.sendInnermost` with `chainMiddleware`, or
+   leaves it `nil`. `TestOptionSemantics` gains its case.
+2. **The call's state** (`middleware.go`).
+   * `type outboundCall struct`, carried under `outboundKey{}`:
+     * `method`;
+     * `id` (`nil` for a notification), `idKey`, and the `pendingResponse`;
+     * the encoded `params`, to tell a replacement;
+     * `entered atomic.Bool`;
+     * `sent`;
+     * the innermost step's `responseEnvelope`, raw result and barrier error, for the commit path.
+3. **The innermost step**, `func (c *Connection) sendInnermost(ctx, method, params) (any, *RequestError)`, in this order:
+   * the call from `ctx`, or `ErrSendingMiddleware`, "next called with a context that does not carry the call";
+   * `entered.CompareAndSwap(false, true)`, or "next called twice";
+   * `method == call.method`, or "next called with another method";
+   * if `params` is not the encoded slice (a length or first-element address that differs): `nil`, or a first non-space byte of
+     `{` or `[`, or "params must be a JSON object or array";
+   * `ctx.Err()`, as `exchange` checks it;
+   * a notification: `sendMessage`, and `nil` with `toReqErr` of the error;
+   * a request: `exchangePrepared`; for a request without a commit, the barrier (`waitNotificationsUpTo`); then the raw
+     result, or the peer's or the local `*RequestError`. `sent` is recorded on the call;
+   * a request with a commit: the envelope and the barrier's error are recorded on the call, and the answer is returned as
+     above.
+
+   Each refusal is `NewInternalError({"error": <rule>}).withCause(ErrSendingMiddleware)`, so `errors.Is` finds it, and the
+   rule is the error's text.
+4. **The paths.** Each keeps today's code when `c.sending == nil`, a single nil check. With a chain:
+   * **`sendRequestSent`:**
+     * the checks and `prepareRequest`, as `exchange` orders them;
+     * the call, the context `context.WithValue(ctx, outboundKey{}, call)`, and the chain;
+     * the result to raw bytes: `json.RawMessage` as is, `nil` as none, anything else through `json.Marshal`, whose failure is
+       `-32603`;
+     * the decode, `checkInbound` and `checkPair` of today's `:2272-2284`;
+     * `sent` from the call.
+
+     A `*RequestError` the chain returns is returned only when it is not nil, so a typed nil never becomes a non-nil `error`.
+   * **`sendRequestCommit`:**
+     * the same, with its `pendingResponse` carrying the commit;
+     * after the chain:
+       * if no answer was judged, because the innermost step was never entered or its exchange failed, `settled()` runs, as
+         today's error path runs it (`:2335-2338`), so a message held for `initialize` is released (F10; 0030's question 2).
+         `settled` is safe to run twice: `end` is a `sync.OnceFunc` and `attempt.end` a `sync.Once`;
+       * if the chain returned an error, the call returns it;
+       * if its result is not the innermost step's raw result (`bytes.Equal`), the call fails with "a sending middleware
+         replaced the result of initialize";
+       * otherwise today's `switch` (`:2346-2355`) runs on the recorded envelope and barrier error.
+   * **`SendRequestNoResult`:** as `sendRequestSent`, the result discarded.
+   * **`SendNotification`:** its context check, `prepareNotification`, the call without an id, and the chain. The cancel
+     sender keeps `sendNotification`.
+5. **`RequestIDFromContext`, sending half.** An `outboundCall` in the context comes first: its id, copied, or `false` for a
+   notification, before phase 2's received mark is read (D5).
+6. **`ErrSendingMiddleware`** in `errors.go`, beside the other sentinels, documented with D10's list.
+7. **Godoc:**
+   * `WithSendingMiddleware`, with D4's before, inside and after, the result and params rules, and `Initialize`'s rule;
+   * `SendRequest`, `SendRequestNoResult` and `SendNotification`: they pass the chain;
+   * `ErrSendingMiddleware`.
+8. **Tests**, in `connection_sending_middleware_test.go`, each in a `synctest` bubble where it waits, over `rawWire` or a side
+   pair:
+   * `TestSendingMiddlewareAllPaths`, one subtest per path:
+     * `SendRequest[T]`, `SendRequestNoResult` and `SendNotification`;
+     * a generated request (`NewSession`), a generated notification (`SessionUpdate`), `Prompt`, and `Initialize`;
+     * `CallExtension` and `NotifyExtension`, on each side;
+     * in each, the middleware adds `_meta.traceparent` with `TraceMeta`, and the peer reads it. (Confirmation 4.)
+   * `TestSendingMiddlewareOrder`: three middleware over two options run first-outermost around one call. (Confirmation 4.)
+   * `TestSendingMiddlewareResult`:
+     * a raw result and a peer's error reach the middleware and the caller;
+     * a middleware returning another `json.RawMessage` makes `SendRequest[T]` decode it;
+     * a struct is encoded, then decoded;
+     * a result breaking the schema is refused by `checkInbound`, as the peer's would be. (Confirmation 4.)
+   * `TestSendingMiddlewareSkipsCancelRequest`: a caller's context ends while waiting. The peer receives `$/cancel_request`,
+     and the middleware never sees that method. (Confirmation 4.)
+   * `TestSendingMiddlewareMisuse`, one subtest per rule of D10. Each returns an error for which
+     `errors.Is(err, ErrSendingMiddleware)`, the peer reads nothing, and no pending entry is left. (Confirmation 5.)
+   * `TestSendingMiddlewareShortCircuitInitialize`: a middleware refuses `initialize` without calling `next`.
+     * `Initialize` returns its error, and no record is made.
+     * A request the agent sent before, held for the attempt, is judged and refused `-32601`, not held.
+     * A second `Initialize` without the refusal succeeds. (Confirmation 7, 0030.)
+   * `TestSendingMiddlewareInitializeRecord`:
+     * A middleware that observes `initialize` leaves the record as the peer answered.
+     * One that returns an error after `next` returns that error, and the record stays, as documented. (Confirmation 7.)
+   * `TestSendingMiddlewareKeepsBarrier`: a notification handler sends a request under its context through a middleware that
+     derives a context with a value. The request is answered while the handler runs, which is B1's case, and 0044's guard reads
+     on under `OverflowBlock`. (Confirmation 7.)
+   * `TestRequestIDFromContextSending`:
+     * the middleware sees the id the peer receives;
+     * a notification gives `false`;
+     * inside a received request's handler, a sending middleware sees the sent request's id, and for a notification `false`,
+       not the received id. (Confirmation 6.)
+   * `TestSendingMiddlewareSentFlag`: `Prompt`'s `session/cancel` after a cancelled turn is sent when `next` wrote the request,
+     and not when the middleware refused it. (Confirmation 4.)
+9. **Planted breaks:**
+   * a path left off the chain, one entry per path (`TestSendingMiddlewareAllPaths`, its subtest);
+   * the cancel sender through `SendNotification` (`TestSendingMiddlewareSkipsCancelRequest`);
+   * each D10 check removed, one entry each (`TestSendingMiddlewareMisuse`, its subtest);
+   * a replaced result not decoded (`TestSendingMiddlewareResult`);
+   * the decode before the chain instead of after (`TestSendingMiddlewareResult`, the schema case);
+   * no `settled()` when the innermost step is not entered (`TestSendingMiddlewareShortCircuitInitialize`, which then hangs
+     until its bubble's deadline);
+   * the barrier outside the innermost step's context, for the caller's (`TestSendingMiddlewareKeepsBarrier`);
+   * the received mark read before the call (`TestRequestIDFromContextSending`);
+   * `sent` taken as true (`TestSendingMiddlewareSentFlag`);
+   * a typed nil `*RequestError` returned as an `error` (`TestSendingMiddlewareAllPaths`).
+10. **Checks:** phase 2's, with `-test.run 'SendingMiddleware|RequestIDFromContext'` on the hosts. `make api` adds
+   `ErrSendingMiddleware`. Then the execution record, and staging.
+
+### Phase 4: the observer
+
+1. **The types** (`observer.go`):
+   * `type ObservationKind int`, with `ObservedFault`, `ObservedCancelReceived`, `ObservedCancelSent`, `ObservedRefused`,
+     `ObservedUnmatchedResponse` and `ObservedDropped`, starting at 1 so the zero value is no kind;
+   * `String`, which names each and prints an unknown one as `ObservationKind(n)`;
+   * `type Observation struct { Kind ObservationKind; Method string; ID json.RawMessage; Size int; Err error }`;
+   * `WithObserver(fn func(Observation))`, the last given winning, `nil` removing it.
+2. **The helper.** `func (c *Connection) observe(kind ObservationKind, method string, id json.RawMessage, size int, err
+   error)` returns at once when no observer is set. It copies `id`, and calls the observer. Its call sites add no branch to
+   their functions, so `receiveLine` stays within `gocognit`'s limit; the phase records its measure.
+3. **`readLine`** returns the length of a line it discards for the limit, counted per chunk, for `Size`.
+4. **The sites**, each after any lock is released:
+   * `ObservedFault`: `receive` (`:1456-1458`) and `receiveLine`'s four (`:1585-1617`), with the `*RequestError` each answers;
+   * `ObservedCancelReceived`: `handleCancelRequest`, at each return, with the id when its params decode;
+   * `ObservedCancelSent`: `sendCancelRequests`, after `sendNotification`, with its error;
+   * `ObservedRefused`: the three refusals (`:1633-1652`, `:1669-1678`), with the answer;
+   * `ObservedUnmatchedResponse`: `receiveResponse`'s no-id branch (`:1849-1852`) and `handleResponse`'s `pr == nil`
+     (`:2063-2066`), with the response's error;
+   * `ObservedDropped`: `dropNotification`, and the overflow close before `closeWith`, with `ErrNotificationQueueOverflow`.
+5. **Godoc:** `WithObserver` with D9's rules; each kind with its sites; `RefusedMessages` and `DroppedNotifications` naming
+   the observer.
+6. **Tests**, in `connection_observer_test.go`, each in a `synctest` bubble where it waits:
+   * `TestObserverReportsEachKind`, a subtest per kind and per site, each checking `Kind`, `Method`, `ID`, `Size` and `Err`
+     exactly, and that it is reported once:
+     * the five faults;
+     * a cancel received, with and without params that decode;
+     * a cancel sent;
+     * the three refusals;
+     * a late response, an unknown id, and a response without an id;
+     * a drop, and the overflow close. (Confirmation 8.)
+   * `TestObserverNoLockHeld`: an observer that calls `QueuedBytes`, `RefusedMessages` and `DroppedNotifications` at every
+     kind. The run ends, and the race detector is quiet. (Confirmation 8.)
+   * `TestObserverAndChainsDisjoint`: a run with both chains and the observer, over a mixed sequence of every kind and
+     ordinary traffic. Each message the peer sent or the SDK wrote is counted once, across the three. (Confirmation 8.)
+   * `TestObserverUnset`: the same sequence with no observer runs, and `testing.AllocsPerRun` of `c.observe` with an id and
+     no observer is 0. (Confirmation 8, 9.)
+   * `TestObservationKindString`: every kind, and an unknown one.
+7. **Planted breaks:**
+   * each site removed, one entry per site (`TestObserverReportsEachKind`, its subtest);
+   * the observer called under `notifyMu` at the drop (`TestObserverNoLockHeld`, which then hangs until its bubble's deadline);
+   * a matched response reported (`TestObserverAndChainsDisjoint`);
+   * `ID` not copied (`TestObserverReportsEachKind`, a case that changes the slice after the call);
+   * the copy made before the nil check (`TestObserverUnset`).
+8. **Checks:** phase 3's, with `-test.run 'Observer|Observation'` on the hosts, and `make api`. Then the execution record,
+   and staging.
+
+### Phase 5: documentation, examples and benchmarks
+
+1. **`README.md`,** a "Middleware and observing" section after "Closing and limits":
+   * the type, the two options, and the order rule, with its exception to "last wins";
+   * where each chain sits: receiving outside the dispatch, inside the slot and the budget; sending between the SDK's checks
+     and the exchange, its result checked after;
+   * what the chains do not see (D6), and the observer's six kinds;
+   * the rules (D7, D10), and `Initialize`'s;
+   * a tracing sketch with `TraceMeta` and `RequestIDFromContext`, which is `ExampleWithSendingMiddleware`'s body, bound by
+     `TestReadmeMiddlewareIsTheExample` as the other README examples are bound (`docs_test.go:187-232`);
+   * a metrics sketch counting refusals with the observer;
+   * one sentence telling this from `remote`'s HTTP middleware.
+2. **`docs/architecture.md`:** the two chains and the observer's sites in the message path, and the new files and tests in
+   its lists.
+3. **Examples**, with fixed output, each seen to fail with its option removed:
+   * `ExampleWithReceivingMiddleware`: an authorization middleware refusing one method, over `NewConnection` and a pipe;
+   * `ExampleWithSendingMiddleware`: `_meta.traceparent` added, and the method, id and outcome printed;
+   * `ExampleWithObserver`: a request refused over the concurrency limit, printed as its kind, id and error.
+4. **Benchmarks** in `bench_test.go`:
+   * `BenchmarkPromptRoundTripMiddleware`: one pass-through middleware each way on both sides;
+   * `BenchmarkSessionUpdateNotifyObserved`: an observer set, which these messages never call.
+
+   They are run with step 1.1's command, and their `allocs/op` against the baseline is recorded: D11 expects two more per sent
+   message with sending middleware, none for receiving middleware, and none for the observer.
+5. Phase 4's checks, the benchmark comparison of step 1.6 included; then the execution record, and staging.
+
+### Phase 6: close
+
+1. `tools/gates.py --all`, with its output in the record; `make push-guard` after a fetch.
+2. After the owner pushes, `tools/watch_ci.py --branch main` on the head.
+3. A table of the MADR's eleven Confirmation items, each with the test or command that shows it, and any test that no plant
+   reached, planted then.
+4. The MADR's status, this PLAN's, and the index rows.
+
+### Phase 7: the release, on the owner's ask
+
+As [0045-PLAN-notification-queue-byte-budget.md](0045-PLAN-notification-queue-byte-budget.md)'s phase 4 ran it:
+
+1. `tools/consumer.py`:
+   * one receiving and one sending middleware that count the methods they see;
+   * an observer counting kinds, with a request refused over a concurrency limit of 1;
+   * the counts, a `RequestIDFromContext` line, and `errors.Is` of a misuse against `acp.ErrSendingMiddleware` printed in
+     `WANT_RUN`;
+   * `VERSION` `v1.31.0` or later in the docstring, and `tools/README.md`'s row.
+
+   It is built against the tree through a `replace` three times. `tools/consumer.py v1.30.0` must fail its build, and
+   `make check-tools` must pass.
+2. `docs/reports/0046-REPORT-release-notes-v1-31-0.md`, from `make api` and the commits since `v1.30.0`, and its index row.
+3. The owner's tag; then `tools/release_body.py`, the owner's release, `tools/publication.py`, and `tools/consumer.py v1.31.0`.
+4. The PLAN and its row `complete`.
 
 ## Verification
 
-* Every test of step 1.8 passes under `-race`, and with `-count=3` on the Linux and Windows hosts, and was seen to fail on its
-  planted break.
-* The existing tests pass unchanged, the barrier, overflow and hook tests among them.
-* The no-middleware benchmark shows no change beyond noise.
-* `make api`: the additions only.
+* Every test of phases 2 to 4 passes under `-race`, and with `-count=3` on the Linux and Windows hosts, and was seen to fail on
+  its planted break.
+* The existing tests pass unchanged, the barrier, overflow, hold, budget and hook tests among them.
+* `BenchmarkPromptRoundTrip` and `BenchmarkSessionUpdateNotify`, with nothing registered: `allocs/op` equal to the baseline at
+  `523f319`, `B/op` up by at most one word per received request, median `ns/op` within 5%.
+* `make api` against `v1.30.0`: compatible additions only, those of the MADR's "More Information".
+* `tools/gates.py regen` clean: no generated file changes.
 * `tools/gates.py --all` and CI pass.
 
 ## Rollout and Rollback
 
-* **Rollout.** Additive: no behaviour changes for a connection without middleware.
-* **Rollback before the release.** Revert the phase commits.
-* **Rollback after the release.** The type, options and function stay, under the compatibility promise. A defect in a chain is
-  fixed in a patch.
+* **Rollout.** Additive: no behaviour changes for a connection without middleware or an observer. A minor, `v1.31.0`.
+* **Rollback before the release.** Revert the phase commits, the latest first. Phase 1's refactor stands alone and may stay.
+* **Rollback after the release.** The type, options, function, sentinel and observer stay, under the compatibility promise. A
+  defect in a chain is fixed in a patch. A defect only in the sending chain can be contained in a patch by documenting
+  `WithSendingMiddleware` as inert and skipping the chain, while it is fixed.

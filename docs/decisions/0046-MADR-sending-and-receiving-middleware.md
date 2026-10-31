@@ -29,31 +29,63 @@ hooks, the queue and the barrier, and how it is ordered?
 
 ## Findings
 
-At `9fcbb6f` (`v1.29.0`), and in the sources under "Sources".
+F1 to F4 and F10 to F13 are measured at `523f319`, whose Go code is `v1.30.0`'s (`d65819a`). The later commits change records
+and delete `communique.toml`. F5 to F9 are from the sources under "Sources". This revision re-grounded the first draft's
+findings, whose line numbers were taken at `9fcbb6f`, before 0045 moved them (see "Revision").
 
 * **F1. The SDK's seams.**
   * **Receiving.** Every request and notification that reaches a handler goes through one `MethodHandler`,
-    `func(ctx, method string, params json.RawMessage) (any, *RequestError)` (`connection.go:327`).
-    * `handleInbound` calls it (`connection.go:1988`) and encodes the result after it returns (`:2014`).
-    * `NewConnection` takes it directly. `NewAgentSideConnection` and `NewClientSideConnection` pass the generated dispatch.
-      All three build through `buildConnection(handler, …)` (`:753`).
-  * **Sending.** Outbound calls pass through `SendRequest[T]`, `SendRequestNoResult` and `SendNotification`, and the generated
-    typed methods and `CallExtension` call these. Params are encoded and validated in `encodeParams` (`:2341`).
+    `func(ctx, method string, params json.RawMessage) (any, *RequestError)` (`connection.go:333`).
+    * `handleInbound` calls it (`connection.go:2136`) and encodes a request's result after it returns (`:2162`).
+    * A `nil` handler is handled before the call: a request is answered `-32601`, and a notification is dropped without a log
+      (`:2126-2134`).
+    * `NewConnection` takes the handler directly (`:768`). `NewAgentSideConnection` and `NewClientSideConnection` pass their
+      generated dispatch, `handleWithExtensions` (`agent_gen.go:49`; `client_gen.go:44`). All three build through
+      `buildConnection` (`connection.go:802`).
+  * **Sending.** Three internal paths carry every request and notification the application sends:
+    * `exchange` (`connection.go:2397`) checks the context and the input, allocates the id and encodes the params
+      (`prepareRequest`, `:2467`; `encodeParams`, `:2489`), registers the pending response (`:2413-2415`) before the write
+      (`:2425`), and waits for the answer. Two functions call it:
+      * `sendRequestSent` (`:2259`), behind `SendRequest[T]`, the generated typed requests (18 on the client side, `Prompt`
+        among them, which reads whether the request was written; 10 on the agent side) and `CallExtension` (`extensions.go:232`, `:267`). After `exchange` it waits for the notifications before
+        the answer (the barrier, `:2264`), then decodes and checks the result (`:2273-2283`);
+      * `sendRequestCommit` (`:2303`), which only `Initialize` uses (`client_gen.go:537`).
+    * `SendRequestNoResult` (`:2721`) repeats `exchange`'s steps itself. No generated method calls it.
+    * `SendNotification` (`:2768`) checks the context, encodes the params (`prepareNotification`, `:2878`) and writes. The
+      generated notifications (2 on the agent side, 9 on the client side) and `NotifyExtension` call it.
+    * The generated typed methods check what `initialize` agreed before any of these (for example `Prompt`,
+      `client_gen.go:1044-1047`).
+  * **Errors.** Every error `exchange`, the barrier and `SendNotification` return is a `*RequestError` (`toReqErr`,
+    `errors.go:386-402`). A local failure is kept as its cause, so `errors.Is(err, ErrConnectionClosed)` and the
+    context's errors work through it (`errors.go:11-39`). A `*RequestError` can therefore carry every sending error.
 * **F2. What never reaches the handler.** The reader handles these itself:
-  * parse and invalid-request faults (`connection.go:1517-1538`);
-  * `$/cancel_request` (`:1556`);
-  * requests refused over the concurrency limit (`:1565-1574`) or during shutdown (`:1591-1598`);
-  * responses (`:1529`).
-* **F3. Where handlers run.** A request runs on its own goroutine (`:1619`). Notifications run one at a time from the queue
-  (`processNotifications`, `:1823`), and under `OverflowBlock` a slow notification handler pauses the reader
-  ([0044-MADR-notification-queue-back-pressure.md](0044-MADR-notification-queue-back-pressure.md), D7). A panic in a handler
-  ends the process (`connection.go:320-322`).
+  * **faults**, each answered: a line over `WithMaxMessageSize` (`connection.go:1456-1458`), invalid JSON (`:1585-1589`), not a
+    JSON-RPC object (`:1592-1596`), an invalid request (`:1601-1606`), a method that is not a string (`:1614-1617`);
+  * **`$/cancel_request`** received (`:1624-1627`, `handleCancelRequest`, `:2089`);
+  * **refusals**, each answered `-32603`: over the concurrency limit (`:1633-1642`), past 0045's byte budget (`:1645-1652`), or
+    during shutdown (`:1669-1678`);
+  * **responses** (`:1597-1600`, `receiveResponse`, `:1848`). A response with no usable id is logged and dropped
+    (`:1849-1852`), and one that matches no pending request, such as a late answer, is logged at `Debug` (`:2063-2066`);
+  * **notifications dropped** under `OverflowDropNewest` (`:1775-1781`, `dropNotification`, `:1149`), and the one whose
+    overflow closes the connection (`:1783-1790`);
+  * **the SDK's own `$/cancel_request`**, queued when a caller's context ends (`sendCancelRequest`, `:2533`) and written by
+    `sendCancelRequests` (`:2508`) **through the public `SendNotification`** (`:2525`). It is the only message the SDK sends
+    on its own: every other `SendNotification` and `sendRequest` call in the package is an application's typed or extension
+    call.
+* **F3. Where handlers run.**
+  * A request runs on its own goroutine (`connection.go:1698`). Its concurrency slot and its bytes are released by `release`
+    as the handler returns, before the answer is written (`:1703-1708`, `:2137-2139`).
+  * Notifications run one at a time from the queue (`processNotifications`, `:1924`). Under `OverflowBlock` a slow notification
+    handler pauses the reader ([0044-MADR-notification-queue-back-pressure.md](0044-MADR-notification-queue-back-pressure.md),
+    D7).
+  * A panic in a handler ends the process (`:326-328`).
 * **F4. The hooks are typed and inside the dispatch.**
-  * `judgeInbound` runs the rewrite hook, validation with the initialize gate, then the validation hook
-    (`connection.go:2687-2712`).
-  * It is called from each generated method (`agent_gen.go:244` and on; `client_gen.go:156` and on), and for responses in
-    `sendRequestSent` (`:2128`).
-  * `ChainRewrites` composes several rewrite hooks in order (`:680`).
+  * `judgeInbound` runs the rewrite hook, validation with the initialize gate, then the validation hook (`connection.go:2835-2860`).
+    `checkInbound` counts its refusals in `RefusedMessages` (`:2825-2831`).
+  * It is called from each generated method (`agent_gen.go:244` and on; `client_gen.go` likewise), and for a response in
+    `sendRequestSent` (`:2276`) and in `sendRequestCommit`'s commit (`:2321`).
+  * A handler's result is checked inside the dispatch before it is returned (`checkResult`, `:2791`).
+  * `ChainRewrites` composes several rewrite hooks in order (`:729`), because a connection keeps only the last one.
 * **F5. The MCP Go SDK.** `v1.8.0` has `type Middleware func(MethodHandler) MethodHandler`, where its `MethodHandler` is
   `func(ctx, method string, req Request) (Result, error)`, and `AddSendingMiddleware` and `AddReceivingMiddleware`
   (`mcp/shared.go:112-137`).
@@ -91,11 +123,34 @@ At `9fcbb6f` (`v1.29.0`), and in the sources under "Sources".
   * Older names such as `rpc.jsonrpc.request_id` are deprecated.
   * Trace context travels in `params._meta` as `traceparent`, `tracestate` and `baggage`. ACP reserves exactly those root keys
     (extensibility page; RFD `meta-propagation`), and the OpenTelemetry MCP convention does the same.
-  * The SDK's `TraceMeta` builds such a `_meta` (`extensions.go:143-155`), but nothing propagates it.
-  * MCP declined to build OpenTelemetry into its SDK (#59). This SDK has no dependencies, by rule.
+  * The SDK's `TraceMeta` builds such a `_meta` (`extensions.go:147`), but nothing propagates it.
+  * MCP declined to build OpenTelemetry into its SDK (#59). This SDK adds no dependency without a MADR (`AGENTS.md`).
 * **F9. Costs and hazards recorded elsewhere.** Each layer allocates per call: gRPC allocates a closure per interceptor, MCP takes
   a mutex per message, and Python deep-copies. No benchmark was found for any of them. No Go library surveyed recovers panics in
   its chain by default; connect needs `WithRecover`.
+* **F10. `initialize`'s result is recorded on the reader.** `sendRequestCommit`'s commit decodes, checks and records the result
+  as the reader reads it, before the reader reads on and before the caller resumes (`handleResponse`, `connection.go:2079-2081`;
+  [0030-MADR-record-initialize-on-arrival.md](0030-MADR-record-initialize-on-arrival.md), O1). A sending chain around
+  `Initialize` sees a result that is already recorded.
+* **F11. Contexts carry what the dispatch and the barrier need.**
+  * `receiveLine` gives a request's context its receipt and a `messageMark{notification, seq}` (`connection.go:1656`), and
+    `processNotifications` a notification's (`:1926`). The received id is not kept in the context. `IsNotification(ctx)` reports
+    the mark (`:109`).
+  * The barrier's guard against a notification handler waiting on itself (`waitNotificationsUpTo`, `:2650`;
+    [0019-PLAN-behaviour-fixes.md](0019-PLAN-behaviour-fixes.md), B1) and 0044's peer wait (`exchange`, `:2420`) read the
+    mark from the caller's context. A request sent under a context **not** derived from the running handler's waits for that
+    handler, and deadlocks if the handler waits for it.
+* **F12. Options: the last wins, and that is tested.** `ConnectionOption`'s doc says "Options apply in the order given, so the
+  last of a repeated option wins" (`connection.go:484-491`). `TestOptionSemantics` requires it (`options_test.go:15`).
+  `ChainRewrites` exists because of it.
+* **F13. Probes and benchmarks in the tree.**
+  * `json.Marshal` of an `anyMessage` whose `Params` is a `json.RawMessage` compacts it and refuses invalid JSON, on
+    `go1.26.10`, on `go1.27.3`, and on `go1.27.3` with `GOEXPERIMENT=nojsonv2` (a scratch probe, 2026-10-31). A multi-line
+    object was written on one line, and `{"a":` failed with "unexpected end of JSON input". The error names `json.RawMessage`,
+    or `*jsontext.Value` under the default `go1.27.3` build. A scalar such as `"str"` **is** accepted, which JSON-RPC 2.0
+    forbids for params and `encodeParams` refuses (`connection.go:2502-2503`).
+  * `bench_test.go` has `BenchmarkPromptRoundTrip` (`:92`) and `BenchmarkSessionUpdateNotify` (`:105`), run by `make bench`,
+    six times with allocations (`Makefile:122-124`).
 
 ## Decision Drivers
 
@@ -103,8 +158,10 @@ At `9fcbb6f` (`v1.29.0`), and in the sources under "Sources".
   `MethodHandler`.
 * One mental model for both directions, and the same type the SDK already exports.
 * A clear, documented order, with no surprise when options are repeated (F5's issue #688).
-* No cost when no middleware is registered.
-* 0044's guarantees hold: the barrier, the notification order, and the rule for notification handlers.
+* No cost when nothing is registered: no allocation and no lock on any message's path.
+* 0044's guarantees hold: the barrier, the notification order, the rule for notification handlers, and 0030's record of
+  `initialize`.
+* Misuse fails loudly and at once, never as a hang or a corrupted exchange.
 * No dependency: OpenTelemetry stays the consumer's, and the SDK gives it what it needs (F8).
 
 ## Considered Options
@@ -120,72 +177,135 @@ At `9fcbb6f` (`v1.29.0`), and in the sources under "Sources".
 Chosen option (proposed): **"Sending and receiving middleware, raw, one type"**.
 
 It answers 0015's need in the SDK's existing vocabulary. `MethodHandler` is already exported and raw, and a middleware is a
-function from one to another. It covers tracing (F8 needs only the method, the id and `_meta`), metrics, logging, and authorization
-by method or by a field the middleware decodes. It costs nothing when unused. Typed middleware would duplicate the hooks' place
-inside the dispatch. An observer alone cannot authorize or rewrite. With the owner's answer to Q2, an observer is added beside
-the chain (D9), reporting the messages the chain does not see.
+function from one to another. On the sending side its `*RequestError` carries every error the exchange can return (F1, Errors).
+It covers tracing (F8 needs only the method, the id and `_meta`), metrics, logging, and authorization by method or by a field the
+middleware decodes. It costs nothing when unused. Typed middleware would duplicate the hooks' place inside the dispatch. An
+observer alone cannot authorize or rewrite. With the owner's answer to Q2, an observer is added beside the chains (D9), reporting
+the messages they do not see.
 
 The parts of the decision:
 
-* **D1. The type.** `type Middleware func(MethodHandler) MethodHandler`. Middleware returns the handler it wraps, or a new one.
+* **D1. The type.** `type Middleware func(next MethodHandler) MethodHandler`. A middleware returns `next`, or a handler that
+  calls it at most once, or answers in its place.
 * **D2. Registration, at construction only.**
   * `WithReceivingMiddleware(mw ...Middleware)` and `WithSendingMiddleware(mw ...Middleware)` are `ConnectionOption`s, so all
     three constructors take them.
-  * Repeated options append. The first registered is outermost, as in gRPC and connect, not MCP (F5, F6).
+  * **Repeated options append**, the first registered outermost, as in gRPC and connect, not MCP (F5, F6):
+    `WithReceivingMiddleware(a, b)` then `WithReceivingMiddleware(c)` runs `a`, then `b`, then `c`, then the handler. This is
+    the one exception to F12's "last wins", stated in `ConnectionOption`'s doc and required by `TestOptionSemantics`, because a
+    library that wraps a connection's options, such as `acptest` or a consumer's own helper, must not erase the application's
+    middleware.
+  * Each chain is built **once**, in `buildConnection`. Each `Middleware` is called once there, not per message. A `nil`
+    middleware, or one that returns a `nil` handler, panics there, naming the option and the position, as a `nil` option
+    already panics (F12).
   * There is no registration on a live connection: reading starts inside the constructor, as `WithLogger`'s doc already says.
 * **D3. Receiving.**
-  * The chain wraps the connection's `MethodHandler` once, in `buildConnection`. A `nil` handler is wrapped as the method-not-found
-    answer it gives today.
-  * It runs where the handler runs: on the request's goroutine, or on the notification worker.
-  * It is outside the generated dispatch. It sees the raw params before decoding, the rewrite and validation hooks and the
-    initialize gate, and it sees the result as the handler returns it, before encoding.
-  * A middleware that returns without calling the next handler answers in its place. The SDK's validation of params and results
-    then does not run for that message. That is documented, since a refusal for authorization is the main use.
+  * The chain wraps the connection's `MethodHandler` once, and replaces it, so `handleInbound` is unchanged and a connection
+    without receiving middleware runs exactly as now.
+  * A `nil` handler under a chain is replaced by one that behaves as `handleInbound`'s `nil` branch (F1): `-32601` for a request,
+    and `nil, nil` for a notification, so nothing new is logged.
+  * It runs where the handler runs: on the request's goroutine, inside its concurrency slot and byte count (F3), or on the
+    notification worker.
+  * It is outside the generated dispatch. It sees the method and the raw params before decoding, the rewrite and validation
+    hooks, the initialize gate and the hold for `initialize`. It sees the result as the dispatch returns it, after `checkResult`
+    and before encoding. `params` is `nil` when the peer left them out or sent `null`.
+  * It may pass `next` other params, or another method, to route the message. The dispatch then decodes and checks what it is
+    given.
+  * A middleware that returns without calling `next` answers in its place. The dispatch's validation, gate and result check
+    then do not run for that message. That is documented, since a refusal for authorization is the main use. A result it
+    returns is encoded as a handler's is.
+  * `IsNotification(ctx)` tells a notification from a request, as it does for handlers.
 * **D4. Sending.**
-  * The chain wraps the step from encoded params to the raw result, for `SendRequest[T]`, `SendRequestNoResult`,
-    `SendNotification`, `CallExtension`, `NotifyExtension` and the generated methods.
-  * It sees the method and the params as `json.RawMessage` after `encodeParams` has validated them, and returns the result as
-    `json.RawMessage`, which `SendRequest[T]` then decodes. For a notification, both returns are nil.
-  * The response barrier and the connection's waits stay inside the innermost handler, so a middleware's timing includes them.
-  * The SDK's own `$/cancel_request`, sent when a caller's context ends, does not pass the chain (F2's inbound twin).
-  * A middleware may replace the params, for example adding `traceparent` to `_meta`. The bytes it passes on are sent as they are.
-* **D5. The request id.** `RequestID(ctx) (json.RawMessage, bool)` reports a request's id to middleware on both sides. On the
-  sending side the id is allocated before the chain runs. The PLAN's first step checks that allocating it earlier changes nothing
-  else. If it would, the sending side reports no id, and this record is amended.
-* **D6. What the chain does not see.** F2's messages are outside it: faults, `$/cancel_request`, refusals by limit or shutdown, and
-  responses as frames. A response is seen as its sending call's result. They are documented as outside the chain, as connect
-  documents its gate, and reported to the observer (D9; Q2 b, answered 2026-10-31).
+  * The chain wraps one innermost step, the same for every path: from the encoded params to the raw result. Every request and
+    notification the application sends passes it: `SendRequest[T]`, `SendRequestNoResult`, `SendNotification`,
+    `CallExtension`, `NotifyExtension` and every generated typed method, `Initialize` included.
+  * **Before the chain**, as today and in today's order: the typed methods' gate, the context and input checks, the id's
+    allocation, and `encodeParams`' validation and encoding. A message the SDK would refuse never reaches the chain.
+  * **Inside the innermost step:** the context check again, for the context the chain passes; the pending registration, the
+    write, the wait for the answer, and the barrier. A middleware's timing therefore includes the round trip and the barrier.
+  * **After the chain:** `SendRequest[T]` decodes the result and runs `checkInbound` and the result check on it, as today. A
+    sending middleware cannot make the SDK accept a response it would refuse.
+  * The result is a `json.RawMessage` from the innermost step. A middleware may return another: a `json.RawMessage` is used as
+    is, `nil` is no result, and any other value is encoded with `encoding/json`, as `handleInbound` encodes a handler's result.
+  * The params a middleware passes on are written as given. A replacement must be `nil`, a JSON object or a JSON array (F13:
+    `encoding/json` compacts it and refuses invalid JSON, but accepts a scalar).
+  * `Initialize`'s result is recorded on the reader before the chain sees it (F10). A middleware may observe it and may fail
+    the call, but a result different from the innermost step's fails the call with `ErrSendingMiddleware`, since the record
+    cannot follow it. An error a middleware returns after a recorded `initialize` leaves the record in place; the godoc says so.
+  * The SDK's own `$/cancel_request` keeps a direct path, outside the chain, and is reported to the observer (D9). That needs
+    `sendCancelRequests` to stop calling the public `SendNotification` (F2).
+  * `Prompt`'s `session/cancel` after a cancelled turn is the application's typed `Cancel`, and passes the chain.
+* **D5. The request id: `RequestIDFromContext(ctx) (json.RawMessage, bool)`.**
+  * The name follows Go's `FromContext` idiom, and avoids `RequestID` beside the generated `RequestId` type, which differ only
+    in case.
+  * It returns a copy of the id, and `false` for a notification or a context the connection did not make.
+  * **Receiving:** the id from the request, `null` included. It is kept in `messageMark` as a pointer to the message's existing
+    `*json.RawMessage`, so no allocation is added and the value grows by one word (F11). Handlers can read it too.
+  * **Sending:** the id the SDK allocated before the chain (D4). Allocating it there changes nothing else: the registration
+    still precedes the write, and no answer can arrive before the write. A short-circuited request leaves a gap in the ids,
+    which JSON-RPC allows.
+  * The sending call's state shadows the received message's: inside a sending middleware for a notification, it returns
+    `false`, even when the context derives from a received request's.
+* **D6. What the chains do not see.** F2's messages are outside both chains: faults, `$/cancel_request` in both directions,
+  refusals by limit, budget or shutdown, drops, and responses as frames. A matched response is seen as its sending call's result.
+  Each is documented as outside the chain, as connect documents its gate, and reported to the observer (D9; Q2 b, answered
+  2026-10-31).
 * **D7. The rules middleware inherits.**
+  * Middleware must be safe for concurrent use: requests run concurrently, and so do sending calls.
   * A receiving middleware around a notification runs on the worker. Under `OverflowBlock` it must not wait for anything the
     peer sends later (0044 D7).
+  * `next` is called at most once, and before the middleware returns, with a context derived from the one it was given. On the
+    sending side the context matters for the barrier's guard (F11), and the SDK enforces all three (D10).
+  * `params` must not be changed in place or kept after the middleware returns; a change passes a new slice.
   * A panic ends the process, as in a handler; nothing recovers it.
-  * Middleware must not keep the params after it returns.
 * **D8. Helpers, none now.** No OpenTelemetry integration, by the no-dependency rule (F8). `TraceMeta` already builds the `_meta`
-  value. An example shows a tracing middleware with the standard library only (`log/slog`, timing, `RequestID`).
-* **D9. An observer for what the chain does not see** (Q2 b, answered 2026-10-31).
-  * `WithObserver(fn func(ctx context.Context, o Observation))` is a `ConnectionOption`, set at construction. A later call
-    replaces an earlier one, as `WithLogger` does.
+  value. An example shows a tracing middleware with the standard library only (`log/slog`, timing, `RequestIDFromContext`).
+* **D9. An observer for what the chains do not see** (Q2 b, answered 2026-10-31).
+  * `WithObserver(fn func(Observation))` is a `ConnectionOption`, set at construction. A later call replaces an earlier one, as
+    `WithLogger` does. `nil` removes it.
   * `Observation` is a struct of plain values:
-    * `Kind`: an `ObservationKind`;
-    * `Method`: when the message names one;
-    * `ID`: a `json.RawMessage`, a copy, when the message carries one;
-    * `Size`: the line's length in bytes;
-    * `Err`: the `*RequestError` the connection answered, or the one a response carried, or nil.
-  * The kinds, each reported once, where it happens:
-    * `ObservedFault`: a parse error, a non-object, an invalid request or a line over `WithMaxMessageSize`
-      (`connection.go:1389-1393`, `:1517-1548`), with the answer sent;
-    * `ObservedCancelReceived`: an inbound `$/cancel_request` (`:1556`);
-    * `ObservedCancelSent`: the SDK's own `$/cancel_request`, sent when a caller's context ends;
-    * `ObservedRefused`: a request answered without its handler, over the concurrency limit (`:1565-1574`), during shutdown
-      (`:1591-1598`), or past
-      [0045-MADR-notification-queue-byte-budget.md](0045-MADR-notification-queue-byte-budget.md)'s budget, with the answer;
-    * `ObservedResponse`: a response read, matched or not, with its error if it carried one;
-    * `ObservedDropped`: a notification dropped under `OverflowDropNewest`, or the one whose overflow closed the connection.
-  * The observer runs synchronously on the goroutine that met the message, the reader for all but `ObservedCancelSent`. It must
-    not block, as jsonrpc2_v2's `Preempter` "must not block" (F6). A slow observer stalls reading. A panic ends the process.
-  * It sees no message the middleware chain sees, so the two together cover every message once. It cannot change or stop
-    anything.
-  * Unset, it costs one nil check at each site.
+    * `Kind`: an `ObservationKind`, with a `String` method for logs;
+    * `Method`: when the message names one and it was decoded;
+    * `ID`: a copy, when the message carries one: the request's, the response's, or for a cancel the `requestId` it names;
+    * `Size`: the received line's length in bytes, counted while a line over the limit is discarded; 0 for a sent message;
+    * `Err`: the `*RequestError` the connection answered, the one a response carried, the send's error, or
+      `ErrNotificationQueueOverflow`; `nil` otherwise.
+  * The kinds, each reported once, where it happens (F2):
+    * `ObservedFault`: each of the five faults, with the answer sent and its id, if valid. `Method` is empty, since the line
+      is not trusted;
+    * `ObservedCancelReceived`: an inbound `$/cancel_request`, with the id it names, or none when its params do not decode;
+    * `ObservedCancelSent`: the SDK's own `$/cancel_request` once written, or with the write's error;
+    * `ObservedRefused`: a request answered without its handler, over the concurrency limit, past the byte budget, or during
+      shutdown, with the answer. These are not counted by `RefusedMessages`, which counts the hooks' and validation's refusals
+      inside the chain (F4);
+    * `ObservedUnmatchedResponse`: a response no pending request took, a late answer or an unknown id, or one without a usable
+      id, with its error if it carried one. A matched response goes to its call (D6);
+    * `ObservedDropped`: a notification dropped under `OverflowDropNewest`, beside the drop handler, or, with
+      `ErrNotificationQueueOverflow`, the one whose overflow closed the connection.
+  * The observer has no context argument. None of these messages has a handler's context, and a connection-wide one would
+    mislead.
+  * It runs synchronously on the goroutine that met the message: the reader for all kinds but `ObservedCancelSent`, which runs
+    on the cancel sender. It must be safe for concurrent use and must not block, as jsonrpc2_v2's `Preempter` "must not block"
+    (F6): a slow observer stalls reading. It is never called with a lock of the connection's held, so it may call the
+    connection's accessors. A panic ends the process.
+  * It sees no message either chain sees: with both chains and the observer set, every message is seen once. It cannot change
+    or stop anything.
+  * Unset, it costs one nil check at each site, and the id is not copied.
+* **D10. Misuse fails at once.** On the sending side the innermost step refuses, sends nothing, and returns a `*RequestError`
+  (`-32603`) wrapping the exported sentinel `ErrSendingMiddleware`, naming the rule broken:
+  * `next` called a second time for one call;
+  * `next` called with a context that does not carry the call, such as `context.Background()` (D7, F11);
+  * another method passed to `next`: the gate, the result's type and the pending registration belong to the caller's;
+  * replacement params that are not `nil`, an object or an array (D4);
+  * a replaced result for `initialize` (D4, F10).
+  The receiving side has no such state per message and does not enforce D7's rules; its godoc states them.
+* **D11. Cost.**
+  * Nothing registered: no allocation is added to any path, the receiving path is unchanged, and the sending paths add one nil
+    check. `BenchmarkPromptRoundTrip` and `BenchmarkSessionUpdateNotify` must show the same allocations per operation, and
+    bytes per operation up by at most one word per received request (D5).
+  * Sending middleware registered: the call's state and the context that carries it, two allocations per sent message, plus
+    whatever the middleware allocates. Receiving middleware registered: none added by the SDK. Both are measured by new
+    benchmarks and recorded.
 
 ### Questions for the owner
 
@@ -206,41 +326,77 @@ The parts of the decision:
 
 The decision stays `proposed` until the owner accepts it.
 
+### Revision, 2026-10-31
+
+On the owner's ask to assess the pair against the tree, before acceptance. Nothing in Q1 or Q2 changes. What changed, and why:
+
+* **The findings were re-pinned** at `523f319`. 0045 had moved every `connection.go` line, and its byte-budget refusal, which
+  the first draft named conditionally, is now a site. F10 to F13 are new.
+* **D2:** the append rule is stated as the exception to F12, with its test. The chain's construction-time panics are new.
+* **D3:** the `nil` handler's replacement now drops notifications silently. As first written, it would have answered `-32601`
+  for every method, and `handleInbound` logs that at `Warn` for each notification.
+* **D4:**
+  * The innermost step's place in each of the three paths is fixed (F1).
+  * The SDK's `$/cancel_request` needs its own path, since it goes through the public `SendNotification` today.
+  * The result's encoding rule, the params rule and the `Initialize` rule are new (F10, F13).
+* **D5:** `RequestID` became `RequestIDFromContext`. It returns a copy, its storage costs no allocation, the sending call
+  shadows a received message, and the step that was to check the id's allocation is answered here.
+* **D7:** the concurrency and `next` rules are new.
+* **D9:**
+  * `ObservedResponse`, "a response read, matched or not", contradicted "it sees no message the chain sees" for every matched
+    response. It became `ObservedUnmatchedResponse`.
+  * `Err` became an `error`, to carry `ErrNotificationQueueOverflow`.
+  * The observer lost its `context.Context` argument.
+  * The observer gained the concurrency rule and the guarantee that no lock is held while it runs.
+* **D10 and D11** are new. D10 adds an exported sentinel, `ErrSendingMiddleware`.
+
 ### Consequences
 
 * Good, because tracing, metrics, logging and authorization by method can be added in a few lines, around every message that
   reaches a handler and every call the application sends.
 * Good, because the type is the one the SDK already exports, so a `MethodHandler` written for `NewConnection` composes with it.
-* Good, because a connection with no middleware runs exactly as now: the chain is built once, and only if registered.
-* Neutral, because each registered middleware adds a function call per message. A closure per call, as in gRPC, is avoided by
-  building the chain once.
-* Bad, because a receiving middleware that answers in the handler's place skips the SDK's validation of that message. It is
-  documented, and the hooks remain for validation.
+* Good, because a connection with no middleware and no observer runs as now, with no allocation added (D11).
+* Good, because on the sending side every SDK check runs before the chain or after it, so middleware cannot send what the SDK
+  would refuse, nor make it accept a response it would refuse.
+* Good, because misuse on the sending side fails at once with a named rule (D10), where it would otherwise hang under the
+  barrier or desynchronize a pending call.
+* Neutral, because each registered middleware adds a function call per message, and sending middleware two allocations per sent
+  message. The chain is built once, so there is no closure per call, as in gRPC.
+* Bad, because a receiving middleware that answers in the handler's place skips the SDK's validation and result check of that
+  message. It is documented, and the hooks remain for validation.
 * Bad, because raw params mean that a middleware authorizing on a field decodes the params itself. The typed hooks remain for
   that, inside the dispatch.
-* Good, because with the observer every message is seen once: through the chain, or by the observer with its reason. Metrics can
-  count refusals, faults, drops and cancels.
-* Bad, because the observer is a second mechanism to document and test. It runs on the reader, so a slow observer stalls reading.
-  The godoc says it must not block.
+* Bad, because `Initialize`'s result cannot be replaced by sending middleware (D4), an exception to the sending side's rule,
+  forced by 0030's record.
+* Good, because with the observer every message is seen once: through a chain, or by the observer with its reason. Metrics can
+  count refusals, faults, drops, cancels and unmatched responses.
+* Bad, because the observer is a second mechanism to document and test. It runs on the reader, so a slow observer stalls
+  reading. The godoc says it must not block.
 
 ### Confirmation
 
 The PLAN, [0046-PLAN-sending-and-receiving-middleware.md](0046-PLAN-sending-and-receiving-middleware.md), confirms each of these.
 Each new test is seen to fail on a planted break in a scratch copy.
 
-1. Receiving middleware wraps requests and notifications, in registration order, first outermost, across repeated options.
-2. A receiving middleware that returns an error answers the request with it, and the handler does not run.
-3. A receiving middleware sees the result before encoding, and the raw params before the hooks; a rewrite it passes on is what
+1. Receiving middleware wraps requests and notifications, in registration order, first outermost, across repeated options. A
+   `nil` middleware or a `nil` handler it returns panics at construction. A `nil` handler under a chain answers requests `-32601`
+   and drops notifications without a log.
+2. A receiving middleware that returns an error answers the request with it, and the dispatch and handler do not run.
+3. A receiving middleware sees the raw params before the hooks and the result after `checkResult`. Params it passes on are what
    the hooks and the handler see.
-4. Sending middleware wraps requests and notifications from every sending path, sees the encoded params and the raw result, and
-   can add `_meta`.
-5. `RequestID` reports the id on both sides (D5).
-6. The response barrier, notification order and 0044's guard hold with middleware registered; the existing tests pass unchanged.
-7. The observer reports each kind of D9 once, with its method, id, size and error. It sees no message the chain sees, and is
-   never called when unset.
-8. With no middleware and no observer, the benchmark of a request round trip shows no change beyond noise.
-9. `make api`: compatible additions only.
-10. `tools/gates.py --all` and CI pass.
+4. Sending middleware wraps every sending path, `Initialize` included, sees the encoded params and the raw result, and can add
+   `_meta`. A replaced result is decoded and checked as the peer's would be. The SDK's own `$/cancel_request` does not pass it.
+5. Each misuse of D10 fails with `ErrSendingMiddleware` and writes nothing.
+6. `RequestIDFromContext` reports the id on both sides, `false` for notifications, and the sending call's id inside a received
+   request's handler.
+7. The response barrier, notification order, 0044's guard and 0030's record hold with middleware registered. The existing tests
+   pass unchanged.
+8. The observer reports each kind of D9 once, with its method, id, size and error, never under a lock. It sees no message the
+   chains see, and is never called when unset.
+9. With nothing registered, `BenchmarkPromptRoundTrip` and `BenchmarkSessionUpdateNotify` show the same allocations per
+   operation, and no time change beyond noise (D11).
+10. `make api`: compatible additions only.
+11. `tools/gates.py --all` and CI pass.
 
 ## Pros and Cons of the Options
 
@@ -260,6 +416,8 @@ Each new test is seen to fail on a planted break in a scratch copy.
 * Good, because it is one type, the SDK's existing one, and one order rule, for both directions.
 * Good, because raw params cover extension methods the same way as the standard methods.
 * Bad, because authorization on a field decodes the params a second time.
+* Bad, because the sending side needs rules a typed design would not (D4, D10), since raw bytes and one innermost step serve
+  every path.
 
 ### Typed middleware
 
@@ -277,9 +435,12 @@ Each new test is seen to fail on a planted break in a scratch copy.
 * Related records: [0015-MADR-validate-absolute-protocol-paths.md](0015-MADR-validate-absolute-protocol-paths.md) (X3, and the
   finding "No middleware"); [0017-PLAN-remediate-acp-v1-conformance-violations.md](0017-PLAN-remediate-acp-v1-conformance-violations.md);
   [0019-MADR-remediate-debugging-pass-findings.md](0019-MADR-remediate-debugging-pass-findings.md), decision 7, the hooks on
-  extension methods; [0044-MADR-notification-queue-back-pressure.md](0044-MADR-notification-queue-back-pressure.md), D7.
-* Release: a minor. Added: the `Middleware` type, `WithReceivingMiddleware`, `WithSendingMiddleware`, `RequestID`, and the
-  observer's `WithObserver`, `Observation` and `ObservationKind` with its constants.
+  extension methods; [0030-MADR-record-initialize-on-arrival.md](0030-MADR-record-initialize-on-arrival.md), O1;
+  [0044-MADR-notification-queue-back-pressure.md](0044-MADR-notification-queue-back-pressure.md), D3 and D7;
+  [0045-MADR-notification-queue-byte-budget.md](0045-MADR-notification-queue-byte-budget.md), D6.
+* Release: a minor, `v1.31.0`. Added: the `Middleware` type, `WithReceivingMiddleware`, `WithSendingMiddleware`,
+  `RequestIDFromContext`, `ErrSendingMiddleware`, and the observer's `WithObserver`, `Observation`, `ObservationKind` with its
+  six constants and `String`.
 
 ### Sources
 
@@ -296,3 +457,4 @@ Each new test is seen to fail on a planted break in a scratch copy.
 | coder/acp-go-sdk | `b60322e` | `connection.go:91` |
 | OpenTelemetry semantic conventions | `026271d` | `docs/rpc/json-rpc.md:44-56`, `:91-92`; `docs/registry/attributes/rpc.md:123-135` |
 | ACP | `b4c72a8` | `docs/protocol/v1/extensibility.mdx:37-41`; `docs/rfds/meta-propagation.mdx` |
+| This repository | `523f319` (Go code as `d65819a`, `v1.30.0`) | the files and lines under F1 to F4 and F10 to F13 |
