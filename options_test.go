@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -58,6 +59,15 @@ func TestOptionSemantics(t *testing.T) {
 	}
 	if got := tr.take(); got != "a b c c b a" {
 		t.Errorf("repeated WithReceivingMiddleware ran %q, want all three, the first outermost", got)
+	}
+	// So does WithSendingMiddleware. Called without a call in its context,
+	// the innermost step refuses (D10).
+	c = build(WithSendingMiddleware(named(&tr, "a"), named(&tr, "b")), WithSendingMiddleware(named(&tr, "c")))
+	if _, err := c.sending(context.Background(), "m", nil); !errors.Is(err, ErrSendingMiddleware) {
+		t.Errorf("the sending chain without a call = %v, want ErrSendingMiddleware", err)
+	}
+	if got := tr.take(); got != "a b c c b a" {
+		t.Errorf("repeated WithSendingMiddleware ran %q, want all three, the first outermost", got)
 	}
 
 	start := StartToolCall("c", "t", WithStartStatus(ToolCallStatusPending), WithStartStatus(ToolCallStatusCompleted))

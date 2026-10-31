@@ -565,3 +565,93 @@ was corrected and all eleven rerun.
   | `BenchmarkSessionUpdateNotify` | 15608 → 15048 (−3.6%) | +0 | 65 → 65 |
 
   The rounds alone ranged from −8.3% to +6.9%, in both directions, which is the machine's noise.
+
+The owner committed phase 2 as `df22f9e`.
+
+### Phase 3, 2026-10-31
+
+The owner said "committed, proceed".
+
+**What changed.**
+
+* **`middleware.go`, 252 lines added:**
+  * `WithSendingMiddleware`, appending, with D4 and D10 in its godoc;
+  * `outboundCall` and `outboundKey`; `misuse`, `sameBytes` and `structuredParams`;
+  * `sendInnermost`, which checks D10's four rules in the order of step 3.3, then writes or exchanges, and records `sent`,
+    `answered`, the envelope, the raw result, the barrier's error and the error it returned;
+  * `startCall` (`exchange`'s checks and `prepareRequest`), `runChain`, `resultBytes`;
+  * `sendThroughChain` and `commitThroughChain`;
+  * `RequestIDFromContext`'s sending half, ahead of the received mark.
+* **`connection.go`:**
+  * `connectionConfig.sending`, and `Connection.sending`, the chain over `sendInnermost`, built once in `buildConnection`, or
+    `nil`;
+  * `sendRequestSent` and `sendRequestCommit` call the chain's path when `c.sending` is set, and keep their code otherwise;
+  * `decodeResult` and `committedResult` are their decode and their final `switch`, moved out unchanged, so both paths share
+    them;
+  * `SendRequestNoResult` and `SendNotification` gained their chain branches; the cancel sender keeps `notifyDirect`;
+  * godoc of `ConnectionOption`, `IsNotification` (deferred from phase 2), `SendRequest`, `SendRequestNoResult` and
+    `SendNotification`.
+* **`errors.go`:** `ErrSendingMiddleware`.
+* **`options_test.go`:** two `WithSendingMiddleware` calls keep all three middleware, the first outermost; the chain called
+  without a call in its context refuses with `ErrSendingMiddleware`.
+* **`connection_sending_middleware_test.go`, new:** the ten tests of step 3.8. `TestSendingMiddlewareAllPaths` covers eleven
+  paths, among them `Initialize`, `Prompt`, and each side's `CallExtension` and `NotifyExtension`.
+
+**Refinements, not deviations.**
+
+* *What the innermost step returns for `initialize`.* For a committed answer whose commit failed, it returns that error to the
+  middleware as a `*RequestError`, so a tracing middleware sees the failure. The caller still gets the commit's own error, a
+  `*ProtocolVersionError` for example: when the chain returns the step's own error, `commitThroughChain` applies
+  `committedResult` to the recorded answer.
+* *Two test corrections before the first green run:*
+  * the test package already had a type `sent`; the new one is `sentLine`;
+  * `TestSendingMiddlewareKeepsBarrier` first sent three notifications after the handler's request, with a queue of one. Under
+    `OverflowBlock` the reader reads on only to twice the queue, so the third closed the connection: "failed to queue
+    notification; closing connection … capacity=1 queued=2". Two notifications need the guard and stay within the read-on
+    limit.
+* *`thelper`* asked for `t.Helper()` in the two builder closures of `sendPaths`.
+
+**Step 3.9, seen to fail.** `tools/plants.py`, seventeen plants. The first run refused three as written, since removing a check
+left a variable unused (`declared and not used: ok`, `raw`, `raw`). They were rewritten to keep the variable used. The second run
+had sixteen as required. The seventeenth failed its test with a pause and the bubble's deadlock, not the "did not happen" the
+spec guessed; with its `want` corrected, it ran alone, "1/1 as required".
+
+| Break | Test | Failure seen |
+| :--- | :--- | :--- |
+| `sendRequestSent` off the chain | `TestSendingMiddlewareAllPaths/SendRequest` | "the middleware did not happen" |
+| `sendRequestCommit` off the chain | `TestSendingMiddlewareAllPaths/Initialize` | "the middleware did not happen" |
+| `SendRequestNoResult` off the chain | `TestSendingMiddlewareAllPaths/SendRequestNoResult` | "the middleware did not happen" |
+| `SendNotification` off the chain | `TestSendingMiddlewareAllPaths/SendNotification` | "the middleware did not happen" |
+| the cancel sender through `SendNotification` | `TestSendingMiddlewareSkipsCancelRequest` | `the middleware saw "$/cancel_request", the connection's own cancel` |
+| no check of a second `next` | `TestSendingMiddlewareMisuse/next_called_twice` | "the call did not happen": the second request was written and waits |
+| no check of the context | `TestSendingMiddlewareMisuse/a_context_that_does_not_carry_the_call` | a nil pointer panic in the innermost step |
+| no check of the method | `TestSendingMiddlewareMisuse/another_method` | "the call did not happen" |
+| no check of replaced params | `TestSendingMiddlewareMisuse/params_that_are_not_an_object_or_an_array` | "the call did not happen" |
+| no check of a replaced `initialize` result | `TestSendingMiddlewareMisuse/a_replaced_result_of_initialize` | "Initialize = <nil>, want ErrSendingMiddleware" |
+| a replaced result not decoded | `TestSendingMiddlewareResult` | "want n 2", and the replaced `session/list` result not refused |
+| a replaced result not checked | `TestSendingMiddlewareResult/a_replaced_result_is_checked` | "ListSessions = <nil>, want the replaced result refused with a *ValidationError" |
+| no `settled()` when no answer was judged | `TestSendingMiddlewareShortCircuitInitialize` | "the held request's answer did not happen" |
+| the exchange off the middleware's context | `TestSendingMiddlewareKeepsBarrier` | "notification queue full; reading paused", then "deadlock: all goroutines in bubble are blocked" |
+| the received mark read before the call | `TestRequestIDFromContextSending` | `"_x/note \"recv\" true", want "_x/note  false"` |
+| `sent` taken as true | `TestSendingMiddlewareSentFlag/refused_unwritten` | `the peer read ["session/cancel"] after Prompt returned; session/cancel sent true, want false` |
+| a typed nil returned as an `error` | `TestSendingMiddlewareAllPaths/SendRequestNoResult` | "the call = <nil>, want nil" |
+
+**Step 3.10, the checks.**
+
+* `go test -race -count=3 -run 'SendingMiddleware|RequestIDFromContext|ReceivingMiddleware|OptionSemantics' .`: `ok`. At the
+  floor, with `GOEXPERIMENT=goroutineleakprofile`, once: `ok`.
+* `tools/remote.py pkg` on the Linux and Windows hosts, `-test.run 'SendingMiddleware|RequestIDFromContext|OptionSemantics'
+  -test.count=3`: "PASS", exit 0, on each.
+* `make pre-add-check`: "go-precheck: 281 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)"; with the new
+  file named, "1 file(s) clean".
+* `make api`: "compatible: ErrSendingMiddleware: added" and "compatible: WithSendingMiddleware: added", beside phase 2's three;
+  "against v1.30.0: 0 incompatible, 5 compatible".
+* **The benchmark,** nothing registered, three alternating rounds of `-count=5`. Allocations are equal in every round (99 and
+  65). Pooled:
+
+  | Benchmark | ns/op | B/op | allocs/op |
+  | :--- | :--- | :--- | :--- |
+  | `BenchmarkPromptRoundTrip` | 33689 → 34152 (+1.4%) | +10 | 99 → 99 |
+  | `BenchmarkSessionUpdateNotify` | 19395 → 18488 (−4.7%) | +0 | 65 → 65 |
+
+  The machine was busier than in phase 2, with both sides slower, and the rounds ranged from −11.6% to +4.5%.

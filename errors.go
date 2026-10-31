@@ -203,6 +203,17 @@ var ErrShutdown = errors.New("acp: connection shut down")
 // 2026-10-30, X2).
 var ErrHandlersRunning = errors.New("acp: the connection's handlers still run")
 
+// ErrSendingMiddleware is why a call through WithSendingMiddleware's chain
+// failed without writing anything, because a middleware broke a rule: it
+// called next a second time, or with a context that does not carry the call,
+// such as context.Background(), or with another method; it passed next
+// params that are not a JSON object or array; or it replaced Initialize's
+// result, which the connection had already recorded. The call returns a
+// *RequestError, -32603, whose data names the rule and which wraps this
+// error, read with errors.Is
+// (0046-MADR-sending-and-receiving-middleware.md, D10).
+var ErrSendingMiddleware = errors.New("acp: sending middleware broke a rule")
+
 // ErrNotificationQueueOverflow is why a connection closed itself: under
 // OverflowCloseConnection, an inbound notification found its queue full, at
 // the count or the byte budget; under OverflowBlock, the default, one arrived

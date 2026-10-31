@@ -120,6 +120,9 @@ func sentAsNotification(ctx context.Context) bool {
 // kinds, such as an ExtensionMethodHandler, can tell a notification from a
 // request. It is false for a request's context and for one the connection
 // did not make (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 4).
+// It describes the received message ctx derives from, in a sending
+// middleware too; there, RequestIDFromContext tells a request being sent from
+// a notification (0046-MADR-sending-and-receiving-middleware.md, D5).
 func IsNotification(ctx context.Context) bool { return sentAsNotification(ctx) }
 
 func sentAsRequest(ctx context.Context) bool {
@@ -497,12 +500,18 @@ type Connection struct {
 	// WithElicitationCheck (0040-MADR-check-elicitation-forms-answers-and-urls.md,
 	// item 6). It names no type of the protocol.
 	resultChecks map[string]func(params, result any) error
+	// sending is the sending chain over sendInnermost, built once, or nil
+	// when no WithSendingMiddleware was given: each sending path then runs as
+	// it would without the option (0046-MADR-sending-and-receiving-middleware.md,
+	// D4 and D11).
+	sending MethodHandler
 }
 
 // ConnectionOption configures optional parameters for a Connection.
 //
 // Options apply in the order given, so the last of a repeated option wins,
-// except WithReceivingMiddleware, whose repeated options append
+// except WithReceivingMiddleware and WithSendingMiddleware, whose repeated
+// options append
 // (0046-MADR-sending-and-receiving-middleware.md, D2). A
 // value n <= 0 keeps the value already set for WithMaxQueuedNotifications,
 // WithMaxQueuedBytes and WithMaxMessageSize, the default unless an earlier
@@ -523,9 +532,10 @@ type connectionConfig struct {
 	resultChecks           map[string]func(params, result any) error
 	maxConcurrentRequests  int
 	promptOverlap          PromptOverlapPolicy
-	// receiving is WithReceivingMiddleware's middleware, in the order
-	// registered (0046-MADR-sending-and-receiving-middleware.md, D2).
-	receiving []Middleware
+	// receiving and sending are WithReceivingMiddleware's and
+	// WithSendingMiddleware's middleware, in the order registered
+	// (0046-MADR-sending-and-receiving-middleware.md, D2).
+	receiving, sending []Middleware
 }
 
 // WithMaxQueuedNotifications sets how many notifications may wait in the
@@ -899,6 +909,9 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		c.logger.Store(cfg.logger)
 	}
 	c.notifyCond = sync.NewCond(&c.notifyMu)
+	if len(cfg.sending) > 0 {
+		c.sending = chainMiddleware("WithSendingMiddleware", cfg.sending, c.sendInnermost)
+	}
 	return c
 }
 
@@ -2261,7 +2274,8 @@ func (c *Connection) sendMessageSent(ctx context.Context, msg anyMessage) (sent 
 // For methods that do not return a result, use SendRequestNoResult instead.
 // Unlike the typed methods of the side connections, it does not check what
 // initialize negotiated: it sends any method, before initialize too
-// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, G1). It passes
+// WithSendingMiddleware's chain, and decodes what the chain returns.
 func SendRequest[T any](c *Connection, ctx context.Context, method string, params any) (T, error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
 	return sendRequest[T](c, ctx, method, params, nil)
 }
@@ -2295,6 +2309,9 @@ func sendRequest[T any](c *Connection, ctx context.Context, method string, param
 // handed to the writer goroutine, so that it may have reached the peer
 // (0019-PLAN-issue-fixes.md, B22).
 func sendRequestSent[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc) (result T, sent bool, err error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
+	if c.sending != nil {
+		return sendThroughChain[T](c, ctx, method, params, gate)
+	}
 	resp, sent, err := c.exchange(ctx, method, params, &pendingResponse{ch: make(chan responseEnvelope, 1)})
 	if err != nil {
 		return result, sent, err
@@ -2307,20 +2324,32 @@ func sendRequestSent[T any](c *Connection, ctx context.Context, method string, p
 		return result, true, resp.msg.Error
 	}
 
-	if len(resp.msg.Result) > 0 {
-		if err := json.Unmarshal(resp.msg.Result, &result); err != nil {
-			return result, true, NewInternalError(map[string]any{jsonErrorField: err.Error()})
-		}
-		if err := c.checkInbound(ctx, method, &result, gate); err != nil {
-			var zero T
-			return zero, true, fmt.Errorf("%s response: %w", method, err)
-		}
-		if err := c.checkPair(method, params, &result); err != nil {
-			var zero T
-			return zero, true, fmt.Errorf("%s response: %w", method, err)
-		}
+	result, err = decodeResult[T](c, ctx, method, params, gate, resp.msg.Result)
+	return result, true, err
+}
+
+// decodeResult decodes a response's result, raw, into T and checks it as a
+// received message, then against params; no result is the zero T. A result
+// that does not decode returns what was decoded, with a *RequestError; one the
+// checks refuse returns the zero T. The sending chain's path decodes what the
+// chain returns with it, after the chain
+// (0046-MADR-sending-and-receiving-middleware.md, D4).
+func decodeResult[T any](c *Connection, ctx context.Context, method string, params any, gate gateFunc, raw json.RawMessage) (result T, err error) { //nolint:revive // context-as-argument: the connection value stays the first parameter.
+	if len(raw) == 0 {
+		return result, nil
 	}
-	return result, true, nil
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return result, NewInternalError(map[string]any{jsonErrorField: err.Error()})
+	}
+	if err := c.checkInbound(ctx, method, &result, gate); err != nil {
+		var zero T
+		return zero, fmt.Errorf("%s response: %w", method, err)
+	}
+	if err := c.checkPair(method, params, &result); err != nil {
+		var zero T
+		return zero, fmt.Errorf("%s response: %w", method, err)
+	}
+	return result, nil
 }
 
 // sendRequestCommit is sendRequest for a request whose result the reader
@@ -2368,6 +2397,9 @@ func sendRequestCommit[T any](c *Connection, ctx context.Context, method string,
 		err := commit(&result)
 		return result, err
 	}}
+	if c.sending != nil {
+		return commitThroughChain[T](c, ctx, method, params, pr, settled)
+	}
 	var zero T
 	resp, _, err := c.exchange(ctx, method, params, pr)
 	if err != nil {
@@ -2375,7 +2407,14 @@ func sendRequestCommit[T any](c *Connection, ctx context.Context, method string,
 		settled()
 		return zero, err
 	}
-	werr := c.waitNotificationsUpTo(ctx, resp.notificationWatermark)
+	return committedResult[T](resp, c.waitNotificationsUpTo(ctx, resp.notificationWatermark))
+}
+
+// committedResult is what sendRequestCommit returns for resp, an answer the
+// reader judged and committed, and werr, the wait for the notifications
+// before it: a committed result stands even when the wait ends.
+func committedResult[T any](resp responseEnvelope, werr error) (T, error) {
+	var zero T
 	// committed is nil only for an error response, which runs no commit.
 	var result T
 	if v, ok := resp.committed.(T); ok {
@@ -2762,8 +2801,20 @@ func (c *Connection) cleanupPending(idKey string) {
 }
 
 // SendRequestNoResult sends a JSON-RPC request that returns no result payload.
-// Like SendRequest, it does not check what initialize negotiated.
+// Like SendRequest, it does not check what initialize negotiated. It passes
+// WithSendingMiddleware's chain, and discards any result the chain returns.
 func (c *Connection) SendRequestNoResult(ctx context.Context, method string, params any) error {
+	if c.sending != nil {
+		call, err := c.startCall(ctx, method, params, &pendingResponse{ch: make(chan responseEnvelope, 1)})
+		if err != nil {
+			return err
+		}
+		// A nil *RequestError is no error: it is not returned as one.
+		if _, rerr := c.runChain(ctx, call); rerr != nil {
+			return rerr
+		}
+		return nil
+	}
 	// exchange takes the steps sendRequestSent takes, the decode aside
 	// (0046-PLAN-sending-and-receiving-middleware.md, step 1.2).
 	resp, _, err := c.exchange(ctx, method, params, &pendingResponse{ch: make(chan responseEnvelope, 1)})
@@ -2781,9 +2832,25 @@ func (c *Connection) SendRequestNoResult(ctx context.Context, method string, par
 }
 
 // SendNotification sends a JSON-RPC notification. It does not wait for a response.
-// Like SendRequest, it does not check what initialize negotiated.
+// Like SendRequest, it does not check what initialize negotiated. It passes
+// WithSendingMiddleware's chain.
 func (c *Connection) SendNotification(ctx context.Context, method string, params any) error {
-	return c.notifyDirect(ctx, method, params)
+	if c.sending == nil {
+		return c.notifyDirect(ctx, method, params)
+	}
+	select {
+	case <-ctx.Done():
+		return NewInternalError(map[string]any{jsonErrorField: ctx.Err().Error()}).withCause(context.Cause(ctx))
+	default:
+	}
+	msg, err := c.prepareNotification(method, params)
+	if err != nil {
+		return err
+	}
+	if _, rerr := c.runChain(ctx, &outboundCall{method: method, params: msg.Params}); rerr != nil {
+		return rerr
+	}
+	return nil
 }
 
 // notifyDirect is SendNotification's direct path, which the connection's own
