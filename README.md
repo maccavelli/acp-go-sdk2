@@ -320,6 +320,28 @@ follow the schema:
 - A decode error names the union and, for a variant, the discriminator value or
   the variant, then the cause, such as `ContentBlock: type "text": ...`.
 
+#### From `encoding/json/v2`
+
+Code written with `encoding/json/v2` needs no `encoding/json` import to use the
+SDK. Under Go 1.27's default build, `json.RawMessage` is an alias of
+`jsontext.Value`, so wherever the SDK's API says `json.RawMessage`, you can
+write `jsontext.Value` with no conversion. That covers:
+
+- `MethodHandler`'s and `HandleExtensionMethod`'s `params`;
+- `CallExtension`'s result;
+- the raw tool-call options;
+- the generated `Extra` and `Unknown` fields.
+
+That does not hold under Go 1.26, this module's floor, or with
+`GOEXPERIMENT=nojsonv2`. There `json.RawMessage` is a `[]byte` type of its
+own, and `jsontext` does not exist. The SDK itself stays on `encoding/json`.
+
+Let the SDK encode its own types when it sends them. Encoding them yourself with
+v2's defaults can give different output: for example, `<`, `>` and `&` are not
+escaped, and an `omitempty` `bool` is kept as `false`. The table in
+[0007-MADR-self-contained-acp-sdk.md](docs/decisions/0007-MADR-self-contained-acp-sdk.md)
+lists the differences.
+
 #### Patch fields
 
 Twelve properties of ACP's update messages have patch semantics: left out, the

@@ -320,6 +320,10 @@ func addressable(v any) any {
 // A handler that panics ends the process, as an unrecovered panic in any
 // goroutine does. The connection does not recover it
 // (0024-PLAN-behaviour-fixes.md, A1).
+//
+// Under Go 1.27's default build json.RawMessage is jsontext.Value, so a
+// handler written with encoding/json/v2 may declare params as jsontext.Value
+// (0007-MADR-self-contained-acp-sdk.md, the amendment of 2026-10-31).
 type MethodHandler func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError)
 
 // Connection is a simple JSON-RPC 2.0 connection over line-delimited JSON.

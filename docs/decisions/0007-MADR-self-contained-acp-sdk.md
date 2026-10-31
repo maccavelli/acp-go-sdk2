@@ -80,6 +80,7 @@ What this means:
 * Neither module imports `encoding/json/v2` or `encoding/json/jsontext`. Hand-written code calls `encoding/json`.
 * The generator emits `MarshalJSON` and `UnmarshalJSON` that call `encoding/json`. It does not emit `MarshalJSONTo` or `UnmarshalJSONFrom`.
 * `json.RawMessage` stays in the exported API. On Go 1.27.2 it is an alias of `jsontext.Value`, so the type is the same either way.
+  *Annotated 2026-10-31: that holds under Go 1.27's default build only. Since [0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md](0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md) the floor is Go 1.26, where it is not; see the amendment of 2026-10-31 below.*
 * The wire behavior is the v1 behavior, implemented by Go 1.27 on top of v2 internals. Go's compatibility promise covers the v1 API. Error strings may change between toolchains.
 
 The measurements behind the decision, all on Go 1.27.2:
@@ -118,3 +119,45 @@ Two remnants of the previous project were missing from the Context. Both now bel
 It does not yet hold for the generated output, because 0006 keeps that output byte-identical. 0009 proposes the output changes.
 
 [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md) carries the matching amendment, including a branch and commits in place of "no branch, no commit".
+
+## Amendment 2026-10-31, consumers on encoding/json/v2
+
+A consumer standardizing on `encoding/json/v2`, gobble-cli in its issue #7, took the SDK's `json.RawMessage` to force an
+`encoding/json` import on it. gobble-cli's `docs/reports/0038-REPORT-json-v2-standardization-and-sdk-surface.md` evaluated the
+question. The owner then asked for the answer to be documented here, with no MADR/PLAN pair for this docs-only change. The
+2026-10-09 decision stands: the SDK stays on `encoding/json`, and its API keeps `json.RawMessage`.
+
+What `json.RawMessage` is depends on the toolchain and the build, measured with `go list encoding/json`:
+
+| Toolchain | `GOEXPERIMENT` | `json.RawMessage` | `encoding/json/jsontext` |
+| :--- | :--- | :--- | :--- |
+| go1.27.3 | unset, the default | `= jsontext.Value`, an alias | available |
+| go1.27.3 | `nojsonv2` | `[]byte`, a type of its own | not available |
+| go1.26.10, this module's floor | unset | `[]byte`, a type of its own | not available |
+
+* **The 2026-10-09 bullet** saying it "is an alias of `jsontext.Value`" was true of Go 1.27.2, then the floor. Since
+  [0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md](0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md) the floor
+  is Go 1.26, where it is not. That bullet is annotated.
+* **A consumer on Go 1.27's default build needs no `encoding/json` import.** A probe module at go1.27.3 required `v1.29.0` and
+  imported only `encoding/json/jsontext`. It:
+  * implemented `ExtensionMethodHandler` with `params jsontext.Value`;
+  * assigned a `func(context.Context, string, jsontext.Value) (any, *RequestError)` to a `MethodHandler`;
+  * took `CallExtension`'s result as a `jsontext.Value`.
+
+  It built and ran. With `GOEXPERIMENT=nojsonv2` it failed, because `jsontext` does not exist there.
+* **The API keeps `json.RawMessage`.**
+  * Spelling it `jsontext.Value` would change nothing at Go 1.27, where the types are identical.
+  * It would fail to build at the Go 1.26 floor.
+  * It would break the `GOEXPERIMENT=nojsonv2` run of
+    [0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md) D7.
+* **When this can be revisited.** Go 1.27's release notes say of `GOEXPERIMENT=nojsonv2`: "This opt-out is expected to be removed
+  in a future release." Once that happens, and the floor is Go 1.27 or later, the two spellings are the same type in every
+  build, and the question goes away without a change to the API.
+
+Documented:
+
+* `README.md`, "Wire encoding", gains "From `encoding/json/v2`". It says a v2 consumer may write `jsontext.Value` wherever the
+  API says `json.RawMessage`, under which builds that holds, and that the SDK's own types are best left to the SDK to encode,
+  pointing to this record's table of differences.
+* The doc comments of `MethodHandler` (`connection.go`) and `ExtensionMethodHandler` (`extensions.go`) say the same in one
+  sentence each.

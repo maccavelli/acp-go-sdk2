@@ -26,6 +26,11 @@ import (
 // replace, and the method gets what they leave
 // (0019-MADR-remediate-debugging-pass-findings.md, decision 7).
 //
+// Under Go 1.27's default build json.RawMessage is jsontext.Value, so an
+// implementation written with encoding/json/v2 may declare params as
+// jsontext.Value (0007-MADR-self-contained-acp-sdk.md, the amendment of
+// 2026-10-31).
+//
 // See: https://agentclientprotocol.com/protocol/extensibility#extension-methods
 type ExtensionMethodHandler interface {
 	HandleExtensionMethod(ctx context.Context, method string, params json.RawMessage) (any, error)
