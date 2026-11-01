@@ -101,12 +101,17 @@ docs/reports/NNNN-GATES-short-slug.md
 
 ## Pre-add checks
 
-- Before staging Go files, run `make pre-add-check`. It runs
-  `scripts/go-precheck.sh`: `gofmt`; `golangci-lint` with `.golangci.yml` for
-  the host and for `GOOS=windows`, at the root and in `cmd/generate`; `go vet`;
-  `go test -race`; `go mod tidy -diff`; and `govulncheck` at the version pinned
-  in `.github/workflows/ci.yml`. `GO_PRECHECK_SKIP_VULN=1` skips the
-  vulnerability check offline. A file that fails is not committed.
+- Before staging Go files, or any file a Go build or test reads, run
+  `make pre-add-check FILES="..."` with the changed files. It runs
+  `scripts/go-precheck.sh`: `gofmt` on the named `.go` files; then, for both
+  modules whole, `golangci-lint` with `.golangci.yml` for the host and for
+  `GOOS=windows`, `go vet`, `go test -race -shuffle=on`, uncached, as CI runs
+  it, `go mod tidy -diff`, and `govulncheck` at the version pinned in
+  `.github/workflows/ci.yml`. When every named file is docs-safe, the paths
+  CI ignores, no Go check runs. With no file named, `gofmt` covers every
+  tracked and untracked `.go` file
+  (0047-MADR-pre-add-check-full-coverage.md). `GO_PRECHECK_SKIP_VULN=1` skips
+  the vulnerability check offline. A file that fails is not committed.
 - Before every commit, run `make check-records`, `make markdownlint` and
   `make disclosure-check`.
 - The verification tools a PLAN's steps run, the gate set, the test hosts,

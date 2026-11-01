@@ -6,14 +6,22 @@
 # docs/decisions/0003-PLAN-install-fleet-agent-workspace.md
 #
 # Usage:
-#   scripts/go-precheck.sh [file.go ...]
+#   scripts/go-precheck.sh [file ...]
 #
-# With no arguments it checks every tracked Go file. Non-Go arguments are
-# ignored. Lint, tidy, and govulncheck always cover both modules. Vet and
-# test cover the packages of the named files, or both modules when no files
-# are named.
+# Lint, vet, the tests, tidy and govulncheck always cover both modules whole:
+# a change reaches tests in other packages, in cmd/generate, through
+# subprocess builds and through files that are not Go, and go test's cache
+# does not see the last three, so the tests run uncached, with -race and
+# -shuffle=on as CI's race step runs them. Named files decide two things:
+# gofmt checks the named .go files that exist, and when every named file is
+# docs-safe (CI's paths-ignore, by scripts/check_ci_filters.py --docs-safe)
+# no Go check runs. With no file named, gofmt checks every tracked and every
+# untracked, not ignored .go file. ACPTEST_UPDATE is unset, so no golden file
+# is rewritten
+# (docs/decisions/0047-MADR-pre-add-check-full-coverage.md).
 #
-# Exit codes: 0 all clear · 1 a check failed · 2 a required tool is missing.
+# Exit codes: 0 all clear · 1 a check failed · 2 a required tool is missing,
+# or the named files could not be classified.
 #
 # Env:
 #   GOLANGCI_LINT=<path>      golangci-lint binary (default: $(go env GOPATH)/bin)
@@ -22,6 +30,43 @@ set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT" || exit 1
+
+# A golden test given ACPTEST_UPDATE=1 rewrites its golden file instead of
+# comparing it (acptest/golden.go).
+unset ACPTEST_UPDATE
+
+need() {
+  command -v "$1" >/dev/null 2>&1 && return 0
+  echo "go-precheck: $1 not found in PATH." >&2
+  return 1
+}
+
+gofmt_files=()
+if [ "$#" -gt 0 ]; then
+  need python3 || exit 2
+  docs_out="$(python3 -B scripts/check_ci_filters.py --docs-safe "$@" 2>&1)"
+  case "$?" in
+  0)
+    echo "go-precheck: only docs-safe files named; no Go check runs."
+    exit 0
+    ;;
+  1) ;;
+  *)
+    echo "go-precheck: could not tell whether the named files are docs-safe:" >&2
+    printf '%s\n' "$docs_out" | sed 's/^/  /' >&2
+    exit 2
+    ;;
+  esac
+  for f in "$@"; do
+    case "$f" in
+    *.go) [ -f "$f" ] && gofmt_files+=("$f") ;;
+    esac
+  done
+else
+  while IFS= read -r f; do
+    [ -n "$f" ] && [ -f "$f" ] && gofmt_files+=("$f")
+  done < <(git ls-files --cached --others --exclude-standard -- '*.go')
+fi
 
 # On Go 1.26 the root tests' leak guard needs the goroutineleak profile, an
 # experiment there that Go 1.27 rejects, so the tests set it on 1.26 only.
@@ -37,37 +82,6 @@ go1.26*)
   ;;
 esac
 
-files=()
-deleted_dirs=()
-if [ "$#" -gt 0 ]; then
-  for f in "$@"; do
-    case "$f" in
-    *.go)
-      if [ -f "$f" ]; then
-        files+=("$f")
-      else
-        deleted_dirs+=("$(dirname "$f")")
-      fi
-      ;;
-    esac
-  done
-else
-  while IFS= read -r f; do
-    [ -n "$f" ] && files+=("$f")
-  done < <(git ls-files '*.go')
-fi
-
-if [ "${#files[@]}" -eq 0 ] && [ "${#deleted_dirs[@]}" -eq 0 ]; then
-  echo "go-precheck: no Go files to check."
-  exit 0
-fi
-
-need() {
-  command -v "$1" >/dev/null 2>&1 && return 0
-  echo "go-precheck: $1 not found in PATH." >&2
-  return 1
-}
-
 failed=0
 fail() {
   [ "$failed" -lt "$1" ] && failed="$1"
@@ -75,8 +89,8 @@ fail() {
 
 need gofmt || exit 2
 unformatted=""
-if [ "${#files[@]}" -gt 0 ]; then
-  unformatted="$(gofmt -l "${files[@]}")"
+if [ "${#gofmt_files[@]}" -gt 0 ]; then
+  unformatted="$(gofmt -l "${gofmt_files[@]}")"
 fi
 if [ -n "$unformatted" ]; then
   echo "gofmt: these files are not formatted (run 'gofmt -w <file>'):" >&2
@@ -106,99 +120,31 @@ else
   fail 2
 fi
 
-module_of() {
-  case "$1" in
-  cmd/generate | cmd/generate/*) printf '%s\n' cmd/generate ;;
-  *) printf '%s\n' . ;;
-  esac
-}
-
-pkg_of() {
-  local f="$1" mod dir rel
-  mod="$(module_of "$f")"
-  dir="$(dirname "$f")"
-  if [ "$mod" = . ]; then
-    if [ "$dir" = . ]; then
-      printf '%s\n' .
-    else
-      printf '%s\n' "./$dir"
-    fi
-    return
-  fi
-  rel="${dir#cmd/generate}"
-  rel="${rel#/}"
-  if [ -z "$rel" ]; then
-    printf '%s\n' .
-  else
-    printf '%s\n' "./$rel"
-  fi
-}
-
+# check_module vets and tests the module in dir whole. The tests run with
+# -shuffle=on, which go test does not cache, so no result recorded before a
+# change answers for it; a failure prints the shuffle seed and keeps the whole
+# output in a temporary file.
 check_module() {
-  local dir="$1"
-  shift
-  local vet_out test_out
-  if ! vet_out="$(cd "$dir" && go vet "$@" 2>&1)"; then
+  local dir="$1" vet_out test_out log
+  if ! vet_out="$(cd "$dir" && go vet ./... 2>&1)"; then
     echo "go vet ($dir):" >&2
     printf '%s\n' "$vet_out" | sed 's/^/  /' >&2
     fail 1
   fi
-  if ! test_out="$(cd "$dir" && GOEXPERIMENT="$test_experiment" go test -race "$@" 2>&1)"; then
-    echo "go test -race ($dir):" >&2
+  if ! test_out="$(cd "$dir" && GOEXPERIMENT="$test_experiment" go test -race -shuffle=on ./... 2>&1)"; then
+    echo "go test -race -shuffle=on ($dir):" >&2
     printf '%s\n' "$test_out" | tail -40 | sed 's/^/  /' >&2
+    printf '%s\n' "$test_out" | grep -E '^-test\.shuffle ' | sed 's/^/  seed: /' >&2
+    if log="$(mktemp "${TMPDIR:-/tmp}/go-precheck-test.XXXXXX")"; then
+      printf '%s\n' "$test_out" >"$log"
+      echo "  the whole output: $log" >&2
+    fi
     fail 1
   fi
 }
 
-if [ "$#" -eq 0 ]; then
-  check_module . ./...
-  check_module cmd/generate ./...
-else
-  root_pkgs=""
-  gen_pkgs=""
-  root_whole=0
-  gen_whole=0
-  consider() {
-    local d="$1" mod
-    [ -n "$d" ] || return 0
-    mod="$(module_of "$d")"
-    if [ "$mod" = cmd/generate ]; then
-      if compgen -G "$d/*.go" >/dev/null; then
-        gen_pkgs="${gen_pkgs} $(pkg_of "$d/x.go")"
-      else
-        gen_whole=1
-      fi
-    else
-      if compgen -G "$d/*.go" >/dev/null; then
-        root_pkgs="${root_pkgs} $(pkg_of "$d/x.go")"
-      else
-        root_whole=1
-      fi
-    fi
-  }
-  if [ "${#files[@]}" -gt 0 ]; then
-    for f in "${files[@]}"; do
-      consider "$(dirname "$f")"
-    done
-  fi
-  if [ "${#deleted_dirs[@]}" -gt 0 ]; then
-    for d in "${deleted_dirs[@]}"; do
-      consider "$d"
-    done
-  fi
-  if [ "$root_whole" -eq 1 ]; then
-    check_module . ./...
-  elif [ -n "$root_pkgs" ]; then
-    # shellcheck disable=SC2086
-    check_module . $(printf '%s\n' $root_pkgs | sort -u)
-  fi
-  if [ "$gen_whole" -eq 1 ]; then
-    check_module cmd/generate ./...
-  elif [ -n "$gen_pkgs" ]; then
-    # shellcheck disable=SC2086
-    check_module cmd/generate $(printf '%s\n' $gen_pkgs | sort -u)
-  fi
-fi
+check_module .
+check_module cmd/generate
 
 tidy_module() {
   local dir="$1" tidy_out
@@ -244,10 +190,11 @@ else
 fi
 
 if [ "$failed" -eq 0 ]; then
+  ran="both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy"
   if [ -n "$vuln_skipped" ]; then
-    echo "go-precheck: ${#files[@]} file(s) clean (gofmt, golangci-lint, go vet, go test); govulncheck skipped ($vuln_skipped)."
+    echo "go-precheck: ${#gofmt_files[@]} file(s) gofmt-clean; ${ran}; govulncheck skipped ($vuln_skipped)."
   else
-    echo "go-precheck: ${#files[@]} file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+    echo "go-precheck: ${#gofmt_files[@]} file(s) gofmt-clean; ${ran}, govulncheck."
   fi
 fi
 exit "$failed"

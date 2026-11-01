@@ -406,6 +406,11 @@ Two resolutions were put to the owner: exclude `refusals.go` in that test, or mo
 reverse question 3. The owner chose "option 1". The test's exclusions now name `refusals.go` beside `helpers.go`, and its comment says
 so. The scope and the acceptance item on `cmd/generate` are annotated, and the MADR has "Amendment, 2026-10-25".
 
+*2026-11-01:* the gap that let this pass, met again in
+[0046-PLAN-sending-and-receiving-middleware.md](0046-PLAN-sending-and-receiving-middleware.md)'s deviation 3, is closed by
+[0047-MADR-pre-add-check-full-coverage.md](0047-MADR-pre-add-check-full-coverage.md): the check now tests both modules whole and
+uncached.
+
 **Tests,** `go test -count=1 -race -v`, exit 0: the three `ClientRefusals` tests, `ExampleClientRefusals`,
 `TestExportedDeclarationsDocumented` and `TestExportedTypeDocsStartWithName`. In `cmd/generate`, `TestRuntimeFilesCoverHandWritten`
 passes.

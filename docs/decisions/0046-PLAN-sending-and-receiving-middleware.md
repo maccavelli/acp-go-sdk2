@@ -916,6 +916,9 @@ The owner said "committed, proceed".
   `observer.go`, and its comment cites this entry. No decision of the MADR moves.
 * *Left for a follow-up record:* `go-precheck.sh`'s module selection. A root file that `RuntimeFiles` names should also run
   `cmd/generate`'s tests, so that a change like phase 2's fails before it is staged.
+  * *2026-11-01:* that record is [0047-MADR-pre-add-check-full-coverage.md](0047-MADR-pre-add-check-full-coverage.md). Its
+    research found the gap wider, and the `precheck` gate's pass on `f8e7ecb` above explained by go test's cache; the check now
+    tests both modules whole and uncached.
 
 **Step 6.1, the gates,** after the fix, `tools/gates.py --all`, exit 0:
 
@@ -1079,3 +1082,6 @@ Every item of the MADR's Confirmation was shown in phase 6, and CI and the relea
 and its row are `complete`. Left for later records, each on the owner's ask: `scripts/go-precheck.sh`'s module selection
 (deviation 3), and a line in `WithObserver`'s godoc and the README saying the observer runs after a refusal's answer is written
 (step 7.1).
+
+*2026-11-01:* the first is [0047-PLAN-pre-add-check-full-coverage.md](0047-PLAN-pre-add-check-full-coverage.md); the second is
+phase 8 above, proposed, to run after it.

@@ -9,7 +9,7 @@ Usage: gates.py [--all] [--out DIR] [GATE ...]
 Gates:
   regen      the generator run; the generated files unchanged
   precheck   make pre-add-check
-  newfiles   scripts/go-precheck.sh on the untracked .go files
+  newfiles   gofmt -l on the untracked .go files: any output fails
   nojsonv2   go test ./... with GOEXPERIMENT=nojsonv2
   winvet     GOOS=windows go vet ./..., both modules
   records    make check-records
@@ -74,7 +74,10 @@ class Gates:
         if not new:
             print("  newfiles: no new .go files")
             return 0
-        return self.run("newfiles", ["scripts/go-precheck.sh", *new], env={"GO_PRECHECK_SKIP_VULN": "1"})[0]
+        # gofmt alone: the precheck gate lints, vets and tests both modules
+        # from the files on disk, untracked ones too
+        # (0047-MADR-pre-add-check-full-coverage.md, D5).
+        return fails_on_output(*self.run("newfiles", ["gofmt", "-l", *new]))
 
     def nojsonv2(self) -> int:
         return self.run("nojsonv2", ["go", "test", "-count=1", "./..."], env={"GOEXPERIMENT": "nojsonv2"})[0]

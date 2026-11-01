@@ -694,9 +694,15 @@ Checks that guard this:
   `WithElicitationCheck`; and `elicitation_url_test.go` `ParseElicitationURL`.
   `TestRootDoesNotImportNet` fails when package `acp` reaches package `net`
   through any import.
-- `make pre-add-check` runs `scripts/go-precheck.sh`: gofmt, golangci-lint for the
-  host and for `GOOS=windows`, vet, tests with `-race`, `go mod tidy -diff`, and
-  govulncheck, for both modules. golangci-lint covers the generated files too,
+- `make pre-add-check` runs `scripts/go-precheck.sh`: gofmt on the named `.go`
+  files, then golangci-lint for the host and for `GOOS=windows`, vet, tests with
+  `-race -shuffle=on`, `go mod tidy -diff`, and govulncheck, for both modules
+  whole, whatever files are named. The tests run uncached: `cmd/generate`'s read
+  the root's files, and `TestExamplePair` builds the examples in a subprocess,
+  and go test's cache sees neither. Only when every named file is docs-safe, as
+  `scripts/check_ci_filters.py --docs-safe` reads CI's list, does no Go check run
+  ([0047-MADR-pre-add-check-full-coverage.md](decisions/0047-MADR-pre-add-check-full-coverage.md)).
+  `make test` runs both modules uncached too. golangci-lint covers the generated files too,
   except for `goconst`, `gocognit` and `gocyclo`, which `.golangci.yml` excludes
   for `_gen.go` files with the reason. `make check-records` and `make markdownlint`
   check the docs, and `make disclosure-check` the tracked text for a real

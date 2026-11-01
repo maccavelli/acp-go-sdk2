@@ -173,3 +173,53 @@ unit tests run there, "4/4 as required":
 before; "check-ci-filters: 0 problem(s)". `make check-records`, `make markdownlint` and `make disclosure-check`, each exit 0.
 
 No deviation. Phase 2 waits for the owner.
+
+### Phase 2, 2026-11-01
+
+The owner committed phase 1 as `7ded01e` and said "committed, proceed".
+
+**Step 2.1, `scripts/go-precheck.sh`.**
+
+* The header says what runs and why, and names this record. Exit 2 also covers named files that cannot be classified.
+* `unset ACPTEST_UPDATE` follows the `cd` to the root, before any command (D4).
+* With files named: `check_ci_filters.py --docs-safe "$@"` runs first, before any `go` command. Exit 0 prints "go-precheck: only
+  docs-safe files named; no Go check runs." and exits 0; exit 1 goes on; anything else prints its output and exits 2.
+  `gofmt_files` are the named `.go` files that exist. `need` moved above it, and `python3` is needed only when files are named.
+* With no file named: `gofmt_files` are `git ls-files --cached --others --exclude-standard -- '*.go'`, each that exists (D3).
+* The early exit "no Go files to check", `deleted_dirs`, `module_of`, `pkg_of`, `consider` and the selection are removed; the script's diff is
+  124 lines out and 71 in (`git diff --numstat`).
+  `check_module .` and `check_module cmd/generate` always run; `check_module` vets and tests `./...` itself.
+* The tests: `go test -race -shuffle=on ./...` (Q2 a). On a failure, beside the last 40 lines as before, the script prints each
+  `-test.shuffle` seed line and writes the whole output to a `mktemp` file under `$TMPDIR`, naming it, so an intermittent failure
+  (MADR F8) keeps its evidence. The file is outside the tree.
+* The last line: "go-precheck: N file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy,
+  govulncheck.", or its form with govulncheck skipped.
+* `bash -n`: ok. `shellcheck`: exit 0, where the old script had two SC2046 warnings, both in the removed selection.
+
+**Step 2.2, `Makefile`'s `test`:** both modules' `go test -shuffle=on ./...`, with a comment naming D6; the example build is
+unchanged.
+
+**Step 2.3, `tools/gates.py`'s `newfiles`:** `fails_on_output(*self.run("newfiles", ["gofmt", "-l", *new]))`, the helper the
+`fix` and `tidy` gates use, with a comment naming D5. Its docstring line: "gofmt -l on the untracked .go files: any output
+fails".
+
+**Step 2.4, the words:** `AGENTS.md`'s "Pre-add checks" says what the check runs, for which files, and the docs-safe skip;
+`docs/architecture.md`'s paragraph says both modules whole and uncached, why, the docs-safe skip, and `make test`. The 0046 PLAN's
+deviation 3 and its closing paragraph, and the 0036 PLAN's deviation of 2026-10-25, each gain a dated line pointing here.
+
+**Step 2.5, checks.** A scratch script (`step25.py`) ran `make pre-add-check` on the tree three ways, with `git status --porcelain`
+compared before and after each:
+
+| Run | Exit | Time | Tree | Last line |
+| :--- | :--- | :--- | :--- | :--- |
+| no file | 0 | 98.4 s | unchanged | "284 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck." |
+| `FILES=connection.go` | 0 | 90.1 s | unchanged | "1 file(s) gofmt-clean; …" |
+| `FILES="docs/README.md AGENTS.md"` | 0 | 0.5 s | unchanged | "only docs-safe files named; no Go check runs." |
+
+govulncheck ran in both full runs. The check prints `go test`'s output only on a failure, so the absence of `(cached)` lines in
+these outputs shows nothing; phase 3's item 6 is shown another way (see there).
+
+`make check-tools`, exit 0: tools "Ran 58 tests", scripts "Ran 37 tests", both "OK"; "check-ci-filters: 0 problem(s)". `make
+check-records`, `make markdownlint` and `make disclosure-check`, each exit 0.
+
+No deviation. Phase 3 waits for the owner.
