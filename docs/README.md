@@ -139,7 +139,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0046 | PLAN | [Implement 0046: sending and receiving middleware, and an observer](decisions/0046-PLAN-sending-and-receiving-middleware.md); seven phases, revised 2026-10-31; released in `v1.31.0`; phase 8 proposed 2026-11-01: when the observer runs | complete |
 | 0046 | REPORT | [Release notes for v1.31.0, against v1.30.0](reports/0046-REPORT-release-notes-v1-31-0.md) | observed |
 | 0047 | MADR | [Run the pre-add check's vet and tests over both modules, uncached, whenever a named file can reach a test](decisions/0047-MADR-pre-add-check-full-coverage.md); questions answered 2026-11-01: both modules uncached, `-shuffle=on`, docs-safe skip by CI's list; Confirmation 6 amended 2026-11-01: shown by a stale cache, not by output | accepted |
-| 0047 | PLAN | [Implement 0047: the pre-add check tests both modules, uncached](decisions/0047-PLAN-pre-add-check-full-coverage.md); three phases | in-progress |
+| 0047 | PLAN | [Implement 0047: the pre-add check tests both modules, uncached](decisions/0047-PLAN-pre-add-check-full-coverage.md); three phases | complete |
 
 ## I want to…
 

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-11-01
 associated-madr: "0047-MADR-pre-add-check-full-coverage.md"
 ---
@@ -299,3 +299,24 @@ all gates passed
 
 **Left, on the owner's ask:** step 3.11, `make push-guard` after a fetch, the push, and CI on the head; then this PLAN and its row
 `complete`.
+
+**Step 3.11, the push and CI.** The owner committed phase 3 as `bccb108` and pushed `f00a567`, `7ded01e`, `3f0684e` and
+`bccb108`; `origin/main` moved from `cc2a72d` to `bccb108`. The push came before an agent run of `make push-guard` over those
+commits; it passed the global pre-push guard the push runs. `tools/watch_ci.py --branch main bccb108`, exit 0:
+
+```text
+watch_ci: 2 run(s) for bccb108: 41334498155, 41334498180
+watch_ci: run 41334498155 (main, push): completed success; watch exit 0
+  completed success: docs
+watch_ci: run 41334498180 (main, push): completed success; watch exit 0
+  completed success: validate (macos-15, 1.26.10)
+  completed success: validate (ubuntu-24.04, 1.27.3)
+  completed success: validate (macos-15, 1.27.3)
+  completed success: validate (ubuntu-24.04, 1.26.10)
+  completed success: validate (windows-2025, 1.26.10)
+  completed success: validate (windows-2025, 1.27.3)
+```
+
+Every item of the MADR's Confirmation holds: items 1 to 8 in steps 3.1 to 3.8, item 9 in phase 1, item 10 in steps 1.4, 2.5 and
+3.10 and here. This PLAN and its row are `complete`. Next, as the owner ordered:
+[0046-PLAN-sending-and-receiving-middleware.md](0046-PLAN-sending-and-receiving-middleware.md)'s phase 8, on the owner's word.
