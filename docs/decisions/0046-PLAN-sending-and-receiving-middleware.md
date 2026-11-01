@@ -1134,6 +1134,10 @@ paragraph states the order and the exception, and leads into the refusal-countin
 * `tools/gates.py --all`, the hosts set per command, exit 0: all eighteen gates `ok`, `regen` to `linux`, "all gates passed".
 * `make check-records`, `make markdownlint`, `make disclosure-check`, each exit 0.
 
-No deviation. **Left, each on the owner's ask (step 8.6):** the commit and push of this phase and its CI; then
+**CI.** The owner committed this phase as `cbdd788` and pushed it with `a863ba1`. `tools/watch_ci.py --branch main cbdd788`,
+exit 0: run `41338264422`, "completed success", the six `validate` jobs on macOS, Ubuntu and Windows at Go `1.27.3` and
+`1.26.10`; run `41338264421`, the Docs workflow, "completed success".
+
+No deviation. **Left, each on the owner's ask (step 8.6):**
 `docs/reports/0046-REPORT-release-notes-v1-31-1.md`, `tools/release_body.py`, the owner's tag `v1.31.1` and release,
 `tools/publication.py` and `tools/consumer.py v1.31.1`; then this PLAN and its row `complete`.
