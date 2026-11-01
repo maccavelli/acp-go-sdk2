@@ -965,3 +965,52 @@ Confirmation item 11 is met. Phase 6 is done.
 
 **Step 6.4, the status lines.** The MADR stays `accepted`. This PLAN stays `in-progress` until phase 7, the release, ends, and
 the index rows are unchanged.
+
+### Phase 7, 2026-11-01: before the tag
+
+The owner committed phase 6's CI record as `27afb8f` and said "committed, proceed".
+
+**Step 7.1, `tools/consumer.py`.**
+
+* A second pair of side connections over pipes: the agent side with a receiving middleware, `WithMaxConcurrentRequests(1)` and
+  an observer; the client side with a sending middleware. Each middleware counts the methods it sees, keyed by side, and keeps
+  the id `RequestIDFromContext` gives; the observer counts kinds by `String`.
+  * The client initializes. It then calls `_x/hold`, which the receiving middleware holds until released, and while it is held
+    calls `_x/fast`, refused over the limit. It calls `_x/misuse`, which the sending middleware passes on as `_x/other`.
+  * `WANT_RUN` gains four lines:
+    * `middleware <nil> <nil> map[received _x/hold:1 received initialize:1 sent _x/fast:1 sent _x/hold:1 sent _x/misuse:1
+      sent initialize:1]`: the receiving chain saw neither the refused request nor the misuse, which was never written;
+    * `context id 1 1 3 false`: `initialize`'s id on both sides, `_x/fast`'s in the sending chain, and `false` for a context
+      the connection did not make;
+    * `observed map[refused:1]` and the refusal's `-32603`, `{"error":"too many concurrent requests","limit":1}`;
+    * `misuse true <nil> <nil>`: `errors.Is` of the misuse's error for `acp.ErrSendingMiddleware`, and both closes.
+  * The docstring names this PLAN and says `VERSION` is `v1.31.0` or later. `tools/README.md`'s row names the middleware
+    options, the observer, `RequestIDFromContext` and `ErrSendingMiddleware`, and `v1.31.0`.
+* *The observer's timing, found and fixed in the program.* The first three rounds through a `replace` had one whose run printed
+  `observed map[]`. `answerObserved` writes the refusal, then calls the observer, and `WithObserver`'s godoc promises no order
+  between the peer reading the answer and the observer running, so the client could print the counts first. That is the program's
+  race, not the SDK's: the observer now signals `acp.ObservedRefused` on a channel of one, without blocking, and the program waits
+  for it under its 10-second context before it releases `_x/hold`. Neither godoc nor README says the observer runs after the
+  answer is written; this record notes it for a later doc change and changes nothing in the SDK.
+* *Before the tag.* A scratch script built the program and test against an export of `27afb8f` through a `replace`, at
+  `go1.26.10`, three times, and ran the built program 50 times more in each round: `go mod tidy`, the build, the run, `go test`
+  and the Windows build, each exit 0; "output equals WANT_RUN: True" in each round, no repeat differing; "all rounds as
+  required".
+* *Seen to fail, three times.*
+  * `tools/consumer.py v1.30.0`, the published release without middleware: exit 1, `go build` "undefined:
+    acp.RequestIDFromContext", "undefined: acp.Observation", "undefined: acp.ObservedRefused", "undefined:
+    acp.WithReceivingMiddleware", "undefined: acp.WithObserver", "undefined: acp.WithSendingMiddleware", "undefined:
+    acp.ErrSendingMiddleware"; "NOT AS REQUIRED".
+  * Scratch copies of the export, through the same script: with `misuse`'s `withCause(ErrSendingMiddleware)` dropped, the run
+    differs at `misuse false <nil> <nil>`; with `observe` returning early for `ObservedRefused`, the run ends at "observer: the
+    refusal was not reported". "2/2 failed as required".
+* `make check-tools`, exit 0: "Ran 58 tests" and "Ran 32 tests", both "OK"; "check-ci-filters: 0 problem(s)".
+
+**Step 7.2, the release notes.**
+[0046-REPORT-release-notes-v1-31-0.md](../reports/0046-REPORT-release-notes-v1-31-0.md), and its row in `docs/README.md`. It leads
+with the two additions, the middleware and the observer, then their cost, then what maintainers meet. Its sources: the eleven
+commits since `v1.30.0`, the five Go files changed outside the tests, the unchanged areas, `make api` on `27afb8f` ("0
+incompatible, 14 compatible"), CI on `767ee32`, and the consumer before the tag.
+
+**Left, each on the owner's ask:** the commit and push of this phase and its CI; the tag `v1.31.0`, the GitHub release from
+`tools/release_body.py`, `tools/publication.py`, and `tools/consumer.py v1.31.0`; then this PLAN and its row `complete`.

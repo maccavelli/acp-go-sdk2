@@ -39,8 +39,14 @@ the default OverflowBlock, initializes it, and prints that the two policies
 differ (0044-PLAN-notification-queue-back-pressure.md, phase 4). That
 connection also sets WithMaxQueuedBytes, and the program prints its
 QueuedBytes once initialized, and the error of decoding {} into a RequestId
-(0045-PLAN-notification-queue-byte-budget.md, phase 4). So VERSION is v1.30.0
-or later. Its go.mod must keep the `go` line and gain no toolchain line.
+(0045-PLAN-notification-queue-byte-budget.md, phase 4). Another pair counts
+the methods a receiving middleware on its agent side and a sending middleware
+on its client side see, and the kinds an observer reports, with a request
+refused over WithMaxConcurrentRequests(1) while a held one runs; it prints
+those counts, the ids RequestIDFromContext gives, and errors.Is of a
+middleware's misuse for acp.ErrSendingMiddleware
+(0046-PLAN-sending-and-receiving-middleware.md, phase 7). So VERSION is
+v1.31.0 or later. Its go.mod must keep the `go` line and gain no toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
 Usage: consumer.py VERSION
@@ -306,6 +312,80 @@ func main() {
 	fmt.Println("queued bytes", queued)
 	var id acp.RequestId
 	fmt.Println("request id", json.Unmarshal([]byte(`{}`), &id))
+	var mu sync.Mutex
+	seen, ids, kinds := map[string]int{}, map[string]string{}, map[string]int{}
+	held, release := make(chan struct{}), make(chan struct{})
+	receive := func(next acp.MethodHandler) acp.MethodHandler {
+		return func(ctx context.Context, method string, params json.RawMessage) (any, *acp.RequestError) {
+			id, _ := acp.RequestIDFromContext(ctx)
+			mu.Lock()
+			seen["received "+method]++
+			ids["received "+method] = string(id)
+			mu.Unlock()
+			if method == "_x/hold" {
+				close(held)
+				<-release
+				return map[string]any{}, nil
+			}
+			return next(ctx, method, params)
+		}
+	}
+	send := func(next acp.MethodHandler) acp.MethodHandler {
+		return func(ctx context.Context, method string, params json.RawMessage) (any, *acp.RequestError) {
+			id, _ := acp.RequestIDFromContext(ctx)
+			mu.Lock()
+			seen["sent "+method]++
+			ids["sent "+method] = string(id)
+			mu.Unlock()
+			if method == "_x/misuse" {
+				return next(ctx, "_x/other", params)
+			}
+			return next(ctx, method, params)
+		}
+	}
+	// The observer runs after the refusal is written, so the caller waits
+	// for it rather than for the answer.
+	refused := make(chan struct{}, 1)
+	observe := func(o acp.Observation) {
+		mu.Lock()
+		kinds[o.Kind.String()]++
+		mu.Unlock()
+		if o.Kind == acp.ObservedRefused {
+			select {
+			case refused <- struct{}{}:
+			default:
+			}
+		}
+	}
+	mar, mcw := io.Pipe()
+	mcr, maw := io.Pipe()
+	ma := acp.NewAgentSideConnection(agent{}, maw, mar, acp.WithReceivingMiddleware(receive),
+		acp.WithMaxConcurrentRequests(1), acp.WithObserver(observe))
+	mc := acp.NewClientSideConnection(client{}, mcw, mcr, acp.WithSendingMiddleware(send))
+	_, minit := mc.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
+	holding := make(chan error, 1)
+	go func() {
+		_, err := mc.CallExtension(ctx, "_x/hold", map[string]any{})
+		holding <- err
+	}()
+	<-held
+	_, ferr := mc.CallExtension(ctx, "_x/fast", map[string]any{})
+	select {
+	case <-refused:
+	case <-ctx.Done():
+		fmt.Println("observer: the refusal was not reported")
+		return
+	}
+	close(release)
+	herr := <-holding
+	_, merr := mc.CallExtension(ctx, "_x/misuse", map[string]any{})
+	_, background := acp.RequestIDFromContext(context.Background())
+	mu.Lock()
+	fmt.Println("middleware", minit, herr, seen)
+	fmt.Println("context id", ids["sent initialize"], ids["received initialize"], ids["sent _x/fast"], background)
+	fmt.Println("observed", kinds, ferr)
+	mu.Unlock()
+	fmt.Println("misuse", errors.Is(merr, acp.ErrSendingMiddleware), mc.Close(), ma.Close())
 }
 '''
 TEST = '''package main
@@ -384,7 +464,11 @@ WANT_RUN = ("Close: <nil>\nwait <nil> true\ndropped 0 0\nprotocol version 1\nkin
             "close-context <nil>\nbounded true true <nil>\n"
             'stderr "failed\\n" true\n'
             "remote ws <nil> <nil> <nil> end_turn <nil>\nremote http <nil> <nil> <nil> end_turn <nil>\nhandler <nil>\n"
-            "overflow true 1 <nil> <nil> <nil>\nqueued bytes 0\nrequest id RequestId: no variant matches")
+            "overflow true 1 <nil> <nil> <nil>\nqueued bytes 0\nrequest id RequestId: no variant matches\n"
+            "middleware <nil> <nil> map[received _x/hold:1 received initialize:1 sent _x/fast:1 sent _x/hold:1 "
+            "sent _x/misuse:1 sent initialize:1]\ncontext id 1 1 3 false\n"
+            'observed map[refused:1] {"code":-32603,"message":"Internal error",'
+            '"data":{"error":"too many concurrent requests","limit":1}}\nmisuse true <nil> <nil>')
 
 
 def go_mod_ok(text: str, go: str, mod: str, version: str) -> bool:
