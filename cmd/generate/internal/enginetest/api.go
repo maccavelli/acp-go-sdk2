@@ -22,8 +22,10 @@ import (
 // ProtocolMethodCancelRequest, AgentSideConnection and ClientSideConnection
 // with their handle methods, so the code generated for a synthetic schema
 // compiles with them. helpers.go uses ACP types and is not one of them
-// (0017-MADR-remediate-acp-v1-conformance-violations.md, S1).
-var RuntimeFiles = []string{"connection.go", "doc.go", "errors.go", "extensions.go"}
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, S1). middleware.go and
+// observer.go hold code connection.go calls
+// (0046-PLAN-sending-and-receiving-middleware.md, deviation 3).
+var RuntimeFiles = []string{"connection.go", "doc.go", "errors.go", "extensions.go", "middleware.go", "observer.go"}
 
 // CopyRuntime copies RuntimeFiles from the SDK root into dir.
 func CopyRuntime(root, dir string) error {

@@ -845,3 +845,106 @@ The middleware's time is within the run's noise; its cost shows in allocations a
 
   Round 3 alone ran −16.6% and +13.6% in opposite directions, which is the machine's noise.
 * `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0.
+
+The owner committed phase 5 as `f8e7ecb`.
+
+### Phase 6, 2026-10-31
+
+The owner said "committed, proceed".
+
+**Deviation 3, 2026-10-31, step 6.1: the engine's runtime files lacked `middleware.go` and `observer.go`.**
+
+* *Found.* `tools/gates.py --all` on `f8e7ecb`: fifteen gates `ok`; `floor`, `windows` and `linux` failed, each in `cmd/generate`.
+  * `TestEngineBehaviour` failed every engine case: "generated code does not type-check … connection.go:510:16: undefined:
+    Observation … undefined: Middleware … undefined: notFound … undefined: chainMiddleware".
+  * `TestRuntimeFilesCoverHandWritten` failed: "hand-written files of the root are […, middleware.go, observer.go, …], want
+    …".
+  * The engine compiles a synthetic schema's generated code against `enginetest.RuntimeFiles`
+    (`cmd/generate/internal/enginetest/api.go:26`), the root's files that use no ACP type. It copied `connection.go`, which since
+    phase 2 calls code in `middleware.go` and, since phase 4, in `observer.go`, and copied neither.
+  * The guard test names this case. It failed from phase 2's commit on.
+* *Why the phases' checks missed it.* Given changed files, `scripts/go-precheck.sh` tests only their own module's packages
+  (`:189-200`), so a change to the root's files never runs `cmd/generate`'s tests, which compile them. Only the `floor` and
+  host gates run both modules, and step 6.1 is where this PLAN runs them. The gap predates 0046.
+* *Nothing was pushed:* `main` was six commits ahead of `origin/main`.
+* *Options put to the owner:*
+  * add the two files to `RuntimeFiles`, and record the precheck's gap for a follow-up of its own (recommended);
+  * also make `go-precheck.sh` test `cmd/generate` when a root runtime file changes, in this PLAN;
+  * move the two files' code into `connection.go`.
+* *Decided.* The owner chose the first. A scratch copy with the two names added passed every `cmd/generate` package under
+  `-race`, and no engine case's `want.api` changed. Both files use no ACP type, the list's rule.
+* *Changed.* `cmd/generate/internal/enginetest/api.go` is added to this phase's scope: `RuntimeFiles` names `middleware.go` and
+  `observer.go`, and its comment cites this entry. No decision of the MADR moves.
+* *Left for a follow-up record:* `go-precheck.sh`'s module selection. A root file that `RuntimeFiles` names should also run
+  `cmd/generate`'s tests, so that a change like phase 2's fails before it is staged.
+
+**Step 6.1, the gates,** after the fix, `tools/gates.py --all`, exit 0:
+
+```text
+ok   regen (exit 0)
+ok   precheck (exit 0)
+  newfiles: no new .go files
+ok   newfiles (exit 0)
+ok   nojsonv2 (exit 0)
+ok   winvet (exit 0)
+ok   records (exit 0)
+ok   mdlint (exit 0)
+ok   idscan (exit 0)
+ok   tools (exit 0)
+ok   lint (exit 0)
+ok   fix (exit 0)
+ok   tidy (exit 0)
+ok   api (exit 0)
+ok   race3 (exit 0)
+ok   floor (exit 0)
+ok   platforms (exit 0)
+ok   windows (exit 0)
+ok   linux (exit 0)
+all gates passed
+```
+
+* `precheck`: "go-precheck: 284 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+* `api`: "against v1.30.0: 0 incompatible, 14 compatible".
+* `floor`: "floor gate at go1.26.10: passed", both modules.
+* `windows` and `linux`: the whole tree from source, `go1.27.3`, the root module and `cmd/generate` each "exit 0".
+
+**Step 6.3, the MADR's Confirmation.**
+
+| # | Item | Shown by |
+| :--- | :--- | :--- |
+| 1 | Receiving middleware wraps requests and notifications, first outermost across options; a `nil` middleware or handler panics at construction; a `nil` handler under a chain answers `-32601` and drops notifications silently | `TestReceivingMiddlewareOrder`, `TestReceivingMiddlewareConstruction`, `TestReceivingMiddlewareNilHandler`, `TestOptionSemantics` |
+| 2 | A receiving middleware's error answers the request, and the dispatch and handler do not run | `TestReceivingMiddlewareShortCircuit`; `ExampleWithReceivingMiddleware` |
+| 3 | Raw params before the hooks, the result after `checkResult`; params passed on are what the hooks and handler see | `TestReceivingMiddlewareSeesRawAndResult` |
+| 4 | Every sending path, `Initialize` included, passes the chain; encoded params, raw result, `_meta`; a replaced result decoded and checked; the SDK's `$/cancel_request` outside it | `TestSendingMiddlewareAllPaths` (eleven paths), `TestSendingMiddlewareOrder`, `TestSendingMiddlewareResult`, `TestSendingMiddlewareSkipsCancelRequest`, `TestSendingMiddlewareSentFlag`; `ExampleWithSendingMiddleware` |
+| 5 | Each misuse of D10 fails with `ErrSendingMiddleware` and writes nothing | `TestSendingMiddlewareMisuse`, five subtests |
+| 6 | `RequestIDFromContext` on both sides, `false` for notifications, the sent call's id inside a received request's handler | `TestRequestIDFromContextReceiving`, `TestRequestIDFromContextSending` |
+| 7 | The barrier, the order, 0044's guard and 0030's record hold; the existing tests pass unchanged | `TestReceivingMiddlewareKeepsOrdering`, `TestReceivingMiddlewareCountsInBudget`, `TestSendingMiddlewareKeepsBarrier`, `TestSendingMiddlewareShortCircuitInitialize`, `TestSendingMiddlewareInitializeRecord`; `git diff --numstat 523f319` removes no line from any existing test but `benchPair`'s signature, and the suite passes in `race3`, `floor` and on both hosts |
+| 8 | The observer reports each kind once, with method, id, size and error, never under a lock; nothing either chain sees; never called when unset | `TestObserverReportsEachKind` (fifteen subtests), `TestObserverNoLockHeld`, `TestObserverAndChainsDisjoint`, `TestObserverUnset`, `TestObserverCopiesID`, `TestWithObserverLastWins`; `ExampleWithObserver` |
+| 9 | With nothing registered, the same allocations and no time change beyond noise | phases 1 to 5's alternating benchmarks against `523f319`: 99 and 65 allocations in every round, pooled medians within 5%; `TestObserverUnset` |
+| 10 | `make api`: compatible additions only | the `api` gate: 14 compatible, 0 incompatible |
+| 11 | `tools/gates.py --all` and CI pass | step 6.1; CI in step 6.2 |
+
+**The tests no plant had reached, planted now,** `tools/plants.py`, eleven plants on the tree with deviation 3's fix, "11/11 as
+required":
+
+| Break | Test | Failure seen |
+| :--- | :--- | :--- |
+| `sendRequestSent` off the chain | `TestSendingMiddlewareAllPaths`, all eleven subtests run | "the middleware did not happen" in `Prompt`, `SendRequest`, a generated request, and each side's `CallExtension` |
+| `sendRequestCommit` off the chain | the same | in `Initialize` |
+| `SendRequestNoResult` off the chain | the same | in `SendRequestNoResult` |
+| `SendNotification` off the chain | the same | in `SendNotification`, a generated notification, and each side's `NotifyExtension` |
+| the sending chain built last-outermost | `TestSendingMiddlewareOrder` | `"c b a a b c", want "a b c c b a"` |
+| a middleware's error after a recorded `initialize` dropped | `TestSendingMiddlewareInitializeRecord/an_error_after_next` | "Initialize = <nil>, want the middleware's -32603" |
+| `initialize`'s committed result not returned | `TestSendingMiddlewareInitializeRecord/observed` | "Initialize = {…}, <nil>; want the answer" |
+| `sent` taken as false | `TestSendingMiddlewareSentFlag/written` | `the peer read ["$/cancel_request"] after Prompt returned; session/cancel sent false, want true` |
+| a cancel received unreported | `TestObserverReportsEachKind/a_cancel_received_whose_params_do_not_decode` | "cancel_received did not happen" |
+| an unmatched response unreported | `TestObserverReportsEachKind/an_error_response_to_an_unknown_id` | "unmatched_response did not happen" |
+| a repeated `WithSendingMiddleware` replacing the earlier | `TestOptionSemantics` | `repeated WithSendingMiddleware ran "c c", want all three, the first outermost` |
+
+With phases 1 to 5's plants, every new test and subtest has now been seen to fail, save one site with no input that reaches it
+(phase 4's record). `TestRuntimeFilesCoverHandWritten` was seen to fail by the first gate run above.
+
+**Step 6.2, CI.** Pending the owner's commit of this phase and the push.
+
+**Step 6.4, the status lines.** The MADR stays `accepted`. This PLAN stays `in-progress` until phase 7, the release, ends, and
+the index rows are unchanged.
