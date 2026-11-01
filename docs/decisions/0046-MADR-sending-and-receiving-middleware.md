@@ -297,6 +297,8 @@ The parts of the decision:
     connection's accessors. A panic ends the process.
   * It sees no message either chain sees: with both chains and the observer set, every message is seen once. It cannot change
     or stop anything.
+  * *Amendment proposed 2026-11-01* (see "Amendment, 2026-11-01: when the observer runs" below): the godoc and the README
+    state when the observer runs relative to what the connection does with the message, and a test pins it.
   * Unset, it costs one nil check at each site, and the id is not copied.
 * **D10. Misuse fails at once.** On the sending side the innermost step refuses, sends nothing, and returns a `*RequestError`
   (`-32603`) wrapping the exported sentinel `ErrSendingMiddleware`, naming the rule broken:
@@ -370,6 +372,65 @@ On the owner's ask to assess the pair against the tree, before acceptance. Nothi
   * The observer lost its `context.Context` argument.
   * The observer gained the concurrency rule and the guarantee that no lock is held while it runs.
 * **D10 and D11** are new. D10 adds an exported sentinel, `ErrSendingMiddleware`.
+
+### Amendment, 2026-11-01: when the observer runs
+
+Proposed. The decision stays `accepted`; this amendment waits for the owner's approval.
+
+**Found** in [0046-PLAN-sending-and-receiving-middleware.md](0046-PLAN-sending-and-receiving-middleware.md), step 7.1. The release's
+consumer program counted refusals with an observer and printed the count once its refused call returned. One run in three
+printed `observed map[]`: the client had read the refusal before the observer counted it.
+
+**What the code does,** at `v1.31.0` (`093649b`), at each site:
+
+* `ObservedFault` and `ObservedRefused`: `answerObserved` (`observer.go`) calls `answer`, which writes the error response
+  synchronously through `sendMessage` (`connection.go:1957-1964`), then `observe`. The answer is written first.
+* `ObservedCancelReceived`: `observe` takes the id `handleCancelRequest` returns (`connection.go:1691`), so the named request's
+  context is cancelled first.
+* `ObservedCancelSent`: `observe` follows `notifyDirect`'s write and carries its error (`connection.go:2638-2643`).
+* `ObservedDropped` under `OverflowDropNewest`: `dropNotification` calls the drop handler, then `observe`
+  (`connection.go:1210-1217`).
+* `ObservedDropped` for the overflow that closes the connection: `observe`, then `closeWith` and `shutdownReceive`
+  (`connection.go:1850-1856`). The observer runs before the connection closes.
+* `ObservedUnmatchedResponse`: `observe` follows `handleResponse`'s refusal to take the response (`connection.go:1951-1953`), or
+  the warning for a response without an id (`connection.go:1918-1925`).
+
+Neither `WithObserver`'s godoc nor the README's "What the chains do not see" says any of this. D9 says only that the observer
+runs "synchronously on the goroutine that met the message". So a reader cannot tell whether a count taken when the peer sees the
+answer is complete, and a change of order would break no test: `TestObserverReportsEachKind` reads each observation after its
+answer, whichever came first.
+
+**Options:**
+
+* **(a) State the order the code has, and pin it with a test** (recommended). The observer runs after the connection has acted on
+  the message, with one exception, the overflow that closes the connection, where it runs before the close. A program that counts
+  refusals waits for the observer, not for the answer. Cost: one paragraph in each of the godoc and the README, and one test.
+* **(b) State that no order is promised.** It keeps the freedom to reorder, but it leaves the consumer's question unanswered,
+  and every program that counts would have to synchronize as if the order could change.
+* **(c) Observe before acting.** A count would then be complete when the answer is read. But `Err` is the answer, and would be
+  reported before the write that can fail; a slow observer would delay every answer; and it changes the behaviour `v1.31.0`
+  shipped.
+
+**Proposed decision:** (a). It changes no behaviour, so it is not a change to the exported API, and `make api` stays clean. A
+change of order later would have to amend this record and its test.
+
+**Question for the owner, Q3. The release.**
+
+* **(a) A patch, `v1.31.1`** (recommended): only godoc, the README and a test change. Consumers read godoc from the newest
+  version, and a consumer counting refusals today has nothing to go on.
+* **(b) The next minor release,** with whatever comes next.
+
+#### Answered by the owner, 2026-11-01
+
+Each question was put with three options; the owner chose the recommended one each time:
+
+* The amendment: **(a), state the order the code has, and pin it with a test.** Not chosen: (b) no order promised; (c) observe
+  before acting.
+* Q3: **a patch, `v1.31.1`.** Not chosen: the next minor release; the same patch held until
+  [0047-PLAN-pre-add-check-full-coverage.md](0047-PLAN-pre-add-check-full-coverage.md) lands.
+* The order of work: 0047's PLAN first, then this amendment's phase, so it is checked by 0047's check.
+
+The amendment stays proposed until the owner accepts it.
 
 ### Consequences
 

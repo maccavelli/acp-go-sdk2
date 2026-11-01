@@ -394,6 +394,45 @@ As [0045-PLAN-notification-queue-byte-budget.md](0045-PLAN-notification-queue-by
 3. The owner's tag; then `tools/release_body.py`, the owner's release, `tools/publication.py`, and `tools/consumer.py v1.31.0`.
 4. The PLAN and its row `complete`.
 
+### Phase 8: when the observer runs, proposed 2026-11-01
+
+The MADR's "Amendment, 2026-11-01: when the observer runs", option (a), as the owner answered on 2026-11-01, with Q3 (a), a
+patch `v1.31.1`. Proposed: it runs only on the owner's approval, after
+[0047-PLAN-pre-add-check-full-coverage.md](0047-PLAN-pre-add-check-full-coverage.md) is complete, and this PLAN returns to
+`in-progress` then. Base: `cc2a72d`, whose Go code is `v1.31.0`'s; the step that begins it re-pins every line it names.
+
+1. **The test first,** `TestObserverRunsAfterActing` in `connection_observer_test.go`. Each subtest runs in a synctest bubble,
+   as `TestObserverReportsEachKind` does, and its observer records, as it is called, what the connection has done by then:
+   * **a fault** (invalid JSON), **a refusal over the concurrency limit**, and **a refusal past the byte budget**: the
+     connection's writer is wrapped in a recorder that appends each line once its `Write` returns; the observer requires the
+     recorder to hold the answer to that id already;
+   * **a cancel sent:** the recorder holds the `$/cancel_request` naming the id;
+   * **a cancel received:** a held request with id 9 runs; the observer requires that request's handler context to be done;
+   * **a drop under `OverflowDropNewest`:** a `WithNotificationDropHandler` that counts; the observer requires the count to be
+     1 already;
+   * **the overflow that closes the connection:** the observer requires `Done()` to be still open.
+2. **Seen to fail,** `tools/plants.py`, one plant per order, each in the tool's copies:
+   * `answerObserved` observing before `answer`;
+   * `ObservedCancelSent` observed before `notifyDirect`;
+   * `ObservedCancelReceived` observed before `handleCancelRequest` runs: the id taken from the params first;
+   * `dropNotification` observing before the drop handler;
+   * the overflow observed after `closeWith`.
+   Each `want` is its subtest's own message.
+3. **The godoc,** `WithObserver` in `observer.go`, after "fn runs synchronously on the goroutine that met the message …": fn runs
+   after the connection has acted on the message: after the answer to a fault or a refusal is written, after the request a
+   `$/cancel_request` names is cancelled, after the connection's own `$/cancel_request` is written, after the drop handler, and
+   after a response is found to match no call; for the notification whose overflow closes the connection, before it closes. A peer
+   can therefore read an answer before fn has run for it, and a program that counts refusals waits for fn, not for the answer.
+4. **The README,** "What the chains do not see": one sentence with the same rule, beside the paragraph on where the observer
+   runs, and the refusal-counting example's comment unchanged.
+5. **Checks:** `go test -race -count=3 -run 'Observer' .`; `make pre-add-check FILES="observer.go connection_observer_test.go
+   README.md"`, 0047's check, which runs both modules uncached; `tools/gates.py --all`; `make api`: 0 incompatible, 0 compatible; the record, markdown and disclosure checks; and the
+   execution record, then staging.
+6. **The release, `v1.31.1`, a patch** (the MADR's Q3, answered (a)), each step on the owner's ask:
+   `docs/reports/0046-REPORT-release-notes-v1-31-1.md` and its index row; the push and its CI; `tools/release_body.py`; the
+   owner's tag and release; `tools/publication.py` and `tools/consumer.py v1.31.1`. `tools/consumer.py` itself is unchanged:
+   it already waits for the observer. Then this PLAN and its row `complete` again.
+
 ## Verification
 
 * Every test of phases 2 to 4 passes under `-race`, and with `-count=3` on the Linux and Windows hosts, and was seen to fail on
