@@ -1138,6 +1138,12 @@ paragraph states the order and the exception, and leads into the refusal-countin
 exit 0: run `41338264422`, "completed success", the six `validate` jobs on macOS, Ubuntu and Windows at Go `1.27.3` and
 `1.26.10`; run `41338264421`, the Docs workflow, "completed success".
 
+**Step 8.6, the release notes.** The owner committed the CI record as `32d0b56` and said "committed, proceed".
+[0046-REPORT-release-notes-v1-31-1.md](../reports/0046-REPORT-release-notes-v1-31-1.md), and its row in `docs/README.md`. It leads
+with when the observer runs, then the maintainers' changes, 0047's check among them. Its sources: the eight commits since
+`v1.31.0`, the two Go files changed, `observer.go`'s in comments only, the unchanged areas, `make api` on `32d0b56` ("0
+incompatible, 0 compatible"), and CI on `cbdd788`.
+
 No deviation. **Left, each on the owner's ask (step 8.6):**
 `docs/reports/0046-REPORT-release-notes-v1-31-1.md`, `tools/release_body.py`, the owner's tag `v1.31.1` and release,
 `tools/publication.py` and `tools/consumer.py v1.31.1`; then this PLAN and its row `complete`.
