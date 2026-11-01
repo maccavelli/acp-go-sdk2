@@ -161,6 +161,45 @@ class CheckTest(unittest.TestCase):
         self.assert_one("pins", docs=DOCS.replace("  contents: read\n", "  contents: write\n"))
 
 
+class DocsSafeTest(unittest.TestCase):
+    """--docs-safe against the CI fixture's docs/** and AGENTS.md (0047-PLAN-pre-add-check-full-coverage.md, phase 1)."""
+
+    def setUp(self) -> None:
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        wf = self.dir / ".github" / "workflows"
+        wf.mkdir(parents=True)
+        (wf / "ci.yml").write_text(CI.replace("{pin}", PIN), encoding="utf-8")
+
+    def run_main(self, *paths: str) -> tuple[int, str]:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            status = c.main(["--root", str(self.dir), "--docs-safe", *paths])
+        return status, out.getvalue()
+
+    def test_safe(self) -> None:
+        for path in ("docs/README.md", "AGENTS.md", "./docs/x.md", str(self.dir / "docs" / "x.md"), "docs\\a.md",
+                     "docs/gone/deleted.md"):
+            with self.subTest(path=path):
+                self.assertEqual(c.not_docs_safe(self.dir, [path]), [])
+
+    def test_not_safe(self) -> None:
+        for path in ("README.md", "docs/../README.md", "x/docs/y.md", "connection.go", "../docs/a.md",
+                     str(self.dir.parent / "docs" / "a.md"), ".", ""):
+            with self.subTest(path=path):
+                self.assertEqual(c.not_docs_safe(self.dir, [path]), [path])
+
+    def test_mixed_names_the_unsafe(self) -> None:
+        self.assertEqual(c.not_docs_safe(self.dir, ["docs/a.md", "README.md", "AGENTS.md", "go.mod"]), ["README.md", "go.mod"])
+
+    def test_exit_status(self) -> None:
+        self.assertEqual(self.run_main("docs/a.md", "AGENTS.md")[0], 0)
+        self.assertEqual(self.run_main("docs/a.md", "README.md"), (1, "check-ci-filters: not docs-safe: README.md\n"))
+        self.assertEqual(self.run_main(), (1, "check-ci-filters: --docs-safe: no path named\n"))
+        (self.dir / ".github" / "workflows" / "ci.yml").unlink()
+        self.assertEqual(self.run_main("docs/a.md")[0], 2)
+
+
 class RepositoryTest(unittest.TestCase):
     def test_this_repository_holds(self) -> None:
         root = Path(__file__).resolve().parent.parent
@@ -170,6 +209,12 @@ class RepositoryTest(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             status = c.main(["--root", str(root)])
         self.assertEqual(status, 0, out.getvalue())
+
+    def test_this_repository_docs_safe(self) -> None:
+        root = Path(__file__).resolve().parent.parent
+        self.assertEqual(c.not_docs_safe(root, ["docs/decisions/0047-MADR-pre-add-check-full-coverage.md", "AGENTS.md"]), [])
+        self.assertEqual(c.not_docs_safe(root, ["README.md", "go.mod", "connection.go"]),
+                         ["README.md", "go.mod", "connection.go"])
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-11-01
 associated-madr: "0047-MADR-pre-add-check-full-coverage.md"
 ---
@@ -124,3 +124,52 @@ output and exit status.
 * **Rollout.** Tooling only, for the agents and the owner; nothing a consumer sees. The first runs after the change take about two
   minutes here.
 * **Rollback.** Revert phase 2's commit, then phase 1's; the old selection returns, with the gaps the MADR lists.
+
+## Execution record
+
+*2026-11-01:* the owner committed the pair with the answers as `f00a567` and said "committed, proceed". The MADR is `accepted`
+and this PLAN `in-progress`.
+
+### Phase 1, 2026-11-01
+
+**Step 1.1, `check_ci_filters.py --docs-safe PATH...`.**
+
+* `_relative(root, path)`: backslashes become slashes; a relative path is joined to the root; both are normalized with
+  `os.path.normpath`, which follows no link; `os.path.relpath` then gives the path from the root. `None` for the root itself or
+  anything above it.
+* `not_docs_safe(root, paths)`: reads `ci.yml` with `load`, takes `on.push.paths-ignore`, and returns, in their order, the paths
+  that `_relative` refuses or `_matches` does not cover.
+* `docs_safe_main`: exit 1 with "no path named" for none; 1 with "not docs-safe: PATH", the first, otherwise; 2 when the workflow
+  cannot be read or parsed, as `main` does; 0 when every path is covered. `main` takes `--docs-safe` with `nargs="*"`, so an empty
+  list reaches it rather than argparse.
+* The docstring describes the mode and names this PLAN. `import os` is added.
+
+**Step 1.2, the tests,** `DocsSafeTest` and a second `RepositoryTest` case in `scripts/test_check_ci_filters.py`:
+
+* safe: `docs/README.md`, `AGENTS.md`, `./docs/x.md`, an absolute path under the fixture's root, `docs\a.md`, and a deleted
+  `docs/gone/deleted.md`;
+* not safe: `README.md`, `docs/../README.md`, `x/docs/y.md`, `connection.go`, `../docs/a.md`, an absolute path beside the root,
+  `.` and the empty string;
+* a mix returns the unsafe ones in order; the exit statuses 0, 1 with its message, 1 for no path, and 2 with `ci.yml` removed;
+* this repository's own `ci.yml`: a record and `AGENTS.md` safe; `README.md`, `go.mod` and `connection.go` not.
+
+`python3 -B -m unittest test_check_ci_filters -v`: "Ran 21 tests", "OK".
+
+**Step 1.3, seen to fail,** a scratch script (`plants_p1.py`), each break in its own copy of `scripts/` and `.github/` with the
+unit tests run there, "4/4 as required":
+
+| Break | Failed | As shown |
+| :--- | :--- | :--- |
+| the normalization dropped (`_relative` returns the path as given) | `test_safe` and `test_not_safe` | `./docs/x.md`, the absolute path and `docs\a.md` refused; `docs/../README.md` taken as safe |
+| only a `./` prefix stripped | `test_not_safe`, `test_safe` | `docs/../README.md` taken as safe; the absolute path and `docs\a.md` refused |
+| the empty list taken as safe | `test_exit_status` | `(0, '') != (1, 'check-ci-filters: --docs-safe: no path named\n')` |
+| the patterns searched for, not matched from the start | `test_not_safe` | `x/docs/y.md` taken as safe |
+
+**The command on this tree:** `docs/README.md AGENTS.md` exit 0; `docs/README.md README.md` exit 1, "not docs-safe: README.md";
+`./docs/x.md` exit 0; `tools/README.md .claude/rules/madr-and-plan-skill.md` exit 0; `tools/gates.py` exit 1; no path, exit 1,
+"no path named".
+
+**Step 1.4, checks:** `make check-tools`, exit 0: tools "Ran 58 tests", "OK"; scripts "Ran 37 tests", "OK", five more than
+before; "check-ci-filters: 0 problem(s)". `make check-records`, `make markdownlint` and `make disclosure-check`, each exit 0.
+
+No deviation. Phase 2 waits for the owner.

@@ -23,13 +23,22 @@ flow sequences of scalars, block scalars (| and >), and comments. Anything
 else, an anchor, an alias, a tag, a flow mapping or a second document, is
 refused rather than guessed at.
 
-Usage: python3 scripts/check_ci_filters.py [--root DIR]
-Exit 0 when the contract holds, 1 when it does not, 2 when a file cannot be read.
+With --docs-safe PATH..., it checks the contract no further and answers whether
+every path named is docs-safe: covered by CI's push paths-ignore, so that no Go
+build or test can read it. Each path is taken relative to the root and
+normalized lexically; one outside the root is not docs-safe, and neither is an
+empty list. scripts/go-precheck.sh asks it which named files need no Go check
+(0047-PLAN-pre-add-check-full-coverage.md, phase 1).
+
+Usage: python3 scripts/check_ci_filters.py [--root DIR] [--docs-safe PATH...]
+Exit 0 when the contract holds, or every path is docs-safe; 1 when it does
+not, or one is not; 2 when a file cannot be read.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -284,10 +293,54 @@ def check(root: Path, tracked: list[str]) -> list[str]:
     return problems
 
 
+def _relative(root: Path, path: str) -> str | None:
+    """path as a slash-separated path relative to root, normalized lexically without following links, or None when it is
+    outside root or is root itself."""
+    base = os.path.normpath(os.path.abspath(root))
+    p = path.replace("\\", "/")
+    full = os.path.normpath(p if os.path.isabs(p) else os.path.join(base, p))
+    rel = os.path.relpath(full, base)
+    if rel == os.curdir or rel == os.pardir or rel.startswith(os.pardir + os.sep):
+        return None
+    return rel.replace(os.sep, "/")
+
+
+def not_docs_safe(root: Path, paths: list[str]) -> list[str]:
+    """The paths, of those given, that CI's push paths-ignore does not cover, in their order. A path need not exist: a
+    deleted file is named too."""
+    ci = load((root / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    ignore = ((ci.get("on") or {}).get("push") or {}).get("paths-ignore") or []
+    out = []
+    for p in paths:
+        rel = _relative(root, p)
+        if rel is None or not _matches(ignore, rel):
+            out.append(p)
+    return out
+
+
+def docs_safe_main(root: Path, paths: list[str]) -> int:
+    """--docs-safe's exit status, printing why when it is not 0."""
+    if not paths:
+        print("check-ci-filters: --docs-safe: no path named")
+        return 1
+    try:
+        unsafe = not_docs_safe(root, paths)
+    except (OSError, UnicodeDecodeError, YAMLError) as e:
+        print(f"check-ci-filters: {e}")
+        return 2
+    if unsafe:
+        print(f"check-ci-filters: not docs-safe: {unsafe[0]}")
+        return 1
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
+    ap.add_argument("--docs-safe", nargs="*", metavar="PATH", help="exit 0 only when every PATH is docs-safe")
     args = ap.parse_args(argv)
+    if args.docs_safe is not None:
+        return docs_safe_main(args.root, args.docs_safe)
     p = subprocess.run(["git", "-C", str(args.root), "ls-files", "-z"], capture_output=True, check=False)
     if p.returncode != 0:
         print("check-ci-filters: git ls-files failed")

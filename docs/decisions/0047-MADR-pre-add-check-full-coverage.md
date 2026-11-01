@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-01
 decision-makers: the repository owner
 consulted: "`go help test` (Go 1.27.3), on test caching; probes in scratch exports of `cc2a72d`"
@@ -207,6 +207,9 @@ Each question was put with three options; the owner chose the recommended one ea
   checked by the new check. Not chosen: phase 8 first; the two interleaved by phase.
 
 The decision stays `proposed` until the owner accepts it.
+
+*2026-11-01:* the owner committed the pair with these answers as `f00a567` and said "committed, proceed". The decision is
+`accepted`.
 
 ### Consequences
 
