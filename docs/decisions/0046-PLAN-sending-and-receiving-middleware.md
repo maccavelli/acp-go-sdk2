@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-11-01
 associated-madr: "0046-MADR-sending-and-receiving-middleware.md"
 ---
@@ -1144,6 +1144,42 @@ with when the observer runs, then the maintainers' changes, 0047's check among t
 `v1.31.0`, the two Go files changed, `observer.go`'s in comments only, the unchanged areas, `make api` on `32d0b56` ("0
 incompatible, 0 compatible"), and CI on `cbdd788`.
 
-No deviation. **Left, each on the owner's ask (step 8.6):**
-`docs/reports/0046-REPORT-release-notes-v1-31-1.md`, `tools/release_body.py`, the owner's tag `v1.31.1` and release,
-`tools/publication.py` and `tools/consumer.py v1.31.1`; then this PLAN and its row `complete`.
+**The tag.** The owner committed the notes as `151b6e8`, pushed it, and pushed `v1.31.1`, annotated, naming `151b6e8`, as
+`git ls-remote` shows. CI on `151b6e8` before the tag, docs-only: the Docs run `41339370946`, "completed success". The body,
+`tools/release_body.py v1.31.1 151b6e8`, exit 0: "33 lines, 2 links", its identifier scan "0 match(es)".
+
+**Deviation 1, 2026-11-01, step 8.6: the tag's CI failed one job, an `agentproc` timing test.**
+
+* *Found.* `tools/watch_ci.py --branch v1.31.1 151b6e8`, exit 1: run `41339573142`, attempt 1, five jobs "completed success",
+  `validate (ubuntu-24.04, 1.26.10)` "completed failure". `tools/ci_jobs.py failure 41339573142`: step "race detector",
+  `-test.shuffle 1793559764788967804`, `--- FAIL: TestInProcessServeAgentStep2 (0.82s)`:
+  * "inprocess_test.go:407: Close = agentproc: agent killed: agentproc: agent terminated, want ErrTerminated: ServeAgent returns
+    in the second step";
+  * "inprocess_test.go:412: Prompt = "", … "input ended before a response"; want cancelled, nil".
+
+  `Close`'s second step did not see `ServeAgent` return within the test's bound, so the third step killed the agent. `agentproc`
+  is unchanged since `v1.31.0`, whose tag run passed; this tag changes comments in `observer.go` and a root test only.
+  `tools/ci_jobs.py tally --runs 40`: that job passed in all 15 of its recent first attempts on `main`.
+* *Not pre-existing in this PLAN's changes.* It is [0042-PLAN-in-process-agent-runner.md](0042-PLAN-in-process-agent-runner.md)'s
+  test, and its margin under the race step's load.
+* *Options put to the owner,* three: rerun the failed job, release if it passes, and leave the margin to an amendment of the 0042
+  pair (recommended, as chosen for the same kind of failure in 0040's phase 8 and 0043's phase 9); fix the test before releasing;
+  release now with the tag's CI red.
+* *Decided.* The owner chose the rerun. `gh run rerun 41339573142 --failed`; attempt 2 "completed success", all six jobs, the
+  Ubuntu floor job among them (`tools/watch_ci.py`, exit 0). No file is added to this phase's scope; the margin waits for an
+  amendment of the 0042 pair, on the owner's ask.
+
+**`tools/consumer.py v1.31.1`,** exit 0, "as required": at `go1.26.10`, from the proxy, `go get` of `v1.31.1`, the build, the
+run equal to `WANT_RUN`, `go test` and the Windows build, each exit 0; the consumer's `go.mod` keeps `go 1.26.10`.
+
+**The release.** The owner ran `gh release create v1.31.1 --verify-tag --title v1.31.1 --notes-file` with the extracted body:
+<https://github.com/maccavelli/acp-go-sdk2/releases/tag/v1.31.1>.
+
+**`tools/publication.py v1.31.1 151b6e8`** with that body, exit 0, "10 of 10 checks hold": the release exists, not a draft or
+prerelease, with the extracted body; it is marked latest; the tag is annotated and names `151b6e8`, which is on origin's `main`;
+CI passed on `main`'s head, the Docs run `41339370946`, and on the tag, run `41339573142`, whose latest attempt is the rerun; the
+proxy serves the `.info`, its origin the tag at that commit; `go list -m @latest` gives `v1.31.1`; `go mod download` of the tag
+passes with the checksum database on.
+
+Phase 8 is done: the amendment's order is documented, tested and released in `v1.31.1`. This PLAN and its row are `complete`.
+Left for a record of its own, on the owner's ask: `TestInProcessServeAgentStep2`'s margin (deviation 1 of this phase).

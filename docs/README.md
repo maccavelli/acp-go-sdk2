@@ -136,11 +136,13 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0045 | PLAN | [Implement 0045: a byte budget beside the notification count](decisions/0045-PLAN-notification-queue-byte-budget.md) | complete |
 | 0045 | REPORT | [Release notes for v1.30.0, against v1.29.0](reports/0045-REPORT-release-notes-v1-30-0.md); with 0011's `RequestId` fix | observed |
 | 0046 | MADR | [Add sending and receiving middleware around the connection's method handler, and an observer for the messages it does not see](decisions/0046-MADR-sending-and-receiving-middleware.md); questions answered 2026-10-31: both directions, and an observer; revised 2026-10-31 against `v1.30.0`'s code; D5 amended 2026-10-31: the received id beside the receipt; D11 amended 2026-10-31: three allocations per request through sending middleware; amendment accepted 2026-11-01: when the observer runs | accepted |
-| 0046 | PLAN | [Implement 0046: sending and receiving middleware, and an observer](decisions/0046-PLAN-sending-and-receiving-middleware.md); seven phases, revised 2026-10-31; released in `v1.31.0`; phase 8 2026-11-01: when the observer runs | in-progress |
+| 0046 | PLAN | [Implement 0046: sending and receiving middleware, and an observer](decisions/0046-PLAN-sending-and-receiving-middleware.md); seven phases, revised 2026-10-31; released in `v1.31.0`; phase 8 2026-11-01: when the observer runs, released in `v1.31.1` | complete |
 | 0046 | REPORT | [Release notes for v1.31.0, against v1.30.0](reports/0046-REPORT-release-notes-v1-31-0.md) | observed |
 | 0046 | REPORT | [Release notes for v1.31.1, against v1.31.0](reports/0046-REPORT-release-notes-v1-31-1.md); when the observer runs | observed |
 | 0047 | MADR | [Run the pre-add check's vet and tests over both modules, uncached, whenever a named file can reach a test](decisions/0047-MADR-pre-add-check-full-coverage.md); questions answered 2026-11-01: both modules uncached, `-shuffle=on`, docs-safe skip by CI's list; Confirmation 6 amended 2026-11-01: shown by a stale cache, not by output | accepted |
 | 0047 | PLAN | [Implement 0047: the pre-add check tests both modules, uncached](decisions/0047-PLAN-pre-add-check-full-coverage.md); three phases | complete |
+| 0048 | MADR | [Create a tag's GitHub release in CI, once every check on the tag has passed](decisions/0048-MADR-create-releases-in-ci.md) | proposed |
+| 0048 | PLAN | [Implement 0048: CI creates and verifies a tag's release](decisions/0048-PLAN-create-releases-in-ci.md); three phases | proposed |
 
 ## I want to…
 
