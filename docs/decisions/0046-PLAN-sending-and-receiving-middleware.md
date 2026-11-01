@@ -944,7 +944,24 @@ required":
 With phases 1 to 5's plants, every new test and subtest has now been seen to fail, save one site with no input that reaches it
 (phase 4's record). `TestRuntimeFilesCoverHandWritten` was seen to fail by the first gate run above.
 
-**Step 6.2, CI.** Pending the owner's commit of this phase and the push.
+**Step 6.2, CI.** The owner pushed `fbbbd5c`, `1de8d98`, `df22f9e`, `f23e107`, `3f7f4b1`, `f8e7ecb` and `767ee32`;
+`origin/main` is `767ee32`, moved from `523f319`. The push came before an agent run of `make push-guard` over those commits; it
+passed the global pre-push guard the push runs. `tools/watch_ci.py --branch main 767ee32`, exit 0:
+
+```text
+watch_ci: 2 run(s) for 767ee32: 41317956982, 41317956970
+watch_ci: run 41317956982 (main, push): completed success; watch exit 0
+  completed success: docs
+watch_ci: run 41317956970 (main, push): completed success; watch exit 0
+  completed success: validate (windows-2025, 1.27.3)
+  completed success: validate (macos-15, 1.26.10)
+  completed success: validate (ubuntu-24.04, 1.26.10)
+  completed success: validate (macos-15, 1.27.3)
+  completed success: validate (windows-2025, 1.26.10)
+  completed success: validate (ubuntu-24.04, 1.27.3)
+```
+
+Confirmation item 11 is met. Phase 6 is done.
 
 **Step 6.4, the status lines.** The MADR stays `accepted`. This PLAN stays `in-progress` until phase 7, the release, ends, and
 the index rows are unchanged.
