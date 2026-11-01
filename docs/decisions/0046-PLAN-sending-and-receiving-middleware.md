@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-10-31
+status: complete
+date: 2026-11-01
 associated-madr: "0046-MADR-sending-and-receiving-middleware.md"
 ---
 
@@ -1014,3 +1014,29 @@ incompatible, 14 compatible"), CI on `767ee32`, and the consumer before the tag.
 
 **Left, each on the owner's ask:** the commit and push of this phase and its CI; the tag `v1.31.0`, the GitHub release from
 `tools/release_body.py`, `tools/publication.py`, and `tools/consumer.py v1.31.0`; then this PLAN and its row `complete`.
+
+### Phase 7, 2026-11-01: the release
+
+The owner committed step 7.1 and 7.2 as `093649b` and pushed it.
+
+* **CI on `093649b`,** `tools/watch_ci.py --branch main 093649b`, exit 0: run `41319327566`, "completed success", the six
+  `validate` jobs on macOS, Ubuntu and Windows at Go `1.27.3` and `1.26.10`; run `41319327653`, the Docs workflow, "completed
+  success".
+* **The body,** `tools/release_body.py v1.31.0 093649b`, exit 0: "107 lines, 2 links", its identifier scan "0 match(es)".
+* **The tag.** The owner pushed `v1.31.0`, annotated, naming `093649b`, as `git ls-remote` shows. Its CI,
+  `tools/watch_ci.py --branch v1.31.0 093649b`, exit 0: run `41319985865`, "completed success", the same six jobs.
+* **`tools/consumer.py v1.31.0`,** exit 0, "as required". At `go1.26.10`, from the proxy: `go get` of `v1.31.0`, `go mod tidy`,
+  the build, the run, whose output equals `WANT_RUN`, `go test` and the Windows build, each exit 0. The consumer's `go.mod`
+  keeps `go 1.26.10` and has no toolchain line.
+* **The release.** The owner ran `gh release create v1.31.0 --verify-tag --title v1.31.0 --notes-file` with the extracted body:
+  <https://github.com/maccavelli/acp-go-sdk2/releases/tag/v1.31.0>.
+* **`tools/publication.py v1.31.0 093649b`** with that body, exit 0, "10 of 10 checks hold": the release exists, not a draft or
+  prerelease; its body is the extracted release text; it is marked latest; the tag is annotated and names `093649b`, which is on
+  origin's `main`; CI passed on `main`'s head, run `41319327566`, and on the tag, run `41319985865`; the proxy serves the
+  `.info`, its origin the tag at that commit; `go list -m @latest` gives `v1.31.0`; `go mod download` of the tag passes with the
+  checksum database on.
+
+Every item of the MADR's Confirmation was shown in phase 6, and CI and the release pass. The release is published, so this PLAN
+and its row are `complete`. Left for later records, each on the owner's ask: `scripts/go-precheck.sh`'s module selection
+(deviation 3), and a line in `WithObserver`'s godoc and the README saying the observer runs after a refusal's answer is written
+(step 7.1).

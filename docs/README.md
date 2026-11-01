@@ -136,7 +136,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0045 | PLAN | [Implement 0045: a byte budget beside the notification count](decisions/0045-PLAN-notification-queue-byte-budget.md) | complete |
 | 0045 | REPORT | [Release notes for v1.30.0, against v1.29.0](reports/0045-REPORT-release-notes-v1-30-0.md); with 0011's `RequestId` fix | observed |
 | 0046 | MADR | [Add sending and receiving middleware around the connection's method handler, and an observer for the messages it does not see](decisions/0046-MADR-sending-and-receiving-middleware.md); questions answered 2026-10-31: both directions, and an observer; revised 2026-10-31 against `v1.30.0`'s code; D5 amended 2026-10-31: the received id beside the receipt; D11 amended 2026-10-31: three allocations per request through sending middleware | accepted |
-| 0046 | PLAN | [Implement 0046: sending and receiving middleware, and an observer](decisions/0046-PLAN-sending-and-receiving-middleware.md); seven phases, revised 2026-10-31 | in-progress |
+| 0046 | PLAN | [Implement 0046: sending and receiving middleware, and an observer](decisions/0046-PLAN-sending-and-receiving-middleware.md); seven phases, revised 2026-10-31; released in `v1.31.0` | complete |
 | 0046 | REPORT | [Release notes for v1.31.0, against v1.30.0](reports/0046-REPORT-release-notes-v1-31-0.md) | observed |
 
 ## I want to…
