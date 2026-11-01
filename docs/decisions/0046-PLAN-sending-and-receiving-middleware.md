@@ -365,7 +365,8 @@ The seams D4 and D5 need, made first, so that the existing suite proves them alo
    * `BenchmarkSessionUpdateNotifyObserved`: an observer set, which these messages never call.
 
    They are run with step 1.1's command, and their `allocs/op` against the baseline is recorded: D11 expects two more per sent
-   message with sending middleware, none for receiving middleware, and none for the observer.
+   message with sending middleware, none for receiving middleware, and none for the observer. *Amended by deviation 2:* three
+   per request sent, two per notification.
 5. Phase 4's checks, the benchmark comparison of step 1.6 included; then the execution record, and staging.
 
 ### Phase 6: close
@@ -750,3 +751,97 @@ the three refusals, an unmatched response, a response without an id, a drop, and
   | :--- | :--- | :--- | :--- |
   | `BenchmarkPromptRoundTrip` | 26454 → 26422 (−0.1%) | +7 | 99 → 99 |
   | `BenchmarkSessionUpdateNotify` | 14113 → 14167 (+0.4%) | −1 | 65 → 65 |
+
+The owner committed phase 4 as `3f7f4b1`.
+
+**Deviation 2, 2026-10-31, step 5.4: a request through sending middleware costs three allocations, not two.**
+
+* *Found.* `BenchmarkPromptRoundTripMiddleware`, one pass-through middleware each way on both sides, gave 102 allocations per
+  round trip against `BenchmarkPromptRoundTrip`'s 99, and 363 bytes more. The MADR's D11, and step 5.4, said two per sent message.
+* *The cause.* `go build -gcflags=-m` reports `resp.msg.Result escapes to heap` at both of `sendInnermost`'s result returns
+  (`middleware.go:243`, `:252`): the raw result, a slice, is boxed as the `any` a `MethodHandler` returns.
+  * The three are the call's state, the context that carries it, and that box.
+  * A notification, whose innermost step returns `nil`, costs two. A scratch copy with a notification benchmark through
+    sending middleware gave 67 allocations against 65, and about 340 bytes more.
+  * Receiving middleware and an observer add none: `BenchmarkSessionUpdateNotifyObserved` has 65.
+* *Options put to the owner:*
+  * amend D11 to the measured cost, keeping D4's contract (recommended);
+  * fold the call into its context, one type that is both, for two per request;
+  * return a `*json.RawMessage` into the call, for two per request, changing what middleware sees.
+* *Decided.* The owner chose the first. The MADR's D11 and its "Neutral" consequence carry annotated amendments. Step 5.4 is
+  annotated, and no code changed.
+
+### Phase 5, 2026-10-31
+
+The owner said "committed, proceed".
+
+**What changed.**
+
+* **`README.md`,** 140 lines added: "Middleware and observing", after "Closing and limits":
+  * the type and the two options, where each chain sits, the order and its exception, `RequestIDFromContext`, and the rules;
+  * the tracing middleware, `ExampleWithSendingMiddleware`'s body between `<!-- example: ExampleWithSendingMiddleware -->`
+    markers;
+  * "What the chains do not see": the observer, a table of its six kinds, where it runs, and a metrics sketch that counts
+    refusals;
+  * a sentence that tells this from `remote`'s HTTP middleware.
+* **`docs_test.go`:** `TestReadmeMiddlewareIsTheExample`, as `TestReadmeRemoteIsTheExample` binds its example.
+* **`docs/architecture.md`:**
+  * a paragraph and list on the chains, the call, the innermost step and the observer's sites;
+  * `middleware.go` and `observer.go` in the hand-written files;
+  * the three test files in the checks;
+  * "`exchange` and `SendRequestNoResult` count" became "`exchangePrepared`, which every request takes, counts", since phase 1
+    made it so.
+* **`example_api_test.go`:** `ExampleWithReceivingMiddleware`, `ExampleWithSendingMiddleware` and `ExampleWithObserver`.
+* **`bench_test.go`:** `benchPair` takes options. `BenchmarkPromptRoundTripMiddleware` and
+  `BenchmarkSessionUpdateNotifyObserved` use `benchPass`, a middleware that wraps `next` in a call of its own.
+* **The records:** deviation 2, in this PLAN and the MADR, and the index row.
+
+**Refinements, not deviations.**
+
+* *Trailing comments in the README's example.* `exampleBody` prints with `go/printer`, which pads a trailing comment with tabs,
+  and then turns each tab into four spaces, so a trailing comment never lines up with gofmt's. The first runs of
+  `TestReadmeMiddlewareIsTheExample` failed on the three trailing comments, which moved onto lines of their own. A scratch
+  script writes the README's block from the example's source.
+* *The benchmark's pattern.* With the new benchmarks, `PromptRoundTrip|SessionUpdateNotify` matched four in the tree and two in
+  the base. That comparison gave `SessionUpdateNotify` +9.8% pooled, on a phase that changed no code outside tests and docs. The
+  pattern was anchored to the two benchmarks, and the comparison run again, below.
+
+**Step 5.3, seen to fail.** `tools/plants.py`, four plants, "4/4 as required":
+
+| Break | Test | Failure seen |
+| :--- | :--- | :--- |
+| the receiving middleware neutralized | `ExampleWithReceivingMiddleware` | got `{"jsonrpc":"2.0","id":1,"result":{"ok":true}}`: the method was not refused |
+| the sending middleware neutralized | `ExampleWithSendingMiddleware` | got `peer read: …"params":{"n":1}}`, without `_meta`, and no line from the middleware |
+| the observer neutralized | `ExampleWithObserver` | got nothing |
+| the README's block changed by one space | `TestReadmeMiddlewareIsTheExample` | "README.md's middleware example is not ExampleWithSendingMiddleware's body." |
+
+Each option was replaced by one that does nothing but keeps its variable used, so each copy compiles.
+
+**Step 5.4, the benchmarks,** `-count=10` on the tree:
+
+| Benchmark | ns/op | B/op | allocs/op |
+| :--- | ---: | ---: | ---: |
+| `BenchmarkPromptRoundTrip` | 30002 | 5437 | 99 |
+| `BenchmarkPromptRoundTripMiddleware` | 29061 | 5800 | 102 |
+| `BenchmarkSessionUpdateNotify` | 15288 | 4878 | 65 |
+| `BenchmarkSessionUpdateNotifyObserved` | 16991 | 4877 | 65 |
+
+The middleware's time is within the run's noise; its cost shows in allocations and bytes, as deviation 2 records.
+
+**Step 5.5, the checks.**
+
+* `make pre-add-check`: "go-precheck: 284 file(s) clean (gofmt, golangci-lint, go vet, go test, govulncheck)."
+* `make api`: "against v1.30.0: 0 incompatible, 14 compatible", unchanged from phase 4.
+* At the floor, with `GOEXPERIMENT=goroutineleakprofile`, the three examples and `TestReadmeMiddlewareIsTheExample`: `ok`.
+* `tools/remote.py pkg` on the Linux and Windows hosts, the three examples with `-test.count=3`: "PASS", exit 0, on each. The
+  README's test reads the source, which `pkg` does not send, so it runs on macOS and in CI.
+* **The benchmark against the baseline,** anchored, three alternating rounds of `-count=5`. Allocations are equal in every round.
+  Pooled:
+
+  | Benchmark | ns/op | B/op | allocs/op |
+  | :--- | :--- | :--- | :--- |
+  | `BenchmarkPromptRoundTrip` | 26509 → 26487 (−0.1%) | +4 | 99 → 99 |
+  | `BenchmarkSessionUpdateNotify` | 14778 → 15016 (+1.6%) | +0 | 65 → 65 |
+
+  Round 3 alone ran −16.6% and +13.6% in opposite directions, which is the machine's noise.
+* `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0.

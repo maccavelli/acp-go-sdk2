@@ -943,6 +943,146 @@ conn := acp.NewAgentSideConnection(agent, stdout, stdin,
     acp.WithMaxQueuedBytes(256<<20)) // 256 MiB
 ```
 
+### Middleware and observing
+
+A connection can run middleware around the messages it hands to its handler and
+around the messages the application sends, and report every other message to
+an observer
+([0046-MADR-sending-and-receiving-middleware.md](docs/decisions/0046-MADR-sending-and-receiving-middleware.md)).
+This is the connection's own middleware, around JSON-RPC methods; the HTTP
+middleware a `remote` host adds, under "Remote agents", is another layer.
+
+`acp.Middleware` is `func(next acp.MethodHandler) acp.MethodHandler`, the type a
+`NewConnection` handler already has. A middleware calls `next`, or answers in
+its place.
+
+- **`acp.WithReceivingMiddleware(mw...)`** wraps every request and notification
+  that reaches the handler. It runs where the handler runs: on the request's
+  goroutine, inside its `WithMaxConcurrentRequests` slot and its
+  `WithMaxQueuedBytes` count, or on the notification worker. It sees the method
+  and the raw params before the side connections decode them, before
+  `WithInboundRewrite`, `WithInboundValidation` and the check of what
+  `initialize` agreed, and the result as the dispatch returns it, checked and not
+  yet encoded. One that answers without calling `next`, to refuse a method for
+  example, skips the validation of that message.
+- **`acp.WithSendingMiddleware(mw...)`** wraps every request and notification
+  the application sends: `SendRequest`, `SendRequestNoResult`,
+  `SendNotification`, `CallExtension`, `NotifyExtension`, and every typed method,
+  `Initialize` included.
+  - Before the chain, the connection checks and encodes the message as it does
+    without one, so a message it would refuse never reaches the chain.
+  - Inside it, the connection writes the message and waits for the answer and
+    for the notifications received before it, so a middleware's timing covers
+    the round trip.
+  - After it, the result is decoded and checked as a peer's result is, so a
+    result a middleware returns instead is checked too.
+  - The connection's own `$/cancel_request` does not pass the chain.
+- **Order.** The first registered is outermost: `WithReceivingMiddleware(a, b)`
+  then `WithReceivingMiddleware(c)` runs `a`, `b`, `c`, then the handler.
+  Repeated middleware options append, the one exception to "the last option
+  wins", so a library that adds its own keeps the application's. Each
+  `Middleware` is called once, when the connection is built.
+- **`acp.RequestIDFromContext(ctx)`** gives the id of the request being handled
+  or sent, and `false` for a notification. `acp.IsNotification(ctx)` tells a
+  received notification from a request.
+- **The rules.** Middleware must be safe for concurrent use. It calls `next` at
+  most once, before it returns, with a context derived from its own, and passes
+  new params rather than changing them in place. Around a notification under
+  `OverflowBlock`, it must not wait for anything the peer sends later. A panic
+  ends the process. On the sending side, a broken rule fails the call at once
+  with an error wrapping `acp.ErrSendingMiddleware`, and nothing is written;
+  `Initialize`'s result, recorded as it is read, cannot be replaced.
+
+A tracing middleware, with the standard library alone, adds a W3C trace context
+to `params._meta`, where ACP reserves `traceparent`, `tracestate` and `baggage`:
+
+<!-- example: ExampleWithSendingMiddleware -->
+```go
+// r carries what the peer writes to the connection, out what the
+// connection writes to the peer.
+r, w := io.Pipe()
+out, outW := io.Pipe()
+trace := func(next acp.MethodHandler) acp.MethodHandler {
+    return func(ctx context.Context, method string, params json.RawMessage) (any, *acp.RequestError) {
+        p := map[string]any{}
+        if len(params) > 0 {
+            if err := json.Unmarshal(params, &p); err != nil {
+                return nil, acp.NewInternalError(map[string]any{"error": err.Error()})
+            }
+        }
+        p["_meta"] = acp.TraceMeta("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01", "", "")
+        traced, err := json.Marshal(p)
+        if err != nil {
+            return nil, acp.NewInternalError(map[string]any{"error": err.Error()})
+        }
+        id, _ := acp.RequestIDFromContext(ctx)
+        result, rerr := next(ctx, method, traced)
+        fmt.Printf("%s id %s: error %v\n", method, string(id), rerr)
+        return result, rerr
+    }
+}
+c := acp.NewConnection(nil, outW, r, acp.WithSendingMiddleware(trace))
+
+peer := make(chan struct{})
+go func() {
+    defer close(peer)
+    lines := bufio.NewScanner(out)
+    for lines.Scan() {
+        fmt.Println("peer read:", lines.Text())
+        var req struct {
+            ID json.RawMessage `json:"id"`
+        }
+        if json.Unmarshal(lines.Bytes(), &req) == nil && req.ID != nil {
+            _, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%s,"result":{}}`+"\n", req.ID)
+        }
+    }
+}()
+if err := c.SendRequestNoResult(context.Background(), "_example/ping", map[string]any{"n": 1}); err != nil {
+    fmt.Println("ping:", err)
+}
+// The end of the peer's output ends the connection.
+_ = w.Close()
+_ = c.Wait()
+_ = outW.Close()
+<-peer
+// Output:
+// peer read: {"jsonrpc":"2.0","id":1,"method":"_example/ping","params":{"_meta":{"traceparent":"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"},"n":1}}
+// _example/ping id 1: error <nil>
+```
+<!-- /example -->
+
+#### What the chains do not see
+
+The reader handles some messages itself, and no middleware sees them.
+`acp.WithObserver(fn)` reports each to `fn` as an `acp.Observation`, with its
+`Kind`, `Method`, a copy of its `ID`, its `Size` in bytes and its `Err`:
+
+| Kind | What |
+| :--- | :--- |
+| `ObservedFault` | a line answered as invalid: over the size limit, not JSON, not an object, or not a valid request |
+| `ObservedCancelReceived` | a `$/cancel_request` the peer sent, `ID` the request it names |
+| `ObservedCancelSent` | a `$/cancel_request` the connection sent as a caller's context ended |
+| `ObservedRefused` | a request answered without its handler: over the concurrency limit, past the byte budget, or during `Shutdown` |
+| `ObservedUnmatchedResponse` | a response no pending call took, such as a late answer |
+| `ObservedDropped` | a notification dropped under `OverflowDropNewest`, or, with `ErrNotificationQueueOverflow`, the one whose overflow closed the connection |
+
+With both chains and an observer set, every message is seen once. The observer
+runs on the goroutine that met the message, the reader for every kind but
+`ObservedCancelSent`. It must be safe for concurrent use and must not block,
+since the connection reads nothing while it runs. No lock of the connection's is
+held, so it may call `QueuedBytes` or `RefusedMessages`. With no observer, each
+of these places costs one `nil` check. Counting refusals for a metric:
+
+```go
+var refused atomic.Int64
+conn := acp.NewClientSideConnection(client, stdin, stdout,
+    acp.WithObserver(func(o acp.Observation) {
+        if o.Kind == acp.ObservedRefused {
+            refused.Add(1)
+        }
+    }))
+```
+
 ### Remote agents
 
 Package `remote` runs ACP over the network. It implements the RFD

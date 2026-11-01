@@ -70,6 +70,10 @@ and `make api` gates it with the root, `agentproc` and `clienthost`.
   `WaitContext`, `Wait` bounded by a context, through the one goroutine
   `TestGoStatementsCounted` lets `Wait` not count; 0041, items 6 and 7; and
   `Shutdown`, the graceful close; 0042, item 2),
+  `middleware.go` (`Middleware`, `WithReceivingMiddleware`,
+  `WithSendingMiddleware`, `RequestIDFromContext`, and the sending chain's
+  innermost step; 0046), `observer.go` (`WithObserver`, `Observation` and its
+  kinds; 0046),
   `errors.go` (the error types and constructors, and `IsMethodNotFound`,
   `IsAuthRequired`, `IsCancelled`, `IsResourceNotFound` and `Reason`),
   `extensions.go` (`_`-prefixed methods, and `ExtensionMux`, `TraceMeta` and
@@ -460,8 +464,8 @@ full. `OverflowBlock`, the default, and also what an undefined policy becomes in
   connection's end wakes it through `wakeNotificationWaits`. Woken by the end,
   the reader shuts down as at a failed read.
 - `peerWaits`, under `notifyMu`, counts the waits the notification loop has on
-  the reader. `exchange` and `SendRequestNoResult` count a request sent under
-  the running notification's context (`inRunningNotification`), and
+  the reader. `exchangePrepared`, which every request takes, counts one sent
+  under the running notification's context (`inRunningNotification`), and
   `sendRequestCommit` counts `initialize` until `settled` runs. `beginPeerWait`
   wakes the reader as it counts one.
 - While any is counted, the reader does not pause, and reads on until the
@@ -491,6 +495,41 @@ The byte budget sits beside the count
   - Requests' bytes count toward the total, but never trigger a notification's
     policy alone, since a request's handler may wait for a response only the
     reader delivers.
+
+Middleware and the observer sit on this path
+([0046-MADR-sending-and-receiving-middleware.md](decisions/0046-MADR-sending-and-receiving-middleware.md)),
+in `middleware.go` and `observer.go`. Each chain is built once, in
+`buildConnection`, by `chainMiddleware`, the first registered outermost. With
+nothing registered, no path changes: the receiving handler is the one given, and
+each sending path checks `c.sending` for `nil` and runs its old code.
+
+- **Receiving.** The chain replaces the handler, so `handleInbound` calls it
+  where it called the handler: inside the request's slot and byte count, or on
+  the notification worker. The generated dispatch, with `checkInbound` and
+  `checkResult`, is its innermost step. A `nil` handler under a chain becomes
+  `notFound`, which answers as `handleInbound`'s `nil` branch does. A received
+  request's id rides beside its receipt, in `requestReceipt`, since a request's
+  `messageMark` is a zero literal that costs no allocation.
+- **Sending.**
+  - `sendRequestSent`, `sendRequestCommit`, `SendRequestNoResult` and
+    `SendNotification` run `startCall`, `exchange`'s checks and
+    `prepareRequest`, or `prepareNotification`, then `runChain`, which carries
+    an `outboundCall` in the context.
+  - `sendInnermost` checks the call against D10's rules and returns
+    `ErrSendingMiddleware` for a broken one. Otherwise it writes, or runs
+    `exchangePrepared` and the barrier, and records on the call what it met.
+  - After the chain, `decodeResult` decodes and checks what the chain returned.
+    For `initialize`, `commitThroughChain` refuses a replaced result, runs
+    `settled` when no answer was judged, and returns `committedResult` from the
+    recorded answer.
+  - The cancel sender writes through `notifyDirect`, outside the chain.
+- **The observer.** `observe` returns at once when none is set, and otherwise
+  copies the id and calls it. `answerObserved` answers and then reports. The
+  sites are the faults in `receive` and `receiveLine`, `$/cancel_request`
+  received (`handleCancelRequest` returns the id it named) and sent
+  (`sendCancelRequests`), the three refusals, `receiveResponse` for a response
+  `handleResponse` did not hand over or one without an id, and the drop and
+  the overflow close. None runs under a lock.
 
 One writer goroutine, started by `start`, writes every message, in the order
 `sendMessage` hands them over through an unbuffered channel; a sender returns
@@ -579,6 +618,20 @@ Checks that guard this:
 
   `connection_overflow_policy_test.go` covers the close and drop policies, each
   named.
+- `connection_middleware_test.go` covers the receiving chain:
+  - its order, its construction, and a `nil` handler under it;
+  - a short-circuit, raw params and the checked result;
+  - the slot and bytes it holds, received ids, and the barrier.
+
+  `connection_sending_middleware_test.go` covers the sending chain:
+  - every sending path, `Initialize` included, its order and its results;
+  - the cancel left out, and each rule of D10;
+  - `initialize` refused before `next`, and its record;
+  - the barrier, sent ids, and `Prompt`'s `sent`.
+
+  `connection_observer_test.go` covers each kind at each of its sites, no lock
+  held, the chains and the observer seeing each message once, and nothing
+  copied without an observer.
 - `connection_close_test.go` covers a send that returns on its context, `Close`,
   a send after either end, and the overflow close; `errors_test.go` the
   causes of local errors; `conn_aware_test.go` the hand-off before reading,

@@ -310,9 +310,20 @@ The parts of the decision:
   * Nothing registered: no allocation is added to any path, the receiving path is unchanged, and the sending paths add one nil
     check. `BenchmarkPromptRoundTrip` and `BenchmarkSessionUpdateNotify` must show the same allocations per operation, and
     bytes per operation up by at most one word per received request (D5).
-  * Sending middleware registered: the call's state and the context that carries it, two allocations per sent message, plus
-    whatever the middleware allocates. Receiving middleware registered: none added by the SDK. Both are measured by new
+  * ~~Sending middleware registered: the call's state and the context that carries it, two allocations per sent message, plus
+    whatever the middleware allocates.~~ Receiving middleware registered: none added by the SDK. Both are measured by new
     benchmarks and recorded.
+
+    *Amended 2026-10-31, in phase 5 (the PLAN's deviation 2):* sending middleware registered costs **three allocations per
+    request sent** and two per notification, plus whatever the middleware allocates. They are the call's state, the context
+    that carries it, and, for a request, the raw result boxed as the `any` a `MethodHandler` returns, which D4's contract, a
+    `json.RawMessage` to the chain, requires. Measured:
+    * `BenchmarkPromptRoundTripMiddleware`, one middleware each way on both sides, has 102 allocations per round trip against
+      99, and 363 bytes more;
+    * a notification sent through one, in a scratch copy, has 67 against 65.
+
+    Escape analysis names the box (`resp.msg.Result escapes to heap`). The owner chose to keep D4's contract and state the
+    cost, over folding the call into its context, or returning a `*json.RawMessage`.
 
 ### Questions for the owner
 
@@ -370,8 +381,9 @@ On the owner's ask to assess the pair against the tree, before acceptance. Nothi
   would refuse, nor make it accept a response it would refuse.
 * Good, because misuse on the sending side fails at once with a named rule (D10), where it would otherwise hang under the
   barrier or desynchronize a pending call.
-* Neutral, because each registered middleware adds a function call per message, and sending middleware two allocations per sent
-  message. The chain is built once, so there is no closure per call, as in gRPC.
+* Neutral, because each registered middleware adds a function call per message, and sending middleware ~~two allocations per sent
+  message~~ three allocations per request sent and two per notification (D11 as amended). The chain is built once, so there is
+  no closure per call, as in gRPC.
 * Bad, because a receiving middleware that answers in the handler's place skips the SDK's validation and result check of that
   message. It is documented, and the hooks remain for validation.
 * Bad, because raw params mean that a middleware authorizing on a field decodes the params itself. The typed hooks remain for

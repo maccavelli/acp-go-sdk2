@@ -329,3 +329,132 @@ func ExampleWithMaxQueuedBytes() {
 	// {"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"Internal error","data":{"error":"too many queued bytes","limit":200}}}
 	// held after: 0
 }
+
+// ExampleWithReceivingMiddleware refuses one method before the handler runs,
+// as an authorization check would; every other message reaches the handler
+// (0046-MADR-sending-and-receiving-middleware.md).
+func ExampleWithReceivingMiddleware() {
+	r, w := io.Pipe()
+	out, outW := io.Pipe()
+	authorize := func(next acp.MethodHandler) acp.MethodHandler {
+		return func(ctx context.Context, method string, params json.RawMessage) (any, *acp.RequestError) {
+			if method == "_example/admin" {
+				return nil, acp.NewAuthRequired(map[string]any{"method": method})
+			}
+			return next(ctx, method, params)
+		}
+	}
+	c := acp.NewConnection(func(context.Context, string, json.RawMessage) (any, *acp.RequestError) {
+		return map[string]any{"ok": true}, nil
+	}, outW, r, acp.WithReceivingMiddleware(authorize))
+	answers := bufio.NewScanner(out)
+
+	for _, req := range []string{
+		`{"jsonrpc":"2.0","id":1,"method":"_example/admin"}`,
+		`{"jsonrpc":"2.0","id":2,"method":"_example/read"}`,
+	} {
+		if _, err := fmt.Fprintln(w, req); err != nil {
+			fmt.Println("write:", err)
+			return
+		}
+		answers.Scan()
+		fmt.Println(answers.Text())
+	}
+	_ = w.Close() // the end of the peer's output
+	_ = c.Wait()
+	// Output:
+	// {"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"Authentication required","data":{"method":"_example/admin"}}}
+	// {"jsonrpc":"2.0","id":2,"result":{"ok":true}}
+}
+
+// ExampleWithSendingMiddleware adds a W3C trace context to every message the
+// connection sends, in params._meta where ACP reserves it, and logs each
+// call's method, id and outcome. The peer here prints what it reads and
+// answers each request (0046-MADR-sending-and-receiving-middleware.md).
+func ExampleWithSendingMiddleware() {
+	// r carries what the peer writes to the connection, out what the
+	// connection writes to the peer.
+	r, w := io.Pipe()
+	out, outW := io.Pipe()
+	trace := func(next acp.MethodHandler) acp.MethodHandler {
+		return func(ctx context.Context, method string, params json.RawMessage) (any, *acp.RequestError) {
+			p := map[string]any{}
+			if len(params) > 0 {
+				if err := json.Unmarshal(params, &p); err != nil {
+					return nil, acp.NewInternalError(map[string]any{"error": err.Error()})
+				}
+			}
+			p["_meta"] = acp.TraceMeta("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01", "", "")
+			traced, err := json.Marshal(p)
+			if err != nil {
+				return nil, acp.NewInternalError(map[string]any{"error": err.Error()})
+			}
+			id, _ := acp.RequestIDFromContext(ctx)
+			result, rerr := next(ctx, method, traced)
+			fmt.Printf("%s id %s: error %v\n", method, string(id), rerr)
+			return result, rerr
+		}
+	}
+	c := acp.NewConnection(nil, outW, r, acp.WithSendingMiddleware(trace))
+
+	peer := make(chan struct{})
+	go func() {
+		defer close(peer)
+		lines := bufio.NewScanner(out)
+		for lines.Scan() {
+			fmt.Println("peer read:", lines.Text())
+			var req struct {
+				ID json.RawMessage `json:"id"`
+			}
+			if json.Unmarshal(lines.Bytes(), &req) == nil && req.ID != nil {
+				_, _ = fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%s,"result":{}}`+"\n", req.ID)
+			}
+		}
+	}()
+	if err := c.SendRequestNoResult(context.Background(), "_example/ping", map[string]any{"n": 1}); err != nil {
+		fmt.Println("ping:", err)
+	}
+	// The end of the peer's output ends the connection.
+	_ = w.Close()
+	_ = c.Wait()
+	_ = outW.Close()
+	<-peer
+	// Output:
+	// peer read: {"jsonrpc":"2.0","id":1,"method":"_example/ping","params":{"_meta":{"traceparent":"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"},"n":1}}
+	// _example/ping id 1: error <nil>
+}
+
+// ExampleWithObserver reports a request the connection refused over its
+// concurrency limit, which no middleware sees, with its kind, method, id and
+// the answer sent (0046-MADR-sending-and-receiving-middleware.md).
+func ExampleWithObserver() {
+	r, w := io.Pipe()
+	out, outW := io.Pipe()
+	entered, release := make(chan struct{}), make(chan struct{})
+	report := func(o acp.Observation) {
+		fmt.Printf("%s %s id %s: %v\n", o.Kind, o.Method, string(o.ID), o.Err)
+	}
+	c := acp.NewConnection(func(context.Context, string, json.RawMessage) (any, *acp.RequestError) {
+		close(entered)
+		<-release // a slow handler: it holds the only slot
+		return map[string]any{}, nil
+	}, outW, r, acp.WithMaxConcurrentRequests(1), acp.WithObserver(report))
+	answers := bufio.NewScanner(out)
+
+	if _, err := fmt.Fprintln(w, `{"jsonrpc":"2.0","id":1,"method":"_example/slow"}`); err != nil {
+		fmt.Println("write:", err)
+		return
+	}
+	<-entered
+	if _, err := fmt.Fprintln(w, `{"jsonrpc":"2.0","id":2,"method":"_example/fast"}`); err != nil {
+		fmt.Println("write:", err)
+		return
+	}
+	answers.Scan() // the refusal of request 2
+	close(release)
+	answers.Scan() // the answer to request 1
+	_ = w.Close()  // the end of the peer's output
+	_ = c.Wait()
+	// Output:
+	// refused _example/fast id 2: {"code":-32603,"message":"Internal error","data":{"error":"too many concurrent requests","limit":1}}
+}

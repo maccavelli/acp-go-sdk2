@@ -233,6 +233,33 @@ func TestReadmeRemoteIsTheExample(t *testing.T) {
 	}
 }
 
+// TestReadmeMiddlewareIsTheExample requires the README's tracing middleware,
+// in "Middleware and observing", to be ExampleWithSendingMiddleware's body,
+// so the README shows code that compiles and runs
+// (0046-PLAN-sending-and-receiving-middleware.md, step 5.1).
+func TestReadmeMiddlewareIsTheExample(t *testing.T) {
+	t.Parallel()
+	want := exampleBody(t, "example_api_test.go", "ExampleWithSendingMiddleware")
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const open, end = "<!-- example: ExampleWithSendingMiddleware -->\n", "<!-- /example -->"
+	_, rest, ok := strings.Cut(string(readme), open)
+	block, _, closed := strings.Cut(rest, end)
+	if !ok || !closed {
+		t.Fatalf("README.md has no block between %q and %q", open, end)
+	}
+	got, fenced := strings.CutPrefix(strings.TrimSpace(block)+"\n", "```go\n")
+	got, ended := strings.CutSuffix(got, "```\n")
+	if !fenced || !ended {
+		t.Fatalf("the middleware example is not one Go block:\n%s", block)
+	}
+	if got != want {
+		t.Errorf("README.md's middleware example is not ExampleWithSendingMiddleware's body.\nREADME:\n%s\nexample:\n%s", got, want)
+	}
+}
+
 // exampleBody prints the body of the function name of file, without its
 // braces, one indent removed and each remaining tab as four spaces.
 func exampleBody(t *testing.T, file, name string) string {
