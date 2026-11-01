@@ -238,7 +238,10 @@ Each is seen in the PLAN, in scratch clones, never in the tree:
 4. A `go.mod` that `go mod tidy -diff` refuses, named alone, fails the new check.
 5. Named docs-safe files alone, `docs/README.md` and `AGENTS.md`, exit 0 without running the Go checks; adding `README.md` runs
    them.
-6. A second run of the check, with nothing changed, prints no `(cached)` line.
+6. ~~A second run of the check, with nothing changed, prints no `(cached)` line.~~ *Amended 2026-11-01, in the PLAN's phase 3
+   (its deviation 1):* the check prints `go test`'s output only on a failure, so no line shows a pass was cached. Shown instead:
+   with the cache warmed by the old check itself, and then `example/client` changed so `TestExamplePair` fails, the old check
+   passes from the cache and the new one fails.
 7. With `ACPTEST_UPDATE=1` in the environment, the check leaves the tree unchanged: `git status --porcelain` is empty after it.
 8. An unformatted untracked `.go` file fails the check with no file named.
 9. `--docs-safe`'s unit tests, in `scripts/test_check_ci_filters.py`, each seen to fail on a planted break.

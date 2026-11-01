@@ -103,7 +103,9 @@ output and exit status.
 4. **`go.mod` alone:** a `require` of a module the code does not import, `FILES=go.mod`: exit 1, from `go mod tidy -diff`.
 5. **Docs-safe alone:** `FILES="docs/README.md AGENTS.md"`: exit 0, the docs-safe line, and no `go` command run (timed: under a
    second). `FILES="docs/README.md README.md"`: the checks run.
-6. **No cache:** two runs in a row: no `(cached)` in either's output.
+6. ~~**No cache:** two runs in a row: no `(cached)` in either's output.~~ *Amended by deviation 1:* **no cache:** the old check
+   run once on a clean clone to warm the cache, then `example/client/main.go` changed as in item 2, no file named: the old check
+   exits 0 from the cache, the new one exits 1 with `TestExamplePair`.
 7. **The environment:** `ACPTEST_UPDATE=1 make pre-add-check`, then `git status --porcelain`: empty.
 8. **A new file:** an untracked, unformatted `x.go` at the root, no file named: exit 1, gofmt naming it.
 9. **The timing,** as the MADR's F7 measured it: the new check with `FILES=connection.go` and with none, recorded beside 50.1 s.
@@ -223,3 +225,77 @@ these outputs shows nothing; phase 3's item 6 is shown another way (see there).
 check-records`, `make markdownlint` and `make disclosure-check`, each exit 0.
 
 No deviation. Phase 3 waits for the owner.
+
+### Phase 3, 2026-11-01
+
+The owner committed phase 2 as `3f0684e` and said "committed, proceed".
+
+**Deviation 1, 2026-11-01, step 3.6: "no `(cached)` line" shows nothing.**
+
+* *Found* in step 2.5: the check prints `go test`'s output only on a failure, so a pass from the cache and a pass that ran look
+  the same. Step 3.6 and the MADR's Confirmation 6, as written, could not fail.
+* *Told the owner* in phase 2's handoff, with the replacement below; the owner said "committed, proceed".
+* *Replaced* by a run that can fail: the old check warms the cache on a clean clone, `example/client` is changed so
+  `TestExamplePair` fails, and the old check must pass from the cache while the new one fails. The MADR's Confirmation 6 and
+  step 3.6 are annotated. No decision changes, and no file is added to the scope.
+
+**Steps 3.1 to 3.8,** a scratch script (`confirm.py`), each item in its own `git clone` of the tree at `3f0684e` (item 1 at
+`f8e7ecb`), never in the tree. The new check is `scripts/go-precheck.sh` at `3f0684e`; the old one is the script at `7ded01e`, run
+from a copy outside the clone. Every run sets `GO_PRECHECK_SKIP_VULN=1`: govulncheck is unchanged here, and ran in step 2.5. A
+failing test's name is read from the output file the new check names.
+
+| Item | Setup | New check | Old check |
+| :--- | :--- | :--- | :--- |
+| 1 | `f8e7ecb`, deviation 3's tree, with this PLAN's two scripts copied in; `FILES=connection.go` | exit 1, 104 s; "go test -race -shuffle=on (cmd/generate)", `TestEngineBehaviour` failing | exit 0, 23 s |
+| 2 | `example/client/main.go` prints `stopped, reason`; `FILES=example/client/main.go` | exit 1, 145 s; `TestExamplePair` failing | exit 0, 8 s |
+| 3 | the README's middleware example calls `_example/pong`; `FILES=README.md` | exit 1, 116 s; `TestReadmeMiddlewareIsTheExample` failing | exit 0: "go-precheck: no Go files to check." |
+| 4 | `go.mod` marks its direct `golang.org/x/sys` requirement `// indirect`; `FILES=go.mod` | exit 1, 139 s; "go mod tidy -diff (.)" | exit 0: "go-precheck: no Go files to check." |
+| 5 | `FILES="docs/README.md AGENTS.md"`, with `go` and `gofmt` on `PATH` replaced by scripts that fail | exit 0, 0.5 s, "only docs-safe files named; no Go check runs.", neither replacement called | — |
+| 5 | `FILES="docs/README.md README.md"` | exit 0, 120 s, every check run | — |
+| 6 | the old check warms the cache (exit 0, 117 s); then item 2's change; no file named | exit 1, 86 s; `TestExamplePair` failing | exit 0, 16 s: every result from the cache |
+| 7 | a golden test in `acptest` and a stale `testdata/plant.golden` committed in the clone; `ACPTEST_UPDATE=1`; lint replaced by `true` so the plant needs no lint fixes | exit 1, 104 s, `TestPlantGolden` failing; `git status --porcelain` empty | — |
+| 7 | the same, with `unset ACPTEST_UPDATE` removed from a copy of the new script | exit 0; `M acptest/testdata/plant.golden` | — |
+| 8 | an untracked, unformatted `plant_unformatted.go` at the root; no file named | exit 1, 126 s; gofmt names the file | exit 1, from lint; its gofmt step does not name the file |
+
+"8/8 as required". Item 6 first ran with the cache warmed by `go test -race ./...` itself. The old check then exited 1: it ran
+the root package, `clienthost` and `example/remote` afresh rather than from the cache, because the old script sets
+`GOEXPERIMENT` to the empty string and the warm-up left it unset, which is a different cache key. The warm-up was replaced by the
+old check itself, and the item ran again, as the table shows. Each run's output is kept in the session's scratch directory.
+
+**Step 3.9, the timing.** Step 2.5's runs on the tree: `FILES=connection.go` 90.1 s and no file 98.4 s, both with govulncheck,
+against 50.1 s for the root package alone before (MADR F7). The clones above, each with a cold test cache for its path, took
+86 s to 145 s.
+
+**Step 3.10, the gates,** `tools/gates.py --all`, the hosts set per command, exit 0:
+
+```text
+ok   regen (exit 0)
+ok   precheck (exit 0)
+  newfiles: no new .go files
+ok   newfiles (exit 0)
+ok   nojsonv2 (exit 0)
+ok   winvet (exit 0)
+ok   records (exit 0)
+ok   mdlint (exit 0)
+ok   idscan (exit 0)
+ok   tools (exit 0)
+ok   lint (exit 0)
+ok   fix (exit 0)
+ok   tidy (exit 0)
+ok   api (exit 0)
+ok   race3 (exit 0)
+ok   floor (exit 0)
+ok   platforms (exit 0)
+ok   windows (exit 0)
+ok   linux (exit 0)
+all gates passed
+```
+
+* `precheck`: "go-precheck: 284 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy,
+  govulncheck."
+* `api`: "against v1.31.0: 0 incompatible, 0 compatible".
+* `floor`: "floor gate at go1.26.10: passed", both modules.
+* `windows` and `linux`: the whole tree from source, the root module and `cmd/generate` each "exit 0".
+
+**Left, on the owner's ask:** step 3.11, `make push-guard` after a fetch, the push, and CI on the head; then this PLAN and its row
+`complete`.
