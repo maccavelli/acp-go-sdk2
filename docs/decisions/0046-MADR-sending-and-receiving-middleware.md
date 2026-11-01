@@ -297,7 +297,7 @@ The parts of the decision:
     connection's accessors. A panic ends the process.
   * It sees no message either chain sees: with both chains and the observer set, every message is seen once. It cannot change
     or stop anything.
-  * *Amendment proposed 2026-11-01* (see "Amendment, 2026-11-01: when the observer runs" below): the godoc and the README
+  * *Amendment accepted 2026-11-01* (see "Amendment, 2026-11-01: when the observer runs" below): the godoc and the README
     state when the observer runs relative to what the connection does with the message, and a test pins it.
   * Unset, it costs one nil check at each site, and the id is not copied.
 * **D10. Misuse fails at once.** On the sending side the innermost step refuses, sends nothing, and returns a `*RequestError`
@@ -375,7 +375,7 @@ On the owner's ask to assess the pair against the tree, before acceptance. Nothi
 
 ### Amendment, 2026-11-01: when the observer runs
 
-Proposed. The decision stays `accepted`; this amendment waits for the owner's approval.
+Accepted 2026-11-01 (below). The decision stays `accepted`.
 
 **Found** in [0046-PLAN-sending-and-receiving-middleware.md](0046-PLAN-sending-and-receiving-middleware.md), step 7.1. The release's
 consumer program counted refusals with an observer and printed the count once its refused call returned. One run in three
@@ -431,6 +431,9 @@ Each question was put with three options; the owner chose the recommended one ea
 * The order of work: 0047's PLAN first, then this amendment's phase, so it is checked by 0047's check.
 
 The amendment stays proposed until the owner accepts it.
+
+*2026-11-01:* with [0047-PLAN-pre-add-check-full-coverage.md](0047-PLAN-pre-add-check-full-coverage.md) complete, the owner
+committed `a863ba1` and said "committed, proceed". The amendment is accepted; the PLAN's phase 8 runs it.
 
 ### Consequences
 

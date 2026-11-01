@@ -96,6 +96,15 @@ type Observation struct {
 // the connection held, so it may call the connection's methods, such as
 // QueuedBytes. It cannot change or stop a message. A panic in it ends the
 // process, as a handler's does.
+//
+// fn runs after the connection has acted on the message: after the answer to
+// a fault or a refusal is written, after the request a $/cancel_request names
+// is cancelled, after the connection's own $/cancel_request is written, after
+// the drop handler, and after a response is found to match no call; for the
+// notification whose overflow closes the connection, before the connection
+// closes. So a peer can read an answer before fn has run for it: a program
+// that counts refusals waits for fn, not for the answer
+// (0046-MADR-sending-and-receiving-middleware.md, "Amendment, 2026-11-01").
 func WithObserver(fn func(Observation)) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		cfg.observer = fn

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 )
@@ -196,6 +197,201 @@ func TestObserverReportsEachKind(t *testing.T) {
 				})
 				tc.run(t, c, p, entered)
 				expectObserved(t, ch, tc.want)
+			})
+		})
+	}
+}
+
+// written is an io.Writer that keeps what is written through it, each write
+// once it has returned.
+type written struct {
+	w  io.Writer
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (r *written) Write(p []byte) (int, error) {
+	n, err := r.w.Write(p)
+	r.mu.Lock()
+	r.b.Write(p[:n])
+	r.mu.Unlock()
+	return n, err
+}
+
+// has reports whether what has been written holds each of s.
+func (r *written) has(s ...string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, x := range s {
+		if !strings.Contains(r.b.String(), x) {
+			return false
+		}
+	}
+	return true
+}
+
+// acting is what TestObserverRunsAfterActing's observer inspects when it is
+// called: the connection, what it has written, the context of the request
+// _x/hold runs, and the drop handler's count.
+type acting struct {
+	c     *Connection
+	out   *written
+	held  atomic.Pointer[context.Context]
+	drops atomic.Int64
+}
+
+// handler holds _x/hold requests, keeping their contexts, until release is
+// closed or their context ends, and _x/n notifications until release is
+// closed, signalling entered as each begins; it answers any other message at
+// once.
+func (a *acting) handler(entered chan<- struct{}, release <-chan struct{}) MethodHandler {
+	return func(ctx context.Context, method string, _ json.RawMessage) (any, *RequestError) {
+		switch method {
+		case "_x/hold":
+			a.held.Store(&ctx)
+			entered <- struct{}{}
+			select {
+			case <-release:
+			case <-ctx.Done():
+			}
+		case "_x/n":
+			entered <- struct{}{}
+			<-release
+		}
+		return map[string]any{}, nil
+	}
+}
+
+// unless is "" when ok, and what otherwise.
+func unless(ok bool, what string) string {
+	if ok {
+		return ""
+	}
+	return what
+}
+
+// TestObserverRunsAfterActing requires the observer to be called after the
+// connection has acted on the message: the answer to a fault or a refusal
+// written, the request a $/cancel_request names cancelled, the connection's
+// own $/cancel_request written, the drop handler called; and, for the
+// notification whose overflow closes the connection, before it closes
+// (0046-MADR-sending-and-receiving-middleware.md, "Amendment, 2026-11-01: when
+// the observer runs"). Each runs in a synctest bubble, and its observer
+// records what it finds when it is first called for the case's kind.
+func TestObserverRunsAfterActing(t *testing.T) {
+	t.Parallel()
+	const (
+		hold       = `{"jsonrpc":"2.0","id":1,"method":"_x/hold"}`
+		notifyLine = `{"jsonrpc":"2.0","method":"_x/n"}`
+	)
+	padded := `{"jsonrpc":"2.0","id":3,"method":"_x/r","params":{"pad":"` + strings.Repeat("x", 40) + `"}}`
+	for _, tc := range []struct {
+		name  string
+		kind  ObservationKind
+		opts  func(a *acting) []ConnectionOption
+		run   func(t *testing.T, a *acting, p wire, entered chan struct{})
+		check func(a *acting) string
+	}{
+		{"a fault", ObservedFault, nil, func(_ *testing.T, _ *acting, p wire, _ chan struct{}) {
+			p.send(`{oops`)
+		}, func(a *acting) string {
+			return unless(a.out.has(`"code":-32700`), "the observer ran before the fault's answer was written")
+		}},
+		{"a refusal over the concurrency limit", ObservedRefused, func(*acting) []ConnectionOption {
+			return []ConnectionOption{WithMaxConcurrentRequests(1)}
+		}, func(t *testing.T, _ *acting, p wire, entered chan struct{}) {
+			t.Helper()
+			p.send(hold)
+			within(t, entered, "the held request")
+			p.send(`{"jsonrpc":"2.0","id":2,"method":"_x/r"}`)
+		}, func(a *acting) string {
+			return unless(a.out.has(`"id":2,"error"`), "the observer ran before the refusal was written")
+		}},
+		{"a refusal past the byte budget", ObservedRefused, func(*acting) []ConnectionOption {
+			return []ConnectionOption{WithMaxMessageSize(100), WithMaxQueuedBytes(100)}
+		}, func(t *testing.T, _ *acting, p wire, entered chan struct{}) {
+			t.Helper()
+			p.send(hold)
+			within(t, entered, "the held request")
+			p.send(padded)
+		}, func(a *acting) string {
+			return unless(a.out.has(`"id":3,"error"`), "the observer ran before the refusal was written")
+		}},
+		{"a cancel received", ObservedCancelReceived, nil, func(t *testing.T, _ *acting, p wire, entered chan struct{}) {
+			t.Helper()
+			p.send(`{"jsonrpc":"2.0","id":9,"method":"_x/hold"}`)
+			within(t, entered, "the held request")
+			p.send(`{"jsonrpc":"2.0","method":"$/cancel_request","params":{"requestId":9}}`)
+		}, func(a *acting) string {
+			ctx := a.held.Load()
+			return unless(ctx != nil && (*ctx).Err() != nil, "the observer ran before the request it names was cancelled")
+		}},
+		{"a cancel sent", ObservedCancelSent, nil, func(t *testing.T, a *acting, p wire, _ chan struct{}) {
+			t.Helper()
+			ctx, cancel := context.WithCancel(t.Context())
+			go func() { _ = a.c.SendRequestNoResult(ctx, "_x/slow", nil) }()
+			p.next("the request")
+			cancel()
+		}, func(a *acting) string {
+			return unless(a.out.has(`"$/cancel_request"`, `"requestId":1`), "the observer ran before the $/cancel_request was written")
+		}},
+		{"a notification dropped", ObservedDropped, func(a *acting) []ConnectionOption {
+			return []ConnectionOption{WithNotificationOverflowPolicy(OverflowDropNewest), WithMaxQueuedNotifications(1),
+				WithNotificationDropHandler(func(string, uint64) { a.drops.Add(1) })}
+		}, func(t *testing.T, _ *acting, p wire, entered chan struct{}) {
+			t.Helper()
+			p.send(notifyLine)
+			within(t, entered, "the running notification")
+			p.send(notifyLine)
+			p.send(notifyLine)
+		}, func(a *acting) string {
+			return unless(a.drops.Load() >= 1, "the observer ran before the drop handler")
+		}},
+		{"the overflow that closed the connection", ObservedDropped, func(*acting) []ConnectionOption {
+			return []ConnectionOption{WithNotificationOverflowPolicy(OverflowCloseConnection), WithMaxQueuedNotifications(1)}
+		}, func(t *testing.T, _ *acting, p wire, entered chan struct{}) {
+			t.Helper()
+			p.send(notifyLine)
+			within(t, entered, "the running notification")
+			p.send(notifyLine)
+			_ = p.trySend(notifyLine)
+		}, func(a *acting) string {
+			select {
+			case <-a.c.Done():
+				return "the observer ran after the connection closed"
+			default:
+				return ""
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				a := &acting{}
+				found := make(chan string, 1)
+				observe := func(o Observation) {
+					if o.Kind != tc.kind {
+						return
+					}
+					select {
+					case found <- tc.check(a):
+					default:
+					}
+				}
+				entered, release := make(chan struct{}, 4), make(chan struct{})
+				t.Cleanup(sync.OnceFunc(func() { close(release) }))
+				opts := []ConnectionOption{WithObserver(observe), quietLogs()}
+				if tc.opts != nil {
+					opts = append(opts, tc.opts(a)...)
+				}
+				p := rawWire(t, func(w io.Writer, r io.Reader) {
+					a.out = &written{w: w}
+					a.c = NewConnection(a.handler(entered, release), a.out, r, opts...)
+				})
+				tc.run(t, a, p, entered)
+				if what := within(t, found, tc.kind.String()); what != "" {
+					t.Errorf("%v: %s", tc.kind, what)
+				}
 			})
 		})
 	}

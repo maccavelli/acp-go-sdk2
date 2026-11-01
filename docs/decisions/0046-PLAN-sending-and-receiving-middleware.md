@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 date: 2026-11-01
 associated-madr: "0046-MADR-sending-and-receiving-middleware.md"
 ---
@@ -1085,3 +1085,55 @@ and its row are `complete`. Left for later records, each on the owner's ask: `sc
 
 *2026-11-01:* the first is [0047-PLAN-pre-add-check-full-coverage.md](0047-PLAN-pre-add-check-full-coverage.md); the second is
 phase 8 above, proposed, to run after it.
+
+### Phase 8, 2026-11-01: when the observer runs
+
+The owner committed 0047's close as `a863ba1` and said "committed, proceed". The MADR's amendment is accepted, and this PLAN and
+its row are `in-progress` again. No Go file changed between `v1.31.0` (`093649b`) and `a863ba1`
+(`git diff --stat 093649b a863ba1 -- '*.go'` is empty), so every line the amendment cites holds as written.
+
+**Step 8.1, `TestObserverRunsAfterActing`,** in `connection_observer_test.go`, 196 lines added:
+
+* `written` wraps the connection's writer and keeps each write once it returns; `acting` holds what the observer inspects: the
+  connection, `written`, the context of the request `_x/hold` runs (`atomic.Pointer`), and the drop handler's count; its handler
+  holds `_x/hold` until released or cancelled, and `_x/n` until released.
+* Seven subtests, each in a synctest bubble, its observer recording what it finds when first called for the case's kind:
+  * a fault (`{oops`): the `-32700` answer already written;
+  * a refusal over the concurrency limit, and one past the byte budget: `"id":2,"error"` and `"id":3,"error"` already written;
+  * a cancel received for a held request with id 9: that request's context already done;
+  * a cancel sent after `SendRequestNoResult`'s context ends: `"$/cancel_request"` and `"requestId":1` already written;
+  * a notification dropped under `OverflowDropNewest`: the drop handler already called;
+  * the overflow that closes the connection: `Done()` still open.
+* `go test -race -count=3 -run '^TestObserverRunsAfterActing$' -v .`: each of the seven subtests "PASS" three times; `ok`.
+
+**Step 8.2, seen to fail,** `tools/plants.py`, five plants, "5/5 as required", each built from the source's own lines by a
+scratch script (`plants_p8.py`):
+
+| Break | Failed | Message |
+| :--- | :--- | :--- |
+| `answerObserved` observes before it answers | `a_fault`, both refusal subtests | "fault: the observer ran before the fault's answer was written"; "refused: the observer ran before the refusal was written" |
+| the cancel sent observed before `notifyDirect` | `a_cancel_sent` | "cancel_sent: the observer ran before the $/cancel_request was written" |
+| the cancel received observed before `handleCancelRequest` | `a_cancel_received` | "cancel_received: the observer ran before the request it names was cancelled" |
+| `dropNotification` observes before the drop handler | `a_notification_dropped` | "dropped: the observer ran before the drop handler" |
+| the overflow observed after `shutdownReceive` | `the_overflow_that_closed_the_connection` | "dropped: the observer ran after the connection closed" |
+
+**Step 8.3, the godoc,** `WithObserver` in `observer.go`, 9 lines: a paragraph after the one on where fn runs, stating the order
+at each site, the overflow's exception, and that a program counting refusals waits for fn, not for the answer, citing the
+amendment.
+
+**Step 8.4, the README,** "What the chains do not see": the paragraph on where the observer runs ends at the `nil` check; a new
+paragraph states the order and the exception, and leads into the refusal-counting example, unchanged.
+`go test -count=1 -run 'Readme|Doc|Example|Exported' .`: `ok`.
+
+**Step 8.5, checks:**
+
+* `go test -race -count=3 -run 'Observer' .`: `ok`.
+* `make pre-add-check FILES="observer.go connection_observer_test.go README.md"`, 0047's check, exit 0: "go-precheck: 2 file(s)
+  gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `make api`, exit 0: "against v1.31.0: 0 incompatible, 0 compatible".
+* `tools/gates.py --all`, the hosts set per command, exit 0: all eighteen gates `ok`, `regen` to `linux`, "all gates passed".
+* `make check-records`, `make markdownlint`, `make disclosure-check`, each exit 0.
+
+No deviation. **Left, each on the owner's ask (step 8.6):** the commit and push of this phase and its CI; then
+`docs/reports/0046-REPORT-release-notes-v1-31-1.md`, `tools/release_body.py`, the owner's tag `v1.31.1` and release,
+`tools/publication.py` and `tools/consumer.py v1.31.1`; then this PLAN and its row `complete`.

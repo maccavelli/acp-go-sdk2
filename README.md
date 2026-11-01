@@ -1071,7 +1071,15 @@ runs on the goroutine that met the message, the reader for every kind but
 `ObservedCancelSent`. It must be safe for concurrent use and must not block,
 since the connection reads nothing while it runs. No lock of the connection's is
 held, so it may call `QueuedBytes` or `RefusedMessages`. With no observer, each
-of these places costs one `nil` check. Counting refusals for a metric:
+of these places costs one `nil` check.
+
+The observer runs after the connection has acted on the message: after a fault's
+or a refusal's answer is written, after a cancelled request's context ends,
+after the connection's own `$/cancel_request` is written, and after the drop
+handler. The one exception is the notification whose overflow closes the
+connection, reported before it closes. So the peer can read a refusal before the
+observer has counted it; code that counts waits for the observer, not for the
+answer. Counting refusals for a metric:
 
 ```go
 var refused atomic.Int64
