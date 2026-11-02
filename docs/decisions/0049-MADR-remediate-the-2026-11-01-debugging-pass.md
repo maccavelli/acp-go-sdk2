@@ -439,6 +439,40 @@ Each fix's test is its probe, kept, seen to fail before the fix and to pass afte
 * **Q7. Order across PLANs:** (a) runtime first, then surface, subpackages, tooling, generator (recommended: R1 and P1 reach
   consumers today); (b) by whichever area holds the most medium findings.
 
+#### Answered by the owner, 2026-11-01
+
+The owner committed this record as `5c3344c` and said "committed, proceed". Each question was then put with three options; the
+owner chose the recommended one each time:
+
+* Q1 (a): five PLANs by area. Not chosen: one PLAN by severity; high and medium only.
+* Q2 (a): refuse a replaced or short-circuited `initialize` result on the receiving side. Not chosen: record the result after
+  the chain; document only.
+* Q3 (a): gate the unstable capabilities as the stable ones are. Not chosen: record them as ungated; gate plan updates only.
+* Q4 (a): strict on send, readable on receive, lenient fields as the schema says. Not chosen: strict both ways; only an empty
+  `stopReason`.
+* Q5 (a): a `HandlerOptions` Host allowlist, defaulting to the loopback names on a loopback listener. Not chosen: document only;
+  refuse every Host that is not an IP literal or `localhost`.
+* Q6 (a): discard an over-long WebSocket message and answer `-32600`. Not chosen: document the difference; close on write too.
+* Q7 (a): runtime, then surface, subpackages, tooling, generator. Not chosen: tooling first; most medium findings first.
+
+Each PLAN is written when its turn comes, against the tree as it then stands, so its line references hold; the first is
+[0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md). The decision stays `proposed` until the owner accepts it with that PLAN.
+
+#### R1's and R2's designs, decided 2026-11-01
+
+* **R1, the bound.** The reader queues the answers it gives itself, to faults and refusals, for a separate goroutine to write,
+  and never waits on the peer. Asked what bounds that queue, with three options, the owner chose the recommended one: past 1 024
+  unwritten answers the connection closes, its error naming a peer that does not read. Not chosen: an unbounded queue; dropping
+  past the cap with a log, which leaves a request unanswered.
+  * A consequence for [0046-MADR-sending-and-receiving-middleware.md](0046-MADR-sending-and-receiving-middleware.md)'s D9 and its
+    amendment of 2026-11-01: the observer for `ObservedFault` and `ObservedRefused` runs on that goroutine, after the answer is
+    written, not on the reader. The order the amendment states holds; where the observer runs changes, and with it the reader no
+    longer stalls while it runs for those kinds. The runtime PLAN amends 0046 to say so.
+* **R2, the guard (Q2 a).** On the agent's side only, where the dispatch records `initialize`, the connection notes the result the
+  dispatch returned; when the receiving chain returns another result, or returns one without the dispatch having run, the
+  request is answered `-32603` and the reason logged at `Error`. A middleware that fails `initialize` with an error is allowed, as
+  on the sending side. No exported identifier is added.
+
 ### Consequences
 
 * Good, because a deadlock, a crash, and four schema mismatches a peer can see are fixed, each with a test that would have caught
