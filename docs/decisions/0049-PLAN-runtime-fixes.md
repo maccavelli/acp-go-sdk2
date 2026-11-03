@@ -446,3 +446,18 @@ The MADR's R findings, each with what shows it:
 Each test was seen to fail on its fix reverted, in phases 1 to 3's plants.
 
 Steps 2 to 4 wait on the owner: the push, CI on the head, and the release when asked.
+
+**Step 2, CI.** The owner committed the record as `427c40d` and pushed `d55ba2a..427c40d` after `make push-guard` passed
+for its five code and record commits. The owner then said "committed and pushed, proceed". `tools/watch_ci.py 427c40d
+--branch main` read two runs:
+
+* CI's run `41720647295`, "completed success", six `validate` jobs on Ubuntu, Windows and macOS at Go `1.27.3` and
+  `1.26.10`;
+* the Docs workflow's run `41720647338`, "completed success".
+
+**Step 3, the release, begun.**
+
+* [0049-REPORT-release-notes-v1-31-2.md](../reports/0049-REPORT-release-notes-v1-31-2.md) drafts the release text. It leads
+  with R1, and each statement names its commit.
+* `make api` on `427c40d`: "against v1.31.1: 0 incompatible, 0 compatible".
+* The report is staged with its row. `tools/release_body.py v1.31.2 <rev>` runs once it is committed, before the tag.
