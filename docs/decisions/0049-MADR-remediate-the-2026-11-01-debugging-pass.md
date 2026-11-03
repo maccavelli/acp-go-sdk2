@@ -94,6 +94,9 @@ wrong result or breaks a documented contract on a reachable path; **low** is an 
 
 ### F-R: the connection runtime
 
+*Done 2026-11-03:* R1 to R10 are fixed in `v1.31.2` by [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md), each with
+the test its phase 4 table names; R2 as amended under "R1's and R2's designs".
+
 **R1. High. Two SDK peers can deadlock: the reader writes its refusals synchronously.** `connection.go:1699-1718`, `:1735-1744`
 (refusals), `:1524`, `:1653-1670` (faults), `:1957-1963` (`answer` writes with `sendMessage(context.Background())` on the reader's
 goroutine), `observer.go:126-128`.

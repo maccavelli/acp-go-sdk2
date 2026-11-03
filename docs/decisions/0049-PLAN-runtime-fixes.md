@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-11-03
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
@@ -461,3 +461,39 @@ for its five code and record commits. The owner then said "committed and pushed,
   with R1, and each statement names its commit.
 * `make api` on `427c40d`: "against v1.31.1: 0 incompatible, 0 compatible".
 * The report is staged with its row. `tools/release_body.py v1.31.2 <rev>` runs once it is committed, before the tag.
+
+The owner committed the report as `69eff66` and pushed it, then tagged `v1.31.2` on `69eff66` and pushed the tag. After the
+consumer check below, the owner created the release with `gh release create v1.31.2 --title v1.31.2 --notes-file <the body>`,
+which printed its URL.
+
+* `tools/release_body.py v1.31.2 69eff66`: exit 0, "77 lines, 1 links"; `idscan` over the body, 0 matches. The one link names
+  the MADR at the tag.
+* **CI,** read by `tools/watch_ci.py 69eff66`:
+  * the tag's run `41729591119`, "completed success", six `validate` jobs on Ubuntu, Windows and macOS at Go `1.27.3` and
+    `1.26.10`;
+  * the Docs workflow's run `41728264484` on `main`, "completed success".
+* `tools/consumer.py v1.31.2`: exit 0, "as required". The module at the floor, `go 1.26.10`, requires `v1.31.2`, its test is
+  `ok`, and its Windows build exits 0.
+* `tools/publication.py v1.31.2 69eff66 <the body>`: exit 0, "10 of 10 checks hold". The checks:
+  * the release exists, not a draft or prerelease, and is marked latest;
+  * its body is the extracted text;
+  * the tag is annotated, names `69eff66`, and is on origin's `main`;
+  * CI passed on that head and on the tag;
+  * the proxy serves the tag at that commit;
+  * `go list -m @latest` gives `v1.31.2`;
+  * `go mod download` works with the checksum database on.
+
+**Step 4.** This PLAN and its row are `complete`. The MADR's F-R section records R1 to R10 as done in `v1.31.2`. The MADR stays
+`accepted`, with four PLANs to come (Q1 a, Q7 a).
+
+**Verification,** against the section above:
+
+* R1 to R9 each have a committed test that failed with its fix reverted and passes now. R10 is godoc. See the table in step 1.
+* Two SDK peers refusing each other complete every call (`TestPeersRefusingEachOtherDoNotDeadlock`). A peer that never reads
+  closes the connection past 1,024 answers (`TestUnreadAnswersCloseTheConnection`).
+* `make api`: no change against `v1.31.1`.
+* Requests' allocations per operation are unchanged in every benchmark run of phases 1 and 3.
+* `tools/gates.py --all`, 18 of 18, and CI on `427c40d`, `69eff66` and the tag, pass.
+
+Not done here, by the MADR's plan: the surface, subpackage, tooling and generator findings, each in its own PLAN, written when
+its turn comes.
