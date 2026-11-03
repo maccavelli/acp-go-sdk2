@@ -21,9 +21,12 @@ import (
 //   - at ctx's end, it shuts the connection down with Shutdown, within the
 //     same 5 s: every handler's context ends with ErrShutdown, and a handler
 //     that honours it is answered, an agent's prompt cancelled, before the
-//     connection closes. It returns context.Cause(ctx), joined with
-//     Shutdown's error, which wraps ErrHandlersRunning too when the 5 s pass
-//     with requests unanswered, their handlers still running.
+//     connection closes. Within those 5 s it then waits for the connection's
+//     handlers, the notifications' included, as at in's end. It returns
+//     context.Cause(ctx), joined with Shutdown's error, which wraps
+//     ErrHandlersRunning too when the 5 s pass with a handler still running,
+//     a request's or a notification's
+//     (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R4).
 //
 // The agent's own cleanup is the caller's, once ServeAgent has returned. Its
 // bound is the one the connection gives its input's drain
@@ -48,8 +51,17 @@ func ServeAgent(ctx context.Context, agent Agent, in io.Reader, out io.Writer, o
 		bound, cancel := context.WithTimeout(context.Background(), notificationQueueDrainTimeout)
 		defer cancel()
 		err := c.Shutdown(bound)
-		// Shutdown's own error, not the joined one: a caller's context whose
-		// cause is context.DeadlineExceeded is not the bound.
+		// Shutdown waits for the requests' handlers; the notifications'
+		// handlers are waited for under the same bound, as at in's end
+		// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R4).
+		if !errors.Is(err, context.DeadlineExceeded) {
+			if werr := c.WaitContext(bound); errors.Is(werr, context.DeadlineExceeded) {
+				err = errors.Join(err, werr)
+			}
+		}
+		// Shutdown's and WaitContext's own errors, not the joined one: a
+		// caller's context whose cause is context.DeadlineExceeded is not the
+		// bound.
 		if errors.Is(err, context.DeadlineExceeded) {
 			err = fmt.Errorf("%w %v after the context's end: %w", ErrHandlersRunning, notificationQueueDrainTimeout, err)
 		}

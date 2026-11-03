@@ -191,6 +191,11 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 var (
 	negotiationField = regexp.MustCompile(`\tnegotiation +atomic\.Pointer\[Negotiation\]\n`)
 	pendingField     = regexp.MustCompile(`\tpending +pendingRequests\n`)
+	// initializeGuard matches the agent's guard on initialize, set to the
+	// model's initialize constant between building its connection and
+	// starting it (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R2).
+	initializeGuard = regexp.MustCompile(`asc\.conn = buildConnection\(asc\.handleWithExtensions, peerInput, peerOutput, opts\.\.\.\)\n` +
+		`\tasc\.conn\.guardInitialize = AgentMethod\w+\n\tif aware, ok := agent\.\(AgentConnAware\); ok \{`)
 )
 
 // TestSideConnectionsFollowTheModel requires each side connection to be
@@ -218,8 +223,8 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 			"// AgentSideConnection represents the agent's view of a connection to a client.\n//\n// Its methods are safe for concurrent use. Messages sent from several\n// goroutines are written whole, one at a time, in the order they reach the\n// connection's writer (0024-PLAN-documentation.md, A5).\ntype AgentSideConnection struct {",
 			"func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection {\n" +
 				"\tif agent == nil {\n\t\tpanic(\"acp: NewAgentSideConnection: nil agent\")\n\t}\n\tif peerInput == nil {\n\t\tpanic(\"acp: NewAgentSideConnection: nil peerInput\")\n\t}\n\tif peerOutput == nil {\n\t\tpanic(\"acp: NewAgentSideConnection: nil peerOutput\")\n\t}\n",
-			"asc.conn = buildConnection(asc.handleWithExtensions, peerInput, peerOutput, opts...)\n" +
-				"\tif aware, ok := agent.(AgentConnAware); ok {\n\t\taware.SetAgentConnection(asc)\n\t}\n" +
+			"asc.conn = buildConnection(asc.handleWithExtensions, peerInput, peerOutput, opts...)\n",
+			"\tif aware, ok := agent.(AgentConnAware); ok {\n\t\taware.SetAgentConnection(asc)\n\t}\n" +
 				"\tasc.conn.start()\n\treturn asc\n}\n",
 			"func (a *AgentSideConnection) DroppedNotifications() uint64 {",
 			"func (a *AgentSideConnection) Done() <-chan struct{} {",
@@ -273,6 +278,15 @@ func TestSideConnectionsFollowTheModel(t *testing.T) {
 			t.Errorf("%s: client_gen.go holds the pending requests: %v, want %v", name, got, want)
 		}
 		gated := name == "with prompt turns"
+		// The agent, which answers initialize, guards its answer against a
+		// receiving middleware, between building its connection and starting
+		// it (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R2).
+		if got := initializeGuard.MatchString(files["agent_gen.go"]); got != gated {
+			t.Errorf("%s: agent_gen.go guards initialize: %v, want %v", name, got, gated)
+		}
+		if strings.Contains(files["client_gen.go"], "guardInitialize") {
+			t.Errorf("%s: client_gen.go guards initialize, which it sends", name)
+		}
 		for file, w := range map[string]string{
 			"agent_gen.go":  "func (a *AgentSideConnection) gate(",
 			"client_gen.go": "func (c *ClientSideConnection) resultGate(",

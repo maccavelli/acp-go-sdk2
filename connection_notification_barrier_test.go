@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -510,5 +511,90 @@ func TestBarrierAfterOwnNotification(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("the request did not return after the notification before its response completed")
+	}
+}
+
+// connectedPair connects two connections, with handlers ha and hb, over
+// io.Pipe; each is closed when the test ends.
+func connectedPair(t *testing.T, ha, hb MethodHandler) (a, b *Connection) {
+	t.Helper()
+	aR, bW := io.Pipe()
+	bR, aW := io.Pipe()
+	a = NewConnection(ha, aW, aR, quietLogs())
+	b = NewConnection(hb, bW, bR, quietLogs())
+	t.Cleanup(func() {
+		_ = a.Close()
+		_ = b.Close()
+	})
+	return a, b
+}
+
+// TestBarrierAcrossConnections requires a request a notification handler of
+// connection x sends on another connection, y, under its context, as a bridge
+// does, to wait for y's notifications received before its response, as one
+// sent under context.Background() does: x's mark names x, not y
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R3). Each runs in a
+// synctest bubble.
+func TestBarrierAcrossConnections(t *testing.T) {
+	t.Parallel()
+	for _, underNotification := range []bool{false, true} {
+		name := "under context.Background()"
+		if underNotification {
+			name = "under x's notification context"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				gate := make(chan struct{})
+				var yHandled atomic.Bool
+				// y's notification, sent by y's peer before its answer, waits
+				// for gate.
+				// yPeer is set before any request reaches its handler.
+				var yPeer *Connection
+				y, yp := connectedPair(t, func(_ context.Context, method string, _ json.RawMessage) (any, *RequestError) {
+					if method == "_x/n" {
+						<-gate
+						yHandled.Store(true)
+					}
+					return nil, nil
+				}, func(ctx context.Context, _ string, _ json.RawMessage) (any, *RequestError) {
+					if err := yPeer.SendNotification(ctx, "_x/n", nil); err != nil {
+						return nil, toReqErr(err)
+					}
+					return map[string]any{}, nil
+				})
+				yPeer = yp
+				returned := make(chan bool, 1)
+				call := func(ctx context.Context) {
+					if err := y.SendRequestNoResult(ctx, "_x/r", nil); err != nil {
+						t.Errorf("the request on y = %v", err)
+					}
+					returned <- yHandled.Load()
+				}
+				_, xPeer := connectedPair(t, func(ctx context.Context, method string, _ json.RawMessage) (any, *RequestError) {
+					if method == "_x/go" {
+						call(ctx)
+					}
+					return nil, nil
+				}, nil)
+				if underNotification {
+					if err := xPeer.SendNotification(t.Context(), "_x/go", nil); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					go call(context.Background())
+				}
+				synctest.Wait()
+				select {
+				case <-returned:
+					t.Fatal("the request on y returned while y's notification before its response was still running: the barrier was skipped")
+				default:
+				}
+				close(gate)
+				if handled := within(t, returned, "the request on y"); !handled {
+					t.Error("the request on y returned before y's notification was handled")
+				}
+			})
+		})
 	}
 }

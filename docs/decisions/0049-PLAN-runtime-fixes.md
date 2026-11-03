@@ -111,11 +111,12 @@ Each with its test, in the file named:
    `ErrHandlersRunning`.
 3. **R2** (`connection_initialize_guard_test.go`):
    * The emitter (`cmd/generate/internal/emit/dispatch.go:211`) writes, in `NewAgentSideConnection` after `buildConnection`,
-     `asc.conn.guardInitialize = true`; `dispatch_test.go:221`'s expectation and the regenerated `agent_gen.go` follow.
-     `tools/gates.py regen` is clean after.
+     ~~`asc.conn.guardInitialize = true`~~ `asc.conn.guardInitialize = AgentMethodInitialize` (deviation 1, 2026-11-03);
+     `dispatch_test.go:221`'s expectation and the regenerated `agent_gen.go` follow. `tools/gates.py regen` is clean after.
    * In `connection.go`, when `guardInitialize` is set and a receiving chain is built, the inner handler is wrapped to note,
      in a cell `handleInbound` puts in the context for `initialize` alone, the result the dispatch returned. After the chain, a
-     result other than that one (by interface equality, the dispatch's result being a pointer), or a result with no dispatch,
+     result other than that one ~~(by interface equality, the dispatch's result being a pointer)~~ (by its encoding:
+     deviation 1, 2026-11-03), or a result with no dispatch,
      is answered `-32603` `{"error":"a receiving middleware replaced initialize's result"}` and logged at `Error`; an error from
      the chain is answered as now.
    * `WithReceivingMiddleware`'s godoc states the rule and that the sending side has the same.
@@ -302,4 +303,117 @@ check that follows reports the close.
   phase's files: 0 matches.
 
 Staged for the owner, who commits. Phase 3 begins on the owner's word.
+
+The owner committed phase 2 as `022d0d1`.
+
+### Phase 3: R3, R4, R2 and R10, 2026-11-03
+
+Begun on the owner's "committed, proceed" after `022d0d1`.
+
+**Deviation 1, 2026-11-03: R2's comparison, and how the guard is set.**
+
+* **Found.** Step 3.3 compares the chain's result with the dispatch's "by interface equality, the dispatch's result being a
+  pointer". The dispatch returns `&resp`, a `*InitializeResponse`. A receiving middleware that changes that struct in place
+  keeps the pointer, so interface equality passes it, while the client receives what the agent's record does not hold. That
+  is R2 itself.
+* **Decided.** The owner was asked, with three options, and chose the recommended one: compare the encoded bytes.
+  `noteInitialize` encodes the dispatch's answer once, for `initialize` alone, and `handleInbound` refuses a chain's result that
+  encodes otherwise. Not chosen: interface equality; identity first, with the bytes for the same pointer. The MADR's R2 design
+  carries an amendment of the same date.
+* **Two consequences, found while building it.** Neither changes a decision:
+  * `guardInitialize` is a `string`, initialize's method, not a `bool`. The generated constructor sets it to
+    `AgentMethodInitialize`. As first written, `connection.go` named the generated constant, and `TestEngineBehaviour` failed:
+    each engine case generates from a schema without `initialize`, and the runtime "does not type-check …: undefined:
+    AgentMethodInitialize". The hand-written runtime names no generated identifier. The emitter takes the constant's name
+    from `m.Initialize.Const`, and `TestSideConnectionsFollowTheModel` matches it with a regular expression, since its renamed
+    model names the constant otherwise.
+  * `buildConnection` wraps the dispatch in `noteInitialize` whenever a receiving chain is built, not only on the agent's side:
+    `guardInitialize` is set after `buildConnection` returns, as step 3.3 says. On any other message, the step costs one
+    `ctx.Value` lookup per received message, and only under a chain.
+
+**What it did:**
+
+* **R3:**
+  * `messageMark` gains `conn *Connection`. `processNotifications` sets it, and a request's mark stays the zero literal.
+  * `inRunningNotification` and `waitNotificationsUpTo`'s cap apply only when the mark's connection is `c`. So
+    `beginPeerWait`, which `exchangePrepared` calls under `inRunningNotification`, no longer counts another connection's
+    notification as a wait of `c`'s.
+  * The test: `TestBarrierAcrossConnections`, in `connection_notification_barrier_test.go`, in a synctest bubble, with a helper,
+    `connectedPair`. Under `context.Background()` and under `x`'s notification context alike, the request on `y` is still
+    waiting once the bubble is idle, and returns after `y`'s notification has run.
+* **R4:**
+  * `ServeAgent`'s context branch calls `WaitContext(bound)` after `Shutdown`, unless `Shutdown` already met the bound, and
+    joins its `context.DeadlineExceeded`. The existing wrap then names `ErrHandlersRunning`, "… 5s after the context's end".
+  * The godoc and the README say it waits for every handler, a notification's included.
+  * The test: `TestServeAgentContextEndWaitsForHandlers`, in `shutdown_test.go`, with `slowCancelAgent` from the probe, in
+    synctest bubbles.
+    * A `Cancel` released within the bound: `ServeAgent` returns after it, with the context's cause alone.
+    * Never released: it returns at 5 s with the cause and `ErrHandlersRunning`.
+* **R2:**
+  * The emitter, `dispatch.go`: `side.guardsInitialize` holds the constant's name. `agentSide` sets it from `initializeConst(m)`,
+    and the constructor emits `asc.conn.guardInitialize = <it>` between `buildConnection` and the `ConnAware` hand-off.
+  * Regenerated: `agent_gen.go`, one line.
+  * `connection.go`:
+    * `receivingChain` and `guardInitialize` fields.
+    * `handleInbound` gives an agent's `initialize` request, under a chain, an `initializeGuard` in its context.
+    * After encoding, it answers `-32603` `{"error":"a receiving middleware replaced initialize's result"}`, logged at
+      `Error`, when the guard was not noted or its bytes differ.
+  * `middleware.go`: `initializeGuardKey`, `initializeGuard` with `answered`, and `noteInitialize`. The godoc of
+    `WithReceivingMiddleware` states the rule; the README does too.
+  * The tests, `connection_initialize_guard_test.go`:
+    * `TestInitializeGuardRefusesAChangedAnswer`: a replaced result, one changed in place, and one without the dispatch. Each
+      gives `-32603` with the reason, and the client has no record.
+    * `TestInitializeGuardAllowsAnErrorAndAPassThrough`: the middleware's own error is answered; a pass-through leaves both
+      sides' records the same.
+    * `TestInitializeGuardOnlyOnTheAgent`: a raw `Connection`'s chain may replace a result for a method named `initialize`.
+* **R10:** `Wait`'s godoc names a writer `Close` cannot close, blocked in a `Write` to a peer that does not read. `Close`'s
+  godoc says a `Write` to a writer without `io.Closer` is not interrupted, and `Wait` waits for it. There is no code change and
+  no test, as the step says.
+* `docs/architecture.md`: `ServeAgent`'s wait, the mark's connection and the barrier, and the receiving chain's guard.
+
+**Seen to fail:** `tools/plants.py`, four plants, each in its own copy of the tree, 4/4 as required:
+
+```text
+FAILED AS REQUIRED: R3 another connection's mark cuts the barrier (^TestBarrierAcrossConnections$): exit 1: connection_notification_barrier_test.go:590: the request on y returned while y's notification before its response was still running: the barrier was skipped
+FAILED AS REQUIRED: R4 ServeAgent does not wait at its context's end (^TestServeAgentContextEndWaitsForHandlers$): exit 1: shutdown_test.go:435: ServeAgent = the test's signal while the agent's Cancel still runs
+FAILED AS REQUIRED: R2 the guard not applied (^TestInitializeGuardRefusesAChangedAnswer$): exit 1: connection_initialize_guard_test.go:80: Initialize = <nil>, want -32603 naming the replaced result
+FAILED AS REQUIRED: R2 the guard by identity: an answer changed in place passes (^TestInitializeGuardRefusesAChangedAnswer$): exit 1: connection_initialize_guard_test.go:80: Initialize = <nil>, want -32603 naming the replaced result
+```
+
+* **The fourth plant** keeps the noted value and compares its re-encoding, which is what interface equality sees. It fails
+  `a_result_changed_in_place` alone, the case deviation 1 is about. On its first run it only dropped the comparison, and so
+  failed every case. That plant was replaced.
+* **The emitter's plant** ran by a scratch script, since `plants.py` runs from the tree's root and the emitter is in the
+  nested `cmd/generate` module. In a copy of the tree, the emitter stopped setting the guard. `TestSideConnectionsFollowTheModel`
+  failed with "with prompt turns: agent_gen.go guards initialize: false, want true".
+
+**The benchmarks,** `HEAD` (`022d0d1`) against the tree, two runs of three alternating rounds of `-count=5`:
+
+| Benchmark | allocs/op | B/op, run 1 | B/op, run 2 | ns/op, run 1 | ns/op, run 2 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `PromptRoundTrip` | 99, 99 | 5438, 5436 | 5437, 5440 | 30538, 27764 | 30992, 31967 |
+| `PromptRoundTripMiddleware` | 102, 102 | 5801, 5804 | 5801, 5803 | 33333, 33457 | 31682, 33437 |
+| `SessionUpdateNotify` | 65, 65 | 4877, 4886 | 4878, 4886 | 15126, 18118 | 18721, 18112 |
+| `SessionUpdateNotifyObserved` | 65, 65 | 4878, 4886 | 4878, 4887 | 17189, 18464 | 18000, 17281 |
+
+* Allocations are equal everywhere.
+* A notification's mark grew by one word, `+8` to `+9` B/op, as step 3.1 expected. A request's did not.
+* The first run's `SessionUpdateNotify` time, 20% higher, did not repeat: the second run has the tree faster. Both runs were at
+  a load average of 13 to 37.
+
+**Checks:**
+
+* `go test -race -count=3` of the phase's tests: `ok`. `go test -race -shuffle=on -count=1 .`: `ok`.
+* `go test ./...` in `cmd/generate`: `ok`, after the fix to the type-check failure above.
+* `make pre-add-check` with the phase's nine Go files and the README, started at load 18.5: exit 0, "9 file(s) gofmt-clean;
+  both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `make api`: "against v1.31.1: 0 incompatible, 0 compatible".
+* The generator run again: no further change.
+* `tools/remote.py pkg --host windows . -test.run 'TestBarrierAcrossConnections|TestServeAgent|TestInitializeGuard'
+  -test.count=3`: "PASS", exit 0.
+* `tools/remote.py tree --host linux`: both modules, exit 0.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each; `tools/idscan.py --paths` over the
+  phase's files: 0 matches.
+
+Staged for the owner, who commits. Phase 4, the close and the release, begins on the owner's word.
 

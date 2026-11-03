@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -374,6 +375,88 @@ func TestServeAgentHandlersStillRun(t *testing.T) {
 			err := <-served
 			close(release)
 			if !errors.Is(err, stop) || !errors.Is(err, ErrHandlersRunning) || !errors.Is(err, context.DeadlineExceeded) ||
+				!strings.Contains(err.Error(), "acp: the connection's handlers still run 5s after the context's end") {
+				t.Errorf("ServeAgent = %v, want the context's cause and ErrHandlersRunning, the 5 s bound passed", err)
+			}
+		})
+	})
+}
+
+// slowCancelAgent's Cancel, a notification handler, runs until release is
+// closed, ignoring its context, as slow cleanup does.
+type slowCancelAgent struct {
+	*shutdownAgent
+	started chan struct{}
+	release chan struct{}
+	running atomic.Bool
+}
+
+func (a *slowCancelAgent) Cancel(context.Context, CancelNotification) error {
+	a.running.Store(true)
+	defer a.running.Store(false)
+	close(a.started)
+	<-a.release
+	return nil
+}
+
+// TestServeAgentContextEndWaitsForHandlers requires ServeAgent, at its
+// context's end, to wait for a notification's handler as it does at its
+// input's end: it returns once the handler has, or, when the 5 s bound passes
+// first, with ErrHandlersRunning beside the context's cause
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R4). Each runs in a
+// synctest bubble.
+func TestServeAgentContextEndWaitsForHandlers(t *testing.T) {
+	t.Parallel()
+	// serve starts ServeAgent under a context it returns the cancel of, and
+	// returns once the agent's Cancel runs.
+	serve := func(t *testing.T) (*slowCancelAgent, context.CancelCauseFunc, <-chan error) {
+		t.Helper()
+		agent := &slowCancelAgent{shutdownAgent: &shutdownAgent{}, started: make(chan struct{}), release: make(chan struct{})}
+		p := newShutdownPipes(t, &shutdownClient{})
+		ctx, cancel := context.WithCancelCause(t.Context())
+		served := serveAgentAsync(ctx, agent, p)
+		handshake(t, p.client)
+		if err := p.client.Cancel(t.Context(), CancelNotification{SessionId: "s"}); err != nil {
+			t.Fatal(err)
+		}
+		<-agent.started
+		return agent, cancel, served
+	}
+	stop := errors.New("the test's signal")
+	t.Run("the handler returns within the bound", func(t *testing.T) {
+		t.Parallel()
+		synctest.Test(t, func(t *testing.T) {
+			agent, cancel, served := serve(t)
+			cancel(stop)
+			synctest.Wait()
+			select {
+			case err := <-served:
+				close(agent.release)
+				t.Fatalf("ServeAgent = %v while the agent's Cancel still runs", err)
+			default:
+			}
+			close(agent.release)
+			err := <-served
+			if agent.running.Load() {
+				t.Error("ServeAgent returned while the agent's Cancel still runs")
+			}
+			if !errors.Is(err, stop) || errors.Is(err, ErrHandlersRunning) {
+				t.Errorf("ServeAgent = %v, want the context's cause alone", err)
+			}
+		})
+	})
+	t.Run("the bound passes", func(t *testing.T) {
+		t.Parallel()
+		synctest.Test(t, func(t *testing.T) {
+			agent, cancel, served := serve(t)
+			cancel(stop)
+			err := <-served
+			running := agent.running.Load()
+			close(agent.release)
+			if !running {
+				t.Error("the agent's Cancel ended before the bound, which this case needs it not to")
+			}
+			if !errors.Is(err, stop) || !errors.Is(err, ErrHandlersRunning) ||
 				!strings.Contains(err.Error(), "acp: the connection's handlers still run 5s after the context's end") {
 				t.Errorf("ServeAgent = %v, want the context's cause and ErrHandlersRunning, the 5 s bound passed", err)
 			}

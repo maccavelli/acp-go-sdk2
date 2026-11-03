@@ -106,6 +106,20 @@ type side struct {
 	// initialize, and so holds a received message while its initialize is in
 	// flight (0030-MADR-record-initialize-on-arrival.md, question 2).
 	promptTurns, pending, negotiated, holds bool
+	// guardsInitialize names initialize's constant when the side answers
+	// initialize, and so refuses a receiving middleware that replaces the
+	// answer it recorded; it is empty otherwise
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R2).
+	guardsInitialize string
+}
+
+// initializeConst is the name of initialize's method constant, or empty when
+// m has no initialize.
+func initializeConst(m *model.Model) string {
+	if m.Initialize == nil {
+		return ""
+	}
+	return m.Initialize.Const
 }
 
 // agentSide and clientSide describe the two side connections of m
@@ -128,8 +142,9 @@ func agentSide(m *model.Model) side {
 			"It panics, naming the argument, when agent, peerInput or peerOutput is nil",
 			"(0024-PLAN-behaviour-fixes.md, A1).",
 		},
-		peer:       "client",
-		negotiated: m.Initialize != nil,
+		peer:             "client",
+		negotiated:       m.Initialize != nil,
+		guardsInitialize: initializeConst(m),
 		promptTurns: slices.ContainsFunc(m.AgentMethods, func(mi *model.Method) bool {
 			return mi.PromptTurn || mi.CancelsPromptTurn
 		}),
@@ -211,7 +226,14 @@ func emitSideConnection(f *goFile, s side) {
 			Fun:      id("buildConnection"),
 			Args:     exprs(dot(s.local, "handleWithExtensions"), id("peerInput"), id("peerOutput"), id("opts")),
 			Ellipsis: placeholderPos,
-		}),
+		}))
+	// The side that answers initialize refuses a receiving middleware's
+	// replacement of its answer, which its record would not hold
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R2).
+	if s.guardsInitialize != "" {
+		body = append(body, assign(exprs(dot(s.local, "conn", "guardInitialize")), id(s.guardsInitialize)))
+	}
+	body = append(body,
 		ifStmt(define(exprs(id("aware"), id("ok")), typeAssert(id(s.field), id(s.aware))), id("ok"),
 			exprStmt(call(dot("aware", s.setter), id(s.local)))),
 		exprStmt(call(dot(s.local, "conn", "start"))),

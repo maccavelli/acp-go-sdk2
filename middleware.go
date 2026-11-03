@@ -47,6 +47,15 @@ type Middleware func(next MethodHandler) MethodHandler
 // notification from a request, and RequestIDFromContext gives a request's id
 // (D3).
 //
+// On an agent's side connection, which records what initialize agreed as its
+// dispatch answers, the chain must pass the dispatch's answer to initialize
+// on unchanged, as a sending chain must: a result that encodes otherwise,
+// replaced, changed in place, or returned without the dispatch running, is
+// answered -32603 and logged at Error, so the client's record and the agent's
+// never disagree. A middleware may fail initialize with an error. A
+// Connection that is not an agent's does not check
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R2).
+//
 // The chain does not see what the reader handles itself: invalid messages,
 // $/cancel_request, the requests refused over WithMaxConcurrentRequests, past
 // WithMaxQueuedBytes or during Shutdown, the notifications an overflow policy
@@ -54,6 +63,42 @@ type Middleware func(next MethodHandler) MethodHandler
 func WithReceivingMiddleware(mw ...Middleware) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		cfg.receiving = append(cfg.receiving, mw...)
+	}
+}
+
+// initializeGuardKey is the context key of the initializeGuard handleInbound
+// gives an agent's initialize under a receiving chain.
+type initializeGuardKey struct{}
+
+// initializeGuard is where noteInitialize notes the answer the dispatch gave
+// initialize, encoded, and handleInbound compares it with the chain's: the
+// agent records the dispatch's answer, so the client must receive that one
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R2). The bytes, not
+// the value, are compared, so an answer a middleware changed in place is
+// caught too.
+type initializeGuard struct {
+	noted   bool
+	encoded []byte
+}
+
+// answered reports whether b, the encoded result the chain returned, is the
+// dispatch's answer: the dispatch ran, answered, and its answer encodes as b.
+func (g *initializeGuard) answered(b []byte) bool {
+	return g.noted && bytes.Equal(g.encoded, b)
+}
+
+// noteInitialize is a receiving chain's innermost step: it runs next, the
+// dispatch, and, for a message whose context carries an initializeGuard,
+// notes its answer there. For any other it only runs next.
+func noteInitialize(next MethodHandler) MethodHandler {
+	return func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
+		result, e := next(ctx, method, params)
+		if g, ok := ctx.Value(initializeGuardKey{}).(*initializeGuard); ok && e == nil {
+			if b, err := json.Marshal(result); err == nil {
+				g.noted, g.encoded = true, b
+			}
+		}
+		return result, e
 	}
 }
 

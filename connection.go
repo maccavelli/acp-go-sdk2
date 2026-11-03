@@ -99,10 +99,15 @@ func receiptOf(ctx context.Context) uint64 {
 // notification queue (0019-PLAN-behaviour-fixes.md, B1).
 type messageKey struct{}
 
-// messageMark is what messageKey holds.
+// messageMark is what messageKey holds. A notification's names the connection
+// whose queue gave seq, so a request sent under it on another connection
+// waits for that connection's notifications as any request does; a request's
+// is the zero literal, which costs no allocation
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R3).
 type messageMark struct {
 	notification bool
 	seq          uint64
+	conn         *Connection
 }
 
 // markOf returns ctx's mark, and false for a context receive did not make,
@@ -526,6 +531,15 @@ type Connection struct {
 	// observer is WithObserver's function, or nil; observe reads it
 	// (0046-MADR-sending-and-receiving-middleware.md, D9).
 	observer func(Observation)
+	// receivingChain is set when the handler is a receiving chain, whose
+	// innermost step is noteInitialize. guardInitialize is initialize's
+	// method, set before the connection starts by the agent's side
+	// connection, which records the initialize answer it gives: under a
+	// chain, handleInbound then refuses a result the chain changed
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R2). It is empty
+	// on any other connection.
+	receivingChain  bool
+	guardInitialize string
 }
 
 // ConnectionOption configures optional parameters for a Connection.
@@ -905,7 +919,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		if handler == nil {
 			handler = notFound
 		}
-		handler = chainMiddleware("WithReceivingMiddleware", cfg.receiving, handler)
+		handler = chainMiddleware("WithReceivingMiddleware", cfg.receiving, noteInitialize(handler))
 	}
 
 	ctx, cancel := context.WithCancelCause(context.Background())
@@ -940,6 +954,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		inbound:               cfg.inbound,
 		resultChecks:          cfg.resultChecks,
 		observer:              cfg.observer,
+		receivingChain:        len(cfg.receiving) > 0,
 	}
 	if cfg.maxConcurrentRequests > 0 {
 		c.requestSlots = make(chan struct{}, cfg.maxConcurrentRequests)
@@ -1073,7 +1088,10 @@ func EndedCleanly(err error) bool {
 // does not end the connection: call Close first to stop it. A reader that
 // Close cannot close, one that does not implement io.Closer, keeps Wait
 // waiting until its Read returns; so does a handler that ignores its
-// context (0026-MADR-connection-end-cause-and-wait.md).
+// context (0026-MADR-connection-end-cause-and-wait.md). So does a writer
+// Close cannot close, blocked in a Write to a peer that does not read: the
+// connection's writer goroutine waits for that Write to return
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R10).
 func (c *Connection) Wait() error {
 	// The end comes first, as the contract says. Today the wait group alone
 	// implies it, since writeLoop and sendCancelRequests return only once the
@@ -1125,8 +1143,11 @@ func (c *Connection) waitDone() <-chan struct{} {
 // send fails without writing; every handler's context ends, a request's and a
 // notification's alike (0023-MADR-connection-lifetime-and-test-leaks.md, C1);
 // and its reader and writer are closed when they implement io.Closer, which
-// also ends a read in progress. It returns their errors joined, and nil when
-// it was called before (0019-PLAN-api-decisions.md, B17).
+// also ends a read in progress. A Write to a writer that does not
+// implement io.Closer is not interrupted: it runs until it returns, and Wait
+// waits for it (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R10).
+// It returns their errors joined, and nil when it was called before
+// (0019-PLAN-api-decisions.md, B17).
 func (c *Connection) Close() error {
 	return c.closeWith(ErrConnectionClosed)
 }
@@ -2103,7 +2124,7 @@ func (c *Connection) shutdownReceive(cause error) {
 func (c *Connection) processNotifications() {
 	for queued := range c.notificationQueue {
 		ctx := context.WithValue(context.WithValue(c.inboundCtx, receiptKey{}, queued.receipt),
-			messageKey{}, messageMark{notification: true, seq: queued.seq})
+			messageKey{}, messageMark{notification: true, seq: queued.seq, conn: c})
 		c.handleInbound(ctx, queued.msg, nil)
 
 		c.notifyMu.Lock()
@@ -2219,12 +2240,14 @@ func (c *Connection) beginPeerWait() (end func()) {
 }
 
 // inRunningNotification reports whether ctx is, or derives from, the context
-// of the notification whose handler is running, by the test
+// of the notification of c's whose handler is running, by the test
 // waitNotificationsUpTo's cap uses: the notification loop waits on a request
-// sent under it (0019-PLAN-behaviour-fixes.md, B1).
+// sent under it (0019-PLAN-behaviour-fixes.md, B1). Another connection's
+// notification is not c's (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
+// R3).
 func (c *Connection) inRunningNotification(ctx context.Context) bool {
 	m, ok := markOf(ctx)
-	if !ok || !m.notification {
+	if !ok || !m.notification || m.conn != c {
 		return false
 	}
 	c.notifyMu.Lock()
@@ -2323,6 +2346,14 @@ func (c *Connection) handleInbound(ctx context.Context, req *anyMessage, handled
 		return
 	}
 
+	// An agent's initialize under a receiving chain carries the cell the
+	// chain's innermost step notes the dispatch's answer in
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R2).
+	var guard *initializeGuard
+	if c.receivingChain && c.guardInitialize != "" && req.ID != nil && req.Method == c.guardInitialize {
+		guard = &initializeGuard{}
+		ctx = context.WithValue(ctx, initializeGuardKey{}, guard)
+	}
 	result, err := c.handler(ctx, req.Method, req.Params)
 	if handled != nil {
 		handled()
@@ -2350,9 +2381,13 @@ func (c *Connection) handleInbound(ctx context.Context, req *anyMessage, handled
 	} else {
 		// marshal result
 		b, mErr := json.Marshal(result)
-		if mErr != nil {
+		switch {
+		case mErr != nil:
 			res.Error = NewInternalError(map[string]any{jsonErrorField: mErr.Error()})
-		} else {
+		case guard != nil && !guard.answered(b):
+			c.loggerOrDefault().Error("initialize answer not sent: a receiving middleware replaced it", "method", req.Method)
+			res.Error = NewInternalError(map[string]any{jsonErrorField: "a receiving middleware replaced initialize's result"})
+		default:
 			res.Result = b
 		}
 	}
@@ -2874,8 +2909,10 @@ func (c *Connection) waitNotificationsUpTo(ctx context.Context, target uint64) e
 	// A request sent under the context of a notification whose handler is
 	// still running would wait for that handler, which may be the caller:
 	// the wait stops before it. Notifications before it have completed, the
-	// queue running one at a time (0019-PLAN-behaviour-fixes.md, B1).
-	if m, ok := markOf(ctx); ok && m.notification && c.completedNotificationSeq < m.seq && target >= m.seq {
+	// queue running one at a time (0019-PLAN-behaviour-fixes.md, B1). Only a
+	// notification of this connection's is a handler this wait can reach
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R3).
+	if m, ok := markOf(ctx); ok && m.notification && m.conn == c && c.completedNotificationSeq < m.seq && target >= m.seq {
 		target = m.seq - 1
 	}
 

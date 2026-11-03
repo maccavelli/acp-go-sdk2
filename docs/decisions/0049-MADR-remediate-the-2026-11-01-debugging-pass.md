@@ -472,6 +472,11 @@ Each PLAN is written when its turn comes, against the tree as it then stands, so
   dispatch returned; when the receiving chain returns another result, or returns one without the dispatch having run, the
   request is answered `-32603` and the reason logged at `Error`. A middleware that fails `initialize` with an error is allowed, as
   on the sending side. No exported identifier is added.
+  * *Amended 2026-11-03,* in [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md)'s phase 3, deviation 1: "another
+    result" is judged by the result's encoding, not by interface equality. The dispatch returns a `*InitializeResponse`, and a
+    middleware that changes it in place keeps the pointer while the client receives what the agent's record does not hold.
+    Asked with three options, the owner chose encoded bytes, the recommended one. Not chosen: interface equality, which misses
+    the in-place change; identity first and the bytes for the same pointer, the same coverage with more code.
 
 *2026-11-02:* the owner committed these answers and the runtime PLAN as `9f59ee2` and said "proceed". The decision is
 `accepted`, and [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md) is in progress. 0046's amendment of 2026-11-02 records

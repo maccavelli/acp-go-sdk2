@@ -111,7 +111,10 @@ and `make api` gates it with the root, `agentproc` and `clienthost`.
   its error wraps `ErrHandlersRunning` when its 5 s bound passes with
   handlers still running, at its input's end or, through `Shutdown`'s
   deadline, at its context's, as `TestServeAgentHandlersStillRun` requires;
-  0042, the amendment of 2026-10-30, X2), and
+  0042, the amendment of 2026-10-30, X2; at its context's end it then
+  `WaitContext`s under the same bound, so a notification's handler is waited
+  for too, as `TestServeAgentContextEndWaitsForHandlers` requires; 0049, R4),
+  and
   `doc.go`.
   None of them holds protocol state, but for the compactions and tool calls
   the two timelines' callers feed; none holds a connection's. A helper that takes a side connection is a package-level
@@ -437,12 +440,13 @@ its own entry. With `WithMaxConcurrentRequests(n)`, `receive` takes a slot of
 `requestSlots`, a channel of capacity `n`, for each request, and answers one it
 finds no slot for `-32603` without starting it; a slot is given back when the
 handler returns, before its answer is written. Notifications run one at a time from a queue, each handler's
-context marked with its sequence number. A held request keeps its slot, and a
+context marked with its sequence number and its connection (0049, R3). A held request keeps its slot, and a
 held notification the loop, so the queue behind it fills, until the
 `initialize` in flight ends. A response is returned after the
 notifications received before it are handled, unless the request was sent
-under the context of a notification whose handler is still running: that wait
-stops before it. A message's params are left out when they encode as `null`,
+under the context of a notification of the same connection's whose handler is
+still running: that wait stops before it. A request sent under another
+connection's notification waits as any does. A message's params are left out when they encode as `null`,
 refused when they encode as neither an object nor an array, and a request
 whose context has ended is not written.
 
@@ -509,8 +513,14 @@ each sending path checks `c.sending` for `nil` and runs its old code.
 - **Receiving.** The chain replaces the handler, so `handleInbound` calls it
   where it called the handler: inside the request's slot and byte count, or on
   the notification worker. The generated dispatch, with `checkInbound` and
-  `checkResult`, is its innermost step. A `nil` handler under a chain becomes
-  `notFound`, which answers as `handleInbound`'s `nil` branch does. A received
+  `checkResult`, is wrapped in `noteInitialize`, the chain's innermost step. A
+  `nil` handler under a chain becomes `notFound`, which answers as
+  `handleInbound`'s `nil` branch does. On the agent's side, whose constructor
+  sets `guardInitialize` to initialize's method before `start`,
+  `handleInbound` gives an `initialize` request an `initializeGuard` in its
+  context. `noteInitialize` notes the dispatch's answer there, encoded, and a
+  chain's result that encodes otherwise, or one given without the dispatch, is
+  answered `-32603` (0049, R2). A received
   request's id rides beside its receipt, in `requestReceipt`, since a request's
   `messageMark` is a zero literal that costs no allocation.
 - **Sending.**

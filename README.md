@@ -699,7 +699,8 @@ ctx's cause. A side connection's is its `Connection()`'s.
 `acp.ServeAgent(ctx, agent, in, out, opts...)` is an agent's main. It serves
 until the input ends, waits up to 5 seconds for the handlers, and returns nil
 at a clean end; when ctx ends, as at an interrupt, it shuts the connection
-down within the same 5 seconds and returns ctx's cause (`ExampleServeAgent`;
+down and waits for every handler, a notification's included, within the same
+5 seconds, and returns ctx's cause (`ExampleServeAgent`;
 [0042-MADR-in-process-agent-runner.md](docs/decisions/0042-MADR-in-process-agent-runner.md),
 item 2). When the 5 seconds pass with handlers still running, at either end,
 its error wraps `acp.ErrHandlersRunning`, which `errors.Is` reads (0042, the
@@ -972,7 +973,13 @@ its place.
   `WithInboundRewrite`, `WithInboundValidation` and the check of what
   `initialize` agreed, and the result as the dispatch returns it, checked and not
   yet encoded. One that answers without calling `next`, to refuse a method for
-  example, skips the validation of that message.
+  example, skips the validation of that message. On an agent's side
+  connection, which records what `initialize` agreed, `initialize`'s answer
+  must pass through unchanged: a result that encodes otherwise, or one given
+  without calling `next`, is answered `-32603` and logged at `Error`, so the
+  two sides' records agree. Failing `initialize` with an error is allowed
+  ([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](docs/decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
+  R2).
 - **`acp.WithSendingMiddleware(mw...)`** wraps every request and notification
   the application sends: `SendRequest`, `SendRequestNoResult`,
   `SendNotification`, `CallExtension`, `NotifyExtension`, and every typed method,

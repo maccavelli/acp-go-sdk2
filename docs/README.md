@@ -144,7 +144,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0048 | MADR | [Create a tag's GitHub release in CI, once every check on the tag has passed](decisions/0048-MADR-create-releases-in-ci.md) | proposed |
 | 0048 | PLAN | [Implement 0048: CI creates and verifies a tag's release](decisions/0048-PLAN-create-releases-in-ci.md); three phases | proposed |
 | 0049 | MADR | [Remediate the defects, gaps and dead code the 2026-11-01 debugging pass found, in phases by area and severity](decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md); 52 findings at `d55ba2a`, one high; questions answered 2026-11-01: five PLANs by area, runtime first; accepted 2026-11-02 | accepted |
-| 0049 | PLAN | [Implement 0049, the runtime: R1 to R10](decisions/0049-PLAN-runtime-fixes.md); four phases, a patch `v1.31.2`; phases 1 and 2, R1 and R5 to R9, done; phase 2 staged | in-progress |
+| 0049 | PLAN | [Implement 0049, the runtime: R1 to R10](decisions/0049-PLAN-runtime-fixes.md); four phases, a patch `v1.31.2`; phases 1 to 3, R1 to R10, done; phase 3 staged | in-progress |
 
 ## I want to…
 
