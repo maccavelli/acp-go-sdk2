@@ -1,6 +1,6 @@
 ---
-status: proposed
-date: 2026-11-01
+status: in-progress
+date: 2026-11-02
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
 
@@ -151,3 +151,87 @@ Each with its test, in the file named:
   `initialize`'s result on an agent is refused; `ServeAgent` at its context's end waits for handlers as it does at the input's end;
   `WithMaxQueuedNotifications` is clamped. The notes lead with these.
 * **Rollback.** Revert the phase's commit; each phase stands alone, phase 1 included.
+
+## Execution record
+
+### Phase 1: R1, 2026-11-02
+
+Begun on the owner's "proceed" after `9f59ee2`. The MADR is `accepted`.
+
+**What it did:**
+
+* **The queue.** `Connection` gained `answersMu`, `answers` (`[]queuedAnswer`), `answersEnded` and `answerSignal`. `start`
+  starts `answerLoop` under `c.goroutines`. `answerObserved` (`observer.go`) queues and signals, and no longer writes.
+  `answerLoop` takes the first answer, writes it through `answer` (unchanged: `sendMessage` with `context.Background()`), pops it,
+  then calls `observe`. The answer being written stays in the queue until it is written, so the bound counts it:
+  `maxPendingAnswers = 1024` unwritten, and the next closes the connection with `closeWith(errUnreadAnswers)`, whose text is "the
+  peer does not read its input: more than 1024 answers unwritten". `handleInbound`'s `nil`-handler branch is unchanged.
+* **Details the steps did not name**, each needed for the steps' own outcome. None changes a decision or an exported identifier:
+  * `EndedCleanly` returns false for `errUnreadAnswers`. Its godoc already says it is true only for `Close` or the peer's end
+    of output, and false "for any other error"; without the case, `ErrConnectionClosed` alone would make it true.
+  * Each queued answer counts in `inboundRequests`, so `drainInput`, at the end of input, waits for the queued answers as it
+    does for the requests received before it. Without it, a peer that sends a fault and ends its output loses the answer, which
+    the reader used to write before it read the end. A fourth test pins it, `TestFaultAnswersWrittenAtEndOfInput`.
+  * When the connection ends, `answerLoop` reports the answers still queued, unwritten, and sets `answersEnded`. After that the
+    reader reports a fault or refusal itself, since nothing can be written. So every message is still observed once (D9), the
+    1 025th in `TestUnreadAnswersCloseTheConnection` included.
+* **The tests,** `connection_answers_test.go`, each in a synctest bubble: `TestPeersRefusingEachOtherDoNotDeadlock` (limits 0
+  and 1: 2 answered and 14 refused, or 16 answered), `TestFaultAnswersDoNotBlockTheReader`, `TestFaultAnswersWrittenAtEndOfInput`
+  and `TestUnreadAnswersCloseTheConnection`.
+* **Step 4, the observer tests.** `TestObserverNoLockHeld` failed once the queue was in: `observed [dropped unmatched_response
+  refused cancel_received], want [dropped refused unmatched_response cancel_received]`. The refusal is now reported on
+  `answerLoop` after its write, so the next kind, reported on the reader, could come first. The test now waits
+  (`synctest.Wait()`) after reading the refusal; that is the only change. `TestObserverReportsEachKind` and
+  `TestObserverRunsAfterActing` are unchanged and pass.
+* **The godoc:**
+  * `WithMaxConcurrentRequests`: the reader waits for neither a handler nor its peer, and the connection closes past 1024
+    unwritten answers.
+  * `WithMaxQueuedBytes` and `Shutdown`: the same for their refusals.
+  * `WithObserver`: where each kind runs.
+  * `ObservedFault` and `ObservedRefused`: reported off the reader, once written.
+  * `EndedCleanly`: the new case.
+* **The docs:**
+  * `README.md`: "Closing and limits", `WithMaxConcurrentRequests`, and "What the chains do not see".
+  * `docs/architecture.md`: a paragraph on the queue, and the observer bullet.
+  * [0046-MADR-sending-and-receiving-middleware.md](0046-MADR-sending-and-receiving-middleware.md): D9 annotated, and
+    "Amendment, 2026-11-02: where faults and refusals are observed".
+
+**Step 5, seen to fail:** `tools/plants.py` with five plants, each in its own copy of the tree, 5/5 as required:
+
+```text
+FAILED AS REQUIRED: R1 queue bypassed: the reader writes its refusals (^TestPeersRefusingEachOtherDoNotDeadlock$): exit 1: connection_answers_test.go:110: a call returned {"code":-32603,"message":"Internal error","data":{"error":"context deadline exceeded"}} after the held requests were released: the readers waited on each other
+FAILED AS REQUIRED: R1 queue bypassed: the reader writes its fault answers (^TestFaultAnswersDoNotBlockTheReader$): exit 1: connection_answers_test.go:154: the notification after the faults did not happen
+FAILED AS REQUIRED: R1 cap removed (^TestUnreadAnswersCloseTheConnection$): exit 1: connection_answers_test.go:227: the end of the connection did not happen
+FAILED AS REQUIRED: R1 observer before the write (^TestObserverRunsAfterActing$): exit 1: connection_observer_test.go:393: fault: the observer ran before the fault's answer was written
+FAILED AS REQUIRED: R1 end of input does not wait for the queued answers (^TestFaultAnswersWrittenAtEndOfInput$): exit 1: connection_answers_test.go:191: answer 0 did not happen
+```
+
+The first two plants restore the old write on the reader. On the first run, two plants failed their tests but not with the
+wanted text. The deadlock test counted a timed-out call, which `SendRequest` returns as a `-32603`, among the refusals ("0
+answered and 16 refused"). The fault test's sends blocked the bubble's main goroutine, so synctest panicked with a deadlock.
+The test now checks `context.DeadlineExceeded` first, and sends from its own goroutine, so each failure says what broke.
+
+**Step 6, the benchmarks:** a `git archive 5c3344c` in the scratch directory and the tree, alternately, three rounds of
+`-count=5`; medians of 15:
+
+| Benchmark | ns/op base, tree | B/op base, tree | allocs/op base, tree |
+| :--- | :--- | :--- | :--- |
+| `PromptRoundTrip` | 31573, 31407 | 5439, 5438 | 99, 99 |
+| `PromptRoundTripMiddleware` | 32176, 32706 | 5801, 5801 | 102, 102 |
+| `SessionUpdateNotify` | 18412, 17852 | 4879, 4877 | 65, 65 |
+| `SessionUpdateNotifyObserved` | 18113, 17818 | 4878, 4878 | 65, 65 |
+
+Allocations are equal in every run, and times are within noise.
+
+**Step 7, the checks:**
+
+* `go test -race -count=3 -run 'TestPeersRefusingEachOtherDoNotDeadlock|TestFaultAnswers|TestUnreadAnswersCloseTheConnection|TestObserver' .`:
+  `ok`.
+* `make pre-add-check FILES="connection.go observer.go connection_answers_test.go connection_observer_test.go README.md"`: exit
+  0, "4 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `tools/remote.py pkg . -test.run 'Answers|PeersRefusing|Observer' -test.count=3` on the Linux and Windows hosts: "PASS", exit 0,
+  on each.
+* `make check-records`, `make markdownlint` ("0 issues in 0 files"), `make disclosure-check`: exit 0 each.
+* `tools/idscan.py --paths` over the phase's ten files: "10 file(s), 17 pattern(s), 0 match(es)".
+
+Staged for the owner, who commits. Phase 2 begins on the owner's word.

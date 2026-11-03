@@ -388,6 +388,16 @@ type Connection struct {
 	pendingCancelRequest []string
 	cancelRequestSignal  chan struct{}
 
+	// answers holds, under answersMu, the error answers the reader has queued
+	// for answerLoop, the first being written; answerSignal wakes it.
+	// answersEnded is set once answerLoop has ended, and the reader then
+	// reports an answer itself, which can no longer be written
+	// (0049-PLAN-runtime-fixes.md, phase 1).
+	answersMu    sync.Mutex
+	answers      []queuedAnswer
+	answersEnded bool
+	answerSignal chan struct{}
+
 	// goroutines counts every goroutine the connection starts, each through
 	// its Go, so Wait can wait for them all. The context.AfterFunc callbacks
 	// are not counted: one on a caller's context can start after the count has
@@ -438,6 +448,8 @@ type Connection struct {
 	// inputDone is closed when the input ends cleanly, at end of file; the
 	// requests received before it, which inboundRequests counts, are then
 	// answered before the connection ends (0019-PLAN-issue-fixes.md, B23).
+	// inboundRequests also counts the answers queued for answerLoop, so they
+	// are written before the end too.
 	inputDone       chan struct{}
 	inboundRequests sync.WaitGroup
 
@@ -579,8 +591,10 @@ func WithMaxQueuedNotifications(n int) ConnectionOption {
 // A request that would take the counted bytes past the budget, while anything
 // is counted, is answered at once with -32603 and data {"error": "too many
 // queued bytes", "limit": n}, and its handler does not run, as
-// WithMaxConcurrentRequests refuses one; the reader never waits for a request
-// (0045-MADR-notification-queue-byte-budget.md).
+// WithMaxConcurrentRequests refuses one; the reader never waits for a request,
+// nor for its peer to read the refusal
+// (0045-MADR-notification-queue-byte-budget.md;
+// 0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R1).
 func WithMaxQueuedBytes(n int) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		if n > 0 {
@@ -630,7 +644,12 @@ func WithPromptOverlapPolicy(p PromptOverlapPolicy) ConnectionOption {
 // does not run, and the refusal is logged at Debug. A request stops counting
 // when its handler returns, before its answer is written. The reader never
 // waits for a handler to end: a running handler may be waiting for a response
-// only the reader can deliver. Notifications and $/cancel_request are not
+// only the reader can deliver. Nor does it wait for its peer: a refusal is
+// queued for the goroutine that writes the connection's answers to faults and
+// refusals, so a peer that refuses this side's requests in turn is still read
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R1). Past 1024 such
+// answers unwritten, the peer is not reading, and the connection closes, its
+// Err wrapping ErrConnectionClosed. Notifications and $/cancel_request are not
 // counted. n <= 0, the default, leaves requests unbounded
 // (0019-PLAN-api-decisions.md, B18). WithMaxQueuedBytes refuses a request the
 // same way when its bytes would pass the connection's byte budget.
@@ -888,6 +907,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		inflight:            make(map[string]*inflightRequest),
 		inflightReceipts:    make(map[uint64]struct{}),
 		cancelRequestSignal: make(chan struct{}, 1),
+		answerSignal:        make(chan struct{}, 1),
 		ctx:                 ctx,
 		cancel:              cancel,
 		inboundCtx:          inboundCtx,
@@ -931,6 +951,7 @@ func (c *Connection) start() {
 	context.AfterFunc(c.ctx, c.wakeNotificationWaits)
 	c.goroutines.Go(c.writeLoop)
 	c.goroutines.Go(c.sendCancelRequests)
+	c.goroutines.Go(c.answerLoop)
 	c.goroutines.Go(c.receive)
 	c.goroutines.Go(c.processNotifications)
 }
@@ -1018,12 +1039,14 @@ func (c *Connection) Err() error {
 // EndedCleanly reports whether err, a connection's Err or Wait's error, says
 // the connection ended cleanly: this side closed it with Close, or the peer
 // ended its output. It is false for the close a notification overflow makes,
-// under either policy that closes, for a read's error, for any other error, and for nil, the Err of a
+// under either policy that closes, for the close of a peer that leaves its
+// answers unread, for a read's error, for any other error, and for nil, the Err of a
 // connection that has not ended. A side connection's Err is its connection's
-// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 7).
+// (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 7;
+// 0049-PLAN-runtime-fixes.md, phase 1).
 func EndedCleanly(err error) bool {
 	switch {
-	case errors.Is(err, ErrNotificationQueueOverflow):
+	case errors.Is(err, ErrNotificationQueueOverflow), errors.Is(err, errUnreadAnswers):
 		return false
 	case errors.Is(err, ErrConnectionClosed):
 		return true
@@ -1102,7 +1125,8 @@ func (c *Connection) Close() error {
 // ErrConnectionClosed. A request received after it is answered at once with
 // an internal error, -32603, saying the connection is shutting down, and the
 // connection keeps reading, so the answers to this side's own requests still
-// arrive. A handler that honours its context answers as it would at a cancel:
+// arrive; the refusal is written as WithMaxConcurrentRequests' are, without
+// the reader waiting for it. A handler that honours its context answers as it would at a cancel:
 // an agent's prompt, cancelled, as the protocol asks after session/cancel.
 // When ctx ends first, Shutdown closes the connection at once and returns
 // context.Cause(ctx), joined with Close's error; it returns Close's error
@@ -1233,6 +1257,10 @@ const (
 	maxCanonicalJSONRPCIDKeyLen   = 4096
 	maxCanonicalJSONRPCIDAbsExp10 = 4096
 	maxPendingCancelRequests      = 1024
+	// maxPendingAnswers bounds the error answers the reader has queued and
+	// answerLoop has not written; one more closes the connection with
+	// errUnreadAnswers (0049-PLAN-runtime-fixes.md, phase 1).
+	maxPendingAnswers = 1024
 )
 
 var (
@@ -1960,6 +1988,66 @@ func (c *Connection) answer(id json.RawMessage, e *RequestError) {
 	}
 	if err := c.sendMessage(context.Background(), anyMessage{ID: &id, Error: e}); err != nil {
 		c.loggerOrDefault().Debug("failed to answer an invalid message", "err", err)
+	}
+}
+
+// errUnreadAnswers is why a connection closed itself when its peer left
+// more than maxPendingAnswers of its error answers unread: a peer that sends
+// and does not read (0049-PLAN-runtime-fixes.md, phase 1).
+var errUnreadAnswers = fmt.Errorf("the peer does not read its input: more than %d answers unwritten", maxPendingAnswers)
+
+// queuedAnswer is an error answer the reader queued for answerLoop, and the
+// observation reported once it is written.
+type queuedAnswer struct {
+	kind   ObservationKind
+	method string
+	id     json.RawMessage
+	size   int
+	e      *RequestError
+}
+
+// write writes a's answer, then reports it to the observer.
+func (a queuedAnswer) write(c *Connection) {
+	c.answer(a.id, a.e)
+	c.observe(a.kind, a.method, a.id, a.size, a.e)
+}
+
+// answerLoop writes each answer the reader queues, in order, then reports it,
+// until the connection ends; the answers still queued then are reported
+// unwritten. The reader never writes its own answers, so it never waits for
+// a peer that is itself waiting to write to it
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R1).
+func (c *Connection) answerLoop() {
+	for {
+		select {
+		case <-c.ctx.Done():
+			c.answersMu.Lock()
+			left := c.answers
+			c.answers, c.answersEnded = nil, true
+			c.answersMu.Unlock()
+			for _, a := range left {
+				a.write(c)
+				c.inboundRequests.Done()
+			}
+			return
+		case <-c.answerSignal:
+			for {
+				c.answersMu.Lock()
+				if len(c.answers) == 0 {
+					c.answersMu.Unlock()
+					break
+				}
+				a := c.answers[0]
+				c.answersMu.Unlock()
+				c.answer(a.id, a.e)
+				c.answersMu.Lock()
+				c.answers[0] = queuedAnswer{}
+				c.answers = c.answers[1:]
+				c.answersMu.Unlock()
+				c.observe(a.kind, a.method, a.id, a.size, a.e)
+				c.inboundRequests.Done()
+			}
+		}
 	}
 }
 

@@ -524,8 +524,8 @@ each sending path checks `c.sending` for `nil` and runs its old code.
     recorded answer.
   - The cancel sender writes through `notifyDirect`, outside the chain.
 - **The observer.** `observe` returns at once when none is set, and otherwise
-  copies the id and calls it. `answerObserved` answers and then reports. The
-  sites are the faults in `receive` and `receiveLine`, `$/cancel_request`
+  copies the id and calls it. `answerObserved` queues the answer, and
+  `answerLoop` writes it and then reports. The sites are the faults in `receive` and `receiveLine`, `$/cancel_request`
   received (`handleCancelRequest` returns the id it named) and sent
   (`sendCancelRequests`), the three refusals, `receiveResponse` for a response
   `handleResponse` did not hand over or one without an id, and the drop and
@@ -543,6 +543,21 @@ context with `ErrConnectionClosed`, and closes the reader and the writer that
 implement `io.Closer`. A `*RequestError` the connection makes for a local
 failure keeps that failure as its cause, which `Unwrap` returns; one a peer
 answered has none.
+
+The reader writes nothing itself
+([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
+R1). Its answers to faults and refusals go, through `answerObserved`, to
+`answers`, under `answersMu`, and `answerLoop`, a goroutine `start` starts,
+writes each in order through `sendMessage`, pops it, and reports it. So a
+reader never waits on a peer that is waiting to write to it, as two peers that
+refuse each other's requests would. The queue holds `maxPendingAnswers`, 1,024,
+the one being written included; one more closes the connection with
+`errUnreadAnswers`, which `EndedCleanly` reads as unclean. Each queued answer
+counts in `inboundRequests`, so the end of input waits for it as for a request.
+When the connection ends, `answerLoop` reports what is left unwritten and sets
+`answersEnded`, after which the reader reports a fault itself. The `nil`
+handler's answer is written on the request's goroutine, not the reader's, and
+stays a direct write.
 
 A request handler's context is a child of `handlersCtx`, itself a child of the
 connection's context, so `Close` ends it. `Shutdown` ends `handlersCtx` alone,

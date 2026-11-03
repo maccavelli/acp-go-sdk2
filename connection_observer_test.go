@@ -427,6 +427,10 @@ func TestObserverNoLockHeld(t *testing.T) {
 		within(t, entered, "the held request")
 		p.send(`{"jsonrpc":"2.0","id":2,"method":"_x/r"}`)
 		p.next("the refusal")
+		// The refusal is reported on the answering goroutine once it is
+		// written, so the order of the kinds waits for it
+		// (0049-PLAN-runtime-fixes.md, phase 1).
+		synctest.Wait()
 		p.send(`{"jsonrpc":"2.0","id":77,"result":{}}`)
 		p.send(`{"jsonrpc":"2.0","method":"$/cancel_request","params":{"requestId":1}}`)
 		synctest.Wait()

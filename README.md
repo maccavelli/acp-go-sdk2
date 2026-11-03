@@ -679,7 +679,12 @@ implement `io.Closer`, which also ends a read in progress. A second `Close`
 returns nil. When the peer ends the connection, the same holds, but for the
 transport, which is the application's to close. A full notification queue
 pauses the connection by default, and closes it only under the overflow
-policies below that say so.
+policies below that say so. A peer that leaves more than 1,024 of the
+connection's answers to its faults and refusals unread is not reading its
+input, and the connection closes; `Err()` wraps `acp.ErrConnectionClosed`, and
+`acp.EndedCleanly` is false for it
+([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](docs/decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
+R1).
 
 `Connection.Shutdown(ctx)` is the graceful close, as `http.Server.Shutdown` is
 a server's. Every handler's context ends with `acp.ErrShutdown`, and the
@@ -908,8 +913,10 @@ conn := acp.NewClientSideConnection(client, stdin, stdout,
 run at once. Over the limit, a request is answered at once, `-32603` with
 `{"error": "too many concurrent requests", "limit": n}`, and its handler does not
 run; the reader never waits for a handler, since a running one may be waiting
-for a response only the reader delivers. Notifications and `$/cancel_request`
-do not count. The default is no limit.
+for a response only the reader delivers. Nor does it wait for the peer to read
+the refusal, which another goroutine of the connection's writes, so two peers
+that refuse each other's requests both go on reading. Notifications and
+`$/cancel_request` do not count. The default is no limit.
 
 #### The byte budget
 
@@ -1067,10 +1074,12 @@ The reader handles some messages itself, and no middleware sees them.
 | `ObservedDropped` | a notification dropped under `OverflowDropNewest`, or, with `ErrNotificationQueueOverflow`, the one whose overflow closed the connection |
 
 With both chains and an observer set, every message is seen once. The observer
-runs on the goroutine that met the message, the reader for every kind but
-`ObservedCancelSent`. It must be safe for concurrent use and must not block,
-since the connection reads nothing while it runs. No lock of the connection's is
-held, so it may call `QueuedBytes` or `RefusedMessages`. With no observer, each
+runs on the reader for every kind but three: `ObservedFault` and
+`ObservedRefused` run on the goroutine that writes their answers, and
+`ObservedCancelSent` on the one that sends cancels. It must be safe for
+concurrent use and must not block, since the connection reads nothing while it
+runs on the reader, and writes no further answer while it runs for one. No lock
+of the connection's is held, so it may call `QueuedBytes` or `RefusedMessages`. With no observer, each
 of these places costs one `nil` check.
 
 The observer runs after the connection has acted on the message: after a fault's

@@ -1,6 +1,6 @@
 ---
-status: proposed
-date: 2026-11-01
+status: accepted
+date: 2026-11-02
 decision-makers: the repository owner
 consulted: "probe tests and scripts in scratch copies of `d55ba2a`; `schema/schema.json` and `schema/schema.unstable.json` at ACP 1.25.0; `go help test`; GitHub's workflow documentation"
 informed: gobble-cli, magic-cli-remote
@@ -405,7 +405,7 @@ documents 4.2. **Probe** (investigator): make 3.81 gives `V=[]` and would fetch 
 
 ## Decision Outcome
 
-Chosen option: **"A"**, proposed, because the areas touch different files and different checks, so each PLAN can land and be
+Chosen option: **"A"**, accepted 2026-11-02, because the areas touch different files and different checks, so each PLAN can land and be
 released on its own, while the severity order inside each keeps R1 first. The plans would be:
 
 * `0049-PLAN-runtime-fixes.md`: R1, then R5, R9, R4, R3, R7, R8, R6, R10, and R2 per Q2. A patch release when it changes no
@@ -472,6 +472,10 @@ Each PLAN is written when its turn comes, against the tree as it then stands, so
   dispatch returned; when the receiving chain returns another result, or returns one without the dispatch having run, the
   request is answered `-32603` and the reason logged at `Error`. A middleware that fails `initialize` with an error is allowed, as
   on the sending side. No exported identifier is added.
+
+*2026-11-02:* the owner committed these answers and the runtime PLAN as `9f59ee2` and said "proceed". The decision is
+`accepted`, and [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md) is in progress. 0046's amendment of 2026-11-02 records
+where faults and refusals are now observed.
 
 ### Consequences
 

@@ -295,6 +295,8 @@ The parts of the decision:
     on the cancel sender. It must be safe for concurrent use and must not block, as jsonrpc2_v2's `Preempter` "must not block"
     (F6): a slow observer stalls reading. It is never called with a lock of the connection's held, so it may call the
     connection's accessors. A panic ends the process.
+    *Amended 2026-11-02* (see "Amendment, 2026-11-02: where faults and refusals are observed" below): `ObservedFault` and
+    `ObservedRefused` run on the goroutine that writes their answers, not on the reader.
   * It sees no message either chain sees: with both chains and the observer set, every message is seen once. It cannot change
     or stop anything.
   * *Amendment accepted 2026-11-01* (see "Amendment, 2026-11-01: when the observer runs" below): the godoc and the README
@@ -434,6 +436,25 @@ The amendment stays proposed until the owner accepts it.
 
 *2026-11-01:* with [0047-PLAN-pre-add-check-full-coverage.md](0047-PLAN-pre-add-check-full-coverage.md) complete, the owner
 committed `a863ba1` and said "committed, proceed". The amendment is accepted; the PLAN's phase 8 runs it.
+
+### Amendment, 2026-11-02: where faults and refusals are observed
+
+Accepted with [0049-MADR-remediate-the-2026-11-01-debugging-pass.md](0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
+whose R1 and its design, "R1's and R2's designs, decided 2026-11-01", decide it; executed by
+[0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md), phase 1. The decision stays `accepted`.
+
+**Why.** The reader wrote its answers to faults and refusals itself. Two SDK peers that refused each other's requests each
+blocked in a write the other's reader had to read, and neither read again (0049's R1). The reader now queues those answers for a
+goroutine of their own, `answerLoop`, which writes them in order.
+
+**What changes in D9.** `ObservedFault` and `ObservedRefused` are reported on that goroutine, after the answer is written, as
+the order of the 2026-11-01 amendment requires. A fault or refusal met after the connection has ended, which cannot be answered,
+is still reported on the reader. The other kinds run where they did. A slow observer of faults and refusals no longer stalls
+reading; it delays the next such answer instead. The godoc of `WithObserver` and of the two kinds, and the README, say so.
+
+**What holds.** Every message is still observed once, the answers left unwritten at the end included. The order of the
+2026-11-01 amendment holds for every kind. `TestObserverNoLockHeld` waits for the refusal's report before sending the next
+message, since the refusal and the next kind are now reported on different goroutines; no other observer test changed.
 
 ### Consequences
 

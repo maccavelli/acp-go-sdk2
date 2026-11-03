@@ -15,7 +15,8 @@ const (
 	// ObservedFault is a received line the connection answered as invalid:
 	// over WithMaxMessageSize, not JSON, not a JSON-RPC object, or not a valid
 	// request. Err is the answer, ID the id it carries when that is valid,
-	// and Method is empty: the line is not trusted.
+	// and Method is empty: the line is not trusted. It is reported once the
+	// answer is written, off the reader (WithObserver).
 	ObservedFault ObservationKind = iota + 1
 	// ObservedCancelReceived is a $/cancel_request the peer sent. ID is the
 	// requestId it names, or nil when its params do not decode or name none.
@@ -28,7 +29,8 @@ const (
 	// over WithMaxConcurrentRequests, past WithMaxQueuedBytes, or during
 	// Shutdown. Err is the answer. RefusedMessages does not count it: it
 	// counts the refusals of the hooks and the validation, which the
-	// receiving chain sees.
+	// receiving chain sees. It is reported once the answer is written, off
+	// the reader, as ObservedFault is.
 	ObservedRefused
 	// ObservedUnmatchedResponse is a response no pending request took: a late
 	// answer to a call whose caller gave up, one with an unknown id, or one
@@ -89,13 +91,17 @@ type Observation struct {
 // given wins, and nil removes it
 // (0046-MADR-sending-and-receiving-middleware.md, D6 and D9).
 //
-// fn runs synchronously on the goroutine that met the message: the reader,
-// for every kind but ObservedCancelSent, which runs on the goroutine that
-// sends cancels. It must be safe for concurrent use and must not block: while
-// it runs, the connection reads nothing. It is never called with a lock of
-// the connection held, so it may call the connection's methods, such as
-// QueuedBytes. It cannot change or stop a message. A panic in it ends the
-// process, as a handler's does.
+// fn runs synchronously on a goroutine of the connection's: ObservedFault and
+// ObservedRefused on the one that writes the answers to them, ObservedCancelSent
+// on the one that sends cancels, and every other kind on the reader. A fault or
+// a refusal met after the connection has ended, which cannot be answered, is
+// reported on the reader. fn must be safe for concurrent use and must not
+// block: while it runs on the reader, the connection reads nothing, and while
+// it runs for an answer, the next answer waits
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R1). It is never
+// called with a lock of the connection held, so it may call the connection's
+// methods, such as QueuedBytes. It cannot change or stop a message. A panic in
+// it ends the process, as a handler's does.
 //
 // fn runs after the connection has acted on the message: after the answer to
 // a fault or a refusal is written, after the request a $/cancel_request names
@@ -104,7 +110,8 @@ type Observation struct {
 // notification whose overflow closes the connection, before the connection
 // closes. So a peer can read an answer before fn has run for it: a program
 // that counts refusals waits for fn, not for the answer
-// (0046-MADR-sending-and-receiving-middleware.md, "Amendment, 2026-11-01").
+// (0046-MADR-sending-and-receiving-middleware.md, "Amendment, 2026-11-01",
+// and its amendment of 2026-11-02).
 func WithObserver(fn func(Observation)) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		cfg.observer = fn
@@ -121,11 +128,33 @@ func (c *Connection) observe(kind ObservationKind, method string, id json.RawMes
 	fn(Observation{Kind: kind, Method: method, ID: slices.Clone(id), Size: size, Err: err})
 }
 
-// answerObserved answers id with e, then reports the message, of size bytes,
-// to the observer as kind.
+// answerObserved queues the answer e to id for answerLoop, which writes it
+// and then reports the message, of size bytes, to the observer as kind. It
+// does not wait. Past maxPendingAnswers unwritten it closes the connection
+// with errUnreadAnswers; once answerLoop has ended it reports the answer
+// itself, unwritten (0049-PLAN-runtime-fixes.md, phase 1).
 func (c *Connection) answerObserved(kind ObservationKind, method string, id json.RawMessage, size int64, e *RequestError) {
-	c.answer(id, e)
-	c.observe(kind, method, id, int(size), e)
+	a := queuedAnswer{kind: kind, method: method, id: id, size: int(size), e: e}
+	c.answersMu.Lock()
+	switch {
+	case c.answersEnded:
+		c.answersMu.Unlock()
+		a.write(c)
+		return
+	case len(c.answers) >= maxPendingAnswers:
+		c.answersMu.Unlock()
+		c.loggerOrDefault().Warn("the peer does not read its answers; closing the connection", "unwritten", maxPendingAnswers)
+		_ = c.closeWith(errUnreadAnswers) //nolint:errcheck // Err reports the close.
+		a.write(c)
+		return
+	}
+	c.answers = append(c.answers, a)
+	c.inboundRequests.Add(1)
+	c.answersMu.Unlock()
+	select {
+	case c.answerSignal <- struct{}{}:
+	default:
+	}
 }
 
 // requestErr is e as an error: nil for a nil *RequestError, never a typed
