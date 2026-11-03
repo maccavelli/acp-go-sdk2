@@ -1,8 +1,8 @@
 ---
 status: accepted
-date: 2026-11-02
+date: 2026-11-03
 decision-makers: the repository owner
-consulted: "probe tests and scripts in scratch copies of `d55ba2a`; `schema/schema.json` and `schema/schema.unstable.json` at ACP 1.25.0; `go help test`; GitHub's workflow documentation"
+consulted: "probe tests and scripts in scratch copies of `d55ba2a`, and of `e98987a` for the re-assessment; the official TypeScript (`08a0d30`) and Python (`9853d8b`) SDKs' clones in the interop cache; `schema/schema.json` and `schema/schema.unstable.json` at ACP 1.25.0; `go help test`; GitHub's workflow documentation"
 informed: gobble-cli, magic-cli-remote
 ---
 
@@ -17,7 +17,8 @@ has gained the side-connection helpers, `agentproc`, `clienthost`, `remote`, `ac
 and byte budget, middleware and the observer.
 
 This record holds what the pass found, and proposes how to remediate it. It decides nothing yet: every finding is evidence, and the
-owner's answers to "Questions for the owner" settle the program.
+owner's answers to "Questions for the owner" settle the program. *2026-11-03:* the owner answered on 2026-11-01 and accepted
+the record on 2026-11-02; the runtime findings are done, and "Re-assessment at `e98987a`" below checks the rest against the tree.
 
 ### How the pass was run
 
@@ -86,6 +87,159 @@ CPU within `testGrace`, 300 ms: `ServeAgent`'s select, `Shutdown`, the prompt ha
 * The same load, one run each: `testGrace` 1.2 s failed 0 of 100; 300 ms failed 13 of 100.
 
 The fix is the test's: a larger `Grace` for this test, as `descendantGrace` does elsewhere, keeping the `ErrTerminated` assertion.
+
+### Re-assessment at `e98987a`, 2026-11-03
+
+The owner asked, before the surface PLAN, for the record to be checked against the tree as it now stands. The method was the
+pass's: each finding's probe re-run in a scratch copy of `e98987a` (`git archive`), never in the tree, and each citation read
+at `e98987a`. Three investigators each took one part: the generator; the subpackages and tooling; and the official SDKs. The
+author took the surface. `git status --porcelain` was empty afterwards.
+
+**The environment:**
+
+* `e98987a` is `v1.31.2`, released 2026-11-03, plus the record of its release.
+* Go `1.27.3` on macOS `arm64`; the floor is `go 1.26.10` in both `go.mod` files.
+* The schema is ACP `1.25.0`. The 1.26.0 schema stays deferred by the owner.
+* The official SDKs, compared from the clones `tools/interop.py` keeps in its cache, at the revisions it pins:
+  * TypeScript `08a0d30` (package 2.1.0) vendors schema `1.27.0`;
+  * Python `9853d8b` vendors schema `1.23.0`.
+  * The S definitions agree across 1.23, 1.25 and 1.27, except `NewSessionRequest.mcpServers`'s annotations, which no
+    finding concerns.
+* The host's load average was 5 to 93 during the runs. The flaky test's figures were taken under a load the probe adds on
+  purpose; no other conclusion rests on a timing test.
+
+**What changed since `d55ba2a`:**
+
+* The runtime PLAN changed `connection.go`, `middleware.go`, `observer.go`, `serve.go`, `agent_gen.go` and
+  `cmd/generate/internal/emit/dispatch.go`, with their tests.
+* No S, G, P, T or F-C finding cites those lines, apart from F-R's.
+* `types_gen.go`, `helpers.go`, the timelines, `cmd/generate/internal/model/` and every subpackage are byte-identical to
+  `d55ba2a` (`git diff --stat d55ba2a e98987a`).
+
+**F-R:** done in `v1.31.2` (above).
+
+**F-S: all nine reproduce at `e98987a`.** The decisive lines, from `go test -run TestProbe` in the copy:
+
+* S1: "agent handler got ValueId=nil, Boolean=false, Kind()="select"".
+* S2: "WithUpdateContent([]) / WithUpdateLocations([]) sent {…"tool_call_update","toolCallId":"t1"}}".
+* S3: "plan_removed allowed without clientCapabilities.plan; providers/list allowed without its agent capability; …".
+* S4: "timeline state changed through a returned copy" for both timelines.
+* S5: "boolean set_config_option sent and handled without session.configOptions.boolean".
+* S6: "PromptResponse{} (stopReason "") validates"; "agent answered and client accepted stopReason """; "audience [user system]
+  kept 2 items".
+* S7: "McpServer {"type":"stdio",...}: Stdio=nil, Kind()=stdio; AuthMethod {"type":"agent",...}: Agent=nil".
+* S8: "AllowsValue nil, sent (err=<nil>), agent handler ran".
+* S9: "prompt with an undeclared "video" block allowed".
+* `TestProbeHolds` passes.
+
+Every S citation holds. Facts the surface PLAN rests on:
+
+* S6's closed sets are, by the generator's own classes (`KindEnum`, `KindStringConstUnion`, not `KindOpenEnum`):
+  * stable: `StopReason`, `PermissionOptionKind`, `PlanEntryPriority`, `PlanEntryStatus`, `ToolKind`, `ToolCallStatus`, `Role`,
+    `StringFormat`, `ElicitationSchemaType`;
+  * unstable: `NesDiagnosticSeverity`, `NesRejectReason`, `NesTriggerKind`, `PositionEncodingKind`, `TextDocumentSyncKind`.
+
+  The finding names seven of the fourteen.
+* S2's "Replace the … collection" is the wording of `ToolCallUpdate.content` and `.locations` alone. `SessionMessage.content`
+  and `CompactionUpdate.summary` already carry patch rules.
+* S1 and S7 are one mechanism. The unions with a key-less variant are `AuthMethod` (`agent`), `McpServer` (`stdio`) and
+  `SetSessionConfigOptionRequest` (`value_id`), and two with a catch-all as well, `MultiSelectItems` (`titled`) and the
+  unstable `IdleStateUpdate` (`none`). The generated decoder sends any present discriminator it does not name to `Unknown`,
+  before the key-less variant is tried (`cmd/generate/internal/emit/types.go:962-968`).
+* The generated `validate` already takes a parameter that tells sending from receiving, the rule for an absolute path
+  (`connection.go:215-241`, `:3115`). The types a timeline entity reaches have no unexported field, and their only interface
+  values are `_meta`'s.
+
+**The official SDKs on S1 to S9.** "Probe" means the investigator ran it against the clone; "read" means the code only.
+
+| | TypeScript `08a0d30` | Python `9853d8b` |
+| :--- | :--- | :--- |
+| S1 | Probe: unknown `type` with a string `value` decodes as the value-id variant. `type:"boolean"` with a string is also accepted there (zod's first match). | Probe: the same, by `type == "boolean"`. Any other `type` is the select request; a non-string `value` is `-32602`. |
+| S2 | Probe: `[]` is sent and received as `[]`; nothing is normalised. | Probe: `[]` is sent; an explicit `null` cannot be. |
+| S3, S5, S8 | Read: no capability or `authMethods` check, either way; the README leaves it to the application. | Read: none; unstable routes sit behind a local flag only. |
+| S4 | Read: no timeline helpers in v1. | Read: `contrib/` deep-copies with `model_copy(deep=True)`. |
+| S6 | Probe: a required closed value that is unknown is refused on receive (`-32602`); a lenient one is dropped to absent; no check on send. | Probe: the same on receive. On send, a required one is refused; a lenient one is dropped silently. |
+| S7 | Probe: `"type":"stdio"` decodes as stdio, and an unknown `type` with stdio's keys does too. | Probe: the same. It also decodes a key-less `AuthMethod` as terminal, against the schema. |
+| S9 | Read: no capability check; an unknown block type is refused on receive. | Probe: the same. |
+
+* So on S1 and S7 both SDKs read the key-less variant as the schema's `anyOf` allows. On S6's lenient fields both drop what
+  0012's treatment 5 also drops.
+* On required closed values both refuse what Q4 (a) chose to keep readable on receive. That is recorded as a difference; the
+  owner's answer stands.
+* Neither SDK gates capabilities. This SDK has gated the stable ones since
+  [0017-MADR-remediate-acp-v1-conformance-violations.md](0017-MADR-remediate-acp-v1-conformance-violations.md) (G1), and Q3
+  (a) extends that to the unstable ones.
+
+**F-G: all thirteen reproduce at `e98987a`,** each probe re-run, every citation held, with these corrections to the text below:
+
+* **G3:** the probe's stable `Shared.b` is `{"type":"integer","format":"int32","description":"Stable b."}`. The emitted field
+  keeps neither the stable description nor an unstable notice.
+* **G4,** seen in passing: an `int64` `minimum` of 2^63 is not refused by the model. It fails later, at `Check`, with "…
+  overflows int64", naming the generated file, not the schema path. The cause is the same `float64` path, and the same fix
+  covers it.
+* **G5 (d):** only some `$ref` siblings are dropped. One carrying `type` or a bound is refused ("minimum or maximum on B, not a
+  number"), and one carrying other properties is dropped silently.
+* **G6:** in the probe `n` is `["integer","null"]`, a pointer, so `0` is sent. Only `s` and `b` are dropped, and the peer reads
+  their defaults.
+* **G7:** the function is `model/fields.go:581-603`, its comment at `:583`; `checkDefaults` is at `model/fields.go:373`.
+* **G9:** "the host's build configuration" is the generator's own `GOOS` and `GOARCH`: `build.Default` follows the
+  environment. With `GOOS=windows` set, the probe's collision is refused.
+* **G10:** `cmd/generate/main_test.go:38-68`, not `:38-70`.
+* **The paths:** G2 to G9 name files relative to `cmd/generate/internal/`; G1 and G10 to G12 relative to the repository.
+
+**F-P, F-T and F-C:** every finding holds at `e98987a`.
+
+* `agentproc/`, `clienthost/`, `remote/`, `acptest/`, `internal/`, `tools/`, `scripts/`, the `Makefile`, `.github/`,
+  `.golangci.yml`, `RELEASING.md` and `tools/README.md` are unchanged since `d55ba2a`.
+* Each re-runnable probe reproduced, at a load average of 5 to 16.
+* Corrections and additions to the text below:
+  * **The flaky test:**
+    * Re-run with 32 busy goroutines, `-test.cpu=2`, `go1.26.10` and `-race`. The probe killed 6 of 100 at 300 ms and 0 at
+      1.2 s; the real test, in two runs of 50 per binary, failed 8 of 100 at 300 ms and 0 of 100 at 1.2 s. Unloaded:
+      `p50` 0.83 ms, `max` 18.2 ms. The figures move with the host's load; the margin does not.
+    * The chain has one more link since `v1.31.2`: `ServeAgent`'s wait for the notification handlers after `Shutdown`
+      (`serve.go:57-61`, R4).
+  * **P1:** the function at `remote/ws.go:178-202` starts at `:180`. With a 10 s keepalive both probes still pass.
+  * **P4:** the stat itself is in `regular`, `clienthost/files.go:86`.
+  * **P5:** on macOS the commands need `GOOS=linux`: `GOOS=linux GOARCH=386 go vet` and `GOOS=linux GOARCH=arm go build` exit 0,
+    as does `GOOS=windows GOARCH=386 go build`. `GOARCH=386` alone fails "unsupported GOOS/GOARCH pair darwin/386".
+  * **P6:** the 101-byte frame closes with status 1009, "StatusMessageTooBig".
+  * **P7:**
+    * The race is also write against write: `linetap.go:46` (`l.held = nil`) against `:54`. So the read is at `:41` or `:46`.
+    * The probe's own precondition log, "the tap was not abandoned", is a false negative: `tap.abandon` counts
+      `queued - inflight` (`tap.go:76`), and the probe's one write in flight is not counted. The committed test needs another
+      check that the tap was abandoned.
+  * **T2: it recurred at `v1.31.2`.** `69eff66` changed records only, so the push ran the Docs workflow alone on `main`.
+    `tools/publication.py`'s "CI on origin main's head" passed on run `41728264484`, which `tools/watch_ci.py` had reported as
+    the Docs workflow's ([0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md), phase 4).
+    * "CI on the tag" (`publication.py:87-90`) has no workflow filter either. Once
+      [0048-MADR-create-releases-in-ci.md](0048-MADR-create-releases-in-ci.md)'s tag workflow exists, its run could pass it.
+    * `main_run` has no test.
+  * **T3:** `0100` from `--next` needs a record numbered `0099` under `.worktrees/`. A copy of the 0047 pair alone gives "number
+    0047 is claimed by 2 MADRs" and leaves `--next` at `0050`. A bad `.cache/bad.md` fails `make markdownlint`, "4 issues in 1
+    file".
+  * **T7:** `docs.yml` has the same concurrency block, without the comment.
+  * **T8:** the check is at `Makefile:202-204`, not `:200-203`.
+  * **T9:** `Makefile:37`, not `:38`. Under make 3.81, `.SHELLFLAGS` is a plain variable, so recipes also lose `-eu -o pipefail`.
+  * **T10:** `docs/architecture.md:751-760`, not `:723-732`.
+  * **T11,** the same class, new: `scripts/check_disclosure.py:88-90` exits 2 silently when `git ls-files` fails, as outside a
+    work tree.
+  * **T13:** the tree also omits `scripts/test_check_*.py`, which may be intended.
+  * **F-C:**
+    * `ConfigOptionUpdate.gates` is dead, but its definition is used. `SessionUpdate`'s `config_option_update` variant includes
+      it by `allOf`, and the generator flattens that variant into `SessionConfigOptionUpdate` (`types_gen.go:15413`). So the
+      call at `:24199-24203` reaches `(*SessionConfigOptionUpdate).gates` (`:24207`), never this one.
+    * `internal/proctree/deathsig_none.go:10` does run. Its build tag, `unix && !linux && !freebsd`, includes macOS,
+      `tree_unix.go:45` calls it, and the profile counts it run (`deathsig_none.go:10.48,10.48 0 1`). It shows 0% because it
+      has no statement. It is not a gap.
+
+**Not findings, noted:**
+
+* `mcp/message`, in both directions, and the agent's `positionEncoding` are not gated. No sentence of the schema states a gate
+  for `mcp/message`. For `positionEncoding`, the schema says the agent selects "from the client's supported encodings",
+  which no check enforces. Neither was probed as a defect, and no PLAN takes them up unless the owner asks.
+* `SessionInfo.additionalDirectories` says "When present, this is the complete ordered additional-root list". So an empty list
+  and an absent one may differ in meaning, as S2's do. It is reported, not probed.
 
 ## Findings
 
@@ -170,6 +324,9 @@ which it never received, and the observer reported a cancel sent. Fix: send it o
 context deadline exceeded". Fix: name the case in `Wait`'s and `Close`'s doc.
 
 ### F-S: the SDK surface against the schema
+
+*Re-run 2026-11-03 at `e98987a`:* all nine reproduce ("Re-assessment" above).
+[0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md) takes them up.
 
 **S1. Medium. `session/set_config_option` with an unknown `type` and a string `value` decodes to `Unknown`, not `ValueId`.**
 `types_gen.go:16339-16342`. The schema, `SetSessionConfigOptionRequest/anyOf/1`: "Unknown `type` values with string payloads also
@@ -259,22 +416,22 @@ winning. **Probe** (investigator, one probe schema each); none occurs in the com
 `kwpaths.py`, `constprops.py`). Fix: refuse each with its path, as 0012 aims.
 
 **G6. Low. A non-zero scalar default with `omitempty` cannot send the zero value.** `model/fields.go:555-561`. **Probe**
-(investigator): `{"n":0,"s":"","b":false}` with defaults `5`, `"d"`, `true` re-encodes without them, and the peer reads the
-defaults. The committed schemas have one non-zero scalar default, where `""` is invalid anyway. Fix: refuse, or emit a pointer.
+(investigator): `{"n":0,"s":"","b":false}` with defaults `5`, `"d"`, `true` re-encodes without `s` and `b` (`n`, nullable,
+is a pointer and is sent; corrected 2026-11-03), and the peer reads the defaults. The committed schemas have one non-zero scalar default, where `""` is invalid anyway. Fix: refuse, or emit a pointer.
 
-**G7. Low. Defaults on nested inline objects and inline-variant properties are not applied.** `model/fields.go:583-602` says so in a
-comment, while `checkDefaults` accepts them. **Probe** (investigator): "inner.flag=false (schema default true)". None in the
-committed schemas. Fix: refuse, or apply.
+**G7. Low. Defaults on nested inline objects and inline-variant properties are not applied.** `model/fields.go:581-603`
+(corrected 2026-11-03) says so in a comment at `:583`, while `checkDefaults` accepts them. **Probe** (investigator):
+"inner.flag=false (schema default true)". None in the committed schemas. Fix: refuse, or apply.
 
 **G8. Low. `meta.json` without `version` emits `ProtocolVersionNumber = 0`.** `load/load.go:18-24`, `merge.go:84`. **Probe**
 (`noversion.txtar`, re-run): "gen rc=0". Fix: require `version >= 1`.
 
-**G9. Low. `Check` type-checks only the host's build configuration.** `output/check.go:189-191`. **Probe** (investigator): a
-Windows-only file that collides passes on `darwin`, and `GOOS=windows go build` then fails. Fix: also check for `windows` and
+**G9. Low. `Check` type-checks only the generator's own `GOOS` and `GOARCH`, the host's unless the environment sets them.**
+`output/check.go:189-191`. **Probe** (investigator): a Windows-only file that collides passes on `darwin`, and `GOOS=windows go build` then fails. Fix: also check for `windows` and
 `linux`.
 
-**G10. Low. `TestGeneratedFilesUpToDate` misses a stale root `*_gen.go`.** `cmd/generate/main_test.go:38-70` checks `unstable/`
-only. **Probe** (investigator): with `extra_gen.go` at the root, the test passes. Fix: the same loop for the root.
+**G10. Low. `TestGeneratedFilesUpToDate` misses a stale root `*_gen.go`.** `cmd/generate/main_test.go:38-68` (corrected
+2026-11-03) checks `unstable/` only. **Probe** (investigator): with `extra_gen.go` at the root, the test passes. Fix: the same loop for the root.
 
 **G11. Low. Stray positional arguments are ignored.** `main.go:37-39`. **Probe** (investigator): `gen /some/other/out stray` exits 0
 and writes to the working directory's repository. Fix: refuse `fs.NArg() > 0`.
@@ -360,14 +517,14 @@ and a `GOENV` setting `GONOSUMDB`, both tools' environments keep them. Fix: set 
 third push while one runs cancels the pending second. **Read**, GitHub's workflow syntax. Fix: correct the comment, or put the
 SHA in the group for `main`.
 
-**T8. Low. `RELEASING.md`'s prerequisites omit `mdsh`,** which `make version` needs (`Makefile:200-203`). **Probe** (investigator):
-"mdsh not found", `Error 1`.
+**T8. Low. `RELEASING.md`'s prerequisites omit `mdsh`,** which `make version` needs (`Makefile:202-204`, corrected
+2026-11-03). **Probe** (investigator): "mdsh not found", `Error 1`.
 
-**T9. Low. macOS's `/usr/bin/make`, 3.81, computes an empty schema version silently.** `Makefile:12`, `:38`; `RELEASING.md:10`
-documents 4.2. **Probe** (investigator): make 3.81 gives `V=[]` and would fetch `…/schema-v/meta.json`. Fix: a version guard.
+**T9. Low. macOS's `/usr/bin/make`, 3.81, computes an empty schema version silently.** `Makefile:12`, `:37` (corrected
+2026-11-03); `RELEASING.md:10` documents 4.2. **Probe** (investigator): make 3.81 gives `V=[]` and would fetch `…/schema-v/meta.json`. Fix: a version guard.
 
-**T10. Low. The docs name the wrong packages for `make api`.** `RELEASING.md:98-104`, `docs/architecture.md:723-732`,
-`Makefile:106` against `scripts/check_api.py:49`, `:54` (gated: root, `agentproc`, `acptest`, `clienthost`; reported: `unstable`,
+**T10. Low. The docs name the wrong packages for `make api`.** `RELEASING.md:98-104`, `docs/architecture.md:751-760`
+(corrected 2026-11-03), `Makefile:106` against `scripts/check_api.py:49`, `:54` (gated: root, `agentproc`, `acptest`, `clienthost`; reported: `unstable`,
 `remote`).
 
 **T11. Low. `release_body.py` hides why the identifier scan failed.** `tools/release_body.py:77-81` prints idscan's stdout only.
@@ -384,9 +541,11 @@ documents 4.2. **Probe** (investigator): make 3.81 gives `V=[]` and would fetch 
 
 * `agentproc/agentproc.go:286`, `abandon`, Start's clean-up when it cannot connect an agent: never run by a test.
 * `agentproc/stderr.go:21` and `elicitation.go:286`: two `Error()` methods never run.
-* `ConfigOptionUpdate.gates` (`types_gen.go:23956`): generated for a schema definition no message uses; the
-  `SessionConfigOptionUpdate` variant is the one sent. Dead.
-* `internal/proctree/deathsig_none.go:10`: built only on platforms the tests do not run.
+* `ConfigOptionUpdate.gates` (`types_gen.go:23956`): dead. ~~generated for a schema definition no message uses~~ The definition
+  is used, by `allOf` in `SessionUpdate`'s `config_option_update`, which the generator flattens into
+  `SessionConfigOptionUpdate`, whose own `gates` is the one called (corrected 2026-11-03).
+* ~~`internal/proctree/deathsig_none.go:10`: built only on platforms the tests do not run.~~ *Corrected 2026-11-03:* it is
+  built on macOS, called by `tree_unix.go:45`, and counted run; it shows 0% because it has no statement. Not a gap.
 * `cmd/generate`: G13, and the two `main` functions.
 
 ## Decision Drivers
@@ -412,9 +571,11 @@ Chosen option: **"A"**, accepted 2026-11-02, because the areas touch different f
 released on its own, while the severity order inside each keeps R1 first. The plans would be:
 
 * `0049-PLAN-runtime-fixes.md`: R1, then R5, R9, R4, R3, R7, R8, R6, R10, and R2 per Q2. A patch release when it changes no
-  exported API.
+  exported API. *Complete 2026-11-03,* released in `v1.31.2`.
 * `0049-PLAN-surface-fixes.md`: S1, S2, S6 per Q4, S7, S8, S9, S5, S4, and S3 per Q3. The new gates and stricter validation are
-  behaviour changes, released as a minor version with notes that lead with them.
+  behaviour changes, released as a minor version with notes that lead with them. *Written 2026-11-03,*
+  [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md), proposed. It groups the order into phases by mechanism: S1 with S7,
+  S2, S6, then the gates S8, S9, S5 and S3, then S4.
 * `0049-PLAN-subpackage-fixes.md`: P1, P3, P4, P7, P5, P2 per Q5, P6 per Q6, and `TestInProcessServeAgentStep2`'s margin.
 * `0049-PLAN-generator-fixes.md`: G2, G1, G3, then G4 to G12, each refusal with an engine case; G13.
 * `0049-PLAN-tooling-fixes.md`: T2 (with 0048), T1, T3, then T4 to T13, and F-C's dead `ConfigOptionUpdate.gates` through the
@@ -460,6 +621,7 @@ owner chose the recommended one each time:
 
 Each PLAN is written when its turn comes, against the tree as it then stands, so its line references hold; the first is
 [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md). The decision stays `proposed` until the owner accepts it with that PLAN.
+(It was accepted on 2026-11-02, below.)
 
 #### R1's and R2's designs, decided 2026-11-01
 
@@ -485,6 +647,72 @@ Each PLAN is written when its turn comes, against the tree as it then stands, so
 `accepted`, and [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md) is in progress. 0046's amendment of 2026-11-02 records
 where faults and refusals are now observed.
 
+#### The surface PLAN's designs, proposed 2026-11-03
+
+[0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md) needs four answers the questions above did not settle. Each is put with
+three options, the recommended one first. The PLAN is written on the recommended answers and changes if the owner chooses
+otherwise.
+
+* **Q8. S1 and S7, the key-less variant.**
+  * **(a) One rule for every union with a key-less variant** (recommended).
+    * A discriminator equal to the variant's own name, its schema `title`, decodes into it. The `Kind()` helpers already
+      return that name for it.
+    * In a union without a catch-all, a discriminator that names no variant decodes into the key-less variant when the payload
+      has its required keys and decodes as it, and into `Unknown` otherwise.
+    * A union with a catch-all keeps sending unknown values there.
+    * This is what JSON Schema's `anyOf` allows, as the key-less variants declare no discriminator and no
+      `additionalProperties`. The schema says it outright for `SetSessionConfigOptionRequest`, and both official SDKs decode
+      so.
+    * Its cost: a future `McpServer` type that carries stdio's keys, or a future `AuthMethod` type that carries `id` and `name`,
+      decodes as `Stdio` or `Agent`, not `Unknown`.
+  * **(b) The own name for every union, the fallback only where the schema states it.** A protocol-table rule quotes
+    `SetSessionConfigOptionRequest`'s sentence, and `Build` checks it. `McpServer` and `AuthMethod` keep `Unknown` for future
+    types, unlike the other SDKs.
+  * **(c) Special cases.** The fallback in `SetSessionConfigOptionRequest`'s decoder alone, and the own name for `McpServer`
+    and `AuthMethod` alone. This is the smallest diff, with no rule to keep the generator honest when a schema adds a key-less
+    union.
+* **Q9. S4, how the timelines copy.**
+  * **(a) An unexported deep copy by `reflect`,** used by both timelines (recommended).
+    * It covers any field the schema adds, without generated code.
+    * Every field the timelines reach is exported, and the only interface values are `_meta`'s, which it copies by their
+      dynamic kind.
+    * Its cost is reflection on each `Get` and `Apply`, which these helpers do not call in a loop.
+  * **(b) Generated `clone` methods** for every type a timeline reaches. No reflection, and the fastest. But it is a new emit
+    pass and its tests, for a low finding, and `_meta`'s `any` values still need a runtime copy.
+  * **(c) A JSON round trip.** The least code, but it changes `_meta` values' dynamic types (an `int` comes back a `float64`),
+    and costs an encode and a decode per call.
+* **Q10. S8, the error for an unadvertised `methodId`.**
+  * **(a) A new sentinel, `ErrUnadvertisedAuthMethod`,** wrapped with the method and the id, as `ErrTerminalAuthMethod` is
+    (recommended). One exported identifier, a compatible addition; `errors.Is` reads it.
+  * **(b) A `*CapabilityError`** naming `authMethods`. Nothing exported is added, but `authMethods` is not a capability, and
+    the error would say "capability authMethods not advertised".
+  * **(c) `ErrTerminalAuthMethod`,** its doc widened. Nothing is added, but a terminal method and an unknown one are different
+    refusals, and code that tells them apart today could no longer.
+* **Q11. S2, how an empty collection is sent.**
+  * **(a) A protocol-table rule, `EmptyClears`,** for the two properties whose description says "Replace the … collection"
+    (recommended).
+    * Their fields are tagged `omitzero`, so nil is omitted and empty is sent as `[]`, and `Build` checks the quoted sentence.
+    * The option helpers send `[]` for nil.
+    * No Go type changes.
+  * **(b) `omitzero` on every optional array** whose schema type admits `null`. This is wider. It sends `[]` where a caller
+    set an empty slice for fields whose empty and absent mean the same, and changes the wire for the gated
+    `additionalDirectories`.
+  * **(c) `Patch[[]T]` for the two fields,** as the patch rules give. It is exact, but it changes two exported fields' types:
+    an incompatible change, which needs a `/v2`.
+
+##### Answered by the owner, 2026-11-03
+
+Each question was put with its three options; the owner chose the recommended one each time:
+
+* Q8 (a): one rule for every union with a key-less variant. Not chosen: the own name with a table rule for the fallback;
+  special cases.
+* Q9 (a): an unexported deep copy by `reflect`. Not chosen: generated `clone` methods; a JSON round trip.
+* Q10 (a): a new sentinel, `ErrUnadvertisedAuthMethod`. Not chosen: a `*CapabilityError`; a widened `ErrTerminalAuthMethod`.
+* Q11 (a): a protocol-table rule, `EmptyClears`. Not chosen: `omitzero` on every nullable array; `Patch[[]T]`.
+
+[0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md) is written on these answers. It stays `proposed` until the owner
+approves it.
+
 ### Consequences
 
 * Good, because a deadlock, a crash, and four schema mismatches a peer can see are fixed, each with a test that would have caught
@@ -495,12 +723,12 @@ where faults and refusals are now observed.
 * Bad, because the surface fixes refuse what the SDK sent before (an empty `stopReason`, an unadvertised `methodId`, an ungated
   boolean option): a consumer that relied on it fails at the call, which is why they go in a minor release with notes.
 * Bad, because five PLANs are a long program; Q1 (c) is the shorter alternative.
-* Neutral, because none of the fixes needs an incompatible API change; Q5 (a) adds one option.
+* Neutral, because none of the fixes needs an incompatible API change; Q5 (a) adds one option, and Q10 (a) one sentinel.
 
 ### Confirmation
 
-Each PLAN confirms its findings: the probe, committed as a test, fails at `d55ba2a`'s code and passes after the fix; the gate set
-and CI pass; and each release's notes name what changed for a consumer.
+Each PLAN confirms its findings: the probe, committed as a test, fails at its PLAN's base (`d55ba2a`'s code, or the
+later base a PLAN names) and passes after the fix; the gate set and CI pass; and each release's notes name what changed for a consumer.
 
 ## Pros and Cons of the Options
 
