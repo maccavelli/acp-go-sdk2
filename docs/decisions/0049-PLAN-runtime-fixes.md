@@ -417,3 +417,32 @@ FAILED AS REQUIRED: R2 the guard by identity: an answer changed in place passes 
 
 Staged for the owner, who commits. Phase 4, the close and the release, begins on the owner's word.
 
+The owner committed phase 3 as `2ed2aa6`.
+
+### Phase 4: the close, 2026-11-03
+
+Begun on the owner's "committed, proceed" after `2ed2aa6`.
+
+**Step 1, the gate set:** `tools/gates.py --all`, with the Linux and Windows hosts named per command, at a load average of 6
+to 22: every gate `ok`, exit 0, "all gates passed". The gates were `regen`, `precheck`, `newfiles` ("no new .go files"),
+`nojsonv2`, `winvet`, `records`, `mdlint`, `idscan`, `tools`, `lint`, `fix`, `tidy`, `api`, `race3`, `floor`, `platforms`,
+`windows` and `linux`.
+
+The MADR's R findings, each with what shows it:
+
+| Finding | Shown by | File |
+| :--- | :--- | :--- |
+| R1 | `TestPeersRefusingEachOtherDoNotDeadlock`, `TestFaultAnswersDoNotBlockTheReader`, `TestFaultAnswersWrittenAtEndOfInput`, `TestUnreadAnswersCloseTheConnection` | `connection_answers_test.go` |
+| R2 | `TestInitializeGuardRefusesAChangedAnswer`, `TestInitializeGuardAllowsAnErrorAndAPassThrough`, `TestInitializeGuardOnlyOnTheAgent`; the emitter's `TestSideConnectionsFollowTheModel` | `connection_initialize_guard_test.go`, `cmd/generate/internal/emit/dispatch_test.go` |
+| R3 | `TestBarrierAcrossConnections` | `connection_notification_barrier_test.go` |
+| R4 | `TestServeAgentContextEndWaitsForHandlers` | `shutdown_test.go` |
+| R5 | `TestByteBudgetAtMaxInt` | `connection_queue_bytes_test.go` |
+| R6 | `TestQueueSizeAtMaxInt` | `connection_queue_size_test.go` |
+| R7 | `TestMaxMessageSizeCRLF` | `jsonrpc_test.go` |
+| R8 | `TestSendingMiddlewareMisuse`, its three new cases | `connection_sending_middleware_test.go` |
+| R9 | `TestNoCancelForUnsentRequest` | `connection_cancel_test.go` |
+| R10 | godoc of `Wait` and `Close`; no test, as step 3.4 says | `connection.go` |
+
+Each test was seen to fail on its fix reverted, in phases 1 to 3's plants.
+
+Steps 2 to 4 wait on the owner: the push, CI on the head, and the release when asked.
