@@ -770,6 +770,57 @@ func TestPromptEndedBeforeHandOverSendsNoCancel(t *testing.T) {
 	})
 }
 
+// TestNoCancelForUnsentRequest requires a request whose context ends before
+// the writer takes it, while the writer is busy with an earlier one, to send
+// no $/cancel_request: it was never written, so the peer has nothing to
+// cancel, and the observer reports no cancel sent
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R9). It runs in a
+// synctest bubble.
+func TestNoCancelForUnsentRequest(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		outR, outW := io.Pipe() // not read until the second request has returned
+		inR, inW := io.Pipe()
+		t.Cleanup(func() {
+			_ = outR.Close()
+			_ = inW.Close()
+		})
+		var cancelsSent atomic.Int64
+		c := NewConnection(nil, outW, inR, quietLogs(), WithObserver(func(o Observation) {
+			if o.Kind == ObservedCancelSent {
+				cancelsSent.Add(1)
+			}
+		}))
+		t.Cleanup(func() { _ = c.Close() })
+		go func() { _ = c.SendRequestNoResult(context.WithoutCancel(t.Context()), "_x/first", nil) }()
+		synctest.Wait() // the writer is blocked on the unread pipe
+		ctx, cancel := context.WithCancel(t.Context())
+		returned := make(chan error, 1)
+		go func() { returned <- c.SendRequestNoResult(ctx, "_x/second", nil) }()
+		synctest.Wait() // the second request waits for the writer
+		cancel()
+		if re, ok := errors.AsType[*RequestError](<-returned); !ok || re.Code != -32800 {
+			t.Errorf("the second request = %v, want -32800", re)
+		}
+		lines := make(chan string, 8)
+		go func() {
+			sc := bufio.NewScanner(outR)
+			for sc.Scan() {
+				lines <- sc.Text()
+			}
+		}()
+		synctest.Wait()
+		for len(lines) > 0 {
+			if l := <-lines; strings.Contains(l, ProtocolMethodCancelRequest) || strings.Contains(l, "_x/second") {
+				t.Errorf("the peer read %s, want only the first request", l)
+			}
+		}
+		if n := cancelsSent.Load(); n != 0 {
+			t.Errorf("observed %d cancels sent, want none", n)
+		}
+	})
+}
+
 // refusingWriter writes to w until refuse is set, then refuses every write.
 type refusingWriter struct {
 	w      io.Writer

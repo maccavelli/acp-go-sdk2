@@ -3,6 +3,8 @@ package acp
 import (
 	"context"
 	"io"
+	"math"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -154,5 +156,18 @@ func TestLargerQueue_SurvivesNotificationBurst(t *testing.T) {
 
 	if got != burstSize {
 		t.Fatalf("received %d notifications, want %d", got, burstSize)
+	}
+}
+
+// TestQueueSizeAtMaxInt requires WithMaxQueuedNotifications(math.MaxInt) to
+// build a connection, its n lowered to the maximum, 1 << 20, before
+// OverflowBlock doubles it (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
+// R6).
+func TestQueueSizeAtMaxInt(t *testing.T) {
+	t.Parallel()
+	c := buildConnection(nil, io.Discard, strings.NewReader(""), WithMaxQueuedNotifications(math.MaxInt))
+	if c.queueLimit != maxQueuedNotificationsLimit || cap(c.notificationQueue) != 2*maxQueuedNotificationsLimit {
+		t.Errorf("queue limit %d, channel %d, want %d and %d", c.queueLimit, cap(c.notificationQueue),
+			maxQueuedNotificationsLimit, 2*maxQueuedNotificationsLimit)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -21,6 +22,11 @@ import (
 const (
 	notificationQueueDrainTimeout = 5 * time.Second
 	defaultMaxQueuedNotifications = 1024
+	// maxQueuedNotificationsLimit is the largest n WithMaxQueuedNotifications
+	// takes; a larger one is lowered to it, so the queue, allocated whole,
+	// stays allocatable (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
+	// R6).
+	maxQueuedNotificationsLimit = 1 << 20
 	// defaultMaxQueuedBytes is WithMaxQueuedBytes' default budget
 	// (0045-MADR-notification-queue-byte-budget.md, D5).
 	defaultMaxQueuedBytes = 64 * 1024 * 1024
@@ -565,6 +571,11 @@ type connectionConfig struct {
 // combined notification rate may exceed the processing speed of the
 // single-threaded notification consumer. WithMaxQueuedBytes bounds the same
 // queue in bytes; whichever is reached first, the policy acts.
+//
+// n is at most 1 << 20 (1,048,576); a larger n is lowered to it. The queue is
+// allocated whole as the connection is built, 32 bytes a slot on a 64-bit
+// platform, with 2n slots under OverflowBlock: 64 MiB at the maximum
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R6).
 func WithMaxQueuedNotifications(n int) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		if n > 0 {
@@ -577,7 +588,8 @@ func WithMaxQueuedNotifications(n int) ConnectionOption {
 // of its peer's unfinished messages: the lines of the notifications queued or
 // running and of the requests whose handlers run, each counted from its
 // receipt until its handler returns. The default is 64 MiB; a budget below
-// WithMaxMessageSize is raised to it, so one message always fits.
+// WithMaxMessageSize is raised to it, so one message always fits; math.MaxInt
+// sets no practical budget.
 //
 // A notification that would take the counted bytes past the budget, while a
 // notification is counted, meets the overflow policy as at
@@ -660,7 +672,7 @@ func WithMaxConcurrentRequests(n int) ConnectionOption {
 }
 
 // WithMaxMessageSize sets the largest message, one line in bytes without its
-// newline, the connection reads. A longer line is read through its newline,
+// newline, "\n" or "\r\n", the connection reads. A longer line is read through its newline,
 // discarded, logged, and answered -32600 with "id": null, and reading goes on.
 // The default is 10 MiB; n <= 0 keeps it
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, J1).
@@ -881,6 +893,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		// (0044-MADR-notification-queue-back-pressure.md, D9).
 		cfg.notificationOverflow = OverflowBlock
 	}
+	cfg.maxQueuedNotifications = min(cfg.maxQueuedNotifications, maxQueuedNotificationsLimit)
 	queueCap := cfg.maxQueuedNotifications
 	if cfg.notificationOverflow == OverflowBlock {
 		queueCap *= 2
@@ -1517,8 +1530,10 @@ func formatCanonicalJSONRPCNumericID(negative bool, digits string, exp10 int) (s
 // readLine reads one line from r, without its newline. A line longer than max
 // bytes is read through its newline and discarded, and tooLong is true;
 // discarded is then its length without the newline, for the observer
-// (0046-MADR-sending-and-receiving-middleware.md, D9). err is r's error,
-// io.EOF at the end; a last line without a newline comes with it.
+// (0046-MADR-sending-and-receiving-middleware.md, D9). The newline is "\n" or
+// "\r\n", measured alike (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
+// R7). err is r's error, io.EOF at the end; a last line without a newline
+// comes with it.
 func readLine(r *bufio.Reader, maxBytes int) (line []byte, tooLong bool, discarded int, err error) {
 	for {
 		chunk, err := r.ReadSlice('\n')
@@ -1526,7 +1541,7 @@ func readLine(r *bufio.Reader, maxBytes int) (line []byte, tooLong bool, discard
 			discarded += len(chunk)
 		} else {
 			line = append(line, chunk...)
-			if len(bytes.TrimSuffix(line, []byte("\n"))) > maxBytes {
+			if len(bytes.TrimSuffix(bytes.TrimSuffix(line, []byte("\n")), []byte("\r"))) > maxBytes {
 				discarded, line, tooLong = len(line), nil, true
 			}
 		}
@@ -2150,11 +2165,17 @@ func (c *Connection) waitForRoom(size int64) bool {
 // when readOn is set, past twice the budget, OverflowBlock's read-on limit.
 // Requests' bytes count toward the total but never trigger it alone: a
 // notification is admitted when none is counted. The caller holds notifyMu
-// (0045-MADR-notification-queue-byte-budget.md, D3 as amended).
+// (0045-MADR-notification-queue-byte-budget.md, D3 as amended). Twice a
+// budget above math.MaxInt64/2 is math.MaxInt64, not a negative number
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R5).
 func (c *Connection) overByteBudget(size int64, readOn bool) bool {
 	limit := c.byteLimit
 	if readOn {
-		limit *= 2
+		if limit > math.MaxInt64/2 {
+			limit = math.MaxInt64
+		} else {
+			limit *= 2
+		}
 	}
 	return c.notifBytes > 0 && c.queuedBytes+size > limit
 }
@@ -2632,7 +2653,10 @@ func (c *Connection) exchangePrepared(ctx context.Context, msg anyMessage, idKey
 			return resp, true, nil
 		}
 		c.cleanupPending(idKey)
-		if ctx.Err() != nil {
+		// A request never handed to the writer was never written, so the
+		// peer has nothing to cancel
+		// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R9).
+		if sent && ctx.Err() != nil {
 			c.sendCancelRequest(idKey)
 		}
 		return responseEnvelope{}, sent, toReqErr(err)

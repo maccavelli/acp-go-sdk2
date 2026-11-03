@@ -254,6 +254,32 @@ func TestMaxMessageSize(t *testing.T) {
 	}
 }
 
+// TestMaxMessageSizeCRLF requires WithMaxMessageSize to measure a line
+// without its newline whether that is "\n" or "\r\n": a line at the limit is
+// read, and one byte over it is answered -32600, with either newline
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R7).
+func TestMaxMessageSizeCRLF(t *testing.T) {
+	t.Parallel()
+	const limit = 100
+	notFound := func(_ context.Context, method string, _ json.RawMessage) (any, *RequestError) {
+		return nil, NewMethodNotFound(method)
+	}
+	for name, cr := range map[string]string{`\n`: "", `\r\n`: "\r"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			p := rawWire(t, func(w io.Writer, r io.Reader) { NewConnection(notFound, w, r, WithMaxMessageSize(limit), quietLogs()) })
+			p.send(lineOf(t, 1, limit) + cr)
+			if a := p.next("the line at the limit"); string(a.ID) != "1" || a.Error == nil || a.Error.Code != -32601 {
+				t.Errorf("a line of %d bytes, ending %s, answered %s %+v, want -32601 with id 1", limit, name, a.ID, a.Error)
+			}
+			p.send(lineOf(t, 2, limit+1) + cr)
+			if a := p.next("the overlong line's answer"); string(a.ID) != "null" || a.Error == nil || a.Error.Code != -32600 {
+				t.Errorf("a line of %d bytes, ending %s, answered %s %+v, want -32600 with id null", limit+1, name, a.ID, a.Error)
+			}
+		})
+	}
+}
+
 // sizeRecorder is a reader that sends the size of the buffer each Read is
 // given on sizes, then waits for stop and reports the end of input.
 type sizeRecorder struct {

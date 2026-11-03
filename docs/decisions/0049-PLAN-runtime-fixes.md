@@ -1,6 +1,6 @@
 ---
 status: in-progress
-date: 2026-11-02
+date: 2026-11-03
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
 
@@ -235,3 +235,71 @@ Allocations are equal in every run, and times are within noise.
 * `tools/idscan.py --paths` over the phase's ten files: "10 file(s), 17 pattern(s), 0 match(es)".
 
 Staged for the owner, who commits. Phase 2 begins on the owner's word.
+
+The owner committed phase 1 as `fd4dcaf`.
+
+### Phase 2: R5 to R9, 2026-11-03
+
+Begun on the owner's "committed proceed" after `fd4dcaf`.
+
+**What it did,** each fix with its test, in the file the step names:
+
+* **R5:** `overByteBudget` doubles the budget for the read-on only up to `math.MaxInt64/2`, and above it uses `math.MaxInt64`.
+  `TestByteBudgetAtMaxInt` runs budgets of `math.MaxInt` and `math.MaxInt/2 + 1`: one notification held, two more queued, and
+  the connection stays open with three lines counted. The godoc of `WithMaxQueuedBytes` and the README add that `math.MaxInt`
+  sets no practical budget.
+* **R6:** `maxQueuedNotificationsLimit = 1 << 20`, applied in `buildConnection` before the doubling. `WithMaxQueuedNotifications`'s
+  godoc names the maximum and the memory: 32 bytes a slot, 2n slots under `OverflowBlock`, 64 MiB at the maximum. The README
+  names the maximum. `TestQueueSizeAtMaxInt` builds a connection with `math.MaxInt`, giving a limit of `1 << 20` and a channel
+  of `2 << 20`.
+* **R7:** `readLine` measures the line without a trailing `"\n"` and then one `"\r"`, so `"\r\n"` counts as `"\n"` does. It
+  trims one `"\r"` only, not every trailing `"\r"`, so a peer cannot grow a line past the limit with carriage returns.
+  `WithMaxMessageSize`'s godoc names both newlines. `TestMaxMessageSizeCRLF` uses a limit of 100, since `lineOf` cannot build a
+  50-byte line: 100 bytes is read with either newline, and 101 is answered `-32600` with either.
+* **R8:** `structuredParams` accepts empty params, and otherwise an object or an array that is valid JSON. White space alone is
+  refused. `WithSendingMiddleware`'s godoc says "and valid JSON". There are three new cases in `TestSendingMiddlewareMisuse`'s
+  table, `{"a":`, `[1,` and `"   "`, through a helper, `passingParams`; each fails with `-32603` wrapping
+  `ErrSendingMiddleware`, writes nothing, and leaves nothing pending.
+* **R9:** `exchangePrepared` sends `$/cancel_request` only when `sent`. `TestNoCancelForUnsentRequest`, in a synctest bubble:
+  the writer is held by an unread first request, and the second request's context ends before the writer takes it. The second
+  returns `-32800`, the peer then reads only the first request, and the observer reports no cancel sent.
+* `docs/architecture.md`: the saturating double and the clamp.
+
+**Seen to fail:** `tools/plants.py`, five plants, each the fix reverted in its own copy of the tree, 5/5 as required:
+
+```text
+FAILED AS REQUIRED: R5 the doubling overflows again (^TestByteBudgetAtMaxInt$): exit 1: connection_queue_bytes_test.go:323: WithMaxQueuedBytes(4611686018427387904): the connection closed with notifications waiting: acp: connection closed: notification queue overflow
+FAILED AS REQUIRED: R6 the clamp removed (^TestQueueSizeAtMaxInt$): exit 1: [the stack of] panic: makechan: size out of range
+FAILED AS REQUIRED: R7 the line measured with its CR (^TestMaxMessageSizeCRLF$): exit 1: jsonrpc_test.go:273: a line of 100 bytes, ending \r\n, answered null {"code":-32600,"message":"Invalid request","data":{"error":"message exceeds 100 bytes"}}, want -32601 with id 1
+FAILED AS REQUIRED: R8 the first byte checked alone (^TestSendingMiddlewareMisuse$): exit 1: connection_sending_middleware_test.go:380: the call = {"code":-32603,"message":"Internal error","data":{"error":"json: error calling MarshalJSON for type *jsontext.Value: unexpected end of JSON input"}}, want -32603 wrapping ErrSendingMiddleware
+FAILED AS REQUIRED: R9 the cancel sent unsent (^TestNoCancelForUnsentRequest$): exit 1: connection_cancel_test.go:815: the peer read {"jsonrpc":"2.0","method":"$/cancel_request","params":{"requestId":2}}, want only the first request
+```
+
+On the first run, R5's plant failed with `io: read/write on closed pipe` instead of the wanted text: the connection closed on
+the second notification, and the test's third send then failed. The two sends after the first now use `trySend`, so the
+check that follows reports the close.
+
+**Checks:**
+
+* `go test -race -count=3 -run 'TestByteBudgetAtMaxInt|TestQueueSizeAtMaxInt|TestMaxMessageSize|TestSendingMiddlewareMisuse|TestNoCancelForUnsentRequest' .`:
+  `ok`.
+* `make pre-add-check` with the phase's Go files and the README:
+  * **First run:** exit 2. `golangci-lint` found one `perfsprint` issue, `fmt.Sprint(budget)` in `TestByteBudgetAtMaxInt`'s
+    subtest name, now `strconv.Itoa`. The tests also failed in `agentproc`, a package the phase does not touch:
+    `TestBlockedTapDetached` and `TestDetachedTapIsPrefix` ("the bulk agent did not say it was ready within 30s"), and
+    `TestInProcessDetachedTapIsPrefix` ("the connection did not read Serve's first 56 MiB within 30s"). The host's load average
+    was 73 to 93, from `fseventsd` and Spotlight. The three tests pass alone, and the whole package passes with that run's
+    seed, `-shuffle=1793720620141291000`.
+  * **Second run,** after the lint fix, at load 57 to 88: exit 2. `remote`'s `TestHTTPServerRouting` failed, a package the
+    phase does not touch: "Post …: net/http: HTTP/1.x transport connection broken: http: CloseIdleConnections called".
+  * As the MADR's "How the pass was run" did with failures under the same load, these are set aside, not treated as findings.
+    The evidence is below.
+  * **Third run,** started once the 1-minute load fell below 20 (19.7): exit 0, "7 file(s) gofmt-clean; both modules
+    linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `tools/remote.py tree --host linux`: both modules, every package `ok`, exit 0.
+* `tools/remote.py pkg --host windows . -test.run '…the five tests…' -test.count=3`: "PASS", exit 0.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each; `tools/idscan.py --paths` over the
+  phase's files: 0 matches.
+
+Staged for the owner, who commits. Phase 3 begins on the owner's word.
+

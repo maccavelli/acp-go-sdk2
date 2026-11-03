@@ -132,7 +132,8 @@ func RequestIDFromContext(ctx context.Context) (json.RawMessage, bool) {
 // A middleware may answer without calling next. It may return another
 // result: a json.RawMessage is used as it is, nil is no result, and any other
 // value is encoded with encoding/json. It may pass next other params, which
-// are written as given and must be nil, a JSON object or a JSON array.
+// are written as given and must be nil, a JSON object or a JSON array, and
+// valid JSON.
 // Initialize's result is recorded as the reader reads it, before the chain
 // sees it: a middleware may fail the call, and the record stays, but a result
 // other than the one next returned fails the call. The connection's own
@@ -188,10 +189,15 @@ func sameBytes(a, b json.RawMessage) bool {
 }
 
 // structuredParams reports whether p may be written as a message's params:
-// none, a JSON object or a JSON array, as encodeParams leaves them.
+// none, a JSON object or a JSON array, as encodeParams leaves them. Valid
+// JSON only: white space alone, or an object or array left unfinished, is
+// not (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R8).
 func structuredParams(p json.RawMessage) bool {
+	if len(p) == 0 {
+		return true
+	}
 	t := bytes.TrimLeft(p, " \t\r\n")
-	return len(t) == 0 || t[0] == '{' || t[0] == '['
+	return len(t) > 0 && (t[0] == '{' || t[0] == '[') && json.Valid(p)
 }
 
 // sendInnermost is the sending chain's innermost handler. It checks the call

@@ -871,7 +871,8 @@ Every send returns when its context ends, even while the peer does not read.
 A message whose write has begun may still reach the peer.
 
 `acp.WithMaxQueuedNotifications(n)` sets how many received notifications may
-wait while a notification handler runs, 1024 by default.
+wait while a notification handler runs, 1024 by default and at most 1,048,576;
+a larger `n` is lowered to it, since the queue is allocated whole.
 `acp.WithMaxQueuedBytes(n)` bounds the same queue in bytes, 64 MiB by default;
 whichever limit is reached first counts (see "The byte budget", below).
 `acp.WithNotificationOverflowPolicy(p)` sets what happens past either
@@ -930,7 +931,7 @@ about 10 GiB.
   receipt until its handler returns: the notifications queued or running, and
   the requests whose handlers run.
 - **The default is 64 MiB.** A budget below `WithMaxMessageSize` is raised to
-  it, so one message always fits.
+  it, so one message always fits. `math.MaxInt` sets no practical budget.
 - **A notification** that would take the bytes counted past the budget, while
   another notification is counted, meets the overflow policy as at the count:
   - `acp.OverflowBlock` pauses the reader;

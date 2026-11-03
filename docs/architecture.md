@@ -448,7 +448,9 @@ whose context has ended is not written.
 
 What a full queue does is the overflow policy
 ([0044-MADR-notification-queue-back-pressure.md](decisions/0044-MADR-notification-queue-back-pressure.md)).
-`queueLimit` is `WithMaxQueuedNotifications`' `n`. `receiveLine` queues each
+`queueLimit` is `WithMaxQueuedNotifications`' `n`, lowered to
+`maxQueuedNotificationsLimit`, `1 << 20`, in `buildConnection`, since the
+channel is allocated whole (0049, R6). `receiveLine` queues each
 notification with a non-blocking send, whose `default` closes
 (`OverflowCloseConnection`) or drops (`OverflowDropNewest`) once the channel is
 full. `OverflowBlock`, the default, and also what an undefined policy becomes in
@@ -485,7 +487,8 @@ The byte budget sits beside the count
   so the bytes and the count release together.
   - `overByteBudget` is true while `notifBytes > 0` and the line would take
     `queuedBytes` past the budget, or past twice it for `OverflowBlock`'s
-    read-on.
+    read-on; twice a budget above `math.MaxInt64/2` is `math.MaxInt64` (0049,
+    R5).
   - `waitForRoom` waits on it as on the count. Past the wait, it sends the
     notification to the same overflow path as a full channel.
 - **A request.** `admitRequestBytes` adds its size after the concurrency limit's

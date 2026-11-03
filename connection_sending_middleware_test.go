@@ -315,6 +315,16 @@ func pendingCount(c *Connection) int {
 	return len(c.pending)
 }
 
+// passingParams is a sending middleware that passes next params instead of
+// the call's.
+func passingParams(params string) Middleware {
+	return func(next MethodHandler) MethodHandler {
+		return func(ctx context.Context, method string, _ json.RawMessage) (any, *RequestError) {
+			return next(ctx, method, json.RawMessage(params))
+		}
+	}
+}
+
 // TestSendingMiddlewareMisuse requires each rule D10 names, broken, to fail
 // the call with ErrSendingMiddleware, write nothing more, and leave no
 // request pending (Confirmation 5). Each runs in a synctest bubble.
@@ -348,6 +358,12 @@ func TestSendingMiddlewareMisuse(t *testing.T) {
 				return next(ctx, method, json.RawMessage(`"str"`))
 			}
 		}},
+		// Params that begin as an object or an array but are not valid JSON,
+		// and white space alone (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
+		// R8).
+		{"an unfinished object", 0, passingParams(`{"a":`)},
+		{"an unfinished array", 0, passingParams(`[1,`)},
+		{"white space alone", 0, passingParams("   ")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

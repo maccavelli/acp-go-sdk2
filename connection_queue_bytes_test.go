@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"testing/synctest"
 )
@@ -289,4 +292,41 @@ func TestQueuedBytesRequestsDoNotPause(t *testing.T) {
 			t.Errorf("QueuedBytes = %d with every handler returned, want 0: the request's bytes were not let go", got)
 		}
 	})
+}
+
+// TestByteBudgetAtMaxInt requires a budget whose double does not fit an
+// int64, such as math.MaxInt for no practical limit, to keep the connection
+// open under OverflowBlock while notifications wait: twice it is
+// math.MaxInt64, not a negative number
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R5). Each runs in a
+// synctest bubble.
+func TestByteBudgetAtMaxInt(t *testing.T) {
+	t.Parallel()
+	const note = `{"jsonrpc":"2.0","method":"_x/n"}`
+	for _, budget := range []int{math.MaxInt, math.MaxInt/2 + 1} {
+		t.Run(strconv.Itoa(budget), func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				entered, release := make(chan struct{}, 4), make(chan struct{})
+				t.Cleanup(sync.OnceFunc(func() { close(release) }))
+				var c *Connection
+				p := rawWire(t, func(w io.Writer, r io.Reader) {
+					c = NewConnection(holding(entered, release), w, r, WithMaxQueuedBytes(budget), quietLogs())
+				})
+				p.send(note)
+				within(t, entered, "the running notification")
+				// A connection that closes stops reading, so these may fail;
+				// the check below says why.
+				_ = p.trySend(note)
+				_ = p.trySend(note)
+				synctest.Wait()
+				if isEnded(c) {
+					t.Fatalf("WithMaxQueuedBytes(%d): the connection closed with notifications waiting: %v", budget, c.Err())
+				}
+				if got, want := c.QueuedBytes(), int64(3*len(note)); got != want {
+					t.Errorf("QueuedBytes = %d, want %d", got, want)
+				}
+			})
+		})
+	}
 }
