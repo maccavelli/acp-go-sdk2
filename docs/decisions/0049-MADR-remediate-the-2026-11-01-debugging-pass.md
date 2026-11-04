@@ -325,6 +325,9 @@ context deadline exceeded". Fix: name the case in `Wait`'s and `Close`'s doc.
 
 ### F-S: the SDK surface against the schema
 
+*Done 2026-11-04:* S1 to S9 are fixed in `v1.32.0` by [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md), each with
+the test its phase 6 table names, under its deviations 1 to 5 and the amendments of 2026-11-03 to Q8, Q9 and Consequences.
+
 *Re-run 2026-11-03 at `e98987a`:* all nine reproduce ("Re-assessment" above).
 [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md) takes them up.
 

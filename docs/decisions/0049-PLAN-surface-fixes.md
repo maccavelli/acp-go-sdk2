@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-11-03
+status: complete
+date: 2026-11-04
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
 
@@ -299,7 +299,8 @@ emitter's plant runs in a scratch copy by script, since `plants.py` runs from th
 ## Verification
 
 * Each of S1 to S9 has a committed test that fails at `e98987a`'s code, by its plant, and passes after.
-* `make api`: one compatible addition, nothing incompatible against `v1.31.2`.
+* `make api`: ~~one compatible addition~~ 26 compatible additions (deviation 3), nothing incompatible against
+  `v1.31.2`.
 * `tools/gates.py regen` is clean, and `go test ./...` passes in both modules.
 * The behaviour changes are stated in the godoc, the README and the release notes:
   * the key-less fallback;
@@ -961,5 +962,39 @@ and the other five passing; here that job took 90 seconds.
 * `tools/consumer.py` is unchanged, as step 3.4 found its program sends only listed values.
 * [0048-PLAN-create-releases-in-ci.md](0048-PLAN-create-releases-in-ci.md) has not landed, so the owner tags and releases.
 
-**Not done yet,** each waiting on the owner: the tag `v1.32.0` and its release; then `tools/publication.py` and
-`tools/consumer.py v1.32.0`; step 6.5, this PLAN, its row and the MADR's S findings marked done, once the release is out.
+The owner committed the report as `9eeb57f` and pushed it, after `make push-guard` passed over it ("1 outgoing commit(s),
+a85a653..9eeb57f"), then tagged `v1.32.0` on `9eeb57f` and pushed the tag. After the consumer check and CI below, the owner
+created the release with `gh release create v1.32.0 --title v1.32.0 --notes-file <the body>`, which printed its URL.
+
+* `tools/release_body.py v1.32.0 HEAD` at `9eeb57f`: exit 0, "101 lines, 2 links"; `idscan` over the body, 0 matches. The two
+  links name the MADR and [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md) at the tag.
+* **CI:**
+  * the tag's run `41840310316`, "success", six `validate` jobs on Ubuntu, Windows and macOS at Go `1.27.3` and `1.26.10`;
+  * the Docs workflow's run `41840076826` on `main` at `9eeb57f`, "success".
+* `tools/consumer.py v1.32.0`: exit 0, "as required". The module at the floor, `go 1.26.10`, requires `v1.32.0`, its test is
+  `ok`, and its Windows build exits 0.
+* `tools/publication.py v1.32.0 9eeb57f <the body>`: exit 0, "10 of 10 checks hold". The checks:
+  * the release exists, not a draft or prerelease, and is marked latest;
+  * its body is the extracted text;
+  * the tag is annotated, names `9eeb57f`, and is on origin's `main`;
+  * CI passed on that head and on the tag;
+  * the proxy serves the tag at that commit;
+  * `go list -m @latest` gives `v1.32.0`;
+  * `go mod download` works with the checksum database on.
+
+**Step 6.5.** This PLAN and its row are `complete`. The MADR's F-S section records S1 to S9 as done in `v1.32.0`. The MADR
+stays `accepted`, with three PLANs to come (Q1 a, Q7 a).
+
+**Verification,** against the section above:
+
+* S1 to S9 each have a committed test that failed with its fix reverted and passes now. See the table in step 6.1.
+* `make api`: 26 compatible additions, `ErrUnadvertisedAuthMethod` and deviation 3's 25 `Validate` methods, and nothing
+  incompatible against `v1.31.2`.
+* `tools/gates.py regen` is clean, and `go test ./...` passes in both modules: the gate set, 18 of 18.
+* The behaviour changes are stated in the godoc, `README.md` and the release notes: the key-less own name and fallback
+  (phase 1), the empty collections (phase 2), membership on send and lenient reads (phase 3), and the new gates (phase 4).
+  The timelines' deep copies (phase 5) are stated in the same three places.
+* `tools/gates.py --all` and CI on `a85a653`, `9eeb57f` and the tag pass.
+
+Not done here, by the MADR's plan: the subpackage, tooling and generator findings, each in its own PLAN, written when its
+turn comes.
