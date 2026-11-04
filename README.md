@@ -869,7 +869,11 @@ item 3).
 
 `agentproc.NewTranscript(w)`, its `Input()` and `Output()` set as the two taps,
 records both ways of the wire, one `{"direction","frame"}` object a line, the
-form `acptest.ReadRecords` reads (`ExampleTranscript`; 0042, item 4).
+form `acptest.ReadRecords` reads (`ExampleTranscript`; 0042, item 4). Call its
+`Close` once the agent is done, even while a tap `Wait` abandoned is still
+writing: nothing reaches `w` once it has returned, so `w` may then be closed
+([0049-PLAN-subpackage-fixes.md](docs/decisions/0049-PLAN-subpackage-fixes.md),
+phase 3).
 
 When the input ends cleanly, at end of file, as when a script closes a stdio
 agent's standard input after writing its requests, the requests already received

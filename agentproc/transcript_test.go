@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	acp "github.com/maccavelli/acp-go-sdk2"
 	"github.com/maccavelli/acp-go-sdk2/acptest"
@@ -175,5 +176,80 @@ func TestTranscriptOfSession(t *testing.T) {
 	}
 	if _, err := acptest.Decode[acp.PromptRequest](records, acptest.Sent, acp.AgentMethodSessionPrompt); err != nil {
 		t.Errorf("Decode of the prompt = %v", err)
+	}
+}
+
+// blockingWriter holds each Write until release is closed. It signals entered
+// at its first Write, and counts the Writes that returned.
+type blockingWriter struct {
+	release, entered chan struct{}
+	once             sync.Once
+
+	mu sync.Mutex
+	n  int
+}
+
+func (w *blockingWriter) Write(p []byte) (int, error) {
+	w.once.Do(func() { close(w.entered) })
+	<-w.release
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.n++
+	return len(p), nil
+}
+
+func (w *blockingWriter) writes() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.n
+}
+
+// TestTranscriptCloseAfterAbandon requires Transcript.Close, called while a
+// tap that Wait abandoned is still inside the Transcript's writer, to race
+// with nothing and to end the record: nothing reaches w once Close has
+// returned (0049-PLAN-subpackage-fixes.md, phase 3, P7). The agent writes
+// 5 000 notifications of a method the client does not know, which it does
+// not answer, in one write, which the tap is writing when Wait's grace
+// passes, and one more that is still queued, so the tap is abandoned:
+// DroppedTapBytes is above 0, the precondition the pass's probe could not
+// check. Once the writer is released, the tap goes on through the burst while
+// Close waits for the lock; the burst outlasts a mutex's 1 ms before it hands
+// the lock to a waiter, so Close takes it within the burst, and a frame
+// written after Close returned is seen.
+func TestTranscriptCloseAfterAbandon(t *testing.T) {
+	t.Parallel()
+	w := &blockingWriter{release: make(chan struct{}), entered: make(chan struct{})}
+	var released sync.Once
+	release := func() { released.Do(func() { close(w.release) }) }
+	t.Cleanup(release)
+	tr := NewTranscript(w)
+	p := startInProcess(t, &InProcess{Grace: 100 * time.Millisecond, OutputTap: tr.Output(),
+		Serve: func(ctx context.Context, _ io.Reader, out io.Writer) error {
+			if _, err := io.WriteString(out, strings.Repeat(`{"jsonrpc":"2.0","method":"x"}`+"\n", 5000)); err != nil {
+				return err
+			}
+			select {
+			case <-w.entered: // the tap is writing the first frame
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			}
+			_, err := io.WriteString(out, `{"jsonrpc":"2.0","method":"y"}`+"\n")
+			return err
+		}})
+	_ = p.Wait()
+	if output, _ := p.DroppedTapBytes(); output == 0 {
+		t.Fatal("the output tap was not abandoned: DroppedTapBytes is 0, so the test proves nothing")
+	}
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		release()
+	}()
+	if err := tr.Close(); err != nil {
+		t.Errorf("Close = %v", err)
+	}
+	at := w.writes()
+	time.Sleep(100 * time.Millisecond) // the abandoned tap goes on through the burst
+	if got := w.writes(); at < 1 || got != at {
+		t.Errorf("the writer had taken %d records when Close returned, and %d records 100ms later; want none after Close", at, got)
 	}
 }

@@ -447,3 +447,64 @@ Begun on the owner's "committed proceed" after `f133869`. No deviation.
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 3 begins on the owner's word.
+
+The owner committed phase 2 as `63485ff`.
+
+### Phase 3: P7, `Transcript.Close`, and the step-2 margin, 2026-11-04
+
+Begun on the owner's "committed, proceed" after `63485ff`. No deviation.
+
+**What it did:**
+
+* **`agentproc/linetap.go`:** `lineTap` gains `mu`, taken around each change to `held` in `Write` and in `Close`, and
+  released before `fn` runs. `LineTap`'s doc says `Close` may be called from another goroutine while a `Write` runs.
+* **`agentproc/transcript.go`:** `Transcript` gains `closed`, set by `Close` under `t.mu` after the two taps' `Close`;
+  `write` writes nothing once it is set. `Close`'s doc: nothing reaches `w` once it has returned, a record in progress is
+  finished first, and it may be called while an abandoned tap is still writing.
+* **`agentproc/inprocess_test.go`:** `TestInProcessServeAgentStep2` runs with `Grace: slack` and `within`'s bound
+  `3*slack+slack`; its doc gives the reason and the figures. The `ErrTerminated` assertion is kept.
+* **The test,** `agentproc/transcript_test.go`: `TestTranscriptCloseAfterAbandon`, beside `blockingWriter`, which holds each
+  `Write` until released and signals its first. The agent writes 5 000 notifications in one write and, once the tap is
+  writing the first, one more; `Wait`'s 100 ms grace abandons the tap with that one queued, so `DroppedTapBytes` is above 0,
+  which the test requires first. `Close` runs while the first record's write is held, the writer is released 20 ms later,
+  and no record may reach the writer after `Close` has returned. The release is also a cleanup, so a failure leaks no
+  goroutine.
+  * Step 3.4 had two lines in two writes and "nothing more written within 100 ms". Two first runs refined it:
+    * As two lines, the test failed on Windows in 2 of 3 runs, "the writer took 2 records when Close returned and 2
+      after": the tap took the lock for the second record before `Close` did, which the contract allows, since that record
+      began before `Close` returned. The test now requires only that nothing follows `Close`'s return, and the burst of
+      5 000 outlasts the 1 ms after which a mutex hands its lock to a waiter, so `Close` takes it within the burst and a
+      later record is seen.
+    * The burst first used `{"a":1}`, not JSON-RPC: the client answered each `-32600` on an input the serve never reads, and
+      past R1's 1 024 unwritten answers the connection closed before reading the last write, so nothing was queued:
+      "DroppedTapBytes is 0". The frames are notifications of a method the client does not know, which it does not answer.
+  * `TestTranscriptLines`, `TestTranscriptWriteError`, `TestTranscriptOfSession` and the `LineTap` tests pass unchanged.
+* **Docs:** `README.md`'s Transcript paragraph; `docs/architecture.md`'s `LineTap`, `Transcript` and the test list.
+
+**Seen to fail,** by script, `go test -race -count=3` in a copy of the tree per plant, since `tools/plants.py` passes no
+`-race` (`tools/plants.py:83-90`), 2/2:
+
+```text
+FAILED AS REQUIRED: lineTap's lock removed (^TestTranscriptCloseAfterAbandon$): exit 1: WARNING: DATA RACE
+FAILED AS REQUIRED: write ignores closed (^TestTranscriptCloseAfterAbandon$): exit 1: transcript_test.go:253: the writer had taken 1 records when Close returned, and 4228 records 100ms later; want none after Close
+```
+
+The race is at `linetap.go:49` and `:59`, from `transcript.go:59`, as the probe's.
+
+**The margin,** by the pass's probe at the new grace, `PROBE_N=100 PROBE_HOGS=32 GOMAXPROCS=2 PROBE_GRACE=3s`, at load 8 to
+14: "killed=0 p50=150.991125ms p99=403.559792ms max=403.559792ms". The margin has no plant: it is a test's bound.
+
+**Checks:**
+
+* `go test -race -count=10 -run TestTranscriptCloseAfterAbandon`, and `-count=3` of the phase's tests and of `./agentproc/`
+  whole: `ok`.
+* `make api`: "against v1.32.0: 0 incompatible, 1 compatible", phase 1's; this phase adds nothing.
+* `make pre-add-check` with the phase's four Go files, the README and `docs/architecture.md`, at load 7 to 17: exit 0, "4
+  file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `tools/remote.py tree --host linux`: both modules, exit 0.
+* `tools/remote.py pkg --host windows ./agentproc -test.run 'TestTranscript|TestLineTap|TestInProcessServeAgentStep2'
+  -test.count=5`: "PASS", after the rewrite above.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 4 begins on the owner's word.

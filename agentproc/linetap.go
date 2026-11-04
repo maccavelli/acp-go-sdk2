@@ -3,6 +3,7 @@ package agentproc
 import (
 	"bytes"
 	"io"
+	"sync"
 )
 
 // LineTap returns a writer, for Command.OutputTap or InputTap, that calls fn
@@ -15,8 +16,10 @@ import (
 //
 // The writer is for one stream, written from one goroutine, as a tap is: set
 // as both taps, it would be written from two, so each tap takes a LineTap of
-// its own. fn runs on the tap's goroutine, and the connection does not wait
-// for it. LineTap panics if fn is nil
+// its own. Its Close may be called from another goroutine, while a Write runs,
+// as after a tap that Wait abandoned (0049-PLAN-subpackage-fixes.md, phase 3,
+// P7). fn runs on the tap's goroutine, and the connection does not wait for
+// it. LineTap panics if fn is nil
 // (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 5).
 func LineTap(fn func(frame []byte)) io.Writer {
 	if fn == nil {
@@ -27,8 +30,10 @@ func LineTap(fn func(frame []byte)) io.Writer {
 
 // lineTap is the writer LineTap returns.
 type lineTap struct {
-	fn   func(frame []byte)
-	held []byte // the line not yet ended
+	fn func(frame []byte)
+
+	mu   sync.Mutex // guards held, for a Close from another goroutine; never held while fn runs
+	held []byte     // the line not yet ended
 }
 
 // Write calls fn with each line p ends, and holds what follows the last
@@ -37,13 +42,16 @@ func (l *lineTap) Write(p []byte) (int, error) {
 	n := len(p)
 	for {
 		i := bytes.IndexByte(p, '\n')
+		l.mu.Lock()
 		if i < 0 {
 			l.held = append(l.held, p...)
+			l.mu.Unlock()
 			return n, nil
 		}
 		frame := make([]byte, 0, len(l.held)+i)
 		frame = append(append(frame, l.held...), p[:i]...)
 		l.held = nil
+		l.mu.Unlock()
 		l.fn(frame)
 		p = p[i+1:]
 	}
@@ -51,6 +59,8 @@ func (l *lineTap) Write(p []byte) (int, error) {
 
 // Close drops the line not yet ended, which is not a frame, and returns nil.
 func (l *lineTap) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.held = nil
 	return nil
 }

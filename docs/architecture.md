@@ -962,7 +962,8 @@ goroutine starts. `Command`'s and `InProcess`'s unexported `readHook`, which
 only the package's tests set, runs before each read of the output tap's reader, to hold the
 connection behind the agent. `LineTap` (`linetap.go`) is a tap writer that
 calls a function with each line, a copy without its newline, and holds a line
-not yet ended (0041, item 5). The tap reader and writer take any
+not yet ended (0041, item 5), under a mutex that `Close`, from another
+goroutine, takes too and that is never held while the function runs. The tap reader and writer take any
 `io.ReadCloser` and `io.WriteCloser`, so an in-process agent's pipes have taps
 too.
 
@@ -982,7 +983,9 @@ rather than waits, and ends `Serve`'s context with `context.Canceled`.
 standard error under its two caps and forwards every byte to the caller's
 writer; `Wait` joins a `StderrError` holding it under `JoinStderrTail` (0042,
 item 3). `transcript.go`'s `Transcript` writes two `lineTap`s' frames, one
-record a line, under a mutex (0042, item 4).
+record a line, under a mutex (0042, item 4). `Close` sets `closed` under it, so
+a record in progress finishes first and none is written after
+(0049-PLAN-subpackage-fixes.md, phase 3).
 
 Checks that guard it:
 
@@ -996,10 +999,10 @@ Checks that guard it:
   `TestCloseReadsTheAgentsLastOutput` and `TestTapDrainBoundedByGrace`, `LineTap`'s `TestLineTapFrames`,
   `TestLineTapCopies`, `TestLineTapHoldsUnended`, `TestLineTapNilFn` and `TestLineTapAsOutputTap`, and
   `TestExitedFirst` and `TestProcessWaitContext`, `InProcess`'s thirteen in `inprocess_test.go`,
-  `TestInProcessDetachedTapIsPrefix`, `TestInProcessServeAgentStep2` and `TestWaitErrorSaysTheCauseOnce`, which
+  `TestInProcessDetachedTapIsPrefix`, `TestInProcessServeAgentStep2`, under a grace of `slack`, and `TestWaitErrorSaysTheCauseOnce`, which
   requires `Wait`'s error to say its cause once, among them, the stderr tail's six in
-  `stderr_test.go`, the transcript's three
-  in `transcript_test.go`, and the bounded close's seven in `closecontext_test.go`:
+  `stderr_test.go`, the transcript's four
+  in `transcript_test.go`, `TestTranscriptCloseAfterAbandon` among them, and the bounded close's seven in `closecontext_test.go`:
   `TestCloseContextBoundsHandlers`, in process and for a child, `TestCloseContextJoinsTheAgentsError`,
   `TestCloseContextWaitsForHandlers`, `TestCloseContextHurriesTheSteps`, `TestCloseContextCause`,
   `TestCloseContextNotHandlers` and `TestCloseContextOneGoroutine`; on Unix `TestStartRefusesSharedGroup` and

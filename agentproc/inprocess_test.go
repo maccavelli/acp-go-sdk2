@@ -375,11 +375,15 @@ func (a promptAgent) Prompt(ctx context.Context, _ acp.PromptRequest) (acp.Promp
 // acp.ServeAgent, stopped by Close's second step during a prompt, to answer
 // the prompt cancelled: the step cancels Serve's context, and ServeAgent
 // shuts its connection down gracefully
-// (0042-MADR-in-process-agent-runner.md, item 2, S4).
+// (0042-MADR-in-process-agent-runner.md, item 2, S4). Its grace is slack, not
+// testGrace: the second step succeeds only once a chain of goroutines has run,
+// which a loaded runner left past 300 ms in 9 of 100 runs and to 689 ms at
+// 1.2 s (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, the flaky test;
+// 0049-PLAN-subpackage-fixes.md, phase 3).
 func TestInProcessServeAgentStep2(t *testing.T) {
 	t.Parallel()
 	agent := promptAgent{started: make(chan struct{})}
-	p := startInProcess(t, &InProcess{Serve: func(ctx context.Context, in io.Reader, out io.Writer) error {
+	p := startInProcess(t, &InProcess{Grace: slack, Serve: func(ctx context.Context, in io.Reader, out io.Writer) error {
 		return acp.ServeAgent(ctx, agent, in, out, acp.WithLogger(slog.New(slog.DiscardHandler)))
 	}})
 	if _, err := p.Conn().Initialize(t.Context(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
@@ -402,7 +406,7 @@ func TestInProcessServeAgentStep2(t *testing.T) {
 	case <-time.After(slack):
 		t.Fatal("the prompt's handler did not start")
 	}
-	_, err := within(t, 3*testGrace+slack, "Close", p.Close)
+	_, err := within(t, 3*slack+slack, "Close", p.Close)
 	if !errors.Is(err, ErrTerminated) || errors.Is(err, ErrKilled) {
 		t.Errorf("Close = %v, want ErrTerminated: ServeAgent returns in the second step", err)
 	}

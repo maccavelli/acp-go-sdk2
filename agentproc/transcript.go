@@ -25,9 +25,10 @@ import (
 type Transcript struct {
 	in, out *lineTap // each recording one direction
 
-	mu  sync.Mutex
-	w   io.Writer
-	err error // the first write's error; nothing is written after it
+	mu     sync.Mutex
+	w      io.Writer
+	err    error // the first write's error; nothing is written after it
+	closed bool  // set by Close; nothing is written after it
 }
 
 // NewTranscript returns a Transcript writing to w.
@@ -48,12 +49,17 @@ func (t *Transcript) Input() io.Writer { return t.in }
 func (t *Transcript) Output() io.Writer { return t.out }
 
 // Close drops a line either stream has not ended, which is not a frame, and
-// returns the first error a write to w returned. It does not close w.
+// returns the first error a write to w returned. It does not close w. Once it
+// has returned, nothing more is written to w, so the caller may close w; a
+// record being written when it is called is finished first. It may be called
+// while a tap Wait abandoned is still writing, whose later frames it drops
+// (0049-PLAN-subpackage-fixes.md, phase 3, P7).
 func (t *Transcript) Close() error {
 	_ = t.in.Close()  //nolint:errcheck // a LineTap's Close returns nil.
 	_ = t.out.Close() //nolint:errcheck // a LineTap's Close returns nil.
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.closed = true
 	return t.err
 }
 
@@ -76,7 +82,7 @@ func (t *Transcript) write(dir string, frame []byte) {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.err != nil {
+	if t.err != nil || t.closed {
 		return
 	}
 	if _, err := t.w.Write(append(line, '\n')); err != nil {
