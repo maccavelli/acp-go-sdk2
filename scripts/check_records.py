@@ -8,7 +8,11 @@ Modes:
                  placement, and relative markdown links with their anchors
   --check-all    --check plus link checks for unnumbered docs
                  (docs/guides/**, docs/README.md, docs/architecture.md,
-                 and the root README.md)
+                 the root README.md, RELEASING.md, tools/README.md and
+                 AGENTS.md)
+
+Every mode reads the markdown files git tracks or would, not those it
+ignores; outside a work tree, every one.
 
 This copy does not generate docs/README.md. The index is written by hand
 so Status and extra sections survive.
@@ -33,6 +37,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -57,6 +62,15 @@ def errors(msg: str) -> None:
 
 
 def markdown_files() -> list[Path]:
+    """The repository's markdown files that git tracks or would: `git ls-files
+    -co --exclude-standard`, so a directory .gitignore or .git/info/exclude
+    names, such as .cache or .worktrees, is not read. Outside a work tree, as
+    in a git archive copy, every file but SKIP_PARTS'
+    (0049-PLAN-tooling-fixes.md, phase 2, T3)."""
+    listed = subprocess.run(["git", "ls-files", "-z", "-co", "--exclude-standard", "--", "*.md"], cwd=REPO,
+                            capture_output=True, text=True)
+    if listed.returncode == 0:
+        return sorted(REPO / n for n in listed.stdout.split("\0") if n and (REPO / n).is_file())
     out = []
     for p in sorted(REPO.rglob("*.md")):
         rel_parts = p.relative_to(REPO).parts
@@ -218,11 +232,18 @@ def check_links(path: Path) -> int:
     return found
 
 
+#: The unnumbered docs, besides docs/guides/, whose links --check-all checks:
+#: RELEASING.md, tools/README.md and AGENTS.md are docs-safe, so the Docs
+#: workflow, which runs this check, is the one that sees their changes
+#: (0049-PLAN-tooling-fixes.md, phase 2, T1).
+UNNUMBERED_DOCS = ("README.md", "docs/README.md", "docs/architecture.md", "RELEASING.md", "tools/README.md", "AGENTS.md")
+
+
 def unnumbered_docs() -> list[Path]:
     out = []
     for p in markdown_files():
         rel = p.relative_to(REPO).as_posix()
-        if rel == "README.md" or rel in ("docs/README.md", "docs/architecture.md"):
+        if rel in UNNUMBERED_DOCS:
             out.append(p)
         elif rel.startswith("docs/guides/"):
             out.append(p)

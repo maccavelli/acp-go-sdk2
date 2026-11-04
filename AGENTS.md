@@ -92,8 +92,11 @@ docs/reports/NNNN-GATES-short-slug.md
   Never reuse a number, never renumber an existing record, never leave a gap
   deliberately.
 - `make check-records` validates naming, pairing, placement, and every
-  relative link in the records and the unnumbered docs. If Make is absent,
-  run `python3 scripts/check_records.py --check-all`.
+  relative link in the records and the unnumbered docs: the root `README.md`,
+  `docs/README.md`, `docs/architecture.md`, `docs/guides/`, `RELEASING.md`,
+  `tools/README.md` and this file. It reads the files git tracks or would,
+  not those `.gitignore` ignores. If Make is absent, run
+  `python3 scripts/check_records.py --check-all`.
 - Cite records by full filename, never by number alone. Cite another
   repository's record by repository and filename; a relative link cannot reach
   it.

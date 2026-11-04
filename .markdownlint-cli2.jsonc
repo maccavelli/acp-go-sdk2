@@ -93,6 +93,11 @@
   // docs/decisions/0003-MADR-install-fleet-agent-workspace.md.
   "ignores": [".tools/**"],
 
+  // What .gitignore ignores is not linted either: .cache, .worktrees and the
+  // like hold copies and tool output, not the product tree. Named in
+  // docs/decisions/0049-PLAN-tooling-fixes.md, phase 2, T3.
+  "gitignore": true,
+
   // Glob patterns.
   //
   // INCLUDE: all markdown files by default.

@@ -766,7 +766,9 @@ Checks that guard this:
   `make test` runs both modules uncached too. golangci-lint covers the generated files too,
   except for `goconst`, `gocognit` and `gocyclo`, which `.golangci.yml` excludes
   for `_gen.go` files with the reason. `make check-records` and `make markdownlint`
-  check the docs, and `make disclosure-check` the tracked text for a real
+  check the docs, each reading what git tracks or would, not what `.gitignore`
+  ignores, and `check-records` the links of `RELEASING.md`, `tools/README.md`
+  and `AGENTS.md` too (0049-PLAN-tooling-fixes.md, phase 2), and `make disclosure-check` the tracked text for a real
   user-home path. GitHub Actions runs `.github/workflows/ci.yml`, which also runs
   the root tests with `GOEXPERIMENT=nojsonv2` on Linux, and both modules' tests
   with `-race` on the Linux and Windows jobs.
@@ -1197,8 +1199,9 @@ steps run beyond `make pre-add-check`, in Python and the standard library;
 call. `_common.py` gives every tool the repository's root from git, the test
 hosts from `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST`, the logs under
 `.cache/tools/`, and the caches, Go's and the planted breaks' copies of the
-tree, in the user's cache directory, outside the tree, where `make
-markdownlint` and `scripts/check_records.py` would otherwise walk them.
+tree, in the user's cache directory, outside the tree; the logs under
+`.cache/`, which git ignores, `make markdownlint` and
+`scripts/check_records.py` do not read.
 
 - `gates.py` runs the gate set, one gate at a time, each exit status taken
   before its output is read; `floor.py` the tests at the `go` line;

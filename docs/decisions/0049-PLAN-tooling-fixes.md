@@ -275,3 +275,54 @@ failure either way.
 Step 1.8, 0048's amendment, follows the owner's commit of this phase, with phase 2.
 
 Staged for the owner, who commits. Phase 2 begins on the owner's word.
+
+The owner committed phase 1 as `72a4667`.
+
+**Step 1.8,** with phase 2's change: [0048-PLAN-create-releases-in-ci.md](0048-PLAN-create-releases-in-ci.md) gains two dated
+amendments, under its phase 1's step 1, `--no-idscan` building on this PLAN's phase 3, and under its step 4, `--run-id`
+building on `ci_runs_command` and `ci_of_head`. 0048 stays `proposed`.
+
+### Phase 2: T1 and T3, what the record checks read, 2026-11-04
+
+Begun on the owner's "committed, proceed" after `72a4667`. No deviation.
+
+**What it did:**
+
+* **`scripts/check_records.py`:**
+  * `markdown_files` lists `git ls-files -z -co --exclude-standard -- '*.md'`, the files on disk among them; when git fails, as
+    outside a work tree, it walks with `rglob` and `SKIP_PARTS`, as before. Every mode reads through it, `--next` and the name
+    checks included.
+  * `UNNUMBERED_DOCS`, the root `README.md`, `docs/README.md`, `docs/architecture.md`, `RELEASING.md`, `tools/README.md` and
+    `AGENTS.md`, with `docs/guides/`, are what `--check-all` checks the links of. The module doc says both.
+* **`.markdownlint-cli2.jsonc`:** `"gitignore": true`, beside the `.tools/**` ignore 0003 named, with its reason. The file is
+  the fleet's shared configuration; the line is to be offered upstream at the PLAN's close.
+* **The tests,** a new `scripts/test_check_records.py`, each copying the script into a temporary repository with
+  `GIT_CEILING_DIRECTORIES` set to it: `test_links_of_the_docs_safe_docs`, a broken link in each of the three, "broken
+  relative link: …:1: missing.md"; `test_ignored_directories_are_not_read`, copies under `.worktrees/` and `.cache/`, `--next`
+  `0002` and no number claimed twice; `test_outside_a_work_tree`, `rglob`'s fallback finding the records and the link.
+  `ReadmeTest` stays.
+* **Docs:** `AGENTS.md`'s `make check-records` bullet names the docs it checks and what it reads; `docs/architecture.md`'s
+  checks and tools paragraphs.
+
+**A real run,** step 2.4: `make markdownlint` on the tree, "Linting: 47 files … 0 issues", where it linted 48 with
+`.cache/tools/release/release-body-v1.28.0.md`; `python3 scripts/check_records.py --check-all`, exit 0, the three docs' links
+resolving; `--next`, `0050`.
+
+**Seen to fail,** by script, `scripts/test_check_records.py` run in a copy per plant, 2/2:
+
+```text
+FAILED AS REQUIRED: unnumbered_docs without RELEASING.md, tools/README.md and AGENTS.md: exit 1: FAIL: test_links_of_the_docs_safe_docs (test_check_records.CheckRecordsTest.test_links_of_the_docs_safe_docs) (doc='RELEASING.md')
+FAILED AS REQUIRED: markdown_files back to rglob in a work tree: exit 1: FAIL: test_ignored_directories_are_not_read (test_check_records.CheckRecordsTest.test_ignored_directories_are_not_read)
+```
+
+The second's log: "number 0001 is claimed by 2 MADRs: .worktrees/copy/docs/decisions/0001-MADR-first.md, …" and `--next`
+`0100`, the finding's own symptoms.
+
+**Checks:**
+
+* `make check-tools`: exit 0, the new tests among `scripts/`'s.
+* `make pre-add-check` with the phase's files, once its wait for the load had passed: exit 0.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 3 begins on the owner's word.

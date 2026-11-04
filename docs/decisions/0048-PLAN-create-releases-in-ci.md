@@ -48,6 +48,10 @@ planted break, in a scratch copy, never in the tree.
 1. **`tools/release_body.py --no-idscan`.** Skips the `idscan.py` call (`:77-81`) and prints "idscan: skipped (--no-idscan): the
    body is an extract of pushed text, which the pre-push guard scanned". The exit status then rests on the link targets alone. A
    test: with `--no-idscan` and no deny list, exit 0; without it, exit 1, as today.
+   * *Amended 2026-11-04,* before execution, by
+     [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md)'s step 1.8 (the MADR's Q19 a): that PLAN's phase 3 makes the scan's
+     failure print its reason and status (T11). `--no-idscan` builds on it: the skip is printed in the same place, and a scan
+     that runs keeps that phase's report.
 2. **`tools/publish_release.py`,** stdlib Python, in the style of the other tools (`_common`, `main_guard`, a docstring with usage
    and exit codes):
    * `publish_release.py VERSION COMMIT [--dry-run] [--no-idscan]`: in order, failing at the first that does not hold, each
@@ -80,6 +84,11 @@ planted break, in a scratch copy, never in the tree.
 4. **`tools/publication.py`.**
    * `--run-id ID`: "CI on the tag" holds when run `ID` is the tag's and is in progress or succeeded, since the job runs only after
      `validate` passed in that run. Without it, as today.
+   * *Amended 2026-11-04,* before execution, by [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md)'s step 1.8 (the
+     MADR's Q19 a). Its phase 1, `72a4667`, has both CI checks read the CI workflow's runs alone (`ci_runs_command`), and "CI on
+     origin main's head" take the head's own run from any ref, or its nearest docs-safe ancestor's (`ci_of_head`). `--run-id`
+     builds on them: the run `ID` stands for "CI on the tag"'s answer, and, the release commit being main's head, for
+     `ci_of_head`'s too, as the run in progress on the tag's commit. Its tests extend `PublicationTest`.
    * `--proxy-wait SECONDS`: the three proxy checks are retried every 30 s until they hold or the time is spent, printing each
      attempt. Default 0, as today.
    * Tests for both, with the fake API.
