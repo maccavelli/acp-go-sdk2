@@ -6,7 +6,10 @@ Usage: publication.py VERSION COMMIT BODY
   the file the release's body must equal (release_body.py writes it).
 
 It reads GitHub (gh, the origin remote's repository) and the proxy, and writes
-only a module cache, in the tool's cache directory, removed after.
+only a module cache, in the tool's cache directory, removed after. Its two CI
+checks read the CI workflow's runs alone, ci.yml's: for main's head, its own,
+from any ref, or its nearest ancestor's that every later change leaves
+docs-safe; for the tag, the tag's (0049-PLAN-tooling-fixes.md, phase 1, T2).
 Exit 0 only when every check holds.
 """
 from __future__ import annotations
@@ -29,12 +32,47 @@ def same_body(published: str, expected: str) -> bool:
     return published.strip() == expected.strip()
 
 
-def main_run(runs: list[dict]) -> dict | None:
-    """The newest of the runs whose branch is main: at a release, main's head
-    is also the tag's commit, and the tag's run is listed first
-    (0031-MADR-verification-tools-in-repository.md, "Amendment 2026-10-22,
-    after step 8", W4)."""
-    return next((r for r in runs if r.get("headBranch") == "main"), None)
+#: The CI workflow, .github/workflows/ci.yml, which scripts/check_ci_filters.py
+#: pins: the one that runs Go. The Docs workflow's runs are not CI's.
+CI_WORKFLOW = "ci.yml"
+
+
+def ci_runs_command(repo: str, commit: str | None = None, branch: str | None = None) -> list[str]:
+    """gh's listing of the CI workflow's runs, newest first: of a commit, from
+    any ref, the tag's included, or of a branch or tag
+    (0049-PLAN-tooling-fixes.md, phase 1, T2)."""
+    cmd = ["gh", "run", "list", "--repo", repo, "--workflow", CI_WORKFLOW, "--json",
+           "conclusion,status,headBranch,headSha,databaseId", "--limit", "20"]
+    if commit:
+        cmd += ["--commit", commit]
+    if branch:
+        cmd += ["--branch", branch]
+    return cmd
+
+
+def ci_of_head(head: str, runs_of, ancestors, docs_safe) -> tuple[dict | None, str | None]:
+    """The CI run that stands for head, and the commit it ran on: head's own
+    newest, from any ref; or, when head has none, the newest of the nearest
+    first-parent ancestor from which every later change is docs-safe, since
+    CI does not run for a docs-only push (0049-PLAN-tooling-fixes.md, phase
+    1, T2; Q16 a). runs_of(commit) lists a commit's CI runs, ancestors(head)
+    yields (commit, the paths changed from it to head), nearest first, and
+    docs_safe(paths) answers as check_ci_filters.py --docs-safe."""
+    runs = runs_of(head)
+    if runs:
+        return runs[0], head
+    for commit, changed in ancestors(head):
+        if not docs_safe(changed):
+            return None, None
+        runs = runs_of(commit)
+        if runs:
+            return runs[0], commit
+    return None, None
+
+
+def passed(r: dict | None) -> bool:
+    """Whether run r completed with success."""
+    return bool(r) and r["status"] == "completed" and r["conclusion"] == "success"
 
 
 def contains(root: Path, ancestor: str, head: str) -> bool:
@@ -79,15 +117,30 @@ def main(argv: list[str]) -> int:
     # is make push-guard's (0031-PLAN, the deviation during step 6).
     origin_main = refs.get("refs/heads/main", "")
     check("the tag's commit is on origin's main", bool(peeled and origin_main) and contains(root, peeled, origin_main), origin_main[:7])
-    rc, out = run("gh", "run", "list", "--repo", repo, "--commit", origin_main, "--branch", "main", "--json",
-                  "conclusion,status,headBranch,databaseId", "--limit", "5")
-    m_run = main_run(json.loads(out)) if rc == 0 and origin_main else None
-    check("CI on origin main's head", bool(m_run) and m_run["status"] == "completed" and m_run["conclusion"] == "success",
-          f"run {m_run['databaseId']}, {m_run['headBranch']}" if m_run else "no run of main")
-    rc, out = run("gh", "run", "list", "--repo", repo, "--branch", tag, "--json", "conclusion,status,headSha,databaseId,headBranch", "--limit", "1")
+    def runs_of(commit: str) -> list[dict]:
+        rc, out = run(*ci_runs_command(repo, commit=commit))
+        return json.loads(out) if rc == 0 else []
+
+    def ancestors(head: str):
+        rc, out = run("git", "rev-list", "--first-parent", "--max-count=51", head)
+        for commit in (out.split()[1:] if rc == 0 else []):
+            rc, names = run("git", "diff", "--name-only", commit, head)
+            yield commit, (names.split() if rc == 0 else ["<git diff failed>"])
+
+    def docs_safe(paths: list[str]) -> bool:
+        if not paths:
+            return True
+        rc, _ = run(sys.executable, "-B", str(root / "scripts" / "check_ci_filters.py"), "--docs-safe", *paths)
+        return rc == 0
+
+    m_run, on = ci_of_head(origin_main, runs_of, ancestors, docs_safe) if origin_main else (None, None)
+    check("CI on origin main's head", passed(m_run),
+          f"run {m_run['databaseId']} on {on[:7]}{', docs-safe since' if on != origin_main else ''}, {m_run['headBranch']}"
+          if m_run and on else "no CI run of main's head, nor of an ancestor it changes only docs since")
+    rc, out = run(*ci_runs_command(repo, branch=tag))
     runs = json.loads(out) if rc == 0 else []
-    check("CI on the tag", bool(runs) and runs[0]["status"] == "completed" and runs[0]["conclusion"] == "success" and
-          runs[0]["headSha"].startswith(want), f"run {runs[0]['databaseId']}, {runs[0]['headBranch']}" if runs else "no run of the tag")
+    check("CI on the tag", bool(runs) and passed(runs[0]) and runs[0]["headSha"].startswith(want),
+          f"run {runs[0]['databaseId']}, {runs[0]['headBranch']}" if runs else "no CI run of the tag")
 
     try:
         with urllib.request.urlopen(f"https://proxy.golang.org/{mod}/@v/{tag}.info", timeout=60) as r:

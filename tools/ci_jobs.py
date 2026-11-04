@@ -4,8 +4,9 @@
 
 Usage:
   ci_jobs.py tally [--branch B] [--runs N] [--created RANGE] [--markdown]
-      every job's first attempt in the N (40) most recent runs of B (main),
-      counted by job, a Go version's patch made x, and by conclusion; each
+      every job's first attempt in the N (40) most recent runs of the CI
+      workflow, ci.yml, on B (main), the Docs workflow's left out, counted
+      by job, a Go version's patch made x, and by conclusion; each
       job that did not succeed listed with its failing step
   ci_jobs.py failure RUN [--attempt N] [--out DIR]
       each failed job of every attempt, or of attempt N: its failing step,
@@ -182,11 +183,22 @@ def holds(values: dict[str, list[str]], expect: dict[str, str], others: str | No
     return problems
 
 
-def run_list(repo: str, branch: str, limit: int, created: str | None) -> list[dict]:
-    cmd = ["gh", "run", "list", "--repo", repo, "--branch", branch, "--limit", str(limit), "--json",
+#: The CI workflow, whose jobs these are: the Docs workflow's runs are not
+#: counted (0049-PLAN-tooling-fixes.md, phase 1, T14).
+CI_WORKFLOW = "ci.yml"
+
+
+def run_list_command(repo: str, branch: str, limit: int, created: str | None) -> list[str]:
+    """gh's listing of the CI workflow's runs of branch, newest first."""
+    cmd = ["gh", "run", "list", "--repo", repo, "--workflow", CI_WORKFLOW, "--branch", branch, "--limit", str(limit), "--json",
            "databaseId,headSha,createdAt,status,attempt"]
     if created:
         cmd += ["--created", created]
+    return cmd
+
+
+def run_list(repo: str, branch: str, limit: int, created: str | None) -> list[dict]:
+    cmd = run_list_command(repo, branch, limit, created)
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     if p.returncode:
         raise ReadError(f"gh run list: exit {p.returncode}: {p.stderr.strip()[:300]}")
@@ -201,7 +213,7 @@ def do_tally(args: argparse.Namespace, repo: str, api: Api) -> int:
         print(f"ci_jobs: no completed run of {args.branch}")
         return 1
     created = sorted(r["createdAt"] for r in runs)
-    print(f"ci_jobs: {len(runs)} run(s) of {args.branch}, created {created[0]} to {created[-1]}; first attempts")
+    print(f"ci_jobs: {len(runs)} {CI_WORKFLOW} run(s) of {args.branch}, created {created[0]} to {created[-1]}; first attempts")
     if left:
         named = ", ".join(f"{r['databaseId']} ({r.get('status')})" for r in left)
         print(f"  left out, not completed: {named}")

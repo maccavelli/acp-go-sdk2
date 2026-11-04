@@ -1213,8 +1213,12 @@ markdownlint` and `scripts/check_records.py` would otherwise walk them.
 - `plants.py` runs planted breaks from a JSON list, each in its own copy.
 - `release_body.py`, `publication.py`, `consumer.py` and `watch_ci.py` build a
   release's body from its report and check the release, its publication, a
-  consumer at the floor, and a commit's CI run.
-- `ci_jobs.py` reads CI's job history: every job's first attempt tallied, a
+  consumer at the floor, and a commit's CI run. `publication.py`'s CI checks
+  list the CI workflow's runs alone: main's head's own, from any ref, the tag's
+  included, or, when CI did not run for it, the nearest first-parent
+  ancestor's that every later change leaves docs-safe, by
+  `check_ci_filters.py --docs-safe` (0049-PLAN-tooling-fixes.md, phase 1).
+- `ci_jobs.py` reads CI's job history, the CI workflow's runs alone: every job's first attempt tallied, a
   failed job's step, seed and crash, and a variable's value in each step's
   environment, each log read by its job id, so from that job's own attempt.
 - `interop.py` runs `example/remote` against the official TypeScript and

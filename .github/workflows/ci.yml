@@ -33,7 +33,10 @@ on:
   schedule:
     - cron: '17 6 * * 1'
 
-# A newer push to a pull request cancels its older run; main runs each push.
+# A newer push to a pull request cancels its older run. On main a running
+# push finishes, and of the pushes queued behind it only the newest runs: a
+# newly queued run cancels the one pending in its group
+# (0049-PLAN-tooling-fixes.md, phase 1, T7).
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

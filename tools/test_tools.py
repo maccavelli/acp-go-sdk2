@@ -473,11 +473,51 @@ class WatchCiTest(unittest.TestCase):
         self.assertEqual(watch_ci.watch(["gh"], timeout=5, runner=hangs), (None, "did not finish within 5 s"))
         self.assertEqual(watch_ci.watch(["gh"], runner=lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1)), (1, ""))
 
-    def test_main_run_of_a_released_commit(self) -> None:
+
+
+class PublicationTest(unittest.TestCase):
+    """publication.py's two CI checks: the CI workflow's runs alone, and for
+    main's head its own or a docs-safe ancestor's
+    (0049-PLAN-tooling-fixes.md, phase 1, T2)."""
+    TAG_RUN = {"databaseId": 2, "headBranch": "v9.9.9", "status": "completed", "conclusion": "success"}
+
+    @staticmethod
+    def docs_safe(paths: list[str]) -> bool:
+        return all(p.startswith("docs/") for p in paths)
+
+    def test_ci_of_head(self) -> None:
         import publication
-        runs = [{"databaseId": 2, "headBranch": "v9.9.9"}, {"databaseId": 1, "headBranch": "main"}]
-        self.assertEqual(publication.main_run(runs)["databaseId"], 1, "main's run, not the newer tag's")
-        self.assertIsNone(publication.main_run(runs[:1]))
+        runs = {"rel": [self.TAG_RUN]}
+        of = runs.get
+        # A release commit, main's head, whose CI ran only as the tag's run.
+        self.assertEqual(publication.ci_of_head("rel", lambda c: of(c, []), lambda h: iter(()), self.docs_safe),
+                         (self.TAG_RUN, "rel"), "the tag's run counts for its commit")
+        # A docs-only commit after it: its parent's run stands for it.
+        history = [("rel", ["docs/decisions/x.md"])]
+        self.assertEqual(publication.ci_of_head("rec", lambda c: of(c, []), lambda h: iter(history), self.docs_safe),
+                         (self.TAG_RUN, "rel"), "docs-safe since the run")
+        # A Go file changed since: no run stands for the head.
+        history = [("mid", ["docs/a.md"]), ("rel", ["docs/a.md", "remote/ws.go"])]
+        self.assertEqual(publication.ci_of_head("rec", lambda c: of(c, []), lambda h: iter(history), self.docs_safe),
+                         (None, None), "a change that runs CI is not covered by an older run")
+        self.assertEqual(publication.ci_of_head("rec", lambda c: [], lambda h: iter([("a", [])]), self.docs_safe), (None, None))
+
+    def test_ci_runs_command(self) -> None:
+        import publication
+        cmd = publication.ci_runs_command("o/n", commit="abc")
+        self.assertEqual(cmd[cmd.index("--workflow") + 1], "ci.yml", "the CI workflow's runs, not the Docs workflow's")
+        self.assertEqual(cmd[cmd.index("--commit") + 1], "abc")
+        self.assertNotIn("--branch", cmd, "a commit's runs from any ref, the tag's included")
+        cmd = publication.ci_runs_command("o/n", branch="v9.9.9")
+        self.assertEqual((cmd[cmd.index("--workflow") + 1], cmd[cmd.index("--branch") + 1]), ("ci.yml", "v9.9.9"))
+        self.assertNotIn("--commit", cmd)
+
+    def test_passed(self) -> None:
+        import publication
+        self.assertTrue(publication.passed(self.TAG_RUN))
+        self.assertFalse(publication.passed({**self.TAG_RUN, "conclusion": "failure"}))
+        self.assertFalse(publication.passed({**self.TAG_RUN, "status": "in_progress"}))
+        self.assertFalse(publication.passed(None))
 
 
 class FakeApi:
@@ -541,6 +581,13 @@ class CiJobsTest(unittest.TestCase):
         self.assertEqual([(n["job"], n["conclusion"], n["step"], n["commit"]) for n in notable],
                          [("validate (linux, 1.26.10)", "failure", "Run go test", "abcdef0"),
                           ("validate (macos, 1.27.3)", "cancelled", "no step ran", "abcdef0")])
+
+    def test_run_list_is_ci_s(self) -> None:
+        import ci_jobs
+        cmd = ci_jobs.run_list_command("o/n", "main", 40, None)
+        self.assertEqual(cmd[cmd.index("--workflow") + 1], "ci.yml",
+                         "CI's runs alone: the Docs workflow's are not CI's jobs (0049-PLAN-tooling-fixes.md, T14)")
+        self.assertEqual(cmd[cmd.index("--branch") + 1], "main")
 
     def test_tally_reads_first_attempt(self) -> None:
         import ci_jobs

@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-11-04
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
@@ -219,5 +219,59 @@ when one is Go or read by Go. The phases follow the MADR's order, T2, T1, T3, th
 
 ## Execution record
 
-Not started. The owner answered Q16 to Q19 on 2026-11-04 (the MADR's "Answered by the owner, 2026-11-04", under the
-tooling PLAN's designs); the PLAN is `proposed` until the owner approves it.
+The owner answered Q16 to Q19 on 2026-11-04 (the MADR's "Answered by the owner, 2026-11-04", under the tooling PLAN's
+designs), committed this PLAN as `4e3d9cc`, and said "committed, proceed".
+
+### Phase 1: T2, T14 and T7, which run is CI's, 2026-11-04
+
+Begun on the owner's "committed, proceed" after `4e3d9cc`. No deviation.
+
+**What it did:**
+
+* **`tools/publication.py`:**
+  * `CI_WORKFLOW = "ci.yml"`; `ci_runs_command(repo, commit=, branch=)`, the CI workflow's runs of a commit from any ref, or
+    of a branch or tag, newest first; `passed(run)`.
+  * `ci_of_head(head, runs_of, ancestors, docs_safe)`, as step 1.1 has it: head's own CI run, or the nearest first-parent
+    ancestor's whose every later change `check_ci_filters.py --docs-safe` passes, stopping at the first that does not.
+    `main` gives it `gh` for `runs_of`, `git rev-list --first-parent --max-count=51` and `git diff --name-only` for
+    `ancestors`, and the script for `docs_safe`.
+  * "CI on origin main's head" names the run, its commit and "docs-safe since" when it is an ancestor's; "CI on the tag"
+    lists the CI workflow's runs of the tag. `main_run` is gone. The module doc says what the two checks read.
+* **`tools/ci_jobs.py`:** `CI_WORKFLOW` and `run_list_command`, with `--workflow ci.yml`; `run_list` uses it; the usage and
+  `tally`'s summary line name the workflow.
+* **`.github/workflows/ci.yml:36`** and **`docs.yml`'s concurrency block:** the comment step 1.3 gives.
+* **The tests,** `tools/test_tools.py`: `PublicationTest`, with `test_ci_of_head` (the tag's run for its commit; a docs-only
+  head after it, "docs-safe since"; a Go file changed since, no run; no run at all), `test_ci_runs_command` and
+  `test_passed`; `CiJobsTest.test_run_list_is_ci_s`. `WatchCiTest.test_main_run_of_a_released_commit` went with `main_run`.
+* **Docs:** `tools/README.md`'s two rows; `docs/architecture.md`'s release tools.
+
+**A real run,** step 1.5, `tools/publication.py v1.33.0 6e04da6 <the body>`, `origin/main` at `1fe3dd0`, one docs-only commit
+past the tag: exit 0, "10 of 10 checks hold", "ok   CI on origin main's head  run 41890673918 on 6e04da6, docs-safe since,
+v1.33.0", the tag's CI run, where the old check named the Docs run `41889919614`; "ok   CI on the tag  run 41890673918,
+v1.33.0".
+
+**Seen to fail,** by script, the tools' tests run in a copy of the tree per plant, `tools/plants.py` running `go test` alone,
+3/3:
+
+```text
+FAILED AS REQUIRED: publication.py's runs without the workflow filter: exit 1: ERROR: test_ci_runs_command (test_tools.PublicationTest.test_ci_runs_command)
+FAILED AS REQUIRED: the ancestor walk ignoring the docs-safe rule: exit 1: (None, None), "a change that runs CI is not covered by an older run")
+FAILED AS REQUIRED: ci_jobs.py's runs without the workflow filter: exit 1: ERROR: test_run_list_is_ci_s (test_tools.CiJobsTest.test_run_list_is_ci_s)
+```
+
+The first and third fail as errors, a `ValueError` where the test reads the value after `--workflow`, which is not there; a
+failure either way.
+
+**Checks:**
+
+* `python3 -B -m unittest discover -s tools -p 'test_*.py'`: the 16 tests of the three classes `ok`; `make check-tools`: exit 0,
+  37 tests, "check-ci-filters: 0 problem(s)".
+* `actionlint` at CI's pin, `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12`, on both workflows: exit 0.
+* `make pre-add-check` with the phase's files, at load 24 to 33: exit 0.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+* `ci.yml` is not docs-safe, so the push runs CI.
+
+Step 1.8, 0048's amendment, follows the owner's commit of this phase, with phase 2.
+
+Staged for the owner, who commits. Phase 2 begins on the owner's word.

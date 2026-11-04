@@ -30,6 +30,8 @@ on:
       - '.opencode/rules.md'
       - '.github/workflows/docs.yml'
 
+# As ci.yml's: a newer push to a pull request cancels its older run; on main a
+# running push finishes, and of those queued behind it only the newest runs.
 concurrency:
   group: docs-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
