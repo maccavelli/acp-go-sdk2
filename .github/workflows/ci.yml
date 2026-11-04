@@ -102,8 +102,10 @@ jobs:
           test "$(sed -n 's/^toolchain //p' go.mod)" = "go${{ matrix.go }}"
           test "$(sed -n 's/^toolchain //p' cmd/generate/go.mod)" = "go${{ matrix.go }}"
       - run: go mod download
-      # The root package's exported API against the newest v1 tag, by apidiff:
-      # an incompatible change fails the job. apidiff exits 0 either way, so
+      # The gated packages' exported API, the root's, agentproc's, acptest's
+      # and clienthost's, against the newest v1 tag, by apidiff: an
+      # incompatible change fails the job; unstable's and remote's are reported
+      # and do not. apidiff exits 0 either way, so
       # scripts/check_api.py reads its report. On a tag push the base is that
       # tag, which compares the tree with itself
       # (0024-PLAN-api-gate-and-deprecation.md, step 8).

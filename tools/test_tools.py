@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -696,6 +697,61 @@ class CiJobsTest(unittest.TestCase):
             "| :--- | :--- | :--- | :--- | :--- | :--- |",
             "| validate (linux, 1.26.x) | 3 | 1 | 1 | 0 | 1 |",
         ])
+
+
+class MakefileTest(unittest.TestCase):
+    """The Makefile's guard for the schema stamp, and its help
+    (0049-PLAN-tooling-fixes.md, phase 4, T9 and T13). Under whatever make
+    is on PATH: GNU make 4 in CI, 3.81 on a stock macOS."""
+    ROOT = TOOLS.parent
+
+    def make(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(["make", "--no-print-directory", *args], cwd=self.ROOT, capture_output=True, text=True, timeout=300)
+
+    def test_schema_version_guard(self) -> None:
+        r = self.make("schema-version-set", "ACP_VERSION=")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("schema/version read as empty", r.stderr)
+        for target in ("version", "release", "schema/meta.json", "schema/schema.json", "schema/meta.unstable.json",
+                       "schema/schema.unstable.json"):
+            with self.subTest(target=target):
+                # -n prints the recipes it would run: the guard's comes before
+                # any that reads the stamp, a schema URL, the generator, or
+                # release's write of schema/version.
+                lines = self.make("-n", "-B", target, "ACP_VERSION=", "VERSION=9.9.9").stdout.splitlines()
+                guard = next((i for i, line in enumerate(lines) if "schema/version read as empty" in line), None)
+                self.assertIsNotNone(guard, f"{target} runs no guard: {lines[:4]}")
+                users = [i for i, line in enumerate(lines) if "schema-v" in line or "go run ." in line or "> schema/version" in line]
+                self.assertTrue(users, f"{target}'s recipes read no stamp: {lines[:4]}")
+                self.assertLess(guard, min(users), f"{target}: the guard after a recipe that reads the stamp")
+        self.assertNotIn("schema/version read as empty", self.make("-n", "check-records", "ACP_VERSION=").stdout,
+                         "the docs gates do not need the stamp")
+
+    def test_help_lists_targets(self) -> None:
+        out = re.sub(r"\x1b\[[0-9;]*m", " ", self.make("help").stdout)  # its colour codes
+        for target in ("all", "check-records", "check-tools", "clean", "disclosure-check", "markdownlint", "release", "version"):
+            with self.subTest(target=target):
+                self.assertRegex(out, rf"\b{re.escape(target)}\b")
+
+
+class PlatformsTest(unittest.TestCase):
+    def test_checks(self) -> None:
+        # The platforms, named here and not read from VET, so that one dropped
+        # from it fails (0049-PLAN-tooling-fixes.md, phase 4, T13).
+        import platforms
+        todo = platforms.checks("LINT")
+        self.assertEqual([name for name, _, _ in todo], [
+            "lint-linux", "lint-freebsd", "vet-darwin-arm64", "vet-linux-amd64", "vet-linux-arm64", "vet-freebsd-amd64",
+            "vet-openbsd-amd64", "vet-netbsd-amd64", "vet-illumos-amd64", "vet-windows-amd64", "vet-js-wasm", "vet-wasip1-wasm",
+            "vet-plan9-amd64"])
+        for name, env, cmd in todo:
+            with self.subTest(check=name):
+                self.assertEqual(cmd[-3:], ["./agentproc/...", "./clienthost/...", "./internal/..."])
+                if name.startswith("lint-"):
+                    self.assertEqual((cmd[:4], env), (["LINT", "run", "-c", ".golangci.yml"], {"GOOS": name[5:]}))
+                else:
+                    self.assertEqual(cmd[:2], ["go", "vet"])
+                    self.assertEqual(f"vet-{env['GOOS']}-{env['GOARCH']}", name)
 
 
 class ReadmeTest(unittest.TestCase):

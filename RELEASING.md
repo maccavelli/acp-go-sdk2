@@ -7,7 +7,11 @@ code, helper APIs, and library version remain in sync.
 
 ## Prerequisites
 
-- GNU make 4.2 or newer, `curl`, and `git` in your `PATH`. The Makefile reads `schema/version` with `$(file)`, which Make 3.81 does not implement. Homebrew installs this binary as `gmake`.
+- GNU make 4.2 or newer, `curl`, and `git` in your `PATH`. The Makefile reads
+  `schema/version` with `$(file)`, which Make 3.81 does not implement; under
+  3.81, `make version`, `make release` and the schema downloads stop with
+  "schema/version read as empty", and the docs gates still run. Homebrew
+  installs this binary as `gmake`.
 - Go at the version in the `go` line of `go.mod`.
 - `gofmt`, `golangci-lint` v2.14.0, and `make pre-add-check`.
 - `mdsh`, which `make version` runs to rewrite `README.md` (`make version

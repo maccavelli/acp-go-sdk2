@@ -796,7 +796,10 @@ Checks that guard this:
   (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2e).
 
 The schema stamp lives in `schema/version`, and `make version` copies it to
-`version`, which `make release` compares with it. The `go` line lives in `go.mod` and
+`version`, which `make release` compares with it. The Makefile reads it with
+`$(file)`, which GNU make before 4.2 lacks, so the targets that read it take
+`schema-version-set` as an order-only prerequisite, which stops them when the
+stamp reads as empty (0049-PLAN-tooling-fixes.md, phase 4). The `go` line lives in `go.mod` and
 `cmd/generate/go.mod`.
 
 ## The unstable boundary

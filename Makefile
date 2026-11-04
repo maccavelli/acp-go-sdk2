@@ -13,28 +13,37 @@ endif
 
 .PHONY: check-records markdownlint check-tools disclosure-check
 
-check-records:
+check-records: ## Checks the records' names, numbers and links, and the docs' links
 	python3 scripts/check_records.py --check-all
 
 # The verification tools and the scripts: each compiles, and their offline
 # tests pass (docs/decisions/0031-MADR-verification-tools-in-repository.md,
 # docs/decisions/0037-PLAN-align-docs-ci-and-disclosure-gates.md).
-check-tools:
+check-tools: ## Compiles the tools and scripts and runs their offline tests
 	python3 -m py_compile tools/*.py scripts/*.py
 	python3 -B -m unittest discover -s tools -p 'test_*.py'
 	python3 -B -m unittest discover -s scripts -p 'test_*.py'
 	python3 -B scripts/check_ci_filters.py
 
-markdownlint:
+markdownlint: ## Lints the Markdown that is not a record
 	npx --yes markdownlint-cli2@0.23.2
 
 # Real user-home paths in tracked text, with no private data; the private
 # deny list stays with push-guard
 # (docs/decisions/0037-MADR-align-docs-ci-and-disclosure-gates.md).
-disclosure-check:
+disclosure-check: ## Refuses a real user-home path in a tracked file
 	python3 -B scripts/check_disclosure.py
 
 ACP_VERSION := $(file < ./schema/version)
+
+# GNU make before 4.2 has no $(file), so ACP_VERSION reads as empty there, and
+# a schema download would name .../schema-v/... The targets that read it take
+# this guard first, as an order-only prerequisite; the docs gates do not, so
+# they still run under the make 3.81 macOS ships
+# (0049-PLAN-tooling-fixes.md, phase 4, T9).
+.PHONY: schema-version-set
+schema-version-set:
+	@test -n "$(ACP_VERSION)" || { echo "schema/version read as empty: it is empty, or this make, $(MAKE_VERSION), is older than GNU make 4.2, which reading it needs" 1>&2; exit 2; }
 GOCACHE ?= $(CURDIR)/.gocache
 MDSH ?= mdsh
 GOPATH_BIN := $(shell go env GOPATH)/bin
@@ -57,7 +66,7 @@ endif
 
 .PHONY: all help test fmt vet lint tidy vuln api pre-add-check push-guard
 
-all: help
+all: help ## Displays this help message
 
 # -shuffle=on, as CI runs them, so go test reads no cached result: the cache
 # does not see the files cmd/generate's tests read from the root, nor what a
@@ -103,9 +112,12 @@ vuln: ## Runs govulncheck at the version pinned in CI
 	go run $(GOVULNCHECK_PIN) ./...
 	cd cmd/generate && go run $(GOVULNCHECK_PIN) ./...
 
-# apidiff compares the working tree's root package with the newest v1 tag, or
-# BASE, and fails on an incompatible change; scripts/check_api.py pins it and
-# reads its report (0024-PLAN-api-gate-and-deprecation.md, step 8).
+# apidiff compares the working tree's gated packages, the root, agentproc,
+# acptest and clienthost, with the newest v1 tag, or BASE, and fails on an
+# incompatible change; unstable and remote are reported, not gated.
+# scripts/check_api.py pins it and reads its report
+# (0024-PLAN-api-gate-and-deprecation.md, step 8; 0049-PLAN-tooling-fixes.md,
+# phase 4, T10).
 api: ## Fails on an incompatible exported API change (apidiff against the newest v1 tag, or BASE)
 	python3 -B scripts/check_api.py $(BASE)
 
@@ -154,20 +166,20 @@ help: ## Displays this help message
 	@echo "Targets:"
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
-version: README.md schema/meta.json schema/schema.json schema/meta.unstable.json schema/schema.unstable.json
+version: README.md schema/meta.json schema/schema.json schema/meta.unstable.json schema/schema.unstable.json | schema-version-set ## Downloads the schema schema/version names and regenerates the code
 	cd cmd/generate && env -u GOPATH -u GOMODCACHE go run .
 	gofmt -w .
 	gofmt -w ./cmd/generate
 	touch $@
 	echo $(ACP_VERSION) > $@
 
-schema/meta.json: schema/version
+schema/meta.json: schema/version | schema-version-set
 	curl -o $@ --fail -L https://github.com/agentclientprotocol/agent-client-protocol/releases/download/schema-v$(ACP_VERSION)/meta.json
 
-schema/schema.json: schema/version
+schema/schema.json: schema/version | schema-version-set
 	curl -o $@ --fail -L https://github.com/agentclientprotocol/agent-client-protocol/releases/download/schema-v$(ACP_VERSION)/schema.json
 
-schema/meta.unstable.json: schema/version
+schema/meta.unstable.json: schema/version | schema-version-set
 	@set -e; \
 		url=https://github.com/agentclientprotocol/agent-client-protocol/releases/download/schema-v$(ACP_VERSION)/meta.unstable.json; \
 		tmp=$@.tmp; \
@@ -183,7 +195,7 @@ schema/meta.unstable.json: schema/version
 			exit 1; \
 		fi
 
-schema/schema.unstable.json: schema/version
+schema/schema.unstable.json: schema/version | schema-version-set
 	@set -e; \
 		url=https://github.com/agentclientprotocol/agent-client-protocol/releases/download/schema-v$(ACP_VERSION)/schema.unstable.json; \
 		tmp=$@.tmp; \
@@ -204,13 +216,13 @@ README.md: schema/version
 	$(MDSH) --input README.md
 
 .PHONY: clean
-clean:
+clean: ## Removes the downloaded schema files and the version stamp
 	rm -f schema/meta.json schema/schema.json schema/meta.unstable.json schema/schema.unstable.json version
 	mdsh --clean --input README.md
 	touch schema/version # Touching the schema version file ensures that the README.md is regenerated on next make.
 
 .PHONY: release
-release:
+release: | schema-version-set ## Bumps the schema to VERSION and runs the checks; no commit or tag
 	@if [ -z "$(VERSION)" ]; then \
 		echo "VERSION is required (e.g. 'make release VERSION=0.4.4')" 1>&2; \
 		exit 1; \

@@ -107,13 +107,6 @@ linters:
           - gocognit
           - gocyclo
         path: _gen\.go$
-      # mkwinsyscall's //sys directives must start "//sys<tab>"; gocritic's
-      # commentFormatting allowlist (//go:generate, //export, //line) lacks
-      # them. Directive lines only; a prose comment is still checked.
-      - linters:
-          - gocritic
-        path: _windows\.go$
-        source: ^//sys\s
       - linters:
           - errcheck
           - gosec
@@ -122,13 +115,6 @@ linters:
           - gocritic
           - goconst
         path: _test\.go
-      - linters:
-          - godot
-        text: Comment should end in a period
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
@@ -138,7 +124,3 @@ formatters:
     - goimports
   exclusions:
     generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$

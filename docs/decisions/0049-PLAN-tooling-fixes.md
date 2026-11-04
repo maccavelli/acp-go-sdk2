@@ -387,3 +387,64 @@ FAILED AS REQUIRED: find.py's named-path check removed: exit 1: FAIL: test_bad_p
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 4 begins on the owner's word.
+
+The owner committed phase 3 as `01dfcec`.
+
+### Phase 4: T9, T10, T12 and T13, the Makefile and the configuration, 2026-11-04
+
+Begun on the owner's "committed, proceed" after `01dfcec`. No deviation.
+
+**What it did:**
+
+* **T9, the `Makefile`:** `schema-version-set`, phony, fails, exit 2, with "schema/version read as empty: it is empty, or this
+  make, $(MAKE_VERSION), is older than GNU make 4.2, which reading it needs" when `ACP_VERSION` is empty. It is an order-only
+  prerequisite of `version`, `release` and the four schema downloads. The message names both causes, since an empty file
+  under a new make reads the same.
+* **T10:** the `Makefile`'s `api` comment and `ci.yml`'s apidiff step comment name the gated packages, the root,
+  `agentproc`, `acptest` and `clienthost`, and the reported ones, `unstable` and `remote`.
+* **T12, `.golangci.yml`:** the `//sys` rule for `_windows.go`, the `godot` rule, and both `paths` lists, `third_party$`,
+  `builtin$` and `examples$`, go. `example/` stays linted. The file is the fleet's shared configuration (`FLEET_LINT_CFG`), as
+  `.markdownlint-cli2.jsonc` is; the change is to be offered upstream at the PLAN's close.
+* **T13:** `all`, `check-records`, `check-tools`, `clean`, `disclosure-check`, `markdownlint`, `release` and `version` gain
+  `##` help; `tools/platforms.py`'s check list is `checks(lint)`, which `main` runs.
+* **The tests,** `tools/test_tools.py`:
+  * `MakefileTest.test_schema_version_guard`: `make schema-version-set ACP_VERSION=` fails with the guard's text; for each of
+    the six targets, `make -n -B` prints the guard's recipe before any that reads the stamp, a `schema-v` URL, the generator's
+    `go run .` or `release`'s write of `schema/version`; `make -n check-records` prints none of it.
+  * `MakefileTest.test_help_lists_targets`: `make help`, its colour codes stripped, names the eight.
+  * `PlatformsTest.test_checks`: the thirteen checks' names, written out, not read from `VET`, and each one's command and
+    environment.
+  * Two first runs refined them. The guard's test first required the guard's recipe first of all; under `-B`, make runs
+    `version`'s normal prerequisite, `README.md`'s `mdsh`, before the order-only guard, which reads no stamp. And `\b`
+    found no word boundary after the help's colour code, whose final `m` is a letter.
+* **Docs:** `RELEASING.md`'s prerequisites say what make 3.81 does now; `docs/architecture.md`'s stamp paragraph names the
+  guard.
+
+**Real runs:**
+
+* `/usr/bin/make` is GNU Make 3.81 here and the `make` on PATH: `make version` stops, "schema/version read as empty: … 3.81
+  …", exit 2; `make check-records` exits 0. `make -n -B schema/meta.json` prints the guard's recipe before the `schema-v/` URL.
+* `gmake`, 4.4.1: `gmake schema-version-set` exits 0; `gmake -n -B schema/meta.json` names `schema-v1.25.0`.
+* `MakefileTest` passes under both, `gmake` put first on PATH for the second.
+* `tools/gates.py lint platforms`: "ok   lint", "ok   platforms", with the smaller `.golangci.yml`.
+
+**Seen to fail,** by script, the tests run in a copy per plant, 3/3:
+
+```text
+FAILED AS REQUIRED: the guard dropped from schema/meta.json: exit 1: AssertionError: unexpectedly None : schema/meta.json runs no guard: ['curl -o schema/meta.json --fail -L https://github.com/agentclientprotocol/agent-client-protocol/releases/download/schema-v/meta.json']
+FAILED AS REQUIRED: clean's help dropped: exit 1: FAIL: test_help_lists_targets (test_tools.MakefileTest.test_help_lists_targets) (target='clean')
+FAILED AS REQUIRED: a platform dropped from VET: exit 1: "vet-openbsd-amd64", "vet-netbsd-amd64", "vet-illumos-amd64", "vet-windows-amd64", "vet-js-wasm", "vet-wasip1-wasm",
+```
+
+The first shows the finding's own URL, `schema-v/meta.json`. T10's and T12's changes are comments and configuration with
+nothing to fail; the lint gates show T12 drops no issue.
+
+**Checks:**
+
+* `make check-tools`: exit 0. `actionlint` at CI's pin on `ci.yml`: exit 0.
+* `make pre-add-check` with the phase's files, at load 20 to 41: exit 0.
+* `make markdownlint` first failed, "RELEASING.md:10:201 error MD013/line-length … Actual: 328", the prerequisites line made
+  longer; it is wrapped, and passes. `make check-records`, `make disclosure-check`: exit 0. `tools/idscan.py --paths` over the
+  phase's files: 0 matches.
+
+Staged for the owner, who commits. Phase 5 begins on the owner's word.

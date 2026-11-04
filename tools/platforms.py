@@ -34,6 +34,14 @@ def golangci_lint() -> str:
     return str(Path(gopath) / "bin" / "golangci-lint")
 
 
+def checks(lint: str) -> list[tuple[str, dict[str, str], list[str]]]:
+    """Each check's name, environment and command: golangci-lint, as lint
+    names it, for linux and freebsd, and go vet for each of VET."""
+    out = [(f"lint-{goos}", {"GOOS": goos}, [lint, "run", "-c", ".golangci.yml", *PKGS]) for goos in ("linux", "freebsd")]
+    out += [(f"vet-{goos}-{arch}", {"GOOS": goos, "GOARCH": arch}, ["go", "vet", *PKGS]) for goos, arch in VET]
+    return out
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--tree", help="the tree to check (default: this repository)")
@@ -41,11 +49,9 @@ def main(argv: list[str]) -> int:
     args = ap.parse_args(argv)
     tree = Path(args.tree).resolve() if args.tree else _common.repo()
     out = _common.out_dir("platforms", args.out)
-    lint = golangci_lint()
-    checks = [(f"lint-{goos}", {"GOOS": goos}, [lint, "run", "-c", ".golangci.yml", *PKGS]) for goos in ("linux", "freebsd")]
-    checks += [(f"vet-{goos}-{arch}", {"GOOS": goos, "GOARCH": arch}, ["go", "vet", *PKGS]) for goos, arch in VET]
+    todo = checks(golangci_lint())
     failed = []
-    for name, env, cmd in checks:
+    for name, env, cmd in todo:
         log = out / f"{name}.log"
         log.unlink(missing_ok=True)
         status, text = _common.run(log, cmd, cwd=tree, env={**os.environ, **env})
@@ -53,7 +59,7 @@ def main(argv: list[str]) -> int:
         print(f"{'ok  ' if status == 0 else 'FAIL'} {name} (exit {status}){': ' + last[:160] if last else ''}", flush=True)
         if status:
             failed.append(name)
-    print(f"{len(checks) - len(failed)} of {len(checks)} passed" + (f"; failed: {', '.join(failed)}" if failed else ""))
+    print(f"{len(todo) - len(failed)} of {len(todo)} passed" + (f"; failed: {', '.join(failed)}" if failed else ""))
     return 1 if failed else 0
 
 
