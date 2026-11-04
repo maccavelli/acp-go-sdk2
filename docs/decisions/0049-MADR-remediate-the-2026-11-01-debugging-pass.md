@@ -693,6 +693,10 @@ sender `-32600` with `"id": null` (`connection.go:1597-1601`), so the agent at l
 
 ### F-T: tooling, CI and documentation
 
+*Done 2026-11-04:* T1 to T14 are fixed by [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md), with no release of
+their own, each with what its phase 6 table names, on the answers Q16 to Q19 (a): T7 and T10 are comments, read, under
+its deviation 2, and T8 was corrected in `f6bfdcf`.
+
 **T1. Medium. `tools/README.md` is docs-safe, but only `make check-tools` checks its links, and nothing checks `RELEASING.md`'s.**
 `ci.yml:15`, `docs.yml:13`; `tools/test_tools.py:593-601`; `docs.yml:48-53` runs neither. `check_ci_filters.py`'s "readers" rule
 sees only Go string literals. **Probe** (investigator): links broken in both files pass `check-records`, `disclosure-check` and
@@ -753,6 +757,10 @@ job history" is mostly the docs gates'. Fix: list the CI workflow's runs, as T2'
 
 ### F-C: coverage and dead code
 
+*Done 2026-11-04,* by [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md): `abandon` and the two `Error` methods are
+run by tests, and `ConfigOptionUpdate.gates` is no longer generated, with `accept-gates-unreachable`'s `allOf` route under
+its phase 6's deviation 1. G13 and `cmd/generate`'s two `main` functions stay the generator PLAN's.
+
 * `agentproc/agentproc.go:286`, `abandon`, Start's clean-up when it cannot connect an agent: never run by a test.
 * `agentproc/stderr.go:21` and `elicitation.go:286`: two `Error()` methods never run.
 * `ConfigOptionUpdate.gates` (`types_gen.go:23956`): dead. ~~generated for a schema definition no message uses~~ The definition
@@ -799,7 +807,8 @@ released on its own, while the severity order inside each keeps R1 first. The pl
 * `0049-PLAN-tooling-fixes.md`: T2 (with 0048), T1, T3, then T4 to T13, and F-C's dead `ConfigOptionUpdate.gates` through the
   generator. *Written 2026-11-04,* [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md), proposed, with T14, F-C's two
   untested `Error` methods and `abandon`, and Q16 to Q19 below. It groups the order into phases by tool: T2, T14 and T7;
-  T1 and T3; T4, T11, T5 and T6; T9, T10, T12 and T13; F-C.
+  T1 and T3; T4, T11, T5 and T6; T9, T10, T12 and T13; F-C. *Complete 2026-11-04,* with no release of its own, under
+  three deviations of its close: the `allOf` engine case, T12's test, and R11 recorded.
 
 Each fix's test is its probe, kept, seen to fail before the fix and to pass after; the probes named above are the starting point.
 

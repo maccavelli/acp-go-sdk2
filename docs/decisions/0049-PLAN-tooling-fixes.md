@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-11-04
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
@@ -640,3 +640,22 @@ incompatible, not gated"; exit 0.
   files: 0 matches.
 
 Staged for the owner, who commits and pushes. Step 6.3 follows the push.
+
+The owner committed phase 6 as `ea32a99` and pushed it; `make push-guard` passed first, 7 outgoing commits, `1fe3dd0..ea32a99`.
+
+**Step 6.3,** CI on `origin/main`'s head, `ea32a99`: the CI workflow's run `41936179461`, "success", its six jobs each
+"success": `validate` on `ubuntu-24.04`, `macos-15` and `windows-2025`, each with Go `1.27.3` and `1.26.10`. The Docs
+workflow's run `41936179495`: "success".
+
+**Step 6.5.** This PLAN and its row are `complete`. The MADR's F-T section records T1 to T14 as done, and its F-C section
+the three gaps, with no release of their own. The MADR stays `accepted`, with the generator PLAN to come (Q1 a, Q7 a), and
+R11 open.
+
+**Verification,** against the section above:
+
+* T1 to T6, T9, T11 to T14 and F-C's three gaps each have a committed test, seen to fail on its plant and passing now; T7
+  and T10 are comments, read (deviation 2); T8 was fixed in `f6bfdcf`. See the table in step 6.1.
+* `tools/publication.py v1.33.0 6e04da6` named the CI workflow's run `41890673918` for main's head (phase 1).
+* `make markdownlint` and `make check-records` read only what git tracks or would (phase 2).
+* `make check-tools`, `tools/gates.py --all`, 18 of 18 after deviation 3, and CI on `ea32a99` pass; `make api` reports no
+  change.
