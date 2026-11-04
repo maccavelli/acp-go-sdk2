@@ -1103,8 +1103,12 @@ profile:
   - `Close` sends `DELETE`.
   - `sse.go`'s `sseReader` reads the events, within `MaxMessageSize`.
 
-**The server.** `handler.go`'s `Handler` answers `503` once closed; hands a
-GET with `Upgrade: websocket` to `websocket.Accept`, which applies its own
+**The server.** `handler.go`'s `Handler` answers `503` once closed; answers
+`403` a request whose `Host` `host.go`'s `hostAllowed` refuses, by
+`AllowedHosts` or, without it on a listener `http.LocalAddrContextKey` shows is
+loopback, any name but an IP literal, `localhost` and `.localhost`'s
+(0049-PLAN-subpackage-fixes.md, phase 4); hands a GET with
+`Upgrade: websocket` to `websocket.Accept`, which applies its own
 origin rule; answers any method but GET, POST and DELETE `405`; and checks
 those three with `originAllowed`, a copy of `websocket.Accept`'s rule, before
 routing them by method. Each connection is a `serverConn`:
@@ -1154,15 +1158,17 @@ Each profile drives a `serverConn`:
 
 Checks that guard it:
 
-- `remote`'s 55 tests run on loopback through `httptest`. Each event a test
+- `remote`'s 60 tests run on loopback through `httptest`. Each event a test
   requires is waited for under a named bound. Its fixed waits are deliberate:
   - a delay the fake server injects;
+  - the second a client or an agent does not read, to apply back-pressure;
   - the 300 ms a stream must last under a 100 ms `WriteTimeout`;
   - a short window in which a test requires that something does not happen.
 
   The tests, by file:
   - `frame_test.go`'s three and `route_test.go`'s four;
-  - `ws_test.go`'s twelve and `handler_test.go`'s six;
+  - `ws_test.go`'s fifteen, the three of back-pressure among them, and
+    `handler_test.go`'s eight, the Host rule's two among them;
   - `httpclient_test.go`'s fifteen, against `fakeserver_test.go`'s fake in the
     modes of the three official servers;
   - `httpserver_test.go`'s fifteen, its round trip over HTTP/1.1, HTTP/2 over

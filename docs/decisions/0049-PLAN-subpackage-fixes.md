@@ -508,3 +508,54 @@ The race is at `linetap.go:49` and `:59`, from `transcript.go:59`, as the probe'
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 4 begins on the owner's word.
+
+The owner committed phase 3 as `dbccdb5`.
+
+### Phase 4: P2, the Host rule, 2026-11-04
+
+Begun on the owner's "committed, proceed" after `dbccdb5`. No deviation.
+
+**What it did:**
+
+* **`remote/host.go`,** new: `hostAllowed(r, patterns)` and `hostName`, as step 4.2 has them. `hostName` also drops a final
+  dot, so `localhost.` is `localhost`.
+* **`remote/handler.go`:** `HandlerOptions.AllowedHosts`, its doc as step 4.1 has it, with the 403 and the proxy's case;
+  `ServeHTTP` checks it after the closed check and before the WebSocket branch, refusing `403` "remote: the request's host
+  is not allowed", logged as a refusal; `ServeHTTP`'s doc names the 403.
+* **The tests,** `remote/handler_test.go`, beside `hostRequest`, which sends a POST of `initialize`, a GET, a DELETE or a
+  WebSocket upgrade with a chosen `Host` and `Origin`:
+  * `TestHandlerHostRule`: `attacker.example:PORT`, with its own `Origin` and with none, `403` on each of the four;
+    `127.0.0.1`, `[::1]`, `localhost`, `agent.localhost` and `LOCALHOST.`, each with the port, `200` for `initialize`;
+    `localhost`'s upgrade `101`; with `AllowedHosts: {"agent.example"}`, that name `200` and `localhost` `403`.
+  * `TestHandlerHostRuleOffLoopback`: `ServeHTTP` with a recorder, `LocalAddrContextKey` a `192.0.2.10` address or unset.
+  * `TestHTTPServerOrigin` and `TestWebSocketOrigin` pass unchanged; no test of the package sent a name the rule refuses.
+* **Docs:** `README.md`'s `OriginPatterns` and `AllowedHosts` bullets and the host's part; `docs/architecture.md`'s server
+  paragraph and `remote`'s test counts, 60, with `ws_test.go`'s fifteen and `handler_test.go`'s eight. Phase 1 had added
+  three tests to `ws_test.go` and left the counts at 55 and twelve; this phase corrects both, and adds phase 1's
+  back-pressure pause to the deliberate waits.
+
+**Seen to fail,** by `tools/plants.py`, 3/3:
+
+```text
+FAILED AS REQUIRED: hostAllowed allows every request (^TestHandlerHostRule$): exit 1: handler_test.go:272: POST with Host attacker.example:55498 and Origin "http://attacker.example:55498" = 200, want 403
+FAILED AS REQUIRED: the loopback test inverted (^TestHandlerHostRule(OffLoopback)?$): exit 1: handler_test.go:330: any name, not loopback: DELETE with Host attacker.example:8080 = 403; want allowed true
+FAILED AS REQUIRED: the Host checked after the WebSocket branch (^TestHandlerHostRule$): exit 1: handler_test.go:272: UPGRADE with Host attacker.example:55513 and Origin "http://attacker.example:55513" = 101, want 403
+```
+
+The inverted plant failed both tests, as step 4.6 has it: the log holds "--- FAIL" for `TestHandlerHostRuleOffLoopback` and
+`TestHandlerHostRule` in its run.
+
+**Checks:**
+
+* `go test -race -count=3` of the two tests and of `./remote/` whole: `ok`.
+* `make api`: "against v1.32.0: 0 incompatible, 2 compatible", "remote: DialOptions.MaxBuffered: added" and "remote:
+  HandlerOptions.AllowedHosts: added", the two of design rule 1.
+* `make pre-add-check` with the phase's three Go files, the README and `docs/architecture.md`, at load 29 to 31: exit 0, "3
+  file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `tools/remote.py tree --host linux`: both modules, exit 0, `example/remote`'s test, which listens on `127.0.0.1`, included.
+* `tools/remote.py pkg --host windows ./remote -test.run 'TestHandlerHostRule|TestHTTPServerOrigin|TestWebSocketOrigin'
+  -test.count=3`: "PASS".
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 5 begins on the owner's word.

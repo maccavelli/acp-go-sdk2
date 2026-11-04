@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -206,5 +208,126 @@ func TestHandlerRefusals(t *testing.T) {
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed || resp.Header.Get("Allow") != "GET, POST, DELETE" {
 		t.Errorf("a PUT = %d, Allow %q; want 405 and GET, POST, DELETE", resp.StatusCode, resp.Header.Get("Allow"))
+	}
+}
+
+// hostRequest sends a request of method to ts with Host host and, unless
+// empty, Origin origin: a POST of initialize, a GET of the connection's
+// stream, a DELETE, or a GET with "Upgrade: websocket", the handshake's
+// headers set. It returns the status.
+func hostRequest(t *testing.T, ts *httptest.Server, method, host, origin string) int {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), waitBound)
+	defer cancel()
+	var body io.Reader
+	if method == http.MethodPost {
+		body = strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}`)
+	}
+	verb := method
+	if method == "UPGRADE" {
+		verb = http.MethodGet
+	}
+	req, err := http.NewRequestWithContext(ctx, verb, ts.URL, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Host = host
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+	switch method {
+	case http.MethodPost:
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+	case http.MethodGet:
+		req.Header.Set("Accept", "text/event-stream")
+	case "UPGRADE":
+		req.Header.Set("Upgrade", "websocket")
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Sec-WebSocket-Version", "13")
+		req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("%s with Host %s: %v", method, host, err)
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode
+}
+
+// TestHandlerHostRule requires a handler on a loopback listener to refuse,
+// 403, a request whose Host is a name other than localhost's, as a DNS
+// rebinding sends with an Origin of the same name, on every method and the
+// WebSocket upgrade; to serve one whose Host is an IP literal, localhost or a
+// name under .localhost; and, with AllowedHosts, to serve the names listed
+// and refuse the rest (0049-PLAN-subpackage-fixes.md, phase 4, P2).
+func TestHandlerHostRule(t *testing.T) {
+	t.Parallel()
+	ts := testServer(t, NewHandler(serveAgents(func() acp.Agent { return &acptest.ScriptAgent{} }), nil))
+	port := ts.URL[strings.LastIndex(ts.URL, ":"):]
+	rebound := "attacker.example" + port
+	for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete, "UPGRADE"} {
+		for _, origin := range []string{"http://" + rebound, ""} {
+			if got := hostRequest(t, ts, method, rebound, origin); got != http.StatusForbidden {
+				t.Errorf("%s with Host %s and Origin %q = %d, want 403", method, rebound, origin, got)
+			}
+		}
+	}
+	for _, host := range []string{"127.0.0.1" + port, "[::1]" + port, "localhost" + port, "agent.localhost" + port, "LOCALHOST." + port} {
+		if got := hostRequest(t, ts, http.MethodPost, host, ""); got != http.StatusOK {
+			t.Errorf("POST initialize with Host %s = %d, want 200", host, got)
+		}
+	}
+	if got := hostRequest(t, ts, "UPGRADE", "localhost"+port, ""); got != http.StatusSwitchingProtocols {
+		t.Errorf("the WebSocket upgrade with Host localhost%s = %d, want 101", port, got)
+	}
+
+	listed := testServer(t, NewHandler(serveAgents(func() acp.Agent { return &acptest.ScriptAgent{} }),
+		&HandlerOptions{AllowedHosts: []string{"agent.example"}}))
+	port = listed.URL[strings.LastIndex(listed.URL, ":"):]
+	if got := hostRequest(t, listed, http.MethodPost, "agent.example"+port, ""); got != http.StatusOK {
+		t.Errorf("POST initialize with a listed Host = %d, want 200", got)
+	}
+	if got := hostRequest(t, listed, http.MethodPost, "localhost"+port, ""); got != http.StatusForbidden {
+		t.Errorf("POST initialize with Host localhost, AllowedHosts set without it = %d, want 403", got)
+	}
+}
+
+// TestHandlerHostRuleOffLoopback requires a handler whose listener is not
+// loopback, or does not say, to serve any Host with AllowedHosts nil, and
+// only a listed one with it set (0049-PLAN-subpackage-fixes.md, phase 4, P2).
+func TestHandlerHostRuleOffLoopback(t *testing.T) {
+	t.Parallel()
+	public := &net.TCPAddr{IP: net.ParseIP("192.0.2.10"), Port: 8080}
+	status := func(h *Handler, host string, local net.Addr) int {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "http://"+host+"/", nil)
+		if local != nil {
+			req = req.WithContext(context.WithValue(req.Context(), http.LocalAddrContextKey, local))
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	open := NewHandler(serveAgents(func() acp.Agent { return &acptest.ScriptAgent{} }), nil)
+	listed := NewHandler(serveAgents(func() acp.Agent { return &acptest.ScriptAgent{} }), &HandlerOptions{AllowedHosts: []string{"agent.example"}})
+	t.Cleanup(func() {
+		_ = open.Close(context.Background())
+		_ = listed.Close(context.Background())
+	})
+	for _, c := range []struct {
+		name  string
+		h     *Handler
+		host  string
+		local net.Addr
+		want  bool
+	}{
+		{"any name, not loopback", open, "attacker.example:8080", public, true},
+		{"any name, no listener address", open, "attacker.example:8080", nil, true},
+		{"a listed name", listed, "agent.example:8080", public, true},
+		{"a name not listed", listed, "attacker.example:8080", public, false},
+	} {
+		if got := status(c.h, c.host, c.local); (got != http.StatusForbidden) != c.want {
+			t.Errorf("%s: DELETE with Host %s = %d; want allowed %v", c.name, c.host, got, c.want)
+		}
 	}
 }

@@ -60,6 +60,17 @@ type HandlerOptions struct {
 	// program sends, is always allowed.
 	OriginPatterns []string
 
+	// AllowedHosts are the host names a request's Host header may carry, as
+	// patterns matched as OriginPatterns are, the port ignored. Nil, on a
+	// listener whose address is loopback, allows an IP literal, localhost and
+	// a name under .localhost, and refuses any other name, as a DNS rebinding
+	// sends, which the origin rule cannot tell from the request's own host;
+	// nil elsewhere allows every name. A refused request, the WebSocket
+	// upgrade included, is answered 403 before the origin rule. A server that
+	// a name reaches on loopback, through a proxy for one, lists the name
+	// (0049-PLAN-subpackage-fixes.md, phase 4, P2).
+	AllowedHosts []string
+
 	// Logger receives what the handler cannot return: a refused request, a
 	// serve's error, an abandonment. It logs byte counts and fixed labels,
 	// never a message, an id or a session id. Nil is slog.Default().
@@ -144,10 +155,15 @@ func resolveHandlerOptions(opts *HandlerOptions) HandlerOptions {
 // 202 is sent before the agent can reply; while 256 messages wait, a POST
 // waits for room. Any other method is answered 405, a browser's CORS
 // preflight included, which is the host's middleware. After Close, every
-// request is answered 503.
+// request is answered 503, and a request whose Host AllowedHosts refuses,
+// 403.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.isClosed() {
 		h.refuse(w, http.StatusServiceUnavailable, "remote: the handler is closed")
+		return
+	}
+	if !hostAllowed(r, h.opts.AllowedHosts) {
+		h.refuse(w, http.StatusForbidden, "remote: the request's host is not allowed")
 		return
 	}
 	if r.Method == http.MethodGet && strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {

@@ -1255,7 +1255,17 @@ the endpoint.
     streams no client is receiving.
   - `OriginPatterns` allows browser origins besides the request's own host,
     on every method, as the WebSocket upgrade matches them. A request with no
-    `Origin`, as a program sends, is always allowed.
+    `Origin`, as a program sends, is always allowed. The request's own host is
+    its `Host` header, which a DNS-rebinding page sets to its own name, so
+    `AllowedHosts` checks it first.
+  - `AllowedHosts` lists the names a request's `Host` may carry, as patterns,
+    the port ignored. Left nil, a handler on a loopback listener allows an IP
+    literal, `localhost` and a name under `.localhost`, and answers any other
+    name `403`, the WebSocket upgrade included; on any other listener it allows
+    every name. A server reached by a name on loopback, through a proxy for
+    one, lists the name
+    ([0049-PLAN-subpackage-fixes.md](docs/decisions/0049-PLAN-subpackage-fixes.md),
+    phase 4).
   - `Logger` gets byte counts and fixed labels, never a message, an id or a
     session id.
 - **Event streams:** the handler clears their write deadline, so the server's
@@ -1287,6 +1297,8 @@ The host's part is the rest, as the RFD layers it on the transport:
 - **Authentication**, as middleware before the handler, on every request. The
   RFD says `Acp-Connection-Id` is not a credential, so checking `initialize`
   alone is not enough.
+- **Host names,** in `AllowedHosts`, for a server on a public or private
+  address that a browser can reach: the loopback default checks nothing there.
 - **Limits** on how many connections one client may open.
 - **CORS** for browsers, the preflight included.
 - **TLS.**
