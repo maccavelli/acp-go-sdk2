@@ -2,7 +2,7 @@
 status: accepted
 date: 2026-11-04
 decision-makers: the repository owner
-consulted: "probe tests and scripts in scratch copies of `d55ba2a`, of `e98987a` for the re-assessment, and of `277aca0` for the second, with a linux/386 run on the Linux test host; the official TypeScript (`08a0d30`) and Python (`9853d8b`) SDKs' clones in the interop cache; `schema/schema.json` and `schema/schema.unstable.json` at ACP 1.25.0; `go help test`; GitHub's workflow documentation"
+consulted: "probe tests and scripts in scratch copies of `d55ba2a`, of `e98987a` for the re-assessment, of `277aca0` for the second, with a linux/386 run on the Linux test host, and of `1fe3dd0` for the third; the official TypeScript (`08a0d30`) and Python (`9853d8b`) SDKs' clones in the interop cache; `schema/schema.json` and `schema/schema.unstable.json` at ACP 1.25.0; `go help test`; GitHub's workflow documentation"
 informed: gobble-cli, magic-cli-remote
 ---
 
@@ -346,6 +346,64 @@ text (P1), the origin rule (P2), `Files`' reads (P3), the message limit (P6, P9)
 * `make check-records`: exit 0. 139 records and 139 rows with the subpackage PLAN's, every MADR's and PLAN's status
   matching its row.
 
+### Re-assessment of F-T and F-C at `1fe3dd0`, 2026-11-04
+
+The owner said "proceed" after `v1.33.0`, for the next PLAN of Q7 (a), the tooling's. The method was the earlier ones': each T
+probe re-run in a scratch copy of `1fe3dd0` (`git archive`), never in the tree, every citation read at `1fe3dd0`, a coverage
+profile of both modules for F-C, read-only `gh` queries for T2; one investigator, and the author's own check of each claim
+the PLAN rests on. `git status --porcelain` was empty afterwards.
+
+**What changed since `e98987a`:** `tools/`, `scripts/`, the `Makefile`, `.github/` and `.golangci.yml` are unchanged
+(`git diff --stat e98987a 1fe3dd0`); `RELEASING.md` and `docs/architecture.md` changed in `f6bfdcf`'s corrections.
+
+**F-T:** eleven reproduce, T8 is fixed, T10 and T13 are fixed in part. The decisive lines:
+
+* T1: broken links planted in `tools/README.md` and `RELEASING.md` pass `check_records.py --check-all`, `check_disclosure` and
+  `check_ci_filters --docs-safe`, exit 0 each; only `ReadmeTest` fails. `unnumbered_docs` (`scripts/check_records.py:221-229`)
+  lists `README.md`, `docs/README.md`, `docs/architecture.md` and `docs/guides/` alone.
+* T2: at each of the last four releases, main's run for the release commit was the Docs workflow's (`v1.31.1` `41339370946`,
+  `v1.31.2` `41728264484`, `v1.32.0` `41840076826`, `v1.33.0` `41889919614`), and CI ran on that commit only as the tag's run.
+  The author checked `v1.33.0`'s: `gh run list --commit 6e04da6… --branch main` gives the Docs run alone, and with
+  `--workflow ci.yml` it gives `[]`. So **the fix as stated, a workflow filter, would fail every release whose commit is
+  docs-only**, which is each of them. Corrections: `main_run` has a test, `test_main_run_of_a_released_commit`
+  (`tools/test_tools.py:476-480`, `c39195a`), which tests its branch rule and not the workflow; and its `headBranch` filter
+  does nothing, since `--branch main` already filters on the server (`tools/publication.py:32-37`, `:82-86`). "CI on the tag"
+  (`:87-90`) has no workflow filter either.
+* T3: live in the tree. `make markdownlint` lints 48 files, one more than a clean copy: `.cache/tools/release/
+  release-body-v1.28.0.md`, which `release_body.py` writes by default and `.gitignore:18` ignores. `check_records.py` also
+  walks the untracked `.tools/`. In a copy, a record under `.worktrees/` gives `--next` `0100` and "number 0047 is claimed by
+  2 MADRs", and a bad `.cache/bad.md` fails markdownlint, "3 issues in 1 file".
+* T4, wider than recorded: with `GOSUMDB=off` in the parent and a `GOENV` file, both tools' Go keeps `GOSUMDB=off`, and
+  removing `GONOSUMDB` from the environment lets the file's value apply. A `GOPRIVATE` in the file also sets `GONOPROXY` for
+  the module, so `go list -m @latest` and `go mod download` go direct and prove nothing about the proxy.
+* T5: in a three-commit repository, an identifier added and removed inside `HEAD~2..HEAD` gives "0 match(es)", exit 0;
+  `--range HEAD` an `IndexError`, and, new, `--range A...B` a `CalledProcessError`, each exit 1, its "match" status.
+* T6: a misspelt file, a bare directory and, new, `files no_such_dir` each exit 1 with no output.
+* T7: read; `gh run list --branch main --status cancelled` gives `[]`, so it has not happened yet.
+* T9: `/usr/bin/make` here is GNU Make 3.81: `make -n -B schema/meta.json` gives `…/download/schema-v/meta.json`, where
+  gmake 4.4.1 gives `schema-v1.25.0`; and `false | true` passes under 3.81, so `.SHELLFLAGS` is lost.
+* T10: `Makefile:106` still says "compares the working tree's root package", and, new, `ci.yml:102`'s comment "The root
+  package's exported API".
+* T11: with an empty deny list, `release_body.py` exits 1 printing a blank line and its summary, no reason. T11b:
+  `check_disclosure.py` exits 2 with no output outside a work tree.
+* T12: `golangci-lint` with the four dead exclusions removed, and `third_party$` and `builtin$`, which match nothing either,
+  gives "0 issues." for darwin and windows, as with them.
+* T13: `make help` omits `all`, `check-records`, `check-tools`, `clean`, `disclosure-check`, `markdownlint`, `release` and
+  `version`; `tools/test_tools.py` has no test of `platforms.py`.
+
+**T14, new,** under F-T below.
+
+**F-C,** by a coverage profile of both modules, `-coverpkg=./...`, go1.27.3:
+
+* `agentproc/agentproc.go:286-294`, `abandon`: 0 of 3 blocks run; its callers are `:240` and `:244`, a failed close of the
+  parent's pipe ends and a failed `proctree.Attach`.
+* `agentproc/stderr.go:21-23` and `elicitation.go:286`, the two `Error` methods: 0 of 1 block each.
+* `ConfigOptionUpdate.gates`: generated and dead, at `types_gen.go:25427-25434`, 0 of 4 blocks; `SessionConfigOptionUpdate.gates`
+  (`:25703-25710`) runs. The type, `:2575`, is no field's, params' or result's; `unused` does not report the method, which
+  satisfies the unexported `gater` interface.
+* `deathsig_none.go`: counted run, as corrected. `cmd/generate`'s two `main` bodies and G13's `Model.Validates`
+  (`model/validate.go:80`) are the generator PLAN's.
+
 ## Findings
 
 Severity is the effect on a consumer or a maintainer: **high** loses data, hangs, or crashes a correct program; **medium** gives a
@@ -670,6 +728,10 @@ one reported, the citation having been corrected on 2026-11-03 and not the text;
 `release` and `clean`; `tools/platforms.py` has no test. *The tree corrected 2026-11-04,* with `version` and
 `scripts/test_check_*.py` too; `make help` and `platforms.py`'s test are the tooling PLAN's.
 
+**T14. Low. `ci_jobs.py tally` counts every workflow's runs as CI's.** `tools/ci_jobs.py:183-191` lists main's runs with no
+workflow filter. **Probe** (2026-11-04): of main's last 40 runs, 26 are the Docs workflow's and 14 CI's, so a tally of "CI's
+job history" is mostly the docs gates'. Fix: list the CI workflow's runs, as T2's fix does.
+
 ### F-C: coverage and dead code
 
 * `agentproc/agentproc.go:286`, `abandon`, Start's clean-up when it cannot connect an agent: never run by a test.
@@ -715,7 +777,9 @@ released on its own, while the severity order inside each keeps R1 first. The pl
   the margin; P2; P6, P9 and P8. *Complete 2026-11-04,* released in `v1.33.0`.
 * `0049-PLAN-generator-fixes.md`: G2, G1, G3, then G4 to G12, each refusal with an engine case; G13.
 * `0049-PLAN-tooling-fixes.md`: T2 (with 0048), T1, T3, then T4 to T13, and F-C's dead `ConfigOptionUpdate.gates` through the
-  generator.
+  generator. *Written 2026-11-04,* [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md), proposed, with T14, F-C's two
+  untested `Error` methods and `abandon`, and Q16 to Q19 below. It groups the order into phases by tool: T2, T14 and T7;
+  T1 and T3; T4, T11, T5 and T6; T9, T10, T12 and T13; F-C.
 
 Each fix's test is its probe, kept, seen to fail before the fix and to pass after; the probes named above are the starting point.
 
@@ -955,6 +1019,61 @@ Each question was put with its three options:
 * Q15 (c), not the recommended one: no 32-bit run. The new tests run on 64-bit hosts, where they check the arithmetic and
   cannot fail on the old code. Each is still seen to fail once, as the PLAN's rule requires: its plant runs as linux/386 on
   the Linux test host, by script, and the record quotes it. Not chosen: a CI step on linux/386; a `linux386` gate.
+
+#### The tooling PLAN's designs, proposed 2026-11-04
+
+[0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md) needs four answers the questions above did not settle. Each is put with
+three options, the recommended one first. The PLAN is written on the recommended answers and changes if the owner chooses
+otherwise.
+
+* **Q16. T2, which run shows "CI on origin main's head".** The fix as stated, the CI workflow on `--branch main`, finds no run
+  for a docs-only head, which every release commit is (the re-assessment at `1fe3dd0`).
+  * **(a) The CI workflow's newest run on the head commit, from any ref; or, when the head has none, on its newest ancestor
+    from which every later change is docs-safe** (recommended). The tag's run counts for a release commit, and a docs-only
+    commit after it is judged by the code it did not change, by `check_ci_filters.py --docs-safe`'s own list, so the check
+    holds whatever was pushed since. "CI on the tag" takes the same workflow filter. Cost: an ancestor walk and its tests.
+  * **(b) The CI workflow's run on the head commit, from any ref, alone.** Simpler; it holds at a release, when main's head is
+    the tag's commit, and fails once a docs-only commit follows the tag before `publication.py` runs.
+  * **(c) Rename the check to what it reads:** "the workflow that ran on main's head passed", Docs or CI, and leave the Go to
+    "CI on the tag". The smallest change; the check then says less, and T14 still needs its own filter.
+* **Q17. T3, files git ignores.**
+  * **(a) Both checks read what git tracks or would:** `check_records.py` lists files with `git ls-files -co
+    --exclude-standard`, falling back to `rglob` outside a work tree, and `.markdownlint-cli2.jsonc` gains `"gitignore": true`
+    (recommended). Probed: "Linting: 47 files … 0 issues" with the bad files present. Cost: the markdownlint file is the fleet's
+    shared configuration, so the line goes upstream too, or a refresh drops it.
+  * **(b) Name the directories:** `.cache`, `.worktrees`, `.tools` and `.gocache` in `SKIP_PARTS` and in markdownlint's
+    ignores. No git call; it drifts from `.gitignore`, and still touches the fleet file.
+  * **(c) `make markdownlint` passes markdownlint the files `git ls-files` lists,** leaving the fleet file alone, and
+    `check_records.py` as (a). Cost: the Makefile must keep the fleet's MADR and PLAN exclusions itself, since files given on
+    the command line bypass the configured globs.
+* **Q18. T9, make 3.81.**
+  * **(a) An order-only prerequisite on the targets that read `schema/version`:** `version`, `release` and the four schema
+    downloads fail at once, "schema/version read as empty: GNU make 4.2 or newer is needed, this is 3.81" (recommended).
+    Probed under 3.81: the guard fails, exit 2, and `make check-records` still passes there. The docs gates keep working
+    under stock macOS make.
+  * **(b) Read the stamp with `$(shell cat schema/version)`,** which 3.81 has. The cause goes; `.SHELLFLAGS` is still lost
+    under 3.81, so a pipeline's failure can pass silently.
+  * **(c) Refuse make 3.81 for every target,** by `MAKE_VERSION`. The surest, and it breaks `make check-records` and the other
+    docs gates under the make macOS ships.
+* **Q19. T2 and [0048-PLAN-create-releases-in-ci.md](0048-PLAN-create-releases-in-ci.md).** Both change `publication.py`'s CI
+  checks (0048's D5 adds `--run-id`) and `release_body.py`'s scan (0048's D3 and T11).
+  * **(a) This PLAN first; 0048's PLAN amended after to build on its `publication.py` and `release_body.py`** (recommended).
+    T2 is medium and wrong at every release now; 0048 is `proposed` and not accepted.
+  * **(b) 0048 first,** then this PLAN on top. 0048's `verify-release` would inherit T2's defect until this PLAN lands.
+  * **(c) One PLAN:** this one takes 0048's three phases in. One review of the release tooling; a larger PLAN, and 0048's
+    decision still needs the owner's acceptance first.
+
+##### Answered by the owner, 2026-11-04
+
+Each question was put with its three options; the owner chose the recommended one each time:
+
+* Q16 (a): the CI workflow's run on main's head from any ref, or on its newest docs-safe ancestor. Not chosen: the head's run
+  alone; renaming the check.
+* Q17 (a): `git ls-files -co --exclude-standard` in `check_records.py`, and `"gitignore": true` in markdownlint's configuration.
+  Not chosen: naming the directories; the Makefile passing the file list.
+* Q18 (a): an order-only guard on the targets that read `schema/version`. Not chosen: `$(shell cat)`; refusing make 3.81 for
+  every target.
+* Q19 (a): this PLAN first, and 0048's PLAN amended after to build on it. Not chosen: 0048 first; one PLAN.
 
 ### Consequences
 
