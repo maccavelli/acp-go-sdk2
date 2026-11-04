@@ -219,6 +219,19 @@ type Variant struct {
 	// discriminator value and is not the catch-all: the schema means it when
 	// the discriminator is absent.
 	KeyLess bool
+	// Title is a key-less variant's schema title, its own name, in a union
+	// without a catch-all: a discriminator equal to it decodes into the
+	// variant. Empty otherwise, and in a union with a catch-all, where a title
+	// is a label and not a wire value
+	// (0049-PLAN-surface-fixes.md, phase 1, deviation 1).
+	Title string
+	// Fallback is true for the key-less variant of a union a key-less
+	// fallback rule names: a discriminator that names no variant decodes into
+	// it when the payload carries its keys and decodes as it
+	// (0049-PLAN-surface-fixes.md, phase 1, deviation 2). description is the
+	// variant's schema description, which the rule's source must be in.
+	Fallback    bool
+	description string
 	// FitKeys lists, in schema order, a variant's required keys other than
 	// its union's discriminator: a payload without the discriminator fits
 	// the variant when it carries them all. Nil outside a discriminated union.
@@ -383,6 +396,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		return nil, err
 	}
 	if err := m.resolveNullRetained(r); err != nil {
+		return nil, err
+	}
+	if err := m.resolveKeyLessFallbacks(r); err != nil {
 		return nil, err
 	}
 	if err := m.resolveKeyOrders(r); err != nil {
@@ -1293,6 +1309,23 @@ func classifyUnion(schema *load.Schema, t *Type, list []*load.Definition) error 
 				return fmt.Errorf("%s: variant %s takes the field Unknown, which the union needs", t.Name, vi.TypeName)
 			}
 		}
+		return keyLessTitles(t, list)
+	}
+	return nil
+}
+
+// keyLessTitles gives each key-less variant of t, a union without a
+// catch-all, its schema title as its own name, and keeps its description for
+// a key-less fallback rule (0049-PLAN-surface-fixes.md, phase 1). A title
+// cannot be another variant's discriminator value or another key-less
+// variant's title: both name the variant's field, which buildUnion already
+// requires to be unique.
+func keyLessTitles(t *Type, list []*load.Definition) error {
+	for idx, vi := range t.Variants {
+		if vi.Skip || !vi.KeyLess {
+			continue
+		}
+		vi.description, vi.Title = list[idx].Description, list[idx].Title
 	}
 	return nil
 }
@@ -1437,6 +1470,39 @@ func (m *Model) resolvePatchFields(r *rules) error {
 			if vi.Inline != nil {
 				patch(vi.Inline.Fields)
 			}
+		}
+	}
+	return nil
+}
+
+// resolveKeyLessFallbacks marks the key-less variant of each union a key-less
+// fallback rule names, in its definition's type and each copy the merge made
+// of it. A rule whose definition the schema lacks is skipped; one on a type
+// that is not a union without a catch-all, or that has no key-less variant or
+// several, or whose key-less variant's description does not state its
+// source, is refused (0049-PLAN-surface-fixes.md, phase 1, deviation 2).
+func (m *Model) resolveKeyLessFallbacks(r *rules) error {
+	if r.table == nil {
+		return nil
+	}
+	for _, rule := range r.table.KeyLessFallbacks {
+		for _, t := range m.ruleTypes(rule.Definition) {
+			if t.Kind != KindUnion || !t.HasUnknown {
+				return fmt.Errorf("%s: a key-less fallback rule needs a discriminated union without a catch-all", t.Name)
+			}
+			var keyLess []*Variant
+			for _, vi := range t.Variants {
+				if !vi.Skip && vi.KeyLess {
+					keyLess = append(keyLess, vi)
+				}
+			}
+			if len(keyLess) != 1 {
+				return fmt.Errorf("%s: a key-less fallback rule needs one key-less variant, not %d", t.Name, len(keyLess))
+			}
+			if !strings.Contains(strings.Join(strings.Fields(keyLess[0].description), " "), strings.Join(strings.Fields(rule.Source), " ")) {
+				return fmt.Errorf("%s: its key-less variant's description does not state %q", t.Name, rule.Source)
+			}
+			keyLess[0].Fallback = true
 		}
 	}
 	return nil

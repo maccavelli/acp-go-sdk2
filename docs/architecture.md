@@ -262,9 +262,12 @@ neither, naming it, and send a nil required array or map as `[]` or `{}`. A
 union's generated `UnmarshalJSON` leaves the union unchanged on `null`
 (`RequestId` sets its `Null` variant) and otherwise clears it first. A union
 with a discriminator fails on one that is present and not a string, naming the
-union and the key; decodes the variant a known value names; sends an unknown
-value to the schema's catch-all variant (`Other`, which keeps undeclared keys
-in `Extra`) or keeps it in `Unknown`; and decodes a payload without the
+union and the key; decodes the variant a known value names, and, in a union
+without a catch-all, the key-less variant its title names (`Variant.Title`);
+sends an unknown value to the schema's catch-all variant (`Other`, which keeps
+undeclared keys in `Extra`) or keeps it in `Unknown`, except in a union a
+`KeyLessFallbacks` rule names, whose key-less variant takes a payload that fits
+and decodes as it (`Variant.Fallback`; 0049, S1 and S7); and decodes a payload without the
 discriminator into the schema's key-less variant, else into the one variant
 whose own required keys it carries (not those the union requires of every
 variant), else into `Unknown`, or fails in a union with a catch-all. A union

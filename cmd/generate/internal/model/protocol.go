@@ -39,6 +39,14 @@ type Protocol struct {
 	// another optional raw value reads null as absent; Source must be in the
 	// property's description (0019-PLAN-generator-hardening.md, G3).
 	NullRetained []PatchRule
+	// KeyLessFallbacks lists the unions without a catch-all whose key-less
+	// variant also takes a payload whose discriminator names no variant, when
+	// the payload carries its keys and decodes as it, which the schema states
+	// only in prose. Elsewhere such a payload goes to Unknown
+	// (0011-MADR-harden-code-generator-engine.md, F1). Source must be in the
+	// key-less variant's description (0049-PLAN-surface-fixes.md, phase 1,
+	// deviation 2).
+	KeyLessFallbacks []FallbackRule
 	// KeyOrders lists the typed map properties whose key order the protocol
 	// gives meaning, which the schema does not state: each struct gains
 	// Field, the order of the map's keys, read when decoded and written when
@@ -105,6 +113,13 @@ type PathRule struct {
 // sentence the rule follows.
 type PatchRule struct {
 	Definition, Property, Source string
+}
+
+// FallbackRule names a union, by its definition as the merged schema names
+// it, whose key-less variant takes a payload whose discriminator names no
+// variant. Source is the schema sentence that says so.
+type FallbackRule struct {
+	Definition, Source string
 }
 
 // GateKind is what a capability rule checks.
@@ -295,6 +310,23 @@ func ruleKey(side, wire string) string { return side + "|" + wire }
 
 func (r *MethodRule) owner() string { return fmt.Sprintf("%s method %q", r.Side, r.Wire) }
 
+// checkFallbackRules checks the key-less fallback rules without the schema:
+// each needs a definition and a source, and a definition has one rule
+// (0049-PLAN-surface-fixes.md, phase 1, deviation 2).
+func checkFallbackRules(rules []FallbackRule) error {
+	seen := map[string]bool{}
+	for _, rule := range rules {
+		switch {
+		case rule.Definition == "" || rule.Source == "":
+			return fmt.Errorf("key-less fallback rule %q: it needs a definition and a source", rule.Definition)
+		case seen[rule.Definition]:
+			return fmt.Errorf("key-less fallback rule %s: two rules", rule.Definition)
+		}
+		seen[rule.Definition] = true
+	}
+	return nil
+}
+
 // newRules checks what a table says without the schema. A nil table has no
 // rules.
 func newRules(p *Protocol) (*rules, error) {
@@ -372,6 +404,9 @@ func newRules(p *Protocol) (*rules, error) {
 			return nil, fmt.Errorf("null-retained rule %s.%s: two rules", rule.Definition, rule.Property)
 		}
 		retained[k] = true
+	}
+	if err := checkFallbackRules(p.KeyLessFallbacks); err != nil {
+		return nil, err
 	}
 	ordered := map[[2]string]bool{}
 	for _, rule := range p.KeyOrders {

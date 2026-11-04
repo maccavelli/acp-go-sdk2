@@ -108,6 +108,13 @@ var ACP = Protocol{
 	NullRetained: []PatchRule{
 		{Definition: "UnstableMcpError", Property: "data", Source: srcMcpErrorData},
 	},
+	// The unions whose key-less variant also takes an unknown discriminator's
+	// payload, which the schema states only in prose; every other union keeps
+	// such a payload in Unknown (0049-PLAN-surface-fixes.md, phase 1,
+	// deviation 2).
+	KeyLessFallbacks: []FallbackRule{
+		{Definition: "SetSessionConfigOptionRequest", Source: srcValueIDFallback},
+	},
 	// The typed maps whose key order the protocol gives meaning
 	// (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
 	KeyOrders: []OrderRule{
@@ -230,6 +237,9 @@ const (
 	srcMessageMeta = "Omitted leaves metadata unchanged; `null` removes it."
 	// srcMcpErrorData is from the unstable schema, McpError's data.
 	srcMcpErrorData = "Optional error data; explicit null is retained."
+	// srcValueIDFallback is from the schema, SetSessionConfigOptionRequest's
+	// value_id variant.
+	srcValueIDFallback = "Unknown `type` values with string payloads also gracefully deserialize into this variant."
 )
 
 // srcFormOrder is the reason the key-order rule follows: the schema states no

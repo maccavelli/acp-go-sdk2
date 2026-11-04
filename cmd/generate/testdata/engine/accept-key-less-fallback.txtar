@@ -1,0 +1,152 @@
+A union a key-less fallback rule names, SetSessionConfigOptionRequest, decodes
+a discriminator no variant names into its key-less variant when the payload
+carries its keys and decodes as it, as the variant's description says, and
+keeps it in Unknown otherwise. A union of the same shape that no rule names
+keeps it in Unknown (0011-MADR-harden-code-generator-engine.md, F1;
+0049-PLAN-surface-fixes.md, phase 1, deviation 2).
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "SetSessionConfigOptionRequest": {"anyOf": [{"description": "A boolean value.", "type": "object", "properties": {"type": {"type": "string", "const": "boolean"}, "value": {"type": "boolean"}}, "required": ["type", "value"]}, {"title": "value_id", "description": "A string value.\n\nThis is the default when `type` is absent on the wire. Unknown `type`\nvalues with string payloads also gracefully deserialize into this\nvariant.", "type": "object", "properties": {"value": {"type": "string"}}, "required": ["value"]}]},
+  "V": {"anyOf": [{"type": "object", "properties": {"type": {"type": "string", "const": "boolean"}, "value": {"type": "boolean"}}, "required": ["type", "value"]}, {"title": "value_id", "type": "object", "properties": {"value": {"type": "string"}}, "required": ["value"]}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewSetSessionConfigOptionRequestBoolean(value bool) SetSessionConfigOptionRequest
+func NewSetSessionConfigOptionRequestValueId(value string) SetSessionConfigOptionRequest
+func NewVBoolean(value bool) V
+func NewVValueId(value string) V
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type SetSessionConfigOptionBoolean struct{Type string "json:\"type\""; Value bool "json:\"value\""}
+type SetSessionConfigOptionRequest struct{Boolean *SetSessionConfigOptionBoolean "json:\"-\""; ValueId *SetSessionConfigOptionValueId "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type SetSessionConfigOptionValueId struct{Value string "json:\"value\""}
+type V struct{Boolean *VBoolean "json:\"-\""; ValueId *VValueId "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type VBoolean struct{Type string "json:\"type\""; Value bool "json:\"value\""}
+type VValueId struct{Value string "json:\"value\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+func (*SetSessionConfigOptionBoolean).UnmarshalJSON(b []byte) error
+func (SetSessionConfigOptionRequest).MarshalJSON() ([]byte, error)
+func (*SetSessionConfigOptionRequest).UnmarshalJSON(b []byte) error
+func (*SetSessionConfigOptionRequest).Validate() error
+func (*SetSessionConfigOptionValueId).UnmarshalJSON(b []byte) error
+func (V).MarshalJSON() ([]byte, error)
+func (*V).UnmarshalJSON(b []byte) error
+func (*V).Validate() error
+func (*VBoolean).UnmarshalJSON(b []byte) error
+func (*VValueId).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"bytes"
+	"encoding/json"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func which(u SetSessionConfigOptionRequest) string {
+	switch {
+	case u.Boolean != nil:
+		return "Boolean"
+	case u.ValueId != nil:
+		return "ValueId " + u.ValueId.Value
+	case u.Unknown != nil:
+		return "Unknown"
+	}
+	return "none"
+}
+
+func sameJSON(t *testing.T, got []byte, want string) {
+	t.Helper()
+	decode := func(b []byte) any {
+		d := json.NewDecoder(bytes.NewReader(b))
+		d.UseNumber()
+		var v any
+		if err := d.Decode(&v); err != nil {
+			t.Fatalf("%s: %v", b, err)
+		}
+		return v
+	}
+	if !reflect.DeepEqual(decode(got), decode([]byte(want))) {
+		t.Errorf("got %s, want %s", got, want)
+	}
+}
+
+// An unknown type with a string value is the value-id variant; with a value
+// that is not a string it is kept, and sent back unchanged.
+func TestFallback(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"type":"future","value":"x"}`:   "ValueId x",
+		`{"value":"x"}`:                   "ValueId x",
+		`{"type":"value_id","value":"x"}`: "ValueId x",
+		`{"type":"boolean","value":true}`: "Boolean",
+		`{"type":"future","value":true}`:  "Unknown",
+	} {
+		var u SetSessionConfigOptionRequest
+		if err := json.Unmarshal([]byte(in), &u); err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		if got := which(u); got != want {
+			t.Errorf("%s decoded as %s, want %s", in, got, want)
+		}
+	}
+	var u SetSessionConfigOptionRequest
+	in := `{"type":"future","value":true}`
+	if err := json.Unmarshal([]byte(in), &u); err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sameJSON(t, b, in)
+}
+
+// The own name is strict.
+func TestFallbackOwnNameStrict(t *testing.T) {
+	var u SetSessionConfigOptionRequest
+	err := json.Unmarshal([]byte(`{"type":"value_id","value":true}`), &u)
+	if err == nil || !strings.Contains(err.Error(), `SetSessionConfigOptionRequest: type "value_id"`) {
+		t.Errorf("= %v, decoded as %s; want an error naming the value", err, which(u))
+	}
+}
+
+// A union no rule names keeps an unknown type in Unknown, whatever its value.
+func TestNoRuleNoFallback(t *testing.T) {
+	var v V
+	if err := json.Unmarshal([]byte(`{"type":"future","value":"x"}`), &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.Unknown == nil || v.ValueId != nil {
+		t.Errorf("V decoded as %+v, want Unknown", v)
+	}
+}

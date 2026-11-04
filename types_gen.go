@@ -737,12 +737,20 @@ func (u *AuthMethod) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("AuthMethod: discriminator \"type\": %w", err)
 		}
 	}
-	if disc == "terminal" {
+	switch disc {
+	case "terminal":
 		var v AuthMethodTerminalInline
 		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("AuthMethod: type \"terminal\": %w", err)
 		}
 		u.Terminal = &v
+		return nil
+	case "agent":
+		var v AuthMethodAgent
+		if err := v.decodeKeys(b, m); err != nil {
+			return fmt.Errorf("AuthMethod: type \"agent\": %w", err)
+		}
+		u.Agent = &v
 		return nil
 	}
 	if v, ok := m["type"]; ok && string(v) != "null" {
@@ -8266,6 +8274,13 @@ func (u *McpServer) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("McpServer: type \"acp\": %w", err)
 		}
 		u.Acp = &v
+		return nil
+	case "stdio":
+		var v McpServerStdio
+		if err := v.decodeKeys(b, m); err != nil {
+			return fmt.Errorf("McpServer: type \"stdio\": %w", err)
+		}
+		u.Stdio = &v
 		return nil
 	}
 	if v, ok := m["type"]; ok && string(v) != "null" {
@@ -16306,7 +16321,8 @@ type SetSessionConfigOptionRequest struct {
 	// values with string payloads also gracefully deserialize into this
 	// variant.
 	ValueId *SetSessionConfigOptionValueId `json:"-"`
-	// Unknown holds a payload whose "type" names no variant this SDK knows, as it was received.
+	// Unknown holds a payload whose "type" names no variant this SDK knows and that does
+	// not decode as the variant the schema means without it, as it was received.
 	// MarshalJSON writes it back unchanged when no variant is set.
 	Unknown json.RawMessage `json:"-"`
 }
@@ -16328,15 +16344,36 @@ func (u *SetSessionConfigOptionRequest) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("SetSessionConfigOptionRequest: discriminator \"type\": %w", err)
 		}
 	}
-	if disc == "boolean" {
+	switch disc {
+	case "boolean":
 		var v SetSessionConfigOptionBoolean
 		if err := v.decodeKeys(b, m); err != nil {
 			return fmt.Errorf("SetSessionConfigOptionRequest: type \"boolean\": %w", err)
 		}
 		u.Boolean = &v
 		return nil
+	case "value_id":
+		var v SetSessionConfigOptionValueId
+		if err := v.decodeKeys(b, m); err != nil {
+			return fmt.Errorf("SetSessionConfigOptionRequest: type \"value_id\": %w", err)
+		}
+		u.ValueId = &v
+		return nil
 	}
-	if v, ok := m["type"]; ok && string(v) != "null" {
+	if raw, ok := m["type"]; ok && string(raw) != "null" {
+		{
+			var v SetSessionConfigOptionValueId
+			match := true
+			if _, ok := m["value"]; !ok {
+				match = false
+			}
+			if match {
+				if err := v.decodeKeys(b, m); err == nil {
+					u.ValueId = &v
+					return nil
+				}
+			}
+		}
 		u.Unknown = bytes.Clone(b)
 		return nil
 	}
@@ -20013,6 +20050,13 @@ func (u *UnstableMcpServer) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("UnstableMcpServer: type \"acp\": %w", err)
 		}
 		u.Acp = &v
+		return nil
+	case "stdio":
+		var v McpServerStdio
+		if err := v.decodeKeys(b, m); err != nil {
+			return fmt.Errorf("UnstableMcpServer: type \"stdio\": %w", err)
+		}
+		u.Stdio = &v
 		return nil
 	}
 	if v, ok := m["type"]; ok && string(v) != "null" {

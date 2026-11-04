@@ -257,7 +257,15 @@ follow the schema:
   gives the union a catch-all variant, the payload decodes into it (`Other`),
   which keeps the keys it does not declare in its `Extra` field. Otherwise the
   payload is kept as received in the union's `Unknown` field. Either way,
-  encoding sends the payload back unchanged.
+  encoding sends the payload back unchanged. Two cases are not unknown:
+  - In a union without a catch-all, the name of the variant the schema means
+    when the discriminator is absent decodes into that variant. For example,
+    `McpServer`'s `"type":"stdio"` and `AuthMethod`'s `"type":"agent"` decode
+    into `Stdio` and `Agent`, and a payload that does not fit it is an error.
+  - `SetSessionConfigOptionRequest`, as its schema says, decodes an unknown
+    `type` with a string `value` as `ValueId`
+    ([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](docs/decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
+    S1 and S7).
 - A payload without its discriminator, or with it `null`, decodes into the
   variant the schema means for that case where the union has one, such as
   `IdleStateUpdateNone`. Otherwise it decodes into the one variant whose own

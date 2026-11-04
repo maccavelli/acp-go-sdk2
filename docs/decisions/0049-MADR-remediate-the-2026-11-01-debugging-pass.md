@@ -706,6 +706,25 @@ Each question was put with its three options; the owner chose the recommended on
 
 * Q8 (a): one rule for every union with a key-less variant. Not chosen: the own name with a table rule for the fallback;
   special cases.
+  * *Amended 2026-11-03,* in [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md)'s phase 1, deviation 1. In a union
+    with a catch-all, a key-less variant's title is not a wire value. `IdleStateUpdate`'s `none` means "`stopReason` is
+    omitted or `null`", and that union gives unknown values to its catch-all. So both rules apply only to a union without a
+    catch-all.
+    * The own name decodes into the key-less variant, strictly: a payload that does not decode is an error.
+    * Any other unknown discriminator falls back to the key-less variant when the payload fits.
+
+    Asked with three options, the owner chose this one. Not chosen: the fallback alone; Q8 (a) as first written.
+  * *Amended again 2026-11-03,* deviation 2.
+    * The general fallback reverses
+      [0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md)'s F1 for `AuthMethod` and
+      `McpServer`, which Q8 did not name: "a discriminator value that names no variant is never matched by key or by trial".
+      Three tests pin F1.
+    * So the fallback applies only where the schema states it, by a sourced protocol-table rule:
+      `SetSessionConfigOptionRequest`, which fixes S1.
+    * The strict own name fixes S7.
+
+    F1 holds everywhere else. Asked with three options, the owner chose this one. Not chosen: superseding F1; a hand special
+    case for S1.
 * Q9 (a): an unexported deep copy by `reflect`. Not chosen: generated `clone` methods; a JSON round trip.
 * Q10 (a): a new sentinel, `ErrUnadvertisedAuthMethod`. Not chosen: a `*CapabilityError`; a widened `ErrTerminalAuthMethod`.
 * Q11 (a): a protocol-table rule, `EmptyClears`. Not chosen: `omitzero` on every nullable array; `Patch[[]T]`.

@@ -1,0 +1,144 @@
+A key-less variant's title is its own name in a union without a catch-all: a
+discriminator equal to it decodes into the variant, strictly, as a named
+variant's value does. A type no variant names is still kept in Unknown
+(0011-MADR-harden-code-generator-engine.md, F1). In a union with a catch-all
+the title is a label, not a wire value, and the catch-all keeps taking it
+(0049-PLAN-surface-fixes.md, phase 1, deviations 1 and 2).
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"anyOf": [{"type": "object", "properties": {"type": {"type": "string", "const": "a"}}, "required": ["type"]}, {"title": "loose", "type": "object", "required": ["x"], "properties": {"x": {"type": "string"}}}]},
+  "C": {"anyOf": [{"type": "object", "properties": {"type": {"type": "string", "const": "a"}}, "required": ["type"]}, {"title": "other", "type": "object", "required": ["type"], "properties": {"type": {"type": "string"}}, "not": {"anyOf": [{"type": "object", "properties": {"type": {"type": "string", "const": "a"}}, "required": ["type"]}]}}, {"title": "plain", "type": "object", "required": ["y"], "properties": {"y": {"type": "string"}}}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type C struct{A *CA "json:\"-\""; Other *COther "json:\"-\""; Plain *CPlain "json:\"-\""}
+type CA struct{Type string "json:\"type\""}
+type COther struct{Type string "json:\"type\""; Extra map[string]json.RawMessage "json:\"-\""}
+type CPlain struct{Y string "json:\"y\""}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewCA() C
+func NewCOther(typeValue string) C
+func NewCPlain(y string) C
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewUA() U
+func NewULoose(x string) U
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type U struct{A *UA "json:\"-\""; Loose *ULoose "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type UA struct{Type string "json:\"type\""}
+type ULoose struct{X string "json:\"x\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (C).MarshalJSON() ([]byte, error)
+func (*C).UnmarshalJSON(b []byte) error
+func (*C).Validate() error
+func (COther).MarshalJSON() ([]byte, error)
+func (*COther).UnmarshalJSON(b []byte) error
+func (*CPlain).UnmarshalJSON(b []byte) error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+func (U).MarshalJSON() ([]byte, error)
+func (*U).UnmarshalJSON(b []byte) error
+func (*U).Validate() error
+func (*ULoose).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+func whichU(u U) string {
+	switch {
+	case u.A != nil:
+		return "A"
+	case u.Loose != nil:
+		return "Loose"
+	case u.Unknown != nil:
+		return "Unknown"
+	}
+	return "none"
+}
+
+func whichC(c C) string {
+	switch {
+	case c.A != nil:
+		return "A"
+	case c.Other != nil:
+		return "Other " + c.Other.Type
+	case c.Plain != nil:
+		return "Plain"
+	}
+	return "none"
+}
+
+// The own name decodes into the key-less variant; another unknown type is
+// kept; without a type the key-less variant is tried by its keys.
+func TestOwnName(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"type":"a"}`:           "A",
+		`{"type":"loose","x":"v"}`: "Loose",
+		`{"x":"v"}`:              "Loose",
+		`{"type":"q","x":"v"}`:   "Unknown",
+	} {
+		var u U
+		if err := json.Unmarshal([]byte(in), &u); err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		if got := whichU(u); got != want {
+			t.Errorf("%s decoded as %s, want %s", in, got, want)
+		}
+	}
+}
+
+// The own name is strict: a payload it does not decode as is an error that
+// names the value, not a payload kept in Unknown.
+func TestOwnNameStrict(t *testing.T) {
+	var u U
+	err := json.Unmarshal([]byte(`{"type":"loose"}`), &u)
+	if err == nil || !strings.Contains(err.Error(), `U: type "loose"`) {
+		t.Errorf(`{"type":"loose"} = %v, decoded as %s; want an error naming U: type "loose"`, err, whichU(u))
+	}
+}
+
+// In a union with a catch-all, the key-less variant's title goes to the
+// catch-all, as any value no variant names does.
+func TestCatchAllKeepsTheTitle(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"type":"plain","y":"1"}`: "Other plain",
+		`{"y":"1"}`:                "Plain",
+	} {
+		var c C
+		if err := json.Unmarshal([]byte(in), &c); err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		if got := whichC(c); got != want {
+			t.Errorf("%s decoded as %s, want %s", in, got, want)
+		}
+	}
+}

@@ -924,10 +924,17 @@ func discUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKe
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	var cases []ast.Stmt
 	for _, vi := range variants {
-		if vi.DiscValue != "" {
-			cases = append(cases, caseOf(exprs(str(vi.DiscValue)),
+		// A key-less variant's own name, in a union without a catch-all,
+		// decodes into it as a named variant's value does
+		// (0049-PLAN-surface-fixes.md, phase 1, deviation 1).
+		value := vi.DiscValue
+		if value == "" {
+			value = vi.Title
+		}
+		if value != "" {
+			cases = append(cases, caseOf(exprs(str(value)),
 				append([]ast.Stmt{varStmt("v", f.typeName(vi.TypeName))},
-					decodeChosen(f, vi, name+": "+discKey+" "+strconv.Quote(vi.DiscValue), true)...)...))
+					decodeChosen(f, vi, name+": "+discKey+" "+strconv.Quote(value), true)...)...))
 		}
 	}
 	reads := []string{discKey}
@@ -959,25 +966,61 @@ func discUnmarshalBody(f *goFile, name string, variants []*model.Variant, discKe
 			}, setVariant(catchAll)...)...,
 		))
 	}
-	if hasUnknown {
-		// A present value no case took is kept as received.
-		body = append(body, ifStmt(define(exprs(id("v"), id("ok")), index(id("m"), str(discKey))), present("v"),
-			assign(exprs(dot("u", unknownField)), call(f.qual(pkgBytes, "Clone"), id("b"))),
-			ret(nilExpr()),
-		))
-	}
-
-	// The discriminator is absent or null.
 	var keyLess []*model.Variant
 	for _, vi := range variants {
 		if vi.KeyLess {
 			keyLess = append(keyLess, vi)
 		}
 	}
+	if hasUnknown {
+		// A present value no case took goes to a key-less variant whose keys
+		// the payload carries and which it decodes as, as JSON Schema's anyOf
+		// allows (0049-PLAN-surface-fixes.md, phase 1), and is kept as received
+		// otherwise.
+		var fallback []ast.Stmt
+		for _, vi := range keyLess {
+			if vi.Fallback {
+				fallback = append(fallback, tryKeyLess(f, vi))
+			}
+		}
+		// The present value is v, as it has always been named, unless a
+		// fallback block declares its own v.
+		disc := "v"
+		if len(fallback) > 0 {
+			disc = "raw"
+		}
+		body = append(body, ifStmt(define(exprs(id(disc), id("ok")), index(id("m"), str(discKey))), present(disc),
+			append(fallback,
+				assign(exprs(dot("u", unknownField)), call(f.qual(pkgBytes, "Clone"), id("b"))),
+				ret(nilExpr()),
+			)...,
+		))
+	}
+
+	// The discriminator is absent or null.
 	if len(keyLess) > 0 {
 		return append(body, keyLessBody(f, name, keyLess, discKey)...)
 	}
 	return append(body, fitBody(f, name, variants, discKey, hasUnknown, catchAll)...)
+}
+
+// tryKeyLess is a block that sets the key-less variant vi and returns when the
+// payload carries vi's keys and decodes as vi; otherwise it falls through.
+func tryKeyLess(f *goFile, vi *model.Variant) ast.Stmt {
+	decode := call(f.qual(pkgJSON, "Unmarshal"), id("b"), addr(id("v")))
+	if f.keyDecoders[vi.TypeName] {
+		decode = call(dot("v", "decodeKeys"), id("b"), id("m"))
+	}
+	set := ifStmt(define(exprs(id("err")), decode), binary(id("err"), token.EQL, nilExpr()), setVariant(vi)...)
+	stmts := []ast.Stmt{varStmt("v", f.typeName(vi.TypeName))}
+	if len(vi.FitKeys) == 0 {
+		return block(append(stmts, set)...)
+	}
+	stmts = append(stmts, define(exprs(id("match")), boolLit(true)))
+	for _, k := range vi.FitKeys {
+		stmts = append(stmts, keyMatch("m", k))
+	}
+	return block(append(stmts, ifStmt(nil, id("match"), set))...)
 }
 
 // keyLessBody decodes the variants the schema means when the discriminator is
@@ -1339,8 +1382,16 @@ func emitUnion(f *goFile, t *model.Type) {
 		st.add(structField(vi.FieldName, star(f.typeName(vi.TypeName)), "-"))
 	}
 	if t.HasUnknown {
+		doc := fmt.Sprintf("Unknown holds a payload whose %q names no variant this SDK knows, as it was received.", t.DiscKey)
+		if slices.ContainsFunc(t.Variants, func(vi *model.Variant) bool { return vi.Fallback }) {
+			// A payload the key-less variant takes is not kept here
+			// (0049-PLAN-surface-fixes.md, phase 1, deviation 2).
+			doc = fmt.Sprintf("Unknown holds a payload whose %q names no variant this SDK knows and that does", t.DiscKey)
+			st.comment(doc, "not decode as the variant the schema means without it, as it was received.")
+		} else {
+			st.comment(doc)
+		}
 		st.comment(
-			fmt.Sprintf("Unknown holds a payload whose %q names no variant this SDK knows, as it was received.", t.DiscKey),
 			"MarshalJSON writes it back unchanged when no variant is set.",
 		)
 		st.add(structField(unknownField, f.qual(pkgJSON, "RawMessage"), "-"))

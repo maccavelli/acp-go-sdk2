@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-11-03
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
@@ -92,6 +92,9 @@ emitter's plant runs in a scratch copy by script, since `plants.py` runs from th
 ### Phase 1: S1 and S7, the key-less variant (Q8)
 
 1. **The rule,** in `discUnmarshalBody` (`internal/emit/types.go:920-981`), for a union with a key-less variant:
+   * *Amended by deviation 1, 2026-11-03: both rules below apply only to a union without a catch-all. Amended by deviation 2,
+     2026-11-03: the second rule, the fallback, applies only to a union a protocol-table rule names, with the schema's
+     sentence.*
    * **A discriminator equal to the key-less variant's own name** decodes into that variant, as a named variant's does. A
      payload that does not decode is an error, `"<Union>: type \"<name>\": …"`. The name is the variant's schema `title`, which
      `Kind()` already returns for it (`helpers.go:439-470`). `Variant` gains `Title`, set for a key-less variant.
@@ -101,7 +104,7 @@ emitter's plant runs in a scratch copy by script, since `plants.py` runs from th
      schema's `SetSessionConfigOptionRequest` says so for its own: "Unknown `type` values with string payloads also gracefully
      deserialize into this variant". The official TypeScript and Python SDKs decode the same way (the MADR's re-assessment).
    * **A union with a catch-all,** such as `MultiSelectItems` or `IdleStateUpdate`, keeps sending an unknown value to the
-     catch-all, as the schema's catch-all says.
+     catch-all, as the schema's catch-all says, its key-less variant's own name included (deviation 1).
    * Absent or `null`, the discriminator keeps today's `keyLessBody` rule.
 2. **The model:** `Variant.Title`, and a check in `Build` that two key-less variants of one union do not share a title.
 3. **Engine cases** (`cmd/generate/testdata/engine/`):
@@ -123,8 +126,9 @@ emitter's plant runs in a scratch copy by script, since `plants.py` runs from th
    * the fallback removed: `TestSetConfigOptionUnknownTypeIsValueId` fails;
    * the catch-all guard removed: the fallback engine case fails.
 7. **Regenerate.** `git diff` of `types_gen.go` touches only the decoders of the unions with a key-less variant. The record
-   names them: `AuthMethod`, `McpServer`, `SetSessionConfigOptionRequest`, `MultiSelectItems` and `IdleStateUpdate`, the last
-   two for the own name only.
+   names them: `AuthMethod`, `McpServer` and `SetSessionConfigOptionRequest`, with the unstable copy `UnstableMcpServer`; only
+   `SetSessionConfigOptionRequest` gains the fallback (deviation 2). ~~`MultiSelectItems` and `IdleStateUpdate`, the
+   last two for the own name only.~~ Those two have a catch-all and do not change (deviation 1).
 
 ### Phase 2: S2, an empty collection is sent
 
@@ -310,3 +314,138 @@ emitter's plant runs in a scratch copy by script, since `plants.py` runs from th
   * an empty `content` or `locations` now clears the collection, and the option helpers send it.
 * **Rollback.** Revert the phase's commit; each phase stands alone. A consumer that needs the old sending behaviour pins
   `v1.31.2`.
+
+## Execution record
+
+### Phase 1: S1 and S7, 2026-11-03
+
+Begun on the owner's "committed, proceed" after `df1eb2c`.
+
+**Deviation 1, 2026-11-03: the own name applies only in a union without a catch-all.**
+
+* **Found,** reading the schemas before any change: step 1.1 gave the own-name rule to every union with a key-less variant,
+  and also kept a catch-all union's unknown values with the catch-all. For two unions the rules collide.
+  * In the unstable `IdleStateUpdate`, the key-less variant's title is `none`: "No stop reason: `stopReason` is omitted or
+    `null`". A title is a label here, not a wire value. The catch-all `other` takes "Custom or future stop reason … Other
+    unknown values are reserved for future ACP variants". At `e98987a`, `{"stopReason":"none"}` decodes into `Other`
+    (`types_gen.go:6951-6957`), and step 1.1 as written would have moved it to `None`.
+  * `MultiSelectItems`'s key-less `titled` is the same case.
+* **Decided.** The owner was asked, with three options, and chose "fallback plus strict own name". Both rules apply only to a
+  union without a catch-all:
+  * the own name decodes into the key-less variant, and is an error naming the variant when the payload does not decode;
+  * any other unknown discriminator decodes into it when the payload fits and decodes, and into `Unknown` otherwise.
+
+  A union with a catch-all is unchanged. Not chosen: the fallback alone, under which a non-fitting own name reads as
+  `Unknown`; and keeping the plan as written, which contradicts those schemas.
+* **Scope:** `Variant.Title` stays (step 1.2). Step 1.3's engine cases gain a catch-all union with a titled key-less variant,
+  which must not change. Step 1.7's list loses the two catch-all unions. The MADR's Q8 carries an amendment of the same date.
+
+**Deviation 2, 2026-11-03: the fallback only where the schema states it, as 0011's F1 requires elsewhere.**
+
+* **Found,** after the change, when the generator's and the root package's tests ran. The general fallback failed three tests
+  that pin a decision this PLAN and the MADR's Q8 had not named:
+  [0011-MADR-harden-code-generator-engine.md](0011-MADR-harden-code-generator-engine.md)'s F1, "a discriminator value that names
+  no variant is never matched by key or by trial; it goes to `Unknown`". Its probes included a future auth method re-encoded as
+  another type. The failures:
+  * `TestRemainingUnionKindsDecoded`: "AuthMethod {"type":"future","id":"x","name":"X"}: decoded Kind() = "agent", want
+    "future"";
+  * `TestConformanceUnions/AuthMethod`: "an unknown type decoded into [Agent], want Unknown", and "… was sent back as
+    {"id":"s","name":"s"}";
+  * the engine case `accept-key-less-variant`: "{"type":"q","x":"v"} decoded as Loose, want Unknown", its comment "never
+    matched to the key-less variant (F1)".
+* **Decided.** The owner was asked, with three options, and chose "strict own name + S1 rule":
+  * the own name stays, strictly, in a union without a catch-all, as deviation 1 has it. A named variant is not an unknown one,
+    so F1 holds, and S7 is fixed.
+  * the fallback applies only to a union that a new protocol-table rule, `KeyLessFallbacks`, names. Its `Source` must be in the
+    key-less variant's description. The one rule is `SetSessionConfigOptionRequest`, quoting "Unknown `type` values with
+    string payloads also gracefully deserialize into this variant." That fixes S1.
+  * `AuthMethod` and `McpServer` keep `Unknown` for a future type, as 0011 decided. The three tests keep their contract and do
+    not change.
+
+  Not chosen: keeping the general fallback and amending 0011; and a hand special case for S1 in place of a sourced rule.
+* **Scope added:** `Protocol.KeyLessFallbacks` and `FallbackRule` (`internal/model/protocol.go`), their checks, `Variant.Fallback`,
+  and the rule in `internal/model/acp.go`. The engine case for the fallback declares a union named
+  `SetSessionConfigOptionRequest`, and a model test checks the rule's refusals. The MADR's Q8 carries a second amendment.
+
+**What it did,** under deviations 1 and 2:
+
+* **The model** (`cmd/generate/internal/model/`):
+  * `Variant.Title`, a key-less variant's schema title, is set only in a union without a catch-all, by `keyLessTitles` from
+    `classifyUnion`. `Variant.Fallback` marks the key-less variant a rule names, and the unexported `description` holds the
+    text the rule's source is checked against.
+  * `Protocol.KeyLessFallbacks` and `FallbackRule` (`protocol.go`), checked for a definition, a source, and one rule per
+    definition. `resolveKeyLessFallbacks` (`model.go`) refuses a rule on a type that is not a discriminated union without a
+    catch-all, on one without exactly one key-less variant, or whose key-less variant's description does not state the
+    source, compared with white space collapsed.
+  * The one rule (`acp.go`) is `SetSessionConfigOptionRequest`, with `srcValueIDFallback`.
+  * The step's title check, that a title is not another variant's value, was dropped as unreachable. A title and a
+    discriminator value derive the same field name, which `buildUnion` already refuses twice: "field A is already used by
+    variant 1", seen when the test tried it.
+* **The emitter** (`internal/emit/types.go`):
+  * `discUnmarshalBody` adds a case for a key-less variant's title, decoded strictly by `decodeChosen`.
+  * In a union with `Unknown`, before the payload is kept there, each `Fallback` variant is tried by `tryKeyLess`: its keys,
+    then a decode whose error falls through.
+  * The present value stays `v` unless a fallback block needs that name, so the other unions' decoders do not change. A
+    first run renamed it everywhere and touched eight unrelated decoders; the rename was confined.
+  * `Unknown`'s field doc names the fallback, only where there is one.
+* **Regenerated** `types_gen.go`, 48 lines added and 4 removed:
+  * the own-name case in `AuthMethod`, `McpServer` and `UnstableMcpServer`;
+  * the own name and the fallback in `SetSessionConfigOptionRequest`.
+
+  Nothing else changed, and `tools/gates.py regen` is clean.
+* **The tests:**
+  * The model: `TestKeyLessTitlesAndFallbacks`, and `checkCommittedKeyLessFallbacks` in
+    `TestProtocolTableAppliesToCommittedSchema`. The latter requires the variants whose description says they take unknown
+    values to be the ones a rule marks, `[SetSessionConfigOptionRequest.ValueId]`.
+  * The engine cases:
+    * `accept-key-less-variant-named.txtar`: the own name, strict, and a catch-all union that keeps the title;
+    * `accept-key-less-fallback.txtar`: the fallback, a boolean value kept and sent back unchanged, the own name strict, and
+      a union no rule names keeping `Unknown`.
+  * The root, `union_keyless_test.go`:
+    * `TestSetConfigOptionUnknownTypeIsValueId`: the probe end to end, with a boolean value kept.
+    * `TestKeylessVariantNamedExplicitly`:
+      * `"type":"stdio"`, which `ResolveStdioCommands` then resolves;
+      * `"type":"agent"`;
+      * the strict error;
+      * an unknown type with stdio's keys kept in `Unknown`.
+  * The three tests that pin 0011's F1 pass unchanged: `TestRemainingUnionKindsDecoded`, `TestConformanceUnions` and
+    `accept-key-less-variant`.
+* **Docs:** `README.md`'s "Wire encoding", and `docs/architecture.md`'s union decoding.
+
+**Seen to fail,** each in its own scratch copy of the tree, regenerated there, by script (`plants.py` runs from the root, and
+the emitter is in `cmd/generate`'s module), 6/6:
+
+```text
+FAILED AS REQUIRED: own name removed: rc 1: union_keyless_test.go:80: McpServer {"type":"stdio",...} decoded as {Http:<nil> Sse:<nil> Acp:<nil> Stdio:<nil> Unknown:{"type":"stdio","name":"fs","command":"npx","args":[],"env":[]}}
+FAILED AS REQUIRED: fallback removed: rc 1: union_keyless_test.go:56: handler got {Boolean:<nil> ValueId:<nil> Unknown:{"sessionId":"s","configId":"model","type":"select","value":"fast"}}, Kind() "select"; want the value-id variant {s model fast}
+FAILED AS REQUIRED: own name in a catch-all union too: rc 1: behaviour_test.go:74: {"type":"plain","y":"1"} decoded as Plain, want Other plain
+FAILED AS REQUIRED: fallback for every key-less variant (F1 broken): rc 1: union_keyless_test.go:107: an unknown type with stdio's keys decoded as {… Stdio:0x… Unknown:null}, want Unknown
+FAILED AS REQUIRED: the source check removed: rc 1: keyless_test.go:82: not stated: Build = <nil>, want an error containing "Silent: its key-less variant's description does not state …"
+FAILED AS REQUIRED: the rule dropped from the table: rc 1: protocol_test.go:511: key-less variants that say they take unknown values: [SetSessionConfigOptionRequest.ValueId]; marked by a rule: []; want both [SetSessionConfigOptionRequest.ValueId]
+```
+
+On the first run, "fallback removed" deleted the whole `if`, which left `vi` unused, and the generator failed to build. The
+plant became `if false && vi.Fallback`. The second plant of the model's pair first lacked the schema files in its copy, and the
+copy now takes the whole tree.
+
+**Checks:**
+
+* `go test -count=1 ./...` in `cmd/generate`: `ok`.
+* `go test -count=1 .`: `ok`.
+* `go test -race -count=3` of the two root tests: `ok`.
+* `tools/gates.py regen`: `ok`.
+* `make pre-add-check` with the phase's eight Go files and the README:
+  * **First run:** exit 2. `golangci-lint`'s `gocyclo` found "cyclomatic complexity 43 of func `newRules` is high (> 40)",
+    which the fallback rules' checks had added. They moved to `checkFallbackRules`, and `newRules` calls it.
+  * **Second run,** at load 21 once the wait's 25-minute bound passed: exit 0, "8 file(s) gofmt-clean; both modules linted,
+    vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `tools/remote.py tree --host linux`: both modules, exit 0.
+* `tools/remote.py pkg --host windows . -test.run 'TestSetConfigOptionUnknownTypeIsValueId|TestKeylessVariantNamedExplicitly|
+  TestRemainingUnionKindsDecoded' -test.count=3`: "PASS".
+  * A first run that also named `TestConformanceUnions` failed with "open schema\\schema.json: The system cannot find the path
+    specified". `pkg` sends the test binary alone, and that test reads the schema. The Linux run, which copies the tree,
+    passes it.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 2 begins on the owner's word.
