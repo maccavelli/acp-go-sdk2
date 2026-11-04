@@ -658,3 +658,51 @@ live client was disconnected while its agent was busy", "a client holding MaxBuf
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 6 begins on the owner's word.
+
+The owner committed phase 5 as `c299242`.
+
+### Phase 6: close, 2026-11-04
+
+Begun on the owner's "committed, proceed" after `c299242`.
+
+**Deviation 1, 2026-11-04: phase 2's FIFO tests use `golang.org/x/sys/unix.Mkfifo`.**
+
+* **Found** by step 6.1's first `tools/gates.py --all` at `c299242`: 17 of 18 gates `ok`, `platforms` failing: "FAIL
+  vet-illumos-amd64 (exit 1): clienthost/files_unix_test.go:74:20: undefined: syscall.Mkfifo". Phase 2's new file is
+  `//go:build unix`, and the standard library's `syscall` has no `Mkfifo` on illumos, solaris or aix. The shipped code is
+  not affected: `open_unix.go`'s `syscall.O_NONBLOCK` and `syscall.ENXIO` vet there. The phases' checks did not run the
+  `platforms` gate, which only step 6.1 runs.
+* **Probed,** in scratch copies, `go vet ./clienthost/` on nine Unix targets: as it was, illumos, solaris and aix/ppc64 exit
+  1, "undefined: syscall.Mkfifo"; with `unix.Mkfifo`, all nine exit 0. The module already requires `golang.org/x/sys`, and
+  `clienthost/exit_unix.go` imports it.
+* **Decided.** The owner was asked, with three options, and chose the recommended one: `unix.Mkfifo`. Not chosen: narrowing
+  the test's build tag, which stops the FIFO tests where the FIFO code ships; dropping illumos from the gate, a workaround.
+* **Scope added:** `clienthost/files_unix_test.go`, phase 2's file. The MADR is unchanged.
+* **After it:** `go vet` for illumos, solaris and aix: exit 0 each; `go test -race -count=3 -run TestFiles ./clienthost/`:
+  `ok`; phase 2's two `tools/plants.py` plants again, 2/2, "line 1, limit 1 of a 64 MiB file … allocating 671127280 bytes"
+  and "3 of 271 ReadTextFile calls on a path flipped to a FIFO were still blocked after 500ms".
+
+**Step 6.1,** `tools/gates.py --all`, with `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set on the command, after deviation 1:
+exit 0, "all gates passed", each of the 18 `ok`: `regen`, `precheck`, `newfiles`, `nojsonv2`, `winvet`, `records`, `mdlint`,
+`idscan`, `tools`, `lint`, `fix`, `tidy`, `api`, `race3`, `floor`, `platforms`, `windows` and `linux`.
+
+| Item | Phase | The test that shows it, each seen to fail on its plant |
+| --- | --- | --- |
+| P1, the keepalive under back-pressure | 1 | `TestWebSocketSlowClientStaysConnected`, `TestWebSocketBusyAgentStaysConnected`, `TestWebSocketClientPastMaxBuffered` |
+| P2, DNS rebinding | 4 | `TestHandlerHostRule`, `TestHandlerHostRuleOffLoopback` |
+| P3, a line of a large file | 2 | `TestReadTextFileBoundedAllocation` |
+| P4, the FIFO race | 2 | `TestFilesFIFOSwap` |
+| P5, 32-bit `line` and `limit` | 2 | `TestReadTextFileLinesPast32Bits`, `TestMemoryClientLinesPast32Bits`, each failing on linux/386 |
+| P6, an over-long WebSocket message | 5 | `TestWebSocketOverlongFrameAnswered`, `TestWebSocketLargeMessage` |
+| P7, `Transcript.Close` | 3 | `TestTranscriptCloseAfterAbandon` |
+| P8, Streamable HTTP's clean end | 5 | `TestHTTPClientCleanEndIsEOF` |
+| P9, an agent's over-long answer | 5 | `TestHTTPServerOverlongAnswer` |
+| The step-2 margin | 3 | `TestInProcessServeAgentStep2`, 0 kills in 100 at 3 s under load |
+
+**Step 6.2,** `make api`, in the `api` gate: "against v1.32.0: 0 incompatible, 2 compatible", "remote:
+DialOptions.MaxBuffered: added" and "remote: HandlerOptions.AllowedHosts: added"; "reported packages unstable, remote: 0
+incompatible, not gated". The compatible changes make the release a minor, `v1.33.0`.
+
+**Not done yet,** each waiting on the owner: step 6.3, CI on the head after the owner's push; step 6.4, the release `v1.33.0`
+and its notes, on the owner's ask; step 6.5, this PLAN, its row and the MADR's P findings marked done, once the release is
+out.

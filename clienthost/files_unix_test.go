@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	acp "github.com/maccavelli/acp-go-sdk2"
 )
 
@@ -32,7 +34,7 @@ func TestFilesFIFOSwap(t *testing.T) {
 		for !stop.Load() {
 			_ = os.WriteFile(reg, []byte("x\n"), 0o600)
 			_ = os.Rename(reg, target)
-			_ = syscall.Mkfifo(fifo, 0o600)
+			_ = unix.Mkfifo(fifo, 0o600)
 			_ = os.Rename(fifo, target)
 		}
 	}()
@@ -71,7 +73,7 @@ func TestFilesFIFOSwap(t *testing.T) {
 func TestFilesRefuseFIFO(t *testing.T) {
 	t.Parallel()
 	fifo := filepath.Join(t.TempDir(), "fifo")
-	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+	if err := unix.Mkfifo(fifo, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	for name, call := range map[string]func() error{
