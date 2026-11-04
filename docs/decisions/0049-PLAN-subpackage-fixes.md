@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-11-04
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
@@ -735,5 +735,45 @@ commits before it.
   rule allows.
 * [0048-PLAN-create-releases-in-ci.md](0048-PLAN-create-releases-in-ci.md) has not landed, so the owner tags and releases.
 
-**Not done yet,** each waiting on the owner: the tag `v1.33.0` and its release; then `tools/publication.py` and
-`tools/consumer.py v1.33.0`; step 6.5, this PLAN, its row and the MADR's P findings marked done, once the release is out.
+The owner committed the report as `6e04da6` and pushed it, after `make push-guard` passed over it ("1 outgoing commit(s),
+41150d9..6e04da6"), then tagged `v1.33.0` on `6e04da6` and pushed the tag. After the consumer check and CI below, the owner
+created the release with `gh release create v1.33.0 --title v1.33.0 --notes-file <the body>`, which printed its URL.
+
+* `tools/release_body.py v1.33.0 HEAD` at `6e04da6`: exit 0, "77 lines, 1 links"; `idscan` over the body, 0 matches. The link
+  names the MADR at the tag.
+* **CI:**
+  * the tag's run `41890673918`, attempt 1: five `validate` jobs "success", and `validate (macos-15, 1.26.10)` "cancelled"
+    after 15 minutes with no step run, as the scheduled run `41477762519`'s macOS job of 2026-11-02 was; the owner was asked
+    and chose to rerun it. Attempt 2, `gh run rerun --failed`: "success", the six jobs on Ubuntu, Windows and macOS at Go
+    `1.27.3` and `1.26.10`;
+  * the Docs workflow's run `41889919614` on `main` at `6e04da6`, "success".
+* `tools/consumer.py v1.33.0`: exit 0, "as required". The module at the floor, `go 1.26.10`, requires `v1.33.0`, its test is
+  `ok`, and its Windows build exits 0. Its `remote` handler, on `httptest`'s `127.0.0.1`, passes the Host rule.
+* `tools/publication.py v1.33.0 6e04da6 <the body>`: exit 0, "10 of 10 checks hold". The checks:
+  * the release exists, not a draft or prerelease, and is marked latest;
+  * its body is the extracted text;
+  * the tag is annotated, names `6e04da6`, and is on origin's `main`;
+  * CI passed on that head and on the tag. "CI on origin main's head" passed on run `41889919614`, the Docs workflow's, as
+    T2 has it; the CI workflow's run on the tag, `41890673918`, is the one that ran Go;
+  * the proxy serves the tag at that commit;
+  * `go list -m @latest` gives `v1.33.0`;
+  * `go mod download` works with the checksum database on.
+
+**Step 6.5.** This PLAN and its row are `complete`. The MADR's F-P section records P1 to P9 as done in `v1.33.0`. The MADR
+stays `accepted`, with two PLANs to come, the tooling and the generator's (Q1 a, Q7 a).
+
+**Verification,** against the section above:
+
+* P1 to P9 each have a committed test that failed with its fix reverted and passes now, P5's on linux/386, where alone it can;
+  the step-2 margin killed none of 100 at 3 s under load. See the table in step 6.1.
+* `make api`: two compatible additions, `remote`'s `DialOptions.MaxBuffered` and `HandlerOptions.AllowedHosts`, and nothing
+  incompatible against `v1.32.0`.
+* `go test -race ./...` passes in both modules, in every phase's pre-add check and in CI.
+* The behaviour changes are stated in the godoc, the README and the release notes.
+* `tools/gates.py --all`, 18 of 18 after phase 6's deviation 1, and CI on `41150d9`, `6e04da6` and the tag, each after the
+  rerun recorded above, pass.
+
+Not done here, by the MADR's plan: the tooling and generator findings, each in its own PLAN, written when its turn comes.
+Noted, not findings of this PLAN: a Streamable HTTP client's event over `MaxMessageSize` still ends its `Conn` (phase 5);
+the clean end of a Streamable HTTP connection cancels a request still in flight (phase 5); `TestCloseLadder`'s two-grace
+bound, seen once past it in CI (step 6.3).

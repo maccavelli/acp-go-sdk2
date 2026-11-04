@@ -553,6 +553,11 @@ file, or keep it as a test helper by name.
 
 ### F-P: the subpackages
 
+*Done 2026-11-04:* P1 to P9 are fixed in `v1.33.0` by [0049-PLAN-subpackage-fixes.md](0049-PLAN-subpackage-fixes.md),
+each with the test its phase 6 table names, on the answers Q12 to Q14 (a) and Q15 (c), and `TestInProcessServeAgentStep2`'s
+margin is widened, under its deviations: phase 5's, the back-pressure tests' keepalive; phase 6's, the FIFO tests'
+`unix.Mkfifo`.
+
 **P1. Medium. The WebSocket keepalive disconnects a live peer that is only applying back-pressure.** `remote/ws.go:141-157`,
 `:178-202`, `:71-83`; `frame.go:129-141`. coder/websocket reads pongs only while a `Read` runs ("Ping must be called concurrently
 with Reader"), and a reader blocked on a full pipe or queue does not read. A busy agent, or a slow client under `OverflowBlock`,
@@ -705,9 +710,9 @@ released on its own, while the severity order inside each keeps R1 first. The pl
   [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md). It groups the order into phases by mechanism: S1 with S7,
   S2, S6, then the gates S8, S9, S5 and S3, then S4. *Complete 2026-11-04,* released in `v1.32.0`.
 * `0049-PLAN-subpackage-fixes.md`: P1, P3, P4, P7, P5, P2 per Q5, P6 per Q6, and `TestInProcessServeAgentStep2`'s margin.
-  *Written 2026-11-04,* [0049-PLAN-subpackage-fixes.md](0049-PLAN-subpackage-fixes.md), proposed, with P8 and P9 of the
-  second re-assessment and Q12 to Q15 below. It groups the order into phases by package: P1; P3, P4 and P5, one function;
-  P7 and the margin; P2; P6, P9 and P8.
+  *Written 2026-11-04,* [0049-PLAN-subpackage-fixes.md](0049-PLAN-subpackage-fixes.md), with P8 and P9 of the second
+  re-assessment and Q12 to Q15 below. It groups the order into phases by package: P1; P3, P4 and P5, one function; P7 and
+  the margin; P2; P6, P9 and P8. *Complete 2026-11-04,* released in `v1.33.0`.
 * `0049-PLAN-generator-fixes.md`: G2, G1, G3, then G4 to G12, each refusal with an engine case; G13.
 * `0049-PLAN-tooling-fixes.md`: T2 (with 0048), T1, T3, then T4 to T13, and F-C's dead `ConfigOptionUpdate.gates` through the
   generator.
@@ -955,7 +960,7 @@ Each question was put with its three options:
 
 * Good, because a deadlock, a crash, and four schema mismatches a peer can see are fixed, each with a test that would have caught
   it. *2026-11-04:* the deadlock and the mismatches are fixed, in `v1.31.2` and `v1.32.0`; the crash, P5, is the
-  subpackage PLAN's.
+  subpackage PLAN's, fixed in `v1.33.0`.
 * Good, because the generator refuses the schemas it now crashes on, renders wrongly or drops parts of (G2 to G8), before a
   schema update meets one.
 * Good, because the checks the records quote (`publication.py`, `check_records.py`, the docs-safe set) check what they claim.
