@@ -1,6 +1,7 @@
 package remote
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"slices"
@@ -82,11 +83,12 @@ func TestToLine(t *testing.T) {
 }
 
 // TestLineQueue requires lines to be read in order across reads of any size,
-// end's error after every line pushed before it, a push after end refused,
-// and a push past queueLimit to wait for Read.
+// end's error after every line pushed before it, a push after end refused, a
+// push past the byte limit to wait for Read, and a line longer than the limit
+// to be taken alone (0049-PLAN-subpackage-fixes.md, phase 1, P1).
 func TestLineQueue(t *testing.T) {
 	t.Parallel()
-	q := newLineQueue()
+	q := newLineQueue(64)
 	q.push([]byte("one\n"))
 	q.push([]byte("two\n"))
 	q.end(nil)
@@ -98,18 +100,29 @@ func TestLineQueue(t *testing.T) {
 		t.Errorf("read = %q, %v, want the two lines and io.EOF", b, err)
 	}
 
-	q = newLineQueue()
-	for range queueLimit {
-		q.push([]byte("x\n"))
+	const limit, lines = 16, 8
+	q = newLineQueue(limit)
+	for range lines {
+		if !q.push([]byte("x\n")) {
+			t.Fatal("a push within the limit = false")
+		}
 	}
 	pushed := make(chan bool)
 	go func() { pushed <- q.push([]byte("over\n")) }()
 	select {
 	case <-pushed:
-		t.Fatal("a push past queueLimit returned before any read")
+		t.Fatal("a push past the byte limit returned before any read")
 	case <-time.After(50 * time.Millisecond):
 	}
 	if _, err := q.Read(make([]byte, 2)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-pushed:
+		t.Fatal("a push that still does not fit returned after a 2-byte read")
+	case <-time.After(50 * time.Millisecond):
+	}
+	if _, err := io.ReadFull(q, make([]byte, 4)); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -123,7 +136,27 @@ func TestLineQueue(t *testing.T) {
 	stop := errors.New("stop")
 	q.end(stop)
 	b, err = io.ReadAll(q)
-	if !errors.Is(err, stop) || strings.Count(string(b), "\n") != queueLimit {
-		t.Errorf("after end: %d lines, %v; want the %d left and stop", strings.Count(string(b), "\n"), err, queueLimit)
+	if !errors.Is(err, stop) || string(b) != strings.Repeat("x\n", lines-3)+"over\n" {
+		t.Errorf("after end: %q, %v; want the %d lines left, over, and stop", b, err, lines-3)
+	}
+
+	q = newLineQueue(limit)
+	long := []byte(strings.Repeat("y", 2*limit) + "\n")
+	if !q.push(long) {
+		t.Fatal("a line longer than the limit, pushed to an empty queue = false")
+	}
+	go func() { pushed <- q.push([]byte("z\n")) }()
+	select {
+	case <-pushed:
+		t.Fatal("a push behind a line longer than the limit returned before any read")
+	case <-time.After(50 * time.Millisecond):
+	}
+	if b, err := io.ReadAll(io.LimitReader(q, int64(len(long)))); err != nil || !bytes.Equal(b, long) {
+		t.Fatalf("read the long line = %q, %v", b, err)
+	}
+	select {
+	case <-pushed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the push behind the long line did not return within 5s of its read")
 	}
 }

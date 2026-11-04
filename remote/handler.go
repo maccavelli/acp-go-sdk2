@@ -22,6 +22,10 @@ import (
 // and in every later request of Streamable HTTP.
 const connectionIDHeader = "Acp-Connection-Id"
 
+// inboxLines is how many lines a Streamable HTTP connection queues for its
+// agent's input before a POST waits for room.
+const inboxLines = 256
+
 // HandlerOptions configure NewHandler. The zero value, or nil, is ready to
 // use.
 type HandlerOptions struct {
@@ -32,7 +36,10 @@ type HandlerOptions struct {
 
 	// KeepAlive is how often a connection is pinged, whether messages flow
 	// or not: a WebSocket ping, or a comment on each event stream. It is also
-	// how long a WebSocket ping waits for its answer.
+	// how long a WebSocket ping waits for its answer. A ping not answered ends
+	// the connection with ErrDisconnected, unless the connection was waiting
+	// for its serve to read a message meanwhile: a serve that is busy does not
+	// end a client that is not (0049-PLAN-subpackage-fixes.md, phase 1, P1).
 	// Zero or less is 15 seconds, the official servers' interval
 	// (0043-MADR-remote-http-and-websocket-transport.md, "Amended by the PLAN,
 	// 2026-10-29", 8).
@@ -101,7 +108,7 @@ func NewHandler(serve func(ctx context.Context, in io.Reader, out io.Writer) err
 	o := resolveHandlerOptions(opts)
 	return &Handler{
 		serve: serve, opts: o, log: o.Logger, conns: make(map[*serverConn]struct{}), httpConns: make(map[string]*httpConn),
-		initBound: 30 * time.Second, idleBound: 60 * time.Second, inboxLimit: queueLimit,
+		initBound: 30 * time.Second, idleBound: 60 * time.Second, inboxLimit: inboxLines,
 	}
 }
 
@@ -121,7 +128,7 @@ func resolveHandlerOptions(opts *HandlerOptions) HandlerOptions {
 		o.MaxMessageSize = defaultMaxMessageSize
 	}
 	if o.MaxBuffered <= 0 {
-		o.MaxBuffered = 64 * 1024 * 1024
+		o.MaxBuffered = defaultMaxBuffered
 	}
 	if o.Logger == nil {
 		o.Logger = slog.Default()
@@ -306,6 +313,14 @@ type serverConn struct {
 
 	returned chan struct{} // closed when serve has returned, err set
 	err      error         // what serve returned
+
+	// waiting counts the WebSocket reader's writes to the agent's input in
+	// progress, and waited is set by each; the keepalive does not count a
+	// pong missed while the reader waits on the agent, which leaves the
+	// library no Read to take the pong in (0049-PLAN-subpackage-fixes.md,
+	// phase 1, P1).
+	waiting atomic.Int32
+	waited  atomic.Bool
 
 	endOnce sync.Once
 	ending  chan struct{} // closed when the ending starts

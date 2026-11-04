@@ -30,7 +30,19 @@ type DialOptions struct {
 	// MaxMessageSize is the largest message, in bytes, the connection reads
 	// or writes. Zero or less is 10 MiB, the connection's own default.
 	MaxMessageSize int
+
+	// MaxBuffered is how many bytes of messages the connection holds for
+	// Read before it stops reading the server. Below it, a WebSocket goes on
+	// reading while the application does not, and so answers the server's
+	// pings; past it, it answers none, and the server ends the connection with
+	// ErrDisconnected after a ping (0049-PLAN-subpackage-fixes.md, phase 1,
+	// P1). Zero or less is 64 MiB; less than MaxMessageSize is raised to it.
+	MaxBuffered int
 }
+
+// defaultMaxBuffered is DialOptions.MaxBuffered's default, as
+// HandlerOptions.MaxBuffered's.
+const defaultMaxBuffered = 64 * 1024 * 1024
 
 // Conn is a client's remote connection to an agent: an io.ReadWriteCloser of
 // newline-ended JSON-RPC messages, for acp.NewClientSideConnection's two
@@ -103,5 +115,9 @@ func resolveDialOptions(opts *DialOptions) DialOptions {
 	if o.MaxMessageSize <= 0 {
 		o.MaxMessageSize = defaultMaxMessageSize
 	}
+	if o.MaxBuffered <= 0 {
+		o.MaxBuffered = defaultMaxBuffered
+	}
+	o.MaxBuffered = max(o.MaxBuffered, o.MaxMessageSize)
 	return o
 }

@@ -101,25 +101,28 @@ func toLine(msg []byte) []byte {
 	return b.Bytes()
 }
 
-// queueLimit is how many lines a lineQueue holds before push waits for Read.
-const queueLimit = 256
-
 // lineQueue is the reading half of the seam: the lines a transport received,
-// in the order pushed, read as one byte stream. push waits while it holds
-// queueLimit lines, so a reader that falls behind slows the transport rather
-// than growing the queue. After end, Read returns the lines already pushed,
-// then end's error; a push after end, or waiting at end, returns false.
+// in the order pushed, read as one byte stream. push waits while the bytes it
+// holds and the line's would pass its limit, so a reader that falls behind
+// slows the transport rather than growing the queue; below the limit the
+// transport goes on reading, and so answers a WebSocket's pings
+// (0049-PLAN-subpackage-fixes.md, phase 1, P1). A line longer than the limit
+// is taken once the queue is empty. After end, Read returns the lines already
+// pushed, then end's error; a push after end, or waiting at end, returns
+// false.
 type lineQueue struct {
 	mu    sync.Mutex
 	cond  *sync.Cond
 	lines [][]byte
 	cur   []byte // the part of the first line not yet read
-	err   error  // set by end
+	held  int    // the bytes of lines and cur not yet read
+	limit int
+	err   error // set by end
 }
 
-// newLineQueue returns an empty lineQueue.
-func newLineQueue() *lineQueue {
-	q := &lineQueue{}
+// newLineQueue returns an empty lineQueue that holds up to limit bytes.
+func newLineQueue(limit int) *lineQueue {
+	q := &lineQueue{limit: limit}
 	q.cond = sync.NewCond(&q.mu)
 	return q
 }
@@ -129,13 +132,14 @@ func newLineQueue() *lineQueue {
 func (q *lineQueue) push(line []byte) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	for q.err == nil && len(q.lines) >= queueLimit {
+	for q.err == nil && q.held > 0 && q.held+len(line) > q.limit {
 		q.cond.Wait()
 	}
 	if q.err != nil {
 		return false
 	}
 	q.lines = append(q.lines, line)
+	q.held += len(line)
 	q.cond.Broadcast()
 	return true
 }
@@ -164,7 +168,6 @@ func (q *lineQueue) Read(p []byte) (int, error) {
 	for len(q.cur) == 0 {
 		if len(q.lines) > 0 {
 			q.cur, q.lines = q.lines[0], q.lines[1:]
-			q.cond.Broadcast()
 			continue
 		}
 		if q.err != nil {
@@ -174,5 +177,7 @@ func (q *lineQueue) Read(p []byte) (int, error) {
 	}
 	n := copy(p, q.cur)
 	q.cur = q.cur[n:]
+	q.held -= n
+	q.cond.Broadcast()
 	return n, nil
 }

@@ -1,10 +1,12 @@
 package remote
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -396,6 +398,116 @@ func TestWebSocketKeepAlive(t *testing.T) {
 		}
 	case <-time.After(waitBound):
 		t.Fatal("a client answering no ping was not ended")
+	}
+}
+
+// backPressureServer serves serve with a 100 ms keepalive and a 500 ms grace,
+// the bounds the probes of 0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
+// P1, ran under, and reports the serve's context's cause on the channel it
+// returns when the context ends.
+func backPressureServer(t *testing.T, serve func(in io.Reader, out io.Writer)) (string, <-chan error) {
+	t.Helper()
+	causes := make(chan error, 1)
+	ts := testServer(t, NewHandler(func(ctx context.Context, in io.Reader, out io.Writer) error {
+		go func() {
+			<-ctx.Done()
+			causes <- context.Cause(ctx)
+		}()
+		serve(in, out)
+		<-ctx.Done()
+		return nil
+	}, &HandlerOptions{KeepAlive: 100 * time.Millisecond, Grace: 500 * time.Millisecond}))
+	return wsURL(ts), causes
+}
+
+// TestWebSocketSlowClientStaysConnected requires a client whose application
+// reads nothing for a second, while the agent writes 2 000 lines, to stay
+// connected and then read them all: the client's reader goes on taking
+// frames below MaxBuffered, so it answers the server's pings
+// (0049-PLAN-subpackage-fixes.md, phase 1, P1).
+func TestWebSocketSlowClientStaysConnected(t *testing.T) {
+	t.Parallel()
+	const lines = 2000
+	url, causes := backPressureServer(t, func(in io.Reader, out io.Writer) {
+		go func() { _, _ = io.Copy(io.Discard, in) }()
+		for i := range lines {
+			if _, err := fmt.Fprintf(out, `{"jsonrpc":"2.0","method":"session/update","params":{"n":%d}}`+"\n", i); err != nil {
+				return
+			}
+		}
+	})
+	c, err := Dial(t.Context(), url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	time.Sleep(time.Second) // the application is busy; the agent's lines wait for it
+	r := bufio.NewReader(c)
+	for n := range lines {
+		if _, err := r.ReadString('\n'); err != nil {
+			t.Fatalf("after %d of %d lines: %v", n, lines, err)
+		}
+	}
+	select {
+	case cause := <-causes:
+		t.Errorf("a client slow to read was disconnected: cause %v", cause)
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+// TestWebSocketBusyAgentStaysConnected requires a live client to stay
+// connected while its agent reads nothing for a second: a ping that fails
+// while the server's reader waits on the agent is not counted
+// (0049-PLAN-subpackage-fixes.md, phase 1, P1).
+func TestWebSocketBusyAgentStaysConnected(t *testing.T) {
+	t.Parallel()
+	url, causes := backPressureServer(t, func(in io.Reader, _ io.Writer) {
+		time.Sleep(time.Second) // busy: the client's message waits for the agent
+		go func() { _, _ = io.Copy(io.Discard, in) }()
+	})
+	c, err := Dial(t.Context(), url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	go func() { _, _ = io.Copy(io.Discard, c) }() // the client reads, so it answers pings
+	if _, err := io.WriteString(c, `{"jsonrpc":"2.0","method":"x","params":{}}`+"\n"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case cause := <-causes:
+		t.Errorf("a live client was disconnected while its agent was busy: cause %v", cause)
+	case <-time.After(1500 * time.Millisecond):
+	}
+}
+
+// TestWebSocketClientPastMaxBuffered requires a client that reads nothing,
+// once it holds DialOptions.MaxBuffered, to stop answering pings and be ended
+// with ErrDisconnected: the bound is kept (0049-PLAN-subpackage-fixes.md,
+// phase 1, P1).
+func TestWebSocketClientPastMaxBuffered(t *testing.T) {
+	t.Parallel()
+	url, causes := backPressureServer(t, func(in io.Reader, out io.Writer) {
+		go func() { _, _ = io.Copy(io.Discard, in) }()
+		line := `{"jsonrpc":"2.0","method":"session/update","params":{"pad":"` + strings.Repeat("p", 100) + `"}}` + "\n"
+		for range (1 << 20) / len(line) {
+			if _, err := io.WriteString(out, line); err != nil {
+				return
+			}
+		}
+	})
+	c, err := Dial(t.Context(), url, &DialOptions{MaxMessageSize: 1024, MaxBuffered: 4096})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	select {
+	case cause := <-causes:
+		if !errors.Is(cause, ErrDisconnected) {
+			t.Errorf("the serve's cause = %v, want ErrDisconnected", cause)
+		}
+	case <-time.After(waitBound):
+		t.Fatal("a client holding MaxBuffered and reading nothing was not ended")
 	}
 }
 

@@ -38,7 +38,7 @@ func dialWebSocket(ctx context.Context, rawURL string, o DialOptions) (*wsClient
 	}
 	c.SetReadLimit(int64(o.MaxMessageSize))
 	lctx, cancel := context.WithCancel(context.Background())
-	w := &wsClient{c: c, ctx: lctx, cancel: cancel, in: newLineQueue(), readDone: make(chan struct{})}
+	w := &wsClient{c: c, ctx: lctx, cancel: cancel, in: newLineQueue(o.MaxBuffered), readDone: make(chan struct{})}
 	w.out = newLineSplitter(func(line []byte) error {
 		return w.c.Write(w.ctx, websocket.MessageText, line)
 	}, o.MaxMessageSize)
@@ -135,9 +135,9 @@ func (sc *serverConn) runWebSocket(c *websocket.Conn) {
 }
 
 // readWebSocket writes each text frame, made a line, to the agent's input,
-// until the socket ends. A binary frame is ignored and logged, once. Once the
-// agent's input is closed, frames are read and dropped, so the close
-// handshake is still read.
+// until the socket ends, marking each write for keepAlive. A binary frame is
+// ignored and logged, once. Once the agent's input is closed, frames are read
+// and dropped, so the close handshake is still read.
 func (sc *serverConn) readWebSocket(ctx context.Context, c *websocket.Conn) {
 	warned := false
 	for {
@@ -152,7 +152,10 @@ func (sc *serverConn) readWebSocket(ctx context.Context, c *websocket.Conn) {
 			}
 			continue
 		}
+		sc.waiting.Add(1)
+		sc.waited.Store(true)
 		_, _ = sc.inW.Write(toLine(b)) //nolint:errcheck // A closed input drops the frame; the ending says why.
+		sc.waiting.Add(-1)
 	}
 }
 
@@ -176,7 +179,10 @@ func (sc *serverConn) pumpWebSocket(ctx context.Context, c *websocket.Conn) {
 }
 
 // keepAlive pings the client every KeepAlive, and ends sc with
-// ErrDisconnected when a ping is not answered within KeepAlive.
+// ErrDisconnected when a ping is not answered within KeepAlive. A ping that
+// fails while the reader waited on the agent is not counted: the library
+// reads a pong only in a Read, which the reader was not in. A failed ping
+// leaves the socket open, so the next is sent.
 func (sc *serverConn) keepAlive(ctx context.Context, c *websocket.Conn) {
 	every := sc.h.opts.KeepAlive
 	t := time.NewTicker(every)
@@ -187,9 +193,14 @@ func (sc *serverConn) keepAlive(ctx context.Context, c *websocket.Conn) {
 			return
 		case <-t.C:
 		}
+		sc.waited.Store(false)
 		pctx, cancel := context.WithTimeout(ctx, every)
 		err := c.Ping(pctx)
 		cancel()
+		if err != nil && ctx.Err() == nil && (sc.waiting.Load() > 0 || sc.waited.Load()) {
+			sc.h.log.Debug("remote: WebSocket ping not counted: the agent is not reading")
+			continue
+		}
 		if err != nil {
 			if ctx.Err() == nil {
 				sc.h.log.Info("remote: WebSocket ping not answered")

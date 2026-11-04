@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-11-04
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
@@ -321,5 +321,58 @@ found on 2026-11-04, join P6, the message limit's phase.
 
 ## Execution record
 
-Not started. The owner answered Q12 to Q15 on 2026-11-04 (the MADR's "Answered by the owner, 2026-11-04"); the PLAN is
-`proposed` until the owner approves it.
+The owner answered Q12 to Q15 on 2026-11-04 (the MADR's "Answered by the owner, 2026-11-04"), committed this PLAN with the
+documentation's corrections as `f6bfdcf`, and said "committed, proceed".
+
+### Phase 1: P1, the WebSocket keepalive under back-pressure, 2026-11-04
+
+Begun on the owner's "committed, proceed" after `f6bfdcf`. No deviation.
+
+**What it did:**
+
+* **`remote/frame.go`:** `lineQueue` counts the bytes it holds (`held`) against `limit`, from `newLineQueue(limit)`. `push`
+  waits while `held` is above 0 and the line would take it past `limit`, so a line longer than the limit is taken once the
+  queue is empty. `Read` takes `held` down by what it copies and wakes a waiting `push`. `queueLimit` is gone.
+* **`remote/client.go`:** `DialOptions.MaxBuffered`, its doc as step 1.1 has it; `defaultMaxBuffered`, 64 MiB, which
+  `resolveHandlerOptions` uses too; `resolveDialOptions` defaults it and raises it to `MaxMessageSize`.
+* **`remote/ws.go` and `httpclient.go`:** both clients' queues take `MaxBuffered`. `readWebSocket` adds to `waiting` and
+  sets `waited` around each write to the agent's input. `keepAlive` clears `waited` before each ping, and a failed ping with
+  either set is logged at `Debug`, "remote: WebSocket ping not counted: the agent is not reading", and not counted.
+* **`remote/handler.go`:** `serverConn`'s `waiting` and `waited`; `KeepAlive`'s doc. The Streamable HTTP inbox's 256, which
+  used `queueLimit`, is `inboxLines`, with the doc the field had; its behaviour does not change.
+* **The tests:**
+  * `remote/ws_test.go`, beside `backPressureServer`, a handler with the probes' 100 ms keepalive and 500 ms grace:
+    `TestWebSocketSlowClientStaysConnected`, `TestWebSocketBusyAgentStaysConnected` and
+    `TestWebSocketClientPastMaxBuffered`, as step 1.4 has them. The last uses `MaxMessageSize` 1 024 and `MaxBuffered`
+    4 096, since `MaxBuffered` is raised to `MaxMessageSize`.
+  * `remote/frame_test.go`'s `TestLineQueue` is changed to the byte bound: a push past it waits through a read that does not
+    make room and returns after one that does, and a line of twice the limit is taken alone and holds the next push until it
+    is read. It tested the 256-line rule; its order, `end` and push-after-end cases are kept.
+  * `TestWebSocketKeepAlive`, a raw client that never reads, passes unchanged.
+* **Docs:** `README.md`'s back-pressure paragraph on `remote`, the `DialOptions` `MaxBuffered` bullet and `KeepAlive`'s;
+  `docs/architecture.md`'s `lineQueue`, `readWebSocket` and `keepAlive`.
+
+**Seen to fail,** by `tools/plants.py`, 3/3:
+
+```text
+FAILED AS REQUIRED: push bounded by 256 lines again (^TestWebSocketSlowClientStaysConnected$): exit 1: ws_test.go:453: a client slow to read was disconnected: cause remote: client disconnected
+FAILED AS REQUIRED: keepAlive counts every failed ping (^TestWebSocketBusyAgentStaysConnected$): exit 1: ws_test.go:479: a live client was disconnected while its agent was busy: cause remote: client disconnected
+FAILED AS REQUIRED: push never waits (^TestWebSocketClientPastMaxBuffered$): exit 1: ws_test.go:510: a client holding MaxBuffered and reading nothing was not ended
+```
+
+* `TestLineQueue`'s first rewrite failed on the fixed code, "the waiting push did not return within 5s of a read": a `Read`
+  returns at most one line, so a 4-byte read took 2. It reads with `io.ReadFull` now.
+
+**Checks:**
+
+* `go test -race -count=3` of the four WebSocket tests and `TestLineQueue`: `ok`; `go test -race -count=3 ./remote/`: `ok`.
+* `make api`: "against v1.32.0: 0 incompatible, 1 compatible", "remote: DialOptions.MaxBuffered: added".
+* `make pre-add-check` with the phase's seven Go files, the README and `docs/architecture.md`, at load 27: exit 0, "7
+  file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `tools/remote.py tree --host linux`: both modules, exit 0.
+* `tools/remote.py pkg --host windows ./remote -test.run 'TestWebSocket(SlowClientStaysConnected|BusyAgentStaysConnected|
+  ClientPastMaxBuffered|KeepAlive)$|TestLineQueue' -test.count=3`: "PASS".
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 2 begins on the owner's word.

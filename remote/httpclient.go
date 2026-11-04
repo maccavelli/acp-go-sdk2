@@ -69,7 +69,7 @@ func newHTTPClient(rawURL string, o DialOptions) *httpClient {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &httpClient{
 		url: rawURL, client: o.HTTPClient, header: o.Header, maxBytes: o.MaxMessageSize,
-		ctx: ctx, cancel: cancel, in: newLineQueue(),
+		ctx: ctx, cancel: cancel, in: newLineQueue(o.MaxBuffered),
 		streams: map[string]bool{}, serverReqs: map[string]string{}, reopen: map[string]string{},
 	}
 	c.out = newLineSplitter(c.post, o.MaxMessageSize)

@@ -946,9 +946,12 @@ either. Past that, it closes with `acp.ErrNotificationQueueOverflow`. A pause
 that lasts 5 seconds is logged at `Warn`, with the bytes counted and the
 budget.
 
-Over package `remote`, the server's own bounds still apply to a long pause: a
-WebSocket write waits at most `Grace`, and Streamable HTTP holds at most
-`MaxBuffered`. To keep the close that was the default before v1.29.0:
+Over package `remote`, the transport's own bounds still apply to a long pause:
+a WebSocket client holds at most its `MaxBuffered` for a reader that does not
+read, a WebSocket write waits at most `Grace`, and Streamable HTTP holds at
+most `MaxBuffered`. Below them a pause on either side does not end the
+connection: the client goes on answering pings, and the server does not count
+a ping while its agent is not reading. To keep the close that was the default before v1.29.0:
 
 ```go
 conn := acp.NewClientSideConnection(client, stdin, stdout,
@@ -1189,6 +1192,10 @@ A client calls `remote.Dial(ctx, url, opts)`.
   - `Header` goes on every request, the handshake included. Authentication
     goes there.
   - `MaxMessageSize` defaults to 10 MiB.
+  - `MaxBuffered`, 64 MiB by default and at least `MaxMessageSize`, bounds what
+    the connection holds for an application that does not read. Below it, a
+    WebSocket client goes on answering the server's pings; past it, it stops
+    reading, and the server ends it with `remote.ErrDisconnected`.
 - **`Close`:** a WebSocket's close handshake, or Streamable HTTP's `DELETE`,
   waiting up to 5 seconds; `Read` then returns `io.EOF`.
 
@@ -1235,7 +1242,8 @@ the endpoint.
     and each WebSocket message written to a client.
   - `KeepAlive`, 15 seconds, is how often each WebSocket is pinged and each
     event stream sent a comment, traffic or none. A ping not answered within
-    it ends the connection.
+    it ends the connection, unless the agent was not reading meanwhile: a busy
+    agent does not end a client that is answering.
   - `MaxMessageSize` is 10 MiB.
   - `MaxBuffered`, 64 MiB, bounds what a Streamable HTTP connection holds for
     streams no client is receiving.

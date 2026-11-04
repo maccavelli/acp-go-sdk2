@@ -1068,8 +1068,10 @@ written becomes one message. So `acp`'s connections, `ServeAgent`, the taps and
     writes, and refuses one over `MaxMessageSize`.
   - `toLine` makes a message one compact line. One that is not JSON has its CR
     and LF made spaces.
-  - `lineQueue` holds received lines for a reader, up to `queueLimit` (256)
-    before a push waits.
+  - `lineQueue` holds received lines for a reader, up to `DialOptions.MaxBuffered`
+    bytes before a push waits; a line longer than that is taken alone. Below the
+    bound the WebSocket reader goes on reading, so the library answers pings
+    (0049-PLAN-subpackage-fixes.md, phase 1).
 - `route.go`'s `classify` reads a line's kind, its id key, its method, and its
   `params.sessionId` and `result.sessionId`.
   - The id key is the id's raw bytes, which an answer repeats exactly.
@@ -1113,9 +1115,12 @@ Each profile drives a `serverConn`:
 
 - `ws.go`'s `runWebSocket`:
   - `readWebSocket` pushes text frames into the input, and drops binary frames,
-    logging the first.
+    logging the first. It marks each write to the input in `serverConn`'s
+    `waiting` and `waited`.
   - `pumpWebSocket` writes each output line as a text frame under `Grace`.
-  - `keepAlive` pings every `KeepAlive`.
+  - `keepAlive` pings every `KeepAlive`. A failed ping ends the connection
+    unless the reader waited on the agent meanwhile, when the library had no
+    `Read` to take the pong in; the socket stays open after a failed ping.
 - `httpserver.go`'s `httpConn`, one per Streamable HTTP connection, in
   `Handler.httpConns` once `initialize` has a result:
   - `servePost` applies the routing tree's statuses and `admit`'s session rule,
