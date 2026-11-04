@@ -754,6 +754,34 @@ class PlatformsTest(unittest.TestCase):
                     self.assertEqual(f"vet-{env['GOOS']}-{env['GOARCH']}", name)
 
 
+class GolangciTest(unittest.TestCase):
+    def test_path_exclusions_match_a_file(self) -> None:
+        # Each path exclusion of .golangci.yml, a rule's path or path-except
+        # or an exclusions' paths item, matches a file, so a dead one, as
+        # examples$ was, fails (0049-PLAN-tooling-fixes.md, phase 6, T12).
+        root = TOOLS.parent
+        r = subprocess.run(["git", "ls-files", "-co", "--exclude-standard"], cwd=root, capture_output=True, text=True)
+        if r.returncode == 0:
+            files = r.stdout.splitlines()
+        else:  # outside a work tree, as in a git archive copy
+            files = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and ".git" not in p.parts]
+        patterns, paths_indent = [], None
+        for line in (root / ".golangci.yml").read_text(encoding="utf-8").splitlines():
+            item = re.match(r"(\s*)- (.+)$", line)
+            if paths_indent is not None and item and len(item.group(1)) > paths_indent:
+                patterns.append(item.group(2).strip("'\""))
+                continue
+            paths_indent = None
+            if m := re.match(r"(\s*)paths:\s*$", line):
+                paths_indent = len(m.group(1))
+            elif m := re.match(r"\s*(?:- )?path(?:-except)?: (.+)$", line):
+                patterns.append(m.group(1).strip("'\""))
+        self.assertIn(r"_gen\.go$", patterns, "the parse finds the rules' paths")
+        for pattern in patterns:
+            with self.subTest(pattern=pattern):
+                self.assertTrue(any(re.search(pattern, f) for f in files), f".golangci.yml excludes {pattern}, which matches no file")
+
+
 class ReadmeTest(unittest.TestCase):
     def test_relative_links_resolve(self) -> None:
         # scripts/check_records.py checks the docs tree's links; this README

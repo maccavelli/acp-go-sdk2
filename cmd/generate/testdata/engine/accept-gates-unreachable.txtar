@@ -1,8 +1,10 @@
 Gates only on what the dispatch reaches: SessionNotification, which a method
 carries, holds the gated SessionUpdate and has gates; Archive holds it too,
-but no method's params or result reach it, so it has none, as
-ConfigOptionUpdate, reached only by allOf, had a gates no call reached
-(0049-PLAN-tooling-fixes.md, phase 5, F-C).
+but no method's params or result reach it, so it has none. Batch holds the
+gated SessionUpdate and is reached only by the batch_update variant's allOf,
+which the merge flattens into SessionBatchUpdate: that has gates and Batch
+none, where ConfigOptionUpdate, reached the same way, had a gates no call
+reached (0049-PLAN-tooling-fixes.md, phases 5 and 6, F-C).
 
 -- meta.json --
 {"version": 1, "agentMethods": {"initialize": "initialize", "new": "x/new", "prompt": "x/prompt"}, "clientMethods": {"update": "x/update"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
@@ -36,10 +38,12 @@ ConfigOptionUpdate, reached only by allOf, had a gates no call reached
     {"type": "object", "required": ["sessionUpdate"], "properties": {"sessionUpdate": {"const": "session_message", "type": "string"}}},
     {"type": "object", "required": ["sessionUpdate"], "properties": {"sessionUpdate": {"const": "session_message_chunk", "type": "string"}}},
     {"type": "object", "required": ["sessionUpdate"], "properties": {"sessionUpdate": {"const": "plan_update", "type": "string"}}},
-    {"type": "object", "required": ["sessionUpdate"], "properties": {"sessionUpdate": {"const": "plan_removed", "type": "string"}}}
+    {"type": "object", "required": ["sessionUpdate"], "properties": {"sessionUpdate": {"const": "plan_removed", "type": "string"}}},
+    {"type": "object", "required": ["sessionUpdate"], "properties": {"sessionUpdate": {"const": "batch_update", "type": "string"}}, "allOf": [{"$ref": "#/$defs/Batch"}]}
   ], "discriminator": {"propertyName": "sessionUpdate"}},
   "SessionNotification": {"type": "object", "properties": {"update": {"$ref": "#/$defs/SessionUpdate"}}, "required": ["update"], "x-side": "client", "x-method": "x/update"},
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"},
+  "Batch": {"type": "object", "properties": {"updates": {"type": "array", "items": {"$ref": "#/$defs/SessionUpdate"}}}},
   "Archive": {"type": "object", "properties": {"update": {"$ref": "#/$defs/SessionUpdate"}}}
 }}
 -- want.api --
@@ -51,6 +55,7 @@ const AgentMethodNew untyped string = "x/new"
 const AgentMethodPrompt untyped string = "x/prompt"
 type AgentSideConnection struct{conn *Connection; agent Agent; negotiation atomic.Pointer[Negotiation]}
 type Archive struct{Update SessionUpdate "json:\"update\""}
+type Batch struct{Updates []SessionUpdate "json:\"updates,omitempty\""}
 type CancelRequestNotification struct{}
 type Client interface{Session(ctx context.Context, params SessionNotification) error}
 type ClientCapabilities struct{Plan *Flag "json:\"plan,omitempty\""; Session *ClientSessionCapabilities "json:\"session,omitempty\""; Subagents *Flag "json:\"subagents,omitempty\""}
@@ -77,12 +82,13 @@ type PromptResponse struct{}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 type ProtocolVersion uint16
 const ProtocolVersionNumber untyped int = 1
+type SessionBatchUpdate struct{SessionUpdate string "json:\"sessionUpdate\""; Updates []SessionUpdate "json:\"updates,omitempty\""}
 type SessionCapabilities struct{AdditionalDirectories *Flag "json:\"additionalDirectories,omitempty\""}
 type SessionCompactionUpdate struct{SessionUpdate string "json:\"sessionUpdate\""}
 type SessionNotification struct{Update SessionUpdate "json:\"update\""}
 type SessionPlanUpdate struct{SessionUpdate string "json:\"sessionUpdate\""}
 type SessionSubagentUpdate struct{SessionUpdate string "json:\"sessionUpdate\""}
-type SessionUpdate struct{AgentMessageChunk *SessionUpdateAgentMessageChunk "json:\"-\""; Notice *SessionUpdateNotice "json:\"-\""; CompactionUpdate *SessionCompactionUpdate "json:\"-\""; CompactionSummaryChunk *SessionUpdateCompactionSummaryChunk "json:\"-\""; SubagentUpdate *SessionSubagentUpdate "json:\"-\""; SessionMessage *SessionUpdateSessionMessage "json:\"-\""; SessionMessageChunk *SessionUpdateSessionMessageChunk "json:\"-\""; PlanUpdate *SessionPlanUpdate "json:\"-\""; PlanRemoved *SessionUpdatePlanRemoved "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type SessionUpdate struct{AgentMessageChunk *SessionUpdateAgentMessageChunk "json:\"-\""; Notice *SessionUpdateNotice "json:\"-\""; CompactionUpdate *SessionCompactionUpdate "json:\"-\""; CompactionSummaryChunk *SessionUpdateCompactionSummaryChunk "json:\"-\""; SubagentUpdate *SessionSubagentUpdate "json:\"-\""; SessionMessage *SessionUpdateSessionMessage "json:\"-\""; SessionMessageChunk *SessionUpdateSessionMessageChunk "json:\"-\""; PlanUpdate *SessionPlanUpdate "json:\"-\""; PlanRemoved *SessionUpdatePlanRemoved "json:\"-\""; BatchUpdate *SessionBatchUpdate "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
 type SessionUpdateAgentMessageChunk struct{SessionUpdate string "json:\"sessionUpdate\""; Text string "json:\"text\""}
 type SessionUpdateCompactionSummaryChunk struct{SessionUpdate string "json:\"sessionUpdate\""; Text string "json:\"text\""}
 type SessionUpdateNotice struct{SessionUpdate string "json:\"sessionUpdate\""; Text string "json:\"text\""}
@@ -99,6 +105,7 @@ func (*AgentSideConnection).Session(ctx context.Context, params SessionNotificat
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*AgentSideConnection).Wait() error
 func (*Archive).Validate() error
+func (*Batch).Validate() error
 func (*CancelRequestNotification).Validate() error
 func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
@@ -129,6 +136,7 @@ func (PromptRequest).MarshalJSON() ([]byte, error)
 func (*PromptRequest).UnmarshalJSON(b []byte) error
 func (*PromptRequest).Validate() error
 func (*PromptResponse).Validate() error
+func (*SessionBatchUpdate).Validate() error
 func (*SessionNotification).UnmarshalJSON(b []byte) error
 func (*SessionNotification).Validate() error
 func (SessionUpdate).MarshalJSON() ([]byte, error)
@@ -143,7 +151,8 @@ package acp
 import "testing"
 
 // TestGatesOnlyWhereTheDispatchReaches requires gates on the notification's
-// params and on the union it holds, and none on a type no method reaches.
+// params, on the union it holds and on the variant an allOf was flattened
+// into, and none on a type no method reaches, by a property or by allOf.
 func TestGatesOnlyWhereTheDispatchReaches(t *testing.T) {
 	if _, ok := any(&SessionNotification{}).(gater); !ok {
 		t.Error("SessionNotification, which a method carries, has no gates")
@@ -153,5 +162,11 @@ func TestGatesOnlyWhereTheDispatchReaches(t *testing.T) {
 	}
 	if _, ok := any(&Archive{}).(gater); ok {
 		t.Error("Archive, which no method reaches, has gates")
+	}
+	if _, ok := any(&SessionBatchUpdate{}).(gater); !ok {
+		t.Error("SessionBatchUpdate, which SessionUpdate holds, has no gates")
+	}
+	if _, ok := any(&Batch{}).(gater); ok {
+		t.Error("Batch, reached only by allOf, has gates")
 	}
 }

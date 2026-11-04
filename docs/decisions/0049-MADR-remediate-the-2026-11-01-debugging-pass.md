@@ -486,6 +486,25 @@ which it never received, and the observer reported a cancel sent. Fix: send it o
 `connection.go:956-966`, the doc at `:1035-1040`. **Probe** (`TestProbeWaitBlockedByWriter`, re-run): "WaitContext after Close =
 context deadline exceeded". Fix: name the case in `Wait`'s and `Close`'s doc.
 
+**R11. Unrated, open. `TestOverflowBlockHeldInitialize` fails intermittently with the connection ended.** *Added
+2026-11-04,* by the tooling PLAN's phase 6, its deviation 3, on the owner's choice to record it as a finding rather than a
+footnote. `connection_overflow_block_test.go:306-339`, a `synctest` test of 0044's D3: with a queue of 1 under
+`OverflowBlock`, three extension notifications held for `initialize`'s answer, then the answer.
+
+* **Seen twice:** in [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md)'s phase 2, a pre-add check at load 43,
+  `-shuffle=1793756062234892000`; and in [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md)'s phase 6,
+  `tools/gates.py`'s `race3`, `go test -race -count=3 -shuffle=on .` at load 24 to 26, `-shuffle=1793834057755576000`. Both
+  times: "Initialize = {"code":-32603,"message":"Internal error","data":{"error":"connection ended before response"}}, want
+  its result" (`:329`). Neither phase changed the root package's code.
+* **Not reproduced:** 2000 runs each in the tree and in archives of `v1.31.1` and `e98987a` (2026-11-03); 200 runs alone
+  under `-race`, and the package with the second seed, `-race -count=3` (2026-11-04).
+* **What it suggests, unconfirmed:** a `synctest` test fails by order, not by time. "connection ended before response" is
+  `Initialize`'s answer when the connection ends with the request pending, so the connection ended, or was seen to, before
+  the answer was delivered. Whether the SDK's held-notification path or the test's harness orders it so is not known.
+* **Severity** is left unrated until the cause is known: a defect in the SDK's path would end a correct client's
+  `Initialize` (medium); one in the harness, none.
+* Next: examined by an amendment of [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md), on the owner's approval.
+
 ### F-S: the SDK surface against the schema
 
 *Done 2026-11-04:* S1 to S9 are fixed in `v1.32.0` by [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md), each with
@@ -766,7 +785,8 @@ Chosen option: **"A"**, accepted 2026-11-02, because the areas touch different f
 released on its own, while the severity order inside each keeps R1 first. The plans would be:
 
 * `0049-PLAN-runtime-fixes.md`: R1, then R5, R9, R4, R3, R7, R8, R6, R10, and R2 per Q2. A patch release when it changes no
-  exported API. *Complete 2026-11-03,* released in `v1.31.2`.
+  exported API. *Complete 2026-11-03,* released in `v1.31.2`. *R11, added 2026-11-04, is open:* an amendment of that PLAN
+  examines it, on the owner's approval.
 * `0049-PLAN-surface-fixes.md`: S1, S2, S6 per Q4, S7, S8, S9, S5, S4, and S3 per Q3. The new gates and stricter validation are
   behaviour changes, released as a minor version with notes that lead with them. *Written 2026-11-03,*
   [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md). It groups the order into phases by mechanism: S1 with S7,

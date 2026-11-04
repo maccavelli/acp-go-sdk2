@@ -206,6 +206,8 @@ when one is Go or read by Go. The phases follow the MADR's order, T2, T1, T3, th
 
 * Each of T1 to T7, T9 to T14 and F-C's three gaps has a committed test that fails at `1fe3dd0`'s code, by its plant, and
   passes after; T8 is fixed.
+  *Amended 2026-11-04, phase 6's deviation 2:* T7 and T10 are comments, checked by reading and `actionlint`, with no test;
+  T12 gains one.
 * `tools/publication.py v1.33.0 6e04da6` names the CI workflow's run for main's head.
 * `make markdownlint` and `make check-records` read only what git tracks or would.
 * `make check-tools`, `tools/gates.py --all` and CI pass; `make api` reports no change.
@@ -456,6 +458,10 @@ The owner committed phase 4 as `719198f`.
 Begun on the owner's "committed, proceed" after `719198f`. No deviation: step 5.1's reading found the model computes no
 reachability, and what it needs is the walk the step allows, from the types the dispatch names.
 
+*Corrected 2026-11-04, in phase 6:* "No deviation" missed one. Step 5.1's engine case was to hold a type reached only by
+`allOf`; `accept-gates-unreachable.txtar` as committed in `32ca4c7` holds none, its `Archive` reached by no property. Phase
+6's deviation 1 records it and its resolution.
+
 **What it did:**
 
 * **`ConfigOptionUpdate.gates`,** `cmd/generate/internal/model/gates.go`: `dispatchReach(holders)` walks from every method's
@@ -515,3 +521,122 @@ reachability, and what it needs is the walk the step allows, from the types the 
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 6 begins on the owner's word.
+
+The owner committed phase 5 as `32ca4c7`.
+
+### Phase 6: close, 2026-11-04
+
+Begun on the owner's "committed, proceed" after `32ca4c7`.
+
+**Deviation 1, 2026-11-04: step 5.1's `allOf` route had no engine case.**
+
+* **Found:** step 5.1 (`:185`) asks for an engine case holding "a type reached only by `allOf`, which gets no `gates`".
+  `cmd/generate/testdata/engine/accept-gates-unreachable.txtar:9-44`, at `32ca4c7`, has no `allOf`: its `Archive` is
+  reached by no property. The rule was tested, the route the finding took, `ConfigOptionUpdate`'s, only by
+  `tools/gates.py regen`, as a diff of `types_gen.go`. Phase 5's record said "No deviation"; it is annotated, not rewritten.
+* **Decided,** by the owner, from three options (the others: strike the wording and rely on the regen gate; a model unit
+  test instead): add the `allOf` route to `accept-gates-unreachable.txtar`, a gated definition used only through a
+  `SessionUpdate` variant's `allOf`, its behaviour test requiring `gates` on the variant the merge flattens it into and none
+  on the definition; `want.api` rewritten by `-update`; a plant; the pre-add check.
+* **Files added to the phase:** `cmd/generate/testdata/engine/accept-gates-unreachable.txtar`; `docs/architecture.md` if its
+  case list's wording changes. The MADR's decisions and facts stand: no amendment.
+
+**Deviation 2, 2026-11-04: three findings had no test the Verification asks for.**
+
+* **Found:** the Verification's first bullet asks a committed test of each of T1 to T7 and T9 to T14. T7 (`ci.yml`'s and
+  `docs.yml`'s concurrency comments, phase 1) and T10 (the `Makefile`'s and `ci.yml`'s `make api` comments, phase 4) change
+  comments; T12 (`.golangci.yml`'s dead exclusions, phase 4) changes configuration, which phase 4 showed drops no issue,
+  but nothing keeps a dead exclusion from returning.
+* **Decided,** by the owner, from three options (the others: record all three with no code; a test of T10's comment text
+  too): a test in `tools/test_tools.py` requiring each path exclusion of `.golangci.yml` to match a tracked file, seen to
+  fail on a planted one; T7 and T10 recorded as comments. The Verification bullet is annotated, not rewritten.
+* **Files added to the phase:** `tools/test_tools.py`. The MADR's decisions and facts stand: no amendment.
+
+**Deviation 3, 2026-11-04: a runtime test failed in the gate set.**
+
+* **Found:** step 6.1's `tools/gates.py --all`, at load 24 to 26, failed one gate, `race3`, `go test -race -count=3
+  -shuffle=on .`, seed `1793834057755576000`: `connection_overflow_block_test.go:329`, `TestOverflowBlockHeldInitialize`,
+  "Initialize = {"code":-32603,…"connection ended before response"}, want its result". The other 17 gates passed. This phase
+  changes no root-package code; the failure is the one
+  [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md)'s phase 2 saw once. Rerun: 200 runs alone under `-race`, `ok`;
+  the package with the seed, `-race -count=3`, `ok`.
+* **Decided,** by the owner, from three options (the others: stop the close and examine it first, as a phase of
+  [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md); note it here only, as the surface PLAN did): recorded as a
+  finding, R11, in the MADR's F-R, open, to be examined by an amendment of the runtime PLAN on the owner's approval; the
+  gate set run again for this record.
+* **Files added to the phase:** the MADR, its R11 and the runtime PLAN's bullet in "Decision Outcome"; `docs/README.md`'s
+  MADR row.
+
+**What the deviations added:**
+
+* **Deviation 1,** `cmd/generate/testdata/engine/accept-gates-unreachable.txtar`: `Batch`, holding `[]SessionUpdate`, reached
+  only by a `batch_update` variant's `allOf`, which the merge flattens into `SessionBatchUpdate`, as it does
+  `config_option_update` into `SessionConfigOptionUpdate`. Its behaviour test requires `gates` on `SessionBatchUpdate` and
+  none on `Batch`; `want.api` rewritten by `-update`. A first try held `[]ContentBlock`, which this case gates nowhere: the
+  test failed, "SessionBatchUpdate, which SessionUpdate holds, has no gates", and `Batch` having none proved nothing.
+* **Deviation 2,** `tools/test_tools.py`: `GolangciTest.test_path_exclusions_match_a_file` reads `.golangci.yml`'s `path`,
+  `path-except` and `paths` items, requires `_gen\.go$` among them, and each to match a file `git ls-files -co
+  --exclude-standard` lists, or, outside a work tree, a file on disk.
+
+**Seen to fail,** by script, the tests run in a copy per plant, 4/4:
+
+```text
+FAILED AS REQUIRED: gates emitted for every gated type again: exit 1: behaviour_test.go:22: Batch, reached only by allOf, has gates
+FAILED AS REQUIRED: gates emitted for the allOf-reached type alone: exit 1: behaviour_test.go:22: Batch, reached only by allOf, has gates
+FAILED AS REQUIRED: a dead paths item back, in a work tree: exit 1: AssertionError: False is not true : .golangci.yml excludes examples$, which matches no file
+FAILED AS REQUIRED: a rule's path that matches nothing, outside a work tree: exit 1: AssertionError: False is not true : .golangci.yml excludes _tests\.go, which matches no file
+```
+
+The second plant gives `gates` to `Batch` alone, so the `allOf` assertion is seen to fail by itself; the generator's
+plants run `TestEngineBehaviour` whole, as phase 5's did.
+
+**Step 6.1,** `tools/gates.py --all`, `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` named per command:
+
+* First run, at load 24 to 26: 17 of 18; `race3` failed, deviation 3.
+* Second run, after deviations 1 to 3, at load 9 to 18: "all gates passed", the 18 each `ok`: `regen`, `precheck`,
+  `newfiles`, `nojsonv2`, `winvet`, `records`, `mdlint`, `idscan`, `tools`, `lint`, `fix`, `tidy`, `api`, `race3`, `floor`,
+  `platforms`, `windows`, `linux`.
+
+The findings, each with what shows it:
+
+| Finding | Phase | Shown by | Seen to fail |
+| --- | --- | --- | --- |
+| T1, the docs-safe docs' links | 2 | `scripts/test_check_records.py` `test_links_of_the_docs_safe_docs` | 1 |
+| T2, CI's run, not Docs' | 1 | `PublicationTest.test_ci_of_head`, `test_ci_runs_command`, `test_passed`; the real run naming `41890673918` | 2 |
+| T3, ignored directories | 2 | `test_ignored_directories_are_not_read`, `test_outside_a_work_tree`; `make markdownlint`, 47 files | 1 |
+| T4, the Go environment | 3 | `HelpersTest.test_go_env` | 2 |
+| T5, `idscan.py --range` | 3 | `IdscanTest.test_range_finds_what_a_later_commit_removed`, `test_range_refuses_other_forms` | 2 |
+| T6, `find.py`'s bad paths | 3 | `FindTest.test_bad_paths` | 1 |
+| T7, the concurrency comments | 1 | a comment, read; `actionlint` (deviation 2) | none |
+| T8, `mdsh` in `RELEASING.md` | before 4e3d9cc | corrected in `f6bfdcf` | none |
+| T9, the schema version guard | 4 | `MakefileTest.test_schema_version_guard`; `/usr/bin/make` 3.81 stopping | 1 |
+| T10, `make api`'s packages | 4 | a comment, read (deviation 2) | none |
+| T11, the scans' reasons | 3 | `ReleaseTest.test_scan_failure_says_why`; `test_main_outside_a_work_tree_says_why` | 2 |
+| T12, dead lint exclusions | 4, 6 | `GolangciTest.test_path_exclusions_match_a_file`; `tools/gates.py lint platforms` | 2 |
+| T13, help and `platforms.py` | 4 | `MakefileTest.test_help_lists_targets`, `PlatformsTest.test_checks` | 2 |
+| T14, `ci_jobs.py`'s runs | 1 | `CiJobsTest.test_run_list_is_ci_s` | 1 |
+| F-C, `ConfigOptionUpdate.gates` | 5, 6 | `accept-gates-unreachable`'s `TestGatesOnlyWhereTheDispatchReaches`; `types_gen.go` without it | 3 |
+| F-C, `abandon` | 5 | `TestStartAbandonsUnattachedAgent`; coverage 100.0% | 1 |
+| F-C, the two `Error` methods | 5 | `TestStderrErrorText`, `TestElicitationCheckSchemaDefaultText`; coverage 100.0% each | 2 |
+
+**Step 6.2,** `make api`: "check_api: against v1.33.0: 0 incompatible, 0 compatible"; "reported packages unstable, remote: 0
+incompatible, not gated"; exit 0.
+
+**Step 6.4:** no release. Nothing exported or run-time changed; the next release's notes name this PLAN.
+
+**Not done in this phase:**
+
+* Step 6.3, CI on the head, waits for the owner's push; step 6.5, this PLAN and its row `complete` and the MADR's T and F-C
+  findings done, follows CI, as the subpackage PLAN's did.
+* R11 is open (deviation 3).
+* `.markdownlint-cli2.jsonc`'s `"gitignore": true` (phase 2) and `.golangci.yml`'s removed exclusions (phase 4) are the
+  fleet's shared files: they are to be offered upstream, by the owner, outside this repository.
+
+**Checks:**
+
+* `make check-tools`: exit 0, 41 tests, "check-ci-filters: 0 problem(s)".
+* `cd cmd/generate && go test -count=1 -run '^(TestEngineBehaviour|TestEngineCases)$' .`: `ok`.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits and pushes. Step 6.3 follows the push.
