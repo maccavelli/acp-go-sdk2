@@ -14369,11 +14369,13 @@ type SessionToolCallUpdate struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Replace the content collection.
-	Content []ToolCallContent `json:"content,omitempty"`
+	// A nil slice leaves the collection unchanged and is not sent; an empty one clears it.
+	Content []ToolCallContent `json:"content,omitzero"`
 	// Update the tool kind.
 	Kind *ToolKind `json:"kind,omitempty"`
 	// Replace the locations collection.
-	Locations []ToolCallLocation `json:"locations,omitempty"`
+	// A nil slice leaves the collection unchanged and is not sent; an empty one clears it.
+	Locations []ToolCallLocation `json:"locations,omitzero"`
 	// Update the programmatic name of the tool being invoked.
 	//
 	// This field is optional. Omitting it or sending 'null' both mean that
@@ -18479,11 +18481,13 @@ type ToolCallUpdate struct {
 	// See protocol docs: [Extensibility](https://agentclientprotocol.com/protocol/extensibility)
 	Meta map[string]any `json:"_meta,omitempty"`
 	// Replace the content collection.
-	Content []ToolCallContent `json:"content,omitempty"`
+	// A nil slice leaves the collection unchanged and is not sent; an empty one clears it.
+	Content []ToolCallContent `json:"content,omitzero"`
 	// Update the tool kind.
 	Kind *ToolKind `json:"kind,omitempty"`
 	// Replace the locations collection.
-	Locations []ToolCallLocation `json:"locations,omitempty"`
+	// A nil slice leaves the collection unchanged and is not sent; an empty one clears it.
+	Locations []ToolCallLocation `json:"locations,omitzero"`
 	// Update the programmatic name of the tool being invoked.
 	//
 	// This field is optional. Omitting it or sending 'null' both mean that

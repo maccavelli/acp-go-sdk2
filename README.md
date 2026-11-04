@@ -186,7 +186,10 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
   call, and a `tool_call_update` changes only the fields it carries, its
   `content` and `locations` replacing the collections, an empty one clearing
   them; an update for a call never seen starts it `pending`. `Get` and `Open`,
-  the calls neither `completed` nor `failed`, read it back.
+  the calls neither `completed` nor `failed`, read it back. To clear them when
+  sending, pass `acp.WithUpdateContent` or `acp.WithUpdateLocations` an empty
+  or nil slice: the update carries `"content": []`. On a `ToolCallUpdate` built
+  by hand, a nil slice is not sent and an empty one is.
 
 Helper constructors are provided to reduce boilerplate when working with union types:
 

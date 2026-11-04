@@ -47,6 +47,12 @@ type Protocol struct {
 	// key-less variant's description (0049-PLAN-surface-fixes.md, phase 1,
 	// deviation 2).
 	KeyLessFallbacks []FallbackRule
+	// EmptyClears lists the optional array properties whose empty value
+	// replaces the collection, clearing it, which the schema states only in
+	// prose. Each field built from one is tagged omitzero, so a nil slice is
+	// omitted and an empty one is sent as []; Source must be in the property's
+	// description (0049-PLAN-surface-fixes.md, phase 2).
+	EmptyClears []PatchRule
 	// KeyOrders lists the typed map properties whose key order the protocol
 	// gives meaning, which the schema does not state: each struct gains
 	// Field, the order of the map's keys, read when decoded and written when
@@ -327,6 +333,24 @@ func checkFallbackRules(rules []FallbackRule) error {
 	return nil
 }
 
+// checkPropertyRules checks a list of property rules, named kind in its
+// errors, without the schema: each needs a definition, a property and a
+// source, and a property has one rule.
+func checkPropertyRules(kind string, rules []PatchRule) error {
+	seen := map[[2]string]bool{}
+	for _, rule := range rules {
+		k := [2]string{rule.Definition, rule.Property}
+		switch {
+		case rule.Definition == "" || rule.Property == "" || rule.Source == "":
+			return fmt.Errorf("%s rule %q.%q: it needs a definition, a property, and a source", kind, rule.Definition, rule.Property)
+		case seen[k]:
+			return fmt.Errorf("%s rule %s.%s: two rules", kind, rule.Definition, rule.Property)
+		}
+		seen[k] = true
+	}
+	return nil
+}
+
 // newRules checks what a table says without the schema. A nil table has no
 // rules.
 func newRules(p *Protocol) (*rules, error) {
@@ -383,29 +407,16 @@ func newRules(p *Protocol) (*rules, error) {
 		}
 		seen[k] = true
 	}
-	patched := map[[2]string]bool{}
-	for _, rule := range p.PatchFields {
-		k := [2]string{rule.Definition, rule.Property}
-		switch {
-		case rule.Definition == "" || rule.Property == "" || rule.Source == "":
-			return nil, fmt.Errorf("patch rule %q.%q: it needs a definition, a property, and a source", rule.Definition, rule.Property)
-		case patched[k]:
-			return nil, fmt.Errorf("patch rule %s.%s: two rules", rule.Definition, rule.Property)
-		}
-		patched[k] = true
+	if err := checkPropertyRules("patch", p.PatchFields); err != nil {
+		return nil, err
 	}
-	retained := map[[2]string]bool{}
-	for _, rule := range p.NullRetained {
-		k := [2]string{rule.Definition, rule.Property}
-		switch {
-		case rule.Definition == "" || rule.Property == "" || rule.Source == "":
-			return nil, fmt.Errorf("null-retained rule %q.%q: it needs a definition, a property, and a source", rule.Definition, rule.Property)
-		case retained[k]:
-			return nil, fmt.Errorf("null-retained rule %s.%s: two rules", rule.Definition, rule.Property)
-		}
-		retained[k] = true
+	if err := checkPropertyRules("null-retained", p.NullRetained); err != nil {
+		return nil, err
 	}
 	if err := checkFallbackRules(p.KeyLessFallbacks); err != nil {
+		return nil, err
+	}
+	if err := checkPropertyRules("empty-clears", p.EmptyClears); err != nil {
 		return nil, err
 	}
 	ordered := map[[2]string]bool{}

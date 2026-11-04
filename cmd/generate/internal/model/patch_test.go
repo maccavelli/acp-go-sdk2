@@ -420,3 +420,105 @@ func checkCommittedPatchFields(t *testing.T, m *Model) {
 		}
 	}
 }
+
+// clearedDefs adds, to protocolDefs, Cleared: an object with an optional array
+// whose description states the rule's source, one that does not, a required
+// array and an optional string.
+const clearedDefs = `"Cleared":{"type":"object","required":["need"],"properties":{
+	"items":{"type":["array","null"],"items":{"type":"string"},"description":"Replace the items collection."},
+	"other":{"type":["array","null"],"items":{"type":"string"},"description":"Other items."},
+	"need":{"type":"array","items":{"type":"string"},"description":"Replace the items collection."},
+	"text":{"type":"string","description":"Replace the items collection."}}},`
+
+// TestEmptyClearsRules requires an empty-clears rule to tag its property's
+// field omitzero, with the doc line that says so, another optional array to
+// keep omitempty, a rule whose definition or property the schema lacks to
+// apply nothing, and the table's checks and Build's to refuse a rule they
+// cannot use (0049-PLAN-surface-fixes.md, phase 2).
+func TestEmptyClearsRules(t *testing.T) {
+	t.Parallel()
+	defs := strings.Replace(protocolDefs, `"Update":`, clearedDefs+`"Update":`, 1)
+	const src = "Replace the items collection."
+	build := func(rules ...PatchRule) (*Model, error) {
+		p := testProtocol()
+		p.EmptyClears = rules
+		return Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, defs), Protocol: p})
+	}
+	m, err := build(PatchRule{"Cleared", "items", src}, PatchRule{"Cleared", "nope", src}, PatchRule{"Nope", "items", src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]*Field{}
+	for _, f := range m.Type("Cleared").Fields {
+		got[f.Key] = f
+	}
+	if f := got["items"]; f.Tag != "items,omitzero" || !slices.Contains(f.Doc, emptyClearsDoc) {
+		t.Errorf("items, ruled: tag %q, doc %q", f.Tag, f.Doc)
+	}
+	if f := got["other"]; f.Tag != "other,omitempty" {
+		t.Errorf("other, no rule: tag %q", f.Tag)
+	}
+	for _, tt := range []struct {
+		name string
+		rule PatchRule
+		want string
+	}{
+		{"required", PatchRule{"Cleared", "need", src}, "Cleared.need: an empty-clears rule needs an optional property"},
+		{"not an array", PatchRule{"Cleared", "text", src}, "Cleared.text: an empty-clears rule needs an array property, not string"},
+		{"not stated", PatchRule{"Cleared", "other", src}, `Cleared.other: its description does not state "Replace the items collection."`},
+		{"no source", PatchRule{"Cleared", "items", ""}, "empty-clears rule \"Cleared\".\"items\": it needs a definition, a property, and a source"},
+	} {
+		if _, err := build(tt.rule); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: Build = %v, want an error containing %q", tt.name, err, tt.want)
+		}
+	}
+	if _, err := build(PatchRule{"Cleared", "items", src}, PatchRule{"Cleared", "items", src}); err == nil ||
+		!strings.Contains(err.Error(), "empty-clears rule Cleared.items: two rules") {
+		t.Errorf("two rules: Build = %v", err)
+	}
+}
+
+// replaceWording is how the schema says an array property replaces its
+// collection.
+var replaceWording = regexp.MustCompile(`(?i)^replace the \w+ collection`)
+
+// checkCommittedEmptyClears requires every optional array property of the
+// committed schemas whose description says it replaces its collection to be
+// one an empty-clears rule names, and the fields tagged omitzero for it to be
+// exactly theirs, an inline variant's included (0049-PLAN-surface-fixes.md,
+// phase 2).
+func checkCommittedEmptyClears(t *testing.T, m *Model) {
+	t.Helper()
+	rules := map[[2]string]bool{}
+	for _, r := range ACP.EmptyClears {
+		rules[[2]string{r.Definition, r.Property}] = true
+	}
+	for name, def := range m.schema.Defs {
+		for key, p := range expandAllOf(m.schema, def).Properties {
+			if replaceWording.MatchString(p.Description) && !rules[[2]string{name, key}] {
+				t.Errorf("%s.%s: its description says it replaces its collection, and no empty-clears rule names it", name, key)
+			}
+		}
+	}
+	var tagged []string
+	add := func(owner string, fields []*Field) {
+		for _, f := range fields {
+			if f.Type.Kind == RefSlice && strings.HasSuffix(f.Tag, ",omitzero") {
+				tagged = append(tagged, owner+"."+f.Key)
+			}
+		}
+	}
+	for _, ty := range m.Types {
+		add(ty.Name, ty.Fields)
+		for _, vi := range ty.Variants {
+			if vi.Inline != nil {
+				add(vi.TypeName, vi.Inline.Fields)
+			}
+		}
+	}
+	slices.Sort(tagged)
+	want := []string{"SessionToolCallUpdate.content", "SessionToolCallUpdate.locations", "ToolCallUpdate.content", "ToolCallUpdate.locations"}
+	if !slices.Equal(tagged, want) {
+		t.Errorf("slice fields tagged omitzero: %v, want %v", tagged, want)
+	}
+}

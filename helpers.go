@@ -905,17 +905,29 @@ func WithUpdateStatus(s ToolCallStatus) ToolCallUpdateOpt {
 	}
 }
 
-// WithUpdateContent replaces the content collection for a tool_call_update.
+// WithUpdateContent replaces the content collection for a tool_call_update
+// with c. An empty or nil c clears it: the update is sent with "content": [].
+// An update without this option leaves the collection as it was
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, S2).
 func WithUpdateContent(c []ToolCallContent) ToolCallUpdateOpt {
 	return func(tu *SessionToolCallUpdate) {
+		if c == nil {
+			c = []ToolCallContent{}
+		}
 		tu.Content = c
 	}
 }
 
-// WithUpdateLocations replaces the locations collection for a tool_call_update.
+// WithUpdateLocations replaces the locations collection for a tool_call_update
+// with l. An empty or nil l clears it: the update is sent with "locations": [].
+// An update without this option leaves the collection as it was
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, S2).
 // Each path must be absolute: sending fails otherwise (0015-MADR-validate-absolute-protocol-paths.md).
 func WithUpdateLocations(l []ToolCallLocation) ToolCallUpdateOpt {
 	return func(tu *SessionToolCallUpdate) {
+		if l == nil {
+			l = []ToolCallLocation{}
+		}
 		tu.Locations = l
 	}
 }

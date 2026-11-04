@@ -401,6 +401,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 	if err := m.resolveKeyLessFallbacks(r); err != nil {
 		return nil, err
 	}
+	if err := m.resolveEmptyClears(r); err != nil {
+		return nil, err
+	}
 	if err := m.resolveKeyOrders(r); err != nil {
 		return nil, err
 	}
@@ -1503,6 +1506,73 @@ func (m *Model) resolveKeyLessFallbacks(r *rules) error {
 				return fmt.Errorf("%s: its key-less variant's description does not state %q", t.Name, rule.Source)
 			}
 			keyLess[0].Fallback = true
+		}
+	}
+	return nil
+}
+
+// emptyClearsDoc is the doc line a field an empty-clears rule names gains.
+const emptyClearsDoc = "A nil slice leaves the collection unchanged and is not sent; an empty one clears it."
+
+// resolveEmptyClears resolves each empty-clears rule of the table to its
+// property's definition, and makes every field built from that property, in
+// every type that holds it, an inline allOf variant included, omitted only
+// when nil, so an empty slice is sent as []. A rule whose definition or
+// property the schema lacks is skipped; one on a required or non-array
+// property, or one whose source the property's description does not state, is
+// refused (0049-PLAN-surface-fixes.md, phase 2).
+func (m *Model) resolveEmptyClears(r *rules) error {
+	if r.table == nil {
+		return nil
+	}
+	props := map[*load.Definition]string{}
+	for _, rule := range r.table.EmptyClears {
+		def := m.schema.Defs[rule.Definition]
+		if m.Type(rule.Definition) == nil || def == nil {
+			continue
+		}
+		ed := expandAllOf(m.schema, def)
+		prop := ed.Properties[rule.Property]
+		if prop == nil {
+			continue
+		}
+		owner := rule.Definition + "." + rule.Property
+		switch {
+		case slices.Contains(ed.Required, rule.Property):
+			return fmt.Errorf("%s: an empty-clears rule needs an optional property", owner)
+		case !strings.Contains(strings.Join(strings.Fields(prop.Description), " "), rule.Source):
+			return fmt.Errorf("%s: its description does not state %q", owner, rule.Source)
+		}
+		props[prop] = owner
+	}
+	tag := func(fields []*Field) error {
+		for _, f := range fields {
+			owner, ok := props[f.prop]
+			if !ok {
+				continue
+			}
+			if f.Type.Kind != RefSlice {
+				return fmt.Errorf("%s: an empty-clears rule needs an array property, not %s", owner, f.Type)
+			}
+			f.Tag = f.Key + ",omitzero"
+			f.Doc = append(f.Doc, emptyClearsDoc)
+		}
+		return nil
+	}
+	for _, t := range m.Types {
+		lists := [][]*Field{t.Fields}
+		for _, ns := range t.NestedStructs {
+			lists = append(lists, ns.Fields)
+		}
+		for _, vi := range t.Variants {
+			if vi.Inline != nil {
+				lists = append(lists, vi.Inline.Fields)
+			}
+		}
+		for _, fields := range lists {
+			if err := tag(fields); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

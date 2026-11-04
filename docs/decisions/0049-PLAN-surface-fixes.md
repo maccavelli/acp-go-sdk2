@@ -449,3 +449,79 @@ copy now takes the whole tree.
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 2 begins on the owner's word.
+
+The owner committed phase 1 as `22d508e`.
+
+### Phase 2: S2, an empty collection is sent, 2026-11-03
+
+Begun on the owner's "committed, proceed" after `22d508e`. No deviation.
+
+**What it did:**
+
+* **The rule.**
+  * `Protocol.EmptyClears []PatchRule` (`internal/model/protocol.go`), checked by `checkPropertyRules`.
+  * `resolveEmptyClears` (`internal/model/model.go`) runs after `resolveKeyLessFallbacks`. A rule on a required property, on
+    one that is not an array, or whose property's description does not state its source is refused. Every field built from
+    the property, an inline variant's included, is tagged `key,omitzero`, and its doc gains `emptyClearsDoc`: "A nil slice
+    leaves the collection unchanged and is not sent; an empty one clears it."
+  * The two rules, in `internal/model/acp.go`, name `ToolCallUpdate.content` and `.locations`, quoting "Replace the content
+    collection." and "Replace the locations collection."
+* **`checkPropertyRules`** also checks the patch and null-retained rules, which `newRules` checked in two identical loops,
+  with the same error texts. The third loop would have taken `newRules` to a cyclomatic complexity of 41, past
+  `golangci-lint`'s 40.
+* **Regenerated** `types_gen.go`: the tags and doc of `SessionToolCallUpdate` and `ToolCallUpdate`, 8 lines added and 4
+  removed; nothing else. `tools/gates.py regen` is clean.
+* **The helpers.** `WithUpdateContent` and `WithUpdateLocations` (`helpers.go`) send `[]` for nil, so the option always
+  replaces the collection, and their godoc says so. Decoding is unchanged: `[]` stays an empty slice, and absence nil.
+* **The tests:**
+  * `TestToolCallUpdateEmptyCollectionsOnWire`, in a new `helpers_test.go`:
+    * the options with empty and nil slices send `[]`, and with none send neither key;
+    * a hand-built `ToolCallUpdate` sends `[]` for empty and nothing for nil;
+    * a received `[]` decodes as an empty slice and is sent back as `[]`, and an absent key decodes as nil;
+    * a timeline that held content holds none after the cleared update, read from the wire.
+  * `TestEmptyClearsRules` and `checkCommittedEmptyClears`, in `internal/model/patch_test.go`. The latter, called from
+    `TestProtocolTableAppliesToCommittedSchema`, requires every property whose description reads "Replace the … collection" to
+    be ruled. It also requires the slice fields tagged `omitzero` to be exactly the four, inline variants included. As first
+    written it read top-level fields only, and found two of the four.
+* **Docs:**
+  * `README.md`'s tool-call timeline bullet says how to clear when sending.
+  * `docs/architecture.md` lists `KeyLessFallbacks` and `EmptyClears` among the table's rules.
+
+**Seen to fail,** each in its own scratch copy of the tree, regenerated there, by script, 4/4, then again after the lint fixes,
+4/4:
+
+```text
+FAILED AS REQUIRED: the tag left omitempty: rc 1: helpers_test.go:41: empty: sent {"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t1"}}, want "content":[]
+FAILED AS REQUIRED: the helper's nil case removed: rc 1: helpers_test.go:41: nil: sent {"sessionId":"s","update":{"locations":[],"sessionUpdate":"tool_call_update","toolCallId":"t1"}}, want "content":[]
+FAILED AS REQUIRED: the source check removed: rc 1: patch_test.go:472: not stated: Build = <nil>, want an error containing "Cleared.other: its description does not state …"
+FAILED AS REQUIRED: a rule dropped from the table: rc 1: protocol_test.go:512: ToolCallUpdate.locations: its description says it replaces its collection, and no empty-clears rule names it
+```
+
+**Checks:**
+
+* `go test -race -count=3 -run TestToolCallUpdateEmptyCollectionsOnWire .`: `ok`.
+* `go test -count=1 ./...` in `cmd/generate`, and `go test -count=1 .`: `ok`.
+* `tools/gates.py regen`: `ok`.
+* `make pre-add-check` with the phase's eight Go files and the README:
+  * **First run,** at load 16 to 33: exit 2.
+    * `gocyclo`: "cyclomatic complexity 41 of func `newRules`".
+    * `revive`: "redefinition of the built-in function clear", the resolver's local function, renamed `tag`.
+    * Both were fixed as above.
+  * **Second run,** at load 43: exit 2.
+    * `TestOverflowBlockHeldInitialize` failed once: "Initialize = {"code":-32603,…"connection ended before response"}, want
+      its result". It is a synctest test in a package this phase does not change.
+    * It passed 30 times alone, and with that run's seed, `-shuffle=1793756062234892000`.
+    * It passed 2000 times each in the tree and in archives of `v1.31.1` and `e98987a`, with no failure.
+    * It is recorded here as seen once and not reproduced. A synctest test that fails once may still hide an ordering race,
+      which the owner may want examined.
+  * **Third run,** at load 23: exit 0, "8 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on,
+    uncached), tidy, govulncheck."
+* `tools/remote.py tree --host linux`: both modules, exit 0.
+* `tools/remote.py pkg --host windows . -test.run 'TestToolCallUpdateEmptyCollectionsOnWire|TestToolCallTimeline$|
+  TestToolCallTimelineCopies' -test.count=3`: "PASS".
+  * A first run that named `TestToolCallTimelineReplay` failed opening `testdata\toolcalls\lifecycle.jsonl`. `pkg` sends the
+    binary alone; the Linux run passes it.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 3 begins on the owner's word.

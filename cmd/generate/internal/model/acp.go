@@ -115,6 +115,13 @@ var ACP = Protocol{
 	KeyLessFallbacks: []FallbackRule{
 		{Definition: "SetSessionConfigOptionRequest", Source: srcValueIDFallback},
 	},
+	// The collections an update replaces, so an empty one clears them, which
+	// the schema states only as "Replace" (0049-PLAN-surface-fixes.md, phase
+	// 2).
+	EmptyClears: []PatchRule{
+		{Definition: "ToolCallUpdate", Property: "content", Source: "Replace the content collection."},
+		{Definition: "ToolCallUpdate", Property: "locations", Source: "Replace the locations collection."},
+	},
 	// The typed maps whose key order the protocol gives meaning
 	// (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
 	KeyOrders: []OrderRule{

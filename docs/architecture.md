@@ -241,6 +241,16 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
 - `NullRetained`, the optional raw properties whose explicit `null` the schema
   keeps apart from omission, each with the schema sentence it follows: the
   unstable `McpError.data`. A field built from one keeps `null` when decoded;
+- `KeyLessFallbacks`, the unions whose key-less variant also takes a payload
+  whose discriminator names no variant, each with the schema sentence that
+  says so: `SetSessionConfigOptionRequest`. The model refuses a rule on a type
+  that is not a discriminated union without a catch-all with one key-less
+  variant, or whose variant's description lacks the sentence (0049, S1);
+- `EmptyClears`, the optional arrays whose empty value replaces, and so
+  clears, the collection: `ToolCallUpdate`'s `content` and `locations`. A
+  field built from one is tagged `omitzero`, so nil is omitted and empty is
+  sent as `[]`. The model refuses a rule on a required or non-array property,
+  or whose description lacks the sentence (0049, S2);
 - `KeyOrders`, the typed maps whose key order the protocol gives meaning, each
   with the field that holds the order and the reason: `ElicitationSchema`'s
   `properties`, field `PropertyOrder`. The generated `UnmarshalJSON` reads the
