@@ -138,7 +138,8 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
   implements some of them implements all of them instead.
 - Package `clienthost` serves those methods for you. `clienthost.Terminals`
   runs each `terminal/create`'s command in a process group, or a job on
-  Windows, keeps its output to `outputByteLimit` at a character boundary, and
+  Windows, keeps its output to the smaller of `outputByteLimit` and its
+  `MaxOutputBytes`, 16 MiB by default, at a character boundary, and
   ends the processes it started on kill and release; its `Command` field
   builds the command, and is where your policy checks it. `clienthost.Files`
   reads and writes text files, by 1-based `line` and `limit`, answering a
@@ -326,8 +327,9 @@ follow the schema:
   default, or its zero value, when its value is malformed, and an array marked
   `x-deserialize-skip-invalid-items` drops the items that fail to decode, as
   ACP's Rust implementation does. A closed enumeration's value that its type
-  does not list fails there too: a `tool_call`'s unknown `kind` reads as `""`,
-  a `tool_call_update`'s as nil, and an unknown `audience` role is dropped.
+  does not list fails there too: a `tool_call`'s unknown `kind` or `status`
+  reads as `""`, a `tool_call_update`'s as nil, `ElicitationSchema.type` takes
+  its default, `object`, and an unknown `audience` role is dropped.
 - `Validate` checks what the schema states, at every depth: a union has exactly
   one variant, or `Unknown`, set; a string meets its `minLength`; every nested
   value, slice element, and map value validates; a catch-all does not hold a
@@ -637,9 +639,10 @@ acp.WithInboundValidation(func(ctx context.Context, method string, params any, e
 `Connection()`, `SendRequest`, `SendRequestNoResult`, `SendNotification`, and
 `CallExtension` and `NotifyExtension` hold no record: they send any method,
 before `initialize` too. What is received holds to it, extension messages
-included (see [Extension methods](#extension-methods)). The unstable features whose capabilities the
-specification does not tie to a rule (`nes`, `plan`, `providers`,
-`positionEncoding`) are not checked.
+included (see [Extension methods](#extension-methods)). Two unstable features
+are not checked: `mcp/message`, for which the schema states no gate, and
+`positionEncoding`, which the schema has the agent choose "from the client's
+supported encodings".
 
 ### Cancellation
 
@@ -740,7 +743,8 @@ ctx's cause. A side connection's is its `Connection()`'s.
 until the input ends, waits up to 5 seconds for the handlers, and returns nil
 at a clean end; when ctx ends, as at an interrupt, it shuts the connection
 down and waits for every handler, a notification's included, within the same
-5 seconds, and returns ctx's cause (`ExampleServeAgent`;
+5 seconds, and returns ctx's cause, joined with `Shutdown`'s error
+(`ExampleServeAgent`;
 [0042-MADR-in-process-agent-runner.md](docs/decisions/0042-MADR-in-process-agent-runner.md),
 item 2). When the 5 seconds pass with handlers still running, at either end,
 its error wraps `acp.ErrHandlersRunning`, which `errors.Is` reads (0042, the
@@ -1255,12 +1259,12 @@ A `serve` still running is then abandoned. Its context's cause, which
 | Cause | When |
 | :--- | :--- |
 | `remote.ErrDeleted` | the client sent `DELETE` |
-| `remote.ErrDisconnected` | the client closed its socket, stopped answering pings, or left its Streamable HTTP connection with no connection stream for 60 seconds |
+| `remote.ErrDisconnected` | the client closed its socket, stopped answering pings, did not take a WebSocket message within `Grace`, or left its Streamable HTTP connection with no connection stream for 60 seconds |
 | `remote.ErrHandlerClosed` | the handler was closed |
 | `remote.ErrOverflow` | the messages held past `MaxBuffered` |
 
-`Handler.Close(ctx)` ends every connection at once and answers each later
-request `503`. It returns `ctx`'s cause when `ctx` ends first, and an error
+`Handler.Close(ctx)` starts every connection's ending at once, each its own
+ladder of `Grace` steps, and answers each later request `503`. It returns `ctx`'s cause when `ctx` ends first, and an error
 wrapping `remote.ErrAbandoned` when a `serve` had to be abandoned. A WebSocket's close handshake waits up to 5 seconds for a
 client that does not answer it.
 
@@ -1320,7 +1324,8 @@ Not supported:
 
 - resuming an event stream with `Last-Event-ID`, and reconnecting
   automatically. A client dials again and loads its session.
-- batches, answered `501`;
+- batches: a POST of one is answered `501`, and over WebSocket one is answered
+  `-32600`, as on stdio;
 - WebSocket subprotocols and compression, and WebSocket over HTTP/2;
 - Unix sockets.
 
@@ -1389,7 +1394,8 @@ where this SDK writes why it refused, or else its message.
 A malformed message is logged by its fault, its size and, when it has a valid
 one, its id, never by its content, which may hold prompt text or file contents.
 A message that breaks the schema is refused with an `*acp.ValidationError`;
-for an absolute path or an excluded value, its text quotes the value refused,
+for an absolute path, an excluded value or a closed enumeration's value, its
+text quotes the value refused,
 so that value reaches the answer's `data` and the logs as it was.
 
 These rules are decided in

@@ -1,8 +1,8 @@
 ---
 status: accepted
-date: 2026-11-03
+date: 2026-11-04
 decision-makers: the repository owner
-consulted: "probe tests and scripts in scratch copies of `d55ba2a`, and of `e98987a` for the re-assessment; the official TypeScript (`08a0d30`) and Python (`9853d8b`) SDKs' clones in the interop cache; `schema/schema.json` and `schema/schema.unstable.json` at ACP 1.25.0; `go help test`; GitHub's workflow documentation"
+consulted: "probe tests and scripts in scratch copies of `d55ba2a`, of `e98987a` for the re-assessment, and of `277aca0` for the second, with a linux/386 run on the Linux test host; the official TypeScript (`08a0d30`) and Python (`9853d8b`) SDKs' clones in the interop cache; `schema/schema.json` and `schema/schema.unstable.json` at ACP 1.25.0; `go help test`; GitHub's workflow documentation"
 informed: gobble-cli, magic-cli-remote
 ---
 
@@ -19,6 +19,8 @@ and byte budget, middleware and the observer.
 This record holds what the pass found, and proposes how to remediate it. It decides nothing yet: every finding is evidence, and the
 owner's answers to "Questions for the owner" settle the program. *2026-11-03:* the owner answered on 2026-11-01 and accepted
 the record on 2026-11-02; the runtime findings are done, and "Re-assessment at `e98987a`" below checks the rest against the tree.
+*2026-11-04:* the surface findings are done too, in `v1.32.0`. "Re-assessment at `277aca0`" below checks the subpackage
+findings and the documentation again, before the subpackage PLAN.
 
 ### How the pass was run
 
@@ -241,6 +243,109 @@ Every S citation holds. Facts the surface PLAN rests on:
 * `SessionInfo.additionalDirectories` says "When present, this is the complete ordered additional-root list". So an empty list
   and an absent one may differ in meaning, as S2's do. It is reported, not probed.
 
+### Re-assessment at `277aca0`, 2026-11-04
+
+The owner asked, after `v1.32.0`, for the repository's documentation, decisions and plans to be checked against the code and
+brought up to date, and then for the subpackage PLAN. The method was the first re-assessment's: each subpackage probe re-run in
+a scratch copy of `277aca0` (`git ls-files -co --exclude-standard`, copied), never in the tree; three read-only audits, of the
+records and the index, of `docs/architecture.md`, and of `README.md`, each claim checked against the code with `go doc`, the
+file and a script; and the author's check of each finding the corrections below act on.
+
+**The environment:**
+
+* `277aca0` is `v1.32.0` (`9eeb57f`) plus the record of its release.
+* Go `1.27.3` on macOS `arm64`; the 32-bit probe ran as a linux/386 binary on the Linux test host
+  (`tools/remote.py pkg --host linux --goarch 386 --tree <copy>`), where `strconv.IntSize` is 32.
+* The host's load average was 28 to 42 during the runs. The flaky test's figures were taken under a load the probe adds on
+  purpose; no other conclusion rests on a timing test.
+
+**What changed since `e98987a`:** in the subpackages, `acptest/script.go` and its test alone (`git diff --stat e98987a 277aca0
+-- agentproc clienthost remote internal acptest`), `ScriptAgent`'s default stop reason, which no P finding cites. Every F-P
+citation holds at `277aca0`, line for line.
+
+**F-P: all seven reproduce at `277aca0`.** The decisive lines, from `go test -run TestProbe` in the copy:
+
+* P1: "the agent's connection was ended (cause remote: client disconnected); the client read 2000 of 2000 lines"; "a live,
+  reading client was disconnected while the agent was busy: cause remote: client disconnected (ErrDisconnected=true)". With
+  `PROBE_KA_LONG=1`, a 10 s keepalive, both pass.
+* P2: "POST with Host=attacker.example:56010 Origin=http://attacker.example:56010 -> 200 {…"protocolVersion":1}}"; the
+  control, `Host` 127.0.0.1 with the same `Origin`, `403`.
+* P3: "file 64 MiB; answer "x\n" (2 bytes); allocated 640 MiB".
+* P4: "3 of at most 50000 ReadTextFile calls on a path refused as a FIFO were still blocked after 500ms".
+* P5, **now a probe** (`TestProbe32BitLineLimit`, `TestProbe32BitMemoryClient`, linux/386): `clienthost` panics for a
+  `line` of 2^31 + 1 ("slice bounds out of range [-2147483648:]"), a `line` of 2^32 - 1 ("[-2:]"), and a `limit` of 2^31
+  or 2^32 - 1 ("[:2147483648] with capacity 4"); `acptest`'s `MemoryClient` panics for those and for a `line` of 2^31 too
+  ("[2147483647:3]"). `GOOS=linux GOARCH=386 go vet` and `GOOS=linux GOARCH=arm go build` of both packages exit 0, so the
+  code ships there.
+* P6: a 100-byte frame under a 100-byte limit is delivered; a 101-byte one closes the socket, "status = StatusMessageTooBig
+  … (close status 1009)"; the next write fails "use of closed network connection".
+* P7: `-race -count=3`: "WARNING: DATA RACE" in 2 of 3 runs, at `linetap.go:41` and `:46` against `:54`, from
+  `transcript.go:54`.
+* `TestProbeOutputProperty` and `TestProbeDialContextNotBound` pass, as in the pass.
+
+**The flaky test:** 100 runs each of the probe, `go1.27.3`, without `-race`:
+
+* unloaded: killed 0, `p50` 0.48 ms, `max` 26.6 ms;
+* 32 busy goroutines, `GOMAXPROCS=2`, grace 300 ms: killed 9, each "agentproc: agent killed: agentproc: agent terminated",
+  step-2 latencies of the kills 314 to 391 ms;
+* the same, grace 1.2 s: killed 0, `p99` and `max` 688.7 ms.
+
+The margin is the test's, as found; the latency's tail under load is over half of 1.2 s.
+
+**Two new findings,** P8 and P9 under F-P below, each by a probe in the copy.
+
+**The documentation.** Each correction below was checked against the code by the author and is made in the commit that adds
+this section, on the owner's ask:
+
+* `README.md`:
+  * "The unstable features whose capabilities the specification does not tie to a rule (`nes`, `plan`, `providers`,
+    `positionEncoding`) are not checked": `v1.32.0` gates the first three (S3). Only `mcp/message` and `positionEncoding` are
+    not.
+  * "batches, answered `501`": only a POST is (`remote/httpserver.go:100-102`); over WebSocket a batch is a line, which the
+    connection answers `-32600`, "not a JSON-RPC object" (`connection.go:1737`).
+  * The lenient closed enumerations name `kind` alone: `status` and `ElicitationSchema.type`'s default `object` are read so
+    too (`TestLenientClosedEnumsReadAbsent`).
+  * A validation error quotes the value for an absolute path and an excluded value: a closed enumeration's is quoted too
+    (`errors.go:137-138`).
+  * `ServeAgent` at `ctx`'s end returns `context.Cause(ctx)` joined with `Shutdown`'s error (`go doc acp.ServeAgent`).
+  * `Terminals` keeps output to `outputByteLimit` alone: also to `MaxOutputBytes`, 16 MiB by default
+    (`clienthost/terminals.go:18-20`, `:61-64`).
+  * `Handler.Close` "ends every connection at once": it starts each connection's ending ladder at once
+    (`remote/handler.go:236-244`).
+  * `ErrDisconnected` is also the cause when a WebSocket message is not written within `Grace` (`remote/ws.go:129`, `:166`,
+    `:175`).
+* `docs/architecture.md`:
+  * `Roots` is "written by hand on five request types": four, and `SessionInfo` (`helpers.go:150-163`).
+  * The fuzz targets omit `FuzzCanonicalIDKey` (`fuzz_test.go:115`, `Makefile:118`).
+  * The server "routes a request … after `originAllowed` … for every method": a WebSocket upgrade goes to
+    `websocket.Accept` and its own origin rule, and any other method but GET, POST and DELETE is answered `405`, before
+    `originAllowed` (`remote/handler.go:141-168`).
+  * `ReplayAgent` "is a serve function": its `Serve` method is (`acptest/replay.go:133`).
+  * `readHook` is `Command`'s and `InProcess`'s (`agentproc/inprocess.go:63`), and `inProcessAgent.end` also ends
+    `Serve`'s context (`:166`).
+  * `sessionScoped` is `sessionScopedMethods`, and `connectionScoped` gives a `$/` method to the connection
+    (`remote/route.go:97`, `:107`).
+  * A stream must last 300 ms under a 100 ms `WriteTimeout`, not outlive it by 300 ms (`remote/httpserver_test.go:575-583`).
+  * T10 and T13's tree, below.
+* `RELEASING.md`: T8 and T10, below.
+
+Left to the subpackage PLAN, whose phases change the behaviour the text describes: the README's keepalive and back-pressure
+text (P1), the origin rule (P2), `Files`' reads (P3), the message limit (P6, P9), `Transcript.Close` (P7) and `Conn.Read`'s end
+(P8).
+
+**The records:**
+
+* This record's Decision Outcome, its R2 note and its surface answers said the runtime and surface PLANs were in progress
+  or proposed; they are complete, and each says so now.
+* [0048-MADR-create-releases-in-ci.md](0048-MADR-create-releases-in-ci.md) named `v1.31.1` as the last hand release:
+  `v1.31.2` and `v1.32.0` were too. Its PLAN's `--check` would count
+  [0019-REPORT-release-notes-v0-18-0.md](../reports/0019-REPORT-release-notes-v0-18-0.md) as pending: that report is
+  `v1.14.0`'s, its file name kept from before the renumbering, and `git tag -l 'v0.18*'` prints nothing. Both carry a dated
+  amendment; 0048 stays `proposed`.
+* `docs/README.md`'s 0048 and 0049 rows gain what the records say: the answers, the amendments, the halves done.
+* `make check-records`: exit 0. 139 records and 139 rows with the subpackage PLAN's, every MADR's and PLAN's status
+  matching its row.
+
 ## Findings
 
 Severity is the effect on a consumer or a maintainer: **high** loses data, hangs, or crashes a correct program; **medium** gives a
@@ -329,7 +434,7 @@ context deadline exceeded". Fix: name the case in `Wait`'s and `Close`'s doc.
 the test its phase 6 table names, under its deviations 1 to 5 and the amendments of 2026-11-03 to Q8, Q9 and Consequences.
 
 *Re-run 2026-11-03 at `e98987a`:* all nine reproduce ("Re-assessment" above).
-[0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md) takes them up.
+[0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md) took them up.
 
 **S1. Medium. `session/set_config_option` with an unknown `type` and a string `value` decodes to `Unknown`, not `ValueId`.**
 `types_gen.go:16339-16342`. The schema, `SetSessionConfigOptionRequest/anyOf/1`: "Unknown `type` values with string payloads also
@@ -475,7 +580,8 @@ ReadTextFile calls on a path refused as a FIFO were still blocked after 500ms". 
 
 **P5. Low. On 32-bit targets, a `line` or `limit` of 2^31 or more panics the client.** `clienthost/files.go:115`, `:125-126`;
 `acptest/client.go:174`, `:183-185` convert `uint32` to `int`. **Read** (no 32-bit runner here); `GOARCH=386 go vet` and
-`GOARCH=arm go build` succeed, so the code ships there. Fix: compare in `uint64`, and clamp.
+`GOARCH=arm go build` succeed, so the code ships there. Fix: compare in `uint64`, and clamp. *Probe 2026-11-04,* on
+linux/386: the panics, under "Re-assessment at `277aca0`".
 
 **P6. Low. Over WebSocket, one message over `MaxMessageSize` ends the connection.** `remote/handler.go:217`, `ws.go:39`
 (`SetReadLimit`). Streamable HTTP refuses only that POST (`413`), and stdio answers `-32600` and reads on. **Probe**
@@ -486,6 +592,22 @@ frame fails "use of closed network connection". Fix: Q6.
 without a lock (`linetap.go:54`) while the tap goroutine is still in `lineTap.Write` (`linetap.go:41`). **Probe**
 (`TestProbeTranscriptCloseAfterAbandon`, re-run, `-race -count=3`): "WARNING: DATA RACE" in 2 of 3 runs, the read at `linetap.go:41`,
 the previous write at `linetap.go:54` from `Transcript.Close`. Fix: guard `held` with the Transcript's mutex.
+
+**P8. Low. Over Streamable HTTP, `Conn.Read` ends the agent's clean end with an error wrapping `io.EOF`, not `io.EOF`.**
+`remote/httpclient.go:262-270`: the connection's stream ends with `c.fail(fmt.Errorf("remote: the connection's stream ended:
+%w", err))`. `io.EOF`'s doc: "Read must return EOF itself, not an error wrapping EOF, because callers will test for EOF using
+==", and `Conn.Read`'s doc says it "returns io.EOF after the agent's clean end" (`remote/client.go:49-51`). **Probe**
+(`TestProbeConnReadEOF`, 2026-11-04, `-count=3`): a serve that answers `initialize`, reads one notification and returns;
+reading to the end as `io.ReadAll` does, over WebSocket "<nil>", over Streamable HTTP "remote: the connection's stream ended:
+EOF", `errors.Is(err, io.EOF)` true. So `io.ReadAll(conn)` fails at a clean end. The SDK's own connection reads it with
+`errors.Is`, so its end is still clean. Fix: return `io.EOF` itself when the stream ends at its end.
+
+**P9. Low. An agent's message over `MaxMessageSize` is dropped, and the request it answers gets no answer.**
+`remote/ws.go:207-224` (`pump`, both profiles: `httpserver.go:354-363` uses it for Streamable HTTP) logs "a message from the
+agent exceeds MaxMessageSize and was dropped" and writes nothing else. **Probe** (`TestProbeOverlongAnswerDropped`,
+2026-11-04): a serve answers request 1 with a 444-byte line under a 200-byte limit, then sends a notification; the client
+receives the notification alone, "request 1 got no answer of any kind". On stdio the reader of an over-long line answers its
+sender `-32600` with `"id": null` (`connection.go:1597-1601`), so the agent at least learns of it. Fix: Q14.
 
 ### F-T: tooling, CI and documentation
 
@@ -521,14 +643,16 @@ third push while one runs cancels the pending second. **Read**, GitHub's workflo
 SHA in the group for `main`.
 
 **T8. Low. `RELEASING.md`'s prerequisites omit `mdsh`,** which `make version` needs (`Makefile:202-204`, corrected
-2026-11-03). **Probe** (investigator): "mdsh not found", `Error 1`.
+2026-11-03). **Probe** (investigator): "mdsh not found", `Error 1`. *Corrected 2026-11-04* in `RELEASING.md`'s
+prerequisites ("Re-assessment at `277aca0`").
 
 **T9. Low. macOS's `/usr/bin/make`, 3.81, computes an empty schema version silently.** `Makefile:12`, `:37` (corrected
 2026-11-03); `RELEASING.md:10` documents 4.2. **Probe** (investigator): make 3.81 gives `V=[]` and would fetch `…/schema-v/meta.json`. Fix: a version guard.
 
 **T10. Low. The docs name the wrong packages for `make api`.** `RELEASING.md:98-104`, `docs/architecture.md:751-760`
 (corrected 2026-11-03), `Makefile:106` against `scripts/check_api.py:49`, `:54` (gated: root, `agentproc`, `acptest`, `clienthost`; reported: `unstable`,
-`remote`).
+`remote`). *Corrected 2026-11-04* in `RELEASING.md` and `docs/architecture.md`, which still named three gated packages and
+one reported, the citation having been corrected on 2026-11-03 and not the text; `Makefile:106` is the tooling PLAN's.
 
 **T11. Low. `release_body.py` hides why the identifier scan failed.** `tools/release_body.py:77-81` prints idscan's stdout only.
 **Probe** (investigator): with no deny list, exit 1 with no reason.
@@ -538,7 +662,8 @@ SHA in the group for `main`.
 
 **T13. Low. Small doc gaps:** `docs/architecture.md`'s tree omits `scripts/push_guard.py`, `testdata/elicitation/` and
 `testdata/encodings.golden`; `make help` omits `check-records`, `check-tools`, `markdownlint`, `disclosure-check`, `version`,
-`release` and `clean`; `tools/platforms.py` has no test.
+`release` and `clean`; `tools/platforms.py` has no test. *The tree corrected 2026-11-04,* with `version` and
+`scripts/test_check_*.py` too; `make help` and `platforms.py`'s test are the tooling PLAN's.
 
 ### F-C: coverage and dead code
 
@@ -577,9 +702,12 @@ released on its own, while the severity order inside each keeps R1 first. The pl
   exported API. *Complete 2026-11-03,* released in `v1.31.2`.
 * `0049-PLAN-surface-fixes.md`: S1, S2, S6 per Q4, S7, S8, S9, S5, S4, and S3 per Q3. The new gates and stricter validation are
   behaviour changes, released as a minor version with notes that lead with them. *Written 2026-11-03,*
-  [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md), proposed. It groups the order into phases by mechanism: S1 with S7,
-  S2, S6, then the gates S8, S9, S5 and S3, then S4.
+  [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md). It groups the order into phases by mechanism: S1 with S7,
+  S2, S6, then the gates S8, S9, S5 and S3, then S4. *Complete 2026-11-04,* released in `v1.32.0`.
 * `0049-PLAN-subpackage-fixes.md`: P1, P3, P4, P7, P5, P2 per Q5, P6 per Q6, and `TestInProcessServeAgentStep2`'s margin.
+  *Written 2026-11-04,* [0049-PLAN-subpackage-fixes.md](0049-PLAN-subpackage-fixes.md), proposed, with P8 and P9 of the
+  second re-assessment and Q12 to Q15 below. It groups the order into phases by package: P1; P3, P4 and P5, one function;
+  P7 and the margin; P2; P6, P9 and P8.
 * `0049-PLAN-generator-fixes.md`: G2, G1, G3, then G4 to G12, each refusal with an engine case; G13.
 * `0049-PLAN-tooling-fixes.md`: T2 (with 0048), T1, T3, then T4 to T13, and F-C's dead `ConfigOptionUpdate.gates` through the
   generator.
@@ -647,7 +775,8 @@ Each PLAN is written when its turn comes, against the tree as it then stands, so
     the in-place change; identity first and the bytes for the same pointer, the same coverage with more code.
 
 *2026-11-02:* the owner committed these answers and the runtime PLAN as `9f59ee2` and said "proceed". The decision is
-`accepted`, and [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md) is in progress. 0046's amendment of 2026-11-02 records
+`accepted`, and [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md) is in progress (*complete 2026-11-03,*
+released in `v1.31.2`). 0046's amendment of 2026-11-02 records
 where faults and refusals are now observed.
 
 #### The surface PLAN's designs, proposed 2026-11-03
@@ -740,22 +869,107 @@ Each question was put with its three options; the owner chose the recommended on
 * Q11 (a): a protocol-table rule, `EmptyClears`. Not chosen: `omitzero` on every nullable array; `Patch[[]T]`.
 
 [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md) is written on these answers. It stays `proposed` until the owner
-approves it.
+approves it. (*2026-11-03:* the owner committed it as `df1eb2c` and said "proceed"; it is complete, released in `v1.32.0`.)
+
+#### The subpackage PLAN's designs, proposed 2026-11-04
+
+[0049-PLAN-subpackage-fixes.md](0049-PLAN-subpackage-fixes.md) needs four answers Q5 and Q6 do not settle. Each is put with
+three options, the recommended one first. The PLAN is written on the recommended answers and changes if the owner chooses
+otherwise.
+
+* **Q12. P1, what keeps a WebSocket alive under back-pressure.** The cause is one fact of the library: "You must always read
+  from the connection. Otherwise control frames will not be handled", and `Ping` "does not read from the connection but
+  instead waits for a Reader call to read the pong" (coder/websocket `v1.8.15`, `conn.go:31-32`, `:218-220`). A frame is read
+  in order, so a ping behind a frame nobody takes is not read either. The server's reader waits in the agent's pipe
+  (`remote/ws.go:155`), so the server reads no pong while its agent is busy; the client's waits at 256 lines
+  (`ws.go:79`, `frame.go:132`), so the client answers no ping while its application is slow.
+  * **(a) The client's reader never waits on its application, up to a byte bound; the server does not count a pong missed
+    while its own reader waits on the agent** (recommended).
+    * The client's `lineQueue` is bounded in bytes, not lines: a new `DialOptions.MaxBuffered`, zero 64 MiB, as
+      `HandlerOptions.MaxBuffered` is for Streamable HTTP. Below it the reader takes every frame, so pings are answered.
+    * The server marks the time its reader waits to hand a frame to the agent. A ping that fails while it waited is not
+      counted; the next is sent.
+    * The server holds what it holds now, one frame, in its pipe; the client holds up to its bound. A client past the bound
+      stops reading, and is disconnected after a missed pong, as Streamable HTTP ends with `ErrOverflow` past its own.
+    * One option added, in `remote`, which `make api` reports and does not gate.
+  * **(b) Both readers never wait, each up to `MaxBuffered`.** The server queues a client's frames for the agent up to
+    `HandlerOptions.MaxBuffered`, too, and its keepalive is unchanged. One rule on both sides; but each connection may hold up
+    to 64 MiB of a client's messages in the server, which a client chooses to send, where it holds one frame now.
+  * **(c) A missed pong never disconnects.** Pings are still sent, so intermediaries see traffic; a dead peer is found by a
+    write that waits past `Grace`, or by TCP keep-alive, which `net` enables at 15 s idle, 15 s between probes and 9 probes
+    (`go doc net.KeepAliveConfig`), so about 150 s. The smallest change; a dead, idle client's serve runs about two minutes
+    longer, and `KeepAlive`'s doc and the README's change meaning.
+* **Q13. P2, the Host rule of Q5 (a).**
+  * **(a) `HandlerOptions.AllowedHosts`, patterns for the `Host` header's name, port ignored, matched as `OriginPatterns`
+    are; on a loopback listener, when it is nil, an IP literal or `localhost` (or a name under `.localhost`) passes and any
+    other name is refused** (recommended).
+    * The listener is read from `http.LocalAddrContextKey`, "the local address the connection arrived on" (`go doc
+      net/http.LocalAddrContextKey`); a listener that is not loopback, or a request without the key, checks nothing unless
+      `AllowedHosts` is set.
+    * Every request is checked, the WebSocket upgrade included, before the origin rule, and refused `403`.
+    * An IP literal passes because a rebinding needs a name: a page served from the IP is not cross-site to it.
+  * **(b) The same, on every listener.** A server reached by a name must list it, whatever its address. A private-network
+    address is covered too, which a rebinding also reaches; every deployment behind a domain name breaks until it is
+    configured.
+  * **(c) Check `Host` only on a request that carries `Origin`.** A program that sends no `Origin` is never refused. But a
+    same-origin GET after a rebinding sends none: the Fetch standard ("append a request `Origin` header") adds `Origin` to
+    a same-origin request only when its method is neither GET nor HEAD, so the event streams stay open to the page.
+* **Q14. P6 and P9, a message over `MaxMessageSize`.** On stdio the side that reads it discards it, answers `-32600` with
+  `"id": null`, and reads on (`connection.go:1597-1601`, `WithMaxMessageSize`'s doc).
+  * **(a) Each transport reader does as stdio's: discard, answer `-32600` with `"id": null` and "message exceeds N bytes",
+    read on** (recommended).
+    * The server, for a client's frame, answers on the socket; the client `Conn`, for the server's frame, answers on the
+      socket; the server's pump, for an agent's line (P9), answers on the agent's input, as the client's connection would.
+    * The socket's own limit is disabled (`SetReadLimit(-1)`, "Set to -1 to disable", `read.go:96`), and each frame is read
+      through `Reader` under the transport's bound, the rest drained without being held.
+    * A POST over the limit keeps its `413`.
+  * **(b) The server alone, for a client's frame,** as Q6 (a) reads literally. An over-long frame still closes the client's
+    socket, and an agent's over-long answer is still dropped with no answer, each documented.
+  * **(c) The frame is handed on, and the connection's own limit refuses it.** The fault reaches the observer as on stdio;
+    but `MaxMessageSize` then bounds nothing the agent reads, and a frame crosses the pipe whole.
+* **Q15. P5, how a 32-bit target stays tested.** No CI job, gate or host runs 32-bit code today (`tools/platforms.py:25`'s
+  `VET` list and `ci.yml` name no 32-bit target).
+  * **(a) A CI step that runs `clienthost` and `acptest`'s tests as linux/386 on the Ubuntu job,** besides the new test on
+    every host (recommended). An amd64 runner runs a static 386 binary, as the Linux test host did. The cost: about a
+    minute of CI per run, and `ci.yml`, which `make check-tools` checks.
+  * **(b) A gate, `linux386`, in `tools/gates.py`,** running those tests on the Linux test host with
+    `remote.py pkg --goarch 386`. No CI change; it runs only when a PLAN runs `--all`.
+  * **(c) No 32-bit run.** The new test checks the arithmetic with values past `math.MaxInt32` on 64-bit hosts, where they
+    cannot overflow; `vet` and `build` stay the only 32-bit checks.
+
+##### Answered by the owner, 2026-11-04
+
+Each question was put with its three options:
+
+* Q12 (a), the recommended one: the client's reader bounded in bytes, `DialOptions.MaxBuffered`, and the server not counting
+  a pong missed while its reader waits on the agent. Not chosen: both sides buffering; a missed pong never disconnecting.
+* Q13 (a), the recommended one: `HandlerOptions.AllowedHosts`, the loopback default on a loopback listener only. Not chosen:
+  the default on every listener; a check only when `Origin` is sent.
+* Q14 (a), the recommended one: every transport reader discards an over-long message and answers `-32600` with `"id": null`,
+  the agent's over-long answer included. Not chosen: the server alone; handing the frame to the connection.
+* Q15 (c), not the recommended one: no 32-bit run. The new tests run on 64-bit hosts, where they check the arithmetic and
+  cannot fail on the old code. Each is still seen to fail once, as the PLAN's rule requires: its plant runs as linux/386 on
+  the Linux test host, by script, and the record quotes it. Not chosen: a CI step on linux/386; a `linux386` gate.
 
 ### Consequences
 
 * Good, because a deadlock, a crash, and four schema mismatches a peer can see are fixed, each with a test that would have caught
-  it.
+  it. *2026-11-04:* the deadlock and the mismatches are fixed, in `v1.31.2` and `v1.32.0`; the crash, P5, is the
+  subpackage PLAN's.
 * Good, because the generator refuses the schemas it now crashes on, renders wrongly or drops parts of (G2 to G8), before a
   schema update meets one.
 * Good, because the checks the records quote (`publication.py`, `check_records.py`, the docs-safe set) check what they claim.
 * Bad, because the surface fixes refuse what the SDK sent before (an empty `stopReason`, an unadvertised `methodId`, an ungated
   boolean option): a consumer that relied on it fails at the call, which is why they go in a minor release with notes.
 * Bad, because five PLANs are a long program; Q1 (c) is the shorter alternative.
+* Bad, because nothing runs 32-bit code after the subpackage PLAN (Q15 c): a later change that converts a `uint32` back to
+  `int` in `Files` or `MemoryClient` passes every check on a 64-bit host.
 * Neutral, because none of the fixes needs an incompatible API change; Q5 (a) adds one option, and Q10 (a) one sentinel.
   *Amended 2026-11-03,* in [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md)'s phase 3, deviation 3: S6's
   membership check gives 25 types that held a closed enumeration and checked nothing an exported `Validate`, compatible
   additions the owner accepted.
+  *2026-11-04:* Q12 (a) adds a second option in `remote`, `DialOptions.MaxBuffered`. `make api` reports `remote`'s changes
+  without gating them, and counts its compatible ones with the rest (`scripts/check_api.py:135-140`).
 
 ### Confirmation
 
@@ -790,7 +1004,7 @@ later base a PLAN names) and passes after the fix; the gate set and CI pass; and
   [0019-MADR-remediate-debugging-pass-findings.md](0019-MADR-remediate-debugging-pass-findings.md),
   [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md) (S6),
   [0041-MADR-close-the-gaps-the-consumers-wait-on.md](0041-MADR-close-the-gaps-the-consumers-wait-on.md) (S2, P3, P4),
-  [0043-MADR-remote-http-and-websocket-transport.md](0043-MADR-remote-http-and-websocket-transport.md) (P1, P2, P6),
+  [0043-MADR-remote-http-and-websocket-transport.md](0043-MADR-remote-http-and-websocket-transport.md) (P1, P2, P6, P8, P9),
   [0045-MADR-notification-queue-byte-budget.md](0045-MADR-notification-queue-byte-budget.md) (R5),
   [0046-MADR-sending-and-receiving-middleware.md](0046-MADR-sending-and-receiving-middleware.md) (R2, R8),
   [0047-MADR-pre-add-check-full-coverage.md](0047-MADR-pre-add-check-full-coverage.md) (T1),

@@ -10,6 +10,8 @@ code, helper APIs, and library version remain in sync.
 - GNU make 4.2 or newer, `curl`, and `git` in your `PATH`. The Makefile reads `schema/version` with `$(file)`, which Make 3.81 does not implement. Homebrew installs this binary as `gmake`.
 - Go at the version in the `go` line of `go.mod`.
 - `gofmt`, `golangci-lint` v2.14.0, and `make pre-add-check`.
+- `mdsh`, which `make version` runs to rewrite `README.md` (`make version
+  MDSH=path` names another binary).
 
 ## Bump the Schema Version
 
@@ -96,12 +98,13 @@ bump's record, with what `unstable` gained and lost
    ```
 
    `make api` runs `apidiff`, through `scripts/check_api.py`, on the root
-   package, `agentproc` and `acptest` against the newest `v1` tag, a package
-   the tag lacks against an empty one. It fails on an incompatible change,
-   and lists the compatible ones: when there are any, the release is a minor
-   (`vX.Y+1.0`), otherwise a patch. It compares `unstable` too, and lists its
-   incompatible changes under their own heading without failing. It needs the
-   tags.
+   package, `agentproc`, `acptest` and `clienthost` against the newest `v1`
+   tag, a package the tag lacks against an empty one. It fails on an
+   incompatible change, and lists the compatible ones: when there are any, the
+   release is a minor (`vX.Y+1.0`), otherwise a patch. It compares `unstable`
+   and `remote` too, lists their incompatible changes under their own heading
+   without failing, and counts their compatible ones with the rest. It needs
+   the tags.
 
 2. Tag the release commit with an annotated, Go-compatible tag whose message
    is its name:

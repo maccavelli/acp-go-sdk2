@@ -1,6 +1,6 @@
 ---
 status: proposed
-date: 2026-11-01
+date: 2026-11-04
 decision-makers: the repository owner
 consulted: "the repository's workflows, release tools and settings at `151b6e8`; GitHub's documentation of `GITHUB_TOKEN` and `gh release create`"
 informed: none
@@ -126,7 +126,10 @@ The parts:
   `gh release create` stays as the fallback for a failed job. `tools/README.md` gains `publish_release.py`, and
   `docs/architecture.md` the job.
 
-`v1.31.1`, tagged before this lands, is released by hand as before.
+`v1.31.1`, tagged before this lands, is released by hand as before. *Amended 2026-11-04*
+([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](0049-MADR-remediate-the-2026-11-01-debugging-pass.md), "Re-assessment
+at `277aca0`"): `v1.31.2` and `v1.32.0` were released by hand too, with `gh release create VERSION --title VERSION
+--notes-file <the body>`, `--verify-tag` left out; F1's figures stay those at `151b6e8`.
 
 ### Questions for the owner
 

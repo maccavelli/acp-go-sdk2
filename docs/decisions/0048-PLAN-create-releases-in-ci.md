@@ -1,6 +1,6 @@
 ---
 status: proposed
-date: 2026-11-01
+date: 2026-11-04
 associated-madr: "0048-MADR-create-releases-in-ci.md"
 ---
 
@@ -65,6 +65,12 @@ planted break, in a scratch copy, never in the tree.
    * `publish_release.py --check`: for every `docs/reports/*-REPORT-release-notes-vX-Y-Z.md` at `HEAD` whose `vX.Y.Z` is not a
      tag (`git tag -l`), steps 1 and 4 against `HEAD`, with `--no-idscan`'s reasoning. Exit 0 when every one extracts, or none is
      pending, printing what it checked.
+     * *Amended 2026-11-04,* before execution
+       ([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
+       "Re-assessment at `277aca0`"): a report's version is read from its title line, `# Release notes for vX.Y.Z, …`, not
+       from its file name. [0019-REPORT-release-notes-v0-18-0.md](../reports/0019-REPORT-release-notes-v0-18-0.md) is
+       `v1.14.0`'s, its title says so, and `git tag -l 'v0.18*'` prints nothing, so by its file name `--check` would count it
+       pending. Step 3's tests gain that case: a report whose file name and title differ, its title's tag present.
    * `gh` is called with `--repo OWNER/NAME` from `_common.origin_repo`, never inferred.
 3. **Tests,** `PublishReleaseTest` in `tools/test_tools.py`, in a temporary repository with a fake `gh` on `PATH`, as
    `WatchCiTest`'s `FakeApi` stands in for the API: a plain semver tag on `main` with notes, created; a lightweight tag; a tag

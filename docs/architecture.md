@@ -44,7 +44,7 @@ up a connection pair for a test
   the canonical form `Recorder` keeps, rewrites it under `ACPTEST_UPDATE=1`, an
   environment variable since a flag would collide with a test binary's own
   `-update`, and otherwise writes the records to `tb.ArtifactDir()`.
-- `ReplayAgent` (`replay.go`) is a serve function. `planReplay` reads the
+- `ReplayAgent` (`replay.go`)'s `Serve` method is a serve function. `planReplay` reads the
   Received records as steps, each response tagged, through the Sent requests'
   ids, with the method and position of the client request it answered. Its
   reader queues the client's live requests by method, answers one beyond the
@@ -334,8 +334,8 @@ integer consts, is an enum kind); a discriminator const that is not a string;
 a property key a json struct tag cannot carry; a field, union wrapper field or
 flattened member named `MarshalJSON`, `UnmarshalJSON` or `Validate`; a
 `required` key no property declares; and a definition linked by `x-method` and
-`x-side` to a method no meta file lists. `Roots`, written by hand on five
-request types, is left to the type checker: a property named `roots` there
+`x-side` to a method no meta file lists. `Roots`, written by hand on four
+request types and `SessionInfo`, is left to the type checker: a property named `roots` there
 does not type-check.
 
 Every keyword the schema loader accepts has one treatment, listed in
@@ -723,8 +723,9 @@ Checks that guard this:
   files (`instances_test.go`) and requires each generated type to decode,
   validate, and send them back, to refuse what the schema refuses, and each
   method to reach its peer and bring back its result or error.
-- `FuzzRoundTrip` at the root and `FuzzBuild` in `cmd/generate` run their seeds
-  in every `go test`; `make fuzz` fuzzes them and `FuzzExportedName` for
+- `FuzzRoundTrip` and `FuzzCanonicalIDKey` at the root and `FuzzBuild` in
+  `cmd/generate` run their seeds in every `go test`; `make fuzz` fuzzes them
+  and `FuzzExportedName` for
   `FUZZTIME`. A crasher is kept under the package's `testdata/fuzz/` as a seed.
 - `make mutation-engine` and `make mutation-generated` run
   `cmd/generate/internal/mutate`: one operator changed at a time, compiled
@@ -782,16 +783,18 @@ Checks that guard this:
   (0037-MADR-align-docs-ci-and-disclosure-gates.md).
 - `make api` and CI's "API compatibility" step run `scripts/check_api.py`:
   `apidiff`, pinned there, compares the working tree's root package,
-  `agentproc` and `acptest` with the newest `v1` tag's, a package missing from the tag
+  `agentproc`, `acptest` and `clienthost` with the newest `v1` tag's, a package missing from the tag
   against an empty one, taken with `git archive`, or with `BASE`. An incompatible
   change, such as a removed declaration or a method added to an interface,
   fails; the compatible ones are listed. `apidiff` exits 0 either way, so the
   script reads its report. It needs the tags, so CI's Linux job at the newest
-  Go fetches every commit and tag. `unstable` is a reported package: its
-  incompatible changes are listed under a heading of their own and do not fail
+  Go fetches every commit and tag. `unstable` and `remote` are reported
+  packages: their incompatible changes are listed under a heading of their own
+  and do not fail, and their compatible ones are counted with the rest
   (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2e).
 
-The schema stamp lives in `schema/version`. The `go` line lives in `go.mod` and
+The schema stamp lives in `schema/version`, and `make version` copies it to
+`version`, which `make release` compares with it. The `go` line lives in `go.mod` and
 `cmd/generate/go.mod`.
 
 ## The unstable boundary
@@ -955,8 +958,8 @@ received is a prefix, and counts what it does not receive. `Wait` runs
 `drainTaps` once: it ends each tap's stream and waits, up to the grace from one
 timer, for its queue to be written, then abandons a tap still writing. With no
 tap set, the connection gets the pipe and the input themselves, and no
-goroutine starts. `Command`'s unexported `readHook`, which only the package's
-tests set, runs before each read of the output tap's reader, to hold the
+goroutine starts. `Command`'s and `InProcess`'s unexported `readHook`, which
+only the package's tests set, runs before each read of the output tap's reader, to hold the
 connection behind the agent. `LineTap` (`linetap.go`) is a tap writer that
 calls a function with each line, a copy without its newline, and holds a line
 not yet ended (0041, item 5). The tap reader and writer take any
@@ -972,7 +975,7 @@ cancels it with `ErrKilled`, closes the agent's two pipe ends, and starts the
 abandonment's grace; `wait` returns `Serve`'s error, or `ErrAbandoned` once
 that grace passes; `end` closes the agent's output, so the client reads its
 end as at a child's exit, and its input, so that a write of the client's fails
-rather than waits.
+rather than waits, and ends `Serve`'s context with `context.Canceled`.
 
 `stderr.go`'s `tailWriter`, which `Start` sets as `Cmd.Stderr` when
 `Command.StderrTail` or `StderrTailLines` is set, keeps the end of the agent's
@@ -1070,8 +1073,8 @@ written becomes one message. So `acp`'s connections, `ServeAgent`, the taps and
 - `route.go`'s `classify` reads a line's kind, its id key, its method, and its
   `params.sessionId` and `result.sessionId`.
   - The id key is the id's raw bytes, which an answer repeats exactly.
-  - `sessionScoped` lists the methods that need a session; a `$/` method is the
-    connection's.
+  - `sessionScopedMethods` lists the methods that need a session;
+    `connectionScoped` gives a `$/` method to the connection.
 
 **The client.** `Dial` returns a `Conn` over the unexported `transport` of its
 profile:
@@ -1089,9 +1092,11 @@ profile:
   - `Close` sends `DELETE`.
   - `sse.go`'s `sseReader` reads the events, within `MaxMessageSize`.
 
-**The server.** `handler.go`'s `Handler` routes a request by method and
-`Upgrade`, after `originAllowed`, which copies `websocket.Accept`'s origin rule
-for every method. Each connection is a `serverConn`:
+**The server.** `handler.go`'s `Handler` answers `503` once closed; hands a
+GET with `Upgrade: websocket` to `websocket.Accept`, which applies its own
+origin rule; answers any method but GET, POST and DELETE `405`; and checks
+those three with `originAllowed`, a copy of `websocket.Accept`'s rule, before
+routing them by method. Each connection is a `serverConn`:
 
 - `serve` runs on a goroutine outside `Handler.active`, as `InProcess` keeps
   its agent outside `Process`'s group, between two `io.Pipe`s.
@@ -1138,7 +1143,7 @@ Checks that guard it:
 - `remote`'s 55 tests run on loopback through `httptest`. Each event a test
   requires is waited for under a named bound. Its fixed waits are deliberate:
   - a delay the fake server injects;
-  - the 300 ms a stream must outlive a `WriteTimeout` by;
+  - the 300 ms a stream must last under a 100 ms `WriteTimeout`;
   - a short window in which a test requires that something does not happen.
 
   The tests, by file:
@@ -1220,16 +1225,21 @@ cmd/generate/             the generator, its own module
   testdata/engine/        synthetic engine cases, one txtar each
   testdata/fuzz/          FuzzBuild seeds kept from crashers
 schema/                   schema files, the version stamp, and the frozen unstable-v1.json
+version                   the schema stamp's copy, which make release compares with schema/version
 example/                  agent, client, claude-code, gemini, remote programs
 testdata/json_golden/     JSON goldens
 testdata/fuzz/            FuzzRoundTrip seeds kept from crashers
 testdata/compaction/      CompactionTimeline replay fixtures, one session/update a line
 testdata/toolcalls/       ToolCallTimeline replay fixtures, one session/update a line
+testdata/elicitation/     forms and answers for the elicitation checks
+testdata/encodings.golden each schema instance's type and its encoding after a decode
 scripts/go-precheck.sh    the pre-add gate
 scripts/check_records.py  record numbering and link check
 scripts/check_disclosure.py  real user-home paths in tracked text
 scripts/check_ci_filters.py  CI's and Docs' paths, gates and pins agree
 scripts/check_api.py      the API gate: apidiff against the newest v1 tag
+scripts/push_guard.py     the pre-push disclosure guard, run over the outgoing commits (make push-guard)
+scripts/test_check_*.py   the scripts' tests, run by make check-tools
 tools/                    the verification tools; tools/README.md
 .github/workflows/ci.yml  CI
 .github/workflows/docs.yml  the documentation gates, for docs-only changes
