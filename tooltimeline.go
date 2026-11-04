@@ -3,7 +3,6 @@ package acp
 import (
 	"bytes"
 	"encoding/json"
-	"slices"
 	"sync"
 )
 
@@ -35,9 +34,10 @@ type ToolCallTimeline struct {
 	order    []ToolCallId
 }
 
-// Apply applies u and returns the tool call it changed, as a copy, and true;
-// for an update that is not a tool call's, it returns the zero entity and
-// false.
+// Apply applies u and returns the tool call it changed, as a copy that shares
+// nothing with the timeline, and true; for an update that is not a tool
+// call's, it returns the zero entity and false. What it keeps of u is a copy
+// too, so changing u afterwards changes nothing it holds.
 //
 //   - A tool_call is the call: it replaces every field of an entity of its
 //     id, one already seen included, as a tool_call announces the whole call.
@@ -67,8 +67,8 @@ func (t *ToolCallTimeline) Apply(u SessionUpdate) (ToolCallEntity, bool) {
 			Kind:      c.Kind,
 			Status:    c.Status,
 			Name:      clonePtr(c.Name),
-			Content:   slices.Clone(c.Content),
-			Locations: slices.Clone(c.Locations),
+			Content:   deepCopy(c.Content),
+			Locations: deepCopy(c.Locations),
 			RawInput:  rawValue(c.RawInput),
 			RawOutput: rawValue(c.RawOutput),
 		}
@@ -89,10 +89,10 @@ func (t *ToolCallTimeline) Apply(u SessionUpdate) (ToolCallEntity, bool) {
 			e.Name = clonePtr(c.Name)
 		}
 		if c.Content != nil {
-			e.Content = slices.Clone(c.Content)
+			e.Content = deepCopy(c.Content)
 		}
 		if c.Locations != nil {
-			e.Locations = slices.Clone(c.Locations)
+			e.Locations = deepCopy(c.Locations)
 		}
 		if raw := rawValue(c.RawInput); raw != nil {
 			e.RawInput = raw
@@ -106,7 +106,8 @@ func (t *ToolCallTimeline) Apply(u SessionUpdate) (ToolCallEntity, bool) {
 	}
 }
 
-// Get returns the tool call id, as a copy, and whether the timeline has it.
+// Get returns the tool call id, as a copy that shares nothing with the
+// timeline, and whether the timeline has it.
 func (t *ToolCallTimeline) Get(id ToolCallId) (ToolCallEntity, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -167,14 +168,8 @@ func clonePtr[T any](p *T) *T {
 	return &v
 }
 
-// copyToolCall is a copy of e whose collections and raw values e does not
-// share.
+// copyToolCall is a copy of e that shares nothing with it, to its content's
+// nested blocks.
 func copyToolCall(e *ToolCallEntity) ToolCallEntity {
-	c := *e
-	c.Name = clonePtr(e.Name)
-	c.Content = slices.Clone(e.Content)
-	c.Locations = slices.Clone(e.Locations)
-	c.RawInput = bytes.Clone(e.RawInput)
-	c.RawOutput = bytes.Clone(e.RawOutput)
-	return c
+	return deepCopy(*e)
 }

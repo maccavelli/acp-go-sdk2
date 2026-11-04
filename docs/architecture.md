@@ -106,7 +106,10 @@ and `make api` gates it with the root, `agentproc` and `clienthost`.
   `AgentRefusals`, which answer method-not-found for the `Client` and `Agent`
   methods a side may leave unadvertised), `tooltimeline.go` (`ToolCallTimeline`
   and `ToolCallEntity`, which apply a session's tool-call updates by the
-  schema's rules, live or replayed, for a client; 0041, item 9), `serve.go`
+  schema's rules, live or replayed, for a client; 0041, item 9), `deepcopy.go`
+  (`deepCopy`, the reflection copy through which both timelines keep and
+  return their entities, so they share nothing with an update or a caller;
+  0049, S4), `serve.go`
   (`ServeAgent`, an agent's main over a reader and a writer; 0042, item 2;
   its error wraps `ErrHandlersRunning` when its 5 s bound passes with
   handlers still running, at its input's end or, through `Shutdown`'s

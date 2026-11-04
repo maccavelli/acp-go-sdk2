@@ -726,6 +726,13 @@ Each question was put with its three options; the owner chose the recommended on
     F1 holds everywhere else. Asked with three options, the owner chose this one. Not chosen: superseding F1; a hand special
     case for S1.
 * Q9 (a): an unexported deep copy by `reflect`. Not chosen: generated `clone` methods; a JSON round trip.
+  * *Amended 2026-11-03,* in [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md)'s phase 5, deviation 5. S4 named
+    the copies the timelines return. `Apply` also keeps what it takes from an update shallowly (`tooltimeline.go:70-71,92,95`,
+    `compaction.go:63,76,82` at `6ad8759`), so a caller that changes its update afterwards, through a pointer, changes the
+    timeline: "tool call timeline state changed through the applied update", and the same for compactions
+    (`TestProbeTimelinesIngestAliases`). The deep copy applies on the way in too, so a timeline shares nothing with what it
+    is given or what it returns. Asked with two options, the owner chose this one. Not chosen: documenting that a caller
+    must not change an update after `Apply`, and recording the aliasing as a new finding.
 * Q10 (a): a new sentinel, `ErrUnadvertisedAuthMethod`. Not chosen: a `*CapabilityError`; a widened `ErrTerminalAuthMethod`.
 * Q11 (a): a protocol-table rule, `EmptyClears`. Not chosen: `omitzero` on every nullable array; `Patch[[]T]`.
 

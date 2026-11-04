@@ -163,6 +163,36 @@ func TestCompactionTimelineCopies(t *testing.T) {
 	if got.Meta["k"] != "v" || summaryText(t, got)[0] != "s" {
 		t.Errorf("the timeline shares what Apply returned: %+v", got)
 	}
+
+	// Nor what they hold through pointers: a summary block's text, its
+	// annotations' audience and its nested _meta, and the entity's nested
+	// _meta (0049-PLAN-surface-fixes.md, phase 5, S4).
+	var deep acp.SessionUpdate
+	if err := json.Unmarshal([]byte(`{"sessionUpdate":"compaction_update","compactionId":"d","status":"completed",`+
+		`"summary":[{"type":"text","text":"s","annotations":{"audience":["user"]},"_meta":{"k":{"n":1}}}],`+
+		`"_meta":{"k":{"n":1}}}`), &deep); err != nil {
+		t.Fatal(err)
+	}
+	asJSON := func(e acp.CompactionEntity) string {
+		b, err := json.Marshal(e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	applied, _ := tl.Apply(deep)
+	gotten, _ := tl.Get("d")
+	before := asJSON(gotten)
+	for _, e := range []acp.CompactionEntity{applied, gotten} {
+		text := e.Summary[0].Text
+		text.Text = "changed"
+		text.Annotations.Audience[0] = acp.RoleAssistant
+		text.Meta["k"].(map[string]any)["n"] = "changed"
+		e.Meta["k"].(map[string]any)["n"] = "changed"
+	}
+	if after, _ := tl.Get("d"); asJSON(after) != before {
+		t.Errorf("the timeline changed through a returned copy's pointers:\n got %s\nwant %s", asJSON(after), before)
+	}
 }
 
 // TestCompactionTimelineReplay applies each fixture of testdata/compaction,

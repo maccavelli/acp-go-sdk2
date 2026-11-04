@@ -158,6 +158,30 @@ func TestToolCallTimelineCopies(t *testing.T) {
 		*got.Name != "tool" {
 		t.Errorf("the timeline shares what Apply was given or returned: %s", entityJSON(t, got))
 	}
+
+	// Nor what they hold through pointers: a content block's text, its
+	// annotations' audience and its nested _meta, a diff's new text, and a
+	// location's line (0049-PLAN-surface-fixes.md, phase 5, S4).
+	var deep acp.SessionUpdate
+	if err := json.Unmarshal([]byte(`{"sessionUpdate":"tool_call","toolCallId":"d","title":"D","content":[`+
+		`{"type":"content","content":{"type":"text","text":"a","annotations":{"audience":["user"]},"_meta":{"k":{"n":1}}}},`+
+		`{"type":"diff","path":"/work/a.go","newText":"new"}],"locations":[{"path":"/work/a.go","line":3}]}`), &deep); err != nil {
+		t.Fatal(err)
+	}
+	applied, _ := tl.Apply(deep)
+	gotten, _ := tl.Get("d")
+	before := entityJSON(t, gotten)
+	for _, e := range []acp.ToolCallEntity{applied, gotten} {
+		text := e.Content[0].Content.Content.Text
+		text.Text = "changed"
+		text.Annotations.Audience[0] = acp.RoleAssistant
+		text.Meta["k"].(map[string]any)["n"] = "changed"
+		e.Content[1].Diff.NewText = "changed"
+		*e.Locations[0].Line = 99
+	}
+	if after, _ := tl.Get("d"); entityJSON(t, after) != before {
+		t.Errorf("the timeline changed through a returned copy's pointers:\n got %s\nwant %s", entityJSON(t, after), before)
+	}
 }
 
 // TestToolCallTimelineReplay applies testdata/toolcalls/lifecycle.jsonl, one

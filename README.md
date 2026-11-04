@@ -191,6 +191,11 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
   or nil slice: the update carries `"content": []`. On a `ToolCallUpdate` built
   by hand, a nil slice is not sent and an empty one is.
 
+  Both timelines keep a copy of what they take from an update and return
+  copies, down to the nested content blocks and `_meta` values, so changing an
+  update after `Apply`, or an entity `Apply` or `Get` returned, never changes
+  what the timeline holds.
+
 Helper constructors are provided to reduce boilerplate when working with union types:
 
 - Content blocks: `acp.TextBlock`, `acp.ImageBlock`, `acp.AudioBlock`,

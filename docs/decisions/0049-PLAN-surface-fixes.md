@@ -267,6 +267,8 @@ emitter's plant runs in a scratch copy by script, since `plants.py` runs from th
      element by element, and structs field by field. Every field the timelines reach is exported (checked at `e98987a`: none
      is unexported, and the only interface values are `_meta`'s).
    * `copyToolCall` and `copyEntity` use it.
+   * *Added by deviation 5, 2026-11-03:* `Apply` uses it too, for what it keeps from an update: a tool call's content and
+     locations, and a compaction's summary, summary chunk and `_meta`.
    * The timelines' godoc says "a copy that shares nothing with the timeline".
 2. **Tests:**
    * `TestToolCallTimelineCopies` (`tooltimeline_test.go:142`) and `TestCompactionTimelineCopies` (`compaction_test.go:153`)
@@ -828,3 +830,92 @@ FAILED AS REQUIRED: authGateTypes drops the advertised gate: rc 1: docs_test.go:
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 5 begins on the owner's word.
+
+The owner committed phase 4 as `6ad8759`.
+
+### Phase 5: S4, the timelines' copies, 2026-11-03
+
+Begun on the owner's "committed, proceed" after `6ad8759`.
+
+**Deviation 5, 2026-11-03: the timelines copy what they are given, too.**
+
+* **Found,** reading `tooltimeline.go` and `compaction.go` before the change. Step 5.1 deep-copies what the timelines
+  return. `Apply` also keeps what it takes from an update with `slices.Clone` and `maps.Clone` (`tooltimeline.go:70-71,92,95`,
+  `compaction.go:63,76,82`), which share the nested values. A probe in a scratch copy of the tree, at `6ad8759`, changed an
+  update after `Apply`, through a pointer, and read the timeline back:
+
+  ```text
+  zz_probe_ingest_test.go:13: tool call timeline state changed through the applied update: "after"
+  zz_probe_ingest_test.go:23: compaction timeline state changed through the applied update: "after"
+  ```
+
+* **Decided.** The owner was asked, with two options, and chose the recommended one: `Apply` deep-copies what it keeps, so a
+  timeline shares nothing with what it is given or what it returns. Not chosen: documenting that a caller must not change an
+  update after `Apply`, and recording the aliasing as a new finding for a later PLAN.
+* **Scope added:** step 5.1's `Apply` bullet; the probe as a committed test, `TestTimelinesCopyWhatTheyApply`; its plant. The
+  MADR's Q9 carries an amendment of the same date.
+
+**What it did,** under deviation 5:
+
+* **`deepcopy.go`,** new: `deepCopy[T any](v T) T`, unexported, by `reflect`. A pointer, slice, array, map or interface is
+  copied element by element, and a struct field by field. A slice of plain elements is copied at once (`copyElems`); nil stays
+  nil and empty stays empty. A struct is copied whole first and each exported field then deeply, so an unexported field, which
+  reflection cannot set, is kept rather than zeroed; `TestDeepCopySharesNothing` fails on one, and the timelines reach none.
+* **`tooltimeline.go`:** `copyToolCall` is `deepCopy(*e)`, and `Apply` keeps `deepCopy` of a `tool_call`'s and a
+  `tool_call_update`'s content and locations (deviation 5). `slices` is no longer imported.
+* **`compaction.go`:** `copyEntity` is `deepCopy(*e)`, and `Apply` keeps `deepCopy` of the summary, a chunk's content and
+  `_meta` (deviation 5). `maps` and `slices` are no longer imported.
+* **Godoc:** `Apply` and `Get` of both timelines return "a copy that shares nothing with the timeline", and `Apply` says what
+  it keeps of an update is a copy too.
+* **`cmd/generate/internal/enginetest/api.go`:** `RuntimeFiles` gains `deepcopy.go`, which uses no ACP type.
+  `TestRuntimeFilesCoverHandWritten` requires every hand-written root file to be listed there or excluded, and failed on
+  the new file until it was: "add a new file to enginetest.RuntimeFiles if it uses no ACP type".
+* **The tests:**
+  * `TestToolCallTimelineCopies` (`tooltimeline_test.go`) and `TestCompactionTimelineCopies` (`compaction_test.go`) gain
+    the probes' mutations through pointers, on the copies `Apply` and `Get` return: a content block's text, its annotations'
+    audience and its nested `_meta`, a diff's `NewText`, a location's line, and a compaction's nested `_meta`. The
+    timeline's JSON must be unchanged after.
+  * `deepcopy_test.go`:
+    * `TestDeepCopySharesNothing`: a reflection filler sets every field of `ToolCallEntity` and `CompactionEntity`, every
+      variant of every union included, each interface to a nested object. The copy must `reflect.DeepEqual` the original
+      and share none of the pointers, slices and maps the filler made, counted so that the walk covers all of them. The
+      filler fails on an unexported field and on a type deeper than its bound, rather than leave fields unset. Nil and empty
+      slices, a nil map and a nil interface keep their state.
+    * `TestTimelinesCopyWhatTheyApply`: the deviation's probe, a `tool_call`, then a `tool_call_update`, each changed after
+      `Apply` and read back before the next, and a compaction's summary, chunk and `_meta`.
+* **Docs:** `README.md`'s timelines say both copy what they take and what they return; `docs/architecture.md` lists
+  `deepcopy.go`.
+
+**Seen to fail,** by `tools/plants.py`, 11/11:
+
+```text
+FAILED AS REQUIRED: copyToolCall back to slices.Clone (^TestToolCallTimelineCopies$): exit 1: tooltimeline_test.go:183: the timeline changed through a returned copy's pointers:
+FAILED AS REQUIRED: copyEntity back to a shallow clone (^TestCompactionTimelineCopies$): exit 1: compaction_test.go:194: the timeline changed through a returned copy's pointers:
+FAILED AS REQUIRED: deepCopy skips interfaces (^TestDeepCopySharesNothing$): exit 1: deepcopy_test.go:162: CompactionEntity.Summary[i].Text.Meta[value]: the copy shares the original's map
+FAILED AS REQUIRED: deepCopy copies a struct shallowly (^TestDeepCopySharesNothing$): exit 1: deepcopy_test.go:158: ToolCallEntity.Name: the copy shares the original's ptr
+FAILED AS REQUIRED: deepCopy copies every slice at once (^TestDeepCopySharesNothing$): exit 1: deepcopy_test.go:162: CompactionEntity.Summary[i].Text: the copy shares the original's ptr
+FAILED AS REQUIRED: ToolCallTimeline keeps a tool_call's content shallowly (^TestTimelinesCopyWhatTheyApply$): exit 1: deepcopy_test.go:195: tool call timeline state changed through the applied tool_c…
+FAILED AS REQUIRED: ToolCallTimeline keeps an update's content shallowly (^TestTimelinesCopyWhatTheyApply$): exit 1: deepcopy_test.go:202: tool call timeline state changed through the applied tool_cal…
+FAILED AS REQUIRED: ToolCallTimeline keeps a tool_call's locations shallowly (^TestTimelinesCopyWhatTheyApply$): exit 1: deepcopy_test.go:195: tool call timeline state changed through the applied tool…
+FAILED AS REQUIRED: CompactionTimeline keeps a summary shallowly (^TestTimelinesCopyWhatTheyApply$): exit 1: deepcopy_test.go:217: compaction timeline state changed through the applied update: {Id:c1 …
+FAILED AS REQUIRED: CompactionTimeline keeps _meta shallowly (^TestTimelinesCopyWhatTheyApply$): exit 1: deepcopy_test.go:217: compaction timeline state changed through the applied update: {Id:c1 Stat…
+FAILED AS REQUIRED: CompactionTimeline keeps a chunk shallowly (^TestTimelinesCopyWhatTheyApply$): exit 1: deepcopy_test.go:217: compaction timeline state changed through the applied update: {Id:c1 St…
+```
+
+* On the first run, "ToolCallTimeline keeps a tool_call's content shallowly" passed: the probe applied a
+  `tool_call_update` replacing the content before reading back, so the `tool_call`'s own content was never read after the
+  change. The test now reads each back before the next update, and the plant fails.
+
+**Checks:**
+
+* `go test -count=1 ./...` in both modules: `ok`.
+* `tools/gates.py regen`: `ok`.
+* `make api`: "against v1.31.2: 0 incompatible, 26 compatible", unchanged; `deepCopy` is unexported.
+* `make pre-add-check` with the phase's seven Go files and the README: exit 0 on the first run, "7 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `tools/remote.py tree --host linux`: both modules, exit 0.
+* `tools/remote.py pkg --host windows . -test.run 'TestDeepCopySharesNothing|TestTimelinesCopyWhatTheyApply|
+  TestToolCallTimelineCopies|TestCompactionTimelineCopies' -test.count=3`: "PASS".
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 6 begins on the owner's word.

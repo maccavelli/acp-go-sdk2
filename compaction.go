@@ -1,10 +1,6 @@
 package acp
 
-import (
-	"maps"
-	"slices"
-	"sync"
-)
+import "sync"
 
 // CompactionEntity is a compaction as a client has received it: its id, its
 // status, as it arrived, an unknown one included, its summary, its error and
@@ -32,9 +28,10 @@ type CompactionTimeline struct {
 	order    []CompactionId
 }
 
-// Apply applies u and returns the compaction it changed, as a copy, and
-// true; for an update that is not a compaction's, it returns the zero
-// entity and false.
+// Apply applies u and returns the compaction it changed, as a copy that
+// shares nothing with the timeline, and true; for an update that is not a
+// compaction's, it returns the zero entity and false. What it keeps of u is a
+// copy too, so changing u afterwards changes nothing it holds.
 //
 //   - A compaction_update for an id first seen starts it in_progress with
 //     no summary, error or metadata, then applies the update.
@@ -60,7 +57,7 @@ func (t *CompactionTimeline) Apply(u SessionUpdate) (CompactionEntity, bool) {
 		if c.Summary.IsNull() {
 			e.Summary = nil
 		} else if s, ok := c.Summary.Value(); ok {
-			e.Summary = slices.Clone(s)
+			e.Summary = deepCopy(s)
 			if len(e.Summary) == 0 {
 				e.Summary = nil
 			}
@@ -73,20 +70,21 @@ func (t *CompactionTimeline) Apply(u SessionUpdate) (CompactionEntity, bool) {
 		if c.Meta.IsNull() {
 			e.Meta = nil
 		} else if m, ok := c.Meta.Value(); ok {
-			e.Meta = maps.Clone(m)
+			e.Meta = deepCopy(m)
 		}
 		return copyEntity(e), true
 	case u.CompactionSummaryChunk != nil:
 		c := u.CompactionSummaryChunk
 		e := t.entity(c.CompactionId)
-		e.Summary = append(e.Summary, c.Content)
+		e.Summary = append(e.Summary, deepCopy(c.Content))
 		return copyEntity(e), true
 	default:
 		return CompactionEntity{}, false
 	}
 }
 
-// Get returns the compaction id, as a copy, and whether the timeline has it.
+// Get returns the compaction id, as a copy that shares nothing with the
+// timeline, and whether the timeline has it.
 func (t *CompactionTimeline) Get(id CompactionId) (CompactionEntity, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -130,10 +128,8 @@ func (t *CompactionTimeline) entity(id CompactionId) *CompactionEntity {
 	return e
 }
 
-// copyEntity is a copy of e whose summary and metadata e does not share.
+// copyEntity is a copy of e that shares nothing with it, to its summary's
+// nested blocks and its metadata's nested values.
 func copyEntity(e *CompactionEntity) CompactionEntity {
-	c := *e
-	c.Summary = slices.Clone(e.Summary)
-	c.Meta = maps.Clone(e.Meta)
-	return c
+	return deepCopy(*e)
 }
