@@ -1039,9 +1039,15 @@ promoted at all.
 - The exit status (`exit_unix.go`, `exit_other.go`) is a signal's name, such as
   `SIGKILL`, through `golang.org/x/sys/unix`, or the exit code.
 - `Files` (`files.go`) reads a file's lines by 1-based `line` and `limit`, each
-  with its end, and writes a file, creating it, and its directories under
-  `MkdirAll`; it refuses a relative path, `line` 0 and a path that is not a
-  regular file, and answers `NewResourceNotFound` for a read of a missing file
+  with its end, through a 64 KiB `bufio.Reader` that stops at the last line it
+  returns, counting in `uint64`; with neither, it reads the whole file into a
+  string grown to its size. It writes a file, creating it, and its directories
+  under `MkdirAll`, opening it without truncating and truncating only once the
+  handle is a regular file. It refuses a relative path, `line` 0 and a file
+  that is not regular, by the handle it opened: `openFile` (`open_unix.go`)
+  adds `O_NONBLOCK`, so a FIFO's open returns, and a write's to a FIFO with no
+  reader fails `ENXIO`; `open_other.go` is `os.OpenFile`
+  (0049-PLAN-subpackage-fixes.md, phase 2). It answers `NewResourceNotFound` for a read of a missing file
   and a write under a missing directory without `MkdirAll`. It applies no
   policy: a client's own `ReadTextFile` or `WriteTextFile` wins over it and
   calls it.

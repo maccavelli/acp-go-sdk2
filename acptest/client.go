@@ -158,6 +158,8 @@ func (c *MemoryClient) Updates() []acp.SessionNotification {
 // ReadTextFile answers the file at params.Path, from its 1-based Line, the
 // first when unset, for at most Limit lines, all when unset. A line past the
 // last answers no content; Line 0, which names no line, is invalid params.
+// Line and Limit are compared as uint64, so any uint32 is one on a 32-bit
+// target too (0049-PLAN-subpackage-fixes.md, phase 2, P5).
 func (c *MemoryClient) ReadTextFile(_ context.Context, params acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
 	content, ok := c.File(params.Path)
 	if !ok {
@@ -166,22 +168,22 @@ func (c *MemoryClient) ReadTextFile(_ context.Context, params acp.ReadTextFileRe
 	if params.Line == nil && params.Limit == nil {
 		return acp.ReadTextFileResponse{Content: content}, nil
 	}
-	first := 1
+	first := uint64(1)
 	if params.Line != nil {
 		if *params.Line == 0 {
 			return acp.ReadTextFileResponse{}, acp.NewInvalidParams(map[string]any{"line": 0, "reason": "lines are 1-based"})
 		}
-		first = int(*params.Line)
+		first = uint64(*params.Line)
 	}
 	lines := strings.SplitAfter(content, "\n")
 	if lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
-	if first > len(lines) {
+	if first > uint64(len(lines)) {
 		return acp.ReadTextFileResponse{}, nil
 	}
 	lines = lines[first-1:]
-	if params.Limit != nil && int(*params.Limit) < len(lines) {
+	if params.Limit != nil && uint64(*params.Limit) < uint64(len(lines)) {
 		lines = lines[:*params.Limit]
 	}
 	return acp.ReadTextFileResponse{Content: strings.Join(lines, "")}, nil

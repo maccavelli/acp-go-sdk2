@@ -257,6 +257,34 @@ func TestScriptAgent(t *testing.T) {
 	}
 }
 
+// TestMemoryClientLinesPast32Bits requires a line or a limit that int cannot
+// hold on a 32-bit target to read as any other: a line past the end gives no
+// content, and a limit past the end every line from line. On a 64-bit host it
+// checks the arithmetic; as linux/386 it is the panic the MADR's P5 probe
+// found (0049-PLAN-subpackage-fixes.md, phase 2, P5).
+func TestMemoryClientLinesPast32Bits(t *testing.T) {
+	t.Parallel()
+	c := &acptest.MemoryClient{}
+	c.SetFile("/f", "a\nb\nc\n")
+	u := func(n uint32) *uint32 { return &n }
+	for _, tt := range []struct {
+		name        string
+		line, limit *uint32
+		want        string
+	}{
+		{"line 2^31", u(1 << 31), nil, ""},
+		{"line 2^31+1", u(1<<31 + 1), nil, ""},
+		{"line 2^32-1", u(1<<32 - 1), nil, ""},
+		{"limit 2^31", u(2), u(1 << 31), "b\nc\n"},
+		{"limit 2^32-1", nil, u(1<<32 - 1), "a\nb\nc\n"},
+	} {
+		got, err := c.ReadTextFile(t.Context(), acp.ReadTextFileRequest{Path: "/f", Line: tt.line, Limit: tt.limit})
+		if err != nil || got.Content != tt.want {
+			t.Errorf("%s: %q, %v; want %q", tt.name, got.Content, err, tt.want)
+		}
+	}
+}
+
 // TestMemoryClient reads with line and limit at their edges, a missing path
 // and line 0, writes, answers permissions with and without a scripted
 // outcome, and leaves a terminal method to ClientRefusals.

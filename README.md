@@ -142,8 +142,10 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
   `MaxOutputBytes`, 16 MiB by default, at a character boundary, and
   ends the processes it started on kill and release; its `Command` field
   builds the command, and is where your policy checks it. `clienthost.Files`
-  reads and writes text files, by 1-based `line` and `limit`, answering a
-  missing file `-32002`. Embed them beside `clienthost.Refusals`, which refuses
+  reads and writes text files, by 1-based `line` and `limit`, reading no
+  further than the lines it returns, and answering a missing file `-32002`. It
+  refuses what is not a regular file, a FIFO included, by the file it opened,
+  so a path swapped for one is refused rather than waited on. Embed them beside `clienthost.Refusals`, which refuses
   the rest one level deeper, so that their methods win:
 
   ```go

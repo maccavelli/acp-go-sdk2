@@ -376,3 +376,74 @@ FAILED AS REQUIRED: push never waits (^TestWebSocketClientPastMaxBuffered$): exi
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 2 begins on the owner's word.
+
+The owner committed phase 1 as `f133869`.
+
+### Phase 2: P3, P4 and P5, `clienthost.Files` and `MemoryClient`, 2026-11-04
+
+Begun on the owner's "committed proceed" after `f133869`. No deviation.
+
+**What it did:**
+
+* **`clienthost/open_unix.go`,** new: `openFile` is `os.OpenFile` with `syscall.O_NONBLOCK`, and maps `ENXIO`, a write's open of
+  a FIFO with no reader, to `errNotRegular`. **`open_other.go`,** new, `!unix`: `os.OpenFile`.
+* **`clienthost/files.go`:**
+  * `openRegular(path, flag)` opens through `openFile` with mode `0o644`, then `f.Stat()`, and refuses what is not a regular
+    file with the text it had, "clienthost: %s is not a regular file", closing the handle; a missing path stays
+    `acp.NewResourceNotFound`. It returns the file and its info.
+  * `ReadTextFile`: the absolute-path check, `openRegular`, then `line` 0's refusal, in the order the stat had them, then
+    `readLines`. `WriteTextFile`: the absolute-path check, the directory and `MkdirAll` as before, `openRegular` with
+    `O_WRONLY|O_CREATE`, `Truncate(0)`, the write, and `Close`'s error.
+  * `readLines` reads the whole file, with neither `line` nor `limit`, into a `strings.Builder` grown to the file's size;
+    otherwise a 64 KiB `bufio.Reader`, `readBufferSize`, skips `line - 1` lines and keeps at most `limit`, the counts
+    `uint64`. `readLine` reads a line by `ReadSlice`'s pieces, through `bufio.ErrBufferFull`, so a skipped line is never held.
+  * `regular` and `selectLines` are gone; `absolute` keeps the path check. `Files`' doc says what it reads and that it
+    refuses by the opened handle.
+* **`acptest/client.go`:** `MemoryClient.ReadTextFile` compares `first` and the limit as `uint64`; its doc says so.
+* **The tests:**
+  * `clienthost/files_test.go`: `TestReadTextFileBoundedAllocation`, not parallel, since it counts the process's
+    allocations; `TestReadTextFileLinesPast32Bits`.
+  * `clienthost/files_unix_test.go`, new: `TestFilesFIFOSwap`, which releases a blocked open with a writer's, as the probe
+    did; `TestFilesRefuseFIFO`.
+  * `acptest/acptest_test.go`: `TestMemoryClientLinesPast32Bits`.
+  * `TestReadTextFileLines`, `TestReadTextFileRefused`, `TestWriteTextFile`, `TestFilesRefuseDevice` and `TestMemoryClient`
+    pass unchanged.
+* **Docs:** `README.md`'s `clienthost.Files`; `docs/architecture.md`'s `Files`.
+
+**Seen to fail,** 4/4:
+
+* by `tools/plants.py`:
+
+  ```text
+  FAILED AS REQUIRED: ReadTextFile reads the whole file and splits it again (^TestReadTextFileBoundedAllocation$): exit 1: files_test.go:88: line 1, limit 1 of a 64 MiB file: "x\n", allocating 671127280 bytes; want "x\n" under 1 MiB
+  FAILED AS REQUIRED: the path checked before a blocking open again (^TestFilesFIFOSwap$): exit 1: files_unix_test.go:57: 3 of 2180 ReadTextFile calls on a path flipped to a FIFO were still blocked after 500ms
+  ```
+
+* by script, each plant's copy built for linux/386 and run on the Linux test host with `tools/remote.py pkg --goarch 386`:
+  the old selection restored in `clienthost`, and `MemoryClient`'s `int` conversions restored in `acptest`:
+
+  ```text
+  FAILED AS REQUIRED: clienthost: the old selection's int conversions (^TestReadTextFileLinesPast32Bits$): exit 2: panic: runtime error: slice bounds out of range [-2147483648:] [recovered, repanicked]
+  FAILED AS REQUIRED: acptest: MemoryClient's int conversions (^TestMemoryClientLinesPast32Bits$): exit 2: panic: runtime error: slice bounds out of range [2147483647:3] [recovered, repanicked]
+  ```
+
+* **The fixed code as linux/386** (step 2.5): `TestReadTextFileLinesPast32Bits` and `TestMemoryClientLinesPast32Bits`, exit 0,
+  "PASS". These and the plants' are the phase's only 32-bit runs (Q15 c).
+* The first run of `TestReadTextFileBoundedAllocation` failed on the fixed code: "the whole 64 MiB file: 67108864 bytes,
+  allocating 319 MiB; want all of it under 192 MiB". The builder had not been grown to the file's size, as step 2.2 says;
+  `openRegular` returns the file's info for it now, and the whole read allocates under the bound.
+
+**Checks:**
+
+* `go test -race -count=3` of the phase's tests, and of `./clienthost/ ./acptest/` whole: `ok`.
+* `make api`: "against v1.32.0: 0 incompatible, 1 compatible", phase 1's `remote: DialOptions.MaxBuffered`; this phase adds
+  nothing.
+* `make pre-add-check` with the phase's seven Go files, the README and `docs/architecture.md`, at load 13 to 25: exit 0, "7
+  file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `tools/remote.py tree --host linux`: both modules, exit 0.
+* `tools/remote.py pkg --host windows ./clienthost -test.run 'TestReadTextFile|TestWriteTextFile|TestFiles' -test.count=3` and
+  `./acptest -test.run 'TestMemoryClient' -test.count=3`: "PASS" each.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 3 begins on the owner's word.

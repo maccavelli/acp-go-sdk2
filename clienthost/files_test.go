@@ -1,7 +1,9 @@
 package clienthost
 
 import (
+	"bytes"
 	"context"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -57,6 +59,65 @@ func TestReadTextFileLines(t *testing.T) {
 	}
 	if _, err := (Files{}).ReadTextFile(t.Context(), acp.ReadTextFileRequest{SessionId: "s", Path: path, Line: new(uint32(0))}); code(err) != -32602 {
 		t.Errorf("ReadTextFile at line 0 = %v, want invalid params (-32602)", err)
+	}
+}
+
+// TestReadTextFileBoundedAllocation requires a read of one line of a 64 MiB
+// file to allocate under 1 MiB, since it reads no further than that line, and
+// a read of the whole file under three times its size
+// (0049-PLAN-subpackage-fixes.md, phase 2, P3). It does not run in parallel:
+// it counts the process's allocations.
+func TestReadTextFileBoundedAllocation(t *testing.T) {
+	const size = 64 << 20
+	path := filepath.Join(t.TempDir(), "big.log")
+	if err := os.WriteFile(path, bytes.Repeat([]byte("x\n"), size/2), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	allocated := func(req acp.ReadTextFileRequest) (uint64, string) {
+		runtime.GC()
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		resp, err := Files{}.ReadTextFile(t.Context(), req)
+		runtime.ReadMemStats(&after)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return after.TotalAlloc - before.TotalAlloc, resp.Content
+	}
+	if n, got := allocated(acp.ReadTextFileRequest{SessionId: "s", Path: path, Line: new(uint32(1)), Limit: new(uint32(1))}); n >= 1<<20 || got != "x\n" {
+		t.Errorf("line 1, limit 1 of a 64 MiB file: %q, allocating %d bytes; want \"x\\n\" under 1 MiB", got, n)
+	}
+	if n, got := allocated(acp.ReadTextFileRequest{SessionId: "s", Path: path}); n >= 3*size || len(got) != size {
+		t.Errorf("the whole 64 MiB file: %d bytes, allocating %d MiB; want all of it under %d MiB", len(got), n>>20, 3*size>>20)
+	}
+}
+
+// TestReadTextFileLinesPast32Bits requires a line or a limit that int cannot
+// hold on a 32-bit target to read as any other: a line past the end gives no
+// content, and a limit past the end every line from line. On a 64-bit host it
+// checks the arithmetic; as linux/386 it is the panic the MADR's P5 probe
+// found (0049-PLAN-subpackage-fixes.md, phase 2, P5).
+func TestReadTextFileLinesPast32Bits(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "three.txt")
+	if err := os.WriteFile(path, []byte("a\nb\nc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name        string
+		line, limit *uint32
+		want        string
+	}{
+		{"line 2^31", new(uint32(1 << 31)), nil, ""},
+		{"line 2^31+1", new(uint32(1<<31 + 1)), nil, ""},
+		{"line 2^32-1", new(uint32(math.MaxUint32)), nil, ""},
+		{"limit 2^31", new(uint32(2)), new(uint32(1 << 31)), "b\nc\n"},
+		{"limit 2^32-1", nil, new(uint32(math.MaxUint32)), "a\nb\nc\n"},
+	} {
+		resp, err := Files{}.ReadTextFile(t.Context(), acp.ReadTextFileRequest{SessionId: "s", Path: path, Line: c.line, Limit: c.limit})
+		if err != nil || resp.Content != c.want {
+			t.Errorf("%s: ReadTextFile = %q, %v; want %q", c.name, resp.Content, err, c.want)
+		}
 	}
 }
 
