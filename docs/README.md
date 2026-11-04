@@ -145,8 +145,9 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0048 | PLAN | [Implement 0048: CI creates and verifies a tag's release](decisions/0048-PLAN-create-releases-in-ci.md); three phases | proposed |
 | 0049 | MADR | [Remediate the defects, gaps and dead code the 2026-11-01 debugging pass found, in phases by area and severity](decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md); 52 findings at `d55ba2a`, one high; questions answered 2026-11-01: five PLANs by area, runtime first; accepted 2026-11-02; re-assessed at `e98987a` 2026-11-03, with Q8 to Q11 for the surface PLAN | accepted |
 | 0049 | PLAN | [Implement 0049, the runtime: R1 to R10](decisions/0049-PLAN-runtime-fixes.md); four phases, a patch `v1.31.2`; R1 to R10 done; released in `v1.31.2` | complete |
-| 0049 | PLAN | [Implement 0049, the SDK surface: S1 to S9](decisions/0049-PLAN-surface-fixes.md); six phases, a minor `v1.32.0`; phase 1, S1 and S7, done, deviations 1 and 2; phase 2, S2, done; phase 3, S6, done, deviation 3; phase 4, S8, S9, S5 and S3, done, deviation 4; phase 5, S4, done, deviation 5; phase 6, gates and `make api` done, CI and the release waiting | in-progress |
+| 0049 | PLAN | [Implement 0049, the SDK surface: S1 to S9](decisions/0049-PLAN-surface-fixes.md); six phases, a minor `v1.32.0`; phase 1, S1 and S7, done, deviations 1 and 2; phase 2, S2, done; phase 3, S6, done, deviation 3; phase 4, S8, S9, S5 and S3, done, deviation 4; phase 5, S4, done, deviation 5; phase 6, gates, `make api`, CI and the notes done, the release waiting | in-progress |
 | 0049 | REPORT | [Release notes for v1.31.2, against v1.31.1](reports/0049-REPORT-release-notes-v1-31-2.md); the runtime's ten fixes | observed |
+| 0049 | REPORT | [Release notes for v1.32.0, against v1.31.2](reports/0049-REPORT-release-notes-v1-32-0.md); the surface's nine fixes, what the SDK now refuses to send first | observed |
 
 ## I want to…
 

@@ -945,6 +945,21 @@ Begun on the owner's "committed, proceed" after `6f17464`. No deviation.
 **Step 6.2,** `make api`, in the `api` gate: "against v1.31.2: 0 incompatible, 26 compatible", `ErrUnadvertisedAuthMethod`
 and deviation 3's 25 `Validate` methods.
 
-**Not done yet,** each waiting on the owner: step 6.3, CI on the head after the owner's push; step 6.4, the release
-`v1.32.0` and its notes, on the owner's ask; step 6.5, this PLAN, its row and the MADR's S findings marked done, once the
-release is out.
+The owner committed the record as `a85a653` and pushed it: `origin/main` was at `a85a653` after a fetch. `make
+push-guard` had passed over the seven commits before it, `69eff66..6f17464`.
+
+**Step 6.3,** CI on `a85a653`: run `41836300472`, "completed success", the six `validate` jobs on Ubuntu, Windows and macOS
+at Go `1.27.3` and `1.26.10`; the Docs workflow's run `41836300433`, "completed success". The scheduled run `41477762519` of
+2026-11-02, on `d55ba2a`, before this PLAN's code, had failed with `validate (macos-15, 1.27.3)` cancelled after 15 minutes
+and the other five passing; here that job took 90 seconds.
+
+**Step 6.4,** begun on the owner's "proceed":
+
+* [0049-REPORT-release-notes-v1-32-0.md](../reports/0049-REPORT-release-notes-v1-32-0.md), leading with what the SDK refuses
+  to send, then what it reads otherwise, then the two fixes. `make api` on `a85a653`, the report its only uncommitted file:
+  exit 0, "against v1.31.2: 0 incompatible, 26 compatible".
+* `tools/consumer.py` is unchanged, as step 3.4 found its program sends only listed values.
+* [0048-PLAN-create-releases-in-ci.md](0048-PLAN-create-releases-in-ci.md) has not landed, so the owner tags and releases.
+
+**Not done yet,** each waiting on the owner: the tag `v1.32.0` and its release; then `tools/publication.py` and
+`tools/consumer.py v1.32.0`; step 6.5, this PLAN, its row and the MADR's S findings marked done, once the release is out.
