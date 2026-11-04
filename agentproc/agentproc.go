@@ -239,7 +239,7 @@ func (c *Command) Start(client acp.Client) (*Process, error) {
 	if err := errors.Join(inR.Close(), outW.Close()); err != nil {
 		return nil, p.abandon(proceed, err, inW, outR)
 	}
-	t, err := proctree.Attach(cmd)
+	t, err := attachTree(cmd)
 	if err != nil {
 		return nil, p.abandon(proceed, err, inW, outR)
 	}
@@ -279,6 +279,12 @@ func (p *Process) run(ch *childAgent, started chan<- error, proceed <-chan bool)
 	}
 	p.watch()
 }
+
+// attachTree is proctree.Attach, which Start calls once the agent has
+// started; a test replaces it with one that fails, so that Start's
+// abandonment runs, which on Unix, where Attach has nothing to do, nothing
+// else reaches (0049-PLAN-tooling-fixes.md, phase 5, F-C).
+var attachTree = proctree.Attach
 
 // abandon has run kill and reap an agent Start has started but cannot
 // connect, waits for it, closes the parent's ends of its pipes, and returns

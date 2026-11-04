@@ -25424,15 +25424,6 @@ func (v *AuthenticateRequest) gates(n *Negotiation, method string) error {
 	return nil
 }
 
-func (v *ConfigOptionUpdate) gates(n *Negotiation, method string) error {
-	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].gates(n, method); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (u *CreateElicitationRequest) gates(n *Negotiation, method string) error {
 	if u.Form != nil && (n.Request.ClientCapabilities.Elicitation == nil || n.Request.ClientCapabilities.Elicitation.Form == nil) {
 		return &CapabilityError{

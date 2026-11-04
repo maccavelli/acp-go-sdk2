@@ -235,7 +235,9 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   the generated `unknownKind` reads. `model/gates.go`
   resolves each on its definition and on each copy of it the merge made from
   the unstable schema under another name, and gives a `gates` method to every type
-  that holds one, directly or through fields, members or variants; with no
+  that holds one, directly or through fields, members or variants, and that a
+  method's params or result reach, as `dispatchReach` walks them: the dispatch
+  calls `gates` on nothing else (0049-PLAN-tooling-fixes.md, phase 5); with no
   `initialize` rule, none applies;
 - `AbsolutePaths`, the 17 properties the protocol requires to be absolute
   paths, each with the specification sentence it follows. A rule reaches every
@@ -709,7 +711,8 @@ Checks that guard this:
   raw paths, and `initialize`'s own check; the engine cases
   `accept-prompt-cancellation`, `accept-permission-cancellation`,
   `accept-initialize-negotiation`, `accept-capability-gates`,
-  `accept-capability-undeclared-variant` and `accept-session-close-cancels`
+  `accept-gates-unreachable`, `accept-capability-undeclared-variant` and
+  `accept-session-close-cancels`
   cover the generated code, and
   `accept-description-comment-markers` the generator's comments.
 - `TestEngineCases` in `cmd/generate` runs the generator on each synthetic case

@@ -150,3 +150,20 @@ func TestInProcessHasNoStderrTail(t *testing.T) {
 		t.Errorf("StderrTail = %q, want empty", got)
 	}
 }
+
+// TestStderrErrorText requires a StderrError to say the agent's standard error
+// ended, and give the tail, its last newline left out
+// (0049-PLAN-tooling-fixes.md, phase 5, F-C: its Error was never run by a
+// test).
+func TestStderrErrorText(t *testing.T) {
+	t.Parallel()
+	for tail, want := range map[string]string{
+		"line 1\nline 2\n": "agentproc: the agent's standard error ended: line 1\nline 2",
+		"no newline":       "agentproc: the agent's standard error ended: no newline",
+		"":                 "agentproc: the agent's standard error ended: ",
+	} {
+		if got := (&StderrError{Tail: tail}).Error(); got != want {
+			t.Errorf("StderrError{Tail: %q}.Error() = %q, want %q", tail, got, want)
+		}
+	}
+}

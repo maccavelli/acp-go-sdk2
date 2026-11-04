@@ -131,6 +131,7 @@ func (m *Model) resolveGates(r *rules) error {
 			}
 		}
 	}
+	reach := m.dispatchReach(holders)
 	for _, h := range holders {
 		for _, f := range h.fields {
 			deep := f.Type.Kind == RefPatch || (f.Type.Kind != RefNamed && f.Type.Elem != nil && f.Type.Elem.Kind != RefNamed)
@@ -138,7 +139,7 @@ func (m *Model) resolveGates(r *rules) error {
 				return fmt.Errorf("%s.%s: %s holds a gated type in a shape gates does not descend into", h.name, f.Key, f.Type)
 			}
 		}
-		if gated[h.name] {
+		if gated[h.name] && reach[h.name] {
 			m.Gated = append(m.Gated, &Gates{Type: h.name, Union: h.union, Checks: append(own[h.name], h.nested(gated)...)})
 		}
 	}
@@ -402,6 +403,56 @@ func (m *Model) gateHolders() []gateHolder {
 		}
 	}
 	return out
+}
+
+// dispatchReach returns the types a gate can be called on: each method's
+// request, response and notification type, which the dispatch hands to
+// gateMessage and gateResult, and every type their fields, members and
+// variants hold, at any depth, whose gates a holder's gates call. A gates
+// method on any other type is never called, as ConfigOptionUpdate's was not:
+// it is reached only by allOf, which the merge flattened into another type
+// (0049-PLAN-tooling-fixes.md, phase 5, F-C).
+func (m *Model) dispatchReach(holders []gateHolder) map[string]bool {
+	by := make(map[string]gateHolder, len(holders))
+	for _, h := range holders {
+		by[h.name] = h
+	}
+	reach := map[string]bool{}
+	var queue []string
+	add := func(name string) {
+		if name != "" && !reach[name] {
+			reach[name] = true
+			queue = append(queue, name)
+		}
+	}
+	for _, methods := range [][]*Method{m.AgentMethods, m.ClientMethods, m.Protocol} {
+		for _, me := range methods {
+			add(me.Req)
+			add(me.Resp)
+			add(me.Notif)
+		}
+	}
+	for len(queue) > 0 {
+		h, ok := by[queue[0]]
+		queue = queue[1:]
+		if !ok {
+			continue
+		}
+		for _, f := range h.fields {
+			for r := &f.Type; r != nil; r = r.Elem {
+				if r.Kind == RefNamed {
+					add(r.Name)
+				}
+			}
+		}
+		for _, mb := range h.members {
+			add(mb.Type)
+		}
+		for _, vi := range h.variants {
+			add(vi.TypeName)
+		}
+	}
+	return reach
 }
 
 // nested returns the holder's calls into the gates of what it holds: each

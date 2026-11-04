@@ -5,6 +5,7 @@ import (
 	"errors"
 	"go/build"
 	"slices"
+	"strings"
 	"testing"
 
 	acp "github.com/maccavelli/acp-go-sdk2"
@@ -102,6 +103,26 @@ func TestElicitationCheckSchema(t *testing.T) {
 				t.Errorf("%s: the refused default holds the rules %v, want %s among them", tc.name, rules, tc.inner)
 			}
 		}
+	}
+}
+
+// TestElicitationCheckSchemaDefaultText requires a refused default's error
+// to read as its own RuleDefault error, naming the field and each rule the
+// default breaks (0049-PLAN-tooling-fixes.md, phase 5, F-C: its Error was
+// never run by a test).
+func TestElicitationCheckSchemaDefaultText(t *testing.T) {
+	t.Parallel()
+	err := decodeSchema(t, `{"properties":{"s":{"type":"string","maxLength":2,"default":"héllo"}}}`).CheckSchema()
+	if err == nil {
+		t.Fatal("CheckSchema of a default too long = nil, want its refusal")
+	}
+	var ve *acp.ValidationError
+	if !errors.As(err, &ve) || ve.Rule != acp.RuleDefault {
+		t.Fatalf("CheckSchema = %v, want a RuleDefault *ValidationError first", err)
+	}
+	if got := err.Error(); got != ve.Error() || !strings.Contains(got, `properties["s"].default`) ||
+		!strings.Contains(got, "is refused by its own field: maxLength:") {
+		t.Errorf("the refused default reads %q, want its RuleDefault error, %q, naming the field and maxLength", got, ve.Error())
 	}
 }
 

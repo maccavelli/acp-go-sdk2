@@ -69,6 +69,9 @@ func TestCapabilityRulesApply(t *testing.T) {
 	copied := strings.Replace(protocolDefs, `"Update":`, `"UnstableVerdict":{"oneOf":[{"type":"object","required":["verdict"],"properties":{"verdict":{"const":"withdrawn","type":"string"}}},
 		{"type":"object","required":["verdict","choice"],"properties":{"verdict":{"const":"chosen","type":"string"},"choice":{"type":"string"}}}],
 		"discriminator":{"propertyName":"verdict"}},"Update":`, 1)
+	// Reached by a method's params, as a gate must be (0049-PLAN-tooling-fixes.md, phase 5, F-C).
+	copied = strings.Replace(copied, `"SessionNotification":{"type":"object","x-side":"client","x-method":"s/update"}`,
+		`"SessionNotification":{"type":"object","x-side":"client","x-method":"s/update","properties":{"verdict":{"$ref":"#/$defs/UnstableVerdict"}}}`, 1)
 	prov := &load.Provenance{UnstableDefs: map[string]bool{"UnstableVerdict": true},
 		Origins: map[string]load.Origin{"UnstableVerdict": {File: load.UnstableSchemaFile, Key: "Verdict"}}}
 	p = testProtocol()
@@ -91,6 +94,8 @@ func TestCapabilityRulesApply(t *testing.T) {
 		{"title":"other","type":"object","required":["kind"],"properties":{"kind":{"type":"string"}},
 		 "not":{"anyOf":[{"type":"object","required":["kind"],"properties":{"kind":{"const":"plain","type":"string"}}}]}}],
 		"discriminator":{"propertyName":"kind"}},"Update":`, 1)
+	withOther = strings.Replace(withOther, `"SessionNotification":{"type":"object","x-side":"client","x-method":"s/update"}`,
+		`"SessionNotification":{"type":"object","x-side":"client","x-method":"s/update","properties":{"choice":{"$ref":"#/$defs/Choice"}}}`, 1)
 	p = testProtocol()
 	p.CapabilityRules = []CapabilityRule{{Side: "agent", Definition: "Choice", Capability: "session.list", Source: "s", Kind: GateUndeclaredVariant}}
 	undeclared, err := Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, withOther), Protocol: p})

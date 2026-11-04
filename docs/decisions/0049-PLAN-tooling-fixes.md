@@ -448,3 +448,70 @@ nothing to fail; the lint gates show T12 drops no issue.
   phase's files: 0 matches.
 
 Staged for the owner, who commits. Phase 5 begins on the owner's word.
+
+The owner committed phase 4 as `719198f`.
+
+### Phase 5: F-C, dead code and code no test runs, 2026-11-04
+
+Begun on the owner's "committed, proceed" after `719198f`. No deviation: step 5.1's reading found the model computes no
+reachability, and what it needs is the walk the step allows, from the types the dispatch names.
+
+**What it did:**
+
+* **`ConfigOptionUpdate.gates`,** `cmd/generate/internal/model/gates.go`: `dispatchReach(holders)` walks from every method's
+  `Req`, `Resp` and `Notif` through the holders' fields, at any depth of pointer, slice or map, their members and their
+  variants; `resolveGates` gives `gates` to a type only when it is gated and reached. The dispatch calls `gates` on params and
+  results alone, and a holder's `gates` on what it holds, so a `gates` outside the walk is never called. Regenerated,
+  `types_gen.go` loses `ConfigOptionUpdate.gates`, 9 lines, and nothing else.
+* **`abandon`,** `agentproc/agentproc.go`: `Start` calls `proctree.Attach` through the package variable `attachTree`, its doc
+  saying why; on Unix `Attach` cannot fail, so nothing else reaches `abandon` there.
+* **The tests:**
+  * `cmd/generate/testdata/engine/accept-gates-unreachable.txtar`: `accept-capability-gates`' schema and an `Archive` that
+    holds the gated `SessionUpdate` and that no method reaches; its `behaviour_test.go`,
+    `TestGatesOnlyWhereTheDispatchReaches`, requires `gates` on `SessionNotification` and `SessionUpdate` and none on
+    `Archive`; its `want.api` written by `-update`. The behaviour test runs in `TestEngineBehaviour`, which generates every
+    case before it tests one, so it is run whole; `TestEngineCases` checks the listing.
+  * `cmd/generate/internal/model/gates_test.go`: `TestCapabilityRulesApply`'s `UnstableVerdict` and `Choice` were types no
+    method reached, which now get no `gates`. Each fixture gives `SessionNotification`, which `s/update` carries, a property
+    holding its type; the test checks the rules' resolution as before.
+  * `agentproc/abandon_test.go`, new: `TestStartAbandonsUnattachedAgent`, not parallel, replacing `attachTree` with one that
+    fails: `Start` returns no `Process` and an error wrapping the attach's, and a "beat" child's file stops growing, so the
+    agent was killed and reaped.
+  * `agentproc/stderr_test.go`: `TestStderrErrorText`. `elicitation_schema_test.go`: `TestElicitationCheckSchemaDefaultText`,
+    a refused default's text read through `CheckSchema`'s error, as `defaultError.Error` gives it.
+* **Docs:** `docs/architecture.md`'s gate resolution and its list of engine cases.
+
+**The coverage run,** step 5.4, `go test -coverprofile -coverpkg=./... . ./agentproc/`: `agentproc.go:292 abandon 100.0%`,
+`stderr.go:21 Error 100.0%`, `elicitation.go:286 Error 100.0%`; `func (v *ConfigOptionUpdate) gates` is no longer in
+`types_gen.go`.
+
+**Seen to fail,** 4/4:
+
+* by `tools/plants.py`:
+
+  ```text
+  FAILED AS REQUIRED: abandon not called on an attach failure (^TestStartAbandonsUnattachedAgent$): exit 1: abandon_test.go:46: the agent still runs after Start abandoned it: its file grew from -1 to 6 bytes in 300 ms
+  FAILED AS REQUIRED: StderrError's text changed (^TestStderrErrorText$): exit 1: stderr_test.go:166: StderrError{Tail: "no newline"}.Error() = "agentproc: stderr: no newline", want "agentproc: the agent's standard error ended: no newline"
+  FAILED AS REQUIRED: defaultError's text changed (^TestElicitationCheckSchemaDefaultText$): exit 1: elicitation_schema_test.go:125: the refused default reads "a default", want its RuleDefault error, …
+  ```
+
+* by script, the generator's test in a copy: `gates` for every gated type again,
+  `TestEngineBehaviour`: "behaviour_test.go:15: Archive, which no method reaches, has gates".
+* The generator's plant first failed to build, leaving `reach` unused, and was rewritten as `reach[h.name] || true`. It then
+  passed under `TestEngineCases`, which runs no behaviour test, and failed to generate under
+  `-run TestEngineBehaviour/accept-gates-unreachable`, which skips the subtest that generates; it fails as required under
+  `TestEngineBehaviour` whole, which passes, in 35 s, on the fixed code.
+
+**Checks:**
+
+* `go test -count=1 ./...` in both modules: `ok`. `go test -race -count=3 ./agentproc/`: `ok`.
+* `tools/gates.py regen`: `ok`. `make api` against `v1.33.0`: "0 incompatible, 0 compatible".
+* `make pre-add-check` with the phase's files, at load 27 to 44: exit 0, "7 file(s) gofmt-clean; both modules linted, vetted
+  and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `tools/remote.py tree --host linux`: both modules, exit 0.
+* `tools/remote.py pkg --host windows ./agentproc -test.run 'TestStartAbandonsUnattachedAgent|TestStderrErrorText'
+  -test.count=3`: "PASS", where `attachTree` stands for a real job attach.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 6 begins on the owner's word.
