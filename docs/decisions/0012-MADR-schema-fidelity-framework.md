@@ -386,6 +386,26 @@ and its definition that "explicit `null` is preserved separately from an omitted
 * **A behaviour change for one unstable type.** A peer's `"data": null` in an `UnstableMcpError` now decodes to the bytes `null`, where it
   decoded empty, and is sent on; the release notes name it.
 
+## Amendment 2026-11-03, closed enumerations
+
+Decided by the owner in [0049-MADR-remediate-the-2026-11-01-debugging-pass.md](0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
+S6 and Q4 (a), and carried out by phase 3 of [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md). The debugging pass found that a
+closed set of string constants, such as `StopReason`, accepted any string, `""` included, so the SDK could send
+`{"stopReason":""}`. Three things this record asserts change.
+
+* **Treatment 7 checks a closed set's membership.** A closed enumeration is an `enum` or a `oneOf` of string consts, not an open enum
+  that admits other strings. Membership is a statement of the schema, and `Validate` checks it: a required field always, so `""` fails;
+  an optional field when set; a pointer when set; each element of a slice. The failure is a `*ValidationError` with `RuleEnum`.
+  Fourteen types are closed at schema 1.25.0. A model test lists them, so a new one is noticed. 25 types that held one and checked
+  nothing gained `Validate` (the PLAN's deviation 3).
+* **The 2026-10-12 amendment's "Validate runs in both directions" holds, but not for membership.** What the SDK sends, and
+  `Validate()`, check it. What it receives does not, so a peer's unknown required value, such as a `stopReason` this SDK does not know,
+  is returned as it arrived. The generated `validate` takes a `validation` value that says which, beside the rule for a path.
+* **Treatments 5 and 6 read an unknown closed value as one that failed to decode.** In a field with `x-deserialize-default-on-error`,
+  it takes the schema default or the zero value: `""` for a value field, nil for a pointer. In an array with
+  `x-deserialize-skip-invalid-items`, the item is dropped. Rust's serde does the same, failing to decode an unknown variant of a
+  closed enum, and so do the official TypeScript and Python SDKs (the 0049 MADR's re-assessment).
+
 ## More Information
 
 Sources:

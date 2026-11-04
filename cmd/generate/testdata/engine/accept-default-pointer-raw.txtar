@@ -49,6 +49,7 @@ func (*ClientSideConnection).Err() error
 func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (*ClientSideConnection).Wait() error
 func (*Opts).UnmarshalJSON(b []byte) error
+func (*Opts).Validate() error
 -- behaviour_test.go --
 package acp
 

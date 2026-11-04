@@ -212,15 +212,28 @@ func isPortableAbs(p string) bool {
 	return false
 }
 
-// validator is a generated type's validate, which takes the rule for an
-// absolute path.
-type validator interface {
-	validate(abs func(string) bool) error
+// validation is what a generated type's validate checks: abs is the rule for
+// an absolute path, and closed is whether a closed enumeration's value must be
+// one its type lists. What the SDK sends, and Validate, check closed sets;
+// what it receives does not, so a peer's unknown value stays readable
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, S6 and Q4 a).
+type validation struct {
+	abs    func(string) bool
+	closed bool
 }
 
+// validator is a generated type's validate.
+type validator interface {
+	validate(how validation) error
+}
+
+// sending is how what the SDK sends is validated: by the portable rule for a
+// path, and with closed sets checked.
+var sending = validation{abs: isPortableAbs, closed: true}
+
 // validateOutbound validates params of a generated type, a pointer or a
-// value, with the rule for a path the SDK sends; params of any other type, an
-// extension's raw JSON among them, pass (0015-MADR-validate-absolute-protocol-paths.md, E1).
+// value, as sending says; params of any other type, an extension's raw JSON
+// among them, pass (0015-MADR-validate-absolute-protocol-paths.md, E1).
 func validateOutbound(params any) error {
 	rv := reflect.ValueOf(params)
 	switch {
@@ -228,14 +241,14 @@ func validateOutbound(params any) error {
 		return nil
 	case rv.Kind() == reflect.Pointer:
 		if v, ok := params.(validator); ok && !rv.IsNil() {
-			return v.validate(isPortableAbs)
+			return v.validate(sending)
 		}
 		return nil
 	}
 	ptr := reflect.New(rv.Type())
 	ptr.Elem().Set(rv)
 	if v, ok := reflect.TypeAssert[validator](ptr); ok {
-		return v.validate(isPortableAbs)
+		return v.validate(sending)
 	}
 	return nil
 }
@@ -3112,7 +3125,9 @@ func (c *Connection) judgeInbound(ctx context.Context, method string, params any
 	}
 	var err, gateErr error
 	if v, ok := params.(validator); ok {
-		err = v.validate(filepath.IsAbs)
+		// A received closed value is kept, as Q4 (a) chose
+		// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, S6).
+		err = v.validate(validation{abs: filepath.IsAbs})
 	}
 	if gate != nil {
 		gateErr = gate(method, params)

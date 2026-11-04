@@ -389,6 +389,7 @@ func (*AgentSideConnection).Err() error
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*AgentSideConnection).Wait() error
 func (*CancelRequestNotification).Validate() error
+func (*Caps).Validate() error
 func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}

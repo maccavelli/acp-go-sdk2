@@ -26,6 +26,10 @@ const (
 	// (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
 	helperKeyOrder      = "keyOrder"
 	helperOrderedObject = "orderedObject"
+	// helperValidation is validate's parameter, which package acp declares
+	// by hand and a file of package unstable declares for itself
+	// (0049-PLAN-surface-fixes.md, phase 3).
+	helperValidation = "validation"
 )
 
 // typePatch is the exported generic type of a property with patch semantics,
@@ -82,6 +86,21 @@ func emitDecodeHelpers(f *goFile) {
 	if f.uses[helperOrderedObject] {
 		emitOrderedObject(f)
 	}
+	if f.uses[helperValidation] {
+		emitValidationType(f)
+	}
+}
+
+// emitValidationType emits, for a file of package unstable, the parameter of
+// its validate methods, which acp's hand-written runtime declares for acp:
+//
+//	type validation struct{ abs func(string) bool; closed bool }
+func emitValidationType(f *goFile) {
+	abs := funcType([]*ast.Field{param("", id("string"))}, param("", id("bool")))
+	f.line()
+	f.comment("validation is what validate checks: abs is the rule for an absolute path, and",
+		"closed whether a closed enumeration's value must be one it lists.")
+	f.add(typeDecl(helperValidation, &ast.StructType{Fields: fields(param("abs", abs), param("closed", id("bool")))}))
 }
 
 // emitKeyOrder emits

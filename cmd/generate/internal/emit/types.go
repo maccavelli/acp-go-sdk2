@@ -136,6 +136,27 @@ func enumConsts(f *goFile, t *model.Type) {
 	f.add(constDecl(true, specs...))
 }
 
+// closedEnumDoc is the doc paragraph of a closed enumeration's type.
+var closedEnumDoc = []string{
+	"Its values are the constants below: Validate, and every message the SDK sends,",
+	"refuses another. One received is kept as it was, or read as absent where the",
+	"schema lets a malformed value default.",
+}
+
+// emitKnown emits known, which reports whether a closed enumeration's value is
+// one of its constants (0049-PLAN-surface-fixes.md, phase 3).
+func emitKnown(f *goFile, t *model.Type) {
+	var values []ast.Expr
+	for _, v := range t.Enum {
+		values = append(values, id(v.Const))
+	}
+	f.comment("known reports whether v is one of " + t.Name + "'s values.")
+	f.add(method(param("v", id(t.Name)), "known", funcType(nil, param("", id("bool"))),
+		switchOrIf(id("v"), caseOf(values, ret(boolLit(true)))),
+		ret(boolLit(false))))
+	f.line()
+}
+
 // enumSpec is <Const> typ = value, documented as the value shown, then the
 // value's schema description (0019-PLAN-examples-docs-tests-tooling.md, I12),
 // then its deprecation notice, naming it a variant of owner.
@@ -225,8 +246,15 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 
 	// A union emits its variant types first, so emitUnion places its
 	// description; every other case starts with the type it documents.
+	closed := t.Kind == model.KindEnum || t.Kind == model.KindStringConstUnion
 	if t.Kind != model.KindUnion {
-		f.comment(withNotice(typeDoc(name, defPlace(t), t.Doc), defPlace(t), t.Deprecation)...)
+		doc := typeDoc(name, defPlace(t), t.Doc)
+		if closed {
+			// A closed enumeration's values are checked on what is sent
+			// (0049-PLAN-surface-fixes.md, phase 3).
+			doc = append(append(doc, ""), closedEnumDoc...)
+		}
+		f.comment(withNotice(doc, defPlace(t), t.Deprecation)...)
 	}
 
 	switch t.Kind {
@@ -236,6 +264,9 @@ func emitSchemaDef(f *goFile, t *model.Type) {
 		f.add(typeDecl(name, id("string")))
 		enumConsts(f, t)
 		f.line()
+		if closed {
+			emitKnown(f, t)
+		}
 	case model.KindUnion:
 		emitUnion(f, t)
 	case model.KindObject:
@@ -711,6 +742,7 @@ func lenientDecode(f *goFile, name string, lenient []*model.Field, wrap func() a
 				f.uses[helperOrDefault] = true
 				body = append(body, assign(exprs(field), call(index(id(helperOrDefault), typeAST(f, fld.Type)), raw, def)))
 			}
+			body = append(body, unknownAbsent(f, fld, field, def)...)
 			continue
 		}
 		f.uses[helperSkipInvalid] = true
@@ -733,8 +765,39 @@ func lenientDecode(f *goFile, name string, lenient []*model.Field, wrap func() a
 		} else {
 			body = append(body, ifElse(define(exprs(id("items"), id("err")), items), binary(id("err"), token.EQL, nilExpr()), then, fallback))
 		}
+		body = append(body, unknownAbsent(f, fld, field, def)...)
 	}
 	return body
+}
+
+// unknownAbsent reads a lenient closed enumeration's unknown value as one that
+// failed to decode, as the schema's annotation has it: a value field takes its
+// default or its zero value, a pointer is nil, and a slice drops the item
+// (0012-MADR-schema-fidelity-framework.md, treatments 5 and 6;
+// 0049-PLAN-surface-fixes.md, phase 3). Nothing for any other field.
+func unknownAbsent(f *goFile, fld *model.Field, field, def ast.Expr) []ast.Stmt {
+	if !fld.Closed {
+		return nil
+	}
+	switch r := fld.Type; r.Kind {
+	case model.RefPointer:
+		return []ast.Stmt{ifStmt(nil, binary(binary(field, token.NEQ, nilExpr()), token.LAND,
+			not(knownExpr(f, r.Elem.Name, fld.ClosedValues, field))), assign(exprs(field), nilExpr()))}
+	case model.RefSlice:
+		unknown := &ast.FuncLit{Type: funcType([]*ast.Field{param("x", f.typeName(r.Elem.Name))}, param("", id("bool"))),
+			Body: block(ret(not(knownExpr(f, r.Elem.Name, fld.ClosedValues, id("x")))))}
+		if !fld.Facts.SkipInvalidItems {
+			// Without skip-invalid-items an item that fails fails the array,
+			// which then takes its zero value.
+			return []ast.Stmt{ifStmt(nil, call(f.qual("slices", "ContainsFunc"), field, unknown), assign(exprs(field), nilExpr()))}
+		}
+		return []ast.Stmt{assign(exprs(field), call(f.qual("slices", "DeleteFunc"), field, unknown))}
+	default:
+		if def == nil {
+			def = str("")
+		}
+		return []ast.Stmt{ifStmt(nil, not(knownExpr(f, r.Name, fld.ClosedValues, field)), assign(exprs(field), def))}
+	}
 }
 
 // emitInlineVariant emits the type the model gives a union variant without a
@@ -1188,10 +1251,13 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 func addValidate(f *goFile, recv, name, place string, body ...ast.Stmt) {
 	f.comment("Validate returns an error if " + recv + " does not satisfy " + place + ".")
 	f.add(method(param(recv, star(id(name))), "Validate", funcType(nil, param("", id("error"))),
-		ret(call(sel(id(recv), "validate"), f.qual("path/filepath", "IsAbs")))))
+		ret(call(sel(id(recv), "validate"), composite(id("validation"),
+			kv(id("abs"), f.qual("path/filepath", "IsAbs")), kv(id("closed"), boolLit(true)))))))
 	f.line()
-	abs := funcType([]*ast.Field{param("", id("string"))}, param("", id("bool")))
-	f.add(method(param(recv, star(id(name))), "validate", funcType([]*ast.Field{param("abs", abs)}, param("", id("error"))), body...))
+	if f.local != nil {
+		f.uses[helperValidation] = true
+	}
+	f.add(method(param(recv, star(id(name))), "validate", funcType([]*ast.Field{param("how", id(helperValidation))}, param("", id("error"))), body...))
 }
 
 // validateCall is if err := x.validate(abs); err != nil { return fmt.Errorf(format, args..., err) }, for x
@@ -1199,7 +1265,7 @@ func addValidate(f *goFile, recv, name, place string, body ...ast.Stmt) {
 // checked through its exported Validate, by the host's rule
 // (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, question 9).
 func validateCall(f *goFile, typeName string, x ast.Expr, format string, args ...ast.Expr) ast.Stmt {
-	check := call(sel(x, "validate"), id("abs"))
+	check := call(sel(x, "validate"), id("how"))
 	if f.external(typeName) {
 		check = call(sel(x, "Validate"))
 	}
@@ -1238,6 +1304,9 @@ func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
 	where := name + ": " + c.Key
 	if c.Kind == model.CheckAbsolutePath {
 		return absPathStmt(f, name, c)
+	}
+	if c.Kind == model.CheckClosedEnum {
+		return closedEnumStmt(f, name, c)
 	}
 	if c.Kind == model.CheckNested {
 		if c.InPatch {
@@ -1294,6 +1363,53 @@ func nestedStmt(f *goFile, typeName string, x func() ast.Expr, shape model.RefKi
 	}
 }
 
+// knownExpr is x.known() for x of the closed enumeration typeName. From a file
+// of package unstable, for one of acp's, whose known it cannot call, it is
+// slices.Contains over values, the enumeration's constants.
+func knownExpr(f *goFile, typeName string, values []string, x ast.Expr) ast.Expr {
+	if !f.external(typeName) {
+		return call(sel(x, "known"))
+	}
+	var consts []ast.Expr
+	for _, v := range values {
+		consts = append(consts, f.rootName(v))
+	}
+	return call(f.qual("slices", "Contains"), composite(sliceOf(f.typeName(typeName)), consts...), x)
+}
+
+// closedEnumStmt checks that a closed enumeration's field holds one of its
+// values when how asks for it, by the field's shape: a value, required or set,
+// a pointer when set, or each element of a slice, named by its index. The
+// message quotes the value, as a path's does (0049-PLAN-surface-fixes.md,
+// phase 3).
+func closedEnumStmt(f *goFile, name string, c model.Check) ast.Stmt {
+	sprintf := func(format string, args ...ast.Expr) ast.Expr {
+		return call(f.qual(pkgFmt, "Sprintf"), append([]ast.Expr{str(format)}, args...)...)
+	}
+	where := name + ": " + c.Key
+	known := func(x ast.Expr) ast.Expr { return knownExpr(f, c.Type, c.Values, x) }
+	field := dot("v", c.Field)
+	var check ast.Stmt
+	switch c.Shape {
+	case model.RefPointer:
+		check = ifStmt(nil, binary(binary(field, token.NEQ, nilExpr()), token.LAND, not(known(field))),
+			ret(validationError(f, name, str(c.Key), star(field), "RuleEnum", sprintf(where+": %q is not a "+c.Type, star(field)))))
+	case model.RefSlice:
+		elem := sprintf(c.Key+"[%d]", id("i"))
+		check = rangeStmt(id("i"), id("x"), field, ifStmt(nil, not(known(id("x"))),
+			ret(validationError(f, name, elem, id("x"), "RuleEnum", sprintf(where+"[%d]: %q is not a "+c.Type, id("i"), id("x"))))))
+	default:
+		cond := ast.Expr(not(known(field)))
+		if !c.Required {
+			// An optional value's zero is the field left out.
+			cond = binary(binary(field, token.NEQ, str("")), token.LAND, cond)
+		}
+		check = ifStmt(nil, cond,
+			ret(validationError(f, name, str(c.Key), field, "RuleEnum", sprintf(where+": %q is not a "+c.Type, field))))
+	}
+	return ifStmt(nil, dot("how", "closed"), check)
+}
+
 // absPathStmt checks a path the protocol requires to be absolute with the
 // rule abs, by the field's shape: a string, a pointer to one when set, or
 // each element of a slice, named by its index
@@ -1309,13 +1425,13 @@ func absPathStmt(f *goFile, name string, c model.Check) ast.Stmt {
 	field := dot("v", c.Field)
 	switch c.Shape {
 	case model.RefPointer:
-		return ifStmt(nil, binary(binary(field, token.NEQ, nilExpr()), token.LAND, not(call(id("abs"), star(field)))), fail(star(field)))
+		return ifStmt(nil, binary(binary(field, token.NEQ, nilExpr()), token.LAND, not(call(dot("how", "abs"), star(field)))), fail(star(field)))
 	case model.RefSlice:
 		elem := sprintf(c.Key+"[%d]", id("i"))
-		return rangeStmt(id("i"), id("x"), field, ifStmt(nil, not(call(id("abs"), id("x"))),
+		return rangeStmt(id("i"), id("x"), field, ifStmt(nil, not(call(dot("how", "abs"), id("x"))),
 			ret(validationError(f, name, elem, id("x"), "RuleAbsolutePath", sprintf(where+"[%d]: %q is not an absolute path", id("i"), id("x"))))))
 	default:
-		return ifStmt(nil, not(call(id("abs"), field)), fail(field))
+		return ifStmt(nil, not(call(dot("how", "abs"), field)), fail(field))
 	}
 }
 

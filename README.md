@@ -320,16 +320,27 @@ follow the schema:
 - A property the schema marks `x-deserialize-default-on-error` takes its schema
   default, or its zero value, when its value is malformed, and an array marked
   `x-deserialize-skip-invalid-items` drops the items that fail to decode, as
-  ACP's Rust implementation does.
+  ACP's Rust implementation does. A closed enumeration's value that its type
+  does not list fails there too: a `tool_call`'s unknown `kind` reads as `""`,
+  a `tool_call_update`'s as nil, and an unknown `audience` role is dropped.
 - `Validate` checks what the schema states, at every depth: a union has exactly
   one variant, or `Unknown`, set; a string meets its `minLength`; every nested
   value, slice element, and map value validates; a catch-all does not hold a
   discriminator value that names another variant, such as
   `ElicitationPropertySchema: variant Other: type "string" names another variant`.
   It also checks that each path the protocol requires to be absolute is, with
-  the host's `filepath.IsAbs` (see Paths, below). Elsewhere a present empty
-  string passes. Every failure is a `*acp.ValidationError` naming the type, the
-  property and the rule.
+  the host's `filepath.IsAbs` (see Paths, below). A closed enumeration, such
+  as `StopReason`, `ToolKind` or `PermissionOptionKind`, must hold one of its
+  constants: required, always, so `PromptResponse{}`'s empty `stopReason`
+  fails; optional, when set. Elsewhere a present empty string passes. Every
+  failure is a `*acp.ValidationError` naming the type, the property and the
+  rule, `acp.RuleEnum` for a closed enumeration.
+- What the SDK sends is checked as `Validate` checks it, so an agent whose
+  `Prompt` returns `PromptResponse{}` answers `-32603`. What it receives is
+  not checked for closed enumerations: a peer's unknown `stopReason` is
+  returned as it arrived
+  ([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](docs/decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
+  S6).
 - A decode error names the union and, for a variant, the discriminator value or
   the variant, then the cause, such as `ContentBlock: type "text": ...`.
 

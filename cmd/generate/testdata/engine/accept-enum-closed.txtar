@@ -1,0 +1,179 @@
+A closed enumeration, Level, is checked where it is held: Validate refuses a
+value it does not list in a required field, and in an optional one when set,
+with RuleEnum. A received value is kept where the field is strict, and read as
+absent where the schema lets it default: a value field as "", a pointer as nil,
+an item of a skip-invalid-items array as dropped. Package unstable's new
+variant holds acp's Level, and checks it by its constants, since acp's known is
+unexported (0049-PLAN-surface-fixes.md, phase 3).
+The meta declares $/cancel_request and the schema its smallest definition, which
+the runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {"old": "x/old"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{
+  "$defs": {
+    "OldRequest": {"type": "object", "properties": {"p": {"$ref": "#/$defs/Pick"}, "h": {"$ref": "#/$defs/Holder"}}, "required": ["p", "h"], "x-side": "agent", "x-method": "x/old"},
+    "OldResponse": {"type": "object", "x-side": "agent", "x-method": "x/old"},
+    "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"},
+    "Level": {"type": "string", "enum": ["low", "high"]},
+    "Holder": {"type": "object", "required": ["req"], "properties": {
+      "req": {"$ref": "#/$defs/Level"},
+      "opt": {"$ref": "#/$defs/Level"},
+      "soft": {"allOf": [{"$ref": "#/$defs/Level"}], "x-deserialize-default-on-error": true},
+      "softPtr": {"anyOf": [{"$ref": "#/$defs/Level"}, {"type": "null"}], "x-deserialize-default-on-error": true},
+      "list": {"type": ["array", "null"], "items": {"$ref": "#/$defs/Level"}, "x-deserialize-default-on-error": true, "x-deserialize-skip-invalid-items": true}}},
+    "Pick": {"discriminator": {"propertyName": "kind"}, "oneOf": [{"type": "object", "properties": {"kind": {"const": "a", "type": "string"}}, "required": ["kind"]}]}
+  }
+}
+-- meta.unstable.json --
+{"version": 1, "agentMethods": {"old": "x/old"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.unstable.json --
+{
+  "$defs": {
+    "OldRequest": {"type": "object", "properties": {"p": {"$ref": "#/$defs/Pick"}, "h": {"$ref": "#/$defs/Holder"}}, "required": ["p", "h"], "x-side": "agent", "x-method": "x/old"},
+    "OldResponse": {"type": "object", "x-side": "agent", "x-method": "x/old"},
+    "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"},
+    "Level": {"type": "string", "enum": ["low", "high"]},
+    "Holder": {"type": "object", "required": ["req"], "properties": {
+      "req": {"$ref": "#/$defs/Level"},
+      "opt": {"$ref": "#/$defs/Level"},
+      "soft": {"allOf": [{"$ref": "#/$defs/Level"}], "x-deserialize-default-on-error": true},
+      "softPtr": {"anyOf": [{"$ref": "#/$defs/Level"}, {"type": "null"}], "x-deserialize-default-on-error": true},
+      "list": {"type": ["array", "null"], "items": {"$ref": "#/$defs/Level"}, "x-deserialize-default-on-error": true, "x-deserialize-skip-invalid-items": true}}},
+    "Pick": {"discriminator": {"propertyName": "kind"}, "oneOf": [
+      {"type": "object", "properties": {"kind": {"const": "a", "type": "string"}}, "required": ["kind"]},
+      {"type": "object", "properties": {"kind": {"const": "n", "type": "string"}, "level": {"$ref": "#/$defs/Level"}}, "required": ["kind", "level"]}]}
+  }
+}
+-- unstable-v1.json --
+{
+  "version": 1,
+  "schema": "",
+  "methods": {},
+  "definitions": {},
+  "changes": {},
+  "$defs": {}
+}
+-- want.api --
+type Agent interface{Old(ctx context.Context, params OldRequest) (OldResponse, error)}
+type AgentExperimental interface{}
+const AgentMethodOld untyped string = "x/old"
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+type Holder struct{List []Level "json:\"list,omitempty\""; Opt Level "json:\"opt,omitempty\""; Req Level "json:\"req\""; Soft Level "json:\"soft,omitempty\""; SoftPtr *Level "json:\"softPtr,omitempty\""}
+type Level string
+const LevelHigh Level = "high"
+const LevelLow Level = "low"
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewPickA() Pick
+type OldRequest struct{H Holder "json:\"h\""; P Pick "json:\"p\""}
+type OldResponse struct{}
+type Pick struct{A *PickA "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type PickA struct{Kind string "json:\"kind\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).Old(ctx context.Context, params OldRequest) (OldResponse, error)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+func (*Holder).UnmarshalJSON(b []byte) error
+func (*Holder).Validate() error
+func (*OldRequest).UnmarshalJSON(b []byte) error
+func (*OldRequest).Validate() error
+func (*OldResponse).Validate() error
+func (Pick).MarshalJSON() ([]byte, error)
+func (*Pick).UnmarshalJSON(b []byte) error
+func (*Pick).Validate() error
+-- want.api.unstable --
+func DecodePickN(raw json.RawMessage) (PickN, error)
+type PickN struct{Kind string "json:\"kind\""; Level acp.Level "json:\"level\""}
+func (*PickN).UnmarshalJSON(b []byte) error
+func (*PickN).Validate() error
+-- behaviour_test.go --
+package acp_test
+
+import (
+	"encoding/json"
+	"errors"
+	"slices"
+	"testing"
+
+	acp "enginetest/accept-enum-closed"
+	"enginetest/accept-enum-closed/unstable"
+)
+
+func isEnumError(err error) bool {
+	ve, ok := errors.AsType[*acp.ValidationError](err)
+	return ok && ve.Rule == acp.RuleEnum
+}
+
+// Validate refuses a value Level does not list: always in a required field,
+// and when set in an optional one.
+func TestValidateClosed(t *testing.T) {
+	for _, tc := range []struct {
+		h    acp.Holder
+		want bool
+	}{
+		{acp.Holder{Req: acp.LevelLow}, false},
+		{acp.Holder{Req: ""}, true},
+		{acp.Holder{Req: "bogus"}, true},
+		{acp.Holder{Req: acp.LevelHigh, Opt: "bogus"}, true},
+		{acp.Holder{Req: acp.LevelHigh, List: []acp.Level{acp.LevelLow, "bogus"}}, true},
+	} {
+		err := tc.h.Validate()
+		if got := err != nil; got != tc.want || (got && !isEnumError(err)) {
+			t.Errorf("%+v: Validate = %v, want an error %v", tc.h, err, tc.want)
+		}
+	}
+}
+
+// A received unknown value is kept in a strict field and read as absent in a
+// lenient one.
+func TestDecodeClosed(t *testing.T) {
+	var h acp.Holder
+	if err := json.Unmarshal([]byte(`{"req":"bogus","soft":"bogus","softPtr":"bogus","list":["low","bogus","high"]}`), &h); err != nil {
+		t.Fatal(err)
+	}
+	if h.Req != "bogus" || h.Soft != "" || h.SoftPtr != nil || !slices.Equal(h.List, []acp.Level{acp.LevelLow, acp.LevelHigh}) {
+		t.Errorf("decoded %+v", h)
+	}
+	h = acp.Holder{}
+	if err := json.Unmarshal([]byte(`{"req":"low","soft":"high","softPtr":"low"}`), &h); err != nil {
+		t.Fatal(err)
+	}
+	if h.Soft != acp.LevelHigh || h.SoftPtr == nil || *h.SoftPtr != acp.LevelLow {
+		t.Errorf("known values decoded %+v", h)
+	}
+}
+
+// Package unstable checks acp's Level in its own type.
+func TestUnstableChecksAcpLevel(t *testing.T) {
+	n, err := unstable.DecodePickN(json.RawMessage(`{"kind":"n","level":"bogus"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := n.Validate(); !isEnumError(err) {
+		t.Errorf("PickN with level bogus: Validate = %v, want RuleEnum", err)
+	}
+	n.Level = acp.LevelHigh
+	if err := n.Validate(); err != nil {
+		t.Errorf("PickN with level high: Validate = %v", err)
+	}
+}

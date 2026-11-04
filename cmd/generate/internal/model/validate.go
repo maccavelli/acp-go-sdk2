@@ -33,6 +33,11 @@ const (
 	// CheckAbsolutePath requires the field to be an absolute path, by the
 	// rule the caller of validate passes (0015-MADR-validate-absolute-protocol-paths.md).
 	CheckAbsolutePath
+	// CheckClosedEnum requires the field, a closed enumeration's value, to
+	// be one of the values its type lists, when the caller of validate asks
+	// for it: on what is sent, and in Validate. A field that is not required
+	// is checked only when set (0049-PLAN-surface-fixes.md, phase 3).
+	CheckClosedEnum
 )
 
 // Check is one check of a Validate method, in field order.
@@ -55,8 +60,13 @@ type Check struct {
 	// Type is, for a CheckNested, the validated type the field holds, so a
 	// type of package unstable checks one of acp's through its exported
 	// Validate (0039-MADR-five-adopter-additions-on-schema-1-25-0.md,
-	// question 9).
+	// question 9). For a CheckClosedEnum it is the enumeration.
 	Type string
+	// Required is true for a CheckClosedEnum of a required field, checked
+	// even when it holds the zero value. Values names the enumeration's
+	// constants, for package unstable, which cannot call acp's known.
+	Required bool
+	Values   []string
 }
 
 // goRange is the range of each sized Go number type.
@@ -179,6 +189,11 @@ func (m *Model) ownChecks(structs []shape) (map[string][]Check, error) {
 				}
 				c = append(c, Check{Kind: CheckAbsolutePath, Key: f.Key, Shape: shape})
 			}
+			closed, err := m.closedEnumCheck(s.name, f)
+			if err != nil {
+				return nil, err
+			}
+			c = append(c, closed...)
 			for i := range c {
 				c[i].Field = f.Name
 			}
@@ -189,6 +204,41 @@ func (m *Model) ownChecks(structs []shape) (map[string][]Check, error) {
 		}
 	}
 	return own, nil
+}
+
+// isClosedEnum reports whether the named type is a closed enumeration: a
+// string type whose values the schema lists in full, an enum or a oneOf of
+// consts, not an open enum that admits other strings.
+func (m *Model) isClosedEnum(name string) bool {
+	t := m.Type(name)
+	return t != nil && (t.Kind == KindEnum || t.Kind == KindStringConstUnion)
+}
+
+// closedEnumCheck returns the membership check of field f when it holds a
+// closed enumeration by value, by pointer, or in a slice, and marks f Closed.
+// One held in a patch or a map is refused, as no check reaches it
+// (0049-PLAN-surface-fixes.md, phase 3).
+func (m *Model) closedEnumCheck(owner string, f *Field) ([]Check, error) {
+	r := f.Type
+	sh := RefNamed
+	switch r.Kind {
+	case RefPointer, RefSlice:
+		sh, r = r.Kind, *r.Elem
+	case RefPatch, RefMap:
+		if r.Elem != nil && r.Elem.Kind == RefNamed && m.isClosedEnum(r.Elem.Name) {
+			return nil, fmt.Errorf("%s.%s: a closed enumeration in %s is not checked", owner, f.Key, f.Type)
+		}
+		return nil, nil
+	}
+	if r.Kind != RefNamed || !m.isClosedEnum(r.Name) {
+		return nil, nil
+	}
+	var values []string
+	for _, v := range m.Type(r.Name).Enum {
+		values = append(values, v.Const)
+	}
+	f.Closed, f.ClosedValues = true, values
+	return []Check{{Kind: CheckClosedEnum, Key: f.Key, Shape: sh, Type: r.Name, Required: f.Required, Values: values}}, nil
 }
 
 // spreadValidates marks, until nothing changes, every struct with a field

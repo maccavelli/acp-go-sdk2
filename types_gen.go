@@ -168,10 +168,41 @@ func (v *AgentCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) e
 	a.McpCapabilities = orZero[McpCapabilities](s.McpCapabilities)
 	a.Nes = orZero[*NesCapabilities](s.Nes)
 	a.PositionEncoding = orZero[*PositionEncodingKind](s.PositionEncoding)
+	if a.PositionEncoding != nil && !a.PositionEncoding.known() {
+		a.PositionEncoding = nil
+	}
 	a.PromptCapabilities = orZero[PromptCapabilities](s.PromptCapabilities)
 	a.Providers = orZero[*ProvidersCapabilities](s.Providers)
 	a.SessionCapabilities = orZero[SessionCapabilities](s.SessionCapabilities)
 	*v = AgentCapabilities(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the AgentCapabilities schema definition.
+func (v *AgentCapabilities) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *AgentCapabilities) validate(how validation) error {
+	if v.Nes != nil {
+		if err := v.Nes.validate(how); err != nil {
+			return fmt.Errorf("AgentCapabilities: nes: %w", err)
+		}
+	}
+	if how.closed {
+		if v.PositionEncoding != nil && !v.PositionEncoding.known() {
+			return &ValidationError{
+				Type:  "AgentCapabilities",
+				Field: "positionEncoding",
+				Value: *v.PositionEncoding,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("AgentCapabilities: positionEncoding: %q is not a PositionEncodingKind", *v.PositionEncoding),
+			}
+		}
+	}
 	return nil
 }
 
@@ -215,10 +246,13 @@ func (v *AgentNotification) decodeKeys(b []byte, m map[string]json.RawMessage) e
 
 // Validate returns an error if v does not satisfy the AgentNotification schema definition.
 func (v *AgentNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *AgentNotification) validate(abs func(string) bool) error {
+func (v *AgentNotification) validate(how validation) error {
 	return nil
 }
 
@@ -264,11 +298,14 @@ func (v *AgentRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 
 // Validate returns an error if v does not satisfy the AgentRequest schema definition.
 func (v *AgentRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *AgentRequest) validate(abs func(string) bool) error {
-	if err := v.Id.validate(abs); err != nil {
+func (v *AgentRequest) validate(how validation) error {
+	if err := v.Id.validate(how); err != nil {
 		return fmt.Errorf("AgentRequest: id: %w", err)
 	}
 	return nil
@@ -313,11 +350,14 @@ func (v *AgentResult) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 
 // Validate returns an error if v does not satisfy the Result variant of the AgentResponse schema definition.
 func (v *AgentResult) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *AgentResult) validate(abs func(string) bool) error {
-	if err := v.Id.validate(abs); err != nil {
+func (v *AgentResult) validate(how validation) error {
+	if err := v.Id.validate(how); err != nil {
 		return fmt.Errorf("AgentResult: id: %w", err)
 	}
 	return nil
@@ -362,11 +402,14 @@ func (v *AgentError) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 
 // Validate returns an error if v does not satisfy the Error variant of the AgentResponse schema definition.
 func (v *AgentError) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *AgentError) validate(abs func(string) bool) error {
-	if err := v.Id.validate(abs); err != nil {
+func (v *AgentError) validate(how validation) error {
+	if err := v.Id.validate(how); err != nil {
 		return fmt.Errorf("AgentError: id: %w", err)
 	}
 	return nil
@@ -461,10 +504,13 @@ func (u AgentResponse) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the AgentResponse schema definition.
 func (u *AgentResponse) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *AgentResponse) validate(abs func(string) bool) error {
+func (u *AgentResponse) validate(how validation) error {
 	var count int
 	if u.Result != nil {
 		count++
@@ -480,12 +526,12 @@ func (u *AgentResponse) validate(abs func(string) bool) error {
 		}
 	}
 	if u.Result != nil {
-		if err := u.Result.validate(abs); err != nil {
+		if err := u.Result.validate(how); err != nil {
 			return fmt.Errorf("AgentResponse: variant Result: %w", err)
 		}
 	}
 	if u.Error != nil {
-		if err := u.Error.validate(abs); err != nil {
+		if err := u.Error.validate(how); err != nil {
 			return fmt.Errorf("AgentResponse: variant Error: %w", err)
 		}
 	}
@@ -538,9 +584,37 @@ func (v *Annotations) decodeKeys(b []byte, _ map[string]json.RawMessage) error {
 	if items, err := skipInvalid[Role](s.Audience); err == nil {
 		a.Audience = items
 	}
+	a.Audience = slices.DeleteFunc(a.Audience, func(x Role) bool {
+		return !x.known()
+	})
 	a.LastModified = orZero[*string](s.LastModified)
 	a.Priority = orZero[*float64](s.Priority)
 	*v = Annotations(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the Annotations schema definition.
+func (v *Annotations) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *Annotations) validate(how validation) error {
+	if how.closed {
+		for i, x := range v.Audience {
+			if !x.known() {
+				return &ValidationError{
+					Type:  "Annotations",
+					Field: fmt.Sprintf("audience[%d]", i),
+					Value: x,
+					Rule:  RuleEnum,
+					msg:   fmt.Sprintf("Annotations: audience[%d]: %q is not a Role", i, x),
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -590,6 +664,23 @@ func (v *AudioContent) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 	a.Meta = orZero[map[string]any](s.Meta)
 	a.Annotations = orZero[*Annotations](s.Annotations)
 	*v = AudioContent(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the AudioContent schema definition.
+func (v *AudioContent) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *AudioContent) validate(how validation) error {
+	if v.Annotations != nil {
+		if err := v.Annotations.validate(how); err != nil {
+			return fmt.Errorf("AudioContent: annotations: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -795,10 +886,13 @@ func (u AuthMethod) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the AuthMethod schema definition.
 func (u *AuthMethod) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *AuthMethod) validate(abs func(string) bool) error {
+func (u *AuthMethod) validate(how validation) error {
 	var count int
 	if u.Terminal != nil {
 		count++
@@ -983,10 +1077,13 @@ func (v *AuthenticateRequest) decodeKeys(b []byte, m map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the AuthenticateRequest schema definition.
 func (v *AuthenticateRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *AuthenticateRequest) validate(abs func(string) bool) error {
+func (v *AuthenticateRequest) validate(how validation) error {
 	return nil
 }
 
@@ -1030,10 +1127,13 @@ func (v *AuthenticateResponse) decodeKeys(b []byte, _ map[string]json.RawMessage
 
 // Validate returns an error if v does not satisfy the AuthenticateResponse schema definition.
 func (v *AuthenticateResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *AuthenticateResponse) validate(abs func(string) bool) error {
+func (v *AuthenticateResponse) validate(how validation) error {
 	return nil
 }
 
@@ -1088,12 +1188,15 @@ func (v *AvailableCommand) decodeKeys(b []byte, m map[string]json.RawMessage) er
 
 // Validate returns an error if v does not satisfy the AvailableCommand schema definition.
 func (v *AvailableCommand) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *AvailableCommand) validate(abs func(string) bool) error {
+func (v *AvailableCommand) validate(how validation) error {
 	if v.Input != nil {
-		if err := v.Input.validate(abs); err != nil {
+		if err := v.Input.validate(how); err != nil {
 			return fmt.Errorf("AvailableCommand: input: %w", err)
 		}
 	}
@@ -1154,10 +1257,13 @@ func (u AvailableCommandInput) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the AvailableCommandInput schema definition.
 func (u *AvailableCommandInput) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *AvailableCommandInput) validate(abs func(string) bool) error {
+func (u *AvailableCommandInput) validate(how validation) error {
 	var count int
 	if u.Unstructured != nil {
 		count++
@@ -1231,12 +1337,15 @@ func (v *AvailableCommandsUpdate) decodeKeys(b []byte, m map[string]json.RawMess
 
 // Validate returns an error if v does not satisfy the AvailableCommandsUpdate schema definition.
 func (v *AvailableCommandsUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *AvailableCommandsUpdate) validate(abs func(string) bool) error {
+func (v *AvailableCommandsUpdate) validate(how validation) error {
 	for i := range v.AvailableCommands {
-		if err := v.AvailableCommands[i].validate(abs); err != nil {
+		if err := v.AvailableCommands[i].validate(how); err != nil {
 			return fmt.Errorf("AvailableCommandsUpdate: availableCommands[%d]: %w", i, err)
 		}
 	}
@@ -1437,10 +1546,13 @@ func (v *CancelNotification) decodeKeys(b []byte, m map[string]json.RawMessage) 
 
 // Validate returns an error if v does not satisfy the CancelNotification schema definition.
 func (v *CancelNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CancelNotification) validate(abs func(string) bool) error {
+func (v *CancelNotification) validate(how validation) error {
 	return nil
 }
 
@@ -1493,11 +1605,14 @@ func (v *CancelRequestNotification) decodeKeys(b []byte, m map[string]json.RawMe
 
 // Validate returns an error if v does not satisfy the CancelRequestNotification schema definition.
 func (v *CancelRequestNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CancelRequestNotification) validate(abs func(string) bool) error {
-	if err := v.RequestId.validate(abs); err != nil {
+func (v *CancelRequestNotification) validate(how validation) error {
+	if err := v.RequestId.validate(how); err != nil {
 		return fmt.Errorf("CancelRequestNotification: requestId: %w", err)
 	}
 	return nil
@@ -1636,10 +1751,38 @@ func (v *ClientCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 	if items, err := skipInvalid[PositionEncodingKind](s.PositionEncodings); err == nil {
 		a.PositionEncodings = items
 	}
+	a.PositionEncodings = slices.DeleteFunc(a.PositionEncodings, func(x PositionEncodingKind) bool {
+		return !x.known()
+	})
 	a.Session = orZero[*ClientSessionCapabilities](s.Session)
 	a.Subagents = orZero[*SubagentCapabilities](s.Subagents)
 	a.Terminal = orZero[bool](s.Terminal)
 	*v = ClientCapabilities(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the ClientCapabilities schema definition.
+func (v *ClientCapabilities) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *ClientCapabilities) validate(how validation) error {
+	if how.closed {
+		for i, x := range v.PositionEncodings {
+			if !x.known() {
+				return &ValidationError{
+					Type:  "ClientCapabilities",
+					Field: fmt.Sprintf("positionEncodings[%d]", i),
+					Value: x,
+					Rule:  RuleEnum,
+					msg:   fmt.Sprintf("ClientCapabilities: positionEncodings[%d]: %q is not a PositionEncodingKind", i, x),
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -1741,10 +1884,13 @@ func (v *ClientNotification) decodeKeys(b []byte, m map[string]json.RawMessage) 
 
 // Validate returns an error if v does not satisfy the ClientNotification schema definition.
 func (v *ClientNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ClientNotification) validate(abs func(string) bool) error {
+func (v *ClientNotification) validate(how validation) error {
 	return nil
 }
 
@@ -1790,11 +1936,14 @@ func (v *ClientRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error
 
 // Validate returns an error if v does not satisfy the ClientRequest schema definition.
 func (v *ClientRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ClientRequest) validate(abs func(string) bool) error {
-	if err := v.Id.validate(abs); err != nil {
+func (v *ClientRequest) validate(how validation) error {
+	if err := v.Id.validate(how); err != nil {
 		return fmt.Errorf("ClientRequest: id: %w", err)
 	}
 	return nil
@@ -1839,11 +1988,14 @@ func (v *ClientResult) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 
 // Validate returns an error if v does not satisfy the Result variant of the ClientResponse schema definition.
 func (v *ClientResult) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ClientResult) validate(abs func(string) bool) error {
-	if err := v.Id.validate(abs); err != nil {
+func (v *ClientResult) validate(how validation) error {
+	if err := v.Id.validate(how); err != nil {
 		return fmt.Errorf("ClientResult: id: %w", err)
 	}
 	return nil
@@ -1888,11 +2040,14 @@ func (v *ClientError) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 
 // Validate returns an error if v does not satisfy the Error variant of the ClientResponse schema definition.
 func (v *ClientError) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ClientError) validate(abs func(string) bool) error {
-	if err := v.Id.validate(abs); err != nil {
+func (v *ClientError) validate(how validation) error {
+	if err := v.Id.validate(how); err != nil {
 		return fmt.Errorf("ClientError: id: %w", err)
 	}
 	return nil
@@ -1987,10 +2142,13 @@ func (u ClientResponse) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the ClientResponse schema definition.
 func (u *ClientResponse) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *ClientResponse) validate(abs func(string) bool) error {
+func (u *ClientResponse) validate(how validation) error {
 	var count int
 	if u.Result != nil {
 		count++
@@ -2006,12 +2164,12 @@ func (u *ClientResponse) validate(abs func(string) bool) error {
 		}
 	}
 	if u.Result != nil {
-		if err := u.Result.validate(abs); err != nil {
+		if err := u.Result.validate(how); err != nil {
 			return fmt.Errorf("ClientResponse: variant Result: %w", err)
 		}
 	}
 	if u.Error != nil {
-		if err := u.Error.validate(abs); err != nil {
+		if err := u.Error.validate(how); err != nil {
 			return fmt.Errorf("ClientResponse: variant Error: %w", err)
 		}
 	}
@@ -2126,10 +2284,13 @@ func (v *CloseSessionRequest) decodeKeys(b []byte, m map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the CloseSessionRequest schema definition.
 func (v *CloseSessionRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CloseSessionRequest) validate(abs func(string) bool) error {
+func (v *CloseSessionRequest) validate(how validation) error {
 	return nil
 }
 
@@ -2173,10 +2334,13 @@ func (v *CloseSessionResponse) decodeKeys(b []byte, _ map[string]json.RawMessage
 
 // Validate returns an error if v does not satisfy the CloseSessionResponse schema definition.
 func (v *CloseSessionResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CloseSessionResponse) validate(abs func(string) bool) error {
+func (v *CloseSessionResponse) validate(how validation) error {
 	return nil
 }
 
@@ -2260,11 +2424,14 @@ func (v *CompactionSummaryChunk) decodeKeys(b []byte, m map[string]json.RawMessa
 
 // Validate returns an error if v does not satisfy the CompactionSummaryChunk schema definition.
 func (v *CompactionSummaryChunk) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CompactionSummaryChunk) validate(abs func(string) bool) error {
-	if err := v.Content.validate(abs); err != nil {
+func (v *CompactionSummaryChunk) validate(how validation) error {
+	if err := v.Content.validate(how); err != nil {
 		return fmt.Errorf("CompactionSummaryChunk: content: %w", err)
 	}
 	return nil
@@ -2328,13 +2495,16 @@ func (v *CompactionUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) er
 
 // Validate returns an error if v does not satisfy the CompactionUpdate schema definition.
 func (v *CompactionUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CompactionUpdate) validate(abs func(string) bool) error {
+func (v *CompactionUpdate) validate(how validation) error {
 	if pv, ok := v.Summary.Value(); ok {
 		for i := range pv {
-			if err := pv[i].validate(abs); err != nil {
+			if err := pv[i].validate(how); err != nil {
 				return fmt.Errorf("CompactionUpdate: summary[%d]: %w", i, err)
 			}
 		}
@@ -2389,10 +2559,13 @@ func (v *CompleteElicitationNotification) decodeKeys(b []byte, m map[string]json
 
 // Validate returns an error if v does not satisfy the CompleteElicitationNotification schema definition.
 func (v *CompleteElicitationNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CompleteElicitationNotification) validate(abs func(string) bool) error {
+func (v *CompleteElicitationNotification) validate(how validation) error {
 	return nil
 }
 
@@ -2455,12 +2628,15 @@ func (v *ConfigOptionUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) 
 
 // Validate returns an error if v does not satisfy the ConfigOptionUpdate schema definition.
 func (v *ConfigOptionUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ConfigOptionUpdate) validate(abs func(string) bool) error {
+func (v *ConfigOptionUpdate) validate(how validation) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].validate(abs); err != nil {
+		if err := v.ConfigOptions[i].validate(how); err != nil {
 			return fmt.Errorf("ConfigOptionUpdate: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -2512,11 +2688,14 @@ func (v *Content) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 
 // Validate returns an error if v does not satisfy the Content schema definition.
 func (v *Content) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *Content) validate(abs func(string) bool) error {
-	if err := v.Content.validate(abs); err != nil {
+func (v *Content) validate(how validation) error {
+	if err := v.Content.validate(how); err != nil {
 		return fmt.Errorf("Content: content: %w", err)
 	}
 	return nil
@@ -2570,6 +2749,23 @@ func (v *ContentBlockText) decodeKeys(b []byte, m map[string]json.RawMessage) er
 	a.Meta = orZero[map[string]any](s.Meta)
 	a.Annotations = orZero[*Annotations](s.Annotations)
 	*v = ContentBlockText(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the "text" variant of the ContentBlock schema definition.
+func (v *ContentBlockText) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *ContentBlockText) validate(how validation) error {
+	if v.Annotations != nil {
+		if err := v.Annotations.validate(how); err != nil {
+			return fmt.Errorf("ContentBlockText: annotations: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -2629,6 +2825,23 @@ func (v *ContentBlockImage) decodeKeys(b []byte, m map[string]json.RawMessage) e
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "image" variant of the ContentBlock schema definition.
+func (v *ContentBlockImage) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *ContentBlockImage) validate(how validation) error {
+	if v.Annotations != nil {
+		if err := v.Annotations.validate(how); err != nil {
+			return fmt.Errorf("ContentBlockImage: annotations: %w", err)
+		}
+	}
+	return nil
+}
+
 // ContentBlockAudio is the "audio" variant of the ContentBlock schema definition.
 //
 // Audio data for transcription or analysis.
@@ -2678,6 +2891,23 @@ func (v *ContentBlockAudio) decodeKeys(b []byte, m map[string]json.RawMessage) e
 	a.Meta = orZero[map[string]any](s.Meta)
 	a.Annotations = orZero[*Annotations](s.Annotations)
 	*v = ContentBlockAudio(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the "audio" variant of the ContentBlock schema definition.
+func (v *ContentBlockAudio) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *ContentBlockAudio) validate(how validation) error {
+	if v.Annotations != nil {
+		if err := v.Annotations.validate(how); err != nil {
+			return fmt.Errorf("ContentBlockAudio: annotations: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -2749,6 +2979,23 @@ func (v *ContentBlockResourceLink) decodeKeys(b []byte, m map[string]json.RawMes
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "resource_link" variant of the ContentBlock schema definition.
+func (v *ContentBlockResourceLink) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *ContentBlockResourceLink) validate(how validation) error {
+	if v.Annotations != nil {
+		if err := v.Annotations.validate(how); err != nil {
+			return fmt.Errorf("ContentBlockResourceLink: annotations: %w", err)
+		}
+	}
+	return nil
+}
+
 // ContentBlockResource is the "resource" variant of the ContentBlock schema definition.
 //
 // Complete resource contents embedded directly in the message.
@@ -2803,11 +3050,19 @@ func (v *ContentBlockResource) decodeKeys(b []byte, m map[string]json.RawMessage
 
 // Validate returns an error if v does not satisfy the "resource" variant of the ContentBlock schema definition.
 func (v *ContentBlockResource) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ContentBlockResource) validate(abs func(string) bool) error {
-	if err := v.Resource.validate(abs); err != nil {
+func (v *ContentBlockResource) validate(how validation) error {
+	if v.Annotations != nil {
+		if err := v.Annotations.validate(how); err != nil {
+			return fmt.Errorf("ContentBlockResource: annotations: %w", err)
+		}
+	}
+	if err := v.Resource.validate(how); err != nil {
 		return fmt.Errorf("ContentBlockResource: resource: %w", err)
 	}
 	return nil
@@ -3049,10 +3304,13 @@ func (u ContentBlock) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the ContentBlock schema definition.
 func (u *ContentBlock) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *ContentBlock) validate(abs func(string) bool) error {
+func (u *ContentBlock) validate(how validation) error {
 	var count int
 	if u.Text != nil {
 		count++
@@ -3079,8 +3337,28 @@ func (u *ContentBlock) validate(abs func(string) bool) error {
 			msg:  "ContentBlock must have exactly one variant set",
 		}
 	}
+	if u.Text != nil {
+		if err := u.Text.validate(how); err != nil {
+			return fmt.Errorf("ContentBlock: variant Text: %w", err)
+		}
+	}
+	if u.Image != nil {
+		if err := u.Image.validate(how); err != nil {
+			return fmt.Errorf("ContentBlock: variant Image: %w", err)
+		}
+	}
+	if u.Audio != nil {
+		if err := u.Audio.validate(how); err != nil {
+			return fmt.Errorf("ContentBlock: variant Audio: %w", err)
+		}
+	}
+	if u.ResourceLink != nil {
+		if err := u.ResourceLink.validate(how); err != nil {
+			return fmt.Errorf("ContentBlock: variant ResourceLink: %w", err)
+		}
+	}
 	if u.Resource != nil {
-		if err := u.Resource.validate(abs); err != nil {
+		if err := u.Resource.validate(how); err != nil {
 			return fmt.Errorf("ContentBlock: variant Resource: %w", err)
 		}
 	}
@@ -3139,11 +3417,14 @@ func (v *ContentChunk) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 
 // Validate returns an error if v does not satisfy the ContentChunk schema definition.
 func (v *ContentChunk) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ContentChunk) validate(abs func(string) bool) error {
-	if err := v.Content.validate(abs); err != nil {
+func (v *ContentChunk) validate(how validation) error {
+	if err := v.Content.validate(how); err != nil {
 		return fmt.Errorf("ContentChunk: content: %w", err)
 	}
 	return nil
@@ -3285,11 +3566,14 @@ func (v *CreateElicitationForm) decodeKeys(b []byte, m map[string]json.RawMessag
 
 // Validate returns an error if v does not satisfy the "form" variant of the CreateElicitationRequest schema definition.
 func (v *CreateElicitationForm) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CreateElicitationForm) validate(abs func(string) bool) error {
-	if err := v.RequestedSchema.validate(abs); err != nil {
+func (v *CreateElicitationForm) validate(how validation) error {
+	if err := v.RequestedSchema.validate(how); err != nil {
 		return fmt.Errorf("CreateElicitationForm: requestedSchema: %w", err)
 	}
 	var count int
@@ -3307,7 +3591,7 @@ func (v *CreateElicitationForm) validate(abs func(string) bool) error {
 		}
 	}
 	if v.Request != nil {
-		if err := v.Request.validate(abs); err != nil {
+		if err := v.Request.validate(how); err != nil {
 			return fmt.Errorf("CreateElicitationForm: member Request: %w", err)
 		}
 	}
@@ -3409,10 +3693,13 @@ func (v *CreateElicitationUrl) decodeKeys(b []byte, m map[string]json.RawMessage
 
 // Validate returns an error if v does not satisfy the "url" variant of the CreateElicitationRequest schema definition.
 func (v *CreateElicitationUrl) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CreateElicitationUrl) validate(abs func(string) bool) error {
+func (v *CreateElicitationUrl) validate(how validation) error {
 	var count int
 	if v.Session != nil {
 		count++
@@ -3428,7 +3715,7 @@ func (v *CreateElicitationUrl) validate(abs func(string) bool) error {
 		}
 	}
 	if v.Request != nil {
-		if err := v.Request.validate(abs); err != nil {
+		if err := v.Request.validate(how); err != nil {
 			return fmt.Errorf("CreateElicitationUrl: member Request: %w", err)
 		}
 	}
@@ -3656,10 +3943,13 @@ func (u CreateElicitationRequest) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the CreateElicitationRequest schema definition.
 func (u *CreateElicitationRequest) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *CreateElicitationRequest) validate(abs func(string) bool) error {
+func (u *CreateElicitationRequest) validate(how validation) error {
 	var count int
 	if u.Form != nil {
 		count++
@@ -3690,12 +3980,12 @@ func (u *CreateElicitationRequest) validate(abs func(string) bool) error {
 		}
 	}
 	if u.Form != nil {
-		if err := u.Form.validate(abs); err != nil {
+		if err := u.Form.validate(how); err != nil {
 			return fmt.Errorf("CreateElicitationRequest: variant Form: %w", err)
 		}
 	}
 	if u.Url != nil {
-		if err := u.Url.validate(abs); err != nil {
+		if err := u.Url.validate(how); err != nil {
 			return fmt.Errorf("CreateElicitationRequest: variant Url: %w", err)
 		}
 	}
@@ -3747,13 +4037,16 @@ func (v *CreateElicitationAccept) decodeKeys(b []byte, _ map[string]json.RawMess
 
 // Validate returns an error if v does not satisfy the "accept" variant of the CreateElicitationResponse schema definition.
 func (v *CreateElicitationAccept) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CreateElicitationAccept) validate(abs func(string) bool) error {
+func (v *CreateElicitationAccept) validate(how validation) error {
 	for _, k := range slices.Sorted(maps.Keys(v.Content)) {
 		x := v.Content[k]
-		if err := x.validate(abs); err != nil {
+		if err := x.validate(how); err != nil {
 			return fmt.Errorf("CreateElicitationAccept: content[%q]: %w", k, err)
 		}
 	}
@@ -4057,10 +4350,13 @@ func (u CreateElicitationResponse) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the CreateElicitationResponse schema definition.
 func (u *CreateElicitationResponse) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *CreateElicitationResponse) validate(abs func(string) bool) error {
+func (u *CreateElicitationResponse) validate(how validation) error {
 	var count int
 	if u.Accept != nil {
 		count++
@@ -4094,7 +4390,7 @@ func (u *CreateElicitationResponse) validate(abs func(string) bool) error {
 		}
 	}
 	if u.Accept != nil {
-		if err := u.Accept.validate(abs); err != nil {
+		if err := u.Accept.validate(how); err != nil {
 			return fmt.Errorf("CreateElicitationResponse: variant Accept: %w", err)
 		}
 	}
@@ -4163,11 +4459,14 @@ func (v *CreateTerminalRequest) decodeKeys(b []byte, m map[string]json.RawMessag
 
 // Validate returns an error if v does not satisfy the CreateTerminalRequest schema definition.
 func (v *CreateTerminalRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CreateTerminalRequest) validate(abs func(string) bool) error {
-	if v.Cwd != nil && !abs(*v.Cwd) {
+func (v *CreateTerminalRequest) validate(how validation) error {
+	if v.Cwd != nil && !how.abs(*v.Cwd) {
 		return &ValidationError{
 			Type:  "CreateTerminalRequest",
 			Field: "cwd",
@@ -4224,10 +4523,13 @@ func (v *CreateTerminalResponse) decodeKeys(b []byte, m map[string]json.RawMessa
 
 // Validate returns an error if v does not satisfy the CreateTerminalResponse schema definition.
 func (v *CreateTerminalResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *CreateTerminalResponse) validate(abs func(string) bool) error {
+func (v *CreateTerminalResponse) validate(how validation) error {
 	return nil
 }
 
@@ -4323,10 +4625,13 @@ func (v *DeleteSessionRequest) decodeKeys(b []byte, m map[string]json.RawMessage
 
 // Validate returns an error if v does not satisfy the DeleteSessionRequest schema definition.
 func (v *DeleteSessionRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *DeleteSessionRequest) validate(abs func(string) bool) error {
+func (v *DeleteSessionRequest) validate(how validation) error {
 	return nil
 }
 
@@ -4370,10 +4675,13 @@ func (v *DeleteSessionResponse) decodeKeys(b []byte, _ map[string]json.RawMessag
 
 // Validate returns an error if v does not satisfy the DeleteSessionResponse schema definition.
 func (v *DeleteSessionResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *DeleteSessionResponse) validate(abs func(string) bool) error {
+func (v *DeleteSessionResponse) validate(how validation) error {
 	return nil
 }
 
@@ -4432,11 +4740,14 @@ func (v *Diff) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 
 // Validate returns an error if v does not satisfy the Diff schema definition.
 func (v *Diff) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *Diff) validate(abs func(string) bool) error {
-	if !abs(v.Path) {
+func (v *Diff) validate(how validation) error {
+	if !how.abs(v.Path) {
 		return &ValidationError{
 			Type:  "Diff",
 			Field: "path",
@@ -4458,13 +4769,16 @@ type ElicitationAcceptAction struct {
 
 // Validate returns an error if v does not satisfy the ElicitationAcceptAction schema definition.
 func (v *ElicitationAcceptAction) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ElicitationAcceptAction) validate(abs func(string) bool) error {
+func (v *ElicitationAcceptAction) validate(how validation) error {
 	for _, k := range slices.Sorted(maps.Keys(v.Content)) {
 		x := v.Content[k]
-		if err := x.validate(abs); err != nil {
+		if err := x.validate(how); err != nil {
 			return fmt.Errorf("ElicitationAcceptAction: content[%q]: %w", k, err)
 		}
 	}
@@ -4640,10 +4954,13 @@ func (u ElicitationContentValue) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the ElicitationContentValue schema definition.
 func (u *ElicitationContentValue) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *ElicitationContentValue) validate(abs func(string) bool) error {
+func (u *ElicitationContentValue) validate(how validation) error {
 	var count int
 	if u.String != nil {
 		count++
@@ -4789,11 +5106,14 @@ func (v *ElicitationFormMode) decodeKeys(b []byte, m map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the ElicitationFormMode schema definition.
 func (v *ElicitationFormMode) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ElicitationFormMode) validate(abs func(string) bool) error {
-	if err := v.RequestedSchema.validate(abs); err != nil {
+func (v *ElicitationFormMode) validate(how validation) error {
+	if err := v.RequestedSchema.validate(how); err != nil {
 		return fmt.Errorf("ElicitationFormMode: requestedSchema: %w", err)
 	}
 	var count int
@@ -4811,7 +5131,7 @@ func (v *ElicitationFormMode) validate(abs func(string) bool) error {
 		}
 	}
 	if v.Request != nil {
-		if err := v.Request.validate(abs); err != nil {
+		if err := v.Request.validate(how); err != nil {
 			return fmt.Errorf("ElicitationFormMode: member Request: %w", err)
 		}
 	}
@@ -4903,6 +5223,29 @@ func (v *ElicitationPropertySchemaString) decodeKeys(b []byte, _ map[string]json
 	a.Description = orZero[*string](s.Description)
 	a.Title = orZero[*string](s.Title)
 	*v = ElicitationPropertySchemaString(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the "string" variant of the ElicitationPropertySchema schema definition.
+func (v *ElicitationPropertySchemaString) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *ElicitationPropertySchemaString) validate(how validation) error {
+	if how.closed {
+		if v.Format != nil && !v.Format.known() {
+			return &ValidationError{
+				Type:  "ElicitationPropertySchemaString",
+				Field: "format",
+				Value: *v.Format,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("ElicitationPropertySchemaString: format: %q is not a StringFormat", *v.Format),
+			}
+		}
+	}
 	return nil
 }
 
@@ -5175,11 +5518,14 @@ func (v *ElicitationPropertySchemaArray) decodeKeys(b []byte, m map[string]json.
 
 // Validate returns an error if v does not satisfy the "array" variant of the ElicitationPropertySchema schema definition.
 func (v *ElicitationPropertySchemaArray) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ElicitationPropertySchemaArray) validate(abs func(string) bool) error {
-	if err := v.Items.validate(abs); err != nil {
+func (v *ElicitationPropertySchemaArray) validate(how validation) error {
+	if err := v.Items.validate(how); err != nil {
 		return fmt.Errorf("ElicitationPropertySchemaArray: items: %w", err)
 	}
 	return nil
@@ -5440,10 +5786,13 @@ func (u ElicitationPropertySchema) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the ElicitationPropertySchema schema definition.
 func (u *ElicitationPropertySchema) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *ElicitationPropertySchema) validate(abs func(string) bool) error {
+func (u *ElicitationPropertySchema) validate(how validation) error {
 	var count int
 	if u.String != nil {
 		count++
@@ -5482,8 +5831,13 @@ func (u *ElicitationPropertySchema) validate(abs func(string) bool) error {
 			}
 		}
 	}
+	if u.String != nil {
+		if err := u.String.validate(how); err != nil {
+			return fmt.Errorf("ElicitationPropertySchema: variant String: %w", err)
+		}
+	}
 	if u.Array != nil {
-		if err := u.Array.validate(abs); err != nil {
+		if err := u.Array.validate(how); err != nil {
 			return fmt.Errorf("ElicitationPropertySchema: variant Array: %w", err)
 		}
 	}
@@ -5525,11 +5879,14 @@ func (v *ElicitationRequestScope) decodeKeys(b []byte, m map[string]json.RawMess
 
 // Validate returns an error if v does not satisfy the ElicitationRequestScope schema definition.
 func (v *ElicitationRequestScope) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ElicitationRequestScope) validate(abs func(string) bool) error {
-	if err := v.RequestId.validate(abs); err != nil {
+func (v *ElicitationRequestScope) validate(how validation) error {
+	if err := v.RequestId.validate(how); err != nil {
 		return fmt.Errorf("ElicitationRequestScope: requestId: %w", err)
 	}
 	return nil
@@ -5633,6 +5990,9 @@ func (v *ElicitationSchema) decodeKeys(b []byte, m map[string]json.RawMessage) e
 	a.Description = orZero[*string](s.Description)
 	a.Title = orZero[*string](s.Title)
 	a.Type = orDefault[ElicitationSchemaType](s.Type, ElicitationSchemaTypeObject)
+	if !a.Type.known() {
+		a.Type = ElicitationSchemaTypeObject
+	}
 	{
 		_rm, _ok := m["properties"]
 		if !_ok || (string(_rm) == "null") {
@@ -5652,14 +6012,28 @@ func (v *ElicitationSchema) decodeKeys(b []byte, m map[string]json.RawMessage) e
 
 // Validate returns an error if v does not satisfy the ElicitationSchema schema definition.
 func (v *ElicitationSchema) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ElicitationSchema) validate(abs func(string) bool) error {
+func (v *ElicitationSchema) validate(how validation) error {
 	for _, k := range slices.Sorted(maps.Keys(v.Properties)) {
 		x := v.Properties[k]
-		if err := x.validate(abs); err != nil {
+		if err := x.validate(how); err != nil {
 			return fmt.Errorf("ElicitationSchema: properties[%q]: %w", k, err)
+		}
+	}
+	if how.closed {
+		if v.Type != "" && !v.Type.known() {
+			return &ValidationError{
+				Type:  "ElicitationSchema",
+				Field: "type",
+				Value: v.Type,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("ElicitationSchema: type: %q is not a ElicitationSchemaType", v.Type),
+			}
 		}
 	}
 	return nil
@@ -5668,6 +6042,10 @@ func (v *ElicitationSchema) validate(abs func(string) bool) error {
 // ElicitationSchemaType is the ElicitationSchemaType schema definition.
 //
 // Type discriminator for elicitation schemas.
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 type ElicitationSchemaType string
 
 const (
@@ -5676,6 +6054,14 @@ const (
 	// Object schema type.
 	ElicitationSchemaTypeObject ElicitationSchemaType = "object"
 )
+
+// known reports whether v is one of ElicitationSchemaType's values.
+func (v ElicitationSchemaType) known() bool {
+	if v == ElicitationSchemaTypeObject {
+		return true
+	}
+	return false
+}
 
 // ElicitationSessionScope is the ElicitationSessionScope schema definition.
 //
@@ -5844,10 +6230,13 @@ func (v *ElicitationUrlMode) decodeKeys(b []byte, m map[string]json.RawMessage) 
 
 // Validate returns an error if v does not satisfy the ElicitationUrlMode schema definition.
 func (v *ElicitationUrlMode) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ElicitationUrlMode) validate(abs func(string) bool) error {
+func (v *ElicitationUrlMode) validate(how validation) error {
 	var count int
 	if v.Session != nil {
 		count++
@@ -5863,7 +6252,7 @@ func (v *ElicitationUrlMode) validate(abs func(string) bool) error {
 		}
 	}
 	if v.Request != nil {
-		if err := v.Request.validate(abs); err != nil {
+		if err := v.Request.validate(how); err != nil {
 			return fmt.Errorf("ElicitationUrlMode: member Request: %w", err)
 		}
 	}
@@ -5919,11 +6308,19 @@ func (v *EmbeddedResource) decodeKeys(b []byte, m map[string]json.RawMessage) er
 
 // Validate returns an error if v does not satisfy the EmbeddedResource schema definition.
 func (v *EmbeddedResource) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *EmbeddedResource) validate(abs func(string) bool) error {
-	if err := v.Resource.validate(abs); err != nil {
+func (v *EmbeddedResource) validate(how validation) error {
+	if v.Annotations != nil {
+		if err := v.Annotations.validate(how); err != nil {
+			return fmt.Errorf("EmbeddedResource: annotations: %w", err)
+		}
+	}
+	if err := v.Resource.validate(how); err != nil {
 		return fmt.Errorf("EmbeddedResource: resource: %w", err)
 	}
 	return nil
@@ -6015,10 +6412,13 @@ func (u EmbeddedResourceResource) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the EmbeddedResourceResource schema definition.
 func (u *EmbeddedResourceResource) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *EmbeddedResourceResource) validate(abs func(string) bool) error {
+func (u *EmbeddedResourceResource) validate(how validation) error {
 	var count int
 	if u.TextResourceContents != nil {
 		count++
@@ -7015,10 +7415,13 @@ func (u IdleStateUpdate) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the IdleStateUpdate schema definition.
 func (u *IdleStateUpdate) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *IdleStateUpdate) validate(abs func(string) bool) error {
+func (u *IdleStateUpdate) validate(how validation) error {
 	var count int
 	if u.EndTurn != nil {
 		count++
@@ -7116,6 +7519,23 @@ func (v *ImageContent) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 	a.Annotations = orZero[*Annotations](s.Annotations)
 	a.Uri = orZero[*string](s.Uri)
 	*v = ImageContent(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the ImageContent schema definition.
+func (v *ImageContent) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *ImageContent) validate(how validation) error {
+	if v.Annotations != nil {
+		if err := v.Annotations.validate(how); err != nil {
+			return fmt.Errorf("ImageContent: annotations: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -7236,10 +7656,16 @@ func (v *InitializeRequest) decodeKeys(b []byte, m map[string]json.RawMessage) e
 
 // Validate returns an error if v does not satisfy the InitializeRequest schema definition.
 func (v *InitializeRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *InitializeRequest) validate(abs func(string) bool) error {
+func (v *InitializeRequest) validate(how validation) error {
+	if err := v.ClientCapabilities.validate(how); err != nil {
+		return fmt.Errorf("InitializeRequest: clientCapabilities: %w", err)
+	}
 	return nil
 }
 
@@ -7334,12 +7760,18 @@ func (v *InitializeResponse) decodeKeys(b []byte, m map[string]json.RawMessage) 
 
 // Validate returns an error if v does not satisfy the InitializeResponse schema definition.
 func (v *InitializeResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *InitializeResponse) validate(abs func(string) bool) error {
+func (v *InitializeResponse) validate(how validation) error {
+	if err := v.AgentCapabilities.validate(how); err != nil {
+		return fmt.Errorf("InitializeResponse: agentCapabilities: %w", err)
+	}
 	for i := range v.AuthMethods {
-		if err := v.AuthMethods[i].validate(abs); err != nil {
+		if err := v.AuthMethods[i].validate(how); err != nil {
 			return fmt.Errorf("InitializeResponse: authMethods[%d]: %w", i, err)
 		}
 	}
@@ -7459,10 +7891,13 @@ func (v *KillTerminalRequest) decodeKeys(b []byte, m map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the KillTerminalRequest schema definition.
 func (v *KillTerminalRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *KillTerminalRequest) validate(abs func(string) bool) error {
+func (v *KillTerminalRequest) validate(how validation) error {
 	return nil
 }
 
@@ -7506,10 +7941,13 @@ func (v *KillTerminalResponse) decodeKeys(b []byte, _ map[string]json.RawMessage
 
 // Validate returns an error if v does not satisfy the KillTerminalResponse schema definition.
 func (v *KillTerminalResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *KillTerminalResponse) validate(abs func(string) bool) error {
+func (v *KillTerminalResponse) validate(how validation) error {
 	return nil
 }
 
@@ -7559,11 +7997,14 @@ func (v *ListSessionsRequest) decodeKeys(b []byte, _ map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the ListSessionsRequest schema definition.
 func (v *ListSessionsRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ListSessionsRequest) validate(abs func(string) bool) error {
-	if v.Cwd != nil && !abs(*v.Cwd) {
+func (v *ListSessionsRequest) validate(how validation) error {
+	if v.Cwd != nil && !how.abs(*v.Cwd) {
 		return &ValidationError{
 			Type:  "ListSessionsRequest",
 			Field: "cwd",
@@ -7639,12 +8080,15 @@ func (v *ListSessionsResponse) decodeKeys(b []byte, m map[string]json.RawMessage
 
 // Validate returns an error if v does not satisfy the ListSessionsResponse schema definition.
 func (v *ListSessionsResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ListSessionsResponse) validate(abs func(string) bool) error {
+func (v *ListSessionsResponse) validate(how validation) error {
 	for i := range v.Sessions {
-		if err := v.Sessions[i].validate(abs); err != nil {
+		if err := v.Sessions[i].validate(how); err != nil {
 			return fmt.Errorf("ListSessionsResponse: sessions[%d]: %w", i, err)
 		}
 	}
@@ -7721,12 +8165,15 @@ func (v *LoadSessionRequest) decodeKeys(b []byte, m map[string]json.RawMessage) 
 
 // Validate returns an error if v does not satisfy the LoadSessionRequest schema definition.
 func (v *LoadSessionRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *LoadSessionRequest) validate(abs func(string) bool) error {
+func (v *LoadSessionRequest) validate(how validation) error {
 	for i, x := range v.AdditionalDirectories {
-		if !abs(x) {
+		if !how.abs(x) {
 			return &ValidationError{
 				Type:  "LoadSessionRequest",
 				Field: fmt.Sprintf("additionalDirectories[%d]", i),
@@ -7736,7 +8183,7 @@ func (v *LoadSessionRequest) validate(abs func(string) bool) error {
 			}
 		}
 	}
-	if !abs(v.Cwd) {
+	if !how.abs(v.Cwd) {
 		return &ValidationError{
 			Type:  "LoadSessionRequest",
 			Field: "cwd",
@@ -7746,7 +8193,7 @@ func (v *LoadSessionRequest) validate(abs func(string) bool) error {
 		}
 	}
 	for i := range v.McpServers {
-		if err := v.McpServers[i].validate(abs); err != nil {
+		if err := v.McpServers[i].validate(how); err != nil {
 			return fmt.Errorf("LoadSessionRequest: mcpServers[%d]: %w", i, err)
 		}
 	}
@@ -7805,12 +8252,15 @@ func (v *LoadSessionResponse) decodeKeys(b []byte, _ map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the LoadSessionResponse schema definition.
 func (v *LoadSessionResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *LoadSessionResponse) validate(abs func(string) bool) error {
+func (v *LoadSessionResponse) validate(how validation) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].validate(abs); err != nil {
+		if err := v.ConfigOptions[i].validate(how); err != nil {
 			return fmt.Errorf("LoadSessionResponse: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -7899,10 +8349,13 @@ func (v *LogoutRequest) decodeKeys(b []byte, _ map[string]json.RawMessage) error
 
 // Validate returns an error if v does not satisfy the LogoutRequest schema definition.
 func (v *LogoutRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *LogoutRequest) validate(abs func(string) bool) error {
+func (v *LogoutRequest) validate(how validation) error {
 	return nil
 }
 
@@ -7946,10 +8399,13 @@ func (v *LogoutResponse) decodeKeys(b []byte, _ map[string]json.RawMessage) erro
 
 // Validate returns an error if v does not satisfy the LogoutResponse schema definition.
 func (v *LogoutResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *LogoutResponse) validate(abs func(string) bool) error {
+func (v *LogoutResponse) validate(how validation) error {
 	return nil
 }
 
@@ -8341,10 +8797,13 @@ func (u McpServer) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the McpServer schema definition.
 func (u *McpServer) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *McpServer) validate(abs func(string) bool) error {
+func (u *McpServer) validate(how validation) error {
 	var count int
 	if u.Http != nil {
 		count++
@@ -8369,7 +8828,7 @@ func (u *McpServer) validate(abs func(string) bool) error {
 		}
 	}
 	if u.Stdio != nil {
-		if err := u.Stdio.validate(abs); err != nil {
+		if err := u.Stdio.validate(how); err != nil {
 			return fmt.Errorf("McpServer: variant Stdio: %w", err)
 		}
 	}
@@ -8629,11 +9088,14 @@ func (v *McpServerStdio) decodeKeys(b []byte, m map[string]json.RawMessage) erro
 
 // Validate returns an error if v does not satisfy the McpServerStdio schema definition.
 func (v *McpServerStdio) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *McpServerStdio) validate(abs func(string) bool) error {
-	if !abs(v.Command) {
+func (v *McpServerStdio) validate(how validation) error {
+	if !how.abs(v.Command) {
 		return &ValidationError{
 			Type:  "McpServerStdio",
 			Field: "command",
@@ -8849,10 +9311,13 @@ func (u MultiSelectItems) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the MultiSelectItems schema definition.
 func (u *MultiSelectItems) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *MultiSelectItems) validate(abs func(string) bool) error {
+func (u *MultiSelectItems) validate(how validation) error {
 	var count int
 	if u.String != nil {
 		count++
@@ -8959,11 +9424,14 @@ func (v *MultiSelectPropertySchema) decodeKeys(b []byte, m map[string]json.RawMe
 
 // Validate returns an error if v does not satisfy the MultiSelectPropertySchema schema definition.
 func (v *MultiSelectPropertySchema) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *MultiSelectPropertySchema) validate(abs func(string) bool) error {
-	if err := v.Items.validate(abs); err != nil {
+func (v *MultiSelectPropertySchema) validate(how validation) error {
+	if err := v.Items.validate(how); err != nil {
 		return fmt.Errorf("MultiSelectPropertySchema: items: %w", err)
 	}
 	return nil
@@ -9020,6 +9488,23 @@ func (v *NesCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) err
 	a.Context = orZero[*NesContextCapabilities](s.Context)
 	a.Events = orZero[*NesEventCapabilities](s.Events)
 	*v = NesCapabilities(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the NesCapabilities schema definition.
+func (v *NesCapabilities) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *NesCapabilities) validate(how validation) error {
+	if v.Events != nil {
+		if err := v.Events.validate(how); err != nil {
+			return fmt.Errorf("NesCapabilities: events: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -9187,6 +9672,29 @@ func (v *NesDocumentDidChangeCapabilities) decodeKeys(b []byte, m map[string]jso
 	a := s.Alias
 	a.Meta = orZero[map[string]any](s.Meta)
 	*v = NesDocumentDidChangeCapabilities(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the NesDocumentDidChangeCapabilities schema definition.
+func (v *NesDocumentDidChangeCapabilities) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *NesDocumentDidChangeCapabilities) validate(how validation) error {
+	if how.closed {
+		if !v.SyncKind.known() {
+			return &ValidationError{
+				Type:  "NesDocumentDidChangeCapabilities",
+				Field: "syncKind",
+				Value: v.SyncKind,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("NesDocumentDidChangeCapabilities: syncKind: %q is not a TextDocumentSyncKind", v.SyncKind),
+			}
+		}
+	}
 	return nil
 }
 
@@ -9440,6 +9948,23 @@ func (v *NesDocumentEventCapabilities) decodeKeys(b []byte, _ map[string]json.Ra
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the NesDocumentEventCapabilities schema definition.
+func (v *NesDocumentEventCapabilities) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *NesDocumentEventCapabilities) validate(how validation) error {
+	if v.DidChange != nil {
+		if err := v.DidChange.validate(how); err != nil {
+			return fmt.Errorf("NesDocumentEventCapabilities: didChange: %w", err)
+		}
+	}
+	return nil
+}
+
 // NesEditHistoryCapabilities is the NesEditHistoryCapabilities schema definition.
 //
 // **UNSTABLE**
@@ -9537,6 +10062,23 @@ func (v *NesEventCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage
 	a.Meta = orZero[map[string]any](s.Meta)
 	a.Document = orZero[*NesDocumentEventCapabilities](s.Document)
 	*v = NesEventCapabilities(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the NesEventCapabilities schema definition.
+func (v *NesEventCapabilities) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *NesEventCapabilities) validate(how validation) error {
+	if v.Document != nil {
+		if err := v.Document.validate(how); err != nil {
+			return fmt.Errorf("NesEventCapabilities: document: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -9935,12 +10477,15 @@ func (v *NewSessionRequest) decodeKeys(b []byte, m map[string]json.RawMessage) e
 
 // Validate returns an error if v does not satisfy the NewSessionRequest schema definition.
 func (v *NewSessionRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *NewSessionRequest) validate(abs func(string) bool) error {
+func (v *NewSessionRequest) validate(how validation) error {
 	for i, x := range v.AdditionalDirectories {
-		if !abs(x) {
+		if !how.abs(x) {
 			return &ValidationError{
 				Type:  "NewSessionRequest",
 				Field: fmt.Sprintf("additionalDirectories[%d]", i),
@@ -9950,7 +10495,7 @@ func (v *NewSessionRequest) validate(abs func(string) bool) error {
 			}
 		}
 	}
-	if !abs(v.Cwd) {
+	if !how.abs(v.Cwd) {
 		return &ValidationError{
 			Type:  "NewSessionRequest",
 			Field: "cwd",
@@ -9960,7 +10505,7 @@ func (v *NewSessionRequest) validate(abs func(string) bool) error {
 		}
 	}
 	for i := range v.McpServers {
-		if err := v.McpServers[i].validate(abs); err != nil {
+		if err := v.McpServers[i].validate(how); err != nil {
 			return fmt.Errorf("NewSessionRequest: mcpServers[%d]: %w", i, err)
 		}
 	}
@@ -10028,12 +10573,15 @@ func (v *NewSessionResponse) decodeKeys(b []byte, m map[string]json.RawMessage) 
 
 // Validate returns an error if v does not satisfy the NewSessionResponse schema definition.
 func (v *NewSessionResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *NewSessionResponse) validate(abs func(string) bool) error {
+func (v *NewSessionResponse) validate(how validation) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].validate(abs); err != nil {
+		if err := v.ConfigOptions[i].validate(how); err != nil {
 			return fmt.Errorf("NewSessionResponse: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -10099,10 +10647,13 @@ func (v *Notice) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 
 // Validate returns an error if v does not satisfy the Notice schema definition.
 func (v *Notice) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *Notice) validate(abs func(string) bool) error {
+func (v *Notice) validate(how validation) error {
 	if utf8.RuneCountInString(v.Title) < 1 {
 		return &ValidationError{
 			Type:  "Notice",
@@ -10253,6 +10804,29 @@ func (v *PermissionOption) decodeKeys(b []byte, m map[string]json.RawMessage) er
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the PermissionOption schema definition.
+func (v *PermissionOption) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *PermissionOption) validate(how validation) error {
+	if how.closed {
+		if !v.Kind.known() {
+			return &ValidationError{
+				Type:  "PermissionOption",
+				Field: "kind",
+				Value: v.Kind,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("PermissionOption: kind: %q is not a PermissionOptionKind", v.Kind),
+			}
+		}
+	}
+	return nil
+}
+
 // PermissionOptionId is the PermissionOptionId schema definition.
 //
 // Unique identifier for a permission option.
@@ -10263,6 +10837,10 @@ type PermissionOptionId string
 // The type of permission option being presented to the user.
 //
 // Helps clients choose appropriate icons and UI treatment.
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 type PermissionOptionKind string
 
 const (
@@ -10283,6 +10861,15 @@ const (
 	// Reject this operation and remember the choice.
 	PermissionOptionKindRejectAlways PermissionOptionKind = "reject_always"
 )
+
+// known reports whether v is one of PermissionOptionKind's values.
+func (v PermissionOptionKind) known() bool {
+	switch v {
+	case PermissionOptionKindAllowOnce, PermissionOptionKindAllowAlways, PermissionOptionKindRejectOnce, PermissionOptionKindRejectAlways:
+		return true
+	}
+	return false
+}
 
 // Plan is the Plan schema definition.
 //
@@ -10347,6 +10934,23 @@ func (v *Plan) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 		a.Entries = items
 	}
 	*v = Plan(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the Plan schema definition.
+func (v *Plan) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *Plan) validate(how validation) error {
+	for i := range v.Entries {
+		if err := v.Entries[i].validate(how); err != nil {
+			return fmt.Errorf("Plan: entries[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -10448,6 +11052,40 @@ func (v *PlanEntry) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the PlanEntry schema definition.
+func (v *PlanEntry) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *PlanEntry) validate(how validation) error {
+	if how.closed {
+		if !v.Priority.known() {
+			return &ValidationError{
+				Type:  "PlanEntry",
+				Field: "priority",
+				Value: v.Priority,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("PlanEntry: priority: %q is not a PlanEntryPriority", v.Priority),
+			}
+		}
+	}
+	if how.closed {
+		if !v.Status.known() {
+			return &ValidationError{
+				Type:  "PlanEntry",
+				Field: "status",
+				Value: v.Status,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("PlanEntry: status: %q is not a PlanEntryStatus", v.Status),
+			}
+		}
+	}
+	return nil
+}
+
 // PlanEntryPriority is the PlanEntryPriority schema definition.
 //
 // Priority levels for plan entries.
@@ -10455,6 +11093,10 @@ func (v *PlanEntry) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 // Used to indicate the relative importance or urgency of different
 // tasks in the execution plan.
 // See protocol docs: [Plan Entries](https://agentclientprotocol.com/protocol/agent-plan#plan-entries)
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 type PlanEntryPriority string
 
 const (
@@ -10472,12 +11114,25 @@ const (
 	PlanEntryPriorityLow PlanEntryPriority = "low"
 )
 
+// known reports whether v is one of PlanEntryPriority's values.
+func (v PlanEntryPriority) known() bool {
+	switch v {
+	case PlanEntryPriorityHigh, PlanEntryPriorityMedium, PlanEntryPriorityLow:
+		return true
+	}
+	return false
+}
+
 // PlanEntryStatus is the PlanEntryStatus schema definition.
 //
 // Status of a plan entry in the execution flow.
 //
 // Tracks the lifecycle of each task from planning through completion.
 // See protocol docs: [Plan Entries](https://agentclientprotocol.com/protocol/agent-plan#plan-entries)
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 type PlanEntryStatus string
 
 const (
@@ -10494,6 +11149,15 @@ const (
 	// The task has been successfully completed.
 	PlanEntryStatusCompleted PlanEntryStatus = "completed"
 )
+
+// known reports whether v is one of PlanEntryStatus's values.
+func (v PlanEntryStatus) known() bool {
+	switch v {
+	case PlanEntryStatusPending, PlanEntryStatusInProgress, PlanEntryStatusCompleted:
+		return true
+	}
+	return false
+}
 
 // PlanFile is the PlanFile schema definition.
 //
@@ -10628,6 +11292,23 @@ func (v *PlanItems) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 		a.Entries = items
 	}
 	*v = PlanItems(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the PlanItems schema definition.
+func (v *PlanItems) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *PlanItems) validate(how validation) error {
+	for i := range v.Entries {
+		if err := v.Entries[i].validate(how); err != nil {
+			return fmt.Errorf("PlanItems: entries[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -10788,11 +11469,14 @@ func (v *PlanUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 
 // Validate returns an error if v does not satisfy the PlanUpdate schema definition.
 func (v *PlanUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *PlanUpdate) validate(abs func(string) bool) error {
-	if err := v.Plan.validate(abs); err != nil {
+func (v *PlanUpdate) validate(how validation) error {
+	if err := v.Plan.validate(how); err != nil {
 		return fmt.Errorf("PlanUpdate: plan: %w", err)
 	}
 	return nil
@@ -10862,6 +11546,23 @@ func (v *PlanUpdateContentItems) decodeKeys(b []byte, m map[string]json.RawMessa
 		a.Entries = items
 	}
 	*v = PlanUpdateContentItems(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the "items" variant of the PlanUpdateContent schema definition.
+func (v *PlanUpdateContentItems) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *PlanUpdateContentItems) validate(how validation) error {
+	for i := range v.Entries {
+		if err := v.Entries[i].validate(how); err != nil {
+			return fmt.Errorf("PlanUpdateContentItems: entries[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -11135,10 +11836,13 @@ func (u PlanUpdateContent) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the PlanUpdateContent schema definition.
 func (u *PlanUpdateContent) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *PlanUpdateContent) validate(abs func(string) bool) error {
+func (u *PlanUpdateContent) validate(how validation) error {
 	var count int
 	if u.Items != nil {
 		count++
@@ -11159,6 +11863,11 @@ func (u *PlanUpdateContent) validate(abs func(string) bool) error {
 			msg:  "PlanUpdateContent must have exactly one variant set",
 		}
 	}
+	if u.Items != nil {
+		if err := u.Items.validate(how); err != nil {
+			return fmt.Errorf("PlanUpdateContent: variant Items: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -11171,6 +11880,10 @@ func (u *PlanUpdateContent) validate(abs func(string) bool) error {
 // The encoding used for character offsets in positions.
 //
 // Follows the same conventions as LSP 3.17. The default is UTF-16.
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
 // under v1 for compatibility only
@@ -11203,6 +11916,15 @@ const (
 	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	PositionEncodingKindUtf8 PositionEncodingKind = "utf-8"
 )
+
+// known reports whether v is one of PositionEncodingKind's values.
+func (v PositionEncodingKind) known() bool {
+	switch v {
+	case PositionEncodingKindUtf16, PositionEncodingKindUtf32, PositionEncodingKindUtf8:
+		return true
+	}
+	return false
+}
 
 // PromptCapabilities is the PromptCapabilities schema definition.
 //
@@ -11347,12 +12069,15 @@ func (v *PromptRequest) decodeKeys(b []byte, m map[string]json.RawMessage) error
 
 // Validate returns an error if v does not satisfy the PromptRequest schema definition.
 func (v *PromptRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *PromptRequest) validate(abs func(string) bool) error {
+func (v *PromptRequest) validate(how validation) error {
 	for i := range v.Prompt {
-		if err := v.Prompt[i].validate(abs); err != nil {
+		if err := v.Prompt[i].validate(how); err != nil {
 			return fmt.Errorf("PromptRequest: prompt[%d]: %w", i, err)
 		}
 	}
@@ -11418,10 +12143,24 @@ func (v *PromptResponse) decodeKeys(b []byte, m map[string]json.RawMessage) erro
 
 // Validate returns an error if v does not satisfy the PromptResponse schema definition.
 func (v *PromptResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *PromptResponse) validate(abs func(string) bool) error {
+func (v *PromptResponse) validate(how validation) error {
+	if how.closed {
+		if !v.StopReason.known() {
+			return &ValidationError{
+				Type:  "PromptResponse",
+				Field: "stopReason",
+				Value: v.StopReason,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("PromptResponse: stopReason: %q is not a StopReason", v.StopReason),
+			}
+		}
+	}
 	return nil
 }
 
@@ -11534,11 +12273,14 @@ func (v *ReadTextFileRequest) decodeKeys(b []byte, m map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the ReadTextFileRequest schema definition.
 func (v *ReadTextFileRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ReadTextFileRequest) validate(abs func(string) bool) error {
-	if !abs(v.Path) {
+func (v *ReadTextFileRequest) validate(how validation) error {
+	if !how.abs(v.Path) {
 		return &ValidationError{
 			Type:  "ReadTextFileRequest",
 			Field: "path",
@@ -11595,10 +12337,13 @@ func (v *ReadTextFileResponse) decodeKeys(b []byte, m map[string]json.RawMessage
 
 // Validate returns an error if v does not satisfy the ReadTextFileResponse schema definition.
 func (v *ReadTextFileResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ReadTextFileResponse) validate(abs func(string) bool) error {
+func (v *ReadTextFileResponse) validate(how validation) error {
 	return nil
 }
 
@@ -11649,10 +12394,13 @@ func (v *ReleaseTerminalRequest) decodeKeys(b []byte, m map[string]json.RawMessa
 
 // Validate returns an error if v does not satisfy the ReleaseTerminalRequest schema definition.
 func (v *ReleaseTerminalRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ReleaseTerminalRequest) validate(abs func(string) bool) error {
+func (v *ReleaseTerminalRequest) validate(how validation) error {
 	return nil
 }
 
@@ -11696,10 +12444,13 @@ func (v *ReleaseTerminalResponse) decodeKeys(b []byte, _ map[string]json.RawMess
 
 // Validate returns an error if v does not satisfy the ReleaseTerminalResponse schema definition.
 func (v *ReleaseTerminalResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ReleaseTerminalResponse) validate(abs func(string) bool) error {
+func (v *ReleaseTerminalResponse) validate(how validation) error {
 	return nil
 }
 
@@ -11784,10 +12535,13 @@ func (u RequestId) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the RequestId schema definition.
 func (u *RequestId) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *RequestId) validate(abs func(string) bool) error {
+func (u *RequestId) validate(how validation) error {
 	var count int
 	if u.Null != nil {
 		count++
@@ -11973,10 +12727,13 @@ func (u RequestPermissionOutcome) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the RequestPermissionOutcome schema definition.
 func (u *RequestPermissionOutcome) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *RequestPermissionOutcome) validate(abs func(string) bool) error {
+func (u *RequestPermissionOutcome) validate(how validation) error {
 	var count int
 	if u.Cancelled != nil {
 		count++
@@ -12060,11 +12817,19 @@ func (v *RequestPermissionRequest) decodeKeys(b []byte, m map[string]json.RawMes
 
 // Validate returns an error if v does not satisfy the RequestPermissionRequest schema definition.
 func (v *RequestPermissionRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *RequestPermissionRequest) validate(abs func(string) bool) error {
-	if err := v.ToolCall.validate(abs); err != nil {
+func (v *RequestPermissionRequest) validate(how validation) error {
+	for i := range v.Options {
+		if err := v.Options[i].validate(how); err != nil {
+			return fmt.Errorf("RequestPermissionRequest: options[%d]: %w", i, err)
+		}
+	}
+	if err := v.ToolCall.validate(how); err != nil {
 		return fmt.Errorf("RequestPermissionRequest: toolCall: %w", err)
 	}
 	return nil
@@ -12115,11 +12880,14 @@ func (v *RequestPermissionResponse) decodeKeys(b []byte, m map[string]json.RawMe
 
 // Validate returns an error if v does not satisfy the RequestPermissionResponse schema definition.
 func (v *RequestPermissionResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *RequestPermissionResponse) validate(abs func(string) bool) error {
-	if err := v.Outcome.validate(abs); err != nil {
+func (v *RequestPermissionResponse) validate(how validation) error {
+	if err := v.Outcome.validate(how); err != nil {
 		return fmt.Errorf("RequestPermissionResponse: outcome: %w", err)
 	}
 	return nil
@@ -12234,6 +13002,23 @@ func (v *ResourceLink) decodeKeys(b []byte, m map[string]json.RawMessage) error 
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the ResourceLink schema definition.
+func (v *ResourceLink) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *ResourceLink) validate(how validation) error {
+	if v.Annotations != nil {
+		if err := v.Annotations.validate(how); err != nil {
+			return fmt.Errorf("ResourceLink: annotations: %w", err)
+		}
+	}
+	return nil
+}
+
 // ResumeSessionRequest is the ResumeSessionRequest schema definition.
 //
 // Request parameters for resuming an existing session.
@@ -12295,12 +13080,15 @@ func (v *ResumeSessionRequest) decodeKeys(b []byte, m map[string]json.RawMessage
 
 // Validate returns an error if v does not satisfy the ResumeSessionRequest schema definition.
 func (v *ResumeSessionRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ResumeSessionRequest) validate(abs func(string) bool) error {
+func (v *ResumeSessionRequest) validate(how validation) error {
 	for i, x := range v.AdditionalDirectories {
-		if !abs(x) {
+		if !how.abs(x) {
 			return &ValidationError{
 				Type:  "ResumeSessionRequest",
 				Field: fmt.Sprintf("additionalDirectories[%d]", i),
@@ -12310,7 +13098,7 @@ func (v *ResumeSessionRequest) validate(abs func(string) bool) error {
 			}
 		}
 	}
-	if !abs(v.Cwd) {
+	if !how.abs(v.Cwd) {
 		return &ValidationError{
 			Type:  "ResumeSessionRequest",
 			Field: "cwd",
@@ -12320,7 +13108,7 @@ func (v *ResumeSessionRequest) validate(abs func(string) bool) error {
 		}
 	}
 	for i := range v.McpServers {
-		if err := v.McpServers[i].validate(abs); err != nil {
+		if err := v.McpServers[i].validate(how); err != nil {
 			return fmt.Errorf("ResumeSessionRequest: mcpServers[%d]: %w", i, err)
 		}
 	}
@@ -12379,12 +13167,15 @@ func (v *ResumeSessionResponse) decodeKeys(b []byte, _ map[string]json.RawMessag
 
 // Validate returns an error if v does not satisfy the ResumeSessionResponse schema definition.
 func (v *ResumeSessionResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ResumeSessionResponse) validate(abs func(string) bool) error {
+func (v *ResumeSessionResponse) validate(how validation) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].validate(abs); err != nil {
+		if err := v.ConfigOptions[i].validate(how); err != nil {
 			return fmt.Errorf("ResumeSessionResponse: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -12394,6 +13185,10 @@ func (v *ResumeSessionResponse) validate(abs func(string) bool) error {
 // Role is the Role schema definition.
 //
 // The sender or recipient of messages and data in a conversation.
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 type Role string
 
 const (
@@ -12406,6 +13201,15 @@ const (
 	// The user side of a conversation.
 	RoleUser Role = "user"
 )
+
+// known reports whether v is one of Role's values.
+func (v Role) known() bool {
+	switch v {
+	case RoleAssistant, RoleUser:
+		return true
+	}
+	return false
+}
 
 // RunningStateUpdate is the RunningStateUpdate schema definition.
 //
@@ -12828,11 +13632,14 @@ func (v *SessionConfigOptionSelect) decodeKeys(b []byte, m map[string]json.RawMe
 
 // Validate returns an error if v does not satisfy the "select" variant of the SessionConfigOption schema definition.
 func (v *SessionConfigOptionSelect) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionConfigOptionSelect) validate(abs func(string) bool) error {
-	if err := v.Options.validate(abs); err != nil {
+func (v *SessionConfigOptionSelect) validate(how validation) error {
+	if err := v.Options.validate(how); err != nil {
 		return fmt.Errorf("SessionConfigOptionSelect: options: %w", err)
 	}
 	return nil
@@ -13008,10 +13815,13 @@ func (u SessionConfigOption) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the SessionConfigOption schema definition.
 func (u *SessionConfigOption) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *SessionConfigOption) validate(abs func(string) bool) error {
+func (u *SessionConfigOption) validate(how validation) error {
 	var count int
 	if u.Select != nil {
 		count++
@@ -13030,7 +13840,7 @@ func (u *SessionConfigOption) validate(abs func(string) bool) error {
 		}
 	}
 	if u.Select != nil {
-		if err := u.Select.validate(abs); err != nil {
+		if err := u.Select.validate(how); err != nil {
 			return fmt.Errorf("SessionConfigOption: variant Select: %w", err)
 		}
 	}
@@ -13152,11 +13962,14 @@ func (v *SessionConfigSelect) decodeKeys(b []byte, m map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the SessionConfigSelect schema definition.
 func (v *SessionConfigSelect) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionConfigSelect) validate(abs func(string) bool) error {
-	if err := v.Options.validate(abs); err != nil {
+func (v *SessionConfigSelect) validate(how validation) error {
+	if err := v.Options.validate(how); err != nil {
 		return fmt.Errorf("SessionConfigSelect: options: %w", err)
 	}
 	return nil
@@ -13395,10 +14208,13 @@ func (u SessionConfigSelectOptions) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the SessionConfigSelectOptions schema definition.
 func (u *SessionConfigSelectOptions) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *SessionConfigSelectOptions) validate(abs func(string) bool) error {
+func (u *SessionConfigSelectOptions) validate(how validation) error {
 	var count int
 	if u.Ungrouped != nil {
 		count++
@@ -13584,12 +14400,15 @@ func (v *SessionInfo) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 
 // Validate returns an error if v does not satisfy the SessionInfo schema definition.
 func (v *SessionInfo) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionInfo) validate(abs func(string) bool) error {
+func (v *SessionInfo) validate(how validation) error {
 	for i, x := range v.AdditionalDirectories {
-		if !abs(x) {
+		if !how.abs(x) {
 			return &ValidationError{
 				Type:  "SessionInfo",
 				Field: fmt.Sprintf("additionalDirectories[%d]", i),
@@ -13599,7 +14418,7 @@ func (v *SessionInfo) validate(abs func(string) bool) error {
 			}
 		}
 	}
-	if !abs(v.Cwd) {
+	if !how.abs(v.Cwd) {
 		return &ValidationError{
 			Type:  "SessionInfo",
 			Field: "cwd",
@@ -13764,13 +14583,16 @@ func (v *SessionMessage) decodeKeys(b []byte, m map[string]json.RawMessage) erro
 
 // Validate returns an error if v does not satisfy the SessionMessage schema definition.
 func (v *SessionMessage) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionMessage) validate(abs func(string) bool) error {
+func (v *SessionMessage) validate(how validation) error {
 	if pv, ok := v.Content.Value(); ok {
 		for i := range pv {
-			if err := pv[i].validate(abs); err != nil {
+			if err := pv[i].validate(how); err != nil {
 				return fmt.Errorf("SessionMessage: content[%d]: %w", i, err)
 			}
 		}
@@ -13839,11 +14661,14 @@ func (v *SessionMessageChunk) decodeKeys(b []byte, m map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the SessionMessageChunk schema definition.
 func (v *SessionMessageChunk) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionMessageChunk) validate(abs func(string) bool) error {
-	if err := v.Content.validate(abs); err != nil {
+func (v *SessionMessageChunk) validate(how validation) error {
+	if err := v.Content.validate(how); err != nil {
 		return fmt.Errorf("SessionMessageChunk: content: %w", err)
 	}
 	return nil
@@ -14015,11 +14840,14 @@ func (v *SessionNotification) decodeKeys(b []byte, m map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the SessionNotification schema definition.
 func (v *SessionNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionNotification) validate(abs func(string) bool) error {
-	if err := v.Update.validate(abs); err != nil {
+func (v *SessionNotification) validate(how validation) error {
+	if err := v.Update.validate(how); err != nil {
 		return fmt.Errorf("SessionNotification: update: %w", err)
 	}
 	return nil
@@ -14118,11 +14946,14 @@ func (v *SessionUpdateUserMessageChunk) decodeKeys(b []byte, m map[string]json.R
 
 // Validate returns an error if v does not satisfy the "user_message_chunk" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateUserMessageChunk) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionUpdateUserMessageChunk) validate(abs func(string) bool) error {
-	if err := v.Content.validate(abs); err != nil {
+func (v *SessionUpdateUserMessageChunk) validate(how validation) error {
+	if err := v.Content.validate(how); err != nil {
 		return fmt.Errorf("SessionUpdateUserMessageChunk: content: %w", err)
 	}
 	return nil
@@ -14181,11 +15012,14 @@ func (v *SessionUpdateAgentMessageChunk) decodeKeys(b []byte, m map[string]json.
 
 // Validate returns an error if v does not satisfy the "agent_message_chunk" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateAgentMessageChunk) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionUpdateAgentMessageChunk) validate(abs func(string) bool) error {
-	if err := v.Content.validate(abs); err != nil {
+func (v *SessionUpdateAgentMessageChunk) validate(how validation) error {
+	if err := v.Content.validate(how); err != nil {
 		return fmt.Errorf("SessionUpdateAgentMessageChunk: content: %w", err)
 	}
 	return nil
@@ -14244,11 +15078,14 @@ func (v *SessionUpdateAgentThoughtChunk) decodeKeys(b []byte, m map[string]json.
 
 // Validate returns an error if v does not satisfy the "agent_thought_chunk" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateAgentThoughtChunk) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionUpdateAgentThoughtChunk) validate(abs func(string) bool) error {
-	if err := v.Content.validate(abs); err != nil {
+func (v *SessionUpdateAgentThoughtChunk) validate(how validation) error {
+	if err := v.Content.validate(how); err != nil {
 		return fmt.Errorf("SessionUpdateAgentThoughtChunk: content: %w", err)
 	}
 	return nil
@@ -14326,6 +15163,9 @@ func (v *SessionUpdateToolCall) decodeKeys(b []byte, m map[string]json.RawMessag
 		a.Content = items
 	}
 	a.Kind = orZero[ToolKind](s.Kind)
+	if !a.Kind.known() {
+		a.Kind = ""
+	}
 	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
 		a.Locations = items
 	}
@@ -14333,6 +15173,9 @@ func (v *SessionUpdateToolCall) decodeKeys(b []byte, m map[string]json.RawMessag
 	a.RawInput = orZero[json.RawMessage](s.RawInput)
 	a.RawOutput = orZero[json.RawMessage](s.RawOutput)
 	a.Status = orZero[ToolCallStatus](s.Status)
+	if !a.Status.known() {
+		a.Status = ""
+	}
 	a.RawInput = absentIfNull(a.RawInput)
 	a.RawOutput = absentIfNull(a.RawOutput)
 	*v = SessionUpdateToolCall(a)
@@ -14341,18 +15184,43 @@ func (v *SessionUpdateToolCall) decodeKeys(b []byte, m map[string]json.RawMessag
 
 // Validate returns an error if v does not satisfy the "tool_call" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateToolCall) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionUpdateToolCall) validate(abs func(string) bool) error {
+func (v *SessionUpdateToolCall) validate(how validation) error {
 	for i := range v.Content {
-		if err := v.Content[i].validate(abs); err != nil {
+		if err := v.Content[i].validate(how); err != nil {
 			return fmt.Errorf("SessionUpdateToolCall: content[%d]: %w", i, err)
 		}
 	}
+	if how.closed {
+		if v.Kind != "" && !v.Kind.known() {
+			return &ValidationError{
+				Type:  "SessionUpdateToolCall",
+				Field: "kind",
+				Value: v.Kind,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("SessionUpdateToolCall: kind: %q is not a ToolKind", v.Kind),
+			}
+		}
+	}
 	for i := range v.Locations {
-		if err := v.Locations[i].validate(abs); err != nil {
+		if err := v.Locations[i].validate(how); err != nil {
 			return fmt.Errorf("SessionUpdateToolCall: locations[%d]: %w", i, err)
+		}
+	}
+	if how.closed {
+		if v.Status != "" && !v.Status.known() {
+			return &ValidationError{
+				Type:  "SessionUpdateToolCall",
+				Field: "status",
+				Value: v.Status,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("SessionUpdateToolCall: status: %q is not a ToolCallStatus", v.Status),
+			}
 		}
 	}
 	return nil
@@ -14431,6 +15299,9 @@ func (v *SessionToolCallUpdate) decodeKeys(b []byte, m map[string]json.RawMessag
 		a.Content = items
 	}
 	a.Kind = orZero[*ToolKind](s.Kind)
+	if a.Kind != nil && !a.Kind.known() {
+		a.Kind = nil
+	}
 	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
 		a.Locations = items
 	}
@@ -14438,6 +15309,9 @@ func (v *SessionToolCallUpdate) decodeKeys(b []byte, m map[string]json.RawMessag
 	a.RawInput = orZero[json.RawMessage](s.RawInput)
 	a.RawOutput = orZero[json.RawMessage](s.RawOutput)
 	a.Status = orZero[*ToolCallStatus](s.Status)
+	if a.Status != nil && !a.Status.known() {
+		a.Status = nil
+	}
 	a.Title = orZero[*string](s.Title)
 	a.RawInput = absentIfNull(a.RawInput)
 	a.RawOutput = absentIfNull(a.RawOutput)
@@ -14447,18 +15321,43 @@ func (v *SessionToolCallUpdate) decodeKeys(b []byte, m map[string]json.RawMessag
 
 // Validate returns an error if v does not satisfy the "tool_call_update" variant of the SessionUpdate schema definition.
 func (v *SessionToolCallUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionToolCallUpdate) validate(abs func(string) bool) error {
+func (v *SessionToolCallUpdate) validate(how validation) error {
 	for i := range v.Content {
-		if err := v.Content[i].validate(abs); err != nil {
+		if err := v.Content[i].validate(how); err != nil {
 			return fmt.Errorf("SessionToolCallUpdate: content[%d]: %w", i, err)
 		}
 	}
+	if how.closed {
+		if v.Kind != nil && !v.Kind.known() {
+			return &ValidationError{
+				Type:  "SessionToolCallUpdate",
+				Field: "kind",
+				Value: *v.Kind,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("SessionToolCallUpdate: kind: %q is not a ToolKind", *v.Kind),
+			}
+		}
+	}
 	for i := range v.Locations {
-		if err := v.Locations[i].validate(abs); err != nil {
+		if err := v.Locations[i].validate(how); err != nil {
 			return fmt.Errorf("SessionToolCallUpdate: locations[%d]: %w", i, err)
+		}
+	}
+	if how.closed {
+		if v.Status != nil && !v.Status.known() {
+			return &ValidationError{
+				Type:  "SessionToolCallUpdate",
+				Field: "status",
+				Value: *v.Status,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("SessionToolCallUpdate: status: %q is not a ToolCallStatus", *v.Status),
+			}
 		}
 	}
 	return nil
@@ -14526,6 +15425,23 @@ func (v *SessionUpdatePlan) decodeKeys(b []byte, m map[string]json.RawMessage) e
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the "plan" variant of the SessionUpdate schema definition.
+func (v *SessionUpdatePlan) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *SessionUpdatePlan) validate(how validation) error {
+	for i := range v.Entries {
+		if err := v.Entries[i].validate(how); err != nil {
+			return fmt.Errorf("SessionUpdatePlan: entries[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
 // SessionPlanUpdate is the "plan_update" variant of the SessionUpdate schema definition.
 //
 // **UNSTABLE**
@@ -14580,11 +15496,14 @@ func (v *SessionPlanUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) e
 
 // Validate returns an error if v does not satisfy the "plan_update" variant of the SessionUpdate schema definition.
 func (v *SessionPlanUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionPlanUpdate) validate(abs func(string) bool) error {
-	if err := v.Plan.validate(abs); err != nil {
+func (v *SessionPlanUpdate) validate(how validation) error {
+	if err := v.Plan.validate(how); err != nil {
 		return fmt.Errorf("SessionPlanUpdate: plan: %w", err)
 	}
 	return nil
@@ -14702,12 +15621,15 @@ func (v *SessionAvailableCommandsUpdate) decodeKeys(b []byte, m map[string]json.
 
 // Validate returns an error if v does not satisfy the "available_commands_update" variant of the SessionUpdate schema definition.
 func (v *SessionAvailableCommandsUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionAvailableCommandsUpdate) validate(abs func(string) bool) error {
+func (v *SessionAvailableCommandsUpdate) validate(how validation) error {
 	for i := range v.AvailableCommands {
-		if err := v.AvailableCommands[i].validate(abs); err != nil {
+		if err := v.AvailableCommands[i].validate(how); err != nil {
 			return fmt.Errorf("SessionAvailableCommandsUpdate: availableCommands[%d]: %w", i, err)
 		}
 	}
@@ -14820,12 +15742,15 @@ func (v *SessionConfigOptionUpdate) decodeKeys(b []byte, m map[string]json.RawMe
 
 // Validate returns an error if v does not satisfy the "config_option_update" variant of the SessionUpdate schema definition.
 func (v *SessionConfigOptionUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionConfigOptionUpdate) validate(abs func(string) bool) error {
+func (v *SessionConfigOptionUpdate) validate(how validation) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].validate(abs); err != nil {
+		if err := v.ConfigOptions[i].validate(how); err != nil {
 			return fmt.Errorf("SessionConfigOptionUpdate: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -14984,10 +15909,13 @@ func (v *SessionUpdateNotice) decodeKeys(b []byte, m map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the "notice" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateNotice) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionUpdateNotice) validate(abs func(string) bool) error {
+func (v *SessionUpdateNotice) validate(how validation) error {
 	if utf8.RuneCountInString(v.Title) < 1 {
 		return &ValidationError{
 			Type:  "SessionUpdateNotice",
@@ -15055,13 +15983,16 @@ func (v *SessionCompactionUpdate) decodeKeys(b []byte, m map[string]json.RawMess
 
 // Validate returns an error if v does not satisfy the "compaction_update" variant of the SessionUpdate schema definition.
 func (v *SessionCompactionUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionCompactionUpdate) validate(abs func(string) bool) error {
+func (v *SessionCompactionUpdate) validate(how validation) error {
 	if pv, ok := v.Summary.Value(); ok {
 		for i := range pv {
-			if err := pv[i].validate(abs); err != nil {
+			if err := pv[i].validate(how); err != nil {
 				return fmt.Errorf("SessionCompactionUpdate: summary[%d]: %w", i, err)
 			}
 		}
@@ -15116,11 +16047,14 @@ func (v *SessionUpdateCompactionSummaryChunk) decodeKeys(b []byte, m map[string]
 
 // Validate returns an error if v does not satisfy the "compaction_summary_chunk" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateCompactionSummaryChunk) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionUpdateCompactionSummaryChunk) validate(abs func(string) bool) error {
-	if err := v.Content.validate(abs); err != nil {
+func (v *SessionUpdateCompactionSummaryChunk) validate(how validation) error {
+	if err := v.Content.validate(how); err != nil {
 		return fmt.Errorf("SessionUpdateCompactionSummaryChunk: content: %w", err)
 	}
 	return nil
@@ -15215,12 +16149,15 @@ func (v *SessionSubagentUpdate) decodeKeys(b []byte, m map[string]json.RawMessag
 
 // Validate returns an error if v does not satisfy the "subagent_update" variant of the SessionUpdate schema definition.
 func (v *SessionSubagentUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionSubagentUpdate) validate(abs func(string) bool) error {
+func (v *SessionSubagentUpdate) validate(how validation) error {
 	if pv, ok := v.State.Value(); ok {
-		if err := pv.validate(abs); err != nil {
+		if err := pv.validate(how); err != nil {
 			return fmt.Errorf("SessionSubagentUpdate: state: %w", err)
 		}
 	}
@@ -15293,13 +16230,16 @@ func (v *SessionUpdateSessionMessage) decodeKeys(b []byte, m map[string]json.Raw
 
 // Validate returns an error if v does not satisfy the "session_message" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateSessionMessage) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionUpdateSessionMessage) validate(abs func(string) bool) error {
+func (v *SessionUpdateSessionMessage) validate(how validation) error {
 	if pv, ok := v.Content.Value(); ok {
 		for i := range pv {
-			if err := pv[i].validate(abs); err != nil {
+			if err := pv[i].validate(how); err != nil {
 				return fmt.Errorf("SessionUpdateSessionMessage: content[%d]: %w", i, err)
 			}
 		}
@@ -15369,11 +16309,14 @@ func (v *SessionUpdateSessionMessageChunk) decodeKeys(b []byte, m map[string]jso
 
 // Validate returns an error if v does not satisfy the "session_message_chunk" variant of the SessionUpdate schema definition.
 func (v *SessionUpdateSessionMessageChunk) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SessionUpdateSessionMessageChunk) validate(abs func(string) bool) error {
-	if err := v.Content.validate(abs); err != nil {
+func (v *SessionUpdateSessionMessageChunk) validate(how validation) error {
+	if err := v.Content.validate(how); err != nil {
 		return fmt.Errorf("SessionUpdateSessionMessageChunk: content: %w", err)
 	}
 	return nil
@@ -16067,10 +17010,13 @@ func (u SessionUpdate) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the SessionUpdate schema definition.
 func (u *SessionUpdate) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *SessionUpdate) validate(abs func(string) bool) error {
+func (u *SessionUpdate) validate(how validation) error {
 	var count int
 	if u.UserMessageChunk != nil {
 		count++
@@ -16140,72 +17086,77 @@ func (u *SessionUpdate) validate(abs func(string) bool) error {
 		}
 	}
 	if u.UserMessageChunk != nil {
-		if err := u.UserMessageChunk.validate(abs); err != nil {
+		if err := u.UserMessageChunk.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant UserMessageChunk: %w", err)
 		}
 	}
 	if u.AgentMessageChunk != nil {
-		if err := u.AgentMessageChunk.validate(abs); err != nil {
+		if err := u.AgentMessageChunk.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant AgentMessageChunk: %w", err)
 		}
 	}
 	if u.AgentThoughtChunk != nil {
-		if err := u.AgentThoughtChunk.validate(abs); err != nil {
+		if err := u.AgentThoughtChunk.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant AgentThoughtChunk: %w", err)
 		}
 	}
 	if u.ToolCall != nil {
-		if err := u.ToolCall.validate(abs); err != nil {
+		if err := u.ToolCall.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant ToolCall: %w", err)
 		}
 	}
 	if u.ToolCallUpdate != nil {
-		if err := u.ToolCallUpdate.validate(abs); err != nil {
+		if err := u.ToolCallUpdate.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant ToolCallUpdate: %w", err)
 		}
 	}
+	if u.Plan != nil {
+		if err := u.Plan.validate(how); err != nil {
+			return fmt.Errorf("SessionUpdate: variant Plan: %w", err)
+		}
+	}
 	if u.PlanUpdate != nil {
-		if err := u.PlanUpdate.validate(abs); err != nil {
+		if err := u.PlanUpdate.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant PlanUpdate: %w", err)
 		}
 	}
 	if u.AvailableCommandsUpdate != nil {
-		if err := u.AvailableCommandsUpdate.validate(abs); err != nil {
+		if err := u.AvailableCommandsUpdate.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant AvailableCommandsUpdate: %w", err)
 		}
 	}
 	if u.ConfigOptionUpdate != nil {
-		if err := u.ConfigOptionUpdate.validate(abs); err != nil {
+		if err := u.ConfigOptionUpdate.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant ConfigOptionUpdate: %w", err)
 		}
 	}
 	if u.Notice != nil {
-		if err := u.Notice.validate(abs); err != nil {
+		if err := u.Notice.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant Notice: %w", err)
 		}
 	}
 	if u.CompactionUpdate != nil {
-		if err := u.CompactionUpdate.validate(abs); err != nil {
+		if err := u.CompactionUpdate.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant CompactionUpdate: %w", err)
 		}
 	}
 	if u.CompactionSummaryChunk != nil {
-		if err := u.CompactionSummaryChunk.validate(abs); err != nil {
+		if err := u.CompactionSummaryChunk.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant CompactionSummaryChunk: %w", err)
 		}
 	}
 	if u.SubagentUpdate != nil {
-		if err := u.SubagentUpdate.validate(abs); err != nil {
+		if err := u.SubagentUpdate.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant SubagentUpdate: %w", err)
 		}
 	}
 	if u.SessionMessage != nil {
-		if err := u.SessionMessage.validate(abs); err != nil {
+		if err := u.SessionMessage.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant SessionMessage: %w", err)
 		}
 	}
 	if u.SessionMessageChunk != nil {
-		if err := u.SessionMessageChunk.validate(abs); err != nil {
+		if err := u.SessionMessageChunk.validate(how); err != nil {
 			return fmt.Errorf("SessionUpdate: variant SessionMessageChunk: %w", err)
 		}
 	}
@@ -16414,10 +17365,13 @@ func (u SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the SetSessionConfigOptionRequest schema definition.
 func (u *SetSessionConfigOptionRequest) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *SetSessionConfigOptionRequest) validate(abs func(string) bool) error {
+func (u *SetSessionConfigOptionRequest) validate(how validation) error {
 	var count int
 	if u.Boolean != nil {
 		count++
@@ -16497,12 +17451,15 @@ func (v *SetSessionConfigOptionResponse) decodeKeys(b []byte, m map[string]json.
 
 // Validate returns an error if v does not satisfy the SetSessionConfigOptionResponse schema definition.
 func (v *SetSessionConfigOptionResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SetSessionConfigOptionResponse) validate(abs func(string) bool) error {
+func (v *SetSessionConfigOptionResponse) validate(how validation) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].validate(abs); err != nil {
+		if err := v.ConfigOptions[i].validate(how); err != nil {
 			return fmt.Errorf("SetSessionConfigOptionResponse: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -16556,10 +17513,13 @@ func (v *SetSessionModeRequest) decodeKeys(b []byte, m map[string]json.RawMessag
 
 // Validate returns an error if v does not satisfy the SetSessionModeRequest schema definition.
 func (v *SetSessionModeRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SetSessionModeRequest) validate(abs func(string) bool) error {
+func (v *SetSessionModeRequest) validate(how validation) error {
 	return nil
 }
 
@@ -16603,10 +17563,13 @@ func (v *SetSessionModeResponse) decodeKeys(b []byte, _ map[string]json.RawMessa
 
 // Validate returns an error if v does not satisfy the SetSessionModeResponse schema definition.
 func (v *SetSessionModeResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SetSessionModeResponse) validate(abs func(string) bool) error {
+func (v *SetSessionModeResponse) validate(how validation) error {
 	return nil
 }
 
@@ -17035,10 +17998,13 @@ func (u StateUpdate) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the StateUpdate schema definition.
 func (u *StateUpdate) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *StateUpdate) validate(abs func(string) bool) error {
+func (u *StateUpdate) validate(how validation) error {
 	var count int
 	if u.Running != nil {
 		count++
@@ -17082,6 +18048,10 @@ func (u *StateUpdate) validate(abs func(string) bool) error {
 // Reasons why an agent stops processing a prompt turn.
 //
 // See protocol docs: [Stop Reasons](https://agentclientprotocol.com/protocol/prompt-turn#stop-reasons)
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 type StopReason string
 
 const (
@@ -17115,9 +18085,22 @@ const (
 	StopReasonCancelled StopReason = "cancelled"
 )
 
+// known reports whether v is one of StopReason's values.
+func (v StopReason) known() bool {
+	switch v {
+	case StopReasonEndTurn, StopReasonMaxTokens, StopReasonMaxTurnRequests, StopReasonRefusal, StopReasonCancelled:
+		return true
+	}
+	return false
+}
+
 // StringFormat is the StringFormat schema definition.
 //
 // String format types for string properties in elicitation schemas.
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 type StringFormat string
 
 const (
@@ -17138,6 +18121,15 @@ const (
 	// Date-time format (ISO 8601).
 	StringFormatDateTime StringFormat = "date-time"
 )
+
+// known reports whether v is one of StringFormat's values.
+func (v StringFormat) known() bool {
+	switch v {
+	case StringFormatEmail, StringFormatUri, StringFormatDate, StringFormatDateTime:
+		return true
+	}
+	return false
+}
 
 // StringMultiSelectItems is the StringMultiSelectItems schema definition.
 //
@@ -17276,6 +18268,29 @@ func (v *StringPropertySchema) decodeKeys(b []byte, _ map[string]json.RawMessage
 	a.Description = orZero[*string](s.Description)
 	a.Title = orZero[*string](s.Title)
 	*v = StringPropertySchema(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the StringPropertySchema schema definition.
+func (v *StringPropertySchema) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *StringPropertySchema) validate(how validation) error {
+	if how.closed {
+		if v.Format != nil && !v.Format.known() {
+			return &ValidationError{
+				Type:  "StringPropertySchema",
+				Field: "format",
+				Value: *v.Format,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("StringPropertySchema: format: %q is not a StringFormat", *v.Format),
+			}
+		}
+	}
 	return nil
 }
 
@@ -17486,12 +18501,15 @@ func (v *SubagentUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) erro
 
 // Validate returns an error if v does not satisfy the SubagentUpdate schema definition.
 func (v *SubagentUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *SubagentUpdate) validate(abs func(string) bool) error {
+func (v *SubagentUpdate) validate(how validation) error {
 	if pv, ok := v.State.Value(); ok {
-		if err := pv.validate(abs); err != nil {
+		if err := pv.validate(how); err != nil {
 			return fmt.Errorf("SubagentUpdate: state: %w", err)
 		}
 	}
@@ -17643,10 +18661,13 @@ func (v *TerminalOutputRequest) decodeKeys(b []byte, m map[string]json.RawMessag
 
 // Validate returns an error if v does not satisfy the TerminalOutputRequest schema definition.
 func (v *TerminalOutputRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *TerminalOutputRequest) validate(abs func(string) bool) error {
+func (v *TerminalOutputRequest) validate(how validation) error {
 	return nil
 }
 
@@ -17701,10 +18722,13 @@ func (v *TerminalOutputResponse) decodeKeys(b []byte, m map[string]json.RawMessa
 
 // Validate returns an error if v does not satisfy the TerminalOutputResponse schema definition.
 func (v *TerminalOutputResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *TerminalOutputResponse) validate(abs func(string) bool) error {
+func (v *TerminalOutputResponse) validate(how validation) error {
 	return nil
 }
 
@@ -17755,6 +18779,23 @@ func (v *TextContent) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the TextContent schema definition.
+func (v *TextContent) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *TextContent) validate(how validation) error {
+	if v.Annotations != nil {
+		if err := v.Annotations.validate(how); err != nil {
+			return fmt.Errorf("TextContent: annotations: %w", err)
+		}
+	}
+	return nil
+}
+
 // TextDocumentSyncKind is the TextDocumentSyncKind schema definition.
 //
 // **UNSTABLE**
@@ -17762,6 +18803,10 @@ func (v *TextContent) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // How the agent wants document changes delivered.
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
 // under v1 for compatibility only
@@ -17786,6 +18831,15 @@ const (
 	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	TextDocumentSyncKindIncremental TextDocumentSyncKind = "incremental"
 )
+
+// known reports whether v is one of TextDocumentSyncKind's values.
+func (v TextDocumentSyncKind) known() bool {
+	switch v {
+	case TextDocumentSyncKindFull, TextDocumentSyncKindIncremental:
+		return true
+	}
+	return false
+}
 
 // TextResourceContents is the TextResourceContents schema definition.
 //
@@ -17967,6 +19021,9 @@ func (v *ToolCall) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 		a.Content = items
 	}
 	a.Kind = orZero[ToolKind](s.Kind)
+	if !a.Kind.known() {
+		a.Kind = ""
+	}
 	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
 		a.Locations = items
 	}
@@ -17974,6 +19031,9 @@ func (v *ToolCall) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 	a.RawInput = orZero[json.RawMessage](s.RawInput)
 	a.RawOutput = orZero[json.RawMessage](s.RawOutput)
 	a.Status = orZero[ToolCallStatus](s.Status)
+	if !a.Status.known() {
+		a.Status = ""
+	}
 	a.RawInput = absentIfNull(a.RawInput)
 	a.RawOutput = absentIfNull(a.RawOutput)
 	*v = ToolCall(a)
@@ -17982,18 +19042,43 @@ func (v *ToolCall) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 
 // Validate returns an error if v does not satisfy the ToolCall schema definition.
 func (v *ToolCall) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ToolCall) validate(abs func(string) bool) error {
+func (v *ToolCall) validate(how validation) error {
 	for i := range v.Content {
-		if err := v.Content[i].validate(abs); err != nil {
+		if err := v.Content[i].validate(how); err != nil {
 			return fmt.Errorf("ToolCall: content[%d]: %w", i, err)
 		}
 	}
+	if how.closed {
+		if v.Kind != "" && !v.Kind.known() {
+			return &ValidationError{
+				Type:  "ToolCall",
+				Field: "kind",
+				Value: v.Kind,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("ToolCall: kind: %q is not a ToolKind", v.Kind),
+			}
+		}
+	}
 	for i := range v.Locations {
-		if err := v.Locations[i].validate(abs); err != nil {
+		if err := v.Locations[i].validate(how); err != nil {
 			return fmt.Errorf("ToolCall: locations[%d]: %w", i, err)
+		}
+	}
+	if how.closed {
+		if v.Status != "" && !v.Status.known() {
+			return &ValidationError{
+				Type:  "ToolCall",
+				Field: "status",
+				Value: v.Status,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("ToolCall: status: %q is not a ToolCallStatus", v.Status),
+			}
 		}
 	}
 	return nil
@@ -18045,11 +19130,14 @@ func (v *ToolCallContentContent) decodeKeys(b []byte, m map[string]json.RawMessa
 
 // Validate returns an error if v does not satisfy the "content" variant of the ToolCallContent schema definition.
 func (v *ToolCallContentContent) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ToolCallContentContent) validate(abs func(string) bool) error {
-	if err := v.Content.validate(abs); err != nil {
+func (v *ToolCallContentContent) validate(how validation) error {
+	if err := v.Content.validate(how); err != nil {
 		return fmt.Errorf("ToolCallContentContent: content: %w", err)
 	}
 	return nil
@@ -18107,11 +19195,14 @@ func (v *ToolCallContentDiff) decodeKeys(b []byte, m map[string]json.RawMessage)
 
 // Validate returns an error if v does not satisfy the "diff" variant of the ToolCallContent schema definition.
 func (v *ToolCallContentDiff) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ToolCallContentDiff) validate(abs func(string) bool) error {
-	if !abs(v.Path) {
+func (v *ToolCallContentDiff) validate(how validation) error {
+	if !how.abs(v.Path) {
 		return &ValidationError{
 			Type:  "ToolCallContentDiff",
 			Field: "path",
@@ -18324,10 +19415,13 @@ func (u ToolCallContent) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the ToolCallContent schema definition.
 func (u *ToolCallContent) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *ToolCallContent) validate(abs func(string) bool) error {
+func (u *ToolCallContent) validate(how validation) error {
 	var count int
 	if u.Content != nil {
 		count++
@@ -18349,12 +19443,12 @@ func (u *ToolCallContent) validate(abs func(string) bool) error {
 		}
 	}
 	if u.Content != nil {
-		if err := u.Content.validate(abs); err != nil {
+		if err := u.Content.validate(how); err != nil {
 			return fmt.Errorf("ToolCallContent: variant Content: %w", err)
 		}
 	}
 	if u.Diff != nil {
-		if err := u.Diff.validate(abs); err != nil {
+		if err := u.Diff.validate(how); err != nil {
 			return fmt.Errorf("ToolCallContent: variant Diff: %w", err)
 		}
 	}
@@ -18420,11 +19514,14 @@ func (v *ToolCallLocation) decodeKeys(b []byte, m map[string]json.RawMessage) er
 
 // Validate returns an error if v does not satisfy the ToolCallLocation schema definition.
 func (v *ToolCallLocation) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ToolCallLocation) validate(abs func(string) bool) error {
-	if !abs(v.Path) {
+func (v *ToolCallLocation) validate(how validation) error {
+	if !how.abs(v.Path) {
 		return &ValidationError{
 			Type:  "ToolCallLocation",
 			Field: "path",
@@ -18443,6 +19540,10 @@ func (v *ToolCallLocation) validate(abs func(string) bool) error {
 // Tool calls progress through different statuses during their lifecycle.
 //
 // See protocol docs: [Status](https://agentclientprotocol.com/protocol/tool-calls#status)
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 type ToolCallStatus string
 
 const (
@@ -18464,6 +19565,15 @@ const (
 	// The tool call failed with an error.
 	ToolCallStatusFailed ToolCallStatus = "failed"
 )
+
+// known reports whether v is one of ToolCallStatus's values.
+func (v ToolCallStatus) known() bool {
+	switch v {
+	case ToolCallStatusPending, ToolCallStatusInProgress, ToolCallStatusCompleted, ToolCallStatusFailed:
+		return true
+	}
+	return false
+}
 
 // ToolCallUpdate is the ToolCallUpdate schema definition.
 //
@@ -18542,6 +19652,9 @@ func (v *ToolCallUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) erro
 		a.Content = items
 	}
 	a.Kind = orZero[*ToolKind](s.Kind)
+	if a.Kind != nil && !a.Kind.known() {
+		a.Kind = nil
+	}
 	if items, err := skipInvalid[ToolCallLocation](s.Locations); err == nil {
 		a.Locations = items
 	}
@@ -18549,6 +19662,9 @@ func (v *ToolCallUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) erro
 	a.RawInput = orZero[json.RawMessage](s.RawInput)
 	a.RawOutput = orZero[json.RawMessage](s.RawOutput)
 	a.Status = orZero[*ToolCallStatus](s.Status)
+	if a.Status != nil && !a.Status.known() {
+		a.Status = nil
+	}
 	a.Title = orZero[*string](s.Title)
 	a.RawInput = absentIfNull(a.RawInput)
 	a.RawOutput = absentIfNull(a.RawOutput)
@@ -18558,18 +19674,43 @@ func (v *ToolCallUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) erro
 
 // Validate returns an error if v does not satisfy the ToolCallUpdate schema definition.
 func (v *ToolCallUpdate) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *ToolCallUpdate) validate(abs func(string) bool) error {
+func (v *ToolCallUpdate) validate(how validation) error {
 	for i := range v.Content {
-		if err := v.Content[i].validate(abs); err != nil {
+		if err := v.Content[i].validate(how); err != nil {
 			return fmt.Errorf("ToolCallUpdate: content[%d]: %w", i, err)
 		}
 	}
+	if how.closed {
+		if v.Kind != nil && !v.Kind.known() {
+			return &ValidationError{
+				Type:  "ToolCallUpdate",
+				Field: "kind",
+				Value: *v.Kind,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("ToolCallUpdate: kind: %q is not a ToolKind", *v.Kind),
+			}
+		}
+	}
 	for i := range v.Locations {
-		if err := v.Locations[i].validate(abs); err != nil {
+		if err := v.Locations[i].validate(how); err != nil {
 			return fmt.Errorf("ToolCallUpdate: locations[%d]: %w", i, err)
+		}
+	}
+	if how.closed {
+		if v.Status != nil && !v.Status.known() {
+			return &ValidationError{
+				Type:  "ToolCallUpdate",
+				Field: "status",
+				Value: *v.Status,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("ToolCallUpdate: status: %q is not a ToolCallStatus", *v.Status),
+			}
 		}
 	}
 	return nil
@@ -18583,6 +19724,10 @@ func (v *ToolCallUpdate) validate(abs func(string) bool) error {
 // display tool execution progress.
 //
 // See protocol docs: [Creating](https://agentclientprotocol.com/protocol/tool-calls#creating)
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 type ToolKind string
 
 const (
@@ -18627,6 +19772,15 @@ const (
 	// Other tool types (default).
 	ToolKindOther ToolKind = "other"
 )
+
+// known reports whether v is one of ToolKind's values.
+func (v ToolKind) known() bool {
+	switch v {
+	case ToolKindRead, ToolKindEdit, ToolKindDelete, ToolKindMove, ToolKindSearch, ToolKindExecute, ToolKindThink, ToolKindFetch, ToolKindSwitchMode, ToolKindOther:
+		return true
+	}
+	return false
+}
 
 // UnknownStateUpdate is the UnknownStateUpdate schema definition.
 //
@@ -18735,10 +19889,13 @@ func (v *UnstableAcceptNesNotification) decodeKeys(b []byte, m map[string]json.R
 
 // Validate returns an error if v does not satisfy the AcceptNesNotification schema definition.
 func (v *UnstableAcceptNesNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableAcceptNesNotification) validate(abs func(string) bool) error {
+func (v *UnstableAcceptNesNotification) validate(how validation) error {
 	return nil
 }
 
@@ -18798,10 +19955,13 @@ func (v *UnstableCloseNesRequest) decodeKeys(b []byte, m map[string]json.RawMess
 
 // Validate returns an error if v does not satisfy the CloseNesRequest schema definition.
 func (v *UnstableCloseNesRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableCloseNesRequest) validate(abs func(string) bool) error {
+func (v *UnstableCloseNesRequest) validate(how validation) error {
 	return nil
 }
 
@@ -18853,10 +20013,13 @@ func (v *UnstableCloseNesResponse) decodeKeys(b []byte, _ map[string]json.RawMes
 
 // Validate returns an error if v does not satisfy the CloseNesResponse schema definition.
 func (v *UnstableCloseNesResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableCloseNesResponse) validate(abs func(string) bool) error {
+func (v *UnstableCloseNesResponse) validate(how validation) error {
 	return nil
 }
 
@@ -18929,10 +20092,13 @@ func (v *UnstableDidChangeDocumentNotification) decodeKeys(b []byte, m map[strin
 
 // Validate returns an error if v does not satisfy the DidChangeDocumentNotification schema definition.
 func (v *UnstableDidChangeDocumentNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableDidChangeDocumentNotification) validate(abs func(string) bool) error {
+func (v *UnstableDidChangeDocumentNotification) validate(how validation) error {
 	return nil
 }
 
@@ -18991,10 +20157,13 @@ func (v *UnstableDidCloseDocumentNotification) decodeKeys(b []byte, m map[string
 
 // Validate returns an error if v does not satisfy the DidCloseDocumentNotification schema definition.
 func (v *UnstableDidCloseDocumentNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableDidCloseDocumentNotification) validate(abs func(string) bool) error {
+func (v *UnstableDidCloseDocumentNotification) validate(how validation) error {
 	return nil
 }
 
@@ -19059,10 +20228,13 @@ func (v *UnstableDidFocusDocumentNotification) decodeKeys(b []byte, m map[string
 
 // Validate returns an error if v does not satisfy the DidFocusDocumentNotification schema definition.
 func (v *UnstableDidFocusDocumentNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableDidFocusDocumentNotification) validate(abs func(string) bool) error {
+func (v *UnstableDidFocusDocumentNotification) validate(how validation) error {
 	return nil
 }
 
@@ -19127,10 +20299,13 @@ func (v *UnstableDidOpenDocumentNotification) decodeKeys(b []byte, m map[string]
 
 // Validate returns an error if v does not satisfy the DidOpenDocumentNotification schema definition.
 func (v *UnstableDidOpenDocumentNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableDidOpenDocumentNotification) validate(abs func(string) bool) error {
+func (v *UnstableDidOpenDocumentNotification) validate(how validation) error {
 	return nil
 }
 
@@ -19189,10 +20364,13 @@ func (v *UnstableDidSaveDocumentNotification) decodeKeys(b []byte, m map[string]
 
 // Validate returns an error if v does not satisfy the DidSaveDocumentNotification schema definition.
 func (v *UnstableDidSaveDocumentNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableDidSaveDocumentNotification) validate(abs func(string) bool) error {
+func (v *UnstableDidSaveDocumentNotification) validate(how validation) error {
 	return nil
 }
 
@@ -19249,10 +20427,13 @@ func (v *UnstableDisableProviderRequest) decodeKeys(b []byte, m map[string]json.
 
 // Validate returns an error if v does not satisfy the DisableProviderRequest schema definition.
 func (v *UnstableDisableProviderRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableDisableProviderRequest) validate(abs func(string) bool) error {
+func (v *UnstableDisableProviderRequest) validate(how validation) error {
 	return nil
 }
 
@@ -19304,10 +20485,13 @@ func (v *UnstableDisableProviderResponse) decodeKeys(b []byte, _ map[string]json
 
 // Validate returns an error if v does not satisfy the DisableProviderResponse schema definition.
 func (v *UnstableDisableProviderResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableDisableProviderResponse) validate(abs func(string) bool) error {
+func (v *UnstableDisableProviderResponse) validate(how validation) error {
 	return nil
 }
 
@@ -19379,12 +20563,15 @@ func (v *UnstableForkSessionRequest) decodeKeys(b []byte, m map[string]json.RawM
 
 // Validate returns an error if v does not satisfy the ForkSessionRequest schema definition.
 func (v *UnstableForkSessionRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableForkSessionRequest) validate(abs func(string) bool) error {
+func (v *UnstableForkSessionRequest) validate(how validation) error {
 	for i, x := range v.AdditionalDirectories {
-		if !abs(x) {
+		if !how.abs(x) {
 			return &ValidationError{
 				Type:  "UnstableForkSessionRequest",
 				Field: fmt.Sprintf("additionalDirectories[%d]", i),
@@ -19394,7 +20581,7 @@ func (v *UnstableForkSessionRequest) validate(abs func(string) bool) error {
 			}
 		}
 	}
-	if !abs(v.Cwd) {
+	if !how.abs(v.Cwd) {
 		return &ValidationError{
 			Type:  "UnstableForkSessionRequest",
 			Field: "cwd",
@@ -19404,7 +20591,7 @@ func (v *UnstableForkSessionRequest) validate(abs func(string) bool) error {
 		}
 	}
 	for i := range v.McpServers {
-		if err := v.McpServers[i].validate(abs); err != nil {
+		if err := v.McpServers[i].validate(how); err != nil {
 			return fmt.Errorf("UnstableForkSessionRequest: mcpServers[%d]: %w", i, err)
 		}
 	}
@@ -19476,12 +20663,15 @@ func (v *UnstableForkSessionResponse) decodeKeys(b []byte, m map[string]json.Raw
 
 // Validate returns an error if v does not satisfy the ForkSessionResponse schema definition.
 func (v *UnstableForkSessionResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableForkSessionResponse) validate(abs func(string) bool) error {
+func (v *UnstableForkSessionResponse) validate(how validation) error {
 	for i := range v.ConfigOptions {
-		if err := v.ConfigOptions[i].validate(abs); err != nil {
+		if err := v.ConfigOptions[i].validate(how); err != nil {
 			return fmt.Errorf("UnstableForkSessionResponse: configOptions[%d]: %w", i, err)
 		}
 	}
@@ -19536,10 +20726,13 @@ func (v *UnstableListProvidersRequest) decodeKeys(b []byte, _ map[string]json.Ra
 
 // Validate returns an error if v does not satisfy the ListProvidersRequest schema definition.
 func (v *UnstableListProvidersRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableListProvidersRequest) validate(abs func(string) bool) error {
+func (v *UnstableListProvidersRequest) validate(how validation) error {
 	return nil
 }
 
@@ -19606,10 +20799,13 @@ func (v *UnstableListProvidersResponse) decodeKeys(b []byte, m map[string]json.R
 
 // Validate returns an error if v does not satisfy the ListProvidersResponse schema definition.
 func (v *UnstableListProvidersResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableListProvidersResponse) validate(abs func(string) bool) error {
+func (v *UnstableListProvidersResponse) validate(how validation) error {
 	return nil
 }
 
@@ -20121,10 +21317,13 @@ func (u UnstableMcpServer) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the McpServer schema definition.
 func (u *UnstableMcpServer) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *UnstableMcpServer) validate(abs func(string) bool) error {
+func (u *UnstableMcpServer) validate(how validation) error {
 	var count int
 	if u.Http != nil {
 		count++
@@ -20149,7 +21348,7 @@ func (u *UnstableMcpServer) validate(abs func(string) bool) error {
 		}
 	}
 	if u.Stdio != nil {
-		if err := u.Stdio.validate(abs); err != nil {
+		if err := u.Stdio.validate(how); err != nil {
 			return fmt.Errorf("UnstableMcpServer: variant Stdio: %w", err)
 		}
 	}
@@ -20295,10 +21494,13 @@ func (v *UnstableMessageMcpNotification) decodeKeys(b []byte, m map[string]json.
 
 // Validate returns an error if v does not satisfy the MessageMcpNotification schema definition.
 func (v *UnstableMessageMcpNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableMessageMcpNotification) validate(abs func(string) bool) error {
+func (v *UnstableMessageMcpNotification) validate(how validation) error {
 	return nil
 }
 
@@ -20363,10 +21565,13 @@ func (v *UnstableMessageMcpRequest) decodeKeys(b []byte, m map[string]json.RawMe
 
 // Validate returns an error if v does not satisfy the MessageMcpRequest schema definition.
 func (v *UnstableMessageMcpRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableMessageMcpRequest) validate(abs func(string) bool) error {
+func (v *UnstableMessageMcpRequest) validate(how validation) error {
 	return nil
 }
 
@@ -20557,10 +21762,13 @@ func (u UnstableMessageMcpResponse) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the MessageMcpResponse schema definition.
 func (u *UnstableMessageMcpResponse) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *UnstableMessageMcpResponse) validate(abs func(string) bool) error {
+func (u *UnstableMessageMcpResponse) validate(how validation) error {
 	var count int
 	if u.Result != nil {
 		count++
@@ -20635,6 +21843,29 @@ func (v *UnstableNesDiagnostic) decodeKeys(b []byte, m map[string]json.RawMessag
 	return nil
 }
 
+// Validate returns an error if v does not satisfy the NesDiagnostic schema definition.
+func (v *UnstableNesDiagnostic) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *UnstableNesDiagnostic) validate(how validation) error {
+	if how.closed {
+		if !v.Severity.known() {
+			return &ValidationError{
+				Type:  "UnstableNesDiagnostic",
+				Field: "severity",
+				Value: v.Severity,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("UnstableNesDiagnostic: severity: %q is not a UnstableNesDiagnosticSeverity", v.Severity),
+			}
+		}
+	}
+	return nil
+}
+
 // UnstableNesDiagnosticSeverity is the NesDiagnosticSeverity schema definition.
 //
 // **UNSTABLE**
@@ -20642,6 +21873,10 @@ func (v *UnstableNesDiagnostic) decodeKeys(b []byte, m map[string]json.RawMessag
 // This capability is not part of the spec yet, and may be removed or changed at any point.
 //
 // Severity of a diagnostic.
+//
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
 // under v1 for compatibility only
@@ -20682,6 +21917,15 @@ const (
 	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesDiagnosticSeverityHint UnstableNesDiagnosticSeverity = "hint"
 )
+
+// known reports whether v is one of UnstableNesDiagnosticSeverity's values.
+func (v UnstableNesDiagnosticSeverity) known() bool {
+	switch v {
+	case UnstableNesDiagnosticSeverityError, UnstableNesDiagnosticSeverityWarning, UnstableNesDiagnosticSeverityInformation, UnstableNesDiagnosticSeverityHint:
+		return true
+	}
+	return false
+}
 
 // UnstableNesEditHistoryEntry is the NesEditHistoryEntry schema definition.
 //
@@ -21039,6 +22283,10 @@ func (v *UnstableNesRecentFile) decodeKeys(b []byte, m map[string]json.RawMessag
 //
 // The reason a suggestion was rejected.
 //
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
+//
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
 // under v1 for compatibility only
 // (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
@@ -21078,6 +22326,15 @@ const (
 	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesRejectReasonCancelled UnstableNesRejectReason = "cancelled"
 )
+
+// known reports whether v is one of UnstableNesRejectReason's values.
+func (v UnstableNesRejectReason) known() bool {
+	switch v {
+	case UnstableNesRejectReasonRejected, UnstableNesRejectReasonIgnored, UnstableNesRejectReasonReplaced, UnstableNesRejectReasonCancelled:
+		return true
+	}
+	return false
+}
 
 // UnstableNesRelatedSnippet is the NesRelatedSnippet schema definition.
 //
@@ -21368,6 +22625,23 @@ func (v *UnstableNesSuggestContext) decodeKeys(b []byte, _ map[string]json.RawMe
 	a := s.Alias
 	a.Meta = orZero[map[string]any](s.Meta)
 	*v = UnstableNesSuggestContext(a)
+	return nil
+}
+
+// Validate returns an error if v does not satisfy the NesSuggestContext schema definition.
+func (v *UnstableNesSuggestContext) Validate() error {
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
+}
+
+func (v *UnstableNesSuggestContext) validate(how validation) error {
+	for i := range v.Diagnostics {
+		if err := v.Diagnostics[i].validate(how); err != nil {
+			return fmt.Errorf("UnstableNesSuggestContext: diagnostics[%d]: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -21824,10 +23098,13 @@ func (u UnstableNesSuggestion) MarshalJSON() ([]byte, error) {
 
 // Validate returns an error if u does not satisfy the NesSuggestion schema definition.
 func (u *UnstableNesSuggestion) Validate() error {
-	return u.validate(filepath.IsAbs)
+	return u.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (u *UnstableNesSuggestion) validate(abs func(string) bool) error {
+func (u *UnstableNesSuggestion) validate(how validation) error {
 	var count int
 	if u.Edit != nil {
 		count++
@@ -21928,6 +23205,10 @@ func (v *UnstableNesTextEdit) decodeKeys(b []byte, m map[string]json.RawMessage)
 //
 // What triggered the suggestion request.
 //
+// Its values are the constants below: Validate, and every message the SDK sends,
+// refuses another. One received is kept as it was, or read as absent where the
+// schema lets a malformed value default.
+//
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
 // under v1 for compatibility only
 // (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
@@ -21959,6 +23240,15 @@ const (
 	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md).
 	UnstableNesTriggerKindManual UnstableNesTriggerKind = "manual"
 )
+
+// known reports whether v is one of UnstableNesTriggerKind's values.
+func (v UnstableNesTriggerKind) known() bool {
+	switch v {
+	case UnstableNesTriggerKindAutomatic, UnstableNesTriggerKindDiagnostic, UnstableNesTriggerKindManual:
+		return true
+	}
+	return false
+}
 
 // UnstableNesUserAction is the NesUserAction schema definition.
 //
@@ -22317,16 +23607,33 @@ func (v *UnstableRejectNesNotification) decodeKeys(b []byte, m map[string]json.R
 	a := s.Alias
 	a.Meta = orZero[map[string]any](s.Meta)
 	a.Reason = orZero[*UnstableNesRejectReason](s.Reason)
+	if a.Reason != nil && !a.Reason.known() {
+		a.Reason = nil
+	}
 	*v = UnstableRejectNesNotification(a)
 	return nil
 }
 
 // Validate returns an error if v does not satisfy the RejectNesNotification schema definition.
 func (v *UnstableRejectNesNotification) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableRejectNesNotification) validate(abs func(string) bool) error {
+func (v *UnstableRejectNesNotification) validate(how validation) error {
+	if how.closed {
+		if v.Reason != nil && !v.Reason.known() {
+			return &ValidationError{
+				Type:  "UnstableRejectNesNotification",
+				Field: "reason",
+				Value: *v.Reason,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("UnstableRejectNesNotification: reason: %q is not a UnstableNesRejectReason", *v.Reason),
+			}
+		}
+	}
 	return nil
 }
 
@@ -22392,10 +23699,13 @@ func (v *UnstableSetProviderRequest) decodeKeys(b []byte, m map[string]json.RawM
 
 // Validate returns an error if v does not satisfy the SetProviderRequest schema definition.
 func (v *UnstableSetProviderRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableSetProviderRequest) validate(abs func(string) bool) error {
+func (v *UnstableSetProviderRequest) validate(how validation) error {
 	return nil
 }
 
@@ -22447,10 +23757,13 @@ func (v *UnstableSetProviderResponse) decodeKeys(b []byte, _ map[string]json.Raw
 
 // Validate returns an error if v does not satisfy the SetProviderResponse schema definition.
 func (v *UnstableSetProviderResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableSetProviderResponse) validate(abs func(string) bool) error {
+func (v *UnstableSetProviderResponse) validate(how validation) error {
 	return nil
 }
 
@@ -22512,10 +23825,13 @@ func (v *UnstableStartNesRequest) decodeKeys(b []byte, _ map[string]json.RawMess
 
 // Validate returns an error if v does not satisfy the StartNesRequest schema definition.
 func (v *UnstableStartNesRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableStartNesRequest) validate(abs func(string) bool) error {
+func (v *UnstableStartNesRequest) validate(how validation) error {
 	return nil
 }
 
@@ -22572,10 +23888,13 @@ func (v *UnstableStartNesResponse) decodeKeys(b []byte, m map[string]json.RawMes
 
 // Validate returns an error if v does not satisfy the StartNesResponse schema definition.
 func (v *UnstableStartNesResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableStartNesResponse) validate(abs func(string) bool) error {
+func (v *UnstableStartNesResponse) validate(how validation) error {
 	return nil
 }
 
@@ -22644,10 +23963,29 @@ func (v *UnstableSuggestNesRequest) decodeKeys(b []byte, m map[string]json.RawMe
 
 // Validate returns an error if v does not satisfy the SuggestNesRequest schema definition.
 func (v *UnstableSuggestNesRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableSuggestNesRequest) validate(abs func(string) bool) error {
+func (v *UnstableSuggestNesRequest) validate(how validation) error {
+	if v.Context != nil {
+		if err := v.Context.validate(how); err != nil {
+			return fmt.Errorf("UnstableSuggestNesRequest: context: %w", err)
+		}
+	}
+	if how.closed {
+		if !v.TriggerKind.known() {
+			return &ValidationError{
+				Type:  "UnstableSuggestNesRequest",
+				Field: "triggerKind",
+				Value: v.TriggerKind,
+				Rule:  RuleEnum,
+				msg:   fmt.Sprintf("UnstableSuggestNesRequest: triggerKind: %q is not a UnstableNesTriggerKind", v.TriggerKind),
+			}
+		}
+	}
 	return nil
 }
 
@@ -22714,12 +24052,15 @@ func (v *UnstableSuggestNesResponse) decodeKeys(b []byte, m map[string]json.RawM
 
 // Validate returns an error if v does not satisfy the SuggestNesResponse schema definition.
 func (v *UnstableSuggestNesResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *UnstableSuggestNesResponse) validate(abs func(string) bool) error {
+func (v *UnstableSuggestNesResponse) validate(how validation) error {
 	for i := range v.Suggestions {
-		if err := v.Suggestions[i].validate(abs); err != nil {
+		if err := v.Suggestions[i].validate(how); err != nil {
 			return fmt.Errorf("UnstableSuggestNesResponse: suggestions[%d]: %w", i, err)
 		}
 	}
@@ -23041,10 +24382,13 @@ func (v *WaitForTerminalExitRequest) decodeKeys(b []byte, m map[string]json.RawM
 
 // Validate returns an error if v does not satisfy the WaitForTerminalExitRequest schema definition.
 func (v *WaitForTerminalExitRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *WaitForTerminalExitRequest) validate(abs func(string) bool) error {
+func (v *WaitForTerminalExitRequest) validate(how validation) error {
 	return nil
 }
 
@@ -23096,10 +24440,13 @@ func (v *WaitForTerminalExitResponse) decodeKeys(b []byte, _ map[string]json.Raw
 
 // Validate returns an error if v does not satisfy the WaitForTerminalExitResponse schema definition.
 func (v *WaitForTerminalExitResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *WaitForTerminalExitResponse) validate(abs func(string) bool) error {
+func (v *WaitForTerminalExitResponse) validate(how validation) error {
 	return nil
 }
 
@@ -23154,11 +24501,14 @@ func (v *WriteTextFileRequest) decodeKeys(b []byte, m map[string]json.RawMessage
 
 // Validate returns an error if v does not satisfy the WriteTextFileRequest schema definition.
 func (v *WriteTextFileRequest) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *WriteTextFileRequest) validate(abs func(string) bool) error {
-	if !abs(v.Path) {
+func (v *WriteTextFileRequest) validate(how validation) error {
+	if !how.abs(v.Path) {
 		return &ValidationError{
 			Type:  "WriteTextFileRequest",
 			Field: "path",
@@ -23210,10 +24560,13 @@ func (v *WriteTextFileResponse) decodeKeys(b []byte, _ map[string]json.RawMessag
 
 // Validate returns an error if v does not satisfy the WriteTextFileResponse schema definition.
 func (v *WriteTextFileResponse) Validate() error {
-	return v.validate(filepath.IsAbs)
+	return v.validate(validation{
+		abs:    filepath.IsAbs,
+		closed: true,
+	})
 }
 
-func (v *WriteTextFileResponse) validate(abs func(string) bool) error {
+func (v *WriteTextFileResponse) validate(how validation) error {
 	return nil
 }
 

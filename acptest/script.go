@@ -13,7 +13,10 @@ import (
 // (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 8, for Err, Usage
 // and WaitCancel).
 type Turn struct {
-	Updates    []acp.SessionUpdate
+	Updates []acp.SessionUpdate
+	// StopReason is the turn's answer; left empty, it is acp.StopReasonEndTurn,
+	// since the SDK refuses to send a stop reason the schema does not list
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, S6).
 	StopReason acp.StopReason
 
 	// Err, when set, is the turn's answer after its updates: the prompt
@@ -132,7 +135,11 @@ func (a *ScriptAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp
 			return acp.PromptResponse{}, context.Cause(ctx)
 		}
 	}
-	return acp.PromptResponse{StopReason: turn.StopReason, Usage: turn.Usage}, nil //nolint:staticcheck // SA1019: the turn's usage.
+	stop := turn.StopReason
+	if stop == "" {
+		stop = acp.StopReasonEndTurn
+	}
+	return acp.PromptResponse{StopReason: stop, Usage: turn.Usage}, nil //nolint:staticcheck // SA1019: the turn's usage.
 }
 
 // Cancel ends the session's turn that waits for it, or the next that will.

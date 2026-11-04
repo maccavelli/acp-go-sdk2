@@ -43,3 +43,4 @@ func (*ClientSideConnection).Err() error
 func (*ClientSideConnection).SetLogger(l *slog.Logger)
 func (*ClientSideConnection).Wait() error
 func (*Paint).UnmarshalJSON(b []byte) error
+func (*Paint).Validate() error

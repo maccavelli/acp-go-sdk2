@@ -240,6 +240,26 @@ func TestScriptAgentTurns(t *testing.T) {
 	}
 }
 
+// TestScriptAgentDefaultStopReason requires a turn without a stop reason to
+// answer end_turn: the SDK refuses to send an empty one, which is not a
+// StopReason (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, S6).
+func TestScriptAgentDefaultStopReason(t *testing.T) {
+	t.Parallel()
+	pair := acptest.Connect(t, &acptest.ScriptAgent{Turns: []acptest.Turn{{}}}, &acptest.MemoryClient{})
+	ctx := t.Context()
+	if _, err := pair.Client.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := pair.Client.NewSession(ctx, acp.NewSessionRequest{Cwd: acptest.Abs("/work"), McpServers: []acp.McpServer{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := pair.Client.Prompt(ctx, acp.PromptRequest{SessionId: sess.SessionId, Prompt: []acp.ContentBlock{acp.TextBlock("hi")}})
+	if err != nil || resp.StopReason != acp.StopReasonEndTurn {
+		t.Errorf("a turn without a stop reason answered %q, %v; want end_turn", resp.StopReason, err)
+	}
+}
+
 // TestMemoryClientElicitation requires CreateElicitation to answer from the
 // script, a form's accept that the form refuses to reach the agent as an
 // internal error, and no script to answer method-not-found.

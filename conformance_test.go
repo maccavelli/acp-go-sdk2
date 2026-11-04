@@ -288,8 +288,8 @@ func roundTrip(t *testing.T, st schemaType, in []byte) (any, []string) {
 	// A golden or an instance is a peer's message from a host this test does
 	// not know, so paths are checked with the portable rule
 	// (0015-PLAN-validate-absolute-protocol-paths.md, step 4).
-	if val, ok := v.(interface{ validate(func(string) bool) error }); ok {
-		if err := val.validate(isPortableAbs); err != nil {
+	if val, ok := v.(validator); ok {
+		if err := val.validate(sending); err != nil {
 			return v, []string{fmt.Sprintf("validate %s: %v", in, err)}
 		}
 	}
@@ -1324,11 +1324,22 @@ func TestConformanceMethods(t *testing.T) {
 			// 0015-PLAN-validate-absolute-protocol-paths.md, step 5, the result
 			// is validated before it is sent, so the error reads "must have
 			// exactly one variant set" rather than the encoder's "no variant set".
-			var zeroErr error
+			// A zero result that encodes may still be one validation refuses,
+			// such as PromptResponse{}, whose stopReason is not one of its closed
+			// set's values: the request then fails -32603
+			// (0049-PLAN-surface-fixes.md, phase 3).
+			var zeroErr, refused error
 			if m.Result != nil {
-				_, zeroErr = json.Marshal(m.Result())
+				r := m.Result()
+				if _, zeroErr = json.Marshal(r); zeroErr == nil {
+					refused = validateOutbound(r)
+				}
 			}
 			switch {
+			case refused != nil:
+				if re, ok := errors.AsType[*RequestError](err); !ok || re.Code != -32603 {
+					t.Errorf("%s: the zero result is refused (%v), but the request returned %v", m.Wire, refused, err)
+				}
 			case zeroErr == nil && err != nil:
 				t.Errorf("%s: %v", m.Wire, err)
 			case zeroErr != nil && (err == nil || !strings.Contains(err.Error(), "variant set")):

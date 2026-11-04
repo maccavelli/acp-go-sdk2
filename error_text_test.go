@@ -81,14 +81,14 @@ func TestValidationMessagesQuoteValue(t *testing.T) {
 		err  error
 		want string
 	}{
-		{"absolute path", (&NewSessionRequest{Cwd: dir, McpServers: []McpServer{}}).validate(isPortableAbs), fmt.Sprintf("%q", dir)},
-		{"excluded value", (&CreateElicitationRequest{Other: &CreateElicitationOther{Mode: "form"}}).validate(isPortableAbs), `"form"`},
+		{"absolute path", (&NewSessionRequest{Cwd: dir, McpServers: []McpServer{}}).validate(sending), fmt.Sprintf("%q", dir)},
+		{"excluded value", (&CreateElicitationRequest{Other: &CreateElicitationOther{Mode: "form"}}).validate(sending), `"form"`},
 	} {
 		if tc.err == nil || !strings.Contains(tc.err.Error(), tc.want) {
 			t.Errorf("%s: message %v, want it to hold %s", tc.name, tc.err, tc.want)
 		}
 	}
-	if err := (&CreateElicitationRequest{}).validate(isPortableAbs); err == nil ||
+	if err := (&CreateElicitationRequest{}).validate(sending); err == nil ||
 		err.Error() != "CreateElicitationRequest must have exactly one variant set" {
 		t.Errorf("one variant: message %v", err)
 	}

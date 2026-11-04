@@ -743,6 +743,9 @@ approves it.
   boolean option): a consumer that relied on it fails at the call, which is why they go in a minor release with notes.
 * Bad, because five PLANs are a long program; Q1 (c) is the shorter alternative.
 * Neutral, because none of the fixes needs an incompatible API change; Q5 (a) adds one option, and Q10 (a) one sentinel.
+  *Amended 2026-11-03,* in [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md)'s phase 3, deviation 3: S6's
+  membership check gives 25 types that held a closed enumeration and checked nothing an exported `Validate`, compatible
+  additions the owner accepted.
 
 ### Confirmation
 

@@ -146,8 +146,13 @@ func sides(t *testing.T, w *countingWriter, n *Negotiation, opts ...ConnectionOp
 
 // validReply fills a result the zero value of which does not validate.
 func validReply(result any) error {
-	if r, ok := result.(*CreateElicitationResponse); ok {
+	switch r := result.(type) {
+	case *CreateElicitationResponse:
 		*r = NewCreateElicitationResponseCancel()
+	case *PromptResponse:
+		// A stop reason is a closed enumeration, which the SDK checks on what
+		// it sends (0049-PLAN-surface-fixes.md, phase 3).
+		r.StopReason = StopReasonEndTurn
 	}
 	return nil
 }
@@ -163,7 +168,7 @@ func receive(t *testing.T, m gatedMethod, n *Negotiation, opts ...ConnectionOpti
 	}
 	var rerr *RequestError
 	if m.toAgent {
-		asc := NewAgentSideConnection(recordingAgent{calls: calls}, &countingWriter{}, idleReader(t), opts...)
+		asc := NewAgentSideConnection(recordingAgent{calls: calls, reply: validReply}, &countingWriter{}, idleReader(t), opts...)
 		if n != nil {
 			negotiate(t, asc, n)
 		}

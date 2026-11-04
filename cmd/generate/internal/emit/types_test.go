@@ -278,7 +278,13 @@ const (
 	RuleOneVariant    ValidationRule = "oneVariant"
 	RuleOneMember     ValidationRule = "oneMember"
 	RuleExcludedValue ValidationRule = "excludedValue"
+	RuleEnum          ValidationRule = "enum"
 )
+
+type validation struct {
+	abs    func(string) bool
+	closed bool
+}
 
 type ValidationError struct {
 	Type, Field string

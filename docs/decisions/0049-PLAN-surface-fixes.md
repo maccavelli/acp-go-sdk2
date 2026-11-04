@@ -46,8 +46,8 @@ In scope:
   * `README.md`: "Wire encoding", "Initialization and capabilities", and the validation and tool-call text;
   * `docs/architecture.md`;
   * an amendment to [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md), treatments 5 and 7.
-* **The release,** a minor `v1.32.0`, on the owner's ask. `make api` must report one compatible addition, the sentinel, and
-  nothing incompatible.
+* **The release,** a minor `v1.32.0`, on the owner's ask. `make api` must report ~~one compatible addition, the sentinel,~~
+  26 compatible additions, the sentinel and deviation 3's 25 `Validate` methods, and nothing incompatible.
 
 Out of scope:
 
@@ -65,7 +65,8 @@ The Go API rules each step follows:
    removed. A struct tag may change: the pinned `apidiff` does not report it, and the wire meaning it gains is the schema's own.
    Checked 2026-11-03: in a scratch clone of `e98987a`, with the `content` and `locations` tags of `types_gen.go` changed to
    `omitzero`, `scripts/check_api.py` gave "against v1.31.2: 0 incompatible, 0 compatible".
-2. **The least new API.** One exported identifier is added, the sentinel of step 4.2. It is an `Err…` variable read with
+2. **The least new API.** ~~One exported identifier is added, the sentinel of step 4.2.~~ The sentinel of step 4.2, and
+   the 25 `Validate` methods of deviation 3, 2026-11-03, are added. It is an `Err…` variable read with
    `errors.Is`, as `ErrTerminalAuthMethod` is. Membership of a closed set is reported by the existing `Validate`, so no enum gains
    an exported method. The deep copy is unexported.
 3. **Errors keep their types.** A gate refusal is a `*CapabilityError` or wraps a sentinel, and a validation failure wraps the
@@ -279,7 +280,8 @@ emitter's plant runs in a scratch copy by script, since `plants.py` runs from th
 
 1. `tools/gates.py --all`, with the hosts named per command. The MADR's S items are listed, each with the test that shows it, in
    a table.
-2. `make api`: "1 compatible" (`ErrUnadvertisedAuthMethod`), 0 incompatible.
+2. `make api`: ~~"1 compatible" (`ErrUnadvertisedAuthMethod`)~~ 26 compatible (`ErrUnadvertisedAuthMethod` and deviation 3's
+   25 `Validate` methods), 0 incompatible.
 3. After the owner's push, CI on the head.
 4. On the owner's ask:
    * `docs/reports/0049-REPORT-release-notes-v1-32-0.md`, leading with the behaviour changes;
@@ -525,3 +527,126 @@ FAILED AS REQUIRED: a rule dropped from the table: rc 1: protocol_test.go:512: T
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 3 begins on the owner's word.
+
+The owner committed phase 2 as `e0dd5d2`.
+
+### Phase 3: S6, closed enumerations, 2026-11-03
+
+Begun on the owner's "committed proceed" after `e0dd5d2`.
+
+**Deviation 3, 2026-11-03: 25 types gain an exported `Validate`.**
+
+* **Found** by `make api` after the first regeneration: "against v1.31.2: 0 incompatible, 25 compatible". Each type holds a
+  closed enumeration's field and had nothing to check before, so the membership check gives it `Validate`:
+  * `AgentCapabilities`, `ClientCapabilities`, `Annotations`;
+  * the four content types (`TextContent`, `ImageContent`, `AudioContent`, `ResourceLink`) and their `ContentBlock*`
+    variants;
+  * `PermissionOption`, `Plan`, `PlanEntry`, `PlanItems`, `SessionUpdatePlan`, `PlanUpdateContentItems`;
+  * `StringPropertySchema`, `ElicitationPropertySchemaString`;
+  * six NES types: `NesCapabilities`, `NesDocumentDidChangeCapabilities`, `NesDocumentEventCapabilities`,
+    `NesEventCapabilities`, `UnstableNesDiagnostic`, `UnstableNesSuggestContext`.
+
+  Design rule 2 promised one new exported identifier.
+* **Decided.** The owner was asked, with three options, and chose the recommended one: accept them.
+  * 0012's treatment 7 has `Validate` check what the schema states, and these types now hold a statement to check.
+  * Every type that can fail validation then has `Validate`, and each is a compatible addition in the minor.
+
+  Not chosen: an unexported `validate` alone, reached only through a parent, which no consumer could call on a
+  `PermissionOption`; and checking only types that already validated, which would leave S6 partly unfixed.
+* **Scope:** design rule 2, the Scope's release line and step 6.2 are amended above. The MADR's Consequences carry it.
+
+**What it did,** under deviation 3:
+
+* **The model** (`internal/model/`):
+  * `isClosedEnum` takes a `KindEnum` or `KindStringConstUnion` type, not a `KindOpenEnum`. `closedEnumCheck`, called from
+    `ownChecks`, gives each field that holds one, by value, by pointer, or in a slice, a `CheckClosedEnum` with its shape,
+    the enumeration, whether the field is required, and the enumeration's constants.
+  * It marks the field `Closed`, with `ClosedValues`, and refuses one held in a patch or a map, which no check reaches.
+* **The emitter** (`internal/emit/`):
+  * Each closed type gains `known()`, a switch, or an `if` for a single constant (`gocritic`'s `singleCaseSwitch` found the
+    first form on `ElicitationSchemaType`), and the doc paragraph `closedEnumDoc`.
+  * `validate(abs func(string) bool)` becomes `validate(how validation)`. `Validate` passes
+    `validation{abs: filepath.IsAbs, closed: true}`, nested calls pass `how`, and the path checks call `how.abs`.
+  * `closedEnumStmt` emits each check under `if how.closed`, with `RuleEnum` and a message that quotes the value.
+  * `unknownAbsent`, after each lenient field's decode, reads an unknown closed value as absent:
+    * a value field as its default or `""`;
+    * a pointer as nil;
+    * an item of a skip-invalid-items array dropped with `slices.DeleteFunc`, and without skip-invalid-items the whole
+      array nil, as Rust's `DefaultOnError` has it.
+  * A file of package `unstable` declares its own `validation` (`emitValidationType`). It checks one of acp's enumerations
+    with `slices.Contains` over its constants (`knownExpr`), since `known` is acp's and unexported.
+* **Hand-written:**
+  * `connection.go`: `validation`; `validator.validate(how validation)`; `sending`, which `validateOutbound` passes; and
+    `judgeInbound` passing `validation{abs: filepath.IsAbs}`, so a received closed value is kept.
+  * `errors.go`: the docs of `RuleEnum` and `ValidationError`. No identifier is added.
+* **Regenerated** `types_gen.go`: 1 764 lines added and 410 changed. These are the `known` methods, the checks, the lenient
+  reads, every `validate`'s signature, and the 25 `Validate` methods of deviation 3. `tools/gates.py regen` is clean.
+* **Step 3.4, the SDK's own senders:**
+  * The generated prompt-turn answer, `agentproc`'s `InProcess`, the examples and `tools/consumer.py`'s program send only
+    listed values. Every package's tests pass, and the consumer program's stop reasons and permission kinds are constants.
+  * `acptest`'s `ScriptAgent` answered a `Turn` without a `StopReason` with `""`, which is now refused. It answers
+    `StopReasonEndTurn` instead, and the field's godoc says so. Its test is `TestScriptAgentDefaultStopReason`.
+* **Tests changed where they tested something else,** each named here:
+  * `gates_test.go`'s `validReply` gives a `PromptResponse` the stop reason `end_turn`, and `receive` passes it to the
+    recording agent as it did to the client. `TestValueGates`'s prompt cases had failed with "PromptResponse: stopReason: \"\"
+    is not a StopReason".
+  * `conformance_test.go`'s `TestConformanceMethods` handled a zero result that cannot be encoded. It now also handles one
+    that validation refuses, expecting `-32603`; `session/prompt` had failed the same way. `roundTrip` asserted the old
+    signature in an interface literal, which would have skipped validation silently; it now asserts `validator`.
+  * `error_text_test.go`'s three calls, and that one, pass `sending` where they passed `isPortableAbs`.
+  * The two runtime stubs, in `main_test.go` and `internal/emit/types_test.go`, gain `RuleEnum` and `validation`.
+* **The tests:**
+  * `enum_closed_test.go`:
+    * `TestClosedEnumsRefusedOnSend`: six closed positions, four stable and two optional or unstable. `""` and `"bogus"` fail
+      `Validate` with `RuleEnum`, quoting the value, and a listed value passes. An agent answering `PromptResponse{}` gives
+      the client `-32603`.
+    * `TestClosedEnumsReadableOnReceive`: a raw agent's `"bogus"` stop reason is returned as it came.
+    * `TestLenientClosedEnumsReadAbsent`:
+      * `tool_call`'s and `tool_call_update`'s kind and status;
+      * `audience`;
+      * `ElicitationSchema.type`, taking its default `object`;
+      * `positionEncoding`;
+      * known values kept.
+  * The model, `closed_test.go`:
+    * `TestClosedEnumChecks`: each shape, an open enum unchecked, a map refused;
+    * `checkCommittedClosedEnums`: the fourteen types.
+  * The engine case `accept-enum-closed.txtar`: required, optional, a slice, the lenient reads, and package `unstable`'s
+    type holding acp's enumeration.
+  * The three engine cases whose `want.api` gained `Validate` methods: `accept-enum` (`Paint`), `accept-default-pointer-raw`
+    (`Opts`) and `accept-unstable-deprecated` (`Caps`). That is the only change in their files.
+* **Docs:**
+  * `README.md`'s "Wire encoding": `Validate`, sending, and lenient reads.
+  * `docs/architecture.md`: `validate(how validation)`, `sending`, and `known`.
+  * [0012-MADR-schema-fidelity-framework.md](0012-MADR-schema-fidelity-framework.md)'s "Amendment 2026-11-03, closed
+    enumerations": treatments 7, 5 and 6, and the 2026-10-12 amendment's "both directions".
+
+**Seen to fail,** each in its own scratch copy of the tree, regenerated there, by script, 5/5, and the `acptest` default by
+`tools/plants.py`, 1/1:
+
+```text
+FAILED AS REQUIRED: membership not checked: rc 1: enum_closed_test.go:65: PromptResponse.stopReason "": Validate = <nil>, want a RuleEnum ValidationError quoting ""
+FAILED AS REQUIRED: received values checked too: rc 1: enum_closed_test.go:100: Prompt = "", session/prompt response: PromptResponse: stopReason: "bogus" is not a StopReason; want "bogus", nil
+FAILED AS REQUIRED: the lenient read removed: rc 1: enum_closed_test.go:121: tool_call kind "browse" status "queued", want both absent
+FAILED AS REQUIRED: a oneOf of consts not taken as closed: rc 1: closed_test.go:52: opt: check {…Type: …Values:[]}, want {…Type:S …Values:[SX SY]}
+FAILED AS REQUIRED: package unstable calls acp's known: rc 1: --- FAIL: TestEngineCases/accept-enum-closed
+FAILED AS REQUIRED: ScriptAgent default removed (^TestScriptAgentDefaultStopReason$): exit 1: additions_test.go:259: a turn without a stop reason answered "", {"code":-32603,…"PromptResponse: stopReason: \"\" is not a StopReason"…}; want end_turn
+```
+
+**Checks:**
+
+* `go test -race -count=3` of the three root tests and the `acptest` ones: `ok`.
+* `go test -count=1 ./...` in both modules: `ok`.
+* `tools/gates.py regen`: `ok`.
+* `make api`: "against v1.31.2: 0 incompatible, 25 compatible", the 25 of deviation 3.
+* `make pre-add-check` with the phase's seventeen Go files and the README:
+  * **First run:** exit 2, `gocritic` `singleCaseSwitch` on `ElicitationSchemaType.known`; `emitKnown` now uses
+    `switchOrIf`.
+  * **Second run,** at load 24: exit 0, "17 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on,
+    uncached), tidy, govulncheck."
+* `tools/remote.py tree --host linux`: both modules, exit 0.
+* `tools/remote.py pkg --host windows . -test.run 'TestClosedEnumsRefusedOnSend|TestClosedEnumsReadableOnReceive|
+  TestLenientClosedEnumsReadAbsent|TestValueGates' -test.count=3`: "PASS".
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 4 begins on the owner's word.

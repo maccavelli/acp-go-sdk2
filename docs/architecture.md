@@ -369,21 +369,26 @@ meets a bound its Go type does not enforce, and every nested value validates,
 a patch's through the value it holds; an integer bound with a fraction is
 rounded inward, a `uint64` one above the `int64` range is written as such, and
 one the Go type cannot reach is refused;
-and it checks the table's absolute paths. Each exported `Validate` calls an
-unexported `validate(abs func(string) bool)` with the host's `filepath.IsAbs`,
-and passes `abs` to the nested values; every check returns a
+and it checks the table's absolute paths, and that a closed enumeration's
+field, a `KindEnum` or `KindStringConstUnion` type's, holds one of its constants
+(`known`, a method of each such type; 0049, S6). Each exported `Validate` calls
+an unexported `validate(how validation)` with `validation{abs: filepath.IsAbs,
+closed: true}`, and passes `how` to the nested values; a file of package
+`unstable` declares its own `validation`, and checks one of acp's enumerations
+with `slices.Contains` over its constants, since `known` is acp's; every check returns a
 `*ValidationError` naming the type, the property and the rule. The elicitation
 checks in `elicitation.go` return the same type, under rules of their own in
 `errors.go`, each problem joined with `errors.Join`; their messages never quote
 an answer's value, and a refused default also holds the rule it breaks.
 
 `connection.go` applies that check in both directions. Before sending, the
-params of a generated type, and a handler's result, are validated with
-`isPortableAbs`, which accepts a path absolute in POSIX or Windows form;
-nothing is written on failure, and a failing result is answered `-32603`.
-On receipt, `checkInbound` runs on every decoded request, notification and
-response: the `WithInboundRewrite` hook, then `validate(filepath.IsAbs)`
-and the gate, then the `WithInboundValidation` hook with the validation
+params of a generated type, and a handler's result, are validated as `sending`
+says: `isPortableAbs`, which accepts a path absolute in POSIX or Windows form,
+and closed sets checked; nothing is written on failure, and a failing result is
+answered `-32603`. On receipt, `checkInbound` runs on every decoded request,
+notification and response: the `WithInboundRewrite` hook, then
+`validate(validation{abs: filepath.IsAbs})`, which leaves closed sets alone, so
+a peer's unknown value stays readable, and the gate, then the `WithInboundValidation` hook with the validation
 error and, only if it accepts that, the gate's. The generated dispatch
 first refuses a method received as the other kind, a request sent without an
 id or a notification sent with one, by the mark `connection.go` puts in the

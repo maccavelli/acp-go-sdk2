@@ -144,7 +144,14 @@ type Field struct {
 	// Unstable is true for a field of a stable definition whose property
 	// only the definition's unstable version has (load.Changes).
 	Unstable bool
-	Facts    Facts
+	// Closed is true for a field that holds a closed enumeration, by value,
+	// by pointer, or in a slice: Validate checks its membership, and a
+	// lenient one reads an unknown value as absent
+	// (0049-PLAN-surface-fixes.md, phase 3). ClosedValues names the
+	// enumeration's constants.
+	Closed       bool
+	ClosedValues []string
+	Facts        Facts
 	// prop is the schema property the field is built from; every type that
 	// holds the property, an inline allOf variant included, shares it.
 	prop *load.Definition

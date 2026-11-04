@@ -106,7 +106,9 @@ const (
 	// one the protocol allows.
 	RuleFormat ValidationRule = "format"
 	// RuleEnum: a value is not one of its choices, or a list of choices is
-	// empty or given twice.
+	// empty or given twice. A generated Validate check uses it too, for a
+	// closed enumeration's field whose value is not one of the type's
+	// constants (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, S6).
 	RuleEnum ValidationRule = "enum"
 	// RuleMinItems: a list has fewer items than its minItems.
 	RuleMinItems ValidationRule = "minItems"
@@ -132,8 +134,8 @@ const (
 // broken. A Validate error that wraps a nested type's error keeps this one
 // reachable with errors.As.
 //
-// The message of an absolute-path or excluded-value check quotes the value it
-// refuses, so a value the peer sent reaches the answer's data and the logs as
+// The message of an absolute-path, excluded-value or closed-enumeration check
+// quotes the value it refuses, so a value the peer sent reaches the answer's data and the logs as
 // it was (0024-PLAN-behaviour-fixes.md, A14). The message of an elicitation
 // check of an answer, a text input or a URL names the field and the rule and
 // never the value, which may be personal data or a credential: Value holds an
