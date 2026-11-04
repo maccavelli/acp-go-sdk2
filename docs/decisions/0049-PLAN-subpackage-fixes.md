@@ -559,3 +559,102 @@ The inverted plant failed both tests, as step 4.6 has it: the log holds "--- FAI
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 5 begins on the owner's word.
+
+The owner committed phase 4 as `994ba94`.
+
+### Phase 5: P6, P9 and P8, a message's limit and a stream's end, 2026-11-04
+
+Begun on the owner's "committed, proceed" after `994ba94`.
+
+**Deviation 1, 2026-11-04: phase 1's back-pressure tests ping every 300 ms, not 100 ms.**
+
+* **Found** by the phase's second `make pre-add-check`: `TestWebSocketSlowClientStaysConnected`, added in phase 1, "after 1038
+  of 2000 lines: remote: WebSocket: failed to get reader: failed to read frame header: read tcp …: read: connection reset by
+  peer", at 1.04 s. The server had dropped the connection during the client's one-second pause; the client then read what
+  was buffered.
+* **Not reproduced:** 30 runs alone, 10 of the WebSocket tests at `-cpu=2`, 40 under the root module's `-race` suite as load,
+  40 more at `-cpu=1` under it, three of `./remote/` under `-race`, and the first and third pre-add checks: all pass.
+* **The likely cause, not proven:** the test's server pinged every 100 ms, `backPressureServer`'s bound, the probes'. A ping
+  is read in order, behind the frames sent before it, and the client was taking 2 000 under `-race` and the full suite's
+  load. The fixed code misses a pong only when the reader lags by more than `KeepAlive`, 15 s by default, so the margin is
+  the test's. The log's one "WebSocket ping not answered" near the failure cannot be told from `TestWebSocketKeepAlive`'s,
+  which logs it by design.
+* **Decided.** The owner was asked, with three options, and chose the recommended one: `backPressureServer` pings every
+  300 ms, three times within the tests' one-second pauses, and phase 1's three plants are run again to show they still fail.
+  Not chosen: recording it as seen once and keeping 100 ms; instrumenting the test and running it until it fails.
+* **Scope added:** `backPressureServer`'s keepalive and doc, in `remote/ws_test.go`, already in this phase's scope. The MADR
+  is unchanged: no decision or fact it states moves.
+
+**What it did,** under deviation 1:
+
+* **`remote/frame.go`:** `overlongAnswer(limit)`, the connection's own answer, `{"jsonrpc":"2.0","id":null,"error":{"code":
+  -32600,"message":"Invalid request","data":{"error":"message exceeds N bytes"}}}`, encoded from `acp.NewInvalidRequest`;
+  `answerer`, which writes an answer on a goroutine of its own, one at a time, so neither a reader nor the pump waits on the
+  side it answers (design rule 4).
+* **`remote/ws.go`:**
+  * `readFrame` reads a message through `Reader` into at most `MaxMessageSize + 1` bytes, and drains a longer one with
+    `io.Copy(io.Discard, r)`.
+  * `dialWebSocket` and `serveWebSocket` (`handler.go`) call `SetReadLimit(-1)`.
+  * `readLoop` answers a text frame over the limit on the socket, under the connection's context; `readWebSocket` logs it,
+    "remote: a message from the client exceeds MaxMessageSize and was dropped", and answers it on the socket under `Grace`,
+    by `serverConn.toClient`. A binary frame over the limit is dropped, as any binary frame is, unanswered.
+  * `pump`, for both profiles, answers an agent's over-long line on its input, by `serverConn.toAgent`.
+* **`remote/httpclient.go`:** the connection stream's end, when its error is `io.EOF`, ends the reader with `c.fail(nil)`, so
+  `Read` returns `io.EOF` itself; any other end is wrapped as before.
+* **Godoc:** `HandlerOptions.MaxMessageSize`, `DialOptions.MaxMessageSize` and `Conn.Read`.
+* **The tests:**
+  * `remote/ws_test.go`: `TestWebSocketOverlongFrameAnswered`, beside `overlongAnswerOf`, which checks an answer's code, id
+    and text: the server answers a raw client's frame over 128 bytes and reads the frames around it; the client `Conn`
+    answers the agent's line over its limit, which reaches the agent's input, and delivers the lines around it.
+    `TestWebSocketLargeMessage` required a frame past the limit to end the connection on either side; it is changed to the
+    new rule, a frame at the limit, one past it and one at it again, on both sides, the second dropped and the third
+    arriving. Its 64 KiB round trip is kept.
+  * `remote/httpserver_test.go`: `TestHTTPServerOverlongAnswer`, over Streamable HTTP and WebSocket: the agent's 444-byte
+    answer under a 200-byte limit is answered on its input, and its next message, which says so, arrives. Its read of that
+    message is bounded by `waitBound`, so a plant fails it with its own message rather than at the test timeout.
+  * `remote/httpclient_test.go`: `TestHTTPClientCleanEndIsEOF`, over both profiles. Its last write, the notification that
+    ends the agent, is not checked: over Streamable HTTP the clean end it causes cancels the connection's requests, so its
+    POST can fail with "context canceled" after the agent took it. That failed the test once on Windows and once in the
+    first pre-add check, before it was unchecked. The cancel is as it was before this phase, which only changed the error
+    the reader ends with.
+  * `TestHTTPClientStreamEnds`, which requires the connection stream's clean end to end the connection cleanly, passes
+    unchanged. (Step 5.4 said it "keeps its unclean end's error"; it tests the clean end.)
+* **Docs:** `README.md`'s `MaxMessageSize` bullets, the client's and the handler's; `docs/architecture.md`'s `readLoop`,
+  `readWebSocket` and `pump`, and `remote`'s test counts, 63.
+* **Not done, as Q14 (a) does not name it:** an event over `MaxMessageSize` on a Streamable HTTP client's stream still ends
+  the `Conn` (`sse.go`'s limit). The server's pump keeps its own events under its limit.
+
+**Seen to fail,** by `tools/plants.py`, 5/5: the four of step 5.6, and one more for the client's answer, which the step did
+not name:
+
+```text
+FAILED AS REQUIRED: the socket's read limit restored (^TestWebSocketOverlongFrameAnswered$): exit 1: ws_test.go:297: the server's answer to a frame over the limit = , failed to get reader: received close frame: status = StatusMessageTooBig and reason = "read limited at 129 bytes"; want -32600 with id null, "message exceeds 128 bytes"
+FAILED AS REQUIRED: the server's answer not written (^TestWebSocketOverlongFrameAnswered$): exit 1: ws_test.go:297: the server's answer to a frame over the limit = , failed to get reader: context deadline exceeded; want -32600 with id null, "message exceeds 128 bytes"
+FAILED AS REQUIRED: the pump's answer to the agent removed (^TestHTTPServerOverlongAnswer$): exit 1: httpserver_test.go:809: http: no message within 10s of the agent's over-long answer: the agent was not answered
+FAILED AS REQUIRED: the connection stream's clean end wrapped again (^TestHTTPClientCleanEndIsEOF$): exit 1: httpclient_test.go:548: http://127.0.0.1:59194: io.ReadAll after the agent's clean end = "", remote: the connection's stream ended: EOF; want nothing and nil, Read having returned io.EOF itself
+FAILED AS REQUIRED: the client's answer not written (^TestWebSocketOverlongFrameAnswered$): exit 1: ws_test.go:333: the client did not answer a frame over its limit
+```
+
+Phase 1's three plants, run again at the 300 ms keepalive (deviation 1), 3/3: "a client slow to read was disconnected", "a
+live client was disconnected while its agent was busy", "a client holding MaxBuffered and reading nothing was not ended".
+
+**Checks:**
+
+* `go test -race -count=3` of the phase's tests and of `./remote/` whole: `ok`; `TestHTTPClientCleanEndIsEOF` at `-count=20`:
+  `ok`.
+* `make api`: "against v1.32.0: 0 incompatible, 2 compatible", phases 1's and 4's; this phase adds nothing.
+* `make pre-add-check` with the phase's eight Go files, the README and `docs/architecture.md`:
+  * **First run:** exit 2. `unparam`: "(*answerer).answer - result 0 (bool) is never used", which `answer` no longer
+    returns; and `TestHTTPClientCleanEndIsEOF`'s "context canceled", as above.
+  * **Second run:** exit 2, `TestWebSocketSlowClientStaysConnected`, deviation 1.
+  * **Third run,** before deviation 1's change: exit 0.
+  * **Fourth run,** after it, at load 8 to 31: exit 0, "8 file(s) gofmt-clean; both modules linted, vetted and tested
+    (-race -shuffle=on, uncached), tidy, govulncheck."
+* `tools/remote.py tree --host linux`: both modules, exit 0.
+* `tools/remote.py pkg --host windows ./remote -test.run 'TestWebSocket(LargeMessage|OverlongFrameAnswered|
+  SlowClientStaysConnected|BusyAgentStaysConnected|ClientPastMaxBuffered)$|TestHTTPServerOverlongAnswer|
+  TestHTTPClientCleanEndIsEOF|TestHTTPClientStreamEnds' -test.count=5`: "PASS".
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 6 begins on the owner's word.

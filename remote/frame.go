@@ -7,11 +7,50 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
+
+	acp "github.com/maccavelli/acp-go-sdk2"
 )
 
 // errLineTooLong is what a lineSplitter's Write returns for a line longer
 // than its limit, which it drops.
 var errLineTooLong = errors.New("remote: message exceeds the size limit")
+
+// overlongAnswer is the line a side answers a message over limit bytes with,
+// as a connection answers an over-long line on stdio: -32600 with "id": null,
+// and the connection's own text (0049-PLAN-subpackage-fixes.md, phase 5, P6
+// and P9).
+func overlongAnswer(limit int) []byte {
+	b, err := json.Marshal(struct {
+		JSONRPC string            `json:"jsonrpc"`
+		ID      *int              `json:"id"`
+		Error   *acp.RequestError `json:"error"`
+	}{"2.0", nil, acp.NewInvalidRequest(map[string]any{"error": fmt.Sprintf("message exceeds %d bytes", limit)})})
+	if err != nil {
+		panic(err) // a fixed shape, which always encodes
+	}
+	return b
+}
+
+// answerer writes the answers to over-long messages on a goroutine of its
+// own, so the reader or the pump that found one never waits on the side it
+// answers. While one answer waits, a later one is not written, so at most one
+// goroutine is held; the answer's write ends at its own bound or at the
+// stream's end.
+type answerer struct {
+	busy atomic.Bool
+}
+
+// answer starts write unless an answer is still being written.
+func (a *answerer) answer(write func()) {
+	if !a.busy.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer a.busy.Store(false)
+		write()
+	}()
+}
 
 // lineSplitter is the writing half of the seam: the bytes a connection or a
 // serve writes are split at '\n', a line split across writes is joined, as

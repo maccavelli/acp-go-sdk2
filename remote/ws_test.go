@@ -165,7 +165,9 @@ func TestWebSocketCancel(t *testing.T) {
 
 // TestWebSocketLargeMessage requires a message past the library's default
 // read limit, 32768 bytes, and one at MaxMessageSize to arrive, and one byte
-// past MaxMessageSize to end the connection on the side that received it.
+// past MaxMessageSize to be dropped on the side that received it, the
+// messages after it arriving: the socket stays open
+// (0049-PLAN-subpackage-fixes.md, phase 5, P6, where it ended the connection).
 func TestWebSocketLargeMessage(t *testing.T) {
 	t.Parallel()
 	const limit = 128 * 1024
@@ -183,14 +185,20 @@ func TestWebSocketLargeMessage(t *testing.T) {
 		t.Fatalf("a 64 KiB prompt and a 64 KiB update: %v", err)
 	}
 
-	// The server side: a raw client sends a frame at the limit, then one past it.
+	// The server side: a raw client sends a frame at the limit, one past it,
+	// and one at it again.
 	ctx, cancel := context.WithTimeout(context.Background(), waitBound)
 	defer cancel()
-	lines := make(chan int, 4)
+	lines := make(chan string, 4)
 	h := NewHandler(func(_ context.Context, in io.Reader, _ io.Writer) error {
-		b, err := io.ReadAll(in)
-		lines <- bytes.Count(b, []byte("\n"))
-		return err
+		r := bufio.NewReader(in)
+		for {
+			l, err := r.ReadString('\n')
+			if err != nil {
+				return err
+			}
+			lines <- l
+		}
 	}, &HandlerOptions{MaxMessageSize: limit, Grace: 100 * time.Millisecond})
 	raw := testServer(t, h)
 	c, _, err := websocket.Dial(ctx, wsURL(raw), nil) //nolint:bodyclose // Dial owns the body.
@@ -199,26 +207,30 @@ func TestWebSocketLargeMessage(t *testing.T) {
 	}
 	defer c.CloseNow()
 	c.SetReadLimit(-1)
+	go func() { _, _, _ = c.Read(ctx) }() // takes the answer to the one past the limit
 	at := `"` + strings.Repeat("b", limit-2) + `"`
-	if err := c.Write(ctx, websocket.MessageText, []byte(at)); err != nil {
-		t.Fatal(err)
-	}
-	_ = c.Write(ctx, websocket.MessageText, []byte(at+" "))
-	select {
-	case n := <-lines:
-		if n != 1 {
-			t.Errorf("the serve read %d lines, want the 1 at the limit", n)
+	for _, frame := range []string{at, at + " ", at} {
+		if err := c.Write(ctx, websocket.MessageText, []byte(frame)); err != nil {
+			t.Fatal(err)
 		}
-	case <-time.After(waitBound):
-		t.Fatal("a frame past MaxMessageSize did not end the connection")
+	}
+	for i := range 2 {
+		select {
+		case l := <-lines:
+			if len(l) != limit+1 {
+				t.Errorf("the serve read a %d-byte line, want the %d of a frame at the limit", len(l), limit+1)
+			}
+		case <-time.After(waitBound):
+			t.Fatalf("the serve read %d of the 2 frames at the limit", i)
+		}
 	}
 
-	// The client side: the agent writes a line at the client's limit, then one
-	// past it.
+	// The client side: the agent writes a line at the client's limit, one past
+	// it, and one at it again.
 	const clientLimit = 512
 	atClient := `"` + strings.Repeat("c", clientLimit-2) + `"`
 	over := testServer(t, NewHandler(func(_ context.Context, _ io.Reader, out io.Writer) error {
-		_, err := io.WriteString(out, atClient+"\n"+atClient+" \n")
+		_, err := io.WriteString(out, atClient+"\n"+atClient+" \n"+atClient+"\n")
 		return err
 	}, nil))
 	cc, err := Dial(ctx, wsURL(over), &DialOptions{MaxMessageSize: clientLimit})
@@ -226,8 +238,99 @@ func TestWebSocketLargeMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cc.Close()
-	if b, err := io.ReadAll(cc); err == nil || string(b) != atClient+"\n" {
-		t.Errorf("reading a message at the client's limit, then one past it = %q, %v; want the first and an error", b, err)
+	if b, err := io.ReadAll(cc); err != nil || string(b) != atClient+"\n"+atClient+"\n" {
+		t.Errorf("reading a message at the client's limit, one past it, and one at it = %q, %v; want the two at it and a clean end", b, err)
+	}
+}
+
+// overlongAnswerOf reports whether b is the -32600 answer, with "id": null,
+// that a side gives a message over limit bytes.
+func overlongAnswerOf(b []byte, limit int) bool {
+	var m struct {
+		ID    json.RawMessage `json:"id"`
+		Error struct {
+			Code int `json:"code"`
+			Data struct {
+				Error string `json:"error"`
+			} `json:"data"`
+		} `json:"error"`
+	}
+	return json.Unmarshal(b, &m) == nil && string(m.ID) == "null" && m.Error.Code == -32600 &&
+		m.Error.Data.Error == fmt.Sprintf("message exceeds %d bytes", limit)
+}
+
+// TestWebSocketOverlongFrameAnswered requires a frame over MaxMessageSize to
+// be answered -32600 with "id": null on the side that sent it, as a
+// connection answers an over-long line on stdio, and reading to go on: the
+// server answers a client's on the socket, and the client Conn answers the
+// server's on the socket, which the server hands to its agent
+// (0049-PLAN-subpackage-fixes.md, phase 5, P6).
+func TestWebSocketOverlongFrameAnswered(t *testing.T) {
+	t.Parallel()
+	const limit = 128
+	ctx, cancel := context.WithTimeout(context.Background(), waitBound)
+	defer cancel()
+	at := `"` + strings.Repeat("a", limit-2) + `"`
+
+	lines := make(chan string, 4)
+	ts := testServer(t, NewHandler(func(_ context.Context, in io.Reader, _ io.Writer) error {
+		r := bufio.NewReader(in)
+		for {
+			l, err := r.ReadString('\n')
+			if err != nil {
+				return err
+			}
+			lines <- l
+		}
+	}, &HandlerOptions{MaxMessageSize: limit}))
+	c, _, err := websocket.Dial(ctx, wsURL(ts), nil) //nolint:bodyclose // Dial owns the body.
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	for _, frame := range []string{at, at + " ", at} {
+		if err := c.Write(ctx, websocket.MessageText, []byte(frame)); err != nil {
+			t.Fatalf("a write after a frame over the limit: %v", err)
+		}
+	}
+	if _, b, err := c.Read(ctx); err != nil || !overlongAnswerOf(b, limit) {
+		t.Errorf("the server's answer to a frame over the limit = %s, %v; want -32600 with id null, \"message exceeds %d bytes\"", b, err, limit)
+	}
+	for i := range 2 {
+		select {
+		case <-lines:
+		case <-time.After(waitBound):
+			t.Fatalf("the serve read %d of the 2 frames at the limit around the one over it", i)
+		}
+	}
+
+	inputs := make(chan string, 4)
+	agent := testServer(t, NewHandler(func(_ context.Context, in io.Reader, out io.Writer) error {
+		if _, err := io.WriteString(out, at+"\n"+at+" \n"+at+"\n"); err != nil {
+			return err
+		}
+		l, err := bufio.NewReader(in).ReadString('\n')
+		inputs <- l
+		return err
+	}, nil))
+	cc, err := Dial(ctx, wsURL(agent), &DialOptions{MaxMessageSize: limit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cc.Close()
+	r := bufio.NewReader(cc)
+	for i := range 2 {
+		if l, err := r.ReadString('\n'); err != nil || l != at+"\n" {
+			t.Fatalf("the client's line %d around the one over its limit = %q, %v; want the one at it", i, l, err)
+		}
+	}
+	select {
+	case l := <-inputs:
+		if !overlongAnswerOf([]byte(strings.TrimSpace(l)), limit) {
+			t.Errorf("the agent's input after its line over the client's limit = %q; want the client's -32600 answer", l)
+		}
+	case <-time.After(waitBound):
+		t.Fatal("the client did not answer a frame over its limit")
 	}
 }
 
@@ -401,10 +504,14 @@ func TestWebSocketKeepAlive(t *testing.T) {
 	}
 }
 
-// backPressureServer serves serve with a 100 ms keepalive and a 500 ms grace,
-// the bounds the probes of 0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
-// P1, ran under, and reports the serve's context's cause on the channel it
-// returns when the context ends.
+// backPressureServer serves serve with a 300 ms keepalive and a 500 ms grace,
+// and reports the serve's context's cause on the channel it returns when the
+// context ends. The probes of
+// 0049-MADR-remediate-the-2026-11-01-debugging-pass.md, P1, pinged every
+// 100 ms; a ping waits behind the frames before it, which a client reading
+// 2 000 under -race and a loaded host once took longer than that to reach, so
+// the tests ping every 300 ms, three times in their one-second pauses
+// (0049-PLAN-subpackage-fixes.md, phase 5, deviation 1).
 func backPressureServer(t *testing.T, serve func(in io.Reader, out io.Writer)) (string, <-chan error) {
 	t.Helper()
 	causes := make(chan error, 1)
@@ -416,7 +523,7 @@ func backPressureServer(t *testing.T, serve func(in io.Reader, out io.Writer)) (
 		serve(in, out)
 		<-ctx.Done()
 		return nil
-	}, &HandlerOptions{KeepAlive: 100 * time.Millisecond, Grace: 500 * time.Millisecond}))
+	}, &HandlerOptions{KeepAlive: 300 * time.Millisecond, Grace: 500 * time.Millisecond}))
 	return wsURL(ts), causes
 }
 

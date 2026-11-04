@@ -265,7 +265,13 @@ func (c *httpClient) readStream(session string, resp *http.Response) {
 			closing := c.closing
 			delete(c.streams, session)
 			c.smu.Unlock()
-			if session == "" && !closing {
+			switch {
+			case session != "" || closing:
+			case errors.Is(err, io.EOF):
+				// The agent's clean end: Read returns io.EOF itself, as io.Reader's
+				// callers test it with == (0049-PLAN-subpackage-fixes.md, phase 5, P8).
+				c.fail(nil)
+			default:
 				c.fail(fmt.Errorf("remote: the connection's stream ended: %w", err))
 			}
 			return

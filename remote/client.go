@@ -28,7 +28,10 @@ type DialOptions struct {
 	Header http.Header
 
 	// MaxMessageSize is the largest message, in bytes, the connection reads
-	// or writes. Zero or less is 10 MiB, the connection's own default.
+	// or writes. Zero or less is 10 MiB, the connection's own default. A
+	// longer WebSocket message from the server is dropped and answered -32600
+	// with "id": null, as a connection answers an over-long line on stdio, and
+	// the connection reads on (0049-PLAN-subpackage-fixes.md, phase 5, P6).
 	MaxMessageSize int
 
 	// MaxBuffered is how many bytes of messages the connection holds for
@@ -59,7 +62,9 @@ type transport interface {
 }
 
 // Read reads the messages from the agent, one line each. It returns io.EOF
-// after the agent's clean end, and the transport's error after any other.
+// itself after the agent's clean end, over either profile, and the
+// transport's error after any other end (0049-PLAN-subpackage-fixes.md,
+// phase 5, P8).
 func (c *Conn) Read(p []byte) (int, error) { return c.t.Read(p) }
 
 // Write sends each line written as one message. A line longer than

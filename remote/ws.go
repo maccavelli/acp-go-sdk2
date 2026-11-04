@@ -19,6 +19,8 @@ type wsClient struct {
 	ctx    context.Context // the connection's life: every read and write runs under it
 	cancel context.CancelFunc
 	in     *lineQueue
+	limit  int      // MaxMessageSize, which readLoop applies to each frame
+	answer answerer // the answers to the server's over-long frames
 
 	mu  sync.Mutex // serializes Write
 	out *lineSplitter
@@ -36,9 +38,9 @@ func dialWebSocket(ctx context.Context, rawURL string, o DialOptions) (*wsClient
 	if err != nil {
 		return nil, fmt.Errorf("remote: WebSocket handshake: %w", err)
 	}
-	c.SetReadLimit(int64(o.MaxMessageSize))
+	c.SetReadLimit(-1) // readFrame bounds each frame, and an over-long one is answered, not fatal
 	lctx, cancel := context.WithCancel(context.Background())
-	w := &wsClient{c: c, ctx: lctx, cancel: cancel, in: newLineQueue(o.MaxBuffered), readDone: make(chan struct{})}
+	w := &wsClient{c: c, ctx: lctx, cancel: cancel, in: newLineQueue(o.MaxBuffered), limit: o.MaxMessageSize, readDone: make(chan struct{})}
 	w.out = newLineSplitter(func(line []byte) error {
 		return w.c.Write(w.ctx, websocket.MessageText, line)
 	}, o.MaxMessageSize)
@@ -67,19 +69,50 @@ func http1Only(rt http.RoundTripper) http.RoundTripper {
 
 // readLoop pushes each text frame to in until the socket ends, and ends in
 // with the socket's end: io.EOF after a normal closure. A binary frame is
-// ignored, as the RFD says.
+// ignored, as the RFD says. A text frame over MaxMessageSize is drained,
+// dropped and answered -32600, and reading goes on, as a connection does on
+// stdio (0049-PLAN-subpackage-fixes.md, phase 5, P6).
 func (w *wsClient) readLoop() {
 	defer close(w.readDone)
 	for {
-		typ, b, err := w.c.Read(w.ctx)
+		typ, b, tooLong, err := readFrame(w.ctx, w.c, w.limit)
 		if err != nil {
 			w.in.end(socketEnd(err))
 			return
+		}
+		if tooLong {
+			if typ == websocket.MessageText {
+				w.answer.answer(func() {
+					_ = w.c.Write(w.ctx, websocket.MessageText, overlongAnswer(w.limit)) //nolint:errcheck // The socket's end is the reader's to report.
+				})
+			}
+			continue
 		}
 		if typ == websocket.MessageText && !w.in.push(toLine(b)) {
 			return
 		}
 	}
+}
+
+// readFrame reads c's next message, holding at most limit bytes of it. A
+// message over limit is read to its end and dropped, and tooLong is true; so
+// a message of any size costs at most limit bytes, and the socket stays open.
+func readFrame(ctx context.Context, c *websocket.Conn, limit int) (typ websocket.MessageType, b []byte, tooLong bool, err error) {
+	typ, r, err := c.Reader(ctx)
+	if err != nil {
+		return 0, nil, false, err
+	}
+	b, err = io.ReadAll(io.LimitReader(r, int64(limit)+1))
+	if err != nil {
+		return typ, nil, false, err
+	}
+	if len(b) <= limit {
+		return typ, b, false, nil
+	}
+	if _, err := io.Copy(io.Discard, r); err != nil {
+		return typ, nil, true, err
+	}
+	return typ, nil, true, nil
 }
 
 // socketEnd is the error a reader ends with when a socket's read failed with
@@ -136,14 +169,29 @@ func (sc *serverConn) runWebSocket(c *websocket.Conn) {
 
 // readWebSocket writes each text frame, made a line, to the agent's input,
 // until the socket ends, marking each write for keepAlive. A binary frame is
-// ignored and logged, once. Once the agent's input is closed, frames are read
-// and dropped, so the close handshake is still read.
+// ignored and logged, once. A text frame over MaxMessageSize is drained,
+// dropped, logged and answered -32600 on the socket, under Grace, and
+// reading goes on, as a connection does on stdio
+// (0049-PLAN-subpackage-fixes.md, phase 5, P6). Once the agent's input is
+// closed, frames are read and dropped, so the close handshake is still read.
 func (sc *serverConn) readWebSocket(ctx context.Context, c *websocket.Conn) {
 	warned := false
+	limit := sc.h.opts.MaxMessageSize
 	for {
-		typ, b, err := c.Read(ctx)
+		typ, b, tooLong, err := readFrame(ctx, c, limit)
 		if err != nil {
 			return
+		}
+		if tooLong {
+			if typ == websocket.MessageText {
+				sc.h.log.Warn("remote: a message from the client exceeds MaxMessageSize and was dropped", "limit", limit)
+				sc.toClient.answer(func() {
+					wctx, cancel := context.WithTimeout(ctx, sc.h.opts.Grace)
+					defer cancel()
+					_ = c.Write(wctx, websocket.MessageText, overlongAnswer(limit)) //nolint:errcheck // The socket's end is the reader's to report.
+				})
+			}
+			continue
 		}
 		if typ != websocket.MessageText {
 			if !warned {
@@ -214,9 +262,13 @@ func (sc *serverConn) keepAlive(ctx context.Context, c *websocket.Conn) {
 
 // pump copies the agent's output to s, and reports whether it ended at the
 // output's clean end. When s fails, it closes the output, so the agent's
-// writes fail rather than wait.
+// writes fail rather than wait. A line over MaxMessageSize is dropped,
+// logged, and answered -32600 on the agent's input, as the client's
+// connection would answer it on stdio, so the agent learns of it
+// (0049-PLAN-subpackage-fixes.md, phase 5, P9).
 func (sc *serverConn) pump(s *lineSplitter) bool {
 	buf := make([]byte, 32*1024)
+	limit := sc.h.opts.MaxMessageSize
 	for {
 		n, err := sc.outR.Read(buf)
 		if n > 0 {
@@ -225,7 +277,10 @@ func (sc *serverConn) pump(s *lineSplitter) bool {
 					_ = sc.outR.CloseWithError(werr)
 					return false
 				}
-				sc.h.log.Warn("remote: a message from the agent exceeds MaxMessageSize and was dropped", "limit", sc.h.opts.MaxMessageSize)
+				sc.h.log.Warn("remote: a message from the agent exceeds MaxMessageSize and was dropped", "limit", limit)
+				sc.toAgent.answer(func() {
+					_, _ = sc.inW.Write(append(overlongAnswer(limit), '\n')) //nolint:errcheck // A closed input ends the answer; the ending says why.
+				})
 			}
 		}
 		if err != nil {

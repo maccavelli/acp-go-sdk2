@@ -735,3 +735,79 @@ func blockedServer(t *testing.T, release <-chan struct{}, got chan<- string) str
 	h.inboxLimit = 2
 	return testServer(t, h).URL
 }
+
+// TestHTTPServerOverlongAnswer requires an agent's answer over MaxMessageSize,
+// which the server does not send, to be answered -32600 with "id": null on
+// the agent's input, as the client's connection answers it on stdio, and the
+// agent's next message to arrive, over both profiles
+// (0049-PLAN-subpackage-fixes.md, phase 5, P9; before, the answer was dropped
+// and nothing else said so).
+func TestHTTPServerOverlongAnswer(t *testing.T) {
+	t.Parallel()
+	const limit = 200
+	for _, scheme := range []string{"http", "ws"} {
+		ts := testServer(t, NewHandler(func(_ context.Context, in io.Reader, out io.Writer) error {
+			r := bufio.NewReader(in)
+			if _, err := r.ReadString('\n'); err != nil { // initialize
+				return err
+			}
+			if _, err := io.WriteString(out, `{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}`+"\n"); err != nil {
+				return err
+			}
+			if _, err := r.ReadString('\n'); err != nil { // request 2
+				return err
+			}
+			pad := strings.Repeat("x", 2*limit)
+			if _, err := io.WriteString(out, `{"jsonrpc":"2.0","id":2,"result":{"pad":"`+pad+`"}}`+"\n"); err != nil {
+				return err
+			}
+			l, err := r.ReadString('\n')
+			if err != nil {
+				return err
+			}
+			answered := overlongAnswerOf([]byte(strings.TrimSpace(l)), limit)
+			_, err = fmt.Fprintf(out, `{"jsonrpc":"2.0","method":"after","params":{"answered":%v}}`+"\n", answered)
+			if err != nil {
+				return err
+			}
+			_, _ = io.Copy(io.Discard, r)
+			return nil
+		}, &HandlerOptions{MaxMessageSize: limit}))
+		url := ts.URL
+		if scheme == "ws" {
+			url = wsURL(ts)
+		}
+		c, err := Dial(t.Context(), url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := bufio.NewReader(c)
+		if _, err := io.WriteString(c, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}`+"\n"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.ReadString('\n'); err != nil {
+			t.Fatalf("%s: initialize's answer: %v", scheme, err)
+		}
+		if _, err := io.WriteString(c, `{"jsonrpc":"2.0","id":2,"method":"_x/big","params":{}}`+"\n"); err != nil {
+			t.Fatal(err)
+		}
+		type line struct {
+			l   string
+			err error
+		}
+		next := make(chan line, 1)
+		go func() {
+			l, err := r.ReadString('\n')
+			next <- line{l, err}
+		}()
+		select {
+		case got := <-next:
+			if got.err != nil || !strings.Contains(got.l, `"method":"after"`) || !strings.Contains(got.l, `"answered":true`) {
+				t.Errorf("%s: the message after the agent's over-long answer = %q, %v; want after, answered true", scheme, got.l, got.err)
+			}
+		case <-time.After(waitBound):
+			t.Errorf("%s: no message within %v of the agent's over-long answer: the agent was not answered", scheme, waitBound)
+		}
+		_ = c.Close()
+	}
+}

@@ -1197,7 +1197,9 @@ A client calls `remote.Dial(ctx, url, opts)`.
     streams.
   - `Header` goes on every request, the handshake included. Authentication
     goes there.
-  - `MaxMessageSize` defaults to 10 MiB.
+  - `MaxMessageSize` defaults to 10 MiB. A longer WebSocket message from the
+    server is dropped and answered `-32600` with `"id": null`, as a connection
+    on stdio answers an over-long line, and the connection reads on.
   - `MaxBuffered`, 64 MiB by default and at least `MaxMessageSize`, bounds what
     the connection holds for an application that does not read. Below it, a
     WebSocket client goes on answering the server's pings; past it, it stops
@@ -1250,7 +1252,12 @@ the endpoint.
     event stream sent a comment, traffic or none. A ping not answered within
     it ends the connection, unless the agent was not reading meanwhile: a busy
     agent does not end a client that is answering.
-  - `MaxMessageSize` is 10 MiB.
+  - `MaxMessageSize` is 10 MiB. A longer WebSocket message from a client, or
+    line from the agent, is dropped and answered `-32600` with `"id": null`,
+    the agent's on its input, as on stdio, and the connection reads on; a
+    longer POST is answered `413`
+    ([0049-PLAN-subpackage-fixes.md](docs/decisions/0049-PLAN-subpackage-fixes.md),
+    phase 5).
   - `MaxBuffered`, 64 MiB, bounds what a Streamable HTTP connection holds for
     streams no client is receiving.
   - `OriginPatterns` allows browser origins besides the request's own host,

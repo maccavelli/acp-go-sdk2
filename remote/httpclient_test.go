@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -507,5 +508,45 @@ func TestHTTPClientProtocols(t *testing.T) {
 				t.Errorf("%s: a request over %s, want %s", tc.name, r.proto, tc.want)
 			}
 		}
+	}
+}
+
+// TestHTTPClientCleanEndIsEOF requires Read, after the agent's clean end, to
+// return io.EOF itself over both profiles, as io.Reader's callers test it
+// with ==, so io.ReadAll returns nil (0049-PLAN-subpackage-fixes.md, phase 5,
+// P8; over Streamable HTTP it wrapped io.EOF).
+func TestHTTPClientCleanEndIsEOF(t *testing.T) {
+	t.Parallel()
+	ts := testServer(t, NewHandler(func(_ context.Context, in io.Reader, out io.Writer) error {
+		r := bufio.NewReader(in)
+		if _, err := r.ReadString('\n'); err != nil {
+			return err
+		}
+		if _, err := io.WriteString(out, `{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}`+"\n"); err != nil {
+			return err
+		}
+		_, err := r.ReadString('\n') // the client's notification; then the clean end
+		return err
+	}, &HandlerOptions{Logger: slog.New(slog.DiscardHandler)}))
+	for _, url := range []string{wsURL(ts), ts.URL} {
+		c, err := Dial(t.Context(), url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := bufio.NewReader(c)
+		if _, err := io.WriteString(c, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}`+"\n"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.ReadString('\n'); err != nil {
+			t.Fatalf("%s: initialize's answer: %v", url, err)
+		}
+		// Over Streamable HTTP this POST races the end it causes: the clean end
+		// cancels the connection's requests, so Write may fail after the agent
+		// has taken the notification. Its result is not the test's.
+		_, _ = io.WriteString(c, `{"jsonrpc":"2.0","method":"done","params":{}}`+"\n")
+		if rest, err := io.ReadAll(r); err != nil || len(rest) != 0 {
+			t.Errorf("%s: io.ReadAll after the agent's clean end = %q, %v; want nothing and nil, Read having returned io.EOF itself", url, rest, err)
+		}
+		_ = c.Close()
 	}
 }

@@ -46,7 +46,12 @@ type HandlerOptions struct {
 	KeepAlive time.Duration
 
 	// MaxMessageSize is the largest message, in bytes, a connection reads or
-	// writes. Zero or less is 10 MiB, the connection's own default.
+	// writes. Zero or less is 10 MiB, the connection's own default. A longer
+	// WebSocket message from a client is dropped and answered -32600 with
+	// "id": null, a longer POST is answered 413, and a longer line from the
+	// agent is dropped and answered -32600 on the agent's input, as a
+	// connection answers an over-long line on stdio; the connection reads on
+	// (0049-PLAN-subpackage-fixes.md, phase 5, P6 and P9).
 	MaxMessageSize int
 
 	// MaxBuffered is how many bytes of messages a Streamable HTTP connection
@@ -237,7 +242,7 @@ func (h *Handler) serveWebSocket(w http.ResponseWriter, r *http.Request) {
 		h.log.Info("remote: WebSocket upgrade refused")
 		return
 	}
-	c.SetReadLimit(int64(h.opts.MaxMessageSize))
+	c.SetReadLimit(-1) // readFrame bounds each frame, and an over-long one is answered, not fatal
 	sc, ok := h.start()
 	if !ok {
 		_ = c.Close(websocket.StatusGoingAway, "the handler is closed") //nolint:errcheck // The client is turned away; nothing is left to report.
@@ -337,6 +342,11 @@ type serverConn struct {
 	// phase 1, P1).
 	waiting atomic.Int32
 	waited  atomic.Bool
+
+	// toClient and toAgent write the answers to over-long messages: a
+	// client's frame, on the socket, and the agent's line, on its input
+	// (0049-PLAN-subpackage-fixes.md, phase 5, P6 and P9).
+	toClient, toAgent answerer
 
 	endOnce sync.Once
 	ending  chan struct{} // closed when the ending starts

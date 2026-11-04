@@ -1093,6 +1093,9 @@ profile:
 - `ws.go`'s `wsClient`: a handshake through an HTTP/1.1-only copy of the
   caller's transport (`http1Only`), and one reader under the connection's
   context (`readLoop`), since a read whose context ends closes the socket.
+  `readFrame` reads each message through `Reader` into at most
+  `MaxMessageSize` bytes, the library's own limit disabled, and drains a
+  longer one, which `readLoop` answers `-32600` through an `answerer`.
 - `httpclient.go`'s `httpClient`:
   - `post` sends each line in order, waiting for its `202`, with
     `Acp-Session-Id` from `sessionOf`. A `404` with the header is retried once
@@ -1129,8 +1132,13 @@ Each profile drives a `serverConn`:
 - `ws.go`'s `runWebSocket`:
   - `readWebSocket` pushes text frames into the input, and drops binary frames,
     logging the first. It marks each write to the input in `serverConn`'s
-    `waiting` and `waited`.
+    `waiting` and `waited`. A frame `readFrame` finds over `MaxMessageSize` is
+    answered `-32600` on the socket, under `Grace`, by `toClient`.
   - `pumpWebSocket` writes each output line as a text frame under `Grace`.
+    `pump`, for both profiles, answers a line over `MaxMessageSize` `-32600`
+    on the agent's input, by `toAgent`. An `answerer` writes on a goroutine of
+    its own, one answer at a time, so neither the reader nor the pump waits on
+    the side it answers (0049-PLAN-subpackage-fixes.md, phase 5).
   - `keepAlive` pings every `KeepAlive`. A failed ping ends the connection
     unless the reader waited on the agent meanwhile, when the library had no
     `Read` to take the pong in; the socket stays open after a failed ping.
@@ -1158,7 +1166,7 @@ Each profile drives a `serverConn`:
 
 Checks that guard it:
 
-- `remote`'s 60 tests run on loopback through `httptest`. Each event a test
+- `remote`'s 63 tests run on loopback through `httptest`. Each event a test
   requires is waited for under a named bound. Its fixed waits are deliberate:
   - a delay the fake server injects;
   - the second a client or an agent does not read, to apply back-pressure;
@@ -1167,11 +1175,13 @@ Checks that guard it:
 
   The tests, by file:
   - `frame_test.go`'s three and `route_test.go`'s four;
-  - `ws_test.go`'s fifteen, the three of back-pressure among them, and
+  - `ws_test.go`'s sixteen, the three of back-pressure and
+    `TestWebSocketOverlongFrameAnswered` among them, and
     `handler_test.go`'s eight, the Host rule's two among them;
-  - `httpclient_test.go`'s fifteen, against `fakeserver_test.go`'s fake in the
-    modes of the three official servers;
-  - `httpserver_test.go`'s fifteen, its round trip over HTTP/1.1, HTTP/2 over
+  - `httpclient_test.go`'s sixteen, against `fakeserver_test.go`'s fake in the
+    modes of the three official servers, and `TestHTTPClientCleanEndIsEOF`;
+  - `httpserver_test.go`'s sixteen, `TestHTTPServerOverlongAnswer` among them,
+    its round trip over HTTP/1.1, HTTP/2 over
     TLS and unencrypted HTTP/2.
 - Its `TestMain` runs the goroutine-leak guard.
 - `TestReadmeRemoteIsTheExample` at the root requires the README's example to
