@@ -67,6 +67,7 @@ func TestRemediationErrors(t *testing.T) {
 		{&ProtocolVersionError{Requested: 1, Answered: 2}, "acp: agent answered protocol version 2 to a request for 1"},
 		{ErrPromptCancelled, "acp: prompt turn cancelled"},
 		{ErrNotInitialized, "acp: initialize has not completed"},
+		{ErrUnadvertisedAuthMethod, "acp: methodId names no auth method the agent advertised"},
 	} {
 		if got := tt.err.Error(); got != tt.want {
 			t.Errorf("%#v: Error() = %q, want %q", tt.err, got, tt.want)

@@ -215,14 +215,21 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   filled and another refused;
 - the name `SessionUpdate` for the client's `session/update` handler;
 - the unions whose constructors `helpers.go` writes;
-- the capability that gates each of 15 methods, resolved to its Go fields
+- the capability that gates each of 28 methods, the 13 unstable
+  `providers/*`, `nes/*` and `document/*` among them, resolved to its Go fields
   (`CapabilitySteps`);
-- `CapabilityRules`, the 19 properties and variants a capability gates,
-  each with the specification sentence it follows: among them the rule that an
-  `authenticate` must not name a terminal auth method, and the rule that an
-  elicitation's catch-all variant, a mode the schema does not list, is set
-  only under a capability no client can advertise, so it is always refused,
-  naming `elicitation.` and the mode (`GateUndeclaredVariant`). `model/gates.go`
+- `CapabilityRules`, the 30 properties and variants a capability gates,
+  each with the specification sentence it follows. The kinds are
+  `GateNonEmpty`, an array; `GateVariant`, a variant of a union or of the
+  union a property holds; `GateNotTerminalAuthMethod`, that an `authenticate`
+  must not name a terminal auth method; `GateAdvertisedAuthMethod`, that it
+  must name one the agent advertised, a known variant's id or the `"id"` of an
+  entry kept in `Unknown`; and `GateUndeclaredVariant`, that a union's catch-all,
+  a value the schema does not list, is set only under a capability no peer can
+  advertise, so it is always refused, naming the rule's capability, `.` and
+  the value. The catch-all is a variant, as an elicitation's mode, or the raw
+  `Unknown` of a union without one, as a prompt's content block, whose value
+  the generated `unknownKind` reads. `model/gates.go`
   resolves each on its definition and on each copy of it the merge made from
   the unstable schema under another name, and gives a `gates` method to every type
   that holds one, directly or through fields, members or variants; with no
@@ -299,7 +306,9 @@ other than the catch-all, and a property that would take the field `Extra`.
 
 Generated decoders read a key as `encoding/json` reads a struct field's name:
 under Unicode case folding, the last matching key winning (`foldKeys` in
-`types_gen.go`), and the model refuses a schema in which two keys one decoder
+`types_gen.go`; `unknownKind` reads one key of a raw `Unknown` the same way,
+for the gates and for `helpers.go`'s `Kind()` methods), and the model refuses a
+schema in which two keys one decoder
 reads differ only in case. An object with properties of its own and an `anyOf`
 or `oneOf` of references is a struct with one pointer field per member, whose
 keys share its JSON object: decoding takes the first member whose required
@@ -691,6 +700,8 @@ Checks that guard this:
   record on arrival, the hooks on the reader, and the hold, with the queue and
   the slots it keeps, and `gates_test.go`
   every method and value gate both ways, the undeclared elicitation mode,
+  `gates_surface_test.go` the boolean set request, the advertised auth method,
+  the undeclared prompt block and the unstable capabilities,
   extension messages through the hooks and the gate, the hook's order, the
   raw paths, and `initialize`'s own check; the engine cases
   `accept-prompt-cancellation`, `accept-permission-cancellation`,

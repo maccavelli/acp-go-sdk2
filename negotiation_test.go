@@ -38,13 +38,21 @@ func negotiate(t *testing.T, side any, n *Negotiation) {
 }
 
 // allAdvertised returns a record in which each side advertises every
-// capability the protocol table and its gates name.
+// capability the protocol table and its gates name, the unstable ones
+// included, and the agent one auth method, whose id is the string the
+// conformance builder fills (0049-PLAN-surface-fixes.md, phase 4, S8).
 func allAdvertised() *Negotiation {
 	return &Negotiation{
 		Request: InitializeRequest{ProtocolVersion: ProtocolVersionNumber, ClientCapabilities: ClientCapabilities{
 			Auth:        AuthCapabilities{Terminal: true},
 			Elicitation: &ElicitationCapabilities{Form: &ElicitationFormCapabilities{}, Url: &ElicitationUrlCapabilities{}},
 			Fs:          FileSystemCapabilities{ReadTextFile: true, WriteTextFile: true},
+			Nes: &ClientNesCapabilities{
+				Jump:             &NesJumpCapabilities{},
+				Rename:           &NesRenameCapabilities{},
+				SearchAndReplace: &NesSearchAndReplaceCapabilities{},
+			},
+			Plan: &PlanCapabilities{},
 			Session: &ClientSessionCapabilities{
 				Compaction:    &CompactionCapabilities{},
 				ConfigOptions: &SessionConfigOptionsCapabilities{Boolean: &BooleanConfigOptionCapabilities{}},
@@ -53,11 +61,19 @@ func allAdvertised() *Negotiation {
 			Subagents: &SubagentCapabilities{},
 			Terminal:  true,
 		}},
-		Response: InitializeResponse{ProtocolVersion: ProtocolVersionNumber, AgentCapabilities: AgentCapabilities{
-			Auth:               AgentAuthCapabilities{Logout: &LogoutCapabilities{}},
-			LoadSession:        true,
-			McpCapabilities:    McpCapabilities{Acp: true, Http: true, Sse: true},
+		Response: InitializeResponse{ProtocolVersion: ProtocolVersionNumber, AuthMethods: []AuthMethod{NewAuthMethodAgent("s", "S")}, AgentCapabilities: AgentCapabilities{
+			Auth:            AgentAuthCapabilities{Logout: &LogoutCapabilities{}},
+			LoadSession:     true,
+			McpCapabilities: McpCapabilities{Acp: true, Http: true, Sse: true},
+			Nes: &NesCapabilities{Events: &NesEventCapabilities{Document: &NesDocumentEventCapabilities{
+				DidChange: &NesDocumentDidChangeCapabilities{SyncKind: TextDocumentSyncKindFull},
+				DidClose:  &NesDocumentDidCloseCapabilities{},
+				DidFocus:  &NesDocumentDidFocusCapabilities{},
+				DidOpen:   &NesDocumentDidOpenCapabilities{},
+				DidSave:   &NesDocumentDidSaveCapabilities{},
+			}}},
 			PromptCapabilities: PromptCapabilities{Audio: true, EmbeddedContext: true, Image: true},
+			Providers:          &ProvidersCapabilities{},
 			SessionCapabilities: SessionCapabilities{
 				AdditionalDirectories: &SessionAdditionalDirectoriesCapabilities{},
 				Close:                 &SessionCloseCapabilities{},

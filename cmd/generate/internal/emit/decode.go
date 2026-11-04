@@ -22,6 +22,10 @@ const (
 	helperLastKey      = "lastKey"
 	helperPatchOf      = "patchOf"
 	helperPatchItems   = "patchItems"
+	// helperUnknownKind reads a raw Unknown's key, for the gates and for
+	// helpers.go's Kind methods (0049-PLAN-surface-fixes.md, phase 4,
+	// deviation 4).
+	helperUnknownKind = "unknownKind"
 	// The helpers of a key-order rule
 	// (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
 	helperKeyOrder      = "keyOrder"
@@ -54,6 +58,10 @@ func emitDecodeHelpers(f *goFile) {
 	}
 	if f.uses[helperRequireKeys] {
 		emitRequireKeys(f)
+		f.uses[helperFoldKeys] = true
+	}
+	if f.uses[helperUnknownKind] {
+		emitUnknownKind(f)
 		f.uses[helperFoldKeys] = true
 	}
 	if f.uses[helperFoldKeys] {
@@ -466,6 +474,36 @@ func emitRequireKeys(f *goFile) {
 				ret(call(f.qual(pkgFmt, "Errorf"), str("%s: missing required property %q"), id("typ"), id("k"))))),
 		ret(nilExpr()),
 	))
+}
+
+// emitUnknownKind emits
+//
+//	func unknownKind(b json.RawMessage, key string) string
+//
+// which reads key of the JSON object b as a union's UnmarshalJSON reads it,
+// folding keys, the last match winning, and returns "unknown" when that is
+// not a non-empty string. Hand-written helpers.go calls it too
+// (0049-PLAN-surface-fixes.md, phase 4, deviation 4).
+func emitUnknownKind(f *goFile) {
+	unknown := func() ast.Expr { return str("unknown") }
+	unmarshal := func(src ast.Expr, dst string) ast.Stmt {
+		return define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), src, addr(id(dst))))
+	}
+	fn := function(helperUnknownKind,
+		funcType([]*ast.Field{param("b", f.qual(pkgJSON, "RawMessage")), param("key", id("string"))}, param("", id("string"))),
+		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
+		ifStmt(unmarshal(id("b"), "m"), errNotNil(), ret(unknown())),
+		exprStmt(call(id(helperFoldKeys), id("b"), id("m"), id("key"))),
+		varStmt("kind", id("string")),
+		ifStmt(unmarshal(index(id("m"), id("key")), "kind"),
+			binary(errNotNil(), token.LOR, binary(id("kind"), token.EQL, str(""))), ret(unknown())),
+		ret(id("kind")),
+	)
+	f.line()
+	f.comment("unknownKind reads key of the JSON object b as a union's UnmarshalJSON reads",
+		"it, folding keys, the last match winning, and returns \"unknown\" when that is",
+		"not a non-empty string.")
+	f.add(fn)
 }
 
 // emitFoldKeys emits

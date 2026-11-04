@@ -360,13 +360,15 @@ func (c *ClientSideConnection) handle(ctx context.Context, method string, params
 // until initialize completes; a *CapabilityError when what initialize agreed
 // does not allow the method or a property or variant of params; an error
 // wrapping ErrTerminalAuthMethod when params name a terminal auth method of
-// the agent's initialize answer; and a *ValidationError when params break the
-// schema. It returns a *RequestError wrapping context.Cause(ctx) when ctx
-// ends, ErrPeerDisconnected or ErrConnectionClosed when the connection ends,
-// or the write's error when writing fails; and the peer's error answer as a
-// *RequestError. A response that breaks the schema or what initialize agreed
-// returns an error wrapping *ValidationError or *CapabilityError, and one that
-// does not decode a *RequestError.
+// the agent's initialize answer; an error wrapping ErrUnadvertisedAuthMethod
+// when params name no auth method of the agent's initialize answer; and a
+// *ValidationError when params break the schema. It returns a *RequestError
+// wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or
+// ErrConnectionClosed when the connection ends, or the write's error when
+// writing fails; and the peer's error answer as a *RequestError. A response
+// that breaks the schema or what initialize agreed returns an error wrapping
+// *ValidationError or *CapabilityError, and one that does not decode a
+// *RequestError.
 func (c *ClientSideConnection) Authenticate(ctx context.Context, params AuthenticateRequest) (AuthenticateResponse, error) {
 	if err := c.gate(AgentMethodAuthenticate, &params); err != nil {
 		return AuthenticateResponse{}, err

@@ -143,12 +143,20 @@ const (
 	// name a method of the initialize response whose variant is Variant. No
 	// capability lifts it, and the rule names none.
 	GateNotTerminalAuthMethod
-	// GateUndeclaredVariant requires Definition's catch-all variant, which
+	// GateUndeclaredVariant requires the catch-all variant of a union, which
 	// holds a discriminator value the schema reserves for custom or future
-	// variants, to be unset: no capability advertises such a value. Capability
-	// is the prefix the refusal names, followed by "." and that value
+	// variants, to be unset: no capability advertises such a value. The union
+	// is Definition's own, when Property is empty, or Property's, a union or
+	// an array of one; its catch-all is a variant or the raw Unknown
+	// (0049-PLAN-surface-fixes.md, phase 4, S9). Capability is the prefix
+	// the refusal names, followed by "." and that value
 	// (0019-PLAN-api-decisions.md, B20).
 	GateUndeclaredVariant
+	// GateAdvertisedAuthMethod requires Property, an auth method id, to name
+	// a method of the initialize response: a variant's id, or the id of an
+	// entry the response holds raw. No capability lifts it, and the rule names
+	// none (0049-PLAN-surface-fixes.md, phase 4, S8).
+	GateAdvertisedAuthMethod
 )
 
 // CapabilityRule gates a property or variant of a definition, as the merged
@@ -498,7 +506,9 @@ func checkCapabilityRules(rules []CapabilityRule) error {
 		case GateNotTerminalAuthMethod:
 			missing = rule.Property == "" || rule.Variant == "" || rule.Capability != ""
 		case GateUndeclaredVariant:
-			missing = rule.Property != "" || rule.Variant != "" || rule.Capability == ""
+			missing = rule.Variant != "" || rule.Capability == ""
+		case GateAdvertisedAuthMethod:
+			missing = rule.Property == "" || rule.Variant != "" || rule.Capability != ""
 		default:
 			return fmt.Errorf("%s: no gate kind", rule.name())
 		}
@@ -884,11 +894,24 @@ func (m *Model) checkCapabilities(r *rules) error {
 	return nil
 }
 
-// capabilitySteps resolves a dotted capability path from side's capabilities
-// type, through the named types of its fields, to its Go fields: each
-// marked when it is a pointer, the last a bool or a pointer. With the
-// initialize rule, the record's capabilities field must be that type.
+// capabilitySteps resolves a dotted capability path, as capabilityPath does,
+// whose last Go field is a bool or a pointer.
 func (m *Model) capabilitySteps(side, capability string) ([]CapabilityStep, error) {
+	steps, last, err := m.capabilityPath(side, capability)
+	if err != nil {
+		return nil, err
+	}
+	if !steps[len(steps)-1].Pointer && (last.Kind != RefNamed || last.Name != goBool) {
+		return nil, fmt.Errorf("capability %q is neither a boolean nor optional", capability)
+	}
+	return steps, nil
+}
+
+// capabilityPath resolves a dotted capability path from side's capabilities
+// type, through the named types of its fields, to its Go fields, each
+// marked when it is a pointer, and the type the last one holds. With the
+// initialize rule, the record's capabilities field must be that type.
+func (m *Model) capabilityPath(side, capability string) ([]CapabilityStep, TypeRef, error) {
 	typeName := map[string]string{sideAgent: "AgentCapabilities", sideClient: "ClientCapabilities"}[side]
 	if in := m.Initialize; in != nil {
 		holder, field := in.Resp, in.RespCapsField
@@ -896,31 +919,26 @@ func (m *Model) capabilitySteps(side, capability string) ([]CapabilityStep, erro
 			holder, field = in.Req, in.ReqCapsField
 		}
 		if got := m.fieldType(holder, field); got != typeName {
-			return nil, fmt.Errorf("capability %q: %s.%s is %s, not %s", capability, holder, field, got, typeName)
+			return nil, TypeRef{}, fmt.Errorf("capability %q: %s.%s is %s, not %s", capability, holder, field, got, typeName)
 		}
 	}
-	segs := strings.Split(capability, ".")
 	var steps []CapabilityStep
-	for i, seg := range segs {
+	var ref TypeRef
+	for seg := range strings.SplitSeq(capability, ".") {
+		if len(steps) > 0 {
+			typeName = ref.Name
+		}
 		f := m.objectField(typeName, seg)
 		if f == nil {
-			return nil, fmt.Errorf("capability %q: %s has no property %q", capability, typeName, seg)
+			return nil, TypeRef{}, fmt.Errorf("capability %q: %s has no property %q", capability, typeName, seg)
 		}
-		ref := f.Type
-		step := CapabilityStep{Field: f.Name, Pointer: ref.Kind == RefPointer}
+		ref = f.Type
+		steps = append(steps, CapabilityStep{Field: f.Name, Pointer: ref.Kind == RefPointer})
 		for ref.Kind == RefPointer {
 			ref = *ref.Elem
 		}
-		steps = append(steps, step)
-		if i == len(segs)-1 {
-			if !step.Pointer && (ref.Kind != RefNamed || ref.Name != goBool) {
-				return nil, fmt.Errorf("capability %q is neither a boolean nor optional", capability)
-			}
-			break
-		}
-		typeName = ref.Name
 	}
-	return steps, nil
+	return steps, ref, nil
 }
 
 // applyDocNotes adds each doc note's lines to its type's doc comment, and to

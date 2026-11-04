@@ -40,6 +40,8 @@ In scope:
     `:3115`);
   * `errors.go`, one new sentinel beside `ErrTerminalAuthMethod` (`:178`);
   * `helpers.go:909-921`, `WithUpdateContent` and `WithUpdateLocations`;
+  * `helpers.go:348-362`, `unknownKind`, which the generator emits from phase 4 on (deviation 4), with
+    `internal/emit/decode.go`;
   * `tooltimeline.go:172-179` and `compaction.go:134-139`, the copies, with one new unexported helper file.
 * **Tests:** one test per finding, under the names each step gives, in the root package and the generator's packages.
 * **Docs:**
@@ -221,7 +223,7 @@ emitter's plant runs in a scratch copy by script, since `plants.py` runs from th
    `-32602`.
 2. **S8:** a gate kind, `GateAdvertisedAuthMethod`, in `internal/model/protocol.go` and `gates.go`, for `AuthenticateRequest.methodId`:
    * The id must name a method of the initialize response's `authMethods`: a known variant's id, or the `"id"` of an entry kept
-     in `Unknown`, read with `unknownKind` (`helpers.go:351`).
+     in `Unknown`, read with `unknownKind` ~~(`helpers.go:351`)~~, generated beside `foldKeys` (deviation 4, 2026-11-03).
    * The terminal rule runs first and keeps `ErrTerminalAuthMethod`.
    * Otherwise the error is `fmt.Errorf("%s: methodId %q: %w", method, id, ErrUnadvertisedAuthMethod)`.
    * `errors.go` adds `ErrUnadvertisedAuthMethod = errors.New("acp: methodId names no auth method the agent advertised")`, and
@@ -233,7 +235,7 @@ emitter's plant runs in a scratch copy by script, since `plants.py` runs from th
      * an unknown-type entry's id passes.
 3. **S9:** `GateUndeclaredVariant` extended to a property's union whose unknown payload is the raw `Unknown`:
    * The union is resolved through `Property`, as `GateVariant` does, and `catchAll` (`gates.go:206-219`) accepts `Unknown`,
-     reading the discriminator with `unknownKind`.
+     reading the discriminator with `unknownKind`, generated (deviation 4).
    * The rule is `{Side: sideAgent, Definition: defPrompt, Property: keyPrompt, Capability: "promptCapabilities", Kind:
      GateUndeclaredVariant}`, sourced from `PromptCapabilities`: "Other variants must be explicitly opted in to."
    * Its error is `*CapabilityError{Capability: "promptCapabilities.<type>", Field: "prompt[i]", Variant: "<type>"}`.
@@ -650,3 +652,179 @@ FAILED AS REQUIRED: ScriptAgent default removed (^TestScriptAgentDefaultStopReas
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 4 begins on the owner's word.
+
+The owner committed phase 3 as `cedb98d`.
+
+### Phase 4: the gates, S8, S9, S5 and S3, 2026-11-03
+
+Begun on the owner's "committed, proceed" after `cedb98d`.
+
+**Deviation 4, 2026-11-03: `unknownKind` is generated.**
+
+* **Found,** reading the generator before the gates' code was written. Steps 4.2 and 4.3 had the generated gates read a raw
+  `Unknown` entry with `unknownKind`, at `helpers.go:351`. Generated code cannot call it:
+  * the engine cases build under `model.ACP` with the runtime files of `internal/enginetest/api.go:28`, which leave out
+    `helpers.go`, since it uses ACP types (`engine_test.go:218`);
+  * `accept-capability-gates.txtar:57` holds a `PromptRequest` whose `ContentBlock` has a raw `Unknown`, so S9's rule would
+    emit the call there, and the case would not build: `undefined: unknownKind`.
+
+  It was derived from those lines, before any gate code existed, and not run.
+* **Decided.** The owner was asked, with two options, and chose the recommended one:
+  * the emitter writes `unknownKind` beside `foldKeys`, in a file that uses it, as `emitDecodeHelpers` does for the other
+    helpers;
+  * `helpers.go:348-362` loses its copy. The body and the `"unknown"` result are the same, and the eight `Kind` methods that
+    call it do not change. `helpers.go` already calls the generated `foldKeys`.
+
+  Not chosen: the read inlined in each gate, which would copy `unknownKind`'s logic into the generated code for each rule.
+  No third route left the tree correct: `unknownKind` in a runtime file fails where no `foldKeys` is emitted, and gates that
+  do not read the raw entry break step 4.2's unknown-type entry and step 4.3's error.
+* **Scope added:** `helpers.go:348-362` and `internal/emit/decode.go`, in the Scope above. No exported identifier.
+
+**What it did,** under deviation 4:
+
+* **The table** (`internal/model/acp.go`), each rule with its schema sentence:
+  * **S5:** `SetSessionConfigOptionRequest`'s `boolean` variant needs `session.configOptions.boolean`, quoting "the client may
+    send `session/set_config_option` requests with `type: \"boolean\"`" (`srcBooleanSet`).
+  * **S8:** `AuthenticateRequest.methodId`, `GateAdvertisedAuthMethod`, after the terminal rule, quoting "Must be one of the
+    methods advertised in the initialize response." (`srcAdvertisedAuth`).
+  * **S9:** `PromptRequest.prompt`, `GateUndeclaredVariant` with the prefix `promptCapabilities`, quoting "Other variants must
+    be explicitly opted in to." (`srcPromptOptIn`).
+  * **S3:** 13 method rules, `providers/*` on `providers`, `nes/*` on `nes`, and `document/<event>` on
+    `nes.events.document.<event>`, their quotes in the comment above them, since a method rule has no `Source`; and five
+    variant rules, `plan_update` and `plan_removed` on the client's `plan` (`srcPlan`), and `SuggestNesResponse.suggestions`'
+    `jump`, `rename` and `searchAndReplace` on `nes.jump`, `nes.rename` and `nes.searchAndReplace` (`srcNesJump`,
+    `srcNesRename`, `srcNesSearchAndReplace`, one sentence each). The rules name `SuggestNesResponse`, which reaches the
+    merged `UnstableSuggestNesResponse` by `ruleTypes`.
+* **The model** (`internal/model/`):
+  * `GateAdvertisedAuthMethod` (`protocol.go`) takes a property and no variant or capability. `advertisedAuth` (`gates.go`)
+    finds the initialize response's array of a union every variant of which holds an id of the property's type, and gives
+    `GateCheckAdvertisedAuth` each variant's id field (`Advertised`, `[]VariantField`), the union (`Elem`), the id's type
+    (`IDType`) and, for a union with `Unknown`, the variants' one JSON key for the id (`RawKey`). `idField` is shared with
+    `terminalAuth`.
+  * `GateUndeclaredVariant` takes a property now. `ruleUnion`, shared with `GateVariant`, resolves the union a property
+    holds, and `catchAll` takes a discriminated union's raw `Unknown` (`Variant` `"Unknown"`, `RawKey` the discriminator's
+    key) besides a catch-all variant.
+  * Its capability is the prefix a refusal names, so it need only exist: `capabilitySteps` is split, and
+    `capabilityPath` resolves a path without requiring its last field to be a boolean or optional. `promptCapabilities` is
+    a required object. Before, an undeclared rule's capability had to be one, which held for `elicitation` only by chance.
+* **The emitter** (`internal/emit/`):
+  * `eachUnion` runs a check over the union a gate reads, the receiver or a field by value, pointer or array; the variant
+    gate and `undeclaredGate` use it, and the variant gates' output is unchanged.
+  * `undeclaredGate` reads a raw `Unknown`'s value with `kind := unknownKind(x.Unknown, key)`.
+  * `advertisedGate` emits `slices.ContainsFunc` over the list, one `||` term per variant and one for `Unknown`, converting
+    `unknownKind`'s string to the id's type, and returns `fmt.Errorf("%s: methodId %q: %w", …, ErrUnadvertisedAuthMethod)`.
+  * Deviation 4: `emitUnknownKind` (`decode.go`) emits `unknownKind` with the other decoding helpers, when a file uses it,
+    marking `foldKeys`. `markGateHelpers` marks it before `emitDecodeHelpers` runs, since `typesFile` emits the gates after
+    the helpers; the file's order does not change.
+  * `authGates` and `authGateTypes` (`dispatch.go`) replace `terminalAuthTypes`' bool, so `Authenticate`'s doc names
+    `ErrUnadvertisedAuthMethod` too.
+* **Hand-written:**
+  * `errors.go`: `ErrUnadvertisedAuthMethod`, "acp: methodId names no auth method the agent advertised", its godoc quoting
+    the schema.
+  * `helpers.go`: `unknownKind` removed (deviation 4), and `sessionUpdateUnknownKind`, which only it used.
+* **Regenerated:** `types_gen.go`, 140 lines added and none removed: `unknownKind`; the 13 methods in `Allows`; the gates of
+  `AuthenticateRequest`, `PromptRequest`, `SessionUpdate`, `SetSessionConfigOptionRequest` (new) and
+  `UnstableSuggestNesResponse` (new). `client_gen.go`: `Authenticate`'s doc. `tools/gates.py regen` is clean.
+* **Tests changed where they tested something else,** each named here:
+  * `negotiation_test.go`'s `allAdvertised` advertises the unstable capabilities, and an agent auth method whose id is
+    `"s"`, the string the conformance builder fills. `TestConformanceReplies`, `TestConformanceMethods` and
+    `TestConformanceNotificationErrors` had failed for the 13 methods and `authenticate`, each refused as the gates now
+    require.
+  * `gates_test.go`: `TestMethodGates`' and `TestValueGates`' bodies became `checkMethodGate` and `checkValueGate`, unchanged,
+    for the new tests; `TestAllows` takes the unstable methods too.
+  * The model: `TestCapabilityRulesRefuse`'s "undeclared variant of a union without a catch-all" is accepted now and became
+    two cases, a type and a property that are not unions; `TestProtocolTableAppliesToCommittedSchema` counts 28 method gates,
+    and names `providers/*` and `nes/*` by the descriptions they have, "provider configuration methods" and "NES methods";
+    `checkCommittedGates` counts 33 checks from 30 rules and pins `AuthenticateRequest`'s two and `PromptRequest`'s new one.
+  * `internal/emit/docs_test.go`'s `TestOutboundErrors` takes `authGates`, with an authenticate row.
+  * Three engine cases that define `SessionUpdate` gain its `plan_update` and `plan_removed` variants and an optional `plan`
+    capability, as B24 gave them the subagent ones: `accept-capability-gates`, `accept-untyped-object-gates` and
+    `refuse-gated-in-patch`. The first two's `want.api` gains the two variant types and the field, and nothing else.
+    `accept-capability-gates` now emits `unknownKind`, since its `ContentBlock` keeps a raw `Unknown`.
+* **The tests,** `gates_surface_test.go`:
+  * `TestBooleanSetConfigOptionGated`: the rule both ways, by `checkValueGate`; a value-id request needs nothing.
+  * `TestAuthenticateUnadvertisedMethod`: `x` refused with the exact text and nothing written, by `Authenticate` and
+    `AllowsValue`, and answered `-32602`; `t` keeps `ErrTerminalAuthMethod`; `a` and `f`, an `Unknown` entry whose key is
+    `ID`, read with folding, pass; `f` is sent; an answer with no methods refuses every id.
+  * `TestPromptUndeclaredBlockGated`: a `video` block, with every capability advertised, is refused as
+    `{session/prompt, promptCapabilities.video, prompt[1], video}`, writing nothing, answered `-32602`, and by
+    `AllowsValue`; text and a resource link pass, advertising nothing.
+  * `TestUnstableCapabilitiesGated`: the 13 methods by `checkMethodGate`, the two plan updates by `checkValueGate`, and the
+    three suggestion kinds both ways, an agent answering `-32603` and a client returning the `*CapabilityError`; an `edit`
+    passes with no NES kind advertised.
+  * `docs_test.go`'s `TestTypedMethodDocsNameErrors` requires `Authenticate`'s doc alone to name the two auth sentinels.
+  * The model: `TestCapabilityRulesApplyRawUnknown`, the raw `Unknown` on the union and through a property, with a
+    required-object prefix; `TestCapabilityRulesRefuse`'s advertised-rule and undeclared-rule refusals.
+  * A received NES result is not answered, so "a received variant `-32602`" of step 4.4 applies to the plan updates; a
+    suggestion is refused as `TestResultGates` refuses a result.
+* **Docs:**
+  * `README.md`'s "Initialization and capabilities": the unstable methods and values, the undeclared prompt block, the
+    boolean set request, and `ErrUnadvertisedAuthMethod`.
+  * `docs/architecture.md`: the gate kinds; the counts, 28 methods and 30 rules, the rules' stale at 19 for 22 before this
+    phase; `unknownKind`; and `gates_surface_test.go`.
+
+**Seen to fail,** each in its own scratch copy of the tree, regenerated there, by script, 28/28: each of the 18 rules removed
+from the table on its own, and ten breaks of the mechanism.
+
+```text
+FAILED AS REQUIRED: S5 rule removed: rc 1: gates_surface_test.go:102: send = {"code":-32603,"message":"Internal error","data":{"error":"context deadline exceeded"}}, want *CapabilityError{session/set_…
+FAILED AS REQUIRED: S8 rule removed: rc 1: gates_surface_test.go:147: Authenticate(x) = {"code":-32603,"message":"Internal error","data":{"error":"context deadline exceeded"}}, want ErrUnadvertisedAut…
+FAILED AS REQUIRED: S9 rule removed: rc 1: gates_surface_test.go:219: send = {"code":-32603,"message":"Internal error","data":{"error":"context deadline exceeded"}}, want *CapabilityError{session/prom…
+FAILED AS REQUIRED: S3 method rule providers/list removed: rc 1: gates_surface_test.go:266: send advertising everything else: {"code":-32603,"message":"Internal error","data":{"error":"context deadlin…
+FAILED AS REQUIRED: S3 method rule providers/set removed: rc 1: gates_surface_test.go:266: send advertising everything else: {"code":-32603,"message":"Internal error","data":{"error":"context deadline…
+FAILED AS REQUIRED: S3 method rule providers/disable removed: rc 1: gates_surface_test.go:266: send advertising everything else: {"code":-32603,"message":"Internal error","data":{"error":"context dead…
+FAILED AS REQUIRED: S3 method rule nes/start removed: rc 1: gates_surface_test.go:266: send advertising everything else: {"code":-32603,"message":"Internal error","data":{"error":"context deadline exc…
+FAILED AS REQUIRED: S3 method rule nes/suggest removed: rc 1: gates_surface_test.go:266: send advertising everything else: {"code":-32603,"message":"Internal error","data":{"error":"context deadline e…
+FAILED AS REQUIRED: S3 method rule nes/accept removed: rc 1: gates_surface_test.go:266: send advertising everything else: <nil>, want *CapabilityError{Method: "nes/accept", Capability: "nes"}
+FAILED AS REQUIRED: S3 method rule nes/reject removed: rc 1: gates_surface_test.go:266: send advertising everything else: <nil>, want *CapabilityError{Method: "nes/reject", Capability: "nes"}
+FAILED AS REQUIRED: S3 method rule nes/close removed: rc 1: gates_surface_test.go:266: send advertising everything else: {"code":-32603,"message":"Internal error","data":{"error":"context deadline exc…
+FAILED AS REQUIRED: S3 method rule document/didOpen removed: rc 1: gates_surface_test.go:266: send advertising nothing: <nil>, want *CapabilityError{Method: "document/didOpen", Capability: "nes.events…
+FAILED AS REQUIRED: S3 method rule document/didChange removed: rc 1: gates_surface_test.go:266: send advertising everything else: <nil>, want *CapabilityError{Method: "document/didChange", Capability:…
+FAILED AS REQUIRED: S3 method rule document/didClose removed: rc 1: gates_surface_test.go:266: send advertising everything else: <nil>, want *CapabilityError{Method: "document/didClose", Capability: "…
+FAILED AS REQUIRED: S3 method rule document/didSave removed: rc 1: gates_surface_test.go:266: send advertising everything else: <nil>, want *CapabilityError{Method: "document/didSave", Capability: "ne…
+FAILED AS REQUIRED: S3 method rule document/didFocus removed: rc 1: gates_surface_test.go:266: send advertising everything else: <nil>, want *CapabilityError{Method: "document/didFocus", Capability: "…
+FAILED AS REQUIRED: S3 variant rule plan_update removed: rc 1: gates_surface_test.go:284: send = <nil>, want *CapabilityError{session/update, plan, Field "", Variant "plan_update"}
+FAILED AS REQUIRED: S3 variant rule plan_removed removed: rc 1: gates_surface_test.go:284: send = <nil>, want *CapabilityError{session/update, plan, Field "", Variant "plan_removed"}
+FAILED AS REQUIRED: S3 suggestion rule jump removed: rc 1: --- FAIL: TestUnstableCapabilitiesGated/suggestion_jump (0.01s)
+FAILED AS REQUIRED: S3 suggestion rule rename removed: rc 1: --- FAIL: TestUnstableCapabilitiesGated/suggestion_rename (0.00s)
+FAILED AS REQUIRED: S3 suggestion rule searchAndReplace removed: rc 1: --- FAIL: TestUnstableCapabilitiesGated/suggestion_searchAndReplace (0.00s)
+FAILED AS REQUIRED: the advertised gate ignores Unknown: rc 1: gates_surface_test.go:165: received f: {"code":-32602,"message":"Invalid params","data":{"error":"authenticate: methodId \"f\": acp: meth…
+FAILED AS REQUIRED: catchAll refuses a raw Unknown: rc 1: gates_test.go:117: model: protocol table: capability rule Verdict: Verdict is not a union with a catch-all variant or Unknown
+FAILED AS REQUIRED: an undeclared rule's capability must be a boolean or optional: rc 1: gates_test.go:117: model: protocol table: capability rule Verdict: capability "session" is neither a boolean no…
+FAILED AS REQUIRED: unknownKind not marked for the gates: rc 1: <scratch>/p4plant24/types_gen.go:25404:141: undefined: unknownKind
+FAILED AS REQUIRED: unknownKind returns unknown for every key: rc 1: kind_remaining_test.go:151: AuthMethod {"type":"future","id":"x","name":"X"}: decoded Kind() = "unknown", want "future"
+FAILED AS REQUIRED: the authenticate doc omits ErrUnadvertisedAuthMethod: rc 1: docs_test.go:85: an authenticate request: names "ErrUnadvertisedAuthMethod": false, want true
+FAILED AS REQUIRED: authGateTypes drops the advertised gate: rc 1: docs_test.go:139: client_gen.go:370:1: Authenticate's doc names ErrUnadvertisedAuthMethod: false, want true
+```
+
+* On the first run, three missed:
+  * "S8 rule removed" and "S9 rule removed" failed only at the ten-minute test timeout, with a goroutine dump: with the rule
+    gone, nothing refused the send, which waited on `t.Context()` for an answer that never comes. The two tests now bound the
+    refused sends at two seconds, as `checkMethodGate` does, and fail at once.
+  * "authGateTypes drops the advertised gate" failed nothing: no test read the generated `Authenticate` doc.
+    `TestTypedMethodDocsNameErrors` now requires it to name both auth sentinels, and only it.
+* After the lint fixes below, the six plants the fixes touched ran again, each failing as above: the S5 rule and the three
+  suggestion rules, whose lines now name `variantBoolean` and `defSuggestNes`, and the two model plants, whose test moved to
+  `TestCapabilityRulesApplyRawUnknown` and which now report `gates_test.go:120`.
+
+**Checks:**
+
+* `go test -count=1 ./...` in both modules: `ok`.
+* `tools/gates.py regen`: `ok`.
+* `make api`: "against v1.31.2: 0 incompatible, 26 compatible", `ErrUnadvertisedAuthMethod` and deviation 3's 25.
+* `make pre-add-check` with the phase's 19 Go files, three engine cases and the README:
+  * **First run:** exit 2. `goconst`: a third `"boolean"` in the package, the S5 rule's, now `variantBoolean`, and a third
+    `"SuggestNesResponse"`, now `defSuggestNes`; it also named `model.go:483`'s `"boolean"`, which this phase did not add and
+    which counted only with the new one. `gocyclo`: `TestCapabilityRulesApply` at 55; the raw-`Unknown` cases moved to
+    `TestCapabilityRulesApplyRawUnknown`.
+  * **Second run:** exit 2, `goconst`, a third `"suggestions"`, now `keySuggestions`.
+  * **Third run:** exit 0, "19 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy,
+    govulncheck."
+  * The generated files did not change with the fixes.
+* `tools/remote.py tree --host linux`: both modules, exit 0.
+* `tools/remote.py pkg --host windows . -test.run 'TestBooleanSetConfigOptionGated|TestAuthenticateUnadvertisedMethod|
+  TestPromptUndeclaredBlockGated|TestUnstableCapabilitiesGated|TestMethodGates|TestValueGates' -test.count=3`: "PASS".
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 5 begins on the owner's word.

@@ -601,7 +601,7 @@ func agentFile(m *model.Model) *goFile {
 	f.add(handleFunc(f, "a", "AgentSideConnection", cases))
 
 	// Agent outbound wrappers (agent -> client).
-	emitOutbound(f, agentSide(m), m.ClientMethods, m.Initialize != nil, terminalAuthTypes(m))
+	emitOutbound(f, agentSide(m), m.ClientMethods, m.Initialize != nil, authGateTypes(m))
 
 	return f
 }
@@ -642,7 +642,7 @@ func clientFile(m *model.Model) *goFile {
 	f.add(handleFunc(f, "c", "ClientSideConnection", cases))
 
 	// Client outbound wrappers (client -> agent).
-	emitOutbound(f, clientSide(m), m.AgentMethods, m.Initialize != nil, terminalAuthTypes(m))
+	emitOutbound(f, clientSide(m), m.AgentMethods, m.Initialize != nil, authGateTypes(m))
 
 	return f
 }
@@ -758,7 +758,7 @@ func initializeWrapper(mi *model.Method) []ast.Stmt {
 // outboundDoc is a typed outbound method's doc: what it sends to peer, then
 // the interface method's doc (0019-PLAN-examples-docs-tests-tooling.md, I12),
 // then the errors it returns (0024-PLAN-documentation.md, A6).
-func outboundDoc(mi *model.Method, peer string, gated, terminalAuth bool) []string {
+func outboundDoc(mi *model.Method, peer string, gated bool, auth authGates) []string {
 	first := mi.GoName + " sends the " + mi.Wire + " request to the " + peer + " and returns its response."
 	switch {
 	case mi.Notif != "":
@@ -776,22 +776,25 @@ func outboundDoc(mi *model.Method, peer string, gated, terminalAuth bool) []stri
 			"before it reads the next message, so that a message the "+peer+" sends after its answer is judged by what "+
 			"the answer agreed.")...)
 	}
-	return append(append(lines, ""), outboundErrors(mi, gated, terminalAuth)...)
+	return append(append(lines, ""), outboundErrors(mi, gated, auth)...)
 }
 
 // outboundErrors is the paragraph of a typed outbound method's doc that names
 // the errors it returns, as sendRequest, SendNotification, the gates and the
 // checks of a response return them (0024-PLAN-documentation.md, A6). gated is
 // false for a protocol with no initialize, whose messages nothing gates;
-// terminalAuth marks a method whose params a terminal-auth gate checks.
-func outboundErrors(mi *model.Method, gated, terminalAuth bool) []string {
+// auth names the auth method gates that check its params.
+func outboundErrors(mi *model.Method, gated bool, auth authGates) []string {
 	var before []string
 	if gated && !mi.Initializes {
 		before = append(before, "an error wrapping ErrNotInitialized until initialize completes",
 			"a *CapabilityError when what initialize agreed does not allow the method or a property or variant of params")
 	}
-	if terminalAuth {
+	if auth.terminal {
 		before = append(before, "an error wrapping ErrTerminalAuthMethod when params name a terminal auth method of the agent's initialize answer")
+	}
+	if auth.advertised {
+		before = append(before, "an error wrapping ErrUnadvertisedAuthMethod when params name no auth method of the agent's initialize answer")
 	}
 	if mi.Initializes {
 		before = append(before, "a *ProtocolVersionError when params ask for a version this SDK does not speak")
@@ -846,15 +849,29 @@ func wrapDoc(text string) []string {
 	return append(lines, line)
 }
 
-// terminalAuthTypes is the set of request types of m whose params a
-// terminal-auth gate checks.
-func terminalAuthTypes(m *model.Model) map[string]bool {
-	set := map[string]bool{}
+// authGates is which auth method gates check a request type's params: the
+// terminal one, and the advertised one (0049-PLAN-surface-fixes.md, phase 4,
+// S8).
+type authGates struct {
+	terminal, advertised bool
+}
+
+// authGateTypes is the auth method gates of each request type of m whose
+// params one checks.
+func authGateTypes(m *model.Model) map[string]authGates {
+	set := map[string]authGates{}
 	for _, g := range m.Gated {
 		for _, c := range g.Checks {
-			if c.Kind == model.GateCheckTerminalAuth {
-				set[g.Type] = true
+			a := set[g.Type]
+			switch c.Kind {
+			case model.GateCheckTerminalAuth:
+				a.terminal = true
+			case model.GateCheckAdvertisedAuth:
+				a.advertised = true
+			default:
+				continue
 			}
+			set[g.Type] = a
 		}
 	}
 	return set
@@ -862,7 +879,7 @@ func terminalAuthTypes(m *model.Model) map[string]bool {
 
 // emitOutbound emits one method per peer method on recvType that sends the
 // request or notification over c.conn to peer.
-func emitOutbound(f *goFile, s side, methods []*model.Method, gated bool, terminalAuth map[string]bool) {
+func emitOutbound(f *goFile, s side, methods []*model.Method, gated bool, auth map[string]authGates) {
 	recv := func() *ast.Field { return param(s.recv, star(id(s.typeName))) }
 	params := func(typeName string) []*ast.Field {
 		return []*ast.Field{param("ctx", f.qual(pkgContext, "Context")), param("params", id(typeName))}
@@ -891,7 +908,7 @@ func emitOutbound(f *goFile, s side, methods []*model.Method, gated bool, termin
 	for _, mi := range methods {
 		// A blank line separates each wrapper from the declaration before it.
 		f.line()
-		f.comment(methodNotice(outboundDoc(mi, s.peer, gated, terminalAuth[mi.Req]), mi)...)
+		f.comment(methodNotice(outboundDoc(mi, s.peer, gated, auth[mi.Req]), mi)...)
 		if mi.Notif != "" && mi.CancelsPending {
 			// The cancel is written before the pending requests are answered
 			// (0017-MADR-remediate-acp-v1-conformance-violations.md, Q1).

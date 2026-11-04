@@ -59,6 +59,7 @@ func typesFile(m *model.Model) *goFile {
 		emitSchemaDef(f, t)
 	}
 	emitRPCInterfaces(f, m)
+	markGateHelpers(f, m)
 	emitDecodeHelpers(f)
 	if mi := m.Initialize; mi != nil {
 		f.line()

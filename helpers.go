@@ -62,7 +62,6 @@ const (
 	sessionUpdateSubagent            = "subagent_update"
 	sessionUpdateSessionMessage      = "session_message"
 	sessionUpdateSessionMessageChunk = "session_message_chunk"
-	sessionUpdateUnknownKind         = "unknown"
 )
 
 // TextBlock constructs a text content block.
@@ -343,22 +342,6 @@ func (u SessionUpdate) Kind() string {
 		return unknownKind(u.Unknown, "sessionUpdate")
 	}
 	return ""
-}
-
-// unknownKind reads the discriminator key of b as a union's UnmarshalJSON
-// reads it, folding keys, the last match winning, and returns "unknown" when
-// that is not a non-empty string.
-func unknownKind(b json.RawMessage, key string) string {
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err != nil {
-		return sessionUpdateUnknownKind
-	}
-	foldKeys(b, m, key)
-	var kind string
-	if err := json.Unmarshal(m[key], &kind); err != nil || kind == "" {
-		return sessionUpdateUnknownKind
-	}
-	return kind
 }
 
 // Kind returns the type value of the content block b sends: the first set

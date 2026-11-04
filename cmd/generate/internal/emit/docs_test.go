@@ -38,6 +38,7 @@ func TestOutboundErrors(t *testing.T) {
 		notInit   = "an error wrapping ErrNotInitialized until initialize completes"
 		capErr    = "a *CapabilityError when what initialize agreed"
 		termAuth  = "ErrTerminalAuthMethod"
+		advAuth   = "ErrUnadvertisedAuthMethod"
 		version   = "a *ProtocolVersionError when params ask for a version"
 		valid     = "a *ValidationError when params break the schema"
 		conn      = "a *RequestError wrapping context.Cause(ctx) when ctx ends, ErrPeerDisconnected or ErrConnectionClosed"
@@ -47,26 +48,29 @@ func TestOutboundErrors(t *testing.T) {
 		undecoded = "one that does not decode a *RequestError."
 		versionAn = "An answer with another protocol version returns a *ProtocolVersionError."
 	)
-	every := []string{notInit, capErr, termAuth, version, valid, conn, answer, gatedResp, plainResp, undecoded, versionAn}
+	every := []string{notInit, capErr, termAuth, advAuth, version, valid, conn, answer, gatedResp, plainResp, undecoded, versionAn}
 	for _, tt := range []struct {
-		name        string
-		mi          model.Method
-		gated, auth bool
-		want        []string
+		name  string
+		mi    model.Method
+		gated bool
+		auth  authGates
+		want  []string
 	}{
-		{"a gated notification", model.Method{Notif: "CancelNotification"}, true, false,
+		{"a gated notification", model.Method{Notif: "CancelNotification"}, true, authGates{},
 			[]string{notInit, capErr, valid, conn}},
-		{"a gated request with no result", model.Method{}, true, false,
+		{"a gated request with no result", model.Method{}, true, authGates{},
 			[]string{notInit, capErr, valid, conn, answer}},
-		{"a gated request", model.Method{HasResult: true}, true, false,
+		{"a gated request", model.Method{HasResult: true}, true, authGates{},
 			[]string{notInit, capErr, valid, conn, answer, gatedResp, undecoded}},
-		{"a terminal-auth request", model.Method{HasResult: true}, true, true,
+		{"a terminal-auth request", model.Method{HasResult: true}, true, authGates{terminal: true},
 			[]string{notInit, capErr, termAuth, valid, conn, answer, gatedResp, undecoded}},
-		{"initialize", model.Method{HasResult: true, Initializes: true}, true, false,
+		{"an authenticate request", model.Method{HasResult: true}, true, authGates{terminal: true, advertised: true},
+			[]string{notInit, capErr, termAuth, advAuth, valid, conn, answer, gatedResp, undecoded}},
+		{"initialize", model.Method{HasResult: true, Initializes: true}, true, authGates{},
 			[]string{version, valid, conn, answer, gatedResp, undecoded, versionAn}},
-		{"an ungated request", model.Method{HasResult: true}, false, false,
+		{"an ungated request", model.Method{HasResult: true}, false, authGates{},
 			[]string{valid, conn, answer, plainResp, undecoded}},
-		{"an ungated notification", model.Method{Notif: "N"}, false, false,
+		{"an ungated notification", model.Method{Notif: "N"}, false, authGates{},
 			[]string{valid, conn}},
 	} {
 		lines := outboundErrors(&tt.mi, tt.gated, tt.auth)

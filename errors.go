@@ -179,6 +179,14 @@ var ErrNotInitialized = errors.New("acp: initialize has not completed")
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
 var ErrTerminalAuthMethod = errors.New("acp: a terminal auth method is not authenticated")
 
+// ErrUnadvertisedAuthMethod is the error, wrapped with the method, the
+// property and the id, that an authenticate meets when its id names no auth
+// method of the agent's initialize answer: the schema's methodId "Must be one
+// of the methods advertised in the initialize response". An entry the answer
+// holds in Unknown counts by its "id" (0049-PLAN-surface-fixes.md, phase 4,
+// S8).
+var ErrUnadvertisedAuthMethod = errors.New("acp: methodId names no auth method the agent advertised")
+
 // ErrPeerDisconnected is the cause of the error a call returns when its
 // connection ended because the peer closed it, read with errors.Is
 // (0019-MADR-remediate-debugging-pass-findings.md, decision 3).

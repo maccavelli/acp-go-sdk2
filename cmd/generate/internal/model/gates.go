@@ -30,6 +30,9 @@ const (
 	GateCheckTerminalAuth
 	// GateCheckUndeclaredVariant refuses the union's catch-all variant, set.
 	GateCheckUndeclaredVariant
+	// GateCheckAdvertisedAuth refuses an id that names no method of the
+	// initialize response's list.
+	GateCheckAdvertisedAuth
 )
 
 // GateCheck is one check of a gates method.
@@ -58,6 +61,21 @@ type GateCheck struct {
 	// value, for GateCheckUndeclaredVariant, whose Variant is the catch-all's
 	// field and whose Capability is the prefix of the capability it names.
 	Disc string
+	// RawKey is the JSON key read from a raw Unknown: the discriminator's, for
+	// a GateCheckUndeclaredVariant whose catch-all is Unknown, which Variant
+	// then names and Disc does not; an entry's id, for
+	// GateCheckAdvertisedAuth, or empty when its union has no Unknown.
+	RawKey string
+	// Advertised is, for GateCheckAdvertisedAuth, each variant of List's
+	// union, Elem, with its field of IDType, the checked id's type.
+	Advertised   []VariantField
+	Elem, IDType string
+}
+
+// VariantField is a union's variant, by its Go field, and a Go field of the
+// variant's struct.
+type VariantField struct {
+	Variant, Field string
 }
 
 // gateHolder is one generated type a gates method may sit on: a struct with
@@ -168,16 +186,9 @@ func (m *Model) gateCheck(t *Type, rule CapabilityRule) (GateCheck, bool, error)
 		}
 		c.Kind, c.Shape = GateCheckNonEmpty, RefSlice
 	case GateVariant:
-		union := t
-		if f != nil {
-			ref := f.Type
-			if ref.Kind == RefSlice || ref.Kind == RefPointer {
-				c.Shape, ref = ref.Kind, *ref.Elem
-			}
-			union = m.Type(ref.Name)
-			if ref.Kind != RefNamed || union == nil {
-				return c, false, fmt.Errorf("%s is %s, not a union or an array of one", rule.Property, f.Type)
-			}
+		union, err := m.ruleUnion(&c, t, f)
+		if err != nil {
+			return c, false, err
 		}
 		vi, err := variantOf(union, rule.Variant)
 		if err != nil {
@@ -189,11 +200,26 @@ func (m *Model) gateCheck(t *Type, rule CapabilityRule) (GateCheck, bool, error)
 			return c, false, err
 		}
 	case GateUndeclaredVariant:
-		if err := m.catchAll(&c, t); err != nil {
+		union, err := m.ruleUnion(&c, t, f)
+		if err != nil {
+			return c, false, err
+		}
+		if err := m.catchAll(&c, union); err != nil {
+			return c, false, err
+		}
+	case GateAdvertisedAuthMethod:
+		if err := m.advertisedAuth(&c, f); err != nil {
 			return c, false, err
 		}
 	}
-	if rule.Capability != "" {
+	switch {
+	case rule.Kind == GateUndeclaredVariant:
+		// The capability is the prefix a refusal names: no capability lifts
+		// the gate, so it need only exist.
+		if _, _, err := m.capabilityPath(rule.Side, rule.Capability); err != nil {
+			return c, false, err
+		}
+	case rule.Capability != "":
 		steps, err := m.capabilitySteps(rule.Side, rule.Capability)
 		if err != nil {
 			return c, false, err
@@ -203,10 +229,34 @@ func (m *Model) gateCheck(t *Type, rule CapabilityRule) (GateCheck, bool, error)
 	return c, true, nil
 }
 
-// catchAll finds union t's catch-all variant and its discriminator's field.
+// ruleUnion returns the union a rule gates: t, when the rule names no
+// property, or the union property f holds, by value, pointer or array, whose
+// shape it records in c.
+func (m *Model) ruleUnion(c *GateCheck, t *Type, f *Field) (*Type, error) {
+	if f == nil {
+		return t, nil
+	}
+	ref := f.Type
+	if ref.Kind == RefSlice || ref.Kind == RefPointer {
+		c.Shape, ref = ref.Kind, *ref.Elem
+	}
+	union := m.Type(ref.Name)
+	if ref.Kind != RefNamed || union == nil {
+		return nil, fmt.Errorf("%s is %s, not a union or an array of one", f.Key, f.Type)
+	}
+	return union, nil
+}
+
+// catchAll finds union t's catch-all: a variant and its discriminator's
+// field, or the raw Unknown of a discriminated union without one, whose
+// discriminator is read by its key.
 func (m *Model) catchAll(c *GateCheck, t *Type) error {
+	if t.Kind == KindUnion && t.HasUnknown && t.DiscKey != "" {
+		c.Kind, c.Variant, c.RawKey = GateCheckUndeclaredVariant, "Unknown", t.DiscKey
+		return nil
+	}
 	if t.Kind != KindUnion || t.CatchAll < 0 {
-		return fmt.Errorf("%s is not a union with a catch-all variant", t.Name)
+		return fmt.Errorf("%s is not a union with a catch-all variant or Unknown", t.Name)
 	}
 	vi := t.Variants[t.CatchAll]
 	for _, f := range m.variantFields(vi) {
@@ -249,15 +299,69 @@ func (m *Model) terminalAuth(c *GateCheck, f *Field, value string) error {
 		if err != nil {
 			continue
 		}
-		fields := m.variantFields(vi)
-		for _, idf := range fields {
-			if idf.Type.Kind == RefNamed && idf.Type.Name == f.Type.Name {
-				c.Kind, c.List, c.Variant, c.ID = GateCheckTerminalAuth, lf.Name, vi.FieldName, idf.Name
-				return nil
-			}
+		if idf := idField(m.variantFields(vi), f.Type.Name); idf != nil {
+			c.Kind, c.List, c.Variant, c.ID = GateCheckTerminalAuth, lf.Name, vi.FieldName, idf.Name
+			return nil
 		}
 	}
 	return fmt.Errorf("%s has no array of a union whose variant %q holds a %s", m.Initialize.Resp, value, f.Type.Name)
+}
+
+// advertisedAuth finds, for the id property f, the initialize response's
+// array of a union whose variants hold an id of f's type, and each variant's
+// field of it. Every variant must hold one, and a union with Unknown must
+// give them one JSON key, which is read from Unknown.
+func (m *Model) advertisedAuth(c *GateCheck, f *Field) error {
+	if f.Type.Kind != RefNamed {
+		return fmt.Errorf("%s is %s, not an id", f.Key, f.Type)
+	}
+	for _, lf := range m.Type(m.Initialize.Resp).Fields {
+		if lf.Type.Kind != RefSlice || lf.Type.Elem.Kind != RefNamed {
+			continue
+		}
+		u := m.Type(lf.Type.Elem.Name)
+		if u == nil || u.Kind != KindUnion {
+			continue
+		}
+		var ids []VariantField
+		keys := map[string]bool{}
+		for _, vi := range u.Variants {
+			if vi.Skip {
+				continue
+			}
+			idf := idField(m.variantFields(vi), f.Type.Name)
+			if idf == nil {
+				ids = nil
+				break
+			}
+			ids = append(ids, VariantField{Variant: vi.FieldName, Field: idf.Name})
+			keys[idf.Key] = true
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		c.Kind, c.List, c.Elem, c.IDType, c.Advertised = GateCheckAdvertisedAuth, lf.Name, u.Name, f.Type.Name, ids
+		if u.HasUnknown {
+			if len(keys) != 1 {
+				return fmt.Errorf("%s: its variants' %s ids have %d JSON keys, not one to read from Unknown", u.Name, f.Type.Name, len(keys))
+			}
+			for k := range keys {
+				c.RawKey = k
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("%s has no array of a union every variant of which holds a %s", m.Initialize.Resp, f.Type.Name)
+}
+
+// idField returns the field of fields whose type is the named type id.
+func idField(fields []*Field, id string) *Field {
+	for _, f := range fields {
+		if f.Type.Kind == RefNamed && f.Type.Name == id {
+			return f
+		}
+	}
+	return nil
 }
 
 // variantFields returns the fields of a variant's struct.

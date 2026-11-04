@@ -465,6 +465,10 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 			switch {
 			case strings.HasPrefix(r.Wire, "terminal/"):
 				named = "'terminal/*'"
+			case strings.HasPrefix(r.Wire, "providers/"):
+				named = "provider configuration methods"
+			case strings.HasPrefix(r.Wire, "nes/"):
+				named = "NES methods"
 			case r.Wire == "logout":
 				named = "the logout method"
 			case r.Wire == "elicitation/complete":
@@ -475,8 +479,9 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 			}
 		}
 	}
-	if gates != 15 {
-		t.Errorf("%d capability gates, want 15", gates)
+	// Phase 4 of 0049-PLAN-surface-fixes.md adds the 13 unstable methods.
+	if gates != 28 {
+		t.Errorf("%d capability gates, want 28", gates)
 	}
 	prompt := methodByWire(m, "session/prompt")
 	if prompt.SessionField != "SessionId" || prompt.Canceller == nil || prompt.Canceller.Wire != "session/cancel" {

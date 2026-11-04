@@ -207,53 +207,59 @@ func TestMethodGates(t *testing.T) {
 	for _, m := range methods {
 		t.Run(m.wire, func(t *testing.T) {
 			t.Parallel()
-			without, only := records(m)
-			for name, n := range map[string]*Negotiation{"advertising everything else": without, "advertising nothing": versionOnly()} {
-				w := &countingWriter{}
-				asc, csc := sides(t, w, n)
-				// A send the gate lets through waits for an answer that never comes.
-				ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
-				wantMethodGate(t, "send "+name, m, m.send(ctx, asc, csc, m.params))
-				cancel()
-				if got := w.count(); got != 0 {
-					t.Errorf("send %s: %d bytes written, want none", name, got)
-				}
-				rerr, ran := receive(t, m, n)
-				if rerr == nil || rerr.Code != -32601 || ran {
-					t.Errorf("receive %s: answered %v, handler ran %v, want -32601 and no handler", name, rerr, ran)
-				}
-			}
-
-			w := &countingWriter{}
-			asc, csc := sides(t, w, only)
-			ctx, cancel := context.WithCancel(t.Context())
-			sent := make(chan error, 1)
-			go func() { sent <- m.send(ctx, asc, csc, m.params) }()
-			deadline := time.Now().Add(5 * time.Second)
-			for w.count() == 0 && time.Now().Before(deadline) {
-				time.Sleep(time.Millisecond)
-			}
-			if w.count() == 0 {
-				t.Errorf("send advertising only %s: nothing written", m.capability)
-			}
-			cancel()
-			if err := within(t, sent, "the send"); isCapabilityError(err) || (m.notifies && err != nil) {
-				t.Errorf("send advertising only %s: %v", m.capability, err)
-			}
-			if rerr, ran := receive(t, m, only); rerr != nil || !ran {
-				t.Errorf("receive advertising only %s: answered %v, handler ran %v, want it handled", m.capability, rerr, ran)
-			}
-
-			accept := WithInboundValidation(func(_ context.Context, _ string, _ any, err error) error {
-				if isCapabilityError(err) {
-					return nil
-				}
-				return err
-			})
-			if rerr, ran := receive(t, m, without, accept); rerr != nil || !ran {
-				t.Errorf("receive with a hook accepting the gate: answered %v, handler ran %v, want it handled", rerr, ran)
-			}
+			checkMethodGate(t, m)
 		})
+	}
+}
+
+// checkMethodGate checks method gate m as TestMethodGates says.
+func checkMethodGate(t *testing.T, m gatedMethod) {
+	t.Helper()
+	without, only := records(m)
+	for name, n := range map[string]*Negotiation{"advertising everything else": without, "advertising nothing": versionOnly()} {
+		w := &countingWriter{}
+		asc, csc := sides(t, w, n)
+		// A send the gate lets through waits for an answer that never comes.
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		wantMethodGate(t, "send "+name, m, m.send(ctx, asc, csc, m.params))
+		cancel()
+		if got := w.count(); got != 0 {
+			t.Errorf("send %s: %d bytes written, want none", name, got)
+		}
+		rerr, ran := receive(t, m, n)
+		if rerr == nil || rerr.Code != -32601 || ran {
+			t.Errorf("receive %s: answered %v, handler ran %v, want -32601 and no handler", name, rerr, ran)
+		}
+	}
+
+	w := &countingWriter{}
+	asc, csc := sides(t, w, only)
+	ctx, cancel := context.WithCancel(t.Context())
+	sent := make(chan error, 1)
+	go func() { sent <- m.send(ctx, asc, csc, m.params) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for w.count() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if w.count() == 0 {
+		t.Errorf("send advertising only %s: nothing written", m.capability)
+	}
+	cancel()
+	if err := within(t, sent, "the send"); isCapabilityError(err) || (m.notifies && err != nil) {
+		t.Errorf("send advertising only %s: %v", m.capability, err)
+	}
+	if rerr, ran := receive(t, m, only); rerr != nil || !ran {
+		t.Errorf("receive advertising only %s: answered %v, handler ran %v, want it handled", m.capability, rerr, ran)
+	}
+
+	accept := WithInboundValidation(func(_ context.Context, _ string, _ any, err error) error {
+		if isCapabilityError(err) {
+			return nil
+		}
+		return err
+	})
+	if rerr, ran := receive(t, m, without, accept); rerr != nil || !ran {
+		t.Errorf("receive with a hook accepting the gate: answered %v, handler ran %v, want it handled", rerr, ran)
 	}
 }
 
@@ -351,7 +357,8 @@ func TestRawPathsUngated(t *testing.T) {
 
 // TestAllows requires Negotiation.Allows to agree with the gate: nil for a
 // method the table does not gate, for initialize and for a gated method whose
-// capability is advertised, and the gate's *CapabilityError otherwise
+// capability is advertised, the unstable ones included, and the gate's
+// *CapabilityError otherwise
 // (0017-PLAN-remediate-acp-v1-conformance-violations.md, step 9).
 func TestAllows(t *testing.T) {
 	t.Parallel()
@@ -364,7 +371,7 @@ func TestAllows(t *testing.T) {
 	if err := gateMessage(nil, AgentMethodInitialize, nil); err != nil {
 		t.Errorf("initialize without a record: %v, want nil", err)
 	}
-	for _, m := range gatedMethods() {
+	for _, m := range slices.Concat(gatedMethods(), unstableGatedMethods()) {
 		without, only := records(m)
 		wantMethodGate(t, "Allows("+m.wire+") without its capability", m, without.Allows(m.wire))
 		if err := only.Allows(m.wire); err != nil {
@@ -546,54 +553,60 @@ func TestValueGates(t *testing.T) {
 	for _, g := range gates {
 		t.Run(g.capability+" "+g.variant+g.field, func(t *testing.T) {
 			t.Parallel()
-			without, with := allAdvertised(), allAdvertised()
-			g.advertise(without, false)
-			w := &countingWriter{}
-			asc, csc := sides(t, w, without)
-			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
-			err := g.send(ctx, asc, csc, g.params)
-			cancel()
-			ce, ok := errors.AsType[*CapabilityError](err)
-			if !ok || ce.Method != g.wire || ce.Capability != g.capability || ce.Field != g.field || ce.Variant != g.variant {
-				t.Errorf("send = %v, want *CapabilityError{%s, %s, Field %q, Variant %q}", err, g.wire, g.capability, g.field, g.variant)
-			}
-			if got := w.count(); got != 0 {
-				t.Errorf("%d bytes written, want none", got)
-			}
-			if rerr, ran := receive(t, g.gatedMethod, without); rerr == nil || rerr.Code != -32602 || ran {
-				t.Errorf("received without the capability: %v, handler ran %v, want -32602 and no handler", rerr, ran)
-			}
-
-			w = &countingWriter{}
-			asc, csc = sides(t, w, with)
-			ctx, cancel = context.WithCancel(t.Context())
-			sent := make(chan error, 1)
-			go func() { sent <- g.send(ctx, asc, csc, g.params) }()
-			// A notification's send returns once written, so it is awaited
-			// before the cancel; a request's waits for an answer that never
-			// comes, so it is cancelled once its bytes are seen
-			// (0019-PLAN-api-decisions.md, step 7's deviation).
-			err = nil
-			if g.notifies {
-				err = within(t, sent, "the send")
-			}
-			for deadline := time.Now().Add(5 * time.Second); w.count() == 0 && time.Now().Before(deadline); {
-				time.Sleep(time.Millisecond)
-			}
-			if w.count() == 0 {
-				t.Error("with the capability, nothing written")
-			}
-			cancel()
-			if !g.notifies {
-				err = within(t, sent, "the send")
-			}
-			if isCapabilityError(err) || (g.notifies && err != nil) {
-				t.Errorf("send with the capability: %v", err)
-			}
-			if rerr, ran := receive(t, g.gatedMethod, with); rerr != nil || !ran {
-				t.Errorf("received with the capability: %v, handler ran %v, want it handled", rerr, ran)
-			}
+			checkValueGate(t, g)
 		})
+	}
+}
+
+// checkValueGate checks capability rule g as TestValueGates says.
+func checkValueGate(t *testing.T, g valueGate) {
+	t.Helper()
+	without, with := allAdvertised(), allAdvertised()
+	g.advertise(without, false)
+	w := &countingWriter{}
+	asc, csc := sides(t, w, without)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	err := g.send(ctx, asc, csc, g.params)
+	cancel()
+	ce, ok := errors.AsType[*CapabilityError](err)
+	if !ok || ce.Method != g.wire || ce.Capability != g.capability || ce.Field != g.field || ce.Variant != g.variant {
+		t.Errorf("send = %v, want *CapabilityError{%s, %s, Field %q, Variant %q}", err, g.wire, g.capability, g.field, g.variant)
+	}
+	if got := w.count(); got != 0 {
+		t.Errorf("%d bytes written, want none", got)
+	}
+	if rerr, ran := receive(t, g.gatedMethod, without); rerr == nil || rerr.Code != -32602 || ran {
+		t.Errorf("received without the capability: %v, handler ran %v, want -32602 and no handler", rerr, ran)
+	}
+
+	w = &countingWriter{}
+	asc, csc = sides(t, w, with)
+	ctx, cancel = context.WithCancel(t.Context())
+	sent := make(chan error, 1)
+	go func() { sent <- g.send(ctx, asc, csc, g.params) }()
+	// A notification's send returns once written, so it is awaited
+	// before the cancel; a request's waits for an answer that never
+	// comes, so it is cancelled once its bytes are seen
+	// (0019-PLAN-api-decisions.md, step 7's deviation).
+	err = nil
+	if g.notifies {
+		err = within(t, sent, "the send")
+	}
+	for deadline := time.Now().Add(5 * time.Second); w.count() == 0 && time.Now().Before(deadline); {
+		time.Sleep(time.Millisecond)
+	}
+	if w.count() == 0 {
+		t.Error("with the capability, nothing written")
+	}
+	cancel()
+	if !g.notifies {
+		err = within(t, sent, "the send")
+	}
+	if isCapabilityError(err) || (g.notifies && err != nil) {
+		t.Errorf("send with the capability: %v", err)
+	}
+	if rerr, ran := receive(t, g.gatedMethod, with); rerr != nil || !ran {
+		t.Errorf("received with the capability: %v, handler ran %v, want it handled", rerr, ran)
 	}
 }
 

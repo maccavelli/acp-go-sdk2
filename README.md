@@ -554,23 +554,32 @@ receives against the capabilities in the record:
   `session/resume`, `session/close` and the unstable `session/fork` need the
   matching `sessionCapabilities` entry; `logout` needs `auth.logout`;
   `fs/read_text_file` and `fs/write_text_file` need `fs.readTextFile` and
-  `fs.writeTextFile`; the `terminal/*` methods need `terminal`; and
-  `elicitation/complete` needs `elicitation.url`.
+  `fs.writeTextFile`; the `terminal/*` methods need `terminal`;
+  `elicitation/complete` needs `elicitation.url`; and, unstable, the
+  `providers/*` methods need the agent's `providers`, the `nes/*` methods its
+  `nes`, and each `document/<event>` notification its
+  `nes.events.document.<event>`.
 - Values: a non-empty `additionalDirectories` on `session/new`, `session/load`,
   `session/resume` and `session/fork` needs
   `sessionCapabilities.additionalDirectories`; an `http`, `sse` or unstable
   `acp` MCP server, on any of those four methods, needs `mcpCapabilities.http`,
   `.sse` or `.acp`; an `image`,
   `audio` or `resource` block in a prompt needs `promptCapabilities.image`,
-  `.audio` or `.embeddedContext`; an elicitation's `form` or `url` mode needs
+  `.audio` or `.embeddedContext`, and a block of a type the schema does not
+  list, which no capability opts in, is refused, as `promptCapabilities.<type>`,
+  with every capability advertised; an elicitation's `form` or `url` mode needs
   `elicitation.form` or `.url`, and an elicitation in any other mode, which no
   capability advertises, is refused, as `elicitation.<mode>`, with every
   capability advertised; a `notice` update needs `session.notices`, a
   compaction update `session.compaction`, and the unstable `subagent_update`,
-  `session_message` and `session_message_chunk` need `subagents`; a `boolean`
-  config option, wherever an agent sends one, needs
-  `session.configOptions.boolean`; and a `terminal` auth method in the
-  `initialize` answer needs `auth.terminal`.
+  `session_message` and `session_message_chunk` need `subagents`, and the
+  unstable `plan_update` and `plan_removed` need `plan`; a `boolean` config
+  option, wherever an agent sends one, and a `session/set_config_option` of
+  type `boolean` need `session.configOptions.boolean`; a `terminal` auth method
+  in the `initialize` answer needs `auth.terminal`; and the unstable `jump`,
+  `rename` and `searchAndReplace` suggestions of an `nes/suggest` result need
+  the client's `nes.jump`, `nes.rename` and `nes.searchAndReplace`, while an
+  `edit` needs none.
 
 A typed method that would send what the record does not allow returns a
 `*acp.CapabilityError` naming the method and the capability, and the property
@@ -593,6 +602,10 @@ every message behind it.
 `Authenticate` with the id of a `terminal` auth method the agent listed returns
 an error wrapping `acp.ErrTerminalAuthMethod` and sends nothing, since a
 terminal method is run, not authenticated; received, it is answered `-32602`.
+An id that names no method of the agent's answer, which the schema says it
+"Must be one of", returns an error wrapping `acp.ErrUnadvertisedAuthMethod` and
+sends nothing, and is answered `-32602` when received. An entry of a type this
+SDK does not know, kept in `AuthMethod.Unknown`, counts by its `"id"`.
 
 `Negotiation.Allows(method)` reports whether the record lets a method be sent,
 for an application that shows or hides features: nil, or the

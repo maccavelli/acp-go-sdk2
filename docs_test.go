@@ -111,7 +111,9 @@ func TestExportedTypeDocsStartWithName(t *testing.T) {
 // A typed method's must also name ErrNotInitialized, unless the method is
 // Initialize; an extension method's, whose params are any, must not, as it
 // sends before initialize too (0024-PLAN-documentation.md, A6, and its
-// step 2 deviation).
+// step 2 deviation). The auth method gates' sentinels are named by
+// Authenticate's doc, and by no other's (0049-PLAN-surface-fixes.md, phase 4,
+// S8).
 func TestTypedMethodDocsNameErrors(t *testing.T) {
 	t.Parallel()
 	fset, files := parsePackage(t)
@@ -131,6 +133,11 @@ func TestTypedMethodDocsNameErrors(t *testing.T) {
 			text := fn.Doc.Text()
 			if !strings.Contains(text, "*RequestError") {
 				t.Errorf("%s: %s's doc does not name *RequestError", fset.Position(fn.Pos()), fn.Name.Name)
+			}
+			for _, sentinel := range []string{"ErrTerminalAuthMethod", "ErrUnadvertisedAuthMethod"} {
+				if got, want := strings.Contains(text, sentinel), fn.Name.Name == "Authenticate"; got != want {
+					t.Errorf("%s: %s's doc names %s: %v, want %v", fset.Position(fn.Pos()), fn.Name.Name, sentinel, got, want)
+				}
 			}
 			names := strings.Contains(text, "ErrNotInitialized")
 			switch p := fn.Type.Params.List; {

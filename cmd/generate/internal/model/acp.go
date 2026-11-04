@@ -85,6 +85,25 @@ var ACP = Protocol{
 		// elicitation/complete is "sent by the agent when a URL-based
 		// elicitation is complete" (schema), so it needs the URL mode.
 		{Side: sideClient, Wire: "elicitation/complete", Capability: "elicitation.url"},
+		// Unstable: "Supplying {} means the agent supports provider
+		// configuration methods"; "Omitted or null both mean the agent does not
+		// advertise support for NES methods"; and "Whether the agent wants
+		// document/<event> events", for each event (schema,
+		// AgentCapabilities and NesDocumentEventCapabilities;
+		// 0049-PLAN-surface-fixes.md, phase 4, S3).
+		{Side: sideAgent, Wire: "providers/list", Capability: capProviders},
+		{Side: sideAgent, Wire: "providers/set", Capability: capProviders},
+		{Side: sideAgent, Wire: "providers/disable", Capability: capProviders},
+		{Side: sideAgent, Wire: "nes/start", Capability: capNes},
+		{Side: sideAgent, Wire: "nes/suggest", Capability: capNes},
+		{Side: sideAgent, Wire: "nes/accept", Capability: capNes},
+		{Side: sideAgent, Wire: "nes/reject", Capability: capNes},
+		{Side: sideAgent, Wire: "nes/close", Capability: capNes},
+		{Side: sideAgent, Wire: "document/didOpen", Capability: capDocument + "didOpen"},
+		{Side: sideAgent, Wire: "document/didChange", Capability: capDocument + "didChange"},
+		{Side: sideAgent, Wire: "document/didClose", Capability: capDocument + "didClose"},
+		{Side: sideAgent, Wire: "document/didSave", Capability: capDocument + "didSave"},
+		{Side: sideAgent, Wire: "document/didFocus", Capability: capDocument + "didFocus"},
 	},
 	// The properties whose omission, null, and value mean unchanged, cleared,
 	// and replaced, which the schema states only in prose
@@ -198,8 +217,17 @@ var ACP = Protocol{
 		{Side: sideClient, Definition: defSessionUpdate, Variant: "subagent_update", Capability: capSubagents, Source: srcSubagents, Kind: GateVariant},
 		{Side: sideClient, Definition: defSessionUpdate, Variant: "session_message", Capability: capSubagents, Source: srcSubagents, Kind: GateVariant},
 		{Side: sideClient, Definition: defSessionUpdate, Variant: "session_message_chunk", Capability: capSubagents, Source: srcSubagents, Kind: GateVariant},
-		{Side: sideClient, Definition: "SessionConfigOption", Variant: "boolean", Capability: "session.configOptions.boolean", Source: srcBooleanOption, Kind: GateVariant},
+		{Side: sideClient, Definition: "SessionConfigOption", Variant: variantBoolean, Capability: "session.configOptions.boolean", Source: srcBooleanOption, Kind: GateVariant},
 		{Side: sideClient, Definition: "InitializeResponse", Property: "authMethods", Variant: "terminal", Capability: "auth.terminal", Source: srcTerminalAuth, Kind: GateVariant},
+		// (0049-PLAN-surface-fixes.md, phase 4: S5, S8, S9 and S3.)
+		{Side: sideClient, Definition: "SetSessionConfigOptionRequest", Variant: variantBoolean, Capability: "session.configOptions.boolean", Source: srcBooleanSet, Kind: GateVariant},
+		{Side: sideAgent, Definition: "AuthenticateRequest", Property: "methodId", Source: srcAdvertisedAuth, Kind: GateAdvertisedAuthMethod},
+		{Side: sideAgent, Definition: defPrompt, Property: keyPrompt, Capability: "promptCapabilities", Source: srcPromptOptIn, Kind: GateUndeclaredVariant},
+		{Side: sideClient, Definition: defSessionUpdate, Variant: "plan_update", Capability: "plan", Source: srcPlan, Kind: GateVariant},
+		{Side: sideClient, Definition: defSessionUpdate, Variant: "plan_removed", Capability: "plan", Source: srcPlan, Kind: GateVariant},
+		{Side: sideClient, Definition: defSuggestNes, Property: keySuggestions, Variant: "jump", Capability: "nes.jump", Source: srcNesJump, Kind: GateVariant},
+		{Side: sideClient, Definition: defSuggestNes, Property: keySuggestions, Variant: "rename", Capability: "nes.rename", Source: srcNesRename, Kind: GateVariant},
+		{Side: sideClient, Definition: defSuggestNes, Property: keySuggestions, Variant: "searchAndReplace", Capability: "nes.searchAndReplace", Source: srcNesSearchAndReplace, Kind: GateVariant},
 	},
 }
 
@@ -217,17 +245,23 @@ const (
 	defSubagent      = "SubagentUpdate"
 	defMessage       = "SessionMessage"
 	defSessionInfo   = "SessionInfoUpdate"
+	defSuggestNes    = "SuggestNesResponse"
 )
+
+// variantBoolean is the discriminator value of a boolean config option, in
+// the option and in the request that sets one.
+const variantBoolean = "boolean"
 
 // The property keys several rules name.
 const (
-	keyCwd       = "cwd"
-	keyRoots     = "additionalDirectories"
-	keyPath      = "path"
-	keySessionID = "sessionId"
-	keyPrompt    = "prompt"
-	keyMeta      = "_meta"
-	keyTitle     = "title"
+	keyCwd         = "cwd"
+	keyRoots       = "additionalDirectories"
+	keyPath        = "path"
+	keySessionID   = "sessionId"
+	keyPrompt      = "prompt"
+	keyMeta        = "_meta"
+	keyTitle       = "title"
+	keySuggestions = "suggestions"
 )
 
 // The schema sentences the patch and null-retained rules follow.
@@ -270,6 +304,15 @@ const capRoots = "sessionCapabilities.additionalDirectories"
 // (0019-PLAN-issue-fixes.md, B24).
 const capSubagents = "subagents"
 
+// The unstable capabilities that gate methods (0049-PLAN-surface-fixes.md,
+// phase 4, S3): providers/*, nes/*, and each document event, by name after
+// capDocument.
+const (
+	capProviders = "providers"
+	capNes       = "nes"
+	capDocument  = "nes.events.document."
+)
+
 // The specification sentences the capability rules follow.
 const (
 	// srcRootsGate is from <https://agentclientprotocol.com/protocol/session-setup>, additional workspace roots.
@@ -290,4 +333,17 @@ const (
 	srcTerminalAuth = "Agents MUST advertise this method only when the client enabled its terminal authentication capability"
 	// srcSubagents is from the unstable schema, SubagentCapabilities.
 	srcSubagents = "The client must advertise this capability before the agent sends subagent updates or session-directed messages."
+	// srcBooleanSet is from the schema, SessionConfigOptionsCapabilities' boolean.
+	srcBooleanSet = "the client may send `session/set_config_option` requests with `type: \"boolean\"`"
+	// srcAdvertisedAuth is from the schema, AuthenticateRequest's methodId.
+	srcAdvertisedAuth = "Must be one of the methods advertised in the initialize response."
+	// srcPromptOptIn is from the schema, PromptCapabilities.
+	srcPromptOptIn = "Other variants must be explicitly opted in to."
+	// srcPlan is from the unstable schema, ClientCapabilities' plan.
+	srcPlan = "Whether the client supports `plan_update` and `plan_removed` session updates."
+	// srcNesJump, srcNesRename and srcNesSearchAndReplace are from the
+	// unstable schema, ClientNesCapabilities.
+	srcNesJump             = "Whether the client supports the `jump` suggestion kind."
+	srcNesRename           = "Whether the client supports the `rename` suggestion kind."
+	srcNesSearchAndReplace = "Whether the client supports the `searchAndReplace` suggestion kind."
 )

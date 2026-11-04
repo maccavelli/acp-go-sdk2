@@ -47,6 +47,19 @@ func emitValueGates(f *goFile, m *model.Model) {
 	}
 }
 
+// markGateHelpers marks the decoding helpers the gates call, which
+// typesFile emits before them: unknownKind, for a check that reads a raw
+// Unknown (0049-PLAN-surface-fixes.md, phase 4, deviation 4).
+func markGateHelpers(f *goFile, m *model.Model) {
+	for _, g := range m.Gated {
+		for _, c := range g.Checks {
+			if c.RawKey != "" {
+				f.uses[helperUnknownKind] = true
+			}
+		}
+	}
+}
+
 // gateStmt renders one check of a gates method.
 func gateStmt(f *goFile, m *model.Model, recv string, c model.GateCheck) ast.Stmt {
 	field := func() ast.Expr { return dot(recv, c.Field) }
@@ -54,13 +67,9 @@ func gateStmt(f *goFile, m *model.Model, recv string, c model.GateCheck) ast.Stm
 	case model.GateCheckNested:
 		return nestedGate(f, field, c)
 	case model.GateCheckUndeclaredVariant:
-		// The catch-all holds a value no capability advertises
-		// (0019-PLAN-api-decisions.md, B20).
-		v := func() ast.Expr { return dot(recv, c.Variant) }
-		return ifStmt(nil, binary(v(), token.NEQ, nilExpr()),
-			ret(addr(composite(id("CapabilityError"), kv(id("Method"), id("method")),
-				kv(id("Capability"), binary(str(c.Capability+"."), token.ADD, sel(v(), c.Disc))),
-				kv(id("Variant"), sel(v(), c.Disc))))))
+		return undeclaredGate(f, recv, c)
+	case model.GateCheckAdvertisedAuth:
+		return advertisedGate(f, field, c)
 	case model.GateCheckTerminalAuth:
 		a := func() ast.Expr { return dot("a", c.Variant) }
 		return rangeStmt(id("_"), id("a"), dot("n", "Response", c.List),
@@ -92,20 +101,83 @@ func gateStmt(f *goFile, m *model.Model, recv string, c model.GateCheck) ast.Stm
 		return ifStmt(nil, binary(binary(call(id("len"), field()), token.GTR, intLit(0)), token.LAND, missing()), refuse(str(c.Key)))
 	}
 	// A variant: of the union itself, or of the union a field holds.
-	set := func(x ast.Expr) ast.Expr {
-		return binary(binary(sel(x, c.Variant), token.NEQ, nilExpr()), token.LAND, missing())
+	set := func(x func() ast.Expr) ast.Expr {
+		return binary(binary(sel(x(), c.Variant), token.NEQ, nilExpr()), token.LAND, missing())
 	}
+	return eachUnion(f, recv, c, set, func(_ func() ast.Expr, name ast.Expr) []ast.Stmt { return []ast.Stmt{refuse(name)} })
+}
+
+// eachUnion checks the union a gate reads, recv itself or the one field c
+// names, held by value, pointer or array: where cond(x) holds of it, body(x,
+// name) runs, with name the field's JSON key, indexed for an array, or nil
+// for recv.
+func eachUnion(f *goFile, recv string, c model.GateCheck, cond func(x func() ast.Expr) ast.Expr,
+	body func(x func() ast.Expr, name ast.Expr) []ast.Stmt,
+) ast.Stmt {
+	field := func() ast.Expr { return dot(recv, c.Field) }
 	switch {
 	case c.Field == "":
-		return ifStmt(nil, set(id(recv)), refuse(nil))
+		self := func() ast.Expr { return id(recv) }
+		return ifStmt(nil, cond(self), body(self, nil)...)
 	case c.Shape == model.RefSlice:
-		elem := call(f.qual(pkgFmt, "Sprintf"), str(c.Key+"[%d]"), id("i"))
-		return rangeStmt(id("i"), nil, field(), ifStmt(nil, set(index(field(), id("i"))), refuse(elem)))
+		elem := func() ast.Expr { return index(field(), id("i")) }
+		name := call(f.qual(pkgFmt, "Sprintf"), str(c.Key+"[%d]"), id("i"))
+		return rangeStmt(id("i"), nil, field(), ifStmt(nil, cond(elem), body(elem, name)...))
 	case c.Shape == model.RefPointer:
-		return ifStmt(nil, binary(binary(field(), token.NEQ, nilExpr()), token.LAND, set(field())), refuse(str(c.Key)))
+		return ifStmt(nil, binary(binary(field(), token.NEQ, nilExpr()), token.LAND, cond(field)), body(field, str(c.Key))...)
 	default:
-		return ifStmt(nil, set(field()), refuse(str(c.Key)))
+		return ifStmt(nil, cond(field), body(field, str(c.Key))...)
 	}
+}
+
+// undeclaredGate refuses a union's catch-all, set, whose value no capability
+// advertises: a variant whose Disc field holds the value, or the raw Unknown,
+// from which unknownKind reads it (0019-PLAN-api-decisions.md, B20;
+// 0049-PLAN-surface-fixes.md, phase 4, S9).
+func undeclaredGate(f *goFile, recv string, c model.GateCheck) ast.Stmt {
+	set := func(x func() ast.Expr) ast.Expr { return binary(sel(x(), c.Variant), token.NEQ, nilExpr()) }
+	return eachUnion(f, recv, c, set, func(x func() ast.Expr, name ast.Expr) []ast.Stmt {
+		var body []ast.Stmt
+		value := func() ast.Expr { return sel(x(), c.Variant, c.Disc) }
+		if c.RawKey != "" {
+			body = append(body, define(exprs(id("kind")), call(id(helperUnknownKind), sel(x(), c.Variant), str(c.RawKey))))
+			value = func() ast.Expr { return id("kind") }
+		}
+		elts := []ast.Expr{kv(id("Method"), id("method")), kv(id("Capability"), binary(str(c.Capability+"."), token.ADD, value()))}
+		if name != nil {
+			elts = append(elts, kv(id("Field"), name))
+		}
+		elts = append(elts, kv(id("Variant"), value()))
+		return append(body, ret(addr(composite(id("CapabilityError"), elts...))))
+	})
+}
+
+// advertisedGate refuses an id that names no entry of the initialize
+// response's list: no variant's id, nor a raw entry's, which unknownKind
+// reads (0049-PLAN-surface-fixes.md, phase 4, S8).
+func advertisedGate(f *goFile, field func() ast.Expr, c model.GateCheck) ast.Stmt {
+	var match ast.Expr
+	or := func(x ast.Expr) {
+		if match == nil {
+			match = x
+			return
+		}
+		match = binary(match, token.LOR, x)
+	}
+	for _, a := range c.Advertised {
+		v := func() ast.Expr { return dot("a", a.Variant) }
+		or(binary(binary(v(), token.NEQ, nilExpr()), token.LAND, binary(sel(v(), a.Field), token.EQL, field())))
+	}
+	if c.RawKey != "" {
+		var raw ast.Expr = call(id(helperUnknownKind), dot("a", "Unknown"), str(c.RawKey))
+		if c.IDType != "string" {
+			raw = call(id(c.IDType), raw)
+		}
+		or(binary(binary(dot("a", "Unknown"), token.NEQ, nilExpr()), token.LAND, binary(raw, token.EQL, field())))
+	}
+	named := &ast.FuncLit{Type: funcType([]*ast.Field{param("a", id(c.Elem))}, param("", id("bool"))), Body: block(ret(match))}
+	return ifStmt(nil, not(call(f.qual("slices", "ContainsFunc"), dot("n", "Response", c.List), named)),
+		ret(call(f.qual(pkgFmt, "Errorf"), str("%s: "+c.Key+" %q: %w"), id("method"), field(), id("ErrUnadvertisedAuthMethod"))))
 }
 
 // nestedGate is the call into the gates of a held value, by its shape.

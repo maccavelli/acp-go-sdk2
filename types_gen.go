@@ -25000,6 +25000,22 @@ func requireKeys(b []byte, m map[string]json.RawMessage, typ string, required ..
 	return nil
 }
 
+// unknownKind reads key of the JSON object b as a union's UnmarshalJSON reads
+// it, folding keys, the last match winning, and returns "unknown" when that is
+// not a non-empty string.
+func unknownKind(b json.RawMessage, key string) string {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return "unknown"
+	}
+	foldKeys(b, m, key)
+	var kind string
+	if err := json.Unmarshal(m[key], &kind); err != nil || kind == "" {
+		return "unknown"
+	}
+	return kind
+}
+
 // foldKeys makes m, the keys of the JSON object b, hold for each of names the
 // value encoding/json gives a struct field of that name: the value of the last key
 // of b that matches it under Unicode case folding. It removes the other matching
@@ -25230,11 +25246,60 @@ type Negotiation struct {
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
 func (n Negotiation) Allows(method string) error {
 	switch method {
+	case AgentMethodDocumentDidChange:
+		if n.Response.AgentCapabilities.Nes == nil || n.Response.AgentCapabilities.Nes.Events == nil || n.Response.AgentCapabilities.Nes.Events.Document == nil || n.Response.AgentCapabilities.Nes.Events.Document.DidChange == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "nes.events.document.didChange",
+			}
+		}
+	case AgentMethodDocumentDidClose:
+		if n.Response.AgentCapabilities.Nes == nil || n.Response.AgentCapabilities.Nes.Events == nil || n.Response.AgentCapabilities.Nes.Events.Document == nil || n.Response.AgentCapabilities.Nes.Events.Document.DidClose == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "nes.events.document.didClose",
+			}
+		}
+	case AgentMethodDocumentDidFocus:
+		if n.Response.AgentCapabilities.Nes == nil || n.Response.AgentCapabilities.Nes.Events == nil || n.Response.AgentCapabilities.Nes.Events.Document == nil || n.Response.AgentCapabilities.Nes.Events.Document.DidFocus == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "nes.events.document.didFocus",
+			}
+		}
+	case AgentMethodDocumentDidOpen:
+		if n.Response.AgentCapabilities.Nes == nil || n.Response.AgentCapabilities.Nes.Events == nil || n.Response.AgentCapabilities.Nes.Events.Document == nil || n.Response.AgentCapabilities.Nes.Events.Document.DidOpen == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "nes.events.document.didOpen",
+			}
+		}
+	case AgentMethodDocumentDidSave:
+		if n.Response.AgentCapabilities.Nes == nil || n.Response.AgentCapabilities.Nes.Events == nil || n.Response.AgentCapabilities.Nes.Events.Document == nil || n.Response.AgentCapabilities.Nes.Events.Document.DidSave == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "nes.events.document.didSave",
+			}
+		}
 	case AgentMethodLogout:
 		if n.Response.AgentCapabilities.Auth.Logout == nil {
 			return &CapabilityError{
 				Method:     method,
 				Capability: "auth.logout",
+			}
+		}
+	case AgentMethodNesAccept, AgentMethodNesClose, AgentMethodNesReject, AgentMethodNesStart, AgentMethodNesSuggest:
+		if n.Response.AgentCapabilities.Nes == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "nes",
+			}
+		}
+	case AgentMethodProvidersDisable, AgentMethodProvidersList, AgentMethodProvidersSet:
+		if n.Response.AgentCapabilities.Providers == nil {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "providers",
 			}
 		}
 	case AgentMethodSessionClose:
@@ -25350,6 +25415,11 @@ func (v *AuthenticateRequest) gates(n *Negotiation, method string) error {
 		if a.Terminal != nil && a.Terminal.Id == v.MethodId {
 			return fmt.Errorf("%s: methodId %q: %w", method, v.MethodId, ErrTerminalAuthMethod)
 		}
+	}
+	if !slices.ContainsFunc(n.Response.AuthMethods, func(a AuthMethod) bool {
+		return a.Terminal != nil && a.Terminal.Id == v.MethodId || a.Agent != nil && a.Agent.Id == v.MethodId || a.Unknown != nil && AuthMethodId(unknownKind(a.Unknown, "id")) == v.MethodId
+	}) {
+		return fmt.Errorf("%s: methodId %q: %w", method, v.MethodId, ErrUnadvertisedAuthMethod)
 	}
 	return nil
 }
@@ -25508,6 +25578,17 @@ func (v *PromptRequest) gates(n *Negotiation, method string) error {
 			}
 		}
 	}
+	for i := range v.Prompt {
+		if v.Prompt[i].Unknown != nil {
+			kind := unknownKind(v.Prompt[i].Unknown, "type")
+			return &CapabilityError{
+				Method:     method,
+				Capability: "promptCapabilities." + kind,
+				Field:      fmt.Sprintf("prompt[%d]", i),
+				Variant:    kind,
+			}
+		}
+	}
 	return nil
 }
 
@@ -25597,6 +25678,20 @@ func (u *SessionUpdate) gates(n *Negotiation, method string) error {
 			Variant:    "session_message_chunk",
 		}
 	}
+	if u.PlanUpdate != nil && n.Request.ClientCapabilities.Plan == nil {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "plan",
+			Variant:    "plan_update",
+		}
+	}
+	if u.PlanRemoved != nil && n.Request.ClientCapabilities.Plan == nil {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "plan",
+			Variant:    "plan_removed",
+		}
+	}
 	if u.ConfigOptionUpdate != nil {
 		if err := u.ConfigOptionUpdate.gates(n, method); err != nil {
 			return err
@@ -25609,6 +25704,17 @@ func (v *SessionConfigOptionUpdate) gates(n *Negotiation, method string) error {
 	for i := range v.ConfigOptions {
 		if err := v.ConfigOptions[i].gates(n, method); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (u *SetSessionConfigOptionRequest) gates(n *Negotiation, method string) error {
+	if u.Boolean != nil && (n.Request.ClientCapabilities.Session == nil || n.Request.ClientCapabilities.Session.ConfigOptions == nil || n.Request.ClientCapabilities.Session.ConfigOptions.Boolean == nil) {
+		return &CapabilityError{
+			Method:     method,
+			Capability: "session.configOptions.boolean",
+			Variant:    "boolean",
 		}
 	}
 	return nil
@@ -25668,6 +25774,40 @@ func (u *UnstableMcpServer) gates(n *Negotiation, method string) error {
 			Method:     method,
 			Capability: "mcpCapabilities.acp",
 			Variant:    "acp",
+		}
+	}
+	return nil
+}
+
+func (v *UnstableSuggestNesResponse) gates(n *Negotiation, method string) error {
+	for i := range v.Suggestions {
+		if v.Suggestions[i].Jump != nil && (n.Request.ClientCapabilities.Nes == nil || n.Request.ClientCapabilities.Nes.Jump == nil) {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "nes.jump",
+				Field:      fmt.Sprintf("suggestions[%d]", i),
+				Variant:    "jump",
+			}
+		}
+	}
+	for i := range v.Suggestions {
+		if v.Suggestions[i].Rename != nil && (n.Request.ClientCapabilities.Nes == nil || n.Request.ClientCapabilities.Nes.Rename == nil) {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "nes.rename",
+				Field:      fmt.Sprintf("suggestions[%d]", i),
+				Variant:    "rename",
+			}
+		}
+	}
+	for i := range v.Suggestions {
+		if v.Suggestions[i].SearchAndReplace != nil && (n.Request.ClientCapabilities.Nes == nil || n.Request.ClientCapabilities.Nes.SearchAndReplace == nil) {
+			return &CapabilityError{
+				Method:     method,
+				Capability: "nes.searchAndReplace",
+				Field:      fmt.Sprintf("suggestions[%d]", i),
+				Variant:    "searchAndReplace",
+			}
 		}
 	}
 	return nil

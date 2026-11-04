@@ -1,6 +1,7 @@
 package model
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -97,8 +98,34 @@ func TestCapabilityRulesApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c := gatesOf(undeclared, "Choice"); len(c) != 1 || c[0].Kind != GateCheckUndeclaredVariant || c[0].Variant != "Other" ||
-		c[0].Disc != "Kind" || c[0].Capability != "session.list" || c[0].Value != "" || c[0].Field != "" {
+		c[0].Disc != "Kind" || c[0].Capability != "session.list" || c[0].Value != "" || c[0].Field != "" || c[0].RawKey != "" {
 		t.Errorf("Choice: %+v", c)
+	}
+}
+
+// TestCapabilityRulesApplyRawUnknown requires an undeclared-variant rule on a
+// union without a catch-all variant, which keeps an undeclared value in its
+// raw Unknown, to read the discriminator by its key: on the union itself, or
+// on the union a property holds; and a capability that is a required object
+// to name the prefix (0049-PLAN-surface-fixes.md, phase 4, S9).
+func TestCapabilityRulesApplyRawUnknown(t *testing.T) {
+	t.Parallel()
+	p := testProtocol()
+	p.CapabilityRules = []CapabilityRule{
+		{Side: "agent", Definition: "Verdict", Capability: "session", Source: "s", Kind: GateUndeclaredVariant},
+		{Side: "agent", Definition: "AskResponse", Property: "verdict", Capability: "session", Source: "s", Kind: GateUndeclaredVariant},
+	}
+	raw, err := Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, protocolDefs), Protocol: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := gatesOf(raw, "Verdict"); len(c) != 1 || c[0].Kind != GateCheckUndeclaredVariant || c[0].Variant != "Unknown" ||
+		c[0].RawKey != "verdict" || c[0].Disc != "" || c[0].Field != "" || c[0].Capability != "session" || len(c[0].Steps) != 0 {
+		t.Errorf("Verdict, raw: %+v", c)
+	}
+	if c := gatesOf(raw, "AskResponse"); len(c) < 1 || c[0].Kind != GateCheckUndeclaredVariant || c[0].Variant != "Unknown" ||
+		c[0].RawKey != "verdict" || c[0].Field != "Verdict" || c[0].Key != "verdict" || c[0].Shape != RefNamed {
+		t.Errorf("AskResponse, raw: %+v", c)
 	}
 }
 
@@ -128,8 +155,24 @@ func TestCapabilityRulesRefuse(t *testing.T) {
 			"or has one it does not take"},
 		{"undeclared variant without a capability", with(func(r *CapabilityRule) { r.Kind, r.Variant, r.Capability = GateUndeclaredVariant, "", "" }),
 			"it lacks a field its kind needs"},
-		{"undeclared variant of a union without a catch-all", with(func(r *CapabilityRule) { r.Kind, r.Variant = GateUndeclaredVariant, "" }),
-			"Verdict is not a union with a catch-all variant"},
+		{"undeclared variant of a type that is not a union", with(func(r *CapabilityRule) {
+			r.Definition, r.Kind, r.Variant = "Update", GateUndeclaredVariant, ""
+		}), "Update is not a union with a catch-all variant or Unknown"},
+		{"undeclared variant of a property that is not a union", with(func(r *CapabilityRule) {
+			r.Definition, r.Property, r.Kind, r.Variant = "PromptRequest", "sessionId", GateUndeclaredVariant, ""
+		}), "SessionId is not a union with a catch-all variant or Unknown"},
+		{"undeclared variant naming a capability the schema lacks", with(func(r *CapabilityRule) {
+			r.Kind, r.Variant, r.Capability = GateUndeclaredVariant, "", "nope"
+		}), `capability "nope": AgentCapabilities has no property "nope"`},
+		{"advertised auth without a property", with(func(r *CapabilityRule) { r.Kind, r.Variant, r.Capability = GateAdvertisedAuthMethod, "", "" }),
+			"it lacks a field its kind needs"},
+		{"advertised auth with a variant", with(func(r *CapabilityRule) { r.Kind, r.Property, r.Capability = GateAdvertisedAuthMethod, "id", "" }),
+			"or has one it does not take"},
+		{"advertised auth with a capability", with(func(r *CapabilityRule) { r.Kind, r.Property, r.Variant = GateAdvertisedAuthMethod, "id", "" }),
+			"or has one it does not take"},
+		{"advertised auth without a list", with(func(r *CapabilityRule) {
+			r.Definition, r.Property, r.Variant, r.Capability, r.Kind = "PromptRequest", "sessionId", "", "", GateAdvertisedAuthMethod
+		}), "InitResponse has no array of a union every variant of which holds a SessionId"},
 		{"two rules", []CapabilityRule{ok, ok}, `capability rule Verdict "chosen": two rules`},
 		{"a variant the union lacks", with(func(r *CapabilityRule) { r.Variant = "maybe" }), `Verdict has no variant "maybe"`},
 		{"a variant of a type that is not a union", with(func(r *CapabilityRule) { r.Definition = "Update" }), "Update is not a union"},
@@ -161,7 +204,9 @@ func TestCapabilityRulesRefuse(t *testing.T) {
 // (0019-PLAN-behaviour-fixes.md, B6); and the undeclared elicitation mode on
 // the catch-all's mode (0019-PLAN-api-decisions.md, B20). The three subagent
 // variants of SessionUpdate add three rules and three checks
-// (0019-PLAN-issue-fixes.md, B24).
+// (0019-PLAN-issue-fixes.md, B24). Phase 4 of 0049-PLAN-surface-fixes.md adds
+// eight of each: the boolean set request, the advertised auth method, the
+// prompt's undeclared block, the two plan updates and the three NES kinds.
 func checkCommittedGates(t *testing.T, m *Model) {
 	t.Helper()
 	own := map[string][]GateCheck{}
@@ -174,8 +219,8 @@ func checkCommittedGates(t *testing.T, m *Model) {
 			}
 		}
 	}
-	if len(ACP.CapabilityRules) != 22 || n != 25 {
-		t.Errorf("%d checks resolve from %d capability rules, want 25 from 22: %v", n, len(ACP.CapabilityRules), own)
+	if len(ACP.CapabilityRules) != 30 || n != 33 {
+		t.Errorf("%d checks resolve from %d capability rules, want 33 from 30: %v", n, len(ACP.CapabilityRules), own)
 	}
 	for _, r := range ACP.CapabilityRules {
 		for _, ty := range m.ruleTypes(r.Definition) {
@@ -191,9 +236,19 @@ func checkCommittedGates(t *testing.T, m *Model) {
 	if u := own["UnstableMcpServer"]; len(u) != 3 {
 		t.Errorf("UnstableMcpServer: %d checks, want the three MCP rules: %+v", len(u), u)
 	}
-	if a := own["AuthenticateRequest"]; len(a) != 1 || a[0].Kind != GateCheckTerminalAuth || a[0].List != "AuthMethods" ||
-		a[0].Variant != "Terminal" || a[0].ID != "Id" || a[0].Field != "MethodId" {
+	// The terminal rule runs first, then the advertised one, which reads every
+	// variant's id and an Unknown entry's "id" (0049-PLAN-surface-fixes.md,
+	// phase 4, S8).
+	if a := own["AuthenticateRequest"]; len(a) != 2 || a[0].Kind != GateCheckTerminalAuth || a[0].List != "AuthMethods" ||
+		a[0].Variant != "Terminal" || a[0].ID != "Id" || a[0].Field != "MethodId" ||
+		a[1].Kind != GateCheckAdvertisedAuth || a[1].List != "AuthMethods" || a[1].Field != "MethodId" || a[1].Elem != "AuthMethod" ||
+		a[1].IDType != "AuthMethodId" || a[1].RawKey != "id" ||
+		!slices.Equal(a[1].Advertised, []VariantField{{Variant: "Terminal", Field: "Id"}, {Variant: "Agent", Field: "Id"}}) {
 		t.Errorf("AuthenticateRequest: %+v", a)
+	}
+	if pr := own["PromptRequest"]; len(pr) != 4 || pr[3].Kind != GateCheckUndeclaredVariant || pr[3].Variant != "Unknown" ||
+		pr[3].RawKey != "type" || pr[3].Field != "Prompt" || pr[3].Shape != RefSlice || pr[3].Capability != "promptCapabilities" {
+		t.Errorf("PromptRequest: %+v", pr)
 	}
 	if e := own["CreateElicitationRequest"]; len(e) != 3 || e[2].Kind != GateCheckUndeclaredVariant || e[2].Variant != "Other" ||
 		e[2].Disc != "Mode" || e[2].Capability != "elicitation" {
