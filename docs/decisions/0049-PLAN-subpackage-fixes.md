@@ -703,6 +703,37 @@ exit 0, "all gates passed", each of the 18 `ok`: `regen`, `precheck`, `newfiles`
 DialOptions.MaxBuffered: added" and "remote: HandlerOptions.AllowedHosts: added"; "reported packages unstable, remote: 0
 incompatible, not gated". The compatible changes make the release a minor, `v1.33.0`.
 
-**Not done yet,** each waiting on the owner: step 6.3, CI on the head after the owner's push; step 6.4, the release `v1.33.0`
-and its notes, on the owner's ask; step 6.5, this PLAN, its row and the MADR's P findings marked done, once the release is
-out.
+The owner committed the record as `41150d9` and pushed `277aca0..41150d9`, `make push-guard` having passed over the six
+commits before it.
+
+**Step 6.3,** CI on `41150d9`, run `41876268138`:
+
+* **Attempt 1:** "failure". Five `validate` jobs passed; `validate (ubuntu-24.04, 1.26.10)` failed its "race detector" step,
+  `-test.shuffle 1793812772601309925`: "--- FAIL: TestCloseLadder/exits_on_SIGTERM (0.63s) … agentproc_test.go:210: Close =
+  agentproc: agent terminated: exit status 3 after 622.616752ms, want ErrTerminated with exit status 3 between one and two
+  graces". `Close`'s error was the right one; its time passed the two graces' 600 ms by 23 ms.
+  * The test and the code it runs are unchanged since `v1.32.0` (`git log v1.32.0..41150d9 -- agentproc/agentproc.go
+    agentproc/tap.go agentproc/agentproc_test.go agentproc/child_test.go` is empty); this PLAN's phase 3 changed `LineTap`,
+    `Transcript` and the step-2 test.
+  * In CI's history, `tools/ci_jobs.py tally`, 40 runs of `main` from 2026-10-30: the job's only failure is this one, and no
+    record names `TestCloseLadder` failing.
+  * Not reproduced: `go test -race -count=50 -run TestCloseLadder ./agentproc/`, and 30 more at `-cpu=2` under the root
+    module's `-race` suite at load 47 to 61: all pass.
+  * The owner was asked, with three options, and chose the recommended one: rerun the failed job and record the failure as
+    seen once, a margin of an unchanged test. Not chosen: also recording a new finding for a later PLAN; widening the bound
+    in this PLAN.
+* **Attempt 2,** the failed job rerun with `gh run rerun --failed`: "completed success", the six `validate` jobs on Ubuntu,
+  Windows and macOS at Go `1.27.3` and `1.26.10` passing.
+* The Docs workflow's run `41876268062`: "success".
+
+**Step 6.4,** begun on the owner's "proceed":
+
+* [0049-REPORT-release-notes-v1-33-0.md](../reports/0049-REPORT-release-notes-v1-33-0.md), leading with the Host rule's
+  refusal, then the fixes. `make api` on `41150d9`, the report its only uncommitted file: exit 0, "against v1.32.0: 0
+  incompatible, 2 compatible".
+* `tools/consumer.py` is unchanged: its program serves `remote` through `httptest.NewServer`, on `127.0.0.1`, which the Host
+  rule allows.
+* [0048-PLAN-create-releases-in-ci.md](0048-PLAN-create-releases-in-ci.md) has not landed, so the owner tags and releases.
+
+**Not done yet,** each waiting on the owner: the tag `v1.33.0` and its release; then `tools/publication.py` and
+`tools/consumer.py v1.33.0`; step 6.5, this PLAN, its row and the MADR's P findings marked done, once the release is out.
