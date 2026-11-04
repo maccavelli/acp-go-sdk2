@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -84,6 +85,16 @@ class ScanTest(unittest.TestCase):
     def test_main_passes_clean_tree(self) -> None:
         root = self.git_repo({"a.md": f"{LINUX}<user>/x\n"})
         self.assertEqual(self.run_main(root), (0, "check-disclosure: 1 tracked file(s), 0 finding(s)\n"))
+
+    def test_main_outside_a_work_tree_says_why(self) -> None:
+        # Not a bare exit 2 (0049-PLAN-tooling-fixes.md, phase 3, T11).
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: subprocess.run(["rm", "-rf", str(root)], check=False))
+        r = subprocess.run([sys.executable, "-B", str(Path(__file__).resolve().parent / "check_disclosure.py"), "--root", str(root)],
+                           capture_output=True, text=True, env={**os.environ, "GIT_CEILING_DIRECTORIES": str(root.parent)},
+                           timeout=60)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("it needs a git work tree", r.stderr)
 
     def test_main_reads_tracked_files_only(self) -> None:
         root = self.git_repo({"a.md": "ok\n"})

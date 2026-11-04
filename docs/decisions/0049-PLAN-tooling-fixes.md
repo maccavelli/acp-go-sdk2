@@ -326,3 +326,64 @@ The second's log: "number 0001 is claimed by 2 MADRs: .worktrees/copy/docs/decis
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 3 begins on the owner's word.
+
+The owner committed phase 2 as `992f6a5`.
+
+### Phase 3: T4, T11, T5 and T6, tools that fail loudly, 2026-11-04
+
+Begun on the owner's "committed, proceed" after `992f6a5`. No deviation.
+
+**What it did:**
+
+* **T4, `tools/_common.py`:** `GO_ENV_CLEARED` (`GONOSUMDB`, `GONOSUMCHECK`, `GOPRIVATE`, `GONOPROXY`, `GOINSECURE`, `GOFLAGS`,
+  `GOEXPERIMENT`); `go_env(**extra)`, which removes them and sets `GOENV=off`, `GOSUMDB=sum.golang.org` and
+  `GOPROXY=https://proxy.golang.org,direct` before the caller's; `GO_ENV_WANT` and `go_env_problems(env)`, which reads `go env
+  -json` of those under `env` and names each that differs. `publication.py` checks it before any check, and `consumer.py`
+  before it writes its module, each exiting 1 with "the go command would not use the public proxy and checksum database:
+  …"; both give `go` `go_env`'s environment.
+  * Under `GOENV=off`, `go env` reports `GOENV` as `""`: the first run of the check, with `"off"` expected, reported
+    "GOENV='', want 'off'" on a correct environment. `GO_ENV_WANT` holds `""`, with the reason.
+* **T11:** `release_body.py` prints idscan's output only when there is some, and, when the scan fails, "release_body: the
+  identifier scan exited N: <idscan's stderr>" on stderr. **T11b:** `scripts/check_disclosure.py` prints "git ls-files
+  failed: it needs a git work tree: <git's stderr>", without the root, as its contract prints no path but a file's.
+* **T5, `tools/idscan.py`:** `--range` refuses a range with `...` or without `..`, exit 2; otherwise `scan_log` reads `git log
+  -p --no-color --no-ext-diff --format=commit %H A..B` and reports each added line that matches as `commit:path:line`, the
+  summary counting commits. The usage and help say so.
+* **T6, `tools/find.py`:** `lines` exits 2 for a path named outright that is a directory, "… is a directory; use P/** for
+  its files", or no file, "no such file: P"; `files` for a `ROOT` that is no directory. A glob matching nothing is still
+  "nothing found", exit 1. The usage says so.
+* **The tests:**
+  * `tools/test_tools.py`: `HelpersTest.test_go_env`, a parent with the variables set and a `GOENV` file holding
+    `GOPRIVATE` and `GONOSUMDB`, then `go env` itself reporting nothing exempted, and a planted value and the file each
+    caught; `ReleaseTest.test_scan_failure_says_why`; `IdscanTest.test_range_finds_what_a_later_commit_removed` (the
+    finding's probe, with its commit) and `test_range_refuses_other_forms`; `FindTest.test_bad_paths`.
+    `IdscanTest.test_range_reads_the_commit` now matches the place with its commit, the format it reported changing.
+  * `scripts/test_check_disclosure.py`: `test_main_outside_a_work_tree_says_why`.
+* **Docs:** `tools/README.md`'s `idscan.py` and `find.py` rows.
+
+**Real runs:**
+
+* `tools/publication.py v1.33.0 6e04da6 <the body>`: "10 of 10 checks hold"; and again with `GOSUMDB=off` and `GONOSUMDB`
+  naming the module in the parent: "10 of 10 checks hold", `go_env` overriding both.
+* `tools/consumer.py v1.33.0`: exit 0, "as required".
+
+**Seen to fail,** by script, the tests run in a copy per plant, 7/7:
+
+```text
+FAILED AS REQUIRED: go_env clears only the four it cleared: exit 1: FAIL: test_go_env (test_tools.HelpersTest.test_go_env)
+FAILED AS REQUIRED: go_env without GOENV=off: exit 1: FAIL: test_go_env (test_tools.HelpersTest.test_go_env)
+FAILED AS REQUIRED: release_body's reason not printed: exit 1: "the reason, not a bare status (0049-PLAN-tooling-fixes.md, phase 3, T11)")
+FAILED AS REQUIRED: check_disclosure's reason not printed: exit 1: FAIL: test_main_outside_a_work_tree_says_why (test_check_disclosure.ScanTest.test_main_outside_a_work_tree_says_why)
+FAILED AS REQUIRED: idscan's range scanning the endpoints again: exit 1: FAIL: test_range_finds_what_a_later_commit_removed (test_tools.IdscanTest.test_range_finds_what_a_later_commit_removed)
+FAILED AS REQUIRED: idscan's range form not checked: exit 1: FAIL: test_range_refuses_other_forms (test_tools.IdscanTest.test_range_refuses_other_forms)
+FAILED AS REQUIRED: find.py's named-path check removed: exit 1: FAIL: test_bad_paths (test_tools.FindTest.test_bad_paths)
+```
+
+**Checks:**
+
+* `make check-tools`: exit 0.
+* `make pre-add-check` with the phase's files, at load 23 to 26: exit 0.
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 4 begins on the owner's word.

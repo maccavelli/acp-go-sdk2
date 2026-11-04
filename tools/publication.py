@@ -92,6 +92,13 @@ def main(argv: list[str]) -> int:
     root = _common.repo(Path.cwd())
     mod, repo, tag, want = _common.module_path(root), _common.origin_repo(root), args.version, args.commit
     results: list[bool] = []
+    # The proxy and checksum-database checks prove nothing if go goes around
+    # either (0049-PLAN-tooling-fixes.md, phase 3, T4).
+    problems = _common.go_env_problems(_common.go_env())
+    if problems:
+        print(f"publication: the go command would not use the public proxy and checksum database: {'; '.join(problems)}",
+              file=sys.stderr)
+        return 1
 
     def check(what: str, ok: bool, detail: str = "") -> None:
         results.append(ok)
@@ -153,9 +160,7 @@ def main(argv: list[str]) -> int:
 
     scratch = _common.cache_dir("publication") / f"run-{os.getpid()}"
     (scratch / "mod").mkdir(parents=True)
-    env = {k: v for k, v in os.environ.items() if k not in ("GONOSUMDB", "GONOSUMCHECK", "GOPRIVATE", "GOFLAGS")}
-    env.update(GOPATH=str(scratch / "gopath"), GOMODCACHE=str(scratch / "gopath" / "pkg" / "mod"), GOPROXY="https://proxy.golang.org,direct",
-               GOFLAGS="-mod=mod -modcacherw")
+    env = _common.go_env(GOPATH=str(scratch / "gopath"), GOMODCACHE=str(scratch / "gopath" / "pkg" / "mod"), GOFLAGS="-mod=mod -modcacherw")
     try:
         run("go", "mod", "init", "example.invalid/consumer", cwd=scratch / "mod", env=env)
         rc, out = run("go", "list", "-m", f"{mod}@latest", cwd=scratch / "mod", env=env)

@@ -484,14 +484,20 @@ def main(argv: list[str]) -> int:
     root = _common.repo()
     mod, go = _common.module_path(root), floor.go_line(root / "go.mod")
     cache = _common.cache_dir("consumer")
+    env = _common.go_env(GOTOOLCHAIN=f"go{go}", GOPATH=str(cache / "gopath"), GOMODCACHE=str(cache / "gopath" / "pkg" / "mod"),
+                         GOCACHE=str(cache / "gocache"), GOFLAGS="-modcacherw")
+    # A consumer that went around the proxy or the checksum database would
+    # prove nothing of either (0049-PLAN-tooling-fixes.md, phase 3, T4).
+    problems = _common.go_env_problems(env)
+    if problems:
+        print(f"consumer: the go command would not use the public proxy and checksum database: {'; '.join(problems)}",
+              file=sys.stderr)
+        return 1
     d = cache / f"module-{os.getpid()}"
     d.mkdir(parents=True)
     (d / "go.mod").write_text(f"module example.invalid/consumer\n\ngo {go}\n", encoding="utf-8")
     (d / "main.go").write_text(PROGRAM.replace("MODULE", mod), encoding="utf-8")
     (d / "consumer_test.go").write_text(TEST.replace("MODULE", mod), encoding="utf-8")
-    env = {k: v for k, v in os.environ.items() if k not in ("GONOSUMDB", "GOEXPERIMENT", "GOFLAGS", "GOPRIVATE")}
-    env.update(GOTOOLCHAIN=f"go{go}", GOPATH=str(cache / "gopath"), GOMODCACHE=str(cache / "gopath" / "pkg" / "mod"),
-               GOCACHE=str(cache / "gocache"), GOPROXY="https://proxy.golang.org,direct", GOFLAGS="-modcacherw")
     ok, outs = True, {}
     try:
         for name, cmd, extra in (("version", ["go", "version"], {}), ("get", ["go", "get", f"{mod}@{args.version}"], {}),

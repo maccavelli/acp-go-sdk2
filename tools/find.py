@@ -9,7 +9,9 @@ Usage:
       left out
 
 Exit 0 when something is found, 1 when nothing is, or when the reader of its
-output closes early (`| head`), 2 on a usage error.
+output closes early (`| head`), 2 on a usage error: a path named outright
+that is no file, or is a directory, and a ROOT that is no directory, each
+said on standard error. A glob that matches nothing is "nothing found".
 """
 from __future__ import annotations
 
@@ -32,6 +34,16 @@ def lines(args: list[str]) -> int:
         return 2
     files: list[str] = []
     for s in sources:
+        if not glob.has_magic(s):
+            # A path named outright must be a file: a typo or a directory is a
+            # usage error, not "nothing found" (0049-PLAN-tooling-fixes.md,
+            # phase 3, T6).
+            if Path(s).is_dir():
+                print(f"find.py lines: {s} is a directory; use {s.rstrip('/')}/** for its files", file=sys.stderr)
+                return 2
+            if not Path(s).is_file():
+                print(f"find.py lines: no such file: {s}", file=sys.stderr)
+                return 2
         matched = sorted(glob.glob(s, recursive=True)) if glob.has_magic(s) else [s]
         files += [f for f in matched if Path(f).is_file()]
     found = 0
@@ -48,6 +60,9 @@ def files(args: list[str]) -> int:
         print("find.py files: need ROOT and at least one pattern", file=sys.stderr)
         return 2
     root, pats = Path(args[0]), args[1:]
+    if not root.is_dir():
+        print(f"find.py files: no such directory: {root}", file=sys.stderr)
+        return 2
     seen: set[Path] = set()
     for pat in pats:
         for p in sorted(root.rglob(pat)):

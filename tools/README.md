@@ -32,7 +32,7 @@ cache directory, outside the tree.
 | `remote.py tree --host H` | the tree's tests on a test host |
 | `remote.py pkg --host H PKG [FLAG...]` | one package's test binary, built here, run there with the flags |
 | `leftovers.py` | test binaries left running on the Windows host |
-| `idscan.py [--all \| --range A..B \| --paths F...]` | identifiers, by the place they are found |
+| `idscan.py [--all \| --range A..B \| --paths F...]` | identifiers, by the place they are found; `--range` scans the lines each commit adds, by commit, path and line |
 | `plants.py SPEC.json` | planted breaks, each in its own copy of the tree |
 | `release_body.py VERSION REV` | a release's body, from its release-notes report |
 | `publication.py VERSION COMMIT BODY` | ten checks of a release's publication; its two CI checks read the CI workflow's (`ci.yml`) runs alone, main's head's own from any ref or its nearest docs-safe ancestor's, and the tag's |
@@ -40,7 +40,7 @@ cache directory, outside the tree.
 | `interop.py [--ts REV] [--py REV] [--tree DIR] [PAIR...]` | package `remote` against the official TypeScript and Python SDKs, each cloned at a pinned revision into the cache: `example/remote dial` against each one's example server, and their example clients against `example/remote serve`, over Streamable HTTP and WebSocket, eight pairs; needs `node`, `npm`, `npx` and `uv`, and `localhost:8000` free; macOS or Linux |
 | `watch_ci.py REV [--branch B]` | every CI run of a commit, or of one branch, waited for, watched, and read once every job has settled (`--settle`, 180 s, `--every`, 10 s) |
 | `ci_jobs.py tally \| failure RUN \| env RUN VAR` | CI's job history, the CI workflow's (`ci.yml`) runs alone: every job's first attempt counted by job and conclusion; each failed job's step, seed and crash; a variable's value in each step's environment, checked with `--expect` and `--others`. Each log is read by its job id, so it is that job's own attempt |
-| `find.py lines \| files` | lines or files, without `grep` |
+| `find.py lines \| files` | lines or files, without `grep`; a path named that is no file, or is a directory, exits 2 saying so |
 | `procs.py TEXT...` | processes, without `pgrep` |
 
 `gates.py --help` lists the gates. A plant in `plants.py`'s list is:

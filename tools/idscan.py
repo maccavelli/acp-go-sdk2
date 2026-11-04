@@ -10,7 +10,8 @@ place, path:line, never by the text it matched.
 Usage:
   idscan.py                 the changed files: modified, staged and untracked
   idscan.py --all           every tracked file
-  idscan.py --range A..B    the files the commits in A..B touch, as at B
+  idscan.py --range A..B    the lines each commit in A..B adds, reported as
+                            commit:path:line; a range not of A..B exits 2
   idscan.py --paths FILE..  the files named, inside the repository or not
 
 Exit 0 when nothing matches, 1 when something does, 2 when the deny list is
@@ -56,11 +57,38 @@ def scan_text(name: str, text: str, pats: list[re.Pattern[str]]) -> list[str]:
     return [f"{name}:{n}" for n, line in enumerate(text.splitlines(), 1) if any(p.search(line) for p in pats)]
 
 
+COMMIT_RE = re.compile(r"^commit ([0-9a-f]{40,64})$")
+HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+
+
+def scan_log(log: str, pats: list[re.Pattern[str]]) -> tuple[list[str], int]:
+    """The places, commit:path:line, where any pattern matches a line a commit
+    of `git log -p --format=commit %H` adds, and how many commits it holds. So
+    an identifier added and removed again inside the range is found, with the
+    commit that added it (0049-PLAN-tooling-fixes.md, phase 3, T5)."""
+    places: list[str] = []
+    commit, path, line, commits = "", None, 0, 0
+    for text in log.splitlines():
+        if (c := COMMIT_RE.match(text)) is not None:
+            commit, path, commits = c.group(1)[:7], None, commits + 1
+        elif text.startswith("+++ "):
+            path = None if text == "+++ /dev/null" else text[6:] if text.startswith("+++ b/") else text[4:]
+        elif (m := HUNK_RE.match(text)) is not None:
+            line = int(m.group(1))
+        elif path is not None and text.startswith("+"):
+            if any(p.search(text[1:]) for p in pats):
+                places.append(f"{commit}:{path}:{line}")
+            line += 1
+        elif path is not None and text.startswith(" "):
+            line += 1
+    return places, commits
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--all", action="store_true", help="every tracked file")
-    mode.add_argument("--range", metavar="A..B", help="the files the commits in A..B touch, as at B")
+    mode.add_argument("--range", metavar="A..B", help="the lines the commits in A..B add")
     mode.add_argument("--paths", nargs="+", metavar="FILE", help="the files named")
     args = ap.parse_args(argv)
 
@@ -80,11 +108,16 @@ def main(argv: list[str]) -> int:
     else:
         root = _common.repo(Path.cwd())
         if args.range:
-            end = args.range.split("..", 1)[1] or "HEAD"
-            names = sorted(set(git(root, "diff", "--name-only", "--diff-filter=d", args.range).split()))
-            for n in names:
-                blob = subprocess.run(["git", "show", f"{end}:{n}"], cwd=root, capture_output=True, check=True).stdout
-                places += scan_text(n, blob.decode(errors="replace"), pats)
+            if "..." in args.range or ".." not in args.range:
+                print(f"idscan: --range takes A..B, two dots: {args.range!r}", file=sys.stderr)
+                return 2
+            log = git(root, "log", "-p", "--no-color", "--no-ext-diff", "--format=commit %H", args.range)
+            found, commits = scan_log(log, pats)
+            places += found
+            for place in places:
+                print(f"idscan: identifier at {place}")
+            print(f"idscan: {commits} commit(s), {len(pats)} pattern(s), {len(places)} match(es)")
+            return 1 if places else 0
         else:
             if args.all:
                 names = git(root, "ls-files", "-z").split("\0")

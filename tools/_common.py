@@ -7,6 +7,7 @@ an account or a machine's path.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -118,6 +119,39 @@ def main_guard(main, argv: list[str]) -> int:
         devnull = os.open(os.devnull, os.O_WRONLY)
         os.dup2(devnull, sys.stdout.fileno())
         return 1
+
+
+#: The variables that send the go command around the proxy or the checksum
+#: database, or change how it builds, which a release's checks must not
+#: inherit; GONOSUMCHECK is no Go variable, and is cleared for the habit.
+GO_ENV_CLEARED = ("GONOSUMDB", "GONOSUMCHECK", "GOPRIVATE", "GONOPROXY", "GOINSECURE", "GOFLAGS", "GOEXPERIMENT")
+
+#: What go env must report under go_env: no GOENV file, which go env shows as
+#: an empty GOENV when GOENV=off, the public checksum database and proxy, and
+#: nothing exempted from either.
+GO_ENV_WANT = {"GOENV": "", "GOSUMDB": "sum.golang.org", "GOPROXY": "https://proxy.golang.org,direct",
+               "GONOSUMDB": "", "GOPRIVATE": "", "GONOPROXY": "", "GOINSECURE": ""}
+
+
+def go_env(**extra: str) -> dict[str, str]:
+    """The environment publication.py and consumer.py give go: this process's,
+    GO_ENV_CLEARED removed, GOENV=off, so a go env -w file applies nothing,
+    the public proxy and checksum database, then extra
+    (0049-PLAN-tooling-fixes.md, phase 3, T4)."""
+    env = {k: v for k, v in os.environ.items() if k not in GO_ENV_CLEARED}
+    env.update(GOENV="off", GOSUMDB=GO_ENV_WANT["GOSUMDB"], GOPROXY=GO_ENV_WANT["GOPROXY"])
+    env.update(extra)
+    return env
+
+
+def go_env_problems(env: dict[str, str], runner=subprocess.run) -> list[str]:
+    """The ways go, under env, differs from GO_ENV_WANT, by go env -json; empty
+    when it does not."""
+    p = runner(["go", "env", "-json", *GO_ENV_WANT], env=env, capture_output=True, text=True, timeout=300)
+    if p.returncode:
+        return [f"go env: exit {p.returncode}: {p.stderr.strip()[:200]}"]
+    got = json.loads(p.stdout)
+    return [f"{k}={got.get(k, '')!r}, want {v!r}" for k, v in GO_ENV_WANT.items() if got.get(k, "") != v]
 
 
 def fail(message: str, status: int = 1) -> None:

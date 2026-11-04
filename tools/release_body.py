@@ -75,7 +75,13 @@ def main(argv: list[str]) -> int:
     out = _common.out_dir("release", args.out) / f"release-body-{args.version}.md"
     out.write_text(text, encoding="utf-8")
     scan = subprocess.run([sys.executable, "-B", str(TOOLS / "idscan.py"), "--paths", str(out)], capture_output=True, text=True)
-    print(scan.stdout.strip())
+    if scan.stdout.strip():
+        print(scan.stdout.strip())
+    if scan.returncode:
+        # Why it failed, as the scan said it, not a bare status
+        # (0049-PLAN-tooling-fixes.md, phase 3, T11).
+        print(f"release_body: the identifier scan exited {scan.returncode}: {scan.stderr.strip() or 'with no reason given'}",
+              file=sys.stderr)
     links = re.findall(r"\]\((https?://[^)\s]+)\)", text)
     print(f"release_body: {len(text.splitlines())} lines, {len(links)} links, written to {out}")
     return 1 if missing or scan.returncode else 0

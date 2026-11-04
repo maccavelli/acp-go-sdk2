@@ -87,6 +87,10 @@ def tracked(root: Path) -> list[str]:
     """The files git tracks in root."""
     p = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True, check=False)
     if p.returncode != 0:
+        # It needs a work tree to know what is tracked; say so, with git's
+        # reason (0049-PLAN-tooling-fixes.md, phase 3, T11).
+        reason = p.stderr.decode("utf-8", "replace").strip()
+        print(f"check-disclosure: git ls-files failed: it needs a git work tree: {reason}", file=sys.stderr)
         sys.exit(2)
     return [n for n in p.stdout.decode("utf-8", "surrogateescape").split("\0") if n]
 

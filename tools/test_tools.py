@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent
@@ -79,7 +80,29 @@ class IdscanTest(Temp):
         (self.repo / "b.txt").write_text("cleaned in the tree only\n")
         r = tool("idscan", "--range", "HEAD~1..HEAD", cwd=self.repo, env=self.env)
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
-        self.assertIn("identifier at b.txt:2", r.stdout)
+        self.assertRegex(r.stdout, r"identifier at [0-9a-f]{7}:b\.txt:2\n", "its commit, path and line")
+
+    def test_range_finds_what_a_later_commit_removed(self) -> None:
+        # Added in one commit and removed in the next: the endpoints are clean,
+        # the range is not (0049-PLAN-tooling-fixes.md, phase 3, T5).
+        (self.repo / "c.txt").write_text(f"one\ntwo\n{FAKE}\n")
+        git(self.repo, "add", "c.txt")
+        git(self.repo, "commit", "-q", "-m", "planted")
+        added = subprocess.run(["git", "rev-parse", "--short=7", "HEAD"], cwd=self.repo, capture_output=True, text=True,
+                               check=True).stdout.strip()
+        (self.repo / "c.txt").write_text("one\ntwo\n")
+        git(self.repo, "commit", "-q", "-am", "removed")
+        r = tool("idscan", "--range", "HEAD~2..HEAD", cwd=self.repo, env=self.env)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn(f"identifier at {added}:c.txt:3", r.stdout)
+        self.assertIn("2 commit(s)", r.stdout)
+        self.assertNotIn(FAKE, r.stdout + r.stderr)
+
+    def test_range_refuses_other_forms(self) -> None:
+        for bad in ("HEAD", "HEAD~1...HEAD"):
+            r = tool("idscan", "--range", bad, cwd=self.repo, env=self.env)
+            self.assertEqual(r.returncode, 2, f"{bad}: {r.stdout}{r.stderr}")
+            self.assertIn("--range takes A..B", r.stderr)
 
     def test_paths(self) -> None:
         f = self.dir / "body.md"
@@ -115,6 +138,20 @@ class FindTest(Temp):
 
     def test_usage(self) -> None:
         self.assertEqual(tool("find", "lines", "x").returncode, 2)
+
+    def test_bad_paths(self) -> None:
+        # A path named outright that is no file is a usage error, said so,
+        # not "nothing found" (0049-PLAN-tooling-fixes.md, phase 3, T6).
+        r = tool("find", "lines", str(self.dir / "missing.go"), "--", "x")
+        self.assertEqual((r.returncode, r.stdout), (2, ""))
+        self.assertIn("no such file", r.stderr)
+        r = tool("find", "lines", str(self.dir), "--", "x")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("is a directory; use", r.stderr)
+        r = tool("find", "files", str(self.dir / "nowhere"), "*.go")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("no such directory", r.stderr)
+        self.assertEqual(tool("find", "lines", str(self.dir / "*.nothing"), "--", "x").returncode, 1, "a glob matching nothing")
 
     def test_reader_that_closes_early(self) -> None:
         # Its output piped to a reader that takes one line and closes, as
@@ -362,6 +399,14 @@ class ReleaseTest(Temp):
         self.assertEqual(body, "It is in [the record](https://github.com/example-owner/example-repo/blob/v9.9.9/docs/decisions/0001-MADR-x.md"
                                "#more), and [elsewhere](https://example.invalid/x).\n")
 
+    def test_scan_failure_says_why(self) -> None:
+        repo = self.make()
+        (self.dir / "deny").write_text("# no pattern\n")
+        r = tool("release_body", "v9.9.9", "HEAD", "--out", str(self.dir / "out"), cwd=repo, env=self.env)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("the identifier scan exited 2: idscan: no pattern", r.stderr,
+                      "the reason, not a bare status (0049-PLAN-tooling-fixes.md, phase 3, T11)")
+
     def test_missing_target_refused(self) -> None:
         repo = self.make(extra="See [gone](0099-REPORT-gone.md).\n")
         r = tool("release_body", "v9.9.9", "HEAD", "--out", str(self.dir / "out"), cwd=repo, env=self.env)
@@ -370,6 +415,23 @@ class ReleaseTest(Temp):
 
 
 class HelpersTest(Temp):
+    def test_go_env(self) -> None:
+        # A parent that would send go around the checksum database or the
+        # proxy, directly and through a GOENV file (0049-PLAN-tooling-fixes.md,
+        # phase 3, T4).
+        goenv = self.dir / "goenv"
+        goenv.write_text("GOPRIVATE=example.invalid/private\nGONOSUMDB=example.invalid/x\n")
+        parent = {"GOSUMDB": "off", "GONOSUMDB": "example.invalid/x", "GOPRIVATE": "example.invalid/y",
+                  "GONOPROXY": "example.invalid/z", "GOINSECURE": "example.invalid/w", "GOENV": str(goenv)}
+        with unittest.mock.patch.dict(os.environ, parent):
+            env = _common.go_env(GOFLAGS="-modcacherw")
+        for var in ("GONOSUMDB", "GOPRIVATE", "GONOPROXY", "GOINSECURE"):
+            self.assertNotIn(var, env)
+        self.assertEqual((env["GOENV"], env["GOSUMDB"], env["GOFLAGS"]), ("off", "sum.golang.org", "-modcacherw"))
+        self.assertEqual(_common.go_env_problems(env), [], "go itself reports nothing exempted")
+        self.assertEqual(len(_common.go_env_problems({**env, "GONOSUMDB": "example.invalid/x"})), 1, "a planted value is caught")
+        self.assertIn("GOPRIVATE", " ".join(_common.go_env_problems({**env, "GOENV": str(goenv)})), "a GOENV file is caught")
+
     def test_github_repo(self) -> None:
         for url in ("https://github.com/o/n.git", "https://github.com/o/n", "git@github.com:o/n.git", "ssh://git@github.com/o/n.git\n"):
             self.assertEqual(_common.github_repo(url), "o/n", url)
