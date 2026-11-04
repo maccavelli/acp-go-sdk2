@@ -919,3 +919,32 @@ FAILED AS REQUIRED: CompactionTimeline keeps a chunk shallowly (^TestTimelinesCo
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 6 begins on the owner's word.
+
+The owner committed phase 5 as `6f17464`.
+
+### Phase 6: close, 2026-11-03
+
+Begun on the owner's "committed, proceed" after `6f17464`. No deviation.
+
+**Step 6.1,** `tools/gates.py --all`, with `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set on the command, at `6f17464`: exit 0,
+"all gates passed", each of the 18 `ok`: `regen`, `precheck`, `newfiles`, `nojsonv2`, `winvet`, `records`, `mdlint`,
+`idscan`, `tools`, `lint`, `fix`, `tidy`, `api`, `race3`, `floor`, `platforms`, `windows` and `linux`.
+
+| Item | Phase | The test that shows it, each seen to fail on its plant |
+| --- | --- | --- |
+| S1, an unknown `type` that fits `ValueId` | 1 | `TestSetConfigOptionUnknownTypeIsValueId` |
+| S2, an empty collection is sent | 2 | `TestToolCallUpdateEmptyCollectionsOnWire` |
+| S3, the unstable capabilities | 4 | `TestUnstableCapabilitiesGated` |
+| S4, the timelines' copies | 5 | `TestToolCallTimelineCopies`, `TestCompactionTimelineCopies`, `TestDeepCopySharesNothing`, `TestTimelinesCopyWhatTheyApply` |
+| S5, a boolean `session/set_config_option` | 4 | `TestBooleanSetConfigOptionGated` |
+| S6, closed enumerations | 3 | `TestClosedEnumsRefusedOnSend`, `TestClosedEnumsReadableOnReceive`, `TestLenientClosedEnumsReadAbsent` |
+| S7, a key-less variant named by its title | 1 | `TestKeylessVariantNamedExplicitly` |
+| S8, an unadvertised `methodId` | 4 | `TestAuthenticateUnadvertisedMethod` |
+| S9, an undeclared prompt block | 4 | `TestPromptUndeclaredBlockGated` |
+
+**Step 6.2,** `make api`, in the `api` gate: "against v1.31.2: 0 incompatible, 26 compatible", `ErrUnadvertisedAuthMethod`
+and deviation 3's 25 `Validate` methods.
+
+**Not done yet,** each waiting on the owner: step 6.3, CI on the head after the owner's push; step 6.4, the release
+`v1.32.0` and its notes, on the owner's ask; step 6.5, this PLAN, its row and the MADR's S findings marked done, once the
+release is out.
