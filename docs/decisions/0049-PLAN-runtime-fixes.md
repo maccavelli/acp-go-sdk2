@@ -572,3 +572,92 @@ which printed its URL.
 
 Not done here, by the MADR's plan: the surface, subpackage, tooling and generator findings, each in its own PLAN, written when
 its turn comes.
+
+### Phase 5: R11, the overflow decided by the count, 2026-11-05
+
+The owner committed the amendment as `a4d8ef2` and said "committed, proceed".
+
+**Deviation 1, 2026-11-05: step 5.7's delay cannot show what it was to show.**
+
+* **Found:** step 5.7 asked for probe 1's delay, the loop sleeping 1 ms in fake time before each receive, on the fixed code,
+  with `TestOverflowBlockHeldInitialize`, `TestHeldNotificationsFillQueue` and the new tests passing 200 runs each. In a copy
+  of the working tree: `TestHeldNotificationsFillQueue` 200 of 200, and probe 2 20 of 20 open with 2 handled under each
+  policy, where before the fix `OverflowCloseConnection` closed and `OverflowDropNewest` dropped, 20 of 20. But
+  `TestOverflowBlockHeldInitialize` failed, "connection_overflow_block_test.go:332: Initialize did not return: the reader
+  paused on the held notifications", the connection no longer ending; and
+  `TestOverflowBlockHeldInitializeLoopBehind/past_it` ended in "deadlock: main bubble goroutine has exited but blocked
+  goroutines remain". Both are the probe's: `synctest.Wait` returns while the loop sleeps without advancing the clock, so a
+  test that then requires the handlers to have run fails, and one that ends with the loop asleep leaves it blocked in the
+  bubble. Without the delay, each passes, 3 of 3 under `-race`. The step's claim was wrong for any `synctest` test that
+  waits on the loop, whatever the fix.
+* **Decided,** by the owner, from three options (the others: narrow the step to probe 2, the fill-queue test and the held
+  tests, records only; both): for the `synctest` tests that wait on the loop, untimed yields in place of the sleep,
+  `runtime.Gosched` before each receive, which reorder the goroutines without fake time, with
+  `TestOverflowBlockHeldInitialize` run 2000 times on `a4d8ef2`'s code and on the fixed code and the failures counted; probe
+  2 and the fill-queue test stand under the timed delay, which they passed.
+* **Files added to the phase:** none; the probes are scratch scripts. The MADR's decisions and facts stand: no amendment.
+
+**What it did:**
+
+* **The seam,** step 5.1: `withBeforeDequeue(f func())`, unexported, sets `connectionConfig.beforeDequeue`, which
+  `buildConnection` copies to `Connection.beforeDequeue`; `processNotifications` is a `for` with an explicit receive and
+  calls it, when set, before each.
+* **The admission,** step 5.2: `admitLimit()` is `queueLimit + 1`, or `2*queueLimit + 1` under `OverflowBlock`;
+  `queueNotification` admits when `seq - completedNotificationSeq` is within it and `overByteBudget` does not refuse, and
+  the send's `default` unlocks and panics, "an admitted notification found the notification queue full". Refused, it
+  rolls back and meets the policy as before. Its comment, and `notificationQueue`'s, say so.
+* **The capacity,** step 5.3: `queueCap++` after the doubling. `WithMaxQueuedNotifications`' godoc says the one running or
+  next to run is not among the `n`, and the slots are `n + 1`, or `2n + 1`.
+* **The tests,** step 5.4:
+  * `connection_overflow_boundary_test.go`, new: `heldLoop(t)` holds the loop until its `release`, which the test's end
+    calls too, once, so a failed test leaves no goroutine held in its bubble. `TestOverflowBoundaryCounted`, its subtests
+    `close`, `drop` and `block`; `TestOverflowBlockHeldInitializeLoopBehind`, its subtests "at the limit", three
+    notifications, and "past it", four.
+  * `connection_queue_size_test.go`: the default's channel `2n + 1`, and `TestQueueSizeAtMaxInt`'s; a new
+    `TestQueueChannelCapacity`, the channel and `admitLimit` at `n = 7` under each policy, 15, 8 and 8. The Scope's "its
+    custom-size test's" was wrong: `TestWithMaxQueuedNotifications_CustomSize` checks `queueLimit` alone, and no test
+    checked the `n + 1` of the other two policies, so the table test holds both.
+* **Docs,** step 5.5: `docs/architecture.md`'s overflow section, the admission by the count, `admitLimit`, the panic, the
+  seam, `2n + 1`, the read-on's close, and the byte budget's overflow path; its tests list names
+  `connection_overflow_boundary_test.go`. `README.md` names no capacity, "twice the queue's size" still true of the
+  waiting: unchanged.
+
+**Seen to fail,** step 5.6, by `tools/plants.py`, 3/3:
+
+```text
+FAILED AS REQUIRED: the admission by the channel's room, capacity n and 2n, restored (^(TestOverflowBoundaryCounted|TestOverflowBlockHeldInitializeLoopBehind)$): exit 1: connection_overflow_boundary_test.go:142: three held notifications, the loop behind: the connection ended: acp: connection closed: notification queue overflow
+FAILED AS REQUIRED: the limit without its + 1 (^(TestOverflowBoundaryCounted|TestOverflowBlockHeldInitializeLoopBehind)$): exit 1: connection_overflow_boundary_test.go:142: three held notifications, the loop behind: the connection ended: acp: connection closed: notification queue overflow
+FAILED AS REQUIRED: the seam's call removed (^TestOverflowBoundaryCounted$): exit 1: connection_overflow_boundary_test.go:78: a third: ended false (<nil>), want true
+```
+
+Under the first two, `TestOverflowBoundaryCounted`'s log is probe 2's table: `close`, "two notifications with a queue of
+1, the loop behind: ended true (acp: connection closed: notification queue overflow)"; `drop`, "ended false (<nil>),
+dropped 1".
+
+**Scheduling, step 5.7 as amended by deviation 1:**
+
+* The timed delay, the loop sleeping 1 ms before each receive, on the fixed code: `TestHeldNotificationsFillQueue`, 200 of
+  200; probe 2, 20 of 20 "closed=false handled=2" under each policy.
+* Untimed yields, `runtime.Gosched()` three times before each receive, `TestOverflowBlockHeldInitialize` `-count=2000`:
+  on `a4d8ef2`'s code, 303 of 2000 failed, each "connection ended before response"; on the fixed code, 0 of 2000.
+* The same under `-race`, `-count=500`: 0 of 500 on either. The race detector's scheduling hides the order, which the
+  yields alone bring about; the two failures in the tree were under `-race` at load 24 to 43.
+
+**Checks,** step 5.8:
+
+* `go test -race -count=3 -shuffle=on .`: `ok`, 44.4 s. `go test -count=2000 -run '^TestOverflowBlockHeldInitialize$' .`:
+  `ok`.
+* `go test -run '^$' -bench 'SessionUpdateNotify|SessionNotificationUnmarshal' -benchmem -count=5 .`, on `a4d8ef2`'s code
+  and the tree: allocations per operation 65, 65 and 39 each, before and after; the bytes per operation within 13 of
+  each other; the times within the noise of load 15 to 30.
+* `make api`: "against v1.33.0: 0 incompatible, 0 compatible".
+* `make pre-add-check` with the phase's files: first, exit 2, `thelper`, "connection_overflow_boundary_test.go:26:6: test
+  helper function should start from t.Helper()", `heldLoop` taking `t` for its cleanup; with `t.Helper()`, exit 0, at
+  load 21 to 62: "3 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy,
+  govulncheck."
+* `tools/remote.py tree --host linux`: both modules, exit 0. `tools/remote.py pkg --host windows . -test.run
+  'Overflow|QueueSize|QueueChannelCapacity|HeldNotifications|WithMaxQueuedNotifications' -test.count=3`: "PASS".
+* `make check-records`, `make markdownlint`, `make disclosure-check`: exit 0 each. `tools/idscan.py --paths` over the phase's
+  files: 0 matches.
+
+Staged for the owner, who commits. Phase 6 begins on the owner's word.

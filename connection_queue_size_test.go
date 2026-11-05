@@ -28,9 +28,11 @@ func TestWithMaxQueuedNotifications_DefaultSize(t *testing.T) {
 		t.Fatalf("default queue capacity = %d, want %d", csc.conn.queueLimit, defaultMaxQueuedNotifications)
 	}
 	// Under OverflowBlock, the default, the channel holds twice the limit, for
-	// the reader's read-on (0044-MADR-notification-queue-back-pressure.md, D4).
-	if got := cap(csc.conn.notificationQueue); got != 2*defaultMaxQueuedNotifications {
-		t.Fatalf("default queue channel capacity = %d, want %d", got, 2*defaultMaxQueuedNotifications)
+	// the reader's read-on, and one for the notification whose handler runs
+	// or is next to (0044-MADR-notification-queue-back-pressure.md, D4 as
+	// amended).
+	if got := cap(csc.conn.notificationQueue); got != 2*defaultMaxQueuedNotifications+1 {
+		t.Fatalf("default queue channel capacity = %d, want %d", got, 2*defaultMaxQueuedNotifications+1)
 	}
 }
 
@@ -162,12 +164,34 @@ func TestLargerQueue_SurvivesNotificationBurst(t *testing.T) {
 // TestQueueSizeAtMaxInt requires WithMaxQueuedNotifications(math.MaxInt) to
 // build a connection, its n lowered to the maximum, 1 << 20, before
 // OverflowBlock doubles it (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
-// R6).
+// R6), with one slot more (R11).
 func TestQueueSizeAtMaxInt(t *testing.T) {
 	t.Parallel()
 	c := buildConnection(nil, io.Discard, strings.NewReader(""), WithMaxQueuedNotifications(math.MaxInt))
-	if c.queueLimit != maxQueuedNotificationsLimit || cap(c.notificationQueue) != 2*maxQueuedNotificationsLimit {
+	if c.queueLimit != maxQueuedNotificationsLimit || cap(c.notificationQueue) != 2*maxQueuedNotificationsLimit+1 {
 		t.Errorf("queue limit %d, channel %d, want %d and %d", c.queueLimit, cap(c.notificationQueue),
-			maxQueuedNotificationsLimit, 2*maxQueuedNotificationsLimit)
+			maxQueuedNotificationsLimit, 2*maxQueuedNotificationsLimit+1)
+	}
+}
+
+// TestQueueChannelCapacity requires the channel to hold what the count
+// admits under each policy: n waiting, or 2n under OverflowBlock, and the
+// notification whose handler runs or is next to
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R11).
+func TestQueueChannelCapacity(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		policy NotificationOverflowPolicy
+		want   int
+	}{
+		{"block", OverflowBlock, 2*7 + 1},
+		{"close", OverflowCloseConnection, 7 + 1},
+		{"drop", OverflowDropNewest, 7 + 1},
+	} {
+		c := buildConnection(nil, io.Discard, strings.NewReader(""), WithMaxQueuedNotifications(7), WithNotificationOverflowPolicy(tc.policy))
+		if got := cap(c.notificationQueue); got != tc.want || c.admitLimit() != uint64(tc.want) {
+			t.Errorf("%s: channel %d, admitLimit %d, want %d each", tc.name, got, c.admitLimit(), tc.want)
+		}
 	}
 }

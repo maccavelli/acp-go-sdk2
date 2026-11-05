@@ -491,8 +491,9 @@ type Connection struct {
 
 	// notificationQueue serializes notification processing to maintain order.
 	// It is bounded to keep memory usage predictable: its capacity is
-	// queueLimit, or twice it under OverflowBlock, which reads on past
-	// queueLimit while the notification loop waits on this connection.
+	// admitLimit's, queueLimit, or twice it under OverflowBlock, which reads on
+	// past queueLimit while the notification loop waits on this connection,
+	// and one for the notification whose handler runs or is next to.
 	notificationQueue chan queuedNotification
 	// queueLimit is WithMaxQueuedNotifications' n: how many notifications may
 	// wait while a handler runs before the overflow policy acts.
@@ -553,6 +554,11 @@ type Connection struct {
 	// on any other connection.
 	receivingChain  bool
 	guardInitialize string
+	// beforeDequeue, set only by a test through withBeforeDequeue, runs on
+	// the notification loop before each receive from notificationQueue, so
+	// that a test can hold the loop with a notification it has not taken
+	// (0049-PLAN-runtime-fixes.md, phase 5, R11).
+	beforeDequeue func()
 }
 
 // ConnectionOption configures optional parameters for a Connection.
@@ -587,28 +593,39 @@ type connectionConfig struct {
 	// observer is WithObserver's function, the last given
 	// (0046-MADR-sending-and-receiving-middleware.md, D9).
 	observer func(Observation)
+	// beforeDequeue is withBeforeDequeue's function, or nil.
+	beforeDequeue func()
 }
 
 // WithMaxQueuedNotifications sets how many notifications may wait in the
 // queue while a notification handler runs; past it, the overflow policy acts
 // (WithNotificationOverflowPolicy). Under OverflowBlock, the default, the
 // reader then pauses, and reads on to 2n while the notification loop waits
-// on this connection. The default is 1024. Increase this value when
-// multiplexing many concurrent sessions over a single connection, as the
-// combined notification rate may exceed the processing speed of the
-// single-threaded notification consumer. WithMaxQueuedBytes bounds the same
+// on this connection. The notification whose handler runs, or is next to
+// run, is not among the n, whether or not the loop has taken it yet, so the
+// same input meets the policy the same way. The default is 1024. Increase
+// this value when multiplexing many concurrent sessions over a single
+// connection, as the combined notification rate may exceed the processing
+// speed of the single-threaded notification consumer. WithMaxQueuedBytes bounds the same
 // queue in bytes; whichever is reached first, the policy acts.
 //
 // n is at most 1 << 20 (1,048,576); a larger n is lowered to it. The queue is
 // allocated whole as the connection is built, 32 bytes a slot on a 64-bit
-// platform, with 2n slots under OverflowBlock: 64 MiB at the maximum
-// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R6).
+// platform, with n + 1 slots, or 2n + 1 under OverflowBlock: 64 MiB at the
+// maximum (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R6 and R11).
 func WithMaxQueuedNotifications(n int) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		if n > 0 {
 			cfg.maxQueuedNotifications = n
 		}
 	}
+}
+
+// withBeforeDequeue sets a function the notification loop runs before each
+// receive from its queue: a test's seam, to hold the loop with a notification
+// it has not taken (0049-PLAN-runtime-fixes.md, phase 5, R11).
+func withBeforeDequeue(f func()) ConnectionOption {
+	return func(cfg *connectionConfig) { cfg.beforeDequeue = f }
 }
 
 // WithMaxQueuedBytes sets the budget, in bytes, for what the connection holds
@@ -921,10 +938,15 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		cfg.notificationOverflow = OverflowBlock
 	}
 	cfg.maxQueuedNotifications = min(cfg.maxQueuedNotifications, maxQueuedNotificationsLimit)
+	// The channel holds what admitLimit admits: the n waiting, or 2n on
+	// OverflowBlock's read-on, and the notification whose handler runs or is
+	// next to, which the loop may not have taken yet
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R11).
 	queueCap := cfg.maxQueuedNotifications
 	if cfg.notificationOverflow == OverflowBlock {
 		queueCap *= 2
 	}
+	queueCap++
 	// The receiving chain replaces the handler, built once, so handleInbound
 	// is unchanged and a connection without one runs as before
 	// (0046-MADR-sending-and-receiving-middleware.md, D3).
@@ -968,6 +990,7 @@ func buildConnection(handler MethodHandler, peerInput io.Writer, peerOutput io.R
 		resultChecks:          cfg.resultChecks,
 		observer:              cfg.observer,
 		receivingChain:        len(cfg.receiving) > 0,
+		beforeDequeue:         cfg.beforeDequeue,
 	}
 	if cfg.maxConcurrentRequests > 0 {
 		c.requestSlots = make(chan struct{}, cfg.maxConcurrentRequests)
@@ -1876,9 +1899,12 @@ func (c *Connection) queueNotification(m anyMessage, receipt uint64, size int64)
 	c.notifyMu.Lock()
 	// Under OverflowBlock the reader waits for room before the notification
 	// takes a sequence number, so no response's watermark counts one it has
-	// not queued; past the wait, the select below queues it, or, at twice
-	// queueLimit, closes (0044-MADR-notification-queue-back-pressure.md, D2
-	// to D4). The byte budget acts as the count does: the wait covers it, and
+	// not queued; past the wait, the count below admits it, or, past
+	// admitLimit, closes (0044-MADR-notification-queue-back-pressure.md, D2
+	// to D4, D4 as amended). The count decides, not the channel's room, which
+	// depends on whether the notification loop has taken the one next to run
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R11). The byte
+	// budget acts as the count does: the wait covers it, and
 	// past it the notification meets the policy, at twice the budget under
 	// OverflowBlock (0045-MADR-notification-queue-byte-budget.md, D3 as
 	// amended).
@@ -1890,13 +1916,17 @@ func (c *Connection) queueNotification(m anyMessage, receipt uint64, size int64)
 	c.lastEnqueuedNotificationSeq++
 	seq := c.lastEnqueuedNotificationSeq
 	queued := false
-	if !c.overByteBudget(size, c.notificationOverflow == OverflowBlock) {
+	if seq-c.completedNotificationSeq <= c.admitLimit() && !c.overByteBudget(size, c.notificationOverflow == OverflowBlock) {
 		select {
 		case c.notificationQueue <- queuedNotification{seq: seq, receipt: receipt, msg: &m, size: size}:
 			c.queuedBytes += size
 			c.notifBytes += size
 			queued = true
 		default:
+			// The channel holds at most the notifications received and not
+			// taken, which the count has just admitted.
+			c.notifyMu.Unlock()
+			panic("an admitted notification found the notification queue full")
 		}
 	}
 	if queued {
@@ -1932,6 +1962,20 @@ func (c *Connection) queueNotification(m anyMessage, receipt uint64, size int64)
 	}
 	c.shutdownReceive(ErrNotificationQueueOverflow)
 	return false
+}
+
+// admitLimit is how many notifications may be received and not completed:
+// queueLimit waiting, or twice it under OverflowBlock, which reaches that only
+// on its read-on path, and the one whose handler runs or is next to. Counted
+// so, the policy meets the same input the same way whether or not the
+// notification loop has taken that one yet
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, R11).
+func (c *Connection) admitLimit() uint64 {
+	n := uint64(c.queueLimit) //nolint:gosec // G115: queueLimit is at least 1 and at most maxQueuedNotificationsLimit.
+	if c.notificationOverflow == OverflowBlock {
+		n *= 2
+	}
+	return n + 1
 }
 
 // keepCancel keeps receipt, a session/cancel's or a session close's, as the
@@ -2135,7 +2179,14 @@ func (c *Connection) shutdownReceive(cause error) {
 // processNotifications processes notifications sequentially to maintain order.
 // It terminates when notificationQueue is closed (e.g. on disconnect in receive()).
 func (c *Connection) processNotifications() {
-	for queued := range c.notificationQueue {
+	for {
+		if c.beforeDequeue != nil {
+			c.beforeDequeue()
+		}
+		queued, ok := <-c.notificationQueue
+		if !ok {
+			return
+		}
 		ctx := context.WithValue(context.WithValue(c.inboundCtx, receiptKey{}, queued.receipt),
 			messageKey{}, messageMark{notification: true, seq: queued.seq, conn: c})
 		c.handleInbound(ctx, queued.msg, nil)

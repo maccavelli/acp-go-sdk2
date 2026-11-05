@@ -486,13 +486,21 @@ What a full queue does is the overflow policy
 ([0044-MADR-notification-queue-back-pressure.md](decisions/0044-MADR-notification-queue-back-pressure.md)).
 `queueLimit` is `WithMaxQueuedNotifications`' `n`, lowered to
 `maxQueuedNotificationsLimit`, `1 << 20`, in `buildConnection`, since the
-channel is allocated whole (0049, R6). `receiveLine` queues each
-notification with a non-blocking send, whose `default` closes
-(`OverflowCloseConnection`) or drops (`OverflowDropNewest`) once the channel is
-full. `OverflowBlock`, the default, and also what an undefined policy becomes in
-`buildConnection`, works this way:
+channel is allocated whole (0049, R6). `queueNotification` admits each
+notification by the count, not the channel's room: while
+`lastEnqueuedNotificationSeq - completedNotificationSeq`, the notifications
+received and not completed, this one included, is within `admitLimit`, `n + 1`,
+or `2n + 1` under `OverflowBlock`, one for the handler that runs or is next to;
+past it, the notification closes (`OverflowCloseConnection`) or is dropped
+(`OverflowDropNewest`). The channel's capacity is `admitLimit`'s, so an admitted
+send cannot fail; its `default` panics. The channel's room depended on whether
+the loop had taken the notification next to run, so the same input was
+refused or not by scheduling (0049, R11). A test holds the loop through
+`withBeforeDequeue`, an unexported option `processNotifications` calls before
+each receive. `OverflowBlock`, the default, and also what an undefined policy
+becomes in `buildConnection`, works this way:
 
-- Its channel holds `2n`.
+- Its channel holds `2n + 1`.
 - Before a notification takes its sequence number, `waitForRoom` waits on
   `notifyCond` while more than `n` are received and not completed, as
   `lastEnqueuedNotificationSeq - completedNotificationSeq` counts them, so the
@@ -507,7 +515,7 @@ full. `OverflowBlock`, the default, and also what an undefined policy becomes in
   `sendRequestCommit` counts `initialize` until `settled` runs. `beginPeerWait`
   wakes the reader as it counts one.
 - While any is counted, the reader does not pause, and reads on until the
-  channel's `2n` are full, where the same `default` closes.
+  count passes `2n + 1`, where it closes as `OverflowCloseConnection` does.
 - A pause that lasts `pauseWarnAfter`, 5 s, is logged once at `Warn`.
 
 The byte budget sits beside the count
@@ -526,7 +534,7 @@ The byte budget sits beside the count
     read-on; twice a budget above `math.MaxInt64/2` is `math.MaxInt64` (0049,
     R5).
   - `waitForRoom` waits on it as on the count. Past the wait, it sends the
-    notification to the same overflow path as a full channel.
+    notification to the same overflow path as the count past `admitLimit`.
 - **A request.** `admitRequestBytes` adds its size after the concurrency limit's
   check, or refuses it at once.
   - `releaseRequestBytes` runs in the request's `release` callback, as its
@@ -677,7 +685,10 @@ Checks that guard this:
     peer.
 
   `connection_overflow_policy_test.go` covers the close and drop policies, each
-  named.
+  named. `connection_overflow_boundary_test.go` covers the limit at its
+  boundary, the loop held by `withBeforeDequeue` with the notification next to
+  run not taken: each policy at the limit and one past it, and the
+  `initialize` hold at and past `2n + 1` (0049, R11).
 - `connection_middleware_test.go` covers the receiving chain:
   - its order, its construction, and a `nil` handler under it;
   - a short-circuit, raw params and the checked result;
