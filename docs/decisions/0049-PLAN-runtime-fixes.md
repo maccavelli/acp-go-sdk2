@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-11-05
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
@@ -716,3 +716,35 @@ Steps 3 and 4 wait on the owner's ask for the release.
   commit.
 * `make api` on `e02e63f`: "against v1.33.0: 0 incompatible, 0 compatible".
 * The report is staged with its row. `tools/release_body.py v1.33.1 <rev>` runs once it is committed, before the tag.
+
+The owner committed the report as `b4ee2d4` and pushed it, then tagged `v1.33.1` on `b4ee2d4` and pushed the tag. After the
+consumer check below, the owner created the release with `gh release create v1.33.1 --title v1.33.1 --notes-file <the body>`,
+which printed its URL.
+
+* `tools/release_body.py v1.33.1 b4ee2d4`: exit 0, "58 lines, 3 links"; `idscan` over the body, 0 matches. The links name the
+  MADR, the 0044 MADR and the tooling PLAN at the tag.
+* `make push-guard` before the push: "1 outgoing commit(s), e02e63f..b4ee2d4", "the guard passed (exit 0)".
+* **CI,** read by `tools/watch_ci.py b4ee2d4`:
+  * the Docs workflow's run `42078457018` on `main`, "completed success", the push changing records alone;
+  * the tag's run `42078758455`, "completed success", six `validate` jobs on Ubuntu, Windows and macOS at Go `1.27.3` and
+    `1.26.10`.
+* `tools/consumer.py v1.33.1`: exit 0, "as required". The module at the floor, `go 1.26.10`, requires `v1.33.1`, its test is
+  `ok`, and its Windows build exits 0.
+* `tools/publication.py v1.33.1 b4ee2d4 <the body>`: exit 0, "10 of 10 checks hold". The release exists, not a draft or
+  prerelease, and is marked latest; its body is the extracted text; the tag is annotated, names `b4ee2d4`, and is on origin's
+  `main`; CI passed on that head and on the tag, both by run `42078758455`, CI's only run on `b4ee2d4`; the proxy serves the
+  tag at that commit; `go list -m @latest` gives `v1.33.1`; `go mod download` works with the checksum database on.
+
+**Step 4.** This PLAN and its row are `complete`. The MADR's R11 is marked done in `v1.33.1`, and its F-R note names it.
+
+**Verification,** the amended bullet of 2026-11-05:
+
+* The overflow policy acts on the same input the same way whatever the order the loop runs in: the two new tests, with the
+  loop held, pass, and each failed with the admission by the channel's room restored (phase 5, step 5.6). Probe 1's delay on
+  the fixed code: probe 2 and `TestHeldNotificationsFillQueue` pass; for the tests that wait on the loop, untimed yields in
+  its place, by deviation 1: `TestOverflowBlockHeldInitialize` 0 of 2000 failed, against 303 of 2000 before the fix. The
+  capacity tests failed on their plants at step 3.
+* `make api`: no change against `v1.33.0`.
+* `tools/gates.py --all`, 18 of 18, and CI on `e02e63f` and on the tag, pass.
+
+Not done here: the generator PLAN, by the MADR's plan, written when its turn comes.

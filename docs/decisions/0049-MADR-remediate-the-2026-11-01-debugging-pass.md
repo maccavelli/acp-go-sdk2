@@ -412,7 +412,8 @@ wrong result or breaks a documented contract on a reachable path; **low** is an 
 ### F-R: the connection runtime
 
 *Done 2026-11-03:* R1 to R10 are fixed in `v1.31.2` by [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md), each with
-the test its phase 4 table names; R2 as amended under "R1's and R2's designs".
+the test its phase 4 table names; R2 as amended under "R1's and R2's designs". *R11, done 2026-11-05,* in `v1.33.1` by
+the same PLAN's phases 5 and 6, per Q20 (a), with the tests its phase 6 table names.
 
 **R1. High. Two SDK peers can deadlock: the reader writes its refusals synchronously.** `connection.go:1699-1718`, `:1735-1744`
 (refusals), `:1524`, `:1653-1670` (faults), `:1957-1963` (`answer` writes with `sendMessage(context.Background())` on the reader's
@@ -486,7 +487,7 @@ which it never received, and the observer reported a cancel sent. Fix: send it o
 `connection.go:956-966`, the doc at `:1035-1040`. **Probe** (`TestProbeWaitBlockedByWriter`, re-run): "WaitContext after Close =
 context deadline exceeded". Fix: name the case in `Wait`'s and `Close`'s doc.
 
-**R11. ~~Unrated~~ Medium, rated 2026-11-05; open. `TestOverflowBlockHeldInitialize` fails intermittently with the connection ended.** *Added
+**R11. ~~Unrated~~ Medium, rated 2026-11-05; ~~open~~ done 2026-11-05 in `v1.33.1`. `TestOverflowBlockHeldInitialize` fails intermittently with the connection ended.** *Added
 2026-11-04,* by the tooling PLAN's phase 6, its deviation 3, on the owner's choice to record it as a finding rather than a
 footnote. `connection_overflow_block_test.go:306-339`, a `synctest` test of 0044's D3: with a queue of 1 under
 `OverflowBlock`, three extension notifications held for `initialize`'s answer, then the answer.
@@ -854,7 +855,7 @@ released on its own, while the severity order inside each keeps R1 first. The pl
 
 * `0049-PLAN-runtime-fixes.md`: R1, then R5, R9, R4, R3, R7, R8, R6, R10, and R2 per Q2. A patch release when it changes no
   exported API. *Complete 2026-11-03,* released in `v1.31.2`. *R11, added 2026-11-04, is open:* an amendment of that PLAN
-  examines it, on the owner's approval. *Amended 2026-11-05:* its phases 5 and 6 fix R11 per Q20 (a), released as `v1.33.1`.
+  examines it, on the owner's approval. *Amended 2026-11-05:* its phases 5 and 6 fix R11 per Q20 (a), released as `v1.33.1`. *Complete 2026-11-05,* released in `v1.33.1`.
 * `0049-PLAN-surface-fixes.md`: S1, S2, S6 per Q4, S7, S8, S9, S5, S4, and S3 per Q3. The new gates and stricter validation are
   behaviour changes, released as a minor version with notes that lead with them. *Written 2026-11-03,*
   [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md). It groups the order into phases by mechanism: S1 with S7,
@@ -868,7 +869,7 @@ released on its own, while the severity order inside each keeps R1 first. The pl
   generator. *Written 2026-11-04,* [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md), proposed, with T14, F-C's two
   untested `Error` methods and `abandon`, and Q16 to Q19 below. It groups the order into phases by tool: T2, T14 and T7;
   T1 and T3; T4, T11, T5 and T6; T9, T10, T12 and T13; F-C. *Complete 2026-11-04,* with no release of its own, under
-  three deviations of its close: the `allOf` engine case, T12's test, and R11 recorded.
+  three deviations of its close: the `allOf` engine case, T12's test, and R11 recorded. Its fixes shipped in `v1.33.1`.
 
 Each fix's test is its probe, kept, seen to fail before the fix and to pass after; the probes named above are the starting point.
 
