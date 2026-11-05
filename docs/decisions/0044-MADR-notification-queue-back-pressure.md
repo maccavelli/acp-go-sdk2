@@ -213,6 +213,11 @@ memory stays bounded (E2, E4 to E6). A consumer that wants the close passes `Ove
 * **D4. The read-on limit.** At `2n` queued, a further notification closes the connection as `OverflowCloseConnection` does, with
   `ErrNotificationQueueOverflow`. The queue's channel has capacity `2n` under `OverflowBlock` and `n` under the other policies, so
   memory stays bounded by configuration, and the existing capacity tests are unchanged.
+  *Amended 2026-11-05,* by [0049-MADR-remediate-the-2026-11-01-debugging-pass.md](0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
+  R11 and Q20 (a): the channel's room decided the limit, so the notification next to run counted as waiting until the loop
+  took it, and the same input was refused or not by scheduling. The limit is counted instead, the notifications received
+  and not completed against `2n + 1`, or `n + 1` under the other policies, one for the handler that runs or is next to; the
+  channel has that capacity. "At `2n` queued" stands, counted besides that one.
 * **D5. Diagnostics.** A pause that lasts 5 s logs one `Warn`, with the queue's capacity and how long the reader has waited, so a handler
   that never returns is found from the log. A pause logs nothing before then.
 * **D6. What is unchanged.**

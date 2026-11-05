@@ -1,6 +1,6 @@
 ---
-status: complete
-date: 2026-11-03
+status: in-progress
+date: 2026-11-05
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
 
@@ -16,6 +16,11 @@ for R2, and the bound for R1 under "R1's and R2's designs". Each fix lands with 
 
 Base: `5c3344c`, whose Go code is `v1.31.1`'s. Every file and line named below is at that commit.
 
+*Amended 2026-11-05, for R11.* The MADR's R11, found by the tooling PLAN's close and traced on 2026-11-04, is the same
+topic, so this PLAN carries it: phases 5 and 6 below, per Q20 (a), answered by the owner on 2026-11-05 with the severity
+medium. Their base is `c69499d`, whose Go code is `v1.33.0`'s; every file and line in them is at that commit. Phases 1 to 4
+stand as executed.
+
 ## Scope
 
 In scope:
@@ -30,6 +35,19 @@ In scope:
 * The release, a patch `v1.31.2`, on the owner's ask: `make api` must report no change.
 
 Out of scope: the other four areas' findings (their PLANs follow, Q7 a); any exported identifier; the 1.26.0 schema.
+
+In scope for phases 5 and 6, R11 (amended 2026-11-05):
+
+* `connection.go`: `queueNotification` (`:1875-1935`), `processNotifications` (`:2137-2161`), the queue's capacity in
+  `buildConnection` (`:924-927`), `WithMaxQueuedNotifications`' godoc (`:592-605`), and one unexported option and field, the
+  test's seam.
+* Tests: a new `connection_overflow_boundary_test.go`; `connection_queue_size_test.go`'s capacity assertions (`:30-34`,
+  `:169-171`, and its custom-size test's), which state the capacity this phase changes.
+* `docs/architecture.md`'s overflow section (`:485-511`); `README.md` only where it names the channel's capacity; the
+  amendment to [0044-MADR-notification-queue-back-pressure.md](0044-MADR-notification-queue-back-pressure.md)'s D4.
+* The release, a patch `v1.33.1`, on the owner's ask: `make api` must report no change. Its notes name
+  [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md) too, which had no release of its own.
+* Out of scope: the byte budget and `waitForRoom`'s pause, which count already (the MADR's R11); any exported identifier.
 
 ## Implementation Steps
 
@@ -137,6 +155,57 @@ Each with its test, in the file named:
    adds, if it has landed); `tools/publication.py`; `tools/consumer.py v1.31.2`.
 4. This PLAN and its row `complete`; the MADR's R findings marked done.
 
+### Phase 5: R11, the overflow decided by the count (amended 2026-11-05)
+
+1. **The seam.** An unexported `ConnectionOption`, `withBeforeDequeue(f func())`, stored in `connectionConfig` and in a
+   `Connection` field `beforeDequeue`, set before any goroutine starts. `processNotifications` becomes `for { … queued, ok
+   := <-c.notificationQueue; if !ok { return } … }` and calls `beforeDequeue`, when set, before each receive. A test holds
+   the loop with it, so that what the loop has taken is the test's to choose. Nothing exported changes; a connection built
+   without it runs as before, one nil check a notification.
+2. **The admission,** in `queueNotification`, after the sequence number is taken:
+   * `pending := seq - c.completedNotificationSeq`, the notifications received and not completed, this one, the one whose
+     handler runs and any the loop has not taken included.
+   * The limit is `queueLimit + 1`, or `2*queueLimit + 1` under `OverflowBlock`, where the reader reaches it only on the
+     read-on path: one for the handler that runs or is next to, and `n`, or `2n`, waiting, as the godoc states.
+   * Admitted when `pending` is within the limit and `overByteBudget` does not refuse it, as now. The send to the channel
+     then cannot fail, as the channel holds at most the notifications received and not taken; its `default` panics, "an
+     admitted notification found the queue full", as the invariant checks beside it do.
+   * Refused otherwise, by the rollback and the policy as now: `OverflowDropNewest` drops, the others close.
+3. **The capacity,** `buildConnection`: `queueCap` is `n + 1`, or `2n + 1` under `OverflowBlock`. `WithMaxQueuedNotifications`'
+   memory sentence becomes `2n + 1` slots, still 64 MiB at the maximum, and the godoc gains that the notification whose
+   handler runs or is next to is not among the `n`, whether or not the loop has taken it.
+4. **Tests,** `connection_overflow_boundary_test.go`, each under `synctest`, the loop held by the seam:
+   * `TestOverflowBoundaryCounted`: after `initialize`, a client with a queue of 1 whose handler blocks, under each policy,
+     the loop held before it takes anything: two notifications leave the connection open and, released, both are handled;
+     a third closes under `OverflowCloseConnection`, is dropped under `OverflowDropNewest`, and under `OverflowBlock`
+     pauses the reader, all three handled once released. The MADR's probe 2, with the boundary's other side.
+   * `TestOverflowBlockHeldInitializeLoopBehind`: R11's input, three notifications held for `initialize`'s answer with a
+     queue of 1, the loop held before its first receive: the connection stays open, and, released, `Initialize` returns its
+     result and the three are handled; a fourth, past `2n + 1`, closes with `ErrNotificationQueueOverflow` (D4).
+   * `connection_queue_size_test.go`: the capacities `2n + 1` and `n + 1`, the decision's own numbers.
+   * `TestOverflowBlockHeldInitialize` is unchanged: with the fix it no longer depends on the order the loop runs in.
+5. **Docs:** `docs/architecture.md`'s overflow section says the policy acts by the count, the channel's capacity, and the
+   seam; `README.md` is read for the capacity and changed only where it names it.
+6. **Seen to fail,** by `tools/plants.py`: the admission by the channel's room restored, with the capacity `n` and `2n`
+   (both new tests fail, as probes 1 and 2 did); the limit without its `+ 1` (two notifications close or drop); the seam's
+   call removed (the loop no longer held, the held tests' order lost).
+7. **Scheduling no longer matters:** probe 1's delay, the loop sleeping before each receive, applied to the fixed code in a
+   `git archive` copy: `TestOverflowBlockHeldInitialize`, `TestHeldNotificationsFillQueue` and the new tests pass, 200
+   runs each; and probe 2 under the delay, as the code is: open, 2 handled, under each policy.
+8. **Checks:** `go test -race -count=3 -shuffle=on .`; `go test -count=2000 -run '^TestOverflowBlockHeldInitialize$' .`;
+   `go test -run '^$' -bench 'Notification' -benchmem .` before and after, allocations per operation unchanged; `make api`,
+   no change against `v1.33.0`; `make pre-add-check` with the phase's files; `tools/remote.py tree --host linux`;
+   `tools/remote.py pkg --host windows . -test.run 'Overflow|QueueSize|HeldNotifications' -test.count=3`.
+
+### Phase 6: close of R11, and the release on the owner's ask (amended 2026-11-05)
+
+1. `tools/gates.py --all`, with the hosts, and R11 with its tests, in a table.
+2. After the owner's push, CI on the head.
+3. On the owner's ask: `docs/reports/0049-REPORT-release-notes-v1-33-1.md`, leading with R11 and naming the tooling PLAN;
+   the push; `tools/release_body.py`; the owner's tag `v1.33.1` and release; `tools/publication.py`; `tools/consumer.py
+   v1.33.1`.
+4. This PLAN and its row `complete`; the MADR's R11 marked done.
+
 ## Verification
 
 * Each of R1 to R9 has a committed test that fails at `5c3344c`'s code and passes after; R10 is godoc.
@@ -144,6 +213,9 @@ Each with its test, in the file named:
 * `make api`: no change against `v1.31.1`.
 * The benchmarks' allocations per operation are unchanged for requests.
 * `tools/gates.py --all` and CI pass.
+* *Amended 2026-11-05, R11:* the overflow policy acts on the same input the same way whatever the order the loop runs in:
+  the two new tests, with the loop held, and probe 1's delay on the fixed code, pass; each fails with the admission by the
+  channel's room restored. `make api`: no change against `v1.33.0`.
 
 ## Rollout and Rollback
 
@@ -152,6 +224,9 @@ Each with its test, in the file named:
   `initialize`'s result on an agent is refused; `ServeAgent` at its context's end waits for handlers as it does at the input's end;
   `WithMaxQueuedNotifications` is clamped. The notes lead with these.
 * **Rollback.** Revert the phase's commit; each phase stands alone, phase 1 included.
+* *Amended 2026-11-05, R11:* a patch, `v1.33.1`. What a consumer meets: at the queue's limit a notification is no longer
+  refused, by a close or a drop, because the loop had not yet taken the one before; none is refused earlier than before;
+  the channel holds one slot more. Rollback: revert phase 5's commit.
 
 ## Execution record
 

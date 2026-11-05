@@ -659,3 +659,5 @@ R11 open.
 * `make markdownlint` and `make check-records` read only what git tracks or would (phase 2).
 * `make check-tools`, `tools/gates.py --all`, 18 of 18 after deviation 3, and CI on `ea32a99` pass; `make api` reports no
   change.
+
+The owner committed and pushed step 6.5 as `c69499d`: its Docs workflow run `41937797649`, "success".

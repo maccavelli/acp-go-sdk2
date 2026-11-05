@@ -486,7 +486,7 @@ which it never received, and the observer reported a cancel sent. Fix: send it o
 `connection.go:956-966`, the doc at `:1035-1040`. **Probe** (`TestProbeWaitBlockedByWriter`, re-run): "WaitContext after Close =
 context deadline exceeded". Fix: name the case in `Wait`'s and `Close`'s doc.
 
-**R11. Unrated, open. `TestOverflowBlockHeldInitialize` fails intermittently with the connection ended.** *Added
+**R11. ~~Unrated~~ Medium, rated 2026-11-05; open. `TestOverflowBlockHeldInitialize` fails intermittently with the connection ended.** *Added
 2026-11-04,* by the tooling PLAN's phase 6, its deviation 3, on the owner's choice to record it as a finding rather than a
 footnote. `connection_overflow_block_test.go:306-339`, a `synctest` test of 0044's D3: with a queue of 1 under
 `OverflowBlock`, three extension notifications held for `initialize`'s answer, then the answer.
@@ -504,6 +504,66 @@ footnote. `connection_overflow_block_test.go:306-339`, a `synctest` test of 0044
 * **Severity** is left unrated until the cause is known: a defect in the SDK's path would end a correct client's
   `Initialize` (medium); one in the harness, none.
 * Next: examined by an amendment of [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md), on the owner's approval.
+
+*Cause found 2026-11-04,* on the owner's "work on R11, track that down so we can resolve it", by reading and two probes in
+`git archive` copies of `c69499d`, never in the tree:
+
+* **The decision is the channel's, not the count's.** `queueNotification` (`connection.go:1875-1935`) admits a
+  notification when the send to `notificationQueue` succeeds (`:1894-1900`), and otherwise meets the policy. The channel's
+  capacity is `n`, or `2n` under `OverflowBlock` (`:924-927`), and the notification the loop will run next stays in it until
+  `processNotifications` (`:2137-2138`) has taken it. So whether the peer's notification `n+1`, or `2n+1` on the read-on
+  path, is refused depends on whether the loop goroutine has been scheduled to take the head, not on what the peer sent or
+  what the handlers have finished. `WithMaxQueuedNotifications` says "how many notifications may wait in the queue while a
+  notification handler runs" (`:594-595`), and `OverflowBlock` "reads on, to twice the queue's size" (`:756-758`).
+* **R11 is that race on the read-on path.** `sendRequestCommit` counts a peer wait for as long as `initialize` is in flight
+  (`:2562`), so `waitForRoom` does not pause (`:2181`); with a queue of 1 the channel holds 2; when the third notification
+  arrives before the loop has taken the first, the `select` falls to `default` and the connection closes with
+  `ErrNotificationQueueOverflow` (`:1926-1934`), and `Initialize` answers "connection ended before response" (`:2848`).
+  `synctest` fixes time, not the order in which runnable goroutines run.
+* **What is not affected:** `waitForRoom`'s pause counts by the sequence, received and not completed (`:2180`); the byte
+  budget counts bytes at enqueue and lets them go as the handler returns (`:1896-1897`, `:2152-2153`). Neither depends on the
+  dequeue.
+* **Probe 1** (`p49/r11/probe1.py`): the loop sleeps 1 ms, in fake time, before each dequeue, so the reader queues all it
+  can first. `TestOverflowBlockHeldInitialize` fails on its first run, "connection_overflow_block_test.go:329: Initialize =
+  {"code":-32603,…"connection ended before response"}, want its result", the failure seen twice;
+  `TestHeldNotificationsFillQueue`, which requires the close, passes, 20 of 20.
+* **Probe 2** (`p49/r11/probe2_test.go.txt`): after `initialize`, two notifications to a client with a queue of 1 whose
+  handler blocks, one to run and one to wait, as the option allows; 20 runs a line:
+
+  | Policy | As the code is | The loop slow to dequeue |
+  | --- | --- | --- |
+  | `OverflowCloseConnection` | open, 2 handled | closed, 1 handled |
+  | `OverflowDropNewest` | open, 2 handled | open, 1 handled: one dropped |
+  | `OverflowBlock` | open, 2 handled | open, 2 handled: it pauses |
+
+  So the same input from the peer is closed on, dropped, or handled, by scheduling, under the two refusing policies and on
+  `OverflowBlock`'s read-on path. The race has stood since the queue was bounded with `select … default`; the read-on path,
+  R11's, since 0044 (`v1.29.0`).
+* **Severity, proposed: medium.** On a reachable path it breaks the documented limits: a correct client's connection
+  closes, or a notification is dropped, at the limit's boundary, by an ordering the program does not control. It needs a
+  burst that reaches the boundary before the loop takes its head, which is rare at the default 1024 and likely at a small
+  queue.
+
+**Q20. R11, the boundary's fix:**
+
+* (a) **Admit by the count, and give the channel the room the count allows** (recommended). The policy acts when the
+  notifications received and not completed, the one running or next to run included, would pass `n + 1`, or `2n + 1` on
+  `OverflowBlock`'s read-on path; the channel's capacity is that, so a send the count admits never fails. The outcome then
+  depends on what the peer sent and what the handlers finished, as the byte budget's does, and matches the documented "n
+  wait while a handler runs". No API change; a refusal that came sometimes at the boundary no longer comes, and none comes
+  earlier than now: a patch release. Its test needs a seam to hold the loop before a dequeue, an unexported hook, as
+  phase 5 of [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md) added `attachTree`.
+* (b) **Admit by the count, with no room for the running one.** The policy acts past `n` received and not completed, and
+  the docs change to say so. As deterministic and simpler, but every limit shrinks by one against what a promptly
+  scheduled loop gives now: a behaviour change, a minor release whose notes lead with it.
+* (c) **Document the boundary as approximate, and order the test.** The docs say a refusal at the limit may come one
+  notification early; `TestOverflowBlockHeldInitialize` waits for the loop to take the first notification before sending
+  the rest. Cheapest, but the scheduling dependence stays, by contract.
+
+*Answered by the owner, 2026-11-05:* Q20 (a), and the severity medium, as proposed. R11 is fixed by phases 5 and 6 of
+[0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md), amended the same day, in a patch release, `v1.33.1`. It changes
+[0044-MADR-notification-queue-back-pressure.md](0044-MADR-notification-queue-back-pressure.md)'s D4 as to the channel's
+capacity, `2n + 1` and `n + 1`, not `2n` and `n`; that record carries the amendment.
 
 ### F-S: the SDK surface against the schema
 
@@ -794,7 +854,7 @@ released on its own, while the severity order inside each keeps R1 first. The pl
 
 * `0049-PLAN-runtime-fixes.md`: R1, then R5, R9, R4, R3, R7, R8, R6, R10, and R2 per Q2. A patch release when it changes no
   exported API. *Complete 2026-11-03,* released in `v1.31.2`. *R11, added 2026-11-04, is open:* an amendment of that PLAN
-  examines it, on the owner's approval.
+  examines it, on the owner's approval. *Amended 2026-11-05:* its phases 5 and 6 fix R11 per Q20 (a), released as `v1.33.1`.
 * `0049-PLAN-surface-fixes.md`: S1, S2, S6 per Q4, S7, S8, S9, S5, S4, and S3 per Q3. The new gates and stricter validation are
   behaviour changes, released as a minor version with notes that lead with them. *Written 2026-11-03,*
   [0049-PLAN-surface-fixes.md](0049-PLAN-surface-fixes.md). It groups the order into phases by mechanism: S1 with S7,
