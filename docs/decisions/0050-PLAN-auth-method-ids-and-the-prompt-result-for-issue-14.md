@@ -1,0 +1,287 @@
+---
+status: proposed
+date: 2026-11-05
+associated-madr: "0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md"
+---
+
+# Implement 0050: the ids authenticate accepts, their refusal, the unknown entry's id, and the prompt result's doc
+
+Associated MADR: [0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md](0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md)
+
+## Goal
+
+Ship the MADR's O1 as `v1.34.0`. At the end of it:
+
+* a client takes the ids `Authenticate` will send from `AuthenticateMethodIDs`, which reads the same generated list as the
+  gate;
+* a refused id is answered with the ids that are accepted;
+* an `Unknown` entry without a string `"id"` no longer advertises `"unknown"`;
+* `PromptResponse`'s godoc says a successful turn sets `StopReason`;
+* the documentation names S8's sentinel wherever it names S8's sibling.
+
+Then issue #14 is answered, on the owner's ask.
+
+## Scope
+
+**Preconditions.**
+
+* The MADR's questions Q1 to Q4 are answered: (a) each, on 2026-11-05, the recommended answers that this specification
+  is written for. The MADR is `accepted`.
+* This PLAN is approved by the owner before phase 1 begins.
+* The close of [0049-PLAN-runtime-fixes.md](0049-PLAN-runtime-fixes.md) is committed, as `27f0cc5`. The base is that
+  commit, whose code is `b4ee2d4`'s, the tree the MADR assessed.
+
+**Files changed.** Phase by phase:
+
+| Phase | Files |
+| :--- | :--- |
+| 1, the generator (D1, D2, D4) | `cmd/generate/internal/model/gates.go`, `gates_test.go`; `cmd/generate/internal/emit/gates.go`, `decode.go`; `cmd/generate/testdata/engine/accept-advertised-auth-ids.txtar` (new); `types_gen.go` (regenerated); `gates_surface_test.go` |
+| 2, the helpers (D3, D6) | `helpers.go`; `auth_method_ids_test.go` (new); `example_auth_test.go` (new); `doc.go`; `docs_test.go`; `README.md`; `docs/architecture.md` |
+| 3, the prompt result (D5, D7) | `cmd/generate/internal/model/acp.go`; `types_gen.go` (regenerated); `docs_test.go`; `acp_test.go` |
+| 4, the close (D9) | `docs/reports/0050-REPORT-release-notes-v1-34-0.md` (new); this PLAN; the MADR; `docs/README.md` |
+
+Each phase also updates this PLAN's execution record and its row in `docs/README.md`.
+
+**Not changed:** S6 and S8 as rules; `go.mod`, `go.sum` and `cmd/generate/go.mod`; the schema; `.github/`; every exported
+signature; what is sent on the wire, except F5's `"unknown"`, which is now refused.
+
+**Out of scope:** the MADR's D8. That covers the prompt constructors, `AuthenticateAdvertised`, a `-32603` hint, a doc note
+on `Agent.Prompt`, and the consumers' own changes.
+
+## Implementation Steps
+
+Every new check is first seen to fail on a planted break in a scratch copy. A plant is never made in the tree.
+
+* **In the root module,** a plant that edits a hand-written file runs through `tools/plants.py`.
+* **In the generator,** a plant needs a regeneration, or runs in the `cmd/generate` module, which `tools/plants.py`'s
+  root-relative `go test` cannot reach. Such a plant runs by a scratch script in a copy, as the tooling PLAN's phase 5
+  did. The script applies the edit, runs `cd cmd/generate && go run .` when the root's tests are to see it, then runs the
+  named tests.
+* **`TestEngineBehaviour`** runs whole in such a plant, not filtered to a subtest. Filtered, it skips the subtest that
+  generates ([0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md), phase 5).
+
+### Phase 1: the generator, D1, D2 and D4
+
+1. **The model.**
+   * `GateCheck` (`cmd/generate/internal/model/gates.go:39-73`) gains `Terminal string`. For a `GateCheckAdvertisedAuth`,
+     it is the Go field of the variant that the same property's `GateCheckTerminalAuth` names, or empty when the gated
+     type has no terminal check.
+   * It is set where a gated type's checks are collected, after both checks exist: the advertised check of field `F` takes
+     `Variant` from the terminal check of the same `Field` and `List`.
+   * Both checks read the same union, so the variant is always one of `Advertised`, and no new refusal is needed.
+   * The pin on `AuthenticateRequest` in `checkCommittedGates` (`gates_test.go:244-252`), which
+     `protocol_test.go:513` runs over the committed schema, gains `a[1].Terminal != "Terminal"`.
+2. **The string reader, D1.** `cmd/generate/internal/emit/decode.go` gains a helper, `unknownString(b json.RawMessage,
+   key string) (string, bool)`:
+   * it decodes `b` and folds `key` as `unknownKind` does;
+   * it reports `(s, true)` when the value is a JSON string, the empty string included;
+   * it reports `("", false)` otherwise, and for `b` that does not decode.
+
+   It is a `helperUnknownString` constant beside `helperUnknownKind` (`decode.go:25-28`), emitted when used
+   (`decode.go:58-68`). `emitUnknownKind` (`decode.go:482-507`) is rewritten to call it, keeping its `"unknown"` fallback
+   for a value that is absent, empty or not a string, so `Kind()`'s results do not change. `markGateHelpers`
+   (`emit/gates.go:50-59`) marks it for an advertised check with a `RawKey`.
+3. **The list, D2.** For each `GateCheckAdvertisedAuth`, `emit/gates.go` emits one unexported function before the gates,
+   named `accepted` + gated type + field + `s`. For ACP that is `acceptedAuthenticateRequestMethodIds(list []AuthMethod)
+   []AuthMethodId`. It works in two passes over `list`:
+   * **The terminal pass,** when `Terminal` is set, gathers every id a `Terminal` entry holds.
+   * **The second pass,** in order, takes from each entry the id of the advertised variant it sets other than `Terminal`.
+     Failing that, it takes the `Unknown` entry's id, through `unknownString(a.Unknown, RawKey)` when `RawKey` is set and
+     the read reports a string. It appends that id unless the terminal pass gathered it, or it is already appended.
+   * It returns nil when nothing is appended.
+4. **The gate and its text, D4.** `advertisedGate` (`emit/gates.go:154-181`) becomes:
+
+   ```go
+   if ids := acceptedAuthenticateRequestMethodIds(n.Response.AuthMethods); !slices.Contains(ids, v.MethodId) {
+       return fmt.Errorf("%s: methodId %q: %w; %s accepts %s", method, v.MethodId, ErrUnadvertisedAuthMethod, method, quotedIDs(ids))
+   }
+   ```
+
+   * `quotedIDs[T ~string](ids []T) string` is a generated helper, emitted when used. It gives `none` for an empty list, or
+     each id `%q`-quoted, joined by `", "`.
+   * The terminal check (`emit/gates.go:73-77`) is unchanged and stays first.
+   * The comment above `advertisedGate` cites this PLAN, D1, D2 and D4.
+5. **The engine case.** `cmd/generate/testdata/engine/accept-advertised-auth-ids.txtar`, new:
+   * **Its files:** `meta.json` with `initialize` and `authenticate`; a `schema.json` holding ACP's `AuthenticateRequest`,
+     `AuthMethodId` and `AuthMethod` shapes from `schema/schema.json` (a `terminal` variant by `type`, and the default
+     `agent`), and an `InitializeResponse` with `authMethods`; and `behaviour_test.go`.
+   * **The capability the table needs:** `ClientCapabilities` holds `auth.terminal`, as ACP's does. Once `authMethods`
+     exists, the protocol table's terminal-offer rule (`cmd/generate/internal/model/acp.go:221`) applies, and it needs
+     that capability path.
+   * **What its behaviour test requires,** in-package:
+     * the list over `[agent a, terminal t, agent t, Unknown {"type":"x","id":"u"}, Unknown {"type":"x"}, agent a]` is
+       exactly `[a u]`;
+     * the gate refuses `t` with `ErrTerminalAuthMethod`, and refuses `unknown` and `z` with `ErrUnadvertisedAuthMethod`
+       and the text `…; authenticate accepts "a", "u"`;
+     * over an empty list, the text ends `accepts none`.
+   * **`want.api`** is written by `cd cmd/generate && go test . -run '^TestEngineCases$/accept-advertised-auth-ids' -update`,
+     then read in full.
+6. **Regenerate:** `cd cmd/generate && go run .`. Then `git diff --stat` must show `types_gen.go` alone.
+   * Its diff is read in full. It is the new `unknownString`, `quotedIDs` and `acceptedAuthenticateRequestMethodIds`,
+     `unknownKind`'s new body, and `(*AuthenticateRequest).gates`' new advertised check. Nothing else changes.
+7. **The root tests,** `gates_surface_test.go`:
+   * **`TestAuthenticateUnadvertisedMethod`'s exact text** (`:146`) becomes D4's, for its answer of `a`, `t` and `f`:
+     `…; authenticate accepts "a", "f"`.
+   * **`TestAuthenticateUnknownEntryID`,** new, is P4 as a test. For each of `{"type":"future","name":"F"}`,
+     `{"type":"future","id":"","name":"F"}` and `{"type":"future","id":7,"name":"F"}`, `methodId: "unknown"`:
+     * is refused by `AllowsValue`;
+     * is refused by `Authenticate`, with nothing written;
+     * is answered `-32602` when received, with no handler run.
+   * **The same test's accepted cases:** an entry `{"type":"future","id":"","name":"F"}` makes `methodId: ""` accepted.
+     `{"type":"future","ID":"f","name":"F"}` makes `f` accepted.
+   * **`TestAuthenticateAcceptsNone`,** new: an answer of one terminal method refuses an agent id with the text ending
+     `authenticate accepts none`.
+8. **Seen to fail,** by the scratch script, each plant regenerating in its copy and then running the named tests, with
+   `TestEngineBehaviour` whole:
+   * the list reading `Unknown` through `unknownKind` again: `TestAuthenticateUnknownEntryID` fails, and so does the
+     engine case;
+   * the terminal pass removed: the engine case's `[a u]` fails;
+   * the text without `; %s accepts %s`: `TestAuthenticateUnadvertisedMethod` and the engine case fail;
+   * `Terminal` left unset in the model: the model test fails.
+9. **Checks:**
+   * `cd cmd/generate && go test -shuffle=on ./...`;
+   * `go test -race -count=1 -shuffle=on .`;
+   * `tools/gates.py regen` reports the generated files unchanged;
+   * `make pre-add-check FILES="<the phase's files>"`.
+
+   Then stage the files for the owner.
+
+### Phase 2: the helpers and the documentation, D3 and D6
+
+1. **`helpers.go`:**
+   * **`func (a AuthMethod) ID() AuthMethodId`,** after `Kind()` (`helpers.go:418-433`): `Terminal.Id`, `Agent.Id`, or
+     `Unknown`'s `"id"` through `unknownString`, `""` when that reports no string; `""` for the zero value. Its godoc
+     cites the MADR's D3 and says an empty `ID()` does not mean the entry is not authenticatable: use
+     `AuthenticateMethodIDs`.
+   * **`func AuthenticateMethodIDs(methods []AuthMethod) []AuthMethodId`,** after `OfferedAuthMethods`
+     (`helpers.go:740-756`): it returns `acceptedAuthenticateRequestMethodIds(methods)`, and is not copied. Its godoc
+     says:
+     * it reads an `initialize` answer's `AuthMethods`, as `Initialize` returns it or as `Negotiated()` records it;
+     * an id it returns is one `Authenticate` sends, and every other id is refused before anything is sent: a terminal
+       one with `ErrTerminalAuthMethod`, any other with `ErrUnadvertisedAuthMethod`;
+     * entries of a type this SDK does not know are included by their string `"id"`, and `Kind()` filters them;
+     * it cites the MADR's D2 and D3.
+2. **Tests,** `auth_method_ids_test.go`, new:
+   * **`TestAuthMethodID`:** each variant; `Unknown` with `"id"`, with `"ID"`, with `""`, without one, and with `7`; and the
+     zero value.
+   * **`TestAuthenticateMethodIDsIsTheGate`:** over each of five answers, every id returned passes `AllowsValue`. Every
+     other id of the answer (`ID()` of each entry), and `"unknown"` and `"stranger"`, is refused with `ErrTerminalAuthMethod`
+     or `ErrUnadvertisedAuthMethod`. The five answers:
+     * P2's;
+     * P3's, the id that is both terminal and agent;
+     * one with P4's entry;
+     * one with a duplicate agent id;
+     * the empty answer.
+   * **The order:** the list follows the answer's order, with each id once.
+3. **`example_auth_test.go`,** new, package `acp_test`: `ExampleAuthenticateMethodIDs` builds an answer of `openai` and
+   `grok`, agent methods, and `grok-login`, terminal. It picks a pin when the list holds it, and the first id otherwise. Its
+   `// Output:` shows `[openai grok]`, the pin `grok` taken, and the stale pin `grok-login` falling back to `openai`.
+4. **Documentation:**
+   * **`AllowsValue`'s godoc** (`helpers.go:1020-1031`) names `ErrUnadvertisedAuthMethod` beside `ErrTerminalAuthMethod`.
+   * **`doc.go:36-38`'s sentinel list** names `[ErrUnadvertisedAuthMethod]`.
+   * **`docs_test.go`** gains `TestPackageDocNamesAuthSentinels`: `doc.go`'s comment names both `ErrTerminalAuthMethod`
+     and `ErrUnadvertisedAuthMethod`.
+   * **`README.md:611-617`** says:
+     * an `Unknown` entry counts by its `"id"` when that is a string (D1);
+     * the refusal names the ids `authenticate` accepts (D4);
+     * `acp.AuthenticateMethodIDs(resp.AuthMethods)` lists them, and `AuthMethod.ID()` reads one entry's id.
+   * **`README.md`'s client section,** after the `Implement the acp.Client interface` bullet (`:133-138`), gains one
+     bullet: take an `authenticate` id from `acp.AuthenticateMethodIDs`, since the SDK refuses any other before sending.
+   * **`docs/architecture.md:81-86`'s list** of what `helpers.go` holds names `ID()` and `AuthenticateMethodIDs`.
+5. **Seen to fail,** with `tools/plants.py`:
+   * `ID()` returning `"unknown"` for an `Unknown` entry without a string id: `TestAuthMethodID` fails;
+   * `AuthenticateMethodIDs` returning every entry's `ID()` unfiltered: `TestAuthenticateMethodIDsIsTheGate` fails;
+   * the example's fallback taking the last id: `ExampleAuthenticateMethodIDs` fails;
+   * `[ErrUnadvertisedAuthMethod]` removed from `doc.go`: `TestPackageDocNamesAuthSentinels` fails.
+6. **Checks:**
+   * `go test -race -count=1 -shuffle=on ./...`;
+   * `make api`, "against v1.33.1: 0 incompatible, 2 compatible", naming `AuthMethod.ID` and `AuthenticateMethodIDs`;
+   * `make pre-add-check FILES="<the phase's files>"`;
+   * `make check-records`, `make markdownlint` and `make disclosure-check`.
+
+   Then stage the files.
+
+### Phase 3: the prompt result, D5 and D7
+
+1. **The doc note.** `cmd/generate/internal/model/acp.go`'s `DocNotes` (`:155-169`) gain a `PromptResponse` entry, its
+   lines wrapped below 80 columns:
+
+   ```text
+   StopReason is required and has no default: its zero value, "", is not a
+   StopReason, and an agent whose Prompt returns it answers -32603 instead
+   of sending it. A successful turn sets one of the constants, such as
+   StopReasonEndTurn (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D5).
+   ```
+
+2. **Regenerate:** `cd cmd/generate && go run .`. The diff of `types_gen.go` is `PromptResponse`'s godoc alone.
+3. **`docs_test.go`** gains `TestPromptResponseDocNamesTheStopReasonRule`: `PromptResponse`'s godoc, read with
+   `go/doc` from the package, holds `-32603` and `StopReasonEndTurn`.
+4. **The stubs,** `acp_test.go:200-205`, `:409-411` and `:1340-1342`, return `PromptResponse{StopReason:
+   StopReasonEndTurn}, nil`. `TestClosedEnumsRefusedOnSend` keeps its planted zero result.
+5. **Seen to fail,** by the scratch script: the doc note removed and the copy regenerated, so
+   `TestPromptResponseDocNamesTheStopReasonRule` fails.
+6. **Checks:**
+   * `go test -race -count=1 -shuffle=on ./...`;
+   * `tools/gates.py regen`;
+   * `make pre-add-check FILES="<the phase's files>"`.
+
+   Then stage the files.
+
+### Phase 4: the close and the release, D9
+
+1. **The gates:** `tools/gates.py --all`, with the Linux and Windows hosts named per command. Then a table of each
+   decision, D1 to D7, with the test that shows it.
+2. **CI:** after the owner's push, CI on the head, read by `tools/watch_ci.py`.
+3. **The release,** on the owner's ask:
+   * `docs/reports/0050-REPORT-release-notes-v1-34-0.md` leads with D4 and D3, then D1 as a behaviour change, then D5 and
+     D6. Each statement names its commit.
+   * Before the push: `make push-guard`, after a fetch.
+   * `tools/release_body.py v1.34.0 <rev>`.
+   * The owner tags `v1.34.0` and creates the release.
+   * After the tag: `tools/consumer.py v1.34.0` and `tools/publication.py v1.34.0 <rev> <the body>`.
+4. **The issue reply,** posted only on the owner's ask, with `gh issue comment 14 --body-file <file>`. Its draft goes in this
+   PLAN's execution record first. Its content:
+   * what shipped in `v1.34.0`, with the helper and the new refusal text;
+   * the corrections to the issue's table (MADR F2): `refusals_test.go` and `connection_overflow_block_test.go`, and the
+     stubs reached by `TestConcurrentUse` alone;
+   * why the prompt constructors were declined (MADR O2);
+   * the consumer facts of F10: magic-cli-remote's pin and key-method paths, and gobble-cli's two tests that expect
+     `-32602`.
+
+   Closing the issue is the owner's choice.
+5. **Status:** this PLAN and its row are marked `complete`.
+
+## Verification
+
+* **D1:** `TestAuthenticateUnknownEntryID` passes, and failed with the list reading `Unknown` through `unknownKind`.
+* **D2:** `TestAuthenticateMethodIDsIsTheGate` and the engine case `accept-advertised-auth-ids` pass, and each failed on
+  its plant.
+* **D3:** `TestAuthMethodID` and `ExampleAuthenticateMethodIDs` pass, and each failed on its plant.
+* **D4:** the exact texts, with ids and with none, in `TestAuthenticateUnadvertisedMethod` and `TestAuthenticateAcceptsNone`,
+  on send and as received.
+* **D5:** `TestPromptResponseDocNamesTheStopReasonRule`.
+* **D6:** `TestPackageDocNamesAuthSentinels`, and the README and architecture text read in full.
+* **D7:** the suite passes, and the root's only success-path `PromptResponse{}` is `TestClosedEnumsRefusedOnSend`'s.
+* **`make api`** against `v1.33.1`: "0 incompatible, 2 compatible".
+* **The gates and CI:** `tools/gates.py regen` is clean after each phase. `tools/gates.py --all`, 18 of 18, and CI on the
+  head and on the tag, pass.
+* **The benchmarks:** `go test -run '^$' -bench 'PromptRoundTrip|SessionUpdateNotify|SessionNotificationUnmarshal'
+  -benchmem -count=5 .` (`bench_test.go`) before phase 1 and after phase 3, with allocations per operation unchanged. The
+  changed gate runs only for `authenticate`.
+
+## Rollout and Rollback
+
+* **Rollout:** a minor, `v1.34.0`. What a consumer meets:
+  * **The new helpers:** `AuthMethod.ID()` and `AuthenticateMethodIDs`.
+  * **A longer refusal text:** `ErrUnadvertisedAuthMethod`'s error, sent and received, ends with the accepted ids.
+    `errors.Is` is unchanged. Code that compares the whole string, as gobble-cli's tests do with codes, sees the longer
+    text.
+  * **`"unknown"` refused:** `methodId: "unknown"` against an `Unknown` entry without a string `"id"` is now refused, sent
+    or received.
+  * **The godoc:** `PromptResponse`'s godoc states the rule.
+* **Rollback:** each phase reverts on its own, by reverting its commit, before the tag. After `v1.34.0` is published, the
+  two names are a `v1` promise. A rollback then removes nothing exported; it only reverts behaviour, D1 or D4, in a patch.
+
+## Execution record
+
+Not started. The MADR is `accepted`, with Q1 to Q4 answered (a). The PLAN awaits the owner's approval.
