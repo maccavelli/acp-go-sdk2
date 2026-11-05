@@ -26,6 +26,14 @@ const (
 	// helpers.go's Kind methods (0049-PLAN-surface-fixes.md, phase 4,
 	// deviation 4).
 	helperUnknownKind = "unknownKind"
+	// helperUnknownString reads a raw Unknown's key as a JSON string, for
+	// unknownKind, for the list of ids an advertised check accepts, and for
+	// helpers.go's AuthMethod.ID; helperQuotedIDs quotes that list for the
+	// refusal's text
+	// (0050-PLAN-auth-method-ids-and-the-prompt-result-for-issue-14.md,
+	// phase 1, D1 and D4).
+	helperUnknownString = "unknownString"
+	helperQuotedIDs     = "quotedIDs"
 	// The helpers of a key-order rule
 	// (0022-MADR-keep-elicitation-property-order-before-v1-15-0.md).
 	helperKeyOrder      = "keyOrder"
@@ -62,7 +70,14 @@ func emitDecodeHelpers(f *goFile) {
 	}
 	if f.uses[helperUnknownKind] {
 		emitUnknownKind(f)
+		f.uses[helperUnknownString] = true
+	}
+	if f.uses[helperUnknownString] {
+		emitUnknownString(f)
 		f.uses[helperFoldKeys] = true
+	}
+	if f.uses[helperQuotedIDs] {
+		emitQuotedIDs(f)
 	}
 	if f.uses[helperFoldKeys] {
 		emitFoldKeys(f)
@@ -483,26 +498,74 @@ func emitRequireKeys(f *goFile) {
 // which reads key of the JSON object b as a union's UnmarshalJSON reads it,
 // folding keys, the last match winning, and returns "unknown" when that is
 // not a non-empty string. Hand-written helpers.go calls it too
-// (0049-PLAN-surface-fixes.md, phase 4, deviation 4).
+// (0049-PLAN-surface-fixes.md, phase 4, deviation 4). It reads through
+// unknownString, which an id needs without the fallback
+// (0050-PLAN-auth-method-ids-and-the-prompt-result-for-issue-14.md, phase 1).
 func emitUnknownKind(f *goFile) {
-	unknown := func() ast.Expr { return str("unknown") }
-	unmarshal := func(src ast.Expr, dst string) ast.Stmt {
-		return define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), src, addr(id(dst))))
-	}
 	fn := function(helperUnknownKind,
 		funcType([]*ast.Field{param("b", f.qual(pkgJSON, "RawMessage")), param("key", id("string"))}, param("", id("string"))),
-		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
-		ifStmt(unmarshal(id("b"), "m"), errNotNil(), ret(unknown())),
-		exprStmt(call(id(helperFoldKeys), id("b"), id("m"), id("key"))),
-		varStmt("kind", id("string")),
-		ifStmt(unmarshal(index(id("m"), id("key")), "kind"),
-			binary(errNotNil(), token.LOR, binary(id("kind"), token.EQL, str(""))), ret(unknown())),
-		ret(id("kind")),
+		ifStmt(define(exprs(id("kind"), id("ok")), call(id(helperUnknownString), id("b"), id("key"))),
+			binary(id("ok"), token.LAND, binary(id("kind"), token.NEQ, str(""))), ret(id("kind"))),
+		ret(str("unknown")),
 	)
 	f.line()
 	f.comment("unknownKind reads key of the JSON object b as a union's UnmarshalJSON reads",
 		"it, folding keys, the last match winning, and returns \"unknown\" when that is",
 		"not a non-empty string.")
+	f.add(fn)
+}
+
+// emitUnknownString emits
+//
+//	func unknownString(b json.RawMessage, key string) (string, bool)
+//
+// which reads key of the JSON object b as unknownKind does, and reports
+// whether its value is a JSON string, the empty string included. An id is
+// read so: one that is absent, or not a string, names nothing
+// (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D1).
+func emitUnknownString(f *goFile) {
+	unmarshal := func(src ast.Expr, dst string) ast.Stmt {
+		return define(exprs(id("err")), call(f.qual(pkgJSON, "Unmarshal"), src, addr(id(dst))))
+	}
+	fn := function(helperUnknownString,
+		funcType([]*ast.Field{param("b", f.qual(pkgJSON, "RawMessage")), param("key", id("string"))},
+			param("", id("string")), param("", id("bool"))),
+		varStmt("m", rawMap(f.qual(pkgJSON, "RawMessage"))),
+		ifStmt(unmarshal(id("b"), "m"), errNotNil(), ret(str(""), boolLit(false))),
+		exprStmt(call(id(helperFoldKeys), id("b"), id("m"), id("key"))),
+		define(exprs(id("v"), id("ok")), index(id("m"), id("key"))),
+		ifStmt(nil, binary(not(id("ok")), token.LOR, binary(call(id("string"), id("v")), token.EQL, str("null"))),
+			ret(str(""), boolLit(false))),
+		varStmt("s", id("string")),
+		ifStmt(unmarshal(id("v"), "s"), errNotNil(), ret(str(""), boolLit(false))),
+		ret(id("s"), boolLit(true)),
+	)
+	f.line()
+	f.comment("unknownString reads key of the JSON object b as unknownKind does, and",
+		"reports whether its value is a JSON string, the empty string included.")
+	f.add(fn)
+}
+
+// emitQuotedIDs emits
+//
+//	func quotedIDs[T ~string](ids []T) string
+//
+// which quotes each of ids and joins them with ", ", or returns "none" for
+// none: the list a refusal of an unadvertised id names
+// (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D4).
+func emitQuotedIDs(f *goFile) {
+	fn := function(helperQuotedIDs,
+		funcType([]*ast.Field{param("ids", sliceOf(id("T")))}, param("", id("string"))),
+		ifStmt(nil, binary(call(id("len"), id("ids")), token.EQL, intLit(0)), ret(str("none"))),
+		define(exprs(id("quoted")), call(id("make"), sliceOf(id("string")), intLit(0), call(id("len"), id("ids")))),
+		rangeStmt(id("_"), id("s"), id("ids"),
+			assign(exprs(id("quoted")), call(id("append"), id("quoted"), call(f.qual(pkgFmt, "Sprintf"), str("%q"), id("s"))))),
+		ret(call(f.qual(pkgStrings, "Join"), id("quoted"), str(", "))),
+	)
+	fn.Type.TypeParams = fields(param("T", &ast.UnaryExpr{Op: token.TILDE, X: id("string")}))
+	f.line()
+	f.comment("quotedIDs quotes each of ids and joins them with \", \", or returns \"none\"",
+		"for none.")
 	f.add(fn)
 }
 

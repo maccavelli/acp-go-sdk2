@@ -1,0 +1,137 @@
+The ids authenticate accepts, from an initialize answer whose auth methods are
+ACP's union, read by one emitted function that the gate uses too: the agent
+ids and an Unknown entry's string id, in order and once each, and no id a
+terminal entry names. The gate refuses a terminal id first, and any id the
+list lacks with ErrUnadvertisedAuthMethod naming the list, or "none"
+(0050-PLAN-auth-method-ids-and-the-prompt-result-for-issue-14.md, phase 1).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"initialize": "initialize", "authenticate": "authenticate"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"AuthMethod": {"description": "Describes an available authentication method.\n\nThe `type` field acts as the discriminator in the serialized JSON form.\nWhen no `type` is present, the method is treated as `agent`.", "anyOf": [{"description": "Client runs the configured agent program as a separate interactive\nprocess, without passing this method to `authenticate`.", "type": "object", "properties": {"type": {"type": "string", "const": "terminal"}}, "required": ["type"], "allOf": [{"$ref": "#/$defs/AuthMethodTerminal"}]}, {"title": "agent", "description": "Agent handles authentication itself through `authenticate`.\n\nThis is the default when no `type` is specified.", "allOf": [{"$ref": "#/$defs/AuthMethodAgent"}]}]}, "AuthMethodAgent": {"description": "Agent handles authentication itself through `authenticate`.\n\nThis is the default authentication method type.", "type": "object", "properties": {"id": {"description": "Unique identifier for this authentication method.", "allOf": [{"$ref": "#/$defs/AuthMethodId"}]}, "name": {"description": "Human-readable name of the authentication method.", "type": "string"}, "description": {"description": "Optional description providing more details about this authentication method.", "type": ["string", "null"], "x-deserialize-default-on-error": true}}, "required": ["id", "name"]}, "AuthMethodTerminal": {"description": "Terminal-based authentication method.\n\nThe client runs the configured agent program as a separate interactive\nprocess for the user to authenticate via a TUI. Agents MUST advertise this\nmethod only when the client enabled its terminal authentication capability.\nA zero exit status signals success; any other termination signals failure.\nThe client MUST NOT pass this method to `authenticate`.", "type": "object", "properties": {"id": {"description": "Unique identifier for this authentication method.", "allOf": [{"$ref": "#/$defs/AuthMethodId"}]}, "name": {"description": "Human-readable name of the authentication method.", "type": "string"}, "description": {"description": "Optional description providing more details about this authentication method.", "type": ["string", "null"], "x-deserialize-default-on-error": true}, "args": {"description": "Additional arguments to append to the configured agent invocation for terminal auth.", "type": "array", "items": {"type": "string"}}, "env": {"description": "Additional environment variables to set on the configured agent invocation for terminal auth.\nThese values override same-named variables in the base launch configuration.", "type": "object", "additionalProperties": {"type": "string"}}}, "required": ["id", "name"]}, "AuthMethodId": {"description": "Typed identifier used for auth method values on the wire.", "type": "string"}, "AuthenticateRequest": {"description": "Request parameters for the authenticate method.\n\nSpecifies which authentication method to use.", "type": "object", "properties": {"methodId": {"description": "The ID of the authentication method to use.\nMust be one of the methods advertised in the initialize response.", "allOf": [{"$ref": "#/$defs/AuthMethodId"}]}}, "required": ["methodId"], "x-side": "agent", "x-method": "authenticate"}, "AuthenticateResponse": {"description": "Response to the `authenticate` method.", "type": "object", "properties": {}, "x-side": "agent", "x-method": "authenticate"}, "AuthCapabilities": {"description": "Authentication capabilities supported by the client.\n\nAdvertised during initialization to inform the agent which authentication\nmethod types the client can handle. This governs opt-in types that require\nadditional client-side support.", "type": "object", "properties": {"terminal": {"description": "Whether the client supports `terminal` authentication methods.\n\nThe client should set this to `true` only when it can reproduce the\nconfigured agent invocation in an interactive terminal. When `true`, the\nagent may include `terminal` entries in its authentication methods.", "type": "boolean", "default": false, "x-deserialize-default-on-error": true}}}, "ProtocolVersion": {"description": "Protocol version identifier.\n\nThis version is only bumped for breaking changes.\nNon-breaking changes should be introduced via capabilities.", "type": "integer", "format": "uint16", "minimum": 0, "maximum": 65535}, "ClientCapabilities": {"type": "object", "properties": {"auth": {"description": "Authentication capabilities supported by the client.\nDetermines which authentication method types the agent may include\nin its `InitializeResponse`.", "x-deserialize-default-on-error": true, "default": {"terminal": false}, "allOf": [{"$ref": "#/$defs/AuthCapabilities"}]}}}, "AgentCapabilities": {"type": "object", "properties": {"loadSession": {"type": "boolean"}}}, "InitializeRequest": {"type": "object", "properties": {"protocolVersion": {"description": "The latest protocol version supported by the client.", "allOf": [{"$ref": "#/$defs/ProtocolVersion"}]}, "clientCapabilities": {"allOf": [{"$ref": "#/$defs/ClientCapabilities"}]}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"}, "InitializeResponse": {"type": "object", "properties": {"protocolVersion": {"description": "The protocol version the client specified if supported by the agent,\nor the latest protocol version supported by the agent.\n\nThe client should disconnect, if it doesn't support this version.", "allOf": [{"$ref": "#/$defs/ProtocolVersion"}]}, "agentCapabilities": {"allOf": [{"$ref": "#/$defs/AgentCapabilities"}]}, "authMethods": {"description": "Authentication methods supported by the agent.", "type": "array", "items": {"$ref": "#/$defs/AuthMethod"}, "default": [], "x-deserialize-default-on-error": true, "x-deserialize-skip-invalid-items": true}}, "required": ["protocolVersion"], "x-side": "agent", "x-method": "initialize"}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"errors"
+	"slices"
+	"strings"
+	"testing"
+)
+
+// TestAcceptedAuthMethodIDs requires the emitted list of the ids authenticate
+// accepts to hold, in the answer's order and each once, the agent ids and an
+// Unknown entry's string id, and no id a terminal entry names, even one an
+// agent entry also names; and the gate to refuse a terminal id as terminal and
+// any id the list lacks as unadvertised, naming the list, or "none".
+func TestAcceptedAuthMethodIDs(t *testing.T) {
+	entry := func(raw string) AuthMethod {
+		var a AuthMethod
+		if err := json.Unmarshal([]byte(raw), &a); err != nil {
+			t.Fatalf("%s: %v", raw, err)
+		}
+		return a
+	}
+	list := []AuthMethod{
+		entry(`{"id":"a","name":"A"}`),
+		entry(`{"type":"terminal","id":"t","name":"T"}`),
+		entry(`{"id":"t","name":"T, agent"}`),
+		entry(`{"type":"x","id":"u","name":"U"}`),
+		entry(`{"type":"x","name":"V"}`),
+		entry(`{"id":"a","name":"A again"}`),
+	}
+	if list[3].Unknown == nil || list[4].Unknown == nil {
+		t.Fatalf("the type x entries decoded as %+v and %+v, want Unknown", list[3], list[4])
+	}
+	if got := acceptedAuthenticateRequestMethodIds(list); !slices.Equal(got, []AuthMethodId{"a", "u"}) {
+		t.Errorf("accepted ids = %q, want [a u]", got)
+	}
+	n := &Negotiation{Response: InitializeResponse{AuthMethods: list}}
+	gate := func(n *Negotiation, id AuthMethodId) error {
+		return (&AuthenticateRequest{MethodId: id}).gates(n, "authenticate")
+	}
+	if err := gate(n, "t"); !errors.Is(err, ErrTerminalAuthMethod) {
+		t.Errorf("t, terminal and agent: %v, want ErrTerminalAuthMethod", err)
+	}
+	for _, id := range []AuthMethodId{"unknown", "z"} {
+		err := gate(n, id)
+		if !errors.Is(err, ErrUnadvertisedAuthMethod) || err == nil || !strings.HasSuffix(err.Error(), `; authenticate accepts "a", "u"`) {
+			t.Errorf("%s: %v, want ErrUnadvertisedAuthMethod naming a and u", id, err)
+		}
+	}
+	for _, id := range []AuthMethodId{"a", "u"} {
+		if err := gate(n, id); err != nil {
+			t.Errorf("%s: %v, want nil", id, err)
+		}
+	}
+	if err := gate(&Negotiation{}, "a"); err == nil || !strings.HasSuffix(err.Error(), "; authenticate accepts none") {
+		t.Errorf("a, with no methods: %v, want the refusal to name none", err)
+	}
+}
+-- want.api --
+type Agent interface{Authenticate(ctx context.Context, params AuthenticateRequest) (AuthenticateResponse, error); Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error)}
+type AgentCapabilities struct{LoadSession bool "json:\"loadSession,omitempty\""}
+type AgentExperimental interface{}
+const AgentMethodAuthenticate untyped string = "authenticate"
+const AgentMethodInitialize untyped string = "initialize"
+type AgentSideConnection struct{conn *Connection; agent Agent; negotiation atomic.Pointer[Negotiation]}
+type AuthCapabilities struct{Terminal bool "json:\"terminal,omitempty\""}
+type AuthMethod struct{Terminal *AuthMethodTerminalInline "json:\"-\""; Agent *AuthMethodAgent "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type AuthMethodAgent struct{Description *string "json:\"description,omitempty\""; Id AuthMethodId "json:\"id\""; Name string "json:\"name\""}
+type AuthMethodId string
+type AuthMethodTerminal struct{Args []string "json:\"args,omitempty\""; Description *string "json:\"description,omitempty\""; Env map[string]string "json:\"env,omitempty\""; Id AuthMethodId "json:\"id\""; Name string "json:\"name\""}
+type AuthMethodTerminalInline struct{Args []string "json:\"args,omitempty\""; Description *string "json:\"description,omitempty\""; Env map[string]string "json:\"env,omitempty\""; Id AuthMethodId "json:\"id\""; Name string "json:\"name\""; Type string "json:\"type\""}
+type AuthenticateRequest struct{MethodId AuthMethodId "json:\"methodId\""}
+type AuthenticateResponse struct{}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientCapabilities struct{Auth AuthCapabilities "json:\"auth\""}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client; negotiation atomic.Pointer[Negotiation]; initializing atomic.Pointer[initializeAttempt]}
+type InitializeRequest struct{ClientCapabilities ClientCapabilities "json:\"clientCapabilities\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
+type InitializeResponse struct{AgentCapabilities AgentCapabilities "json:\"agentCapabilities\""; AuthMethods []AuthMethod "json:\"authMethods\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
+type Negotiation struct{Request InitializeRequest; Response InitializeResponse}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewAuthMethodAgent(id AuthMethodId, name string) AuthMethod
+func NewAuthMethodTerminal(id AuthMethodId, name string) AuthMethod
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+type ProtocolVersion uint16
+const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).Negotiated() (Negotiation, bool)
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*AuthCapabilities).UnmarshalJSON(b []byte) error
+func (AuthMethod).MarshalJSON() ([]byte, error)
+func (*AuthMethod).UnmarshalJSON(b []byte) error
+func (*AuthMethod).Validate() error
+func (*AuthMethodAgent).UnmarshalJSON(b []byte) error
+func (*AuthMethodTerminal).UnmarshalJSON(b []byte) error
+func (*AuthMethodTerminalInline).UnmarshalJSON(b []byte) error
+func (*AuthenticateRequest).UnmarshalJSON(b []byte) error
+func (*AuthenticateRequest).Validate() error
+func (*AuthenticateResponse).Validate() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientCapabilities).UnmarshalJSON(b []byte) error
+func (*ClientSideConnection).Authenticate(ctx context.Context, params AuthenticateRequest) (AuthenticateResponse, error)
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error)
+func (*ClientSideConnection).Negotiated() (Negotiation, bool)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+func (*InitializeRequest).UnmarshalJSON(b []byte) error
+func (*InitializeRequest).Validate() error
+func (InitializeResponse).MarshalJSON() ([]byte, error)
+func (*InitializeResponse).UnmarshalJSON(b []byte) error
+func (*InitializeResponse).Validate() error
+func (Negotiation).Allows(method string) error

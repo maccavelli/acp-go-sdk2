@@ -25004,16 +25004,42 @@ func requireKeys(b []byte, m map[string]json.RawMessage, typ string, required ..
 // it, folding keys, the last match winning, and returns "unknown" when that is
 // not a non-empty string.
 func unknownKind(b json.RawMessage, key string) string {
+	if kind, ok := unknownString(b, key); ok && kind != "" {
+		return kind
+	}
+	return "unknown"
+}
+
+// unknownString reads key of the JSON object b as unknownKind does, and
+// reports whether its value is a JSON string, the empty string included.
+func unknownString(b json.RawMessage, key string) (string, bool) {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err != nil {
-		return "unknown"
+		return "", false
 	}
 	foldKeys(b, m, key)
-	var kind string
-	if err := json.Unmarshal(m[key], &kind); err != nil || kind == "" {
-		return "unknown"
+	v, ok := m[key]
+	if !ok || string(v) == "null" {
+		return "", false
 	}
-	return kind
+	var s string
+	if err := json.Unmarshal(v, &s); err != nil {
+		return "", false
+	}
+	return s, true
+}
+
+// quotedIDs quotes each of ids and joins them with ", ", or returns "none"
+// for none.
+func quotedIDs[T ~string](ids []T) string {
+	if len(ids) == 0 {
+		return "none"
+	}
+	quoted := make([]string, 0, len(ids))
+	for _, s := range ids {
+		quoted = append(quoted, fmt.Sprintf("%q", s))
+	}
+	return strings.Join(quoted, ", ")
 }
 
 // foldKeys makes m, the keys of the JSON object b, hold for each of names the
@@ -25410,16 +25436,47 @@ func gateResult(n *Negotiation, method string, result any) error {
 	return nil
 }
 
+// acceptedAuthenticateRequestMethodIds returns the ids of list, an initialize
+// answer's, that AuthenticateRequest's MethodId may name, in list's order, each
+// once: no id a terminal entry names, and an Unknown entry's only when it is a
+// JSON string.
+func acceptedAuthenticateRequestMethodIds(list []AuthMethod) []AuthMethodId {
+	var terminal []AuthMethodId
+	for _, a := range list {
+		if a.Terminal != nil {
+			terminal = append(terminal, a.Terminal.Id)
+		}
+	}
+	var ids []AuthMethodId
+	for _, a := range list {
+		var x AuthMethodId
+		switch {
+		case a.Agent != nil:
+			x = a.Agent.Id
+		case a.Unknown != nil:
+			s, ok := unknownString(a.Unknown, "id")
+			if !ok {
+				continue
+			}
+			x = AuthMethodId(s)
+		default:
+			continue
+		}
+		if !slices.Contains(terminal, x) && !slices.Contains(ids, x) {
+			ids = append(ids, x)
+		}
+	}
+	return ids
+}
+
 func (v *AuthenticateRequest) gates(n *Negotiation, method string) error {
 	for _, a := range n.Response.AuthMethods {
 		if a.Terminal != nil && a.Terminal.Id == v.MethodId {
 			return fmt.Errorf("%s: methodId %q: %w", method, v.MethodId, ErrTerminalAuthMethod)
 		}
 	}
-	if !slices.ContainsFunc(n.Response.AuthMethods, func(a AuthMethod) bool {
-		return a.Terminal != nil && a.Terminal.Id == v.MethodId || a.Agent != nil && a.Agent.Id == v.MethodId || a.Unknown != nil && AuthMethodId(unknownKind(a.Unknown, "id")) == v.MethodId
-	}) {
-		return fmt.Errorf("%s: methodId %q: %w", method, v.MethodId, ErrUnadvertisedAuthMethod)
+	if ids := acceptedAuthenticateRequestMethodIds(n.Response.AuthMethods); !slices.Contains(ids, v.MethodId) {
+		return fmt.Errorf("%s: methodId %q: %w; %s accepts %s", method, v.MethodId, ErrUnadvertisedAuthMethod, method, quotedIDs(ids))
 	}
 	return nil
 }

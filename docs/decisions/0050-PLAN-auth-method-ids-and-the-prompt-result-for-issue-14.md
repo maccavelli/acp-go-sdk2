@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-11-05
 associated-madr: "0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md"
 ---
@@ -284,4 +284,86 @@ Every new check is first seen to fail on a planted break in a scratch copy. A pl
 
 ## Execution record
 
-Not started. The MADR is `accepted`, with Q1 to Q4 answered (a). The PLAN awaits the owner's approval.
+The owner committed the pair as `4037547` and said "committed, approved. proceed".
+
+### Phase 1: the generator, D1, D2 and D4, 2026-11-05
+
+**Before:** the benchmark baseline, `go test -run '^$' -bench 'PromptRoundTrip|SessionUpdateNotify|SessionNotificationUnmarshal'
+-benchmem -count=5 .` on `4037547`, kept for phase 3's comparison.
+
+**What it did:**
+
+* **The model,** step 1.1:
+  * `GateCheck` gained `Terminal`. `linkTerminal`, called in `resolveGates` once each type's own checks are collected, sets
+    it on an advertised check from the terminal check of the same `Field` and `List`.
+  * The pin on `AuthenticateRequest` requires `Terminal: "Terminal"`. That pin moved out of `checkCommittedGates` into a
+    helper of its own, `checkAuthenticateGates`, which it calls. The added condition made `checkCommittedGates`' cyclomatic
+    complexity 41, over `gocyclo`'s 40 (`make pre-add-check`: "cyclomatic complexity 41 of func `checkCommittedGates` is
+    high (> 40)"). The checks are the same, and the plant below fails through the helper.
+* **The string reader,** step 1.2:
+  * `decode.go` gained `helperUnknownString` and `emitUnknownString`, which emits `unknownString(b, key) (string, bool)`.
+    It reports `("", false)` for `b` that does not decode, and for a key that is absent, `null` or not a string.
+  * `emitUnknownKind` now emits `unknownKind` reading through it, with the `"unknown"` fallback kept for an absent, empty or
+    non-string value.
+  * `emitDecodeHelpers` emits `unknownString` whenever `unknownKind` is emitted, and `quotedIDs` when it is used.
+* **The list,** step 1.3: `emitAcceptedIDs` emits `acceptedAuthenticateRequestMethodIds`, named by `acceptedIDsName`. It
+  makes two passes: the terminal ids first, then each entry's `Agent` id, or its `Unknown` string id. It appends an id not
+  among the terminal ones and not already appended.
+* **The gate,** step 1.4:
+  * `advertisedGate` takes the list function's name, and refuses an id the list lacks with `"%s: methodId %q: %w; %s
+    accepts %s"` and `quotedIDs(ids)`.
+  * `quotedIDs[T ~string]` is emitted with a type parameter on the `ast.FuncType`. `markGateHelpers` marks it and
+    `unknownString` for an advertised check, and `unknownKind` for any other check with a `RawKey`.
+  * The comments cite the MADR's D1, D2 and D4.
+* **The engine case,** step 1.5: `accept-advertised-auth-ids.txtar`.
+  * It holds ACP's `AuthMethod`, `AuthMethodAgent`, `AuthMethodTerminal`, `AuthMethodId`, `AuthenticateRequest`,
+    `AuthenticateResponse`, `AuthCapabilities` and `ProtocolVersion`, copied from `schema/schema.json` with their
+    descriptions, `_meta` dropped. It also holds a `ClientCapabilities` of `auth`, an `AgentCapabilities` of `loadSession`,
+    and the two `initialize` definitions with `authMethods`.
+  * It also needed a `CancelRequestNotification`. Without one the model refused the case: "protocol method
+    "$/cancel_request": no request or notification definition is linked to it by x-method and x-side". It takes the same
+    shape as `accept-gates-unreachable`'s.
+  * Its `want.api` was written by `go test . -run '^TestEngineCases$/^accept-advertised-auth-ids$' -update` and read in
+    full: the union with `Unknown`, the gated `Authenticate`, and no new exported name.
+  * Its behaviour test, `TestAcceptedAuthMethodIDs`, runs under `TestEngineBehaviour`: "--- PASS:
+    TestEngineBehaviour/accept-advertised-auth-ids".
+* **Regenerated,** step 1.6: `cd cmd/generate && go run .`. `git diff --stat` showed `types_gen.go` alone, 66 insertions and
+  9 deletions, and its diff was read in full. It holds:
+  * `unknownKind` through `unknownString`, then `unknownString` and `quotedIDs`;
+  * `acceptedAuthenticateRequestMethodIds`, its comment wrapped below 80 columns after a first run printed it in one line;
+  * the advertised check of `(*AuthenticateRequest).gates`.
+* **The root tests,** step 1.7, `gates_surface_test.go`:
+  * `TestAuthenticateUnadvertisedMethod` requires `; authenticate accepts "a", "f"`, sent and in the `-32602` received.
+  * `TestAuthenticateUnknownEntryID` refuses `methodId: "unknown"` against an entry whose `"id"` is absent, `""`, `null`,
+    `7` or an object: in `AllowsValue`, on send with nothing written, and as received. It accepts `""`, `"f"` by `"ID"`, and
+    `"unknown"` itself, each when it is the entry's string id. `null` and an object are added to the PLAN's three.
+  * `TestAuthenticateAcceptsNone` refuses against one terminal method with `…; authenticate accepts none`. It refuses an id
+    that is both terminal and agent as terminal, and then names `"b"` alone as accepted.
+
+**Seen to fail,** step 1.8, by `plants_p1.py`, a scratch script that copies the working tree for each plant, regenerates
+where the root's tests must see the change, and runs `TestEngineBehaviour` whole. 7 of 7 runs failed as required:
+
+```text
+FAILED AS REQUIRED: the list reading Unknown through unknownKind again (. -run ^TestAuthenticateUnknownEntryID$ .): exit 1: gates_surface_test.go:218: {"type":"future","name":"F"}: AllowsValue(unknown) = <nil>, want ErrUnadvertisedAuthMethod
+FAILED AS REQUIRED: the list reading Unknown through unknownKind again (cmd/generate -run ^TestEngineBehaviour$ .): exit 1: behaviour_test.go:36: accepted ids = ["a" "u" "unknown"], want [a u]
+FAILED AS REQUIRED: the terminal pass removed (cmd/generate -run ^TestEngineBehaviour$ .): exit 1: behaviour_test.go:36: accepted ids = ["a" "t" "u"], want [a u]
+FAILED AS REQUIRED: the terminal pass removed (. -run ^TestAuthenticateAcceptsNone$ .): exit 1: gates_surface_test.go:272: AllowsValue(z) = authenticate: methodId "z": acp: methodId names no auth method the agent advertised; authenticate accepts "t", "b", want the accepted ids to be b alone
+FAILED AS REQUIRED: the text without the accepted ids (. -run ^TestAuthenticateUnadvertisedMethod$ .): exit 1: gates_surface_test.go:150: Authenticate(x) = authenticate: methodId "x": acp: methodId names no auth method the agent advertised, want ErrUnadvertisedAuthMethod
+FAILED AS REQUIRED: the text without the accepted ids (cmd/generate -run ^TestEngineBehaviour$ .): exit 1: behaviour_test.go:48: unknown: authenticate: methodId "unknown": acp: methodId names no auth method the agent advertised, want ErrUnadvertisedAuthMethod naming a and u
+FAILED AS REQUIRED: Terminal left unset in the model (cmd/generate ./internal/model/): exit 1: protocol_test.go:513: AuthenticateRequest: [{Kind:4 Field:MethodId …
+```
+
+The last plant was run again after the pin moved into `checkAuthenticateGates`, and failed the same way.
+
+**Checks,** step 1.9:
+
+* `cd cmd/generate && go test -count=1 -shuffle=on ./...`: `ok` for all seven packages.
+* `go test -race -count=1 -shuffle=on .`: `ok`, 16.3 s.
+* `tools/gates.py regen`: "ok regen (exit 0)", the generated files unchanged.
+* `make pre-add-check` with the phase's seven files:
+  * first, exit 2, `gocyclo` on `checkCommittedGates`, as above;
+  * then exit 0, at a load of 27 to 47: "6 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on,
+    uncached), tidy, govulncheck."
+
+No deviation: the pin's move and the case's `CancelRequestNotification` are details the steps did not name, inside the
+phase's files. Staged for the owner, who commits. Phase 2 begins on the owner's word.

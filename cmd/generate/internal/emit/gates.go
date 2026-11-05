@@ -38,7 +38,10 @@ func emitValueGates(f *goFile, m *model.Model) {
 		}
 		var body []ast.Stmt
 		for _, c := range g.Checks {
-			body = append(body, gateStmt(f, m, recv, c))
+			if c.Kind == model.GateCheckAdvertisedAuth {
+				emitAcceptedIDs(f, g.Type, c)
+			}
+			body = append(body, gateStmt(f, m, g.Type, recv, c))
 		}
 		body = append(body, ret(nilExpr()))
 		f.line()
@@ -49,19 +52,99 @@ func emitValueGates(f *goFile, m *model.Model) {
 
 // markGateHelpers marks the decoding helpers the gates call, which
 // typesFile emits before them: unknownKind, for a check that reads a raw
-// Unknown (0049-PLAN-surface-fixes.md, phase 4, deviation 4).
+// Unknown's discriminator (0049-PLAN-surface-fixes.md, phase 4, deviation 4);
+// for an advertised check, unknownString, which reads an Unknown's id with no
+// fallback, and quotedIDs, which its refusal names the accepted ids with
+// (0050-PLAN-auth-method-ids-and-the-prompt-result-for-issue-14.md, phase 1).
 func markGateHelpers(f *goFile, m *model.Model) {
 	for _, g := range m.Gated {
 		for _, c := range g.Checks {
-			if c.RawKey != "" {
+			switch {
+			case c.Kind == model.GateCheckAdvertisedAuth:
+				f.uses[helperQuotedIDs] = true
+				if c.RawKey != "" {
+					f.uses[helperUnknownString] = true
+				}
+			case c.RawKey != "":
 				f.uses[helperUnknownKind] = true
 			}
 		}
 	}
 }
 
-// gateStmt renders one check of a gates method.
-func gateStmt(f *goFile, m *model.Model, recv string, c model.GateCheck) ast.Stmt {
+// acceptedIDsName is the name of the function that lists the ids the
+// advertised check c of the gated type typ accepts: accepted, the type, the
+// field and "s", AuthenticateRequest's MethodId giving
+// acceptedAuthenticateRequestMethodIds.
+func acceptedIDsName(typ string, c model.GateCheck) string {
+	return "accepted" + typ + c.Field + "s"
+}
+
+// emitAcceptedIDs emits, for the advertised check c of the gated type typ,
+//
+//	func acceptedAuthenticateRequestMethodIds(list []AuthMethod) []AuthMethodId
+//
+// which returns the ids of list, an initialize answer's, that the check
+// accepts, in list's order, each once: every advertised variant's id but the
+// terminal one's, and an Unknown entry's id when it is a JSON string; and no
+// id a terminal entry names, even one another variant holds, since the
+// terminal check refuses it first. The gate and helpers.go's
+// AuthenticateMethodIDs both read it, so the two cannot differ
+// (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D1 and D2).
+func emitAcceptedIDs(f *goFile, typ string, c model.GateCheck) {
+	idType := func() ast.Expr { return id(c.IDType) }
+	var body []ast.Stmt
+	if c.Terminal != "" {
+		for _, a := range c.Advertised {
+			if a.Variant != c.Terminal {
+				continue
+			}
+			body = append(body, varStmt("terminal", sliceOf(idType())),
+				rangeStmt(id("_"), id("a"), id("list"),
+					ifStmt(nil, binary(dot("a", a.Variant), token.NEQ, nilExpr()),
+						assign(exprs(id("terminal")), call(id("append"), id("terminal"), dot("a", a.Variant, a.Field))))))
+		}
+	}
+	var cases []ast.Stmt
+	for _, a := range c.Advertised {
+		if a.Variant == c.Terminal {
+			continue
+		}
+		cases = append(cases, caseOf(exprs(binary(dot("a", a.Variant), token.NEQ, nilExpr())),
+			assign(exprs(id("x")), dot("a", a.Variant, a.Field))))
+	}
+	if c.RawKey != "" {
+		var conv ast.Expr = id("s")
+		if c.IDType != "string" {
+			conv = call(idType(), id("s"))
+		}
+		cases = append(cases, caseOf(exprs(binary(dot("a", "Unknown"), token.NEQ, nilExpr())),
+			define(exprs(id("s"), id("ok")), call(id(helperUnknownString), dot("a", "Unknown"), str(c.RawKey))),
+			ifStmt(nil, not(id("ok")), continueStmt()),
+			assign(exprs(id("x")), conv)))
+	}
+	cases = append(cases, caseOf(nil, continueStmt()))
+	var keep ast.Expr = not(call(f.qual("slices", "Contains"), id("ids"), id("x")))
+	if c.Terminal != "" {
+		keep = binary(not(call(f.qual("slices", "Contains"), id("terminal"), id("x"))), token.LAND, keep)
+	}
+	body = append(body, varStmt("ids", sliceOf(idType())),
+		rangeStmt(id("_"), id("a"), id("list"),
+			varStmt("x", idType()),
+			switchStmt(nil, cases...),
+			ifStmt(nil, keep, assign(exprs(id("ids")), call(id("append"), id("ids"), id("x"))))),
+		ret(id("ids")))
+	name := acceptedIDsName(typ, c)
+	f.line()
+	f.comment(name+" returns the ids of list, an initialize",
+		"answer's, that "+typ+"'s "+c.Field+" may name, in list's order, each",
+		"once: no id a terminal entry names, and an Unknown entry's only when it is a",
+		"JSON string.")
+	f.add(function(name, funcType([]*ast.Field{param("list", sliceOf(id(c.Elem)))}, param("", sliceOf(idType()))), body...))
+}
+
+// gateStmt renders one check of a gates method of the gated type typ.
+func gateStmt(f *goFile, m *model.Model, typ, recv string, c model.GateCheck) ast.Stmt {
 	field := func() ast.Expr { return dot(recv, c.Field) }
 	switch c.Kind {
 	case model.GateCheckNested:
@@ -69,7 +152,7 @@ func gateStmt(f *goFile, m *model.Model, recv string, c model.GateCheck) ast.Stm
 	case model.GateCheckUndeclaredVariant:
 		return undeclaredGate(f, recv, c)
 	case model.GateCheckAdvertisedAuth:
-		return advertisedGate(f, field, c)
+		return advertisedGate(f, field, acceptedIDsName(typ, c), c)
 	case model.GateCheckTerminalAuth:
 		a := func() ast.Expr { return dot("a", c.Variant) }
 		return rangeStmt(id("_"), id("a"), dot("n", "Response", c.List),
@@ -153,31 +236,17 @@ func undeclaredGate(f *goFile, recv string, c model.GateCheck) ast.Stmt {
 }
 
 // advertisedGate refuses an id that names no entry of the initialize
-// response's list: no variant's id, nor a raw entry's, which unknownKind
-// reads (0049-PLAN-surface-fixes.md, phase 4, S8).
-func advertisedGate(f *goFile, field func() ast.Expr, c model.GateCheck) ast.Stmt {
-	var match ast.Expr
-	or := func(x ast.Expr) {
-		if match == nil {
-			match = x
-			return
-		}
-		match = binary(match, token.LOR, x)
-	}
-	for _, a := range c.Advertised {
-		v := func() ast.Expr { return dot("a", a.Variant) }
-		or(binary(binary(v(), token.NEQ, nilExpr()), token.LAND, binary(sel(v(), a.Field), token.EQL, field())))
-	}
-	if c.RawKey != "" {
-		var raw ast.Expr = call(id(helperUnknownKind), dot("a", "Unknown"), str(c.RawKey))
-		if c.IDType != "string" {
-			raw = call(id(c.IDType), raw)
-		}
-		or(binary(binary(dot("a", "Unknown"), token.NEQ, nilExpr()), token.LAND, binary(raw, token.EQL, field())))
-	}
-	named := &ast.FuncLit{Type: funcType([]*ast.Field{param("a", id(c.Elem))}, param("", id("bool"))), Body: block(ret(match))}
-	return ifStmt(nil, not(call(f.qual("slices", "ContainsFunc"), dot("n", "Response", c.List), named)),
-		ret(call(f.qual(pkgFmt, "Errorf"), str("%s: "+c.Key+" %q: %w"), id("method"), field(), id("ErrUnadvertisedAuthMethod"))))
+// response's list (0049-PLAN-surface-fixes.md, phase 4, S8): one the list
+// function accepted, emitted by emitAcceptedIDs, does not hold. Its refusal
+// names the ids that function accepts, "none" for none
+// (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D2 and
+// D4). The terminal check runs before it, so a terminal id keeps its own
+// refusal.
+func advertisedGate(f *goFile, field func() ast.Expr, accepted string, c model.GateCheck) ast.Stmt {
+	return ifStmt(define(exprs(id("ids")), call(id(accepted), dot("n", "Response", c.List))),
+		not(call(f.qual("slices", "Contains"), id("ids"), field())),
+		ret(call(f.qual(pkgFmt, "Errorf"), str("%s: "+c.Key+" %q: %w; %s accepts %s"), id("method"), field(),
+			id("ErrUnadvertisedAuthMethod"), id("method"), call(id(helperQuotedIDs), id("ids")))))
 }
 
 // nestedGate is the call into the gates of a held value, by its shape.

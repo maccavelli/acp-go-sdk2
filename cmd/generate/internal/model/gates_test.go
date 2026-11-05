@@ -241,16 +241,7 @@ func checkCommittedGates(t *testing.T, m *Model) {
 	if u := own["UnstableMcpServer"]; len(u) != 3 {
 		t.Errorf("UnstableMcpServer: %d checks, want the three MCP rules: %+v", len(u), u)
 	}
-	// The terminal rule runs first, then the advertised one, which reads every
-	// variant's id and an Unknown entry's "id" (0049-PLAN-surface-fixes.md,
-	// phase 4, S8).
-	if a := own["AuthenticateRequest"]; len(a) != 2 || a[0].Kind != GateCheckTerminalAuth || a[0].List != "AuthMethods" ||
-		a[0].Variant != "Terminal" || a[0].ID != "Id" || a[0].Field != "MethodId" ||
-		a[1].Kind != GateCheckAdvertisedAuth || a[1].List != "AuthMethods" || a[1].Field != "MethodId" || a[1].Elem != "AuthMethod" ||
-		a[1].IDType != "AuthMethodId" || a[1].RawKey != "id" ||
-		!slices.Equal(a[1].Advertised, []VariantField{{Variant: "Terminal", Field: "Id"}, {Variant: "Agent", Field: "Id"}}) {
-		t.Errorf("AuthenticateRequest: %+v", a)
-	}
+	checkAuthenticateGates(t, own["AuthenticateRequest"])
 	if pr := own["PromptRequest"]; len(pr) != 4 || pr[3].Kind != GateCheckUndeclaredVariant || pr[3].Variant != "Unknown" ||
 		pr[3].RawKey != "type" || pr[3].Field != "Prompt" || pr[3].Shape != RefSlice || pr[3].Capability != "promptCapabilities" {
 		t.Errorf("PromptRequest: %+v", pr)
@@ -258,5 +249,21 @@ func checkCommittedGates(t *testing.T, m *Model) {
 	if e := own["CreateElicitationRequest"]; len(e) != 3 || e[2].Kind != GateCheckUndeclaredVariant || e[2].Variant != "Other" ||
 		e[2].Disc != "Mode" || e[2].Capability != "elicitation" {
 		t.Errorf("CreateElicitationRequest: %+v", e)
+	}
+}
+
+// checkAuthenticateGates requires AuthenticateRequest's two checks: the
+// terminal rule first, then the advertised one, which reads every variant's
+// id and an Unknown entry's "id" (0049-PLAN-surface-fixes.md, phase 4, S8),
+// and names the terminal variant its list of accepted ids leaves out
+// (0050-PLAN-auth-method-ids-and-the-prompt-result-for-issue-14.md, phase 1).
+func checkAuthenticateGates(t *testing.T, a []GateCheck) {
+	t.Helper()
+	if len(a) != 2 || a[0].Kind != GateCheckTerminalAuth || a[0].List != "AuthMethods" ||
+		a[0].Variant != "Terminal" || a[0].ID != "Id" || a[0].Field != "MethodId" ||
+		a[1].Kind != GateCheckAdvertisedAuth || a[1].List != "AuthMethods" || a[1].Field != "MethodId" || a[1].Elem != "AuthMethod" ||
+		a[1].IDType != "AuthMethodId" || a[1].RawKey != "id" || a[1].Terminal != "Terminal" ||
+		!slices.Equal(a[1].Advertised, []VariantField{{Variant: "Terminal", Field: "Id"}, {Variant: "Agent", Field: "Id"}}) {
+		t.Errorf("AuthenticateRequest: %+v", a)
 	}
 }

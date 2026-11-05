@@ -70,6 +70,13 @@ type GateCheck struct {
 	// union, Elem, with its field of IDType, the checked id's type.
 	Advertised   []VariantField
 	Elem, IDType string
+	// Terminal is, for GateCheckAdvertisedAuth, the variant of Advertised
+	// that the GateCheckTerminalAuth of the same Field and List names: its
+	// ids are refused first, and the list of accepted ids leaves them out,
+	// even one another variant also holds. It is empty when the type has no
+	// terminal check (0050-PLAN-auth-method-ids-and-the-prompt-result-for-issue-14.md,
+	// phase 1).
+	Terminal string
 }
 
 // VariantField is a union's variant, by its Go field, and a Go field of the
@@ -115,6 +122,9 @@ func (m *Model) resolveGates(r *rules) error {
 			}
 		}
 	}
+	for _, checks := range own {
+		linkTerminal(checks)
+	}
 	holders := m.gateHolders()
 	gated := map[string]bool{}
 	for name := range own {
@@ -144,6 +154,24 @@ func (m *Model) resolveGates(r *rules) error {
 		}
 	}
 	return nil
+}
+
+// linkTerminal gives each advertised check of checks, one type's own, the
+// variant its property's terminal check names, so that the list of ids the
+// advertised check accepts leaves the terminal ones out. Both checks read the
+// same union, so the variant is one of Advertised
+// (0050-PLAN-auth-method-ids-and-the-prompt-result-for-issue-14.md, phase 1).
+func linkTerminal(checks []GateCheck) {
+	for i := range checks {
+		if checks[i].Kind != GateCheckAdvertisedAuth {
+			continue
+		}
+		for _, t := range checks {
+			if t.Kind == GateCheckTerminalAuth && t.Field == checks[i].Field && t.List == checks[i].List {
+				checks[i].Terminal = t.Variant
+			}
+		}
+	}
 }
 
 // ruleTypes returns the types a capability rule names: its definition's, and

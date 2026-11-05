@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -143,7 +145,8 @@ func TestAuthenticateUnadvertisedMethod(t *testing.T) {
 	refused, cancelRefused := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancelRefused()
 	err := authenticate(refused, nil, csc, AuthenticateRequest{MethodId: "x"})
-	if !errors.Is(err, ErrUnadvertisedAuthMethod) || err.Error() != `authenticate: methodId "x": `+ErrUnadvertisedAuthMethod.Error() {
+	if !errors.Is(err, ErrUnadvertisedAuthMethod) || err.Error() != `authenticate: methodId "x": `+ErrUnadvertisedAuthMethod.Error()+
+		`; authenticate accepts "a", "f"` {
 		t.Errorf("Authenticate(x) = %v, want ErrUnadvertisedAuthMethod", err)
 	}
 	if err := authenticate(refused, nil, csc, AuthenticateRequest{MethodId: "t"}); !errors.Is(err, ErrTerminalAuthMethod) {
@@ -156,8 +159,9 @@ func TestAuthenticateUnadvertisedMethod(t *testing.T) {
 		t.Errorf("AllowsValue(x) = %v, want ErrUnadvertisedAuthMethod", err)
 	}
 	m.params = AuthenticateRequest{MethodId: "x"}
-	if rerr, ran := receive(t, m, n); rerr == nil || rerr.Code != -32602 || ran {
-		t.Errorf("received x: %v, handler ran %v, want -32602 and no handler", rerr, ran)
+	if rerr, ran := receive(t, m, n); rerr == nil || rerr.Code != -32602 || ran ||
+		!strings.Contains(fmt.Sprint(rerr.Data), `; authenticate accepts "a", "f"`) {
+		t.Errorf("received x: %v, handler ran %v, want -32602 naming the accepted ids and no handler", rerr, ran)
 	}
 	for _, id := range []AuthMethodId{"a", "f"} {
 		m.params = AuthenticateRequest{MethodId: id}
@@ -186,6 +190,86 @@ func TestAuthenticateUnadvertisedMethod(t *testing.T) {
 	none.Response.AuthMethods = nil
 	if err := none.AllowsValue(AgentMethodAuthenticate, AuthenticateRequest{MethodId: "a"}); !errors.Is(err, ErrUnadvertisedAuthMethod) {
 		t.Errorf("AllowsValue(a) with no methods = %v, want ErrUnadvertisedAuthMethod", err)
+	}
+}
+
+// TestAuthenticateUnknownEntryID requires an entry of a type this SDK does
+// not know to advertise its "id" only when that is a JSON string, the empty
+// string included and the key folded as its decoder folds it. Absent, null or
+// not a string, it advertises nothing, so methodId "unknown", which it used
+// to advertise, is refused on send, writing nothing, refused by AllowsValue,
+// and answered -32602 when received
+// (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, F5 and D1).
+func TestAuthenticateUnknownEntryID(t *testing.T) {
+	t.Parallel()
+	answer := func(raw string) *Negotiation {
+		n := allAdvertised()
+		n.Response.AuthMethods = []AuthMethod{NewAuthMethodAgent("a", "A"), decoded[AuthMethod](t, raw)}
+		if n.Response.AuthMethods[1].Unknown == nil {
+			t.Fatalf("%s decoded as %+v, want Unknown", raw, n.Response.AuthMethods[1])
+		}
+		return n
+	}
+	m := gatedMethod{wire: AgentMethodAuthenticate, toAgent: true, params: AuthenticateRequest{MethodId: "unknown"}}
+	for _, raw := range []string{`{"type":"future","name":"F"}`, `{"type":"future","id":"","name":"F"}`, `{"type":"future","id":null,"name":"F"}`,
+		`{"type":"future","id":7,"name":"F"}`, `{"type":"future","id":{"x":1},"name":"F"}`} {
+		n := answer(raw)
+		if err := n.AllowsValue(AgentMethodAuthenticate, m.params); !errors.Is(err, ErrUnadvertisedAuthMethod) {
+			t.Errorf("%s: AllowsValue(unknown) = %v, want ErrUnadvertisedAuthMethod", raw, err)
+		}
+		w := &countingWriter{}
+		_, csc := sides(t, w, n)
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		_, err := csc.Authenticate(ctx, AuthenticateRequest{MethodId: "unknown"})
+		cancel()
+		if !errors.Is(err, ErrUnadvertisedAuthMethod) || w.count() != 0 {
+			t.Errorf("%s: Authenticate(unknown) = %v, %d bytes written; want ErrUnadvertisedAuthMethod and none", raw, err, w.count())
+		}
+		if rerr, ran := receive(t, m, n); rerr == nil || rerr.Code != -32602 || ran {
+			t.Errorf("%s: received unknown: %v, handler ran %v, want -32602 and no handler", raw, rerr, ran)
+		}
+	}
+	for _, tc := range []struct {
+		raw string
+		id  AuthMethodId
+	}{
+		{`{"type":"future","id":"","name":"F"}`, ""},
+		{`{"type":"future","ID":"f","name":"F"}`, "f"},
+		{`{"type":"future","id":"unknown","name":"F"}`, "unknown"},
+	} {
+		n := answer(tc.raw)
+		if err := n.AllowsValue(AgentMethodAuthenticate, AuthenticateRequest{MethodId: tc.id}); err != nil {
+			t.Errorf("%s: AllowsValue(%q) = %v, want nil", tc.raw, tc.id, err)
+		}
+		mm := m
+		mm.params = AuthenticateRequest{MethodId: tc.id}
+		if rerr, ran := receive(t, mm, n); rerr != nil || !ran {
+			t.Errorf("%s: received %q: %v, handler ran %v, want it handled", tc.raw, tc.id, rerr, ran)
+		}
+	}
+}
+
+// TestAuthenticateAcceptsNone requires the refusal of an unadvertised id to
+// say that authenticate accepts none when every method the agent listed is
+// terminal, and an id that is both terminal and agent to be refused as
+// terminal (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md,
+// D2 and D4).
+func TestAuthenticateAcceptsNone(t *testing.T) {
+	t.Parallel()
+	n := allAdvertised()
+	n.Response.AuthMethods = []AuthMethod{NewAuthMethodTerminal("t", "T")}
+	err := n.AllowsValue(AgentMethodAuthenticate, AuthenticateRequest{MethodId: "a"})
+	if want := `authenticate: methodId "a": ` + ErrUnadvertisedAuthMethod.Error() + `; authenticate accepts none`; err == nil ||
+		err.Error() != want || !errors.Is(err, ErrUnadvertisedAuthMethod) {
+		t.Errorf("AllowsValue(a) against one terminal method = %v, want %q", err, want)
+	}
+	n.Response.AuthMethods = append(n.Response.AuthMethods, NewAuthMethodAgent("t", "T, agent"), NewAuthMethodAgent("b", "B"))
+	if err := n.AllowsValue(AgentMethodAuthenticate, AuthenticateRequest{MethodId: "t"}); !errors.Is(err, ErrTerminalAuthMethod) {
+		t.Errorf("AllowsValue(t), t terminal and agent = %v, want ErrTerminalAuthMethod", err)
+	}
+	if err := n.AllowsValue(AgentMethodAuthenticate, AuthenticateRequest{MethodId: "z"}); err == nil ||
+		!strings.HasSuffix(err.Error(), `; authenticate accepts "b"`) {
+		t.Errorf("AllowsValue(z) = %v, want the accepted ids to be b alone", err)
 	}
 }
 
