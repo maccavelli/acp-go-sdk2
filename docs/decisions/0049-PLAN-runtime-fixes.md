@@ -680,6 +680,39 @@ R11, with what shows it:
 | R11, the capacity | `TestQueueChannelCapacity`; the default's and `TestQueueSizeAtMaxInt`'s `2n + 1` | `connection_queue_size_test.go` |
 | R11, the order | `TestOverflowBlockHeldInitialize`, unchanged: 0 of 2000 failed under untimed yields, 303 of 2000 before the fix (phase 5, step 5.7) | `connection_overflow_block_test.go` |
 
-Each new test was seen to fail in phase 5's plants, 3 of 3.
+~~Each new test was seen to fail in phase 5's plants, 3 of 3.~~ *Corrected 2026-11-05, at step 3:* phase 5's three
+plants ran the two boundary tests alone, so the capacity row was not seen to fail until step 3's four plants below.
 
 Steps 2 to 4 wait on the owner: the push, CI on the head, and the release when asked.
+
+**Step 2, CI.** The owner committed the record as `e02e63f` and pushed `a4d8ef2`, `03acda5` and `e02e63f`, then said
+"committed and pushed". `tools/watch_ci.py e02e63f --branch main` read two runs, the push's paths taking in
+`connection.go`:
+
+* CI's run `42074319831`, "completed success", six `validate` jobs on Ubuntu, Windows and macOS at Go `1.27.3` and
+  `1.26.10`;
+* the Docs workflow's run `42074319832`, "completed success".
+
+Steps 3 and 4 wait on the owner's ask for the release.
+
+**Step 3, the release, begun.** The owner said "proceed".
+
+* **A gap in phase 5's plants, found while drafting.** The release text says each new test was seen to fail; step 5.6's three
+  plants ran `^(TestOverflowBoundaryCounted|TestOverflowBlockHeldInitializeLoopBehind)$` and `^TestOverflowBoundaryCounted$`
+  alone, so `TestQueueChannelCapacity` and the `2n + 1` of `TestWithMaxQueuedNotifications_DefaultSize` and
+  `TestQueueSizeAtMaxInt` had never failed, and step 1's sentence above said they had. `tools/plants.py`, in a copy of
+  `e02e63f`, 4/4:
+
+  ```text
+  FAILED AS REQUIRED: the capacity without its + 1, the default's test (^TestWithMaxQueuedNotifications_DefaultSize$): exit 1: connection_queue_size_test.go:35: default queue channel capacity = 2048, want 2049
+  FAILED AS REQUIRED: the capacity without its + 1, the maximum's test (^TestQueueSizeAtMaxInt$): exit 1: connection_queue_size_test.go:172: queue limit 1048576, channel 2097152, want 1048576 and 2097153
+  FAILED AS REQUIRED: the capacity without its + 1, the table test (^TestQueueChannelCapacity$): exit 1: connection_queue_size_test.go:194: block: channel 14, admitLimit 15, want 15 each
+  FAILED AS REQUIRED: admitLimit without its + 1, the table test (^TestQueueChannelCapacity$): exit 1: connection_queue_size_test.go:194: block: channel 15, admitLimit 14, want 15 each
+  ```
+
+  No code or test changed; the records are corrected, step 1's sentence struck through above.
+* [0049-REPORT-release-notes-v1-33-1.md](../reports/0049-REPORT-release-notes-v1-33-1.md) drafts the release text. It leads
+  with R11, names the tooling PLAN and its T1 to T14 and F-C, which had no release of their own, and each statement names its
+  commit.
+* `make api` on `e02e63f`: "against v1.33.0: 0 incompatible, 0 compatible".
+* The report is staged with its row. `tools/release_body.py v1.33.1 <rev>` runs once it is committed, before the tag.
