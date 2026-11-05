@@ -661,3 +661,25 @@ dropped 1".
   files: 0 matches.
 
 Staged for the owner, who commits. Phase 6 begins on the owner's word.
+
+### Phase 6: the close of R11, 2026-11-05
+
+The owner committed phase 5 as `03acda5` and said "committed, proceed".
+
+**Step 1, the gate set:** `tools/gates.py --all` on `03acda5`, with the Linux and Windows hosts named per command, at a
+load average of 5 to 11 on the last reading: every gate `ok`, exit 0, "all gates passed". The gates were `regen`,
+`precheck`, `newfiles` ("no new .go files"), `nojsonv2`, `winvet`, `records`, `mdlint`, `idscan`, `tools`, `lint`, `fix`,
+`tidy`, `api` ("against v1.33.0: 0 incompatible, 0 compatible"), `race3` (`ok`, 38.7 s, `TestOverflowBlockHeldInitialize`
+among its tests), `floor`, `platforms`, `windows` and `linux`.
+
+R11, with what shows it:
+
+| Finding | Shown by | File |
+| :--- | :--- | :--- |
+| R11 | `TestOverflowBoundaryCounted`, its subtests `close`, `drop` and `block`; `TestOverflowBlockHeldInitializeLoopBehind`, its subtests "at the limit" and "past it" | `connection_overflow_boundary_test.go` |
+| R11, the capacity | `TestQueueChannelCapacity`; the default's and `TestQueueSizeAtMaxInt`'s `2n + 1` | `connection_queue_size_test.go` |
+| R11, the order | `TestOverflowBlockHeldInitialize`, unchanged: 0 of 2000 failed under untimed yields, 303 of 2000 before the fix (phase 5, step 5.7) | `connection_overflow_block_test.go` |
+
+Each new test was seen to fail in phase 5's plants, 3 of 3.
+
+Steps 2 to 4 wait on the owner: the push, CI on the head, and the release when asked.
