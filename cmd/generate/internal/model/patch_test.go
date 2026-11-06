@@ -272,8 +272,8 @@ func TestDocNotes(t *testing.T) {
 // inline variants', after a blank line: the ten envelope types among them.
 func checkCommittedDocNotes(t *testing.T, m *Model) {
 	t.Helper()
-	if len(ACP.DocNotes) != 9 {
-		t.Errorf("%d doc notes, want 9", len(ACP.DocNotes))
+	if len(ACP.DocNotes) != 10 {
+		t.Errorf("%d doc notes, want 10", len(ACP.DocNotes))
 	}
 	var variants []string
 	for _, note := range ACP.DocNotes {

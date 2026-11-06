@@ -2,6 +2,7 @@ package acp
 
 import (
 	"go/ast"
+	"go/doc"
 	"go/parser"
 	"go/printer"
 	"go/token"
@@ -358,6 +359,43 @@ func TestPackageDocNamesAuthSentinels(t *testing.T) {
 	for _, sentinel := range []string{"[ErrTerminalAuthMethod]", "[ErrUnadvertisedAuthMethod]"} {
 		if !strings.Contains(text, sentinel) {
 			t.Errorf("the package doc does not name %s", sentinel)
+		}
+	}
+}
+
+// TestPromptResponseDocNamesTheStopReasonRule requires PromptResponse's
+// godoc, as go/doc reads it from the package's files, to say what a zero
+// StopReason does and which value a successful turn sets
+// (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D5).
+func TestPromptResponseDocNamesTheStopReasonRule(t *testing.T) {
+	t.Parallel()
+	names, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	var files []*ast.File
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, parser.ParseComments)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, f)
+	}
+	pkg, err := doc.NewFromFiles(fset, files, "github.com/maccavelli/acp-go-sdk2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(pkg.Types, func(typ *doc.Type) bool { return typ.Name == "PromptResponse" })
+	if i < 0 {
+		t.Fatal("the package has no PromptResponse type")
+	}
+	for _, want := range []string{"-32603", "StopReasonEndTurn"} {
+		if !strings.Contains(pkg.Types[i].Doc, want) {
+			t.Errorf("PromptResponse's godoc does not name %s:\n%s", want, pkg.Types[i].Doc)
 		}
 	}
 }

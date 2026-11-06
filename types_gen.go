@@ -12089,6 +12089,12 @@ func (v *PromptRequest) validate(how validation) error {
 // Response from processing a user prompt.
 //
 // See protocol docs: [Check for Completion](https://agentclientprotocol.com/protocol/prompt-turn#4-check-for-completion)
+//
+// StopReason is required and has no default: its zero value, "", is not a
+// StopReason, and an agent whose Prompt returns it answers -32603 instead
+// of sending it. A successful turn sets one of the constants, such as
+// StopReasonEndTurn
+// (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D5).
 type PromptResponse struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
 	// metadata to their interactions. Implementations MUST NOT make assumptions about values at

@@ -227,6 +227,9 @@ Every new check is first seen to fail on a planted break in a scratch copy. A pl
 
    Then stage the files.
 
+   *Amended 2026-11-05:* the phase's files include `cmd/generate/internal/model/patch_test.go`, whose count of doc notes
+   moves from 9 to 10. See the execution record's deviation.
+
 ### Phase 4: the close and the release, D9
 
 1. **The gates:** `tools/gates.py --all`, with the Linux and Windows hosts named per command. Then a table of each
@@ -422,3 +425,63 @@ FAILED AS REQUIRED: ErrUnadvertisedAuthMethod removed from the package doc (^Tes
 * `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0 each.
 
 No deviation. Staged for the owner, who commits. Phase 3 begins on the owner's word.
+
+### Phase 3: the prompt result, D5 and D7, 2026-11-05
+
+The owner committed phase 2 as `ea5de92` and said "committed, proceed".
+
+**What it did:**
+
+* **The doc note,** step 3.1: `DocNotes` in `cmd/generate/internal/model/acp.go` gained a `PromptResponse` entry, after
+  `CancelRequestNotification`'s. It holds step 3.1's text. The text's last line, with the MADR's filename, came to more than
+  80 columns as a godoc line, so the filename and D5 went on a line of their own, as other generated notes cite theirs.
+* **Regenerated,** step 3.2: the diff of `types_gen.go` is six added lines, a blank comment line and the note, at the end
+  of `PromptResponse`'s godoc. No other file changed.
+* **The test,** step 3.3: `docs_test.go`'s `TestPromptResponseDocNamesTheStopReasonRule` parses the package's non-test
+  files, reads them with `go/doc`'s `NewFromFiles`, and requires `PromptResponse`'s doc to hold `-32603` and
+  `StopReasonEndTurn`.
+* **The stubs,** step 3.4: `agentFuncs.Prompt`, `forkOnlyUnstableAgent.Prompt` and `agentNoExtensions.Prompt` in
+  `acp_test.go` return `PromptResponse{StopReason: StopReasonEndTurn}, nil`. `TestClosedEnumsRefusedOnSend` keeps its planted
+  zero result. In the root's `.go` files, the only `PromptResponse{}` still returned with a nil error is
+  `enum_closed_test.go:71`, that test's. Every other one is returned with an error, or is generated code.
+
+**Deviation, 2026-11-05: the count of doc notes.**
+
+* **Found:** the first `make pre-add-check` exited 2.
+  `cmd/generate/internal/model/patch_test.go:275-276`, in `checkCommittedDocNotes`, pins `len(ACP.DocNotes)` at 9.
+  `TestProtocolTableAppliesToCommittedSchema` failed with `protocol_test.go:520: 10 doc notes, want 9`.
+  Step 3.1's note caused it; it had passed before. Phase 3 did not name that file, and the root race run of step 3.6 does
+  not reach the generator's module.
+* **Decision:** the owner chose to raise the pin to 10. The rest of `checkCommittedDocNotes` already holds the new note:
+  its text ends `PromptResponse`'s godoc, after a blank line.
+* **Scope:** `cmd/generate/internal/model/patch_test.go` joins phase 3's files.
+* **The MADR:** not amended. No decision and no asserted fact changes.
+
+**Seen to fail,** step 3.5, 2/2. The plant ran in a copy of the tree, made by a scratch script: it removes the note,
+regenerates the copy and runs both tests there. The second run is the deviation's.
+
+```text
+FAILED AS REQUIRED: the PromptResponse doc note removed (. -run ^TestPromptResponseDocNamesTheStopReasonRule$ .): exit 1: docs_test.go:398: PromptResponse's godoc does not name -32603:
+FAILED AS REQUIRED: the PromptResponse doc note removed (cmd/generate -run ^TestProtocolTableAppliesToCommittedSchema$ ./internal/model/): exit 1: protocol_test.go:520: 9 doc notes, want 10
+```
+
+**Checks,** step 3.6:
+
+* `go test -race -count=1 -shuffle=on ./...`: `ok`, all nine packages with tests.
+* `tools/gates.py regen`: "ok   regen (exit 0)", "all gates passed".
+* `make pre-add-check` with the phase's five files: exit 0, at a load of 9 to 13: "5 file(s) gofmt-clean; both modules
+  linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* **The benchmarks** (Verification), the same command as the baseline, after phase 3, compared by benchmark: allocations
+  per operation unchanged. The medians of five runs, at a host load of 7 to 10:
+
+  ```text
+  BenchmarkSessionNotificationUnmarshal-10: allocs/op [39] -> [39]; median ns/op 6021 -> 5968; median B/op 2603 -> 2603
+  BenchmarkPromptRoundTrip-10: allocs/op [99] -> [99]; median ns/op 28636 -> 28953; median B/op 5436 -> 5437
+  BenchmarkPromptRoundTripMiddleware-10: allocs/op [102] -> [102]; median ns/op 30520 -> 29496; median B/op 5800 -> 5798
+  BenchmarkSessionUpdateNotifyObserved-10: allocs/op [65] -> [65]; median ns/op 15228 -> 16355; median B/op 4889 -> 4888
+  BenchmarkSessionUpdateNotify-10: allocs/op [65] -> [65]; median ns/op 16481 -> 17449; median B/op 4887 -> 4885
+  ```
+
+* `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0 each.
+
+One deviation, recorded above. Staged for the owner, who commits. Phase 4 begins on the owner's word.

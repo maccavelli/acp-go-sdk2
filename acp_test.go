@@ -201,7 +201,7 @@ func (a agentFuncs) Prompt(ctx context.Context, p PromptRequest) (PromptResponse
 	if a.PromptFunc != nil {
 		return a.PromptFunc(ctx, p)
 	}
-	return PromptResponse{}, nil
+	return PromptResponse{StopReason: StopReasonEndTurn}, nil
 }
 
 func (a agentFuncs) Cancel(ctx context.Context, n CancelNotification) error {
@@ -407,7 +407,7 @@ func (a *forkOnlyUnstableAgent) NewSession(context.Context, NewSessionRequest) (
 }
 
 func (a *forkOnlyUnstableAgent) Prompt(context.Context, PromptRequest) (PromptResponse, error) {
-	return PromptResponse{}, nil
+	return PromptResponse{StopReason: StopReasonEndTurn}, nil
 }
 
 func (a *forkOnlyUnstableAgent) SetSessionMode(context.Context, SetSessionModeRequest) (SetSessionModeResponse, error) {
@@ -1338,7 +1338,7 @@ func (agentNoExtensions) NewSession(ctx context.Context, params NewSessionReques
 }
 
 func (agentNoExtensions) Prompt(ctx context.Context, params PromptRequest) (PromptResponse, error) {
-	return PromptResponse{}, nil
+	return PromptResponse{StopReason: StopReasonEndTurn}, nil
 }
 
 func (agentNoExtensions) SetSessionMode(ctx context.Context, params SetSessionModeRequest) (SetSessionModeResponse, error) {

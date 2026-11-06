@@ -167,6 +167,13 @@ var ACP = Protocol{
 		{Definition: "CancelRequestNotification", Lines: []string{
 			"Connection sends $/cancel_request itself when a call's context ends.",
 		}},
+		{Definition: "PromptResponse", Lines: []string{
+			"StopReason is required and has no default: its zero value, \"\", is not a",
+			"StopReason, and an agent whose Prompt returns it answers -32603 instead",
+			"of sending it. A successful turn sets one of the constants, such as",
+			"StopReasonEndTurn",
+			"(0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D5).",
+		}},
 	},
 	// The properties the protocol requires to be absolute paths, which the
 	// schema states only in prose (0015-MADR-validate-absolute-protocol-paths.md).
