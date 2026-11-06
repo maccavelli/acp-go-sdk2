@@ -532,4 +532,38 @@ and its output.
 | D6, the documentation | `TestPackageDocNamesAuthSentinels`; the README and `docs/architecture.md` text, read in full in phase 2 | phase 2: the sentinel removed from the package doc |
 | D7, the stubs return `StopReasonEndTurn` | the suite; `TestClosedEnumsRefusedOnSend` and `TestConcurrentUse` pass | none: D7 adds no check. Phase 3 lists the root's `PromptResponse{}` literals, and the planted one alone is returned with a nil error |
 
-**CI,** step 4.2, waits for the owner's push of `ba14c67` to `d339cf1` and this record.
+**CI,** step 4.2: the owner committed this record as `3013065` and pushed `4037547` to `3013065`, after `make push-guard`
+passed over the five commits. `tools/watch_ci.py --branch main 3013065`, exit 0:
+
+```text
+watch_ci: 2 run(s) for 3013065: 42148583653, 42148583617
+watch_ci: run 42148583653 (main, push): completed success; watch exit 0; https://github.com/maccavelli/acp-go-sdk2/actions/runs/42148583653
+  completed success: docs
+watch_ci: run 42148583617 (main, push): completed success; watch exit 0; https://github.com/maccavelli/acp-go-sdk2/actions/runs/42148583617
+  completed success: validate (ubuntu-24.04, 1.26.10)
+  completed success: validate (macos-15, 1.27.3)
+  completed success: validate (windows-2025, 1.27.3)
+  completed success: validate (macos-15, 1.26.10)
+  completed success: validate (ubuntu-24.04, 1.27.3)
+  completed success: validate (windows-2025, 1.26.10)
+```
+
+**The release,** step 4.3: the owner asked for the notes, to push the tag.
+[0050-REPORT-release-notes-v1-34-0.md](../reports/0050-REPORT-release-notes-v1-34-0.md) leads with D4 and D3, then D1 as a
+behaviour change, then D5 and D6; each statement names its commit. `make api` on `3013065`, with only records
+uncommitted: "against v1.33.1: 0 incompatible, 2 compatible".
+
+**Deviation, 2026-11-05: the tag before the notes.** The owner found the ordered hand-off too long, and tagged
+`v1.34.0` on `3013065`, the commit whose API the notes describe, before the notes were committed. So the tagged tree
+does not hold the notes. The release body was cut from the working-tree notes, as `tools/release_body.py` cuts it, with
+each relative link made absolute at the tag and checked to exist there, then scanned by `tools/idscan.py`, exit 0. The
+MADR is not amended: no decision changes.
+
+**After the tag:**
+
+* CI on the tag, run 42150033112: the six `validate` jobs, `success`.
+* The owner created the release with that body.
+* `tools/publication.py v1.34.0 3013065 <the body>`: exit 0, "10 of 10 checks hold".
+* `tools/consumer.py v1.34.0`: exit 0, "as required".
+
+The issue reply, step 4.4, waits for the owner's ask.
