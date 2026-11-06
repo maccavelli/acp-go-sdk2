@@ -485,3 +485,51 @@ FAILED AS REQUIRED: the PromptResponse doc note removed (cmd/generate -run ^Test
 * `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0 each.
 
 One deviation, recorded above. Staged for the owner, who commits. Phase 4 begins on the owner's word.
+
+### Phase 4: the close and the release, D9, 2026-11-05
+
+The owner committed phase 3 as `d339cf1` and said "committed, proceed".
+
+**The gates,** step 4.1: `tools/gates.py --all`, with the Linux and Windows hosts named per command, on `d339cf1`. Exit 0,
+18 of 18:
+
+```text
+ok   regen (exit 0)
+ok   precheck (exit 0)
+  newfiles: no new .go files
+ok   newfiles (exit 0)
+ok   nojsonv2 (exit 0)
+ok   winvet (exit 0)
+ok   records (exit 0)
+ok   mdlint (exit 0)
+ok   idscan (exit 0)
+ok   tools (exit 0)
+ok   lint (exit 0)
+ok   fix (exit 0)
+ok   tidy (exit 0)
+ok   api (exit 0)
+ok   race3 (exit 0)
+ok   floor (exit 0)
+ok   platforms (exit 0)
+ok   windows (exit 0)
+ok   linux (exit 0)
+all gates passed
+```
+
+The `api` gate's log: "check_api: against v1.33.1: 0 incompatible, 2 compatible".
+
+**The decisions and what shows each,** on `d339cf1`. Every named test passed there, in one `go test -count=1 -v -run` of
+the root and a whole `TestEngineBehaviour` of `cmd/generate`. "Seen to fail" names the phase whose record gives the plant
+and its output.
+
+| Decision | What shows it | Seen to fail |
+| --- | --- | --- |
+| D1, an `Unknown` entry counts only by a string `"id"` | `TestAuthenticateUnknownEntryID` | phase 1: the list reading `Unknown` through `unknownKind` |
+| D2, one generated list of what `authenticate` accepts | `TestAuthenticateMethodIDsIsTheGate`; the engine case `accept-advertised-auth-ids` | phase 1: plants 1 to 3 in the engine case; phase 2: the helper returning ids unfiltered |
+| D3, `AuthMethod.ID()` and `AuthenticateMethodIDs` | `TestAuthMethodID`; `ExampleAuthenticateMethodIDs` | phase 2: `ID()` falling back to `"unknown"`; the example's fallback taking the last id |
+| D4, the refusal names the accepted ids | `TestAuthenticateUnadvertisedMethod`; `TestAuthenticateAcceptsNone` | phase 1: the text without the ids; the terminal pass removed |
+| D5, the doc note on `PromptResponse` | `TestPromptResponseDocNamesTheStopReasonRule`; `checkCommittedDocNotes` | phase 3: the note removed, 2/2 |
+| D6, the documentation | `TestPackageDocNamesAuthSentinels`; the README and `docs/architecture.md` text, read in full in phase 2 | phase 2: the sentinel removed from the package doc |
+| D7, the stubs return `StopReasonEndTurn` | the suite; `TestClosedEnumsRefusedOnSend` and `TestConcurrentUse` pass | none: D7 adds no check. Phase 3 lists the root's `PromptResponse{}` literals, and the planted one alone is returned with a nil error |
+
+**CI,** step 4.2, waits for the owner's push of `ba14c67` to `d339cf1` and this record.
