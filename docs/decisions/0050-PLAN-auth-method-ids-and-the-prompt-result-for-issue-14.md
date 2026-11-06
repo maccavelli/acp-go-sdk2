@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-11-05
+status: complete
+date: 2026-11-06
 associated-madr: "0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md"
 ---
 
@@ -566,4 +566,51 @@ MADR is not amended: no decision changes.
 * `tools/publication.py v1.34.0 3013065 <the body>`: exit 0, "10 of 10 checks hold".
 * `tools/consumer.py v1.34.0`: exit 0, "as required".
 
-The issue reply, step 4.4, waits for the owner's ask.
+**The issue reply,** step 4.4: the owner said "address issue 14" on 2026-11-06. The text, scanned by
+`tools/idscan.py`, posted with `gh issue comment 14 --body-file`:
+
+````markdown
+Shipped in [`v1.34.0`](https://github.com/maccavelli/acp-go-sdk2/releases/tag/v1.34.0), by [0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md](https://github.com/maccavelli/acp-go-sdk2/blob/v1.34.0/docs/decisions/0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md). Both refusals stay as they are. `make api` against `v1.33.1`: 0 incompatible, 2 compatible.
+
+## Authenticate (S8)
+
+- **Item 3, the refusal names the ids accepted.** The prefix and the sentinel are unchanged, so `errors.Is(err, acp.ErrUnadvertisedAuthMethod)` still holds. The same text reaches a peer in the `-32602`'s `data.error`.
+
+  ```text
+  authenticate: methodId "nope": acp: methodId names no auth method the agent advertised; authenticate accepts "openai", "grok"
+  ```
+
+  With nothing accepted, it ends `authenticate accepts none`.
+- **Items 1 and 2, in one helper: `acp.AuthenticateMethodIDs(resp.AuthMethods)`.** It returns the ids `Authenticate` sends, in the answer's order, each once: every `agent` method's id, and the string `"id"` of an entry of a type the SDK does not know. It leaves out any id a `terminal` method names, even one an `agent` method also names.
+  - It is generated from the same code as the gate, so the two cannot disagree.
+  - For agent methods alone, filter by `Kind()` first.
+  - For every advertised id, terminal ones included, there is `AuthMethod.ID()` on each entry. It returns `""` for an unknown entry without a string id.
+- **A fix the investigation found.** Through `v1.33.1`, an unknown entry with no string `"id"` (absent, `""`, `null`, a number) advertised the id `"unknown"`, so `methodId: "unknown"` was sent against it. Now such an entry counts only by a string `"id"`. Without one it advertises nothing, and `"unknown"` is refused.
+- **Item 4, the docs.** The README's authenticate passage gives the rule, the text and the helpers. Its client section says to take the id from `AuthenticateMethodIDs`. The package doc and `AllowsValue`'s godoc name `ErrUnadvertisedAuthMethod`. `ExampleAuthenticateMethodIDs` keeps a configured pin when it is accepted, and otherwise falls back to the first accepted id.
+- **Item 5, `AuthenticateAdvertised`:** not added. With the list and the text, it would be `Authenticate` under another name.
+
+## PromptResponse (S6)
+
+- **Item 2, godoc.** `PromptResponse`'s godoc now says that `StopReason` is required, that `""` makes the agent answer `-32603`, and that a successful turn sets a constant such as `StopReasonEndTurn`. `Agent.Prompt`'s godoc is still the schema's: an interface method's doc comes from its request definition, and changing that would need a new generator mechanism for one sentence.
+- **Item 3, stubs.** The three `acp_test.go` stubs (`agentFuncs`'s default, `forkOnlyUnstableAgent`, `agentNoExtensions`) return `StopReasonEndTurn`. The root's only zero result returned without an error is the one `TestClosedEnumsRefusedOnSend` plants.
+- **Corrections to the table.**
+  - `refusals_test.go` already returns `StopReasonEndTurn`.
+  - `connection_overflow_block_test.go:453` returns `PromptResponse{}` with `ctx.Err()`, an error path.
+  - Every success path in `example/` and the example tests sets `StopReason`.
+  - Of the three stubs, only `TestConcurrentUse` reached one, and that test does not check results.
+- **Item 1, constructors (`NewPromptResponse`, `PromptEndTurn`, `PromptCancelled`):** declined. `acp.NewPromptResponse(acp.StopReasonEndTurn)` is no shorter than `acp.PromptResponse{StopReason: acp.StopReasonEndTurn}`, and it would leave the zero value just as easy to return. It would also add three more `v1` names.
+- **Item 4, a hint in the `-32603` text:** not added. It is `Validate`'s generic message, and it already names the type, the property and the value: `PromptResponse: stopReason: "" is not a StopReason`.
+- **Item 5, the migration note:** already there. The `v1.32.0` notes say "An agent whose `Prompt` returns `PromptResponse{}` now answers `-32603`. Set `StopReason`, for example `acp.StopReasonEndTurn`", and the README says the same.
+
+## For the consumers
+
+Neither consumer is changed here.
+
+- **magic-cli-remote** builds its own list of advertised ids from `Agent` entries only. With no safe-list, it authenticates the configured pin, or the spec's key method, without checking it. Since `v1.32.0`, either is refused before sending if the agent did not advertise it. Checking it against `acp.AuthenticateMethodIDs(resp.AuthMethods)` before calling `Authenticate` gives the gate's own list, and the error now names the ids.
+- **gobble-cli** is on `v1.31.2`. Its stop reason cannot be empty today: a turn ends only through `turn.end` with one of five constants. Two of its tests, `acpserver/agent_test.go:197` and `acpserver/auth_test.go:91`, expect an unknown id to come back as a `-32602` `*RequestError`. From `v1.32.0` on, the client refuses that id before sending, with `ErrUnadvertisedAuthMethod`. Those tests change when gobble-cli upgrades.
+````
+
+Closing the issue is the owner's choice. The owner closed issue #14 on 2026-11-06, after the reply.
+
+**Status,** step 4.5: every step is done and each Verification item holds, so this PLAN and its row are marked
+`complete`.
