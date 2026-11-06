@@ -367,3 +367,58 @@ The last plant was run again after the pin moved into `checkAuthenticateGates`, 
 
 No deviation: the pin's move and the case's `CancelRequestNotification` are details the steps did not name, inside the
 phase's files. Staged for the owner, who commits. Phase 2 begins on the owner's word.
+
+### Phase 2: the helpers and the documentation, D3 and D6, 2026-11-05
+
+The owner committed phase 1 as `ba14c67` and said "committed proceed".
+
+**What it did:**
+
+* **`helpers.go`,** step 2.1:
+  * `AuthMethod.ID()`, after `Kind()`, returns `Terminal.Id`, `Agent.Id`, or `Unknown`'s `"id"` through `unknownString`
+    when that reports a string, and `""` otherwise.
+  * `AuthenticateMethodIDs(methods)`, after `OfferedAuthMethods`, returns `acceptedAuthenticateRequestMethodIds(methods)`.
+  * Both godocs cite the MADR's D2 and D3, and say what step 2.1 asks.
+* **The tests,** step 2.2, `auth_method_ids_test.go`:
+  * `TestAuthMethodID`, nine cases: an agent; a terminal; `Unknown` with `"id"`, with `"ID"`, with `""`, without one, with
+    `null` and with `7`; and the zero value.
+  * `TestAuthenticateMethodIDsIsTheGate`, five answers: P2's; P3's id that is both terminal and agent; `Unknown` entries
+    with and without an id; a duplicate agent id; and none.
+  * For each answer, the test checks the list, its order and each id once. Every listed id passes `AllowsValue`; every
+    other entry's `ID()`, and `"unknown"` and `"stranger"`, is refused as terminal or as unadvertised.
+* **The example,** step 2.3: `example_auth_test.go`, `ExampleAuthenticateMethodIDs`, with the output `[openai grok]`, `grok`
+  and `openai`.
+* **Documentation,** step 2.4:
+  * `AllowsValue`'s godoc names `ErrUnadvertisedAuthMethod` and that its text names `AuthenticateMethodIDs`' ids.
+  * `doc.go`'s sentinel list names `[ErrUnadvertisedAuthMethod]`, its paragraph rewrapped.
+  * `docs_test.go`'s `TestPackageDocNamesAuthSentinels` reads `doc.go`'s package comment with `go/parser`.
+  * `README.md`'s authenticate passage gives the refusal's text, D1's rule, and the two helpers. Its client section gains
+    the bullet.
+  * `docs/architecture.md`:
+    * the list of what `helpers.go` holds names the two helpers;
+    * the gates passage names `unknownString`, `acceptedAuthenticateRequestMethodIds` and `quotedIDs`;
+    * the decoders passage says `unknownKind` reads through `unknownString`;
+    * the tests list names `auth_method_ids_test.go`, the new `gates_surface_test.go` checks, and the engine case
+      `accept-advertised-auth-ids`.
+
+    The last three are phase 1's generator work, which phase 1 did not document.
+
+**Seen to fail,** step 2.5, by `tools/plants.py`, 4/4:
+
+```text
+FAILED AS REQUIRED: ID() returning unknownKind's fallback for an entry without a string id (^TestAuthMethodID$): exit 1: auth_method_ids_test.go:31: unknown with an empty id: ID() = "unknown", want ""
+FAILED AS REQUIRED: AuthenticateMethodIDs returning every entry's ID unfiltered (^TestAuthenticateMethodIDsIsTheGate$): exit 1: auth_method_ids_test.go:61: agents and a terminal: AuthenticateMethodIDs = ["openai" "grok" "grok-login"], want ["openai" "grok"]
+FAILED AS REQUIRED: the example's fallback taking the last id (^ExampleAuthenticateMethodIDs$): exit 1: --- FAIL: ExampleAuthenticateMethodIDs (0.00s)
+FAILED AS REQUIRED: ErrUnadvertisedAuthMethod removed from the package doc (^TestPackageDocNamesAuthSentinels$): exit 1: docs_test.go:360: the package doc does not name [ErrUnadvertisedAuthMethod]
+```
+
+**Checks,** step 2.6:
+
+* `go test -race -count=1 -shuffle=on ./...`: `ok`, all nine packages with tests.
+* `make api`: "compatible: AuthMethod.ID: added", "compatible: AuthenticateMethodIDs: added", "against v1.33.1: 0
+  incompatible, 2 compatible".
+* `make pre-add-check` with the phase's seven files: exit 0, at a load of 11 to 13, "5 file(s) gofmt-clean; both modules
+  linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0 each.
+
+No deviation. Staged for the owner, who commits. Phase 3 begins on the owner's word.

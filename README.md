@@ -136,6 +136,9 @@ If you're building a [Client](https://agentclientprotocol.com/protocol/overview#
   `acp.ClientRefusals`, which answers each with method-not-found, and
   implements only `SessionUpdate` and `RequestPermission`; a client that
   implements some of them implements all of them instead.
+- Take the id you `Authenticate` with from
+  `acp.AuthenticateMethodIDs(resp.AuthMethods)`, where `resp` is what
+  `Initialize` returned: the SDK refuses any other id before sending it.
 - Package `clienthost` serves those methods for you. `clienthost.Terminals`
   runs each `terminal/create`'s command in a process group, or a job on
   Windows, keeps its output to the smaller of `outputByteLimit` and its
@@ -613,8 +616,14 @@ an error wrapping `acp.ErrTerminalAuthMethod` and sends nothing, since a
 terminal method is run, not authenticated; received, it is answered `-32602`.
 An id that names no method of the agent's answer, which the schema says it
 "Must be one of", returns an error wrapping `acp.ErrUnadvertisedAuthMethod` and
-sends nothing, and is answered `-32602` when received. An entry of a type this
-SDK does not know, kept in `AuthMethod.Unknown`, counts by its `"id"`.
+sends nothing, and is answered `-32602` when received. Its text names the ids
+the answer accepts, such as `…; authenticate accepts "openai", "grok"`, or
+`accepts none`. An entry of a type this SDK does not know, kept in
+`AuthMethod.Unknown`, counts by its `"id"` when that is a JSON string, and
+otherwise names nothing. `acp.AuthenticateMethodIDs(resp.AuthMethods)` lists
+the ids `Authenticate` sends, in the answer's order, without the terminal
+methods' ids, and `AuthMethod.ID()` reads one entry's id
+([0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md](docs/decisions/0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md)).
 
 `Negotiation.Allows(method)` reports whether the record lets a method be sent,
 for an application that shows or hides features: nil, or the

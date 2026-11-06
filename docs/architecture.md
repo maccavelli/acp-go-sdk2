@@ -92,7 +92,9 @@ and `make api` gates it with the root, `agentproc` and `clienthost`.
   not; and those of 0041: `Negotiation.AllowsValue`, which runs the method
   and value gates a send runs, without sending, and `Kind()` on the other
   stable unions and on `PlanUpdateContent`, a variant sent with no
-  discriminator named by the schema's title), `compaction.go` (`CompactionTimeline` and `CompactionEntity`, which
+  discriminator named by the schema's title; and those of 0050:
+  `AuthMethod.ID()`, and `AuthenticateMethodIDs`, which returns the generated
+  list of ids `authenticate`'s gate accepts, so the two cannot differ), `compaction.go` (`CompactionTimeline` and `CompactionEntity`, which
   apply a session's compaction updates by the protocol's rules, live or
   replayed, for a client; 0039, item 3), `elicitation.go` (an elicitation form's
   fields in the order it is sent, their kinds and their defaults, for a client;
@@ -227,7 +229,13 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   union a property holds; `GateNotTerminalAuthMethod`, that an `authenticate`
   must not name a terminal auth method; `GateAdvertisedAuthMethod`, that it
   must name one the agent advertised, a known variant's id or the `"id"` of an
-  entry kept in `Unknown`; and `GateUndeclaredVariant`, that a union's catch-all,
+  entry kept in `Unknown` when that is a JSON string, which the generated
+  `unknownString` reads. The ids it accepts are one generated list,
+  `acceptedAuthenticateRequestMethodIds`, without the ids the terminal rule's
+  variant holds: the gate reads it, names it in its refusal through
+  `quotedIDs`, and `helpers.go`'s `AuthenticateMethodIDs` returns it
+  (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D1 and D2);
+  and `GateUndeclaredVariant`, that a union's catch-all,
   a value the schema does not list, is set only under a capability no peer can
   advertise, so it is always refused, naming the rule's capability, `.` and
   the value. The catch-all is a variant, as an elicitation's mode, or the raw
@@ -312,7 +320,8 @@ other than the catch-all, and a property that would take the field `Extra`.
 Generated decoders read a key as `encoding/json` reads a struct field's name:
 under Unicode case folding, the last matching key winning (`foldKeys` in
 `types_gen.go`; `unknownKind` reads one key of a raw `Unknown` the same way,
-for the gates and for `helpers.go`'s `Kind()` methods), and the model refuses a
+for the gates and for `helpers.go`'s `Kind()` methods, through `unknownString`,
+which reports whether the value is a JSON string, for an id), and the model refuses a
 schema in which two keys one decoder
 reads differ only in case. An object with properties of its own and an `anyOf`
 or `oneOf` of references is a struct with one pointer field per member, whose
@@ -717,13 +726,15 @@ Checks that guard this:
   the slots it keeps, and `gates_test.go`
   every method and value gate both ways, the undeclared elicitation mode,
   `gates_surface_test.go` the boolean set request, the advertised auth method,
-  the undeclared prompt block and the unstable capabilities,
+  its refusal's text and an unknown entry's id, the undeclared prompt block and
+  the unstable capabilities, `auth_method_ids_test.go` that
+  `AuthenticateMethodIDs` is the gate's list,
   extension messages through the hooks and the gate, the hook's order, the
   raw paths, and `initialize`'s own check; the engine cases
   `accept-prompt-cancellation`, `accept-permission-cancellation`,
   `accept-initialize-negotiation`, `accept-capability-gates`,
-  `accept-gates-unreachable`, `accept-capability-undeclared-variant` and
-  `accept-session-close-cancels`
+  `accept-gates-unreachable`, `accept-advertised-auth-ids`,
+  `accept-capability-undeclared-variant` and `accept-session-close-cancels`
   cover the generated code, and
   `accept-description-comment-markers` the generator's comments.
 - `TestEngineCases` in `cmd/generate` runs the generator on each synthetic case

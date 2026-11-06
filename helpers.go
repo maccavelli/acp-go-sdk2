@@ -431,6 +431,26 @@ func (a AuthMethod) Kind() string {
 	return ""
 }
 
+// ID returns the id of the auth method a describes: its Terminal's or its
+// Agent's Id, or, for an entry of a type this SDK does not know, its "id"
+// read as its decoder reads keys, when that is a JSON string. It returns ""
+// for such an entry without one, and for the zero value. An empty ID does not
+// tell whether authenticate may name the entry; AuthenticateMethodIDs does
+// (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D3).
+func (a AuthMethod) ID() AuthMethodId {
+	switch {
+	case a.Terminal != nil:
+		return a.Terminal.Id
+	case a.Agent != nil:
+		return a.Agent.Id
+	case a.Unknown != nil:
+		if id, ok := unknownString(a.Unknown, "id"); ok {
+			return AuthMethodId(id)
+		}
+	}
+	return ""
+}
+
 // Kind returns the transport of the MCP server s describes: "http", "sse",
 // "acp", or "stdio", the schema's name for a server sent with no type; as
 // ContentBlock.Kind does for a content block otherwise
@@ -753,6 +773,21 @@ func OfferedAuthMethods(caps ClientCapabilities, methods []AuthMethod) []AuthMet
 	return out
 }
 
+// AuthenticateMethodIDs returns the ids that authenticate may name, from an
+// initialize answer's AuthMethods, as Initialize returns it or as Negotiated
+// records it: in their order, each once, every agent method's id and the
+// string "id" of an entry of a type this SDK does not know, and no id a
+// terminal method names, even one an agent method also names. It returns nil
+// for none. Authenticate sends an id it returns, and refuses every other
+// before sending: a terminal one with ErrTerminalAuthMethod, any other with
+// ErrUnadvertisedAuthMethod, whose text names these ids. The connection's
+// gate reads the same list, so the two agree. A client that wants agent
+// methods alone filters methods by Kind first
+// (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D2 and D3).
+func AuthenticateMethodIDs(methods []AuthMethod) []AuthMethodId {
+	return acceptedAuthenticateRequestMethodIds(methods)
+}
+
 // ToolCallStartOpt modifies a tool_call start update before it is built.
 // Options apply in the order given (0024-PLAN-documentation.md, A10).
 type ToolCallStartOpt func(tc *SessionUpdateToolCall)
@@ -1022,8 +1057,11 @@ func PresentCompactionSummary(ctx context.Context, a *AgentSideConnection, sessi
 // sends, without sending. That is Allows' *CapabilityError when method's own
 // capability is not advertised, and otherwise the *CapabilityError naming
 // the property or variant of params whose capability is not, such as an
-// MCP server's transport, a prompt's content block or a session update, or
-// ErrTerminalAuthMethod for authenticate naming a terminal auth method. So a
+// MCP server's transport, a prompt's content block or a session update; or,
+// for authenticate, ErrTerminalAuthMethod when it names a terminal auth method
+// and ErrUnadvertisedAuthMethod when it names none of the agent's answer,
+// whose text names the ids AuthenticateMethodIDs returns
+// (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, D6). So a
 // caller can choose another value, or leave the property out, before it
 // sends. params is a request, a notification or a result, as a value or a
 // pointer; a result is checked as it is when answered or received

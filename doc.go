@@ -34,13 +34,13 @@
 // # Errors
 //
 // The connection's errors wrap sentinels, for [errors.Is]:
-// [ErrNotInitialized], [ErrTerminalAuthMethod], [ErrPeerDisconnected],
-// [ErrConnectionClosed] and [ErrPromptCancelled]. Four error types carry
-// details, for [errors.AsType]: [*RequestError], a JSON-RPC error, sent or
-// received; [*ValidationError], a message that breaks the schema;
-// [*CapabilityError], a message that what initialize agreed does not allow;
-// and [*ProtocolVersionError], a protocol version this package does not
-// speak. Each typed method's doc names the ones it returns.
+// [ErrNotInitialized], [ErrTerminalAuthMethod], [ErrUnadvertisedAuthMethod],
+// [ErrPeerDisconnected], [ErrConnectionClosed] and [ErrPromptCancelled].
+// Four error types carry details, for [errors.AsType]: [*RequestError], a
+// JSON-RPC error, sent or received; [*ValidationError], a message that breaks
+// the schema; [*CapabilityError], a message that what initialize agreed does
+// not allow; and [*ProtocolVersionError], a protocol version this package
+// does not speak. Each typed method's doc names the ones it returns.
 //
 // # Where to start
 //

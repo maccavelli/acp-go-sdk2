@@ -341,6 +341,27 @@ func undocumented(fset *token.FileSet, f *ast.File) []string {
 	return out
 }
 
+// TestPackageDocNamesAuthSentinels requires the package doc's list of
+// sentinels to name both of authenticate's, ErrTerminalAuthMethod and its
+// sibling ErrUnadvertisedAuthMethod
+// (0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md, F7 and D6).
+func TestPackageDocNamesAuthSentinels(t *testing.T) {
+	t.Parallel()
+	f, err := parser.ParseFile(token.NewFileSet(), "doc.go", nil, parser.ParseComments|parser.PackageClauseOnly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Doc == nil {
+		t.Fatal("doc.go has no package doc")
+	}
+	text := f.Doc.Text()
+	for _, sentinel := range []string{"[ErrTerminalAuthMethod]", "[ErrUnadvertisedAuthMethod]"} {
+		if !strings.Contains(text, sentinel) {
+			t.Errorf("the package doc does not name %s", sentinel)
+		}
+	}
+}
+
 // receiverName returns the type name of a method's receiver.
 func receiverName(e ast.Expr) string {
 	for {
