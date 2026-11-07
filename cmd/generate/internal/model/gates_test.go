@@ -1,6 +1,9 @@
 package model
 
 import (
+	"fmt"
+	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -325,5 +328,163 @@ func TestCapabilityRuleOnCopiedProperty(t *testing.T) {
 				t.Errorf("%s: Build = %v, want %q", tt.name, err, w)
 			}
 		}
+	}
+}
+
+// The schema's wordings that ask for a gate or a path rule
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G29): a method or a
+// property available only with a capability; an update a side may send only
+// when the peer advertised one; and a path that must be absolute.
+var (
+	capabilityWording = regexp.MustCompile("(?i)only available if the (agent|client) supports the")
+	sendWording       = regexp.MustCompile("(?i)MUST only send this (update|notification|request)")
+	absPathWording    = regexp.MustCompile("(?i)must be an absolute path")
+)
+
+// wordingGaps lists each place of m's schema whose description carries one of
+// those wordings and that no rule of p answers. The capability and the send
+// wordings ask for any gate that applies: a method gate on the definition's
+// x-method, or a capability rule on the definition, the property, or the
+// union variant, a variant's payload type included; the absolute-path wording
+// asks for a path rule (0049-PLAN-generator-fixes.md, phase 8, deviation 1).
+func wordingGaps(m *Model, p *Protocol) []string {
+	w := newWordingIndex(m, p)
+	var gaps []string
+	for _, name := range slices.Sorted(maps.Keys(m.schema.Defs)) {
+		if def := m.schema.Defs[name]; def != nil {
+			gaps = append(gaps, w.gapsOf(name, def)...)
+		}
+	}
+	return gaps
+}
+
+// wordingIndex is what p's rules answer, for wordingGaps.
+type wordingIndex struct {
+	m                     *Model
+	methodGated, defRuled map[string]bool
+	payload               map[string]bool
+	paths, propRuled      map[[2]string]bool
+	variantRuled          map[string]map[string]bool
+}
+
+func newWordingIndex(m *Model, p *Protocol) *wordingIndex {
+	w := &wordingIndex{m: m, methodGated: map[string]bool{}, defRuled: map[string]bool{}, payload: map[string]bool{},
+		paths: map[[2]string]bool{}, propRuled: map[[2]string]bool{}, variantRuled: map[string]map[string]bool{}}
+	for _, r := range p.Methods {
+		if r.Capability != "" {
+			w.methodGated[r.Wire] = true
+		}
+	}
+	for _, r := range p.AbsolutePaths {
+		w.paths[[2]string{r.Definition, r.Property}] = true
+	}
+	for _, r := range p.CapabilityRules {
+		switch {
+		case r.Variant != "":
+			union := unionOf(m, r.Definition, r.Property)
+			if w.variantRuled[union] == nil {
+				w.variantRuled[union] = map[string]bool{}
+			}
+			w.variantRuled[union][r.Variant] = true
+		case r.Property != "":
+			w.propRuled[[2]string{r.Definition, r.Property}] = true
+		default:
+			w.defRuled[r.Definition] = true
+		}
+	}
+	// A gated variant's payload type is gated with it.
+	for union := range w.variantRuled {
+		def := m.schema.Defs[union]
+		if def == nil {
+			continue
+		}
+		members := slices.Concat(def.AnyOf, def.OneOf)
+		for _, v := range members {
+			if v == nil || !w.variantGated(union, v, members) {
+				continue
+			}
+			for _, part := range append([]*load.Definition{v}, v.AllOf...) {
+				if name, ok := strings.CutPrefix(part.Ref, refPrefix); ok {
+					w.payload[name] = true
+				}
+			}
+		}
+	}
+	return w
+}
+
+// variantGated reports whether a capability rule names the variant v of union
+// by its discriminator value.
+func (w *wordingIndex) variantGated(union string, v *load.Definition, members []*load.Definition) bool {
+	key, _ := discriminatorKey(w.m.schema, w.m.schema.Defs[union], members)
+	value, _ := discConst(expandAllOf(w.m.schema, v).Properties[key]).(string)
+	return value != "" && w.variantRuled[union][value]
+}
+
+// gapsOf lists the gaps of the definition name: its own description, its
+// properties', and its variants'.
+func (w *wordingIndex) gapsOf(name string, def *load.Definition) []string {
+	asks := func(text string) bool { return capabilityWording.MatchString(text) || sendWording.MatchString(text) }
+	gated := w.defRuled[name] || w.payload[name] || (def.XMethod != "" && w.methodGated[def.XMethod])
+	var gaps []string
+	if asks(def.Description) && !gated {
+		gaps = append(gaps, name+": its description asks for a gate, and no rule gates it")
+	}
+	props := expandAllOf(w.m.schema, def).Properties
+	for _, key := range slices.Sorted(maps.Keys(props)) {
+		prop := props[key]
+		if prop == nil {
+			continue
+		}
+		if asks(prop.Description) && !gated && !w.propRuled[[2]string{name, key}] {
+			gaps = append(gaps, name+"."+key+": its description asks for a gate, and no rule gates it")
+		}
+		if absPathWording.MatchString(prop.Description) && !w.paths[[2]string{name, key}] {
+			gaps = append(gaps, name+"."+key+": its description asks for an absolute path, and no path rule names it")
+		}
+	}
+	members := slices.Concat(def.AnyOf, def.OneOf)
+	for i, v := range members {
+		if v != nil && asks(v.Description) && !gated && !w.variantGated(name, v, members) {
+			gaps = append(gaps, fmt.Sprintf("%s variant %d: its description asks for a gate, and no rule gates it", name, i+1))
+		}
+	}
+	return gaps
+}
+
+// unionOf names the union a capability rule's variant belongs to: its
+// definition, or the union its property holds, through items, an allOf of
+// one and a $ref.
+func unionOf(m *Model, definition, property string) string {
+	if property == "" {
+		return definition
+	}
+	def := m.schema.Defs[definition]
+	if def == nil {
+		return ""
+	}
+	d := expandAllOf(m.schema, def).Properties[property]
+	for d != nil {
+		switch {
+		case d.Ref != "":
+			return strings.TrimPrefix(d.Ref, refPrefix)
+		case d.Items != nil:
+			d = d.Items
+		case len(d.AllOf) == 1:
+			d = d.AllOf[0]
+		default:
+			return ""
+		}
+	}
+	return ""
+}
+
+// checkCommittedWording requires every place of the committed schemas whose
+// wording asks for a gate or an absolute path to have its rule in ACP's table
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G29).
+func checkCommittedWording(t *testing.T, m *Model) {
+	t.Helper()
+	for _, g := range wordingGaps(m, &ACP) {
+		t.Error(g)
 	}
 }

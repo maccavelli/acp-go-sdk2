@@ -68,10 +68,12 @@ func testProtocol() *Protocol {
 	}
 }
 
-// methodByWire returns the method of m with the given wire name, or nil.
-func methodByWire(m *Model, wire string) *Method {
+// methodByWire returns the method of side, "agent" or "client", with the wire
+// name, or nil. A wire on both sides, as mcp/message is, is found on the one
+// asked for (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G36).
+func methodByWire(m *Model, side, wire string) *Method {
 	for _, mi := range slices.Concat(m.AgentMethods, m.ClientMethods) {
-		if mi.Wire == wire {
+		if mi.Side == side && mi.Wire == wire {
 			return mi
 		}
 	}
@@ -82,11 +84,11 @@ func methodByWire(m *Model, wire string) *Method {
 // rules to have resolved their fields.
 func checkTestRoles(t *testing.T, m *Model, cancel *Method) {
 	t.Helper()
-	if init := methodByWire(m, "s/init"); m.Initialize != init || !init.Initializes || init.ReqVersionField != "ProtocolVersion" ||
+	if init := methodByWire(m, "agent", "s/init"); m.Initialize != init || !init.Initializes || init.ReqVersionField != "ProtocolVersion" ||
 		init.RespVersionField != "ProtocolVersion" || init.ReqCapsField != "ClientCapabilities" || init.RespCapsField != "AgentCapabilities" {
 		t.Errorf("s/init: %+v; Model.Initialize %v", init, m.Initialize)
 	}
-	if ask := methodByWire(m, "s/ask"); !ask.CancelledByPromptCancel || ask.SessionField != "SessionId" ||
+	if ask := methodByWire(m, "client", "s/ask"); !ask.CancelledByPromptCancel || ask.SessionField != "SessionId" ||
 		ask.CancelledField != "Verdict" || ask.CancelledHelper != "NewVerdictWithdrawn" || !cancel.CancelsPending {
 		t.Errorf("s/ask: %+v; s/cancel CancelsPending %v", ask, cancel.CancelsPending)
 	}
@@ -108,7 +110,7 @@ func TestProtocolTableApplies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	loader, prompt, cancel, update := methodByWire(m, "s/load"), methodByWire(m, "s/prompt"), methodByWire(m, "s/cancel"), methodByWire(m, "s/update")
+	loader, prompt, cancel, update := methodByWire(m, "agent", "s/load"), methodByWire(m, "agent", "s/prompt"), methodByWire(m, "agent", "s/cancel"), methodByWire(m, "client", "s/update")
 	if loader.Binding != BindAgentOptional || loader.Capability != "loadSession" {
 		t.Errorf("s/load: binding %v capability %q", loader.Binding, loader.Capability)
 	}
@@ -125,7 +127,7 @@ func TestProtocolTableApplies(t *testing.T) {
 	if update.GoName != "SessionUpdate" {
 		t.Errorf("s/update: GoName %q", update.GoName)
 	}
-	if cl := methodByWire(m, "s/close"); !cl.ClosesSession || cl.SessionField != "SessionId" || !cl.CancelsPending {
+	if cl := methodByWire(m, "agent", "s/close"); !cl.ClosesSession || cl.SessionField != "SessionId" || !cl.CancelsPending {
 		t.Errorf("s/close: ClosesSession %v SessionField %q CancelsPending %v", cl.ClosesSession, cl.SessionField, cl.CancelsPending)
 	}
 	if got := interfaceNames(m); !slices.Equal(got, []string{"Agent", "Loader", "AgentExperimental", "Client", "ClientExperimental"}) {
@@ -142,20 +144,20 @@ func TestProtocolTableApplies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b := methodByWire(plain, "s/load").Binding; b != BindAgent {
+	if b := methodByWire(plain, "agent", "s/load").Binding; b != BindAgent {
 		t.Errorf("without a table, s/load binds %v", b)
 	}
-	if g := methodByWire(plain, "s/update").GoName; g != "Session" {
+	if g := methodByWire(plain, "client", "s/update").GoName; g != "Session" {
 		t.Errorf("without a table, s/update is %q", g)
 	}
-	if plain.Initialize != nil || methodByWire(plain, "s/init").Initializes ||
-		methodByWire(plain, "s/ask").CancelledByPromptCancel || methodByWire(plain, "s/cancel").CancelsPending {
-		t.Errorf("without a table, a role applies: %+v %+v", plain.Initialize, methodByWire(plain, "s/ask"))
+	if plain.Initialize != nil || methodByWire(plain, "agent", "s/init").Initializes ||
+		methodByWire(plain, "client", "s/ask").CancelledByPromptCancel || methodByWire(plain, "agent", "s/cancel").CancelsPending {
+		t.Errorf("without a table, a role applies: %+v %+v", plain.Initialize, methodByWire(plain, "client", "s/ask"))
 	}
-	if cl := methodByWire(plain, "s/close"); cl.ClosesSession || cl.CancelsPending || cl.SessionField != "" {
+	if cl := methodByWire(plain, "agent", "s/close"); cl.ClosesSession || cl.CancelsPending || cl.SessionField != "" {
 		t.Errorf("without a table, s/close closes its session: %+v", cl)
 	}
-	if p := methodByWire(plain, "s/prompt"); p.PromptTurn || p.Canceller != nil || p.SessionField != "" {
+	if p := methodByWire(plain, "agent", "s/prompt"); p.PromptTurn || p.Canceller != nil || p.SessionField != "" {
 		t.Errorf("without a table, s/prompt is a prompt turn: %+v", p)
 	}
 	if got := interfaceNames(plain); !slices.Equal(got, []string{"Agent", "AgentExperimental", "Client", "ClientExperimental"}) {
@@ -450,7 +452,7 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 	m := committedModel(t)
 	gates := 0
 	for _, r := range ACP.Methods {
-		mi := methodByWire(m, r.Wire)
+		mi := methodByWire(m, r.Side, r.Wire)
 		if mi == nil || mi.Side != r.Side {
 			t.Errorf("%s method %q: not in the committed meta files", r.Side, r.Wire)
 			continue
@@ -491,7 +493,7 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 	if gates != 28 {
 		t.Errorf("%d capability gates, want 28", gates)
 	}
-	prompt := methodByWire(m, "session/prompt")
+	prompt := methodByWire(m, "agent", "session/prompt")
 	if prompt.SessionField != "SessionId" || prompt.Canceller == nil || prompt.Canceller.Wire != "session/cancel" {
 		t.Errorf("session/prompt: SessionField %q Canceller %+v", prompt.SessionField, prompt.Canceller)
 	}
@@ -521,10 +523,28 @@ func TestProtocolTableAppliesToCommittedSchema(t *testing.T) {
 	checkCommittedGates(t, m)
 	checkCommittedPatchFields(t, m)
 	checkCommittedNullRetained(t, m)
+	checkCommittedWording(t, m)
 	checkCommittedKeyLessFallbacks(t, m)
 	checkCommittedEmptyClears(t, m)
 	checkCommittedClosedEnums(t, m)
 	checkCommittedKeyOrders(t, m)
 	checkCommittedDocNotes(t, m)
 	checkCommittedAnsweredCancelled(t, m)
+}
+
+// TestMethodByWireSide requires the table test's lookup to find a wire on the
+// side asked for: mcp/message is on both sides of the committed schemas, and
+// the agent's came first whatever the rule's side
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G36).
+func TestMethodByWireSide(t *testing.T) {
+	t.Parallel()
+	m := committedModel(t)
+	for _, side := range []string{"agent", "client"} {
+		if mi := methodByWire(m, side, "mcp/message"); mi == nil || mi.Side != side {
+			t.Errorf("methodByWire(%s, mcp/message) = %+v, want the %s's", side, mi, side)
+		}
+	}
+	if mi := methodByWire(m, "client", "session/prompt"); mi != nil {
+		t.Errorf("methodByWire(client, session/prompt) = %+v, want nil: it is the agent's", mi)
+	}
 }

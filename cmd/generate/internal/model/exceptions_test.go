@@ -28,7 +28,7 @@ func TestAnsweredCancelledNotes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	prompt, ask := methodByWire(m, "s/prompt"), methodByWire(m, "s/ask")
+	prompt, ask := methodByWire(m, "agent", "s/prompt"), methodByWire(m, "client", "s/ask")
 	for _, tc := range []struct {
 		b    Binding
 		want string

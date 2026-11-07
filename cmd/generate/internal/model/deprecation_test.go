@@ -194,3 +194,29 @@ func TestDeprecationNoteReachesCopies(t *testing.T) {
 		}
 	}
 }
+
+// TestDeprecationNoteVariantWithoutDiscriminator requires a note naming a
+// variant of a union without discriminator values, by its field, to reach that
+// variant alone: model/protocol.go's match of a note to a variant had no case
+// for it, and a mutant that took every such variant survived
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G35).
+func TestDeprecationNoteVariantWithoutDiscriminator(t *testing.T) {
+	t.Parallel()
+	defs := strings.Replace(protocolDefs, `"Update":`, `"V":{"oneOf":[{"title":"Text","type":"string","deprecated":true},
+		{"title":"Count","type":"integer","format":"int64","deprecated":true}]},"Update":`, 1)
+	p := testProtocol()
+	p.DeprecationNotes = []DeprecationNote{{Definition: "V", Variant: "Text", Note: "Use Count."}}
+	m, err := Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, defs), Protocol: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, vi := range m.Type("V").Variants {
+		want := ""
+		if vi.FieldName == "Text" {
+			want = "Use Count."
+		}
+		if vi.Deprecation == nil || vi.Deprecation.Note != want {
+			t.Errorf("variant %s: %+v, want the note %q", vi.FieldName, vi.Deprecation, want)
+		}
+	}
+}

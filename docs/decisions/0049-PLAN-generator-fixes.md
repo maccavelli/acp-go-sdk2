@@ -368,6 +368,9 @@ The order is the MADR's: the mediums first (G16, G1, G2, G15, G17, G3, G18), the
 
    At `73b0537` the regexes match 7, 5 and 6 times in the stable schema, and 8, 5 and 7 in the unstable one. The phase first
    lists each match with its rule. A match with no rule is a real gap: it stops as a deviation, not a test to loosen.
+   *Amended 2026-11-07, deviation 1:* the capability and the send wordings each require the carrier to be gated by any
+   rule that applies: a method gate on its `x-method`, or a capability rule on the definition, its property or its union
+   variant, a variant's payload type included. The absolute-path wording requires a path rule.
    * Seen to fail: the MADR's three probe sentences added in a copy, each failing its scan; one rule removed.
 2. **G35.**
    * `model`'s `TestDeprecationNoteVariantWithoutDiscriminator` covers `model/protocol.go:1026` for a variant with no
@@ -1134,3 +1137,97 @@ All as required.
 * `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py` over the changed files: exit 0 each.
 
 **Status:** no deviation. Staged for the owner, who commits. Phase 8, G29, G35, G36 and G12, begins on the owner's word.
+
+### Phase 8: G29, G35, G36 and G12, the table's tests and the fuzzer, 2026-11-07
+
+The owner committed phase 7 as `78f72e9`, and said "committed proceed".
+
+**Step 8.1's listing,** by a scratch script, `g29_list.py`, a test in a copy of the working tree over the committed model's
+schema:
+
+* the capability wording: 8 request definitions, `CloseSessionRequest`, `DeleteSessionRequest`, `ListSessionsRequest`,
+  `LoadSessionRequest`, `ReadTextFileRequest`, `ResumeSessionRequest`, `UnstableForkSessionRequest` and `WriteTextFileRequest`,
+  each gated by the method rule of its `x-method`;
+* the send wording: `SessionUpdate`'s variants 13, 14 and 15, and the payload types `CompactionUpdate` and
+  `CompactionSummaryChunk`, each gated by a variant capability rule of `SessionUpdate`;
+* the absolute-path wording: the `cwd` of 7 definitions, each with a path rule.
+
+No carrier lacks a rule.
+
+**Deviation 1, 2026-11-07: which rule the send wording asks for.**
+
+* **Found:** step 8.1 has the send wording, "MUST only send this update", require a method gate. Its committed carriers are
+  `SessionUpdate`'s variants and their payload types, which variant capability rules gate; no method rule could.
+* **Decision:** the owner chose the recommended option. The capability and the send wordings each require any applicable
+  gate, and the absolute-path wording a path rule. Not chosen: a variant capability rule for the send wording alone; dropping
+  that scan.
+* **Scope:** no file added.
+* **The MADR:** not amended. G29's fix, "the same wording scans for these three rule kinds", holds.
+
+**Deviation 2, 2026-11-07: the fuzz corpus.**
+
+* **Found:** with `FuzzBuild` taking a meta and a schema, `go test -run ^FuzzBuild$ .` failed: "fuzz_test.go:27:
+  "testdata/fuzz/FuzzBuild/2e4f0f4e77985ba7": wrong number of values in corpus entry: 1, want 2". The entry, a schema alone,
+  was committed in `77d053b`, a key-folding regression.
+* **Decision:** the owner chose the recommended option. The entry is rewritten in the two-value form, its meta `{}`, an empty
+  `Meta` as it ran before, its schema unchanged. Not chosen: keeping the one-value target beside a new one; removing the entry.
+* **Scope:** `cmd/generate/testdata/fuzz/FuzzBuild/2e4f0f4e77985ba7` joins the phase.
+* **The MADR:** not amended.
+
+**What changed:**
+
+* **G29 (deviation 1).** `cmd/generate/internal/model/gates_test.go` gains `capabilityWording`, `sendWording` and
+  `absPathWording`, and `wordingGaps`, which an index of the rules, `wordingIndex`, and a per-definition scan, `gapsOf`,
+  carry out; a variant rule's union is found by `unionOf`. `checkCommittedWording` runs it on the committed model from
+  `TestProtocolTableAppliesToCommittedSchema` (`model/protocol_test.go`), beside the other committed checks.
+* **G36.** `methodByWire` (`model/protocol_test.go`) takes the side. Its eighteen callers pass theirs, and the committed table
+  loop passes the rule's.
+* **G35.** No code changes: a unit test and an engine case reach the two rule kinds.
+* **G12 (deviation 2).** `FuzzBuild` (`cmd/generate/fuzz_test.go`) seeds each engine case's `meta.json` with its
+  `schema.json`, by a new `seedPairs`, and builds with the meta, by a new `buildSeed`, which returns a decode error rather than
+  nil. The corpus entry is in the two-value form.
+
+**Tests:**
+
+* G29: the committed scan passes. Step 8.1's listing is above.
+* G35: `TestDeprecationNoteVariantWithoutDiscriminator` (`model/deprecation_test.go`), a note on `V`'s `Text`, with `Count`
+  deprecated too, so a note that reached every variant without a discriminator value shows; `accept-empty-clears.txtar`, its
+  rule in `protocol.json`, `Tags []string "json:\"tags,omitzero\""` beside `Notes` with `omitempty`. Its behaviour test sends
+  an empty `Tags` as `[]` and omits a nil one.
+* G36: `TestMethodByWireSide`, `mcp/message` from each side, and `session/prompt` not the client's.
+* G12: `TestFuzzSeedsBuild`, every plain accepted case's seed built and rendered by `buildSeed`. The seed census, by a
+  scratch script, `g12_census.py`, over the 230 seeds: with an empty meta, "accepted 1, refused as unlisted-method 137, refused
+  otherwise 92"; with each case's meta, "accepted 123, refused as unlisted-method 1, refused otherwise 106". The refused are
+  mostly the refusal cases. `go test -fuzz ^FuzzBuild$ -fuzztime 20s`: "execs: 736371", PASS.
+
+**Seen to fail,** by `plants_gen.py 8`, each break in its own copy of the working tree:
+
+* G29, the MADR's three sentences, each added to the copy's `schema/schema.json`:
+  * "protocol_test.go:526: SetSessionModeRequest: its description asks for a gate, and no rule gates it";
+  * "SessionUpdate variant 13: its description asks for a gate, and no rule gates it", for `usage_update`, which the message
+    counts from 1;
+  * "CreateTerminalRequest.command: its description asks for an absolute path, and no path rule names it".
+* G29, the path rule on `CreateTerminalRequest.cwd` removed from `acp.go`: "CreateTerminalRequest.cwd: its description asks
+  for an absolute path, and no path rule names it".
+* G35:
+  * the mutant `&&` to `||`: "deprecation_test.go:219: variant Count: &{Note:Use Count. …}, want the note """;
+  * the empty-clears tag not set: `want.api` differs at "Tags []string "json:\"tags,omitempty\""".
+* G36, the side ignored: "protocol_test.go:544: methodByWire(client, mcp/message) = &{Side:agent …}".
+* G12, the empty meta back: "fuzz_test.go:102: accept-absolute-paths: Build: model: definition CancelRequestNotification:
+  linked by x-method and x-side to protocol method "$/cancel_request", which no meta file lists".
+
+The G29 and G12 plants were run again after the lint changes below, on the final code, with the same lines. All as required.
+
+**Checks:**
+
+* `cd cmd/generate && go run .`: exit 0. `git diff --exit-code -- '*_gen.go' '*_gen_test.go' unstable/`: exit 0.
+* `python3 tools/gates.py regen`: exit 0.
+* `cd cmd/generate && go test -race -count=1 -shuffle=on ./...`: every package `ok`.
+* `make pre-add-check FILES="<the phase's Go files, the corpus entry and the engine case>"`: first exit 2, `gocognit` on
+  `wordingGaps`, 55 > 50, and `nilerr` on `buildSeed`'s nil after a decode error. After the split into `wordingIndex` and
+  `gapsOf`, and the decode error returned: exit 0, "5 file(s) gofmt-clean; both modules linted, vetted and tested (-race
+  -shuffle=on, uncached), tidy, govulncheck."
+* `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py` over the changed files: exit 0 each.
+
+**Status:** two deviations, recorded above. Staged for the owner, who commits. Phase 9, G13, G30 and G34, begins on the
+owner's word.
