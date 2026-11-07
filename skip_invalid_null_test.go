@@ -11,6 +11,24 @@ import (
 // textContent is a tool call's content block holding text, as raw JSON.
 const textContent = `{"type":"content","content":{"type":"text","text":"hi"}}`
 
+// sessionList is a session/list result whose one session's
+// additionalDirectories is [null, dir], with its cwd and dir absolute on
+// every host, as testAbsPath makes them: a POSIX path is not absolute on
+// Windows.
+func sessionList(t *testing.T) (raw, dir string) {
+	t.Helper()
+	cwd, err := json.Marshal(testAbsPath("w"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir = testAbsPath("a")
+	d, err := json.Marshal(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return `{"sessions":[{"sessionId":"s","cwd":` + string(cwd) + `,"additionalDirectories":[null,` + string(d) + `]}]}`, dir
+}
+
 // TestSkipInvalidItemsDropNull requires a null item of an array marked
 // x-deserialize-skip-invalid-items to be dropped on decode, as an item that
 // fails to decode is, so the message validates: through skipInvalid and,
@@ -20,6 +38,7 @@ func TestSkipInvalidItemsDropNull(t *testing.T) {
 	t.Parallel()
 	// message is what a decoded message offers: the exported Validate.
 	type message = interface{ Validate() error }
+	sessions, dir := sessionList(t)
 	toolCall := func(content string) string {
 		return `{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"t","title":"x","content":` + content + `}}`
 	}
@@ -73,12 +92,11 @@ func TestSkipInvalidItemsDropNull(t *testing.T) {
 			},
 		},
 		{
-			"a session's additional directories",
-			`{"sessions":[{"sessionId":"s","cwd":"/w","additionalDirectories":[null,"/a"]}]}`,
+			"a session's additional directories", sessions,
 			func() message { return new(ListSessionsResponse) },
 			func(v message) string {
-				if d := v.(*ListSessionsResponse).Sessions[0].AdditionalDirectories; !slices.Equal(d, []string{"/a"}) {
-					return "additionalDirectories is not /a alone"
+				if d := v.(*ListSessionsResponse).Sessions[0].AdditionalDirectories; !slices.Equal(d, []string{dir}) {
+					return "additionalDirectories is not " + dir + " alone"
 				}
 				return ""
 			},
@@ -119,13 +137,14 @@ func TestSkipInvalidItemsNullReceived(t *testing.T) {
 		t.Errorf("the handler's content = %+v, want the text block alone", got)
 	}
 
-	peer := rawPeer(t, `{"sessions":[{"sessionId":"s","cwd":"/w","additionalDirectories":[null,"/a"]}]}`)
+	sessions, dir := sessionList(t)
+	peer := rawPeer(t, sessions)
 	negotiate(t, peer, allAdvertised())
 	resp, err := peer.ListSessions(t.Context(), ListSessionsRequest{})
 	if err != nil {
 		t.Fatalf("ListSessions with a null directory: %v, want accepted", err)
 	}
-	if d := resp.Sessions[0].AdditionalDirectories; !slices.Equal(d, []string{"/a"}) {
-		t.Errorf("additionalDirectories = %q, want /a alone", d)
+	if d := resp.Sessions[0].AdditionalDirectories; !slices.Equal(d, []string{dir}) {
+		t.Errorf("additionalDirectories = %q, want %q alone", d, dir)
 	}
 }

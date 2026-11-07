@@ -191,3 +191,65 @@ In the first plant's log:
 * `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0 each.
 
 One deviation, recorded above. Staged for the owner, who commits. Phase 2, the release, begins on the owner's word.
+
+### Phase 2: the release `v1.34.1`, 2026-11-07
+
+The owner committed phase 1 as `7b0cb46`, and said "committed, proceed".
+
+* **The record,** step 2.1: the MADR's G14 is marked "done 2026-11-07 by `7b0cb46`, for `v1.34.1`", naming this PLAN.
+* **The notes,** step 2.2: [0049-REPORT-release-notes-v1-34-1.md](../reports/0049-REPORT-release-notes-v1-34-1.md).
+  `make api` on `7b0cb46`, with only records uncommitted, gave "check_api: against v1.34.0: 0 incompatible, 0 compatible".
+
+**Deviation 2, 2026-11-07: the tests' session paths on Windows.**
+
+* **Found:** step 2.3's first `tools/gates.py --all` passed 17 of 18, Linux included, and failed `windows`. Run alone on the
+  Windows host with `-test.v`, both tests failed:
+  * "skip_invalid_null_test.go:96: a session's additional directories: Validate = ListSessionsResponse: sessions[0]:
+    SessionInfo: additionalDirectories[0]: "/a" is not an absolute path, want nil";
+  * "skip_invalid_null_test.go:126: ListSessions with a null directory: … "/a" is not an absolute path, want accepted".
+* **The cause:** phase 1's test data used the POSIX paths `"/a"` and `"/w"`, which are not absolute on Windows. The fix itself
+  was not at fault.
+* **Decision:** the owner chose the recommended option. `sessionList`, a new helper in the test file, builds the
+  `session/list` result with `testAbsPath` (`paths_test.go:24`), JSON-encoded, as the path tests do.
+* **Scope:** `skip_invalid_null_test.go` joins phase 2's files, committed with these records. The notes say so.
+* **The MADR:** not amended.
+* **After the change:**
+  * the two tests pass on the Windows and Linux hosts (`tools/remote.py pkg`, exit 0 each);
+  * phase 1's first plant, re-run, again failed as required: "skip_invalid_null_test.go:114: a tool call's content:
+    Validate = … ToolCallContent must have exactly one variant set, want nil", and the engine case's
+    `TestSkipInvalidItemsNull`;
+  * `make pre-add-check FILES="skip_invalid_null_test.go"` exited 0: "1 file(s) gofmt-clean; both modules linted, vetted
+    and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+
+**The gates,** step 2.3, re-run on the final tree, `tools/gates.py --all`, with the hosts named per command: exit 0, 18 of 18.
+
+```text
+ok   regen (exit 0)
+ok   precheck (exit 0)
+  newfiles: no new .go files
+ok   newfiles (exit 0)
+ok   nojsonv2 (exit 0)
+ok   winvet (exit 0)
+ok   records (exit 0)
+ok   mdlint (exit 0)
+ok   idscan (exit 0)
+ok   tools (exit 0)
+ok   lint (exit 0)
+ok   fix (exit 0)
+ok   tidy (exit 0)
+ok   api (exit 0)
+ok   race3 (exit 0)
+ok   floor (exit 0)
+ok   platforms (exit 0)
+ok   windows (exit 0)
+ok   linux (exit 0)
+all gates passed
+```
+
+**The release,** step 2.4:
+
+* The body, `.cache/tools/release/release-body-v1.34.1.md`, was cut from the working-tree notes. Each relative link was made
+  absolute at `v1.34.1` and checked to exist at `HEAD`. `tools/idscan.py` exited 0 on it.
+* `make push-guard`, after a fetch, passed.
+* The owner commits these records with the test fix, pushes, tags `v1.34.1` and creates the release.
+* CI on the tag, `tools/publication.py` and `tools/consumer.py` follow.
