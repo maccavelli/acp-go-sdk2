@@ -774,7 +774,9 @@ leaves out annotations and `default`. The committed manifest overrides `AgentCap
 `validate.go:63-67`, `:304-321` and `types.go:1306-1314`. **Probe** (investigator): a `uint64`
 `minimum` of 2^64 emits `< 18446744073709551615` on `arm64` and `< 9223372036854775808` on `amd64`; an `int64` `maximum` of
 2^53+1 is emitted as 2^53. No committed case is affected. Fix: read bounds as `json.Number`, refusing magnitudes at or above 2^53 as
-`integerConst` does.
+`integerConst` does. *Amended 2026-11-07,* by [0049-PLAN-generator-fixes.md](0049-PLAN-generator-fixes.md)'s phase 4, deviation 1: an
+integer type's bound is computed exactly with `math/big` instead, as 0019's G12 and G21 accept a fractional bound and a
+`uint64` one above `math.MaxInt64`.
 
 **G5. Low. Shapes silently dropped or loosened, each exit 0.** (a) `not` and `unevaluatedProperties` outside a catch-all;
 (b) `const` and `enum` on an object property; (c) bounds on array items and map values; (d) `$ref` siblings; (e) a definition

@@ -1,0 +1,11 @@
+Refused: a meta.json without a version, which made ProtocolVersionNumber 0
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G8).
+
+-- meta.json --
+{"agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+parse meta.json: version 0; want 1 or more

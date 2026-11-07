@@ -1,0 +1,12 @@
+Refused: a default on a property of a nested inline object, which the generated
+code does not apply (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G7, Q23 a).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Outer": {"type": "object", "properties": {"inner": {"type": "object", "properties": {"flag": {"type": "boolean", "default": true}}}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+OuterInner.flag: a default below a nested object or in an inline variant, which is not applied

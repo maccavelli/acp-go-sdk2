@@ -209,8 +209,87 @@ func checkRefs(schema *load.Schema) error {
 		if err := checkDeprecated(name, schema.Defs[name], placeDefinition); err != nil {
 			return err
 		}
+		if err := checkKeywords(name, schema.Defs[name], placeDefinition, false); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// jsonTypes are JSON Schema's type names.
+var jsonTypes = []string{schemaTypeNull, schemaTypeBoolean, schemaTypeObject, schemaTypeArray, schemaTypeNumber, schemaTypeString, schemaTypeInteger}
+
+// checkKeywords refuses the keywords the model would drop or loosen silently
+// where they stand (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
+// G5): not or unevaluatedProperties anywhere but a direct anyOf or oneOf
+// member of a definition, whose catch-all alone reads them (buildUnion
+// refuses them on any other variant); const or enum on a property of type
+// object; a bound under items or additionalProperties, at any depth, where
+// Validate checks none; a keyword beside $ref but description, title and
+// deprecated; a definition that is only a $ref; and a type name JSON Schema
+// does not have. inCollection is true under items or additionalProperties.
+func checkKeywords(path string, d *load.Definition, place placement, inCollection bool) error {
+	if d == nil {
+		return nil
+	}
+	if (d.Not != nil || d.UnevaluatedProperties != nil) && place != placeVariant {
+		return fmt.Errorf("%s: not or unevaluatedProperties here constrains nothing the generated code checks; "+
+			"only a union's catch-all variant reads them", path)
+	}
+	if place == placeProperty && primaryType(d) == schemaTypeObject && (d.Const != nil || len(d.Enum) > 0) {
+		return fmt.Errorf("%s: const or enum on an object property is not checked", path)
+	}
+	if inCollection && (d.Minimum != nil || d.Maximum != nil || d.MinLength != nil) {
+		return fmt.Errorf("%s: minimum, maximum or minLength on an array's items or a map's values is not checked", path)
+	}
+	if d.Ref != "" {
+		if place == placeDefinition {
+			return fmt.Errorf("%s: a definition that is only a $ref has no Go type of its own", path)
+		}
+		if extra := refSiblings(d); len(extra) > 0 {
+			return fmt.Errorf("%s: %s beside $ref is not read; wrap the $ref in an allOf of one to qualify it", path, strings.Join(extra, ", "))
+		}
+	}
+	names := []any{d.Type}
+	if list, ok := d.Type.([]any); ok {
+		names = list
+	}
+	for _, n := range names {
+		if s, ok := n.(string); n != nil && (!ok || !slices.Contains(jsonTypes, s)) {
+			return fmt.Errorf("%s: type %v is not a JSON Schema type", path, schemaValue(n))
+		}
+	}
+	isUnion := len(d.AnyOf) > 0 || len(d.OneOf) > 0
+	for _, c := range subschemas(path, d) {
+		in := inCollection || c.keyword == kwItems || c.keyword == kwAdditional
+		if err := checkKeywords(c.path, c.def, childPlace(place, c.keyword, isUnion), in); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// refSiblings names the keywords d has beside its $ref, but the annotations
+// description, title and deprecated.
+func refSiblings(d *load.Definition) []string {
+	var out []string
+	for _, k := range []struct {
+		name string
+		set  bool
+	}{
+		{"type", d.Type != nil}, {kwProperties, d.Properties != nil}, {"required", d.Required != nil}, {"enum", d.Enum != nil},
+		{kwItems, d.Items != nil}, {kwAnyOf, d.AnyOf != nil}, {kwOneOf, d.OneOf != nil}, {kwAllOf, d.AllOf != nil},
+		{"x-docs-ignore", d.DocsIgnore}, {"const", d.Const != nil}, {"x-side", d.XSide != ""}, {"x-method", d.XMethod != ""},
+		{"default", d.Default != nil}, {"discriminator", d.Discriminator != nil}, {"format", d.Format != ""},
+		{"minimum", d.Minimum != nil}, {"maximum", d.Maximum != nil}, {"minLength", d.MinLength != nil},
+		{kwAdditional, d.AdditionalProperties != nil}, {kwNot, d.Not != nil}, {kwUnevaluated, d.UnevaluatedProperties != nil},
+		{"x-deserialize-default-on-error", d.XDeserializeDefaultOnError}, {"x-deserialize-skip-invalid-items", d.XDeserializeSkipInvalidItems},
+	} {
+		if k.set {
+			out = append(out, k.name)
+		}
+	}
+	return out
 }
 
 // placement is where a schema node sits, for checkTypable.
@@ -435,7 +514,21 @@ func admitsNull(schema *load.Schema, d *load.Definition, seen map[string]bool) b
 		seen[name] = true
 		return admitsNull(schema, schema.Defs[name], seen)
 	}
-	return false
+	// An allOf admits what each member admits; an enum admits null when it
+	// holds it; a schema that says nothing of the value admits any, null
+	// included, unless it is the boolean schema false. A const of null
+	// decodes as no const, so it is the last case, alone
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G37).
+	if len(d.AllOf) > 0 {
+		return !slices.ContainsFunc(d.AllOf, func(e *load.Definition) bool { return !admitsNull(schema, e, seen) })
+	}
+	if slices.Contains(d.Enum, nil) {
+		return true
+	}
+	if v, ok := d.BoolSchema(); ok {
+		return v
+	}
+	return d.Type == nil && d.Ref == "" && d.Const == nil && d.Enum == nil && d.AnyOf == nil && d.OneOf == nil && d.AllOf == nil
 }
 
 // subschemas returns the subschemas of d with their paths and the keyword that

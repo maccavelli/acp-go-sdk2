@@ -1,0 +1,13 @@
+Refused: a key twice in one object of the schema; decoding kept the last, here the
+second type (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 g).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "O": {"type": "object", "properties": {"p": {"type": "string", "type": "integer"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+parse schema.json
+$defs.O.properties.p.type: key "type" appears twice

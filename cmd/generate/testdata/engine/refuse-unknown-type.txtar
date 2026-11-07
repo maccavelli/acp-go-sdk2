@@ -1,0 +1,12 @@
+Refused: a type name JSON Schema does not have, which was emitted as raw JSON
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 f).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "O": {"type": "object", "properties": {"p": {"type": "strng"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+O.properties.p: type "strng" is not a JSON Schema type

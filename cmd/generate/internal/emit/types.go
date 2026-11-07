@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -1459,16 +1458,15 @@ func validationError(f *goFile, typeName string, field, value ast.Expr, rule str
 	return addr(composite(f.runtimeName("ValidationError"), elts...))
 }
 
-// boundLit is a check's bound as a literal: an integer, or a float written
-// without a needless fraction. An integer bound above math.MaxInt64, which
-// only a uint64 holds, is written as one (0019-PLAN-generator-hardening.md,
-// G21).
+// boundLit is a check's bound as a literal: an integer, exactly as the model
+// computed it, so one above math.MaxInt64, which only a uint64 holds, is
+// written as one (0019-PLAN-generator-hardening.md, G21); or a float written
+// without a needless fraction.
 func boundLit(c model.Check) *ast.BasicLit {
-	if c.Integer && c.Bound >= math.MaxInt64 {
-		return &ast.BasicLit{Kind: token.INT, Value: strconv.FormatUint(uint64(c.Bound), 10)}
-	}
+	// The exact integer, which a float64 Bound rounds at 2^53 or more
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G4).
 	if c.Integer {
-		return &ast.BasicLit{Kind: token.INT, Value: strconv.FormatInt(int64(c.Bound), 10)}
+		return &ast.BasicLit{Kind: token.INT, Value: c.BoundText}
 	}
 	return &ast.BasicLit{Kind: token.FLOAT, Value: strconv.FormatFloat(c.Bound, 'g', -1, 64)}
 }

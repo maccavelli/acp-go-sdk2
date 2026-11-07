@@ -1,0 +1,13 @@
+Refused: a keyword beside $ref, which the model does not read, as the reference
+wins; an allOf of one reference qualifies it instead (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 d).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "A": {"type": "string"},
+  "O": {"type": "object", "properties": {"p": {"$ref": "#/$defs/A", "minLength": 3}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+O.properties.p: minLength beside $ref is not read

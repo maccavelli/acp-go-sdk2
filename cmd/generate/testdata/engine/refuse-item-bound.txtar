@@ -1,0 +1,12 @@
+Refused: minLength on an array's items, which Validate does not check
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 c).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "O": {"type": "object", "properties": {"names": {"type": "array", "items": {"type": "string", "minLength": 1}}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+O.properties.names.items: minimum, maximum or minLength on an array's items or a map's values is not checked

@@ -107,8 +107,8 @@ type Default struct {
 // after the field is built: the bounds, which validation checks, and the
 // x-deserialize keywords, which the decoders follow.
 type Facts struct {
-	Minimum   *float64
-	Maximum   *float64
+	Minimum   *json.Number
+	Maximum   *json.Number
 	MinLength *int
 	// DefaultOnError and SkipInvalidItems are the x-deserialize keywords.
 	DefaultOnError   bool
@@ -400,18 +400,25 @@ func includesNull(d *load.Definition) bool {
 func (m *Model) checkDefaults() error {
 	for _, t := range m.Types {
 		lists := [][]*Field{t.Fields}
+		owners := []string{t.Name}
 		for _, ns := range t.NestedStructs {
-			lists = append(lists, ns.Fields)
+			lists, owners = append(lists, ns.Fields), append(owners, ns.Name)
 		}
 		for _, vi := range t.Variants {
 			if vi.Inline != nil {
-				lists = append(lists, vi.Inline.Fields)
+				lists, owners = append(lists, vi.Inline.Fields), append(owners, vi.TypeName)
 			}
 		}
-		for _, fields := range lists {
+		for i, fields := range lists {
 			for _, f := range fields {
 				if f.prop == nil || f.prop.Default == nil {
 					continue
+				}
+				// plainFields builds these, and applies no default
+				// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G7,
+				// Q23 a).
+				if i > 0 {
+					return fmt.Errorf("%s.%s: a default below a nested object or in an inline variant, which is not applied", owners[i], f.Key)
 				}
 				if err := admits(m.schema, t.Name+"."+f.Key, f.prop, f.prop.Default); err != nil {
 					return err

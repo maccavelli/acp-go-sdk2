@@ -1,6 +1,7 @@
 package load
 
 import (
+	"encoding/json"
 	"maps"
 	"path/filepath"
 	"reflect"
@@ -46,12 +47,12 @@ func TestParseSchemaKeepsModeledKeywords(t *testing.T) {
 	t.Parallel()
 	s, err := parseSchema([]byte(`{"$schema":"x","$defs":{"N":{"type":"integer","format":"uint64","minimum":0,"maximum":9,
 		"x-deserialize-default-on-error":true},"M":{"type":"object","additionalProperties":{"type":"string"},
-		"x-deserialize-skip-invalid-items":true,"not":{"required":["a"]},"unevaluatedProperties":false},"S":{"type":"string","minLength":1},"Z":null}}`))
+		"x-deserialize-skip-invalid-items":true,"not":{"required":["a"]},"unevaluatedProperties":false},"S":{"type":"string","minLength":1}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	n, m := s.Defs["N"], s.Defs["M"]
-	if n.Format != "uint64" || n.Minimum == nil || *n.Minimum != 0 || n.Maximum == nil || *n.Maximum != 9 || !n.XDeserializeDefaultOnError {
+	if n.Format != "uint64" || n.Minimum == nil || *n.Minimum != "0" || n.Maximum == nil || *n.Maximum != "9" || !n.XDeserializeDefaultOnError {
 		t.Errorf("N decoded as %+v", n)
 	}
 	if m.AdditionalProperties == nil || m.AdditionalProperties.Type != "string" || !m.XDeserializeSkipInvalidItems ||
@@ -60,9 +61,6 @@ func TestParseSchemaKeepsModeledKeywords(t *testing.T) {
 	}
 	if ml := s.Defs["S"].MinLength; ml == nil || *ml != 1 {
 		t.Errorf("S.MinLength = %v", ml)
-	}
-	if z, ok := s.Defs["Z"]; !ok || z != nil {
-		t.Errorf("a null definition decoded as %v, present %v", z, ok)
 	}
 }
 
@@ -109,7 +107,7 @@ func metaParse(b []byte) error { _, err := parseMeta(b); return err }
 // or slice field with its input.
 func TestDeepCopyDefinitionCoversEveryField(t *testing.T) {
 	t.Parallel()
-	lo, hi, n, b := 0.0, 9.0, 1, true
+	lo, hi, n, b := json.Number("0"), json.Number("9"), 1, true
 	child := func() *Definition { return &Definition{Type: "string"} }
 	orig := &Definition{
 		Description:                  "d",
@@ -228,4 +226,64 @@ func diff(a, b map[string]bool) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// TestParseSchemaRefusesNullDefinition requires a definition whose value is
+// null to be refused by name: it was kept as nil, dropped by the model, and a
+// $ref to it reported that it names no definition
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G32).
+func TestParseSchemaRefusesNullDefinition(t *testing.T) {
+	t.Parallel()
+	_, err := parseSchema([]byte(`{"$defs":{"A":{"type":"string"},"Z":null}}`))
+	if err == nil || !strings.Contains(err.Error(), `definition "Z" is null, not a schema`) {
+		t.Errorf("parseSchema = %v, want it to refuse the null definition Z", err)
+	}
+}
+
+// TestParseMetaRequiresVersion requires a meta file's version to be 1 or
+// more: without one the generated ProtocolVersionNumber was 0
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G8).
+func TestParseMetaRequiresVersion(t *testing.T) {
+	t.Parallel()
+	for _, meta := range []string{`{"agentMethods":{},"clientMethods":{}}`, `{"version":0,"agentMethods":{},"clientMethods":{}}`} {
+		if _, err := parseMeta([]byte(meta)); err == nil || !strings.Contains(err.Error(), "want 1 or more") {
+			t.Errorf("parseMeta(%s) = %v, want it to refuse the version", meta, err)
+		}
+	}
+	if _, err := parseMeta([]byte(`{"version":1,"agentMethods":{},"clientMethods":{}}`)); err != nil {
+		t.Errorf("version 1: %v", err)
+	}
+}
+
+// TestDuplicateKeys requires a key repeated in one object, at any depth, to
+// be refused with where it is, in a schema, a meta file and a manifest: the
+// decoder kept the last and dropped the others silently. The same key in two
+// objects, and JSON that does not parse, are left alone
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 g).
+func TestDuplicateKeys(t *testing.T) {
+	t.Parallel()
+	refused := []struct{ name, in, want string }{
+		{"top level", `{"a":1,"a":2}`, `a: key "a" appears twice`},
+		{"nested", `{"$defs":{"A":{"type":"string","type":"integer"}}}`, `$defs.A.type: key "type" appears twice`},
+		{"in an array", `{"l":[{"x":1},{"y":1,"y":2}]}`, `l[1].y: key "y" appears twice`},
+	}
+	for _, tt := range refused {
+		if err := duplicateKey([]byte(tt.in)); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: duplicateKey = %v, want %q", tt.name, err, tt.want)
+		}
+	}
+	for _, in := range []string{`{"a":{"x":1},"b":{"x":1}}`, `{"a":`, `[1,2]`, `"s"`} {
+		if err := duplicateKey([]byte(in)); err != nil {
+			t.Errorf("duplicateKey(%s) = %v, want nil", in, err)
+		}
+	}
+	if _, err := parseSchema([]byte(`{"$defs":{"A":{"type":"string"},"A":{"type":"integer"}}}`)); err == nil || !strings.Contains(err.Error(), "appears twice") {
+		t.Errorf("parseSchema = %v, want a repeated definition refused", err)
+	}
+	if _, err := parseMeta([]byte(`{"version":1,"version":2,"agentMethods":{},"clientMethods":{}}`)); err == nil || !strings.Contains(err.Error(), "appears twice") {
+		t.Errorf("parseMeta = %v, want a repeated version refused", err)
+	}
+	if _, err := ParseManifest([]byte(`{"version":1,"version":1}`)); err == nil || !strings.Contains(err.Error(), "appears twice") {
+		t.Errorf("ParseManifest = %v, want a repeated version refused", err)
+	}
 }

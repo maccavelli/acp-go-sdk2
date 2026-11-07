@@ -857,6 +857,18 @@ func buildUnion(schema *load.Schema, n *namer, t *Type, r *rules) error {
 	if err := classifyUnion(schema, t, list); err != nil {
 		return err
 	}
+	// Only a discriminated union's catch-all reads not, for the values it
+	// excludes; on any other variant not and unevaluatedProperties would be
+	// dropped (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 a).
+	for idx, v := range list {
+		if v == nil || idx == t.CatchAll {
+			continue
+		}
+		if ev := expandAllOf(schema, v); ev.Not != nil || ev.UnevaluatedProperties != nil {
+			return fmt.Errorf("%s variant %d: not or unevaluatedProperties on a variant that is not the union's catch-all, which nothing reads",
+				t.Name, idx+1)
+		}
+	}
 	if err := checkOwnKeys(t, list); err != nil {
 		return err
 	}

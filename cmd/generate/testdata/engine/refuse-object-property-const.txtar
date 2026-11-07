@@ -1,0 +1,12 @@
+Refused: const on a property of type object, which Validate does not check
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 b).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "O": {"type": "object", "properties": {"p": {"type": "object", "const": {"a": 1}}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+O.properties.p: const or enum on an object property is not checked

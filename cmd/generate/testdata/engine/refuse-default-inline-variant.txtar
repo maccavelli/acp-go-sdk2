@@ -1,0 +1,12 @@
+Refused: a default on a property of an inline union variant, which the generated
+code does not apply (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G7, Q23 a).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"oneOf": [{"type": "object", "title": "On", "properties": {"kind": {"type": "string", "const": "on"}, "level": {"type": "integer", "format": "int32", "default": 3}}, "required": ["kind"]}, {"type": "object", "title": "Off", "properties": {"kind": {"type": "string", "const": "off"}}, "required": ["kind"]}], "discriminator": {"propertyName": "kind"}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+.level: a default below a nested object or in an inline variant, which is not applied

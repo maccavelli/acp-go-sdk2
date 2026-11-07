@@ -1,0 +1,12 @@
+Refused: not on a property, which nothing reads: only a union's catch-all variant
+reads not (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 a).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "O": {"type": "object", "properties": {"p": {"type": "string", "not": {"const": "x"}}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+O.properties.p: not or unevaluatedProperties here constrains nothing the generated code checks

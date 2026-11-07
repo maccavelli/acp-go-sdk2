@@ -1,0 +1,12 @@
+Refused: not on a union variant that is not its catch-all, which the model drops;
+here the union has no discriminator, so no variant is one (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 a).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "U": {"anyOf": [{"type": "object", "title": "Obj", "properties": {"k": {"type": "string"}}, "not": {"required": ["x"]}}, {"type": "string", "title": "Text"}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+U variant 1: not or unevaluatedProperties on a variant that is not the union's catch-all

@@ -87,17 +87,16 @@ func TestIntegerEnumMembers(t *testing.T) {
 	}
 }
 
-// TestReferenceWithPropertiesIsNotNested requires a property with a $ref to
-// be that reference, though it also lists properties.
-func TestReferenceWithPropertiesIsNotNested(t *testing.T) {
+// TestReferenceWithPropertiesIsRefused requires a property with a $ref that
+// also lists properties to be refused, naming the keywords beside the $ref:
+// it was that reference, and the properties were dropped silently
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 d).
+func TestReferenceWithPropertiesIsRefused(t *testing.T) {
 	t.Parallel()
-	m, err := buildDefs(t, `{"X":{"type":"object","properties":{"a":{"type":"string"}}},
+	_, err := buildDefs(t, `{"X":{"type":"object","properties":{"a":{"type":"string"}}},
 		"T":{"type":"object","properties":{"p":{"$ref":"#/$defs/X","type":"object","properties":{"b":{"type":"string"}}}}}}`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := fieldOf(t, m, "T", "p").Type.String(); got != "X" || len(m.Type("T").NestedStructs) != 0 {
-		t.Errorf("p is %s with nested structs %v, want X and none", got, m.Type("T").NestedStructs)
+	if err == nil || !strings.Contains(err.Error(), "T.properties.p: type, properties beside $ref is not read") {
+		t.Errorf("Build = %v, want the keywords beside the $ref refused", err)
 	}
 }
 

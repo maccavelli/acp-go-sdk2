@@ -215,6 +215,12 @@ The order is the MADR's: the mediums first (G16, G1, G2, G15, G17, G3, G18), the
    * Cases: `refuse-bound-above-2-53.txtar`, an `int64` `maximum` of 2^53+1; `refuse-bound-uint64-range.txtar`, a `uint64`
      `minimum` of 2^64, refused the same on `arm64` and `amd64`.
    * Seen to fail: the 2^53 refusal removed.
+   * *Amended 2026-11-07, deviation 1:* the refusals of a fractional bound and of a magnitude of 2^53 or more, and
+     `refuse-bound-above-2-53.txtar`, are replaced. An integer type's bound is computed exactly with `math/big`: a fraction
+     still rounds inward (0019's G12), the range check is exact, and the literal is written from the exact integer, so a
+     `uint64` bound above `math.MaxInt64` stays one (0019's G21). `accept-validate-fractional-bound.txtar` stays accepted,
+     unchanged. Cases: `accept-validate-exact-bound.txtar`, an `int64` `maximum` of 2^53+1 written as `9007199254740993`;
+     `refuse-bound-uint64-range.txtar`, as above. Seen to fail: the bounds back to `float64`.
 2. **G5,** one refusal each, in the model's schema walk (`model/schema.go`, `walkRefs` and `subschemas`), or in `load` for
    (g):
    * (a) `not` or `unevaluatedProperties` outside a catch-all variant;
@@ -707,4 +713,140 @@ All as required.
 * `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py` over the changed files: exit 0 each.
 
 **Status:** two deviations, recorded above. Staged for the owner, who commits. Phase 4, G4, G5, G7, G8, G32 and G37, begins on
+the owner's word.
+
+### Phase 4: G4, G5, G7, G8, G32 and G37, the model's refusals, 2026-11-07
+
+The owner committed phase 3 as `5124800`, and said "committed, proceed".
+
+**Design rule 6's scan,** by a scratch script, `facts4.py`, over `schema/schema.json`, `schema/schema.unstable.json` and
+`schema/unstable-v1.json`, by the model's placements:
+
+* `not`, 4 stable and 6 unstable, and `unevaluatedProperties`, 1 and 1, all on a direct `anyOf` member of a definition; none
+  elsewhere;
+* a `const` or `enum` on an object property, a bound under `items` or `additionalProperties`, a keyword beside `$ref`, a
+  definition that is only a `$ref`, an unknown `type`, an integer bound of 2^53 or more, a default below a nested object or a
+  variant, a definition that is `null`: 0 each;
+* duplicate keys: 0 in each file; `meta.json` and `meta.unstable.json`: `version` 1.
+
+**The engine cases,** by `facts4e.py` over the 205 cases: only two refusal cases hold a shape the phase refuses.
+
+* `refuse-deprecated-under-not.txtar` has `not` on a definition. It keeps its error, since the new keyword checks run after
+  `checkDeprecated`.
+* `refuse-unstable-null-definition.txtar` has a `null` definition in the unstable schema, step 4.5's case.
+
+**Deviation 1, 2026-11-07: G4 against 0019's bounds.**
+
+* **Found:** step 4.1 refuses a fractional bound, and the MADR's G4 fix refuses a magnitude of 2^53 or more. Yet the committed
+  `accept-validate-fractional-bound.txtar`, which the step says stays unchanged, accepts both: an `int64` `minimum` of 1.5,
+  rounded inward (0019-PLAN-generator-hardening.md, G12), and a `uint64` `maximum` of `1e19`, written as a `uint64` (G21).
+* **Decision:** the owner chose the recommended option: read the bounds exactly. Not chosen: refusing 2^53 or more, which
+  reverses 0019's G21 and splits that case; refusing a bound a `float64` does not hold exactly.
+* **Scope:** `cmd/generate/internal/model/fields.go` (`Facts`), `model/validate.go` and its `Check`, `emit/types.go`
+  (`boundLit`), and the tests that read the bounds, `load/load_test.go` and `model/fields_test.go`, join the step.
+* **The MADR:** G4's fix is amended, 2026-11-07.
+
+**What changed:**
+
+* **G4 (deviation 1).**
+  * `load.Definition`'s `Minimum` and `Maximum`, and `model.Facts`', are `*json.Number`.
+  * `bounds` (`cmd/generate/internal/model/validate.go`) computes an integer type's bound with `math/big`: `ceilRat` and
+    `floorRat` round a fraction inward, and `exactRange` gives each sized type's range exactly. A `number` type's bound is
+    parsed to a `float64`, as before.
+  * `Check` gains `BoundText`, the exact integer, and `boundLit` (`emit/types.go`) writes it. Its two branches that wrote an
+    integer from the `float64`, the `math.MaxInt64` one included, are gone, since every integer check now carries the text.
+* **G5,** a new `checkKeywords` in `model/schema.go`, run by `checkRefs` after `checkDeprecated`:
+  * (a) `not` or `unevaluatedProperties` anywhere but a direct `anyOf` or `oneOf` member of a definition. And in
+    `buildUnion` (`model/model.go`), either one on a variant that is not the union's catch-all, which alone reads `not`: "U
+    variant 1: not or unevaluatedProperties on a variant that is not the union's catch-all, which nothing reads";
+  * (b) `const` or `enum` on a property of type `object`;
+  * (c) `minimum`, `maximum` or `minLength` at any depth under `items` or `additionalProperties`;
+  * (d) any keyword beside `$ref` but `description`, `title` and `deprecated`, listed by a new `refSiblings`;
+  * (e) a definition that is only a `$ref`;
+  * (f) a `type` that is not one of JSON Schema's seven names;
+  * (g) in `load`, a new `duplicateKey`, a walk of `json.Decoder.Token`, run by `parseSchema`, `parseMeta` and `ParseManifest`
+    on the whole file. It leaves JSON that does not parse to the decoder, so those files' errors are as they were.
+* **G7.** `checkDefaults` (`model/fields.go`) refuses a default on a field of a nested struct or an inline variant, the
+  fields `plainFields` builds: "OuterInner.flag: a default below a nested object or in an inline variant, which is not
+  applied".
+* **G8.** `parseMeta` refuses a `version` below 1: "parse meta.json: version 0; want 1 or more".
+* **G32.** `parseSchema` refuses a definition whose value is `null`: "parse schema.json: definition "X" is null, not a schema".
+  `refuse-unstable-null-definition.txtar`, step 4.5's case, pinned merge's later "unstable schema missing definition
+  "Ghost"". It now meets this refusal first, and its `want.err` and comment say so. Merge's check still guards a schema built
+  in memory.
+* **G37.** `admitsNull` (`model/schema.go`) also answers true for an `allOf` whose members all admit `null`, an `enum` that
+  holds `null`, the boolean schema `true`, and a schema with no `type`, `$ref`, `const`, `enum`, `anyOf`, `oneOf` or `allOf`.
+  `"const": null` decodes as no `const`, so it lands in the last case, which answers true.
+
+**Tests:**
+
+* Engine cases, sixteen new:
+  * G4: `accept-validate-exact-bound.txtar`, whose behaviour test requires 2^53+1 to pass `Validate` and 2^53+2 to fail;
+    `refuse-bound-uint64-range.txtar`;
+  * G5: `refuse-not-keyword.txtar`, `refuse-not-on-variant.txtar`, `refuse-object-property-const.txtar`,
+    `refuse-item-bound.txtar`, `refuse-ref-sibling.txtar`, `refuse-ref-only-definition.txtar`, `refuse-unknown-type.txtar`
+    and `refuse-duplicate-key.txtar`;
+  * G7: `refuse-default-nested-inline.txtar` and `refuse-default-inline-variant.txtar`;
+  * G8: `refuse-meta-no-version.txtar`;
+  * G32: `refuse-definition-null-value.txtar`;
+  * G37: `refuse-skip-invalid-allof-nullable-items.txtar` and `refuse-skip-invalid-untyped-items.txtar`.
+
+  `accept-validate-fractional-bound.txtar` and every other committed case pass unchanged, but step 4.5's.
+* Unit tests:
+  * `load`: `TestParseSchemaRefusesNullDefinition`; `TestParseMetaRequiresVersion`; `TestDuplicateKeys`, at the top level,
+    nested, in an array, and through each of the three parsers, with the controls of two objects sharing a key, JSON that does
+    not parse, an array and a string;
+  * `model`: `TestAdmitsNull`, sixteen schemas, with a reference cycle among the controls.
+* Three committed tests pinned behaviour this phase replaces. Each now holds the new rule, its purpose kept:
+  * `TestParseSchemaKeepsModeledKeywords` (`load/load_test.go`) required `"Z": null` to decode as a nil definition. `Z` is
+    gone from it, and `TestParseSchemaRefusesNullDefinition` holds G32. Its bounds compare as `json.Number` text.
+  * `TestCheckTypable` (`model/schema_test.go`) had the `not` on its union definition. The `not` is on a variant now, where a
+    catch-all reads it, and the test still requires the inline objects inside a `not` to go untyped.
+  * `TestReferenceWithPropertiesIsNotNested` (`model/edges_test.go`) required a `$ref` with `type` and `properties` beside it
+    to be the reference, the siblings dropped, the very shape G5 (d) names. It is `TestReferenceWithPropertiesIsRefused`, and
+    requires "T.properties.p: type, properties beside $ref is not read".
+  * `model/fields_test.go` compares its bounds as `json.Number` text.
+
+**Seen to fail,** by `plants_gen.py 4`, each break in its own copy of the working tree:
+
+* G4:
+  * the literal written from the `float64`: "behaviour_test.go:8: 2^53+1: T: x: greater than maximum 9007199254740992, want
+    nil";
+  * the exact range check removed: the case fails, as the type checker refuses the generated comparison with 2^64,
+    "generated code does not type-check with …". The first run expected "run accepted the schema", and the plant's expected
+    text was corrected.
+* G5:
+  * each of (a), on a property and on a variant that is not the catch-all, and (b), (c), (e) and (f): "engine_test.go:47: run
+    accepted the schema";
+  * (d): that line, and "edges_test.go:99: Build = <nil>, want the keywords beside the $ref refused";
+  * (g): that line, and "load_test.go:272: top level: duplicateKey = <nil>, …".
+* G7: "run accepted the schema", for each of the two cases.
+* G8: that line, and "load_test.go:250: parseMeta({"agentMethods":{},"clientMethods":{}}) = <nil>, …".
+* G32: "error "model: O.properties.x: $ref "#/$defs/X" names no definition" does not contain …", the old cause, and
+  "load_test.go:239: parseSchema = <nil>, …".
+* G37:
+  * `allOf` not followed: "run accepted the schema", and "schema_test.go:223: admitsNull({"allOf":[{"$ref":"#/$defs/Maybe"}]})
+    = false, want true".
+
+    The first run found a gap. With the `allOf` branch removed, the case still passed, because the last case, a schema that
+    says nothing, did not exclude `allOf` and so answered true for an item that is only an `allOf`. The step lists `allOf`
+    among the keywords that case requires to be absent. The code now checks for `allOf` there, and the re-run failed as
+    above.
+  * an `enum` holding `null` not read: "admitsNull({"enum":["a",null]}) = false, want true";
+  * the last case removed: "run accepted the schema", and "admitsNull({}) = false, want true".
+
+All as required.
+
+**Checks:**
+
+* `cd cmd/generate && go run .`: exit 0. `git diff --exit-code -- '*_gen.go' '*_gen_test.go' unstable/`: exit 0.
+* `python3 tools/gates.py regen`: "ok   regen (exit 0)".
+* `cd cmd/generate && go test -race -count=1 -shuffle=on ./...`: every package `ok`.
+* `make pre-add-check FILES="<the phase's Go files and engine cases>"`: first exit 2. `golangci-lint` found `duplicateIn`'s
+  unchecked type assertion (errcheck), and a third `"properties"` beside the constant `kwProperties` (goconst), in
+  `refSiblings`, which now uses the `kw` constants. Then exit 0, "11 file(s) gofmt-clean; both modules linted, vetted and
+  tested (-race -shuffle=on, uncached), tidy, govulncheck." The G5 (g) plant was re-run after the change, as required.
+* `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py` over the changed files: exit 0 each.
+
+**Status:** one deviation, recorded above. Staged for the owner, who commits. Phase 5, G6, G21, G22, G23 and G24, begins on
 the owner's word.

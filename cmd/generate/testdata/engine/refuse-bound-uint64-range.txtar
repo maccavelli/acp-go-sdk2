@@ -1,0 +1,14 @@
+Refused: a uint64 minimum of 2^64, which no uint64 reaches. Through a float64 it
+was written as 18446744073709551615 on arm64 and 9223372036854775808 on amd64, by
+an implementation-defined conversion; computed exactly, it is out of range
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G4).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "T": {"type": "object", "properties": {"x": {"type": "integer", "format": "uint64", "minimum": 18446744073709551616}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+T.x: minimum 18446744073709551616 is out of range for uint64

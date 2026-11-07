@@ -1,0 +1,56 @@
+An integer bound of 2^53 or more is written exactly: a float64 would round the
+int64 maximum 9007199254740993, 2^53+1, to 2^53, and refuse the schema's own largest
+value (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G4, as amended by
+0049-PLAN-generator-fixes.md's phase 4, deviation 1).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "T": {"type": "object", "properties": {"x": {"type": "integer", "format": "int64", "maximum": 9007199254740993}}, "required": ["x"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type T struct{X int64 "json:\"x\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+func (*T).UnmarshalJSON(b []byte) error
+func (*T).Validate() error
+-- behaviour_test.go --
+package acp
+
+import "testing"
+
+// The schema's largest value passes, and the one after it does not.
+func TestExactBound(t *testing.T) {
+	if err := (&T{X: 9007199254740993}).Validate(); err != nil {
+		t.Errorf("2^53+1: %v, want nil", err)
+	}
+	if err := (&T{X: 9007199254740994}).Validate(); err == nil {
+		t.Error("2^53+2: nil, want an error")
+	}
+}

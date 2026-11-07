@@ -1,0 +1,13 @@
+Refused: a definition that is only a $ref, which was emitted as raw JSON
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 e).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "A": {"type": "string"},
+  "B": {"$ref": "#/$defs/A"},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+B: a definition that is only a $ref has no Go type of its own

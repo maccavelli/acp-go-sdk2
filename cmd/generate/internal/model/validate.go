@@ -1,9 +1,12 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
+	"strings"
 )
 
 // Validation is what a type's Validate method checks: nil means the type has
@@ -48,9 +51,12 @@ type Check struct {
 	// RefPointer, RefSlice, or RefMap.
 	Shape RefKind
 	// Bound is the minLength, minimum, or maximum; Integer reports whether the
-	// field is an integer, so the bound is written without a fraction.
-	Bound   float64
-	Integer bool
+	// field is an integer, so the bound is written without a fraction, as
+	// BoundText, the exact integer: Bound, a float64, rounds one of 2^53 or
+	// more (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G4).
+	Bound     float64
+	Integer   bool
+	BoundText string
 	// InPatch is true for a nested check of a Patch field: Shape is that of
 	// the patch's value, checked when the patch holds one.
 	InPatch bool
@@ -310,8 +316,11 @@ func (m *Model) holdsValidated(r TypeRef) bool {
 
 // bounds returns the checks a property's minimum, maximum, and minLength need:
 // none for a bound its Go type already enforces. A bound on a type it cannot
-// apply to is refused.
-func (m *Model) bounds(owner, key string, minimum, maximum *float64, minLength *int, r TypeRef) ([]Check, error) {
+// apply to is refused. An integer type's bound is computed exactly, from the
+// schema's text, not through a float64, which rounds one of 2^53 or more
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G4, as amended by
+// 0049-PLAN-generator-fixes.md's phase 4, deviation 1).
+func (m *Model) bounds(owner, key string, minimum, maximum *json.Number, minLength *int, r TypeRef) ([]Check, error) {
 	sh := RefNamed
 	if r.Kind == RefPointer {
 		sh, r = RefPointer, *r.Elem
@@ -329,21 +338,29 @@ func (m *Model) bounds(owner, key string, minimum, maximum *float64, minLength *
 		if r.Kind != RefNamed || base != schemaTypeString {
 			return nil, fmt.Errorf("%s: minLength on %s, not a string", where, r)
 		}
-		out = append(out, Check{Kind: CheckMinLength, Key: key, Shape: sh, Bound: float64(*minLength), Integer: true, NamedString: r.Name != base})
+		out = append(out, Check{Kind: CheckMinLength, Key: key, Shape: sh, Bound: float64(*minLength), Integer: true,
+			BoundText: strconv.Itoa(*minLength), NamedString: r.Name != base})
 	}
 	if minimum == nil && maximum == nil {
 		return out, nil
 	}
-	rng, integer := goRange[base]
+	lo, hi, integer := exactRange(base)
 	if r.Kind != RefNamed || (!integer && base != goFloat32 && base != goFloat64) {
 		return nil, fmt.Errorf("%s: minimum or maximum on %s, not a number", where, r)
 	}
 	if !integer {
-		if minimum != nil {
-			out = append(out, Check{Kind: CheckMinimum, Key: key, Shape: sh, Bound: *minimum})
-		}
-		if maximum != nil {
-			out = append(out, Check{Kind: CheckMaximum, Key: key, Shape: sh, Bound: *maximum})
+		for _, b := range []struct {
+			kind CheckKind
+			n    *json.Number
+		}{{CheckMinimum, minimum}, {CheckMaximum, maximum}} {
+			if b.n == nil {
+				continue
+			}
+			f, err := b.n.Float64()
+			if err != nil {
+				return nil, fmt.Errorf("%s: bound %s: %w", where, *b.n, err)
+			}
+			out = append(out, Check{Kind: b.kind, Key: key, Shape: sh, Bound: f})
 		}
 		return out, nil
 	}
@@ -352,30 +369,65 @@ func (m *Model) bounds(owner, key string, minimum, maximum *float64, minLength *
 	// and the type checker would refuse the generated comparison
 	// (0019-PLAN-generator-hardening.md, G12 and G21).
 	if minimum != nil {
-		lo := math.Ceil(*minimum)
-		if lo > rng[1] {
-			return nil, fmt.Errorf("%s: minimum %s is out of range for %s", where, formatBound(*minimum), base)
+		v, ok := new(big.Rat).SetString(string(*minimum))
+		if !ok {
+			return nil, fmt.Errorf("%s: minimum %s is not a number", where, *minimum)
 		}
-		if lo > rng[0] {
-			out = append(out, Check{Kind: CheckMinimum, Key: key, Shape: sh, Bound: lo, Integer: true})
+		c := ceilRat(v)
+		if c.Cmp(hi) > 0 {
+			return nil, fmt.Errorf("%s: minimum %s is out of range for %s", where, *minimum, base)
+		}
+		if c.Cmp(lo) > 0 {
+			out = append(out, integerCheck(CheckMinimum, key, sh, c))
 		}
 	}
 	if maximum != nil {
-		hi := math.Floor(*maximum)
-		if hi < rng[0] {
-			return nil, fmt.Errorf("%s: maximum %s is out of range for %s", where, formatBound(*maximum), base)
+		v, ok := new(big.Rat).SetString(string(*maximum))
+		if !ok {
+			return nil, fmt.Errorf("%s: maximum %s is not a number", where, *maximum)
 		}
-		if hi < rng[1] {
-			out = append(out, Check{Kind: CheckMaximum, Key: key, Shape: sh, Bound: hi, Integer: true})
+		f := floorRat(v)
+		if f.Cmp(lo) < 0 {
+			return nil, fmt.Errorf("%s: maximum %s is out of range for %s", where, *maximum, base)
+		}
+		if f.Cmp(hi) < 0 {
+			out = append(out, integerCheck(CheckMaximum, key, sh, f))
 		}
 	}
 	return out, nil
 }
 
-// formatBound writes a schema bound as the schema does, without a needless
-// fraction or exponent.
-func formatBound(f float64) string {
-	return strconv.FormatFloat(f, 'f', -1, 64)
+// integerCheck is a check of an integer bound n, exact in BoundText.
+func integerCheck(kind CheckKind, key string, sh RefKind, n *big.Int) Check {
+	f, _ := new(big.Float).SetInt(n).Float64()
+	return Check{Kind: kind, Key: key, Shape: sh, Bound: f, Integer: true, BoundText: n.String()}
+}
+
+// floorRat is the greatest integer at most v; ceilRat the least at least v.
+func floorRat(v *big.Rat) *big.Int {
+	// Div rounds toward negative infinity for a positive divisor, and a
+	// Rat's denominator is always positive.
+	return new(big.Int).Div(v.Num(), v.Denom())
+}
+
+func ceilRat(v *big.Rat) *big.Int {
+	return new(big.Int).Neg(floorRat(new(big.Rat).Neg(v)))
+}
+
+// exactRange is the range of the sized Go integer type name, exactly, and
+// whether name is one.
+func exactRange(name string) (lo, hi *big.Int, ok bool) {
+	bits := map[string]uint{goInt8: 8, goInt16: 16, goInt32: 32, goInt64: 64, goUint8: 8, goUint16: 16, goUint32: 32, goUint64: 64}
+	n, ok := bits[name]
+	if !ok {
+		return nil, nil, false
+	}
+	one := big.NewInt(1)
+	if strings.HasPrefix(name, "uint") {
+		return new(big.Int), new(big.Int).Sub(new(big.Int).Lsh(one, n), one), true
+	}
+	limit := new(big.Int).Lsh(one, n-1)
+	return new(big.Int).Neg(limit), new(big.Int).Sub(limit, one), true
 }
 
 // pathFieldShape is how a field holds an absolute path: a string, a pointer

@@ -1,0 +1,14 @@
+Refused: skip-invalid items that admit null through an allOf of a union with a null
+member; skipInvalid would drop the null, which the items admit (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G37).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Item": {"type": "object", "properties": {"x": {"type": "string"}}},
+  "Maybe": {"anyOf": [{"$ref": "#/$defs/Item"}, {"type": "null"}]},
+  "L": {"type": "object", "properties": {"xs": {"type": "array", "items": {"allOf": [{"$ref": "#/$defs/Maybe"}]}, "x-deserialize-skip-invalid-items": true}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+L.properties.xs: x-deserialize-skip-invalid-items on items that admit null

@@ -5,6 +5,7 @@ package load
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -60,10 +61,10 @@ type Definition struct {
 
 	// Format, Minimum, Maximum, and MinLength are JSON Schema validation
 	// keywords, such as format "uint64" with minimum 0.
-	Format    string   `json:"format"`
-	Minimum   *float64 `json:"minimum"`
-	Maximum   *float64 `json:"maximum"`
-	MinLength *int     `json:"minLength"`
+	Format    string       `json:"format"`
+	Minimum   *json.Number `json:"minimum"`
+	Maximum   *json.Number `json:"maximum"`
+	MinLength *int         `json:"minLength"`
 	// AdditionalProperties is the schema of the values of an object's other
 	// keys; boolean true decodes as a boolean schema.
 	AdditionalProperties *Definition `json:"additionalProperties"`
@@ -186,18 +187,94 @@ func (d *Discriminator) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// parseMeta decodes a meta file strictly.
+// parseMeta decodes a meta file strictly. Its version must be 1 or more: a
+// missing one would make ProtocolVersionNumber 0
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G8).
 func parseMeta(b []byte) (*Meta, error) {
+	if err := duplicateKey(b); err != nil {
+		return nil, err
+	}
 	var meta Meta
 	if err := decodeStrict(b, &meta); err != nil {
 		return nil, err
 	}
+	if meta.Version < 1 {
+		return nil, fmt.Errorf("version %d; want 1 or more", meta.Version)
+	}
 	return &meta, nil
+}
+
+// duplicateKey fails on a key that one JSON object of b holds twice, naming
+// where, since decoding would keep the last and drop the others silently
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 g). JSON that
+// does not parse is left to the decoder, which reports it.
+func duplicateKey(b []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	err := duplicateIn(dec, "")
+	if errors.Is(err, errNotJSON) {
+		return nil
+	}
+	return err
+}
+
+// errNotJSON stops duplicateIn at input the decoder will refuse.
+var errNotJSON = errors.New("not JSON")
+
+// duplicateIn reads one value from dec, failing on a repeated key in any
+// object of it; path is where the value is, by its keys.
+func duplicateIn(dec *json.Decoder, path string) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return errNotJSON
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delim {
+	case '{':
+		seen := map[string]bool{}
+		for dec.More() {
+			kt, err := dec.Token()
+			if err != nil {
+				return errNotJSON
+			}
+			key, ok := kt.(string)
+			if !ok {
+				return errNotJSON
+			}
+			at := key
+			if path != "" {
+				at = path + "." + key
+			}
+			if seen[key] {
+				return fmt.Errorf("%s: key %q appears twice in one object; decoding would keep the last", at, key)
+			}
+			seen[key] = true
+			if err := duplicateIn(dec, at); err != nil {
+				return err
+			}
+		}
+	case '[':
+		for i := 0; dec.More(); i++ {
+			if err := duplicateIn(dec, fmt.Sprintf("%s[%d]", path, i)); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := dec.Token(); err != nil {
+		return errNotJSON
+	}
+	return nil
 }
 
 // parseSchema decodes the definitions of a schema file one by one, so an
 // error names the definition it came from. Other top-level keys are ignored.
 func parseSchema(b []byte) (*Schema, error) {
+	if err := duplicateKey(b); err != nil {
+		return nil, err
+	}
 	var top struct {
 		Defs map[string]json.RawMessage `json:"$defs"`
 	}
@@ -210,9 +287,11 @@ func parseSchema(b []byte) (*Schema, error) {
 	schema := &Schema{Defs: make(map[string]*Definition, len(top.Defs))}
 	for _, name := range slices.Sorted(maps.Keys(top.Defs)) {
 		raw := top.Defs[name]
+		// A null definition is no schema: it was dropped, and a $ref to it
+		// reported that it names none
+		// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G32).
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			schema.Defs[name] = nil
-			continue
+			return nil, fmt.Errorf("definition %q is null, not a schema", name)
 		}
 		var d Definition
 		if err := json.Unmarshal(raw, &d); err != nil {

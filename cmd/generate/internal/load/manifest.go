@@ -61,6 +61,9 @@ type ManifestChange struct {
 
 // ParseManifest decodes a manifest strictly, its fragments included.
 func ParseManifest(b []byte) (*Manifest, error) {
+	if err := duplicateKey(b); err != nil {
+		return nil, err
+	}
 	var m Manifest
 	if err := decodeStrict(b, &m); err != nil {
 		return nil, err

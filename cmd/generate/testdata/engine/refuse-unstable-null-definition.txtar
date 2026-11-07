@@ -1,5 +1,8 @@
-An unstable-only method's type refers to a definition that is null
-(merge.go, buildUnstableDuplicateSet).
+An unstable-only method's type refers to a definition that is null. Reading the
+unstable schema refuses the null definition itself, by name; merge.go's
+buildUnstableDuplicateSet refused it later, as a missing definition, and still
+guards a schema built in memory
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G32).
 
 -- meta.json --
 {"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
@@ -18,4 +21,5 @@ An unstable-only method's type refers to a definition that is null
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
 }}
 -- want.err --
-unstable schema missing definition "Ghost"
+parse schema.unstable.json
+definition "Ghost" is null, not a schema

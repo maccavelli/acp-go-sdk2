@@ -172,16 +172,55 @@ func TestEnumValueKinds(t *testing.T) {
 
 // TestCheckTypable accepts the inline objects the model types, and those in a
 // not, which only constrains; the refusals are engine cases
-// (testdata/engine/refuse-allof-*.txtar and refuse-*inline*.txtar).
+// (testdata/engine/refuse-allof-*.txtar and refuse-*inline*.txtar). The not
+// is on a variant, where a catch-all reads it, as checkKeywords refuses it
+// on a definition (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G5 a).
 func TestCheckTypable(t *testing.T) {
 	t.Parallel()
 	schema := schemaOf(t, `{
 		"A":{"type":"object","properties":{"a":{"type":"string"}}},
 		"Nested":{"type":"object","properties":{"inner":{"type":"object","properties":{"x":{"type":"string"}}}}},
 		"Wrapped":{"type":"object","properties":{"a":{"allOf":[{"$ref":"#/$defs/A"}],"description":"One A."}}},
-		"Union":{"anyOf":[{"type":"object","properties":{"k":{"type":"string"}}},{"allOf":[{"$ref":"#/$defs/A"}]}],
-			"not":{"anyOf":[{"type":"object","properties":{"k":{"const":"x"}}}]}}}`)
+		"Union":{"anyOf":[{"type":"object","properties":{"k":{"type":"string"}},
+			"not":{"anyOf":[{"type":"object","properties":{"k":{"const":"x"}}}]}},{"allOf":[{"$ref":"#/$defs/A"}]}]}}`)
 	if err := checkRefs(schema); err != nil {
 		t.Errorf("checkRefs refused shapes the model types: %v", err)
+	}
+}
+
+// TestAdmitsNull requires each way an item admits null to be found, so the
+// refusal of skip-invalid items that admit null, whose null skipInvalid
+// would drop, misses none: an allOf whose members all admit it, an enum that
+// holds it, and a schema that says nothing of the value
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G14 and G37).
+func TestAdmitsNull(t *testing.T) {
+	t.Parallel()
+	schema := schemaOf(t, `{"Item":{"type":"object"},"Maybe":{"anyOf":[{"$ref":"#/$defs/Item"},{"type":"null"}]},
+		"Loop":{"anyOf":[{"$ref":"#/$defs/Loop"},{"type":"string"}]}}`)
+	tests := []struct {
+		def  string
+		want bool
+	}{
+		{`{"type":"null"}`, true},
+		{`{"type":["string","null"]}`, true},
+		{`{"$ref":"#/$defs/Maybe"}`, true},
+		{`{"allOf":[{"$ref":"#/$defs/Maybe"}]}`, true},
+		{`{"allOf":[{"$ref":"#/$defs/Maybe"},{"$ref":"#/$defs/Item"}]}`, false},
+		{`{"enum":["a",null]}`, true},
+		{`{}`, true},
+		{`true`, true},
+		{`false`, false},
+		{`{"description":"anything"}`, true},
+		{`{"type":"string"}`, false},
+		{`{"enum":["a"]}`, false},
+		{`{"const":"a"}`, false},
+		{`{"$ref":"#/$defs/Item"}`, false},
+		{`{"allOf":[{"$ref":"#/$defs/Item"}]}`, false},
+		{`{"$ref":"#/$defs/Loop"}`, false},
+	}
+	for _, tt := range tests {
+		if got := admitsNull(schema, defOf(t, tt.def), map[string]bool{}); got != tt.want {
+			t.Errorf("admitsNull(%s) = %v, want %v", tt.def, got, tt.want)
+		}
 	}
 }

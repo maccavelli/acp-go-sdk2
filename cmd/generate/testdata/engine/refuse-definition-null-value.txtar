@@ -1,0 +1,13 @@
+Refused: a definition whose value is null, which was dropped silently, so a $ref
+to it said it named no definition (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G32).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "X": null,
+  "O": {"type": "object", "properties": {"x": {"$ref": "#/$defs/X"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+parse schema.json: definition "X" is null, not a schema

@@ -128,7 +128,7 @@ func TestObjectFieldDefaultsAndFacts(t *testing.T) {
 		t.Errorf("mode default: %+v", d)
 	}
 	c := fieldByKey(t, fields, "count").Facts
-	if c.Minimum == nil || *c.Minimum != 0 || c.Maximum == nil || *c.Maximum != 9 || !c.DefaultOnError {
+	if c.Minimum == nil || *c.Minimum != "0" || c.Maximum == nil || *c.Maximum != "9" || !c.DefaultOnError {
 		t.Errorf("count facts: %+v", c)
 	}
 	if !fieldByKey(t, fields, "list").Facts.SkipInvalidItems {
