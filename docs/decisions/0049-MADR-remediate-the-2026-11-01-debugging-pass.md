@@ -741,7 +741,7 @@ file, or keep it as a test helper by name.
 *Added 2026-11-07,* by the fourth re-assessment at `ff31967`: G14 to G36. Paths are relative to `cmd/generate/internal/`
 unless they start at the repository (`cmd/`, the root's files).
 
-**G14. Medium; done 2026-11-07 by `7b0cb46`, for `v1.34.1`. A `null` item survives `x-deserialize-skip-invalid-items`, and the whole received message is then refused.**
+**G14. Medium; done 2026-11-07 by `7b0cb46`, released in `v1.34.1`. A `null` item survives `x-deserialize-skip-invalid-items`, and the whole received message is then refused.**
 *Done* by [0049-PLAN-null-items-in-skip-invalid-arrays.md](0049-PLAN-null-items-in-skip-invalid-arrays.md), per Q21 (a):
 `skipInvalid` drops a `null` item, and the generator refuses skip-invalid items that admit `null`. The tests the
 PLAN's phase 1 names failed with the fix removed.

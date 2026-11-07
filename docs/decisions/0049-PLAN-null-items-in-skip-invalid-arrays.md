@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-11-07
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
@@ -251,5 +251,12 @@ all gates passed
 * The body, `.cache/tools/release/release-body-v1.34.1.md`, was cut from the working-tree notes. Each relative link was made
   absolute at `v1.34.1` and checked to exist at `HEAD`. `tools/idscan.py` exited 0 on it.
 * `make push-guard`, after a fetch, passed.
-* The owner commits these records with the test fix, pushes, tags `v1.34.1` and creates the release.
-* CI on the tag, `tools/publication.py` and `tools/consumer.py` follow.
+* The owner committed these records with the test fix as `753d7ca` and pushed it. CI on `main`'s head, run 42387348465,
+  passed its six `validate` jobs, and the Docs run 42387348487 passed.
+* The owner tagged `v1.34.1` on `753d7ca` and created the release with that body.
+* CI on the tag, run 42388162614: the six `validate` jobs, `success`.
+* `tools/consumer.py v1.34.1`: exit 0, "as required".
+* `tools/publication.py v1.34.1 753d7ca <the body>`: exit 0, "10 of 10 checks hold".
+
+**Status,** step 2.5: every step is done, and each Verification item holds. So this PLAN and its row are marked `complete`.
+Two deviations, both recorded above.
