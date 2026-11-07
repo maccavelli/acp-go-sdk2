@@ -1090,3 +1090,47 @@ type check's message, or with the case accepted. They were corrected, and the th
 
 **Status:** four deviations, recorded above. Staged for the owner, who commits. Phase 7, G11, G33 and G31, begins on the
 owner's word.
+
+### Phase 7: G11, G33 and G31, the input edge and the CLI, 2026-11-07
+
+The owner committed phase 6 as `08ad4c1`, and said "committed, proceed".
+
+**What changed:**
+
+* **G33.** `runWith` (`cmd/generate/main.go`) returns nil when `fs.Parse` returns `flag.ErrHelp`. `flag` has printed the
+  usage, and `main` exits 0.
+* **G11.** `runWith` refuses `fs.NArg() > 0` before anything is read or written: "unexpected argument "stray"; use -schema and
+  -out", which `main` prints after "generate:".
+* **G31.** `ManifestMethods` and `ManifestChange` (`cmd/generate/internal/load/manifest.go`) gain an `UnmarshalJSON` through
+  `decodeStrict`, on an alias type, as `Discriminator` has.
+
+**Tests:**
+
+* `main_test.go`: `TestRunRefusesArguments`, `stray` alone and after `-out x`; `TestRunHelp`, `-h`, `-help` and `--help`.
+  `flag` prints its usage to the test's stderr.
+* `load`'s `TestManifestNestedKeysStrict`: a change's `PROPERTIES`, a side's `AGENT`, and a change's unknown `props` are each
+  refused, naming the key; a well-cased manifest decodes.
+* The built command, by hand: `generate -h` printed "Usage of generate:" and exited 0; `generate stray` printed "generate:
+  unexpected argument "stray"; use -schema and -out" and exited 1.
+
+**Seen to fail,** by `plants_gen.py 7`, each break in its own copy of the working tree:
+
+* G11, the check removed: "main_test.go:450: run(["stray"]) = <nil>, want the argument refused". The run went on to generate
+  into the copy.
+* G33, `flag.ErrHelp` a failure again: "main_test.go:461: run(-h) = flag: help requested, want nil".
+* G31, each `UnmarshalJSON` renamed away: "manifest_test.go:245: a change's key: ParseManifest = <nil>, want an error naming
+  "PROPERTIES"", and "a side of the methods: ParseManifest = <nil>, want an error naming "AGENT"".
+
+All as required.
+
+**Checks:**
+
+* `cd cmd/generate && go run .`: exit 0, so the committed manifest decodes strictly.
+  `git diff --exit-code -- '*_gen.go' '*_gen_test.go' unstable/`: exit 0.
+* `python3 tools/gates.py regen`: exit 0.
+* `cd cmd/generate && go test -race -count=1 -shuffle=on ./...`: every package `ok`.
+* `make pre-add-check FILES="<the four Go files>"`: exit 0, "4 file(s) gofmt-clean; both modules linted, vetted and tested
+  (-race -shuffle=on, uncached), tidy, govulncheck."
+* `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py` over the changed files: exit 0 each.
+
+**Status:** no deviation. Staged for the owner, who commits. Phase 8, G29, G35, G36 and G12, begins on the owner's word.

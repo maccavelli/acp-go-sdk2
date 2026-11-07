@@ -438,3 +438,27 @@ func TestFindRepoRootWithoutWorkingDirectory(t *testing.T) {
 		t.Errorf("findRepoRootFrom = %q, %v, want the working directory's error", root, err)
 	}
 }
+
+// TestRunRefusesArguments requires a positional argument to be refused, naming
+// it, before anything is read or written: ignored, it sent the run to the
+// default output directory (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
+// G11).
+func TestRunRefusesArguments(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{{"stray"}, {"-out", "x", "stray"}} {
+		if err := run(args); err == nil || !strings.Contains(err.Error(), `unexpected argument "stray"; use -schema and -out`) {
+			t.Errorf("run(%q) = %v, want the argument refused", args, err)
+		}
+	}
+}
+
+// TestRunHelp requires -h to succeed: flag prints the usage, and the command
+// exits 0 (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G33).
+func TestRunHelp(t *testing.T) {
+	t.Parallel()
+	for _, h := range []string{"-h", "-help", "--help"} {
+		if err := run([]string{h}); err != nil {
+			t.Errorf("run(%s) = %v, want nil", h, err)
+		}
+	}
+}

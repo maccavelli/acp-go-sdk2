@@ -59,6 +59,30 @@ type ManifestChange struct {
 	FrozenEntries []string `json:"frozenEntries,omitempty"`
 }
 
+// UnmarshalJSON decodes the frozen methods strictly, letter case included, as
+// ParseManifest decodes the manifest's top level
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G31).
+func (m *ManifestMethods) UnmarshalJSON(b []byte) error {
+	type alias ManifestMethods
+	var a alias
+	if err := decodeStrict(b, &a); err != nil {
+		return err
+	}
+	*m = ManifestMethods(a)
+	return nil
+}
+
+// UnmarshalJSON decodes a change strictly, letter case included (G31).
+func (c *ManifestChange) UnmarshalJSON(b []byte) error {
+	type alias ManifestChange
+	var a alias
+	if err := decodeStrict(b, &a); err != nil {
+		return err
+	}
+	*c = ManifestChange(a)
+	return nil
+}
+
 // ParseManifest decodes a manifest strictly, its fragments included.
 func ParseManifest(b []byte) (*Manifest, error) {
 	if err := duplicateKey(b); err != nil {

@@ -41,8 +41,17 @@ func runWith(args []string, p *model.Protocol) error {
 	schemaDir := fs.String("schema", "", "path to schema directory (defaults to <repo>/schema)")
 	outDir := fs.String("out", "", "output directory for generated go files (defaults to <repo>)")
 	writeManifest := fs.Bool("write-unstable-manifest", false, "freeze the unstable-origin API into <schema>/"+load.ManifestFile+", once, and generate nothing")
-	if err := fs.Parse(args); err != nil {
+	// -h is a request for the usage, which flag has printed, not a failure
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G33).
+	if err := fs.Parse(args); errors.Is(err, flag.ErrHelp) {
+		return nil
+	} else if err != nil {
 		return err
+	}
+	// A positional argument is a mistake for -schema or -out: ignored, the
+	// run would write to the default output directory (G11).
+	if fs.NArg() > 0 {
+		return fmt.Errorf("unexpected argument %q; use -schema and -out", fs.Arg(0))
 	}
 
 	if *schemaDir == "" || *outDir == "" {

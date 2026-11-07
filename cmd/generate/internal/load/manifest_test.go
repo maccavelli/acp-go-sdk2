@@ -229,3 +229,27 @@ func TestManifestChangeRefusesUnkeyedEntries(t *testing.T) {
 		}
 	}
 }
+
+// TestManifestNestedKeysStrict requires a key of the manifest's methods or of a
+// change in another letter case to be refused, as one at its top level is: it
+// was matched, so "PROPERTIES" applied a change
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G31).
+func TestManifestNestedKeysStrict(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct{ name, in, want string }{
+		{"a change's key", `{"version":1,"changes":{"Obj":{"PROPERTIES":["b"]}}}`, `"PROPERTIES"`},
+		{"a side of the methods", `{"version":1,"methods":{"AGENT":{}}}`, `"AGENT"`},
+		{"an unknown key of a change", `{"version":1,"changes":{"Obj":{"props":["b"]}}}`, `unknown field "props"`},
+	} {
+		if _, err := ParseManifest([]byte(tt.in)); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: ParseManifest = %v, want an error naming %s", tt.name, err, tt.want)
+		}
+	}
+	m, err := ParseManifest([]byte(`{"version":1,"methods":{"agent":{"k":"x/k"}},"changes":{"Obj":{"properties":["b"]}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Methods.Agent["k"] != "x/k" || len(m.Changes["Obj"].Properties) != 1 {
+		t.Errorf("a well-cased manifest decoded as %+v", m)
+	}
+}
