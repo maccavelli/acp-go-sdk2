@@ -3,6 +3,7 @@ package output
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -108,15 +109,17 @@ func TestCheckRefuses(t *testing.T) {
 
 // TestCheckSelectsLikeTheGoCommand requires the files the go command would not
 // build or test with the package to stay out of the check, each of which
-// would fail it: an external test package is another package. An in-package
-// test file is checked (0019-PLAN-generator-hardening.md, G15).
+// would fail it. An in-package test file is checked
+// (0019-PLAN-generator-hardening.md, G15), and so is an external test file,
+// as its own package (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
+// G27, which TestCheckExternalTests shows refusing).
 func TestCheckSelectsLikeTheGoCommand(t *testing.T) {
 	t.Parallel()
 	dir := dirWith(t, map[string]string{
 		"hand.go":         stub,
 		"ignored.go":      "//go:build ignore\n\npackage main\n\nvar _ = undefinedInIgnored\n",
 		"hand_test.go":    "package acp\n\nvar _ = F\n",
-		"hand_x_test.go":  "package acp_test\n\nvar _ = undefinedInExternalTest\n",
+		"hand_x_test.go":  "package acp_test\n\nimport \"acp\"\n\nvar _ = acp.F\n",
 		".x.tmp":          "package acp\n\nvar _ = undefinedInDotFile\n",
 		".types_gen.go.1": "package acp\n\nvar _ = undefinedInDotFile\n",
 		"other_plan9.go":  "package acp\n\nvar _ = undefinedOnPlan9\n",
@@ -254,4 +257,94 @@ func TestCheckSeesTheTreeWriteLeaves(t *testing.T) {
 			t.Errorf("Check = %v, want it to refuse undefined: staleUnstable in package unstable", err)
 		}
 	})
+}
+
+// writeTree writes files, by slash path under dir, making their directories.
+func writeTree(t *testing.T, dir string, files map[string]string) {
+	t.Helper()
+	for name, src := range files {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestCheckOtherPlatforms requires a file that only windows/amd64 builds to
+// be checked for that platform: one that collides with a generated name is
+// refused, naming it, and one that uses the standard library's windows-only
+// API is accepted, since the go command compiles it for windows
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G9, as amended by
+// 0049-PLAN-generator-fixes.md's phase 3, deviation 1).
+func TestCheckOtherPlatforms(t *testing.T) {
+	t.Parallel()
+	module := "module acp\n\ngo 1.26\n"
+	t.Run("a windows file that collides", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeTree(t, dir, map[string]string{"go.mod": module, "hand.go": stub, "x_windows.go": "package acp\n\ntype U int\n"})
+		err := Check(dir, "acp", uses)
+		if err == nil || !strings.Contains(err.Error(), "redeclared") {
+			t.Fatalf("Check = %v, want it to refuse U redeclared", err)
+		}
+		if runtime.GOOS != "windows" && !strings.Contains(err.Error(), "for windows/amd64") {
+			t.Errorf("Check = %v, want it to name windows/amd64", err)
+		}
+	})
+	t.Run("a windows file that uses windows-only API", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeTree(t, dir, map[string]string{"go.mod": module, "hand.go": stub,
+			"x_windows.go": "package acp\n\nimport \"syscall\"\n\nvar _ syscall.Handle\n"})
+		if err := Check(dir, "acp", uses); err != nil {
+			t.Errorf("Check refused a correct windows-only file: %v", err)
+		}
+	})
+}
+
+// TestCheckExternalTests requires the root's external test package to be
+// checked against the package as rendered, with a package of the module that
+// it imports checked from source against the same root: a name the render
+// lacks is refused, and the types the two packages share are one
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G27).
+func TestCheckExternalTests(t *testing.T) {
+	t.Parallel()
+	tree := func(use string) string {
+		dir := t.TempDir()
+		writeTree(t, dir, map[string]string{
+			"go.mod":             "module example.com/m\n\ngo 1.26\n",
+			"hand.go":            stub,
+			"acptest/acptest.go": "package acptest\n\nimport \"example.com/m\"\n\nfunc Use() *acp.RequestError { return acp.F() }\n",
+			"x_test.go": "package acp_test\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m\"\n\t\"example.com/m/acptest\"\n)\n\n" +
+				"func TestX(t *testing.T) {\n\tvar _ *acp.RequestError = acptest.Use()\n\t" + use + "\n}\n",
+		})
+		return dir
+	}
+	if err := Check(tree("_ = acp.F"), "example.com/m", uses); err != nil {
+		t.Errorf("Check refused an external test that uses the render: %v", err)
+	}
+	if err := Check(tree("_ = acp.ToolKindSearch"), "example.com/m", uses); err == nil || !strings.Contains(err.Error(), "undefined: acp.ToolKindSearch") {
+		t.Errorf("Check = %v, want it to refuse undefined: acp.ToolKindSearch", err)
+	}
+}
+
+// TestCheckVersionFromEnclosingModule requires the language version to come
+// from the go.mod that holds the output directory, found walking up as the
+// go command finds it, not only from one inside it
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G28).
+func TestCheckVersionFromEnclosingModule(t *testing.T) {
+	t.Parallel()
+	parent := t.TempDir()
+	writeTree(t, parent, map[string]string{
+		"go.mod":      "module m\n\ngo 1.21\n",
+		"sub/hand.go": stub,
+		"sub/loop.go": "package acp\n\nfunc L() {\n\tfor range 3 {\n\t}\n}\n",
+	})
+	err := Check(filepath.Join(parent, "sub"), "m/sub", uses)
+	if err == nil || !strings.Contains(err.Error(), "requires go1.22 or later") {
+		t.Errorf("Check = %v, want it to refuse the range over an int under go 1.21", err)
+	}
 }

@@ -183,6 +183,9 @@ The order is the MADR's: the mediums first (G16, G1, G2, G15, G17, G3, G18), the
 1. **G9.** `Check` type-checks the package for the host, and for `linux/amd64` and `windows/amd64`. Each platform's file list
    comes from `go/build` with `GOOS` and `GOARCH` set and cgo on, as `handWritten` sets it (`output/check.go:189-191`). A
    platform whose file list equals one already checked is skipped. An error names the platform.
+   *Amended 2026-11-07, deviation 1:* a platform whose lists differ from the host's is not type-checked in process. It is
+   compiled by the go command for that `GOOS` and `GOARCH`, `go test -c` with `-overlay`, so the rendered files stay in
+   memory and the stale ones read as deleted.
    * Test: `output`'s `TestCheckOtherPlatforms`. A `x_windows.go` that declares a generated name is refused on a `darwin` or
      `linux` host, naming `windows/amd64`.
    * Seen to fail: the platform loop removed.
@@ -615,3 +618,93 @@ All as required.
 
 **Status:** two deviations, recorded above. Staged for the owner, who commits. Phase 3, G9, G27, G28 and G10, begins on the
 owner's word.
+
+### Phase 3: G9, G27, G28 and G10, the output edge's lows, 2026-11-07
+
+The owner committed phase 2 as `1a8d09c`, and said "committed, proceed".
+
+**Deviation 1, 2026-11-07: G9's other platforms and the importer.**
+
+* **Found:** step 3.1 type-checks the other platforms' file lists in process. `Check`'s one importer,
+  `importer.ForCompiler(fset, "source", nil)` (`output/check.go`, `sharedImporter`), resolves every import, the standard
+  library's included, for the host, and `go/importer` takes no build context. A correct `windows`-only file that uses
+  `windows`-only API of the standard library, such as `syscall.Handle`, would be refused.
+* **Today:** `go list` with `GOOS` `darwin`, `linux` and `windows` lists the same 18 files for the root, so only the host's
+  check would run.
+* **Decision:** the owner chose the recommended option. When a platform's file lists differ from the host's, `Check` compiles
+  the package and its tests for that platform with the go command, `go test -c` under `-overlay`, and its error names the
+  platform. Not chosen: refusing platform-specific hand-written files; the in-process check with the host's importer.
+* **Scope:** no file added.
+* **The MADR:** not amended. G9's fix, "also check for `windows` and `linux`", holds.
+
+**What changed:**
+
+* **G9 (deviation 1).** `Check` (`cmd/generate/internal/output/check.go`) lists the hand-written files for the host, then for
+  `linux/amd64` and `windows/amd64`, by `listFor` and `handWritten`, which now takes the platform. A platform whose lists equal
+  one already checked is skipped. Today all three are equal, so only the host is checked. Otherwise `compileFor` runs
+  `go test -c -o <temporary directory>/ -overlay <file> .` with `GOOS`, `GOARCH` and `CGO_ENABLED=0`, adding `./unstable` when
+  package unstable is checked.
+  * The overlay maps each rendered file's path to its bytes in a temporary file, and each stale file to "", deleted.
+  * Its paths are resolved through symbolic links, as the go command resolves its working directory. Without that the overlay
+    matched nothing on macOS, whose temporary directories sit behind `/var`'s link. `TestCheckOtherPlatforms` passed
+    silently on the first run because of it.
+  * An error reads "generated code does not compile for windows/amd64 with <dir>: …", with the go command's output.
+* **G27.** `handWritten` returns `XTestGoFiles` too, and `checkHost` type-checks the external test package against the package
+  as tested. A new `moduleImporter` type-checks from source a package of the module under the output directory that an
+  external test imports, such as `acptest`, against that same root. The root's 17 external test files and `acptest` are now
+  checked on every run of the generator.
+* **G28.** A new exported `output.FindGoMod` walks up from a directory to the `go.mod` that holds it. `goVersion` reads the
+  `go` line from it, and `rootImportPath` (`cmd/generate/main.go`) takes the module path from it.
+* **G10.** `TestGeneratedFilesUpToDate` (`cmd/generate/main_test.go`) runs its stale-file loop over every directory of
+  `emit.Dirs`, the root included, for a `*_gen.go` or `*_gen_test.go` the run does not render whose first line is the
+  generated header.
+
+**Tests,** in `output`:
+
+* `TestCheckOtherPlatforms`. A `x_windows.go` declaring the generated `U` is refused "redeclared", naming `windows/amd64` on a
+  host that is not Windows. A `x_windows.go` using `syscall.Handle` is accepted.
+* `TestCheckExternalTests`. An external test using the render through `acptest`, with `*acp.RequestError` shared, is accepted;
+  one naming `acp.ToolKindSearch` is refused "undefined: acp.ToolKindSearch".
+* `TestCheckVersionFromEnclosingModule`. `go 1.21` in a parent `go.mod` and `for range 3` in `sub/` are refused "requires go1.22
+  or later".
+* `TestCheckSelectsLikeTheGoCommand` (0019's G15) required an external test file with an undefined name to stay out of the
+  check, the rule G27 reverses. Its `hand_x_test.go` is now a correct external test, `acp.F` through `import "acp"`, which
+  must pass. `TestCheckExternalTests` holds the refusal.
+
+**Deviation 2, 2026-11-07: two of phase 1's tests on Windows.**
+
+* **Found:** `tools/remote.py tree --host windows`, run in this phase for G9, failed `TestWriteNamesRemovedFiles` and
+  `TestWritePackageDirectories` in `cmd/generate/internal/output`. Every other package passed there, and the Linux host passed
+  every package. `Write` returns each removed file's `emit.File.Path`, which joins with "/" on every OS
+  (`cmd/generate/internal/emit/file.go:147`). The two tests, committed in phase 1's `5e0761b`, expected `filepath.Join`'s
+  `unstable\gone_gen.go`.
+* **The code is right:** `staleIn` splits with `filepath.Split`, and `os.Remove` takes the slash form, both on Windows.
+* **Decision:** the owner chose the recommended option. The tests expect `emit.UnstableDir + "/" + name`, the form `Write`
+  returns on every OS. Not chosen: `Write` returning native paths; comparing through `filepath.ToSlash`.
+* **Scope:** `cmd/generate/internal/output/write_test.go` joins this phase.
+* **After:** `tools/remote.py tree --host windows`: exit 0, every package of both modules `ok`.
+
+**Seen to fail,** by `plants_gen.py 3`, each break in its own copy of the working tree:
+
+* G9, no other platform compiled: "check_test.go:291: Check = <nil>, want it to refuse U redeclared".
+* G9, the overlay's paths left unresolved: the same line.
+* G27, the external tests left out: "check_test.go:330: Check = <nil>, want it to refuse undefined: acp.ToolKindSearch".
+* G28, `FindGoMod` not walking up: "check_test.go:348: Check = <nil>, want it to refuse the range over an int under go
+  1.21".
+* G10, a stale `extra_gen.go` with the header written at the root of the copy: "main_test.go:70: extra_gen.go is a generated
+  file run would remove".
+
+All as required.
+
+**Checks:**
+
+* `cd cmd/generate && go run .`: exit 0. `git diff --exit-code -- '*_gen.go' '*_gen_test.go' unstable/`: exit 0.
+* `python3 tools/gates.py regen`: "ok   regen (exit 0)".
+* `cd cmd/generate && go test -race -count=1 -shuffle=on ./...`: every package `ok`.
+* `tools/remote.py tree`, both modules: Linux, exit 0; Windows, exit 0 after deviation 2.
+* `make pre-add-check FILES="<the five Go files>"`: exit 0, "5 file(s) gofmt-clean; both modules linted, vetted and tested
+  (-race -shuffle=on, uncached), tidy, govulncheck."
+* `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py` over the changed files: exit 0 each.
+
+**Status:** two deviations, recorded above. Staged for the owner, who commits. Phase 4, G4, G5, G7, G8, G32 and G37, begins on
+the owner's word.

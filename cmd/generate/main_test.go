@@ -47,13 +47,28 @@ func TestGeneratedFilesUpToDate(t *testing.T) {
 	if !slices.Equal(names, generatedFiles) {
 		t.Fatalf("run renders %v, want %v", names, generatedFiles)
 	}
-	entries, err := os.ReadDir(filepath.Join(repoRoot, emit.UnstableDir))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), "_gen.go") || strings.HasSuffix(e.Name(), "_gen_test.go") {
-			t.Errorf("%s/%s is a generated file run would remove", emit.UnstableDir, e.Name())
+	// A generated file that the run does not render, in the root or in
+	// package unstable, is stale: run would remove it
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G10). It is one
+	// whose first line is the generated header, as output.Write reads it
+	// (G16).
+	for _, d := range emit.Dirs {
+		entries, err := os.ReadDir(filepath.Join(repoRoot, d))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range entries {
+			path := filepath.Join(d, e.Name())
+			if e.IsDir() || slices.Contains(names, path) || (!strings.HasSuffix(e.Name(), "_gen.go") && !strings.HasSuffix(e.Name(), "_gen_test.go")) {
+				continue
+			}
+			b, err := os.ReadFile(filepath.Join(repoRoot, path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if first, _, _ := strings.Cut(string(b), "\n"); strings.TrimSuffix(first, "\r") == "// "+emit.GeneratedHeader {
+				t.Errorf("%s is a generated file run would remove", path)
+			}
 		}
 	}
 	for _, f := range files {

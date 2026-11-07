@@ -287,7 +287,8 @@ func TestWritePackageDirectories(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"old_gen_test.go", filepath.Join(emit.UnstableDir, "old_gen.go"), filepath.Join(emit.UnstableDir, "unstable_gen.go")}; !slices.Equal(removed, want) {
+	// Write names a file by its emit.File.Path, slash-separated on every OS.
+	if want := []string{"old_gen_test.go", emit.UnstableDir + "/old_gen.go", emit.UnstableDir + "/unstable_gen.go"}; !slices.Equal(removed, want) {
 		t.Errorf("Write removed %q, want %q", removed, want)
 	}
 	requireContents(t, dir, generated("v2"))
@@ -363,7 +364,8 @@ func TestWriteNamesRemovedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"old_gen.go", filepath.Join(emit.UnstableDir, "gone_gen.go")}; !slices.Equal(removed, want) {
+	// By its emit.File.Path, slash-separated on every OS.
+	if want := []string{"old_gen.go", emit.UnstableDir + "/gone_gen.go"}; !slices.Equal(removed, want) {
 		t.Errorf("Write removed %q, want %q", removed, want)
 	}
 }

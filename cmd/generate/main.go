@@ -91,37 +91,33 @@ func run(args []string) error {
 // of the go.mod that holds it, joined with outDir's directory relative to
 // that go.mod's, or, with no go.mod, the package's name, acp. Package
 // unstable imports the root by it
-// (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+// (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f). The go.mod is
+// output.FindGoMod's, the one output.Check reads the language version from
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G28).
 func rootImportPath(outDir string) (string, error) {
 	abs, err := filepath.Abs(outDir)
 	if err != nil {
 		return "", err
 	}
-	for dir := abs; ; {
-		b, err := os.ReadFile(filepath.Join(dir, "go.mod")) //nolint:gosec // G304: a go.mod above the generator's explicit output directory.
-		if err == nil {
-			module, err := modulePath(b)
-			if err != nil {
-				return "", fmt.Errorf("%s: %w", filepath.Join(dir, "go.mod"), err)
-			}
-			rel, err := filepath.Rel(dir, abs)
-			if err != nil {
-				return "", err
-			}
-			if rel == "." {
-				return module, nil
-			}
-			return module + "/" + filepath.ToSlash(rel), nil
-		}
-		if !os.IsNotExist(err) {
-			return "", err
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "acp", nil
-		}
-		dir = parent
+	path, b, err := output.FindGoMod(abs)
+	if err != nil {
+		return "", err
 	}
+	if path == "" {
+		return "acp", nil
+	}
+	module, err := modulePath(b)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", path, err)
+	}
+	rel, err := filepath.Rel(filepath.Dir(path), abs)
+	if err != nil {
+		return "", err
+	}
+	if rel == "." {
+		return module, nil
+	}
+	return module + "/" + filepath.ToSlash(rel), nil
 }
 
 // modulePath returns the module path of the go.mod file b.
