@@ -3,9 +3,11 @@
 package output
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -29,12 +31,13 @@ const fileMode = 0o644
 // those left as they were.
 //
 // Each file goes into its package's directory under dir, which is made when
-// missing. Once every file is in place, a generated file, *_gen.go or
-// *_gen_test.go, that a package directory of emit.Dirs holds and files do not
-// is removed: a schema that stops adding to package unstable leaves its
+// missing. Once every file is in place, the stale files staleFiles lists are
+// removed: a schema that stops adding to package unstable leaves its
 // directory with its hand-written files only
-// (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
-func Write(dir string, files []emit.File) error {
+// (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f). Write returns
+// the paths under dir of the files it removed, so the caller can name them
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G16).
+func Write(dir string, files []emit.File) ([]string, error) {
 	return writeWith(dir, files, os.CreateTemp, os.Rename)
 }
 
@@ -47,7 +50,7 @@ type staged struct {
 // writeWith is Write with the functions it creates a temporary file and
 // renames with, so a test can make one fail.
 func writeWith(dir string, files []emit.File, createTemp func(dir, pattern string) (*os.File, error),
-	rename func(oldpath, newpath string) error) error {
+	rename func(oldpath, newpath string) error) ([]string, error) {
 	var changed []emit.File
 	for _, f := range files {
 		old, err := os.ReadFile(filepath.Join(dir, f.Path())) //nolint:gosec // G304: dir is the generator's explicit output directory.
@@ -55,25 +58,25 @@ func writeWith(dir string, files []emit.File, createTemp func(dir, pattern strin
 		case err == nil && bytes.Equal(old, f.Src):
 			continue
 		case err != nil && !errors.Is(err, fs.ErrNotExist):
-			return fmt.Errorf("compare %s: %w", f.Path(), err)
+			return nil, fmt.Errorf("compare %s: %w", f.Path(), err)
 		}
 		changed = append(changed, f)
 	}
 	stale, err := staleFiles(dir, files)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	temps := make([]staged, 0, len(changed))
 	for _, f := range changed {
 		if f.Dir != "" {
 			if err := os.MkdirAll(filepath.Join(dir, f.Dir), 0o755); err != nil { //nolint:gosec // G301: a package directory of committed source.
-				return errors.Join(fmt.Errorf("stage %s: %w", f.Path(), err), remove(temps))
+				return nil, errors.Join(fmt.Errorf("stage %s: %w", f.Path(), err), remove(temps))
 			}
 		}
 		tmp, err := stage(filepath.Join(dir, f.Dir), f, createTemp)
 		if err != nil {
-			return errors.Join(fmt.Errorf("stage %s: %w", f.Path(), err), remove(temps))
+			return nil, errors.Join(fmt.Errorf("stage %s: %w", f.Path(), err), remove(temps))
 		}
 		temps = append(temps, staged{name: f.Path(), tmp: tmp})
 	}
@@ -82,20 +85,26 @@ func writeWith(dir string, files []emit.File, createTemp func(dir, pattern strin
 		if err := rename(s.tmp, filepath.Join(dir, s.name)); err != nil {
 			// A renamed temporary file is the destination now; only the
 			// rest are removed.
-			return errors.Join(fmt.Errorf("replace %s: %w; replaced: %s; left as they were: %s",
+			return nil, errors.Join(fmt.Errorf("replace %s: %w; replaced: %s; left as they were: %s",
 				s.name, err, nameList(temps[:i]), nameList(temps[i:])), remove(temps[i:]))
 		}
 	}
+	removed := make([]string, 0, len(stale))
 	for _, name := range stale {
 		if err := os.Remove(filepath.Join(dir, name)); err != nil {
-			return fmt.Errorf("remove the stale %s: %w", name, err)
+			return removed, fmt.Errorf("remove the stale %s: %w", name, err)
 		}
+		removed = append(removed, name)
 	}
-	return nil
+	return removed, nil
 }
 
 // staleFiles lists, by path under dir, the generated files the package
-// directories of emit.Dirs hold that files do not.
+// directories of emit.Dirs hold that files do not: each *_gen.go or
+// *_gen_test.go whose first line is the comment emit.GeneratedHeader. A file
+// with such a name whose first line is anything else is hand-written, and is
+// neither removed by Write nor left out by Check
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G16 and G1).
 func staleFiles(dir string, files []emit.File) ([]string, error) {
 	rendered := map[string]bool{}
 	for _, f := range files {
@@ -115,12 +124,35 @@ func staleFiles(dir string, files []emit.File) ([]string, error) {
 			if e.IsDir() || (!strings.HasSuffix(name, "_gen.go") && !strings.HasSuffix(name, "_gen_test.go")) {
 				continue
 			}
-			if path := (emit.File{Dir: d, Name: name}).Path(); !rendered[path] {
+			path := (emit.File{Dir: d, Name: name}).Path()
+			if rendered[path] {
+				continue
+			}
+			ours, err := generatedFile(filepath.Join(dir, path))
+			if err != nil {
+				return nil, err
+			}
+			if ours {
 				stale = append(stale, path)
 			}
 		}
 	}
 	return stale, nil
+}
+
+// generatedFile reports whether the first line of the file at path is the
+// comment emit.GeneratedHeader.
+func generatedFile(path string) (bool, error) {
+	f, err := os.Open(path) //nolint:gosec // G304: a file of the generator's explicit output directory.
+	if err != nil {
+		return false, err
+	}
+	defer f.Close() //nolint:errcheck // read only; a close error loses nothing.
+	line, err := bufio.NewReader(f).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return false, fmt.Errorf("read %s: %w", path, err)
+	}
+	return strings.TrimRight(line, "\r\n") == "// "+emit.GeneratedHeader, nil
 }
 
 // stage writes f to a new temporary file in dir and returns its path. The

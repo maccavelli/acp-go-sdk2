@@ -174,7 +174,9 @@ the hand-written in-package test files and `schema_gen_test.go`, so a name
 both declare is refused as `go vet` would refuse it. Output that does not
 type-check is refused with the first 10 errors, those in generated files
 first. The output directory must exist; a missing one is refused, since the
-generated code needs the hand-written runtime beside it. A file whose bytes
+generated code needs the hand-written runtime beside it. The tree checked is
+the one the write leaves: a stale generated file, which the write removes, is
+not read as hand-written. A file whose bytes
 have not changed is left alone. Every other file is
 staged in the output directory as `.<name>.*.tmp`, synced, and set to mode
 `0644`; once all are staged, each is renamed into place.
@@ -892,9 +894,11 @@ item 1, keeps package `acp` on its `v1` promise while the unstable schema moves.
   - an `acp` variant is decoded with `json.Unmarshal`.
 
   `output.Check` type-checks the root, then `unstable` through an importer that serves the root
-  just checked. `output.Write` writes each package's directory, and removes a generated file a
-  package directory holds that the run did not render. At `1.25.0`, `unstable/` holds only
-  `doc.go`.
+  just checked, and `unstable`'s hand-written files even when nothing renders into it.
+  `output.Write` writes each package's directory, and removes a stale generated file a package
+  directory holds: a `*_gen.go` or `*_gen_test.go` the run did not render whose first line is
+  the generated header. The generator names each file it removes. A file with such a name and
+  another first line is hand-written, and kept. At `1.25.0`, `unstable/` holds only `doc.go`.
 
 ## The agent process helper
 

@@ -78,7 +78,13 @@ func run(args []string) error {
 	if err := output.Check(*outDir, root, files); err != nil {
 		return err
 	}
-	return output.Write(*outDir, files)
+	// Each stale generated file removed is named, so none goes silently
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G16).
+	removed, err := output.Write(*outDir, files)
+	for _, path := range removed {
+		fmt.Fprintln(os.Stderr, "generate: removed", path)
+	}
+	return err
 }
 
 // rootImportPath is the import path of the package in outDir: the module path

@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-11-07
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
@@ -434,4 +434,66 @@ The order is the MADR's: the mediums first (G16, G1, G2, G15, G17, G3, G18), the
 
 ## Execution record
 
-None yet: this PLAN is `proposed`.
+The owner committed this PLAN and the answers to Q22 to Q29 as `189a307`, and said "committed proceed". The PLAN and its row
+are marked `in-progress`.
+
+### Phase 1: G16 and G1, what `Write` deletes and what `Check` checks, 2026-11-07
+
+**What changed:**
+
+* **G16.**
+  * `staleFiles` (`cmd/generate/internal/output/write.go`) lists a `*_gen.go` or `*_gen_test.go` that the run did not render
+    only when its first line is `// ` and `emit.GeneratedHeader`, read by a new `generatedFile`.
+  * `Write` and `writeWith` return the paths they removed. `run` (`cmd/generate/main.go`) prints "generate: removed <path>"
+    to stderr for each.
+  * The header's text was `emit`'s unexported `generatedHeader` (`emit/file.go:20`). It is exported as
+    `emit.GeneratedHeader`, so `output` reads the one constant rather than a copy. The file's one other use,
+    `layout`, names it.
+* **G1.**
+  * `Check` computes the stale set by `staleFiles`. `handWritten` takes it, by name per package directory (`staleIn`), and
+    leaves those files out.
+  * `Check` checks `unstable/` when it holds hand-written files, even when nothing renders into it. `checkPackage` then takes
+    the package's name from a hand-written file.
+* **Docs:** `docs/architecture.md`'s paragraph on what the generator writes, and its `output.Check` and `output.Write`
+  sentences.
+
+**Tests:**
+
+* `TestWriteKeepsHandWrittenGenTest`: three files named like generated ones survive `Write`, and a stale one with the header
+  goes:
+  * a hand-written `helpers_gen_test.go`;
+  * a file with another tool's header;
+  * a file with the header on a later line.
+* `TestWriteNamesRemovedFiles`: nothing removed is named on a clean run. Then a stale file at the root and one in `unstable/`
+  are each removed and named.
+* `TestCheckSeesTheTreeWriteLeaves`, three subtests: a hand-written file using a stale generated one is refused "undefined:
+  staleHelper"; a stale file colliding with the render is accepted; `unstable/`'s `doc.go` using a stale `unstable_gen.go`, with
+  nothing rendered there, is refused "undefined: staleUnstable".
+* `TestWritePackageDirectories`' stale fixtures, `old_gen_test.go`, `unstable/old_gen.go` and the `unstable_gen.go` that the
+  first `Write` puts there, now start with the header. Under G16 that is what makes a file stale. The test also requires
+  `Write` to name those three. The other `Write` and `writeWith` callers take the new result.
+
+**Seen to fail,** by a scratch script, `plants_gen.py 1`, each break in its own copy of the working tree:
+
+* `staleFiles` without the header test: "write_test.go:338: notes_gen.go: "", open …/notes_gen.go: no such file or
+  directory; want it kept".
+* `handWritten` keeping stale files:
+  * "check_test.go:228: Check = <nil>, want it to refuse undefined: staleHelper";
+  * "check_test.go:235: Check refused a stale file that Write removes: generated code does not type-check with …".
+* The early return before `unstable/` restored: "check_test.go:254: Check = <nil>, want it to refuse undefined:
+  staleUnstable in package unstable".
+
+All four as required.
+
+**Checks:**
+
+* `cd cmd/generate && go run .`: exit 0, no output. `git diff --exit-code -- '*_gen.go' '*_gen_test.go' unstable/`: exit 0,
+  so the generated files are unchanged.
+* `python3 tools/gates.py regen`: "ok   regen (exit 0)".
+* `cd cmd/generate && go test -race -count=1 -shuffle=on ./...`: every package `ok`.
+* `make pre-add-check FILES="<the six Go files>"`: exit 0, "6 file(s) gofmt-clean; both modules linted, vetted and tested
+  (-race -shuffle=on, uncached), tidy, govulncheck."
+* `make check-records`, `make markdownlint` ("0 issues"), `make disclosure-check` ("0 finding(s)") and `tools/idscan.py` over
+  the nine changed files: exit 0 each.
+
+**Status:** no deviation. Staged for the owner, who commits. Phase 2, G2, G15, G17, G3 and G18, begins on the owner's word.

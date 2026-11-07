@@ -208,3 +208,50 @@ func TestCheckIncludesGeneratedTestFiles(t *testing.T) {
 		t.Errorf("Check refused a test file that uses the package: %v", err)
 	}
 }
+
+// TestCheckSeesTheTreeWriteLeaves requires Check to read the directory as
+// Write will leave it: a stale generated file, which Write removes, is not
+// read as hand-written, and the hand-written files of package unstable are
+// checked even when nothing renders into it
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G1).
+func TestCheckSeesTheTreeWriteLeaves(t *testing.T) {
+	t.Parallel()
+	header := "// " + emit.GeneratedHeader + "\n\n"
+	t.Run("a hand-written file that uses a stale generated one", func(t *testing.T) {
+		t.Parallel()
+		dir := dirWith(t, map[string]string{
+			"hand.go":       stub,
+			"uses_stale.go": "package acp\n\nvar _ = staleHelper()\n",
+			"old_gen.go":    header + "package acp\n\nfunc staleHelper() int { return 1 }\n",
+		})
+		if err := Check(dir, "acp", uses); err == nil || !strings.Contains(err.Error(), "undefined: staleHelper") {
+			t.Errorf("Check = %v, want it to refuse undefined: staleHelper", err)
+		}
+	})
+	t.Run("a stale generated file that collides with the render", func(t *testing.T) {
+		t.Parallel()
+		dir := dirWith(t, map[string]string{"hand.go": stub, "old_gen.go": header + "package acp\n\ntype U struct{}\n"})
+		if err := Check(dir, "acp", uses); err != nil {
+			t.Errorf("Check refused a stale file that Write removes: %v", err)
+		}
+	})
+	t.Run("package unstable with nothing rendered into it", func(t *testing.T) {
+		t.Parallel()
+		dir := dirWith(t, map[string]string{"hand.go": stub})
+		udir := filepath.Join(dir, emit.UnstableDir)
+		if err := os.Mkdir(udir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		for name, src := range map[string]string{
+			"doc.go":          "// Package unstable is a probe.\npackage unstable\n\nvar _ = staleUnstable\n",
+			"unstable_gen.go": header + "package unstable\n\nvar staleUnstable int\n",
+		} {
+			if err := os.WriteFile(filepath.Join(udir, name), []byte(src), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := Check(dir, "acp", uses); err == nil || !strings.Contains(err.Error(), "undefined: staleUnstable") {
+			t.Errorf("Check = %v, want it to refuse undefined: staleUnstable in package unstable", err)
+		}
+	})
+}

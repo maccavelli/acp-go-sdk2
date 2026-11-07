@@ -5,12 +5,16 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/emit"
 )
+
+// header is the first line of a generated file, and the blank line after it.
+const header = "// " + emit.GeneratedHeader + "\n\n"
 
 var names = []string{"constants_gen.go", "types_gen.go", "agent_gen.go", "client_gen.go", "helpers_gen.go"}
 
@@ -71,7 +75,7 @@ func TestWriteReplacesChangedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	files := generated("v1")
-	if err := Write(dir, files); err != nil {
+	if _, err := Write(dir, files); err != nil {
 		t.Fatal(err)
 	}
 	requireContents(t, dir, files)
@@ -96,7 +100,7 @@ func TestWriteLeavesUnchangedFiles(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	files := generated("v1")
-	if err := Write(dir, files); err != nil {
+	if _, err := Write(dir, files); err != nil {
 		t.Fatal(err)
 	}
 	past := time.Now().Add(-time.Hour).Truncate(time.Second)
@@ -113,7 +117,7 @@ func TestWriteLeavesUnchangedFiles(t *testing.T) {
 		return info.ModTime()
 	}
 
-	if err := Write(dir, files); err != nil {
+	if _, err := Write(dir, files); err != nil {
 		t.Fatal(err)
 	}
 	for _, n := range names {
@@ -123,7 +127,7 @@ func TestWriteLeavesUnchangedFiles(t *testing.T) {
 	}
 
 	files[1].Src = []byte("package acp\n\n// types_gen.go v2\n")
-	if err := Write(dir, files); err != nil {
+	if _, err := Write(dir, files); err != nil {
 		t.Fatal(err)
 	}
 	requireContents(t, dir, files)
@@ -145,7 +149,7 @@ func TestWriteStagingFailureReplacesNothing(t *testing.T) {
 		writeAll(t, dir, old)
 		files := generated("v2")
 		files = append(files[:2:2], emit.File{Name: "sub/x_gen.go", Src: []byte("package acp\n")})
-		err := Write(dir, files)
+		_, err := Write(dir, files)
 		if err == nil || !strings.Contains(err.Error(), "stage sub/x_gen.go") {
 			t.Fatalf("Write error = %v, want one staging sub/x_gen.go", err)
 		}
@@ -164,7 +168,7 @@ func TestWriteStagingFailureReplacesNothing(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
-		err := Write(dir, generated("v2"))
+		_, err := Write(dir, generated("v2"))
 		if err == nil || !strings.Contains(err.Error(), "stage constants_gen.go") {
 			t.Fatalf("Write error = %v, want one staging constants_gen.go", err)
 		}
@@ -188,7 +192,7 @@ func TestWriteStagedFileFailureReplacesNothing(t *testing.T) {
 		}
 		return f, err
 	}
-	err := writeWith(dir, generated("v2"), closed, os.Rename)
+	_, err := writeWith(dir, generated("v2"), closed, os.Rename)
 	if err == nil || !strings.Contains(err.Error(), "stage constants_gen.go") || !strings.Contains(err.Error(), "already closed") {
 		t.Fatalf("writeWith error = %v, want staging constants_gen.go to fail on a closed file", err)
 	}
@@ -208,7 +212,7 @@ func TestWriteRenameFailureReports(t *testing.T) {
 		}
 		return os.Rename(from, to)
 	}
-	err := writeWith(dir, files, os.CreateTemp, failing)
+	_, err := writeWith(dir, files, os.CreateTemp, failing)
 	if err == nil {
 		t.Fatal("writeWith succeeded")
 	}
@@ -233,7 +237,7 @@ func TestWriteCompareFailureReplacesNothing(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(dir, "helpers_gen.go"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	err := Write(dir, generated("v2"))
+	_, err := Write(dir, generated("v2"))
 	if err == nil || !strings.Contains(err.Error(), "helpers_gen.go") {
 		t.Fatalf("Write error = %v, want one naming helpers_gen.go", err)
 	}
@@ -249,8 +253,8 @@ func TestWriteCompareFailureReplacesNothing(t *testing.T) {
 func TestWritePackageDirectories(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	unstable := emit.File{Dir: emit.UnstableDir, Name: "unstable_gen.go", Src: []byte("package unstable\n")}
-	if err := Write(dir, append(generated("v1"), unstable)); err != nil {
+	unstable := emit.File{Dir: emit.UnstableDir, Name: "unstable_gen.go", Src: []byte(header + "package unstable\n")}
+	if _, err := Write(dir, append(generated("v1"), unstable)); err != nil {
 		t.Fatal(err)
 	}
 	requireContents(t, filepath.Join(dir, emit.UnstableDir), []emit.File{unstable})
@@ -274,13 +278,17 @@ func TestWritePackageDirectories(t *testing.T) {
 	}
 	stale := []string{filepath.Join(udir, "old_gen.go"), filepath.Join(dir, "old_gen_test.go")}
 	for _, path := range stale {
-		if err := os.WriteFile(path, []byte("package x\n"), 0o600); err != nil {
+		if err := os.WriteFile(path, []byte(header+"package x\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// The schema stops adding to package unstable: its generated files go.
-	if err := Write(dir, generated("v2")); err != nil {
+	removed, err := Write(dir, generated("v2"))
+	if err != nil {
 		t.Fatal(err)
+	}
+	if want := []string{"old_gen_test.go", filepath.Join(emit.UnstableDir, "old_gen.go"), filepath.Join(emit.UnstableDir, "unstable_gen.go")}; !slices.Equal(removed, want) {
+		t.Errorf("Write removed %q, want %q", removed, want)
 	}
 	requireContents(t, dir, generated("v2"))
 	for _, path := range append(stale, filepath.Join(udir, "unstable_gen.go")) {
@@ -294,4 +302,68 @@ func TestWritePackageDirectories(t *testing.T) {
 		}
 	}
 	requireNoTemporaryFiles(t, udir)
+}
+
+// TestWriteKeepsHandWrittenGenTest requires a file named like a generated one
+// whose first line is not the generated header, such as helpers_gen_test.go
+// written by hand to test helpers_gen.go, to survive Write, while a stale
+// file with the header is removed
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G16).
+func TestWriteKeepsHandWrittenGenTest(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	hand := "package acp\n\nimport \"testing\"\n\nfunc TestHelpersProbe(t *testing.T) {}\n"
+	kept := map[string]string{
+		"helpers_gen_test.go": hand,
+		"notes_gen.go":        "// Code generated by another tool; DO NOT EDIT.\n\npackage acp\n",
+		"late_gen.go":         "package acp\n\n" + header,
+	}
+	for name, text := range kept {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "old_gen.go"), []byte(header+"package acp\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := Write(dir, generated("v1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(removed, []string{"old_gen.go"}) {
+		t.Errorf("Write removed %q, want [old_gen.go]", removed)
+	}
+	for name, text := range kept {
+		if b, err := os.ReadFile(filepath.Join(dir, name)); err != nil || string(b) != text {
+			t.Errorf("%s: %q, %v; want it kept", name, b, err)
+		}
+	}
+}
+
+// TestWriteNamesRemovedFiles requires Write to return the path under the
+// output directory of each stale generated file it removes, in each package
+// directory, and nothing when there is none
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G16).
+func TestWriteNamesRemovedFiles(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	removed, err := Write(dir, generated("v1"))
+	if err != nil || len(removed) != 0 {
+		t.Fatalf("Write = %q, %v; want nothing removed", removed, err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, emit.UnstableDir), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"old_gen.go", filepath.Join(emit.UnstableDir, "gone_gen.go")} {
+		if err := os.WriteFile(filepath.Join(dir, path), []byte(header+"package x\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removed, err = Write(dir, generated("v1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"old_gen.go", filepath.Join(emit.UnstableDir, "gone_gen.go")}; !slices.Equal(removed, want) {
+		t.Errorf("Write removed %q, want %q", removed, want)
+	}
 }

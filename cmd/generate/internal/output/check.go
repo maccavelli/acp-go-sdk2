@@ -41,6 +41,12 @@ const maxReported = 10
 // that returns the root package just checked for root, its import path, and
 // the shared importer's for any other path: the root exists only in memory
 // until Write (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2f).
+// The hand-written files of package unstable are checked even when nothing
+// renders into it.
+//
+// The tree checked is the one Write leaves: the stale generated files that
+// Write removes, by staleFiles, are not read as hand-written
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G1).
 func Check(dir, root string, files []emit.File) error {
 	var rootFiles, unstableFiles []emit.File
 	for _, f := range files {
@@ -50,7 +56,11 @@ func Check(dir, root string, files []emit.File) error {
 			rootFiles = append(rootFiles, f)
 		}
 	}
-	hand, handTests, err := handWritten(dir, rootFiles)
+	stale, err := staleFiles(dir, files)
+	if err != nil {
+		return err
+	}
+	hand, handTests, err := handWritten(dir, rootFiles, staleIn(stale, ""))
 	if err != nil {
 		return err
 	}
@@ -69,18 +79,30 @@ func Check(dir, root string, files []emit.File) error {
 			return err
 		}
 	}
-	if len(unstableFiles) == 0 {
-		return nil
-	}
 	udir := filepath.Join(dir, emit.UnstableDir)
 	var uhand []string
 	if _, err := os.Stat(udir); err == nil {
-		if uhand, _, err = handWritten(udir, unstableFiles); err != nil {
+		if uhand, _, err = handWritten(udir, unstableFiles, staleIn(stale, emit.UnstableDir)); err != nil {
 			return err
 		}
 	}
+	if len(unstableFiles) == 0 && len(uhand) == 0 {
+		return nil
+	}
 	_, err = checkPackage(udir, version, uhand, unstableFiles, servingImporter{path: root, pkg: pkg, next: imp})
 	return err
+}
+
+// staleIn returns the names of the files of stale, paths under the output
+// directory, that are in its package directory d.
+func staleIn(stale []string, d string) map[string]bool {
+	out := map[string]bool{}
+	for _, p := range stale {
+		if dir, name := filepath.Split(p); filepath.Clean(dir) == filepath.Clean(d) {
+			out[name] = true
+		}
+	}
+	return out
 }
 
 // servingImporter returns pkg for path and defers every other import to next.
@@ -113,7 +135,12 @@ func checkPackage(dir, version string, hand []string, files []emit.File, imp typ
 		}
 		parsed = append(parsed, f)
 	}
+	// The package's name, from its files: a hand-written file's when nothing
+	// is generated into dir.
 	pkg := ""
+	if len(parsed) > 0 {
+		pkg = parsed[0].Name.Name
+	}
 	for _, gf := range files {
 		f, err := parser.ParseFile(fset, filepath.Join(dir, gf.Name), gf.Src, parser.SkipObjectResolution)
 		if err != nil {
@@ -178,9 +205,10 @@ func (l *lockedImporter) ImportFrom(path, dir string, mode types.ImportMode) (*t
 
 // handWritten returns the names of the Go files the go command would build in
 // dir for the host, and of its in-package test files, less the generated
-// ones. A missing dir is refused: the generated code needs the hand-written
-// runtime beside it (0019-PLAN-generator-hardening.md, G16).
-func handWritten(dir string, files []emit.File) (hand, tests []string, err error) {
+// ones and the stale ones Write removes, by name. A missing dir is refused:
+// the generated code needs the hand-written runtime beside it
+// (0019-PLAN-generator-hardening.md, G16).
+func handWritten(dir string, files []emit.File, stale map[string]bool) (hand, tests []string, err error) {
 	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
 		return nil, nil, fmt.Errorf("output directory %s: does not exist", dir)
 	}
@@ -199,7 +227,7 @@ func handWritten(dir string, files []emit.File) (hand, tests []string, err error
 		return nil, nil, fmt.Errorf("output directory: cgo file %s is not supported", bp.CgoFiles[0])
 	}
 	generated := func(name string) bool {
-		return slices.ContainsFunc(files, func(f emit.File) bool { return f.Name == name })
+		return stale[name] || slices.ContainsFunc(files, func(f emit.File) bool { return f.Name == name })
 	}
 	for _, name := range bp.GoFiles {
 		if !generated(name) {
