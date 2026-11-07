@@ -1,8 +1,8 @@
 ---
 status: accepted
-date: 2026-11-04
+date: 2026-11-07
 decision-makers: the repository owner
-consulted: "probe tests and scripts in scratch copies of `d55ba2a`, of `e98987a` for the re-assessment, of `277aca0` for the second, with a linux/386 run on the Linux test host, and of `1fe3dd0` for the third; the official TypeScript (`08a0d30`) and Python (`9853d8b`) SDKs' clones in the interop cache; `schema/schema.json` and `schema/schema.unstable.json` at ACP 1.25.0; `go help test`; GitHub's workflow documentation"
+consulted: "probe tests and scripts in scratch copies of `d55ba2a`, of `e98987a` for the re-assessment, of `277aca0` for the second, with a linux/386 run on the Linux test host, of `1fe3dd0` for the third, and of `ff31967` for the fourth, the generator's; the official TypeScript (`08a0d30`) and Python (`9853d8b`) SDKs' clones in the interop cache; `schema/schema.json` and `schema/schema.unstable.json` at ACP 1.25.0; `go help test`; GitHub's workflow documentation"
 informed: gobble-cli, magic-cli-remote
 ---
 
@@ -404,6 +404,55 @@ the PLAN rests on. `git status --porcelain` was empty afterwards.
 * `deathsig_none.go`: counted run, as corrected. `cmd/generate`'s two `main` bodies and G13's `Model.Validates`
   (`model/validate.go:80`) are the generator PLAN's.
 
+### Re-assessment of F-G at `ff31967`, 2026-11-07
+
+The owner asked to "assess the generator again, this time look for bugs, gaps, missing wiring or incomplete functionality.
+anything found will added to the 0049 madr." No generator PLAN had been written, so F-G had not been re-read since `e98987a`.
+
+**The method:**
+
+* Four investigators worked in parallel, one area each: the input and output edges (`main.go`, `load/`, `output/`), the model
+  (`model/`), the emitter and the code it generates (`emit/`, the `*_gen.go` files), and the wiring and test harness across them.
+* Each one worked in its own scratch copy of `ff31967`, never in the tree, with G1 to G13 given as known.
+* Each finding came with a probe it ran and its output, or with exact citations where the code alone settles it.
+* The author re-ran G14, G15 and G16 in fresh `git archive` copies of `ff31967`, and read the code each other finding cites.
+  `git status --porcelain` was empty afterwards.
+* Each probe ran on a scratch copy of the committed schemas or a small schema of its own, with the committed files untouched.
+
+**What changed since `e98987a`:** `git diff --stat e98987a ff31967 -- cmd/generate/` lists 30 files. They are the surface
+PLAN's gates, closed enums and key-less fallbacks, and 0050's accepted-ids function. `main.go`, `fuzz_test.go`, `load/`,
+`output/` and `model/defaults.go` are unchanged.
+
+**G1 to G13 stand.**
+
+* The files that G1, G2, G5, G8, G9, G11 and G12 cite are unchanged since `e98987a`.
+* The code G3, G4, G6, G7, G10 and G13 cite was read at `ff31967`. It is unchanged in substance, but some lines have moved:
+  * G3: `markUnstableEntries` is `model.go:495-497`, not `:476-478`.
+  * G4: `bounds` is `model/validate.go:311-361`, not `:63-67` and `:304-321`. `boundLit` is `emit/types.go:1466-1474`, not
+    `:1306-1314`.
+  * G6: the code is `model/fields.go:553-560`.
+  * G7: `plainFields` and its comment are `model/fields.go:588-605`.
+  * G10 and G13 still match their citations.
+
+**New:** G14 to G36, under F-G below.
+
+* Five are medium. Of these, only G14 is reached by the committed schemas today: a `null` item in an array the schema says to
+  skip invalid items in makes the whole received message fail.
+* G15 to G18 come into play at a schema update, or when someone edits the tree.
+* The rest are low or info, and none is reached today.
+* The investigators' ids map to these: A1 to G15, A2 to G16, A3 to G27, A4 to G28, A5 to G31, A6 to G32, A's CLI note to G33; B1
+  to G17, B2 to G20, B3 to G21, B4 to G22, B5 to G23, B6 to G25, B7 to G26; C1 to G19, C2 to G14, C3 to G30, C4 to G24; D1 to
+  G18, D2 to G29, D3 to G34, D4 to G35, D5 to G36.
+
+**What holds,** as the investigators checked it:
+
+* All 40 meta methods have a constant, a receiving dispatch case and a sender on the other side.
+* Every capability the schema ties to a method or variant is gated. Every path-like string property is ruled.
+* Gates run on send and on receipt, for requests, notifications and results.
+* Key folding agrees with `encoding/json`'s last-match rule.
+* Helper marking happens before emitting, and the generated output is deterministic.
+* 67 of the 90 accepted engine cases have a behaviour test, each with a failure call. The other 23 are API-shape cases.
+
 ## Findings
 
 Severity is the effect on a consumer or a maintainer: **high** loses data, hangs, or crashes a correct program; **medium** gives a
@@ -689,6 +738,256 @@ refused as unlisted-method 116, refused otherwise 70". Fix: fuzz each case's sch
 **G13. Info. `Model.Validates` is used only by tests.** `model/validate.go:70`; `deadcode ./...` lists it. Fix: move it to a test
 file, or keep it as a test helper by name.
 
+*Added 2026-11-07,* by the fourth re-assessment at `ff31967`: G14 to G36. Paths are relative to `cmd/generate/internal/`
+unless they start at the repository (`cmd/`, the root's files).
+
+**G14. Medium. A `null` item survives `x-deserialize-skip-invalid-items`, and the whole received message is then refused.**
+`emit/decode.go:423-443` (`emitSkipInvalid`), in `types_gen.go` as `skipInvalid`, keeps an item when `json.Unmarshal(it, &v)`
+returns nil. For `null`, `encoding/json` leaves a string, an open enum or a generated union unchanged and returns nil, so the
+zero value is kept, not dropped. It then fails `Validate`, which `checkInbound` runs on every received message.
+
+* **Probe** (re-run by the author): `SessionNotification` with a `tool_call` whose `content` is
+  `[null, {"type":"content",…}]` decodes, then fails `Validate` with "SessionNotification: update: SessionUpdate: variant
+  ToolCall: SessionUpdateToolCall: content[0]: ToolCallContent must have exactly one variant set". With `7` in place of
+  `null`, the item is dropped and `Validate` is nil.
+* **The investigator's probe:** `ListSessionsResponse`'s `additionalDirectories` of `[null, "/a"]` fails "`""` is not an
+  absolute path", and an `InitializeResponse` whose `authMethods` is `[null]` fails "AuthMethod must have exactly one variant
+  set".
+* **Committed schemas: yes.** The skip-invalid fields of `ToolCallContent`, `AuthMethod`, `SessionConfigOption` and the
+  absolute-path strings, and `ContentBlock` through `patchItems`, are all affected. A peer that sends a `null` item there gets
+  `-32602`, or an error from `Initialize`, where the schema says to drop the item.
+* **Fix:** skip an item whose raw value is `null`, unless the element type admits null. This changes the generated code, so
+  it reaches consumers.
+
+**G15. Medium. A change to a stable enum in the live unstable schema, even to one value's description, crashes the
+generator.** Stable enums are a `oneOf` of `{"const": …}` entries, which have no `UnionEntryKey`. `load/unstable.go:150-176`
+(`newEntries`) then compares entries with `reflect.DeepEqual`, so any difference counts as a new variant, and
+`load/unstable.go:81-92` records its index. The model builds the enum with no `Variants`, and `emit/unstable.go:74`
+(`t.Variants[i]`) indexes past the end.
+
+* **Probe** (re-run by the author): with " Reworded." appended to the description of `ToolKind`'s first value in
+  `schema.unstable.json` alone, the generator exits 2 with "panic: runtime error: index out of range [0] with length 0", in
+  `emit.unstableFile` at `emit/unstable.go:74`. The unchanged copy exits 0.
+* **The investigator's probe:** adding a value `"browse"` to `ToolKind` in the unstable schema alone panics the same way, with
+  "index out of range [10] with length 0".
+* **Committed schemas:** no, since the live unstable schema still equals the 1.25.0 freeze. But many stable enums have this
+  shape, so a schema update that touches one stops regeneration with a panic, before anything is written.
+* **Fix:** key a const-only entry by its `const`, compare entries without their annotations, and refuse an index the model's
+  type does not have, with an error instead of a panic.
+
+**G16. Medium. `Write` deletes a hand-written file named `*_gen_test.go`, silently.** `output/write.go:99-124` (`staleFiles`)
+lists every `*_gen.go` and `*_gen_test.go` in the root and in `unstable/` that the run did not render, and `:89-93` removes
+them. `helpers_gen_test.go` is the usual Go name for a hand-written test of `helpers_gen.go`.
+
+* **Probe** (re-run by the author): a hand-written `helpers_gen_test.go` (`package acp`, one empty test) at the root. The
+  generator exits 0 with no output, and the file is gone afterwards. `Check` had accepted it as a hand-written test first.
+* **How it differs from G1:** G1 is about stale generated files, and about checking a different tree from the one `Write`
+  leaves. Here what is deleted is hand-written, uncommitted work, unrecoverably and with no message.
+* **Committed tree:** no such file today.
+* **Fix:** delete only files that carry the generated header (`// Code generated … DO NOT EDIT.`), and name each one removed.
+
+**G17. Medium. A property whose `anyOf` or `oneOf` has exactly two members is typed from one of them, the wrong one where both
+are non-null.** `model/fields.go:331-360` (`optionalTypeRef`) loops over the two members and keeps the last non-null one
+(`nonNull = e`). It also retypes a `const` member as a string (`nn.Type = schemaTypeString`), whatever the const's own type.
+
+* **Probe** (investigator), two non-null members: `p: {anyOf: [string, int32]}`, `q: {anyOf: [$ref A, $ref B]}` and
+  `r: {oneOf: [$ref A, boolean]}`. The generator exits 0 with `P *int32`, `Q *B` and `R *bool`. Decoding
+  `{"p":"text","q":{"a":"x"},"r":{"a":"y"}}` fails "cannot unmarshal string into Go struct field Alias.p of type int32".
+* **Probe** (investigator), a typed const: `{"anyOf":[{"type":"integer","format":"int32","const":5},{"type":"null"}]}`
+  becomes `N *string`, and `{"n":5}` fails "cannot unmarshal number into Go struct field Thing.n of type string". A boolean
+  const fails the same way.
+* **Committed schemas:** no. A schema update with either shape would generate a field that refuses valid payloads, and the
+  generator would exit 0.
+* **Fix:** refuse an `anyOf`/`oneOf` with two non-null members, and type a const from its own type, or refuse a const that is
+  not a string.
+
+**G18. Medium. The tests of the protocol table against the committed schemas build their model from the live unstable schema;
+the generator builds from the frozen manifest.** `cmd/generate/internal/model/classes_test.go:44` (`committedInput`) calls
+`load.MergeStableAndUnstable`. `cmd/generate/main.go:196-198` uses `load.MergeManifest` whenever `schema/unstable-v1.json`
+exists, which it does. `committedInput` feeds `TestProtocolTableAppliesToCommittedSchema` (`model/protocol_test.go:442`), the
+union-class tests (`model/classes_test.go:55`, `:118`, `:220`), `model/keywords_test.go:233` and `model/unstable_test.go:128`.
+
+* **Probe** (investigator), the two models today: "types 280/280", "gates 45/45", "paths 17/17", "methods 40/40" and
+  "patch 12/12", with nothing on one side only. They are the same model today.
+* **Probe** (investigator), a false failure: `nes/close` dropped from the live unstable meta, with its two definitions
+  unlinked. The table test fails "agent method "nes/close": not in the committed meta files" and "27 capability gates, want 28".
+  Yet the generator exits 0 with byte-identical output.
+* **Probe** (investigator), a false pass: `session/foo` added to the live unstable schema alone, with a table rule for it. The
+  table test passes and the generator exits 0, but no generated file mentions the rule's `FooProbe`.
+* **Consequence:** once the live unstable schema moves away from the manifest, the tests that guard the table check a model
+  the SDK does not ship. A rule can pass its test and be enforced nowhere, since Build skips a rule whose method it does not
+  find.
+* **Fix:** build `committedInput` with the same function `main.go`'s `loadSchema` uses, shared.
+
+**G19. Low. `Validate` and the gates do not reach inside a union variant that is a named array, and nothing refuses that
+shape.** `model/validate.go:160-163` adds only `InlineStruct` variants to the validation shapes, and `:110-112` sets
+`vi.Validates` from `m.validates[vi.TypeName]`, which a named slice type such as `[]Option` never gets.
+`emit/types.go:1237-1243` then emits no call for that variant. `nested()` (`model/validate.go:271-289`) refuses a shape that
+`Validate` does not descend into for fields, not for variants. The gates have the same gap (`model/gates.go:479-481`,
+`:505-509`; the refusal at `:145-151` loops over fields only).
+
+* **Probe** (investigator): `Option.name` has `minLength: 1`, and `Options` is an `anyOf` of `[]Option` and `[]Group`. An
+  `Option` in a direct slice field fails "Root: direct[0]: Option: name: shorter than minLength 1". The same `Option` inside the
+  array variant gives `Validate = <nil>`.
+* **Committed schemas:** not reached. `SessionConfigSelectOptions` has exactly this shape, but its item types have no check
+  yet, so the first check added to `SessionConfigSelectOption` or `SessionConfigSelectGroup` would be skipped.
+* **Fix:** descend into the items of `InlineNamed` slice and map variants, in `Validate` and in the gates, or refuse such a
+  variant when its items validate or are gated.
+
+**G20. Low. A capability rule with a `Property` reaches only its definition's own fields, so it can apply and gate nothing.**
+`model/gates.go:200-208` (`gateCheck`) searches `t.Fields`, and returns `false, nil` when the property is not there. The patch,
+empty-clears, null-retained and absolute-path rules instead follow `f.prop` into every copy (`model/model.go:1455-1477`,
+`:1562-1577`, `:1624-1639`; `model/validate.go:185`). `resolveKeyOrders` (`model/model.go:1660-1676`) also reads only `t.Fields`.
+
+* **Probe** (investigator): a `GateNonEmpty` rule on `LoadSessionRequest.dirs`, with `LoadSessionRequest` a union with an own
+  `dirs`. Build returns nil, and no type is gated. The same happens for a definition copied into an inline variant by `allOf`,
+  where `WrapD`'s `Dirs []string` is not gated.
+* **Committed schemas:** not reached.
+* **Fix:** resolve gates and key orders per field by `f.prop` across `Fields`, `NestedStructs` and inline variants, as the
+  patch rule does, and refuse what cannot be gated.
+
+**G21. Low. A discriminator written as a one-value `enum` is not recognised, so every payload decodes into `Unknown`.**
+`model/model.go:748-756` (`discriminatorValue`) and `model/schema.go:134-136` read only `Const`.
+
+* **Probe** (investigator): `Shape.oneOf` variants with `"kind": {"type":"string","enum":["circle"]}` and `["square"]`, and a
+  declared discriminator. The generator exits 0. `{"kind":"circle","r":1}` decodes as `{ShapeVariant1:<nil>
+  ShapeVariant2:<nil> Unknown:{"kind":"circle","r":1}}`, and so does every other input.
+* **How it differs from G5 (b):** G5 (b) is a constraint left unchecked; here the union's routing breaks.
+* **Committed schemas:** not reached.
+* **Fix:** treat a one-value enum as a const, or refuse an enum on a discriminator.
+
+**G22. Low. An `anyOf` whose members are all string consts is modelled as an open enum, so `Validate` accepts any string.**
+`model/schema.go:167-194` (`isOpenStringEnum`) requires only that some member is a const, although its comment says the type
+permits arbitrary strings. `model/validate.go:212-215` leaves open enums out of the closed-enum checks.
+
+* **Probe** (investigator): "E kind 3 (KindOpenEnum=3) closed=false", then "O.E Closed=false validation=<nil>".
+* **Committed schemas:** not reached. Each `anyOf` string enum in them, such as `CompactionStatus`, has a plain string
+  member.
+* **Fix:** require at least one non-const string member for an open enum, and type the rest as closed.
+
+**G23. Low. A required nullable collection turns a relayed `null` into `[]`.** `model/fields.go:580` and `:603` set `Fill`
+from `Required` and `IsCollection()` and ignore `includesNull`.
+
+* **Probe** (investigator): required `xs: {"type":["array","null"]}` becomes `Xs []string`. `{"xs":null}` decodes with no error
+  and re-encodes as `{"xs":[]}`.
+* **Committed schemas:** not reached.
+* **Fix:** make a required nullable collection a pointer, or do not fill it when null is admitted.
+
+**G24. Low. A closed-enum array marked `x-deserialize-default-on-error` becomes nil, not its default, when an item is
+unknown.** `emit/types.go:787-793` (`unknownAbsent`'s `RefSlice` case without skip-invalid-items) assigns `nil`, and its comment
+says the array "takes its zero value". The pointer case, `:784-786`, also ignores `def`. The scalar case, `:796-800`, assigns
+`def`.
+
+* **Probe** (investigator): `kinds` is an array of `K {a, b}` with default `["a"]`. `{"kinds":5}` gives `[a]`, but
+  `{"kinds":["zzz"]}` and `{"kinds":["b","zzz"]}` give `nil`. `MarshalJSON` then writes the default, so what was read and what is
+  re-sent differ.
+* **Committed schemas:** not reached. The two closed-enum arrays, `audience` and `positionEncodings`, skip invalid items.
+* **Fix:** assign `def`, when there is one, in the slice and pointer cases.
+
+**G25. Low. A deprecated property copied into an inline variant has no `Deprecated:` notice.** `model/fields.go:599`
+(`plainFields`) never sets `Deprecation`. `deprecationsOf` (`model/protocol.go:1013-1023`) and `applyFrozenDeprecations`
+(`model/frozen.go:49-59`) also mark only `t.Fields`.
+
+* **Probe** (investigator): `Base.old` is deprecated, and `U.oneOf[0]` is `allOf Base`. `want.deprecated` lists
+  `field Base.Old` alone, and `UBase.Old` has no notice.
+* **Committed schemas:** not reached.
+* **Fix:** carry `deprecationOf(prop)` in `plainFields`, and mark copies by `f.prop`.
+
+**G26. Low. Some name collisions are refused only at `Check`, naming a generated file instead of the schema or the rule.**
+
+* **Interface methods:** `model/methods.go:171-184` keeps one set of method names per binding.
+  * **Probe** (investigator): a stable `FooRequest` and an unstable `FooNotification` both become `Foo`. Build and Render return
+    nil, and `Check` fails "client_gen.go:132:32: method ClientSideConnection.Foo already declared".
+  * A method named like a hand-written method of the connections (`Close`, `Wait`, `Err`) is not checked either.
+* **A key order's `Field`:** it is checked with `checkExported` (`model/protocol.go:436`) and against the struct's fields
+  (`model/model.go:1673`), but not against the generated methods or another key-order rule.
+  * **Probe** (investigator): `Field: "MarshalJSON"` passes Build, and `Check` fails "types_gen.go:44:28: field and method with
+    the same name MarshalJSON".
+* **`Interface.Var`:** it is checked only for being non-empty (`model/protocol.go:373`), not as an identifier, nor against the
+  dispatch's locals.
+* **Committed table:** not reached.
+* **Fix:** keep one set of outbound method names per side, with the connections' own methods reserved; apply `checkNotMethod`
+  and a check across rules to a key order's `Field`; check `Var` with `token.IsIdentifier`.
+
+**G27. Low. `Check` does not type-check the root's external test package, or the packages that import the root.**
+`output/check.go:183-215` (`handWritten`) lists `GoFiles` and `TestGoFiles`, never `XTestGoFiles`. 17 root files are
+`package acp_test`, and `acptest`, `agentproc`, `clienthost`, `remote` and `example/` are not checked at all.
+
+* **Probe** (investigator): `ToolKind`'s `"search"` renamed to `"find"` in both schemas. The generator exits 0, then `go vet .`
+  fails "./tooltimeline_test.go:48:35: undefined: acp.ToolKindSearch". The same reference in a `package acp` test file is
+  refused by `Check`.
+* **Committed tree:** not reached. CI's `go vet` and build catch it after the files are written.
+* **Fix:** type-check `XTestGoFiles` against the in-memory root, as `servingImporter` does for `unstable/`.
+
+**G28. Low. `Check` reads the language version from `<out>/go.mod` only.** `output/check.go:219-234` (`goVersion`) reads
+`filepath.Join(dir, "go.mod")` and otherwise returns `""`, the newest version. `rootImportPath` (`cmd/generate/main.go:94-118`)
+walks up to the enclosing `go.mod`.
+
+* **Probe** (investigator): `go 1.21` in a parent `go.mod`, `-out` a subdirectory, and `for range 3 {}` in a hand-written file.
+  The generator exits 0, then `go build` fails "cannot range over 3 … requires go1.22 or later". With the `go.mod` inside
+  `-out`, `Check` refuses it with the same message.
+* **Committed tree:** not reached, since the repository's `-out` is the module root.
+* **Fix:** take the `go` line from the `go.mod` that `rootImportPath` finds.
+
+**G29. Low. Nothing requires a rule where the schema's wording asks for a capability gate, a method gate or an absolute path.**
+Four rule kinds have a scan of the schema's descriptions that requires a rule wherever their wording appears: `patchWording`
+and `retainedWording` (`model/patch_test.go:307`, `:349`), `replaceWording` (`:483`) and `fallbackWording`
+(`model/keyless_test.go:93`). The capability, method-gate and absolute-path rules have only the converse check, that each rule
+applies, and fixed counts (`model/protocol_test.go:483`, `model/gates_test.go:226`).
+
+* **Probe** (investigator): three sentences added to the schemas: "Only available if the Agent supports the
+  `sessionCapabilities.list` capability." on `SetSessionModeRequest`; "Agents MUST only send this update when the Client
+  advertised …" on `usage_update`; and "Must be an absolute path." on `CreateTerminalRequest.command`.
+  `TestProtocolTableAppliesToCommittedSchema` passes. The control, "Set to null to clear." on an unruled property, fails as
+  required.
+* **Committed schemas:** every such sentence today has its rule: 7 stable and 8 unstable requests, and 3 `SessionUpdate`
+  variants.
+* **Fix:** the same wording scans for these three rule kinds.
+
+**G30. Info. Nine hand-written `Kind()` methods compile only because one gate reads a raw key.** `emit/gates.go:59-73`
+(`markGateHelpers`) marks `unknownKind` only for a gate check with a `RawKey`, and `emit/decode.go:71-74` emits it only when
+marked. Yet `helpers.go:342`, `:366`, `:383`, `:398`, `:413`, `:429`, `:469`, `:535` and `:554` call it. The one check with a
+`RawKey` today is the prompt's undeclared-variant rule (`model/acp.go:232`).
+
+* **Probe** (investigator): with that rule removed, the generator exits 1, "helpers.go:342:10: undefined: unknownKind", and
+  eight more lines like it.
+* **Fix:** emit `unknownKind` whenever a union has an `Unknown`.
+
+**G31. Info. The manifest's nested objects match keys in any letter case, although `ParseManifest` decodes "strictly".**
+`load/load.go:141-148` (`decodeStrict`) checks letter case on the top level only, and `ManifestMethods` and `ManifestChange`
+(`load/manifest.go:45-60`) have no strict decoder.
+
+* **Probe** (investigator): `"changes": {"Obj": {"PROPERTIES": ["b"]}}` is accepted, and `Obj` gains `B`. A top-level
+  `"CHANGES"` is refused.
+* **Fix:** a `decodeStrict` `UnmarshalJSON` on both, as `Discriminator` has.
+
+**G32. Info. A definition that is `null` is dropped silently, and a `$ref` to it reports the wrong cause.**
+`load/load.go:213-216` keeps it as nil, and the model skips it.
+
+* **Probe** (investigator): `{"$defs": {"X": null}}` exits 0 with no `type X`. A `$ref` to it fails "names no definition".
+* **How it differs from G5:** G5 drops keywords and shapes; this drops a whole definition, by the load's explicit `null` case.
+* **Fix:** refuse a `null` definition by name.
+
+**G33. Info. `generate -h` exits 1.** `cmd/generate/main.go:37-39` returns `fs.Parse`'s error, `flag.ErrHelp` included, as a
+failure. It prints "generate: flag: help requested". **Fix:** exit 0 on `flag.ErrHelp`.
+
+**G34. Info. `docs/architecture.md`'s list of what the protocol table holds omits `DocNotes`.** `docs/architecture.md:182-282`
+lists every rule kind but `DocNotes`, which `model/acp.go` holds 10 of. **Fix:** one bullet.
+
+**G35. Info. Two rule kinds have no engine case.** Engine cases run with `&model.ACP` (`cmd/generate/main.go:63`), so they reach
+only the rule kinds ACP's table uses.
+
+* `DeprecationNotes` is empty in ACP, so no engine case reaches it. In a sampled run of `internal/mutate`, the mutant
+  `model/protocol.go:1026` `&&` to `||` survived. That line matches a note to a variant without a discriminator value.
+* `EmptyClears` has no engine case. `TestEmptyClearsRules` and the committed-schema check cover it.
+* **Fix:** a unit case for a variant without a discriminator value, and an `accept-empty-clears` engine case with a behaviour
+  test.
+
+**G36. Info. The table test looks a method up by its wire name alone.** `model/protocol_test.go:72-79` (`methodByWire`)
+returns the first method with that name, agent methods first. `mcp/message` is on both sides, so a later client-side rule for
+it would be reported "not in the committed meta files". It can fail falsely but not pass falsely. **Fix:** look up by side and
+wire.
+
 ### F-P: the subpackages
 
 *Done 2026-11-04:* P1 to P9 are fixed in `v1.33.0` by [0049-PLAN-subpackage-fixes.md](0049-PLAN-subpackage-fixes.md),
@@ -864,7 +1163,11 @@ released on its own, while the severity order inside each keeps R1 first. The pl
   *Written 2026-11-04,* [0049-PLAN-subpackage-fixes.md](0049-PLAN-subpackage-fixes.md), with P8 and P9 of the second
   re-assessment and Q12 to Q15 below. It groups the order into phases by package: P1; P3, P4 and P5, one function; P7 and
   the margin; P2; P6, P9 and P8. *Complete 2026-11-04,* released in `v1.33.0`.
-* `0049-PLAN-generator-fixes.md`: G2, G1, G3, then G4 to G12, each refusal with an engine case; G13.
+* `0049-PLAN-generator-fixes.md`: G2, G1, G3, then G4 to G12, each refusal with an engine case; G13. *Amended 2026-11-07,*
+  by the fourth re-assessment: G15 to G36 join it. G14, which changes the generated code and so the root package's
+  behaviour, is fixed alone per Q21 (a), in `v1.34.1`, by
+  [0049-PLAN-null-items-in-skip-invalid-arrays.md](0049-PLAN-null-items-in-skip-invalid-arrays.md). G15 to G18 are medium and go before the low findings, then G19 to G29, then the info findings G30
+  to G36. Each refusal comes with an engine case, and each changed behaviour with a test seen to fail first.
 * `0049-PLAN-tooling-fixes.md`: T2 (with 0048), T1, T3, then T4 to T13, and F-C's dead `ConfigOptionUpdate.gates` through the
   generator. *Written 2026-11-04,* [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md), proposed, with T14, F-C's two
   untested `Error` methods and `abandon`, and Q16 to Q19 below. It groups the order into phases by tool: T2, T14 and T7;
@@ -1165,11 +1468,29 @@ Each question was put with its three options; the owner chose the recommended on
   every target.
 * Q19 (a): this PLAN first, and 0048's PLAN amended after to build on it. Not chosen: 0048 first; one PLAN.
 
+#### The generator re-assessment, proposed 2026-11-07
+
+* **Q21. G14, a `null` item in a skip-invalid array.** It is the one finding of the fourth re-assessment that the committed
+  schemas reach, and its fix changes `types_gen.go`.
+  * **(a) A patch, `v1.34.1`, for G14 alone, ahead of the generator PLAN** (recommended). The fix is one emitted helper and a
+    regeneration. It turns a refused message into the drop the schema asks for, and changes no exported API.
+  * **(b) In the generator PLAN's own release.** One release for the generator's work. G14 stays live until that PLAN lands.
+  * **(c) Document it, and leave the fix to the PLAN's last phase.** The least work now. A peer's `null` keeps failing the
+    message until then.
+
+##### Answered by the owner, 2026-11-07
+
+* Q21 (a): "Q21, yes it will ship as a patch." G14 is fixed alone, in `v1.34.1`, by
+  [0049-PLAN-null-items-in-skip-invalid-arrays.md](0049-PLAN-null-items-in-skip-invalid-arrays.md), ahead of the generator
+  PLAN. Not chosen: in the generator PLAN's release; documented now and fixed last.
+
 ### Consequences
 
 * Good, because a deadlock, a crash, and four schema mismatches a peer can see are fixed, each with a test that would have caught
   it. *2026-11-04:* the deadlock and the mismatches are fixed, in `v1.31.2` and `v1.32.0`; the crash, P5, is the
   subpackage PLAN's, fixed in `v1.33.0`.
+* Good, because a `null` item in a skip-invalid array is dropped as the schema says, not a cause to refuse the message
+  (G14, added 2026-11-07).
 * Good, because the generator refuses the schemas it now crashes on, renders wrongly or drops parts of (G2 to G8), before a
   schema update meets one.
 * Good, because the checks the records quote (`publication.py`, `check_records.py`, the docs-safe set) check what they claim.
