@@ -282,3 +282,45 @@ func ReadSchemaUnstable(schemaDir string) (*Schema, bool, error) {
 	}
 	return schema, true, nil
 }
+
+// Committed reads the inputs the generator builds the SDK from in schemaDir:
+// the stable schema, merged with the manifest when there is one, else with
+// the live unstable schema when there is one. The provenance is nil when
+// there is neither. The generator and the tests of the protocol table both
+// read the schema through it, so the tests check the model the SDK ships
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G18).
+func Committed(schemaDir string) (*Meta, *Schema, *Provenance, error) {
+	meta, err := ReadMeta(schemaDir)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	schema, err := ReadSchema(schemaDir)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	unstableMeta, unstableMetaFound, err := ReadMetaUnstable(schemaDir)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	unstableSchema, unstableSchemaFound, err := ReadSchemaUnstable(schemaDir)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if unstableMetaFound != unstableSchemaFound {
+		return nil, nil, nil, fmt.Errorf("unstable schema/meta mismatch: meta found=%v schema found=%v", unstableMetaFound, unstableSchemaFound)
+	}
+	// The manifest, when present, is the unstable-origin API, frozen; the live
+	// unstable files have no part in it
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 1).
+	manifest, manifestFound, err := ReadUnstableManifest(schemaDir)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if manifestFound {
+		return MergeManifest(meta, schema, manifest)
+	}
+	if !unstableMetaFound {
+		return meta, schema, nil, nil
+	}
+	return MergeStableAndUnstable(meta, schema, unstableMeta, unstableSchema)
+}

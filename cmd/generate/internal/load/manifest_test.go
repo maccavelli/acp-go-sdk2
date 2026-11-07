@@ -179,10 +179,34 @@ func TestApplyChange(t *testing.T) {
 		{"null change", stable, frozen, nil, "the change is null"},
 		{"missing property", stable, frozen, &ManifestChange{Properties: []string{"zz"}}, `no property "zz"`},
 		{"missing frozen entry", stable, frozen, &ManifestChange{Entries: []string{"const kind=q"}, FrozenEntries: []string{"const kind=q"}}, `no entry "const kind=q"`},
+		// G3: the stable schema has since defined the changed property, or
+		// the frozen entry, with another shape
+		// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md).
+		{"a changed property the stable schema now types otherwise",
+			&Definition{Properties: map[string]*Definition{"extra": {Type: "string"}}}, frozen,
+			&ManifestChange{Properties: []string{"extra"}}, `property "extra": the stable schema now defines it, differently`},
+		{"a frozen entry the stable schema now shapes otherwise",
+			union(entry("a", ""), &Definition{Type: "object", Properties: map[string]*Definition{"kind": {Type: "string", Const: "n"}, "x": {Type: "integer"}}}),
+			frozen, &ManifestChange{Entries: []string{"const kind=n"}, FrozenEntries: []string{"const kind=n"}},
+			`entry "const kind=n": the stable schema now defines it, differently`},
 	} {
 		if _, err := applyChange(tt.s, tt.u, tt.c); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 			t.Errorf("%s: %v, want %q", tt.name, err, tt.wantErr)
 		}
+	}
+
+	// A changed property the stable schema holds with the same type, its
+	// description and default aside, is the manifest's override, as the
+	// committed manifest's AgentCapabilities.mcpCapabilities is (G3, as
+	// amended by 0049-PLAN-generator-fixes.md's phase 2, deviation 2).
+	same := &Definition{Properties: map[string]*Definition{"extra": {Type: "integer", Description: "older", Default: 1.0}}}
+	frozen.Properties["extra"].Default = 2.0
+	d, err = applyChange(same, frozen, &ManifestChange{Properties: []string{"extra"}})
+	if err != nil {
+		t.Fatalf("a default-only override: %v", err)
+	}
+	if got := d.Properties["extra"].Default; got != 2.0 {
+		t.Errorf("a default-only override: default %v, want the frozen 2", got)
 	}
 }
 

@@ -20,28 +20,13 @@ func committedModel(t *testing.T) *Model {
 	return m
 }
 
-// committedInput is the merged schema in the repository, with its provenance
-// and the ACP protocol table.
+// committedInput is the schema in the repository as the generator reads it,
+// by load.Committed, with its provenance and the ACP protocol table: the
+// manifest's model, which the SDK ships, not the live unstable schema's
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G18).
 func committedInput(t *testing.T) Input {
 	t.Helper()
-	dir := filepath.Join("..", "..", "..", "..", "schema")
-	sm, err := load.ReadMeta(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ss, err := load.ReadSchema(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	um, _, err := load.ReadMetaUnstable(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	us, _, err := load.ReadSchemaUnstable(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	meta, schema, prov, err := load.MergeStableAndUnstable(sm, ss, um, us)
+	meta, schema, prov, err := load.Committed(filepath.Join("..", "..", "..", "..", "schema"))
 	if err != nil {
 		t.Fatal(err)
 	}

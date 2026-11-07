@@ -1,0 +1,15 @@
+Refused: a default that recurses without end. Node.next is a Node whose
+default is {}, so rendering it renders Node.next's default again; the
+generator overflowed its stack on it
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G2).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Node": {"type": "object", "properties": {"next": {"allOf": [{"$ref": "#/$defs/Node"}], "default": {}}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Node.next
+the default recurses through Node.next

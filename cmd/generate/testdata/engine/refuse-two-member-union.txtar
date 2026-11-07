@@ -1,0 +1,13 @@
+Refused: a property whose anyOf has two members, neither null. It was typed from
+the last, *int32, so a string payload failed to decode
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G17).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Alias": {"type": "object", "properties": {"p": {"anyOf": [{"type": "string"}, {"type": "integer", "format": "int32"}]}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Alias.properties.p: anyOf of two non-null members, which one field cannot hold

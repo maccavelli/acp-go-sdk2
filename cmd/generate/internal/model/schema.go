@@ -367,11 +367,42 @@ func walkRefs(schema *load.Schema, path string, d *load.Definition) error {
 		return fmt.Errorf("%s: x-deserialize-skip-invalid-items on items that admit null, which it would drop", path)
 	}
 	for _, c := range subschemas(path, d) {
+		if c.keyword == kwProperties {
+			if err := twoNonNullMembers(c.path, c.def); err != nil {
+				return err
+			}
+		}
 		if err := walkRefs(schema, c.path, c.def); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// twoNonNullMembers refuses a property whose own anyOf, or oneOf when it has
+// no anyOf, has exactly two members, neither of type null: optionalTypeRef
+// would type the field from one of them alone, and refuse the other's values
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G17).
+func twoNonNullMembers(path string, d *load.Definition) error {
+	if d == nil {
+		return nil
+	}
+	kw, list := kwAnyOf, d.AnyOf
+	if len(list) == 0 {
+		kw, list = kwOneOf, d.OneOf
+	}
+	if len(list) != 2 {
+		return nil
+	}
+	for _, e := range list {
+		if e == nil {
+			return nil
+		}
+		if t, ok := e.Type.(string); ok && t == schemaTypeNull {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s: %s of two non-null members, which one field cannot hold", path, kw)
 }
 
 // The keywords that hold subschemas, as subschemas names them.

@@ -180,7 +180,9 @@ func MergeManifest(stableMeta *Meta, stableSchema *Schema, m *Manifest) (*Meta, 
 }
 
 // applyChange returns the stable definition s with c applied from its frozen
-// version u.
+// version u. A changed property, or frozen entry, that s itself now holds
+// with another shape is refused, since the frozen one would silently
+// override it.
 func applyChange(s, u *Definition, c *ManifestChange) (*Definition, error) {
 	switch {
 	case s == nil:
@@ -195,6 +197,12 @@ func applyChange(s, u *Definition, c *ManifestChange) (*Definition, error) {
 		p, ok := u.Properties[key]
 		if !ok {
 			return nil, fmt.Errorf("the frozen version has no property %q", key)
+		}
+		// A property the stable schema has since defined, differently, is
+		// the stable schema's now; the frozen one would override it
+		// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G3).
+		if sp := s.Properties[key]; sp != nil && !sameShape(sp, p, true) {
+			return nil, fmt.Errorf("property %q: the stable schema now defines it, differently; drop it from the manifest's changes", key)
 		}
 		if d.Properties == nil {
 			d.Properties = map[string]*Definition{}
@@ -224,6 +232,9 @@ func applyChange(s, u *Definition, c *ManifestChange) (*Definition, error) {
 			e := entryOf(frozenList, key)
 			if e == nil {
 				return nil, fmt.Errorf("the frozen version has no entry %q", key)
+			}
+			if se := entryOf(stableList, key); se != nil && !sameShape(se, e, true) {
+				return nil, fmt.Errorf("entry %q: the stable schema now defines it, differently; drop it from the manifest's changes", key)
 			}
 			out = append(out, deepCopyDefinition(e))
 		} else if e := entryOf(stableList, key); e != nil {

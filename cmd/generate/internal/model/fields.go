@@ -311,6 +311,21 @@ func mapValues(ap *load.Definition) TypeRef {
 	return named("any")
 }
 
+// constType is the JSON Schema type of a const's value: a string, a boolean,
+// a whole number as an integer, or another number.
+func constType(v any) string {
+	switch v := v.(type) {
+	case bool:
+		return schemaTypeBoolean
+	case float64:
+		if v == math.Trunc(v) {
+			return schemaTypeInteger
+		}
+		return schemaTypeNumber
+	}
+	return schemaTypeString
+}
+
 // optionalTypeRef maps unions that include null to pointer types where applicable.
 func optionalTypeRef(d *load.Definition) TypeRef {
 	if d == nil {
@@ -342,8 +357,13 @@ func optionalTypeRef(d *load.Definition) TypeRef {
 				continue
 			}
 			if e.Const != nil {
+				// A const member is typed by its own type, or by its
+				// value's JSON kind when it has none
+				// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G17).
 				nn := *e
-				nn.Type = schemaTypeString
+				if nn.Type == nil {
+					nn.Type = constType(e.Const)
+				}
 				nonNull = &nn
 			} else {
 				nonNull = e

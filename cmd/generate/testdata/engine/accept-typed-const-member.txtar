@@ -1,0 +1,62 @@
+A property of a const and null is typed by the const's own type, or by its value's
+JSON kind when it has none: n, an int32 const, is *int32; f, an untyped true, is
+*bool. Both were *string, which refused their payloads
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G17).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Thing": {"type": "object", "properties": {
+    "n": {"anyOf": [{"type": "integer", "format": "int32", "const": 5}, {"type": "null"}]},
+    "f": {"anyOf": [{"const": true}, {"type": "null"}]},
+    "s": {"anyOf": [{"const": "x"}, {"type": "null"}]}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Thing struct{F *bool "json:\"f,omitempty\""; N *int32 "json:\"n,omitempty\""; S *string "json:\"s,omitempty\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Each const member's payload decodes into its field, and an untyped string
+// const is still a string.
+func TestTypedConstMember(t *testing.T) {
+	var v Thing
+	if err := json.Unmarshal([]byte(`{"n":5,"f":true,"s":"x"}`), &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.N == nil || *v.N != 5 || v.F == nil || !*v.F || v.S == nil || *v.S != "x" {
+		t.Errorf("decoded %+v, want n 5, f true and s x", v)
+	}
+}

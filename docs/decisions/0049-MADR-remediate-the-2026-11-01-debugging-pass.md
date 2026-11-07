@@ -765,6 +765,9 @@ overflow", in `renderer.structValue`. `FuzzBuild` found it in 25 s. Fix: refuse 
 `:476-478`) drops the notice too. **Probe** (`stabilized.txtar`, re-run): the
 stable `Shared.b` is `{"type":"integer"}`; the generator exits 0 and emits `B string`; decoding `{"b":5}` fails "cannot unmarshal
 number into Go struct field Shared.b of type string". Fix: refuse when the stable definition now holds the key and differs.
+*Amended 2026-11-07,* by [0049-PLAN-generator-fixes.md](0049-PLAN-generator-fixes.md)'s phase 2, deviation 2: "differs"
+leaves out annotations and `default`. The committed manifest overrides `AgentCapabilities.mcpCapabilities` and
+`InitializeResponse.agentCapabilities` on purpose, and only their defaults differ, by the unstable `"acp": false`.
 
 **G4. Low. Integer bounds pass through `float64`.** `load/load.go:64-65`, `model/validate.go:311-361` (`bounds`),
 `emit/types.go:1466-1474` (`boundLit`: `uint64` of an out-of-range float, implementation-defined). Corrected 2026-11-07, from

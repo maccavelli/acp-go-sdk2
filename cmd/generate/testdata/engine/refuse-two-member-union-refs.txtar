@@ -1,0 +1,15 @@
+Refused: a property whose oneOf is two references, neither null. It was typed from
+the last, *B, so an A payload decoded as a B
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G17).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "A": {"type": "object", "properties": {"a": {"type": "string"}}},
+  "B": {"type": "object", "properties": {"b": {"type": "string"}}},
+  "Alias": {"type": "object", "properties": {"q": {"oneOf": [{"$ref": "#/$defs/A"}, {"$ref": "#/$defs/B"}]}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+Alias.properties.q: oneOf of two non-null members, which one field cannot hold

@@ -1,6 +1,7 @@
 package load
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -406,7 +407,8 @@ func changesOf(s, u *Definition) *Changes {
 // is matched to the stable one it changes: the value of the union's declared
 // discriminator disc, or without one its const-valued properties, as a
 // discriminated variant's tag; else its title, else its reference, else the
-// references its allOf composes. It is "" for an entry with none of them.
+// references its allOf composes, else its own const. It is "" for an entry
+// with none of them.
 func UnionEntryKey(e *Definition, disc string) string {
 	if e == nil {
 		return ""
@@ -437,7 +439,51 @@ func UnionEntryKey(e *Definition, disc string) string {
 	if len(refs) > 0 {
 		return "allOf " + strings.Join(refs, ",")
 	}
+	// An enum's entry is its constant, so a value's reworded description is
+	// the same entry; checked last, so no other entry's key changes
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G15).
+	if e.Const != nil {
+		if b, err := json.Marshal(e.Const); err == nil {
+			return "value " + string(b)
+		}
+	}
 	return ""
+}
+
+// sameShape reports whether a and b are the same schema but for their
+// annotations, description, title and x-docs-ignore, and, with defaults, but
+// for their defaults too, at every depth. A reworded description is not a new
+// entry (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G15); and a
+// manifest's change of a stable property may extend its default, as the
+// committed one extends AgentCapabilities.mcpCapabilities' by the unstable
+// acp, while a change of its type is refused (G3, as amended by
+// 0049-PLAN-generator-fixes.md's phase 2, deviation 2).
+func sameShape(a, b *Definition, defaults bool) bool {
+	return reflect.DeepEqual(withoutAnnotations(deepCopyDefinition(a), defaults), withoutAnnotations(deepCopyDefinition(b), defaults))
+}
+
+// withoutAnnotations clears d's annotations at every depth, in place, and its
+// defaults with defaults, and returns d.
+func withoutAnnotations(d *Definition, defaults bool) *Definition {
+	if d == nil {
+		return nil
+	}
+	d.Description, d.Title, d.DocsIgnore = "", "", false
+	if defaults {
+		d.Default = nil
+	}
+	for _, p := range d.Properties {
+		withoutAnnotations(p, defaults)
+	}
+	for _, list := range [][]*Definition{d.AnyOf, d.OneOf, d.AllOf} {
+		for _, e := range list {
+			withoutAnnotations(e, defaults)
+		}
+	}
+	for _, c := range []*Definition{d.Items, d.AdditionalProperties, d.Not, d.UnevaluatedProperties} {
+		withoutAnnotations(c, defaults)
+	}
+	return d
 }
 
 func ensureRefsAvailable(combinedSchema *Schema, unstableSchema *Schema, roots map[string]struct{}) {

@@ -39,6 +39,22 @@ func RenderUnstable(m *model.Model, u Unstable) ([]File, error) {
 	if len(u.Local) == 0 && len(u.Variants) == 0 && len(u.Wires) == 0 {
 		return nil, nil
 	}
+	// A new entry renders as a variant of the stable union, so a type that
+	// has no variant at an entry's index, such as an enum, cannot hold it
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G15).
+	for _, name := range slices.Sorted(maps.Keys(u.Variants)) {
+		t := m.Type(name)
+		for _, i := range u.Variants[name] {
+			if t == nil || i < 0 || i >= len(t.Variants) {
+				n := 0
+				if t != nil {
+					n = len(t.Variants)
+				}
+				return nil, fmt.Errorf("%s: the live unstable schema adds an entry, index %d, that the generated %s, with %d variants, cannot hold",
+					name, i, name, n)
+			}
+		}
+	}
 	src, err := unstableFile(m, u).render()
 	if err != nil {
 		return nil, fmt.Errorf("%s/%s: %w", UnstableDir, unstableFileName, err)

@@ -3,7 +3,6 @@ package load
 import (
 	"fmt"
 	"maps"
-	"reflect"
 	"slices"
 )
 
@@ -145,8 +144,8 @@ func NewUnstable(stableMeta *Meta, stableSchema *Schema, liveMeta *Meta, liveSch
 
 // newEntries returns the indexes, in the live union's list, of the entries
 // whose key the acp union lacks; an entry without a key is new unless the acp
-// union holds it as it is. The list is the anyOf, or the oneOf when there is
-// no anyOf, by the model's rule.
+// union holds it as it is, its annotations aside (sameShape). The list is the
+// anyOf, or the oneOf when there is no anyOf, by the model's rule.
 func newEntries(ours, live *Definition) []int {
 	liveList, ourList := live.OneOf, ours.OneOf
 	if len(live.AnyOf) > 0 {
@@ -164,7 +163,7 @@ func newEntries(ours, live *Definition) []int {
 		key := UnionEntryKey(e, disc)
 		known := slices.ContainsFunc(ourList, func(o *Definition) bool {
 			if key == "" {
-				return reflect.DeepEqual(o, e)
+				return sameShape(o, e, false)
 			}
 			return UnionEntryKey(o, disc) == key
 		})

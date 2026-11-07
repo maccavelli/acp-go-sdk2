@@ -1,0 +1,253 @@
+Refused: a value that the live unstable schema alone adds to a stable enum. Package
+unstable renders a new entry as a variant, which an enum does not have; the
+generator panicked on it, "index out of range [2] with length 0"
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G15).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"old": "x/old"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{
+  "$defs": {
+    "Shared": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        }
+      }
+    },
+    "OldRequest": {
+      "type": "object",
+      "properties": {
+        "s": {
+          "$ref": "#/$defs/Shared"
+        },
+        "k": {
+          "$ref": "#/$defs/K"
+        }
+      },
+      "required": [
+        "s"
+      ],
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "OldResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "CancelRequestNotification": {
+      "type": "object",
+      "x-side": "protocol",
+      "x-method": "$/cancel_request"
+    },
+    "K": {
+      "oneOf": [
+        {
+          "description": "A.",
+          "type": "string",
+          "const": "a"
+        },
+        {
+          "description": "B.",
+          "type": "string",
+          "const": "b"
+        }
+      ]
+    }
+  }
+}
+-- meta.unstable.json --
+{"version": 1, "agentMethods": {"old": "x/old", "new": "x/new"}, "clientMethods": {"watch": "x/watch"}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.unstable.json --
+{
+  "$defs": {
+    "Shared": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        }
+      }
+    },
+    "OldRequest": {
+      "type": "object",
+      "properties": {
+        "s": {
+          "$ref": "#/$defs/Shared"
+        },
+        "k": {
+          "$ref": "#/$defs/K"
+        }
+      },
+      "required": [
+        "s"
+      ],
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "OldResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/old"
+    },
+    "NewRequest": {
+      "type": "object",
+      "properties": {
+        "extra": {
+          "$ref": "#/$defs/Extra"
+        }
+      },
+      "required": [
+        "extra"
+      ],
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "NewResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "Extra": {
+      "type": "object",
+      "properties": {
+        "z": {
+          "type": "string"
+        }
+      }
+    },
+    "WatchRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "WatchResponse": {
+      "type": "object",
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "CancelRequestNotification": {
+      "type": "object",
+      "x-side": "protocol",
+      "x-method": "$/cancel_request"
+    },
+    "K": {
+      "oneOf": [
+        {
+          "description": "A.",
+          "type": "string",
+          "const": "a"
+        },
+        {
+          "description": "B.",
+          "type": "string",
+          "const": "b"
+        },
+        {
+          "description": "C.",
+          "type": "string",
+          "const": "c"
+        }
+      ]
+    }
+  }
+}
+-- unstable-v1.json --
+{
+  "version": 1,
+  "schema": "",
+  "methods": {
+    "agent": {
+      "new": "x/new"
+    },
+    "client": {
+      "watch": "x/watch"
+    }
+  },
+  "definitions": {
+    "UnstableExtra": "Extra",
+    "UnstableNewRequest": "NewRequest",
+    "UnstableNewResponse": "NewResponse",
+    "UnstableWatchRequest": "WatchRequest",
+    "UnstableWatchResponse": "WatchResponse"
+  },
+  "changes": {
+    "Shared": {
+      "properties": [
+        "b"
+      ]
+    }
+  },
+  "$defs": {
+    "Extra": {
+      "type": "object",
+      "properties": {
+        "z": {
+          "type": "string"
+        }
+      }
+    },
+    "NewRequest": {
+      "type": "object",
+      "properties": {
+        "extra": {
+          "$ref": "#/$defs/Extra"
+        }
+      },
+      "required": [
+        "extra"
+      ],
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "NewResponse": {
+      "type": "object",
+      "x-side": "agent",
+      "x-method": "x/new"
+    },
+    "Shared": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        }
+      }
+    },
+    "WatchRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "x-side": "client",
+      "x-method": "x/watch"
+    },
+    "WatchResponse": {
+      "type": "object",
+      "x-side": "client",
+      "x-method": "x/watch"
+    }
+  }
+}
+-- want.err --
+K: the live unstable schema adds an entry, index 2

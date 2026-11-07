@@ -173,42 +173,11 @@ func renderUnstable(schemaDir, root string, acpMeta *load.Meta, acpSchema *load.
 	return emit.RenderUnstable(m, emit.Unstable{Root: root, Local: u.Local, Variants: u.Variants, Wires: u.Wires})
 }
 
-// loadSchema reads the stable schema and, when present, merges the unstable
-// one. The provenance is nil when there is no unstable schema.
+// loadSchema reads the generator's inputs in schemaDir, by load.Committed,
+// which the tests of the protocol table read them by too
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G18).
 func loadSchema(schemaDir string) (*load.Meta, *load.Schema, *load.Provenance, error) {
-	meta, err := load.ReadMeta(schemaDir)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	schema, err := load.ReadSchema(schemaDir)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	unstableMeta, unstableMetaFound, err := load.ReadMetaUnstable(schemaDir)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	unstableSchema, unstableSchemaFound, err := load.ReadSchemaUnstable(schemaDir)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if unstableMetaFound != unstableSchemaFound {
-		return nil, nil, nil, fmt.Errorf("unstable schema/meta mismatch: meta found=%v schema found=%v", unstableMetaFound, unstableSchemaFound)
-	}
-	// The manifest, when present, is the unstable-origin API, frozen; the live
-	// unstable files have no part in it
-	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 1).
-	manifest, manifestFound, err := load.ReadUnstableManifest(schemaDir)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if manifestFound {
-		return load.MergeManifest(meta, schema, manifest)
-	}
-	if !unstableMetaFound {
-		return meta, schema, nil, nil
-	}
-	return load.MergeStableAndUnstable(meta, schema, unstableMeta, unstableSchema)
+	return load.Committed(schemaDir)
 }
 
 // findRepoRoot walks up from the working directory to the first directory

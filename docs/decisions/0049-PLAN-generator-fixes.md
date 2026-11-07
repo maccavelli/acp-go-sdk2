@@ -137,9 +137,10 @@ The order is the MADR's: the mediums first (G16, G1, G2, G15, G17, G3, G18), the
    * `UnionEntryKey` (`load/merge.go:410`) keys an entry that has a `const` and no key property by its `const`;
    * `newEntries` (`load/unstable.go:150-176`) compares a keyless entry with the annotations (`description`, `title`,
      `x-docs-ignore`) left out;
-   * `model.Build` refuses an unstable added-entry index that the model's type does not have: "ToolKind: the live unstable
+   * ~~`model.Build` refuses an unstable added-entry index that the model's type does not have: "ToolKind: the live unstable
      schema adds an entry, index 10, that a ToolKind enum cannot hold". `emit/unstable.go:74` then never indexes past
-     `Variants`.
+     `Variants`.~~ *Amended 2026-11-07, deviation 1:* `emit.RenderUnstable` refuses it, before rendering, with that
+     message. `Build` never receives the indexes.
 
    Tests:
    * `load`: `TestNewEntriesConstEntries`. A changed description gives no entry, and a new value gives its index.
@@ -163,7 +164,8 @@ The order is the MADR's: the mediums first (G16, G1, G2, G15, G17, G3, G18), the
    shows `ClientNotification.Params` still `json.RawMessage`. Seen to fail: the refusal removed; the const retyped as a string.
 4. **G3.** `applyChange` (`load/manifest.go:184-244`) refuses a changed property, or entry, that the stable schema now holds
    with a different definition: "manifest: Shared.b: the stable schema now defines it, differently; drop it from the
-   manifest's changes". Annotations are left out of the comparison, as in G15.
+   manifest's changes". ~~Annotations are left out of the comparison, as in G15.~~ *Amended 2026-11-07, deviation 2:*
+   annotations and `default` are left out of the comparison, at every depth.
    * Case: `refuse-unstable-manifest-stabilized.txtar`, from the MADR's `stabilized.txtar` probe: the stable `Shared.b` is
      `{"type":"integer"}`, and the manifest's frozen one a string.
    * `accept-unstable-manifest-changed.txtar` stays accepted.
@@ -497,3 +499,119 @@ All four as required.
   the nine changed files: exit 0 each.
 
 **Status:** no deviation. Staged for the owner, who commits. Phase 2, G2, G15, G17, G3 and G18, begins on the owner's word.
+
+### Phase 2: G2, G15, G17, G3 and G18, the model's mediums, 2026-11-07
+
+The owner committed phase 1 as `5e0761b`, and said "committed, proceed".
+
+**Deviation 1, 2026-11-07: where G15's refusal goes.**
+
+* **Found:** step 2.2's third bullet puts the refusal in `model.Build`. `Build` never receives the added-entry indexes: they
+  go from `load.NewUnstable` to `emit.RenderUnstable` (`cmd/generate/main.go:162-169`), as `emit.Unstable.Variants`. And
+  `emit/unstable.go:74` indexes `t.Variants[i]` with no check, which is the panic.
+* **Decision:** the owner chose the recommended option. `emit.RenderUnstable` refuses, before rendering, an index that the
+  model's type does not have, naming the type and the index. It already returns an error and holds both. Not chosen: an
+  `Input` field for `Build`; the check in `main.go`'s `renderUnstable`, which would leave `emit` able to panic for another
+  caller.
+* **Scope:** `emit/unstable.go` was already in scope. No file is added.
+* **The MADR:** not amended. G15's fix, "refuse an index the model's type does not have, with an error instead of a panic",
+  names no place.
+
+**Deviation 2, 2026-11-07: G3's comparison and the manifest's own overrides.**
+
+* **Found:** with step 2.4's refusal in place, `cd cmd/generate && go run .` exited 1: "generate: unstable-v1.json: change of
+  "AgentCapabilities": property "mcpCapabilities": the stable schema now defines it, differently; drop it from the manifest's
+  changes". That refuses the committed schemas, which design rule 2 stops on.
+* **The cause:** a scratch script, `g3_diff.py`, compared each property in the manifest's `changes` with the stable schema's,
+  annotations aside. Two are in the stable schema with another shape: `AgentCapabilities.mcpCapabilities` and
+  `InitializeResponse.agentCapabilities`. Each differs only in `default`, where the frozen one adds the unstable
+  `"acp": false`, as `McpCapabilities.acp` is unstable. The manifest overrides them on purpose. The other eleven are not in the
+  stable schema.
+* **Decision:** the owner chose the recommended option. G3 compares without annotations and without `default`, at every
+  depth. A change of type or shape, G3's hazard, is still refused. Not chosen: recording freeze-time stable copies in the
+  manifest, or marking deliberate overrides in it, each a change of the manifest's format.
+* **The trial:** in a scratch copy with the comparison so, `go run .` exited 0, and `git status --porcelain` was empty: every
+  generated file the same. So step 2.1's, 2.2's, 2.3's and 2.5's changes refuse nothing committed either.
+* **Scope:** no file added.
+* **The MADR:** G3's fix is amended, 2026-11-07.
+
+**What changed:**
+
+* **G2.** `renderer` (`cmd/generate/internal/model/defaults.go`) carries `fallbacks`, the fields, as `Type.key`, whose schema
+  default it is rendering in place of an absent key. `structValue` refuses a field met again among them: "the default recurses
+  through Node.next". Only a schema default can lead back to itself, as an explicit value is finite.
+* **G15:**
+  * `UnionEntryKey` (`load/merge.go`) keys an entry that has none of the other keys by its `const`, as `value "a"`. It is
+    checked last, so no entry that had a key before changes it, a titled const included.
+  * `newEntries` (`load/unstable.go`) matches a keyless entry by `sameShape`, a new helper in `load/merge.go`, which leaves out
+    `description`, `title` and `x-docs-ignore` at every depth.
+  * `emit.RenderUnstable` refuses an index the model's type lacks, per deviation 1: "K: the live unstable schema adds an entry,
+    index 2, that the generated K, with 0 variants, cannot hold".
+* **G17:**
+  * `walkRefs` (`model/schema.go`) calls a new `twoNonNullMembers` on each property: "Alias.properties.p: anyOf of two non-null
+    members, which one field cannot hold".
+  * `optionalTypeRef` (`model/fields.go`) keeps a `const` member's own `type`, and gives an untyped one its value's JSON kind,
+    by a new `constType`.
+* **G3.** `applyChange` (`load/manifest.go`) refuses a changed property, or frozen entry, that the stable schema holds with
+  another shape. Per deviation 2, it compares by `sameShape` with defaults left out too: "change of "Shared": property "b": the
+  stable schema now defines it, differently; drop it from the manifest's changes".
+* **G18.** `load.Committed` (`load/load.go`) holds what `loadSchema` held. `loadSchema` (`cmd/generate/main.go`) calls it, and
+  so does `committedInput` (`model/classes_test.go`), in place of `MergeStableAndUnstable`.
+
+**Tests:**
+
+* Engine cases, the seven the step names:
+  * `refuse-default-recursive.txtar`, with `next` as an `allOf` of one `$ref` with the default, as the committed
+    `ElicitationSchema.type` is, since phase 4's G5 (d) refuses a keyword beside a `$ref`;
+  * `accept-unstable-enum-reworded.txtar` and `refuse-unstable-enum-value.txtar`, built from `accept-unstable-empty.txtar`,
+    with a stable enum `K` used by `OldRequest`;
+  * `refuse-unstable-manifest-stabilized.txtar`, built from `accept-unstable-manifest-changed.txtar`, with the stable `Shared.b`
+    an integer;
+  * `refuse-two-member-union.txtar`; `refuse-two-member-union-refs.txtar`, a `oneOf` of two references;
+  * `accept-typed-const-member.txtar`, generated as `N *int32`, `F *bool` and `S *string`. Its behaviour test decodes
+    `{"n":5,"f":true,"s":"x"}`.
+* `load`'s `TestNewEntriesConstEntries`:
+  * a reworded value, a new value at index 2, and reordered values;
+  * the key itself, and a titled const's;
+  * a reworded keyless entry, matched, and a keyless entry of another shape, new.
+* `load`'s `TestCommittedFollowsTheManifest`, from `accept-unstable-empty.txtar` with `x/late` added to the live unstable
+  files: `Committed` lacks it, and the live merge, the control, has it.
+* `TestApplyChange` gains three cases: a changed property the stable schema now types otherwise, refused; a frozen entry it now
+  shapes otherwise, refused; a default-only override, accepted with the frozen default.
+
+**Seen to fail,** by `plants_gen.py 2`, each break in its own copy of the working tree:
+
+* G2, the check removed and the call back to `r.value`, as at `73b0537`: "fatal error: stack overflow". The first run of
+  this plant left `via.value` in place. It exited 1 too, "signal: killed" after 90 s, as the growing `fallbacks` ran out of
+  memory before the stack did. The plant was corrected to restore the original call.
+* G15:
+  * the const key removed: "unstable_test.go:40: UnionEntryKey of the const "a" = "", want value "a"";
+  * the keyless comparison with annotations: "unstable_test.go:49: a keyless entry reworded: newEntries = [0], want none";
+  * both removed: "engine_test.go:47: K: the live unstable schema adds an entry, index 0, …";
+  * the index check removed: "panic: runtime error: index out of range [2] with length 0".
+
+  The two `load` changes each mask the other in `newEntries`, so each is shown by its own assertion, and the engine case by
+  both.
+* G17: the refusal removed, "engine_test.go:47: run accepted the schema", for each of the two cases; the const typed as a
+  string again, `want.api` differing at "type Thing struct{F *string …; N *string …".
+* G3:
+  * the refusal removed: "run accepted the schema", and "manifest_test.go:194: a changed property the stable schema now types
+    otherwise: <nil>, …";
+  * defaults compared too: "manifest_test.go:206: a default-only override: property "extra": the stable schema now defines it,
+    differently; …".
+* G18, `Committed` merging the live files: "unstable_test.go:96: Committed has the live unstable x/late, which the manifest
+  lacks: …".
+
+All as required.
+
+**Checks:**
+
+* `cd cmd/generate && go run .`: exit 0. `git diff --exit-code -- '*_gen.go' '*_gen_test.go' unstable/`: exit 0.
+* `python3 tools/gates.py regen`: "ok   regen (exit 0)".
+* `cd cmd/generate && go test -race -count=1 -shuffle=on ./...`: every package `ok`.
+* `make pre-add-check FILES="<the phase's Go files and engine cases>"`: exit 0, "12 file(s) gofmt-clean; both modules linted,
+  vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py` over the changed files: exit 0 each.
+
+**Status:** two deviations, recorded above. Staged for the owner, who commits. Phase 3, G9, G27, G28 and G10, begins on the
+owner's word.

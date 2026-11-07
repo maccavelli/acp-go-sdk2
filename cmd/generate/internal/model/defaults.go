@@ -96,6 +96,11 @@ func (m *Model) renderDefaults() error {
 type renderer struct {
 	m       *Model
 	structs map[string]fieldsOf
+	// fallbacks are the fields, as Type.key, whose schema default is being
+	// rendered in place of an absent key. A field met again among them is a
+	// default that recurses without end
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G2).
+	fallbacks []string
 }
 
 // value renders v, a JSON value, as a Go value of r. An item of a slice or a
@@ -246,13 +251,21 @@ func (r renderer) structValue(name string, s fieldsOf, v any, item bool) (Value,
 		if !present && f.Required {
 			return Value{}, fmt.Errorf("%s lacks the required key %q", name, f.Key)
 		}
+		via := r
 		if !present || (x == nil && f.Default != nil && !f.Default.AllowNull) {
 			if f.prop == nil || f.prop.Default == nil {
 				continue
 			}
 			x = f.prop.Default
+			// An explicit value is finite; only a schema default can lead
+			// back to itself.
+			field := name + "." + f.Key
+			if slices.Contains(r.fallbacks, field) {
+				return Value{}, fmt.Errorf("the default recurses through %s", field)
+			}
+			via.fallbacks = append(slices.Clone(r.fallbacks), field)
 		}
-		fv, err := r.value(f.Type, x, false)
+		fv, err := via.value(f.Type, x, false)
 		if err != nil {
 			return Value{}, fmt.Errorf("%s.%s: %w", name, f.Key, err)
 		}
