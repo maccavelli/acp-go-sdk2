@@ -746,7 +746,7 @@ variants must be explicitly opted in to." The elicitation gate refuses the analo
 
 ### F-G: the generator
 
-**G1. Medium. `output.Check` checks a different tree from the one `Write` leaves.** `cmd/generate/internal/output/check.go:53-56`,
+**G1. Medium; done 2026-11-07 by `5e0761b`, for `v1.34.2`. `output.Check` checks a different tree from the one `Write` leaves.** `cmd/generate/internal/output/check.go:53-56`,
 `:72-74`, `:183-215`; `write.go:62`, `:89-93`. `handWritten` takes the directory's Go files less the rendered names, so a stale
 `*_gen.go` is checked as hand-written and then deleted by `Write`; and `Check` returns before `unstable/` when nothing unstable
 renders, though `Write` removes `unstable_gen.go`. Read by the author at those lines.
@@ -756,11 +756,11 @@ renders, though `Write` removes `unstable_gen.go`. Read by the author at those l
   have deleted it.
 * Fix: exclude the stale files from the checked set, and check `unstable/` whenever it holds hand-written files.
 
-**G2. Medium. A self-referential default crashes the generator.** `internal/model/defaults.go:236-262`: `structValue` recurses
+**G2. Medium; done 2026-11-07 by `1a8d09c`, for `v1.34.2`. A self-referential default crashes the generator.** `internal/model/defaults.go:236-262`: `structValue` recurses
 through a property's default with no visited set. **Probe** (`recursive-default.txtar`, re-run): "gen rc=2", "fatal error: stack
 overflow", in `renderer.structValue`. `FuzzBuild` found it in 25 s. Fix: refuse a recursive default, naming it.
 
-**G3. Medium. A property the manifest changed silently overrides the stable schema's own later definition of it.**
+**G3. Medium; done 2026-11-07 by `1a8d09c`, for `v1.34.2`. A property the manifest changed silently overrides the stable schema's own later definition of it.**
 `internal/load/manifest.go:194-203`, `:222-228`; `model.go:495-505` (`markUnstableEntries`; corrected 2026-11-07, from
 `:476-478`) drops the notice too. **Probe** (`stabilized.txtar`, re-run): the
 stable `Shared.b` is `{"type":"integer"}`; the generator exits 0 and emits `B string`; decoding `{"b":5}` fails "cannot unmarshal
@@ -769,7 +769,7 @@ number into Go struct field Shared.b of type string". Fix: refuse when the stabl
 leaves out annotations and `default`. The committed manifest overrides `AgentCapabilities.mcpCapabilities` and
 `InitializeResponse.agentCapabilities` on purpose, and only their defaults differ, by the unstable `"acp": false`.
 
-**G4. Low. Integer bounds pass through `float64`.** `load/load.go:64-65`, `model/validate.go:311-361` (`bounds`),
+**G4. Low; done 2026-11-07 by `ac41197`, for `v1.34.2`. Integer bounds pass through `float64`.** `load/load.go:64-65`, `model/validate.go:311-361` (`bounds`),
 `emit/types.go:1466-1474` (`boundLit`: `uint64` of an out-of-range float, implementation-defined). Corrected 2026-11-07, from
 `validate.go:63-67`, `:304-321` and `types.go:1306-1314`. **Probe** (investigator): a `uint64`
 `minimum` of 2^64 emits `< 18446744073709551615` on `arm64` and `< 9223372036854775808` on `amd64`; an `int64` `maximum` of
@@ -778,42 +778,42 @@ leaves out annotations and `default`. The committed manifest overrides `AgentCap
 integer type's bound is computed exactly with `math/big` instead, as 0019's G12 and G21 accept a fractional bound and a
 `uint64` one above `math.MaxInt64`.
 
-**G5. Low. Shapes silently dropped or loosened, each exit 0.** (a) `not` and `unevaluatedProperties` outside a catch-all;
+**G5. Low; done 2026-11-07 by `ac41197`, for `v1.34.2`. Shapes silently dropped or loosened, each exit 0.** (a) `not` and `unevaluatedProperties` outside a catch-all;
 (b) `const` and `enum` on an object property; (c) bounds on array items and map values; (d) `$ref` siblings; (e) a definition
 that is only a `$ref`, emitted as raw JSON; (f) an unknown `type` name, emitted as raw JSON; (g) duplicate keys, the last one
 winning. **Probe** (investigator, one probe schema each); none occurs in the committed schemas (scripts `latent.py`,
 `kwpaths.py`, `constprops.py`). Fix: refuse each with its path, as 0012 aims.
 
-**G6. Low. A non-zero scalar default with `omitempty` cannot send the zero value.** `model/fields.go:551-567` (corrected
+**G6. Low; done 2026-11-07 by `624edc1`, for `v1.34.2`. A non-zero scalar default with `omitempty` cannot send the zero value.** `model/fields.go:551-567` (corrected
 2026-11-07): the default is read at `:551-560`, and `:561-567` tags `omitempty` on every optional field whose default is not a
 nil-able array or object. **Probe**
 (investigator): `{"n":0,"s":"","b":false}` with defaults `5`, `"d"`, `true` re-encodes without `s` and `b` (`n`, nullable,
 is a pointer and is sent; corrected 2026-11-03), and the peer reads the defaults. The committed schemas have one non-zero scalar default, where `""` is invalid anyway. Fix: refuse, or emit a pointer.
 
-**G7. Low. Defaults on nested inline objects and inline-variant properties are not applied.** `model/fields.go:588-610`
+**G7. Low; done 2026-11-07 by `ac41197`, for `v1.34.2`. Defaults on nested inline objects and inline-variant properties are not applied.** `model/fields.go:588-610`
 (`plainFields`; corrected 2026-11-03, and 2026-11-07) says so in its comment at `:590`, while `checkDefaults`
 (`model/fields.go:380`) accepts them. **Probe** (investigator):
 "inner.flag=false (schema default true)". None in the committed schemas. Fix: refuse, or apply.
 
-**G8. Low. `meta.json` without `version` emits `ProtocolVersionNumber = 0`.** `load/load.go:18-24`, `merge.go:84`; and `load/manifest.go:116`, on the path `main.go` takes, copies `stableMeta.Version`
+**G8. Low; done 2026-11-07 by `ac41197`, for `v1.34.2`. `meta.json` without `version` emits `ProtocolVersionNumber = 0`.** `load/load.go:18-24`, `merge.go:84`; and `load/manifest.go:116`, on the path `main.go` takes, copies `stableMeta.Version`
 unchecked (added 2026-11-07). **Probe**
 (`noversion.txtar`, re-run): "gen rc=0". Fix: require `version >= 1`.
 
-**G9. Low. `Check` type-checks only the generator's own `GOOS` and `GOARCH`, the host's unless the environment sets them.**
+**G9. Low; done 2026-11-07 by `5124800`, for `v1.34.2`. `Check` type-checks only the generator's own `GOOS` and `GOARCH`, the host's unless the environment sets them.**
 `output/check.go:189-191`. **Probe** (investigator): a Windows-only file that collides passes on `darwin`, and `GOOS=windows go build` then fails. Fix: also check for `windows` and
 `linux`.
 
-**G10. Low. `TestGeneratedFilesUpToDate` misses a stale root `*_gen.go`.** `cmd/generate/main_test.go:38-68` (corrected
+**G10. Low; done 2026-11-07 by `5124800`, for `v1.34.2`. `TestGeneratedFilesUpToDate` misses a stale root `*_gen.go`.** `cmd/generate/main_test.go:38-68` (corrected
 2026-11-03) checks `unstable/` only. **Probe** (investigator): with `extra_gen.go` at the root, the test passes. Fix: the same loop for the root.
 
-**G11. Low. Stray positional arguments are ignored.** `main.go:37-39`. **Probe** (investigator): `gen /some/other/out stray` exits 0
+**G11. Low; done 2026-11-07 by `78f72e9`, for `v1.34.2`. Stray positional arguments are ignored.** `main.go:37-39`. **Probe** (investigator): `gen /some/other/out stray` exits 0
 and writes to the working directory's repository. Fix: refuse `fs.NArg() > 0`.
 
-**G12. Low. `FuzzBuild` starts almost only from refused seeds, and never type-checks.** `cmd/generate/fuzz_test.go:36` passes an
+**G12. Low; done 2026-11-07 by `2d8b62f`, for `v1.34.2`. `FuzzBuild` starts almost only from refused seeds, and never type-checks.** `cmd/generate/fuzz_test.go:36` passes an
 empty `Meta`, so since 0019's G18 nearly every seed is an unlisted method. **Probe** (investigator): of 187 seeds, "accepted 1,
 refused as unlisted-method 116, refused otherwise 70". Fix: fuzz each case's schema with its own `meta.json`, and run `Check`.
 
-**G13. Info. `Model.Validates` is used only by tests.** `model/validate.go:80` (corrected 2026-11-07); `deadcode ./...` lists it. Fix: move it to a test
+**G13. Info; done 2026-11-07 by `e31707c`, for `v1.34.2`. `Model.Validates` is used only by tests.** `model/validate.go:80` (corrected 2026-11-07); `deadcode ./...` lists it. Fix: move it to a test
 file, or keep it as a test helper by name.
 
 *Added 2026-11-07,* by the fourth re-assessment at `ff31967`: G14 to G36. Paths are relative to `cmd/generate/internal/`
@@ -841,7 +841,7 @@ zero value is kept, not dropped. It then fails `Validate`, which `checkInbound` 
 * **Fix:** skip an item whose raw value is `null`, unless the element type admits null. This changes the generated code, so
   it reaches consumers.
 
-**G15. Medium. A change to a stable enum in the live unstable schema, even to one value's description, crashes the
+**G15. Medium; done 2026-11-07 by `1a8d09c`, for `v1.34.2`. A change to a stable enum in the live unstable schema, even to one value's description, crashes the
 generator.** Stable enums are a `oneOf` of `{"const": …}` entries, which have no `UnionEntryKey`. `load/unstable.go:150-176`
 (`newEntries`) then compares entries with `reflect.DeepEqual`, so any difference counts as a new variant, and
 `load/unstable.go:81-92` records its index. The model builds the enum with no `Variants`, and `emit/unstable.go:74`
@@ -857,7 +857,7 @@ generator.** Stable enums are a `oneOf` of `{"const": …}` entries, which have 
 * **Fix:** key a const-only entry by its `const`, compare entries without their annotations, and refuse an index the model's
   type does not have, with an error instead of a panic.
 
-**G16. Medium. `Write` deletes a hand-written file named `*_gen_test.go`, silently.** `output/write.go:99-124` (`staleFiles`)
+**G16. Medium; done 2026-11-07 by `5e0761b`, for `v1.34.2`. `Write` deletes a hand-written file named `*_gen_test.go`, silently.** `output/write.go:99-124` (`staleFiles`)
 lists every `*_gen.go` and `*_gen_test.go` in the root and in `unstable/` that the run did not render, and `:89-93` removes
 them. `helpers_gen_test.go` is the usual Go name for a hand-written test of `helpers_gen.go`.
 
@@ -868,7 +868,7 @@ them. `helpers_gen_test.go` is the usual Go name for a hand-written test of `hel
 * **Committed tree:** no such file today.
 * **Fix:** delete only files that carry the generated header (`// Code generated … DO NOT EDIT.`), and name each one removed.
 
-**G17. Medium. A property whose `anyOf` or `oneOf` has exactly two members is typed from one of them, the wrong one where both
+**G17. Medium; done 2026-11-07 by `1a8d09c`, for `v1.34.2`. A property whose `anyOf` or `oneOf` has exactly two members is typed from one of them, the wrong one where both
 are non-null.** `model/fields.go:331-360` (`optionalTypeRef`) loops over the two members and keeps the last non-null one
 (`nonNull = e`). It also retypes a `const` member as a string (`nn.Type = schemaTypeString`), whatever the const's own type.
 
@@ -883,7 +883,7 @@ are non-null.** `model/fields.go:331-360` (`optionalTypeRef`) loops over the two
 * **Fix:** refuse an `anyOf`/`oneOf` with two non-null members, and type a const from its own type, or refuse a const that is
   not a string.
 
-**G18. Medium. The tests of the protocol table against the committed schemas build their model from the live unstable schema;
+**G18. Medium; done 2026-11-07 by `1a8d09c`, for `v1.34.2`. The tests of the protocol table against the committed schemas build their model from the live unstable schema;
 the generator builds from the frozen manifest.** `cmd/generate/internal/model/classes_test.go:44` (`committedInput`) calls
 `load.MergeStableAndUnstable`. `cmd/generate/main.go:199-201` (corrected 2026-11-07) uses `load.MergeManifest` whenever `schema/unstable-v1.json`
 exists, which it does. `committedInput` feeds `TestProtocolTableAppliesToCommittedSchema` (`model/protocol_test.go:442`), the
@@ -901,7 +901,7 @@ union-class tests (`model/classes_test.go:55`, `:118`, `:220`), `model/keywords_
   find.
 * **Fix:** build `committedInput` with the same function `main.go`'s `loadSchema` uses, shared.
 
-**G19. Low. `Validate` and the gates do not reach inside a union variant that is a named array, and nothing refuses that
+**G19. Low; done 2026-11-07 by `08ad4c1`, for `v1.34.2`. `Validate` and the gates do not reach inside a union variant that is a named array, and nothing refuses that
 shape.** `model/validate.go:160-163` adds only `InlineStruct` variants to the validation shapes, and `:110-112` sets
 `vi.Validates` from `m.validates[vi.TypeName]`, which a named slice type such as `[]Option` never gets.
 `emit/types.go:1237-1243` then emits no call for that variant. `nested()` (`model/validate.go:271-289`) refuses a shape that
@@ -916,7 +916,7 @@ shape.** `model/validate.go:160-163` adds only `InlineStruct` variants to the va
 * **Fix:** descend into the items of `InlineNamed` slice and map variants, in `Validate` and in the gates, or refuse such a
   variant when its items validate or are gated.
 
-**G20. Low. A capability rule with a `Property` reaches only its definition's own fields, so it can apply and gate nothing.**
+**G20. Low; done 2026-11-07 by `08ad4c1`, for `v1.34.2`. A capability rule with a `Property` reaches only its definition's own fields, so it can apply and gate nothing.**
 `model/gates.go:200-208` (`gateCheck`) searches `t.Fields`, and returns `false, nil` when the property is not there. The patch,
 empty-clears, null-retained and absolute-path rules instead follow `f.prop` into every copy (`model/model.go:1455-1477`,
 `:1562-1577`, `:1624-1639`; `model/validate.go:185`). `resolveKeyOrders` (`model/model.go:1660-1676`) also reads only `t.Fields`.
@@ -933,7 +933,7 @@ it would gate in part.
 * **Fix:** resolve gates and key orders per field by `f.prop` across `Fields`, `NestedStructs` and inline variants, as the
   patch rule does, and refuse what cannot be gated.
 
-**G21. Low. A discriminator written as a one-value `enum` is not recognised, so every payload decodes into `Unknown`.**
+**G21. Low; done 2026-11-07 by `624edc1`, for `v1.34.2`. A discriminator written as a one-value `enum` is not recognised, so every payload decodes into `Unknown`.**
 `model/model.go:748-756` (`discriminatorValue`) and `model/schema.go:134-136` read only `Const`.
 
 * **Probe** (investigator): `Shape.oneOf` variants with `"kind": {"type":"string","enum":["circle"]}` and `["square"]`, and a
@@ -943,7 +943,7 @@ it would gate in part.
 * **Committed schemas:** not reached.
 * **Fix:** treat a one-value enum as a const, or refuse an enum on a discriminator.
 
-**G22. Low. An `anyOf` whose members are all string consts is modelled as an open enum, so `Validate` accepts any string.**
+**G22. Low; done 2026-11-07 by `624edc1`, for `v1.34.2`. An `anyOf` whose members are all string consts is modelled as an open enum, so `Validate` accepts any string.**
 `model/schema.go:167-194` (`isOpenStringEnum`) requires only that some member is a const, although its comment says the type
 permits arbitrary strings. `model/validate.go:212-215` leaves open enums out of the closed-enum checks.
 
@@ -952,7 +952,7 @@ permits arbitrary strings. `model/validate.go:212-215` leaves open enums out of 
   member.
 * **Fix:** require at least one non-const string member for an open enum, and type the rest as closed.
 
-**G23. Low. A required nullable collection turns a relayed `null` into `[]`.** `model/fields.go:580` and `:603` set `Fill`
+**G23. Low; done 2026-11-07 by `624edc1`, for `v1.34.2`. A required nullable collection turns a relayed `null` into `[]`.** `model/fields.go:580` and `:603` set `Fill`
 from `Required` and `IsCollection()` and ignore `includesNull`.
 
 * **Probe** (investigator): required `xs: {"type":["array","null"]}` becomes `Xs []string`. `{"xs":null}` decodes with no error
@@ -960,7 +960,7 @@ from `Required` and `IsCollection()` and ignore `includesNull`.
 * **Committed schemas:** not reached.
 * **Fix:** make a required nullable collection a pointer, or do not fill it when null is admitted.
 
-**G24. Low. A closed-enum array marked `x-deserialize-default-on-error` becomes nil, not its default, when an item is
+**G24. Low; done 2026-11-07 by `624edc1`, for `v1.34.2`. A closed-enum array marked `x-deserialize-default-on-error` becomes nil, not its default, when an item is
 unknown.** `emit/types.go:787-793` (`unknownAbsent`'s `RefSlice` case without skip-invalid-items) assigns `nil`, and its comment
 says the array "takes its zero value". The pointer case, `:784-786`, also ignores `def`. The scalar case, `:796-800`, assigns
 `def`.
@@ -971,7 +971,7 @@ says the array "takes its zero value". The pointer case, `:784-786`, also ignore
 * **Committed schemas:** not reached. The two closed-enum arrays, `audience` and `positionEncodings`, skip invalid items.
 * **Fix:** assign `def`, when there is one, in the slice and pointer cases.
 
-**G25. Low. A deprecated property copied into an inline variant has no `Deprecated:` notice.** `model/fields.go:599`
+**G25. Low; done 2026-11-07 by `08ad4c1`, for `v1.34.2`. A deprecated property copied into an inline variant has no `Deprecated:` notice.** `model/fields.go:599`
 (`plainFields`) never sets `Deprecation`. `deprecationsOf` (`model/protocol.go:1013-1023`) and `applyFrozenDeprecations`
 (`model/frozen.go:49-59`) also mark only `t.Fields`.
 
@@ -980,7 +980,7 @@ says the array "takes its zero value". The pointer case, `:784-786`, also ignore
 * **Committed schemas:** not reached.
 * **Fix:** carry `deprecationOf(prop)` in `plainFields`, and mark copies by `f.prop`.
 
-**G26. Low. Some name collisions are refused only at `Check`, naming a generated file instead of the schema or the rule.**
+**G26. Low; done 2026-11-07 by `08ad4c1`, for `v1.34.2`. Some name collisions are refused only at `Check`, naming a generated file instead of the schema or the rule.**
 
 * **Interface methods:** `model/methods.go:171-184` keeps one set of method names per binding.
   *Amended 2026-11-07,* by [0049-PLAN-generator-fixes.md](0049-PLAN-generator-fixes.md)'s phase 6: the probe's shape below
@@ -999,7 +999,7 @@ says the array "takes its zero value". The pointer case, `:784-786`, also ignore
 * **Fix:** keep one set of outbound method names per side, with the connections' own methods reserved; apply `checkNotMethod`
   and a check across rules to a key order's `Field`; check `Var` with `token.IsIdentifier`.
 
-**G27. Low. `Check` does not type-check the root's external test package, or the packages that import the root.**
+**G27. Low; done 2026-11-07 by `5124800`, for `v1.34.2`. `Check` does not type-check the root's external test package, or the packages that import the root.**
 `output/check.go:183-215` (`handWritten`) lists `GoFiles` and `TestGoFiles`, never `XTestGoFiles`. 17 root files are
 `package acp_test`, and `acptest`, `agentproc`, `clienthost`, `remote` and `example/` are not checked at all.
 
@@ -1009,7 +1009,7 @@ says the array "takes its zero value". The pointer case, `:784-786`, also ignore
 * **Committed tree:** not reached. CI's `go vet` and build catch it after the files are written.
 * **Fix:** type-check `XTestGoFiles` against the in-memory root, as `servingImporter` does for `unstable/`.
 
-**G28. Low. `Check` reads the language version from `<out>/go.mod` only.** `output/check.go:219-234` (`goVersion`) reads
+**G28. Low; done 2026-11-07 by `5124800`, for `v1.34.2`. `Check` reads the language version from `<out>/go.mod` only.** `output/check.go:219-234` (`goVersion`) reads
 `filepath.Join(dir, "go.mod")` and otherwise returns `""`, the newest version. `rootImportPath` (`cmd/generate/main.go:94-118`)
 walks up to the enclosing `go.mod`.
 
@@ -1019,7 +1019,7 @@ walks up to the enclosing `go.mod`.
 * **Committed tree:** not reached, since the repository's `-out` is the module root.
 * **Fix:** take the `go` line from the `go.mod` that `rootImportPath` finds.
 
-**G29. Low. Nothing requires a rule where the schema's wording asks for a capability gate, a method gate or an absolute path.**
+**G29. Low; done 2026-11-07 by `2d8b62f`, for `v1.34.2`. Nothing requires a rule where the schema's wording asks for a capability gate, a method gate or an absolute path.**
 Four rule kinds have a scan of the schema's descriptions that requires a rule wherever their wording appears: `patchWording`
 and `retainedWording` (`model/patch_test.go:307`, `:349`), `replaceWording` (`:483`) and `fallbackWording`
 (`model/keyless_test.go:93`). The capability, method-gate and absolute-path rules have only the converse check, that each rule
@@ -1034,7 +1034,7 @@ applies, and fixed counts (`model/protocol_test.go:483`, `model/gates_test.go:22
   variants.
 * **Fix:** the same wording scans for these three rule kinds.
 
-**G30. Info. Nine hand-written `Kind()` methods compile only because one gate reads a raw key.** `emit/gates.go:59-73`
+**G30. Info; done 2026-11-07 by `e31707c`, for `v1.34.2`. Nine hand-written `Kind()` methods compile only because one gate reads a raw key.** `emit/gates.go:59-73`
 (`markGateHelpers`) marks `unknownKind` only for a gate check with a `RawKey`, and `emit/decode.go:71-74` emits it only when
 marked. Yet `helpers.go:342`, `:366`, `:383`, `:398`, `:413`, `:429`, `:469`, `:535` and `:554` call it. The one check with a
 `RawKey` today is the prompt's undeclared-variant rule (`model/acp.go:232`).
@@ -1043,7 +1043,7 @@ marked. Yet `helpers.go:342`, `:366`, `:383`, `:398`, `:413`, `:429`, `:469`, `:
   eight more lines like it.
 * **Fix:** emit `unknownKind` whenever a union has an `Unknown`.
 
-**G31. Info. The manifest's nested objects match keys in any letter case, although `ParseManifest` decodes "strictly".**
+**G31. Info; done 2026-11-07 by `78f72e9`, for `v1.34.2`. The manifest's nested objects match keys in any letter case, although `ParseManifest` decodes "strictly".**
 `load/load.go:141-148` (`decodeStrict`) checks letter case on the top level only, and `ManifestMethods` and `ManifestChange`
 (`load/manifest.go:45-60`) have no strict decoder.
 
@@ -1051,20 +1051,20 @@ marked. Yet `helpers.go:342`, `:366`, `:383`, `:398`, `:413`, `:429`, `:469`, `:
   `"CHANGES"` is refused.
 * **Fix:** a `decodeStrict` `UnmarshalJSON` on both, as `Discriminator` has.
 
-**G32. Info. A definition that is `null` is dropped silently, and a `$ref` to it reports the wrong cause.**
+**G32. Info; done 2026-11-07 by `ac41197`, for `v1.34.2`. A definition that is `null` is dropped silently, and a `$ref` to it reports the wrong cause.**
 `load/load.go:213-216` keeps it as nil, and the model skips it.
 
 * **Probe** (investigator): `{"$defs": {"X": null}}` exits 0 with no `type X`. A `$ref` to it fails "names no definition".
 * **How it differs from G5:** G5 drops keywords and shapes; this drops a whole definition, by the load's explicit `null` case.
 * **Fix:** refuse a `null` definition by name.
 
-**G33. Info. `generate -h` exits 1.** `cmd/generate/main.go:37-39` returns `fs.Parse`'s error, `flag.ErrHelp` included, as a
+**G33. Info; done 2026-11-07 by `78f72e9`, for `v1.34.2`. `generate -h` exits 1.** `cmd/generate/main.go:37-39` returns `fs.Parse`'s error, `flag.ErrHelp` included, as a
 failure. It prints "generate: flag: help requested". **Fix:** exit 0 on `flag.ErrHelp`.
 
-**G34. Info. `docs/architecture.md`'s list of what the protocol table holds omits `DocNotes`.** `docs/architecture.md:182-282`
+**G34. Info; done 2026-11-07 by `e31707c`, for `v1.34.2`. `docs/architecture.md`'s list of what the protocol table holds omits `DocNotes`.** `docs/architecture.md:182-282`
 lists every rule kind but `DocNotes`, which `model/acp.go` holds 10 of. **Fix:** one bullet.
 
-**G35. Info. Two rule kinds have no engine case.** Engine cases run with `&model.ACP` (`cmd/generate/main.go:61`, called by `engine_test.go:75`; corrected 2026-11-07), so they
+**G35. Info; done 2026-11-07 by `2d8b62f`, for `v1.34.2`. Two rule kinds have no engine case.** Engine cases run with `&model.ACP` (`cmd/generate/main.go:61`, called by `engine_test.go:75`; corrected 2026-11-07), so they
 reach
 only the rule kinds ACP's table uses.
 
@@ -1074,14 +1074,14 @@ only the rule kinds ACP's table uses.
 * **Fix:** a unit case for a variant without a discriminator value, and an `accept-empty-clears` engine case with a behaviour
   test.
 
-**G36. Info. The table test looks a method up by its wire name alone.** `model/protocol_test.go:72-79` (`methodByWire`)
+**G36. Info; done 2026-11-07 by `2d8b62f`, for `v1.34.2`. The table test looks a method up by its wire name alone.** `model/protocol_test.go:72-79` (`methodByWire`)
 returns the first method with that name, agent methods first. `mcp/message` is on both sides, so a later client-side rule for
 it would be reported "not in the committed meta files". It can fail falsely but not pass falsely. **Fix:** look up by side and
 wire.
 
 *Added 2026-11-07,* by the fifth re-assessment at `73b0537`: G37.
 
-**G37. Low. G14's refusal misses an item that admits `null` through an `allOf`, or by having no type; `skipInvalid` then
+**G37. Low; done 2026-11-07 by `ac41197`, for `v1.34.2`. G14's refusal misses an item that admits `null` through an `allOf`, or by having no type; `skipInvalid` then
 drops a valid `null`.** `model/schema.go:393-408` (`admitsNull`) reads `type`, `anyOf`, `oneOf` and `$ref`, never `allOf`. It
 returns false for an item with no `type`, which admits every JSON value. `skipInvalid` (`emit/decode.go:427-448`) drops every
 `null` item.
@@ -1294,6 +1294,8 @@ released on its own, while the severity order inside each keeps R1 first. The pl
   * the table's tests and the fuzzer, G29, G35, G36 and G12;
   * the info findings, G13, G30 and G34;
   * the close.
+  *Done 2026-11-07,* phases 1 to 9, `5e0761b` to `e31707c`, under the deviations the PLAN records, with the MADR's
+  G3, G4 and G20 amended and G26's probe corrected; the patch `v1.34.2` follows, per Q29 (b).
 * `0049-PLAN-tooling-fixes.md`: T2 (with 0048), T1, T3, then T4 to T13, and F-C's dead `ConfigOptionUpdate.gates` through the
   generator. *Written 2026-11-04,* [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md), proposed, with T14, F-C's two
   untested `Error` methods and `abandon`, and Q16 to Q19 below. It groups the order into phases by tool: T2, T14 and T7;

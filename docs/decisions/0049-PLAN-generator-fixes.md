@@ -1276,3 +1276,101 @@ which helpers.go calls". As required. G13 and G34 are verified by `deadcode` and
 
 **Status:** no deviation. Staged for the owner, who commits. Phase 10, the close and the patch `v1.34.2`, begins on the
 owner's word.
+
+### Phase 10: close, 2026-11-07
+
+The owner committed phase 9 as `e31707c`, and said "committed, proceed".
+
+**The gates,** step 10.1, `tools/gates.py --all`, with the Linux and Windows hosts named per command: exit 0, 18 of 18.
+
+```text
+ok   regen (exit 0)
+ok   precheck (exit 0)
+  newfiles: no new .go files
+ok   newfiles (exit 0)
+ok   nojsonv2 (exit 0)
+ok   winvet (exit 0)
+ok   records (exit 0)
+ok   mdlint (exit 0)
+ok   idscan (exit 0)
+ok   tools (exit 0)
+ok   lint (exit 0)
+ok   fix (exit 0)
+ok   tidy (exit 0)
+ok   api (exit 0)
+ok   race3 (exit 0)
+ok   floor (exit 0)
+ok   platforms (exit 0)
+ok   windows (exit 0)
+ok   linux (exit 0)
+all gates passed
+```
+
+**The findings,** step 10.2. Each test or case failed with its fix removed in a copy of the tree, by `plants_gen.py`, as its
+phase's record quotes, but G13 and G34, verified by `deadcode` and by reading. G14 was
+[0049-PLAN-null-items-in-skip-invalid-arrays.md](0049-PLAN-null-items-in-skip-invalid-arrays.md)'s.
+
+| Finding | Phase | What shows it |
+| :--- | :---: | :--- |
+| G1 | 1 | `TestCheckSeesTheTreeWriteLeaves`, two of its subtests |
+| G2 | 2 | `refuse-default-recursive` |
+| G3 | 2 | `refuse-unstable-manifest-stabilized`; `TestApplyChange`'s three cases (deviation 2) |
+| G4 | 4 | `accept-validate-exact-bound`; `refuse-bound-uint64-range` (deviation 1) |
+| G5 | 4 | seven `refuse-*` cases, (a) twice; `TestDuplicateKeys`; `TestReferenceWithPropertiesIsRefused` |
+| G6 | 5 | `accept-default-scalar`, `TestDefaultScalarSendsZero`; `accept-default-scalar-excluded-zero` |
+| G7 | 4 | `refuse-default-nested-inline`; `refuse-default-inline-variant` |
+| G8 | 4 | `refuse-meta-no-version`; `TestParseMetaRequiresVersion` |
+| G9 | 3 | `TestCheckOtherPlatforms` (deviation 1) |
+| G10 | 3 | `TestGeneratedFilesUpToDate`, with a stale root file planted |
+| G11 | 7 | `TestRunRefusesArguments` |
+| G12 | 8 | `TestFuzzSeedsBuild`; the seed census (deviation 2) |
+| G13 | 9 | `deadcode`, before and after |
+| G15 | 2 | `accept-unstable-enum-reworded`; `refuse-unstable-enum-value`; `TestNewEntriesConstEntries` (deviation 1) |
+| G16 | 1 | `TestWriteKeepsHandWrittenGenTest`; `TestWriteNamesRemovedFiles` |
+| G17 | 2 | `refuse-two-member-union`; `refuse-two-member-union-refs`; `accept-typed-const-member` |
+| G18 | 2 | `TestCommittedFollowsTheManifest` |
+| G19 | 6 | `accept-union-array-variant-validates`; `TestGatesDescendIntoArrayVariant`; `TestNestedGateItems` |
+| G20 | 6 | `TestCapabilityRuleOnCopiedProperty`, two shapes; `refuse-key-order-property-in-copies` (deviations 1, 2) |
+| G21 | 5 | `accept-enum-discriminator` |
+| G22 | 5 | `accept-anyof-const-only` |
+| G23 | 5 | `accept-required-nullable-collection` |
+| G24 | 5 | `accept-default-on-error`, `TestDefaultOnErrorUnknownValue` |
+| G25 | 6 | `accept-deprecated`'s `WWrap.Old`; `TestDeprecationNoteReachesCopies` |
+| G26 | 6 | `refuse-method-name-reserved`; `refuse-method-name-across-bindings`; `refuse-key-order-field-method`; `refuse-key-order-field-twice`; three `Var` cases (deviations 3, 4) |
+| G27 | 3 | `TestCheckExternalTests` |
+| G28 | 3 | `TestCheckVersionFromEnclosingModule` |
+| G29 | 8 | `checkCommittedWording`, with the MADR's three sentences planted (deviation 1) |
+| G30 | 9 | `TestUnknownKindWithoutRawKeyGate` |
+| G31 | 7 | `TestManifestNestedKeysStrict` |
+| G32 | 4 | `refuse-definition-null-value`; `TestParseSchemaRefusesNullDefinition` |
+| G33 | 7 | `TestRunHelp` |
+| G34 | 9 | `docs/architecture.md`, by reading |
+| G35 | 8 | `TestDeprecationNoteVariantWithoutDiscriminator`; `accept-empty-clears` |
+| G36 | 8 | `TestMethodByWireSide` |
+| G37 | 4 | `refuse-skip-invalid-allof-nullable-items`; `refuse-skip-invalid-untyped-items`; `TestAdmitsNull` |
+
+**The API,** step 10.3, `make api` on `e31707c`: "check_api: against v1.34.1: 0 incompatible, 0 compatible"; "reported
+packages unstable, remote: 0 incompatible, not gated".
+
+**The MADR's probes at the close,** the Verification's: `reprobe.py` and `verify.py` on a `git archive` copy of `e31707c`.
+
+* Refused, each naming its path: G8, G11, G17, G32, and G37's `allOf` and untyped items, with G14's control. The G2 probe is
+  refused too, by G5 (d) first, as it writes its `default` beside a `$ref`; `refuse-default-recursive` holds the recursion in
+  the `allOf` form.
+* G33: `-h` exits 0. G15: the reworded copy is accepted. G16: the hand-written file is kept.
+* G1: the probe's stale `old_gen.go` has no generated header, so it is now hand-written: kept, and `go build` passes. With
+  the header, by a scratch script, `g1_close.py`, the generator refuses before writing: "uses_stale.go:3:9: undefined:
+  staleHelper", and the file is left as it was.
+* G21, G22 and G23 are accepted, as fixed; their engine cases' behaviour tests show the routing, the closed enumeration and
+  the kept `null`.
+
+**The notes,** step 10.5: [0049-REPORT-release-notes-v1-34-2.md](../reports/0049-REPORT-release-notes-v1-34-2.md). The
+MADR's F-G findings are marked done, each by its phase's commit, for `v1.34.2`, and its Decision Outcome records the phases.
+
+**The release,** step 10.6:
+
+* The body, `.cache/tools/release/release-body-v1.34.2.md`, is cut from the working-tree notes, each relative link made
+  absolute at `v1.34.2` and checked to exist at `HEAD`.
+* `make push-guard`, after a fetch.
+* The owner commits these records, pushes, tags `v1.34.2` and creates the release.
+* CI on the tag, `tools/publication.py` and `tools/consumer.py` follow.
