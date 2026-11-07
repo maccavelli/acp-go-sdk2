@@ -2,6 +2,8 @@ package model
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 )
@@ -77,6 +79,25 @@ type GateCheck struct {
 	// terminal check (0050-PLAN-auth-method-ids-and-the-prompt-result-for-issue-14.md,
 	// phase 1).
 	Terminal string
+	// Items is true for a GateCheckNested of a union's variant that is a
+	// named slice or map, Shape's kind, behind the variant's pointer: the
+	// gates of each item are called
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G19, Q25 a).
+	Items bool
+}
+
+// collectionItems is the named type of the items of an inline variant that is
+// a named slice or map, and the collection's kind, or "" for any other
+// variant; deep is true when the items are not a named type.
+func collectionItems(vi *Variant) (name string, kind RefKind, deep bool) {
+	in := vi.Inline
+	if vi.Skip || in == nil || in.Kind != InlineNamed || (in.Type.Kind != RefSlice && in.Type.Kind != RefMap) || in.Type.Elem == nil {
+		return "", 0, false
+	}
+	if in.Type.Elem.Kind != RefNamed {
+		return "", in.Type.Kind, true
+	}
+	return in.Type.Elem.Name, in.Type.Kind, false
 }
 
 // VariantField is a union's variant, by its Go field, and a Go field of the
@@ -149,6 +170,11 @@ func (m *Model) resolveGates(r *rules) error {
 				return fmt.Errorf("%s.%s: %s holds a gated type in a shape gates does not descend into", h.name, f.Key, f.Type)
 			}
 		}
+		for _, vi := range h.variants {
+			if _, _, deep := collectionItems(vi); deep && holdsGated(*vi.Inline.Type.Elem, gated) {
+				return fmt.Errorf("%s variant %s: %s holds a gated type in a shape gates does not descend into", h.name, vi.FieldName, vi.Inline.Type)
+			}
+		}
 		if gated[h.name] && reach[h.name] {
 			m.Gated = append(m.Gated, &Gates{Type: h.name, Union: h.union, Checks: append(own[h.name], h.nested(gated)...)})
 		}
@@ -192,6 +218,55 @@ func (m *Model) ruleTypes(def string) []*Type {
 	return out
 }
 
+// fieldsHolding returns every generated field built from the property prop:
+// a definition's own, and its copies in nested structs and inline variants.
+func (m *Model) fieldsHolding(prop *load.Definition) []*Field {
+	var out []*Field
+	add := func(fields []*Field) {
+		for _, f := range fields {
+			if f.prop == prop {
+				out = append(out, f)
+			}
+		}
+	}
+	for _, t := range m.Types {
+		add(t.Fields)
+		for _, ns := range t.NestedStructs {
+			add(ns.Fields)
+		}
+		for _, vi := range t.Variants {
+			if vi.Inline != nil {
+				add(vi.Inline.Fields)
+			}
+		}
+	}
+	return out
+}
+
+// copiesOf names the generated structs, nested and inline variants included,
+// with a field of the property prop, in sorted order.
+func (m *Model) copiesOf(prop *load.Definition) []string {
+	var out []string
+	add := func(owner string, fields []*Field) {
+		if slices.ContainsFunc(fields, func(f *Field) bool { return f.prop == prop }) {
+			out = append(out, owner)
+		}
+	}
+	for _, t := range m.Types {
+		add(t.Name, t.Fields)
+		for _, ns := range t.NestedStructs {
+			add(ns.Name, ns.Fields)
+		}
+		for _, vi := range t.Variants {
+			if vi.Inline != nil {
+				add(vi.TypeName, vi.Inline.Fields)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // gateCheck resolves one rule on its definition t; false when the schema
 // lacks the rule's property.
 func (m *Model) gateCheck(t *Type, rule CapabilityRule) (GateCheck, bool, error) {
@@ -204,7 +279,26 @@ func (m *Model) gateCheck(t *Type, rule CapabilityRule) (GateCheck, bool, error)
 			}
 		}
 		if f == nil {
+			// A property the definition holds that is not one of its own
+			// fields, as a union's is, lives in copies the rule does not
+			// reach: refused, so a rule never gates nothing silently. One the
+			// schema lacks applies nothing
+			// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G20, Q28 a).
+			if def := m.schema.Defs[rule.Definition]; def != nil {
+				if prop := expandAllOf(m.schema, def).Properties[rule.Property]; prop != nil {
+					return c, false, fmt.Errorf("capability rule %s.%s: the property is in copies (%s), not a field of %s",
+						rule.Definition, rule.Property, strings.Join(m.copiesOf(prop), ", "), t.Name)
+				}
+			}
 			return c, false, nil
+		}
+		// The property copied into another struct, as an allOf copies it
+		// into an inline variant, is out of the rule's reach there: refused,
+		// so a rule never gates part of where its property is
+		// (0049-PLAN-generator-fixes.md, phase 6, deviation 2).
+		if copies := slices.DeleteFunc(m.copiesOf(f.prop), func(n string) bool { return n == t.Name }); len(copies) > 0 {
+			return c, false, fmt.Errorf("capability rule %s.%s: the property is also in copies (%s), which the rule does not reach",
+				rule.Definition, rule.Property, strings.Join(copies, ", "))
 		}
 		c.Field, c.Key, c.Shape = f.Name, f.Key, RefNamed
 	}
@@ -478,6 +572,9 @@ func (m *Model) dispatchReach(holders []gateHolder) map[string]bool {
 		}
 		for _, vi := range h.variants {
 			add(vi.TypeName)
+			if items, _, _ := collectionItems(vi); items != "" {
+				add(items)
+			}
 		}
 	}
 	return reach
@@ -505,6 +602,8 @@ func (h gateHolder) nested(gated map[string]bool) []GateCheck {
 	for _, vi := range h.variants {
 		if gated[vi.TypeName] {
 			out = append(out, GateCheck{Kind: GateCheckNested, Field: vi.FieldName, Shape: RefPointer})
+		} else if items, kind, _ := collectionItems(vi); items != "" && gated[items] {
+			out = append(out, GateCheck{Kind: GateCheckNested, Field: vi.FieldName, Shape: kind, Items: true})
 		}
 	}
 	return out

@@ -1,0 +1,15 @@
+Refused: FooRequest, which protocol.json binds to the optional AgentLoader interface,
+and FooNotification, on Agent, both become Foo, an outbound method of
+ClientSideConnection. Their bindings differ, so each interface had one Foo, and only
+the type check found the connection's two
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G26;
+0049-PLAN-generator-fixes.md, phase 6, deviation 4).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"foo": "x/foo", "foo_note": "x/foonote"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"FooRequest": {"type": "object", "x-side": "agent", "x-method": "x/foo"}, "FooResponse": {"type": "object", "x-side": "agent", "x-method": "x/foo"}, "FooNotification": {"type": "object", "x-side": "agent", "x-method": "x/foonote"}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- protocol.json --
+{"Methods": [{"Side": "agent", "Wire": "x/foo", "Binding": 2}]}
+-- want.err --
+agent methods "x/foo" and "x/foonote" both become the connection's method Foo

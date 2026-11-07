@@ -30,6 +30,13 @@ func main() {
 // every changed file before it replaces any. With -write-unstable-manifest it
 // only freezes the manifest (load.WriteUnstableManifest).
 func run(args []string) error {
+	return runWith(args, &model.ACP)
+}
+
+// runWith is run with the protocol table p in place of model.ACP, so an
+// engine case can state rules ACP's table does not hold
+// (0049-PLAN-generator-fixes.md, phase 6, deviation 4).
+func runWith(args []string, p *model.Protocol) error {
 	fs := flag.NewFlagSet("generate", flag.ContinueOnError)
 	schemaDir := fs.String("schema", "", "path to schema directory (defaults to <repo>/schema)")
 	outDir := fs.String("out", "", "output directory for generated go files (defaults to <repo>)")
@@ -58,7 +65,7 @@ func run(args []string) error {
 		return err
 	}
 	// The model refuses a schema it cannot represent before any file is written.
-	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov, Protocol: &model.ACP})
+	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov, Protocol: p})
 	if err != nil {
 		return err
 	}
@@ -70,7 +77,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	unstable, err := renderUnstable(*schemaDir, root, meta, schema, prov)
+	unstable, err := renderUnstable(*schemaDir, root, meta, schema, prov, p)
 	if err != nil {
 		return err
 	}
@@ -134,7 +141,7 @@ func modulePath(b []byte) (string, error) {
 // renderUnstable renders package unstable: what the live unstable files add
 // beyond the manifest (load.NewUnstable). It renders nothing without a
 // manifest or without the live files, and when they add nothing.
-func renderUnstable(schemaDir, root string, acpMeta *load.Meta, acpSchema *load.Schema, acpProv *load.Provenance) ([]emit.File, error) {
+func renderUnstable(schemaDir, root string, acpMeta *load.Meta, acpSchema *load.Schema, acpProv *load.Provenance, p *model.Protocol) ([]emit.File, error) {
 	manifest, found, err := load.ReadUnstableManifest(schemaDir)
 	if err != nil || !found {
 		return nil, err
@@ -162,7 +169,7 @@ func renderUnstable(schemaDir, root string, acpMeta *load.Meta, acpSchema *load.
 	if err != nil || u.Empty() {
 		return nil, err
 	}
-	m, err := model.Build(model.Input{Meta: u.Meta, Schema: u.Schema, Provenance: u.Provenance, Protocol: &model.ACP})
+	m, err := model.Build(model.Input{Meta: u.Meta, Schema: u.Schema, Provenance: u.Provenance, Protocol: p})
 	if err != nil {
 		return nil, fmt.Errorf("unstable: %w", err)
 	}

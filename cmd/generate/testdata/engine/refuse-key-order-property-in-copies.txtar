@@ -1,0 +1,15 @@
+Refused: ACP's key-order rule on ElicitationSchema.properties, with ElicitationSchema a
+union whose own properties only its variants' structs hold. resolveKeyOrders already
+refused it before 0049's G20 fix, and this case guards that
+(0049-PLAN-generator-fixes.md, phase 6, deviation 1).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "ElicitationSchema": {"properties": {"properties": {"type": "object", "additionalProperties": {"type": "string"}}},
+    "anyOf": [{"title": "A", "type": "object", "properties": {"a": {"type": "string"}}}, {"title": "B", "type": "object", "properties": {"b": {"type": "string"}}}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+ElicitationSchema.properties: a key-order rule needs a property of an object

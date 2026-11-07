@@ -169,6 +169,10 @@ func buildMethods(m *Model, prov *load.Provenance, r *rules) error {
 	}
 
 	seen := map[Binding]map[string]string{}
+	// Each side's methods, of every binding, are the outbound methods of one
+	// connection, which also has methods of its own
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G26).
+	outbound := map[string]map[string]string{}
 	for _, mi := range slices.Concat(m.AgentMethods, m.ClientMethods) {
 		iface := m.interfaceName(mi.Binding, r)
 		if err := checkExported(mi.GoName); err != nil {
@@ -181,9 +185,24 @@ func buildMethods(m *Model, prov *load.Provenance, r *rules) error {
 			return fmt.Errorf("interface %s: methods %q and %q both become %s", iface, prev, mi.Wire, mi.GoName)
 		}
 		seen[mi.Binding][mi.GoName] = mi.Wire
+		if slices.Contains(connectionMethods, mi.GoName) {
+			return fmt.Errorf("%s method %q: it becomes %s, a method the connections already have", mi.Side, mi.Wire, mi.GoName)
+		}
+		if outbound[mi.Side] == nil {
+			outbound[mi.Side] = map[string]string{}
+		}
+		if prev, ok := outbound[mi.Side][mi.GoName]; ok {
+			return fmt.Errorf("%s methods %q and %q both become the connection's method %s", mi.Side, prev, mi.Wire, mi.GoName)
+		}
+		outbound[mi.Side][mi.GoName] = mi.Wire
 	}
 	return nil
 }
+
+// connectionMethods are the methods the hand-written runtime gives
+// AgentSideConnection and ClientSideConnection; a wire method of one of these
+// names would collide with it.
+var connectionMethods = []string{"Close", "Connection", "Done", "DroppedNotifications", "Err", "SetLogger", "Wait"}
 
 func buildMethod(schema *load.Schema, linked map[string]*roles, prov *load.Provenance, side, key, wire string) (*Method, error) {
 	owner := fmt.Sprintf("%s method %q", side, wire)

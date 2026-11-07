@@ -687,7 +687,11 @@ func plainFields(owner string, props map[string]*load.Definition, req map[string
 		if err != nil {
 			return nil, err
 		}
-		fld := &Field{Key: key, Name: name, Tag: key, Required: req[key], Doc: docLines(prop.Description), Facts: factsOf(prop), prop: prop}
+		// A copy of a deprecated property, in a nested struct or an inline
+		// variant, is deprecated as the property's own field is
+		// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G25).
+		fld := &Field{Key: key, Name: name, Tag: key, Required: req[key], Doc: docLines(prop.Description), Facts: factsOf(prop), prop: prop,
+			Deprecation: deprecationOf(prop)}
 		fld.Type = optionalTypeRef(prop)
 		fld.NullIsAbsent = !fld.Required && fld.Type.Kind == RefRaw
 		if fld.Required {

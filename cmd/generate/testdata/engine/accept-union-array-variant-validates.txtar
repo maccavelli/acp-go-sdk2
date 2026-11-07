@@ -1,0 +1,85 @@
+A union variant that is a named array, of items that validate, is validated item by
+item, as a field of that array is: an Option whose name is shorter than its
+minLength fails Validate there too, where the variant was not checked
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G19, Q25 a).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Option": {"type": "object", "properties": {"name": {"type": "string", "minLength": 1}}, "required": ["name"]},
+  "Group": {"type": "object", "properties": {"group": {"type": "string"}, "options": {"type": "array", "items": {"$ref": "#/$defs/Option"}}}, "required": ["group", "options"]},
+  "Options": {"anyOf": [{"title": "Ungrouped", "type": "array", "items": {"$ref": "#/$defs/Option"}}, {"title": "Grouped", "type": "array", "items": {"$ref": "#/$defs/Group"}}]},
+  "Root": {"type": "object", "properties": {"direct": {"type": "array", "items": {"$ref": "#/$defs/Option"}}, "opts": {"$ref": "#/$defs/Options"}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+type Group struct{Group string "json:\"group\""; Options []Option "json:\"options\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewOptionsGrouped(value []Group) Options
+func NewOptionsUngrouped(value []Option) Options
+type Option struct{Name string "json:\"name\""}
+type Options struct{Ungrouped *OptionsUngrouped "json:\"-\""; Grouped *OptionsGrouped "json:\"-\""}
+type OptionsGrouped []Group
+type OptionsUngrouped []Option
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Root struct{Direct []Option "json:\"direct,omitempty\""; Opts Options "json:\"opts\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+func (Group).MarshalJSON() ([]byte, error)
+func (*Group).UnmarshalJSON(b []byte) error
+func (*Group).Validate() error
+func (*Option).UnmarshalJSON(b []byte) error
+func (*Option).Validate() error
+func (Options).MarshalJSON() ([]byte, error)
+func (*Options).UnmarshalJSON(b []byte) error
+func (*Options).Validate() error
+func (*Root).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"strings"
+	"testing"
+)
+
+// The same short name fails Validate in a field of the array and in each
+// array variant, and a good one passes.
+func TestUnionArrayVariantValidates(t *testing.T) {
+	bad, good := Option{Name: ""}, Option{Name: "n"}
+	for name, r := range map[string]Root{
+		"a direct field":      {Direct: []Option{good, bad}},
+		"the Ungrouped variant": {Opts: Options{Ungrouped: &OptionsUngrouped{good, bad}}},
+		"the Grouped variant":   {Opts: Options{Grouped: &OptionsGrouped{{Group: "g", Options: []Option{bad}}}}},
+	} {
+		err := r.Validate()
+		if err == nil || !strings.Contains(err.Error(), "Option: name: shorter than minLength 1") {
+			t.Errorf("%s: Validate = %v, want the short name refused", name, err)
+		}
+	}
+	if err := (&Root{Opts: Options{Ungrouped: &OptionsUngrouped{good}}}).Validate(); err != nil {
+		t.Errorf("a good option: %v", err)
+	}
+}

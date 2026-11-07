@@ -115,6 +115,15 @@ func (m *Model) buildValidations() error {
 	for _, t := range m.Types {
 		for _, vi := range t.Variants {
 			vi.Validates = !vi.Skip && m.validates[vi.TypeName]
+			// A named slice or map variant has no Validate of its own; the
+			// union's checks its items when their type validates, and a
+			// deeper shape holding a validated type is refused, as a field's
+			// is (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G19).
+			items, _, deep := collectionItems(vi)
+			if deep && m.holdsValidated(*vi.Inline.Type.Elem) {
+				return fmt.Errorf("%s variant %s: %s holds a validated type in a shape Validate does not descend into", t.Name, vi.FieldName, vi.Inline.Type)
+			}
+			vi.ItemsValidate = items != "" && m.validates[items]
 		}
 	}
 	for _, s := range structs {

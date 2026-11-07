@@ -1,0 +1,9 @@
+Refused: a method that becomes Close, a method the connections already have, which
+only the type check found (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G26).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"close": "x/close"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"CloseRequest": {"type": "object", "x-side": "agent", "x-method": "x/close"}, "CloseResponse": {"type": "object", "x-side": "agent", "x-method": "x/close"}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- want.err --
+agent method "x/close": it becomes Close, a method the connections already have

@@ -318,6 +318,10 @@ The order is the MADR's: the mediums first (G16, G1, G2, G15, G17, G3, G18), the
    same way. A rule whose definition is absent, as in the stable-only build, still skips (`:1661-1663`).
    * Cases: `refuse-capability-property-in-copies.txtar`; `refuse-key-order-property-in-copies.txtar`.
    * Seen to fail: the `false, nil` return restored.
+   * *Amended 2026-11-07, deviation 1:* `resolveKeyOrders` already refused such a rule, "a key-order rule needs a property
+     of an object", so the key-order half has no change; `refuse-key-order-property-in-copies.txtar` guards that refusal,
+     and passes at the base. The capability half's test is `model`'s `TestCapabilityRuleOnCopiedProperty`, not an engine
+     case: engine cases run with ACP's own table, which holds no such rule.
 3. **G25.** `plainFields` (`model/fields.go:599`) sets `Deprecation: deprecationOf(prop)`. `deprecationsOf`
    (`model/protocol.go:1013-1023`) and `applyFrozenDeprecations` (`model/frozen.go:49-59`) mark the copies by `f.prop`.
    * Case: `accept-deprecated.txtar` gains `U`, whose `oneOf[0]` is an `allOf` of a `Base` with a deprecated `old`. Its
@@ -337,6 +341,9 @@ The order is the MADR's: the mediums first (G16, G1, G2, G15, G17, G3, G18), the
    `refuse-method-name-reserved.txtar` (a method that becomes `Close`); `refuse-key-order-field-method.txtar` (`Field:
    "MarshalJSON"`). The `Var` check is a `model` unit test, since engine cases run with `&model.ACP`. Seen to fail: each
    check removed.
+   *Amended 2026-11-07, deviation 4:* the engine harness reads an optional `protocol.json` in a case, which replaces the
+   named fields of a copy of `model.ACP` for that case, so `refuse-key-order-field-method.txtar` is written as planned,
+   with `refuse-key-order-field-twice.txtar` for two rules of one field.
 
 ### Phase 7: G11, G33 and G31, the input edge and the CLI
 
@@ -928,3 +935,158 @@ All as required.
 * `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py` over the changed files: exit 0 each.
 
 **Status:** no deviation. Staged for the owner, who commits. Phase 6, G19, G20, G25 and G26, begins on the owner's word.
+
+### Phase 6: G19, G20, G25 and G26, validation, gates and rules, 2026-11-07
+
+The owner committed phase 5 as `624edc1`, and said "committed, proceed".
+
+**Deviation 1, 2026-11-07: G20's two halves.**
+
+* **Found:**
+  * Step 6.2 has `resolveKeyOrders` refuse a key-order rule whose definition holds the property while its fields lack it.
+    It already did: `cmd/generate/internal/model/model.go`'s `resolveKeyOrders` reads the property through `expandAllOf`, and
+    with no such field returns "a key-order rule needs a property of an object". A scratch script, `g20_probe.py`, ran a case
+    with ACP's own rule's `ElicitationSchema` written as a union holding `properties`, on a `git archive` copy of `624edc1`.
+    The case passed, refused. So `refuse-key-order-property-in-copies.txtar` cannot be seen to fail.
+  * The capability half's case cannot be an engine case. Engine cases run with ACP's own table (`cmd/generate/main.go:61`),
+    which has no capability rule on a property that only copies hold.
+* **Decision:** the owner chose the recommended option.
+  * The capability refusal is tested by a `model` unit test with a synthetic rule, seen to fail.
+  * The key-order case is kept, as a guard of the existing refusal, recorded as passing at the base.
+  * The MADR's G20 is amended.
+
+  Not chosen: rewording the key-order refusal to name the copies; dropping the key-order case.
+* **Scope:** `cmd/generate/internal/model/gates_test.go` was in scope; no file added.
+
+**Deviation 2, 2026-11-07: G20's second shape.**
+
+* **Found:** the MADR's G20 has two probes. A rule on a union whose property only its variants hold is Q28 (a)'s, and
+  `gateCheck` now refuses it. The other is a definition copied into a union's inline variant by an `allOf`: the rule gates
+  the definition's own field and not the copy, so a payload of that variant is not gated. Q28 (a), "a rule whose property the
+  definition's own fields lack", is worded for the first alone.
+* **Today:** a scratch script, `g20_copies.py`, listed in a copy of the working tree the structs holding each property of
+  ACP's capability rules. Each of the 11 rules with a property finds it in its own definition alone.
+* **Decision:** the owner chose the recommended option. `gateCheck` also refuses a rule whose property is a field of another
+  struct too, naming the copies the rule does not reach. Not chosen: leaving the shape open, recorded; gating the copies, as
+  Q28 (b) would have.
+* **Scope:** no file added. `TestCapabilityRuleOnCopiedProperty` holds both shapes.
+* **The MADR:** G20 is amended, 2026-11-07.
+
+**Deviation 3, 2026-11-07: G26's reserved names and the model tests' fixture.**
+
+* **Found:** with the reserved-method check, 22 `model` tests failed "model: agent method "s/close": it becomes Close, a
+  method the connections already have". Their shared fixture, `protocolDefs` (`model/protocol_test.go:21-23`), declares
+  `CloseRequest` and `CloseResponse` for the wire `s/close`. A method's Go name is its request type's less `Request`
+  (`model/methods.go:222`), so the fixture's method is `Close`, which rendered would collide with the connections' own
+  `Close()`. Committed ACP passes: its `session/close` is `CloseSession`, and the regeneration was byte-identical.
+* **Decision:** the owner chose the recommended option. The fixture's types are `CloseSessionRequest` and
+  `CloseSessionResponse`; the wire `s/close`, and every rule keyed by it, stay. Not chosen: exempting fixtures from the check;
+  dropping the reserved names.
+* **Scope:** `model/protocol_test.go` and `model/deprecation_test.go`, which names `CloseRequest` four times.
+
+**Deviation 4, 2026-11-07: G26's key-order case and the engine harness.**
+
+* **Found:** step 6.4's `refuse-key-order-field-method.txtar` cannot be written. Engine cases run with ACP's own table
+  (`cmd/generate/main.go:61`), whose one key-order rule's `Field` is `PropertyOrder`.
+* **Decision:** the owner chose the engine-harness option, not the recommended unit test. A case may carry `protocol.json`, an
+  object whose keys name fields of `model.Protocol`. `runEngineCase` and the behaviour harness give the case a copy of
+  `model.ACP` with each named field replaced by a fresh value decoded from it, so `model.ACP` is never changed under the
+  parallel cases. `run` becomes `runWith(args, protocol)`, and `run` passes `&model.ACP`. Not chosen: a `newRules` unit
+  test; a `Build` test with a custom `Protocol`.
+* **Scope:** `cmd/generate/main.go`, `cmd/generate/engine_test.go`, `cmd/generate/behaviour_test.go`, and
+  `docs/architecture.md`'s paragraph on the engine cases, all in the generator module or the docs the PLAN names.
+* **The MADR:** not amended for either.
+
+**What changed:**
+
+* **G19 (Q25 a):**
+  * A new `collectionItems` (`cmd/generate/internal/model/gates.go`) names the item type of an `InlineNamed` slice or map
+    variant, or reports one whose items are not a named type.
+  * `buildValidations` (`model/validate.go`) sets a new `Variant.ItemsValidate` (`model/model.go`) when the item type
+    validates, and refuses a deeper shape holding a validated type, as `nested` does for a field.
+  * `unionValidateBody` (`emit/types.go`) then calls `nestedStmt` on `(*u.Field)` for that variant.
+  * The gates: `dispatchReach` adds the item type; `gateHolder.nested` gives the variant a `GateCheckNested` with the new
+    `Items` and the collection's shape; a deeper gated shape is refused; and `nestedGate` (`emit/gates.go`) calls each item's
+    gates when the variant is set.
+* **G20 (Q28 a; deviations 1 and 2):** `gateCheck` refuses a rule whose definition holds the property while its fields lack it,
+  "the property is in copies (…), not a field of …", and a rule whose property is also a field of another struct, "the
+  property is also in copies (…), which the rule does not reach". A new `copiesOf` names them, by a new `fieldsHolding`.
+  `resolveKeyOrders` is unchanged.
+* **G25:**
+  * `plainFields` sets `deprecationOf(prop)` on a copy.
+  * `deprecationsOf` (`model/protocol.go`) gives a property's note to every field built from it, by `fieldsHolding`.
+  * `applyFrozenDeprecations` marks a frozen field's copies. Its per-type marking moved into a new `markFrozenType`, as
+    `gocognit` counted 53 against its limit of 50 after the change; the behaviour is as it was.
+* **G26 (deviations 3 and 4):**
+  * `buildMethods` (`model/methods.go`) refuses a method that becomes one of the connections' own methods, a new
+    `connectionMethods`, and two methods of a side, of any binding, that become one outbound method.
+  * `newRules` (`model/protocol.go`) refuses a key order's `Field` named as a generated method (`checkNotMethod`) or as
+    another rule's on the same definition, and an `Interface.Var` that is not an identifier or is one of a new
+    `dispatchLocals`.
+* **The harness (deviation 4):** `run` calls a new `runWith(args, protocol)` with `&model.ACP`; `renderUnstable` takes the
+  protocol. `runEngineCase` and the behaviour harness run a case with `caseProtocol` (`cmd/generate/engine_test.go`), and do
+  not write `protocol.json` into the schema directory. `docs/architecture.md`'s paragraph on the engine cases says so.
+
+**Tests:**
+
+* Engine cases, new:
+  * `accept-union-array-variant-validates.txtar`: the same short `Option` name fails `Validate` in a field, in the
+    `Ungrouped` variant and in the `Grouped` variant's `Group`, and a good one passes;
+  * `refuse-key-order-property-in-copies.txtar`, which passes at the base (deviation 1);
+  * `refuse-method-name-reserved.txtar`, a method `x/close` that becomes `Close`;
+  * `refuse-method-name-across-bindings.txtar`, written with `protocol.json`;
+  * `refuse-key-order-field-method.txtar` and `refuse-key-order-field-twice.txtar`, with `protocol.json`.
+* `accept-deprecated.txtar` gains `Base`, with a deprecated `old`, and `W`, whose `Wrap` variant is an `allOf` of `Base` with
+  its own `kind`. Its `want.deprecated` gains "field WWrap.Old: … the "old" property of the "w" variant of the W schema
+  definition deprecated."
+* Unit tests:
+  * `model`: `TestGatesDescendIntoArrayVariant`; `TestCapabilityRuleOnCopiedProperty`, both shapes;
+    `TestDeprecationNoteReachesCopies`; three `TestProtocolTableRefuses` cases for `Var`, `"1x"`, `"ctx"` and `"_"`;
+  * `emit`: `TestNestedGateItems`, a slice and a map.
+* The `model` tests' fixture, per deviation 3: `CloseSessionRequest` and `CloseSessionResponse` in `protocol_test.go`, and
+  their twelve mentions in `deprecation_test.go`.
+
+**A probe shape, found:** the MADR's G26 probe, a stable `FooRequest` beside an unstable `FooNotification`, does not collide
+at `624edc1`. A scratch script, `g26_probe.py`, generated that schema: the live merge prefixes unstable definitions, so the
+methods are `Foo` and `UnstableFoo`. The collision is reached through the optional interface, which `protocol.json` binds
+`x/foo` to in the case. The MADR's G26 records it.
+
+**Not tested:** `markFrozenType`'s marking of a frozen field's copies. It needs a manifest that freezes a property an `allOf`
+copies into an inline variant, and no case holds one. The regeneration check shows nothing committed reaches it.
+
+**Seen to fail,** by `plants_gen.py 6`, each break in its own copy of the working tree:
+
+* G19:
+  * items not validated: "behaviour_test.go:19: the Ungrouped variant: Validate = <nil>, want the short name refused";
+  * the gates not descending: "gates_test.go:288: Verdicts: [], want one nested check of the Many variant's items";
+  * `nestedGate`'s branch removed: "ast_test.go:66: … for i := range v.Many { … } lacks "if v.Many != nil {"".
+* G20:
+  * a union's property: "gates_test.go:325: a union's property: Build = <nil>, want "capability rule
+    LoadSessionRequest.dirs: the property is in copies (""";
+  * the copies: "a property an allOf copies: Build = <nil>, …".
+* G25:
+  * the copy's mark: `want.deprecated` differs at "field WWrap.Old: …";
+  * the note to the definition's field alone: "deprecation_test.go:193: the copy in W's Wrap: … want the note".
+* G26:
+  * the reserved names, and one outbound name per side: each case fails as at the base, `Check` refusing "generated code
+    does not type-check with … method … already declared";
+  * the key order's field named as a method, and two rules of one field: each case fails, the type check refusing what the
+    rule made;
+  * `Var`: "protocol_test.go:385: Build accepted the table", for the three cases.
+* The harness, `protocol.json` ignored: "engine_test.go:50: run accepted the schema".
+
+The first run's expected texts for the two method-name plants and the harness plant were wrong: each run failed, but with the
+type check's message, or with the case accepted. They were corrected, and the three re-run as above. All as required.
+
+**Checks:**
+
+* `cd cmd/generate && go run .`: exit 0. `git diff --exit-code -- '*_gen.go' '*_gen_test.go' unstable/`: exit 0.
+* `python3 tools/gates.py regen`: exit 0.
+* `cd cmd/generate && go test -race -count=1 -shuffle=on ./...`: every package `ok`.
+* `make pre-add-check FILES="<the phase's Go files and engine cases>"`: first exit 2, `gocognit` on
+  `applyFrozenDeprecations`, 53 > 50; after the split, exit 0, "17 file(s) gofmt-clean; both modules linted, vetted and
+  tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py` over the changed files: exit 0 each.
+
+**Status:** four deviations, recorded above. Staged for the owner, who commits. Phase 7, G11, G33 and G31, begins on the
+owner's word.

@@ -1245,6 +1245,15 @@ func unionValidateBody(f *goFile, t *model.Type, variants []*model.Variant) []as
 					call(f.qual(pkgFmt, "Sprintf"), str(name+": variant "+ca.FieldName+": "+t.DiscKey+" %q names another variant"), value)))))))
 	}
 	for _, vi := range variants {
+		if vi.ItemsValidate {
+			// A named slice or map variant: each item is validated
+			// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G19).
+			in := vi.Inline
+			held := func() ast.Expr { return paren(star(dot("u", vi.FieldName))) }
+			body = append(body, ifStmt(nil, binary(dot("u", vi.FieldName), token.NEQ, nilExpr()),
+				nestedStmt(f, in.Type.Elem.Name, held, in.Type.Kind, name+": variant "+vi.FieldName)))
+			continue
+		}
 		if !vi.Validates {
 			continue
 		}

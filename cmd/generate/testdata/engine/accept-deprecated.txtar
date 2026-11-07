@@ -6,7 +6,9 @@ variant's constant; a flattened member's field; and a request definition's
 methods, its interface method and its side connection's, while its response
 is marked only by its own mark. A property whose $ref names a deprecated
 definition gets no notice of its own, and deprecated false marks nothing
-(0024-PLAN-api-gate-and-deprecation.md).
+(0024-PLAN-api-gate-and-deprecation.md). A deprecated property that an allOf copies
+into an inline variant is marked in the copy too, as Base.old is in W's Wrap
+(0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G25).
 The meta declares $/cancel_request and the schema its smallest definition,
 which the runtime needs.
 
@@ -39,6 +41,11 @@ which the runtime needs.
   ]},
   "InitRequest": {"type": "object", "properties": {"v": {"type": "integer", "format": "uint16"}}, "required": ["v"], "x-side": "agent", "x-method": "x/hello", "deprecated": true},
   "InitResponse": {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"], "x-side": "agent", "x-method": "x/hello"},
+  "Base": {"type": "object", "properties": {"old": {"type": "string", "deprecated": true}, "n": {"type": "string"}}},
+  "W": {"oneOf": [
+    {"title": "Wrap", "type": "object", "allOf": [{"$ref": "#/$defs/Base"}], "properties": {"kind": {"type": "string", "const": "w"}}, "required": ["kind"]},
+    {"title": "Plain", "type": "object", "properties": {"kind": {"type": "string", "const": "p"}}, "required": ["kind"]}
+  ]},
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
 }}
 -- want.api --
@@ -46,6 +53,7 @@ type Agent interface{Init(ctx context.Context, params InitRequest) (InitResponse
 type AgentExperimental interface{}
 const AgentMethodHello untyped string = "x/hello"
 type AgentSideConnection struct{conn *Connection; agent Agent}
+type Base struct{N string "json:\"n,omitempty\""; Old string "json:\"old,omitempty\""}
 type CancelRequestNotification struct{}
 type Client interface{}
 type ClientExperimental interface{}
@@ -65,6 +73,8 @@ func NewUA() U
 func NewUB() U
 func NewVCount(value int64) V
 func NewVText(value string) V
+func NewWP() W
+func NewWW() W
 type Old struct{X string "json:\"x,omitempty\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
@@ -76,6 +86,9 @@ type UB struct{Kind string "json:\"kind\""}
 type V struct{Text *VText "json:\"-\""; Count *VCount "json:\"-\""}
 type VCount int64
 type VText string
+type W struct{W *WWrap "json:\"-\""; P *WPlain "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type WPlain struct{Kind string "json:\"kind\""}
+type WWrap struct{Kind string "json:\"kind\""; N string "json:\"n,omitempty\""; Old string "json:\"old,omitempty\""}
 func (*AgentSideConnection).Close() error
 func (*AgentSideConnection).Connection() *Connection
 func (*AgentSideConnection).Done() <-chan struct{}
@@ -108,13 +121,18 @@ func (*U).Validate() error
 func (V).MarshalJSON() ([]byte, error)
 func (*V).UnmarshalJSON(b []byte) error
 func (*V).Validate() error
+func (W).MarshalJSON() ([]byte, error)
+func (*W).UnmarshalJSON(b []byte) error
+func (*W).Validate() error
 -- want.deprecated --
 const LevelLow: Deprecated: the ACP schema marks the "low" variant of the Level schema definition deprecated.
+field Base.Old: Deprecated: the ACP schema marks the "old" property of the Base schema definition deprecated.
 field Holder.A: Deprecated: the ACP schema marks the "a" property of the Holder schema definition deprecated.
 field Holder.Inner: Deprecated: the ACP schema marks the "inner" property of the Holder schema definition deprecated.
 field Mode.Session: Deprecated: the ACP schema marks the Session member of the Mode schema definition deprecated.
 field U.A: Deprecated: the ACP schema marks the "a" variant of the U schema definition deprecated.
 field V.Text: Deprecated: the ACP schema marks the Text variant of the V schema definition deprecated.
+field WWrap.Old: Deprecated: the ACP schema marks the "old" property of the "w" variant of the W schema definition deprecated.
 func NewUA: Deprecated: the ACP schema marks the "a" variant of the U schema definition deprecated.
 func NewVText: Deprecated: the ACP schema marks the Text variant of the V schema definition deprecated.
 method (*ClientSideConnection).Init: Deprecated: the ACP schema marks the InitRequest schema definition deprecated.

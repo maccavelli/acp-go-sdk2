@@ -134,7 +134,7 @@ func writeBehaviourCase(t *testing.T, c behaviourCase, mod string) {
 		t.Fatal(err)
 	}
 	for _, f := range c.archive.Files {
-		if strings.HasSuffix(f.Name, ".json") {
+		if strings.HasSuffix(f.Name, ".json") && f.Name != protocolFile {
 			if err := os.WriteFile(filepath.Join(schemaDir, f.Name), f.Data, 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -143,7 +143,7 @@ func writeBehaviourCase(t *testing.T, c behaviourCase, mod string) {
 	if err := enginetest.CopyRuntime(repoRoot, out); err != nil {
 		t.Fatal(err)
 	}
-	if err := run([]string{"-schema", schemaDir, "-out", out}); err != nil {
+	if err := runWith([]string{"-schema", schemaDir, "-out", out}, caseProtocol(t, c.archive)); err != nil {
 		t.Fatal(err)
 	}
 	behaviour, _ := c.archive.File("behaviour_test.go")

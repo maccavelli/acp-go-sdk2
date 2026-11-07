@@ -254,6 +254,14 @@ func nestedGate(f *goFile, field func() ast.Expr, c model.GateCheck) ast.Stmt {
 	check := func(x ast.Expr) ast.Stmt {
 		return ifStmt(define(exprs(id("err")), call(sel(x, "gates"), id("n"), id("method"))), errNotNil(), ret(id("err")))
 	}
+	if c.Items {
+		// A union's variant that is a named slice or map: each item's gates,
+		// when the variant is set (0049-MADR-remediate-the-2026-11-01-
+		// debugging-pass.md, G19).
+		inner := c
+		inner.Items = false
+		return ifStmt(nil, binary(field(), token.NEQ, nilExpr()), nestedGate(f, func() ast.Expr { return paren(star(field())) }, inner))
+	}
 	switch c.Shape {
 	case model.RefPointer:
 		return ifStmt(nil, binary(field(), token.NEQ, nilExpr()), check(field()))

@@ -747,7 +747,9 @@ Checks that guard this:
 - `TestEngineCases` in `cmd/generate` runs the generator on each synthetic case
   in `testdata/engine/`: a case with `want.err` must be refused with those
   lines, one with `want.api` must give that exported API, and the deprecation
-  notices of its `want.deprecated`, or none when it has none. `TestEngineBehaviour`
+  notices of its `want.deprecated`, or none when it has none. A case runs with
+  ACP's protocol table, or, with `protocol.json`, a copy of it whose named fields
+  that file replaces, for a rule ACP's table does not hold. `TestEngineBehaviour`
   compiles each case's output with its `behaviour_test.go` and runs it.
   `internal/enginetest` reads the cases and lists an API and its notices.
 - The conformance test at the root, `conformance_test.go` over

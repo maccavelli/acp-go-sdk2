@@ -920,6 +920,11 @@ shape.** `model/validate.go:160-163` adds only `InlineStruct` variants to the va
 `model/gates.go:200-208` (`gateCheck`) searches `t.Fields`, and returns `false, nil` when the property is not there. The patch,
 empty-clears, null-retained and absolute-path rules instead follow `f.prop` into every copy (`model/model.go:1455-1477`,
 `:1562-1577`, `:1624-1639`; `model/validate.go:185`). `resolveKeyOrders` (`model/model.go:1660-1676`) also reads only `t.Fields`.
+*Amended 2026-11-07,* by [0049-PLAN-generator-fixes.md](0049-PLAN-generator-fixes.md)'s phase 6, deviation 1: it does, but it
+refuses such a rule, "a key-order rule needs a property of an object", as a scratch copy of `624edc1` showed. Only
+`gateCheck` applied and gated nothing. *Amended 2026-11-07,* by that PLAN's phase 6, deviation 2: Q28 (a) refuses the
+first probe's rule; the owner extended it to the second's, a rule whose property is also a field of another struct, which
+it would gate in part.
 
 * **Probe** (investigator): a `GateNonEmpty` rule on `LoadSessionRequest.dirs`, with `LoadSessionRequest` a union with an own
   `dirs`. Build returns nil, and no type is gated. The same happens for a definition copied into an inline variant by `allOf`,
@@ -978,6 +983,9 @@ says the array "takes its zero value". The pointer case, `:784-786`, also ignore
 **G26. Low. Some name collisions are refused only at `Check`, naming a generated file instead of the schema or the rule.**
 
 * **Interface methods:** `model/methods.go:171-184` keeps one set of method names per binding.
+  *Amended 2026-11-07,* by [0049-PLAN-generator-fixes.md](0049-PLAN-generator-fixes.md)'s phase 6: the probe's shape below
+  does not collide at `624edc1`, as the live merge prefixes unstable definitions (`Foo` and `UnstableFoo`). The collision is
+  reached with a method bound to the optional interface beside one on `Agent`.
   * **Probe** (investigator): a stable `FooRequest` and an unstable `FooNotification` both become `Foo`. Build and Render return
     nil, and `Check` fails "client_gen.go:132:32: method ClientSideConnection.Foo already declared".
   * A method named like a hand-written method of the connections (`Close`, `Wait`, `Err`) is not checked either.

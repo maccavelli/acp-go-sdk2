@@ -267,3 +267,63 @@ func checkAuthenticateGates(t *testing.T, a []GateCheck) {
 		t.Errorf("AuthenticateRequest: %+v", a)
 	}
 }
+
+// TestGatesDescendIntoArrayVariant requires a union whose variant is a named
+// array of a gated type to have gates that call each item's, where it had
+// none, and the type that holds the union to call into it
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G19, Q25 a).
+func TestGatesDescendIntoArrayVariant(t *testing.T) {
+	t.Parallel()
+	defs := strings.Replace(protocolDefs, `"Update":`, `"Verdicts":{"anyOf":[{"title":"Many","type":"array","items":{"$ref":"#/$defs/Verdict"}},
+		{"title":"None","type":"string"}]},"Update":`, 1)
+	defs = strings.Replace(defs, `"SessionNotification":{"type":"object","x-side":"client","x-method":"s/update"}`,
+		`"SessionNotification":{"type":"object","x-side":"client","x-method":"s/update","properties":{"verdicts":{"$ref":"#/$defs/Verdicts"}}}`, 1)
+	p := testProtocol()
+	p.CapabilityRules = []CapabilityRule{{Side: "agent", Definition: "Verdict", Variant: "chosen", Capability: "session.list", Source: "s", Kind: GateVariant}}
+	m, err := Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, defs), Protocol: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := gatesOf(m, "Verdicts"); len(c) != 1 || c[0].Kind != GateCheckNested || c[0].Field != "Many" || c[0].Shape != RefSlice || !c[0].Items {
+		t.Errorf("Verdicts: %+v, want one nested check of the Many variant's items", c)
+	}
+	if c := gatesOf(m, "SessionNotification"); len(c) != 1 || c[0].Field != "Verdicts" {
+		t.Errorf("SessionNotification: %+v, want its call into Verdicts", c)
+	}
+}
+
+// TestCapabilityRuleOnCopiedProperty requires a capability rule whose property
+// the definition holds but cannot gate everywhere to be refused, naming the
+// copies: a union's property, which only its variants' structs hold, where the
+// rule applied and gated nothing
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G20, Q28 a); and a
+// definition's property that an allOf also copies into an inline variant,
+// where the rule gated the definition alone (0049-PLAN-generator-fixes.md,
+// phase 6, deviation 2).
+func TestCapabilityRuleOnCopiedProperty(t *testing.T) {
+	t.Parallel()
+	dirs := `"dirs":{"type":"array","items":{"type":"string"}}`
+	union := strings.Replace(protocolDefs, `"LoadSessionRequest":{"type":"object","x-side":"agent","x-method":"s/load"}`,
+		`"LoadSessionRequest":{"type":"object","x-side":"agent","x-method":"s/load","properties":{`+dirs+`},
+		"anyOf":[{"title":"A","type":"object","properties":{"a":{"type":"string"}}},{"title":"B","type":"object","properties":{"b":{"type":"string"}}}]}`, 1)
+	copied := strings.Replace(protocolDefs, `"Update":`, `"D":{"type":"object","properties":{`+dirs+`}},
+		"U":{"oneOf":[{"title":"Wrap","type":"object","allOf":[{"$ref":"#/$defs/D"}],"properties":{"w":{"type":"string"}}},{"title":"Other","type":"object","properties":{"x":{"type":"string"}}}]},"Update":`, 1)
+	for _, tt := range []struct {
+		name, defs, definition string
+		want                   []string
+	}{
+		{"a union's property", union, "LoadSessionRequest",
+			[]string{"capability rule LoadSessionRequest.dirs: the property is in copies (", "not a field of LoadSessionRequest"}},
+		{"a property an allOf copies", copied, "D",
+			[]string{"capability rule D.dirs: the property is also in copies (", "which the rule does not reach"}},
+	} {
+		p := testProtocol()
+		p.CapabilityRules = []CapabilityRule{{Side: "agent", Definition: tt.definition, Property: "dirs", Capability: "loadSession", Source: "s", Kind: GateNonEmpty}}
+		_, err := Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, tt.defs), Protocol: p})
+		for _, w := range tt.want {
+			if err == nil || !strings.Contains(err.Error(), w) {
+				t.Errorf("%s: Build = %v, want %q", tt.name, err, w)
+			}
+		}
+	}
+}

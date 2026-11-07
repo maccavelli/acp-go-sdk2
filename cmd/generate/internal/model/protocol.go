@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"go/token"
 	"slices"
 	"strconv"
 	"strings"
@@ -361,6 +362,10 @@ func checkPropertyRules(kind string, rules []PatchRule) error {
 
 // newRules checks what a table says without the schema. A nil table has no
 // rules.
+// dispatchLocals are the names the generated dispatch declares where it
+// declares an optional interface's variable, and the blank identifier.
+var dispatchLocals = []string{"_", "a", "c", "ctx", "method", "params", "p", "ok", "resp", "err"}
+
 func newRules(p *Protocol) (*rules, error) {
 	r := &rules{methods: map[string]*MethodRule{}, interfaces: map[Binding]Interface{}, helpers: map[string]bool{}, table: p}
 	if p == nil {
@@ -372,6 +377,10 @@ func newRules(p *Protocol) (*rules, error) {
 			return nil, fmt.Errorf("interface %s: its binding must be optional", in.Name)
 		case in.Var == "":
 			return nil, fmt.Errorf("interface %s: it needs a variable name", in.Name)
+		case !token.IsIdentifier(in.Var) || slices.Contains(dispatchLocals, in.Var):
+			// The dispatch declares the variable beside its own locals
+			// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G26).
+			return nil, fmt.Errorf("interface %s: variable name %q is not a Go identifier the dispatch can declare", in.Name, in.Var)
 		}
 		if _, ok := r.interfaces[in.Binding]; ok {
 			return nil, fmt.Errorf("interface %s: another interface has its binding", in.Name)
@@ -428,6 +437,7 @@ func newRules(p *Protocol) (*rules, error) {
 		return nil, err
 	}
 	ordered := map[[2]string]bool{}
+	orderFields := map[[2]string]string{}
 	for _, rule := range p.KeyOrders {
 		k := [2]string{rule.Definition, rule.Property}
 		switch {
@@ -437,8 +447,16 @@ func newRules(p *Protocol) (*rules, error) {
 			return nil, fmt.Errorf("key-order rule %s.%s: field %q is not an exported Go identifier", rule.Definition, rule.Property, rule.Field)
 		case ordered[k]:
 			return nil, fmt.Errorf("key-order rule %s.%s: two rules", rule.Definition, rule.Property)
+		case checkNotMethod(rule.Field) != nil:
+			// The field is the struct's, beside its generated methods and the
+			// other rules' fields (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G26).
+			return nil, fmt.Errorf("key-order rule %s.%s: %w", rule.Definition, rule.Property, checkNotMethod(rule.Field))
+		case orderFields[[2]string{rule.Definition, rule.Field}] != "":
+			return nil, fmt.Errorf("key-order rule %s.%s: field %s is also the field of the rule on %s.%s", rule.Definition, rule.Property,
+				rule.Field, rule.Definition, orderFields[[2]string{rule.Definition, rule.Field}])
 		}
 		ordered[k] = true
+		orderFields[[2]string{rule.Definition, rule.Field}] = rule.Property
 	}
 	if err := checkDocNotes(p.DocNotes); err != nil {
 		return nil, err
@@ -1011,9 +1029,14 @@ func (m *Model) deprecationsOf(note DeprecationNote) []*Deprecation {
 	}
 	switch {
 	case note.Property != "":
+		// The property's copies, in nested structs and inline variants, carry
+		// the note too (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
+		// G25).
 		for _, fld := range t.Fields {
 			if fld.Key == note.Property {
-				add(fld.Deprecation)
+				for _, c := range m.fieldsHolding(fld.prop) {
+					add(c.Deprecation)
+				}
 			}
 		}
 		for _, ns := range t.NestedStructs {

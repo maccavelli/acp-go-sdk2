@@ -1,0 +1,12 @@
+Refused: a key-order rule whose field is named as a generated method, MarshalJSON,
+which only the type check found. protocol.json states the rule, which ACP's table
+does not hold (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G26; 0049-PLAN-generator-fixes.md, phase 6, deviation 4).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {"Opts": {"type": "object", "properties": {"labels": {"type": "object", "additionalProperties": {"type": "string"}}, "tags": {"type": "object", "additionalProperties": {"type": "string"}}}}, "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}}}
+-- protocol.json --
+{"KeyOrders": [{"Definition": "Opts", "Property": "labels", "Field": "MarshalJSON", "Source": "test"}]}
+-- want.err --
+key-order rule Opts.labels: field MarshalJSON collides with the generated method MarshalJSON

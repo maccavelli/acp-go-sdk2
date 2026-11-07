@@ -354,7 +354,7 @@ func repositoryFiles(t *testing.T) ([]emit.File, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unstable, err := renderUnstable(dir, root, meta, schema, prov)
+	unstable, err := renderUnstable(dir, root, meta, schema, prov, &model.ACP)
 	if err != nil {
 		t.Fatal(err)
 	}

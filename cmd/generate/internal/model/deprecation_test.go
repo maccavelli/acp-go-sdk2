@@ -6,7 +6,7 @@ import (
 )
 
 // deprecationDefs adds to protocolDefs a node the schema marks deprecated of
-// each kind, beside one it does not mark, and marks CloseRequest, the
+// each kind, beside one it does not mark, and marks CloseSessionRequest, the
 // request of the agent method s/close.
 var deprecationDefs = strings.NewReplacer(
 	`"Update":`, `"Gone":{"type":"object","description":"Gone.","deprecated":true},
@@ -19,7 +19,7 @@ var deprecationDefs = strings.NewReplacer(
 		"Flat":{"type":"object","required":["s"],"properties":{"s":{"type":"string"}},"anyOf":[
 			{"title":"First","allOf":[{"$ref":"#/$defs/ScopeA"}],"deprecated":true},{"title":"Second","allOf":[{"$ref":"#/$defs/ScopeB"}]}]},
 		"Update":`,
-	`"CloseRequest":{"type":"object",`, `"CloseRequest":{"deprecated":true,"type":"object",`,
+	`"CloseSessionRequest":{"type":"object",`, `"CloseSessionRequest":{"deprecated":true,"type":"object",`,
 ).Replace(protocolDefs)
 
 // deprecationMarks holds the marks TestDeprecationNotes reads: the marked
@@ -64,7 +64,7 @@ func readMarks(m *Model) deprecationMarks {
 			k.second = mb.Deprecation
 		}
 	}
-	k.closeReq, k.closeResp = m.Type("CloseRequest").Deprecation, m.Type("CloseResponse").Deprecation
+	k.closeReq, k.closeResp = m.Type("CloseSessionRequest").Deprecation, m.Type("CloseSessionResponse").Deprecation
 	for _, mi := range m.AgentMethods {
 		if mi.Wire == "s/close" {
 			k.method = mi.Deprecation
@@ -91,22 +91,22 @@ func TestDeprecationNotes(t *testing.T) {
 	}
 	k := readMarks(plain)
 	for name, d := range map[string]*Deprecation{"Gone": k.gone, "Hold.a": k.holdA, `Pick "x"`: k.pickX, `Lvl "lo"`: k.lvlLo,
-		"Flat First": k.first, "CloseRequest": k.closeReq} {
+		"Flat First": k.first, "CloseSessionRequest": k.closeReq} {
 		if d == nil || d.Note != "" {
 			t.Errorf("%s: %+v, want a mark without a note", name, d)
 		}
 	}
 	for name, d := range map[string]*Deprecation{"Hold.b": k.holdB, `Pick "y"`: k.pickY, `Lvl "hi"`: k.lvlHi, "Flat Second": k.second,
-		"CloseResponse": k.closeResp} {
+		"CloseSessionResponse": k.closeResp} {
 		if d != nil {
 			t.Errorf("%s: %+v, want no mark", name, d)
 		}
 	}
-	if k.method == nil || k.method.Definition != "CloseRequest" || k.method.Note != "" {
-		t.Errorf("s/close's mark = %+v, want CloseRequest's", k.method)
+	if k.method == nil || k.method.Definition != "CloseSessionRequest" || k.method.Note != "" {
+		t.Errorf("s/close's mark = %+v, want CloseSessionRequest's", k.method)
 	}
 	for _, ty := range plain.Types {
-		if ty.Deprecation != nil && ty.Name != "Gone" && ty.Name != "CloseRequest" {
+		if ty.Deprecation != nil && ty.Name != "Gone" && ty.Name != "CloseSessionRequest" {
 			t.Errorf("%s is marked, and the schema does not mark it", ty.Name)
 		}
 	}
@@ -121,7 +121,7 @@ func TestDeprecationNotes(t *testing.T) {
 		DeprecationNote{Definition: "Pick", Variant: "x", Note: "Use y."},
 		DeprecationNote{Definition: "Lvl", Variant: "lo", Note: "Use hi."},
 		DeprecationNote{Definition: "Flat", Variant: "First", Note: "Use Second."},
-		DeprecationNote{Definition: "CloseRequest", Note: "Close by other means."})
+		DeprecationNote{Definition: "CloseSessionRequest", Note: "Close by other means."})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestDeprecationNotes(t *testing.T) {
 		want string
 	}{
 		"Gone": {k.gone, "Use Kept."}, "Hold.a": {k.holdA, "Use b."}, `Pick "x"`: {k.pickX, "Use y."}, `Lvl "lo"`: {k.lvlLo, "Use hi."},
-		"Flat First": {k.first, "Use Second."}, "CloseRequest": {k.closeReq, "Close by other means."},
+		"Flat First": {k.first, "Use Second."}, "CloseSessionRequest": {k.closeReq, "Close by other means."},
 		"s/close": {k.method, "Close by other means."},
 	} {
 		if tc.d == nil || tc.d.Note != tc.want {
@@ -162,6 +162,35 @@ func TestDeprecationNotes(t *testing.T) {
 	} {
 		if _, err := build(tt.notes...); err == nil || !strings.Contains(err.Error(), tt.want) {
 			t.Errorf("%s: Build = %v, want an error containing %q", tt.name, err, tt.want)
+		}
+	}
+}
+
+// TestDeprecationNoteReachesCopies requires a protocol-table note on a
+// deprecated property to reach the property's copy in an inline variant, which
+// an allOf of its definition makes, as it reaches the definition's own field
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G25).
+func TestDeprecationNoteReachesCopies(t *testing.T) {
+	t.Parallel()
+	defs := strings.Replace(protocolDefs, `"Update":`, `"Base":{"type":"object","properties":{"old":{"type":"string","deprecated":true}}},
+		"W":{"oneOf":[{"title":"Wrap","type":"object","allOf":[{"$ref":"#/$defs/Base"}],"properties":{"kind":{"type":"string","const":"w"}},"required":["kind"]},
+		{"title":"Plain","type":"object","properties":{"kind":{"type":"string","const":"p"}},"required":["kind"]}]},"Update":`, 1)
+	p := testProtocol()
+	p.DeprecationNotes = []DeprecationNote{{Definition: "Base", Property: "old", Note: "Use new."}}
+	m, err := Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, defs), Protocol: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	own := fieldByKey(t, m.Type("Base").Fields, "old")
+	var copied *Field
+	for _, vi := range m.Type("W").Variants {
+		if vi.Inline != nil && vi.DiscValue == "w" {
+			copied = fieldByKey(t, vi.Inline.Fields, "old")
+		}
+	}
+	for name, f := range map[string]*Field{"Base.old": own, "the copy in W's Wrap": copied} {
+		if f == nil || f.Deprecation == nil || f.Deprecation.Note != "Use new." {
+			t.Errorf("%s: %+v, want the note", name, f)
 		}
 	}
 }

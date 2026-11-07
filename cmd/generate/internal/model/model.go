@@ -215,6 +215,11 @@ type Variant struct {
 	// Validates is true when the variant's type has a Validate method, which
 	// the union's Validate calls.
 	Validates bool
+	// ItemsValidate is true for an inline variant of a named slice or map,
+	// InlineNamed, whose items' type has a Validate method: the union's
+	// Validate calls it on each item
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G19, Q25 a).
+	ItemsValidate bool
 	// KeyLess is true for a variant of a discriminated union that has no
 	// discriminator value and is not the catch-all: the schema means it when
 	// the discriminator is absent.

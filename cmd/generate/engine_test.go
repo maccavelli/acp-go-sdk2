@@ -2,18 +2,21 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"go/build"
 	"go/types"
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/emit"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/enginetest"
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
 var update = flag.Bool("update", false, "rewrite the want.api and want.deprecated of the engine cases")
@@ -61,7 +64,7 @@ func runEngineCase(t *testing.T, path string) {
 	}
 	schemaDir := t.TempDir()
 	for _, f := range a.Files {
-		if strings.HasSuffix(f.Name, ".json") {
+		if strings.HasSuffix(f.Name, ".json") && f.Name != protocolFile {
 			if err := os.WriteFile(filepath.Join(schemaDir, f.Name), f.Data, 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -72,7 +75,7 @@ func runEngineCase(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 	before := snapshot(t, out)
-	runErr := run([]string{"-schema", schemaDir, "-out", out})
+	runErr := runWith([]string{"-schema", schemaDir, "-out", out}, caseProtocol(t, a))
 
 	wantErr, refuse := a.File("want.err")
 	wantAPI, accept := a.File("want.api")
@@ -220,4 +223,39 @@ func TestRuntimeFilesCoverHandWritten(t *testing.T) {
 		t.Errorf("hand-written files of the root are %v, want %v: add a new file to enginetest.RuntimeFiles if it uses no ACP type, "+
 			"or exclude it here as helpers.go is", hand, want)
 	}
+}
+
+// protocolFile is an engine case's optional override of the protocol table.
+const protocolFile = "protocol.json"
+
+// caseProtocol is the protocol table an engine case runs with: model.ACP, or,
+// when the case has protocol.json, a copy of it with each field that file's
+// object names replaced by a fresh value decoded from it, so model.ACP itself
+// is never changed under the parallel cases. A case can then state a rule
+// ACP's table does not hold (0049-PLAN-generator-fixes.md, phase 6,
+// deviation 4).
+func caseProtocol(t *testing.T, a *enginetest.Archive) *model.Protocol {
+	t.Helper()
+	b, ok := a.File(protocolFile)
+	if !ok {
+		return &model.ACP
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(b, &fields); err != nil {
+		t.Fatalf("%s: %v", protocolFile, err)
+	}
+	p := model.ACP
+	pv := reflect.ValueOf(&p).Elem()
+	for name, raw := range fields {
+		f := pv.FieldByName(name)
+		if !f.IsValid() {
+			t.Fatalf("%s: model.Protocol has no field %s", protocolFile, name)
+		}
+		v := reflect.New(f.Type())
+		if err := json.Unmarshal(raw, v.Interface()); err != nil {
+			t.Fatalf("%s: %s: %v", protocolFile, name, err)
+		}
+		f.Set(v.Elem())
+	}
+	return &p
 }
