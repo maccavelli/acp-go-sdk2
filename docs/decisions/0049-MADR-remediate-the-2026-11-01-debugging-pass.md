@@ -2,7 +2,7 @@
 status: accepted
 date: 2026-11-07
 decision-makers: the repository owner
-consulted: "probe tests and scripts in scratch copies of `d55ba2a`, of `e98987a` for the re-assessment, of `277aca0` for the second, with a linux/386 run on the Linux test host, of `1fe3dd0` for the third, and of `ff31967` for the fourth, the generator's; the official TypeScript (`08a0d30`) and Python (`9853d8b`) SDKs' clones in the interop cache; `schema/schema.json` and `schema/schema.unstable.json` at ACP 1.25.0; `go help test`; GitHub's workflow documentation"
+consulted: "probe tests and scripts in scratch copies of `d55ba2a`, of `e98987a` for the re-assessment, of `277aca0` for the second, with a linux/386 run on the Linux test host, of `1fe3dd0` for the third, of `ff31967` for the fourth, the generator's, and of `73b0537` for the fifth, the generator's again; the official TypeScript (`08a0d30`) and Python (`9853d8b`) SDKs' clones in the interop cache; `schema/schema.json` and `schema/schema.unstable.json` at ACP 1.25.0; `go help test`; GitHub's workflow documentation"
 informed: gobble-cli, magic-cli-remote
 ---
 
@@ -20,7 +20,8 @@ This record holds what the pass found, and proposes how to remediate it. It deci
 owner's answers to "Questions for the owner" settle the program. *2026-11-03:* the owner answered on 2026-11-01 and accepted
 the record on 2026-11-02; the runtime findings are done, and "Re-assessment at `e98987a`" below checks the rest against the tree.
 *2026-11-04:* the surface findings are done too, in `v1.32.0`. "Re-assessment at `277aca0`" below checks the subpackage
-findings and the documentation again, before the subpackage PLAN.
+findings and the documentation again, before the subpackage PLAN. *2026-11-07:* "Re-assessment of F-G at `73b0537`" checks
+the generator findings again after G14's fix, before the generator PLAN.
 
 ### How the pass was run
 
@@ -453,6 +454,72 @@ PLAN's gates, closed enums and key-less fallbacks, and 0050's accepted-ids funct
 * Helper marking happens before emitting, and the generated output is deterministic.
 * 67 of the 90 accepted engine cases have a behaviour test, each with a failure call. The other 23 are API-shape cases.
 
+### Re-assessment of F-G at `73b0537`, 2026-11-07
+
+The owner asked to "re-assess the codebase, changes have been made. ensure the 0049 madr as regards generator fixes is still
+up-to-date and accurate", then for the generator PLAN.
+
+**What changed since `ff31967`:** four commits, `f31f487` to `73b0537`, all G14's. `git diff --stat ff31967 73b0537 --
+cmd/generate/ '*_gen.go' schema/ Makefile` lists five files:
+
+* `emit/decode.go`, `emitSkipInvalid`;
+* `model/schema.go`, `walkRefs` and the new `admitsNull`;
+* two engine cases;
+* `types_gen.go`'s `skipInvalid`.
+
+No other generator file changed, and the schemas did not.
+
+**The method:**
+
+* A scratch script, `cites.py`, printed each file-and-line citation of F-G at `73b0537` with its enclosing declaration. The
+  author read each one against its finding's claim.
+* A scratch script, `reprobe.py`, ran probes on a `git archive` copy of `73b0537`:
+  * ten small schemas as engine cases, each run alone with `-update`, so the generated API was written into the copy;
+  * `-h`, a stray argument, and a stale `_gen.go`, with the copy's own generator binary.
+* `verify.py` re-ran G15 and G16 in fresh copies.
+* `git status --porcelain` was empty afterwards.
+* A scratch script, `facts.py`, read both committed schemas for the facts the PLAN's designs rest on, listed below.
+
+**Every finding stands.** Re-run at `73b0537`:
+
+* G1: a stale `old_gen.go` that a hand-written file uses. The generator exits 0 and deletes it, and `go build` then fails
+  "./uses_stale.go:3:9: undefined: staleHelper".
+* G2: `Node.next`, a `$ref` to `Node` with `default: {}`. Exit 2, "fatal error: stack overflow".
+* G8: a `meta.json` with no `version` is accepted.
+* G11: `generate stray` exits 0 with no output.
+* G15: " Reworded." appended to `ToolKind`'s first value in `schema.unstable.json` alone. Exit 2, a panic; the unchanged
+  copy exits 0.
+* G16: a hand-written `helpers_gen_test.go`. Exit 0, and the file is gone.
+* G17: `p`, `q`, `r` and `n` are generated as `P *int32`, `Q *B`, `R *bool` and `N *string`.
+* G21, G22 and G32: the enum-discriminated `Shape`, the all-const `anyOf` `E` (`type E string`), and `"X": null`, each
+  accepted, exit 0.
+* G23: the required `xs`, `["array","null"]`, is `Xs []string "json:\"xs\""`, with no pointer and no `omitempty`.
+* G33: `generate -h` exits 1, "generate: flag: help requested".
+* The code the other findings cite is unchanged since `ff31967`, where their probes ran. Their citations were re-read at
+  `73b0537`.
+
+**Citations corrected** in place, each marked "corrected 2026-11-07": G3, G4, G6, G7, G13, G18, G29 and G35. G8 gains the
+manifest path that `main.go` takes. G14's citation is the code before its fix, as the finding describes the defect.
+
+**New:** G37, under F-G. G14's refusal misses two ways in which an item admits `null`.
+
+**Facts for the generator PLAN's designs,** read by `facts.py` over both committed schemas:
+
+* **One property has a non-zero scalar default** (G6, Q22): `ElicitationSchema.type`, `"object"`. It is an `allOf` of
+  `ElicitationSchemaType`, a `oneOf` of the single const `"object"`, and is generated as
+  `Type ElicitationSchemaType "json:\"type,omitempty\""` (`types_gen.go:5929`). Its zero value, `""`, is not a member, so it
+  is never a valid value to send.
+* **No keyword stands beside a `$ref`** (G5 d).
+* **No default sits below a nested object or an inline variant** (G7, Q23).
+* **One `anyOf` has two non-null members** (G17, Q24). In the stable schema, the first member of `ClientNotification.params`
+  is itself an `anyOf` of two. It is a member of `params`'s own two-member list with `null`, not a property's list, and
+  `params` is generated as `json.RawMessage` (`types_gen.go:1857`).
+* **Three one-value `enum`s have no `const`** (G21): `jsonrpc`, in the root's `anyOf`, outside `$defs`. None is a
+  discriminator.
+* **`Model.Validates` has three callers** (G13), all test files of package `model`: `edges_test.go:153`, `paths_test.go:87`
+  and `unions_test.go:143`.
+* **No tag names `cmd/generate`** (Q29). The generator module is not released on its own.
+
 ## Findings
 
 Severity is the effect on a consumer or a maintainer: **high** loses data, hangs, or crashes a correct program; **medium** gives a
@@ -694,12 +761,14 @@ through a property's default with no visited set. **Probe** (`recursive-default.
 overflow", in `renderer.structValue`. `FuzzBuild` found it in 25 s. Fix: refuse a recursive default, naming it.
 
 **G3. Medium. A property the manifest changed silently overrides the stable schema's own later definition of it.**
-`internal/load/manifest.go:194-203`, `:222-228`; `model.go:476-478` drops the notice too. **Probe** (`stabilized.txtar`, re-run): the
+`internal/load/manifest.go:194-203`, `:222-228`; `model.go:495-505` (`markUnstableEntries`; corrected 2026-11-07, from
+`:476-478`) drops the notice too. **Probe** (`stabilized.txtar`, re-run): the
 stable `Shared.b` is `{"type":"integer"}`; the generator exits 0 and emits `B string`; decoding `{"b":5}` fails "cannot unmarshal
 number into Go struct field Shared.b of type string". Fix: refuse when the stable definition now holds the key and differs.
 
-**G4. Low. Integer bounds pass through `float64`.** `load/load.go:64-65`, `model/validate.go:63-67`, `:304-321`,
-`emit/types.go:1306-1314` (`uint64` of an out-of-range float, implementation-defined). **Probe** (investigator): a `uint64`
+**G4. Low. Integer bounds pass through `float64`.** `load/load.go:64-65`, `model/validate.go:311-361` (`bounds`),
+`emit/types.go:1466-1474` (`boundLit`: `uint64` of an out-of-range float, implementation-defined). Corrected 2026-11-07, from
+`validate.go:63-67`, `:304-321` and `types.go:1306-1314`. **Probe** (investigator): a `uint64`
 `minimum` of 2^64 emits `< 18446744073709551615` on `arm64` and `< 9223372036854775808` on `amd64`; an `int64` `maximum` of
 2^53+1 is emitted as 2^53. No committed case is affected. Fix: read bounds as `json.Number`, refusing magnitudes at or above 2^53 as
 `integerConst` does.
@@ -710,15 +779,19 @@ that is only a `$ref`, emitted as raw JSON; (f) an unknown `type` name, emitted 
 winning. **Probe** (investigator, one probe schema each); none occurs in the committed schemas (scripts `latent.py`,
 `kwpaths.py`, `constprops.py`). Fix: refuse each with its path, as 0012 aims.
 
-**G6. Low. A non-zero scalar default with `omitempty` cannot send the zero value.** `model/fields.go:555-561`. **Probe**
+**G6. Low. A non-zero scalar default with `omitempty` cannot send the zero value.** `model/fields.go:551-567` (corrected
+2026-11-07): the default is read at `:551-560`, and `:561-567` tags `omitempty` on every optional field whose default is not a
+nil-able array or object. **Probe**
 (investigator): `{"n":0,"s":"","b":false}` with defaults `5`, `"d"`, `true` re-encodes without `s` and `b` (`n`, nullable,
 is a pointer and is sent; corrected 2026-11-03), and the peer reads the defaults. The committed schemas have one non-zero scalar default, where `""` is invalid anyway. Fix: refuse, or emit a pointer.
 
-**G7. Low. Defaults on nested inline objects and inline-variant properties are not applied.** `model/fields.go:581-603`
-(corrected 2026-11-03) says so in a comment at `:583`, while `checkDefaults` accepts them. **Probe** (investigator):
+**G7. Low. Defaults on nested inline objects and inline-variant properties are not applied.** `model/fields.go:588-610`
+(`plainFields`; corrected 2026-11-03, and 2026-11-07) says so in its comment at `:590`, while `checkDefaults`
+(`model/fields.go:380`) accepts them. **Probe** (investigator):
 "inner.flag=false (schema default true)". None in the committed schemas. Fix: refuse, or apply.
 
-**G8. Low. `meta.json` without `version` emits `ProtocolVersionNumber = 0`.** `load/load.go:18-24`, `merge.go:84`. **Probe**
+**G8. Low. `meta.json` without `version` emits `ProtocolVersionNumber = 0`.** `load/load.go:18-24`, `merge.go:84`; and `load/manifest.go:116`, on the path `main.go` takes, copies `stableMeta.Version`
+unchecked (added 2026-11-07). **Probe**
 (`noversion.txtar`, re-run): "gen rc=0". Fix: require `version >= 1`.
 
 **G9. Low. `Check` type-checks only the generator's own `GOOS` and `GOARCH`, the host's unless the environment sets them.**
@@ -735,7 +808,7 @@ and writes to the working directory's repository. Fix: refuse `fs.NArg() > 0`.
 empty `Meta`, so since 0019's G18 nearly every seed is an unlisted method. **Probe** (investigator): of 187 seeds, "accepted 1,
 refused as unlisted-method 116, refused otherwise 70". Fix: fuzz each case's schema with its own `meta.json`, and run `Check`.
 
-**G13. Info. `Model.Validates` is used only by tests.** `model/validate.go:70`; `deadcode ./...` lists it. Fix: move it to a test
+**G13. Info. `Model.Validates` is used only by tests.** `model/validate.go:80` (corrected 2026-11-07); `deadcode ./...` lists it. Fix: move it to a test
 file, or keep it as a test helper by name.
 
 *Added 2026-11-07,* by the fourth re-assessment at `ff31967`: G14 to G36. Paths are relative to `cmd/generate/internal/`
@@ -746,7 +819,7 @@ unless they start at the repository (`cmd/`, the root's files).
 `skipInvalid` drops a `null` item, and the generator refuses skip-invalid items that admit `null`. The tests the
 PLAN's phase 1 names failed with the fix removed.
 
-`emit/decode.go:423-443` (`emitSkipInvalid`), in `types_gen.go` as `skipInvalid`, keeps an item when `json.Unmarshal(it, &v)`
+`emit/decode.go:423-443` (`emitSkipInvalid`, at `ff31967`; `:427-448` since the fix), in `types_gen.go` as `skipInvalid`, keeps an item when `json.Unmarshal(it, &v)`
 returns nil. For `null`, `encoding/json` leaves a string, an open enum or a generated union unchanged and returns nil, so the
 zero value is kept, not dropped. It then fails `Validate`, which `checkInbound` runs on every received message.
 
@@ -807,7 +880,7 @@ are non-null.** `model/fields.go:331-360` (`optionalTypeRef`) loops over the two
 
 **G18. Medium. The tests of the protocol table against the committed schemas build their model from the live unstable schema;
 the generator builds from the frozen manifest.** `cmd/generate/internal/model/classes_test.go:44` (`committedInput`) calls
-`load.MergeStableAndUnstable`. `cmd/generate/main.go:196-198` uses `load.MergeManifest` whenever `schema/unstable-v1.json`
+`load.MergeStableAndUnstable`. `cmd/generate/main.go:199-201` (corrected 2026-11-07) uses `load.MergeManifest` whenever `schema/unstable-v1.json`
 exists, which it does. `committedInput` feeds `TestProtocolTableAppliesToCommittedSchema` (`model/protocol_test.go:442`), the
 union-class tests (`model/classes_test.go:55`, `:118`, `:220`), `model/keywords_test.go:233` and `model/unstable_test.go:128`.
 
@@ -937,7 +1010,7 @@ walks up to the enclosing `go.mod`.
 Four rule kinds have a scan of the schema's descriptions that requires a rule wherever their wording appears: `patchWording`
 and `retainedWording` (`model/patch_test.go:307`, `:349`), `replaceWording` (`:483`) and `fallbackWording`
 (`model/keyless_test.go:93`). The capability, method-gate and absolute-path rules have only the converse check, that each rule
-applies, and fixed counts (`model/protocol_test.go:483`, `model/gates_test.go:226`).
+applies, and fixed counts (`model/protocol_test.go:483`, `model/gates_test.go:227`, corrected 2026-11-07).
 
 * **Probe** (investigator): three sentences added to the schemas: "Only available if the Agent supports the
   `sessionCapabilities.list` capability." on `SetSessionModeRequest`; "Agents MUST only send this update when the Client
@@ -978,7 +1051,8 @@ failure. It prints "generate: flag: help requested". **Fix:** exit 0 on `flag.Er
 **G34. Info. `docs/architecture.md`'s list of what the protocol table holds omits `DocNotes`.** `docs/architecture.md:182-282`
 lists every rule kind but `DocNotes`, which `model/acp.go` holds 10 of. **Fix:** one bullet.
 
-**G35. Info. Two rule kinds have no engine case.** Engine cases run with `&model.ACP` (`cmd/generate/main.go:63`), so they reach
+**G35. Info. Two rule kinds have no engine case.** Engine cases run with `&model.ACP` (`cmd/generate/main.go:61`, called by `engine_test.go:75`; corrected 2026-11-07), so they
+reach
 only the rule kinds ACP's table uses.
 
 * `DeprecationNotes` is empty in ACP, so no engine case reaches it. In a sampled run of `internal/mutate`, the mutant
@@ -991,6 +1065,30 @@ only the rule kinds ACP's table uses.
 returns the first method with that name, agent methods first. `mcp/message` is on both sides, so a later client-side rule for
 it would be reported "not in the committed meta files". It can fail falsely but not pass falsely. **Fix:** look up by side and
 wire.
+
+*Added 2026-11-07,* by the fifth re-assessment at `73b0537`: G37.
+
+**G37. Low. G14's refusal misses an item that admits `null` through an `allOf`, or by having no type; `skipInvalid` then
+drops a valid `null`.** `model/schema.go:393-408` (`admitsNull`) reads `type`, `anyOf`, `oneOf` and `$ref`, never `allOf`. It
+returns false for an item with no `type`, which admits every JSON value. `skipInvalid` (`emit/decode.go:427-448`) drops every
+`null` item.
+
+* **Probe** (the author, `reprobe.py` at `73b0537`):
+  * items `{"allOf": [{"$ref": "#/$defs/Maybe"}]}`, with `Maybe` an `anyOf` of `Item` and `null`: accepted, as `Xs []Maybe`,
+    where `Maybe` has a `MaybeVariant2` for `null`;
+  * items `{}`: accepted, as `Xs []json.RawMessage`.
+
+  In both, a `null` item decodes, yet it is dropped. The control, items `{"type": ["string","null"], "enum": ["a", null]}`, is
+  refused "L.properties.xs: x-deserialize-skip-invalid-items on items that admit null, which it would drop".
+* **Whitespace is not a gap.** A scratch program decoded `[ null , "a" ]`, `[\n  null,\n  "a"\n]` and `[\tnull\t]` into
+  `[]json.RawMessage`, by default and with `GOEXPERIMENT=nojsonv2`. Each `null` item came out as the four bytes `null`, which
+  `string(it) == "null"` matches.
+* **Committed schemas:** not reached. No skip-invalid array has such items
+  ([0049-PLAN-null-items-in-skip-invalid-arrays.md](0049-PLAN-null-items-in-skip-invalid-arrays.md), "Facts it rests on").
+* **Fix:** `admitsNull` also returns true in three cases:
+  * an `allOf` whose members all admit `null`;
+  * an `enum` that holds `null`, or a `const` of `null`;
+  * an item with no `type`, `$ref`, `const`, `enum`, `anyOf`, `oneOf` or `allOf`.
 
 ### F-P: the subpackages
 
@@ -1139,7 +1237,8 @@ its phase 6's deviation 1. G13 and `cmd/generate`'s two `main` functions stay th
 * A correct program must not hang, crash or lose data because of the SDK (R1, P1, P5).
 * What the SDK sends must be what the schema allows, and what it reads, what the schema says (S1, S2, S6).
 * A documented contract holds, or its documentation changes (R2, R4, R10, S4, T10).
-* The generator refuses what it cannot render faithfully, rather than exiting 0 (G1 to G9).
+* The generator refuses what it cannot render faithfully, rather than exiting 0 (G1 to G9; G15 to G37 add to it,
+  2026-11-07).
 * The checks the records rely on check what they claim (T1 to T5).
 * No incompatible change to the exported API without a `/v2` ([0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md](0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md)).
 
@@ -1172,6 +1271,16 @@ released on its own, while the severity order inside each keeps R1 first. The pl
   behaviour, is fixed alone per Q21 (a), in `v1.34.1`, by
   [0049-PLAN-null-items-in-skip-invalid-arrays.md](0049-PLAN-null-items-in-skip-invalid-arrays.md). G15 to G18 are medium and go before the low findings, then G19 to G29, then the info findings G30
   to G36. Each refusal comes with an engine case, and each changed behaviour with a test seen to fail first.
+  *Written 2026-11-07,* [0049-PLAN-generator-fixes.md](0049-PLAN-generator-fixes.md), proposed, after the fifth
+  re-assessment, with G37 and Q22 to Q29 below. Its ten phases keep this order:
+  * the mediums, G16 and G1, then G2, G15, G17, G3 and G18;
+  * the output edge's lows, G9, G27, G28 and G10;
+  * the model's refusals, G4, G5, G7, G8, G32 and G37, then types and decoding, G6, G21, G22, G23 and G24;
+  * validation, gates and rules, G19, G20, G25 and G26;
+  * the input edge and the CLI, G11, G33 and G31;
+  * the table's tests and the fuzzer, G29, G35, G36 and G12;
+  * the info findings, G13, G30 and G34;
+  * the close.
 * `0049-PLAN-tooling-fixes.md`: T2 (with 0048), T1, T3, then T4 to T13, and F-C's dead `ConfigOptionUpdate.gates` through the
   generator. *Written 2026-11-04,* [0049-PLAN-tooling-fixes.md](0049-PLAN-tooling-fixes.md), proposed, with T14, F-C's two
   untested `Error` methods and `abandon`, and Q16 to Q19 below. It groups the order into phases by tool: T2, T14 and T7;
@@ -1488,6 +1597,86 @@ Each question was put with its three options; the owner chose the recommended on
   [0049-PLAN-null-items-in-skip-invalid-arrays.md](0049-PLAN-null-items-in-skip-invalid-arrays.md), ahead of the generator
   PLAN. Not chosen: in the generator PLAN's release; documented now and fixed last.
 
+#### The generator PLAN's designs, proposed 2026-11-07
+
+Where a finding's fix reads "refuse, or …", or leaves a detail open, [0049-PLAN-generator-fixes.md](0049-PLAN-generator-fixes.md)
+needs the choice. The facts are the fifth re-assessment's.
+
+* **Q22. G6, a non-zero scalar default on an optional field.** The committed schemas have one: `ElicitationSchema.type`,
+  whose closed enumeration, `"object"` alone, excludes the zero value. The engine case `accept-default-scalar.txtar` accepts the
+  shape on purpose, with no enumeration: optional `mode` `"auto"`, `n` `3` and `on` `true`, "filled when absent".
+  * **(a) A pointer when the zero value is a valid value; the plain type when the property's closed enumeration or `const`
+    excludes it** (recommended). The field then sends an explicit zero, as a nullable one does. `ElicitationSchema.Type`
+    keeps its type, and nothing generated changes. `accept-default-scalar.txtar`'s three fields become pointers, so its
+    `want.api` changes.
+  * **(b) Refuse it, unless the zero value is excluded.** This is smaller. But `accept-default-scalar.txtar`'s three fields
+    become refusals, and a schema with an optional `true` default is no longer generated.
+  * **(c) A pointer always.** `ElicitationSchema.Type` would become `*ElicitationSchemaType`, an incompatible change to the
+    exported API, which needs a `/v2`
+    ([0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md](0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md)).
+* **Q23. G7, a default below a nested object or an inline variant.** None is in the committed schemas.
+  * **(a) Refuse it, naming the path** (recommended). It is what "refuse what it cannot render" asks, and nothing committed
+    changes.
+  * **(b) Apply it, as `objectFields` does.** This adds encode and decode paths that no committed schema uses.
+  * **(c) Apply it in nested inline objects, and refuse it in inline variants.** A middle path, with two behaviours to
+    document and test.
+* **Q24. G17, a two-member `anyOf` or `oneOf`.**
+  * **(a) Refuse a property's list of two non-null members. Type a `const` member from its own `type`, or from its JSON kind
+    when it has none** (recommended). `ClientNotification.params` is unaffected: its own list has a `null` member, and its
+    inner `anyOf` is a member, not a property's list.
+  * **(b) Refuse both shapes**, the non-string `const` too.
+  * **(c) Generate a property of two non-null members as `json.RawMessage`,** with the `const` typing of (a). It never
+    refuses, but those fields lose their types.
+* **Q25. G19, a union variant that is a named array.** `SessionConfigSelectOptions` has this shape. Its item types have no
+  check yet.
+  * **(a) Descend into the items of `InlineNamed` slice and map variants, in `Validate` and in the gates** (recommended). A
+    check that a schema update adds to `SessionConfigSelectOption` is then enforced, not silently skipped, and the generated
+    code does not change until one is added.
+  * **(b) Refuse such a variant when its items validate or are gated.** This is smaller, but the first such schema update
+    stops regeneration until the generator is changed.
+  * **(c) Descend in `Validate`, and refuse in the gates.** The gates are rarer and reach the wire. It splits the work,
+    with two rules for one shape.
+* **Q26. G21, a discriminator written as a one-value `enum`.**
+  * **(a) Read a one-value string `enum` as its `const`, in `discriminatorKey` and `discriminatorValue`** (recommended). The
+    union then routes, and the change is two reads.
+  * **(b) Refuse an `enum` on a discriminator.** A schema update written that way then stops regeneration.
+  * **(c) Route every value of a discriminator's `enum`, one or many, to its variant.** The most general, with routing
+    logic for a shape no schema uses.
+* **Q27. G23, a required nullable collection.**
+  * **(a) Do not fill it when it admits `null`** (recommended). A received `null` stays nil and is re-sent as `null`, and the
+    field keeps its type.
+  * **(b) Make it a pointer.** This changes a field's type for any such schema.
+  * **(c) Refuse a required collection that admits `null`, naming the path.** The smallest, but such a schema update stops
+    regeneration.
+* **Q28. G20, a capability or key-order rule whose property the definition's own fields lack.**
+  * **(a) Refuse the rule, naming it and the copies that hold the property** (recommended). ACP's table has none such, and a
+    rule then never applies to nothing silently.
+  * **(b) Resolve it by `f.prop` across `Fields`, `NestedStructs` and inline variants, as the patch rules do.** This is
+    complete, but it needs more code, and no committed rule uses it.
+  * **(c) Resolve capability rules across the copies, and refuse key-order rules.** The gates reach the wire, and key orders
+    do not. It splits the rule kinds.
+* **Q29. The release.** Each phase keeps the generated files byte-identical, which `tools/gates.py regen` checks.
+  * **(a) No release of its own,** as with the tooling PLAN; the next release's notes name the PLAN (recommended). A phase
+    that changes a generated file stops as a deviation.
+  * **(b) A patch release at the close.** A tagged release for traceability, with nothing in it for a consumer.
+  * **(c) A minor release at the close.** It signals the generator's new refusals to maintainers, but bumps the minor
+    version with no change a consumer sees.
+
+##### Answered by the owner, 2026-11-07
+
+Each question was put with its three options, the recommended one first.
+
+* Q22 (a): a pointer when the zero value is a valid value, and the plain type when the closed enumeration or `const`
+  excludes it.
+* Q23 (a): a default below a nested object or in an inline variant is refused, naming the path.
+* Q24 (a): a property's list of two non-null members is refused, and a `const` member is typed from its own type.
+* Q25 (a): `Validate` and the gates descend into the items of named array and map variants.
+* Q26 (a): a one-value string `enum` on a discriminator is read as its `const`.
+* Q27 (a): a required collection that admits `null` is not filled.
+* Q28 (a): a capability or key-order rule whose property only copies hold is refused.
+* Q29 (b): **a patch release at the close**, not the recommended "no release of its own". The generated files stay
+  byte-identical, so the patch's notes state that consumers meet no change, and name the generator's.
+
 ### Consequences
 
 * Good, because a deadlock, a crash, and four schema mismatches a peer can see are fixed, each with a test that would have caught
@@ -1495,8 +1684,8 @@ Each question was put with its three options; the owner chose the recommended on
   subpackage PLAN's, fixed in `v1.33.0`.
 * Good, because a `null` item in a skip-invalid array is dropped as the schema says, not a cause to refuse the message
   (G14, added 2026-11-07).
-* Good, because the generator refuses the schemas it now crashes on, renders wrongly or drops parts of (G2 to G8), before a
-  schema update meets one.
+* Good, because the generator refuses the schemas it now crashes on, renders wrongly or drops parts of (G2 to G8, and G15 to
+  G37 since 2026-11-07), before a schema update meets one.
 * Good, because the checks the records quote (`publication.py`, `check_records.py`, the docs-safe set) check what they claim.
 * Bad, because the surface fixes refuse what the SDK sent before (an empty `stopReason`, an unadvertised `methodId`, an ungated
   boolean option): a consumer that relied on it fails at the call, which is why they go in a minor release with notes.
