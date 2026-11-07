@@ -132,7 +132,7 @@ func discriminatorKey(schema *load.Schema, parent *load.Definition, variants []*
 		}
 		v = expandAllOf(schema, v)
 		for _, k := range slices.Sorted(maps.Keys(v.Properties)) {
-			if pd := v.Properties[k]; pd != nil && pd.Const != nil {
+			if discConst(v.Properties[k]) != nil {
 				return k, DiscDerived
 			}
 		}
@@ -140,12 +140,32 @@ func discriminatorKey(schema *load.Schema, parent *load.Definition, variants []*
 	return "", DiscNone
 }
 
-// isStringConstUnion reports whether def is a oneOf whose variants are all string consts.
+// discConst is the value a discriminator property fixes: its const, or the
+// one value of a one-value enum, which a schema may write in place of a const
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G21, Q26 a). It is
+// nil for a property that fixes none.
+func discConst(pd *load.Definition) any {
+	switch {
+	case pd == nil:
+		return nil
+	case pd.Const != nil:
+		return pd.Const
+	case len(pd.Enum) == 1:
+		return pd.Enum[0]
+	}
+	return nil
+}
+
+// isStringConstUnion reports whether def is a oneOf, or an anyOf, whose
+// variants are all string consts: a closed enumeration. An anyOf of string
+// consts alone admits nothing else either, so it is one too, not an open enum
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G22).
 func isStringConstUnion(def *load.Definition) bool {
-	if def == nil || len(def.OneOf) == 0 {
+	members := constMembers(def)
+	if len(members) == 0 {
 		return false
 	}
-	for _, v := range def.OneOf {
+	for _, v := range members {
 		if v == nil || v.Const == nil {
 			return false
 		}
@@ -156,9 +176,23 @@ func isStringConstUnion(def *load.Definition) bool {
 	return true
 }
 
+// constMembers is the members of a string const union: its oneOf, or its
+// anyOf when it has no oneOf.
+func constMembers(def *load.Definition) []*load.Definition {
+	if def == nil {
+		return nil
+	}
+	if len(def.OneOf) > 0 {
+		return def.OneOf
+	}
+	return def.AnyOf
+}
+
 // isOpenStringEnum reports whether def is an "open" string enum: an `anyOf`
-// where every variant is a plain string schema (type: "string") and at least
-// one variant has a string `const`. Such schemas describe a string value with
+// where every variant is a plain string schema (type: "string"), at least
+// one variant has a string `const`, and at least one has none, which admits
+// any other string; with consts alone it is closed (isStringConstUnion;
+// 0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G22). Such schemas describe a string value with
 // a recommended set of known values while still permitting arbitrary strings
 // for extensibility (see e.g. SessionConfigOptionCategory).
 //
@@ -168,7 +202,7 @@ func isOpenStringEnum(def *load.Definition) bool {
 	if def == nil || len(def.AnyOf) == 0 {
 		return false
 	}
-	sawConst := false
+	sawConst, sawFree := false, false
 	for _, v := range def.AnyOf {
 		if v == nil {
 			return false
@@ -188,9 +222,11 @@ func isOpenStringEnum(def *load.Definition) bool {
 				return false
 			}
 			sawConst = true
+		} else {
+			sawFree = true
 		}
 	}
-	return sawConst
+	return sawConst && sawFree
 }
 
 // checkRefs fails on a $ref that is not local or names no definition, on an

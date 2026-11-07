@@ -29,7 +29,7 @@ type Client interface{}
 type ClientExperimental interface{}
 type ClientSideConnection struct{conn *Connection; client Client}
 type Group struct{Group string "json:\"group\""; Options []Option "json:\"options\""}
-type Item struct{Count int64 "json:\"count,omitempty\""; Id string "json:\"id\""}
+type Item struct{Count *int64 "json:\"count,omitempty\""; Id string "json:\"id\""}
 type Mode struct{Message string "json:\"message\""; Session *SessionScope "json:\"-\""; Request *RequestScope "json:\"-\""}
 func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
 func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
@@ -105,15 +105,21 @@ import (
 
 // A required key or a key with a default, in another case, is read as
 // encoding/json reads its field; of several matching keys, the last wins.
+// count, optional with a default other than 0, is a pointer, so an explicit 0
+// is sent (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G6).
 func TestFoldedObjectKeys(t *testing.T) {
-	for in, want := range map[string]Item{
-		`{"ID":"a"}`:                  {Id: "a", Count: 3},
-		`{"id":"a","Count":5}`:        {Id: "a", Count: 5},
-		`{"id":"a","ID":"b"}`:         {Id: "b", Count: 3},
-		`{"ID":"b","id":"a"}`:         {Id: "a", Count: 3},
+	type item struct {
+		id    string
+		count int64
+	}
+	for in, want := range map[string]item{
+		`{"ID":"a"}`:           {"a", 3},
+		`{"id":"a","Count":5}`: {"a", 5},
+		`{"id":"a","ID":"b"}`:  {"b", 3},
+		`{"ID":"b","id":"a"}`:  {"a", 3},
 	} {
 		var v Item
-		if err := json.Unmarshal([]byte(in), &v); err != nil || v != want {
+		if err := json.Unmarshal([]byte(in), &v); err != nil || v.Id != want.id || v.Count == nil || *v.Count != want.count {
 			t.Errorf("%s decoded as %+v, %v; want %+v", in, v, err, want)
 		}
 	}

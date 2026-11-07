@@ -100,7 +100,9 @@ func TestObjectFields(t *testing.T) {
 		{"env", "Env", "map[string]string", "env,omitempty", false, ""},
 		{"inner", "Inner", "ObjInner", "inner", false, "Inner."},
 		{"list", "List", "[]string", "list", true, ""},
-		{"mode", "Mode", "string", "mode,omitempty", false, `Defaults to "auto" if unset.`},
+		// A pointer, so an explicit "" is sent
+		// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G6).
+		{"mode", "Mode", "*string", "mode,omitempty", false, `Defaults to "auto" if unset.`},
 		{"name", "Name", "string", "name", false, "The name."},
 		{"ref", "Ref", "Foo", "ref", false, ""},
 		{"tags", "Tags", "[]string", "tags", false, "Tags.||Defaults to [] if unset."},

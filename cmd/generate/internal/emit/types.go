@@ -771,10 +771,13 @@ func lenientDecode(f *goFile, name string, lenient []*model.Field, wrap func() a
 }
 
 // unknownAbsent reads a lenient closed enumeration's unknown value as one that
-// failed to decode, as the schema's annotation has it: a value field takes its
-// default or its zero value, a pointer is nil, and a slice drops the item
+// failed to decode, as the schema's annotation has it: a field takes its
+// default, def, or without one its zero value, nil for a pointer or a slice;
+// with skip-invalid-items a slice drops the item instead
 // (0012-MADR-schema-fidelity-framework.md, treatments 5 and 6;
-// 0049-PLAN-surface-fixes.md, phase 3). Nothing for any other field.
+// 0049-PLAN-surface-fixes.md, phase 3; the default for a pointer and a slice,
+// 0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G24). Nothing for any
+// other field.
 func unknownAbsent(f *goFile, fld *model.Field, field, def ast.Expr) []ast.Stmt {
 	if !fld.Closed {
 		return nil
@@ -782,14 +785,14 @@ func unknownAbsent(f *goFile, fld *model.Field, field, def ast.Expr) []ast.Stmt 
 	switch r := fld.Type; r.Kind {
 	case model.RefPointer:
 		return []ast.Stmt{ifStmt(nil, binary(binary(field, token.NEQ, nilExpr()), token.LAND,
-			not(knownExpr(f, r.Elem.Name, fld.ClosedValues, field))), assign(exprs(field), nilExpr()))}
+			not(knownExpr(f, r.Elem.Name, fld.ClosedValues, field))), assign(exprs(field), orNil(def)))}
 	case model.RefSlice:
 		unknown := &ast.FuncLit{Type: funcType([]*ast.Field{param("x", f.typeName(r.Elem.Name))}, param("", id("bool"))),
 			Body: block(ret(not(knownExpr(f, r.Elem.Name, fld.ClosedValues, id("x")))))}
 		if !fld.Facts.SkipInvalidItems {
 			// Without skip-invalid-items an item that fails fails the array,
-			// which then takes its zero value.
-			return []ast.Stmt{ifStmt(nil, call(f.qual("slices", "ContainsFunc"), field, unknown), assign(exprs(field), nilExpr()))}
+			// which then takes its default, or its zero value.
+			return []ast.Stmt{ifStmt(nil, call(f.qual("slices", "ContainsFunc"), field, unknown), assign(exprs(field), orNil(def)))}
 		}
 		return []ast.Stmt{assign(exprs(field), call(f.qual("slices", "DeleteFunc"), field, unknown))}
 	default:
@@ -798,6 +801,14 @@ func unknownAbsent(f *goFile, fld *model.Field, field, def ast.Expr) []ast.Stmt 
 		}
 		return []ast.Stmt{ifStmt(nil, not(knownExpr(f, r.Name, fld.ClosedValues, field)), assign(exprs(field), def))}
 	}
+}
+
+// orNil is def, or nil when there is none.
+func orNil(def ast.Expr) ast.Expr {
+	if def == nil {
+		return nilExpr()
+	}
+	return def
 }
 
 // emitInlineVariant emits the type the model gives a union variant without a

@@ -1,4 +1,8 @@
-Properties with a scalar default are filled when absent.
+Properties with a scalar default are filled when absent. Each is optional, its
+default is not its zero value, and its schema admits the zero value, so each is
+a pointer: an explicit zero value is sent, where omitempty dropped it and the
+peer read the default (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G6,
+Q22 a).
 The meta declares $/cancel_request and the schema its smallest definition, which
 the runtime needs.
 
@@ -19,7 +23,7 @@ type ClientExperimental interface{}
 type ClientSideConnection struct{conn *Connection; client Client}
 func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
 func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
-type Opts struct{Mode string "json:\"mode,omitempty\""; N int32 "json:\"n,omitempty\""; On bool "json:\"on,omitempty\""}
+type Opts struct{Mode *string "json:\"mode,omitempty\""; N *int32 "json:\"n,omitempty\""; On *bool "json:\"on,omitempty\""}
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
 const ProtocolVersionNumber untyped int = 1
 func (*AgentSideConnection).Close() error
@@ -53,14 +57,30 @@ func TestDefaultScalar(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{}`), &o); err != nil {
 		t.Fatal(err)
 	}
-	if o.Mode != "auto" || o.N != 3 || !o.On {
+	if o.Mode == nil || *o.Mode != "auto" || o.N == nil || *o.N != 3 || o.On == nil || !*o.On {
 		t.Errorf("defaults decoded as %+v", o)
 	}
 	o = Opts{}
 	if err := json.Unmarshal([]byte(`{"mode":"m","n":0,"on":false}`), &o); err != nil {
 		t.Fatal(err)
 	}
-	if o.Mode != "m" || o.N != 0 || o.On {
+	if o.Mode == nil || *o.Mode != "m" || o.N == nil || *o.N != 0 || o.On == nil || *o.On {
 		t.Errorf("explicit values decoded as %+v", o)
+	}
+}
+
+// An explicit zero value is sent, so the peer does not read the default in
+// its place (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G6).
+func TestDefaultScalarSendsZero(t *testing.T) {
+	var o Opts
+	if err := json.Unmarshal([]byte(`{"mode":"","n":0,"on":false}`), &o); err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"mode":"","n":0,"on":false}`; string(b) != want {
+		t.Errorf("re-encoded as %s, want %s", b, want)
 	}
 }

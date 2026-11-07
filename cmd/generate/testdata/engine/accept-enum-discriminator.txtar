@@ -1,0 +1,65 @@
+A union whose declared discriminator each variant fixes with a one-value enum, not
+a const: the one value is the variant's, so a payload routes to it, where every
+payload decoded into Unknown (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G21, Q26 a).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Shape": {"oneOf": [{"title": "Circle", "type": "object", "properties": {"kind": {"type": "string", "enum": ["circle"]}, "r": {"type": "integer", "format": "int32"}}, "required": ["kind"]}, {"title": "Square", "type": "object", "properties": {"kind": {"type": "string", "enum": ["square"]}, "s": {"type": "integer", "format": "int32"}}, "required": ["kind"]}], "discriminator": {"propertyName": "kind"}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+func NewShapeCircle() Shape
+func NewShapeSquare() Shape
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+type Shape struct{Circle *ShapeCircle "json:\"-\""; Square *ShapeSquare "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type ShapeCircle struct{Kind string "json:\"kind\""; R int32 "json:\"r,omitempty\""}
+type ShapeSquare struct{Kind string "json:\"kind\""; S int32 "json:\"s,omitempty\""}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+func (Shape).MarshalJSON() ([]byte, error)
+func (*Shape).UnmarshalJSON(b []byte) error
+func (*Shape).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// Each payload routes to the variant whose enum holds its kind.
+func TestEnumDiscriminator(t *testing.T) {
+	var s Shape
+	if err := json.Unmarshal([]byte(`{"kind":"circle","r":1}`), &s); err != nil || s.Circle == nil || s.Circle.R != 1 || s.Unknown != nil {
+		t.Errorf("circle decoded as %+v, %v", s, err)
+	}
+	s = Shape{}
+	if err := json.Unmarshal([]byte(`{"kind":"square","s":2}`), &s); err != nil || s.Square == nil || s.Square.S != 2 || s.Unknown != nil {
+		t.Errorf("square decoded as %+v, %v", s, err)
+	}
+}

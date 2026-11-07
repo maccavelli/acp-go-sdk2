@@ -850,3 +850,81 @@ All as required.
 
 **Status:** one deviation, recorded above. Staged for the owner, who commits. Phase 5, G6, G21, G22, G23 and G24, begins on
 the owner's word.
+
+### Phase 5: G6, G21, G22, G23 and G24, types and decoding, 2026-11-07
+
+The owner said "Commit to main, then proceed": phase 4 was committed on `main`, with `git commit --no-edit`, as `ac41197`.
+
+**What changed:**
+
+* **G6 (Q22 a).** A new pass, `pointerScalarDefaults` (`cmd/generate/internal/model/fields.go`), runs in `Build` between
+  `checkDefaults` and `renderDefaults` (`model/model.go`).
+  * It gives an optional, non-nullable field whose schema default is a scalar other than its zero value a pointer type, when
+    `admitsValue` finds the zero value admitted. `admitsValue` follows `$ref` and an `allOf` of one through `resolveSchema`,
+    and reads a `const`, an `enum`, or a union of consts.
+  * Step 5.1 placed the change in `objectFields`, which has no schema to follow a `$ref` with. The pass sits beside it, in
+    the same file, and changes the same fields.
+  * The rendered default is then the pointer's, `new(...)`, as a nullable field's already is.
+* **G21 (Q26 a).** A new `discConst` (`model/schema.go`) is a property's `const`, or the one value of a one-value `enum`.
+  `discriminatorKey`, `discriminatorValue` (`model/model.go`) and `isCatchAll` read the discriminator through it.
+* **G22.**
+  * `isStringConstUnion` reads the members of a `oneOf`, or of an `anyOf` when there is no `oneOf`, by a new
+    `constMembers`, so an `anyOf` of string consts alone is `KindStringConstUnion`, a closed enumeration that `Validate`
+    checks. `enumValues` reads the same members.
+  * `isOpenStringEnum` also requires a member without a `const`. Since `classify` tests `isStringConstUnion` first, that
+    guard is never reached by an `anyOf` of consts alone; it states the rule where the open enum is defined.
+* **G23 (Q27 a).** Both `Fill` assignments (`model/fields.go`, `objectFields` and `plainFields`) also require
+  `!includesNull(prop)`.
+* **G24.** `unknownAbsent` (`emit/types.go`) assigns the default, by a new `orNil`, in the `RefPointer` case and in the
+  `RefSlice` case without skip-invalid items; `nil` when there is none.
+
+**Tests:**
+
+* Engine cases:
+  * `accept-default-scalar.txtar`: `Mode *string`, `N *int32` and `On *bool`, by `-update`. Its behaviour test reads them
+    through the pointers, and `TestDefaultScalarSendsZero` requires `{"mode":"","n":0,"on":false}` to re-encode with all
+    three keys.
+  * `accept-default-scalar-excluded-zero.txtar`, new: `mode`, an enumeration without `""`, and `kind`, a `oneOf` of the one
+    const `"object"` as the committed `ElicitationSchemaType` is, keep `Mode Mode` and `Kind Kind`.
+  * `accept-enum-discriminator.txtar`, new: the circle and the square route, with `Unknown` empty.
+  * `accept-anyof-const-only.txtar`, new: `type E string` with `EA` and `EB`; `Validate` passes `a` and fails `c`.
+  * `accept-required-nullable-collection.txtar`, new: `{"xs":null}`, `{"xs":[]}` and `{"xs":["a"]}` each re-encode as they
+    came.
+  * `accept-default-on-error.txtar` gains `kinds`, an array of `K {a, b}` with default `["a"]`, and `kp`, a nullable `K`
+    with default `"a"`. `TestDefaultOnErrorUnknownValue` requires `["zzz"]`, `["b","zzz"]` and `5` each to give `[a]` and
+    `a`, and the known `b` to stay.
+* G6 reaches four committed tests, each now holding the pointer, its inputs and purpose kept. Step 5.1 named the first only.
+  * `accept-folded-keys.txtar`'s `Item.count`, an optional `int64` with default 3, is `*int64`. `TestFoldedObjectKeys`
+    compares `Id` and `*Count` for the same four inputs and values.
+  * `TestObjectFields` (`model/fields_test.go`): `mode` is `*string`.
+  * `TestRenderDefaults` (`model/defaults_test.go`): `on`, `name`, `n` and `f` render as pointers. `mode`, whose enumeration
+    excludes `""`, stays a constant, and the zero defaults stay zero.
+  * `TestLenientDecoder` (`emit/types_test.go`): `a.Mode = orDefault[*string](s.Mode, new("auto"))`.
+
+**Seen to fail,** by `plants_gen.py 5`, each break in its own copy of the working tree:
+
+* G6:
+  * the pass not run: `want.api` differs at "type Opts struct{Mode string …; N int32 …; On bool …}", and
+    "fields_test.go:117: field 4: got {mode Mode string …}";
+  * the zero value's exclusion not read: "type Opts struct{Kind *Kind …; Mode *Mode …}".
+* G21, the one-value enum not read: "behaviour_test.go:12: circle decoded as {Circle:<nil> Square:<nil>
+  Unknown:{"kind":"circle","r":1}}, <nil>".
+* G22, both changes reverted: "accept-anyof-const-only/behaviour_test.go:7:24: (&O{…}).Validate undefined (type *O has no
+  field or method Validate)". As an open enum, `E` gave `O` nothing to validate. The first run expected the test's own
+  message, and the plant's expected text was corrected.
+* G23, `Fill` back: "behaviour_test.go:17: {"xs":null} re-encoded as {"xs":[]}, <nil>".
+* G24, `nil` back: "behaviour_test.go:43: {"kinds":["zzz"],"kp":"zzz"} decoded as kinds [], kp <nil>; want [a] and a".
+
+All as required.
+
+**Checks:**
+
+* `cd cmd/generate && go run .`: exit 0. `git diff --exit-code -- '*_gen.go' '*_gen_test.go' unstable/`: exit 0.
+  `ElicitationSchema.Type` keeps its type.
+* `python3 tools/gates.py regen`: exit 0.
+* `cd cmd/generate && go test -race -count=1 -shuffle=on ./...`: every package `ok`.
+* `make pre-add-check FILES="<the phase's Go files and engine cases>"`: exit 0, "7 file(s) gofmt-clean; both modules linted,
+  vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py` over the changed files: exit 0 each.
+
+**Status:** no deviation. Staged for the owner, who commits. Phase 6, G19, G20, G25 and G26, begins on the owner's word.

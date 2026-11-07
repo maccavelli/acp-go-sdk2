@@ -507,6 +507,67 @@ func admits(schema *load.Schema, where string, d *load.Definition, v any) error 
 	return nil
 }
 
+// pointerScalarDefaults gives an optional field that is not nullable, and
+// whose schema default is a scalar other than its zero value, a pointer type
+// when the schema admits the zero value. As a plain type tagged omitempty it
+// could not send that zero value: the encoder drops it, and the peer reads the
+// default. A nullable field is a pointer already, and a field whose closed
+// enumeration or const excludes the zero value keeps its type, as the zero
+// value is never valid to send (0049-MADR-remediate-the-2026-11-01-debugging-
+// pass.md, G6, Q22 a). Only a definition's own fields have defaults; G7
+// refuses the others.
+func (m *Model) pointerScalarDefaults() {
+	for _, t := range m.Types {
+		for _, f := range t.Fields {
+			if f.Required || f.Default == nil || f.Default.AllowNull || f.Type.Kind != RefNamed || f.prop == nil {
+				continue
+			}
+			zero, scalar := zeroOf(f.prop.Default)
+			if !scalar || reflect.DeepEqual(f.prop.Default, zero) || !admitsValue(m.schema, f.prop, zero) {
+				continue
+			}
+			f.Type = wrap(RefPointer, f.Type)
+		}
+	}
+}
+
+// zeroOf is the zero value of v's JSON kind, and whether v is a scalar: a
+// string, a number or a boolean.
+func zeroOf(v any) (any, bool) {
+	switch v.(type) {
+	case string:
+		return "", true
+	case float64:
+		return 0.0, true
+	case bool:
+		return false, true
+	}
+	return nil, false
+}
+
+// admitsValue reports whether d, through its $ref and an allOf of one,
+// admits the scalar v by its const, its enum, or the consts of a union made
+// of consts alone; any other schema is taken to admit it.
+func admitsValue(schema *load.Schema, d *load.Definition, v any) bool {
+	d = resolveSchema(schema, d)
+	switch {
+	case d == nil:
+		return true
+	case d.Const != nil:
+		return reflect.DeepEqual(d.Const, v)
+	case len(d.Enum) > 0:
+		return slices.ContainsFunc(d.Enum, func(e any) bool { return reflect.DeepEqual(e, v) })
+	}
+	members := d.OneOf
+	if len(members) == 0 {
+		members = d.AnyOf
+	}
+	if len(members) == 0 || slices.ContainsFunc(members, func(e *load.Definition) bool { return e == nil || e.Const == nil }) {
+		return true
+	}
+	return slices.ContainsFunc(members, func(e *load.Definition) bool { return reflect.DeepEqual(e.Const, v) })
+}
+
 // resolveSchema follows d's $ref, and an allOf of one schema, to the schema
 // that types it, or nil for a reference the schema lacks.
 func resolveSchema(schema *load.Schema, d *load.Definition) *load.Definition {
@@ -604,7 +665,10 @@ func objectFields(t *Type) ([]*Field, error) {
 			fld.Type = named(nested)
 		} else {
 			fld.Type = optionalTypeRef(prop)
-			fld.Fill = fld.Required && fld.Default == nil && fld.Type.IsCollection()
+			// A collection that admits null is not filled: a relayed null
+			// stays null, where filling sent [] (0049-MADR-remediate-the-
+			// 2026-11-01-debugging-pass.md, G23, Q27 a).
+			fld.Fill = fld.Required && fld.Default == nil && fld.Type.IsCollection() && !includesNull(prop)
 		}
 		fld.NullIsAbsent = !fld.Required && fld.Type.Kind == RefRaw
 		out = append(out, fld)
@@ -627,7 +691,7 @@ func plainFields(owner string, props map[string]*load.Definition, req map[string
 		fld.Type = optionalTypeRef(prop)
 		fld.NullIsAbsent = !fld.Required && fld.Type.Kind == RefRaw
 		if fld.Required {
-			fld.Fill = fld.Type.IsCollection()
+			fld.Fill = fld.Type.IsCollection() && !includesNull(prop)
 		} else {
 			fld.Tag = key + ",omitempty"
 		}

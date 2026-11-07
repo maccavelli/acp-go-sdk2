@@ -179,7 +179,9 @@ func TestLenientDecoder(t *testing.T) {
 	src := mustRender(t, f)
 	for _, want := range []string{
 		"\t\tMode json.RawMessage `json:\"mode\"`",
-		`a.Mode = orDefault[string](s.Mode, "auto")`,
+		// mode, optional with a default other than "", is a pointer
+		// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G6).
+		`a.Mode = orDefault[*string](s.Mode, new("auto"))`,
 		`a.On = orZero[bool](s.On)`,
 		`if items, err := skipInvalid[string](s.Tags); err == nil {`,
 		"} else {\n\t\ta.Tags = []string{}\n\t}",

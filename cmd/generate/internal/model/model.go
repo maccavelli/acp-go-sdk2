@@ -410,6 +410,7 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 	if err := m.checkDefaults(); err != nil {
 		return nil, err
 	}
+	m.pointerScalarDefaults()
 	if err := m.renderDefaults(); err != nil {
 		return nil, err
 	}
@@ -648,7 +649,7 @@ func enumValues(t *Type) []EnumValue {
 			values = append(values, EnumValue{Value: fmt.Sprint(v)})
 		}
 	case KindStringConstUnion:
-		for _, v := range t.def.OneOf {
+		for _, v := range constMembers(t.def) {
 			if v != nil && v.Const != nil {
 				values = append(values, EnumValue{Value: fmt.Sprint(v.Const), Doc: docLines(v.Description), Deprecation: deprecationOf(v)})
 			}
@@ -745,13 +746,13 @@ func discriminatorValue(owner string, facts *load.Definition, discKey string) (s
 	if discKey == "" {
 		return "", nil
 	}
-	pd := facts.Properties[discKey]
-	if pd == nil || pd.Const == nil {
+	c := discConst(facts.Properties[discKey])
+	if c == nil {
 		return "", nil
 	}
-	s, ok := pd.Const.(string)
+	s, ok := c.(string)
 	if !ok {
-		return "", fmt.Errorf("%s: discriminator %s is not a string", owner, schemaValue(pd.Const))
+		return "", fmt.Errorf("%s: discriminator %s is not a string", owner, schemaValue(c))
 	}
 	return s, nil
 }
@@ -1373,7 +1374,7 @@ func isCatchAll(schema *load.Schema, v *load.Definition, key string) bool {
 	}
 	ev := expandAllOf(schema, v)
 	p := ev.Properties[key]
-	return p != nil && p.Const == nil && primaryType(p) == schemaTypeString && slices.Contains(ev.Required, key) && ev.Not != nil
+	return p != nil && discConst(p) == nil && primaryType(p) == schemaTypeString && slices.Contains(ev.Required, key) && ev.Not != nil
 }
 
 // variantIsObject reports whether a union variant decodes from a JSON object.

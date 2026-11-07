@@ -1,5 +1,6 @@
 x-deserialize-default-on-error on a scalar, an object, and an array
-property.
+property. A closed enumeration's unknown value takes the default too, in an
+array and in a pointer, where it took the zero value (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G24).
 The meta declares $/cancel_request and the schema its smallest definition, which
 the runtime needs.
 
@@ -7,7 +8,8 @@ the runtime needs.
 {"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
 -- schema.json --
 {"$defs": {
-  "Caps": {"type": "object", "properties": {"fs": {"allOf": [{"$ref": "#/$defs/Fs"}], "default": {}, "x-deserialize-default-on-error": true}, "n": {"type": ["integer", "null"], "format": "uint32", "x-deserialize-default-on-error": true}, "names": {"type": ["array", "null"], "items": {"type": "string"}, "x-deserialize-default-on-error": true}}},
+  "Caps": {"type": "object", "properties": {"fs": {"allOf": [{"$ref": "#/$defs/Fs"}], "default": {}, "x-deserialize-default-on-error": true}, "n": {"type": ["integer", "null"], "format": "uint32", "x-deserialize-default-on-error": true}, "names": {"type": ["array", "null"], "items": {"type": "string"}, "x-deserialize-default-on-error": true}, "kinds": {"type": "array", "items": {"$ref": "#/$defs/K"}, "default": ["a"], "x-deserialize-default-on-error": true}, "kp": {"anyOf": [{"$ref": "#/$defs/K"}, {"type": "null"}], "default": "a", "x-deserialize-default-on-error": true}}},
+  "K": {"type": "string", "enum": ["a", "b"]},
   "Fs": {"type": "object", "properties": {"read": {"type": "boolean", "default": false}}},
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
 }}
@@ -16,11 +18,14 @@ type Agent interface{}
 type AgentExperimental interface{}
 type AgentSideConnection struct{conn *Connection; agent Agent}
 type CancelRequestNotification struct{}
-type Caps struct{Fs Fs "json:\"fs\""; N *uint32 "json:\"n,omitempty\""; Names []string "json:\"names,omitempty\""}
+type Caps struct{Fs Fs "json:\"fs\""; Kinds []K "json:\"kinds\""; Kp *K "json:\"kp,omitempty\""; N *uint32 "json:\"n,omitempty\""; Names []string "json:\"names,omitempty\""}
 type Client interface{}
 type ClientExperimental interface{}
 type ClientSideConnection struct{conn *Connection; client Client}
 type Fs struct{Read bool "json:\"read,omitempty\""}
+type K string
+const KA K = "a"
+const KB K = "b"
 func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
 func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
@@ -33,7 +38,9 @@ func (*AgentSideConnection).Err() error
 func (*AgentSideConnection).SetLogger(l *slog.Logger)
 func (*AgentSideConnection).Wait() error
 func (*CancelRequestNotification).Validate() error
+func (Caps).MarshalJSON() ([]byte, error)
 func (*Caps).UnmarshalJSON(b []byte) error
+func (*Caps).Validate() error
 func (*ClientSideConnection).Close() error
 func (*ClientSideConnection).Connection() *Connection
 func (*ClientSideConnection).Done() <-chan struct{}
@@ -72,5 +79,24 @@ func TestDefaultOnError(t *testing.T) {
 	c = Caps{}
 	if err := json.Unmarshal([]byte(`{"n":4294967296}`), &c); err != nil || c.N != nil {
 		t.Errorf("n beyond uint32: %+v, %v", c, err)
+	}
+}
+
+// An unknown value of a closed enumeration reads as a value that failed to
+// decode, so the field takes its default, in an array and in a pointer
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G24).
+func TestDefaultOnErrorUnknownValue(t *testing.T) {
+	for _, in := range []string{`{"kinds":["zzz"],"kp":"zzz"}`, `{"kinds":["b","zzz"],"kp":"zzz"}`, `{"kinds":5,"kp":5}`} {
+		var c Caps
+		if err := json.Unmarshal([]byte(in), &c); err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		if len(c.Kinds) != 1 || c.Kinds[0] != KA || c.Kp == nil || *c.Kp != KA {
+			t.Errorf("%s decoded as kinds %v, kp %v; want [a] and a", in, c.Kinds, c.Kp)
+		}
+	}
+	var c Caps
+	if err := json.Unmarshal([]byte(`{"kinds":["b"],"kp":"b"}`), &c); err != nil || len(c.Kinds) != 1 || c.Kinds[0] != KB || c.Kp == nil || *c.Kp != KB {
+		t.Errorf("known values decoded as kinds %v, kp %v, %v", c.Kinds, c.Kp, err)
 	}
 }

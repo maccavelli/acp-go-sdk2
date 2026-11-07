@@ -42,17 +42,22 @@ func TestRenderDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	str := func(s string) Value { return Value{Kind: ValueString, Text: s} }
+	// An optional default other than its zero value, which the schema
+	// admits, is a pointer's, so an explicit zero value is sent
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G6); mode's
+	// enumeration excludes "", so it keeps its type.
+	ptr := func(typ string, v Value) Value { return Value{Kind: ValuePointer, Type: named(typ), Items: []Value{v}} }
 	for _, tt := range []struct {
 		key  string
 		want Value
 	}{
 		{"off", Value{}},
-		{"on", Value{Kind: ValueBool, Text: "true"}},
+		{"on", ptr(goBool, Value{Kind: ValueBool, Text: "true"})},
 		{"empty", Value{}},
-		{"name", str(`"auto"`)},
+		{"name", ptr("string", str(`"auto"`))},
 		{"zeroN", Value{}},
-		{"n", Value{Kind: ValueNumber, Text: "3"}},
-		{"f", Value{Kind: ValueNumber, Text: "1.5"}},
+		{"n", ptr(goInt32, Value{Kind: ValueNumber, Text: "3"})},
+		{"f", ptr(goFloat64, Value{Kind: ValueNumber, Text: "1.5"})},
 		{"mode", Value{Kind: ValueConst, Text: "ModeManual"}},
 		{"inner", Value{}},
 		{"labels", Value{Kind: ValueMap, Type: wrap(RefMap, named("string"))}},
