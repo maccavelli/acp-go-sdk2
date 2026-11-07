@@ -82,9 +82,6 @@ var goRange = map[string][2]float64{
 	goUint8: {0, math.MaxUint8}, goUint16: {0, math.MaxUint16}, goUint32: {0, math.MaxUint32}, goUint64: {0, math.MaxUint64},
 }
 
-// Validates reports whether the named Go type has a Validate method.
-func (m *Model) Validates(name string) bool { return m.validates[name] }
-
 // shape is one generated struct the validation pass visits.
 type shape struct {
 	name    string

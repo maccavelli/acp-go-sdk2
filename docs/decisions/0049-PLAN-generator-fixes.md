@@ -1231,3 +1231,48 @@ The G29 and G12 plants were run again after the lint changes below, on the final
 
 **Status:** two deviations, recorded above. Staged for the owner, who commits. Phase 9, G13, G30 and G34, begins on the
 owner's word.
+
+### Phase 9: G13, G30 and G34, the info findings, 2026-11-07
+
+The owner committed phase 8 as `2d8b62f`, and said "committed, proceed".
+
+**What changed:**
+
+* **G13.** `Model.Validates` moved from `cmd/generate/internal/model/validate.go` to a new test file, `validates_test.go`, of
+  package `model`, its three callers'. `deadcode`, built offline from the module cache's `golang.org/x/tools@v0.52.0` into the
+  scratchpad, as nothing in the repository installs it: before the move it listed "internal/model/validate.go:86:17:
+  unreachable func: Model.Validates" among 19 lines; after, 18 lines, all of them `internal/enginetest`'s, a package only
+  tests import.
+* **G30.** `typesFile` (`emit/types.go`) marks `helperUnknownKind` whenever a type keeps an `Unknown`, not only for a gate
+  check with a raw key. `types_gen.go` held it already, so it is byte-identical.
+* **G34,** with step 9.4, `docs/architecture.md`:
+  * the protocol table's list gains `DocNotes`, and states the refusals G20 and G26 add to the capability, key-order and
+    interface rules, and G19's gates;
+  * `output.Check`'s paragraph states G28's `go.mod`, G27's external tests and G9's other platforms;
+  * the model's refusals gain G2, G5, G7, G17, G26 and G37's, the loader's G5 (g), G8, G31 and G32's;
+  * the decoding and `Validate` paragraphs state G4, G6, G19, G21, G22, G23 and G24;
+  * the manifest and package `unstable` paragraphs state G3 and G15.
+
+  Phase 1 had written G1 and G16's; phase 6 the engine cases' `protocol.json`.
+
+**Tests:**
+
+* `emit`'s new `TestUnknownKindWithoutRawKeyGate` (`unknownkind_test.go`): the committed model built with ACP's table less
+  its `GateUndeclaredVariant` rules, so that no check reads a raw key by `unknownKind`, renders `types_gen.go` with `func
+  unknownKind(`. The advertised-auth check also carries a raw key, "id", but reads it by `unknownString`; the test's
+  precondition leaves it out, after its first run stopped on it.
+
+**Seen to fail,** by `plants_gen.py 9`: G30's marking removed, "unknownkind_test.go:47: types_gen.go lacks unknownKind,
+which helpers.go calls". As required. G13 and G34 are verified by `deadcode` and by reading, as the Verification says.
+
+**Checks:**
+
+* `cd cmd/generate && go run .`: exit 0. `git diff --exit-code -- '*_gen.go' '*_gen_test.go' unstable/`: exit 0.
+* `python3 tools/gates.py regen`: exit 0.
+* `cd cmd/generate && go test -race -count=1 -shuffle=on ./...`: every package `ok`.
+* `make pre-add-check FILES="<the five Go files>"`: exit 0, "5 file(s) gofmt-clean; both modules linted, vetted and tested
+  (-race -shuffle=on, uncached), tidy, govulncheck."
+* `make check-records`, `make markdownlint`, `make disclosure-check` and `tools/idscan.py` over the changed files: exit 0 each.
+
+**Status:** no deviation. Staged for the owner, who commits. Phase 10, the close and the patch `v1.34.2`, begins on the
+owner's word.

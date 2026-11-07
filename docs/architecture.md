@@ -167,13 +167,20 @@ fails on each exported declaration without a doc comment.
 
 The generator writes nothing until every file has rendered and the five files
 type-check with `go/types` together with the hand-written files of the output
-directory, at the language version of its `go.mod`: first the package as
+directory, at the language version of the `go.mod` that holds it, found walking
+up as the go command finds it ([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md), G28): first the package as
 built, the hand-written files the go command would build there with the
 generated files that are not tests, then the package as tested, which adds
 the hand-written in-package test files and `schema_gen_test.go`, so a name
 both declare is refused as `go vet` would refuse it. Output that does not
 type-check is refused with the first 10 errors, those in generated files
-first. The output directory must exist; a missing one is refused, since the
+first. The root's external test package is checked too, against the package
+as tested, with each package of the module that it imports checked from source
+against the same root (G27). For `linux/amd64` and `windows/amd64`, when the
+files the go command would build or test there differ from the host's, the
+package and its tests are compiled by the go command for that platform, the
+generated files given through `-overlay`, as the in-process importer reads the
+standard library for the host alone (G9). The output directory must exist; a missing one is refused, since the
 generated code needs the hand-written runtime beside it. The tree checked is
 the one the write leaves: a stale generated file, which the write removes, is
 not read as hand-written. A file whose bytes
@@ -185,7 +192,8 @@ The protocol behaviour the schema does not express lives in one table, `ACP`
 in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
 `Input.Protocol`. It holds:
 
-- the optional `AgentLoader` interface, for `session/load`;
+- the optional `AgentLoader` interface, for `session/load`, whose variable must be
+  a Go identifier the dispatch can declare beside its own locals (G26);
 - the prompt turn: `AgentSideConnection` runs `session/prompt` under a
   per-turn context. `sessionCancels` holds each session's running turns, and
   `storeTurn` stores a new one as the connection's `WithPromptOverlapPolicy`
@@ -248,7 +256,11 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   that holds one, directly or through fields, members or variants, and that a
   method's params or result reach, as `dispatchReach` walks them: the dispatch
   calls `gates` on nothing else (0049-PLAN-tooling-fixes.md, phase 5); with no
-  `initialize` rule, none applies;
+  `initialize` rule, none applies. A union variant that is a named array or map
+  calls the gates of each item (G19). The model refuses a rule whose property
+  its definition holds but its fields do not, as a union's, or that another
+  struct also holds, as an `allOf` copy in an inline variant, naming the copies
+  the rule would not reach (G20);
 - `AbsolutePaths`, the 17 properties the protocol requires to be absolute
   paths, each with the specification sentence it follows. A rule reaches every
   type that holds its definition's property, an inline variant built through
@@ -280,7 +292,11 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   order through `orderedObject` when an order is set, and as before when none
   is. The model refuses a rule on a property that is not a typed map of a
   struct, on a struct with flattened members or kept extra keys, or whose
-  field the struct already has.
+  field the struct already has, is named as a generated method, or is another
+  rule's field on the same definition (G26);
+- `DocNotes`, the lines the table adds, after a blank line, to the doc comment
+  of the type built from a definition and of each inline variant type of it,
+  10 of them, `PromptResponse`'s rule for `stopReason` among them (G34).
 
 The model applies a rule only where the schema carries its subject, and refuses
 a subject whose shape the rule cannot use with an error that starts
@@ -290,7 +306,8 @@ a subject whose shape the rule cannot use with an error that starts
 
 The SDK uses `encoding/json` v1 only. The generated `MarshalJSON` methods send a
 union's `Unknown` payload back when no variant is set, fail on a union with
-neither, naming it, and send a nil required array or map as `[]` or `{}`. A
+neither, naming it, and send a nil required array or map as `[]` or `{}`,
+except one that admits `null`, which keeps a relayed `null` (G23). A
 union's generated `UnmarshalJSON` leaves the union unchanged on `null`
 (`RequestId` sets its `Null` variant) and otherwise clears it first. A union
 with a discriminator fails on one that is present and not a string, naming the
@@ -305,7 +322,10 @@ whose own required keys it carries (not those the union requires of every
 variant), else into `Unknown`, or fails in a union with a catch-all. A union
 without a discriminator tries required keys, array items, and then each
 variant in turn. A variant that is a `$ref` takes its keys, discriminator
-value, and shape from the definition it names. Decode errors name the union
+value, and shape from the definition it names. A discriminator a variant fixes
+with a one-value `enum` is read as its `const` (G21), and an `anyOf` of string
+consts alone is a closed enumeration, as a `oneOf` of them is (G22). Decode
+errors name the union
 and, for a variant, the discriminator value or the variant. A struct with a
 required key, a default, a lenient field, flattened members, or an `Extra`
 gets a generated `UnmarshalJSON`. A struct gets a generated
@@ -347,14 +367,29 @@ integer consts, is an enum kind); a discriminator const that is not a string;
 a property key a json struct tag cannot carry; a field, union wrapper field or
 flattened member named `MarshalJSON`, `UnmarshalJSON` or `Validate`; a
 `required` key no property declares; and a definition linked by `x-method` and
-`x-side` to a method no meta file lists. `Roots`, written by hand on four
+`x-side` to a method no meta file lists. It also refuses, naming the path or the
+rule ([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md), F-G): `not` or `unevaluatedProperties`
+anywhere but a union's catch-all variant; a `const` or `enum` on an object
+property; a bound under `items` or `additionalProperties`; a keyword beside
+`$ref` other than `description`, `title` and `deprecated`; a definition that is
+only a `$ref`; a `type` JSON Schema does not name (G5); a property whose
+`anyOf` or `oneOf` has two members, neither `null` (G17); a default that
+recurses through itself (G2), or that sits below a nested object or in an
+inline variant, where it would not be applied (G7); skip-invalid items that
+admit `null`, through a type, a union member, an `allOf`, an `enum`, or no type
+at all (G14, G37); and a method that becomes one of the connections' own
+methods, such as `Close`, or the outbound method another of its side, of any
+binding, becomes (G26). `Roots`, written by hand on four
 request types and `SessionInfo`, is left to the type checker: a property named `roots` there
 does not type-check.
 
 Every keyword the schema loader accepts has one treatment, listed in
 `cmd/generate/internal/model/keywords.go`; the loader refuses any other
 keyword, and one written in another letter case, which `encoding/json` would
-match, and the model refuses an integer or number `format` without a Go type.
+match, at any depth of the manifest too (G31); a key repeated in one object of
+a schema, meta or manifest file, which decoding would drop (G5); a definition
+whose value is `null` (G32); and a meta `version` below 1 (G8). The model
+refuses an integer or number `format` without a Go type.
 `deprecated` is an annotation: the loader refuses it when it is `null`, and the
 model refuses it on a node no Go declaration is built from, anything but a
 definition, a property of an object definition, or a direct `anyOf` or `oneOf`
@@ -369,12 +404,17 @@ mark is refused.
 A property's `default` is checked against its schema, through references,
 union members, array items and object properties: its JSON kind, an integer's
 range for its format, its `enum` and its `const`, so the generated decoding of
-a default, which ignores the error, cannot fail.
+a default, which ignores the error, cannot fail. An optional property that is
+not nullable, whose default is a scalar other than its zero value, is a pointer,
+so an explicit zero value is sent; one whose enumeration or `const` excludes the
+zero value keeps its type, as `ElicitationSchema.type` does (G6).
 A number takes the Go type of its `format`; a typed `additionalProperties`
 gives a typed map; a value the model gives no Go type is `json.RawMessage`; and
 an optional struct value carries no `omitempty`. A generated `UnmarshalJSON`
 requires the required keys through `objectKeys`, decodes each
-`x-deserialize-default-on-error` field through `orDefault` and each
+`x-deserialize-default-on-error` field through `orDefault`, a closed
+enumeration's unknown value taking the default too, in an array or a pointer
+as in a value (G24), and each
 `x-deserialize-skip-invalid-items` array through `skipInvalid`, which drops a
 `null` item by its raw value as well as an item that does not decode, since
 `null` decodes into most Go types as no change; the model refuses such an
@@ -396,9 +436,11 @@ model test requires every committed property that says so to be named.
 `Validate` checks what the schema states: a
 union has exactly one variant set, a string meets its `minLength`, a number
 meets a bound its Go type does not enforce, and every nested value validates,
-a patch's through the value it holds; an integer bound with a fraction is
-rounded inward, a `uint64` one above the `int64` range is written as such, and
-one the Go type cannot reach is refused;
+a patch's through the value it holds, and each item of a union variant that is
+a named array or map (G19); an integer bound is computed exactly from the
+schema's text (G4): one with a fraction is rounded inward, a `uint64` one above
+the `int64` range is written as such, and one the Go type cannot reach is
+refused;
 and it checks the table's absolute paths, and that a closed enumeration's
 field, a `KindEnum` or `KindStringConstUnion` type's, holds one of its constants
 (`known`, a method of each such type; 0049, S6). Each exported `Validate` calls
@@ -863,7 +905,8 @@ item 1, keeps package `acp` on its `v1` promise while the unstable schema moves.
 
   When the manifest is present, `load.MergeManifest` builds `acp` from the stable files and the
   manifest alone. A union keeps the frozen entry order, then the entries the stable schema
-  adds. Each definition built from the manifest names it as its origin, so the
+  adds. A change whose property or entry the stable schema has since defined
+  with another type or shape, annotations and defaults aside, is refused (G3). Each definition built from the manifest names it as its origin, so the
   root conformance tests read the frozen fragments, laid over
   `schema.json`'s (`instances_test.go`). `TestUnstableManifestComplete`
   requires the model and the manifest to name each other, and, while
@@ -886,7 +929,10 @@ item 1, keeps package `acp` on its `v1` promise while the unstable schema moves.
   - a new variant of a stable union, as its inline type and a
     `Decode<Union><Variant>` that decodes the `Unknown` `acp` keeps for it.
 
-  A new field of a stable type is emitted nowhere. The package's model is
+  A new field of a stable type is emitted nowhere. An enum's entry is matched by
+  its `const`, so a reworded value is no new entry, and a value the live
+  unstable schema adds to a stable enum, which package `unstable` cannot hold as
+  a variant, is refused (G15). The package's model is
   `acp`'s with the additions, so a name that collides with `acp`'s is refused.
   Its file refers to `acp` through the root's import path, which `main.go` takes
   from the `go.mod` above `-out`, with `acp` when there is none. It uses `acp`'s

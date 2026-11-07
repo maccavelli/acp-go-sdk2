@@ -59,6 +59,12 @@ func typesFile(m *model.Model) *goFile {
 	}
 	emitRPCInterfaces(f, m)
 	markGateHelpers(f, m)
+	// helpers.go's Kind methods read a raw Unknown's key by unknownKind, so it
+	// is emitted whenever a union keeps one, not only for a gate that reads
+	// one (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G30).
+	if slices.ContainsFunc(m.Types, func(t *model.Type) bool { return t.HasUnknown }) {
+		f.uses[helperUnknownKind] = true
+	}
 	emitDecodeHelpers(f)
 	if mi := m.Initialize; mi != nil {
 		f.line()

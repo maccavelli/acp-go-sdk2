@@ -24,7 +24,8 @@ const (
 	helperPatchItems   = "patchItems"
 	// helperUnknownKind reads a raw Unknown's key, for the gates and for
 	// helpers.go's Kind methods (0049-PLAN-surface-fixes.md, phase 4,
-	// deviation 4).
+	// deviation 4); emitted whenever a union keeps an Unknown
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G30).
 	helperUnknownKind = "unknownKind"
 	// helperUnknownString reads a raw Unknown's key as a JSON string, for
 	// unknownKind, for the list of ids an advertised check accepts, and for
