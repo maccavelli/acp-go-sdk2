@@ -418,8 +418,12 @@ func decodes(f *goFile) ast.Expr {
 //
 //	func skipInvalid[T any](raw json.RawMessage) ([]T, error)
 //
-// which decodes raw as a JSON array, dropping the items that do not decode
-// into a T. An empty raw value or null is no items.
+// which decodes raw as a JSON array, dropping the items that are null or do
+// not decode into a T. An empty raw value or null is no items. A null item is
+// dropped by its raw value, since encoding/json decodes null into a T as no
+// change, which would keep the zero value; the model refuses skip-invalid
+// items that admit null
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G14).
 func emitSkipInvalid(f *goFile) {
 	unmarshal := func(args ...ast.Expr) *ast.CallExpr { return call(f.qual(pkgJSON, "Unmarshal"), args...) }
 	fn := function(helperSkipInvalid,
@@ -430,6 +434,7 @@ func emitSkipInvalid(f *goFile) {
 		ifStmt(nil, binary(id("items"), token.EQL, nilExpr()), ret(nilExpr(), nilExpr())),
 		define(exprs(id("out")), call(id("make"), sliceOf(id("T")), intLit(0), call(id("len"), id("items")))),
 		rangeStmt(id("_"), id("it"), id("items"),
+			ifStmt(nil, binary(call(id("string"), id("it")), token.EQL, str(schemaTypeNull)), continueStmt()),
 			varStmt("v", id("T")),
 			ifStmt(nil, binary(unmarshal(id("it"), addr(id("v"))), token.EQL, nilExpr()),
 				assign(exprs(id("out")), call(id("append"), id("out"), id("v"))))),
@@ -437,8 +442,8 @@ func emitSkipInvalid(f *goFile) {
 	)
 	fn.Type.TypeParams = typeParamT()
 	f.line()
-	f.comment("skipInvalid decodes raw as a JSON array, dropping the items that do not decode",
-		"into a T. An empty raw value or null is no items.")
+	f.comment("skipInvalid decodes raw as a JSON array, dropping the items that are null or",
+		"do not decode into a T. An empty raw value or null is no items.")
 	f.add(fn)
 }
 

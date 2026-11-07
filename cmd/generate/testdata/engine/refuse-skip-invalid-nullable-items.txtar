@@ -1,0 +1,17 @@
+Refused: x-deserialize-skip-invalid-items on items that admit null, which
+skipInvalid would drop (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
+G14). A refers to Maybe, a union with a null member; B's items are a type
+array that holds null.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "A": {"type": "object", "properties": {"xs": {"type": "array", "items": {"$ref": "#/$defs/Maybe"}, "x-deserialize-skip-invalid-items": true}}},
+  "B": {"type": "object", "properties": {"ys": {"type": "array", "items": {"type": ["object", "null"]}, "x-deserialize-skip-invalid-items": true}}},
+  "Item": {"type": "object", "properties": {"x": {"type": "integer"}}},
+  "Maybe": {"anyOf": [{"$ref": "#/$defs/Item"}, {"type": "null"}]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+A.properties.xs: x-deserialize-skip-invalid-items on items that admit null

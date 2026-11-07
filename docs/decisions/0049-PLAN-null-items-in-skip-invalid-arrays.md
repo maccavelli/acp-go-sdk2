@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-11-07
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
@@ -23,7 +23,8 @@ generator PLAN.
   * an engine case for each;
   * a root test of the committed paths;
   * the regeneration;
-  * the release `v1.34.1`.
+  * the release `v1.34.1`;
+  * *added 2026-11-07, deviation 1:* the README's and `docs/architecture.md`'s sentences on skip-invalid arrays.
 * **Out:**
   * G15 to G36 and G1 to G13, which stay the generator PLAN's;
   * any change to `default-on-error`, which G24 covers.
@@ -50,8 +51,10 @@ generator PLAN.
    `anyOf`/`oneOf`, or a `$ref` to a definition that admits it, followed with a visited set. `includesNull`
    (`model/fields.go:365`) reads a type array only, so it is not enough alone.
 3. **The engine cases:**
-   * `accept-skip-invalid-items.txtar`'s behaviour test gains `TestSkipInvalidItemsNull`: `{"items":[null,{"x":1}]}` decodes to
-     one item, `x` 1.
+   * `accept-skip-invalid-items.txtar`'s behaviour test gains `TestSkipInvalidItemsNull`: ~~`{"items":[null,{"x":1}]}`
+     decodes to one item, `x` 1~~. *Amended 2026-11-07, deviation 1:* that input passed with the fix removed, since
+     `Item`'s required `x` refuses `null` whatever the helper does. The case's `List` gains `names`, a skip-invalid array of
+     strings, and `{"names":[null,"a"]}` decodes to `["a"]`.
    * `refuse-skip-invalid-nullable-items.txtar`, new: items of `{"type":["object","null"]}` and, in a second definition, a
      `$ref` to a union with a `null` member. Its `want.err` names the first path.
    * `cd cmd/generate && go test . -run '^TestEngineCases$/^accept-skip-invalid-items$' -update` refreshes `want.api` if the
@@ -113,4 +116,78 @@ generator PLAN.
 
 ## Execution record
 
-Not started.
+The owner committed this PLAN with the MADR's Q21 answer as `f31f487`, and said "committed, proceed".
+
+### Phase 1: the fix, the tests and the regeneration, 2026-11-07
+
+**What it did:**
+
+* **The helper,** step 1.1: `emitSkipInvalid` (`cmd/generate/internal/emit/decode.go`) emits
+  `if string(it) == "null" { continue }` before decoding each item. Its doc comment and the emitted comment say a `null`
+  item is dropped, and why.
+* **The refusal,** step 1.2: `walkRefs` (`cmd/generate/internal/model/schema.go`) refuses `x-deserialize-skip-invalid-items`
+  whose items admit `null`. The error is "`<path>`: x-deserialize-skip-invalid-items on items that admit null, which it would
+  drop". The new `admitsNull` reads a `null` type, a type array holding it (`includesNull`), the members of an
+  `anyOf`/`oneOf`, and a `$ref`, each definition followed once.
+* **The engine cases,** step 1.3, as amended by deviation 1:
+  * `accept-skip-invalid-items.txtar`'s `List` gains `names`, a skip-invalid array of strings.
+  * Its `TestSkipInvalidItemsNull` decodes `{"names":[null,"a"]}` to `["a"]`. `want.api` gains `Names []string`, refreshed
+    with `-update`.
+  * `refuse-skip-invalid-nullable-items.txtar` is new. Its `A` reaches `null` through a `$ref` to a union, and its `B` through
+    a type array. `want.err` is `A.properties.xs: x-deserialize-skip-invalid-items on items that admit null`, the first error.
+* **Regenerated,** step 1.4: the diff of `types_gen.go` is `skipInvalid` alone: its comment, and the three lines that skip a
+  `null` item. No other generated file changed.
+* **The root tests,** step 1.5, in `skip_invalid_null_test.go`:
+  * `TestSkipInvalidItemsDropNull` has five cases: a tool call's content with a text block, a tool call's content of `null`
+    alone, a compaction summary (a `Patch`, through `patchItems`), `initialize`'s `authMethods`, and a session's
+    `additionalDirectories`. Each decodes, holds the items listed, and passes the exported `Validate`.
+  * `TestSkipInvalidItemsNullReceived` checks two received messages. A `session/update` reaches the client's handler, through
+    `handle` after `negotiate`, as `paths_test.go` does. A `session/list` result reaches the caller, through `rawPeer`.
+  * The patch case is a compaction summary because `ToolCallUpdate.Content` is a plain slice. `patchItems` serves
+    `SessionCompactionUpdate.Summary` and `SessionUpdateSessionMessage.Content`.
+* **The documentation,** added by deviation 1:
+  * The README's sentence on skip-invalid arrays adds "and its `null` items", citing G14.
+  * `docs/architecture.md`'s passage on `skipInvalid` says it drops a `null` item by its raw value, and that the model refuses
+    items that admit `null`.
+
+**Deviation 1, 2026-11-07: the engine test could not fail, and the documentation.**
+
+* **Found:** the first plant run gave "NOT AS REQUIRED: skipInvalid keeping a null item (cmd/generate -run
+  ^TestEngineBehaviour$ .): exit 0". The test as step 1.3 wrote it, `{"items":[null,{"x":1}]}`, passed with the fix removed.
+  `Item`'s `x` is required, so decoding `null` into an `Item` already fails, and the item was dropped before the fix.
+* **Found too:** `README.md:333` and `docs/architecture.md:376` describe skip-invalid arrays as dropping the items that fail to
+  decode. The PLAN did not list them.
+* **Decision:** the owner chose the recommended option for each. The case gains `names`, a skip-invalid array of strings,
+  since `null` decodes into a string as no change. Both documents are updated in this phase.
+* **Scope:** `README.md` and `docs/architecture.md` join phase 1's files.
+* **The MADR:** not amended. No decision and no asserted fact changes.
+
+**Seen to fail,** step 1.6. A scratch script copied the tree, planted, regenerated where a plant needs it, and ran the
+tests there, 3 of 3:
+
+```text
+FAILED AS REQUIRED: skipInvalid keeping a null item (. -run ^TestSkipInvalidItems(DropNull|NullReceived)$ .): exit 1: skip_invalid_null_test.go:96: a tool call's content: Validate = SessionNotification: update: SessionUpdate: variant ToolCall: SessionUpdateToolCall: content[0]: ToolCallContent must have exactly one variant set, want nil
+FAILED AS REQUIRED: skipInvalid keeping a null item (cmd/generate -run ^TestEngineBehaviour$ .): exit 1: === RUN   TestSkipInvalidItemsNull
+FAILED AS REQUIRED: the refusal of nullable skip-invalid items removed (cmd/generate -run ^TestEngineCases$/^refuse-skip-invalid-nullable-items$ .): exit 1: --- FAIL: TestEngineCases/refuse-skip-invalid-nullable-items (0.92s)
+```
+
+In the first plant's log:
+
+* the engine test fails with `names = ["" "a"], want a alone`;
+* all five root cases fail, the compaction summary's with "summary[0]: ContentBlock must have exactly one variant set";
+* `TestSkipInvalidItemsNullReceived` fails three ways:
+  * the `session/update` "answered {"code":-32602,…}";
+  * "the handler's content = [], want the text block alone";
+  * "ListSessions with a null directory: session/list response: ListSessionsResponse: sessions[0]: SessionInfo:
+    additionalDirectories[0]: "" is not an absolute path, want accepted".
+
+**Checks,** step 1.7:
+
+* `tools/gates.py regen`: "all gates passed".
+* `make api`: "check_api: against v1.34.0: 0 incompatible, 0 compatible".
+* `make pre-add-check` with the phase's seven files, the docs-safe `docs/architecture.md` aside: exit 0. Its output: "4
+  file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck." That run
+  covers the race step of both modules.
+* `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0 each.
+
+One deviation, recorded above. Staged for the owner, who commits. Phase 2, the release, begins on the owner's word.

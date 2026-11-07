@@ -7,7 +7,7 @@ the runtime needs.
 -- schema.json --
 {"$defs": {
   "Item": {"type": "object", "properties": {"x": {"type": "integer"}}, "required": ["x"]},
-  "List": {"type": "object", "properties": {"items": {"type": ["array", "null"], "items": {"$ref": "#/$defs/Item"}, "x-deserialize-default-on-error": true, "x-deserialize-skip-invalid-items": true}}},
+  "List": {"type": "object", "properties": {"items": {"type": ["array", "null"], "items": {"$ref": "#/$defs/Item"}, "x-deserialize-default-on-error": true, "x-deserialize-skip-invalid-items": true}, "names": {"type": "array", "items": {"type": "string"}, "x-deserialize-skip-invalid-items": true}}},
   "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
 }}
 -- want.api --
@@ -19,7 +19,7 @@ type Client interface{}
 type ClientExperimental interface{}
 type ClientSideConnection struct{conn *Connection; client Client}
 type Item struct{X int64 "json:\"x\""}
-type List struct{Items []Item "json:\"items,omitempty\""}
+type List struct{Items []Item "json:\"items,omitempty\""; Names []string "json:\"names,omitempty\""}
 func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
 func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
 const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
@@ -58,6 +58,20 @@ func TestSkipInvalidItems(t *testing.T) {
 	}
 	if len(l.Items) != 2 || l.Items[0].X != 1 || l.Items[1].X != 3 {
 		t.Errorf("items = %+v, want x 1 and x 3", l.Items)
+	}
+}
+
+// A null item is dropped, as an item that fails to decode is. Decoding null
+// into a string succeeds and leaves "", which the helper must not keep; an
+// Item, whose x is required, would refuse null whatever the helper did
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G14).
+func TestSkipInvalidItemsNull(t *testing.T) {
+	var l List
+	if err := json.Unmarshal([]byte(`{"names":[null,"a"]}`), &l); err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Names) != 1 || l.Names[0] != "a" {
+		t.Errorf("names = %q, want a alone", l.Names)
 	}
 }
 

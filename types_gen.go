@@ -25120,8 +25120,8 @@ func orDefault[T any](raw json.RawMessage, def T) T {
 	return def
 }
 
-// skipInvalid decodes raw as a JSON array, dropping the items that do not decode
-// into a T. An empty raw value or null is no items.
+// skipInvalid decodes raw as a JSON array, dropping the items that are null or
+// do not decode into a T. An empty raw value or null is no items.
 func skipInvalid[T any](raw json.RawMessage) ([]T, error) {
 	if len(raw) == 0 {
 		return nil, nil
@@ -25135,6 +25135,9 @@ func skipInvalid[T any](raw json.RawMessage) ([]T, error) {
 	}
 	out := make([]T, 0, len(items))
 	for _, it := range items {
+		if string(it) == "null" {
+			continue
+		}
 		var v T
 		if json.Unmarshal(it, &v) == nil {
 			out = append(out, v)

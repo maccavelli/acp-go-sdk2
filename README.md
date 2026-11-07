@@ -331,7 +331,9 @@ follow the schema:
 - A property the schema marks `x-deserialize-default-on-error` takes its schema
   default, or its zero value, when its value is malformed, and an array marked
   `x-deserialize-skip-invalid-items` drops the items that fail to decode, as
-  ACP's Rust implementation does. A closed enumeration's value that its type
+  ACP's Rust implementation does, and its `null` items
+  ([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](docs/decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
+  G14). A closed enumeration's value that its type
   does not list fails there too: a `tool_call`'s unknown `kind` or `status`
   reads as `""`, a `tool_call_update`'s as nil, `ElicitationSchema.type` takes
   its default, `object`, and an unknown `audience` role is dropped.

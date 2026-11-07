@@ -373,7 +373,12 @@ gives a typed map; a value the model gives no Go type is `json.RawMessage`; and
 an optional struct value carries no `omitempty`. A generated `UnmarshalJSON`
 requires the required keys through `objectKeys`, decodes each
 `x-deserialize-default-on-error` field through `orDefault` and each
-`x-deserialize-skip-invalid-items` array through `skipInvalid`, empties
+`x-deserialize-skip-invalid-items` array through `skipInvalid`, which drops a
+`null` item by its raw value as well as an item that does not decode, since
+`null` decodes into most Go types as no change; the model refuses such an
+array whose items admit `null`
+([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
+G14). It also empties
 an optional raw value that is `null` through `absentIfNull`, so it is not
 sent on, and reads a patch field through `patchOf`, or `patchItems` for an
 array that skips invalid items: a missing key is absent, `null` is null, a

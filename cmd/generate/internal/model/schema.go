@@ -361,6 +361,11 @@ func walkRefs(schema *load.Schema, path string, d *load.Definition) error {
 	if typ := primaryType(d); d.XDeserializeSkipInvalidItems && typ != schemaTypeArray {
 		return fmt.Errorf("%s: x-deserialize-skip-invalid-items on %s, not an array", path, typ)
 	}
+	// skipInvalid drops a null item, so items that admit null are refused
+	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G14).
+	if d.XDeserializeSkipInvalidItems && admitsNull(schema, d.Items, map[string]bool{}) {
+		return fmt.Errorf("%s: x-deserialize-skip-invalid-items on items that admit null, which it would drop", path)
+	}
 	for _, c := range subschemas(path, d) {
 		if err := walkRefs(schema, c.path, c.def); err != nil {
 			return err
@@ -380,6 +385,27 @@ const (
 	kwOneOf       = "oneOf"
 	kwAllOf       = "allOf"
 )
+
+// admitsNull reports whether d admits null: a type of null, or a type array
+// that holds it, a member of its anyOf or oneOf that admits it, or a
+// reference to a definition that admits it. seen holds the definitions
+// already followed, so a cycle ends.
+func admitsNull(schema *load.Schema, d *load.Definition, seen map[string]bool) bool {
+	if d == nil {
+		return false
+	}
+	if t, ok := d.Type.(string); (ok && t == schemaTypeNull) || includesNull(d) {
+		return true
+	}
+	if slices.ContainsFunc(slices.Concat(d.AnyOf, d.OneOf), func(e *load.Definition) bool { return admitsNull(schema, e, seen) }) {
+		return true
+	}
+	if name, ok := strings.CutPrefix(d.Ref, refPrefix); ok && !seen[name] {
+		seen[name] = true
+		return admitsNull(schema, schema.Defs[name], seen)
+	}
+	return false
+}
 
 // subschemas returns the subschemas of d with their paths and the keyword that
 // holds each: items, additionalProperties, not, unevaluatedProperties, the
