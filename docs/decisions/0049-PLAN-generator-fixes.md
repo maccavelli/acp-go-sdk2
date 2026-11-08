@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-11-07
 associated-madr: "0049-MADR-remediate-the-2026-11-01-debugging-pass.md"
 ---
@@ -1372,5 +1372,15 @@ MADR's F-G findings are marked done, each by its phase's commit, for `v1.34.2`, 
 * The body, `.cache/tools/release/release-body-v1.34.2.md`, is cut from the working-tree notes, each relative link made
   absolute at `v1.34.2` and checked to exist at `HEAD`.
 * `make push-guard`, after a fetch.
-* The owner commits these records, pushes, tags `v1.34.2` and creates the release.
-* CI on the tag, `tools/publication.py` and `tools/consumer.py` follow.
+* The owner committed these records as `4c94d2e` and pushed it. CI on `main`'s head, run 42426136087, passed its six
+  `validate` jobs, and the Docs run 42426136106 passed.
+* The owner tagged `v1.34.2` on `4c94d2e` and pushed the tag. CI on the tag, run 42426742761: the six `validate` jobs,
+  `success`.
+* `tools/consumer.py v1.34.2`: exit 0, "as required".
+* The owner approved the release's creation: `gh release create v1.34.2 --title v1.34.2 --notes-file <the body>` created
+  https://github.com/maccavelli/acp-go-sdk2/releases/tag/v1.34.2.
+* `tools/publication.py v1.34.2 4c94d2e <the body>`: exit 0, "10 of 10 checks hold".
+
+**Status:** every phase is done, and each Verification item holds. This PLAN and its row are marked `complete`, and the
+MADR's generator findings released in `v1.34.2`. Deviations: phase 2, two; phase 3, two; phase 4, one; phase 6, four; phase
+8, two; each recorded in its phase.
