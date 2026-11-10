@@ -34,7 +34,7 @@ cache directory, outside the tree.
 | `remote.py test --host H [--module DIR] [--tree DIR] [--timeout S] -- ARG...` | the tree copied to a test host and `go test ARG...` run there in the module `DIR` names, each argument quoted, so `-race`, `-run`, `-count` and packages are passed as given; `-race` is refused before the copy when the host's `go env CGO_ENABLED` is not `1`. Each `remote.py` run removes its remote directory, after a pass, a failure or a timeout (exit 124), and checks it is gone: one left behind is named, exit 3 |
 | `leftovers.py` | test binaries left running on the Windows host |
 | `idscan.py [--all \| --range A..B \| --paths F...]` | identifiers, by the place they are found; `--range` scans the lines each commit adds, by commit, path and line |
-| `plants.py SPEC.json` | planted breaks, each in its own copy of the tree |
+| `plants.py SPEC.json` | planted breaks, each in its own copy of the tree, here or on a host, under `-race` or in another module when the plant asks |
 | `release_body.py VERSION REV` | a release's body, from its release-notes report |
 | `publication.py VERSION COMMIT BODY` | ten checks of a release's publication; its two CI checks read the CI workflow's (`ci.yml`) runs alone, main's head's own from any ref or its nearest docs-safe ancestor's, and the tag's |
 | `consumer.py VERSION` | a module at the floor that uses the release: `agentproc`'s taps, `ClientRefusals`, `AgentRefusals`, `Kind`, `IsMethodNotFound`, `PickPermissionOption`, `CompactionTimeline`, `ExtensionMux`, `TraceMeta`, and an elicitation form's `Fields`, `ParseValue` and `Check`, `Process.WaitContext`, `EndedCleanly`, `ToolCallTimeline`, `clienthost`'s `Files` and `Terminals`, an `InProcess` agent through `ServeAgent` with a `Transcript` as its taps, and a child's stderr tail, and in its `go test`, `acptest.Connect` with `WithElicitationCheck` and `PresentNotice`, and a transcript read with `ReadRecords`, checked with `ValidateGolden` and `Decode`, and replayed with `ConnectReplay`, and a `ScriptAgent` served through `remote.NewHandler` and dialled over `ws://` and `http://`, and an `InProcess` agent closed through `Process.CloseContext`, another under a bound with a client handler that ignores its context, its error read with `errors.Is` for `acp.ErrHandlersRunning`, and a client connection with `WithNotificationOverflowPolicy(acp.OverflowCloseConnection)`, the opt-out from the default `OverflowBlock`, and `WithMaxQueuedBytes` with its `QueuedBytes`, and a `RequestId` that refuses `{}`, and `WithReceivingMiddleware`, `WithSendingMiddleware` and `WithObserver` counting what they see, with `RequestIDFromContext`, a refusal over `WithMaxConcurrentRequests` and a misuse read with `errors.Is` for `acp.ErrSendingMiddleware`, and in its `go test` a `ToolCallStream` written through `io.WriteString`, finished, and read back with `ToolCallTimeline`, so `v1.35.0` or later |
@@ -55,6 +55,20 @@ cache directory, outside the tree.
 
 `host` is optional. Each `old` must occur once in its file, and the plant
 must fail its test with `want` in the output.
+
+Three more keys are optional: `timeout`, `go test`'s `-timeout` (`300s`);
+`"race": true`, the test under `-race`; and `"module": "cmd/generate"`, the
+directory of the copy, holding a `go.mod`, that `go test` runs in (`.`). A
+host plant that sets `race` or `module` runs through `remote.py test`, one
+that sets neither through `remote.py pkg`. A key not named here is refused.
+
+```json
+{"name": "change path without the lock",
+ "edits": [{"file": "toolstream.go", "old": "...", "new": "..."}],
+ "pkg": ".", "run": "^TestToolCallStreamConcurrent$",
+ "want": "race detected during execution of test",
+ "race": true, "host": "linux"}
+```
 
 ## Testing the tools
 

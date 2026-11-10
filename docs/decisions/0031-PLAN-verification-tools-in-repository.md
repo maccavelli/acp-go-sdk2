@@ -1011,3 +1011,59 @@ step changed no Go file, and the pre-add check above, on the same tree, had pass
 and 40.68 just after. `go test -race -count=1 -shuffle=1794342813649344000 ./agentproc`: exit 0, 17.647s; the three tests with
 `-race -count=5`: exit 0, 51.713s. `gates.py precheck` run again: exit 0, "all gates passed". The three tests' 30 s bounds are
 left as they are: changing them is outside this PLAN.
+
+The owner committed the step as `a336669`. Its message, which the commit hook writes, names "race and module plant keys", which
+are step 14's; the commit holds step 13 alone.
+
+### Step 14, plants under `-race` and in another module, 2026-11-10
+
+What changed:
+
+* **`tools/plants.py`,** as the design's last section has it: `OPTIONAL`; `load` refusing a key in neither set, a `race` that is
+  not a boolean, and a `module` that is empty, absolute, holds `..` or a backslash; `module_of`; `command(p, copy, timeout)`,
+  `go test [-race]` in `copy/<module>` here, `remote.py test` for a host plant with `race` or `module`, `remote.py pkg` for one
+  with neither; `run_plant` refusing a module with no `go.mod`, and running `command`'s result; `where(p)`, the verdict line's
+  module, `-race` and host. The docstring gives the keys.
+* **`tools/test_tools.py`,** `PlantsTest` gains six tests: `test_race_plant` and `test_race_plant_without_race`, a counter guarded
+  by a mutex with the lock planted out; `test_module_plant` and `test_module_without_go_mod`, a second module under `sub/`;
+  `test_spec_keys_refused`, `"rcae"`, `race` `"yes"`, `module` `../x` and `/abs`; and `test_command`, the four commands.
+  The race fixture's first plant removed the lock's two calls and left the mutex declared, which did not compile ("declared and
+  not used: mu"); the plant removes the declaration too. `make check-tools`: exit 0, "Ran 89 tests", OK, 6 of them new;
+  `scripts`' 41, OK; "check-ci-filters: 0 problem(s)".
+* **`tools/README.md`:** `plants.py`'s row; a paragraph for `timeout`, `race` and `module`, and an example of a race plant on a
+  host.
+
+**Planted breaks,** each in its own copy of `tools/` outside the tree, `PlantsTest` run there, each edit asserted to apply once; 4
+of 4 failed as required:
+
+| Break | The checks that failed |
+| :--- | :--- |
+| `race` ignored locally | `test_command`: "'-race' not found in ['go', 'test', '-count=1', …]"; `test_race_plant` |
+| `module` ignored | `test_command`: the working directory the copy, not `copy/sub`; `test_module_plant` |
+| an unknown key accepted | `test_spec_keys_refused`: "0 != 2", the plant with `"rcae"` run |
+| a host race plant sent through `remote.py pkg` | `test_command`: `['pkg', '--host', 'linux', …]` for `['test', '--host', 'linux', …]` |
+
+**Live,** `tools/plants.py` over a spec of four plants in the scratch directory, each edit applied once: exit 0, "4/4 as
+required".
+
+| Plant | Result |
+| :--- | :--- |
+| 0052's race plant, `change`'s `s.mu.Lock()` and `defer s.mu.Unlock()` removed, `race` true, locally | failed as required, "(^TestToolCallStreamConcurrent$ under -race)"; "testing.go:1867: race detected during execution of test" |
+| the same, `host` `linux` | failed as required, "under -race on linux", through `remote.py test --module .`: "== linux .: exit 1, 21.8 s", the same line, "remote: linux host: acp-tools-<random> removed" |
+| the same, `host` `windows` | failed as required, "under -race on windows": "== windows .: exit 1, 9.5 s", the same line, the directory removed |
+| 0052's generator plant, `checkPackage(…, built, imp)` for `mod` at `check.go:119`, `module` `cmd/generate`, `pkg` `./internal/output` | failed as required, "(^TestCheckRootImportsModulePackage$ in cmd/generate)": "check_test.go:354: Check refused a root that imports a package of its module" |
+
+The log holds 15 `WARNING: DATA RACE` across the three race plants. The race plant without `race`, alone in a spec: exit 1, "NOT
+AS REQUIRED", "exit 0: ok  github.com/maccavelli/acp-go-sdk2 1.290s", so `race` is what makes it fail. For a race plant the
+verdict line's detail is the first line holding `_test.go:`, a frame of the race report's stack, not "race detected"; the
+verdict is decided by `want`, which holds, and the detail is left as it is.
+
+**Pre-add.** `make pre-add-check FILES="tools/plants.py tools/test_tools.py tools/README.md
+docs/decisions/0031-PLAN-verification-tools-in-repository.md"`: exit 0, "0 file(s) gofmt-clean; both modules linted, vetted and
+tested (-race -shuffle=on, uncached), tidy, govulncheck."
+
+**Gates,** `tools/gates.py --all`, `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set: exit 0, "all gates passed", 18 of 18; `windows`
+and `linux` each printing "remote: <kind> host: acp-tools-<random> removed".
+
+Still to do for this step: `make push-guard` over the outgoing commits, the owner's push, CI on it, and then this PLAN and its row
+`complete`, and issue #15 closed.

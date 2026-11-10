@@ -519,6 +519,88 @@ class PlantsTest(Temp):
         self.assertIn("return a - b", (copies[0] / "m.go").read_text())
         self.assertIn("return a + b", (self.tree / "m.go").read_text(), "the tree itself must be unchanged")
 
+    COUNT = ('package m\n\nimport "sync"\n\n// Count counts to n from n goroutines.\nfunc Count(n int) int {\n'
+             '\tvar mu sync.Mutex\n\tc := 0\n\tvar wg sync.WaitGroup\n\tfor range n {\n\t\twg.Go(func() {\n'
+             '\t\t\tmu.Lock()\n\t\t\tc++\n\t\t\tmu.Unlock()\n\t\t})\n\t}\n\twg.Wait()\n\treturn c\n}\n')
+    RACE_WANT = "race detected during execution of test"
+
+    def race_plant(self, **extra) -> dict:
+        (self.tree / "count.go").write_text(self.COUNT)
+        (self.tree / "count_test.go").write_text('package m\n\nimport "testing"\n\nfunc TestCount(t *testing.T) {\n'
+                                                 '\tif Count(8) != 8 {\n\t\tt.Fatal("Count is wrong")\n\t}\n}\n')
+        return {"name": "unlocked", "edits": [{"file": "count.go", "old": "\tvar mu sync.Mutex\n", "new": ""},
+                                              {"file": "count.go", "old": "\t\t\tmu.Lock()\n\t\t\tc++\n\t\t\tmu.Unlock()\n",
+                                               "new": "\t\t\tc++\n"}],
+                "pkg": ".", "run": "^TestCount$", "want": self.RACE_WANT, **extra}
+
+    def test_race_plant(self) -> None:
+        r = self.plants(self.race_plant(race=True))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("FAILED AS REQUIRED: unlocked (^TestCount$ under -race)", r.stdout)
+
+    def test_race_plant_without_race(self) -> None:
+        r = self.plants(self.race_plant())
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("NOT AS REQUIRED: unlocked", r.stdout)
+
+    def sub_module(self) -> None:
+        sub = self.tree / "sub"
+        sub.mkdir()
+        (sub / "go.mod").write_text("module example.invalid/sub\n\ngo 1.26\n")
+        (sub / "s.go").write_text("package sub\n\n// One is one.\nfunc One() int { return 1 }\n")
+        (sub / "s_test.go").write_text('package sub\n\nimport "testing"\n\nfunc TestOne(t *testing.T) {\n'
+                                       '\tif One() != 1 {\n\t\tt.Fatal("One is wrong")\n\t}\n}\n')
+        (self.tree / "nomod").mkdir()
+
+    @staticmethod
+    def sub_plant(**extra) -> dict:
+        return {"name": "two", "edits": [{"file": "sub/s.go", "old": "return 1", "new": "return 2"}], "pkg": ".", "run": "^TestOne$",
+                "want": "One is wrong", **extra}
+
+    def test_module_plant(self) -> None:
+        self.sub_module()
+        r = self.plants(self.sub_plant(module="sub"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("FAILED AS REQUIRED: two (^TestOne$ in sub)", r.stdout)
+        r = self.plants(self.sub_plant())
+        self.assertEqual(r.returncode, 1, "without module the plant runs in the root, where no TestOne fails")
+        self.assertIn("NOT AS REQUIRED: two", r.stdout)
+
+    def test_module_without_go_mod(self) -> None:
+        self.sub_module()
+        r = self.plants(self.sub_plant(module="nomod"))
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("refused: nomod: no go.mod there", r.stdout)
+
+    def test_spec_keys_refused(self) -> None:
+        for extra, text in (({"rcae": True}, "unknown key(s) rcae"), ({"race": "yes"}, "race must be true or false"),
+                            ({"module": "../x"}, "module must be a relative path"), ({"module": "/abs"}, "module must be a relative path")):
+            r = self.plants(self.plant("subtract", "return a + b", "return a - b") | extra)
+            self.assertEqual(r.returncode, 2, f"{extra}: {r.stdout + r.stderr}")
+            self.assertIn(text, r.stdout, extra)
+
+    def test_command(self) -> None:
+        import plants
+        copy = self.dir / "copy"
+        p = self.plant("x", "a", "b")
+        cmd, cwd = plants.command({**p, "race": True}, copy, "60s")
+        self.assertEqual(cmd[:2], ["go", "test"])
+        self.assertIn("-race", cmd)
+        self.assertEqual(cwd, copy)
+        cmd, cwd = plants.command({**p, "module": "sub"}, copy, "60s")
+        self.assertEqual(cwd, copy / "sub")
+        cmd, _ = plants.command({**p, "host": "linux", "race": True}, copy, "60s")
+        self.assertEqual(cmd[3:9], ["test", "--host", "linux", "--tree", str(copy), "--module"])
+        rest = cmd[cmd.index("--") + 1:]
+        self.assertEqual(rest, ["-race", "-count=1", "-timeout=60s", "-run", "^TestAdd$", "."])
+        cmd, _ = plants.command({**p, "host": "windows", "module": "sub"}, copy, "60s")
+        self.assertEqual(cmd[3], "test")
+        self.assertEqual(cmd[cmd.index("--module") + 1], "sub")
+        self.assertNotIn("-race", cmd)
+        cmd, _ = plants.command({**p, "host": "windows"}, copy, "60s")
+        self.assertEqual(cmd[3:5], ["pkg", "--host"])
+        self.assertIn("-test.run=^TestAdd$", cmd)
+
 
 class ReleaseTest(Temp):
     REPORT = ("# Release notes for v9.9.9, against v9.9.8\n\n## Release text\n\n### v9.9.9\n\n"

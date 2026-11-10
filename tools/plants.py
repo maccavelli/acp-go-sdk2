@@ -7,11 +7,15 @@ SPEC.json is a list of plants:
   {"name": "...",
    "edits": [{"file": "agentproc/agentproc.go", "old": "...", "new": "..."}],
    "pkg": "./agentproc", "run": "^TestKill$", "want": "Kill took longer than",
-   "host": "windows",            optional: run it there, by remote.py pkg
-   "timeout": "300s"}            optional: go test's -timeout, default 300s
-Each edit's "old" must occur exactly once in its file, or the plant is refused.
-A plant fails as required when its test exits non-zero and its output holds
-"want". The tree is the repository, or --tree DIR.
+   "host": "windows",            optional: run it there, by remote.py pkg, or
+                                 by remote.py test with race or module
+   "timeout": "300s",            optional: go test's -timeout, default 300s
+   "race": true,                 optional: go test -race
+   "module": "cmd/generate"}     optional: the copy's directory, holding a
+                                 go.mod, that go test runs in; default "."
+Each edit's "old" must occur exactly once in its file, or the plant is refused;
+so is a key not listed here. A plant fails as required when its test exits
+non-zero and its output holds "want". The tree is the repository, or --tree DIR.
 
 Exit 0 only when every plant failed as required.
 """
@@ -23,7 +27,7 @@ import os
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _common  # noqa: E402
@@ -31,6 +35,7 @@ import _common  # noqa: E402
 TOOLS = Path(__file__).resolve().parent
 IGNORE = shutil.ignore_patterns(".git", ".cache", ".tools", ".gocache", "._*", ".DS_Store")
 KEYS = {"name", "edits", "pkg", "run", "want"}
+OPTIONAL = {"host", "timeout", "race", "module"}
 
 
 class Refused(Exception):
@@ -45,9 +50,46 @@ def load(spec: Path) -> list[dict]:
         missing = KEYS - set(p)
         if missing:
             raise Refused(f"{spec}: plant {i} lacks {', '.join(sorted(missing))}")
+        unknown = set(p) - KEYS - OPTIONAL
+        if unknown:
+            raise Refused(f"{spec}: plant {p['name']!r}: unknown key(s) {', '.join(sorted(unknown))}")
         if p.get("host") not in (None, *_common.HOST_VARS):
             raise Refused(f"{spec}: plant {p['name']!r}: host must be one of {', '.join(_common.HOST_VARS)}")
+        if not isinstance(p.get("race", False), bool):
+            raise Refused(f"{spec}: plant {p['name']!r}: race must be true or false")
+        module = p.get("module", ".")
+        parts = PurePosixPath(module).parts if isinstance(module, str) else ()
+        if not isinstance(module, str) or not module or PurePosixPath(module).is_absolute() or ".." in parts or "\\" in module:
+            raise Refused(f"{spec}: plant {p['name']!r}: module must be a relative path in the tree, not {module!r}")
     return plants
+
+
+def module_of(p: dict) -> str:
+    """The plant's module directory, as a relative POSIX path."""
+    return str(PurePosixPath(p.get("module", ".")))
+
+
+def command(p: dict, copy: Path, timeout: str) -> tuple[list[str], Path]:
+    """The command that runs the plant's test in copy, and its working
+    directory: go test here, else remote.py test on the host when the plant
+    asks for -race or a module, else remote.py pkg."""
+    module = module_of(p)
+    race = ["-race"] if p.get("race") else []
+    if not p.get("host"):
+        return ["go", "test", *race, "-count=1", f"-timeout={timeout}", "-run", p["run"], p["pkg"]], copy / module
+    remote = [sys.executable, "-B", str(TOOLS / "remote.py")]
+    if race or module != ".":
+        return [*remote, "test", "--host", p["host"], "--tree", str(copy), "--module", module, "--", *race, "-count=1",
+                f"-timeout={timeout}", "-run", p["run"], p["pkg"]], copy
+    return [*remote, "pkg", "--host", p["host"], "--tree", str(copy), p["pkg"], f"-test.run={p['run']}", "-test.count=1",
+            f"-test.timeout={timeout}"], copy
+
+
+def where(p: dict) -> str:
+    """The verdict line's account of where the plant ran."""
+    module = module_of(p)
+    return "".join([f" in {module}" if module != "." else "", " under -race" if p.get("race") else "",
+                    f" on {p['host']}" if p.get("host") else ""])
 
 
 def apply(copy: Path, edits: list[dict]) -> None:
@@ -80,14 +122,10 @@ def run_plant(p: dict, tree: Path, work: Path, log: Path) -> tuple[bool, str]:
         apply(copy, p["edits"])
     except Refused as err:
         return False, f"refused: {err}"
-    timeout = p.get("timeout", "300s")
-    if p.get("host"):
-        cmd = [sys.executable, "-B", str(TOOLS / "remote.py"), "pkg", "--host", p["host"], "--tree", str(copy), p["pkg"],
-               f"-test.run={p['run']}", "-test.count=1", f"-test.timeout={timeout}"]
-        status, text = _common.run(log, cmd, cwd=copy)
-    else:
-        status, text = _common.run(log, ["go", "test", "-count=1", f"-timeout={timeout}", "-run", p["run"], p["pkg"]], cwd=copy,
-                                   env=dict(os.environ))
+    if not (copy / module_of(p) / "go.mod").is_file():
+        return False, f"refused: {module_of(p)}: no go.mod there"
+    cmd, cwd = command(p, copy, p.get("timeout", "300s"))
+    status, text = _common.run(log, cmd, cwd=cwd, env=dict(os.environ))
     return status != 0 and p["want"] in text, f"exit {status}: {first_failure(text)[:240]}"
 
 
@@ -114,8 +152,7 @@ def main(argv: list[str]) -> int:
         for p in plants:
             ok, detail = run_plant(p, tree, work, log)
             held += ok
-            where = f" on {p['host']}" if p.get("host") else ""
-            print(f"{'FAILED AS REQUIRED' if ok else 'NOT AS REQUIRED'}: {p['name']} ({p['run']}{where}): {detail}", flush=True)
+            print(f"{'FAILED AS REQUIRED' if ok else 'NOT AS REQUIRED'}: {p['name']} ({p['run']}{where(p)}): {detail}", flush=True)
     finally:
         if not args.keep:
             shutil.rmtree(work, ignore_errors=True)
