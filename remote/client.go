@@ -9,8 +9,9 @@ import (
 )
 
 // defaultMaxMessageSize is the largest message either side takes unless its
-// options set another: the connection's own default, 10 MiB.
-const defaultMaxMessageSize = 10 * 1024 * 1024
+// options set another: the connection's own default, 32 MiB
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md, D6).
+const defaultMaxMessageSize = 32 * 1024 * 1024
 
 // DialOptions configure Dial. The zero value, or nil, is ready to use.
 type DialOptions struct {
@@ -28,7 +29,7 @@ type DialOptions struct {
 	Header http.Header
 
 	// MaxMessageSize is the largest message, in bytes, the connection reads
-	// or writes. Zero or less is 10 MiB, the connection's own default. A
+	// or writes. Zero or less is 32 MiB, the connection's own default. A
 	// longer WebSocket message from the server is dropped and answered -32600
 	// with "id": null, as a connection answers an over-long line on stdio, and
 	// the connection reads on (0049-PLAN-subpackage-fixes.md, phase 5, P6).

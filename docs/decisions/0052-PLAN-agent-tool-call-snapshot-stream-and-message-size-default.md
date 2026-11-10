@@ -328,3 +328,55 @@ magic-cli-remote's adoption, and the MADR's two observations for gobble-cli.
 The owner accepted the MADR with its two reviews and approved this PLAN. The MADR, this PLAN and their two rows in
 `docs/README.md` were staged alone for the bootstrap commit, which is phase 1's base. Phase 1 starts once that commit exists
 and `git status --short` is clean.
+
+### Phase 1, the message size (2026-11-10)
+
+**Base.** The owner committed the pair as `c630d2f`; `git status --short` was empty before the first edit.
+
+**Done.**
+
+* `connection.go`: `defaultMaxMessageSize = 32 * 1024 * 1024`, its comment naming the TypeScript SDK's default and citing
+  the MADR, D6; `WithMaxMessageSize`'s doc says 32 MiB and cites D6 beside 0017.
+* `remote/client.go`: `defaultMaxMessageSize = 32 * 1024 * 1024`, its comment "the connection's own default, 32 MiB" citing
+  D6; `DialOptions.MaxMessageSize`'s doc says 32 MiB. `remote/handler.go`: `HandlerOptions.MaxMessageSize`'s doc says 32 MiB.
+* `README.md`: the byte budget's paragraph, "1024 notifications of up to 32 MiB each, about 32 GiB"; `remote`'s two
+  `MaxMessageSize` bullets; "Errors on the wire", 32 MiB, the TypeScript SDK's default too. `docs/architecture.md`, `receive`'s
+  limit, 32 MiB, citing D6.
+* `jsonrpc_test.go`: `TestDefaultMaxMessageSize`, not parallel. `remote/ws_test.go`: `TestDefaultMaxMessageSize`, not parallel,
+  a 20 MiB request and its 20 MiB answer over Streamable HTTP and WebSocket with nil options on both sides, after
+  `initialize`, as `TestHTTPServerOverlongAnswer` orders them.
+
+**Step 2's search,** a Python script over the tracked and untracked files outside `docs/decisions/` and `docs/reports/`, for
+`10 MiB`, `10 * 1024 * 1024`, `10 << 20`, `10485760` and `10 GiB`, after the edits: exit 1, two hits, both the new tests'
+comments naming "the former 10 MiB default". No statement of the default is left.
+
+**Tests.** `go test -race -count=1 -run 'MaxMessageSize' . ./remote/`: exit 0; the root package 7.3 s, `remote` 17.8 s.
+
+**Plants,** `python3 tools/plants.py` over a two-plant spec in the scratch directory: exit 0, "2/2 as required".
+
+| Plant | Failure |
+| :--- | :--- |
+| `connection.go`'s constant at `10 * 1024 * 1024` | `jsonrpc_test.go:264: the default limit is 10485760 bytes, want 32 MiB`; `jsonrpc_test.go:272: a 20 MiB line under the default limit answered null {"code":-32600,…,"data":{"error":"message exceeds 10485760 bytes"}}, want -32601 with id 1` |
+| `remote/client.go`'s constant at `10 * 1024 * 1024` | `ws_test.go:253: the default limit is 10485760 bytes, want 32 MiB`; `ws_test.go:294: http: writing the 20 MiB request under the default limit: remote: message exceeds the size limit: more than 10485760 bytes` |
+
+The `remote` plant stops at the Streamable HTTP write, which is fatal, so its WebSocket half is not reached under the plant;
+the unplanted run passes both.
+
+**Step 5, memory and time.**
+
+* This host: `go test -race -count=3 -run 'MaxMessageSize' .`: exit 0, 15.2 s, wall 16.3 s.
+* A Linux host reached over SSH (`Linux x86_64`, go1.27.3): `go test -race -count=3 -run 'MaxMessageSize' . ./remote`, in a
+  fresh directory removed after: exit 0; the root package 41.2 s, `remote` 118.0 s, 151 s in all.
+* **Deviation, 2026-11-10, the tool:** step 5 asks for `-race` on the Linux host, and `tools/remote.py pkg` cross-compiles
+  the test binary, which `-race` cannot (it needs cgo), while `remote.py tree` runs without `-race`. The run copied the
+  working tree's tracked and untracked files, without macOS `._` files, by a scratch script that follows `remote.py`'s
+  method: the host from `ACP_LINUX_HOST`, a fresh `acp-tools-<random>` directory, removed after, its removal checked. No
+  file of the tree changed for it. Recorded for the owner's confirmation at the phase's hand-off.
+
+**Pre-add.** `make pre-add-check FILES="connection.go remote/client.go remote/handler.go jsonrpc_test.go remote/ws_test.go
+README.md docs/architecture.md"`: exit 0, "5 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on,
+uncached), tidy, govulncheck." `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0 each.
+
+**Not done in this phase:** step 4's last item needed no new test. 0045's D4 test,
+`TestQueuedBytesClampAndSingleLine` (`connection_queue_bytes_test.go:167`), is unchanged and passed in the pre-add run, and
+the 64 MiB default still holds two 32 MiB messages.

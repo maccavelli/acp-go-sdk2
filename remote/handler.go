@@ -46,7 +46,7 @@ type HandlerOptions struct {
 	KeepAlive time.Duration
 
 	// MaxMessageSize is the largest message, in bytes, a connection reads or
-	// writes. Zero or less is 10 MiB, the connection's own default. A longer
+	// writes. Zero or less is 32 MiB, the connection's own default. A longer
 	// WebSocket message from a client is dropped and answered -32600 with
 	// "id": null, a longer POST is answered 413, and a longer line from the
 	// agent is dropped and answered -32600 on the agent's input, as a

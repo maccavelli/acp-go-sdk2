@@ -989,8 +989,8 @@ that refuse each other's requests both go on reading. Notifications and
 `acp.WithMaxQueuedBytes(n)` bounds what a connection holds of its peer's
 unfinished messages
 ([0045-MADR-notification-queue-byte-budget.md](docs/decisions/0045-MADR-notification-queue-byte-budget.md)).
-Without it, the count alone allows 1024 notifications of up to 10 MiB each,
-about 10 GiB.
+Without it, the count alone allows 1024 notifications of up to 32 MiB each,
+about 32 GiB.
 
 - **What counts.** Each received message counts its line's length, from its
   receipt until its handler returns: the notifications queued or running, and
@@ -1208,7 +1208,7 @@ A client calls `remote.Dial(ctx, url, opts)`.
     streams.
   - `Header` goes on every request, the handshake included. Authentication
     goes there.
-  - `MaxMessageSize` defaults to 10 MiB. A longer WebSocket message from the
+  - `MaxMessageSize` defaults to 32 MiB. A longer WebSocket message from the
     server is dropped and answered `-32600` with `"id": null`, as a connection
     on stdio answers an over-long line, and the connection reads on.
   - `MaxBuffered`, 64 MiB by default and at least `MaxMessageSize`, bounds what
@@ -1263,7 +1263,7 @@ the endpoint.
     event stream sent a comment, traffic or none. A ping not answered within
     it ends the connection, unless the agent was not reading meanwhile: a busy
     agent does not end a client that is answering.
-  - `MaxMessageSize` is 10 MiB. A longer WebSocket message from a client, or
+  - `MaxMessageSize` is 32 MiB. A longer WebSocket message from a client, or
     line from the agent, is dropped and answered `-32600` with `"id": null`,
     the agent's on its input, as on stdio, and the connection reads on; a
     longer POST is answered `413`
@@ -1389,7 +1389,8 @@ The connection reads one JSON-RPC message per line and answers what JSON-RPC
   id when the id is valid and `null` otherwise, an absent id included;
 - a line longer than the limit: read through its newline, discarded, logged,
   and answered `-32600` with `"id": null` and the limit in `data`; reading goes
-  on. The limit is 10 MiB unless `acp.WithMaxMessageSize(n)` sets another.
+  on. The limit is 32 MiB, the TypeScript SDK's default too, unless
+  `acp.WithMaxMessageSize(n)` sets another.
 
 A request whose id is `null` is answered with `"id": null`. A response is never
 answered: one that matches no pending call is logged at Debug, and one that

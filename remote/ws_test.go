@@ -243,6 +243,64 @@ func TestWebSocketLargeMessage(t *testing.T) {
 	}
 }
 
+// TestDefaultMaxMessageSize requires the default limit to be 32 MiB, the
+// connection's own, and a 20 MiB request and its 20 MiB answer, which the
+// former 10 MiB default refused, to cross both profiles with no option set
+// on either side (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// D6). It is not parallel: each message is 20 MiB.
+func TestDefaultMaxMessageSize(t *testing.T) {
+	if defaultMaxMessageSize != 32<<20 {
+		t.Errorf("the default limit is %d bytes, want 32 MiB", defaultMaxMessageSize)
+	}
+	pad := strings.Repeat("a", 20<<20)
+	ts := testServer(t, NewHandler(func(_ context.Context, in io.Reader, out io.Writer) error {
+		r := bufio.NewReader(in)
+		if _, err := r.ReadString('\n'); err != nil { // initialize
+			return err
+		}
+		if _, err := io.WriteString(out, `{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}`+"\n"); err != nil {
+			return err
+		}
+		l, err := r.ReadString('\n') // request 2, 20 MiB
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(l, pad) {
+			return fmt.Errorf("request 2 arrived with %d bytes, want the 20 MiB pad", len(l))
+		}
+		if _, err := io.WriteString(out, `{"jsonrpc":"2.0","id":2,"result":{"p":"`+pad+`"}}`+"\n"); err != nil {
+			return err
+		}
+		_, _ = io.Copy(io.Discard, r)
+		return nil
+	}, nil))
+	for _, scheme := range []string{"http", "ws"} {
+		url := ts.URL
+		if scheme == "ws" {
+			url = wsURL(ts)
+		}
+		c, err := Dial(t.Context(), url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := bufio.NewReader(c)
+		if _, err := io.WriteString(c, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}`+"\n"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.ReadString('\n'); err != nil {
+			t.Fatalf("%s: initialize's answer: %v", scheme, err)
+		}
+		if _, err := io.WriteString(c, `{"jsonrpc":"2.0","id":2,"method":"_x/big","params":{"p":"`+pad+`"}}`+"\n"); err != nil {
+			t.Fatalf("%s: writing the 20 MiB request under the default limit: %v", scheme, err)
+		}
+		l, err := r.ReadString('\n')
+		if err != nil || !strings.HasPrefix(l, `{"jsonrpc":"2.0","id":2,"result":`) || !strings.Contains(l, pad) {
+			t.Errorf("%s: the 20 MiB answer under the default limit: %d bytes, prefix %.60q, %v", scheme, len(l), l, err)
+		}
+		_ = c.Close()
+	}
+}
+
 // overlongAnswerOf reports whether b is the -32600 answer, with "id": null,
 // that a side gives a message over limit bytes.
 func overlongAnswerOf(b []byte, limit int) bool {

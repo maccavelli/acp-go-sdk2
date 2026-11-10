@@ -35,8 +35,10 @@ const (
 	// (0044-MADR-notification-queue-back-pressure.md, D5).
 	pauseWarnAfter = 5 * time.Second
 	// defaultMaxMessageSize is the largest line receive accepts unless
-	// WithMaxMessageSize sets another.
-	defaultMaxMessageSize = 10 * 1024 * 1024
+	// WithMaxMessageSize sets another: 32 MiB, the TypeScript SDK's default
+	// too, so that this SDK reads what that one reads
+	// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md, D6).
+	defaultMaxMessageSize = 32 * 1024 * 1024
 	// readBufferSize is the size of receive's bufio.Reader: a line up to it is
 	// read in one piece (0030-MADR-record-initialize-on-arrival.md, the
 	// amendment of 2026-10-21, B1 to B7).
@@ -718,8 +720,9 @@ func WithMaxConcurrentRequests(n int) ConnectionOption {
 // WithMaxMessageSize sets the largest message, one line in bytes without its
 // newline, "\n" or "\r\n", the connection reads. A longer line is read through its newline,
 // discarded, logged, and answered -32600 with "id": null, and reading goes on.
-// The default is 10 MiB; n <= 0 keeps it
-// (0017-MADR-remediate-acp-v1-conformance-violations.md, J1).
+// The default is 32 MiB; n <= 0 keeps it
+// (0017-MADR-remediate-acp-v1-conformance-violations.md, J1;
+// 0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md, D6).
 func WithMaxMessageSize(n int) ConnectionOption {
 	return func(cfg *connectionConfig) {
 		if n > 0 {

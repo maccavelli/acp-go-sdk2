@@ -254,6 +254,25 @@ func TestMaxMessageSize(t *testing.T) {
 	}
 }
 
+// TestDefaultMaxMessageSize requires the default limit to be 32 MiB, the
+// TypeScript SDK's default, and a 20 MiB line, which the former 10 MiB
+// default refused, to be read with no option set
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md, D6).
+// It is not parallel: the line is 20 MiB.
+func TestDefaultMaxMessageSize(t *testing.T) {
+	if defaultMaxMessageSize != 32<<20 {
+		t.Errorf("the default limit is %d bytes, want 32 MiB", defaultMaxMessageSize)
+	}
+	notFound := func(_ context.Context, method string, _ json.RawMessage) (any, *RequestError) {
+		return nil, NewMethodNotFound(method)
+	}
+	p := rawWire(t, func(w io.Writer, r io.Reader) { NewConnection(notFound, w, r) })
+	p.send(lineOf(t, 1, 20<<20))
+	if a := p.next("a 20 MiB line's answer"); string(a.ID) != "1" || a.Error == nil || a.Error.Code != -32601 {
+		t.Errorf("a 20 MiB line under the default limit answered %s %+v, want -32601 with id 1", a.ID, a.Error)
+	}
+}
+
 // TestMaxMessageSizeCRLF requires WithMaxMessageSize to measure a line
 // without its newline whether that is "\n" or "\r\n": a line at the limit is
 // read, and one byte over it is answered -32600, with either newline

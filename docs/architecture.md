@@ -512,7 +512,9 @@ end, or the connection's, and judges it again. The agent's side holds nothing.
 
 `receive` reads one line at a time through a 128 KiB `bufio.Reader`
 (`readBufferSize`), up to
-`WithMaxMessageSize` (10 MiB by default), and classifies it: an overlong
+`WithMaxMessageSize` (32 MiB by default, the TypeScript SDK's default too;
+0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md, D6),
+and classifies it: an overlong
 line is discarded and answered `-32600`; a line `json.Valid` refuses,
 `-32700`; JSON that is not an object, `-32600`; an object without `method`
 that has `result` or `error`, or whose `id` names a call still pending, is a
