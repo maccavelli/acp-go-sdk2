@@ -224,6 +224,21 @@ var ErrHandlersRunning = errors.New("acp: the connection's handlers still run")
 // (0046-MADR-sending-and-receiving-middleware.md, D10).
 var ErrSendingMiddleware = errors.New("acp: sending middleware broke a rule")
 
+// ErrToolCallStreamFinished is what a ToolCallStream's methods return once
+// Finish has written the call's final update: the stream sends nothing more
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// D1).
+var ErrToolCallStreamFinished = errors.New("acp: the tool-call stream is finished")
+
+// ErrToolCallStreamField is the error, wrapped with the method and the field,
+// a ToolCallStream returns for a change it does not take: Update changing the
+// call's Id or Status, SetStatus with a final status, or Finish without one.
+// The id never changes, and a final status is Finish's alone, so no client
+// sees a call completed and then updated; read with errors.Is
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// D1).
+var ErrToolCallStreamField = errors.New("acp: a change the tool-call stream does not take")
+
 // ErrNotificationQueueOverflow is why a connection closed itself: under
 // OverflowCloseConnection, an inbound notification found its queue full, at
 // the count or the byte budget; under OverflowBlock, the default, one arrived

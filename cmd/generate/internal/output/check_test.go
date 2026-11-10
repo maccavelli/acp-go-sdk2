@@ -331,6 +331,34 @@ func TestCheckExternalTests(t *testing.T) {
 	}
 }
 
+// TestCheckRootImportsModulePackage requires a root whose hand-written file,
+// and in-package test file, import another package of the module, an internal
+// one, to be checked with that package from source: accepted when it checks,
+// and refused, naming it, when it does not
+// (0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// phase 3, the deviation of 2026-11-10).
+func TestCheckRootImportsModulePackage(t *testing.T) {
+	t.Parallel()
+	tree := func(buf string) string {
+		dir := t.TempDir()
+		writeTree(t, dir, map[string]string{
+			"go.mod":              "module example.com/m\n\ngo 1.26\n",
+			"hand.go":             stub,
+			"uses.go":             "package acp\n\nimport \"example.com/m/internal/buf\"\n\nvar Limit = buf.N\n",
+			"uses_test.go":        "package acp\n\nimport (\n\t\"testing\"\n\n\t\"example.com/m/internal/buf\"\n)\n\nfunc TestN(t *testing.T) { _ = buf.N }\n",
+			"internal/buf/buf.go": buf,
+		})
+		return dir
+	}
+	if err := Check(tree("package buf\n\nconst N = 1\n"), "example.com/m", uses); err != nil {
+		t.Errorf("Check refused a root that imports a package of its module: %v", err)
+	}
+	err := Check(tree("package buf\n\nconst N = undefinedName\n"), "example.com/m", uses)
+	if err == nil || !strings.Contains(err.Error(), "example.com/m/internal/buf") || !strings.Contains(err.Error(), "undefinedName") {
+		t.Errorf("Check = %v, want it to refuse the module package that does not check, naming it", err)
+	}
+}
+
 // TestCheckVersionFromEnclosingModule requires the language version to come
 // from the go.mod that holds the output directory, found walking up as the
 // go command finds it, not only from one inside it

@@ -218,7 +218,7 @@ func TestRuntimeFilesCoverHandWritten(t *testing.T) {
 			hand = append(hand, name)
 		}
 	}
-	want := slices.Sorted(slices.Values(append(slices.Clone(enginetest.RuntimeFiles), "compaction.go", "elicitation.go", "helpers.go", "refusals.go", "serve.go", "tooltimeline.go")))
+	want := slices.Sorted(slices.Values(append(slices.Clone(enginetest.RuntimeFiles), "compaction.go", "elicitation.go", "helpers.go", "refusals.go", "serve.go", "toolstream.go", "tooltimeline.go")))
 	if !slices.Equal(hand, want) {
 		t.Errorf("hand-written files of the root are %v, want %v: add a new file to enginetest.RuntimeFiles if it uses no ACP type, "+
 			"or exclude it here as helpers.go is", hand, want)

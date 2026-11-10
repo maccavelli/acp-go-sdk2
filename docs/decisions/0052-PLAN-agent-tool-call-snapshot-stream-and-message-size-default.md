@@ -36,7 +36,7 @@ Ship the MADR's O1 and M1 as `v1.35.0`. At the end of it:
 | :--- | :--- |
 | 1, the message size (D6) | `connection.go`; `remote/client.go`; `remote/handler.go`; `jsonrpc_test.go`; `remote/` one test file; `README.md`; `docs/architecture.md` |
 | 2, a start only while the connection lives (D2) | `connection.go`; `connection_end_test.go` |
-| 3, the stream (D1, D2, D4, D5) | `internal/tailbuf/tailbuf.go`, `tailbuf_test.go` (new); `clienthost/terminals.go`; `clienthost/output.go`, `output_test.go` (deleted); `toolstream.go` (new); `errors.go`; `toolstream_test.go` (new); `example_toolstream_test.go` (new); `cmd/generate/engine_test.go` |
+| 3, the stream (D1, D2, D4, D5) | `internal/tailbuf/tailbuf.go`, `tailbuf_test.go` (new); `clienthost/terminals.go`; `clienthost/output.go`, `output_test.go` (deleted); `toolstream.go` (new); `errors.go`; `toolstream_test.go` (new); `example_toolstream_test.go` (new); `cmd/generate/engine_test.go`; `cmd/generate/internal/output/check.go`, `check_test.go` (added by the phase's deviation of 2026-11-10) |
 | 4, the turn's streams before the answer (D3) | `connection.go`; `toolstream.go`; `toolstream_test.go`; `cmd/generate/internal/emit/dispatch.go`; `cmd/generate/internal/emit/dispatch_test.go`; `agent_gen.go` (regenerated) |
 | 5, the docs | `README.md`; `docs_test.go`; `docs/architecture.md`; `doc.go` |
 | 6, the close | `tools/consumer.py`; `tools/test_tools.py`; `tools/README.md`; `docs/reports/0052-REPORT-release-notes-v1-35-0.md` (new); this PLAN; the MADR; `docs/README.md` |
@@ -424,3 +424,133 @@ linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck." `ma
 `make disclosure-check`: exit 0 each.
 
 **Not done in this phase:** nothing calls `goIfLive` outside its tests yet; phase 3's stream is its first caller.
+
+**Commit.** The owner committed the phase as `8969f86`.
+
+### Phase 3, the stream (2026-11-10)
+
+**Base.** `8969f86`; `git status --short` was empty before the first edit.
+
+**Done.**
+
+* `internal/tailbuf/tailbuf.go`, new: `Buffer` with `Limit`, `Write`, `WriteString`, `Snapshot(final) (text, dropped)` and
+  `Dropped()`; `cut`, `complete` and `compactAfter` moved from `clienthost/output.go` unchanged. `internal/tailbuf/tailbuf_test.go`:
+  `clienthost`'s two tests moved as `TestTruncatesAtCharacter` and `TestHoldsBackUnfinishedCharacter`, and
+  `TestDroppedCount` and `TestWriteNeverFails`, new.
+* `clienthost/terminals.go`: `out *tailbuf.Buffer`; `TerminalOutput` reads `Snapshot(exited)` and sets `Truncated` from
+  `dropped > 0`. `clienthost/output.go` and `clienthost/output_test.go` deleted with `git rm`.
+* `errors.go`: `ErrToolCallStreamFinished` and `ErrToolCallStreamField`.
+* `toolstream.go`, new: the MADR's D1 API, the change path, the sender `run`, `writePending`, the slot, `toolCallUpdateOf` and
+  `wrapUp`, as steps 3 to 10 give them. No `go` statement: the sender starts through `goIfLive`.
+* `toolstream_test.go`, new: the sixteen tests of step 11 and `TestToolCallStreamHelperProcess`, the command
+  `TestToolCallStreamExecWriter` runs, which skips unless its variable is set; `FuzzToolCallStream`, three seeds;
+  `BenchmarkToolCallStream`.
+* `example_toolstream_test.go`, new: `ExampleStartToolCallStream`, its agent built on `AgentRefusals` and its client on
+  `ClientRefusals`, with an `// Output:` the test checks.
+* `cmd/generate/engine_test.go`: `TestRuntimeFilesCoverHandWritten`'s list gains `"toolstream.go"`.
+
+**Found during the phase, each within the step's terms unless marked a deviation.**
+
+* **The MADR's two rules,** `Flush` with nothing pending and a failed write, were wrong as written; the MADR carries "Amended
+  during the PLAN's phase 3, 2026-11-10", and its D1 and D2 bullets point to it. `writePending` takes the slot before it
+  looks at `pending`, and sets `pending` again only when its own context ended.
+* **`tailbuf` has two methods step 1 did not list,** `WriteString` (the stream's `WriteString` without a `[]byte` copy) and
+  `Dropped` (the stream's `Dropped` without copying the text), and its compaction moves the kept tail within its array where
+  `clienthost`'s allocated a new one. The moved tests pin the behaviour, and `clienthost/terminals_test.go` passes unchanged.
+* **The example takes its output from `io.Copy` of a reader, not a command,** with a comment that `cmd.Stdout = stream` does
+  the same: an example's `// Output:` must be the same on every host, and no command prints the same on all of them.
+  `TestToolCallStreamExecWriter` runs a real command, the test binary itself, as Go's helper-process pattern does.
+* **The test helper is `waitUntil`;** `eventually` was taken, by `refused_messages_test.go:41`, with another signature.
+* **Two plants changed from the step's table,** both because the written plant would hang the test, not fail it:
+  * `TestToolCallStreamIdle`'s plant: the table's "the exit on nothing pending removed" makes the sender spin without blocking,
+    and `synctest.Wait` then never returns. The plant leaves the sender's `running` mark set when it exits, which the test
+    reads.
+  * `TestToolCallStreamCoalesces`' plant: "a queue of snapshots" is two edits, every change starting a sender and every sender
+    writing whether pending or not.
+* **Deviation, 2026-11-10, the race plant:** `TestToolCallStreamConcurrent`'s plant is a data race, the change path without the
+  stream's lock, which only `-race` shows, and `tools/plants.py` runs `go test` without it. A scratch script, as phase 1's,
+  copied the working tree's tracked and untracked files to a scratch directory, applied the edit (matched once), ran
+  `go test -race -count=1 -run '^TestToolCallStreamConcurrent$' .`, and removed the copy. It is the same gap as issue #15's,
+  in another tool.
+
+**Tests.**
+
+* `go test -race -count=1 ./internal/tailbuf/ ./clienthost/`: exit 0; 1.7 s and 6.0 s.
+* `go test -race -count=1 -v -run 'ToolCallStream|WrapUp' .`: exit 0; seventeen PASS, `TestToolCallStreamHelperProcess` SKIP, as
+  it must outside its command.
+* `go test -race -count=20 -run 'ToolCallStream|WrapUp' .`: exit 0, 23.5 s.
+* `go test -race -count=3 -run '^ExampleStartToolCallStream$' .`: exit 0.
+* `cd cmd/generate && go test -count=1 -run '^TestRuntimeFilesCoverHandWritten$' .`: exit 0.
+* `go test -run '^$' -fuzz '^FuzzToolCallStream$' -fuzztime 60s .`: exit 0, 189,173 executions, 285 corpus entries, no
+  crasher; nothing written under `testdata/`.
+* `go test -run '^$' -bench '^BenchmarkToolCallStream$' -benchmem .`, recorded, not gated: one stream, 1,000 writes of
+  100 bytes and `Finish`, 1,068,181 ns/op, 1,826,421 B/op, 201 allocs/op; sixteen at once, 19,383,844 ns/op, 34,318,661 B/op,
+  4,160 allocs/op (darwin/arm64).
+
+**Plants,** `python3 tools/plants.py` over a sixteen-plant spec in the scratch directory: exit 0, "16/16 as required", none by
+timeout.
+
+| Plant | Failure |
+| :--- | :--- |
+| `tailbuf`: compaction not counted | `tailbuf_test.go:92: dropped 3000, want 599001: 600000 written, 999 kept` |
+| the live text left out of the snapshot | `toolstream_test.go:189: the client's live text is "summary"` |
+| `Write` returning 0 | `toolstream_test.go:265: short write` |
+| every change sent, as a queue would | `toolstream_test.go:304: 384 writes for 1,001 changes held by back-pressure, want at most 2` |
+| the interval wait removed | `toolstream_test.go:345: 100 writes for a burst within one interval, want 2` |
+| the sender's mark not cleared when it exits | `toolstream_test.go:379: a sender still runs with nothing pending` |
+| the mark cleared outside the lock that checks `pending` | `toolstream_test.go:415: round 0: the client's text is "b0", want "b0c0": a change was lost` |
+| `wrapUp` honouring every cause (`FinishAfterCancel`) | `toolstream_test.go:454: Finish after session/cancel: acp: prompt turn cancelled` |
+| `wrapUp` honouring every cause (`TestWrapUp`) | `toolstream_test.go:527: cause acp: prompt turn cancelled, cancelled before false: live false, want true` |
+| `wrapUp` ignoring every cause | `toolstream_test.go:484: Finish ignored its deadline` |
+| `Update`'s restore removed | `toolstream_test.go:569: after the refused changes: id "other", status "completed", title "kept"; want o1, pending, kept` |
+| the snapshot not holding back | `toolstream_test.go:600: a character not finished: kept text valid false, ends with it false; want it held back` |
+| the sender's sleep not ended by the connection's end | `toolstream_test.go:666: Wait did not return after Close: a sender outlived its connection` |
+| `Finish` without its status check | `toolstream_test.go:697: Finish(pending) = <nil>, want ErrToolCallStreamField` |
+| changes taken after `Finish` | `toolstream_test.go:710: Update after Finish = <nil>, want ErrToolCallStreamFinished` |
+| the background error not kept | `toolstream_test.go:735: the background write's error did not happen` |
+| the change path without the stream's lock, under `-race` (scratch script) | four `WARNING: DATA RACE`; `testing.go:1867: race detected during execution of test`; exit 1 |
+
+`TestToolCallStreamMiddleware` has no plant, as the step says: it pins existing behaviour.
+
+**Deviation, 2026-11-10, the generator's check of the root.** The phase's first `make pre-add-check` exited 2. Besides four lint
+findings in the phase's own files, `cmd/generate`'s `TestCheckAcceptsRepository` failed:
+`../../toolstream.go:10:2: could not import github.com/maccavelli/acp-go-sdk2/internal/tailbuf (no required module provides
+package …)`. `output.Check` (`cmd/generate/internal/output/check.go:110`-`:118`) type-checks the root package through
+`sharedImporter`, a source importer that resolves in the `cmd/generate` module and cannot see the root module's other
+packages. The root had imported only the standard library until `toolstream.go`, so nothing had needed it. `run` calls
+`Check` before it writes, so phase 4's regeneration would fail the same way; the failure is the phase's, not an older one.
+The owner chose, of three resolutions offered (fix the check; keep a copy of the buffer in the root and reverse D4; stop and
+write a separate pair), to fix the check: the root, as built and as tested, is type-checked through `moduleImporter`, which
+already resolves the module's packages from source for the external tests (0049 G27). A scratch copy with that change
+passed `TestCheck*` and the `output` package's tests before the decision. The phase's files gain
+`cmd/generate/internal/output/check.go` and `check_test.go`.
+
+**The same run's other findings.** `errcheck`: `_, _ = s.text.Write(p)` and `_, _ = s.text.WriteString(text)`; `tailbuf`
+gains `Append` and `AppendString`, which return nothing, and its `Write` and `WriteString` call them. `perfsprint`: two
+`fmt.Sprint(i)` in `toolstream_test.go` become `strconv.Itoa(i)`. `agentproc`'s `TestCloseContextBoundsHandlers` failed once
+under the full parallel run, with the line 0042's PLAN records for its timing case ("CloseContext = context deadline exceeded
+after 301.587708ms, want the bound's cause and acp.ErrHandlersRunning"); alone, `go test -race -count=20` passed it 20 times.
+The phase does not touch `agentproc`; it is a timing flake under load, left as it is.
+
+**The resolution, done.**
+
+* `cmd/generate/internal/output/check.go`: `checkHost` checks the root as built and as tested through a `moduleImporter` with
+  no root package to serve; that importer refuses an import of the root when it has none. `Check`'s and `moduleImporter`'s
+  comments say so and cite this deviation.
+* `cmd/generate/internal/output/check_test.go`: `TestCheckRootImportsModulePackage`. A root whose hand-written file and
+  in-package test import `internal/buf` of its module is accepted, and one whose `internal/buf` does not check is refused,
+  naming it. `cd cmd/generate && go test -race -count=1 -run '^TestCheck' . ./internal/output/`: exit 0, 16.1 s and 7.1 s.
+* Plant, by a scratch script in the copy's `cmd/generate`, since `tools/plants.py` runs from the root module: the built check
+  back on `imp`. `check_test.go:354: Check refused a root that imports a package of its module: generated code does not
+  type-check with …`; exit 1, failed as required.
+* `tailbuf.Buffer` gained `Append` and `AppendString`; the stream calls them. `toolstream_test.go` imports `strconv`.
+* After these changes: `go test -race -count=1 -run 'ToolCallStream|WrapUp' .`: exit 0; the sixteen plants again, "16/16 as
+  required"; the race plant again, failed as required.
+
+**Pre-add.** `make pre-add-check FILES="internal/tailbuf/tailbuf.go internal/tailbuf/tailbuf_test.go clienthost/terminals.go
+cmd/generate/engine_test.go cmd/generate/internal/output/check.go cmd/generate/internal/output/check_test.go errors.go
+toolstream.go toolstream_test.go example_toolstream_test.go"`: `make` exit 0, "10 file(s) gofmt-clean; both modules linted,
+vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck." `agentproc` passed in this run. `make check-records`,
+`make markdownlint` and `make disclosure-check`: exit 0 each.
+
+**Not done in this phase:** the turn's stream set and the flush before the answer, phase 4's; `make api`'s listing, phase 6's.

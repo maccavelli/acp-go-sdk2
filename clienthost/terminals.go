@@ -13,6 +13,7 @@ import (
 
 	acp "github.com/maccavelli/acp-go-sdk2"
 	"github.com/maccavelli/acp-go-sdk2/internal/proctree"
+	"github.com/maccavelli/acp-go-sdk2/internal/tailbuf"
 )
 
 // DefaultMaxOutputBytes is the most output a terminal keeps when
@@ -148,7 +149,8 @@ func (t *Terminals) TerminalOutput(_ context.Context, req acp.TerminalOutputRequ
 	}
 	exited := term.exited()
 	var resp acp.TerminalOutputResponse
-	resp.Output, resp.Truncated = term.out.snapshot(exited)
+	text, dropped := term.out.Snapshot(exited)
+	resp.Output, resp.Truncated = text, dropped > 0
 	if exited {
 		status := term.status
 		resp.ExitStatus = &status
@@ -232,7 +234,7 @@ type terminal struct {
 	cmd  *exec.Cmd
 	tree *proctree.Tree
 	pipe *os.File // the read end of the command's output
-	out  *output
+	out  *tailbuf.Buffer
 
 	mu    sync.Mutex
 	ended bool // the command has exited: nothing is sent to its tree from then on
@@ -266,7 +268,7 @@ func start(cmd *exec.Cmd, limit int) (*terminal, error) {
 		_ = cmd.Wait()         //nolint:errcheck // its exit is not why the create failed.
 		return nil, errors.Join(fmt.Errorf("clienthost: %w", err), r.Close())
 	}
-	term := &terminal{cmd: cmd, tree: tree, pipe: r, out: &output{limit: limit}, read: make(chan struct{}),
+	term := &terminal{cmd: cmd, tree: tree, pipe: r, out: &tailbuf.Buffer{Limit: limit}, read: make(chan struct{}),
 		done: make(chan struct{})}
 	go term.readOutput()
 	go term.wait()

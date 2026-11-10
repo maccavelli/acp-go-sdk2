@@ -37,7 +37,11 @@ const maxReported = 10
 // names; dir must exist (G16). The language version is the go line of the
 // go.mod that holds dir, by FindGoMod, when there is one (0049-MADR, G28).
 // Imports are read from source, by one importer that every call in the
-// process shares.
+// process shares; an import of another package of the module under dir, such
+// as the root's of an internal package, is checked from source through
+// moduleImporter
+// (0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// phase 3, the deviation of 2026-11-10).
 //
 // The files of package unstable, in emit.UnstableDir, are then checked with
 // its hand-written files, when its directory exists, through an importer
@@ -108,14 +112,17 @@ func Check(dir, root string, files []emit.File) error {
 // as built, as tested, its external tests, and package unstable.
 func checkHost(dir, root, version string, rootFiles, unstableFiles []emit.File, l fileLists) error {
 	imp := sharedImporter()
+	// The root imports the module's other packages, never itself: mod serves
+	// none for root.
+	mod := &moduleImporter{dir: dir, root: root, version: version, next: imp, done: map[string]*types.Package{}}
 	built := slices.DeleteFunc(slices.Clone(rootFiles), func(f emit.File) bool { return strings.HasSuffix(f.Name, "_test.go") })
-	pkg, err := checkPackage(dir, version, l.hand, built, imp)
+	pkg, err := checkPackage(dir, version, l.hand, built, mod)
 	if err != nil {
 		return err
 	}
 	tested := pkg
 	if len(built) != len(rootFiles) || len(l.tests) > 0 {
-		if tested, err = checkPackage(dir, version, slices.Concat(l.hand, l.tests), rootFiles, imp); err != nil {
+		if tested, err = checkPackage(dir, version, slices.Concat(l.hand, l.tests), rootFiles, mod); err != nil {
 			return err
 		}
 	}
@@ -240,7 +247,10 @@ func compileFor(dir string, files []emit.File, stale []string, p platform, unsta
 // as tested, for root; each package of the module under dir that is imported,
 // type-checked from source against that same root, cached in done; and next's
 // for any other path (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
-// G27). It is used by one check at a time.
+// G27). With pkg nil it serves the root's own checks, which import the
+// module's other packages and never the root; an import of the root is then
+// refused (0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// phase 3, the deviation of 2026-11-10). It is used by one check at a time.
 type moduleImporter struct {
 	dir, root, version string
 	pkg                *types.Package
@@ -254,6 +264,9 @@ func (m *moduleImporter) Import(path string) (*types.Package, error) {
 
 func (m *moduleImporter) ImportFrom(path, dir string, mode types.ImportMode) (*types.Package, error) {
 	if path == m.root {
+		if m.pkg == nil {
+			return nil, fmt.Errorf("%s: imports the root it is checked for", path)
+		}
 		return m.pkg, nil
 	}
 	rel, ok := strings.CutPrefix(path, m.root+"/")

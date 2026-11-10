@@ -220,6 +220,8 @@ var ErrToolCallStreamFinished, ErrToolCallStreamField error
   `Status` are the stream's: a change to either is undone and `Update` returns `ErrToolCallStreamField`, naming the field; the
   other changes stand. After `Finish` it returns `ErrToolCallStreamFinished`.
 * **`Flush`** writes the pending state now and returns that write's error, nil at once when nothing is pending.
+  *Amended in phase 3:* with nothing pending it returns once a write already in flight is done, not at once; see "Amended
+  during the PLAN's phase 3".
 * **`Finish`** sets `status`, `completed` or `failed` (another is refused before anything is sent), and writes one update with
   it and the whole state, even when nothing else is pending. On success the stream is finished: its sender stops and later
   calls return `ErrToolCallStreamFinished`. On an error the status is restored and the stream is not finished, so `Finish` may
@@ -250,7 +252,8 @@ var ErrToolCallStreamFinished, ErrToolCallStreamField error
 * **One write at a time per stream.** A one-slot channel guards taking the snapshot and writing it. The sender, `Flush` and
   `Finish` all take it: the caller's goroutine writes for `Flush` and `Finish`, and a `select` on the caller's context bounds
   the wait for the slot, which a `sync.Mutex` cannot. Snapshots of one call are therefore written in the order taken, and none
-  regresses. A failed write sets `pending` again.
+  regresses. A failed write sets `pending` again. *Amended in phase 3:* only a write stopped by its own context does; see
+  "Amended during the PLAN's phase 3".
 * **The start.** The sender starts through the connection's wait group (F6), so `Wait` counts it and `TestGoStatementsCounted`
   stays as it is. A change may come from any goroutine, a tool worker the agent started included, which the group does not
   count. The connection gains one unexported start, `goIfLive`. It holds a mutex, returns false once the connection is marked
@@ -525,6 +528,28 @@ The same review changed three things the rules touch:
 * **`Finish` may be retried** after an error, in place of finishing the stream whatever the write's result.
 
 The owner accepted the record as both reviews left it, and approved its PLAN, on 2026-11-10.
+
+### Amended during the PLAN's phase 3, 2026-11-10
+
+Two rules of D1 and D2 were wrong as written, and the implementation found them:
+
+1. **`Flush` with nothing pending.** D1 said it returns nil at once. A `Flush` called while the sender's write is in flight
+   would then return before that write, and a caller that orders other updates after `Flush` (D3's second rule) could have
+   one overtake it. `Flush` takes the write slot first, so it returns once a write in flight is done, and then writes what is
+   pending, if anything.
+2. **A failed write.** D2 said a failed write sets `pending` again. A background write's context never ends, so its failures
+   are a refused state (a `*ValidationError`, a `*CapabilityError`) or the connection's end. Retried every interval, a refused
+   state would fail the same way each time. Only a write whose own context ended, a `Flush` or `Finish` stopped by the
+   caller's deadline, leaves the state pending for the sender; a resent snapshot is harmless. A refused state waits for a
+   change, as D1's `Err` already said: "later changes … may correct a refused value".
+
+Neither changes the API or an answer of the owner's.
+
+A third finding changes a fact D4 assumed: that moving the buffer to an internal package costs nothing beyond the move. The
+generator's check of the root before it writes (`cmd/generate/internal/output/check.go`) resolved only the standard library
+for the root, and `toolstream.go` is the root's first import of its own module. The owner chose to have the check resolve the
+module's packages from source, as it already did for the root's external tests, rather than keep two copies of the buffer;
+D4 stands.
 
 ### Observations for gobble-cli, not decided here
 
