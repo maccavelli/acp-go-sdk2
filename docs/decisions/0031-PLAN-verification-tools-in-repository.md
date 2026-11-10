@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-11-10
 associated-madr: "0031-MADR-verification-tools-in-repository.md"
 ---
@@ -1065,5 +1065,13 @@ tested (-race -shuffle=on, uncached), tidy, govulncheck."
 **Gates,** `tools/gates.py --all`, `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set: exit 0, "all gates passed", 18 of 18; `windows`
 and `linux` each printing "remote: <kind> host: acp-tools-<random> removed".
 
-Still to do for this step: `make push-guard` over the outgoing commits, the owner's push, CI on it, and then this PLAN and its row
-`complete`, and issue #15 closed.
+**The push and CI.** The owner committed the step as `bdbd841` and pushed `main`, `a336669` and `bdbd841`, before `make
+push-guard` was run here; the push passed through the global pre-push guard. After it, `git fetch` found `main` and `origin/main`
+at `bdbd841`, and `tools/idscan.py --range 8d8642f..origin/main`: exit 0, "2 commit(s), 21 pattern(s), 0 match(es)".
+`tools/watch_ci.py bdbd841`: exit 0, "2 run(s) for bdbd841"; run `42903152036` (main, push), "completed success; watch exit 0",
+its six jobs each "completed success"; run `42903151957`, the Docs workflow, "completed success". In the Linux job at the newest
+Go, `130134166676`, read by its id through the REST endpoint, `make check-tools`: "Ran 89 tests", the race plant's two tests among
+them, and `scripts`' "Ran 41 tests"; "check-ci-filters: 0 problem(s)".
+
+No release follows: no file of the module's Go code changed ("Rollout and Rollback"). Every acceptance criterion is met; this PLAN
+and its row in `docs/README.md` are `complete` again, and issue #15 is the owner's to close.
