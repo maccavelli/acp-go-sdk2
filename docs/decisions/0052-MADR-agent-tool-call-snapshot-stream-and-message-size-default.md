@@ -558,6 +558,11 @@ consequence gives is bounded as it says, and `BenchmarkToolCallStream` measured 
 about 1.07 ms and 201 allocations on darwin/arm64. `make api` reports the seven additions D1 names, nothing incompatible.
 The one consequence the record had not stated, the generator's check of the root, is the amendment above.
 
+### Released in v1.35.0, 2026-11-10
+
+D1 to D6 shipped in `v1.35.0`, the tag naming `644cfe4`, as question 6 decided. The PLAN's execution record holds the CI runs,
+the publication's ten checks and the consumer at the floor.
+
 ### Observations for gobble-cli, not decided here
 
 * Its final update re-embeds a client terminal already released by the tool's deferred `Release` (`tool/builtin/shell.go:217`

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 date: 2026-11-10
 associated-madr: "0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md"
 ---
@@ -718,3 +718,24 @@ amendment of phase 3.
 
 **Not done:** step 6, the tag and the release, waits for the owner's ask in that turn; `tools/consumer.py v1.35.0` and
 `tools/publication.py` run after it. This PLAN stays `in-progress` until then.
+
+**Commit.** The owner committed the phase as `644cfe4` and pushed it.
+
+### Phase 6, the release (2026-11-10)
+
+* **CI on `main`,** `python3 tools/watch_ci.py --branch main 644cfe4`: exit 0. Run 42870969917, CI, `success`, its six
+  `validate` jobs (ubuntu-24.04, macos-15 and windows-2025, each at 1.26.10 and 1.27.3); run 42870970116, Docs, `success`.
+* **The tag.** The owner pushed `v1.35.0`, annotated, naming `644cfe4` (`git ls-remote --tags origin`). Its CI,
+  `python3 tools/watch_ci.py --branch v1.35.0 644cfe4`: exit 0, run 42872665778, `success`, the six `validate` jobs.
+* **The release,** on the owner's ask in that turn. `python3 tools/release_body.py v1.35.0 644cfe4`: exit 0, "65 lines, 1
+  links", its identifier scan "0 match(es)"; the body read in full before publishing. `gh release create v1.35.0 --verify-tag
+  --title v1.35.0 --notes-file …`, the title as `v1.34.2`'s: published, not a draft or prerelease.
+* **`python3 tools/publication.py v1.35.0 644cfe4 <body>`:** exit 0, "10 of 10 checks hold": the release exists, its body is
+  the extracted text, it is marked latest, the tag is annotated and names `644cfe4`, which is on origin's `main`, CI passed on
+  `main`'s head and on the tag, the proxy serves the `.info` at that commit, `go list -m @latest` gives `v1.35.0`, and
+  `go mod download` of the tag passes with the checksum database on.
+* **`python3 tools/consumer.py v1.35.0`:** exit 0, "as required". A module at the `go 1.26.10` floor fetched `v1.35.0` from
+  the proxy; its program printed `WANT_RUN`; `go test -count=1 .` passed, `TestToolCallStream` included; it built for
+  windows/amd64; its `go.mod` kept the `go` line and gained no toolchain line.
+
+Every Verification item holds and the release is published: this PLAN is `complete`.
