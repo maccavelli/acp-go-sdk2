@@ -45,6 +45,11 @@ type ToolCallStream struct {
 	// the connection.
 	base     context.Context
 	interval time.Duration
+	// turn is the prompt turn the stream belongs to, nil for none: it
+	// flushes the stream before the turn is answered, until Finish
+	// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+	// D3).
+	turn *turnStreams
 	// slot is held while a snapshot is taken and written, so the writes of
 	// one stream are made in the order they were taken. A select on it can
 	// end with a context, which a sync.Mutex cannot.
@@ -124,9 +129,22 @@ func StartToolCallStream(ctx context.Context, conn *AgentSideConnection, session
 		slot:     make(chan struct{}, 1),
 		entity:   entity,
 		last:     time.Now(),
+		turn:     turnStreamsOf(ctx),
 	}
 	s.text.Limit = cfg.maxText
+	s.turn.add(s, s.flushForTurn)
 	return s, nil
+}
+
+// flushForTurn is the stream's flush when its prompt turn ends: an error the
+// write meets is kept for Err, as a background write's is, since the SDK, not
+// the agent, made it.
+func (s *ToolCallStream) flushForTurn(ctx context.Context) {
+	if err := s.Flush(ctx); err != nil && !errors.Is(err, ErrToolCallStreamFinished) {
+		s.mu.Lock()
+		s.keepErrLocked(err)
+		s.mu.Unlock()
+	}
 }
 
 // Write appends p to the call's live text. It never blocks on the wire, and
@@ -270,6 +288,7 @@ func (s *ToolCallStream) Finish(ctx context.Context, status ToolCallStatus) erro
 		return err
 	}
 	s.finished, s.pending = true, false
+	s.turn.remove(s)
 	return nil
 }
 

@@ -90,7 +90,8 @@ func TestDispatchFollowsTheModel(t *testing.T) {
 
 	want := map[string][]string{
 		"agent_gen.go": {
-			"reqCtx, cancel := context.WithCancelCause(ctx)",
+			"reqCtx, cancel := context.WithCancelCause(ctx)\n\t\treqCtx, streams := withTurnStreams(reqCtx)\n",
+			"resp, err := a.agent.Send(reqCtx, p)\n\t\tstreams.flush(context.WithoutCancel(ctx))\n\t\ta.mu.Lock()\n",
 			"stored := a.storeTurn(string(p.ConversationId), turn)",
 			"if !stored {\n\t\t\tcancel(nil)\n\t\t\treturn nil, NewInternalError(map[string]any{",
 			"\"a prompt turn is already running for this session\",",

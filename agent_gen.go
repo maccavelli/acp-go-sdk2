@@ -755,6 +755,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 		}
 		r := receiptOf(ctx)
 		reqCtx, cancel := context.WithCancelCause(ctx)
+		reqCtx, streams := withTurnStreams(reqCtx)
 		turn := &promptTurn{
 			cancel:  cancel,
 			receipt: r,
@@ -770,6 +771,7 @@ func (a *AgentSideConnection) handle(ctx context.Context, method string, params 
 			})
 		}
 		resp, err := a.agent.Prompt(reqCtx, p)
+		streams.flush(context.WithoutCancel(ctx))
 		a.mu.Lock()
 		a.removeTurn(string(p.SessionId), turn)
 		cause := context.Cause(reqCtx)

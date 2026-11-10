@@ -96,6 +96,89 @@ func receiptOf(ctx context.Context) uint64 {
 	return 0
 }
 
+// turnStreams holds the flushes of a prompt turn's unfinished tool-call
+// streams, in the order they started. The generated dispatch puts one in the
+// context each turn's handler runs on, and runs its flushes when the handler
+// returns, before the turn is answered: so the answer never overtakes a
+// call's last state, and one turn never waits for another's streams
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// D3). It holds no ACP type, so that generated code built with the runtime
+// files alone can name it. Its methods are nil-safe: a context made outside a
+// turn has none.
+type turnStreams struct {
+	mu      sync.Mutex
+	entries []turnStream
+}
+
+// turnStream is one stream of a turn: its key, and its flush.
+type turnStream struct {
+	key   any
+	flush func(context.Context)
+}
+
+// turnStreamsKey is the context key of a turn's turnStreams.
+type turnStreamsKey struct{}
+
+// withTurnStreams returns a context that carries a new, empty turnStreams,
+// and the turnStreams.
+func withTurnStreams(ctx context.Context) (context.Context, *turnStreams) {
+	ts := &turnStreams{}
+	return context.WithValue(ctx, turnStreamsKey{}, ts), ts
+}
+
+// turnStreamsOf returns the turnStreams ctx carries, or nil.
+func turnStreamsOf(ctx context.Context) *turnStreams {
+	if ts, ok := ctx.Value(turnStreamsKey{}).(*turnStreams); ok {
+		return ts
+	}
+	return nil
+}
+
+// add keeps flush, under key, to run when the turn ends.
+func (ts *turnStreams) add(key any, flush func(context.Context)) {
+	if ts == nil {
+		return
+	}
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.entries = append(ts.entries, turnStream{key: key, flush: flush})
+}
+
+// remove forgets key's flush: its stream has finished.
+func (ts *turnStreams) remove(key any) {
+	if ts == nil {
+		return
+	}
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.entries = slices.DeleteFunc(ts.entries, func(e turnStream) bool { return e.key == key })
+}
+
+// size returns how many streams the turn holds unfinished.
+func (ts *turnStreams) size() int {
+	if ts == nil {
+		return 0
+	}
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return len(ts.entries)
+}
+
+// flush runs every flush the turn holds, in the order added, on ctx, and
+// returns when each has. It holds no lock while one runs, so a stream that
+// finishes meanwhile may remove itself.
+func (ts *turnStreams) flush(ctx context.Context) {
+	if ts == nil {
+		return
+	}
+	ts.mu.Lock()
+	entries := slices.Clone(ts.entries)
+	ts.mu.Unlock()
+	for _, e := range entries {
+		e.flush(ctx)
+	}
+}
+
 // messageKey is the context key of the kind of message a handler's context
 // was made for: a request, or a notification with its sequence number in the
 // notification queue (0019-PLAN-behaviour-fixes.md, B1).

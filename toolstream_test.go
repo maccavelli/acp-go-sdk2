@@ -772,6 +772,202 @@ func TestToolCallStreamMiddleware(t *testing.T) {
 	}
 }
 
+// holdCall is a sending middleware that holds every tool_call_update whose
+// params name the call id until hold is closed, signalling entered as one
+// waits.
+func holdCall(id string, hold <-chan struct{}, entered chan<- struct{}) Middleware {
+	needle := []byte(`"toolCallId":"` + id + `"`)
+	return func(next MethodHandler) MethodHandler {
+		return func(ctx context.Context, method string, params json.RawMessage) (any, *RequestError) {
+			if method == ClientMethodSessionUpdate && bytes.Contains(params, []byte(`"sessionUpdate":"tool_call_update"`)) &&
+				bytes.Contains(params, needle) {
+				select {
+				case entered <- struct{}{}:
+				default:
+				}
+				<-hold
+			}
+			return next(ctx, method, params)
+		}
+	}
+}
+
+// TestToolCallStreamFlushedBeforeAnswer requires a stream that Prompt left
+// unfinished, whose own sender waits an hour, to be written before the turn
+// is answered, its status as it was
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md, D3).
+func TestToolCallStreamFlushedBeforeAnswer(t *testing.T) {
+	t.Parallel()
+	rec := &streamClient{}
+	var asc *AgentSideConnection
+	a := agentFuncs{PromptFunc: func(ctx context.Context, p PromptRequest) (PromptResponse, error) {
+		s, err := StartToolCallStream(ctx, asc, p.SessionId, StartToolCall("t1", "Run", WithStartStatus(ToolCallStatusInProgress)),
+			WithToolCallStreamInterval(time.Hour))
+		if err != nil {
+			return PromptResponse{}, err
+		}
+		_, _ = s.WriteString("late text")
+		return PromptResponse{StopReason: StopReasonEndTurn}, nil
+	}}
+	asc, csc := streamPair(t, a, rec)
+	within(t, prompt(t, csc, "s1"), "the answer")
+	if e, _ := rec.entity("t1"); textOf(e) != "late text" || e.Status != ToolCallStatusInProgress {
+		t.Errorf("when the answer arrived the client had text %q and status %q, want %q and in_progress", textOf(e), e.Status,
+			"late text")
+	}
+}
+
+// TestToolCallStreamTurnsSeparate requires, under PromptOverlapConcurrent,
+// one turn's answer not to wait for another turn's stream, whose write is
+// held (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// D3).
+func TestToolCallStreamTurnsSeparate(t *testing.T) {
+	t.Parallel()
+	hold, entered := make(chan struct{}), make(chan struct{}, 1)
+	t.Cleanup(func() {
+		select {
+		case <-hold:
+		default:
+			close(hold)
+		}
+	})
+	rec := &streamClient{}
+	var asc *AgentSideConnection
+	a := agentFuncs{PromptFunc: func(ctx context.Context, p PromptRequest) (PromptResponse, error) {
+		id := ToolCallId("t" + p.Prompt[0].Text.Text)
+		s, err := StartToolCallStream(ctx, asc, p.SessionId, StartToolCall(id, "Run"), WithToolCallStreamInterval(time.Hour))
+		if err != nil {
+			return PromptResponse{}, err
+		}
+		_, _ = s.WriteString("text")
+		return PromptResponse{StopReason: StopReasonEndTurn}, nil
+	}}
+	asc, csc := streamPair(t, a, rec, WithPromptOverlapPolicy(PromptOverlapConcurrent), WithSendingMiddleware(holdCall("tB", hold, entered)))
+	answer := func(turn string) <-chan error {
+		done := make(chan error, 1)
+		go func() {
+			_, err := csc.Prompt(t.Context(), PromptRequest{SessionId: "s1", Prompt: []ContentBlock{TextBlock(turn)}})
+			done <- err
+		}()
+		return done
+	}
+	b := answer("B")
+	within(t, entered, "turn B's flush held")
+	if err := within(t, answer("A"), "turn A's answer while turn B's flush is held"); err != nil {
+		t.Fatal(err)
+	}
+	close(hold)
+	if err := within(t, b, "turn B's answer"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestToolCallStreamCancelDuringFlush requires a session/cancel received
+// while the turn's flush waits to reach the agent: the flush holds no lock of
+// the side connection
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md, D3).
+func TestToolCallStreamCancelDuringFlush(t *testing.T) {
+	t.Parallel()
+	hold, entered := make(chan struct{}), make(chan struct{}, 1)
+	t.Cleanup(func() {
+		select {
+		case <-hold:
+		default:
+			close(hold)
+		}
+	})
+	cancelled := make(chan struct{}, 1)
+	rec := &streamClient{}
+	var asc *AgentSideConnection
+	a := agentFuncs{
+		PromptFunc: func(ctx context.Context, p PromptRequest) (PromptResponse, error) {
+			s, err := StartToolCallStream(ctx, asc, p.SessionId, StartToolCall("c1", "Run"), WithToolCallStreamInterval(time.Hour))
+			if err != nil {
+				return PromptResponse{}, err
+			}
+			_, _ = s.WriteString("text")
+			return PromptResponse{StopReason: StopReasonEndTurn}, nil
+		},
+		CancelFunc: func(context.Context, CancelNotification) error {
+			cancelled <- struct{}{}
+			return nil
+		},
+	}
+	asc, csc := streamPair(t, a, rec, WithSendingMiddleware(holdCall("c1", hold, entered)))
+	answered := prompt(t, csc, "s1")
+	within(t, entered, "the turn's flush held")
+	if err := csc.Cancel(t.Context(), CancelNotification{SessionId: "s1"}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-cancelled:
+	case <-time.After(5 * time.Second):
+		t.Error("session/cancel did not reach the agent while the turn's flush was held")
+	}
+	close(hold)
+	within(t, answered, "the answer")
+}
+
+// TestToolCallStreamNoTurn requires a stream started on a context of no turn
+// to be flushed by no answer, and to work
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md, D3).
+func TestToolCallStreamNoTurn(t *testing.T) {
+	t.Parallel()
+	rec := &streamClient{}
+	var asc *AgentSideConnection
+	streams := make(chan *ToolCallStream, 1)
+	a := agentFuncs{PromptFunc: func(_ context.Context, p PromptRequest) (PromptResponse, error) {
+		s, err := StartToolCallStream(context.Background(), asc, p.SessionId, StartToolCall("n1", "Run"),
+			WithToolCallStreamInterval(time.Hour))
+		if err != nil {
+			return PromptResponse{}, err
+		}
+		_, _ = s.WriteString("text")
+		streams <- s
+		return PromptResponse{StopReason: StopReasonEndTurn}, nil
+	}}
+	asc, csc := streamPair(t, a, rec)
+	within(t, prompt(t, csc, "s1"), "the answer")
+	s := within(t, streams, "the stream")
+	if e, _ := rec.entity("n1"); textOf(e) != "" {
+		t.Errorf("a stream of no turn was flushed by the answer: the client has %q", textOf(e))
+	}
+	if err := s.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, "the flushed text", func() bool {
+		e, _ := rec.entity("n1")
+		return textOf(e) == "text"
+	})
+}
+
+// TestToolCallStreamFinishedLeavesTurn requires Finish to remove the stream
+// from its turn, which then holds nothing for the answer to flush
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md, D3).
+func TestToolCallStreamFinishedLeavesTurn(t *testing.T) {
+	t.Parallel()
+	rec := &streamClient{}
+	var asc *AgentSideConnection
+	held := make(chan [2]int, 1)
+	a := agentFuncs{PromptFunc: func(ctx context.Context, p PromptRequest) (PromptResponse, error) {
+		s, err := StartToolCallStream(ctx, asc, p.SessionId, StartToolCall("f1", "Run"))
+		if err != nil {
+			return PromptResponse{}, err
+		}
+		before := turnStreamsOf(ctx).size()
+		if err := s.Finish(ctx, ToolCallStatusCompleted); err != nil {
+			return PromptResponse{}, err
+		}
+		held <- [2]int{before, turnStreamsOf(ctx).size()}
+		return PromptResponse{StopReason: StopReasonEndTurn}, nil
+	}}
+	asc, csc := streamPair(t, a, rec)
+	within(t, prompt(t, csc, "s1"), "the answer")
+	if got := within(t, held, "the turn's counts"); got != [2]int{1, 0} {
+		t.Errorf("the turn held %d streams after the start and %d after Finish, want 1 and 0", got[0], got[1])
+	}
+}
+
 // BenchmarkToolCallStream writes 1,000 chunks of 100 bytes to one stream,
 // then to 16 at once, and finishes them.
 func BenchmarkToolCallStream(b *testing.B) {

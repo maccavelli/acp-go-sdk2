@@ -554,3 +554,60 @@ vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck." `agentproc`
 `make markdownlint` and `make disclosure-check`: exit 0 each.
 
 **Not done in this phase:** the turn's stream set and the flush before the answer, phase 4's; `make api`'s listing, phase 6's.
+
+**Commit.** The owner committed the phase as `38e9772`.
+
+### Phase 4, the turn's streams before the answer (2026-11-10)
+
+**Base.** `38e9772`; `git status --short` was empty before the first edit.
+
+**Done.**
+
+* `connection.go`: `turnStreams`, `turnStream`, `turnStreamsKey`, `withTurnStreams`, `turnStreamsOf`, and the nil-safe `add`,
+  `remove`, `size` and `flush`, after `receiptOf`, with no ACP type. `flush` copies the entries under its lock and runs them
+  with none held.
+* `toolstream.go`: the stream's `turn` field; `StartToolCallStream` adds `flushForTurn` to `turnStreamsOf(ctx)`; `Finish`
+  removes the stream on success.
+* `cmd/generate/internal/emit/dispatch.go`: `promptCase` emits `reqCtx, streams := withTurnStreams(reqCtx)` after the
+  `WithCancelCause`, and `streams.flush(context.WithoutCancel(ctx))` directly after the handler, before `a.mu.Lock()`; its
+  comment cites D3. `dispatch_test.go`: `TestDispatchFollowsTheModel`'s pins gain both, each with its neighbour.
+* `cd cmd/generate && go run .`: exit 0. `git diff --stat` showed `agent_gen.go` as the one generated file, and its diff, read
+  in full, is the two statements at `:758` and `:774`.
+* `toolstream_test.go`: `holdCall`, a middleware that holds one call's updates, and the five tests of step 6.
+
+**Found during the phase.** Step 1 had the turn's `flush` log a failure at Debug, which needs the connection's logger in a
+runtime type. The stream's own `flushForTurn` keeps the error for `Err` instead, as a background write's is: the SDK, not the
+agent, made the write, and `Err` is where the agent reads such errors (D1). `turnStreams` therefore runs flushes that return
+nothing.
+
+**Tests.**
+
+* `go test -race -count=1 -v -run 'ToolCallStream(FlushedBeforeAnswer|TurnsSeparate|CancelDuringFlush|NoTurn|FinishedLeavesTurn)' .`:
+  exit 0, five PASS.
+* `cd cmd/generate && go test -count=1 -run 'TestEngineCases|TestEngineBehaviour' .`, whole: exit 0, 37.5 s. The engine cases
+  that render `promptCase` compile with `withTurnStreams` from the runtime files.
+* `go test -race -count=20 -run 'ToolCallStream|WrapUp|Prompt.*Cancel|Cancel.*Prompt|PromptOverlap' .`: exit 0, 24.2 s.
+
+**Plants.**
+
+| Plant | How | Failure |
+| :--- | :--- | :--- |
+| one stream set for every turn | `tools/plants.py` | `toolstream_test.go:856: turn A's answer while turn B's flush is held did not happen` |
+| `Finish` not leaving its turn | `tools/plants.py` | `toolstream_test.go:967: the turn held 1 streams after the start and 1 after Finish, want 1 and 0` |
+| the flush statement removed from the emitter | scratch script in the copy's `cmd/generate` | `dispatch_test.go:166: agent_gen.go lacks "resp, err := a.agent.Send(reqCtx, p)\n\t\tstreams.flush(…)\n\t\ta.mu.Lock()\n"` |
+| the generated flush replaced by `_ = streams`, regenerated in the copy | scratch script: edit, `go run .`, root test | `toolstream_test.go:815: when the answer arrived the client had text "" and status "in_progress", want "late text" and in_progress` |
+| the flush emitted after `a.mu.Lock()`, regenerated in the copy | the same | `toolstream_test.go:905: session/cancel did not reach the agent while the turn's flush was held`, by its 5 s bound |
+
+The step's "the generated flush removed" leaves `streams` unused, which the generator's check refuses before any test runs; the
+plant keeps the variable with `_ = streams`, which removes the flush and compiles. The regenerating plants print the copy's
+`agent_gen.go` diff, which was the one statement each.
+
+**Pre-add.** The first `make pre-add-check` exited 2 at lint, before its tests: `errcheck` on
+`ts, _ := ctx.Value(turnStreamsKey{}).(*turnStreams)` (`connection.go:131`), and `unconvert` on a `string(…)` in
+`TestToolCallStreamTurnsSeparate`. `turnStreamsOf` checks the assertion's `ok`, and the conversion is gone. The plants of
+`tools/plants.py` were run again after: "2/2 as required". `make pre-add-check FILES="connection.go toolstream.go
+toolstream_test.go agent_gen.go cmd/generate/internal/emit/dispatch.go cmd/generate/internal/emit/dispatch_test.go"` again:
+`make` exit 0, "6 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy,
+govulncheck." `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0 each.
+
+**Not done in this phase:** the README section and the docs, phase 5's.

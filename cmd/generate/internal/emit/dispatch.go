@@ -37,6 +37,14 @@ func handleFunc(f *goFile, recv, recvType string, cases []ast.Stmt) *ast.FuncDec
 // finds no turn and changes nothing
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, P1;
 // 0021-PLAN-resolve-issues-4-and-5-before-v1-14-0.md, step 3).
+//
+// The handler's context carries the turn's tool-call streams, and when the
+// handler returns their unfinished state is written before anything else, on
+// the request's context without its cancellation and with no lock held, so
+// the answer never overtakes a call's last state and a session/cancel is
+// handled meanwhile
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// D3).
 func promptCase(f *goFile, recv ast.Expr, mi *model.Method, gate ast.Expr) []ast.Stmt {
 	field := mi.SessionField
 	refused := call(id("NewInternalError"), composite(rawMap(id("any")),
@@ -45,6 +53,7 @@ func promptCase(f *goFile, recv ast.Expr, mi *model.Method, gate ast.Expr) []ast
 	return []ast.Stmt{
 		define(exprs(id("r")), call(id("receiptOf"), id("ctx"))),
 		define(exprs(id("reqCtx"), id("cancel")), call(f.qual(pkgContext, "WithCancelCause"), id("ctx"))),
+		define(exprs(id("reqCtx"), id("streams")), call(id("withTurnStreams"), id("reqCtx"))),
 		define(exprs(id("turn")), addr(composite(id("promptTurn"), kv(id("cancel"), id("cancel")), kv(id("receipt"), id("r"))))),
 		lockCall("Lock"),
 		define(exprs(id("stored")), call(dot("a", "storeTurn"), sessionKey(field), id("turn"))),
@@ -53,6 +62,7 @@ func promptCase(f *goFile, recv ast.Expr, mi *model.Method, gate ast.Expr) []ast
 			exprStmt(call(id("cancel"), nilExpr())),
 			ret(nilExpr(), refused)),
 		define(exprs(id("resp"), id("err")), call(sel(recv, mi.GoName), id("reqCtx"), id("p"))),
+		exprStmt(call(dot("streams", "flush"), call(f.qual(pkgContext, "WithoutCancel"), id("ctx")))),
 		lockCall("Lock"),
 		exprStmt(call(dot("a", "removeTurn"), sessionKey(field), id("turn"))),
 		define(exprs(id("cause")), call(f.qual(pkgContext, "Cause"), id("reqCtx"))),
