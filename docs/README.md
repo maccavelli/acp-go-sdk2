@@ -160,6 +160,8 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0050 | PLAN | [Implement 0050: the ids authenticate accepts, their refusal, the unknown entry's id, and the prompt result's doc](decisions/0050-PLAN-auth-method-ids-and-the-prompt-result-for-issue-14.md); four phases, a minor `v1.34.0`; approved 2026-11-05; phase 1, the generator, `ba14c67`; phase 2, the helpers, `ea5de92`; phase 3, the prompt result, `d339cf1`; phase 4, the gates `3013065`, CI, `v1.34.0` and the issue reply | complete |
 | 0050 | REPORT | [Release notes for v1.34.0, against v1.33.1](reports/0050-REPORT-release-notes-v1-34-0.md); the ids authenticate accepts, their refusal, the unknown entry's id, and the prompt result's doc | observed |
 | 0051 | REPORT | [ACP schema 1.25.0: current SDK featureset, coverage, and three extensions](reports/0051-REPORT-acp-1-25-0-featureset-coverage-and-three-extensions.md); observed 2026-11-10 on `1e945dd`; decides nothing | observed |
+| 0052 | MADR | [Stream an agent's tool call as coalesced full snapshots, and raise the default message size to 32 MiB](decisions/0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md); 0051 item 1; F1 to F19; O1 to O4, M1 to M4; D1 to D6; questions 1 to 6 answered as recommended 2026-11-10; reviewed twice and accepted 2026-11-10 | accepted |
+| 0052 | PLAN | [Implement 0052: an agent's tool-call snapshot stream, and a 32 MiB default message size](decisions/0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md); six phases, a minor `v1.35.0`; approved 2026-11-10 | in-progress |
 
 ## I want to…
 
