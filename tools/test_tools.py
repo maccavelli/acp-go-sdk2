@@ -3,6 +3,8 @@
 Run by `make check-tools`. Every pattern and name here is made up."""
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import re
@@ -295,6 +297,152 @@ class RemoteTest(unittest.TestCase):
         a, b = remote.remote_dir(), remote.remote_dir()
         self.assertNotEqual(a, b)
         self.assertTrue(a.startswith("acp-tools-") and "/" not in a)
+
+    def test_go_test_command_quoted(self) -> None:
+        import remote
+        cmd = remote.go_test_command("acp-tools-ab12", "cmd/generate", ["-race", "-run", "TestA|TestB", "-run=a b", "./internal/output/"])
+        self.assertEqual(cmd, "cd acp-tools-ab12/cmd/generate && go version && go env GOOS GOARCH CGO_ENABLED && "
+                              "go test -race -run 'TestA|TestB' '-run=a b' ./internal/output/ 2>&1")
+        self.assertTrue(remote.go_test_command("d", ".", ["."]).startswith("cd d && go version"))
+        self.assertTrue(remote.go_test_command("d", "a b", ["."]).startswith("cd 'd/a b' && "))
+
+    def test_wants_race(self) -> None:
+        import remote
+        for on in ("-race", "--race", "-race=true", "-race=1"):
+            self.assertTrue(remote.wants_race(["-count=1", on, "."]), on)
+        for off in ("-race=false", "-race=0", "-run=race", "race", "-racey"):
+            self.assertFalse(remote.wants_race(["-count=1", off, "."]), off)
+
+
+class RemoteRunTest(Temp):
+    """remote.py's subcommands, with _common.run replaced by a fake that
+    answers each command by a rule and keeps the commands it was given."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        import remote
+        self.remote = remote
+        self.tree = self.dir / "tree"
+        (self.tree / "cmd" / "generate").mkdir(parents=True)
+        (self.tree / "go.mod").write_text("module example.invalid/m\n")
+        (self.tree / "cmd" / "generate" / "go.mod").write_text("module example.invalid/g\n")
+        (self.tree / "m.go").write_text("package m\n")
+        (self.tree / "nomod").mkdir()
+        self.out = self.dir / "out"
+        self.cmds: list[str] = []
+        self.rules: list[tuple[str, object]] = []
+        hosts = unittest.mock.patch.dict(os.environ, {"ACP_LINUX_HOST": FAKE, "ACP_WINDOWS_HOST": FAKE})
+        hosts.start()
+        self.addCleanup(hosts.stop)
+        run = unittest.mock.patch.object(_common, "run", self.fake)
+        run.start()
+        self.addCleanup(run.stop)
+        repo = unittest.mock.patch.object(_common, "repo", lambda *a: self.tree)
+        repo.start()
+        self.addCleanup(repo.stop)
+
+    def fake(self, log, cmd, cwd=None, env=None, stdin=None, timeout=3600):
+        text = " ".join(cmd)
+        self.cmds.append(text)
+        for needle, answer in self.rules:
+            if needle in text:
+                if isinstance(answer, BaseException):
+                    raise answer
+                if callable(answer):
+                    return answer(cmd)
+                return answer
+        return 0, ""
+
+    def call(self, fn, *args) -> tuple[int, str]:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            status = fn(*args)
+        return status, buf.getvalue()
+
+    def run_test(self, *args: str, module: str = ".", timeout: int = 3600) -> tuple[int, str]:
+        return self.call(self.remote.test, "linux", module, self.tree, timeout, list(args), self.out)
+
+    def sent(self, needle: str) -> list[int]:
+        return [i for i, c in enumerate(self.cmds) if needle in c]
+
+    def test_module_dir(self) -> None:
+        self.assertEqual(self.remote.module_dir(self.tree, "."), ".")
+        self.assertEqual(self.remote.module_dir(self.tree, "cmd/generate/"), "cmd/generate")
+        for bad in ("/abs", "../x", "cmd/../..", "nomod", "absent"):
+            with self.assertRaises(self.remote.Refused, msg=bad):
+                self.remote.module_dir(self.tree, bad)
+        status, out = self.run_test("-count=1", ".", module="../x")
+        self.assertEqual(status, 2, out)
+        self.assertIn("leaves the tree", out)
+        self.assertEqual(self.cmds, [], "a refused module must reach no host")
+
+    def test_tree_files_without_git(self) -> None:
+        d = self.dir / "copy"
+        (d / "sub").mkdir(parents=True)
+        for name in ("a.go", "sub/b.go", "._a.go", ".DS_Store", "sub/._b.go"):
+            (d / name).write_text("x")
+        self.assertEqual(self.remote.tree_files(d), ["a.go", "sub/b.go"])
+
+    def test_passes_and_removes(self) -> None:
+        status, out = self.run_test("-count=1", ".")
+        self.assertEqual(status, 0, out)
+        self.assertIn("removed", out)
+        self.assertEqual(len(self.sent("&& go test ")), 1, self.cmds)
+        self.assertIn("rm -rf -- ", self.cmds[-1])
+        self.assertIn("; test ! -e ", self.cmds[-1])
+
+    def test_failing_tests_still_removed(self) -> None:
+        self.rules.append(("&& go test ", (1, "--- FAIL: TestX\nFAIL\n")))
+        status, out = self.run_test("-count=1", ".")
+        self.assertEqual(status, 1, out)
+        self.assertIn("--- FAIL: TestX", out)
+        runs, removals = self.sent("&& go test "), self.sent("test ! -e")
+        self.assertEqual(len(removals), 1, self.cmds)
+        self.assertGreater(removals[0], runs[0], "the removal comes after the failing run")
+
+    def test_left_behind(self) -> None:
+        self.rules.append(("test ! -e", (1, "")))
+        status, out = self.run_test("-count=1", ".")
+        self.assertEqual(status, 3, out)
+        self.assertRegex(out, r"acp-tools-[0-9a-f]+ left behind in the remote home")
+
+    def test_timeout(self) -> None:
+        self.rules.append(("&& go test ", subprocess.TimeoutExpired("ssh", 5)))
+        status, out = self.run_test("-count=1", "./...", timeout=5)
+        self.assertEqual(status, 124, out)
+        self.assertIn("did not finish within 5 s", out)
+        self.assertEqual(len(self.sent("test ! -e")), 1, "the removal still runs after a timeout")
+
+    def test_race_without_cgo_refused(self) -> None:
+        self.rules.append(("go env CGO_ENABLED", (0, "Pseudo-terminal will not be allocated\n0\n")))
+        status, out = self.run_test("-race", "-count=1", ".")
+        self.assertEqual(status, 2, out)
+        self.assertIn("-race needs cgo", out)
+        self.assertIn("'0'", out)
+        self.assertEqual(self.sent("mkdir"), [], "nothing is copied once -race is refused")
+
+    def test_race_with_cgo(self) -> None:
+        self.rules.append(("go env CGO_ENABLED", (0, "1\r\n")))
+        status, out = self.run_test("-race", "-count=1", ".")
+        self.assertEqual(status, 0, out)
+        self.assertEqual(len(self.sent("&& go test -race ")), 1, self.cmds)
+
+    def test_tree_left_behind(self) -> None:
+        self.rules.append(("test ! -e", (1, "")))
+        with unittest.mock.patch.object(self.remote, "tree_files", lambda root: ["m.go"]):
+            status, out = self.call(self.remote.tree, "linux", self.out)
+        self.assertEqual(status, 3, out)
+        self.assertIn("left behind", out)
+
+    def test_pkg_left_behind(self) -> None:
+        def build(cmd):
+            Path(cmd[cmd.index("-o") + 1]).write_bytes(b"binary")
+            return 0, ""
+        self.rules += [("go test -c", build), ("test ! -e", (1, ""))]
+        self.out.mkdir(parents=True, exist_ok=True)
+        status, out = self.call(self.remote.pkg, "linux", "amd64", ".", ["-test.run=X"], self.out, self.tree)
+        self.assertEqual(status, 3, out)
+        self.assertIn("left behind", out)
 
 
 class LeftoversTest(unittest.TestCase):

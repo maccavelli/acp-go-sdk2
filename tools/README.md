@@ -31,6 +31,7 @@ cache directory, outside the tree.
 | `platforms.py` | `golangci-lint` for Linux and FreeBSD, and `go vet` per platform, over `./agentproc/...`, `./clienthost/...` and `./internal/...` |
 | `remote.py tree --host H` | the tree's tests on a test host |
 | `remote.py pkg --host H PKG [FLAG...]` | one package's test binary, built here, run there with the flags |
+| `remote.py test --host H [--module DIR] [--tree DIR] [--timeout S] -- ARG...` | the tree copied to a test host and `go test ARG...` run there in the module `DIR` names, each argument quoted, so `-race`, `-run`, `-count` and packages are passed as given; `-race` is refused before the copy when the host's `go env CGO_ENABLED` is not `1`. Each `remote.py` run removes its remote directory, after a pass, a failure or a timeout (exit 124), and checks it is gone: one left behind is named, exit 3 |
 | `leftovers.py` | test binaries left running on the Windows host |
 | `idscan.py [--all \| --range A..B \| --paths F...]` | identifiers, by the place they are found; `--range` scans the lines each commit adds, by commit, path and line |
 | `plants.py SPEC.json` | planted breaks, each in its own copy of the tree |

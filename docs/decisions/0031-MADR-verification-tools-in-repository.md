@@ -89,9 +89,11 @@ new dependency, and puts the tools where a record can name them, with the identi
   * `floor.py`: the floor gate, `GOTOOLCHAIN` taken from the `go` line of `go.mod`, not written in the tool;
   * `platforms.py`: the per-platform checks;
   * `remote.py`: `tree` and `pkg`, on the host `--host linux` or `--host windows` names (question 1), always in a fresh directory removed
-    after;
+    after; (Amended 2026-11-10, proposed: and `test`, `go test` with its arguments on a copy of the tree, the removal checked; see
+    "Amendment 2026-11-10: `go test` on a host with its own flags, and plants under `-race` and in another module".)
   * `leftovers.py`: the Windows host's process list, test binaries matched by their exact image name;
   * `plants.py`: planted breaks from a JSON file the step writes, outside the repository or under `.cache/`, local or on a host;
+    (Amended 2026-11-10, proposed: a plant may ask for `-race` and name the module it runs in; see the same amendment.)
   * `release_body.py`, `publication.py`, `consumer.py`, `watch_ci.py`: the release tools of T3, the version, commit and run given as
     arguments;
   * `find.py` (`lines`, `files`) and `procs.py`: the search and process helpers.
@@ -369,6 +371,119 @@ attempt is never implicit (H2, H3), and each command can be checked against what
 * Good, because the records' figures for the three crashes, their seeds and traces and the second tally, can be read again.
 * Neutral, because a crash's log is megabytes, 3.3 MB for the third, kept under `.cache/tools/`.
 * Bad, because one more tool and its tests are code to maintain.
+
+## Amendment 2026-11-10: `go test` on a host with its own flags, and plants under `-race` and in another module
+
+Raised by GitHub issue #15, "tools/remote.py: run go test -race (and -run, -count) on a test host", which the owner had filed
+after [0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md](0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md)'s
+phase 1, and scoped by the owner on 2026-11-10 (see "Decided with the owner, 2026-11-10, the host-test amendment"). The decisions
+above are unchanged; this adds a subcommand to `remote.py` and two keys to `plants.py`'s plants. Its outcome was proposed, and
+accepted by the owner on 2026-11-10.
+Every figure below was taken that day, the repository only read, at `8d8642f`.
+
+### What was found, for this amendment
+
+* **R1. No tool runs `go test -race` on a host.** `remote.py pkg` cross-compiles the test binary here with `CGO_ENABLED=0`
+  (`tools/remote.py:87`–`:88`), and the race detector needs cgo, so `-race` cannot be one of its flags. `remote.py tree` runs
+  `go test -count=1 -shuffle=on ./...` in both modules (`:71`–`:72`), its command fixed: no `-race`, no `-run`, no `-count`, no
+  package. 0052's phase 1, step 5, asked for `go test -race -count=3 -run 'MaxMessageSize' . ./remote` on the Linux host; a
+  scratch script did it in `remote.py`'s way, the tree's files copied to a fresh `acp-tools-<random>` and removed after, and
+  passed, the root package in 41.2 s and `remote` in 118.0 s, 151 s in all (that PLAN's "Deviation, 2026-11-10, the tool").
+* **R2. No plant runs under `-race`.** A local plant runs `go test -count=1 -timeout=<t> -run <run> <pkg>` (`tools/plants.py:89`),
+  and a host plant goes through `remote.py pkg` (`:85`–`:86`), R1's cross-compiled binary. 0052's phase 3 planted a data race,
+  `TestToolCallStreamConcurrent`'s, the change path without the stream's lock, which only `-race` shows; a scratch script ran it,
+  "the same gap as issue #15's, in another tool" (that PLAN's "Deviation, 2026-11-10, the race plant"). It failed as required:
+  four `WARNING: DATA RACE` and "race detected during execution of test".
+* **R3. No plant runs in another module.** A local plant's `go test` runs in the copy's root (`tools/plants.py:89`–`:90`, `cwd=copy`),
+  so a package of the generator's module, `cmd/generate`, cannot be named: from the root, `go list ./cmd/generate/internal/output`
+  exits 1, "main module (github.com/maccavelli/acp-go-sdk2) does not contain package
+  github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/output". 0052's phase 3 planted the generator check back on its old importer by a scratch script in the copy's `cmd/generate`,
+  "since `tools/plants.py` runs from the root module"; it failed as required at `check_test.go:354`.
+* **R4. The remote directory's removal is not checked, and a timeout is a traceback.** `tree` and `pkg` run `rm -rf` on the
+  remote directory in a `finally` (`tools/remote.py:76`, `:109`) and ignore its status, so a directory a Windows process still holds
+  is left behind unreported. `_common.run` passes `timeout` to `subprocess.run` (`tools/_common.py:70`), which raises
+  `TimeoutExpired` past it, and `remote.py` does not catch it: the run ends with a traceback, after the `finally`'s removal.
+* **R5. Both hosts can run `-race`.** A read-only probe: each host reports go1.27.3 for its own system on amd64, `go env CGO_ENABLED`
+  `1`, `CC` `gcc`, and a `gcc` on its path, on Windows a MinGW-w64 build in the account's home. A throwaway module of two
+  tests, copied to a fresh `acp-tools-<random>` on each host and removed after, its removal checked: `go test -race -count=1 -run
+  '^TestClean$'` passed (Windows 2.2 s, Linux 1.7 s, wall time), and `-run '^TestRacy$'`, an unsynchronised counter, exited 1 with
+  `WARNING: DATA RACE` and "race detected during execution of test" on both. So the issue's Windows question is answered: no
+  refusal is needed today; a host without cgo is still possible, and should be refused with a message, not left to `go test`.
+* **R6. Two other scratch scripts of 0052 are not in this scope.** Its phase 4's regenerating plants edited the emitter, ran `go
+  run .` in the copy's `cmd/generate`, then a root test (that PLAN's phase 4 plants, the "regenerated in the copy" rows); and its
+  phase 6 planted a break in a copy of `tools/` for `test_tools.py`. Neither is a `-race` gap or a module gap; the owner's scope
+  is R1 to R4.
+
+### Considered Options, for this amendment
+
+* **For R1.** (a) A subcommand, `remote.py test`, that copies the tree as `tree` does and runs `go test` with the arguments given,
+  each quoted for the remote shell. (b) Flags on `tree`: `--race`, `--run`, `--count`, packages. (c) `pkg --race`: copy the tree,
+  build the test binary with `-race` on the host, run it with `-test.*` flags.
+* **For R2 and R3.** (a) Two optional keys on a plant, `race` and `module`; a host plant that sets either runs through `remote.py
+  test`. (b) `race` alone (R2), the module left to scratch scripts. (c) Neither, as the issue's own scope.
+* **For R4.** (a) One helper for all three subcommands: remove the directory, check it is gone, and turn a timeout into a verdict.
+  (b) The same, for `test` alone. (c) Leave it.
+
+### Decision Outcome, for this amendment
+
+Chosen: R1 (a), R2 and R3 (a), R4 (a), each the owner's answer of 2026-11-10; the design below was proposed, and the owner
+accepted it and approved the PLAN's steps 13 and 14 the same day. Together they turn the three scratch scripts of R1 to R3 into commands of the tools a PLAN already names, with no new dependency, and make every host run report what it
+left behind.
+
+* R1 (b) needs an option for each `go test` flag a PLAN may ask for, and its packages mix with `tree`'s default of both modules;
+  (c) builds in two stages and still copies the whole tree, so it costs what (a) does for a narrower result.
+* R2 (b) leaves R3's script for the next generator plant; (c) leaves both.
+* R4 (b) gives one tool two clean-up behaviours; (c) leaves the issue's clean-up requirement unmet.
+
+#### The design, as proposed
+
+* **`remote.py test --host H [--module DIR] [--tree DIR] [--timeout SECONDS] -- ARG...`.** The files of the tree, or of
+  `--tree DIR`, copied to a fresh `acp-tools-<random>` as `tree` copies them; then, in `<dir>/<module>`, `go version`, `go env
+  GOOS GOARCH CGO_ENABLED` and `go test ARG...`, each argument quoted for the remote shell as `pkg` quotes its flags. The arguments
+  are `go test`'s own, packages among them, and at least one is required: the tool cannot tell a package from a flag's value, so it
+  adds none. `--module` is a directory of the tree holding a `go.mod`, `.` by default, refused when it is absolute, leaves the
+  tree, or holds none. With `--tree DIR`, the files are the git-listed ones when `DIR` has `.git`, as now; otherwise every file
+  under it but macOS's `._*` and `.DS_Store`, since a plant's copy has no `.git` (`plants.py`'s `IGNORE` has already left the rest
+  out). `--timeout` bounds the remote `go test`, 3600 seconds by default as now.
+* **The race detector's precondition.** When an argument asks for it, `-race`, `--race`, `-race=true` or `-race=1`, the tool
+  reads `go env CGO_ENABLED` on the host before copying; anything but `1` is refused, exit 2, with a message that names the host's
+  kind and the value. R5's hosts pass.
+* **Clean-up, for `tree`, `pkg` and `test`.** One helper, `rm -rf` and then `test ! -e` on the directory, in one SSH command,
+  after a pass, a failure or a timeout. A directory left behind is named in the output, as `acp-tools-<random>` relative to the
+  remote home, and fails the run.
+* **A timeout** in any SSH step is caught: the step reports "did not finish within N s" and status 124, what `timeout(1)` gives;
+  the clean-up still runs. A remote `go test` that outlives its SSH session may hold the directory on Windows; the clean-up's check
+  then reports it, and `leftovers.py` lists the process.
+* **Exit status** of each subcommand: the first failing step's status (a copy, a test run, 124 for a timeout; for `tree`, 1 when
+  either module failed, as now); 2 for a refusal; otherwise 3 when the directory was left behind; 0 only when everything passed
+  and the directory is gone.
+* **`plants.py`.** Two optional keys. `"race": true` runs the plant's test under `-race`: locally, `go test -race`; on a host,
+  through `remote.py test`. `"module": "cmd/generate"` runs it in that directory of the copy, which must hold a `go.mod`: locally,
+  `go test`'s working directory; on a host, `remote.py test --module`. A host plant that sets neither still goes through `remote.py
+  pkg`, which needs no cgo on either side and builds once here. A key a plant does not know is refused, as a missing one is now, so a
+  misspelt `race` is not run without it; `race` must be a boolean and `module` a relative path that stays in the tree. The verdict
+  line names the module and `-race` when set.
+* **Docs.** `remote.py`'s and `plants.py`'s usage; `tools/README.md`'s rows and the plant example; `docs/architecture.md`'s line
+  for `remote.py`.
+
+#### Decided with the owner, 2026-11-10, the host-test amendment
+
+| Question | Answer |
+| :--- | :--- |
+| 9. Where the spec lives | As recommended: this amendment, and a step 13 of the PLAN, not a new pair: the same topic, as `AGENTS.md` has it, and the precedent of steps 9 to 12. |
+| 10. Scope | **The owner's choice, the widest of three:** R1, R2 and R3, `remote.py test` and plants under `-race` and in another module. The recommendation was R1 and R2; the issue alone was R1. |
+| 11. The shape of R1 | As recommended: R1 (a), `remote.py test` with `go test`'s own arguments, the issue's first proposal; the Windows refusal replaced by the cgo check, after R5. |
+| 12. Clean-up | As recommended: R4 (a), for `tree`, `pkg` and `test`. |
+
+### Consequences, for this amendment
+
+* Good, because a PLAN's `-race`, `-run` and `-count` on a host, a race plant, and a generator plant are each one command of a
+  tool in the repository, and the next PLAN does not rebuild a scratch script.
+* Good, because every host run says whether its directory is gone, and a timeout ends in a verdict.
+* Neutral, because `tree`'s and `pkg`'s output gains a line for the removal, and the two host gates' logs with it.
+* Neutral, because a race plant compiles with `-race`, a few seconds more locally and the tree's copy on a host.
+* Bad, because `remote.py` and `plants.py` grow, and their tests with them; a host's `go test` still prints nothing until it ends.
+* Bad, because R6's two scripts remain outside the tools.
 
 ## More Information
 

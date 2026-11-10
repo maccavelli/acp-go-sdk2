@@ -1,6 +1,6 @@
 ---
-status: complete
-date: 2026-10-22
+status: in-progress
+date: 2026-11-10
 associated-madr: "0031-MADR-verification-tools-in-repository.md"
 ---
 
@@ -19,7 +19,8 @@ the MADR's recommended answers to questions 1 to 4; an answer otherwise amends i
 
 * **New, `tools/`:** `_common.py`, `gates.py`, `idscan.py`, `floor.py`, `platforms.py`, `remote.py`, `leftovers.py`, `plants.py`,
   `release_body.py`, `publication.py`, `consumer.py`, `watch_ci.py`, `find.py`, `procs.py`, `test_tools.py`, `README.md`.
-  (Added 2026-10-22, after step 11, proposed: `ci_jobs.py`.)
+  (Added 2026-10-22, after step 11, proposed: `ci_jobs.py`.) (Added 2026-11-10, proposed: `remote.py test`, `plants.py`'s `race`
+  and `module`, and the removal check in `remote.py`; step 13.)
 * **`Makefile`:** `check-tools`, `python3 -m py_compile` on every tool, then `python3 -m unittest` on `tools/test_tools.py`.
 * **`.github/workflows/ci.yml`:** the records step also runs `make check-tools`.
 * **Docs:** `docs/architecture.md`, a section "Verification tools" and the tree; `AGENTS.md`, a line under "Pre-add checks" naming
@@ -121,6 +122,51 @@ has it; every log read by its job id, `gh api --allow-escape-sequences repos/<or
 * **`tools/README.md`:** its row. **`docs/architecture.md`:** `ci_jobs.py` named with `watch_ci.py`.
 * **The report:** its quotation and its "If it happens again", as the owner answers the MADR's question 8.
 
+### `remote.py test`, the removal check, and plants under `-race` and in another module (added 2026-11-10, proposed)
+
+The MADR's "Amendment 2026-11-10: `go test` on a host with its own flags, and plants under `-race` and in another module", R1 to
+R5, as the owner scoped it (questions 9 to 12) and as its "The design, as proposed" has it. Standard library; no Go file changes.
+
+* **`tools/remote.py`,** its parts functions the tests call, each SSH step through `_common.run`, which a test replaces:
+  * `tree_files(root)`: `_common.files_of_tree(root)` when `root/.git` exists; otherwise every regular file and symbolic link under
+    `root`, walked without following links, relative, `/`-separated, sorted, names starting `._` and `.DS_Store` left out;
+  * `copy_tree(host, root, names, log)`: the names into one tar in memory, sent to `mkdir <d> && tar -xf - -C <d>`; returns the
+    status and `d`; `tree` uses it in place of its own copy (`:60`–`:65`);
+  * `step(log, cmd, timeout, stdin=None)`: `_common.run`, with `subprocess.TimeoutExpired` caught: the timeout appended to the log,
+    "did not finish within N s" returned, status 124;
+  * `remove(host, d, log)`: one SSH command, `rm -rf -- <d>; test ! -e <d>`, through `step`, its own timeout 300 s; true when it
+    exits 0; `tree`, `pkg` and `test` call it in their `finally` in place of `rm -rf` (`:76`, `:109`) and print `remote: <kind> host:
+    <d> removed` or `remote: <kind> host: <d> left behind in the remote home`;
+  * `wants_race(args)`: true for an argument `-race`, `--race`, `-race=true` or `-race=1`, and false for `-race=false`, `-race=0`
+    and any other, `-run=race` among them;
+  * `module_dir(root, module)`: `module` as a relative POSIX path, refused (`SystemExit` with status 2 and a message) when it is
+    absolute, holds `..`, or `root/module/go.mod` is no file; `.` by default;
+  * `go_test_command(d, module, args)`: `cd <d>/<module> && go version && go env GOOS GOARCH CGO_ENABLED && go test <args> 2>&1`,
+    the directory and each argument through `shlex.quote`, `<d>` alone for `.`;
+  * `strip_banner(text)`: `pkg`'s filter of SSH's `Pseudo-terminal` and `** ` lines (`:105`–`:106`), shared.
+* **`test(kind, module, tree_dir, timeout, args, out)`:** refuses an empty `args` (exit 2); `module_dir`; when `wants_race(args)`,
+  `go env CGO_ENABLED` on the host first, through `step`, and anything but `1` refused, exit 2, "remote: -race needs cgo, and `go
+  env CGO_ENABLED` is <value> on the <kind> host", before any copy; `copy_tree` of `tree_files(tree_dir or the repository)`; the
+  command through `step` with `timeout`; prints `== <kind> <module>: exit <status>, <seconds> s` (wall time, here) and the output,
+  `strip_banner`ed; `remove` in `finally`. Its log is `.cache/tools/remote/test-<kind>.log`.
+* **Exit status,** `tree`, `pkg` and `test` alike: the first failing step's (the copy's, the build's, the tests', 124 for a timeout;
+  `tree` 1 when either module failed, as now); 2 for a refusal; else 3 when `remove` returned false; else 0.
+* **`main`:** `test` takes `--host`, `--module` (`.`), `--tree`, `--timeout` (3600), `--out`, and every argument after `--`
+  (argparse's `REMAINDER`, a leading `--` dropped). The docstring's usage gains `test`, and the exit statuses.
+* **`tools/plants.py`:**
+  * `KEYS` stays the required set; `OPTIONAL = {"host", "timeout", "race", "module"}`; `load` refuses a key in neither, a `race`
+    that is not a JSON boolean, and a `module` that is absolute or holds `..`;
+  * `command(p, copy, timeout)` returns the command and its working directory, the tests' pure part:
+    * local: `go test [-race] -count=1 -timeout=<t> -run <run> <pkg>` in `copy/<module>`;
+    * host, `race` or `module` set: `remote.py test --host <h> --tree <copy> --module <module> -- [-race] -count=1 -timeout=<t>
+      -run <run> <pkg>`, in `copy`;
+    * host, neither set: `remote.py pkg`, as now (`:85`–`:86`);
+  * `run_plant` refuses a plant whose `copy/<module>/go.mod` is no file, as an edit that does not apply is refused;
+  * the verdict line: `(<run> in <module> under -race on <host>)`, each part only when set; the docstring gains both keys.
+* **`tools/README.md`:** the `remote.py test` row; `remote.py tree`'s and `pkg`'s rows, the removal check; the plant example and
+  its paragraph, `race` and `module`. **`docs/architecture.md`:** the `remote.py` line, its three subcommands and the removal
+  check.
+
 ## Tests
 
 `tools/test_tools.py`, `unittest`, no host and no network:
@@ -152,6 +198,26 @@ has it; every log read by its job id, `gh api --allow-escape-sequences repos/<or
   `VAR: x` line outside a block; `failure_lines` takes the seed, the fatal error with the `runtime:` lines before it, the `FAIL`
   lines and `##[error]`, from a log with timestamps and a byte-order mark; `holds` fails a named job's wrong value, a job not named
   with a value under `--others`, and a named job missing; `markdown` prints the report's columns.
+* (Added 2026-11-10, proposed.) `remote.py`, with `_common.run` replaced by a fake that answers each command by a rule and keeps the
+  commands it was given, so no host is reached:
+  * `go_test_command` quotes `-run 'A|B'`, a pattern holding a space, and the module's directory, and is `cd <d> && …` for `.`;
+  * `wants_race` for each of its true and false forms;
+  * `module_dir` refuses `/abs`, `../x` and a directory without `go.mod`, and accepts `cmd/generate` in a fixture tree;
+  * `tree_files` of a directory without `.git` lists `a.go` and `sub/b.go` and leaves `._a.go` and `.DS_Store` out;
+  * `test`, its tests failing (the fake's `go test` exits 1): exit 1, and the removal command still sent after;
+  * `test`, the removal failing (the fake's `test ! -e` exits 1): exit 3, and the directory named "left behind";
+  * `test`, the fake raising `TimeoutExpired` for `go test`: exit 124, "did not finish within", the removal still sent;
+  * `test -race`, the fake's `go env CGO_ENABLED` printing `0`: exit 2, the message, and no `mkdir` sent;
+  * `tree` and `pkg`, the removal failing: each exits 3, its tests passing.
+* (Added 2026-11-10, proposed.) `plants.py`, against `PlantsTest`'s module and two more fixtures:
+  * a module whose `Count` guards a counter with a mutex, `TestCount` running it from goroutines; a plant that removes the lock,
+    `"race": true`, `want` "race detected during execution of test": failed as required; the same plant without `race`: not as
+    required (needs cgo here, as `make check-tools` already has on each system that runs it);
+  * a tree whose `sub/` holds a second module with one test: a plant that breaks it, `"module": "sub"`, `pkg` `.`: failed as
+    required; with a `module` whose directory holds no `go.mod`: refused;
+  * `load` refuses a key it does not know (`"rcae": true`), a `race` of `"yes"`, and a `module` of `../x`;
+  * `command` for a host plant with `race`: `remote.py test`, `--tree` the copy, `-race` after `--`; with `module`: `--module`; with
+    neither: `remote.py pkg`, as now.
 
 ## Implementation Steps
 
@@ -198,6 +264,37 @@ planted break in a scratch copy, never in the tree.
       `--attempt 1` and with `--attempt 2` (the MADR's H5); and failing with `--expect 'validate (windows-2025, 1.27.3)=crash'`.
 
     Then the gates, `make push-guard`, and after CI passes, this PLAN and its row `complete` again.
+13. **(Added 2026-11-10, proposed) `remote.py test` and the removal check:** `tools/remote.py` as the design's last section has it;
+    its tests; `tools/README.md`'s `remote.py` rows; `docs/architecture.md`'s line. `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set.
+    Live, each exit status as required, each run printing its directory removed:
+    * `remote.py test --host linux -- -race -count=3 -run MaxMessageSize . ./remote`: exit 0, its times beside the MADR's R1
+      (151 s);
+    * `remote.py test --host windows -- -race -count=1 -run 'ToolCallStream|WrapUp' .`: exit 0;
+    * `remote.py test --host linux --module cmd/generate -- -race -count=1 -run '^TestCheck' . ./internal/output/`: exit 0;
+    * a failing test planted in a scratch copy of the tree, `remote.py test --host H --tree <copy> -- -count=1 -run
+      '^TestPlantedFailure$' .` on each host: exit 1, "--- FAIL: TestPlantedFailure";
+    * `remote.py test --host linux --timeout 5 -- -count=1 ./...`: exit 124, "did not finish within 5 s", and the removal's line,
+      whichever it is, recorded; not on Windows, where a `go test` that outlives its session can hold the directory, which the
+      offline test covers;
+    * `remote.py tree` on both hosts, and `remote.py pkg --host windows ./agentproc '-test.run=^(TestKill|TestKillAfterExit)$'`, as
+      step 4 ran them: exit 0, each with its removal line.
+
+    The cgo refusal is not run live: both hosts have cgo (the MADR's R5), and changing a host to lose it is out of scope; the offline
+    test covers it. Then `make check-tools`, `make pre-add-check` on the changed files, the gates (`gates.py --all`, whose `windows`
+    and `linux` run `remote.py tree`), and the files staged for the owner.
+14. **(Added 2026-11-10, proposed) Plants under `-race` and in another module:** `tools/plants.py` as the design's last section
+    has it; its tests; `tools/README.md`'s plant example and paragraph. Live, one spec of four plants, outside the tree, each
+    edit asserted once, 4 of 4 as required:
+    * 0052's race plant: `toolstream.go`, the two lines `s.mu.Lock()` and `defer s.mu.Unlock()` of `change` (`:299`–`:300`)
+      removed; `pkg` `.`, `run` `^TestToolCallStreamConcurrent$`, `race` true, `want` "race detected during execution of test";
+      locally, and again with `host` `linux` and with `host` `windows`;
+    * 0052's generator plant: `cmd/generate/internal/output/check.go`, `checkPackage(dir, version, l.hand, built, mod)` with `imp` for
+      `mod` (`:119`); `module` `cmd/generate`, `pkg` `./internal/output`, `run` `^TestCheckRootImportsModulePackage$`, `want`
+      "Check refused a root that imports a package of its module"; locally.
+
+    And the race plant without `race`, alone in a spec: exit 1, "NOT AS REQUIRED", so the key is what makes it fail. Then `make
+    check-tools`, `make pre-add-check` on the changed files, the gates, `make push-guard`, and after CI passes, this PLAN and its
+    row `complete` again; issue #15 closed by the owner, or by its commit's message.
 
 ## Verification
 
@@ -231,6 +328,17 @@ Planted breaks, each in a scratch copy:
 | `ci_jobs.py` | a cancelled job with no steps not told apart | `test_tools.py`, `tally` |
 | `ci_jobs.py` | `--others` ignored | `test_tools.py`, `holds` |
 | `ci_jobs.py` | the `runtime:` lines before the fatal error dropped | `test_tools.py`, `failure_lines` |
+| `remote.py` (added 2026-11-10, proposed) | the removal's status ignored | `test_tools.py`, `test`'s, `tree`'s and `pkg`'s exit 3 |
+| `remote.py` | the removal skipped after a failing test | `test_tools.py`, the removal sent after exit 1 |
+| `remote.py` | `TimeoutExpired` not caught | `test_tools.py`, exit 124 |
+| `remote.py` | an argument not quoted | `test_tools.py`, `go_test_command`'s `A\|B` |
+| `remote.py` | the cgo check skipped | `test_tools.py`, `-race` with `CGO_ENABLED` `0` |
+| `remote.py` | `--module ../x` accepted | `test_tools.py`, `module_dir` |
+| `remote.py` | `._` files copied from a tree without `.git` | `test_tools.py`, `tree_files` |
+| `plants.py` (added 2026-11-10, proposed) | `race` ignored locally | `test_tools.py`, the race plant not as required |
+| `plants.py` | `module` ignored | `test_tools.py`, the second module's plant |
+| `plants.py` | an unknown key accepted | `test_tools.py`, `load` and `"rcae"` |
+| `plants.py` | a host race plant sent through `remote.py pkg` | `test_tools.py`, `command` |
 
 Acceptance:
 
@@ -820,3 +928,86 @@ completed success; watch exit 0"; its six jobs each "completed success". In the 
 its id through `ci_jobs.py`'s own reader, `make check-tools`: "Ran 53 tests", OK.
 
 Every acceptance criterion is met; this PLAN and its row in `docs/README.md` are `complete` again.
+
+### Amendment, 2026-11-10, after step 12: steps 13 and 14 proposed
+
+**Found.** GitHub issue #15, filed after
+[0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md](0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md)'s
+phase 1: no tool runs `go test -race` on a test host, and 0052 filled that gap, a race plant's and a generator plant's with three
+scratch scripts; the remote directory's removal is never checked, and a timeout ends in a traceback (the MADR's R1 to R4). A
+read-only probe found cgo and a `gcc` on both hosts, and `-race` catching a planted race on each (R5).
+
+**Proposed.** The design's last section, the tests and planted breaks marked "added 2026-11-10, proposed", and steps 13 and 14,
+each one commit, as the owner scoped them on 2026-11-10 (the MADR's questions 9 to 12). Nothing is changed until the owner approves;
+this PLAN then returns to `in-progress` until step 14 closes.
+
+**Approved (owner, 2026-11-10).** The MADR's amendment accepted, and steps 13 and 14 as proposed; this PLAN is `in-progress` until
+step 14 closes.
+
+### Step 13, `remote.py test` and the removal check, 2026-11-10
+
+What changed:
+
+* **`tools/remote.py`,** as the design's last section has it: `test`; `tree_files`, `copy_tree`, `step`, `remove` (with
+  `removed`, which prints its outcome), `wants_race`, `module_dir` (raising `Refused`, which `test` prints and exits 2 for),
+  `go_test_command`, `strip_banner`, and `outcome`, the exit status of the design's rule; `tree` and `pkg` on `copy_tree`, `step`
+  and `remove`. As built, otherwise than the design in two internal details, with no change to what a run does: `copy_tree` takes
+  the directory's name from its caller, which chose it before the `try` so that its `finally` can remove it, rather than returning
+  it; and `step` passes `cwd` and `env` through, so `pkg`'s local build runs through it too. The docstring gives `test`'s usage and
+  the exit statuses.
+* **`tools/test_tools.py`:** `RemoteTest` gains `test_go_test_command_quoted` and `test_wants_race`; `RemoteRunTest`, ten tests,
+  with `_common.run` replaced by a fake that answers by rule and keeps the commands, `_common.repo` by a fixture tree, and the two
+  host variables set to the file's made-up host: `test_module_dir`, `test_tree_files_without_git`, `test_passes_and_removes`,
+  `test_failing_tests_still_removed`, `test_left_behind`, `test_timeout`, `test_race_without_cgo_refused`, `test_race_with_cgo`,
+  `test_tree_left_behind`, `test_pkg_left_behind`. `make check-tools`: exit 0, "Ran 83 tests", OK, 12 of them new; `scripts`' 41,
+  OK; "check-ci-filters: 0 problem(s)".
+* **`tools/README.md`:** the `remote.py test` row, with the cgo check, the removal check and exits 124 and 3.
+  **`docs/architecture.md`:** the `remote.py` line, its three subcommands and the removal check.
+
+**Planted breaks,** each in its own copy of `tools/` outside the tree, `RemoteTest` and `RemoteRunTest` run there, each edit
+asserted to apply once; 7 of 7 failed as required:
+
+| Break | The checks that failed |
+| :--- | :--- |
+| the removal's status ignored (`remove` returning true) | `test_left_behind`, `test_pkg_left_behind`, `test_tree_left_behind`: "0 != 3" |
+| the removal skipped after a failing test | `test_failing_tests_still_removed`, `test_timeout`: "0 != 1", no removal command sent |
+| `TimeoutExpired` not caught | `test_timeout`: "subprocess.TimeoutExpired: Command 'ssh' timed out after 5 seconds" |
+| an argument not quoted | `test_go_test_command_quoted`: the command without `'TestA\|TestB'`'s quotes |
+| the cgo check skipped | `test_race_without_cgo_refused`: "0 != 2" |
+| `--module ../x` accepted | `test_module_dir`: "'leaves the tree' not found in 'remote: --module ../x: no go.mod in ../x'" |
+| `._` files copied from a tree without `.git` | `test_tree_files_without_git`: "['.DS_Store', '._a.go', 'a.go', 'sub/._b.go', 'sub/b.go'] != ['a.go', 'sub/b.go']" |
+
+**Live,** `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set, each run's exit status taken before its output was read; every run printed
+`remote: <kind> host: acp-tools-<random> removed`:
+
+| Run | Result |
+| :--- | :--- |
+| `test --host linux -- -race -count=3 -run MaxMessageSize . ./remote`, first run | **exit 255**, 90.9 s: `go version go1.27.3 linux/amd64`, `linux`, `amd64`, `1`; the root package "ok", 32.277s; then SSH's own status, 255, with no line from `./remote`; the directory removed |
+| the same, run again alone | exit 0, 142.0 s: the root package 33.330s, `remote` 100.280s, against the MADR's R1, 41.2 s, 118.0 s and 151 s |
+| `test --host windows -- -race -count=1 -run 'ToolCallStream\|WrapUp' .` | exit 0, 12.1 s: `go1.27.3 windows/amd64`, `CGO_ENABLED` `1`; the root package 2.688s |
+| `test --host linux --module cmd/generate -- -race -count=1 -run '^TestCheck' . ./internal/output/` | exit 0, 48.5 s: `cmd/generate` 33.526s, `internal/output` 11.016s |
+| `test --host linux --tree <copy> -- -count=1 -run '^TestPlantedFailure$' .`, a failing test planted in a scratch copy without `.git` | exit 1: "--- FAIL: TestPlantedFailure", "planted_failure_test.go:5: planted failure" |
+| the same on Windows | exit 1, the same lines |
+| `test --host linux --timeout 5 -- -count=1 ./...` | exit 124, 5.0 s: "did not finish within 5 s"; the directory removed |
+| `tree --host windows`, `tree --host linux` | exit 0 each, 96.8 s and 152.2 s; both modules "ok" |
+| `pkg --host windows ./agentproc '-test.run=^(TestKill\|TestKillAfterExit)$' -test.v` | exit 0: "--- PASS: TestKillAfterExit", "--- PASS: TestKill", "PASS" |
+
+The first run's 255 is SSH's status, not the tests': the session ended while `./remote` ran, and the tool reported the step's
+status and removed the directory, as designed. Its cause was not established. Afterwards the host's kernel log could not be read
+by the account ("No entries", its groups lacking access), memory stood at 5,815 MB available of 7,935, and its load average was
+8.89 on 4 CPUs from another project's test binaries started in the minute before, not this repository's; no `acp-tools-*`
+directory was left. The run again alone passed; it is recorded here as found, and the cgo refusal is not run live, as the step
+says.
+
+**Pre-add.** `make pre-add-check FILES="tools/remote.py tools/test_tools.py tools/README.md docs/architecture.md docs/README.md
+docs/decisions/0031-MADR-verification-tools-in-repository.md docs/decisions/0031-PLAN-verification-tools-in-repository.md"`: exit 0,
+"0 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+
+**Gates,** `tools/gates.py --all`: exit 1, 17 of 18 passed, `windows` and `linux` each printing its directory removed; `precheck`
+failed, exit 2, in `agentproc` alone, seed `-test.shuffle 1794342813649344000`: `TestBlockedTapDetached` and
+`TestDetachedTapIsPrefix`, "the bulk agent did not say it was ready within 30s" (`tap_test.go:294`, `:335`), and
+`TestInProcessDetachedTapIsPrefix`, "the connection did not read Serve's first 56 MiB within 30s" (`inprocess_test.go:461`). This
+step changed no Go file, and the pre-add check above, on the same tree, had passed. This host's load averages were 18.11, 32.29
+and 40.68 just after. `go test -race -count=1 -shuffle=1794342813649344000 ./agentproc`: exit 0, 17.647s; the three tests with
+`-race -count=5`: exit 0, 51.713s. `gates.py precheck` run again: exit 0, "all gates passed". The three tests' 30 s bounds are
+left as they are: changing them is outside this PLAN.

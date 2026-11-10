@@ -1322,8 +1322,10 @@ tree, in the user's cache directory, outside the tree; the logs under
   `platforms.py` the lint and vet per platform of `agentproc`, `clienthost` and
   `internal/`;
   `remote.py` the tests
-  on a test host, in a fresh directory removed after, and `leftovers.py` the
-  Windows host's process list.
+  on a test host, the tree's (`tree`), one package's binary built here
+  (`pkg`), or `go test` with its own arguments, `-race` among them (`test`),
+  each in a fresh directory removed after and checked gone; and `leftovers.py`
+  the Windows host's process list.
 - `idscan.py` scans for identifiers with the push guard's deny list
   (`DISCLOSURE_DENY` or `~/.config/git/disclosure-deny`), and prints where a
   match is, never what it is; nothing in the tree names an identifier.
