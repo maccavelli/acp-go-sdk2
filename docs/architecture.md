@@ -108,7 +108,14 @@ and `make api` gates it with the root, `agentproc` and `clienthost`.
   `AgentRefusals`, which answer method-not-found for the `Client` and `Agent`
   methods a side may leave unadvertised), `tooltimeline.go` (`ToolCallTimeline`
   and `ToolCallEntity`, which apply a session's tool-call updates by the
-  schema's rules, live or replayed, for a client; 0041, item 9), `deepcopy.go`
+  schema's rules, live or replayed, for a client; 0041, item 9),
+  `toolstream.go` (`ToolCallStream` and `StartToolCallStream`, which send one
+  tool call of an agent as it runs, its whole state at most once per interval
+  through a sender started by `goIfLive`, an `io.Writer` for its live text
+  kept by `internal/tailbuf`, and `Finish`, whose context is honoured but for
+  the prompt turn's own end;
+  [0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md](decisions/0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md),
+  D1 to D5), `deepcopy.go`
   (`deepCopy`, the reflection copy through which both timelines keep and
   return their entities, so they share nothing with an update or a caller;
   0049, S4), `serve.go`
@@ -122,7 +129,8 @@ and `make api` gates it with the root, `agentproc` and `clienthost`.
   and
   `doc.go`.
   None of them holds protocol state, but for the compactions and tool calls
-  the two timelines' callers feed; none holds a connection's. A helper that takes a side connection is a package-level
+  the two timelines' callers feed, and the one tool call a `ToolCallStream`
+  sends, with the agent connection it writes to; none holds a connection's. A helper that takes a side connection is a package-level
   function: every method of a side connection that takes a context is a
   protocol method, as `TestSideConnectionMethodsAreProtocolMethods` requires.
 - Generated from `schema/`: `constants_gen.go`, `types_gen.go`, `agent_gen.go`
@@ -209,10 +217,15 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   receipt that no request in flight is older than, from the receipts it
   keeps of the requests in flight, and, under supersede, a prompt newer than
   the kept cancel removes it. `session/close` (the table's `ClosesSession`)
-  runs the same cancel before its handler. When the handler returns, the case
-  takes the lock, removes its own turn (`removeTurn`) and reads its cause
-  once: a cancelled turn is answered `cancelled`, else the handler's answer
-  stands.
+  runs the same cancel before its handler. The handler's context also carries
+  the turn's `turnStreams`, from `connection.go`, with which each
+  `ToolCallStream` started on it registers. When the handler returns, the case
+  first writes the turn's unfinished streams, on the request's context without
+  its cancellation and with no lock held, so the answer never overtakes a
+  call's last state and a `session/cancel` is handled meanwhile (0052, D3).
+  It then takes the lock, removes its own turn (`removeTurn`) and reads its
+  cause once: a cancelled turn is answered `cancelled`, else the handler's
+  answer stands.
   `ClientSideConnection.Prompt` sends `session/cancel` when its context ends
   with an error;
 - the permission requests: the client's `session/request_permission` case
@@ -703,7 +716,12 @@ connection starts, its handlers' included, starts through the `Go` of its
 `goroutines` wait group, and `Wait` waits for the context's end and then for that
 group. The `context.AfterFunc` callbacks are not counted: one on a caller's
 context can start after the count has reached zero
-(0026-MADR-connection-end-cause-and-wait.md).
+(0026-MADR-connection-end-cause-and-wait.md). `goIfLive` starts a goroutine
+from one the group does not count, such as an agent's tool worker writing to
+a `ToolCallStream`: `writeLoop`, counted from `start`, marks the end under
+`liveMu` as its first deferred step, and `goIfLive` adds under the same lock
+only while the end is unmarked, so it adds while `writeLoop` is still counted
+(0052, D2; `TestWriteLoopEndsLiveFirst` pins the defer).
 
 Checks that guard this:
 
@@ -823,7 +841,16 @@ Checks that guard this:
 - `connection_end_test.go` covers `Err` for each end and after a late `Close`,
   `Wait` with a reader `Close` cannot close and with a handler that ignores its
   context, and both on the side connections; its `TestGoStatementsCounted` fails
-  on a `go` statement in the root package's non-test files.
+  on a `go` statement in the root package's non-test files, and its
+  `TestGoIfLiveAfterEnd`, `TestWriteLoopEndsLiveFirst` and
+  `TestGoIfLiveDuringEnd` cover `goIfLive`.
+- `toolstream_test.go` covers `ToolCallStream`: a client's `ToolCallTimeline`
+  rebuilding the stream's state, scripted and fuzzed; a command's output as its
+  writer; coalescing under back-pressure; the interval and the idle sender,
+  under `testing/synctest`; `Finish` after `session/cancel` and under a
+  deadline; the owned fields; the bound; concurrent writers; the end of the
+  connection; and the turn's streams written before the answer, per turn, with
+  a `session/cancel` handled while they wait.
 - The elicitation tests cover `elicitation.go`: `elicitation_fields_test.go` the
   field order against what `MarshalJSON` writes; `elicitation_schema_test.go`
   each defect `CheckSchema` reports and the `email` rule;
@@ -1334,6 +1361,7 @@ go.mod                    the SDK module
 agentproc/                package agentproc: an agent as a child process or in this process, started and stopped
 clienthost/               package clienthost: terminals and files a client serves for the agent
 internal/proctree/        package proctree: a process group or job, for agentproc and clienthost
+internal/tailbuf/         package tailbuf: a stream's end within a limit, cut at a character, for clienthost and ToolCallStream
 unstable/                 package unstable: doc.go, and unstable_gen.go when the unstable schema adds API
 remote/                   package remote: ACP over Streamable HTTP and WebSocket, client and server
 acptest/                  package acptest: a connection pair, a frame recorder, records, goldens and their check, a replay agent, a scripted agent, a memory client

@@ -611,3 +611,38 @@ toolstream_test.go agent_gen.go cmd/generate/internal/emit/dispatch.go cmd/gener
 govulncheck." `make check-records`, `make markdownlint` and `make disclosure-check`: exit 0 each.
 
 **Not done in this phase:** the README section and the docs, phase 5's.
+
+**Commit.** The owner committed the phase as `4c7f943`.
+
+### Phase 5, the docs (2026-11-10)
+
+**Base.** `4c7f943`; `git status --short` was empty before the first edit.
+
+**Done.**
+
+* `README.md`: "Explore the API"'s tool-call bullet names `acp.StartToolCallStream` and `acp.ToolCallStream` and links the new
+  section. `### Streaming a tool call`, between "Cancellation" and "Closing and limits": the snapshot rule, citing the MADR;
+  the example between `<!-- toolstream: streamingAgent.Prompt -->` and `<!-- /toolstream -->`; and seven bullets: the output
+  and its bound, the other fields and the owned ones, sending, finishing, the turn, the cost, and what the stream does not do.
+* `docs_test.go`: `TestReadmeToolCallStreamIsTheExample`, the pattern of `TestReadmeQuickstartIsTheExample`.
+* `docs/architecture.md`: `toolstream.go` in the hand-written files; the sentence on protocol state names the stream's; the
+  prompt turn's passage gives the turn's `turnStreams` and the flush before the lock; the wait group's passage gives
+  `goIfLive` and its anchor; the tests list names phase 2's tests and gains `toolstream_test.go`; the tree gains
+  `internal/tailbuf/`.
+* `doc.go`: unchanged. It names no tool-call constructor, so the step's condition is not met.
+
+**Found during the phase.** The step put `ExampleStartToolCallStream`'s body in the README. That body is the client's half:
+pipes, `Initialize`, `Prompt`, and printing. The block is the agent's `Prompt` instead, `streamingAgent.Prompt` in
+`example_toolstream_test.go`, which is the code an agent writes; the test reads it with the same `exampleBody`, which finds the
+one `Prompt` of that file, and its marker says so.
+
+**Tests.** `go test -count=1 -run '^TestReadme' .`: exit 0.
+
+**Plant,** `tools/plants.py`: the README block's `output :=` line changed. `docs_test.go:216: README.md's tool-call stream
+example is not streamingAgent.Prompt's body.`; "1/1 as required".
+
+**Pre-add.** `make pre-add-check FILES="README.md docs_test.go docs/architecture.md"`, the README not being docs-safe:
+`make` exit 0, "1 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy,
+govulncheck." `make check-records`, `make markdownlint` (52 files, 0 issues) and `make disclosure-check`: exit 0 each.
+
+**Not done in this phase:** the close, phase 6's.

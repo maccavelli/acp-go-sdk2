@@ -227,7 +227,9 @@ Helper constructors are provided to reduce boilerplate when working with union t
 - Tool calls: `acp.StartToolCall`, `acp.UpdateToolCall`, and their options.
   `rawInput` and `rawOutput` are raw JSON, so `acp.WithStartRawInput`,
   `acp.WithStartRawOutput`, `acp.WithUpdateRawInput`, `acp.WithUpdateRawOutput`,
-  and the content of `acp.StartEditToolCall` take a `json.RawMessage`.
+  and the content of `acp.StartEditToolCall` take a `json.RawMessage`. An
+  agent sends a call while it runs with `acp.StartToolCallStream` and its
+  `acp.ToolCallStream`; see [Streaming a tool call](#streaming-a-tool-call).
 - Utility: `acp.Ptr[T]` for pointer fields in request/update structs.
 - Reading values: `SessionInfo.Updated()` parses `updatedAt`;
   `RequestPermissionResponse.Chosen()` gives the selected option;
@@ -724,6 +726,79 @@ answered `cancelled` at once; its handler's context is cancelled with
 request that arrives after the cancel is handled as usual. Marking the turn's
 unfinished tool calls `cancelled`, which the specification recommends, is the
 client application's.
+
+### Streaming a tool call
+
+An agent that shows a tool's output while the tool runs uses
+`acp.StartToolCallStream`. ACP v1 has no update that appends: each
+`tool_call_update` replaces the `content` and `locations` it carries. A
+stream therefore sends the call's whole state each time, the latest state, at
+most once per interval, so a client may drop or merge updates without losing
+any; `acp.ToolCallTimeline` applies them
+([0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md](docs/decisions/0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md)).
+An agent's `Prompt`:
+
+<!-- toolstream: streamingAgent.Prompt -->
+```go
+// Started on Prompt's context, the stream belongs to this turn: should
+// Prompt return before Finish, its last state is still written before the
+// turn is answered.
+stream, err := acp.StartToolCallStream(ctx, a.conn, p.SessionId,
+    acp.StartToolCall("call_1", "List files", acp.WithStartKind(acp.ToolKindExecute)))
+if err != nil {
+    return acp.PromptResponse{}, err
+}
+if err := stream.SetStatus(acp.ToolCallStatusInProgress); err != nil {
+    return acp.PromptResponse{}, err
+}
+// A command's output; with os/exec, cmd.Stdout = stream does the same.
+output := strings.NewReader("README.md\ngo.mod\n")
+status := acp.ToolCallStatusCompleted
+if _, err := io.Copy(stream, output); err != nil {
+    status = acp.ToolCallStatusFailed
+}
+// Finish writes the final status with the whole output, also after
+// session/cancel has cancelled ctx.
+if err := stream.Finish(ctx, status); err != nil {
+    return acp.PromptResponse{}, err
+}
+return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
+```
+<!-- /toolstream -->
+
+- **Output.** The stream is an `io.Writer`: `cmd.Stdout = stream`, `io.Copy`,
+  or `io.MultiWriter` with a buffer of the agent's own. What is written is
+  the call's live text, sent as one text `content` item after the call's
+  other content. It keeps the last 1 MiB (`acp.WithToolCallStreamMaxText`),
+  cut at a character boundary, and `Dropped` counts what was cut. A character
+  a write began and did not finish is held back until a later write does.
+- **Other fields.** `SetStatus` takes `pending` or `in_progress`. `Update`
+  changes the title, kind, name, content in the agent's order, locations, and
+  `rawInput` and `rawOutput` as whole values, under the stream's lock. The
+  call's id and status are the stream's: `Update` undoes a change to either
+  and returns an error wrapping `acp.ErrToolCallStreamField`.
+- **Sending.** No change blocks on the wire. A sender the connection counts
+  writes the latest state at most every 250 ms
+  (`acp.WithToolCallStreamInterval`), and exits when nothing is pending. A
+  change made while a slow client holds a write joins the next write; nothing
+  queues. `Flush` writes now, after a write in flight. `Err` returns the first
+  error of a write the SDK made for the agent, such as a location that is not
+  absolute.
+- **Finishing.** `Finish` writes the final status, `completed` or `failed`,
+  with the whole state. It honours its context but for the turn's own end:
+  after `session/cancel` or `Shutdown`, `Finish` on `Prompt`'s context still
+  writes. A deadline of the caller's stops it, and the stream stays open for
+  another `Finish`.
+- **The turn.** A stream started on `Prompt`'s context, or one derived from
+  it, belongs to that turn. When `Prompt` returns, the turn's unfinished
+  streams are written before the turn is answered, their status as it was.
+  Under `PromptOverlapConcurrent` each turn waits for its own streams alone. A
+  stream started on another context belongs to no turn.
+- **Cost.** Each update resends the whole state. A tool that prints without
+  pause costs at most its content and 1 MiB of text four times a second.
+- **Not done.** No append or delta on the wire; no terminal output, since a
+  `terminal` content item is shown by the client; no partial `rawOutput`; and
+  no replay, since `session/load` sends finished calls with `StartToolCall`.
 
 ### Closing and limits
 

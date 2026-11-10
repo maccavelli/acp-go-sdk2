@@ -189,6 +189,34 @@ func TestReadmeQuickstartIsTheExample(t *testing.T) {
 	}
 }
 
+// TestReadmeToolCallStreamIsTheExample requires the README's tool-call stream
+// example, in "Streaming a tool call", to be the body of the Prompt of
+// example_toolstream_test.go's agent, so the README shows code that compiles
+// (0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// phase 5).
+func TestReadmeToolCallStreamIsTheExample(t *testing.T) {
+	t.Parallel()
+	want := exampleBody(t, "example_toolstream_test.go", "Prompt")
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const open, end = "<!-- toolstream: streamingAgent.Prompt -->\n", "<!-- /toolstream -->"
+	_, rest, ok := strings.Cut(string(readme), open)
+	block, _, closed := strings.Cut(rest, end)
+	if !ok || !closed {
+		t.Fatalf("README.md has no block between %q and %q", open, end)
+	}
+	got, fenced := strings.CutPrefix(strings.TrimSpace(block)+"\n", "```go\n")
+	got, ended := strings.CutSuffix(got, "```\n")
+	if !fenced || !ended {
+		t.Fatalf("the tool-call stream example is not one Go block:\n%s", block)
+	}
+	if got != want {
+		t.Errorf("README.md's tool-call stream example is not streamingAgent.Prompt's body.\nREADME:\n%s\nexample:\n%s", got, want)
+	}
+}
+
 // TestReadmeAgentprocIsTheExample requires the README's agentproc example,
 // in "Closing and limits", to be ExampleCommand's body, so the README shows
 // code that compiles (0027-PLAN-agent-process-helper.md, step 6).
