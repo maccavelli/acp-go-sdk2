@@ -159,6 +159,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0050 | MADR | [Give clients the ids authenticate accepts, name them in its refusal, count an unknown entry only by a string id, and document the prompt result's stop reason](decisions/0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md); issue #14 assessed at `b4ee2d4`, F1 to F10, F5 a low defect in S8's gate; O1, D1 to D9; Q1 to Q4 answered (a) 2026-11-05 | accepted |
 | 0050 | PLAN | [Implement 0050: the ids authenticate accepts, their refusal, the unknown entry's id, and the prompt result's doc](decisions/0050-PLAN-auth-method-ids-and-the-prompt-result-for-issue-14.md); four phases, a minor `v1.34.0`; approved 2026-11-05; phase 1, the generator, `ba14c67`; phase 2, the helpers, `ea5de92`; phase 3, the prompt result, `d339cf1`; phase 4, the gates `3013065`, CI, `v1.34.0` and the issue reply | complete |
 | 0050 | REPORT | [Release notes for v1.34.0, against v1.33.1](reports/0050-REPORT-release-notes-v1-34-0.md); the ids authenticate accepts, their refusal, the unknown entry's id, and the prompt result's doc | observed |
+| 0051 | REPORT | [ACP schema 1.25.0: current SDK featureset, coverage, and three extensions](reports/0051-REPORT-acp-1-25-0-featureset-coverage-and-three-extensions.md); observed 2026-11-10 on `1e945dd`; decides nothing | observed |
 
 ## I want to…
 
@@ -173,6 +174,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | see whether a Go 1.27.1 floor fits this SDK | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |
 | see how the generated API lines up with the current ACP spec | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |
 | see what the current ACP v1 spec audit found | [0016-REPORT-acp-v1-conformance-audit.md](reports/0016-REPORT-acp-v1-conformance-audit.md) |
+| see whether the SDK covers ACP schema 1.25.0, and which three extensions would add the most | [0051-REPORT-acp-1-25-0-featureset-coverage-and-three-extensions.md](reports/0051-REPORT-acp-1-25-0-featureset-coverage-and-three-extensions.md) |
 | know why Go was accepted at 1.27.2 with schema 1.24.1 | [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](decisions/0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md) |
 | know why the schema pin is 1.25.0 | [0004-MADR-pin-acp-schema-1-25-0.md](decisions/0004-MADR-pin-acp-schema-1-25-0.md) |
 | know why this tree is not the Coder Go SDK | [0005-MADR-separate-module-from-coder.md](decisions/0005-MADR-separate-module-from-coder.md) |
