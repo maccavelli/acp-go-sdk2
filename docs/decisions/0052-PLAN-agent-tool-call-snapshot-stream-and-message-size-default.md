@@ -39,7 +39,7 @@ Ship the MADR's O1 and M1 as `v1.35.0`. At the end of it:
 | 3, the stream (D1, D2, D4, D5) | `internal/tailbuf/tailbuf.go`, `tailbuf_test.go` (new); `clienthost/terminals.go`; `clienthost/output.go`, `output_test.go` (deleted); `toolstream.go` (new); `errors.go`; `toolstream_test.go` (new); `example_toolstream_test.go` (new); `cmd/generate/engine_test.go`; `cmd/generate/internal/output/check.go`, `check_test.go` (added by the phase's deviation of 2026-11-10) |
 | 4, the turn's streams before the answer (D3) | `connection.go`; `toolstream.go`; `toolstream_test.go`; `cmd/generate/internal/emit/dispatch.go`; `cmd/generate/internal/emit/dispatch_test.go`; `agent_gen.go` (regenerated) |
 | 5, the docs | `README.md`; `docs_test.go`; `docs/architecture.md`; `doc.go` |
-| 6, the close | `tools/consumer.py`; `tools/test_tools.py`; `tools/README.md`; `docs/reports/0052-REPORT-release-notes-v1-35-0.md` (new); this PLAN; the MADR; `docs/README.md` |
+| 6, the close | `tools/consumer.py`; `tools/test_tools.py`; `tools/README.md`; `docs/reports/0052-REPORT-release-notes-v1-35-0.md` (new); this PLAN; the MADR; `docs/README.md`; `toolstream_test.go` (added by the phase's deviation of 2026-11-10) |
 
 Each phase also updates this PLAN's execution record and its row in `docs/README.md`. A file a phase needs that is not in its
 row is a deviation: stop, record it, and ask.
@@ -646,3 +646,75 @@ example is not streamingAgent.Prompt's body.`; "1/1 as required".
 govulncheck." `make check-records`, `make markdownlint` (52 files, 0 issues) and `make disclosure-check`: exit 0 each.
 
 **Not done in this phase:** the close, phase 6's.
+
+**Commit.** The owner committed the phase as `62f62aa`.
+
+### Phase 6, the close (2026-11-10)
+
+**Base.** `62f62aa`; `git status --short` was empty before the first edit.
+
+**Deviation, 2026-11-10, the Windows gate.** `python3 tools/gates.py --all`, with both hosts, exited 1: 17 gates passed and
+`windows` failed, in the root package alone: `TestToolCallStreamRoundTrip`, `TestToolCallStreamSendError`, and
+`FuzzToolCallStream`'s three seeds. `python3 tools/remote.py pkg --host windows . -test.run '^TestToolCallStreamRoundTrip$'
+-test.v` gave `toolstream_test.go:178: step 3: … locations[0]: ToolCallLocation: path: "\\x" is not an absolute path`. Phase 3's
+test helper `absPath` built `string(os.PathSeparator) + name`, which is absolute on Unix and not on Windows, which needs a
+volume; the SDK's check refuses it, as it must. The defect is the test's, from phase 3, not the stream's. The owner chose, of
+two resolutions offered (fix the helper in this phase; stop and add a separate step first), to fix it here: `absPath` is
+`filepath.Join(os.TempDir(), name)`, absolute on every platform. The phase's files gain `toolstream_test.go`. Skipping the
+tests on Windows was not offered: it would hide the defect.
+
+**Done.**
+
+* `tools/consumer.py`: the docstring names the stream and the floor `v1.35.0`; its test template imports `io` and gains
+  `TestToolCallStream`, an `acptest` pair, `StartToolCallStream`, `io.WriteString`, `Finish`, and a `ToolCallTimeline` fed the
+  `MemoryClient`'s updates that must hold the call completed with the text. `WANT_RUN`, the program's output, is unchanged.
+* `tools/test_tools.py`: `HelpersTest.test_consumer_streams_a_tool_call` requires the template's stream, write, `Finish` and
+  timeline, and the docstring's floor. `tools/README.md`: the `consumer.py` row names the test and `v1.35.0`.
+* `toolstream_test.go`: `absPath`, by the deviation above.
+* `docs/reports/0052-REPORT-release-notes-v1-35-0.md`, new: the release text and its sources.
+
+**Step 1, the consumer.**
+
+* `make check-tools`: exit 0; 71 tool tests, 41 script tests, `check-ci-filters: 0 problem(s)`.
+* Before the tag, by a scratch script: `consumer.py`'s program and test in a scratch module with a `replace` onto the working
+  tree, `go test -run '^TestToolCallStream$'`: exit 0, PASS. The module was removed.
+* Plant, by a scratch script in a copy of `tools/`: the template's `Finish` call removed; `test_consumer_streams_a_tool_call`
+  failed, "FAILED (failures=1)", as required.
+* `python3 tools/consumer.py v1.35.0` needs the tag on the proxy: it runs after the release, step 6.
+
+**Step 2, the gates.**
+
+* `python3 tools/gates.py --all` with both hosts, first run: exit 1, `windows` failed (the deviation above), the 17 others
+  passed.
+* After the fix: `python3 tools/remote.py pkg --host windows . -test.run '^(TestToolCallStreamRoundTrip|TestToolCallStreamSendError|FuzzToolCallStream)$' -test.v`:
+  exit 0, three PASS. `go test -race -count=1 -run 'ToolCallStream|WrapUp' .`: exit 0.
+* `python3 tools/gates.py --all` again: exit 0, "all gates passed", 18 of 18: `regen`, `precheck`, `newfiles`, `nojsonv2`,
+  `winvet`, `records`, `mdlint`, `idscan`, `tools`, `lint`, `fix`, `tidy`, `api`, `race3`, `floor`, `platforms`, `windows`,
+  `linux`. Its `precheck` is `make pre-add-check` over the whole tree, the fixed test included.
+* `python3 tools/interop.py`, on the first run's tree: exit 0, "all pairs passed", the eight pairs against the official
+  TypeScript and Python SDKs over Streamable HTTP and WebSocket. The fix after it touches a root test alone.
+
+**Step 3, the API.** `make api`: exit 0, "against v1.34.2: 0 incompatible, 7 compatible", the seven additions step 3 names
+(`ToolCallStream`'s nine methods within its type); "reported packages unstable, remote: 0 incompatible, not gated".
+
+**Step 4, the release notes,** `docs/reports/0052-REPORT-release-notes-v1-35-0.md`, in the form of
+`0050-REPORT-release-notes-v1-34-0.md`.
+
+**Step 5, the records.** The Verification list, checked:
+
+| Item | Held by |
+| :--- | :--- |
+| each phase's `make pre-add-check` | phases 1 to 5's records; phase 6's through the `precheck` gate |
+| every new test seen to fail on its plant | each phase's plant table; phase 6's plant above |
+| `go test -race -count=20 -run 'ToolCallStream\|WrapUp\|GoIfLive\|WriteLoopEndsLiveFirst' .` and the same over `./internal/tailbuf/ ./clienthost/` | run in this phase: exit 0 each, 24.2 s; 1.3 s and 70.0 s |
+| `FuzzToolCallStream`, 60 s, no crasher | phase 3 |
+| `make api`, exactly the additions | step 3 |
+| `make check-records`, `make markdownlint`, `make disclosure-check`, `make check-tools` | each phase; this phase's below |
+| the Linux and Windows hosts; interop | step 2 |
+| no 10 MiB default outside the records | phase 1, step 2's search |
+
+The MADR's Consequences were read against what was built; the one the MADR had not stated, the generator's check, is its
+amendment of phase 3.
+
+**Not done:** step 6, the tag and the release, waits for the owner's ask in that turn; `tools/consumer.py v1.35.0` and
+`tools/publication.py` run after it. This PLAN stays `in-progress` until then.

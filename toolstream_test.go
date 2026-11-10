@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -191,9 +192,9 @@ func TestToolCallStreamRoundTrip(t *testing.T) {
 	}
 }
 
-// absPath is an absolute path on this host.
+// absPath is an absolute path on this host, a volume included on Windows.
 func absPath(name string) string {
-	return string(os.PathSeparator) + name
+	return filepath.Join(os.TempDir(), name)
 }
 
 // FuzzToolCallStream drives a stream with a sequence of changes read from the

@@ -45,8 +45,13 @@ on its client side see, and the kinds an observer reports, with a request
 refused over WithMaxConcurrentRequests(1) while a held one runs; it prints
 those counts, the ids RequestIDFromContext gives, and errors.Is of a
 middleware's misuse for acp.ErrSendingMiddleware
-(0046-PLAN-sending-and-receiving-middleware.md, phase 7). So VERSION is
-v1.31.0 or later. Its go.mod must keep the `go` line and gain no toolchain line.
+(0046-PLAN-sending-and-receiving-middleware.md, phase 7). Its test also starts
+a ToolCallStream on an acptest pair, writes to it through io.WriteString,
+finishes it, and requires a ToolCallTimeline fed the client's updates to hold
+the call completed with that text
+(0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md, phase
+6). So VERSION is v1.35.0 or later. Its go.mod must keep the `go` line and gain
+no toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
 Usage: consumer.py VERSION
@@ -392,6 +397,7 @@ TEST = '''package main
 
 import (
 	"bytes"
+	"io"
 	"testing"
 	"time"
 
@@ -416,6 +422,41 @@ func TestPresentNotice(t *testing.T) {
 	}
 	if kind := client.Updates()[0].Update.Kind(); kind != "agent_message_chunk" {
 		t.Fatalf("a client without session.notices got %q, want the agent message fallback", kind)
+	}
+}
+
+func TestToolCallStream(t *testing.T) {
+	client := &acptest.MemoryClient{}
+	pair := acptest.Connect(t, &acptest.ScriptAgent{}, client)
+	if _, err := pair.Client.Initialize(t.Context(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
+		t.Fatal(err)
+	}
+	stream, err := acp.StartToolCallStream(t.Context(), pair.Agent, "s", acp.StartToolCall("t", "Run"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(stream, "out"); err != nil {
+		t.Fatal(err)
+	}
+	if err := stream.Finish(t.Context(), acp.ToolCallStatusCompleted); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		var calls acp.ToolCallTimeline
+		for _, n := range client.Updates() {
+			calls.Apply(n.Update)
+		}
+		call, _ := calls.Get("t")
+		if call.Status == acp.ToolCallStatusCompleted {
+			last := call.Content[len(call.Content)-1]
+			if last.Content == nil || last.Content.Content.Text == nil || last.Content.Content.Text.Text != "out" {
+				t.Fatalf("the finished call's content is %+v, want the text written", call.Content)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the finished call did not arrive")
+		}
 	}
 }
 

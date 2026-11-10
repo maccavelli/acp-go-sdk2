@@ -454,6 +454,16 @@ class HelpersTest(Temp):
         full = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
         self.assertEqual(watch_ci.full_sha(repo, full[:7]), full)
 
+    def test_consumer_streams_a_tool_call(self) -> None:
+        # The consumer's test streams a tool call, writes to it, finishes it,
+        # and reads it back with a ToolCallTimeline
+        # (0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md, phase 6).
+        import consumer
+        for needle in ("func TestToolCallStream(", "acp.StartToolCallStream(", "io.WriteString(stream,",
+                       "stream.Finish(", "acp.ToolCallTimeline"):
+            self.assertIn(needle, consumer.TEST)
+        self.assertIn("v1.35.0 or later", consumer.__doc__)
+
     def test_consumer_go_mod(self) -> None:
         import consumer
         good = "module example.invalid/consumer\n\ngo 1.26.10\n\nrequire example.invalid/m v1.2.3\n"

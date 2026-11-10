@@ -551,6 +551,13 @@ for the root, and `toolstream.go` is the root's first import of its own module. 
 module's packages from source, as it already did for the root's external tests, rather than keep two copies of the buffer;
 D4 stands.
 
+### Checked against the build, 2026-11-10
+
+The PLAN's phase 6 read the Consequences against what phases 1 to 5 built: each holds as stated. The cost the Neutral
+consequence gives is bounded as it says, and `BenchmarkToolCallStream` measured one stream's 1,000 writes and `Finish` at
+about 1.07 ms and 201 allocations on darwin/arm64. `make api` reports the seven additions D1 names, nothing incompatible.
+The one consequence the record had not stated, the generator's check of the root, is the amendment above.
+
 ### Observations for gobble-cli, not decided here
 
 * Its final update re-embeds a client terminal already released by the tool's deferred `Release` (`tool/builtin/shell.go:217`
