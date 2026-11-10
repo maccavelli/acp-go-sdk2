@@ -371,7 +371,8 @@ the unplanted run passes both.
   the test binary, which `-race` cannot (it needs cgo), while `remote.py tree` runs without `-race`. The run copied the
   working tree's tracked and untracked files, without macOS `._` files, by a scratch script that follows `remote.py`'s
   method: the host from `ACP_LINUX_HOST`, a fresh `acp-tools-<random>` directory, removed after, its removal checked. No
-  file of the tree changed for it. Recorded for the owner's confirmation at the phase's hand-off.
+  file of the tree changed for it. Recorded for the owner's confirmation at the phase's hand-off. The owner had issue #15
+  filed, "tools/remote.py: run go test -race (and -run, -count) on a test host", for a permanent fix in `remote.py`.
 
 **Pre-add.** `make pre-add-check FILES="connection.go remote/client.go remote/handler.go jsonrpc_test.go remote/ws_test.go
 README.md docs/architecture.md"`: exit 0, "5 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on,
@@ -380,3 +381,46 @@ uncached), tidy, govulncheck." `make check-records`, `make markdownlint` and `ma
 **Not done in this phase:** step 4's last item needed no new test. 0045's D4 test,
 `TestQueuedBytesClampAndSingleLine` (`connection_queue_bytes_test.go:167`), is unchanged and passed in the pre-add run, and
 the 64 MiB default still holds two 32 MiB messages.
+
+**Commit.** The owner committed the phase as `8e7caad`.
+
+### Phase 2, a start only while the connection lives (2026-11-10)
+
+**Base.** `8e7caad`; `git status --short` was empty before the first edit.
+
+**Done.**
+
+* `connection.go`: `liveMu sync.Mutex` and `ended bool` after `goroutines`, their comment giving why a mutex; `goIfLive(f
+  func()) bool` and `endLive()` before `wakeNotificationWaits`, `goIfLive`'s comment stating the `sync.WaitGroup` argument and
+  citing the MADR, D2, and 0026; `writeLoop`'s first statement `defer c.endLive()`, with a comment naming
+  `TestWriteLoopEndsLiveFirst`.
+* `connection_end_test.go`: `TestGoIfLiveAfterEnd`, `TestWriteLoopEndsLiveFirst` and `TestGoIfLiveDuringEnd`, after
+  `TestGoStatementsCounted`, which is unchanged; the imports gain `sync` and `sync/atomic`.
+
+**Found during the phase.** `TestGoIfLiveDuringEnd` as first written let its 32 callers loop while `goIfLive` accepted. Under
+its plant, `goIfLive` never refused, so the callers never ended and the test hung until `go test`'s 120 s timeout
+("panic: test timed out after 2m0s"); the plant reported "NOT AS REQUIRED". The test was rewritten within the step's terms so
+that a broken `goIfLive` fails it and does not hang it: the callers also stop on a channel the test closes; `Wait` is bounded
+through `WaitContext` at 10 s; one `goIfLive` after `Wait` returns must refuse. No other file changed for it.
+
+**Tests.** `go test -race -count=50 -run '^TestGoIfLiveDuringEnd$|^TestGoIfLiveAfterEnd$|^TestWriteLoopEndsLiveFirst$|^TestGoStatementsCounted$' .`:
+exit 0, 17.2 s.
+
+**Plants,** `python3 tools/plants.py` over a four-plant spec in the scratch directory: exit 0, "4/4 as required", each test
+failing in about 1.3 s.
+
+| Plant | Failure |
+| :--- | :--- |
+| `goIfLive` without the `ended` check | `connection_end_test.go:511: goIfLive started a goroutine after Wait returned` |
+| the same, under `TestGoIfLiveDuringEnd` | `connection_end_test.go:597: Wait returned acp: connection closed and goIfLive after it true: goroutines started after the end` |
+| `writeLoop` without the defer | `connection_end_test.go:542: writeLoop's first statement is not defer c.endLive()` |
+| the defer after a first statement `_ = 0` | `connection_end_test.go:542: writeLoop's first statement is not defer c.endLive()` |
+
+The step named the defer "moved after the loop"; the loop only returns, so a defer after it is unreachable and runs never.
+The plant puts a statement before the defer instead, which tests the same rule: the defer must come first.
+
+**Pre-add.** `make pre-add-check FILES="connection.go connection_end_test.go"`: exit 0, "2 file(s) gofmt-clean; both modules
+linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck." `make check-records`, `make markdownlint` and
+`make disclosure-check`: exit 0 each.
+
+**Not done in this phase:** nothing calls `goIfLive` outside its tests yet; phase 3's stream is its first caller.

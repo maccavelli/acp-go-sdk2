@@ -15,6 +15,8 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -487,5 +489,119 @@ func TestGoStatementsCounted(t *testing.T) {
 	}
 	if waiters != 1 {
 		t.Errorf("%d go statements in connection.go's waitDone, want 1: WaitContext's waiter", waiters)
+	}
+}
+
+// TestGoIfLiveAfterEnd requires goIfLive to start f while the connection
+// lives, and, once it has ended and Wait has returned, to refuse and never run
+// f (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// D2).
+func TestGoIfLiveAfterEnd(t *testing.T) {
+	t.Parallel()
+	c := NewConnection(nil, io.Discard, idleReader(t))
+	ran := make(chan struct{})
+	if !c.goIfLive(func() { close(ran) }) {
+		t.Fatal("goIfLive refused a connection that lives")
+	}
+	<-ran
+	_ = c.Close()
+	_ = c.Wait()
+	var late atomic.Bool
+	if c.goIfLive(func() { late.Store(true) }) {
+		t.Error("goIfLive started a goroutine after Wait returned")
+	}
+	c.goroutines.Wait()
+	if late.Load() {
+		t.Error("f ran after Wait returned")
+	}
+}
+
+// TestWriteLoopEndsLiveFirst requires writeLoop's first statement to be
+// defer c.endLive(): goIfLive is safe from a goroutine the wait group does not
+// count only because writeLoop, which it counts, marks the end before it
+// returns (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// D2).
+func TestWriteLoopEndsLiveFirst(t *testing.T) {
+	t.Parallel()
+	f, err := parser.ParseFile(token.NewFileSet(), "connection.go", nil, parser.SkipObjectResolution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range f.Decls {
+		fn, ok := d.(*ast.FuncDecl)
+		if !ok || fn.Recv == nil || fn.Name.Name != "writeLoop" {
+			continue
+		}
+		if len(fn.Body.List) > 0 {
+			if ds, ok := fn.Body.List[0].(*ast.DeferStmt); ok {
+				if sel, ok := ds.Call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "endLive" && len(ds.Call.Args) == 0 {
+					return
+				}
+			}
+		}
+		t.Fatal("writeLoop's first statement is not defer c.endLive()")
+	}
+	t.Fatal("connection.go has no writeLoop method")
+}
+
+// TestGoIfLiveDuringEnd starts goroutines through goIfLive from 32 goroutines
+// the wait group does not count while the connection is closed and Wait runs.
+// When Wait returns, every f that started has returned, and goIfLive refuses
+// from then on. Under -race, a WaitGroup misused by an Add after its count
+// reached zero fails here too. Every wait is bounded, so a goIfLive that never
+// refuses fails the test and does not hang it
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+// D2).
+func TestGoIfLiveDuringEnd(t *testing.T) {
+	t.Parallel()
+	c := NewConnection(nil, io.Discard, idleReader(t))
+	var started, finished atomic.Int64
+	f := func() {
+		started.Add(1)
+		finished.Add(1)
+	}
+	stop := make(chan struct{})
+	var callers, ready sync.WaitGroup
+	for range 32 {
+		ready.Add(1)
+		callers.Go(func() {
+			first := true
+			defer func() {
+				if first {
+					ready.Done()
+				}
+			}()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				if !c.goIfLive(f) {
+					return
+				}
+				if first {
+					ready.Done()
+					first = false
+				}
+			}
+		})
+	}
+	ready.Wait()
+	_ = c.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	waitErr := c.WaitContext(ctx)
+	atWait, doneAtWait := started.Load(), finished.Load()
+	if late := c.goIfLive(f); errors.Is(waitErr, context.DeadlineExceeded) || late {
+		t.Errorf("Wait returned %v and goIfLive after it %v: goroutines started after the end", waitErr, late)
+	} else if atWait != doneAtWait {
+		t.Errorf("when Wait returned, %d goroutines had started and %d returned", atWait, doneAtWait)
+	}
+	close(stop)
+	callers.Wait()
+	c.goroutines.Wait()
+	if n := started.Load(); n != atWait {
+		t.Errorf("%d goroutines started after Wait returned", n-atWait)
 	}
 }

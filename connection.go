@@ -430,6 +430,15 @@ type Connection struct {
 	// reached zero (0026-MADR-connection-end-cause-and-wait.md).
 	goroutines sync.WaitGroup
 
+	// liveMu guards ended, which writeLoop's first defer sets as the
+	// connection ends. goIfLive starts a goroutine under liveMu only while
+	// ended is false, from any goroutine, one goroutines does not count
+	// included (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+	// D2). A mutex, not an atomic: the check and the start are one step
+	// against the mark.
+	liveMu sync.Mutex
+	ended  bool
+
 	// waitOnce starts, once, the goroutine WaitContext waits through, which
 	// runs Wait and then closes waited. It is the one goroutine goroutines
 	// does not count: it runs Wait, which waits for them, and it ends when
@@ -1023,6 +1032,33 @@ func (c *Connection) start() {
 	c.goroutines.Go(c.processNotifications)
 }
 
+// goIfLive starts f on a goroutine goroutines counts when the connection has
+// not ended, and reports whether it did. It may be called from any goroutine,
+// one goroutines does not count included. sync.WaitGroup requires an Add that
+// can meet a zero count to happen before Wait; writeLoop, which goroutines
+// counts from start and which returns only once the connection's context has
+// ended, sets ended under liveMu as its first deferred step. So a start that
+// finds ended false under liveMu adds while writeLoop is still counted, with
+// the count above zero
+// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md, D2;
+// 0026-MADR-connection-end-cause-and-wait.md).
+func (c *Connection) goIfLive(f func()) bool {
+	c.liveMu.Lock()
+	defer c.liveMu.Unlock()
+	if c.ended {
+		return false
+	}
+	c.goroutines.Go(f)
+	return true
+}
+
+// endLive marks the connection ended for goIfLive. writeLoop defers it first.
+func (c *Connection) endLive() {
+	c.liveMu.Lock()
+	c.ended = true
+	c.liveMu.Unlock()
+}
+
 // wakeNotificationWaits wakes every wait on the notification sequence, so each
 // checks again whether its context or the connection has ended.
 func (c *Connection) wakeNotificationWaits() {
@@ -1042,6 +1078,11 @@ type writeRequest struct {
 // ends. A write that has begun runs to its end, so its sender may already
 // have returned on its context (0019-PLAN-api-decisions.md, B16).
 func (c *Connection) writeLoop() {
+	// The first defer: goIfLive relies on writeLoop, which goroutines counts
+	// from start, marking the end before it returns, and on nothing else
+	// (0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md,
+	// D2; TestWriteLoopEndsLiveFirst).
+	defer c.endLive()
 	for {
 		select {
 		case <-c.ctx.Done():
