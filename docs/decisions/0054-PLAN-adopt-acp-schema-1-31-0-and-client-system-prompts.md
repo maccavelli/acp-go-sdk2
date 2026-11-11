@@ -848,3 +848,41 @@ The second run was "2/2 as required", exit 0.
   unchanged, `cmp -s schema/version version` exited 0, and `git diff --exit-code schema/unstable-v1.json README.md`
   exited 0.
 * Phase 3 is staged for the owner's commit.
+
+### Deviation 6, a phase 3 test fails on Windows (2026-11-10)
+
+* **Found:** by step 4 of
+  [0055-PLAN-pin-go-1-27-4-and-floor-1-26-11.md](0055-PLAN-pin-go-1-27-4-and-floor-1-26-11.md), the first run of this
+  tree's tests on the Windows host since phase 3. The root module passed. In `cmd/generate`, one test failed:
+  `TestGeneratedFilesUpToDate`, "`main_test.go:79`: `unstable\unstable_gen.go` is a generated file run would remove".
+  The Linux host passed both modules.
+* **Why:** the test's loop over `emit.Dirs` built each path with `filepath.Join(d, e.Name())` (`main_test.go:70`), a
+  backslash path on Windows, and looked it up among the rendered files' paths, which `emit.File.Path` writes with a
+  slash on every platform. The file was not found there, so the test read it, saw the generated header, and called it
+  stale. The line is from `5124800`. It could not fail before phase 3 (`894726f`): until then no generated file was in
+  a subdirectory. The generator is right: `output.staleFiles` builds the path with `emit.File.Path`
+  (`output/write.go:127`), and `output`'s own tests passed on the Windows host. The Go pin has no part in it.
+* **Left alone:** CI's Windows jobs run `go test -shuffle=on ./...` in `cmd/generate` (`ci.yml:117`), so both would
+  fail on the first push of `894726f`.
+* **Put to the owner** with three options. The other two were the fix inside 0055's commit, and a new record pair.
+* **Decided:** a deviation of this PLAN, in a commit of its own, before 0055's (the owner, 2026-11-10).
+* **Changed:** `cmd/generate/main_test.go:70` builds the path as `output.staleFiles` does,
+  `emit.File{Dir: d, Name: e.Name()}.Path()`. The read below it joins that path to the repository root with
+  `filepath.Join`, which turns the slash into the platform's separator. The file is in phase 3's row; no file is added
+  to the PLAN's scope.
+* **The check was seen to fail, and still fails when it should.**
+  * Before the fix, on the Windows host, the one test run alone with `-v`: exit 1, the message above.
+  * After the fix, on a scratch copy of the tree, the test passed here and on the Windows host (go1.27.4).
+  * On that copy with `unstable/old_gen.go` planted, the generated header and `package unstable`, the test failed on
+    both, exit 1: "`main_test.go:82`: `unstable/old_gen.go` is a generated file run would remove". So the test still
+    finds a stale file in package unstable, and names it with a slash on Windows.
+* **Checks.**
+  * `make pre-add-check FILES="cmd/generate/main_test.go"` exited 0: "1 file(s) gofmt-clean; both modules linted,
+    vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck." It ran with 0055's pins in the tree, without
+    which `govulncheck` fails (deviation 5).
+  * `tools/gates.py windows` exited 0: both modules passed at `go version go1.27.4 windows/amd64`, and the host's
+    directory was removed.
+  * The Linux host was not run again after the fix. It had passed both modules before it, and the changed line yields
+    the same path where the separator is a slash.
+* The fix and this entry are staged alone, for a commit before 0055's. Deviation 5 and phase 4's record above stay
+  unstaged with phase 4.

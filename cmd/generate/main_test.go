@@ -67,7 +67,10 @@ func TestGeneratedFilesUpToDate(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, e := range entries {
-			path := filepath.Join(d, e.Name())
+			// The path as the rendered files name it, with a slash on
+			// every platform, as output.staleFiles builds it: filepath.Join
+			// would not find unstable\unstable_gen.go among them on Windows.
+			path := emit.File{Dir: d, Name: e.Name()}.Path()
 			if e.IsDir() || slices.Contains(names, path) || (!strings.HasSuffix(e.Name(), "_gen.go") && !strings.HasSuffix(e.Name(), "_gen_test.go")) {
 				continue
 			}
