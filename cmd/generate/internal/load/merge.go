@@ -85,6 +85,9 @@ func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta
 	if stableMeta.Version != 0 && unstableMeta.Version != 0 && stableMeta.Version != unstableMeta.Version {
 		return nil, nil, nil, fmt.Errorf("stable meta version (%d) differs from unstable meta version (%d)", stableMeta.Version, unstableMeta.Version)
 	}
+	if err := refuseStableProxyMethods(stableMeta); err != nil {
+		return nil, nil, nil, err
+	}
 
 	stableWires := map[string]struct{}{}
 	addWireMethods(stableWires, stableMeta.AgentMethods)
@@ -176,6 +179,16 @@ func MergeStableAndUnstable(stableMeta *Meta, stableSchema *Schema, unstableMeta
 		prov.UnstableWires[wire] = true
 	}
 	return combinedMeta, combinedSchema, prov, nil
+}
+
+// refuseStableProxyMethods refuses a stable meta that lists proxy methods:
+// the SDK dispatches only agent, client and protocol methods, and an unstable
+// meta's proxy methods are merged into no side (Meta.ProxyMethods).
+func refuseStableProxyMethods(stableMeta *Meta) error {
+	if len(stableMeta.ProxyMethods) > 0 {
+		return errors.New("proxy methods in the stable schema: the SDK dispatches only agent, client and protocol methods")
+	}
+	return nil
 }
 
 func addWireMethods(dst map[string]struct{}, methods map[string]string) {

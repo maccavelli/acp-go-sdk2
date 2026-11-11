@@ -231,7 +231,9 @@ func isOpenStringEnum(def *load.Definition) bool {
 
 // checkRefs fails on a $ref that is not local or names no definition, on an
 // integer or number whose format has no Go type (keywords.go), on
-// x-deserialize-skip-invalid-items on a node that is not an array, on a
+// x-deserialize-skip-invalid-items on a node that is not an array, on
+// x-deserialize-default-on-null on one that is neither an array nor an
+// object, on a
 // shape the model would type with loss (checkTypable), and on deprecated
 // where no Go declaration is built (checkDeprecated).
 func checkRefs(schema *load.Schema) error {
@@ -320,6 +322,7 @@ func refSiblings(d *load.Definition) []string {
 		{"minimum", d.Minimum != nil}, {"maximum", d.Maximum != nil}, {"minLength", d.MinLength != nil},
 		{kwAdditional, d.AdditionalProperties != nil}, {kwNot, d.Not != nil}, {kwUnevaluated, d.UnevaluatedProperties != nil},
 		{"x-deserialize-default-on-error", d.XDeserializeDefaultOnError}, {"x-deserialize-skip-invalid-items", d.XDeserializeSkipInvalidItems},
+		{"x-deserialize-default-on-null", d.XDeserializeDefaultOnNull},
 	} {
 		if k.set {
 			out = append(out, k.name)
@@ -475,6 +478,11 @@ func walkRefs(schema *load.Schema, path string, d *load.Definition) error {
 	}
 	if typ := primaryType(d); d.XDeserializeSkipInvalidItems && typ != schemaTypeArray {
 		return fmt.Errorf("%s: x-deserialize-skip-invalid-items on %s, not an array", path, typ)
+	}
+	// null has an empty value to decode as only for an array or an object
+	// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D2).
+	if typ := primaryType(d); d.XDeserializeDefaultOnNull && typ != schemaTypeArray && typ != schemaTypeObject {
+		return fmt.Errorf("%s: x-deserialize-default-on-null on %s, not an array or an object", path, typ)
 	}
 	// skipInvalid drops a null item, so items that admit null are refused
 	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G14).

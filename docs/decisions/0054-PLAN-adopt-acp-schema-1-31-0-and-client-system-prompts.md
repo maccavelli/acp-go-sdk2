@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: in-progress
 date: 2026-11-10
 associated-madr: "0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md"
 ---
@@ -51,7 +51,7 @@ Ship the MADR's O1 as `v1.36.0`. At the end of it:
 
 | Phase | Files |
 | :--- | :--- |
-| 1, the two keys (D2, D3) | `cmd/generate/internal/load/load.go`, `merge.go`, `manifest.go`, `unstable.go`, `load_test.go`, `unstable_test.go`; `cmd/generate/internal/model/keywords.go`, `schema.go`, `fields.go`, `methods.go`, `model.go`, `schema_test.go`; `cmd/generate/internal/emit/constants.go`, `unstable.go`; `cmd/generate/testdata/engine/` new cases |
+| 1, the two keys (D2, D3) | `cmd/generate/internal/load/load.go`, `merge.go`, `manifest.go`, `load_test.go`; `cmd/generate/internal/model/keywords.go`, `schema.go`, `fields.go`, `schema_test.go`; `cmd/generate/testdata/engine/` new cases. *Deviation 1 (2026-11-10) dropped `load/unstable.go`, `unstable_test.go`, `model/methods.go`, `model.go`, `emit/constants.go` and `emit/unstable.go`: the proxy methods emit nothing.* |
 | 2, the gate kinds and the validation list (D5, D6 machinery) | `cmd/generate/internal/model/protocol.go`, `gates.go`, `model.go`, `validate.go`, `gates_test.go`, `protocol_test.go`; `cmd/generate/internal/emit/gates.go`, `types.go`, `types_test.go`; `cmd/generate/main_test.go` (the rule stub, if its type check needs `RuleMinItems`); `cmd/generate/testdata/engine/` new cases |
 | 3, the pin and the rules (D1, D4, D5, D6, D8) | `schema/version`, `version`, `schema/meta.json`, `schema/schema.json`, `schema/meta.unstable.json`, `schema/schema.unstable.json`; `cmd/generate/internal/model/acp.go`, `gates_test.go`, `sources_test.go`; `cmd/generate/main_test.go`; the generated `constants_gen.go`, `types_gen.go`, `agent_gen.go`, `client_gen.go`, `helpers_gen.go`, `schema_gen_test.go`, `unstable/unstable_gen.go` (new); `testdata/encodings.golden`; `system_prompt_test.go` (new); `default_on_null_test.go` (new) |
 | 4, the docs (D8) | `README.md`; `docs/architecture.md`; `doc.go` only if it lists the capabilities |
@@ -123,35 +123,31 @@ passing and `git status` naming no `*_gen.go` file are this phase's proof.
    * In `MergeStableAndUnstable` (`merge.go:90`-`:96`) and `MergeManifest` (`manifest.go:139`-`:144`), a stable
      `meta.json` that holds proxy methods is refused: "proxy methods in the stable schema: the SDK dispatches only agent,
      client and protocol methods". Upstream's stable `meta.json` holds none.
-   * The live unstable meta's proxy methods are new unstable methods by 0039's rule. `NewUnstable` (`unstable.go:99`-`:126`)
-     copies them into the meta of package `unstable` under `ProxyMethods`, as it copies the other sides, and marks their
-     wires unstable.
-6. **The proxy side in the model of `unstable`.**
-   * `model/methods.go`'s side table (`:144`-`:146`) gains `{"proxy", m.meta.ProxyMethods, m.ProxyMethodConsts,
-     &m.Proxy}`, with `Model.ProxyMethodConsts` and `Model.Proxy` beside their kin (`model.go:71`-`:75`, `:359`, `:434`-`:436`).
-   * The 1.31.0 unstable schema links five definitions with `"x-side": "proxy"`: `InitializeProxyRequest`,
-     `InitializeProxyResponse`, `ProxySuccessorRequest`, `ProxySuccessorResponse` and `ProxySuccessorNotification`.
-     `ProxyRequest`, `ProxyNotification` and `ProxyResponse` are envelopes with `x-docs-ignore`.
-   * A proxy method takes no interface binding and no dispatch. It gets its types and a `ProxyMethod<Name>` constant,
-     emitted where `unstable`'s method constants are (`emit/unstable.go:103`, `emit/constants.go:36`-`:39`).
-   * The G18 check (`methods.go:159`-`:168`) then finds the five linked definitions listed.
-7. **Stop condition (MADR D3).** If the model cannot hold a side that is neither agent nor client without a binding,
-   dispatch or interface, or if a proxy definition would reach a type in `acp`, stop. Record what was found, and amend the
-   MADR before going on. Proxy methods are not dropped silently.
+   * ~~The live unstable meta's proxy methods are new unstable methods by 0039's rule. `NewUnstable` copies them into the
+     meta of package `unstable`.~~ *Deviation 1 (2026-11-10): the proxy methods are merged into no side, so none of
+     their definitions is reached and `unstable` holds no proxy name. `Meta.ProxyMethods`' doc comment says so and cites
+     the MADR's amendment.*
+6. ~~**The proxy side in the model of `unstable`.** A `"proxy"` side in `model/methods.go`'s side table, `ProxyMethod<Name>`
+   constants, and the five linked definitions listed for G18.~~ *Dropped by deviation 1: the generator cannot type them
+   (alias definitions, a dual-role wire, a binding-less side; the MADR's amendment).*
+7. **Stop condition (MADR D3).** *Met on 2026-11-10 before any edit; deviation 1 records it, and the MADR is amended.*
 8. **Engine cases** (`cmd/generate/testdata/engine/`):
    * `accept-default-on-null.txtar`: an object with a required array, an optional array and an optional map, each with
      the keyword. Its `behaviour_test.go` decodes `null` into each with no error, requires `Validate` to pass, and
      requires the re-encoding to hold `[]` for the required array and to omit the optional ones.
    * `refuse-default-on-null-scalar.txtar`: the keyword on a string. `want.err` is step 3's message.
-   * `accept-unstable-proxy-methods.txtar`: a manifest and a live unstable meta with `proxyMethods` and its five linked
-     definitions. `want.api` (acp) is the same as without them. `want.api.unstable` lists the proxy types and constants.
+   * `accept-unstable-proxy-methods-omitted.txtar`, *renamed by deviation 1*: a manifest and a live unstable meta with
+     `proxyMethods` and the 1.31.0 proxy shapes: an `allOf` alias definition, and a wire with a request, a response and a
+     notification. Generation succeeds. `want.api` (acp) is the same as without them, and `want.api.unstable` holds no
+     proxy name.
    * `refuse-stable-proxy-methods.txtar`: a stable `meta.json` with `proxyMethods`. `want.err` is step 5's message.
-9. **Unit tests.** `load_test.go` decodes both keys. `unstable_test.go` requires the proxy methods in `unstable`'s meta and
-   in no `acp` model.
+9. **Unit tests.** `load_test.go` decodes both keys. *Deviation 1: `unstable_test.go` is not changed; the engine case
+   carries the omission.*
 10. **Plants:**
     * the `keywords.go` entry removed fails `TestKeywordRegistryMatchesLoader`;
     * step 3's check removed fails `refuse-default-on-null-scalar`;
-    * `NewUnstable`'s proxy copy removed fails `accept-unstable-proxy-methods`;
+    * *(deviation 1)* `MergeStableAndUnstable` made to merge the live proxy methods into the agent side fails
+      `accept-unstable-proxy-methods-omitted`, on the alias or the dual-role refusal;
     * the stable refusal removed fails `refuse-stable-proxy-methods`;
     * the emitter's nil-to-`[]` encoding of a required array, at the site the phase finds and records, made to keep `null`,
       fails `accept-default-on-null`.
@@ -324,7 +320,7 @@ The schema stays at `1.25.0`, and `model/acp.go` gains no rule, so again no gene
     * in `acp`, exactly the eleven additions of MADR F9: `SystemPrompt`, `SystemPromptMode`, `SystemPromptModeAppend`,
       `SystemPromptModeOverride`, `SessionSystemPromptCapabilities`, `SessionSystemPromptModeCapabilities`,
       `SessionSystemPromptOverrideCapabilities`, and the four `SystemPrompt` fields;
-    * in `unstable`, F9's 46 additions plus the proxy types and constants, each listed in the record.
+    * in `unstable`, F9's 46 additions and no proxy name (deviation 1), each listed in the record.
 
     A gate adds no exported name.
 11. **Flakiness:** `go test -race -count=20 -run 'SystemPrompt|DefaultOnNull' .`, recorded.
@@ -377,7 +373,7 @@ The schema stays at `1.25.0`, and `model/acp.go` gains no rule, so again no gene
    * the system prompt's types and their gates, and what an SDK client and an SDK agent now refuse, as a change on the
      wire limited to messages that carry `systemPrompt`;
    * the keyword;
-   * the new `unstable` names;
+   * the new `unstable` names, and the proxy methods that are not among them (deviation 1);
    * `make api`'s report.
 6. **The records:**
    * this PLAN is `complete` only when every Verification item holds;
@@ -431,4 +427,89 @@ The schema stays at `1.25.0`, and `model/acp.go` gains no rule, so again no gene
 
 ## Execution record
 
-Not started. The PLAN is `proposed` until the owner approves it.
+### Approval (2026-11-10)
+
+* The 0053 report and its rows were committed alone (`9491138`, on the owner's ask). The owner committed the MADR, this
+  PLAN and their rows (`130ea34`), and said "committed proceed". That is the approval, and `130ea34` is the base.
+* Preconditions: `git status --short` was clean on `130ea34`. `make test` exited 0, every package of both modules `ok`.
+
+### Deviation 1, the proxy methods (2026-11-10)
+
+* **Found:** in phase 1, before any edit, by reading the generator for step 6. The `1.31.0` proxy methods hold three
+  shapes the generator refuses:
+  * `InitializeProxyRequest` and `InitializeProxyResponse` are `allOf` aliases on a definition
+    (`model/schema.go:357`-`:358`);
+  * `proxy/successor` links a request and a notification to one wire (`model/methods.go:213`-`:214`);
+  * `"x-side": "proxy"` takes no binding (`methods.go:268`-`:283`).
+
+  Step 7's stop condition was met.
+* **Put to the owner** with three options. The other two were building the generator support, and the constants only.
+* **Decided:** model the key and emit nothing (the owner, 2026-11-10). The MADR's D3 and question 4 carry an amendment.
+* **Changed in this PLAN:**
+  * phase 1, steps 5 to 10, struck through or annotated;
+  * phase 1's row in Scope;
+  * one engine case renamed `accept-unstable-proxy-methods-omitted`.
+
+  Phase 3, step 10's `unstable` additions are now F9's 46, with no proxy names. The release notes (phase 5) name the
+  omission.
+
+### Phase 1, the two keys (2026-11-10)
+
+**What was done.**
+
+* **`load/load.go`:** `Definition.XDeserializeDefaultOnNull`, with the doc of the three `x-deserialize` fields citing
+  D2. `Meta.ProxyMethods`, whose doc says the methods are read, merged into no side and refused in a stable meta,
+  citing the amendment. `ReadMeta` refuses a stable `meta.json` with proxy methods.
+* **`load/merge.go`:** `refuseStableProxyMethods`, called first in `MergeStableAndUnstable`. **`load/manifest.go`:** the
+  same, in `MergeManifest`.
+* **`model/keywords.go`:** `"x-deserialize-default-on-null": TreatDecode`. **`model/schema.go`:** the keyword in
+  `refSiblings`, and the shape check in `walkRefs` ("x-deserialize-default-on-null on %s, not an array or an object"),
+  named in `checkRefs`' doc. **`model/fields.go`:** `Facts.DefaultOnNull`, set by `factsOf`. No emitter reads it.
+* **Engine cases:**
+  * `accept-default-on-null`: required `args`, optional `more` and `env`. Its behaviour test decodes `null` into each
+    and requires `{"args":[]}` on encode.
+  * `refuse-default-on-null-scalar`;
+  * `accept-unstable-proxy-methods-omitted`: `accept-unstable-empty` plus `proxyMethods`, an `allOf` alias pair, and a
+    request, response and notification on `proxy/successor`. Its `want.api` is byte-identical to
+    `accept-unstable-empty`'s, and it has no `want.api.unstable`;
+  * `refuse-stable-proxy-methods`.
+* **`load/load_test.go`:** `TestParseSchemaKeepsDefaultOnNull`. `TestMetaProxyMethods` requires the refusal from
+  `ReadMeta`, `MergeStableAndUnstable` and `MergeManifest`. `TestDeepCopyDefinitionCoversEveryField`'s fixture sets the
+  new field, which that test requires of every `Definition` field (it failed first: "the fixture leaves
+  XDeserializeDefaultOnNull zero").
+
+**Found on the way, inside the phase's files.**
+
+* `refuse-stable-proxy-methods` was first accepted. A schema with no unstable files is read by `Committed` without
+  either merge (`load.go:413`-`:414`), so the refusal also went into `ReadMeta`.
+* `accept-default-on-null`'s behaviour test first failed to compile in `TestEngineBehaviour`: `l.Validate undefined`.
+  `Validate` is generated only for a type with checks. The call was removed; phase 3's `TestDefaultOnNullLists`
+  validates the schema's own 14 properties.
+* The PLAN's Scope named `model/schema_test.go`. It was not needed, because the engine case carries the check.
+
+**Generated output.** `git status --short` names no generated file. At `1.25.0` nothing carries the new keys, so the
+output is unchanged.
+
+**Plants** (`python3 tools/plants.py`, scratch spec `plants_p1.json`, each in its own copy of the working tree; exit 0,
+"5/5 as required"):
+
+| Plant | Test | Failure |
+| :--- | :--- | :--- |
+| P1-1, the `keywords.go` entry removed | `TestKeywordRegistryMatchesLoader` | `keywords_test.go:30: registry:` |
+| P1-2, `walkRefs`' shape check made `false &&` | `TestEngineCases/refuse-default-on-null-scalar` | `engine_test.go:50: run accepted the schema` |
+| P1-3, the live proxy methods merged into the agent side | `TestEngineCases/accept-unstable-proxy-methods-omitted` | `engine_test.go:50: unstable: model: InitializeProxyRequest: allOf on a definition is not supported` |
+| P1-4, `ReadMeta`'s refusal given an empty meta | `TestEngineCases/refuse-stable-proxy-methods` | `engine_test.go:50: run accepted the schema` |
+| P1-5, `emitObjectMarshal`'s fill of nil required collections skipped (`fills[:0]`) | `TestEngineBehaviour` | `behaviour_test.go:80: the package's tests did not pass`, in `accept-default-on-null` |
+
+P1-3's failure is deviation 1's evidence, run: the generator refuses the proxy alias when the proxy methods reach a
+side.
+
+**Checks.**
+
+* `make pre-add-check FILES="<the phase's 7 Go files and 4 engine cases>"` first exited 2: gofmt wanted the keyword
+  table's column realigned after the new entry and its comment (`model/keywords.go:54`). After `gofmt -w` on that file,
+  it exited 0: "7 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy,
+  govulncheck."
+* `make check-records`, `make markdownlint` and `make disclosure-check` exited 0: 0 issues, "813 tracked file(s),
+  0 finding(s)".
+* Phase 1 is staged for the owner's commit.

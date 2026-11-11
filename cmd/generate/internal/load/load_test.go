@@ -3,6 +3,7 @@ package load
 import (
 	"encoding/json"
 	"maps"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -61,6 +62,58 @@ func TestParseSchemaKeepsModeledKeywords(t *testing.T) {
 	}
 	if ml := s.Defs["S"].MinLength; ml == nil || *ml != 1 {
 		t.Errorf("S.MinLength = %v", ml)
+	}
+}
+
+// TestParseSchemaKeepsDefaultOnNull requires x-deserialize-default-on-null to
+// be read, where the strict decoder refused it as unknown before schema 1.31.0
+// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D2).
+func TestParseSchemaKeepsDefaultOnNull(t *testing.T) {
+	t.Parallel()
+	s, err := parseSchema([]byte(`{"$defs":{"L":{"type":"object","properties":{"args":{"type":"array","items":{"type":"string"},
+		"x-deserialize-default-on-null":true},"name":{"type":"string"}}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	props := s.Defs["L"].Properties
+	if !props["args"].XDeserializeDefaultOnNull || props["name"].XDeserializeDefaultOnNull {
+		t.Errorf("args decoded as %+v, name as %+v", props["args"], props["name"])
+	}
+}
+
+// TestMetaProxyMethods requires a meta file's proxyMethods to be read into
+// ProxyMethods, as the unstable meta of schema 1.29.0 and later carries them,
+// and a stable meta.json that lists one to be refused, by ReadMeta and by both
+// merges (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md,
+// "Amendment 2026-11-10: the proxy methods emit nothing").
+func TestMetaProxyMethods(t *testing.T) {
+	t.Parallel()
+	const withProxy = `{"version":1,"agentMethods":{},"clientMethods":{},"protocolMethods":{},` +
+		`"proxyMethods":{"proxy_successor":"proxy/successor"}}`
+	meta, err := parseMeta([]byte(withProxy))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.ProxyMethods["proxy_successor"] != "proxy/successor" {
+		t.Errorf("ProxyMethods = %v", meta.ProxyMethods)
+	}
+
+	const want = "proxy methods in the stable schema"
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "meta.json"), []byte(withProxy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadMeta(dir); err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("ReadMeta = %v, want an error containing %q", err, want)
+	}
+	unstable := &Meta{Version: 1}
+	if _, _, _, err := MergeStableAndUnstable(meta, &Schema{Defs: map[string]*Definition{}}, unstable, &Schema{Defs: map[string]*Definition{}}); err == nil ||
+		!strings.Contains(err.Error(), want) {
+		t.Errorf("MergeStableAndUnstable = %v, want an error containing %q", err, want)
+	}
+	if _, _, _, err := MergeManifest(meta, &Schema{Defs: map[string]*Definition{}}, &Manifest{frozen: &Schema{}}); err == nil ||
+		!strings.Contains(err.Error(), want) {
+		t.Errorf("MergeManifest = %v, want an error containing %q", err, want)
 	}
 }
 
@@ -136,6 +189,7 @@ func TestDeepCopyDefinitionCoversEveryField(t *testing.T) {
 		UnevaluatedProperties:        child(),
 		XDeserializeDefaultOnError:   true,
 		XDeserializeSkipInvalidItems: true,
+		XDeserializeDefaultOnNull:    true,
 		Deprecated:                   true,
 		boolSchema:                   &b,
 	}

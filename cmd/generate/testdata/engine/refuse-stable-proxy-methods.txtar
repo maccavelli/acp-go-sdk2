@@ -1,0 +1,12 @@
+Refused: a stable meta.json that lists proxy methods, which the SDK does not
+dispatch (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md,
+"Amendment 2026-11-10: the proxy methods emit nothing").
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}, "proxyMethods": {"proxy_successor": "proxy/successor"}}
+-- schema.json --
+{"$defs": {
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+proxy methods in the stable schema: the SDK dispatches only agent, client and protocol methods

@@ -271,6 +271,9 @@ answers a received one `-32601`, as it does any unstable method `acp` does not d
 Proxy methods belong to neither side, unlike every method the generator has placed so far. If the generator cannot
 place them on that rule as it stands, the PLAN stops and this record is amended. They are not dropped silently.
 
+*Amended 2026-11-10, in the PLAN's phase 1: the generator cannot place them. The proxy methods are modeled and emit
+nothing; see "Amendment 2026-11-10: the proxy methods emit nothing" below.*
+
 ### D4. The types
 
 The types are generated as F13 shows. No hand-written code changes for them. `SystemPromptMode` stays an open `string`
@@ -381,7 +384,7 @@ D1 to D9 stand as written.
 | 1. The pin | `1.31.0` | `1.30.0`; the newest stable at PLAN time |
 | 2. Unlisted modes | Refuse every mode but `append` and `override`, `_` modes included, on send and on receipt; `WithInboundValidation` opts an agent in | let `_` modes pass both ways; refuse on send only |
 | 3. Empty content | Refuse on send and on receipt (`-32602`) | on send only; not at all |
-| 4. Proxy methods | Their types and constants to `unstable`; if the generator cannot place a method of neither side, the PLAN stops and this record is amended | model the key and emit nothing; full proxy support with dispatch hooks |
+| 4. Proxy methods | Their types and constants to `unstable`; if the generator cannot place a method of neither side, the PLAN stops and this record is amended. *Superseded 2026-11-10 by the amendment below: model the key and emit nothing.* | model the key and emit nothing; full proxy support with dispatch hooks |
 | 5. Helpers | None | a constructor and a text accessor; a constructor only |
 | 6. Release | `v1.36.0` at the close of the PLAN | two releases, the types ungated first; hold the tag until gobble-cli is ready |
 
@@ -507,3 +510,29 @@ gates of D5 and D6, and the PLAN measures it again.
 
 A PLAN, `0054-PLAN-adopt-acp-schema-1-31-0-and-client-system-prompts.md`, once the owner accepts this record. The
 questions were answered on 2026-11-10.
+
+## Amendment 2026-11-10: the proxy methods emit nothing
+
+Found in the PLAN's phase 1, by reading the generator before any edit. The MADR's question 4 answer, the proxy methods'
+types and constants in `unstable`, cannot be built on the generator as it stands. Three of its rules refuse what the
+`1.31.0` unstable schema holds:
+
+* **Alias definitions.** `InitializeProxyRequest` and `InitializeProxyResponse` are each
+  `{"allOf": [{"$ref": "#/$defs/InitializeRequest"}]}` (or `InitializeResponse`). `checkTypable` refuses `allOf` on a
+  definition: "allOf on a definition is not supported" (`cmd/generate/internal/model/schema.go:357`-`:358`).
+* **One wire, two roles.** `proxy/successor` links `ProxySuccessorRequest`, `ProxySuccessorResponse` and
+  `ProxySuccessorNotification`: it wraps either a request or a notification. `buildMethod` refuses a wire with both a
+  request and a notification (`model/methods.go:213`-`:214`). `ProxySuccessorResponse` has no type at all.
+* **A side of its own.** `"x-side": "proxy"` takes no binding (`bindingOf`, `model/methods.go:268`-`:283`).
+
+The owner chose, on 2026-11-10, Q4's alternative of the three put: **model the key and emit nothing**. The other two
+were building the generator support (alias definitions, a dual-role wire, a binding-less side), and the constants alone.
+
+* `load.Meta` declares `proxyMethods`, so `meta.unstable.json` loads. A stable `meta.json` that holds proxy methods is
+  still refused, since the SDK dispatches only agent, client and protocol methods.
+* The proxy methods are merged into no side. So no proxy wire is unstable-only to the merge, none of their definitions
+  is reached, and package `unstable` holds no proxy name. That is what the probe of F9 measured with the key removed:
+  46 additions in `unstable`.
+* An engine case pins the omission. The release notes name it, so it is a recorded gap, not a silent drop.
+* Building the proxy types needs its own record: alias definitions and a dual-role wire are new generator machinery.
+  That record waits until a consumer needs proxy chains; none does today.

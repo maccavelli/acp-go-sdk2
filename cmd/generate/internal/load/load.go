@@ -22,6 +22,15 @@ type Meta struct {
 	AgentMethods    map[string]string `json:"agentMethods"`
 	ClientMethods   map[string]string `json:"clientMethods"`
 	ProtocolMethods map[string]string `json:"protocolMethods,omitempty"`
+	// ProxyMethods are the proxy-chain methods a conductor and its proxies
+	// exchange. The generator reads them and emits nothing for them: their
+	// definitions are allOf aliases and a wire with both a request and a
+	// notification, which it cannot type, so they are merged into no side and
+	// reach neither acp nor package unstable. A stable meta that lists one is
+	// refused
+	// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md,
+	// "Amendment 2026-11-10: the proxy methods emit nothing").
+	ProxyMethods map[string]string `json:"proxyMethods,omitempty"`
 }
 
 // Schema is a minimal view over schema/schema.json definitions used by the generator.
@@ -73,9 +82,12 @@ type Definition struct {
 	UnevaluatedProperties *Definition `json:"unevaluatedProperties"`
 	// XDeserializeDefaultOnError asks a decoder to use the default when the
 	// value fails to decode; XDeserializeSkipInvalidItems asks it to drop
-	// array items that fail to decode.
+	// array items that fail to decode; XDeserializeDefaultOnNull asks it to
+	// read null as the empty array or object
+	// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D2).
 	XDeserializeDefaultOnError   bool `json:"x-deserialize-default-on-error"`
 	XDeserializeSkipInvalidItems bool `json:"x-deserialize-skip-invalid-items"`
+	XDeserializeDefaultOnNull    bool `json:"x-deserialize-default-on-null"`
 	// Deprecated is JSON Schema 2020-12's annotation that applications should
 	// refrain from using the node; false is the same as absent, and null is
 	// refused (0024-PLAN-api-gate-and-deprecation.md).
@@ -310,6 +322,9 @@ func ReadMeta(schemaDir string) (*Meta, error) {
 	}
 	meta, err := parseMeta(metaBytes)
 	if err != nil {
+		return nil, fmt.Errorf("parse meta.json: %w", err)
+	}
+	if err := refuseStableProxyMethods(meta); err != nil {
 		return nil, fmt.Errorf("parse meta.json: %w", err)
 	}
 	return meta, nil

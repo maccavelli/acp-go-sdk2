@@ -110,9 +110,14 @@ type Facts struct {
 	Minimum   *json.Number
 	Maximum   *json.Number
 	MinLength *int
-	// DefaultOnError and SkipInvalidItems are the x-deserialize keywords.
+	// DefaultOnError, SkipInvalidItems and DefaultOnNull are the
+	// x-deserialize keywords. DefaultOnNull is what the decoders already do
+	// for an array or an object, so no emitter reads it; the engine case
+	// accept-default-on-null pins that behaviour
+	// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D2).
 	DefaultOnError   bool
 	SkipInvalidItems bool
+	DefaultOnNull    bool
 }
 
 // Field is one struct field.
@@ -620,6 +625,7 @@ func factsOf(prop *load.Definition) Facts {
 		MinLength:        prop.MinLength,
 		DefaultOnError:   prop.XDeserializeDefaultOnError,
 		SkipInvalidItems: prop.XDeserializeSkipInvalidItems,
+		DefaultOnNull:    prop.XDeserializeDefaultOnNull,
 	}
 }
 

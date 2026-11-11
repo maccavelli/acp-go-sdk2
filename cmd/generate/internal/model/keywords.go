@@ -48,7 +48,10 @@ var keywords = map[string]Treatment{
 	"required":                         TreatDecode,
 	"x-deserialize-default-on-error":   TreatDecode,
 	"x-deserialize-skip-invalid-items": TreatDecode,
-	"default":                          TreatDecodeEncode,
+	// null decodes as the empty array or object, which the decoders already
+	// do (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D2).
+	"x-deserialize-default-on-null": TreatDecode,
+	"default":                       TreatDecodeEncode,
 
 	"minimum":   TreatTypeOrValidate,
 	"maximum":   TreatTypeOrValidate,

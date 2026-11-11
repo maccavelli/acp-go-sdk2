@@ -1,0 +1,12 @@
+Refused: x-deserialize-default-on-null on a string, which has no empty array or
+object to decode null as (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D2).
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Caps": {"type": "object", "properties": {"name": {"type": "string", "x-deserialize-default-on-null": true}}},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.err --
+x-deserialize-default-on-null on string, not an array or an object

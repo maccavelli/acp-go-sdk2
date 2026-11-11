@@ -1,0 +1,72 @@
+x-deserialize-default-on-null on a required array, an optional array and an
+optional object: null decodes as the empty value, and the encoding writes the
+required array as [] and leaves out the optional ones (Launch has no checks, so
+no Validate; the root's TestDefaultOnNullLists validates the schema's own)
+(0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D2). The meta
+declares $/cancel_request and the schema its smallest definition, which the
+runtime needs.
+
+-- meta.json --
+{"version": 1, "agentMethods": {}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{"$defs": {
+  "Launch": {"type": "object", "properties": {"args": {"type": "array", "items": {"type": "string"}, "x-deserialize-default-on-null": true}, "more": {"type": "array", "items": {"type": "string"}, "x-deserialize-default-on-null": true}, "env": {"type": "object", "additionalProperties": {"type": "string"}, "x-deserialize-default-on-null": true}}, "required": ["args"]},
+  "CancelRequestNotification": {"type": "object", "x-side": "protocol", "x-method": "$/cancel_request"}
+}}
+-- want.api --
+type Agent interface{}
+type AgentExperimental interface{}
+type AgentSideConnection struct{conn *Connection; agent Agent}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client}
+type Launch struct{Args []string "json:\"args\""; Env map[string]string "json:\"env,omitempty\""; More []string "json:\"more,omitempty\""}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+const ProtocolVersionNumber untyped int = 1
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Wait() error
+func (Launch).MarshalJSON() ([]byte, error)
+func (*Launch).UnmarshalJSON(b []byte) error
+-- behaviour_test.go --
+package acp
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+// A property marked x-deserialize-default-on-null decodes null as its empty
+// value, without error: the required array is written back as [], and the
+// optional array and object are left out.
+func TestDefaultOnNull(t *testing.T) {
+	var l Launch
+	if err := json.Unmarshal([]byte(`{"args":null,"more":null,"env":null}`), &l); err != nil {
+		t.Fatalf("null failed the message: %v", err)
+	}
+	if len(l.Args) != 0 || len(l.More) != 0 || len(l.Env) != 0 {
+		t.Errorf("null decoded as %+v, want empty values", l)
+	}
+	b, err := json.Marshal(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != `{"args":[]}` {
+		t.Errorf("encoded as %s, want {\"args\":[]}", b)
+	}
+}

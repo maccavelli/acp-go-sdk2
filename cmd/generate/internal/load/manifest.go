@@ -135,6 +135,9 @@ func MergeManifest(stableMeta *Meta, stableSchema *Schema, m *Manifest) (*Meta, 
 	if stableMeta == nil || stableSchema == nil || m == nil || m.frozen == nil {
 		return nil, nil, nil, errors.New("merge manifest: a stable input or the parsed manifest is nil")
 	}
+	if err := refuseStableProxyMethods(stableMeta); err != nil {
+		return nil, nil, nil, err
+	}
 	stableWires := map[string]struct{}{}
 	addWireMethods(stableWires, stableMeta.AgentMethods)
 	addWireMethods(stableWires, stableMeta.ClientMethods)
