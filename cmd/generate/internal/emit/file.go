@@ -12,6 +12,7 @@ import (
 	"path"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
@@ -209,19 +210,57 @@ func (f *goFile) render() ([]byte, error) {
 	return out, nil
 }
 
+// standardImport reports whether importPath is one of the standard library:
+// its first element has no dot, which is how goimports tells one from an
+// import of another module.
+func standardImport(importPath string) bool {
+	first, _, _ := strings.Cut(importPath, "/")
+	return !strings.Contains(first, ".")
+}
+
+// importDecl is the file's import declaration as goimports formats one: the
+// standard library's imports, sorted by path, then the others, sorted by
+// path. layout.genDecl puts a blank line between the two groups, which gofmt
+// alone does not require and goimports does: a file of package unstable
+// imports the root beside the standard library
+// (0054-PLAN-adopt-acp-schema-1-31-0-and-client-system-prompts.md, deviation 4).
 func (f *goFile) importDecl() *ast.GenDecl {
 	if len(f.imports) == 0 {
 		return nil
 	}
 	d := &ast.GenDecl{Tok: token.IMPORT}
-	for _, p := range slices.Sorted(maps.Keys(f.imports)) {
-		spec := &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(p)}}
-		if name, ok := f.aliases[p]; ok {
-			spec.Name = id(name)
+	paths := slices.Sorted(maps.Keys(f.imports))
+	for _, standard := range []bool{true, false} {
+		for _, p := range paths {
+			if standardImport(p) != standard {
+				continue
+			}
+			spec := &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(p)}}
+			if name, ok := f.aliases[p]; ok {
+				spec.Name = id(name)
+			}
+			d.Specs = append(d.Specs, spec)
 		}
-		d.Specs = append(d.Specs, spec)
 	}
 	return d
+}
+
+// startsOtherImports reports whether specs[i] is the first import of another
+// module after one of the standard library, where goimports has a blank
+// line.
+func startsOtherImports(specs []ast.Spec, i int) bool {
+	standard := func(s ast.Spec) bool {
+		is, ok := s.(*ast.ImportSpec)
+		if !ok {
+			return false
+		}
+		p, err := strconv.Unquote(is.Path.Value)
+		return err == nil && standardImport(p)
+	}
+	if _, ok := specs[i].(*ast.ImportSpec); !ok || i == 0 {
+		return false
+	}
+	return standard(specs[i-1]) && !standard(specs[i])
 }
 
 // layout builds the *ast.File and gives every line-starting token a position.
@@ -387,10 +426,15 @@ func (l *layout) genDecl(d *ast.GenDecl) {
 	l.at(&d.TokPos, line)
 	if d.Lparen.IsValid() || len(d.Specs) != 1 {
 		l.at(&d.Lparen, line)
-		for _, s := range d.Specs {
+		for i, s := range d.Specs {
 			// A grouped constant's doc sits on the lines above it.
 			if vs, ok := s.(*ast.ValueSpec); ok {
 				l.doc(vs.Doc)
+			}
+			// A blank line parts the standard library's imports from the
+			// others, as goimports has them.
+			if startsOtherImports(d.Specs, i) {
+				l.next()
 			}
 			l.spec(s, l.next())
 		}
@@ -403,6 +447,12 @@ func (l *layout) genDecl(d *ast.GenDecl) {
 func (l *layout) spec(s ast.Spec, line int) {
 	switch s := s.(type) {
 	case *ast.ImportSpec:
+		// A named import starts at its name, which the printer reads the
+		// spec's line from: without it the blank line before the import of
+		// another module is lost.
+		if s.Name != nil {
+			l.at(&s.Name.NamePos, line)
+		}
 		l.at(&s.Path.ValuePos, line)
 	case *ast.ValueSpec:
 		l.at(&s.Names[0].NamePos, line)

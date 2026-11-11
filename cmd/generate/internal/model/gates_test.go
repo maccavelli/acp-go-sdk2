@@ -233,6 +233,10 @@ func TestCapabilityRulesRefuse(t *testing.T) {
 // (0019-PLAN-issue-fixes.md, B24). Phase 4 of 0049-PLAN-surface-fixes.md adds
 // eight of each: the boolean set request, the advertised auth method, the
 // prompt's undeclared block, the two plan updates and the three NES kinds.
+// 0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5, adds six
+// of each: the system prompt on the three session requests, and, on
+// SystemPrompt, its override mode, its unlisted modes and its text-only
+// content; no copy of SystemPrompt exists, so each resolves once.
 func checkCommittedGates(t *testing.T, m *Model) {
 	t.Helper()
 	own := map[string][]GateCheck{}
@@ -245,8 +249,8 @@ func checkCommittedGates(t *testing.T, m *Model) {
 			}
 		}
 	}
-	if len(ACP.CapabilityRules) != 30 || n != 33 {
-		t.Errorf("%d checks resolve from %d capability rules, want 33 from 30: %v", n, len(ACP.CapabilityRules), own)
+	if len(ACP.CapabilityRules) != 36 || n != 39 {
+		t.Errorf("%d checks resolve from %d capability rules, want 39 from 36: %v", n, len(ACP.CapabilityRules), own)
 	}
 	for _, r := range ACP.CapabilityRules {
 		for _, ty := range m.ruleTypes(r.Definition) {

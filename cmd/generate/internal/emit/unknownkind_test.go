@@ -12,10 +12,12 @@ import (
 
 // TestUnknownKindWithoutRawKeyGate requires unknownKind, which helpers.go's
 // Kind methods call for every union that keeps an Unknown, to be generated
-// when no gate reads a raw key: with ACP's undeclared-variant rules removed,
-// the one check that marked it is gone, and the root's hand-written files
-// no longer compiled (0049-MADR-remediate-the-2026-11-01-debugging-pass.md,
-// G30).
+// when no gate reads a raw key: with ACP's rules of the two kinds whose
+// checks read one by unknownKind removed, the undeclared-variant rules and
+// the only-variants rule, the checks that marked it are gone, and the root's
+// hand-written files no longer compiled
+// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G30;
+// 0054-PLAN-adopt-acp-schema-1-31-0-and-client-system-prompts.md, deviation 2).
 func TestUnknownKindWithoutRawKeyGate(t *testing.T) {
 	t.Parallel()
 	meta, schema, prov, err := load.Committed(filepath.Join("..", "..", "..", "..", "schema"))
@@ -24,7 +26,7 @@ func TestUnknownKindWithoutRawKeyGate(t *testing.T) {
 	}
 	p := model.ACP
 	p.CapabilityRules = slices.DeleteFunc(slices.Clone(model.ACP.CapabilityRules), func(r model.CapabilityRule) bool {
-		return r.Kind == model.GateUndeclaredVariant
+		return r.Kind == model.GateUndeclaredVariant || r.Kind == model.GateOnlyVariants
 	})
 	m, err := model.Build(model.Input{Meta: meta, Schema: schema, Provenance: prov, Protocol: &p})
 	if err != nil {

@@ -512,7 +512,7 @@ func (c *ClientSideConnection) UnstableDidSaveDocument(ctx context.Context, para
 //
 // Sent by the client to establish connection and negotiate capabilities.
 //
-// See protocol docs: [Initialization](https://agentclientprotocol.com/protocol/initialization)
+// See protocol docs: [Initialization](https://agentclientprotocol.com/protocol/v1/initialization)
 //
 // The connection's reader checks and records the answer as it reads it, before
 // it reads the next message, so that a message the agent sends after its
@@ -847,7 +847,7 @@ func (c *ClientSideConnection) UnstableSetProvider(ctx context.Context, params U
 //
 // Notification to cancel ongoing operations for a session.
 //
-// See protocol docs: [Cancellation](https://agentclientprotocol.com/protocol/prompt-turn#cancellation)
+// See protocol docs: [Cancellation](https://agentclientprotocol.com/protocol/v1/prompt-turn#cancellation)
 //
 // Before anything is sent, it returns an error wrapping ErrNotInitialized
 // until initialize completes; a *CapabilityError when what initialize agreed
@@ -982,7 +982,7 @@ func (c *ClientSideConnection) ListSessions(ctx context.Context, params ListSess
 //
 // Only available if the Agent supports the 'loadSession' capability.
 //
-// See protocol docs: [Loading Sessions](https://agentclientprotocol.com/protocol/session-setup#loading-sessions)
+// See protocol docs: [Loading Sessions](https://agentclientprotocol.com/protocol/v1/session-setup#loading-sessions)
 //
 // Before anything is sent, it returns an error wrapping ErrNotInitialized
 // until initialize completes; a *CapabilityError when what initialize agreed
@@ -1005,7 +1005,7 @@ func (c *ClientSideConnection) LoadSession(ctx context.Context, params LoadSessi
 //
 // Request parameters for creating a new session.
 //
-// See protocol docs: [Creating a Session](https://agentclientprotocol.com/protocol/session-setup#creating-a-session)
+// See protocol docs: [Creating a Session](https://agentclientprotocol.com/protocol/v1/session-setup#creating-a-session)
 //
 // Before anything is sent, it returns an error wrapping ErrNotInitialized
 // until initialize completes; a *CapabilityError when what initialize agreed
@@ -1030,7 +1030,7 @@ func (c *ClientSideConnection) NewSession(ctx context.Context, params NewSession
 //
 // Contains the user's message and any additional context.
 //
-// See protocol docs: [User Message](https://agentclientprotocol.com/protocol/prompt-turn#1-user-message)
+// See protocol docs: [User Message](https://agentclientprotocol.com/protocol/v1/prompt-turn#1-user-message)
 //
 // Before anything is sent, it returns an error wrapping ErrNotInitialized
 // until initialize completes; a *CapabilityError when what initialize agreed

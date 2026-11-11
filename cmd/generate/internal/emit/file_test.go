@@ -160,6 +160,57 @@ func TestRenderLayout(t *testing.T) {
 				"}",
 			),
 		},
+		{
+			// As goimports formats them, which gofmt alone does not require:
+			// package unstable's file imports the root beside the standard
+			// library (0054-PLAN-adopt-acp-schema-1-31-0-and-client-system-prompts.md,
+			// deviation 4).
+			name: "imports of another module follow the standard library's after a blank line",
+			build: func(f *goFile) {
+				f.root = "example.com/sdk"
+				f.add(function("F", funcType([]*ast.Field{param("v", f.rootName("Value")), param("o", f.qual("example.com/a/other", "T"))},
+					param("", id("error"))),
+					ret(call(f.qual("errors", "New"), call(f.qual("strings", "ToUpper"), str("x"))))))
+			},
+			want: header + src(
+				"",
+				"import (",
+				"\t\"errors\"",
+				"\t\"strings\"",
+				"",
+				"\t\"example.com/a/other\"",
+				"\tacp \"example.com/sdk\"",
+				")",
+				"",
+				"func F(v acp.Value, o other.T) error {",
+				"\treturn errors.New(strings.ToUpper(\"x\"))",
+				"}",
+			),
+		},
+		{
+			// The shape of unstable/unstable_gen.go: the named import of the
+			// root is the only one of its group, so the blank line stands
+			// before a spec that starts at its name.
+			name: "a named import of another module alone after the standard library's",
+			build: func(f *goFile) {
+				f.root = "example.com/sdk"
+				f.add(function("F", funcType([]*ast.Field{param("v", f.rootName("Value"))}, param("", id("error"))),
+					ret(call(f.qual("errors", "New"), call(f.qual("strings", "ToUpper"), str("x"))))))
+			},
+			want: header + src(
+				"",
+				"import (",
+				"\t\"errors\"",
+				"\t\"strings\"",
+				"",
+				"\tacp \"example.com/sdk\"",
+				")",
+				"",
+				"func F(v acp.Value) error {",
+				"\treturn errors.New(strings.ToUpper(\"x\"))",
+				"}",
+			),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -967,7 +967,7 @@ func (a *AgentSideConnection) UnstableMessageMcp(ctx context.Context, params Uns
 //
 // Sent when the agent needs authorization before performing a sensitive operation.
 //
-// See protocol docs: [Requesting Permission](https://agentclientprotocol.com/protocol/tool-calls#requesting-permission)
+// See protocol docs: [Requesting Permission](https://agentclientprotocol.com/protocol/v1/tool-calls#requesting-permission)
 //
 // Before anything is sent, it returns an error wrapping ErrNotInitialized
 // until initialize completes; a *CapabilityError when what initialize agreed
@@ -992,7 +992,7 @@ func (a *AgentSideConnection) RequestPermission(ctx context.Context, params Requ
 //
 // Used to stream real-time progress and results during prompt processing.
 //
-// See protocol docs: [Agent Reports Output](https://agentclientprotocol.com/protocol/prompt-turn#3-agent-reports-output)
+// See protocol docs: [Agent Reports Output](https://agentclientprotocol.com/protocol/v1/prompt-turn#3-agent-reports-output)
 //
 // Before anything is sent, it returns an error wrapping ErrNotInitialized
 // until initialize completes; a *CapabilityError when what initialize agreed

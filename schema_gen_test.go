@@ -1203,6 +1203,24 @@ func schemaTypes() []schemaType {
 			New:  newOf[SessionResumeCapabilities],
 		},
 		{
+			Type: "SessionSystemPromptCapabilities",
+			Def:  "SessionSystemPromptCapabilities",
+			File: "schema.json",
+			New:  newOf[SessionSystemPromptCapabilities],
+		},
+		{
+			Type: "SessionSystemPromptModeCapabilities",
+			Def:  "SessionSystemPromptModeCapabilities",
+			File: "schema.json",
+			New:  newOf[SessionSystemPromptModeCapabilities],
+		},
+		{
+			Type: "SessionSystemPromptOverrideCapabilities",
+			Def:  "SessionSystemPromptOverrideCapabilities",
+			File: "schema.json",
+			New:  newOf[SessionSystemPromptOverrideCapabilities],
+		},
+		{
 			Type: "SessionUpdate",
 			Def:  "SessionUpdate",
 			File: "unstable-v1.json",
@@ -1279,6 +1297,18 @@ func schemaTypes() []schemaType {
 			Def:  "SubagentUpdate",
 			File: "unstable-v1.json",
 			New:  newOf[SubagentUpdate],
+		},
+		{
+			Type: "SystemPrompt",
+			Def:  "SystemPrompt",
+			File: "schema.json",
+			New:  newOf[SystemPrompt],
+		},
+		{
+			Type: "SystemPromptMode",
+			Def:  "SystemPromptMode",
+			File: "schema.json",
+			New:  newOf[SystemPromptMode],
 		},
 		{
 			Type: "Terminal",

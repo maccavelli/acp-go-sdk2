@@ -32,6 +32,14 @@ var generatedFiles = []string{
 	"schema_gen_test.go",
 }
 
+// repositoryGenerated is what a run renders from the repository's schema/:
+// the root package's generatedFiles, then package unstable's file, which
+// exists since schema 1.31.0 added unstable API beyond the manifest
+// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D8).
+func repositoryGenerated() []string {
+	return append(slices.Clone(generatedFiles), "unstable/unstable_gen.go")
+}
+
 // TestGeneratedFilesUpToDate renders the bindings from schema/ in memory and
 // requires the generated files, in order, to match the committed *_gen.go
 // files byte for byte.
@@ -41,11 +49,12 @@ func TestGeneratedFilesUpToDate(t *testing.T) {
 	for _, f := range files {
 		names = append(names, f.Path())
 	}
-	// At schema 1.25.0 the manifest holds every unstable definition, so
-	// package unstable has no generated file
-	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, G9).
-	if !slices.Equal(names, generatedFiles) {
-		t.Fatalf("run renders %v, want %v", names, generatedFiles)
+	// At schema 1.25.0 the manifest held every unstable definition, so
+	// package unstable had no generated file
+	// (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, G9). Since
+	// 1.31.0 it has one.
+	if want := repositoryGenerated(); !slices.Equal(names, want) {
+		t.Fatalf("run renders %v, want %v", names, want)
 	}
 	// A generated file that the run does not render, in the root or in
 	// package unstable, is stale: run would remove it

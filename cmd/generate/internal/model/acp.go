@@ -235,6 +235,21 @@ var ACP = Protocol{
 		{Side: sideClient, Definition: defSuggestNes, Property: keySuggestions, Variant: "jump", Capability: "nes.jump", Source: srcNesJump, Kind: GateVariant},
 		{Side: sideClient, Definition: defSuggestNes, Property: keySuggestions, Variant: "rename", Capability: "nes.rename", Source: srcNesRename, Kind: GateVariant},
 		{Side: sideClient, Definition: defSuggestNes, Property: keySuggestions, Variant: "searchAndReplace", Capability: "nes.searchAndReplace", Source: srcNesSearchAndReplace, Kind: GateVariant},
+		// The client system prompt, R1 to R4
+		// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5):
+		// sent only when the agent advertises it; override only with its own
+		// capability; no mode the schema does not list; text blocks only.
+		{Side: sideAgent, Definition: defNewSession, Property: keySystemPrompt, Capability: capSystemPrompt, Source: srcSystemPromptGate, Kind: GatePresent},
+		{Side: sideAgent, Definition: defLoadSession, Property: keySystemPrompt, Capability: capSystemPrompt, Source: srcSystemPromptGate, Kind: GatePresent},
+		{Side: sideAgent, Definition: defResumeSession, Property: keySystemPrompt, Capability: capSystemPrompt, Source: srcSystemPromptGate, Kind: GatePresent},
+		{Side: sideAgent, Definition: defSystemPrompt, Property: keyMode, Variant: "override", Capability: capSystemPrompt + ".mode.override", Source: srcOverrideGate, Kind: GateValue},
+		{Side: sideAgent, Definition: defSystemPrompt, Property: keyMode, Capability: capSystemPrompt + ".mode", Source: srcUnsupportedMode, Kind: GateUndeclaredValue},
+		{Side: sideAgent, Definition: defSystemPrompt, Property: keyContent, Variant: "text", Capability: capSystemPrompt + ".content", Source: srcTextOnly, Kind: GateOnlyVariants},
+	},
+	// The arrays the protocol forbids to be empty, which the schema states
+	// only in prose (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D6).
+	NonEmptyArrays: []PatchRule{
+		{Definition: defSystemPrompt, Property: keyContent, Source: srcEmptyContent},
 	},
 }
 
@@ -253,6 +268,7 @@ const (
 	defMessage       = "SessionMessage"
 	defSessionInfo   = "SessionInfoUpdate"
 	defSuggestNes    = "SuggestNesResponse"
+	defSystemPrompt  = "SystemPrompt"
 )
 
 // variantBoolean is the discriminator value of a boolean config option, in
@@ -261,14 +277,17 @@ const variantBoolean = "boolean"
 
 // The property keys several rules name.
 const (
-	keyCwd         = "cwd"
-	keyRoots       = "additionalDirectories"
-	keyPath        = "path"
-	keySessionID   = "sessionId"
-	keyPrompt      = "prompt"
-	keyMeta        = "_meta"
-	keyTitle       = "title"
-	keySuggestions = "suggestions"
+	keyCwd          = "cwd"
+	keyRoots        = "additionalDirectories"
+	keyPath         = "path"
+	keySessionID    = "sessionId"
+	keyPrompt       = "prompt"
+	keyMeta         = "_meta"
+	keyTitle        = "title"
+	keySuggestions  = "suggestions"
+	keySystemPrompt = "systemPrompt"
+	keyMode         = "mode"
+	keyContent      = "content"
 )
 
 // The schema sentences the patch and null-retained rules follow.
@@ -318,6 +337,24 @@ const (
 	capProviders = "providers"
 	capNes       = "nes"
 	capDocument  = "nes.events.document."
+)
+
+// capSystemPrompt is the agent's capability for a client system prompt
+// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5).
+const capSystemPrompt = "sessionCapabilities.systemPrompt"
+
+// The schema sentences the system prompt's rules follow (D5 and D6).
+const (
+	// srcSystemPromptGate is from the schema, SystemPrompt.
+	srcSystemPromptGate = "Clients MUST only send this when the Agent advertises `sessionCapabilities.systemPrompt`."
+	// srcOverrideGate is from the schema, SystemPromptMode's override.
+	srcOverrideGate = "MUST only use it when the Agent advertises `sessionCapabilities.systemPrompt.mode.override`."
+	// srcUnsupportedMode is from the schema, SystemPromptMode.
+	srcUnsupportedMode = "An Agent MUST return an error for a mode it does not support rather than treating it as `append` or `override`."
+	// srcTextOnly is from the schema, SystemPrompt's content.
+	srcTextOnly = "Clients MUST NOT send other content block types until a future capability allows them"
+	// srcEmptyContent is from the schema, SystemPrompt's content.
+	srcEmptyContent = "Clients MUST NOT send an empty array."
 )
 
 // The specification sentences the capability rules follow.

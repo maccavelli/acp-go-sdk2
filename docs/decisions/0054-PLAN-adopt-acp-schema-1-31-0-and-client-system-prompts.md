@@ -53,7 +53,7 @@ Ship the MADR's O1 as `v1.36.0`. At the end of it:
 | :--- | :--- |
 | 1, the two keys (D2, D3) | `cmd/generate/internal/load/load.go`, `merge.go`, `manifest.go`, `load_test.go`; `cmd/generate/internal/model/keywords.go`, `schema.go`, `fields.go`, `schema_test.go`; `cmd/generate/testdata/engine/` new cases. *Deviation 1 (2026-11-10) dropped `load/unstable.go`, `unstable_test.go`, `model/methods.go`, `model.go`, `emit/constants.go` and `emit/unstable.go`: the proxy methods emit nothing.* |
 | 2, the gate kinds and the validation list (D5, D6 machinery) | `cmd/generate/internal/model/protocol.go`, `gates.go`, `model.go`, `validate.go`, `gates_test.go`, `protocol_test.go`; `cmd/generate/internal/emit/gates.go`, `types.go`, `types_test.go`; `cmd/generate/main_test.go` (the rule stub, if its type check needs `RuleMinItems`); `cmd/generate/testdata/engine/` new cases |
-| 3, the pin and the rules (D1, D4, D5, D6, D8) | `schema/version`, `version`, `schema/meta.json`, `schema/schema.json`, `schema/meta.unstable.json`, `schema/schema.unstable.json`; `cmd/generate/internal/model/acp.go`, `gates_test.go`, `sources_test.go`; `cmd/generate/main_test.go`; the generated `constants_gen.go`, `types_gen.go`, `agent_gen.go`, `client_gen.go`, `helpers_gen.go`, `schema_gen_test.go`, `unstable/unstable_gen.go` (new); `testdata/encodings.golden`; `system_prompt_test.go` (new); `default_on_null_test.go` (new) |
+| 3, the pin and the rules (D1, D4, D5, D6, D8) | `schema/version`, `version`, `schema/meta.json`, `schema/schema.json`, `schema/meta.unstable.json`, `schema/schema.unstable.json`; `cmd/generate/internal/model/acp.go`, `gates_test.go`, `sources_test.go`; `cmd/generate/main_test.go`; the generated `constants_gen.go`, `types_gen.go`, `agent_gen.go`, `client_gen.go`, `helpers_gen.go`, `schema_gen_test.go`, `unstable/unstable_gen.go` (new); `testdata/encodings.golden`; `system_prompt_test.go` (new); `default_on_null_test.go` (new). *Deviation 2 (2026-11-10) added `cmd/generate/internal/emit/unknownkind_test.go`. Deviation 3 (2026-11-10) added `negotiation_test.go`. Deviation 4 (2026-11-10) added `cmd/generate/internal/emit/file.go` and `file_test.go`.* |
 | 4, the docs (D8) | `README.md`; `docs/architecture.md`; `doc.go` only if it lists the capabilities |
 | 5, the close (D9) | `tools/consumer.py`, `tools/test_tools.py`, `tools/README.md`; `docs/reports/0054-REPORT-release-notes-v1-36-0.md` (new); this PLAN; the MADR; `docs/README.md` |
 
@@ -593,4 +593,258 @@ test output has the subtest names with underscores. With those names (`plants_p2
   tests passed again. P2-9's edit, which quoted the moved code, ran again as P2-9b against it (`plants_p2_9b.json`):
   "1/1 as required", the same failure. The check then exited 0: "10 file(s) gofmt-clean; both modules linted, vetted
   and tested (-race -shuffle=on, uncached), tidy, govulncheck."
-* Phase 2 is staged for the owner's commit.
+* Phase 2 is staged for the owner's commit. It was committed as `06aa72c`, by the agent on the owner's ask in that
+  turn ("Stage, commit to main, and proceed").
+
+### Deviation 2, the `unknownKind` test's setup (2026-11-10)
+
+* **Found:** in phase 3, after the rules were added and the tree regenerated. `TestUnknownKindWithoutRawKeyGate`
+  (`cmd/generate/internal/emit/unknownkind_test.go`) failed: "SystemPrompt: a check still reads the raw key "type" by
+  unknownKind" (`:37`). The file is not in phase 3's row.
+* **Why:** the test guards that `unknownKind` is generated when no gate uses it, since `helpers.go` calls it
+  ([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](0049-MADR-remediate-the-2026-11-01-debugging-pass.md), G30).
+  Its setup removes the table's `GateUndeclaredVariant` rules to get such a model (`:26`-`:28`), and checks that
+  premise before its assertion (`:46`). R4 is a `GateOnlyVariants` rule, which reads an unknown block's type with
+  `unknownKind` too, so the premise no longer held. The failure is not pre-existing: R4 causes it.
+* **Put to the owner** with three options. The other two were reworking R4's emission not to use `unknownKind`, and
+  stopping phase 3 for review.
+* **Decided:** widen the test's setup to remove both kinds whose checks use `unknownKind` (the owner, 2026-11-10). The
+  assertion is unchanged, and it is seen to fail on a plant.
+* **Changed in this PLAN:** phase 3's row in Scope gains the file.
+
+### Deviation 3, the record that advertises everything (2026-11-10)
+
+* **Found:** in phase 3, step 7, before the new root tests were written. `allAdvertised()` (`negotiation_test.go:40`-`:87`)
+  is documented as "a record in which each side advertises every capability the protocol table and its gates name".
+  With R1 and R2 in the table it lacked `SessionCapabilities.SystemPrompt`. `checkValueGate`
+  (`gates_test.go:562`-`:611`), which checks a rule both ways, builds its record with the capability from
+  `allAdvertised()` alone. The file is not in phase 3's row. Nothing failed: the existing tests passed.
+* **Put to the owner** with three options. The other two were building the record and a copy of the check inside
+  `system_prompt_test.go`, and stopping phase 3 for review.
+* **Decided:** update `allAdvertised()` to advertise the system prompt with `override` (the owner, 2026-11-10). The
+  helper's doc stays true, and the new rules run through the harness every other rule uses.
+* **Changed in this PLAN:** phase 3's row in Scope gains the file.
+
+### Deviation 4, the generated import block (2026-11-10)
+
+* **Found:** at the end of phase 3, by its pre-add check, which exited 2:
+  `unstable/unstable_gen.go:10:1: File is not properly formatted (goimports)`, for the host and for `GOOS=windows`.
+* **Why:** `importDecl` (`cmd/generate/internal/emit/file.go:212`-`:225`) wrote every import as one group sorted by
+  path, so `acp "github.com/maccavelli/acp-go-sdk2"` sat between `"fmt"` and `"path/filepath"`. `gofmt` accepts
+  that. `goimports`, which `.golangci.yml` runs as a formatter, requires the standard library's imports first, then a
+  blank line, then the others. The defect was latent: until this pin `unstable/` had no generated file, and the root's
+  generated files import only the standard library. The file is not in phase 3's row.
+* **Put to the owner** with three options. The other two were running `goimports` over the generated files in
+  `make version`, which adds a tool and breaks `TestGeneratedFilesUpToDate`, and stopping phase 3 for review.
+  Excluding the file from the formatter was not offered: it loosens a check.
+* **Decided:** fix the emitter to write imports as `goimports` formats them (the owner, 2026-11-10).
+* **Changed in this PLAN:** phase 3's row in Scope gains `emit/file.go` and its test.
+
+### Phase 3, the pin and the rules (2026-11-10)
+
+Base `06aa72c`, clean.
+
+**Steps 1 and 2, the pin.**
+
+* `printf '1.31.0\n' > schema/version`, then `gmake version MDSH=true`. The owner stopped the first run while the
+  generator was running (`gmake: *** [Makefile:170: version] Terminated: 15`). The state it left was read before
+  anything else was done:
+  * the four schema files downloaded, with the right hashes;
+  * `version` still `1.25.0`;
+  * no generated file written;
+  * no process left running.
+
+  The second run exited 0. It downloaded nothing again, since the files were newer than `schema/version`.
+* The generator read the files as downloaded, with no edit: phase 1's two keys were enough.
+* `shasum -a 256` printed MADR D1's four values:
+
+  | File | SHA-256 |
+  | :--- | :--- |
+  | `schema/meta.json` | `061edb6efa8fb2aa2792459a86ec7268de5fe665bba48b2ffe7939df01481f88` |
+  | `schema/meta.unstable.json` | `99f1b10aca5c1cf516bc1eb330e980e2fafd4029249bbe4c8557119ae1800ffc` |
+  | `schema/schema.json` | `e747a7bec3c02708b70885bf3cccac5c72fa421390dd7e85758fd61e33b1ae21` |
+  | `schema/schema.unstable.json` | `0aa22eba8becd67c67e6da0336b1761dc8684d2d12ba26baedeff1fd3ce257ea` |
+
+* `cmp -s schema/version version` exited 0. `git diff --exit-code schema/unstable-v1.json README.md` exited 0.
+* `unstable/unstable_gen.go` holds no proxy name (deviation 1).
+
+**Steps 3 and 4, the rules.** `model/acp.go` gained the six capability rules and the `NonEmptyArrays` entry as the PLAN
+wrote them, with `capSystemPrompt`, `defSystemPrompt`, `keySystemPrompt`, `keyMode`, `keyContent` and the five source
+sentences. After `go run .` and `gofmt`, the generated code is:
+
+```go
+// in NewSessionRequest.gates, and the same in LoadSessionRequest's and ResumeSessionRequest's
+if v.SystemPrompt != nil && n.Response.AgentCapabilities.SessionCapabilities.SystemPrompt == nil {
+	return &CapabilityError{Method: method, Capability: "sessionCapabilities.systemPrompt", Field: "systemPrompt"}
+}
+// …
+if v.SystemPrompt != nil {
+	if err := v.SystemPrompt.gates(n, method); err != nil {
+		return err
+	}
+}
+
+// SystemPrompt.gates
+if v.Mode == "override" && (… .SystemPrompt == nil || … .SystemPrompt.Mode == nil || … .SystemPrompt.Mode.Override == nil) {
+	return &CapabilityError{Method: method, Capability: "sessionCapabilities.systemPrompt.mode.override", Field: "mode", Variant: "override"}
+}
+if v.Mode != "append" && v.Mode != "override" {
+	return &CapabilityError{Method: method, Capability: "sessionCapabilities.systemPrompt.mode." + string(v.Mode), Field: "mode", Variant: string(v.Mode)}
+}
+for i := range v.Content {
+	if v.Content[i].Text == nil {
+		switch {
+		case v.Content[i].Image != nil: // and Audio, ResourceLink, Resource, each with its own literal
+			return &CapabilityError{Method: method, Capability: "sessionCapabilities.systemPrompt.content.image", Field: fmt.Sprintf("content[%d]", i), Variant: "image"}
+		case v.Content[i].Unknown != nil:
+			kind := unknownKind(v.Content[i].Unknown, "type")
+			return &CapabilityError{Method: method, Capability: "sessionCapabilities.systemPrompt.content." + kind, Field: fmt.Sprintf("content[%d]", i), Variant: kind}
+		}
+	}
+}
+
+// SystemPrompt.validate, first
+if len(v.Content) == 0 {
+	return &ValidationError{Type: "SystemPrompt", Field: "content", Rule: RuleMinItems, msg: "SystemPrompt: content: must not be empty"}
+}
+```
+
+(`types_gen.go:25903`, `:26134` and `:18785`; the composite literals are shown on one line each.)
+
+**Step 5, the generator's tests.** With the rules in, `go test ./...` in `cmd/generate` failed four tests, three of
+them the PLAN's:
+
+* `TestProtocolTableAppliesToCommittedSchema`: "39 checks resolve from 36 capability rules, want 33 from 30". That is
+  the predicted count. `checkCommittedGates` (`model/gates_test.go`) now requires 39 from 36, and its comment says why.
+* `TestCapabilitySourcesQuoteTheSchema`: the three NES rules. `committedDescriptions` now reads the manifest too, by the
+  loader's file-name constants, and the test requires each `NonEmptyArrays` source in a description.
+* `TestGeneratedFilesUpToDate`: the run renders `unstable/unstable_gen.go`. Adding that name to `generatedFiles`, as the
+  PLAN said, broke `TestRunGeneratesRecasedUnion` ("open …/unstable/unstable_gen.go: no such file or directory"):
+  three other tests read `generatedFiles` as the root package's files. So `generatedFiles` is unchanged, and
+  `TestGeneratedFilesUpToDate` compares with a new `repositoryGenerated()`, the root files and then package
+  `unstable`'s. Both are in `cmd/generate/main_test.go`.
+* `TestUnknownKindWithoutRawKeyGate`: deviation 2.
+
+After those changes the module's seven packages pass.
+
+**Step 6, the golden.** At the new pin the root module failed only `TestEncodingsUnchanged`. After
+`go test -run '^TestEncodingsUnchanged$' -update .`, `git diff --numstat` gives `27 6`. The scratch script
+`golden_check.py` printed: "6 lines replaced, each gaining only systemPrompt; 21 lines added:
+{'SessionSystemPromptCapabilities': 3, 'SessionSystemPromptModeCapabilities': 3,
+'SessionSystemPromptOverrideCapabilities': 3, 'SystemPrompt': 3, 'SystemPromptMode': 9}", exit 0. That is MADR F10's
+measurement.
+
+**Step 7, `system_prompt_test.go`.** Seven tests, on the helpers of `gates_test.go`:
+
+* `TestSystemPromptGated` runs R1 on `session/new`, `session/load` and `session/resume` through `checkValueGate`, and
+  reads the prompt the handler received.
+* `TestSystemPromptOverrideGated` runs R2 through `checkValueGate`. It also refuses `override` when the agent's `mode`
+  object advertises none, and passes `append`.
+* `TestSystemPromptUndeclaredModes`: `_vendor`, `later`, `""`, and a raw `"mode": null`.
+* `TestSystemPromptTextOnly`: `image`, `audio`, `resource_link`, `resource` and an unknown `video`, each as
+  `content[1]`.
+* `TestSystemPromptEmptyContent`: `[]` and nil, by `Validate`, by a typed send that writes nothing, and received.
+* `TestSystemPromptInboundValidationOptIn`: a hook that accepts a `_vendor` mode or empty content, and sees the SDK's
+  refusal.
+* `TestSystemPromptAllowsValue`: seven records and requests.
+
+**Step 8, `default_on_null_test.go`.** `TestDefaultOnNullLists` finds the 14 properties in `schema/schema.json` and
+passes for each, named `<Definition>.<property>`.
+
+**Step 9, the plants.** All as required.
+
+Regenerated in a copy of the working tree by the scratch script `regen_plant.py` (spec `plants_p3_regen.json`; exit 0,
+"all as required"). Each ran every test matching `SystemPrompt`:
+
+| Plant | Tests that failed | First failure |
+| :--- | :--- | :--- |
+| P3-1, R1's three rules removed | `TestSystemPromptGated`, `TestSystemPromptAllowsValue` | `system_prompt_test.go:303: a prompt, nothing advertised: AllowsValue = <nil>` |
+| P3-2, R2 removed | `TestSystemPromptOverrideGated`, `TestSystemPromptAllowsValue` | `:303: override, append advertised: AllowsValue = <nil>` |
+| P3-3, R3 removed | `TestSystemPromptUndeclaredModes`, `TestSystemPromptInboundValidationOptIn`, `TestSystemPromptAllowsValue` | `:303: a vendor mode, everything advertised: AllowsValue = <nil>` |
+| P3-4, R4 removed | `TestSystemPromptTextOnly`, `TestSystemPromptAllowsValue` | `:303: an image, everything advertised: AllowsValue = <nil>` |
+| P3-5, the `NonEmptyArrays` entry removed | `TestSystemPromptEmptyContent`, `TestSystemPromptInboundValidationOptIn` | `:268: the hook saw [<nil>], want the SDK's refusal among them` |
+
+By `python3 tools/plants.py` (spec `plants_p3.json`; "5/5 as required", exit 0):
+
+| Plant | Test | Failure |
+| :--- | :--- | :--- |
+| P3-6, `committedDescriptions` without the manifest | `TestCapabilitySourcesQuoteTheSchema` | `sources_test.go:94: the nes.jump rule on SuggestNesResponse jump quotes …, which no description of the committed schema contains` |
+| P3-7, `unknownKind` marked only for a gate (`t.HasUnknown && false`) | `TestUnknownKindWithoutRawKeyGate` | `unknownkind_test.go:49: types_gen.go lacks unknownKind, which helpers.go calls` |
+| P3-8, `McpServerStdio`'s decoder refusing a nil `args` | `TestDefaultOnNullLists` | `default_on_null_test.go:59: … did not decode: McpServerStdio: args is null`, in `McpServerStdio.args` |
+| P3-9, `srcEmptyContent` reworded | `TestCapabilitySourcesQuoteTheSchema` | `sources_test.go:100: the non-empty rule on SystemPrompt.content quotes "Clients MUST NOT send an empty list."` |
+| P3-10, `allAdvertised()` without the system prompt | `TestSystemPromptGated` | `system_prompt_test.go:111: session/new with an advertised prompt: … capability sessionCapabilities.systemPrompt not advertised` |
+
+P3-7 shows deviation 2's widened setup still reaches the test's assertion. Before the setup was widened, the same test
+failed at its premise (`:37`), as deviation 2 records.
+
+The golden script was fed the real diff with one line added: a removed `ToolCall` line gave "a removed line of
+ToolCall, which is not a session request", exit 1; an added `PromptResponse` line gave "an added line of
+PromptResponse, which is not one of the five new types", exit 1.
+
+**Step 10, `make api BASE=v1.35.0`.** Exit 0: "against v1.35.0: 0 incompatible, 57 compatible" and "reported packages
+unstable, remote: 0 incompatible, not gated".
+
+* In `acp`, eleven additions, the PLAN's list: `LoadSessionRequest.SystemPrompt`, `NewSessionRequest.SystemPrompt`,
+  `ResumeSessionRequest.SystemPrompt`, `SessionCapabilities.SystemPrompt`, `SessionSystemPromptCapabilities`,
+  `SessionSystemPromptModeCapabilities`, `SessionSystemPromptOverrideCapabilities`, `SystemPrompt`, `SystemPromptMode`,
+  `SystemPromptModeAppend`, `SystemPromptModeOverride`.
+* In `unstable`, 46 additions and no proxy name: the method constants, types and constructors of `auth/status`,
+  `auth/status_update`, `session/archive`, `session/unarchive`, `session/options`, `session/set_title` and
+  `session/status`, and `ToolCallContentSession` with `DecodeToolCallContentSession`. The full list is the scratch
+  file `p3_api.out`, and equals MADR F9's.
+
+**Step 11.** `go test -race -count=20 -run 'SystemPrompt|DefaultOnNull' .` exited 0.
+
+**Deviation 4's fix.** In `cmd/generate/internal/emit/file.go`:
+
+* `importDecl` writes the standard library's imports first, then the others, each sorted by path. `standardImport`
+  tells them apart as `goimports` does: a first path element without a dot.
+* `layout.genDecl` leaves a blank line before the first import of another module (`startsOtherImports`).
+* `layout.spec` positions a named import's name as well as its path. Without that the first attempt changed nothing:
+  the aliased `acp` import starts at its name, which had no line, so the printer saw no gap and gofmt sorted the block
+  back into one group.
+
+`unstable/unstable_gen.go` now begins:
+
+```go
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	acp "github.com/maccavelli/acp-go-sdk2"
+)
+```
+
+The root's generated files import only the standard library and did not change by this fix. `TestRenderLayout`
+(`emit/file_test.go`) gains two cases: imports of two other modules after the standard library's, and a named import
+alone in its group, which is the shape of `unstable_gen.go`.
+
+Plants, by `tools/plants.py` (spec `plants_p3_d4.json`):
+
+| Plant | Case of `TestRenderLayout` | Failure |
+| :--- | :--- | :--- |
+| P3-11, the blank line's condition made `&& false` | imports of another module follow the standard library's after a blank line | `file_test.go:221: render mismatch` |
+| P3-12, the named import's name given no position | a named import of another module alone after the standard library's | `file_test.go:221: render mismatch` |
+
+The first run of these two was "0/2 as required", and both misses were the plants' and the test's, not the fix's:
+
+* P3-11's edit removed the whole block and left a variable unused, a compile error. The edit now makes the condition
+  false.
+* P3-12 passed, because the first test case had the named import second in its group, after an import that already
+  had a line. The second case was added for it.
+
+The second run was "2/2 as required", exit 0.
+
+**Checks.**
+
+* `make pre-add-check FILES="<the phase's files>"` first exited 2 on deviation 4's `goimports` finding, and nothing
+  else. After the fix it exited 0, with the two emitter files among those named: "15 file(s) gofmt-clean; both modules
+  linted, vetted and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* After the last regeneration, `make api BASE=v1.35.0` exited 0 again with the same counts, the four schema hashes were
+  unchanged, `cmp -s schema/version version` exited 0, and `git diff --exit-code schema/unstable-v1.json README.md`
+  exited 0.
+* Phase 3 is staged for the owner's commit.

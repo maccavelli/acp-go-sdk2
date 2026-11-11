@@ -81,6 +81,11 @@ func allAdvertised() *Negotiation {
 				Fork:                  &SessionForkCapabilities{},
 				List:                  &SessionListCapabilities{},
 				Resume:                &SessionResumeCapabilities{},
+				// The client system prompt, in both modes
+				// (0054-PLAN-adopt-acp-schema-1-31-0-and-client-system-prompts.md, deviation 3).
+				SystemPrompt: &SessionSystemPromptCapabilities{
+					Mode: &SessionSystemPromptModeCapabilities{Override: &SessionSystemPromptOverrideCapabilities{}},
+				},
 			},
 		}},
 	}
