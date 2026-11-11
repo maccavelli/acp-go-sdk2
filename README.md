@@ -335,7 +335,9 @@ follow the schema:
   `x-deserialize-skip-invalid-items` drops the items that fail to decode, as
   ACP's Rust implementation does, and its `null` items
   ([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](docs/decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
-  G14). A closed enumeration's value that its type
+  G14). An array or object marked `x-deserialize-default-on-null`, such as a
+  session request's `mcpServers` or a terminal's `args`, reads `null` as empty:
+  a required one is sent on as `[]`, an optional one left out. A closed enumeration's value that its type
   does not list fails there too: a `tool_call`'s unknown `kind` or `status`
   reads as `""`, a `tool_call_update`'s as nil, `ElicitationSchema.type` takes
   its default, `object`, and an unknown `audience` role is dropped.
@@ -577,7 +579,11 @@ receives against the capabilities in the record:
   `nes.events.document.<event>`.
 - Values: a non-empty `additionalDirectories` on `session/new`, `session/load`,
   `session/resume` and `session/fork` needs
-  `sessionCapabilities.additionalDirectories`; an `http`, `sse` or unstable
+  `sessionCapabilities.additionalDirectories`; a `systemPrompt` on
+  `session/new`, `session/load` and `session/resume` needs
+  `sessionCapabilities.systemPrompt`, and its `override` mode
+  `sessionCapabilities.systemPrompt.mode.override` (see
+  [System prompts](#system-prompts)); an `http`, `sse` or unstable
   `acp` MCP server, on any of those four methods, needs `mcpCapabilities.http`,
   `.sse` or `.acp`; an `image`,
   `audio` or `resource` block in a prompt needs `promptCapabilities.image`,
@@ -658,6 +664,76 @@ included (see [Extension methods](#extension-methods)). Two unstable features
 are not checked: `mcp/message`, for which the schema states no gate, and
 `positionEncoding`, which the schema has the agent choose "from the client's
 supported encodings".
+
+#### System prompts
+
+A client can give an agent system-level instructions for a session, since ACP
+schema 1.30.0: `SystemPrompt` on `NewSessionRequest`, `LoadSessionRequest` and
+`ResumeSessionRequest`, with a `Mode` and `Content`. The agent opts in.
+
+An agent advertises it in its `initialize` answer. `{}` is the `append` mode,
+which adds the content to the agent's own instructions; `Mode.Override` adds
+the `override` mode, which replaces the agent's built-in instructions:
+
+```go
+caps.SessionCapabilities.SystemPrompt = &acp.SessionSystemPromptCapabilities{
+    // Leave Mode nil to offer append alone.
+    Mode: &acp.SessionSystemPromptModeCapabilities{Override: &acp.SessionSystemPromptOverrideCapabilities{}},
+}
+```
+
+A client sends one with the session:
+
+```go
+resp, err := conn.NewSession(ctx, acp.NewSessionRequest{
+    Cwd:        cwd,
+    McpServers: []acp.McpServer{},
+    SystemPrompt: &acp.SystemPrompt{
+        Mode:    acp.SystemPromptModeAppend,
+        Content: []acp.ContentBlock{acp.TextBlock("You are a code review specialist.")},
+    },
+})
+```
+
+The SDK holds both sides to the specification's rules, as it does for every
+capability. A typed method returns the error and writes nothing; a received
+request is answered `-32602`, the code the specification recommends, and the
+agent's handler is not called, so no session is created, loaded or resumed:
+
+| What | Refused as |
+| :--- | :--- |
+| A `systemPrompt` the agent did not advertise | `*acp.CapabilityError`, `sessionCapabilities.systemPrompt`, field `systemPrompt` |
+| `override` without `mode.override` | `*acp.CapabilityError`, `sessionCapabilities.systemPrompt.mode.override`, field `mode` |
+| A mode the schema does not list, one beginning with `_` and a `null` or empty one included | `*acp.CapabilityError`, `sessionCapabilities.systemPrompt.mode.<mode>`, field `mode` |
+| A content block that is not `text` | `*acp.CapabilityError`, `sessionCapabilities.systemPrompt.content.<type>`, field `content[i]` |
+| Empty `content` | `*acp.ValidationError`, `acp.RuleMinItems`, field `content` |
+
+So an agent that advertises `append` alone never sees an `override` prompt, an
+unknown mode or an image in its handler. What only the agent can judge stays
+its own to refuse, with an error: content beyond its limits or against its
+policy.
+
+`Negotiation.AllowsValue(acp.AgentMethodSessionNew, req)` returns the error a
+send would, without sending, so a client can leave the prompt out or change its
+mode first. An agent that supports a mode of its own, or takes an empty prompt,
+accepts it with a validation hook, which is given the SDK's refusal:
+
+```go
+acp.WithInboundValidation(func(ctx context.Context, method string, params any, err error) error {
+    var ce *acp.CapabilityError
+    if errors.As(err, &ce) && ce.Capability == "sessionCapabilities.systemPrompt.mode._review" {
+        return nil // this agent implements the _review mode
+    }
+    return err
+})
+```
+
+On `session/load` and `session/resume` the specification asks a client to send
+the prompt it created the session with; an agent given a different one should
+apply it, and may defer that until it next rebuilds its prompt. Neither is
+checked. The unstable `session/fork` carries no `SystemPrompt` in this package:
+its request is frozen ([Stability](#stability)). The decision is
+[0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md](docs/decisions/0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md).
 
 ### Cancellation
 

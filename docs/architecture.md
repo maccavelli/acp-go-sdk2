@@ -246,7 +246,7 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
 - the capability that gates each of 28 methods, the 13 unstable
   `providers/*`, `nes/*` and `document/*` among them, resolved to its Go fields
   (`CapabilitySteps`);
-- `CapabilityRules`, the 30 properties and variants a capability gates,
+- `CapabilityRules`, the 36 properties and variants a capability gates,
   each with the specification sentence it follows. The kinds are
   `GateNonEmpty`, an array; `GateVariant`, a variant of a union or of the
   union a property holds; `GateNotTerminalAuthMethod`, that an `authenticate`
@@ -263,7 +263,20 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   advertise, so it is always refused, naming the rule's capability, `.` and
   the value. The catch-all is a variant, as an elicitation's mode, or the raw
   `Unknown` of a union without one, as a prompt's content block, whose value
-  the generated `unknownKind` reads. `model/gates.go`
+  the generated `unknownKind` reads. Four more kinds serve the client system
+  prompt
+  ([0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md](decisions/0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md),
+  D5): `GatePresent`, that an optional property held by pointer is set only
+  with its capability, as `systemPrompt` on the three session requests;
+  `GateValue`, that a string enumeration holds a value only with its
+  capability, as the `override` mode; `GateUndeclaredValue`, that it holds
+  only a value it lists, the empty string refused with the rest, as
+  `GateUndeclaredVariant` refuses a union's; and `GateOnlyVariants`, that a
+  union or an array of one holds only one variant, as a system prompt's
+  content holds only `text`, every other declared variant, the raw `Unknown`
+  and a catch-all refused by name. The prefix an only-variants refusal names
+  ends in the property a future capability would sit under, so all of it but
+  that last segment must resolve. `model/gates.go`
   resolves each on its definition and on each copy of it the merge made from
   the unstable schema under another name, and gives a `gates` method to every type
   that holds one, directly or through fields, members or variants, and that a
@@ -298,6 +311,12 @@ in `cmd/generate/internal/model/acp.go`, which `main.go` passes to the model as
   field built from one is tagged `omitzero`, so nil is omitted and empty is
   sent as `[]`. The model refuses a rule on a required or non-array property,
   or whose description lacks the sentence (0049, S2);
+- `NonEmptyArrays`, the arrays the protocol forbids to be empty, which the
+  schema states only in prose: `SystemPrompt`'s `content`. `Validate` refuses
+  an empty one with `RuleMinItems`, on what is sent and on what is received,
+  unlike a closed enumeration, which it checks on what is sent alone. The
+  model refuses a rule on a property that is not an array, or whose
+  description lacks the sentence (0054, D6);
 - `KeyOrders`, the typed maps whose key order the protocol gives meaning, each
   with the field that holds the order and the reason: `ElicitationSchema`'s
   `properties`, field `PropertyOrder`. The generated `UnmarshalJSON` reads the
@@ -401,7 +420,14 @@ Every keyword the schema loader accepts has one treatment, listed in
 keyword, and one written in another letter case, which `encoding/json` would
 match, at any depth of the manifest too (G31); a key repeated in one object of
 a schema, meta or manifest file, which decoding would drop (G5); a definition
-whose value is `null` (G32); and a meta `version` below 1 (G8). The model
+whose value is `null` (G32); and a meta `version` below 1 (G8). A meta file
+may hold `proxyMethods`, the proxy-chain methods of schema 1.29.0 and later.
+The loader reads them, the merge puts them in no side, and so nothing of them
+reaches `acp` or package `unstable`: their definitions are `allOf` aliases
+and a wire with both a request and a notification, which the model does not
+type. A stable `meta.json` that lists one is refused
+([0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md](decisions/0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md),
+its amendment). The model
 refuses an integer or number `format` without a Go type.
 `deprecated` is an annotation: the loader refuses it when it is `null`, and the
 model refuses it on a node no Go declaration is built from, anything but a
@@ -433,7 +459,13 @@ as in a value (G24), and each
 `null` decodes into most Go types as no change; the model refuses such an
 array whose items admit `null`
 ([0049-MADR-remediate-the-2026-11-01-debugging-pass.md](decisions/0049-MADR-remediate-the-2026-11-01-debugging-pass.md),
-G14). It also empties
+G14). `x-deserialize-default-on-null`, which schema 1.27.0 and later put on
+arrays and objects, asks that `null` decode as the empty value. The model
+records it (`Facts.DefaultOnNull`) and refuses it on any other node, and no
+emitter reads it: `encoding/json` already decodes `null` into a nil slice or
+map, and `MarshalJSON` writes a nil required one as `[]` or `{}`. The engine
+case `accept-default-on-null` and the root's `TestDefaultOnNullLists` hold the
+decoders to that (0054, D2). It also empties
 an optional raw value that is `null` through `absentIfNull`, so it is not
 sent on, and reads a patch field through `patchOf`, or `patchItems` for an
 array that skips invalid items: a missing key is absent, `null` is null, a
@@ -799,11 +831,17 @@ Checks that guard this:
   the unstable capabilities, `auth_method_ids_test.go` that
   `AuthenticateMethodIDs` is the gate's list,
   extension messages through the hooks and the gate, the hook's order, the
-  raw paths, and `initialize`'s own check; the engine cases
+  raw paths, and `initialize`'s own check; `system_prompt_test.go` the client
+  system prompt's four rules and its empty content, each both ways, the
+  validation hook that accepts one, and `AllowsValue`; `default_on_null_test.go`
+  each property marked `x-deserialize-default-on-null`; the engine cases
   `accept-prompt-cancellation`, `accept-permission-cancellation`,
   `accept-initialize-negotiation`, `accept-capability-gates`,
   `accept-gates-unreachable`, `accept-advertised-auth-ids`,
-  `accept-capability-undeclared-variant` and `accept-session-close-cancels`
+  `accept-capability-undeclared-variant`, `accept-capability-present`,
+  `accept-capability-value`, `accept-capability-undeclared-value`,
+  `accept-capability-only-variants`, `accept-non-empty-array`,
+  `accept-default-on-null` and `accept-session-close-cancels`
   cover the generated code, and
   `accept-description-comment-markers` the generator's comments.
 - `TestEngineCases` in `cmd/generate` runs the generator on each synthetic case
@@ -975,7 +1013,20 @@ item 1, keeps package `acp` on its `v1` promise while the unstable schema moves.
   `output.Write` writes each package's directory, and removes a stale generated file a package
   directory holds: a `*_gen.go` or `*_gen_test.go` the run did not render whose first line is
   the generated header. The generator names each file it removes. A file with such a name and
-  another first line is hand-written, and kept. At `1.25.0`, `unstable/` holds only `doc.go`.
+  another first line is hand-written, and kept. At `1.25.0`, the pin the manifest was frozen
+  from, `unstable/` held only `doc.go`. Since the pin moved to `1.31.0`
+  ([0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md](decisions/0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md))
+  it also holds `unstable_gen.go`:
+  - the method-name constants and types of `auth/status`, `auth/status_update`, `session/archive`,
+    `session/unarchive`, `session/options`, `session/set_title` and `session/status`;
+  - the definitions they reach;
+  - `ToolCallContentSession`, a new variant of the stable `ToolCallContent`, with its
+    `DecodeToolCallContentSession`.
+
+  The proxy-chain methods are not among them. The file imports the root beside the standard
+  library, so the emitter writes imports as goimports formats them: the standard library's, a
+  blank line, then the others (`importDecl`, and `layout.genDecl` and `layout.spec` for the
+  blank line and a named import's position).
 
 ## The agent process helper
 

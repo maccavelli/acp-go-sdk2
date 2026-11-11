@@ -847,7 +847,84 @@ The second run was "2/2 as required", exit 0.
 * After the last regeneration, `make api BASE=v1.35.0` exited 0 again with the same counts, the four schema hashes were
   unchanged, `cmp -s schema/version version` exited 0, and `git diff --exit-code schema/unstable-v1.json README.md`
   exited 0.
-* Phase 3 is staged for the owner's commit.
+* Phase 3 is staged for the owner's commit. The owner committed it as `894726f`.
+
+### Deviation 5, a Go advisory stops the pre-add check (2026-11-10)
+
+* **Found:** at the end of phase 4, by its pre-add check, which exited 2 at its last step alone:
+  `govulncheck (.): failed`, "Your code is affected by 1 vulnerability from the Go standard library". The steps
+  before it, which print only on failure, passed: gofmt, `golangci-lint` for both platforms, `go vet`, the tests of both
+  modules and `go mod tidy -diff`.
+* **Why:** GO-2026-6859 (CVE-2026-97054), "HTTP/1 server crash due to MaxBytesReader header race in net/http", was
+  published on 2026-11-11 at 02:51 UTC, after phase 3's check passed. It is found in `net/http@go1.27.3` and fixed in
+  go1.26.11 and go1.27.4. This repository pins `go 1.26.10` and `toolchain go1.27.3` in both `go.mod` files, and CI's
+  matrix runs both. `remote/httpserver.go:86` calls `http.MaxBytesReader`. The failure is not phase 4's: its three
+  files are documentation, and the check fails the same on `894726f`.
+* **Put to the owner** with three options. The other two were staging phase 4 with the failure recorded, an exception
+  to `AGENTS.md`'s "a file that fails is not committed", and stopping.
+* **Decided:** the Go pin gets a record of its own first (the owner, 2026-11-10), as
+  [0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md](0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md) was for the last one.
+  Phase 4's files stay written and unstaged until that record is executed. Phase 4's check then runs again.
+* **Changed in this PLAN:** phase 4's record below says where it stopped. Phase 5's release notes (step 5) also name
+  the Go floor and toolchain of
+  [0055-MADR-pin-go-1-27-4-and-floor-1-26-11.md](0055-MADR-pin-go-1-27-4-and-floor-1-26-11.md), which `v1.36.0` is the
+  first release to carry.
+
+### Phase 4, the docs (2026-11-10)
+
+Base `894726f`, clean.
+
+**What was done.**
+
+* **`README.md`:**
+  * A new `#### System prompts` at the end of "Initialization and capabilities". It covers what the agent advertises
+    and what the client sends, each with a code block; a table of the five refusals with the error, the capability
+    and the field of each; that an agent advertising `append` alone never sees the rest in its handler; `AllowsValue`;
+    the validation hook that accepts a mode of the agent's own, with a code block; the specification's re-send on load
+    and resume, which the SDK does not check; and `session/fork`, whose frozen request carries no prompt.
+  * The capability list's "Values" item names the two system prompt capabilities and links the subsection.
+  * "Wire encoding" says what `x-deserialize-default-on-null` does.
+* **`docs/architecture.md`:**
+  * the protocol table: 36 capability rules where it said 30, the four new kinds, and `NonEmptyArrays`;
+  * the loader paragraph: `proxyMethods`, read and placed in no side;
+  * the decoding paragraph: `x-deserialize-default-on-null`, recorded and not emitted, with the two tests that hold the
+    decoders to it;
+  * the unstable boundary: what `unstable_gen.go` holds at `1.31.0`, without the proxy methods, and how the emitter
+    writes its imports (deviation 4), where it said "At `1.25.0`, `unstable/` holds only `doc.go`";
+  * the test list: `system_prompt_test.go`, `default_on_null_test.go` and the six new accept cases.
+* **`docs/README.md`:** an "I want to…" row for the 1.31.0 pin and the system prompt, beside 0004's, which now reads
+  "was 1.25.0".
+* **`doc.go`:** nothing. It names the error types and sentinels, not the capabilities, as the PLAN allowed for.
+
+**Not changed.** `RELEASING.md` still uses `1.25.0` in its examples ("for example `1.25.0`"). It is not in this phase's
+row, and the examples stand for any version.
+
+**The README's code is real code.** Its three blocks are outside the markers `docs_test.go` reads, so no test compiles
+them. A scratch module with a `replace` to this tree held the three blocks as written. `go vet` passed, and the
+program printed, for the table's rows:
+
+```text
+unadvertised           capability=sessionCapabilities.systemPrompt field=systemPrompt variant=""
+override, append only  capability=sessionCapabilities.systemPrompt.mode.override field=mode variant="override"
+_review mode           capability=sessionCapabilities.systemPrompt.mode._review field=mode variant="_review"
+empty mode             capability=sessionCapabilities.systemPrompt.mode. field=mode variant=""
+image block            capability=sessionCapabilities.systemPrompt.content.image field=content[0] variant="image"
+append, append only    <nil>
+override, both         <nil>
+empty content: true SystemPrompt: content: must not be empty
+```
+
+No new check was added in this phase, so no plant ran.
+
+**Checks.**
+
+* `make check-records`, `make markdownlint` and `make disclosure-check` exited 0.
+* `make pre-add-check FILES="README.md docs/architecture.md docs/README.md"` exited 2 at `govulncheck` alone
+  (deviation 5). Phase 4 is written and not staged. It waits for the Go pin's record.
+* **Run again on 2026-11-11,** on base `4d82028`, which holds 0055's pins and deviation 6's fix: the same command
+  exited 0, "0 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy,
+  govulncheck." `make check-records`, `make markdownlint` and `make disclosure-check` exited 0 again. Since the first
+  run, `docs/README.md`'s row for this PLAN names deviations 5 and 6. Nothing else in the phase's three files changed.
 
 ### Deviation 6, a phase 3 test fails on Windows (2026-11-10)
 
@@ -885,4 +962,4 @@ The second run was "2/2 as required", exit 0.
   * The Linux host was not run again after the fix. It had passed both modules before it, and the changed line yields
     the same path where the separator is a slash.
 * The fix and this entry are staged alone, for a commit before 0055's. Deviation 5 and phase 4's record above stay
-  unstaged with phase 4.
+  unstaged with phase 4. Committed as `8cf69bf`, at the owner's word.
