@@ -50,8 +50,14 @@ a ToolCallStream on an acptest pair, writes to it through io.WriteString,
 finishes it, and requires a ToolCallTimeline fed the client's updates to hold
 the call completed with that text
 (0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md, phase
-6). So VERSION is v1.35.0 or later. Its go.mod must keep the `go` line and gain
-no toolchain line.
+6). Its test also connects an acptest pair whose agent advertises
+sessionCapabilities.systemPrompt with no mode: the agent is given the append
+SystemPrompt of a session/new, an override one is refused before it is sent
+with a *CapabilityError the agent never sees, and Negotiated's AllowsValue says
+the same of both
+(0054-PLAN-adopt-acp-schema-1-31-0-and-client-system-prompts.md, phase 5). So
+VERSION is v1.36.0 or later. Its go.mod must keep the `go` line and gain no
+toolchain line.
 The caches are in the tool's cache directory; the module is removed after.
 
 Usage: consumer.py VERSION
@@ -397,6 +403,8 @@ TEST = '''package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"testing"
 	"time"
@@ -405,6 +413,62 @@ import (
 	"MODULE/acptest"
 	"MODULE/agentproc"
 )
+
+// promptAgent is a ScriptAgent that records the system prompt of each
+// session/new it is given.
+type promptAgent struct {
+	*acptest.ScriptAgent
+	got chan *acp.SystemPrompt
+}
+
+func (a promptAgent) NewSession(ctx context.Context, params acp.NewSessionRequest) (acp.NewSessionResponse, error) {
+	a.got <- params.SystemPrompt
+	return a.ScriptAgent.NewSession(ctx, params)
+}
+
+func TestSystemPrompt(t *testing.T) {
+	script := &acptest.ScriptAgent{}
+	script.Capabilities.SessionCapabilities.SystemPrompt = &acp.SessionSystemPromptCapabilities{}
+	agent := promptAgent{ScriptAgent: script, got: make(chan *acp.SystemPrompt, 2)}
+	pair := acptest.Connect(t, agent, &acptest.MemoryClient{})
+	if _, err := pair.Client.Initialize(t.Context(), acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber}); err != nil {
+		t.Fatal(err)
+	}
+	cwd := t.TempDir()
+	request := func(mode acp.SystemPromptMode) acp.NewSessionRequest {
+		return acp.NewSessionRequest{Cwd: cwd, McpServers: []acp.McpServer{}, SystemPrompt: &acp.SystemPrompt{
+			Mode: mode, Content: []acp.ContentBlock{acp.TextBlock("be brief")},
+		}}
+	}
+	if _, err := pair.Client.NewSession(t.Context(), request(acp.SystemPromptModeAppend)); err != nil {
+		t.Fatalf("an agent that advertises the system prompt refused an append one: %v", err)
+	}
+	got := <-agent.got
+	if got == nil || got.Mode != acp.SystemPromptModeAppend || len(got.Content) != 1 || got.Content[0].Text == nil ||
+		got.Content[0].Text.Text != "be brief" {
+		t.Fatalf("the agent was given the system prompt %+v, want the append one sent", got)
+	}
+	const override = "sessionCapabilities.systemPrompt.mode.override"
+	_, err := pair.Client.NewSession(t.Context(), request(acp.SystemPromptModeOverride))
+	var refused *acp.CapabilityError
+	if !errors.As(err, &refused) || refused.Capability != override {
+		t.Fatalf("an override prompt to an agent that advertises append alone gave %v, want a CapabilityError for %s", err, override)
+	}
+	if len(agent.got) != 0 {
+		t.Fatal("the agent was given the override prompt it did not advertise")
+	}
+	n, ok := pair.Client.Negotiated()
+	if !ok {
+		t.Fatal("the connection is not negotiated after initialize")
+	}
+	if err := n.AllowsValue(acp.AgentMethodSessionNew, request(acp.SystemPromptModeAppend)); err != nil {
+		t.Fatalf("AllowsValue refuses the append prompt: %v", err)
+	}
+	var dry *acp.CapabilityError
+	if err := n.AllowsValue(acp.AgentMethodSessionNew, request(acp.SystemPromptModeOverride)); !errors.As(err, &dry) || dry.Capability != override {
+		t.Fatalf("AllowsValue of the override prompt gave %v, want a CapabilityError for %s", err, override)
+	}
+}
 
 func TestPresentNotice(t *testing.T) {
 	client := &acptest.MemoryClient{}

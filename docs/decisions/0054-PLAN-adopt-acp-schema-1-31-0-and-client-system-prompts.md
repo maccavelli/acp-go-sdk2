@@ -55,7 +55,7 @@ Ship the MADR's O1 as `v1.36.0`. At the end of it:
 | 2, the gate kinds and the validation list (D5, D6 machinery) | `cmd/generate/internal/model/protocol.go`, `gates.go`, `model.go`, `validate.go`, `gates_test.go`, `protocol_test.go`; `cmd/generate/internal/emit/gates.go`, `types.go`, `types_test.go`; `cmd/generate/main_test.go` (the rule stub, if its type check needs `RuleMinItems`); `cmd/generate/testdata/engine/` new cases |
 | 3, the pin and the rules (D1, D4, D5, D6, D8) | `schema/version`, `version`, `schema/meta.json`, `schema/schema.json`, `schema/meta.unstable.json`, `schema/schema.unstable.json`; `cmd/generate/internal/model/acp.go`, `gates_test.go`, `sources_test.go`; `cmd/generate/main_test.go`; the generated `constants_gen.go`, `types_gen.go`, `agent_gen.go`, `client_gen.go`, `helpers_gen.go`, `schema_gen_test.go`, `unstable/unstable_gen.go` (new); `testdata/encodings.golden`; `system_prompt_test.go` (new); `default_on_null_test.go` (new). *Deviation 2 (2026-11-10) added `cmd/generate/internal/emit/unknownkind_test.go`. Deviation 3 (2026-11-10) added `negotiation_test.go`. Deviation 4 (2026-11-10) added `cmd/generate/internal/emit/file.go` and `file_test.go`.* |
 | 4, the docs (D8) | `README.md`; `docs/architecture.md`; `doc.go` only if it lists the capabilities |
-| 5, the close (D9) | `tools/consumer.py`, `tools/test_tools.py`, `tools/README.md`; `docs/reports/0054-REPORT-release-notes-v1-36-0.md` (new); this PLAN; the MADR; `docs/README.md` |
+| 5, the close (D9) | `tools/consumer.py`, `tools/test_tools.py`, `tools/README.md`; `tools/consumer_probe.py` (new) and `docs/architecture.md`, both added by deviation 7; `docs/reports/0054-REPORT-release-notes-v1-36-0.md` (new); this PLAN; the MADR; `docs/README.md` |
 
 Each phase also updates this PLAN's execution record and its row in `docs/README.md`. A file a phase needs that is not in
 its row is a deviation: stop, record it, and ask.
@@ -963,3 +963,130 @@ No new check was added in this phase, so no plant ran.
     the same path where the separator is a slash.
 * The fix and this entry are staged alone, for a commit before 0055's. Deviation 5 and phase 4's record above stay
   unstaged with phase 4. Committed as `8cf69bf`, at the owner's word.
+
+### Deviation 7, the consumer probe becomes a tool (2026-11-11)
+
+* **Found:** in phase 5, step 1. `tools/consumer.py VERSION` fetches a release from the proxy, so it cannot run before
+  the tag. To prove the consumer's new test before it, the agent wrote a scratch script: the consumer's program and
+  test in a module whose requirement is a `replace` onto the working tree.
+  [0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md](0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md),
+  phase 6, did the same with a scratch script of its own, which was not kept.
+* **Decided:** the owner, 2026-11-11: "The consumer probe should be kept for reuse. Once it is written ensure it is
+  saved in the repo." No options were put: it is the owner's instruction.
+* **Changed in this PLAN:** phase 5's row gains `tools/consumer_probe.py`, new. `tools/test_tools.py` and
+  `tools/README.md`, already in the row, gain its tests and its row. The tool is written as the other tools are: the
+  shared helpers, `--help`, `main_guard`, and the Go caches of `consumer.py` in the tool's cache directory. It is not
+  added to `tools/gates.py`'s gate set: it is run by the step that changes `consumer.py`, as `consumer.py` is.
+  `docs/architecture.md`, whose tooling paragraph lists the tools, gains a sentence for it; that file joins the row too.
+* The MADR is not amended: no decision or asserted fact changes.
+* **What was built.** `tools/consumer_probe.py [--tree DIR] [--run PATTERN]` writes `consumer.py`'s own program and test
+  into a module at the `go` line, in the tool's cache directory, with `require` and `replace` onto the repository or
+  `DIR`. With the floor's toolchain forced it runs `go mod tidy`, `go vet`, the build, the program, `go test` and the
+  Windows build. It is as required when every step exits 0, `go version` names the floor, the program prints
+  `consumer.WANT_RUN`, and `go.mod` keeps the `go` line and the replace with no toolchain line. It exits 2 for a `DIR`
+  with no `go.mod`. The module is removed after; nothing is written in the tree.
+* **Its tests,** in `tools/test_tools.py`: `test_consumer_probe_go_mod`, `test_consumer_probe_problems` and
+  `test_consumer_probe_uses_the_consumer`. Phase 5's record below has the runs and the planted breaks.
+
+### Phase 5, the close (2026-11-11)
+
+Base `c36fdfe`, which is phase 4, committed at the owner's word after 0055's `4d82028`.
+
+**Step 1, the consumer.**
+
+* `tools/consumer.py`: the docstring names the system prompt check and the floor `v1.36.0`. Its test template gains
+  `TestSystemPrompt`, on an `acptest` pair whose agent is a `ScriptAgent` that advertises
+  `SessionCapabilities.SystemPrompt` with no mode and records each `session/new`'s prompt:
+  * an append prompt is sent, and the agent is given it, its mode and its one text block;
+  * an override prompt returns a `*CapabilityError` for `sessionCapabilities.systemPrompt.mode.override`, and the
+    agent is given nothing;
+  * `Negotiated`'s `AllowsValue` returns nil for the first and the same refusal for the second.
+* `tools/test_tools.py`: `test_consumer_checks_the_system_prompt` requires the template's parts and the docstring's
+  floor. The docstring check moved there from `test_consumer_streams_a_tool_call`. `tools/README.md`: the row.
+* **Before the tag,** `python3 tools/consumer_probe.py` (deviation 7): exit 0, "as required".
+  `go version go1.26.11 darwin/arm64`; `go mod tidy`, `go vet`, the build and the Windows build exited 0; the program
+  printed `consumer.WANT_RUN`; `TestSystemPrompt`, `TestPresentNotice`, `TestToolCallStream` and
+  `TestTranscriptReplay` passed. `--tree` on a directory with no `go.mod` exited 2.
+* `python3 tools/consumer.py v1.36.0` needs the tag on the proxy: it runs after the release, step 7.
+
+**Step 1's planted breaks,** by a scratch script, each in a copy outside the tree; 8 of 8 failed as required:
+
+| Plant | Run | Failure |
+| :--- | :--- | :--- |
+| A, a copy of the tree with rule R2 removed from `model/acp.go`, regenerated | the probe, `--tree` the copy, `--run '^TestSystemPrompt$'` | exit 1, "`consumer_test.go:54`: an override prompt to an agent that advertises append alone gave `<nil>`, want a CapabilityError for sessionCapabilities.systemPrompt.mode.override" |
+| B, a copy of `tools/` whose template's agent advertises nothing | that copy's probe, on the tree | exit 1, "`consumer_test.go:42`: an agent that advertises the system prompt refused an append one: session/new: capability sessionCapabilities.systemPrompt not advertised: systemPrompt" |
+| C, a copy of `tools/` whose template does not check what the agent was given | `test_consumer_checks_the_system_prompt` | exit 1, "AssertionError: 'len(agent.got) != 0' not found in" the template |
+| D, a copy of `tools/` whose consumer docstring says `v1.35.0` or later | the same test | exit 1, "AssertionError: 'VERSION is v1.36.0 or later' not found in" the docstring |
+| E, a copy of `tools/` whose probe does not compare the program's output | `test_consumer_probe_problems` | exit 1, "AssertionError: Lists differ: [] != ['run: the program did not print consumer.WANT_RUN']" |
+| F, a copy of `tools/` whose probe accepts a toolchain line | `test_consumer_probe_go_mod` | exit 1, "AssertionError: True is not false" |
+| G, a copy of `tools/` whose probe does not read `consumer.WANT_RUN` | `test_consumer_probe_uses_the_consumer` | exit 1, "AssertionError: 'consumer.WANT_RUN)' not found in" the tool |
+| H, a copy of `tools/` whose `consumer.WANT_RUN` names protocol version 2 | that copy's probe, on the tree | exit 1, "consumer_probe: run: the program did not print consumer.WANT_RUN" |
+
+Plants A to D ran first against the scratch script the probe was, with the same four failures, before deviation 7.
+
+`make check-tools`, after the last change to `tools/`: exit 0, 93 tests of `tools/`, 41 of `scripts/`,
+"check-ci-filters: 0 problem(s)".
+
+**Step 2, the gates.** `python3 tools/gates.py --all`: exit 0, "all gates passed", 18 of 18: `regen`, `precheck`,
+`newfiles`, `nojsonv2`, `winvet`, `records`, `mdlint`, `idscan`, `tools`, `lint`, `fix`, `tidy`, `api`, `race3`,
+`floor`, `platforms`, `windows` and `linux`.
+
+* `floor`, which is `tools/floor.py`: `go version go1.26.11 darwin/arm64`; `go vet` and `go test -race -count=1` passed
+  in both modules. The three `agentproc` tests of 0055's step 3 passed.
+* `linux`: both modules, `go version go1.27.4 linux/amd64`. `windows`: both modules, `go version go1.27.4
+  windows/amd64`. Each printed that its directory on the host was removed. The copy leaves out macOS `._` files
+  (`_common.files_of_tree`).
+* `python3 tools/interop.py`, run after the gate set: exit 0, "all pairs passed", eight pairs (`ts-http`, `ts-ws`,
+  `py-http`, `py-ws`, `go-ts-http`, `go-ts-ws`, `go-py-http`, `go-py-ws`), the TypeScript SDK at `08a0d30` and the
+  Python SDK at `9853d8b`. `node`, `npm`, `npx` and `uv` were present.
+* **When it ran.** The gate set ran with step 1's `consumer.py`, `test_tools.py` and `tools/README.md` in the tree, and
+  before `tools/consumer_probe.py`, its tests, the report and the records were. No Go file changed after it. What the
+  later files touch was run again after them: `make check-tools` (above), and the pre-add check and the record gates
+  (below).
+
+**Step 3, gobble-cli, read only.** By a scratch script: `git archive d6c10a5` of gobble-cli unpacked into the scratch
+directory; `go mod edit -replace` of this module onto this tree; then, at `go version go1.27.4 darwin/arm64`:
+`go build ./...` exit 0, `go vet ./...` exit 0, `go test -count=1 ./...` exit 0, 38 packages ok and none failing. The
+copy's `go.mod` gained the replace line alone, and its `go.sum` did not change. gobble-cli's `go` line is `1.27.3` and
+it requires `v1.35.0`. Nothing was written in gobble-cli's tree: its `git status` listed the same 11 entries before and
+after, its own uncommitted work.
+
+**Step 4, `make api`,** in step 2's gate set: exit 0, "against v1.35.0: 0 incompatible, 57 compatible", the 11 `acp`
+names and 46 `unstable` names of phase 3's step 10, and "reported packages unstable, remote: 0 incompatible, not
+gated". The release commit is this phase's, which changes no Go file, so its API is the tree's the gate read.
+
+**Step 5, the report.**
+[0054-REPORT-release-notes-v1-36-0.md](../reports/0054-REPORT-release-notes-v1-36-0.md), in the form of 0052's. Beyond
+the PLAN's list it names the Go floor and toolchain of 0055 (deviation 5), the Windows test fix (deviation 6) and the
+probe (deviation 7).
+
+**Step 6, the records.**
+
+* **The MADR's Consequences, against what was built:** none differs, so the MADR is not amended.
+  * No exported name changed or went away: `make api`, 0 incompatible.
+  * 46 names are in package `unstable`: `make api`.
+  * The generator gained four gate kinds and a validation list: phases 2 and 3.
+  * An SDK client cannot send an unadvertised prompt, an unadvertised mode, a non-text block or an empty array, and an
+    agent opts in to a `_` mode or an empty prompt with `WithInboundValidation`: `system_prompt_test.go`.
+  * "134 definitions' doc comments change wording and links" was the MADR's own measurement and was not counted again.
+* **The MADR's Confirmation:** `schema/version` reads `1.31.0`, `cmp -s schema/version version` exited 0, and the four
+  schema files' SHA-256 are D1's, read again in this phase. The other items are phase 3's tests and this phase's steps
+  2 to 4.
+* **Two things the MADR did not foresee,** neither a change to a decision: `v1.36.0` also carries 0055's Go pin, and the
+  repository gained `tools/consumer_probe.py`.
+* `docs/README.md`: the report's row, and this PLAN's.
+
+**Checks.**
+
+* `make pre-add-check` with the phase's eight files (the three of `tools/` and the new tool, `docs/architecture.md`,
+  `docs/README.md`, the report and this PLAN): exit 0, "0 file(s) gofmt-clean; both modules linted, vetted and tested
+  (-race -shuffle=on, uncached), tidy, govulncheck."
+* `make check-records`, `make markdownlint` (55 files, 0 issues) and `make disclosure-check` exited 0.
+  `make disclosure-check` reads tracked files, so the two new files were also scanned by
+  `python3 tools/idscan.py --paths` with the phase's eight files: "8 file(s), 21 pattern(s), 0 match(es)".
+* `python3 tools/release_body.py v1.36.0 <the phase's commit>` builds the release's body from the report as committed,
+  and checks its links there. It is run after the commit, and its result is in the hand-off, not here.
+
+**Not done:** step 7, the release, waits for the owner's ask in that turn: the push, CI on the pushed commit, the tag
+`v1.36.0`, the release's body and publication, and `tools/consumer.py v1.36.0`. This PLAN stays `in-progress` until
+then, as 0052's did until `v1.35.0` was published.

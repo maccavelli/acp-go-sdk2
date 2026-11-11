@@ -1388,6 +1388,11 @@ tree, in the user's cache directory, outside the tree; the logs under
   included, or, when CI did not run for it, the nearest first-parent
   ancestor's that every later change leaves docs-safe, by
   `check_ci_filters.py --docs-safe` (0049-PLAN-tooling-fixes.md, phase 1).
+  `consumer_probe.py` runs `consumer.py`'s program and test before the tag,
+  in a module that requires the SDK through a `replace` onto the tree or a
+  planted break's copy; it says nothing of the proxy
+  (0054-PLAN-adopt-acp-schema-1-31-0-and-client-system-prompts.md, deviation
+  7).
 - `ci_jobs.py` reads CI's job history, the CI workflow's runs alone: every job's first attempt tallied, a
   failed job's step, seed and crash, and a variable's value in each step's
   environment, each log read by its job id, so from that job's own attempt.

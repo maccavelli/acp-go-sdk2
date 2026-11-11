@@ -692,7 +692,19 @@ class HelpersTest(Temp):
         for needle in ("func TestToolCallStream(", "acp.StartToolCallStream(", "io.WriteString(stream,",
                        "stream.Finish(", "acp.ToolCallTimeline"):
             self.assertIn(needle, consumer.TEST)
-        self.assertIn("v1.35.0 or later", consumer.__doc__)
+
+    def test_consumer_checks_the_system_prompt(self) -> None:
+        # The consumer's test sends an append system prompt the agent is given,
+        # has an override one refused, and asks AllowsValue of both, so its
+        # floor is the release that has them
+        # (0054-PLAN-adopt-acp-schema-1-31-0-and-client-system-prompts.md, phase 5).
+        import consumer
+        for needle in ("func TestSystemPrompt(", "acp.SessionSystemPromptCapabilities{}", "acp.SystemPromptModeAppend",
+                       "acp.SystemPromptModeOverride", "*acp.CapabilityError", "pair.Client.Negotiated()",
+                       "n.AllowsValue(acp.AgentMethodSessionNew,", "len(agent.got) != 0"):
+            self.assertIn(needle, consumer.TEST)
+        self.assertIn("VERSION is v1.36.0 or later", consumer.__doc__)
+        self.assertNotIn("v1.35.0 or later", consumer.__doc__)
 
     def test_consumer_go_mod(self) -> None:
         import consumer
@@ -700,6 +712,41 @@ class HelpersTest(Temp):
         self.assertTrue(consumer.go_mod_ok(good, "1.26.10", "example.invalid/m", "v1.2.3"))
         self.assertFalse(consumer.go_mod_ok(good + "\ntoolchain go1.27.3\n", "1.26.10", "example.invalid/m", "v1.2.3"))
         self.assertFalse(consumer.go_mod_ok(good.replace("1.26.10", "1.27.3"), "1.26.10", "example.invalid/m", "v1.2.3"))
+
+    def test_consumer_probe_go_mod(self) -> None:
+        # The probe's module is at the floor and requires the SDK through a
+        # replace onto the tree
+        # (0054-PLAN-adopt-acp-schema-1-31-0-and-client-system-prompts.md, deviation 7).
+        import consumer_probe
+        tree, mod = self.dir / "sdk", "example.invalid/m"
+        text = consumer_probe.go_mod("1.26.11", mod, tree)
+        self.assertEqual(text, f"module example.invalid/consumer\n\ngo 1.26.11\n\nrequire {mod} v0.0.0\n\nreplace {mod} => {tree}\n")
+        self.assertTrue(consumer_probe.go_mod_ok(text, "1.26.11", mod, tree))
+        self.assertFalse(consumer_probe.go_mod_ok(text + "\ntoolchain go1.27.4\n", "1.26.11", mod, tree))
+        self.assertFalse(consumer_probe.go_mod_ok(text.replace("go 1.26.11", "go 1.27.4"), "1.26.11", mod, tree))
+        self.assertFalse(consumer_probe.go_mod_ok(text.replace("replace ", "// replace "), "1.26.11", mod, tree))
+        self.assertFalse(consumer_probe.go_mod_ok(text, "1.26.11", mod, self.dir / "other"))
+
+    def test_consumer_probe_problems(self) -> None:
+        # The probe is as required only when every step ran and exited 0, the
+        # toolchain is the floor's, and the program printed what consumer.py wants.
+        import consumer_probe
+        steps = ["version", "tidy", "run", "test"]
+        good = {"version": (0, "go version go1.26.11 darwin/arm64"), "tidy": (0, ""), "run": (0, "W"), "test": (0, "ok")}
+        self.assertEqual(consumer_probe.problems(good, steps, "1.26.11", "W"), [])
+        self.assertEqual(consumer_probe.problems({**good, "run": (0, "other")}, steps, "1.26.11", "W"),
+                         ["run: the program did not print consumer.WANT_RUN"])
+        self.assertEqual(consumer_probe.problems({**good, "test": (1, "FAIL")}, steps, "1.26.11", "W"), ["test: exit 1"])
+        self.assertEqual(consumer_probe.problems(good, steps, "1.26.10", "W"), ["version: the toolchain is not go1.26.10"])
+        stopped = {"version": good["version"], "tidy": (1, "no network")}
+        self.assertEqual(consumer_probe.problems(stopped, steps, "1.26.11", "W"), ["tidy: exit 1", "run: not run", "test: not run"])
+
+    def test_consumer_probe_uses_the_consumer(self) -> None:
+        # The probe writes consumer.py's own program and test, and reads its
+        # wanted output, so the two cannot differ.
+        text = (TOOLS / "consumer_probe.py").read_text(encoding="utf-8")
+        for needle in ('consumer.PROGRAM.replace("MODULE", mod)', 'consumer.TEST.replace("MODULE", mod)', "consumer.WANT_RUN)"):
+            self.assertIn(needle, text)
 
     def test_tag_on_main(self) -> None:
         import publication
