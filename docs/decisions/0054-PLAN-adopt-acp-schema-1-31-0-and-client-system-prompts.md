@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-11-10
+status: complete
+date: 2026-11-11
 associated-madr: "0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md"
 ---
 
@@ -1090,3 +1090,39 @@ probe (deviation 7).
 **Not done:** step 7, the release, waits for the owner's ask in that turn: the push, CI on the pushed commit, the tag
 `v1.36.0`, the release's body and publication, and `tools/consumer.py v1.36.0`. This PLAN stays `in-progress` until
 then, as 0052's did until `v1.35.0` was published.
+
+### Phase 5, step 7, the release (2026-11-11)
+
+* **The commit and CI on `main`.** Phase 5 was committed as `770ada6`, at the owner's word, and the owner pushed
+  `main`. `python3 tools/watch_ci.py 770ada6 --branch main`: CI's run `43039146840`, "completed success", its six
+  `validate` jobs (ubuntu-24.04, macos-15 and windows-2025, each at 1.26.11 and 1.27.4); the Docs run `43039146723`,
+  "completed success". The first watch exited 1 when its settle time ran out with one job still running; the second,
+  with `--settle 900`, exited 0.
+  [0055-PLAN-pin-go-1-27-4-and-floor-1-26-11.md](0055-PLAN-pin-go-1-27-4-and-floor-1-26-11.md), step 5, has both.
+* **The tag.** The owner committed 0055's completion as `3be7af6`, two record files on top of `770ada6`, and pushed
+  `v1.36.0`, annotated, naming `3be7af6` (`git ls-remote --tags origin`). Its CI,
+  `python3 tools/watch_ci.py 3be7af6 --branch v1.36.0 --settle 900`: exit 0, run `43042525561`, "completed success", the
+  six `validate` jobs.
+* **Not in step 7's order.** The step lists `git fetch` and `make push-guard` before the tag. The owner tagged and
+  pushed the tag first, and `main` was not pushed with it: `origin/main` was at `770ada6`, so `3be7af6` was on GitHub
+  through the tag alone. Put to the owner with three options, the others being that the owner pushes and that `main`
+  stays, the owner chose that the agent push. `git fetch`, then `make push-guard`: "1 outgoing commit(s),
+  770ada6..3be7af6, main to origin", "the guard passed (exit 0)". `git push origin main`: `770ada6..3be7af6`. The Docs
+  run `43043527542` of that push: "completed success". CI does not run for it: the commit is docs-safe.
+* **`make api`** on `3be7af6`: exit 0. With the tag fetched it compares the tree with `v1.36.0` itself, "0 incompatible,
+  0 compatible". The comparison with `v1.35.0` is step 4's, on the same Go files.
+* **The release.** `python3 tools/release_body.py v1.36.0 v1.36.0`: exit 0, "97 lines, 2 links", its identifier scan "0
+  match(es)". Put to the owner with three options, the others being a draft and that the owner creates it, the owner
+  chose that the agent publish it once the tag's CI had passed.
+  `gh release create v1.36.0 --verify-tag --title v1.36.0 --notes-file …`, the title as `v1.35.0`'s: published, not a
+  draft or prerelease.
+* **`python3 tools/publication.py v1.36.0 3be7af6 <body>`:** exit 0, "10 of 10 checks hold": the release exists, its
+  body is the extracted text, it is marked latest, the tag is annotated and names `3be7af6`, which is on origin's
+  `main`, CI passed on `main`'s head and on the tag (run `43042525561`), the proxy serves the `.info` at that commit,
+  `go list -m @latest` gives `v1.36.0`, and `go mod download` of the tag passes with the checksum database on.
+* **`python3 tools/consumer.py v1.36.0`:** exit 0, "as required". A module at the `go 1.26.11` floor fetched `v1.36.0`
+  from the proxy; its program printed `WANT_RUN`; `go test -count=1 .` passed, on the test file that holds
+  `TestSystemPrompt` (the run is not verbose, so it prints the package's `ok` alone); it built for windows/amd64; its `go.mod` kept the `go` line and gained no toolchain line. It ran after the tag was
+  pushed and before the release was created.
+
+Every Verification item holds and the release is published: this PLAN is `complete`.

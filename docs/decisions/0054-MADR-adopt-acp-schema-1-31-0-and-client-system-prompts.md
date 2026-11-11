@@ -536,3 +536,12 @@ were building the generator support (alias definitions, a dual-role wire, a bind
 * An engine case pins the omission. The release notes name it, so it is a recorded gap, not a silent drop.
 * Building the proxy types needs its own record: alias definitions and a dual-role wire are new generator machinery.
   That record waits until a consumer needs proxy chains; none does today.
+
+## Released in v1.36.0, 2026-11-11
+
+D1 to D9 shipped in `v1.36.0`, the tag naming `3be7af6`, as question 6 decided, with D3 as its amendment has it. The
+PLAN's execution record holds the CI runs, the publication's ten checks and the consumer at the floor. The release also
+carries the Go pin of
+[0055-MADR-pin-go-1-27-4-and-floor-1-26-11.md](0055-MADR-pin-go-1-27-4-and-floor-1-26-11.md), which the PLAN's
+deviation 5 found. The PLAN's phase 5 checked this record's Consequences against what was built and found no
+difference.

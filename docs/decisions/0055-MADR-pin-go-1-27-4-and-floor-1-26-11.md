@@ -205,3 +205,10 @@ Each question was put with three options, the recommended one first. The owner c
 * **Not decided here:** a way to learn of a Go security release without a failed check. CI's weekly run
   (`ci.yml:32`) is what would have shown this one without a push.
 * **The PLAN** is [0055-PLAN-pin-go-1-27-4-and-floor-1-26-11.md](0055-PLAN-pin-go-1-27-4-and-floor-1-26-11.md).
+
+## Released in v1.36.0, 2026-11-11
+
+The pins shipped in `v1.36.0`, the tag naming `3be7af6`, with
+[0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md](0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md),
+as this record's Specification said. CI's six jobs passed at `1.26.11` and `1.27.4` on `main` and on the tag; the
+PLANs' execution records hold the runs.
