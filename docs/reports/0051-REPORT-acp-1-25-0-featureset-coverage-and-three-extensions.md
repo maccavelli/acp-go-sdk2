@@ -394,3 +394,29 @@ This report does not choose among those options.
 - [0049-PLAN-surface-fixes.md](../decisions/0049-PLAN-surface-fixes.md) (S6)
 - [0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md](../decisions/0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md)
   (D8)
+
+## Addendum, 2026-11-11: the cost of schema 1.26.0, corrected, and item 3 since
+
+Two places state 0025's count as the cost at `1e945dd`, which it was not. The body above is left as written.
+
+- **The places.** The coverage table's row "Schema 1.26.0 client `systemPrompt`", whose last cell reads "0025: 115
+  incompatible names if regenerated into this v1 module"; and, among the candidates not chosen, "the removal is 115
+  incompatible names".
+- **Why they were wrong.**
+  [0025-REPORT-schema-1-26-0-adoption-assessment.md](0025-REPORT-schema-1-26-0-adoption-assessment.md)
+  measured the 115 against `v1.17.1`. The frozen manifest of
+  [0039-PLAN-five-adopter-additions-on-schema-1-25-0.md](../decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md),
+  2c, ended them on
+  2026-10-25: "With the real `schema-v1.26.0` unstable files, regeneration again leaves every generated file unchanged,
+  and the root tests pass." It is `0c8088e`, in `v1.23.0`, eleven minor releases before the `v1.34.2` this report read.
+  So at `1e945dd` a regeneration from `1.26.0` removed no name from package `acp`.
+- **What stands.** The "Schema fact" paragraph of item 3 gives 0025's measurement with its baseline, and is right as
+  history. The "Code fact" paragraph names the manifest; the two places above did not draw its consequence.
+- **Item 3 since.**
+  [0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md](../decisions/0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md)
+  took it, for schema `1.31.0`, and `v1.36.0` released it.
+  - By `1.31.0` the client system prompt is in the stable schema, so it is generated into `acp`, not into `unstable`
+    as the item's step 3 supposed.
+  - Package `unstable` gained its first generated file, 46 names.
+  - Measured against `v1.35.0`: "0 incompatible, 57 compatible". Run again for this addendum, on `8c0170d`:
+    `make api BASE=v1.35.0`, exit 0, the same line.

@@ -1126,3 +1126,24 @@ then, as 0052's did until `v1.35.0` was published.
   pushed and before the release was created.
 
 Every Verification item holds and the release is published: this PLAN is `complete`.
+
+### After the release: reports 0051 and 0053 corrected (2026-11-11)
+
+Not a phase of this PLAN. It is recorded here because F9 of the MADR is the fact the correction carries, and this
+PLAN's release is what overtook the two reports.
+
+* **Found** on 2026-11-11, listing open work after the release.
+  [0053-REPORT-acp-1-25-0-completeness-parity-and-adherence.md](../reports/0053-REPORT-acp-1-25-0-completeness-parity-and-adherence.md)
+  (`:289`, `:310`) and
+  [0051-REPORT-acp-1-25-0-featureset-coverage-and-three-extensions.md](../reports/0051-REPORT-acp-1-25-0-featureset-coverage-and-three-extensions.md)
+  (`:226`, `:362`) give 0025's 115 incompatible changes as the cost of a later schema at the commits they read. The
+  frozen manifest of 0039 had ended that cost in `v1.23.0`. The MADR's F9 says as much: "The NES names stay in `acp`,
+  built from the manifest as 0039 designed, so 0025's 115 incompatible changes do not occur."
+* **The owner's word:** "proceed with the 0053 and 0051 report correction".
+* **Done:** an addendum at the end of each report, dated, as
+  [0032-REPORT-windows-floor-runtime-crashes.md](../reports/0032-REPORT-windows-floor-runtime-crashes.md) carries its
+  later findings. Neither body is changed. Their two `docs/README.md` rows say so.
+* **Checked for the addenda:** `make api BASE=v1.35.0` on `8c0170d`: exit 0, "against v1.35.0: 0 incompatible, 57
+  compatible"; `SystemPrompt` is a definition of `schema/schema.json`, the stable file.
+* **Not changed:** 0039's and 0025's own texts, which state their measurements with their baselines; this PLAN's
+  status.

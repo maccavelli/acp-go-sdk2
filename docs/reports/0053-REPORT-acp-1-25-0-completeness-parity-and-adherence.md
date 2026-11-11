@@ -358,3 +358,29 @@ Upstream, the public repository `agentclientprotocol/agent-client-protocol`:
 
 - `docs/protocol/v1/*.mdx` at `4cf3dd8` (tag `schema-v1.25.0`) and at `main` `f3ed0fc`
 - its release list, read 2026-11-10
+
+## Addendum, 2026-11-11: the cost of a later schema, corrected
+
+Two sentences of "Outside 1.25.0 stable" were wrong when they were written, and `v1.36.0` has since overtaken part of
+that section. The body above is left as written.
+
+- **"0025 counted 115 incompatible changes if a later schema is generated into this v1 module."** The count is
+  0025's, but it was not the cost at `108b344`.
+  - [0025-REPORT-schema-1-26-0-adoption-assessment.md](0025-REPORT-schema-1-26-0-adoption-assessment.md) measured it against `v1.17.1`.
+  - 0039's PLAN,
+    [0039-PLAN-five-adopter-additions-on-schema-1-25-0.md](../decisions/0039-PLAN-five-adopter-additions-on-schema-1-25-0.md),
+    2a, measured the same 115 against `v1.22.0` on 2026-10-25, and its 2c, the frozen manifest, ended them the
+    same day: "With the real `schema-v1.26.0` unstable files, regeneration again leaves every generated file unchanged,
+    and the root tests pass. 2a measured 115 incompatible changes for the same files without the manifest."
+  - The manifest is `0c8088e`, released in `v1.23.0`. So at `108b344`, twelve minor releases later, regenerating from a
+    later schema removed no name from package `acp`.
+- **"0025 is the repository's only assessment of a later schema."** That overlooks 0039: its MADR weighed adopting
+  `1.26.0` as its option O3, and its PLAN made the two measurements above.
+- **Since this report.**
+  [0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md](../decisions/0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md),
+  F9, measured schema `1.31.0` against `v1.35.0`: "0 incompatible, 57 compatible", 11
+  names added to `acp` and 46 to `unstable`. `v1.36.0` pins `1.31.0`. Run again for this addendum, on `8c0170d`:
+  `make api BASE=v1.35.0`, exit 0, "against v1.35.0: 0 incompatible, 57 compatible".
+- **What that overtakes.** Of "Upstream since the pin", the `systemPrompt` section is now implemented: 0054's D4 to D6,
+  the client system prompt and its gates. The other items of that list were not scored again here. Of "What a later
+  record could take", the last item, later schemas and the unstable boundary, was taken by 0054.
