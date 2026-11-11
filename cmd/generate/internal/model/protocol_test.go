@@ -548,3 +548,52 @@ func TestMethodByWireSide(t *testing.T) {
 		t.Errorf("methodByWire(client, session/prompt) = %+v, want nil: it is the agent's", mi)
 	}
 }
+
+// TestNonEmptyArraysRules requires a non-empty rule to give its property's
+// field a CheckNonEmpty in its type's Validate, required or optional, a rule
+// whose definition or property the schema lacks to apply nothing, and the
+// table's checks and Build's to refuse a rule they cannot use
+// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D6).
+func TestNonEmptyArraysRules(t *testing.T) {
+	t.Parallel()
+	defs := strings.Replace(protocolDefs, `"Update":`, clearedDefs+`"Update":`, 1)
+	const src = "Replace the items collection."
+	build := func(rules ...PatchRule) (*Model, error) {
+		p := testProtocol()
+		p.NonEmptyArrays = rules
+		return Build(Input{Meta: protocolMeta(), Schema: schemaOf(t, defs), Protocol: p})
+	}
+	m, err := build(PatchRule{"Cleared", "items", src}, PatchRule{"Cleared", "need", src}, PatchRule{"Cleared", "nope", src},
+		PatchRule{"Nope", "items", src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	if v := m.Type("Cleared").Validation; v != nil {
+		for _, c := range v.Checks {
+			if c.Kind == CheckNonEmpty {
+				keys = append(keys, c.Key)
+			}
+		}
+	}
+	if !slices.Equal(keys, []string{"items", "need"}) {
+		t.Errorf("non-empty checks on %v, want items and need", keys)
+	}
+	for _, tt := range []struct {
+		name string
+		rule PatchRule
+		want string
+	}{
+		{"not an array", PatchRule{"Cleared", "text", src}, "Cleared.text: a non-empty rule needs an array property, not string"},
+		{"not stated", PatchRule{"Cleared", "other", src}, `Cleared.other: its description does not state "Replace the items collection."`},
+		{"no source", PatchRule{"Cleared", "items", ""}, "non-empty rule \"Cleared\".\"items\": it needs a definition, a property, and a source"},
+	} {
+		if _, err := build(tt.rule); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: Build = %v, want an error containing %q", tt.name, err, tt.want)
+		}
+	}
+	if _, err := build(PatchRule{"Cleared", "items", src}, PatchRule{"Cleared", "items", src}); err == nil ||
+		!strings.Contains(err.Error(), "non-empty rule Cleared.items: two rules") {
+		t.Errorf("two rules: Build = %v", err)
+	}
+}

@@ -64,6 +64,10 @@ type Model struct {
 	absProps      map[*load.Definition]bool
 	// patchProps holds the properties the protocol table's patch rules name.
 	patchProps map[*load.Definition]bool
+	// nonEmptyProps holds the properties the protocol table's non-empty rules
+	// name, each with its rule's name for errors
+	// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D6).
+	nonEmptyProps map[*load.Definition]string
 	// Gated lists, in type order, each type with a gates method and what it
 	// checks (0017-MADR-remediate-acp-v1-conformance-violations.md, G1).
 	Gated []*Gates
@@ -407,6 +411,9 @@ func resolve(meta *load.Meta, schema *load.Schema, prov *load.Provenance, proto 
 		return nil, err
 	}
 	if err := m.resolveEmptyClears(r); err != nil {
+		return nil, err
+	}
+	if err := m.resolveNonEmptyArrays(r); err != nil {
 		return nil, err
 	}
 	if err := m.resolveKeyOrders(r); err != nil {
@@ -1592,6 +1599,35 @@ func (m *Model) resolveEmptyClears(r *rules) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// resolveNonEmptyArrays resolves each non-empty rule of the table to its
+// property's definition, which ownChecks then checks in every field built
+// from it. A rule whose definition or property the schema lacks is skipped;
+// one whose source the property's description does not state is refused, and
+// ownChecks refuses a field that is not an array
+// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D6).
+func (m *Model) resolveNonEmptyArrays(r *rules) error {
+	m.nonEmptyProps = map[*load.Definition]string{}
+	if r.table == nil {
+		return nil
+	}
+	for _, rule := range r.table.NonEmptyArrays {
+		def := m.schema.Defs[rule.Definition]
+		if m.Type(rule.Definition) == nil || def == nil {
+			continue
+		}
+		prop := expandAllOf(m.schema, def).Properties[rule.Property]
+		if prop == nil {
+			continue
+		}
+		owner := rule.Definition + "." + rule.Property
+		if !strings.Contains(strings.Join(strings.Fields(prop.Description), " "), rule.Source) {
+			return fmt.Errorf("%s: its description does not state %q", owner, rule.Source)
+		}
+		m.nonEmptyProps[prop] = owner
 	}
 	return nil
 }

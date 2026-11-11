@@ -1,0 +1,389 @@
+The undeclared-value kind: a value the open enumeration does not list, the empty
+string and an underscore value included, refused both ways with every capability advertised.
+protocol.json states the rules over a schema of its own, shaped like the client
+system prompt: an optional instructions object, an open mode enumeration, and an
+array of a discriminated block union
+(0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5 and D6).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"initialize": "initialize", "start": "x/start"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{
+ "$defs": {
+  "ProtocolVersion": {
+   "type": "integer",
+   "format": "uint16"
+  },
+  "Flag": {
+   "type": "object"
+  },
+  "ModeCaps": {
+   "type": "object",
+   "properties": {
+    "replace": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Flag"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   }
+  },
+  "PromptCaps": {
+   "type": "object",
+   "properties": {
+    "mode": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/ModeCaps"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   }
+  },
+  "AgentCapabilities": {
+   "type": "object",
+   "properties": {
+    "prompt": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/PromptCaps"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   }
+  },
+  "ClientCapabilities": {
+   "type": "object",
+   "properties": {
+    "x": {
+     "type": "boolean"
+    }
+   }
+  },
+  "InitializeRequest": {
+   "type": "object",
+   "properties": {
+    "protocolVersion": {
+     "$ref": "#/$defs/ProtocolVersion"
+    },
+    "clientCapabilities": {
+     "$ref": "#/$defs/ClientCapabilities"
+    }
+   },
+   "required": [
+    "protocolVersion"
+   ],
+   "x-side": "agent",
+   "x-method": "initialize"
+  },
+  "InitializeResponse": {
+   "type": "object",
+   "properties": {
+    "protocolVersion": {
+     "$ref": "#/$defs/ProtocolVersion"
+    },
+    "agentCapabilities": {
+     "$ref": "#/$defs/AgentCapabilities"
+    }
+   },
+   "required": [
+    "protocolVersion"
+   ],
+   "x-side": "agent",
+   "x-method": "initialize"
+  },
+  "Mode": {
+   "anyOf": [
+    {
+     "type": "string",
+     "const": "add"
+    },
+    {
+     "type": "string",
+     "const": "replace"
+    },
+    {
+     "title": "other",
+     "type": "string"
+    }
+   ]
+  },
+  "Block": {
+   "oneOf": [
+    {
+     "title": "text",
+     "type": "object",
+     "required": [
+      "type",
+      "text"
+     ],
+     "properties": {
+      "type": {
+       "const": "text",
+       "type": "string"
+      },
+      "text": {
+       "type": "string"
+      }
+     }
+    },
+    {
+     "title": "image",
+     "type": "object",
+     "required": [
+      "type",
+      "data"
+     ],
+     "properties": {
+      "type": {
+       "const": "image",
+       "type": "string"
+      },
+      "data": {
+       "type": "string"
+      }
+     }
+    }
+   ],
+   "discriminator": {
+    "propertyName": "type"
+   }
+  },
+  "Instructions": {
+   "type": "object",
+   "required": [
+    "mode",
+    "content"
+   ],
+   "properties": {
+    "mode": {
+     "$ref": "#/$defs/Mode"
+    },
+    "content": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/Block"
+     },
+     "description": "The instructions. Clients MUST NOT send an empty array."
+    }
+   }
+  },
+  "StartRequest": {
+   "type": "object",
+   "properties": {
+    "instructions": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Instructions"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   "x-side": "agent",
+   "x-method": "x/start"
+  },
+  "StartResponse": {
+   "type": "object",
+   "x-side": "agent",
+   "x-method": "x/start"
+  },
+  "CancelRequestNotification": {
+   "type": "object",
+   "x-side": "protocol",
+   "x-method": "$/cancel_request"
+  }
+ }
+}
+-- protocol.json --
+{"CapabilityRules": [{"Side": "agent", "Definition": "StartRequest", "Property": "instructions", "Capability": "prompt", "Source": "s", "Kind": 6}, {"Side": "agent", "Definition": "Instructions", "Property": "mode", "Variant": "replace", "Capability": "prompt.mode.replace", "Source": "s", "Kind": 7}, {"Side": "agent", "Definition": "Instructions", "Property": "mode", "Capability": "prompt.mode", "Source": "s", "Kind": 8}, {"Side": "agent", "Definition": "Instructions", "Property": "content", "Variant": "text", "Capability": "prompt.content", "Source": "s", "Kind": 9}], "NonEmptyArrays": [{"Definition": "Instructions", "Property": "content", "Source": "Clients MUST NOT send an empty array."}]}
+-- want.api --
+type Agent interface{Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error); Start(ctx context.Context, params StartRequest) (StartResponse, error)}
+type AgentCapabilities struct{Prompt *PromptCaps "json:\"prompt,omitempty\""}
+type AgentExperimental interface{}
+const AgentMethodInitialize untyped string = "initialize"
+const AgentMethodStart untyped string = "x/start"
+type AgentSideConnection struct{conn *Connection; agent Agent; negotiation atomic.Pointer[Negotiation]}
+type Block struct{Text *BlockText "json:\"-\""; Image *BlockImage "json:\"-\""; Unknown json.RawMessage "json:\"-\""}
+type BlockImage struct{Data string "json:\"data\""; Type string "json:\"type\""}
+type BlockText struct{Text string "json:\"text\""; Type string "json:\"type\""}
+type CancelRequestNotification struct{}
+type Client interface{}
+type ClientCapabilities struct{X bool "json:\"x,omitempty\""}
+type ClientExperimental interface{}
+type ClientSideConnection struct{conn *Connection; client Client; negotiation atomic.Pointer[Negotiation]; initializing atomic.Pointer[initializeAttempt]}
+type Flag struct{}
+type InitializeRequest struct{ClientCapabilities ClientCapabilities "json:\"clientCapabilities\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
+type InitializeResponse struct{AgentCapabilities AgentCapabilities "json:\"agentCapabilities\""; ProtocolVersion ProtocolVersion "json:\"protocolVersion\""}
+type Instructions struct{Content []Block "json:\"content\""; Mode Mode "json:\"mode\""}
+type Mode string
+const ModeAdd Mode = "add"
+type ModeCaps struct{Replace *Flag "json:\"replace,omitempty\""}
+const ModeReplace Mode = "replace"
+type Negotiation struct{Request InitializeRequest; Response InitializeResponse}
+func NewAgentSideConnection(agent Agent, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *AgentSideConnection
+func NewBlockImage(data string) Block
+func NewBlockText(text string) Block
+func NewClientSideConnection(client Client, peerInput io.Writer, peerOutput io.Reader, opts ...ConnectionOption) *ClientSideConnection
+type PromptCaps struct{Mode *ModeCaps "json:\"mode,omitempty\""}
+const ProtocolMethodCancelRequest untyped string = "$/cancel_request"
+type ProtocolVersion uint16
+const ProtocolVersionNumber untyped int = 1
+type StartRequest struct{Instructions *Instructions "json:\"instructions,omitempty\""}
+type StartResponse struct{}
+func (*AgentSideConnection).Close() error
+func (*AgentSideConnection).Connection() *Connection
+func (*AgentSideConnection).Done() <-chan struct{}
+func (*AgentSideConnection).DroppedNotifications() uint64
+func (*AgentSideConnection).Err() error
+func (*AgentSideConnection).Negotiated() (Negotiation, bool)
+func (*AgentSideConnection).SetLogger(l *slog.Logger)
+func (*AgentSideConnection).Wait() error
+func (Block).MarshalJSON() ([]byte, error)
+func (*Block).UnmarshalJSON(b []byte) error
+func (*Block).Validate() error
+func (*BlockImage).UnmarshalJSON(b []byte) error
+func (*BlockText).UnmarshalJSON(b []byte) error
+func (*CancelRequestNotification).Validate() error
+func (*ClientSideConnection).Close() error
+func (*ClientSideConnection).Connection() *Connection
+func (*ClientSideConnection).Done() <-chan struct{}
+func (*ClientSideConnection).DroppedNotifications() uint64
+func (*ClientSideConnection).Err() error
+func (*ClientSideConnection).Initialize(ctx context.Context, params InitializeRequest) (InitializeResponse, error)
+func (*ClientSideConnection).Negotiated() (Negotiation, bool)
+func (*ClientSideConnection).SetLogger(l *slog.Logger)
+func (*ClientSideConnection).Start(ctx context.Context, params StartRequest) (StartResponse, error)
+func (*ClientSideConnection).Wait() error
+func (*InitializeRequest).UnmarshalJSON(b []byte) error
+func (*InitializeRequest).Validate() error
+func (*InitializeResponse).UnmarshalJSON(b []byte) error
+func (*InitializeResponse).Validate() error
+func (Instructions).MarshalJSON() ([]byte, error)
+func (*Instructions).UnmarshalJSON(b []byte) error
+func (*Instructions).Validate() error
+func (Negotiation).Allows(method string) error
+func (*StartRequest).Validate() error
+func (*StartResponse).Validate() error
+-- behaviour_test.go --
+package acp
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"testing"
+	"time"
+)
+
+// startAgent advertises caps and reports each start it handles on got.
+type startAgent struct {
+	caps AgentCapabilities
+	got  chan StartRequest
+}
+
+func (a startAgent) Initialize(context.Context, InitializeRequest) (InitializeResponse, error) {
+	return InitializeResponse{AgentCapabilities: a.caps}, nil
+}
+
+func (a startAgent) Start(_ context.Context, p StartRequest) (StartResponse, error) {
+	a.got <- p
+	return StartResponse{}, nil
+}
+
+type noClient struct{}
+
+// pair connects a client to an agent that advertises caps, and initializes.
+func pair(t *testing.T, caps AgentCapabilities) (*ClientSideConnection, chan StartRequest) {
+	t.Helper()
+	ar, cw := io.Pipe()
+	cr, aw := io.Pipe()
+	t.Cleanup(func() { _ = cw.Close(); _ = aw.Close() })
+	got := make(chan StartRequest, 8)
+	NewAgentSideConnection(startAgent{caps, got}, aw, ar)
+	csc := NewClientSideConnection(noClient{}, cw, cr)
+	if _, err := csc.Initialize(t.Context(), InitializeRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	return csc, got
+}
+
+// rawRefused requires the JSON raw, sent as x/start's params past the typed
+// gate, to be answered -32602, the agent's Start not called.
+func rawRefused(t *testing.T, csc *ClientSideConnection, got chan StartRequest, raw string) {
+	t.Helper()
+	var re *RequestError
+	if _, err := SendRequest[StartResponse](csc.Connection(), t.Context(), AgentMethodStart, json.RawMessage(raw)); !errors.As(err, &re) || re.Code != -32602 {
+		t.Errorf("raw %s = %v, want -32602", raw, err)
+	}
+	select {
+	case p := <-got:
+		t.Errorf("Start handled %+v", p)
+	default:
+	}
+}
+
+// refused requires the typed send of p to return a *CapabilityError naming
+// capability, field and variant, and p sent raw to be answered -32602.
+func refused(t *testing.T, csc *ClientSideConnection, got chan StartRequest, p StartRequest, capability, field, variant string) {
+	t.Helper()
+	var ce *CapabilityError
+	if _, err := csc.Start(t.Context(), p); !errors.As(err, &ce) || ce.Method != AgentMethodStart || ce.Capability != capability ||
+		ce.Field != field || ce.Variant != variant {
+		t.Errorf("Start = %v; want a *CapabilityError naming %s, field %q, variant %q", err, capability, field, variant)
+	}
+	raw, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawRefused(t, csc, got, string(raw))
+}
+
+// passes requires p to be sent and handled.
+func passes(t *testing.T, csc *ClientSideConnection, got chan StartRequest, p StartRequest) StartRequest {
+	t.Helper()
+	if _, err := csc.Start(t.Context(), p); err != nil {
+		t.Fatalf("Start = %v", err)
+	}
+	select {
+	case h := <-got:
+		return h
+	case <-time.After(5 * time.Second):
+		t.Fatal("Start was not handled")
+	}
+	return StartRequest{}
+}
+
+func text(mode Mode, blocks ...Block) StartRequest {
+	if blocks == nil {
+		blocks = []Block{NewBlockText("x")}
+	}
+	return StartRequest{Instructions: &Instructions{Mode: mode, Content: blocks}}
+}
+
+var everything = AgentCapabilities{Prompt: &PromptCaps{Mode: &ModeCaps{Replace: &Flag{}}}}
+
+// No capability advertises an unlisted mode; a null mode decodes as "" and is
+// refused too.
+func TestUndeclaredValueGated(t *testing.T) {
+	csc, got := pair(t, everything)
+	for _, m := range []Mode{"_vendor", "later", ""} {
+		refused(t, csc, got, text(m), "prompt.mode."+string(m), "mode", string(m))
+	}
+	rawRefused(t, csc, got, `{"instructions":{"mode":null,"content":[{"type":"text","text":"x"}]}}`)
+	passes(t, csc, got, text(ModeAdd))
+	passes(t, csc, got, text(ModeReplace))
+}

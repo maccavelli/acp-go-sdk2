@@ -1,0 +1,208 @@
+Refused: an only-variants rule on an enumeration (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5).
+
+-- meta.json --
+{"version": 1, "agentMethods": {"initialize": "initialize", "start": "x/start"}, "clientMethods": {}, "protocolMethods": {"cancel_request": "$/cancel_request"}}
+-- schema.json --
+{
+ "$defs": {
+  "ProtocolVersion": {
+   "type": "integer",
+   "format": "uint16"
+  },
+  "Flag": {
+   "type": "object"
+  },
+  "ModeCaps": {
+   "type": "object",
+   "properties": {
+    "replace": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Flag"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   }
+  },
+  "PromptCaps": {
+   "type": "object",
+   "properties": {
+    "mode": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/ModeCaps"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   }
+  },
+  "AgentCapabilities": {
+   "type": "object",
+   "properties": {
+    "prompt": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/PromptCaps"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   }
+  },
+  "ClientCapabilities": {
+   "type": "object",
+   "properties": {
+    "x": {
+     "type": "boolean"
+    }
+   }
+  },
+  "InitializeRequest": {
+   "type": "object",
+   "properties": {
+    "protocolVersion": {
+     "$ref": "#/$defs/ProtocolVersion"
+    },
+    "clientCapabilities": {
+     "$ref": "#/$defs/ClientCapabilities"
+    }
+   },
+   "required": [
+    "protocolVersion"
+   ],
+   "x-side": "agent",
+   "x-method": "initialize"
+  },
+  "InitializeResponse": {
+   "type": "object",
+   "properties": {
+    "protocolVersion": {
+     "$ref": "#/$defs/ProtocolVersion"
+    },
+    "agentCapabilities": {
+     "$ref": "#/$defs/AgentCapabilities"
+    }
+   },
+   "required": [
+    "protocolVersion"
+   ],
+   "x-side": "agent",
+   "x-method": "initialize"
+  },
+  "Mode": {
+   "anyOf": [
+    {
+     "type": "string",
+     "const": "add"
+    },
+    {
+     "type": "string",
+     "const": "replace"
+    },
+    {
+     "title": "other",
+     "type": "string"
+    }
+   ]
+  },
+  "Block": {
+   "oneOf": [
+    {
+     "title": "text",
+     "type": "object",
+     "required": [
+      "type",
+      "text"
+     ],
+     "properties": {
+      "type": {
+       "const": "text",
+       "type": "string"
+      },
+      "text": {
+       "type": "string"
+      }
+     }
+    },
+    {
+     "title": "image",
+     "type": "object",
+     "required": [
+      "type",
+      "data"
+     ],
+     "properties": {
+      "type": {
+       "const": "image",
+       "type": "string"
+      },
+      "data": {
+       "type": "string"
+      }
+     }
+    }
+   ],
+   "discriminator": {
+    "propertyName": "type"
+   }
+  },
+  "Instructions": {
+   "type": "object",
+   "required": [
+    "mode",
+    "content"
+   ],
+   "properties": {
+    "mode": {
+     "$ref": "#/$defs/Mode"
+    },
+    "content": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/Block"
+     },
+     "description": "The instructions. Clients MUST NOT send an empty array."
+    }
+   }
+  },
+  "StartRequest": {
+   "type": "object",
+   "properties": {
+    "instructions": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Instructions"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   "x-side": "agent",
+   "x-method": "x/start"
+  },
+  "StartResponse": {
+   "type": "object",
+   "x-side": "agent",
+   "x-method": "x/start"
+  },
+  "CancelRequestNotification": {
+   "type": "object",
+   "x-side": "protocol",
+   "x-method": "$/cancel_request"
+  }
+ }
+}
+-- protocol.json --
+{"CapabilityRules": [{"Side": "agent", "Definition": "Instructions", "Property": "mode", "Variant": "add", "Capability": "prompt.content", "Source": "s", "Kind": 9}]}
+-- want.err --
+Mode is not a discriminated union

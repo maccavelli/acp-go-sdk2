@@ -281,6 +281,7 @@ const (
 	RuleOneMember     ValidationRule = "oneMember"
 	RuleExcludedValue ValidationRule = "excludedValue"
 	RuleEnum          ValidationRule = "enum"
+	RuleMinItems      ValidationRule = "minItems"
 )
 
 type validation struct {

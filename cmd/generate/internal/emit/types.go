@@ -1334,6 +1334,12 @@ func checkStmt(f *goFile, name string, c model.Check) ast.Stmt {
 	if c.Kind == model.CheckClosedEnum {
 		return closedEnumStmt(f, name, c)
 	}
+	if c.Kind == model.CheckNonEmpty {
+		// An array the protocol forbids to be empty, refused both ways
+		// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D6).
+		return ifStmt(nil, binary(call(id("len"), field), token.EQL, intLit(0)),
+			ret(validationError(f, name, str(c.Key), nil, "RuleMinItems", str(where+": must not be empty"))))
+	}
 	if c.Kind == model.CheckNested {
 		if c.InPatch {
 			// A patch's value is checked when it holds one.

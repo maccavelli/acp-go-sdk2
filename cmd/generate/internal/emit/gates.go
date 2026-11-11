@@ -158,6 +158,10 @@ func gateStmt(f *goFile, m *model.Model, typ, recv string, c model.GateCheck) as
 		return rangeStmt(id("_"), id("a"), dot("n", "Response", c.List),
 			ifStmt(nil, binary(binary(a(), token.NEQ, nilExpr()), token.LAND, binary(sel(a(), c.ID), token.EQL, field())),
 				ret(call(f.qual(pkgFmt, "Errorf"), str("%s: "+c.Key+" %q: %w"), id("method"), field(), id("ErrTerminalAuthMethod")))))
+	case model.GateCheckUndeclaredValue:
+		return undeclaredValueGate(field, c)
+	case model.GateCheckOnlyVariants:
+		return onlyVariantsGate(f, recv, c)
 	}
 	root := func() ast.Expr { return dot("n", "Response", m.Initialize.RespCapsField) }
 	if c.FromRequest {
@@ -182,6 +186,14 @@ func gateStmt(f *goFile, m *model.Model, typ, recv string, c model.GateCheck) as
 	}
 	if c.Kind == model.GateCheckNonEmpty {
 		return ifStmt(nil, binary(binary(call(id("len"), field()), token.GTR, intLit(0)), token.LAND, missing()), refuse(str(c.Key)))
+	}
+	// A set optional property, and an enumeration's value, each without its
+	// capability (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5).
+	if c.Kind == model.GateCheckPresent {
+		return ifStmt(nil, binary(binary(field(), token.NEQ, nilExpr()), token.LAND, missing()), refuse(str(c.Key)))
+	}
+	if c.Kind == model.GateCheckValue {
+		return ifStmt(nil, binary(binary(field(), token.EQL, str(c.Value)), token.LAND, missing()), refuse(str(c.Key)))
 	}
 	// A variant: of the union itself, or of the union a field holds.
 	set := func(x func() ast.Expr) ast.Expr {
@@ -211,6 +223,59 @@ func eachUnion(f *goFile, recv string, c model.GateCheck, cond func(x func() ast
 	default:
 		return ifStmt(nil, cond(field), body(field, str(c.Key))...)
 	}
+}
+
+// capabilityRefusal is &CapabilityError{Method: method, Capability: capability,
+// Field: field, Variant: variant}.
+func capabilityRefusal(capability, field, variant ast.Expr) ast.Expr {
+	return addr(composite(id("CapabilityError"), kv(id("Method"), id("method")), kv(id("Capability"), capability),
+		kv(id("Field"), field), kv(id("Variant"), variant)))
+}
+
+// undeclaredValueGate refuses an enumeration's value the schema does not
+// list, the empty string included: no capability advertises one. The refusal
+// names the capability prefix followed by "." and the value, the field, and
+// the value as its variant, so a received one is answered -32602
+// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5).
+func undeclaredValueGate(field func() ast.Expr, c model.GateCheck) ast.Stmt {
+	value := call(id("string"), field())
+	var cond ast.Expr = id("true")
+	for i, v := range c.Values {
+		ne := binary(field(), token.NEQ, str(v))
+		if i == 0 {
+			cond = ne
+			continue
+		}
+		cond = binary(cond, token.LAND, ne)
+	}
+	return ifStmt(nil, cond, ret(capabilityRefusal(binary(str(c.Capability+"."), token.ADD, value), str(c.Key), value)))
+}
+
+// onlyVariantsGate refuses, in the union a field holds, any set variant but
+// the allowed one, c.Variant: each other declared variant, by its
+// discriminator value; the raw Unknown, whose value unknownKind reads; and the
+// catch-all, by its discriminator field (D5).
+func onlyVariantsGate(f *goFile, recv string, c model.GateCheck) ast.Stmt {
+	cond := func(x func() ast.Expr) ast.Expr { return binary(sel(x(), c.Variant), token.EQL, nilExpr()) }
+	return eachUnion(f, recv, c, cond, func(x func() ast.Expr, name ast.Expr) []ast.Stmt {
+		var cases []ast.Stmt
+		for _, o := range c.Others {
+			cases = append(cases, caseOf(exprs(binary(sel(x(), o.Variant), token.NEQ, nilExpr())),
+				ret(capabilityRefusal(str(c.Capability+"."+o.Value), name, str(o.Value)))))
+		}
+		if c.RawKey != "" {
+			kind := id("kind")
+			cases = append(cases, caseOf(exprs(binary(sel(x(), "Unknown"), token.NEQ, nilExpr())),
+				define(exprs(kind), call(id(helperUnknownKind), sel(x(), "Unknown"), str(c.RawKey))),
+				ret(capabilityRefusal(binary(str(c.Capability+"."), token.ADD, kind), name, kind))))
+		}
+		if c.CatchAll != "" {
+			value := sel(x(), c.CatchAll, c.CatchDisc)
+			cases = append(cases, caseOf(exprs(binary(sel(x(), c.CatchAll), token.NEQ, nilExpr())),
+				ret(capabilityRefusal(binary(str(c.Capability+"."), token.ADD, value), name, value))))
+		}
+		return []ast.Stmt{switchStmt(nil, cases...)}
+	})
 }
 
 // undeclaredGate refuses a union's catch-all, set, whose value no capability

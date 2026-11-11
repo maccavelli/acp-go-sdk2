@@ -35,6 +35,19 @@ const (
 	// GateCheckAdvertisedAuth refuses an id that names no method of the
 	// initialize response's list.
 	GateCheckAdvertisedAuth
+	// GateCheckPresent refuses a set optional property without the capability
+	// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5).
+	GateCheckPresent
+	// GateCheckValue refuses an enumeration's value Value without the
+	// capability (D5).
+	GateCheckValue
+	// GateCheckUndeclaredValue refuses an enumeration's value Values does not
+	// list (D5).
+	GateCheckUndeclaredValue
+	// GateCheckOnlyVariants refuses a union's set variant other than Variant:
+	// each of Others, the raw Unknown when RawKey is set, and the catch-all
+	// when CatchAll is (D5).
+	GateCheckOnlyVariants
 )
 
 // GateCheck is one check of a gates method.
@@ -84,6 +97,20 @@ type GateCheck struct {
 	// gates of each item are called
 	// (0049-MADR-remediate-the-2026-11-01-debugging-pass.md, G19, Q25 a).
 	Items bool
+	// Values are, for GateCheckUndeclaredValue, the values the enumeration
+	// lists. Others are, for GateCheckOnlyVariants, the union's other
+	// variants, and CatchAll and CatchDisc its catch-all variant's Go field
+	// and that variant's discriminator field, when it has one
+	// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5).
+	Values              []string
+	Others              []VariantValue
+	CatchAll, CatchDisc string
+}
+
+// VariantValue is a union's variant, by its Go field, and its discriminator
+// value.
+type VariantValue struct {
+	Variant, Value string
 }
 
 // collectionItems is the named type of the items of an inline variant that is
@@ -334,22 +361,64 @@ func (m *Model) gateCheck(t *Type, rule CapabilityRule) (GateCheck, bool, error)
 		if err := m.advertisedAuth(&c, f); err != nil {
 			return c, false, err
 		}
-	}
-	switch {
-	case rule.Kind == GateUndeclaredVariant:
-		// The capability is the prefix a refusal names: no capability lifts
-		// the gate, so it need only exist.
-		if _, _, err := m.capabilityPath(rule.Side, rule.Capability); err != nil {
-			return c, false, err
+	case GatePresent:
+		if f.Type.Kind != RefPointer {
+			return c, false, fmt.Errorf("%s is %s, not an optional property", rule.Property, f.Type)
 		}
-	case rule.Capability != "":
-		steps, err := m.capabilitySteps(rule.Side, rule.Capability)
+		c.Kind, c.Shape = GateCheckPresent, RefPointer
+	case GateValue, GateUndeclaredValue:
+		values, err := m.enumValues(f)
 		if err != nil {
 			return c, false, err
 		}
-		c.Steps = steps
+		if rule.Kind == GateUndeclaredValue {
+			c.Kind, c.Values = GateCheckUndeclaredValue, values
+			break
+		}
+		if !slices.Contains(values, rule.Variant) {
+			return c, false, fmt.Errorf("%s does not list %q", f.Type.Name, rule.Variant)
+		}
+		c.Kind = GateCheckValue
+	case GateOnlyVariants:
+		if err := m.onlyVariants(&c, t, f, rule.Variant); err != nil {
+			return c, false, err
+		}
+	}
+	if err := m.ruleCapability(&c, rule); err != nil {
+		return c, false, err
 	}
 	return c, true, nil
+}
+
+// ruleCapability resolves rule's capability for its check c: the prefix a
+// refusal names, which must exist, for the undeclared kinds; the prefix of an
+// only-variants rule, of which all but the last segment must; and otherwise
+// the steps of the capability that lifts the gate, when the rule names one.
+func (m *Model) ruleCapability(c *GateCheck, rule CapabilityRule) error {
+	switch {
+	case rule.Kind == GateUndeclaredVariant || rule.Kind == GateUndeclaredValue:
+		// The capability is the prefix a refusal names: no capability lifts
+		// the gate, so it need only exist.
+		_, _, err := m.capabilityPath(rule.Side, rule.Capability)
+		return err
+	case rule.Kind == GateOnlyVariants:
+		// The prefix's last segment names the property a future capability
+		// would sit under, so only the rest must exist
+		// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5).
+		i := strings.LastIndex(rule.Capability, ".")
+		if i < 0 {
+			return fmt.Errorf("capability %q: an only-variants prefix needs a property under a capability", rule.Capability)
+		}
+		_, _, err := m.capabilityPath(rule.Side, rule.Capability[:i])
+		return err
+	case rule.Capability != "":
+		steps, err := m.capabilitySteps(rule.Side, rule.Capability)
+		if err != nil {
+			return err
+		}
+		c.Steps = steps
+	}
+	return nil
 }
 
 // ruleUnion returns the union a rule gates: t, when the rule names no
@@ -389,6 +458,57 @@ func (m *Model) catchAll(c *GateCheck, t *Type) error {
 		}
 	}
 	return fmt.Errorf("%s: the catch-all variant has no string %s", t.Name, t.DiscKey)
+}
+
+// enumValues returns the values of the string enumeration field f holds by
+// value: an enum, a oneOf of consts, or an open enum
+// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5).
+func (m *Model) enumValues(f *Field) ([]string, error) {
+	t := m.Type(f.Type.Name)
+	if f.Type.Kind != RefNamed || t == nil || (t.Kind != KindEnum && t.Kind != KindStringConstUnion && t.Kind != KindOpenEnum) {
+		return nil, fmt.Errorf("%s is %s, not a string enumeration held by value", f.Key, f.Type)
+	}
+	var values []string
+	for _, v := range t.Enum {
+		values = append(values, v.Value)
+	}
+	return values, nil
+}
+
+// onlyVariants resolves an only-variants rule on field f of t: the union it
+// holds, by value, pointer or array, discriminated; its variant allowed, which
+// c.Variant names; and every other variant, the raw Unknown and the catch-all
+// among them, which the check refuses (D5).
+func (m *Model) onlyVariants(c *GateCheck, t *Type, f *Field, allowed string) error {
+	union, err := m.ruleUnion(c, t, f)
+	if err != nil {
+		return err
+	}
+	if union.Kind != KindUnion || union.DiscKey == "" {
+		return fmt.Errorf("%s is not a discriminated union, whose refused variants a refusal could name", union.Name)
+	}
+	vi, err := variantOf(union, allowed)
+	if err != nil {
+		return err
+	}
+	c.Kind, c.Variant = GateCheckOnlyVariants, vi.FieldName
+	for i, o := range union.Variants {
+		if o.Skip || o == vi || i == union.CatchAll {
+			continue
+		}
+		c.Others = append(c.Others, VariantValue{Variant: o.FieldName, Value: o.DiscValue})
+	}
+	if union.HasUnknown {
+		c.RawKey = union.DiscKey
+	}
+	if union.CatchAll >= 0 {
+		var catch GateCheck
+		if err := m.catchAll(&catch, union); err != nil {
+			return err
+		}
+		c.CatchAll, c.CatchDisc = catch.Variant, catch.Disc
+	}
+	return nil
 }
 
 // variantOf returns the variant of union t whose discriminator value is value.

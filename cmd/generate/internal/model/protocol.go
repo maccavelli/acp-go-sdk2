@@ -54,6 +54,12 @@ type Protocol struct {
 	// omitted and an empty one is sent as []; Source must be in the property's
 	// description (0049-PLAN-surface-fixes.md, phase 2).
 	EmptyClears []PatchRule
+	// NonEmptyArrays lists the array properties the protocol forbids to be
+	// empty, which the schema states only in prose: Validate refuses an empty
+	// one with RuleMinItems, on what is sent and on what is received. Source
+	// must be in the property's description
+	// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D6).
+	NonEmptyArrays []PatchRule
 	// KeyOrders lists the typed map properties whose key order the protocol
 	// gives meaning, which the schema does not state: each struct gains
 	// Field, the order of the map's keys, read when decoded and written when
@@ -158,6 +164,27 @@ const (
 	// entry the response holds raw. No capability lifts it, and the rule names
 	// none (0049-PLAN-surface-fixes.md, phase 4, S8).
 	GateAdvertisedAuthMethod
+	// GatePresent requires Property, an optional property held by pointer, to
+	// be unset unless Capability is advertised. The rule names no Variant
+	// (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5).
+	GatePresent
+	// GateValue requires Property, a string enumeration held by value, not to
+	// hold Variant, a value it lists, unless Capability is advertised (D5).
+	GateValue
+	// GateUndeclaredValue requires Property, a string enumeration held by
+	// value, to hold only a value it lists: no capability advertises another,
+	// the empty string included. Capability is the prefix the refusal names,
+	// followed by "." and the value, as GateUndeclaredVariant's is; the rule
+	// names no Variant (D5).
+	GateUndeclaredValue
+	// GateOnlyVariants requires Property, a union or an array of one, to hold
+	// only its variant whose discriminator value is Variant: any other
+	// variant, the raw Unknown or the catch-all included, is refused with no
+	// capability to lift it. Capability is the prefix the refusal names,
+	// followed by "." and the refused discriminator value; every segment of it
+	// but the last must resolve, the last naming the property a future
+	// capability would sit under (D5).
+	GateOnlyVariants
 )
 
 // CapabilityRule gates a property or variant of a definition, as the merged
@@ -436,6 +463,9 @@ func newRules(p *Protocol) (*rules, error) {
 	if err := checkPropertyRules("empty-clears", p.EmptyClears); err != nil {
 		return nil, err
 	}
+	if err := checkPropertyRules("non-empty", p.NonEmptyArrays); err != nil {
+		return nil, err
+	}
 	ordered := map[[2]string]bool{}
 	orderFields := map[[2]string]string{}
 	for _, rule := range p.KeyOrders {
@@ -527,6 +557,10 @@ func checkCapabilityRules(rules []CapabilityRule) error {
 			missing = rule.Variant != "" || rule.Capability == ""
 		case GateAdvertisedAuthMethod:
 			missing = rule.Property == "" || rule.Variant != "" || rule.Capability != ""
+		case GatePresent, GateUndeclaredValue:
+			missing = rule.Property == "" || rule.Variant != "" || rule.Capability == ""
+		case GateValue, GateOnlyVariants:
+			missing = rule.Property == "" || rule.Variant == "" || rule.Capability == ""
 		default:
 			return fmt.Errorf("%s: no gate kind", rule.name())
 		}

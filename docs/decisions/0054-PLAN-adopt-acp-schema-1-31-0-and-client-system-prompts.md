@@ -512,4 +512,85 @@ side.
   govulncheck."
 * `make check-records`, `make markdownlint` and `make disclosure-check` exited 0: 0 issues, "813 tracked file(s),
   0 finding(s)".
-* Phase 1 is staged for the owner's commit.
+* Phase 1 is staged for the owner's commit. The owner committed it as `0d8f211`.
+
+### Phase 2, the gate kinds and the validation list (2026-11-10)
+
+Base `0d8f211`, clean.
+
+**What was done.**
+
+* **`model/protocol.go`:**
+  * `GateKind` gains `GatePresent`, `GateValue`, `GateUndeclaredValue` and `GateOnlyVariants`, each documented with
+    the fields its rule takes and citing D5.
+  * `checkCapabilityRules` gains their missing-field tests: present and undeclared value take a property and a
+    capability and no variant; value and only variants take all three.
+  * `Protocol.NonEmptyArrays []PatchRule`, checked in `Build` by `checkPropertyRules("non-empty", …)`.
+* **`model/gates.go`:**
+  * four `GateCheckKind`s; `GateCheck.Values`, `Others`, `CatchAll` and `CatchDisc`; and `VariantValue`;
+  * cases in `gateCheck`, with `enumValues` and `onlyVariants`;
+  * the prefix rules in the capability switch: undeclared value's prefix must resolve, and every segment of
+    only variants' prefix but the last must.
+* **`emit/gates.go`:** the present and value checks in `gateStmt`, using the existing `refuse` and `missing`.
+  `undeclaredValueGate` and `onlyVariantsGate`, with `capabilityRefusal`.
+* **`model/model.go`:** `nonEmptyProps` and `resolveNonEmptyArrays`, which requires the source in the property's
+  description, as `resolveEmptyClears` does. **`model/validate.go`:** `CheckNonEmpty`, which `ownChecks` adds for a
+  ruled array and refuses on any other shape. **`emit/types.go`:** `checkStmt` emits
+  `if len(v.F) == 0 { return &ValidationError{…, Rule: RuleMinItems, …} }`.
+* **`RuleMinItems`** was added to the rule stubs of `cmd/generate/main_test.go` and `emit/types_test.go`.
+* **Engine cases:**
+  * five accept cases, each with a behaviour test: `accept-capability-present`, `-value`, `-undeclared-value`,
+    `-only-variants` and `accept-non-empty-array`;
+  * seven refusal cases, exactly the PLAN's list.
+
+  Each accept case states the rules in a `protocol.json`, the per-case table override of
+  `cmd/generate/engine_test.go:228`-`:262`, over one shared schema shaped like the system prompt: optional
+  `instructions`, an open `Mode` (`add`, `replace`, other), and a discriminated `Block` union (`text`, `image`,
+  `Unknown`). The behaviour tests check a typed send's `*CapabilityError` (capability, field, variant) and a raw send
+  answered `-32602` with the handler not called. They also check an advertised send that reaches the handler, and
+  `RuleMinItems` from `Validate`, a typed send and a raw send.
+* **Model tests:**
+  * `TestCapabilityRulesRefuse` gains nine rows: a missing and an extra field for each kind, and an only-variants
+    prefix of one segment;
+  * `TestNonEmptyArraysRules` (`protocol_test.go`) covers the check of `items` and `need`, an array that is not ruled,
+    and the four refusals: not an array, not stated, no source, two rules.
+
+**Refinements, within the PLAN's text.**
+
+* The value kinds accept the three string-enum kinds that list values: `KindEnum`, `KindStringConstUnion` and
+  `KindOpenEnum`. `SystemPromptMode` is a `KindOpenEnum`; the PLAN's step 2 said "a `KindEnum`".
+* `GateCheck.Values` holds the values alone. The generated code compares the field with string literals, which a named
+  string type accepts, so no constant names are needed.
+* The scratch generators of the cases are `p2_cases.py` and `p2_cases_write.py`. A probe case, `accept-zz-probe`, was
+  used to read the generated API and then deleted.
+
+**Generated output.** `git status --short` names no generated file. `model/acp.go` has no new rule yet, so nothing at
+`1.25.0` uses the kinds.
+
+**Plants** (`python3 tools/plants.py`, spec `plants_p2.json`; first run "6/9 as required", exit 1):
+
+| Plant | Test | Failure |
+| :--- | :--- | :--- |
+| P2-1, the present check `!= nil` made `== nil` | `TestEngineBehaviour` | `the package's tests did not pass`, in `TestPresentGated` |
+| P2-2, the value check `==` made `!=` | `TestEngineBehaviour` | the same, in `TestValueGated` |
+| P2-3, the undeclared value comparing only the last listed value | `TestEngineBehaviour` | the same, in `TestUndeclaredValueGated` |
+| P2-4, the only-variants condition negated | `TestEngineBehaviour` | the same, in `TestOnlyVariantsGated` |
+| P2-5, the non-empty check `== 0` made `!= 0` | `TestEngineBehaviour` | the same, in `TestNonEmptyArray` |
+| P2-6, present and undeclared value's field checks made `false` | `TestCapabilityRulesRefuse` | `present_without_a_property`: a nil pointer panic in `gateCheck` (`gates.go:365`), which the field check prevents |
+| P2-7, value and only variants' field checks made `false` | `TestCapabilityRulesRefuse` | `value_without_a_variant` and three more rows: `Build = <nil>, want an error containing "it lacks a field its kind needs"` |
+| P2-8, the non-empty source check removed | `TestNonEmptyArraysRules` | `protocol_test.go:592: not stated: Build = <nil>` |
+| P2-9, a one-segment only-variants prefix accepted | `TestCapabilityRulesRefuse` | `only_variants_with_a_prefix_of_one_segment: Build = <nil>` |
+
+P2-6, P2-7 and P2-9 failed on their rows in the first run. The spec's `want` text named the rows with spaces, where the
+test output has the subtest names with underscores. With those names (`plants_p2_rerun.json`) the three ran again:
+"3/3 as required", exit 0.
+
+**Checks.**
+
+* `make pre-add-check FILES="<the phase's 10 Go files and 12 engine cases>"` first exited 2 on `gocognit`: "cognitive
+  complexity 52 of func `(*Model).gateCheck` is high (> 50)", for the host and for `GOOS=windows`. The capability
+  switch at the end of `gateCheck` moved, unchanged in behaviour, into a method of its own, `ruleCapability`. The model
+  tests passed again. P2-9's edit, which quoted the moved code, ran again as P2-9b against it (`plants_p2_9b.json`):
+  "1/1 as required", the same failure. The check then exited 0: "10 file(s) gofmt-clean; both modules linted, vetted
+  and tested (-race -shuffle=on, uncached), tidy, govulncheck."
+* Phase 2 is staged for the owner's commit.

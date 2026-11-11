@@ -181,6 +181,24 @@ func TestCapabilityRulesRefuse(t *testing.T) {
 		{"advertised auth without a list", with(func(r *CapabilityRule) {
 			r.Definition, r.Property, r.Variant, r.Capability, r.Kind = "PromptRequest", "sessionId", "", "", GateAdvertisedAuthMethod
 		}), "InitResponse has no array of a union every variant of which holds a SessionId"},
+		// The four kinds of 0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D5.
+		{"present without a property", with(func(r *CapabilityRule) { r.Kind, r.Variant = GatePresent, "" }), "it lacks a field its kind needs"},
+		{"present with a variant", with(func(r *CapabilityRule) { r.Kind, r.Property = GatePresent, "x" }), "or has one it does not take"},
+		{"value without a variant", with(func(r *CapabilityRule) { r.Kind, r.Property, r.Variant = GateValue, "x", "" }),
+			"it lacks a field its kind needs"},
+		{"value without a capability", with(func(r *CapabilityRule) { r.Kind, r.Property, r.Capability = GateValue, "x", "" }),
+			"it lacks a field its kind needs"},
+		{"undeclared value with a variant", with(func(r *CapabilityRule) { r.Kind, r.Property = GateUndeclaredValue, "x" }),
+			"or has one it does not take"},
+		{"undeclared value without a capability", with(func(r *CapabilityRule) {
+			r.Kind, r.Property, r.Variant, r.Capability = GateUndeclaredValue, "x", "", ""
+		}), "it lacks a field its kind needs"},
+		{"only variants without a property", with(func(r *CapabilityRule) { r.Kind = GateOnlyVariants }), "it lacks a field its kind needs"},
+		{"only variants without a variant", with(func(r *CapabilityRule) { r.Kind, r.Property, r.Variant = GateOnlyVariants, "x", "" }),
+			"it lacks a field its kind needs"},
+		{"only variants with a prefix of one segment", with(func(r *CapabilityRule) {
+			r.Definition, r.Property, r.Kind = "AskResponse", "verdict", GateOnlyVariants
+		}), `capability "loadSession": an only-variants prefix needs a property under a capability`},
 		{"two rules", []CapabilityRule{ok, ok}, `capability rule Verdict "chosen": two rules`},
 		{"a variant the union lacks", with(func(r *CapabilityRule) { r.Variant = "maybe" }), `Verdict has no variant "maybe"`},
 		{"a variant of a type that is not a union", with(func(r *CapabilityRule) { r.Definition = "Update" }), "Update is not a union"},

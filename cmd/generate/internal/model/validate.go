@@ -41,6 +41,10 @@ const (
 	// for it: on what is sent, and in Validate. A field that is not required
 	// is checked only when set (0049-PLAN-surface-fixes.md, phase 3).
 	CheckClosedEnum
+	// CheckNonEmpty requires the field, an array a non-empty rule of the
+	// protocol table names, to hold an item, on what is sent and on what is
+	// received alike (0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md, D6).
+	CheckNonEmpty
 )
 
 // Check is one check of a Validate method, in field order.
@@ -200,6 +204,12 @@ func (m *Model) ownChecks(structs []shape) (map[string][]Check, error) {
 					return nil, fmt.Errorf("%s: %s: an absolute path must be a string, a pointer to one, or a slice of them, not %s", s.name, f.Key, f.Type)
 				}
 				c = append(c, Check{Kind: CheckAbsolutePath, Key: f.Key, Shape: shape})
+			}
+			if owner, ok := m.nonEmptyProps[f.prop]; ok {
+				if f.Type.Kind != RefSlice {
+					return nil, fmt.Errorf("%s: a non-empty rule needs an array property, not %s", owner, f.Type)
+				}
+				c = append(c, Check{Kind: CheckNonEmpty, Key: f.Key, Shape: RefSlice})
 			}
 			closed, err := m.closedEnumCheck(s.name, f)
 			if err != nil {
