@@ -54,16 +54,16 @@ jobs:
       # Go 1.27 rejects.
       matrix:
         os: [ubuntu-24.04, macos-15, windows-2025]
-        go: ['1.26.10', '1.27.3']
+        go: ['1.26.11', '1.27.4']
         include:
-          - go: '1.26.10'
+          - go: '1.26.11'
             floor: true
             experiment: goroutineleakprofile
           # The Windows floor job alone: its next crash prints every goroutine's
           # stack (0032-REPORT-windows-floor-runtime-crashes.md,
           # 0033-MADR-traceback-on-windows-floor-ci.md).
           - os: windows-2025
-            go: '1.26.10'
+            go: '1.26.11'
             traceback: crash
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30

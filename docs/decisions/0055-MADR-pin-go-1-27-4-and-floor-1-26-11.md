@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-10
 decision-makers: the repository owner
 consulted: "this tree at `894726f`; the Go vulnerability database's GO-2026-6859; go.dev/doc/devel/release and go.dev/dl; the module mirror; `go version` on this machine and both test hosts; gobble-cli's `go.mod` at `d6c10a5`, read as data"
@@ -107,7 +107,7 @@ that is already at 1.27. magic-cli-remote was not read for this record; 0028 fou
 
 ## Decision Outcome
 
-Proposed: "O1", because it is the only option under which every gate passes with no check loosened.
+Chosen option: "O1", accepted by the owner on 2026-11-10, because it is the only option under which every gate passes with no check loosened.
 
 * O2 leaves CI's floor job failing `govulncheck`, since that step runs at both versions.
 * O3 leaves a check failing, or loosens it. `scripts/go-precheck.sh`'s `GO_PRECHECK_SKIP_VULN=1` is for offline work,

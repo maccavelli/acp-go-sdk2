@@ -1,8 +1,8 @@
 module github.com/maccavelli/acp-go-sdk2
 
-go 1.26.10
+go 1.26.11
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 retract v1.13.0 // Published accidentally from an unfinished commit.
 
