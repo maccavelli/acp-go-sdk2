@@ -163,6 +163,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | 0052 | MADR | [Stream an agent's tool call as coalesced full snapshots, and raise the default message size to 32 MiB](decisions/0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md); 0051 item 1; F1 to F19; O1 to O4, M1 to M4; D1 to D6; questions 1 to 6 answered as recommended 2026-11-10; reviewed twice and accepted 2026-11-10; released in `v1.35.0` | accepted |
 | 0052 | PLAN | [Implement 0052: an agent's tool-call snapshot stream, and a 32 MiB default message size](decisions/0052-PLAN-agent-tool-call-snapshot-stream-and-message-size-default.md); six phases, a minor `v1.35.0`; approved 2026-11-10; phase 1, the 32 MiB default, `8e7caad`; phase 2, `goIfLive`, `8969f86`; phase 3, `ToolCallStream`, `38e9772`, with a deviation: the generator's check of the root; phase 4, the turn's streams before the answer, `4c7f943`; phase 5, the docs, `62f62aa`; phase 6, the close, `644cfe4`, with a deviation: a Windows test path; CI, `v1.35.0`, publication 10 of 10 and the consumer at the floor | complete |
 | 0052 | REPORT | [Release notes for v1.35.0, against v1.34.2](reports/0052-REPORT-release-notes-v1-35-0.md); the tool-call snapshot stream, a turn's streams before its answer, and the 32 MiB default | observed |
+| 0053 | REPORT | [ACP 1.25.0 completeness, parity, and adherence](reports/0053-REPORT-acp-1-25-0-completeness-parity-and-adherence.md); observed 2026-11-10 on `108b344` at `v1.35.0`; the 1.25.0 book's 105 MUSTs by who meets them, 0016 re-scored, four gaps and the upstream schema at `1.31.0`; decides nothing | observed |
 
 ## I want to…
 
@@ -178,6 +179,7 @@ This tree holds decisions and observations about the SDK. Guides are not in the 
 | see how the generated API lines up with the current ACP spec | [0001-REPORT-go-127-acp-parity.md](reports/0001-REPORT-go-127-acp-parity.md) |
 | see what the current ACP v1 spec audit found | [0016-REPORT-acp-v1-conformance-audit.md](reports/0016-REPORT-acp-v1-conformance-audit.md) |
 | see whether the SDK covers ACP schema 1.25.0, and which three extensions would add the most | [0051-REPORT-acp-1-25-0-featureset-coverage-and-three-extensions.md](reports/0051-REPORT-acp-1-25-0-featureset-coverage-and-three-extensions.md) |
+| see how close the SDK is to full ACP 1.25.0 parity, and which gaps and deviations remain | [0053-REPORT-acp-1-25-0-completeness-parity-and-adherence.md](reports/0053-REPORT-acp-1-25-0-completeness-parity-and-adherence.md) |
 | know why Go was accepted at 1.27.2 with schema 1.24.1 | [0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md](decisions/0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md) |
 | know why the schema pin is 1.25.0 | [0004-MADR-pin-acp-schema-1-25-0.md](decisions/0004-MADR-pin-acp-schema-1-25-0.md) |
 | know why this tree is not the Coder Go SDK | [0005-MADR-separate-module-from-coder.md](decisions/0005-MADR-separate-module-from-coder.md) |
