@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-11-10
+status: complete
+date: 2026-11-11
 associated-madr: "0055-MADR-pin-go-1-27-4-and-floor-1-26-11.md"
 ---
 
@@ -264,3 +264,21 @@ Each run printed that its directory on the host was removed.
   pair's two rows. The other hunks of those two files are 0054's phase 4 and stay unstaged.
 * **Not done yet:** the owner's push, and CI's six jobs at `1.26.11` and `1.27.4`. This PLAN stays `in-progress` until
   they pass.
+
+### Step 5, the commit and CI (2026-11-11)
+
+* The owner had this PLAN's lines committed as `4d82028`, after 0054's deviation 6 (`8cf69bf`), and pushed `main` at
+  `770ada6`, which holds both.
+* `python3 tools/watch_ci.py 770ada6 --branch main` found two runs of that commit.
+  * **The first watch exited 1.** After its 180 s settle, five `validate` jobs had passed and
+    `validate (ubuntu-24.04, 1.27.4)` was still in progress, in its lint step. Of the thirteen steps before that,
+    twelve had passed, `govulncheck` among them, and "the floor is the go line" was skipped, as it is in a job at the
+    newest version. That job alone runs the lint, the record checks and the tool tests, and takes longest. Nothing had
+    failed.
+  * **The second watch, with `--settle 900`, exited 0.** CI's run `43039146840`: "completed success", its six jobs
+    `validate (ubuntu-24.04, 1.26.11)`, `validate (ubuntu-24.04, 1.27.4)`, `validate (macos-15, 1.26.11)`,
+    `validate (macos-15, 1.27.4)`, `validate (windows-2025, 1.26.11)` and `validate (windows-2025, 1.27.4)`, each
+    "completed success". The Docs run `43039146723`: "completed success".
+* So `govulncheck` passes in CI at both versions, the two pin checks pass in the jobs that run them, and the Windows
+  jobs pass with 0054's deviation 6 in the tree. Every Verification item holds. This PLAN is `complete`.
+* The pins are released in `v1.36.0`, by 0054's PLAN, on the owner's ask.
