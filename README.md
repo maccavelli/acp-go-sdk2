@@ -82,8 +82,10 @@ You can run them from your terminal or connect to external ACP agents.
   (or `ws://…`) prompts it and loads the session again
   ([Remote agents](#remote-agents)).
 
-The example clients advertise the file-system capability and not the terminal
-one, and write only inside the session's working directory. You can watch the
+The example clients, `example/remote`'s apart, advertise the file-system
+capability and not the terminal one, and write only inside the session's
+working directory. `example/remote`'s `dial` advertises no capability and
+serves no file method. You can watch the
 interaction by running `go run ./example/client` locally, answering the
 permission request with `1` or `2`.
 

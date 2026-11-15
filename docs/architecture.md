@@ -1167,7 +1167,7 @@ Checks that guard it:
   `TestLineTapCopies`, `TestLineTapHoldsUnended`, `TestLineTapNilFn` and `TestLineTapAsOutputTap`, and
   `TestExitedFirst` and `TestProcessWaitContext`, `InProcess`'s thirteen in `inprocess_test.go`,
   `TestInProcessDetachedTapIsPrefix`, `TestInProcessServeAgentStep2`, under a grace of `slack`, and `TestWaitErrorSaysTheCauseOnce`, which
-  requires `Wait`'s error to say its cause once, among them, the stderr tail's six in
+  requires `Wait`'s error to say its cause once, among them, the stderr tail's seven in
   `stderr_test.go`, the transcript's four
   in `transcript_test.go`, `TestTranscriptCloseAfterAbandon` among them, and the bounded close's seven in `closecontext_test.go`:
   `TestCloseContextBoundsHandlers`, in process and for a child, `TestCloseContextJoinsTheAgentsError`,
@@ -1202,7 +1202,7 @@ promoted at all.
   after which kill sends nothing, and waits up to a second for the rest of the
   output. Release kills, waits for the exit, and closes the pipe. `Close`
   releases every terminal.
-- The output (`output.go`) is kept to the request's `outputByteLimit` and
+- The output (`terminals.go`) is kept to the request's `outputByteLimit` and
   `MaxOutputBytes`, the smaller, cut from the front at a character boundary
   once it has grown 64 KiB past the limit, and read with a character the
   command has not finished held back while it runs.
@@ -1333,7 +1333,7 @@ Each profile drives a `serverConn`:
 
 Checks that guard it:
 
-- `remote`'s 63 tests run on loopback through `httptest`. Each event a test
+- `remote`'s 64 tests run on loopback through `httptest`. Each event a test
   requires is waited for under a named bound. Its fixed waits are deliberate:
   - a delay the fake server injects;
   - the second a client or an agent does not read, to apply back-pressure;
@@ -1342,7 +1342,7 @@ Checks that guard it:
 
   The tests, by file:
   - `frame_test.go`'s three and `route_test.go`'s four;
-  - `ws_test.go`'s sixteen, the three of back-pressure and
+  - `ws_test.go`'s seventeen, the three of back-pressure and
     `TestWebSocketOverlongFrameAnswered` among them, and
     `handler_test.go`'s eight, the Host rule's two among them;
   - `httpclient_test.go`'s sixteen, against `fakeserver_test.go`'s fake in the

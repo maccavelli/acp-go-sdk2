@@ -610,3 +610,74 @@ Provenance: run by the strongest model at high effort, as the phase's row prices
   this PLAN's row text); this record. No doc was corrected.
 * **Docs.** No doc outside this phase's files was made false or left incomplete by the phase.
 * **Commit.** Staged, not committed. The coordinator commits and pushes.
+
+### 2026-11-15: phase 2
+
+Provenance: run by a mainstream model at medium effort, as the phase's row prices it, on the coordinator's brief.
+
+* **Approval.** The owner, 2026-11-15: "Pause the docs plan when you get the defect report." and, later the same day,
+  "Proceed with the acp-go-sdk2 docs plan through the next phase". This phase alone is approved to run; the plan
+  pauses again when it is done.
+* **Base.** `git rev-parse HEAD`: `632e097d7d28fa8be96ebabf74f295abf71a0159`, on `main`. `git status --short` was
+  empty. `git diff --stat 632e097 HEAD -- '*.go' Makefile go.mod` printed nothing, and the report's own base
+  `e67216c` is two commits back, so no `.go` file, the `Makefile` or `go.mod` changed. No release step had started:
+  the newest tag is `v1.36.0`, and no PLAN but this one is `in-progress`.
+* **Step 1: each row's evidence, re-run on `632e097` before any edit.** Every row held as the report states it.
+  * W1: `grep -n 'output\.go' docs/architecture.md` printed line 1205 (exit 0). `ls clienthost` holds no `output.go`.
+    The limit is set at `clienthost/terminals.go:113`-`:117`; the cut from the front at a character boundary, 64 KiB
+    past the limit, is `internal/tailbuf/tailbuf.go:19` (`compactAfter = 64 << 10`) and `:65`-`:72`, and the hold-back
+    of an unfinished character while the command runs is `Snapshot(final)` (`tailbuf.go`), called as
+    `term.out.Snapshot(exited)` at `terminals.go:152`.
+  * W4: `example/remote/main.go:235` and `:271` are `InitializeRequest{ProtocolVersion: …}` with no
+    `ClientCapabilities`, and `dialClient` embeds `acp.ClientRefusals` (`:303`-`:304`). `example/client/main.go:254`,
+    `example/gemini/main.go:246` and `example/claude-code/main.go:230` advertise
+    `Fs: {ReadTextFile: true, WriteTextFile: true}` and no `Terminal`, and their `WriteTextFile` refuses a path
+    outside the working directory; their terminal methods return `NewMethodNotFound`. `example/agent` is an agent, not
+    a client.
+  * W5: `grep -c '^func Test' agentproc/stderr_test.go` printed 7 (`:16`, `:49`, `:87`, `:110`, `:123`, `:143`,
+    `:158`).
+  * W6: counts of `^func Test…(t *testing.T)` per file in `remote/`: `frame_test.go` 3, `route_test.go` 4,
+    `handler_test.go` 8, `httpclient_test.go` 16, `httpserver_test.go` 16, `ws_test.go` 17. The sum is 64.
+    `grep -h '^func Test' remote/*_test.go | wc -l` printed 65, one of which is `TestMain` in `leak_test.go`.
+* **Step 2: the changes.** Each hunk maps to one row.
+
+  | Hunk | Row | Old | New |
+  | :--- | :--- | :--- | :--- |
+  | `docs/architecture.md:1205` | W1 | "The output (`output.go`) is kept" | "The output (`terminals.go`) is kept" |
+  | `README.md:85`-`:88` | W4 | "The example clients advertise the file-system capability and not the terminal one, and write only inside the session's working directory." | "The example clients, `example/remote`'s apart, advertise the file-system capability and not the terminal one, and write only inside the session's working directory. `example/remote`'s `dial` advertises no capability and serves no file method." |
+  | `docs/architecture.md:1170` | W5 | "the stderr tail's six in `stderr_test.go`" | "the stderr tail's seven in `stderr_test.go`" |
+  | `docs/architecture.md:1336` | W6 | "`remote`'s 63 tests" | "`remote`'s 64 tests" |
+  | `docs/architecture.md:1345` | W6 | "`ws_test.go`'s sixteen" | "`ws_test.go`'s seventeen" |
+
+  The rest of W1's sentence was checked against `clienthost/terminals.go` and `internal/tailbuf` again and holds
+  (the smaller of `outputByteLimit` and `MaxOutputBytes` at `terminals.go:110`-`:118`; the 64 KiB compaction; the
+  held-back character), so only the file name changed. The other counts in W5's and W6's sentences and neighbours
+  were counted on `632e097` and hold: `InProcess`'s thirteen (`inprocess_test.go`), the transcript's four, the bounded
+  close's seven, `frame_test.go`'s three, `route_test.go`'s four, `handler_test.go`'s eight and its Host rule's two,
+  `httpclient_test.go`'s sixteen, `httpserver_test.go`'s sixteen, `ws_test.go`'s three of back-pressure
+  (`TestWebSocketSlowClientStaysConnected`, `TestWebSocketBusyAgentStaysConnected`,
+  `TestWebSocketClientPastMaxBuffered`). No count was found wrong beyond the report's rows.
+* **After, per row.** W1: `grep -n 'output\.go' docs/architecture.md` prints nothing (exit 1), and the limit names
+  `outputByteLimit` and `MaxOutputBytes` are present in `clienthost/terminals.go`. W4: the sentence now holds for
+  each example client the list names. W5: 7 matches the count. W6: 3 + 4 + 17 + 8 + 16 + 16 = 64 matches.
+  W1, W4, W5 and W6 are fixed. W7 is a Go file and stays with phase 4a, untouched.
+* **Step 3: the changelog line.** Phase 5a has not landed, so there is no `CHANGELOG.md` and no `Unreleased` section
+  to add a line to. Phase 5a carries the line: one line for these corrections (the wrong statements W1 and W4 to W6
+  in `README.md` and `docs/architecture.md`).
+* **Docs step.** Searched `README.md`, `docs/architecture.md`, `RELEASING.md`, `tools/README.md`, `AGENTS.md`,
+  `clienthost`'s package comment and `example/*`'s Go files for each corrected fact: the file name `output.go`
+  (no other place), the example clients' capabilities (`README.md:85` alone), and the counts 6, 63 and sixteen
+  for `stderr_test.go` and `remote` (no other place). Nothing else was made false or incomplete, and no Go-file row is
+  opened by this phase. There is no changelog yet (phase 5a creates it).
+* **Verification.** Each output went to a scratch file and its exit status was taken before it was read.
+  * `git diff --cached --numstat`: `README.md` 4/2, `docs/architecture.md` 4/4; every hunk is in the table above.
+  * `python3 -B scripts/check_records.py --check-all`: exit 0, no output.
+  * `python3 -B scripts/check_disclosure.py`: exit 0, "0 finding(s)".
+  * Offline `markdownlint-cli2` v0.23.2, the version the Makefile pins: exit 0, 56 files, 0 issues.
+  * `run-heavy -- make pre-add-check FILES="README.md docs/architecture.md"`: exit 0 (waited in the queue about 33 minutes, ran 200 s, 12:03 to 12:07 local). `go-precheck`: 0 `.go` files to format; both modules linted, vetted and tested (`-race -shuffle=on`, uncached), tidy and `govulncheck`, all clean.
+* **Not verified.** The report's "Not verified" ranges still stand: behavioural claims there were not traced. Test
+  counts count `func Test…(t *testing.T)` declarations, not subtests.
+* **Files.** `README.md` (W4); `docs/architecture.md` (W1, W5, W6); `docs/README.md` (this PLAN's row text); this
+  record. The report is a dated observation and is not edited.
+* **Commit.** Staged, not committed. The coordinator commits and pushes after the disclosure guard. The plan pauses
+  until the owner says to continue.
