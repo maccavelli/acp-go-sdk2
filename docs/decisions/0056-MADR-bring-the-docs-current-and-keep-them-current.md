@@ -168,6 +168,15 @@ repository's pair alone. From it, this record is `accepted` and its PLAN is `in-
 
   Here "reference" means `README.md`, `docs/architecture.md`, `RELEASING.md`, `tools/README.md`, `AGENTS.md`, a
   package's `doc.go`, or a guide under `docs/guides/` if one is created.
+
+  *Annotated 2026-11-15, by the owner's ruling relayed by the coordinator.* Asked what counts as describing a
+  flag, the owner chose "Meaning and default for each": "Every flag gets at least a sentence saying what it does,
+  with its default, where its reader would look. Adds the 15 rows to the missing-feature phase. This matches what
+  you ruled for go-tui-lib ('at least one sentence, with its default'), so the two repositories hold one
+  standard." Rejected: "Strict for user-facing commands only"; "Named is enough". So for a flag, "describes" in
+  the third bullet above means that sentence and that default, in a reference doc or the command's package comment.
+  A flag that is named in a usage line or a list, and has no sentence of its own, is undescribed. A flag with no
+  default (one that is required, or a mode) needs the sentence alone. The PLAN's phase 3 lists the rows.
 * **D2, the changelog.** `CHANGELOG.md` at the root. It has an `Unreleased` section that each phase adds to, in the
   same commit as its change. A release turns `Unreleased` into the version and its date, and links that version's
   release-notes report. The report stays where it is, keeps its number, and is still the source of the GitHub
@@ -273,6 +282,18 @@ open.
    generator adds a sentence about the field to each variant type's existing comment. This meets your rule that a field
    counts when its type's comment names it, with the smallest change to generated code. No API change; full CI runs."
    Rejected: "Comment on each field" (the recommended option) and "Exempt generated code". This is option (b).
+
+   *Annotated 2026-11-15, by the owner's ruling relayed by the coordinator.* Phase 1's defect list found two fields
+   that option (b)'s discriminator sentence does not reach: `Negotiation.Request` and `Negotiation.Response`
+   (`types_gen.go:25584`-`:25585`). They are not discriminators, and their type's comment describes them in lower
+   case, so the audit's word match does not count them. The owner chose "Name them in the type's comment": "Amend
+   the generator phase so the generator names both fields in Negotiation's comment, the same treatment you chose for
+   the discriminator fields. Generator text of its own, in files already in that phase's list; no API change. The
+   audit then reaches zero by your rule that a field counts when its type's comment names it." Rejected: "A comment
+   on each field"; "Count the existing prose". So phase 4b's generator change is two things: the discriminator
+   sentence on each variant type's comment, and a sentence in `Negotiation`'s comment that names `Request` and
+   `Response`. It is generator text of its own, not schema text, and changes no API. The PLAN's phase 4b records
+   what that means for its steps and its acceptance.
 6. **How `CHANGELOG.md` is routed and link-checked.** Today a root `CHANGELOG.md` is not docs-safe: a commit that
    changes it alone runs CI's six jobs, and `make pre-add-check` runs every Go check for it. `check_records.py` checks
    the links of a fixed list of unnumbered docs (`scripts/check_records.py:239`), which would not include it.

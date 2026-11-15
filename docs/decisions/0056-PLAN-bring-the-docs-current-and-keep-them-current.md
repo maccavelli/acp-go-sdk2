@@ -242,6 +242,81 @@ own description is missing from its `doc.go` goes to phase 4a. The survey found 
    it. A flag gets its meaning and default. An environment or Make variable gets who reads it and its default.
 5. Add the line to `CHANGELOG.md`'s `Unreleased` section if phase 5a has landed.
 
+   *Amended 2026-11-15 by the owner's rulings, relayed by the coordinator ("2026-11-15: the owner's rulings on phase
+   1's three items", Execution record).*
+
+   * **M9 is ruled.** The owner chose "One line in the architecture Tree": "Add the file and what its key does to the
+     Tree section of docs/architecture.md, which lists the repository's files. One line in the missing-feature phase;
+     a tracked file no doc names is then accounted for." Rejected: "In AGENTS.md instead"; "Not a settings key; drop
+     it". Phase 3 adds that one line to `docs/architecture.md`'s "Tree", saying what `opencode.json`'s `instructions`
+     key does (`opencode.json:3`, the agent harness's pointer to `.opencode/rules.md`). The report's row M9 stands as
+     written.
+   * **The standard for a flag** (step 4's "a flag gets its meaning and default", confirmed). The owner chose "Meaning
+     and default for each": "Every flag gets at least a sentence saying what it does, with its default, where its
+     reader would look. Adds the 15 rows to the missing-feature phase. This matches what you ruled for go-tui-lib
+     ('at least one sentence, with its default'), so the two repositories hold one standard." Rejected: "Strict for
+     user-facing commands only"; "Named is enough". A flag named in a usage line or a list, and nothing more, is
+     undescribed. A flag with no default needs the sentence alone. Where the reader looks: the mutation tool's flags
+     in `docs/architecture.md`, beside `cmd/generate`, or its package comment, which lists them already
+     (`cmd/generate/internal/mutate/main.go:10`-`:12`); `example/gemini`'s in `README.md`'s "Try the Examples"; the
+     tools' in `tools/README.md`; the scripts' in `docs/architecture.md`. The inventory audit of step 1 changes to
+     match: a flag counts as described only with a sentence and, where it has one, its default, so its list on the
+     tree is the report's 32 items plus the rows below, and step 3's equality holds against that list.
+   * **The 15 rows the report names** ("For the owner": the mutation tool's 10 flags and `example/gemini`'s 5). Each is
+     named, in the mutation tool's usage line (`mutate/main.go:12`) or `README.md:79`'s list, and has no sentence or
+     default in a reference doc. Where each is defined, read from the code on `632e097`:
+
+     | Flag | Defined at |
+     | :--- | :--- |
+     | `-dir` | `cmd/generate/internal/mutate/main.go:65` |
+     | `-files` | `cmd/generate/internal/mutate/main.go:66` |
+     | `-pkgs` | `cmd/generate/internal/mutate/main.go:67` |
+     | `-skip` | `cmd/generate/internal/mutate/main.go:68` |
+     | `-only` | `cmd/generate/internal/mutate/main.go:69` |
+     | `-n` | `cmd/generate/internal/mutate/main.go:70` |
+     | `-j` | `cmd/generate/internal/mutate/main.go:71` |
+     | `-seed` | `cmd/generate/internal/mutate/main.go:72` |
+     | `-timeout` | `cmd/generate/internal/mutate/main.go:73` |
+     | `-o` | `cmd/generate/internal/mutate/main.go:74` |
+     | `example/gemini`'s `-gemini` | `example/gemini/main.go:209` |
+     | `example/gemini`'s `-model` | `example/gemini/main.go:210` |
+     | `example/gemini`'s `-sandbox` | `example/gemini/main.go:211` |
+     | `example/gemini`'s `-yolo` | `example/gemini/main.go:212` |
+     | `example/gemini`'s `-debug` | `example/gemini/main.go:213` |
+
+   * **The stricter standard adds 15 more rows**, found by checking each flag of `cmd/generate`, `example/*`, the
+     mutation tool, `tools/*.py` and `scripts/*.py` that phase 1 counted as described against the standard: its
+     doc line, read, for a sentence and a default. A flag that has both is not listed: `--out DIR`, whose default
+     `tools/README.md:21` states for every tool; `scripts/push_guard.py`'s `--remote` and `--branch`
+     (`AGENTS.md:150`-`:151`); `-write-unstable-manifest` (`docs/architecture.md:966`, `RELEASING.md:81`);
+     `scripts/check_ci_filters.py --docs-safe` (`docs/architecture.md:907`); `scripts/check_records.py --next`
+     (`AGENTS.md:91`, `RELEASING.md:133`); `watch_ci.py`'s `--branch`, `--settle` and `--every` (`tools/README.md:43`);
+     `idscan.py --range` (`tools/README.md:36`); and `ci_jobs.py`'s `--expect` and `--others` (`tools/README.md:44`).
+     The rows, with what each doc line lacks. This is the reading of the standard recorded here; phase 3's audit
+     takes it as its rule, and a flag a later reading finds short is a new row by amendment, not a silent addition.
+
+     | Flag | Defined at | What the docs lack |
+     | :--- | :--- | :--- |
+     | `cmd/generate`'s `-out` | `cmd/generate/main.go:42` | `docs/architecture.md:1005` names it only to say where `main.go` finds the root's import path; no sentence says it is the output directory, nor that it defaults to the repository root |
+     | `example/remote serve`'s `-addr` | `example/remote/main.go:63` | `README.md:80` gives it a value in an example and `:1512` writes `ADDR`; neither says it is the listen address or that `127.0.0.1:7331` is its default |
+     | `scripts/check_records.py --check-all` | `scripts/check_records.py:257` | `AGENTS.md:99` names it in a command; no doc says it is `--check` plus the unnumbered docs |
+     | `tools/ci_jobs.py tally --branch` | `tools/ci_jobs.py:277` | the `--branch` in `tools/README.md:43` is `watch_ci.py`'s; `tally`'s, default `main`, is described nowhere |
+     | `tools/consumer_probe.py --run` | `tools/consumer_probe.py:65` | `tools/README.md:41` shows `[--run PATTERN]` in the synopsis only; no sentence says it is `go test`'s `-run` pattern, nor that every test runs by default |
+     | `tools/gates.py --all` | `tools/gates.py:147` | `tools/README.md:29` shows `[--all]` and says what no gate named does; no sentence says `--all` adds the hosts' gates |
+     | `tools/idscan.py --all` | `tools/idscan.py:90` | `tools/README.md:36` shows it in the synopsis; only `--range` has a sentence |
+     | `tools/idscan.py --paths` | `tools/idscan.py:92` | the same line; only `--range` has a sentence |
+     | `tools/interop.py --ts` | `tools/interop.py:265` | `tools/README.md:42` shows `[--ts REV]`; its sentence says the SDKs are cloned at a pinned revision, not that `--ts` overrides the TypeScript SDK's |
+     | `tools/interop.py --py` | `tools/interop.py:266` | the same line, for the Python SDK's revision |
+     | `tools/interop.py --tree` | `tools/interop.py:268` | `docs/architecture.md:1403` says what it builds, and no doc gives its default, the repository |
+     | `tools/platforms.py --tree` | `tools/platforms.py:47` | `tools/README.md:31` describes `platforms.py` with no flag; the `--tree` hits are other tools' |
+     | `tools/plants.py --tree` | `tools/plants.py:135` | `tools/README.md:37` describes `plants.py SPEC.json` with no flag; the `--tree` hits are other tools' |
+     | `tools/remote.py test --module` | `tools/remote.py:276` | `tools/README.md:34` shows `[--module DIR]` and says "the module `DIR` names"; its default `.` is not stated |
+     | `tools/remote.py test --timeout` | `tools/remote.py:278` | `tools/README.md:34` shows `[--timeout S]` and says a timeout exits 124; the default, 3600 seconds, is not stated |
+
+     That is 15 rows, and 30 flags in all for the standard (15 and 15), beside the report's 32 items, whose 15
+     flags are `-schema`, `-yolo` and the 13 of the tools and scripts (M3a, M3b, M3c). The standard changes none of
+     the report's other rows. It does not apply to positional arguments.
+
 **Verification**
 
 * The audit on the tree: exit 0, no item printed.
@@ -334,6 +409,24 @@ cd ../.. && gofmt -w . && gofmt -w ./cmd/generate
    line, so that `TestExportedTypeDocsStartWithName` still holds. Use the variant's constant value from the model. Add
    no text the schema does not support. The 72 fields (70 in the root package, 2 in `unstable`) then count as
    documented under the owner's rule for Open Question 4.
+
+   *Amended 2026-11-15 by the owner's ruling, relayed by the coordinator ("2026-11-15: the owner's rulings on phase 1's
+   three items", Execution record).* The owner chose "Name them in the type's comment" for `Negotiation.Request` and
+   `Negotiation.Response` (`types_gen.go:25584`-`:25585`): "Amend the generator phase so the generator names both fields
+   in Negotiation's comment, the same treatment you chose for the discriminator fields. Generator text of its own, in
+   files already in that phase's list; no API change. The audit then reaches zero by your rule that a field counts when
+   its type's comment names it." Rejected: "A comment on each field"; "Count the existing prose". So step 1 gains a
+   second change: the emitter also adds to `Negotiation`'s doc comment a sentence that names `Request` and `Response`,
+   each as a word, and it keeps the comment's first line, so `TestExportedTypeDocsStartWithName` still holds. It adds no
+   text the schema does not support: the sentence names the fields the comment already describes. For the rest of the
+   phase:
+   * step 2: the engine case or golden covers `Negotiation`'s comment as well, and the golden diff still shows comment
+     lines only;
+   * step 3: the comments-only check runs over the `*_gen.go` diff, which now includes `Negotiation`'s comment;
+   * step 4 and the acceptance: the audit's 53 generated members are the 49 discriminator fields, the 2 in `unstable`
+     and these 2. After both changes the audit reports 0 in the generated files, and the acceptance, "0 undocumented
+     generated names in scope", can be met. Before this amendment it could not, as phase 1's report said;
+   * the files are the ones already listed, so no file joins the phase, and `make api` still reports no change.
 2. Add an engine case or change one so that the new comment is covered, and run the engine cases with their `-update`
    flag (`cmd/generate/engine_test.go:22`), in the one package `cmd/generate`: `go test . -run TestEngineCases -update`.
    Then read the golden diff: only comment lines change.
@@ -681,3 +774,35 @@ Provenance: run by a mainstream model at medium effort, as the phase's row price
   record. The report is a dated observation and is not edited.
 * **Commit.** Staged, not committed. The coordinator commits and pushes after the disclosure guard. The plan pauses
   until the owner says to continue.
+
+### 2026-11-15: the owner's rulings on phase 1's three items
+
+Provenance: written by a mainstream model at medium effort, on the coordinator's brief. This entry runs no phase. No
+`.go` file, no doc and no report changed, and the report, a dated observation, is not edited. The coordinator committed
+phase 2 as `f629f8f`, and the plan stays paused after this entry.
+
+The owner ruled on 2026-11-15, relayed by the coordinator, on the three items the report's "For the owner" section put.
+Each is recorded as a dated note where it applies: the MADR's Open Question 5 and D1, and this PLAN's phase 3 and
+phase 4b.
+
+1. **`Negotiation.Request` and `Negotiation.Response`.** The owner chose "Name them in the type's comment": "Amend the
+   generator phase so the generator names both fields in Negotiation's comment, the same treatment you chose for the
+   discriminator fields. Generator text of its own, in files already in that phase's list; no API change. The audit
+   then reaches zero by your rule that a field counts when its type's comment names it." Rejected: "A comment on each
+   field"; "Count the existing prose". Phase 4b's step 1 is amended (above), and so are its steps 2 to 4 and its
+   acceptance, which can now be met. The MADR's Open Question 5 carries a dated note of what the generator change is.
+2. **`opencode.json`.** The owner chose "One line in the architecture Tree": "Add the file and what its key does to the
+   Tree section of docs/architecture.md, which lists the repository's files. One line in the missing-feature phase; a
+   tracked file no doc names is then accounted for." Rejected: "In AGENTS.md instead"; "Not a settings key; drop it".
+   Row M9 stands as written, and phase 3 notes that it is ruled.
+3. **What counts as describing a flag.** The owner chose "Meaning and default for each": "Every flag gets at least a
+   sentence saying what it does, with its default, where its reader would look. Adds the 15 rows to the missing-feature
+   phase. This matches what you ruled for go-tui-lib ('at least one sentence, with its default'), so the two
+   repositories hold one standard." Rejected: "Strict for user-facing commands only"; "Named is enough". The MADR's D1
+   and phase 3 carry the standard. Phase 3's list gains the 15 rows the report names, with each flag's `file:line`
+   read from the code, and 15 more that checking the flags phase 1 counted as described found (phase 3, above).
+* **Not verified.** The second 15 rows are one reading of the standard, made by reading each doc line, not by a
+  script. The phase 3 audit, which phase 3 writes, is what measures them.
+* **Index.** The 0056 PLAN row's text said "one item for the owner"; it now says the owner ruled on it. The MADR
+  row and the report row are not false and are not changed.
+* **Commit.** Staged, not committed. The coordinator commits and pushes.
