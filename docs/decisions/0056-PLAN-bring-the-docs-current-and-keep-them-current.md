@@ -543,3 +543,70 @@ Not started. The pair is `proposed`, and no phase is approved.
   *Annotated 2026-11-15:* the scope of the 2026-11-12 approval was stated in the coordinator's brief as fact
   before the owner had ruled on it. On 2026-11-15 the owner confirmed, relayed by the coordinator, that the approval
   extends to this PLAN ("Yes, all approved plans"; the ruling is quoted under "Commits").
+
+### 2026-11-15: phase 1
+
+Provenance: run by the strongest model at high effort, as the phase's row prices it, on the coordinator's brief.
+
+* **Base (step 1).** `git rev-parse HEAD`: `e67216c7ae19f04ee9a7c8c0259ae88407ac502f`, the commit holding this pair.
+  `git status --short` was empty. `git describe --tags --abbrev=0`: `v1.36.0`. Before any edit,
+  `git diff --stat v1.36.0..HEAD -- '*.go' Makefile go.mod` printed nothing, so no code had changed since `77a81cb`.
+  Before this phase started, no release step was in progress (Timing): no PLAN but this one is `in-progress` in
+  `docs/README.md`, and no tag was being prepared.
+* **What was read (steps 3 to 5).**
+  * `README.md`, lines 1 to 1927, in full, in the ranges 1-260, 260-510, 510-760, 760-989, 989-1218, 1218-1467,
+    1467-1706 and 1706-1927.
+  * `docs/architecture.md`, lines 1 to 1469, in full, in the ranges 1-260, 260-500, 500-760, 758-958, 957-1217 and
+    1216-1469, with every "Tree" path checked against the disk.
+  * In full: `RELEASING.md`, `tools/README.md`, `AGENTS.md`, `docs/README.md`'s prose and matrix, every package
+    comment, the `flag` definitions of `example/*`, `cmd/generate` and `cmd/generate/internal/mutate`, and every
+    Make target's `##` text.
+  * Read in part: the `argparse` definitions of `tools/*.py` and `scripts/*.py`. The flags were inventoried; their
+    help text was not checked against what each tool does.
+* **The report (step 9).** It is
+  [0056-REPORT-documentation-defect-list.md](../reports/0056-REPORT-documentation-defect-list.md).
+  * Wrong: 5 rows. W1 and W4 to W6 go to phase 2; W7, the root `doc.go`'s list of sentinels, goes to phase 4a.
+  * Missing feature doc: 13 rows, 46 items. Eleven rows go to phase 3; M6 and M7 go to phase 5a.
+  * Missing doc comment: 87 members. Phase 4a has 34 hand-written; phase 4b has 53 generated.
+  * Stale: 2 rows, S1 and S4, both for phase 6.
+  * Refuted: W2 and M5.
+* **MADR rows (step 2).**
+  * Verified: W1, M1, M4, M6, M7, S2 and S3.
+  * Verified and changed: M2, which gains `GIT_BASH`, and S1, which has 32 rows with this pair's MADR.
+  * M3 partly changed: the mutation tool's flags are named in its package comment, and 13 flags of the tools and
+    scripts are new.
+  * M8 was turned into features M4, M10, M12 and M13.
+  * M9 is judged in scope.
+  * W3 was done by the two readings.
+* **The inventory audit (steps 6 and 7; phase 3's audit).**
+  * On the tree: exit 1, 223 items, 32 undescribed: 15 flags, 5 variables, 5 settings keys and 7 Make targets. No
+    package or command is undescribed. 8 environment variables that belong to Make or to the operating system are
+    listed and not counted, and 8 items were judged described by reading.
+  * Planted breaks on a scratch clone: `ACPTEST_UPDATE` removed from the docs printed
+    `UNDESCRIBED env: ACPTEST_UPDATE (acptest/golden.go)`, exit 1. `make api` removed from the docs and the package
+    comments printed `UNDESCRIBED target: api`, exit 1.
+* **The doc-comment audit (step 8; phase 4a's measurement).**
+  * On the tree: exit 1, 87 undocumented in scope, all of them fields or interface methods; top-level declarations
+    and methods are at 0.
+  * By package: `acp` generated 51 of 1,203 members, `acp` hand-written 22 of 43, `acptest` 10 of 20, `agentproc`
+    2 of 14, `clienthost` 0 of 4, `remote` 0 of 11, and `unstable` 2 of 56.
+  * The type-comment rule clears 40: 21 hand-written and 19 generated.
+  * Planted breaks, four on a scratch clone:
+    * three were reported, exit 1, 90 undocumented: `ClientRefusals.CompleteElicitation`, `AgentAuthCapabilities`
+      and `DialOptions.Header`;
+    * `Files.MkdirAll`, a field its type's comment names, was not reported.
+  * It wrote nothing to the tree.
+* **Step 10, for the owner.** `Negotiation.Request` and `Response` are generated and are not discriminators. Phase
+  4b's step 1 does not cover them, so phase 4b cannot reach 0 as written. The report gives the resolutions. The pair
+  is not amended in this phase.
+* **Not verified.** The report's "Not verified" section lists the line ranges whose behavioural claims were read but
+  not traced through the code.
+* **Verification.** Each output went to a scratch file, and its exit status was taken before it was read.
+  * `python3 -B scripts/check_records.py --check-all`: exit 0, no output.
+  * `python3 -B scripts/check_disclosure.py`: exit 0, "0 finding(s)", run again once the report was staged.
+  * Offline `markdownlint-cli2` v0.23.2, the version the Makefile pins: exit 0, 56 files linted, the report among
+    them.
+* **Files.** `docs/reports/0056-REPORT-documentation-defect-list.md` (new); `docs/README.md` (the report's row, and
+  this PLAN's row text); this record. No doc was corrected.
+* **Docs.** No doc outside this phase's files was made false or left incomplete by the phase.
+* **Commit.** Staged, not committed. The coordinator commits and pushes.
