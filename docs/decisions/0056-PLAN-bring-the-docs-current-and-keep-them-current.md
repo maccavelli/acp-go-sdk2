@@ -330,6 +330,23 @@ own description is missing from its `doc.go` goes to phase 4a. The survey found 
 
      The row is one item for the audit, since a reader sees one flag; phase 3 gives it its sentence in both rows.
 
+     *Annotated 2026-11-15, by the owner's ruling "Name both in the next phase", relayed by the coordinator (Execution
+     record, "2026-11-15: the owner's rulings after phase 3"). The two flags the phase-3 agent judged described on its
+     own reading are short under this standard, and join by this amendment, as "a flag a later reading finds short is a
+     new row by amendment" provides.*
+
+     | Flag | Defined at | What the docs lack |
+     | :--- | :--- | :--- |
+     | `tools/consumer_probe.py --tree` | `tools/consumer_probe.py:64`, help "the tree the replace names, such as a planted break's copy (default: the repository)" | `tools/README.md:41` shows `[--tree DIR]` in the synopsis cell, and its sentence says the module requires the SDK "through a `replace` onto the repository, or onto `DIR`, such as a planted break's copy": what the flag is for and its default, without the flag's name |
+     | `tools/remote.py --host`, of `tree`, `pkg` and `test` | `tools/remote.py:265`, `:268`, `:275`: `choices` the host names (`linux`, `windows`), `required=True`, no default | `tools/README.md:12`-`:13` write `remote.py --host linux` and `remote.py --host windows` in the Setting-up table's "For" cell, to say which variable names the host for each value, and the rows `:32`-`:34` show `--host H` in the synopsis cell; no sentence says that the flag is required, takes `linux` or `windows`, and has no default |
+
+     So there are 18 further rows, 33 flags for the standard (15 and 18), 48 flags with the report's 15, and 73 items
+     for the audit to print on the tree. Each `remote.py --host` is one item, as a flag two subcommands share counts
+     once. Both are fixed in the next phase's commit, which is phase 6 by Timing's order (1, 2, 5a, 3, 6, 5b, 4a, 4b):
+     `tools/README.md` joins phase 6's files by this amendment, beside `docs/README.md`. `ToolCallStream.WriteString`
+     needs no row: `README.md:888`, in the "State" bullet (`:885`-`:889`), names it among the methods that return
+     `acp.ErrToolCallStreamFinished` after `Finish`.
+
 **Verification**
 
 * The audit on the tree: exit 0, no item printed.
@@ -547,6 +564,11 @@ unnumbered docs. Both are shown working by the scratch failures above.
 task" by the owner) is a judgment.
 
 **Files:** `docs/README.md`. The 48 reports are not changed (Open Question 3, answered "Leave them as they are").
+
+*Amended 2026-11-15 by the owner's ruling "Name both in the next phase", relayed by the coordinator (Execution record,
+"2026-11-15: the owner's rulings after phase 3"): `tools/README.md` joins this phase's files, for the two flag rows
+that amendment adds under phase 3's 15 rows, `consumer_probe.py --tree` and `remote.py --host`. Nothing else of
+`tools/README.md` changes in this phase.*
 
 1. The Records table: every record file has a row, and every MADR and PLAN row's status equals its frontmatter
    `status`. This pair's rows and the 0056 report's row are brought up to date.
@@ -992,12 +1014,19 @@ Provenance: run by a mainstream model at medium effort, as the phase's row price
         repository, or onto `DIR`, such as a planted break's copy". It says what the flag is for and its default, the
         repository, without the flag's name. It is the reading least firmly held: the row names the flag only in its
         synopsis cell.
+        *Annotated 2026-11-15: the owner ruled "Name both in the next phase" (Execution record, "2026-11-15: the owner's
+        rulings after phase 3"). It is a row by amendment, under the 15 rows, and is fixed in the next phase's commit.*
       * `tools/remote.py --host`: `tools/README.md:12`-`:13`, "`ACP_LINUX_HOST` | `remote.py --host linux`, the `linux`
         gate | an SSH host or alias with Go", and the same for `windows`. The flag is required and has no default; the
         lines say which host each value names.
+        *Annotated 2026-11-15: the owner ruled "Name both in the next phase" (the same entry). It is a row by
+        amendment, and is fixed in the next phase's commit.*
       * `ToolCallStream.Write` and `WriteString`: `README.md:857`, "The stream is an `io.Writer`: `cmd.Stdout = stream`,
         `io.Copy`, or `io.MultiWriter` with a buffer of the agent's own". `WriteString` is not named by any doc; I judged
         it covered as the same writer's string form (`toolstream.go:164`, "WriteString is Write for a string").
+        *Annotated 2026-11-15: `README.md:888`, in the "State" bullet, names `WriteString` among the methods that return
+        `acp.ErrToolCallStreamFinished` after `Finish`. The coordinator's brief and the owner's rulings add no row for it
+        (Execution record, "2026-11-15: the owner's rulings after phase 3").*
   * **Planted breaks, seen to fail in this run before any result counted** (scratch clones; the first on the unedited
     tree, the rest on the final one):
     * the PLAN's plant, every `make api` and `` `api` `` removed from the docs and the Go package comments, before any
@@ -1102,3 +1131,124 @@ Provenance: run by a mainstream model at medium effort, as the phase's row price
   changed.
 * **Commit.** Staged, not committed. The coordinator commits and pushes after the disclosure guard. The plan pauses
   until the owner says to continue.
+
+### 2026-11-15: the owner's rulings after phase 3
+
+Provenance: written by a mainstream model at medium effort, on the coordinator's brief. These are the owner's rulings,
+relayed by the coordinator. They are not the coordinator's decision and not the author's.
+
+* **The two flags judged described on the phase-3 agent's own reading.** The owner chose "Name both in the next
+  phase": `tools/consumer_probe.py --tree` (`tools/README.md:41`) and `tools/remote.py --host`
+  (`tools/README.md:12`-`:13`).
+  * Both are rows by amendment, under phase 3's 15 rows ("a flag a later reading finds short is a new row by
+    amendment"). The further rows become 18, the flags for the standard 33 (15 and 18), the flags with the report's 15
+    become 48, and the items the audit prints on the tree become 73 (71 and the two).
+  * Both are fixed in the next phase's commit, phase 6 by Timing's order (1, 2, 5a, 3, 6, 5b, 4a, 4b). `tools/README.md`
+    joins phase 6's files by the amendment under phase 3's rows and the note under phase 6's **Files**.
+  * The "on my own reading" items of the phase-3 entry now point here: `consumer_probe.py --tree` and `remote.py
+    --host` are annotated as rows; `ToolCallStream.Write` and `WriteString` is annotated with the line that names
+    `WriteString`.
+  * `ToolCallStream.WriteString` needs no row. Verified in the tree at `55be71e`: `README.md:888`, in the "State"
+    bullet (`:885`-`:889`), reads "`Write`, `WriteString`, `SetStatus`, `Update`, `Flush` and a second `Finish` return
+    `acp.ErrToolCallStreamFinished`".
+* **The tools' sentences that were read and not run.** The owner chose "Run the local and read-only ones". The run, and
+  what it found, are in the next entry.
+* **`CHANGELOG.md`'s `Unreleased` line "Added this file. …".** The owner chose "Keep it as it is". No edit to
+  `CHANGELOG.md`.
+* **Files.** This PLAN only (and `docs/README.md`'s row text for it). No source, doc, workflow, script or `Makefile`
+  file changed.
+
+### 2026-11-15: phase 3's sentences, run
+
+Provenance: run by a mainstream model at medium effort on the coordinator's brief.
+
+* **Why.** Phase 3's "Not verified" said the tools' and scripts' behaviour matched each new sentence by reading, and that
+  `make vuln`, `make lint` and CI's three direct `go` commands were not run. The owner ruled "Run the local and
+  read-only ones" (the entry above). This is that run, on `55be71e` (`main`, CI green).
+* **How.** Everything that writes ran in a scratch clone of `55be71e` or with its output in a scratch folder
+  (`<scratch>`, outside the tree); read-only `gh` calls ran in the repository. The clone's `origin` was set to the
+  repository's GitHub URL so `watch_ci.py` and `ci_jobs.py` read the same repository. Heavy runs went through
+  `run-heavy`, one at a time, and each waited 0 s. Each command's output went to a scratch file and its exit status was
+  taken before the file was read. After the run `git status --short` in the repository printed nothing.
+* **Kinds of evidence.** "Run" is the command, here, against the tree or the clone. "Offline test" is an existing
+  repository test run unchanged. "Read" is source read and not run, the owner's ruling for the items named.
+* **Results.** `<clone>` is the scratch clone; `<repo>` the repository. `go run ./internal/mutate` is run in
+  `<clone>/cmd/generate`.
+
+| Item | Command | Exit | Observed | Verdict |
+| :--- | :--- | :--- | :--- | :--- |
+| `idscan.py`, no flag | `idscan.py` in `<clone>` with `README.md` edited and one untracked file | 0 | "2 file(s), 21 pattern(s), 0 match(es)": the changed and the untracked file | `tools/README.md:36` holds |
+| `idscan.py --all` | `idscan.py --all` | 0 | "840 file(s)", equal to `git ls-files` | holds |
+| `idscan.py --paths` | `idscan.py --paths README.md CHANGELOG.md` | 0 | "2 file(s)" | holds |
+| `idscan.py --range` | `idscan.py --range HEAD~3..HEAD`; `--range HEAD` | 0; 2 | "3 commit(s)"; "--range takes A..B, two dots" | holds |
+| `ci_jobs.py tally` defaults | `ci_jobs.py tally` in `<repo>` | 0 | "40 ci.yml run(s) of main", first attempts counted by job and conclusion | `--branch` default `main` and `--runs` default 40 hold |
+| `tally --runs`, `--markdown` | `tally --runs 3 --markdown` | 0 | 3 runs; the groups printed again as a table | holds |
+| `tally --branch` | `tally --branch <no such branch> --runs 3` | 1 | "no completed run of" that branch | holds |
+| `tally --created` | `tally --runs 100 --created '<2026-11-01T00:00:00Z'` | 0 | 66 runs, the newest created 2026-10-30; without the flag the newest was today's | holds (passed to `gh run list --created` as given; unset by default) |
+| `ci_jobs.py failure RUN`, `--attempt` | `failure <run of 2 attempts>`; `--attempt 1`; `--attempt 2` (each `--out <scratch>`) | 0; 0; 0 | no flag: "attempt 1 of 2: 1 failed job(s)" then "attempt 2 of 2: no failed job"; `--attempt 1` the first alone; `--attempt 2` the second alone | holds |
+| `ci_jobs.py env RUN VAR`, `--attempt` | `env <run of 2 attempts> GOTRACEBACK`; with `--attempt 1` | 0; 0 | no flag: "attempt 2: 6 job(s)", the latest; `--attempt 1`: attempt 1 | holds |
+| `env --expect`, `--others` | `env <run of 55be71e> GOTRACEBACK --expect '<windows floor job>=crash' --others ''`; the same with `--others x` | 0; 1 | "holds"; five "does not hold" lines and "does NOT hold" | holds |
+| `watch_ci.py --minutes` | `watch_ci.py HEAD --minutes 0.1` in `<clone>`, `HEAD` a new local commit with no run | 2 | after 11 s: "no CI run for 06e9859 within 0.1 minutes" | holds (default 20 is read from `argparse`, not waited out) |
+| `watch_ci.py --more` | `watch_ci.py 55be71e --more 1 --settle 20`; the same without `--more` | 0; 0 | the same 2 runs and 7 jobs each time; 6 s with `--more 1`, 34 s by default | holds (the 30 s wait is the difference) |
+| `consumer_probe.py --run` | `consumer_probe.py --run '^TestPresentNotice$'` in `<clone>` | 0 | `go test` ran that test alone; "as required" | holds |
+| `consumer_probe.py`, no `--run` | `consumer_probe.py --tree <tree copy>` | 0 | all 4 tests ran ("every test runs by default") | holds |
+| `consumer_probe.py --tree` | the same; and `--tree <folder with no go.mod>` | 0; 2 | the probe `go.mod`'s `replace` names the clone with no flag and the tree copy with `--tree`; "no go.mod in" the empty folder | holds (the row to be added by the ruling above) |
+| `plants.py`, no `--tree` | `plants.py <spec: an inverted nil check> --out <scratch>` in `<clone>` | 0 | "FAILED AS REQUIRED", "1/1 as required" | holds |
+| `plants.py --tree` | a spec whose edit's `old` text exists only in a tree copy: no `--tree`; then `--tree <copy>` | 1; 0 | no flag: "refused: ... occurs 0 time(s)"; `--tree`: "FAILED AS REQUIRED" | holds (the default is the repository) |
+| `plants.py --keep` | the same with `--keep`; the work folder listed after each run | 0 | without it the work folder was empty after the run; with it one run folder stayed | holds |
+| `platforms.py` | `platforms.py --out <scratch>` in `<clone>` | 0 | "13 of 13 passed": `golangci-lint` for linux and freebsd, `go vet` for 11 platforms | holds |
+| `platforms.py --tree` | `platforms.py --tree <copy with a syntax error in agentproc>` | 1 | "0 of 13 passed"; the vets name the broken file | holds (the default checks the clone) |
+| `gates.py` and `--all` | offline test `GatesTest.test_selection` of `tools/test_tools.py`, and `selected([], False)` against `selected([], True)` | 0; 0 | the test passed; without `--all` 16 gates, with it 18; the two added are `windows` and `linux`, the hosts' gates | holds, by an offline test and by a call, with no host |
+| `check_records.py`, no flag | `check_records.py` | 2 | usage printed | holds |
+| `check_records.py --check`, `--check-all` | both; then with a broken relative link added to `tools/README.md` in `<clone>`; then to a record | 0, 0; 0 and 1; 1 | `--check` passed the broken link in an unnumbered doc and `--check-all` named it ("broken relative link: tools/README.md"); `--check` named the same break in a record | holds |
+| `check_records.py --next` | `check_records.py --next` | 0 | "0057", one past the highest number in the tree (0056) | holds |
+| `check_ci_filters.py` | no flag; `--root <clone>`; `--root <copy with one ignored path removed from the push list>`; no flag run from that copy | 0; 0; 1; 1 | "0 problem(s)"; the same; "2 problem(s)"; the same 2 (the default is the script's own repository) | holds |
+| `check_ci_filters.py --docs-safe` | `--docs-safe docs/architecture.md tools/README.md AGENTS.md RELEASING.md`; with `main.go`; with `README.md`; with none | 0; 1; 1; 1 | silent; "not docs-safe: main.go"; "not docs-safe: README.md" (CI does not ignore it; `docs_test.go` reads it); "no path named" | holds |
+| `check_disclosure.py --root` | no flag; `--root <scratch repo with a home path in a tracked file>` | 0; 1 | "840 tracked file(s), 0 finding(s)"; "a.md:1: macos-home", "1 tracked file(s), 1 finding(s)" | holds |
+| `push_guard.py --guard` | `--guard <missing file>`; `--guard <stub that prints its arguments>` | 1; 0 | "BLOCKED: the guard ... is missing; nothing was checked" on stderr, exit 1; the stub was run as `pre-push <remote> <url>` with the branch's refs on stdin | holds (exit 1 when missing) |
+| `push_guard.py --remote`, `--branch` | no flag; `--remote <other remote> --branch <other branch>`; `--branch <no such>` | 0; 0; 1 | no flag: "main to origin", the stub's stdin names `refs/heads/main`; the others: "other to up", `refs/heads/other`; the missing branch exits 1 with git's "Needed a single revision". The default guard in the home directory also ran over `main` and passed with 0 outgoing commits | holds (defaults `origin` and `main`) |
+| `make vet` | `make vet` in `<clone>` | 0 | runs `go vet ./...` in the root and in `cmd/generate`; both clean | `docs/architecture.md` holds |
+| `make lint` | `make lint` | 0 | golangci-lint 2.14.0, "0 issues." for the host and for windows, in both modules (4 runs) | holds |
+| `make lint`, missing binary | `make lint GOLANGCI_LINT=<missing path>` | 2 | "golangci-lint not found at ...", then "Install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0"; the recipe's `exit 1`, which `make` reports as "Error 1" and its own exit 2 | holds (the sentence does not name an exit status) |
+| `make vuln` | `make vuln` | 0 | `go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...` in both modules, "No vulnerabilities found." twice | holds |
+| `make vuln` without a pin | `make vuln` in a clone whose `ci.yml` has no `govulncheck@` | 2 | "no govulncheck pin in .github/workflows/ci.yml"; recipe exit 1, `make` 2 | holds ("refuses to run without") |
+| `make tidy` | `make tidy`; then an unused `require` added to `go.mod` and `go mod tidy -diff`, then `make tidy`, in `<clone>` | 0; 1; 0 | `go mod tidy` in both modules; on the dirty `go.mod`, `-diff` printed the diff and left the file as it was, and `make tidy` removed the line | holds |
+| `make bench` | `make bench` | 0 | `go test -run '^$' -bench . -benchmem -count=6 .`: 66 result lines, each with `allocs/op`, each of 11 benchmarks six times; 88 s | holds |
+| `make all` | `make all`, `make help` in `<repo>` | 0; 0 | identical output of 25 lines | holds |
+| `MUTANTS`, `SEED`, `JOBS` | `make -n mutation-engine`; with `MUTANTS=1 SEED=7 JOBS=2`; then that run | 0; 0; 0 | defaults print `-seed 1 -j 1` and no `-n`; the variables print `-seed 7 -j 2 -n 1`; the run ran "1 of 2662 sites", and the report's `seed` is 7 | holds |
+| `cmd/generate -schema`, no flag | `generate` built in `<clone>`: run in `<clone>/agentproc`, with `helpers_gen.go` removed; run in a folder with no schema above it | 0; 1 | the file was written back at the repository root, `git status` clean; "could not locate repository root from ...; ensure schema files exist" | holds |
+| `cmd/generate -schema` | `-schema <folder with no meta.json>`; `-schema <clone>/schema -out <tree copy>` run from another folder | 1; 0 | "read meta.json: open ...: no such file"; the files were written | holds |
+| `cmd/generate -out` | `-out <missing folder>`; `-out <empty folder>`; `-out <full tree copy with its generated files removed>` | 1; 1; 0 | "output directory ...: does not exist"; "generated code does not type-check with ...": `undefined: Connection`; the five `*_gen.go` files written, `types_gen.go` equal to the repository's | holds ("must exist and hold the hand-written package it type-checks them with") |
+| the mutation tool's 10 flags | `go run ./internal/mutate` with each flag, `-h`, in `<clone>/cmd/generate`, and `make mutation-engine MUTANTS=1 SEED=7 JOBS=2` | 0 | `-dir`: report `dir` "." by default, `../..` given. `-files`: 34 sites of `internal/util/*.go`; default files with `-pkgs ./internal/util`: the same 34. `-pkgs`: report `pkgs` "./..." by default. `-skip`: with `-skip .` an `agentproc` mutant that was killed survived. (`internal/util` has no tests, so its mutants all survive.) `-only`: the one site ran, though `-n 3` was given. `-n`: 1 of 34 sites; without it all 34 (0 runs "every one"). `-j`: 6 sites with `-j 3`. `-seed`: 1 and 2 chose different sites, 1 twice the same. `-timeout`: `bogus` exit 1 "invalid duration"; `1ms` on an `agentproc` site made it "timeout"; `-h` prints the default `3m`. `-o`: written to the file given, and to a new file in the temporary directory without it. Exit 1 for `-only` with no such site | each sentence in `docs/architecture.md:880`ff. holds, 10 of 10 |
+| `example/remote serve -addr` | the built `remote serve` with no flag, `-addr 127.0.0.1:47331`, `-addr 127.0.0.1:0`; a second default run while one was up | 0; 0; 0; 1 | "serving ACP at http://127.0.0.1:7331/acp", then the port given, then a free port; the second default: "listen tcp 127.0.0.1:7331: bind: address already in use" | holds (default `127.0.0.1:7331`) |
+| `remote.py` flags, offline | `remote.py pkg --help`, `test --help`, `leftovers.py --help`, `interop.py --help`, `gates.py --help` (no host reached) | 0 | `--host` required with choices `linux` and `windows`; `--goarch` default `amd64`; `--module` default `.`; `--timeout` default 3600; `--tree` help "build from this tree instead of the repository" and "copy this tree ..."; `leftovers.py --name` "another image name to match exactly"; `interop.py --ts`, `--py`, `--tree` as described | read from source and `--help`, not run: the commands need hosts (owner's ruling); `remote.py --host` is the row added above |
+| offline tests of the out-of-scope tools | `python3 -B -m unittest discover -s tools -p 'test_*.py'` and `-s scripts` | 0; 0 | 93 and 41 tests passed, among them `RemoteRunTest.test_module_dir` (`--module`, its refusals), `test_timeout` (`--timeout`, exit 124), `test_tree_files_without_git` and `test_tree_left_behind` (`--tree`), `test_race_without_cgo_refused`; `LeftoversTest.test_exact_image_names` (`--name`, compared whole) | offline tests, which cover `--module`, `--timeout`, `--tree` and `--name` of `remote.py` and `leftovers.py`; `--goarch`, `--host`, `interop.py --ts` and `--py` have none |
+
+* **CI's three direct commands against the Makefile's recipes** (`.github/workflows/ci.yml`'s steps "govulncheck"
+  (`:139`) and "vet, gofmt, tidy, lint" (`:145`); the Makefile at `55be71e`, with `make -n` for the expanded lines):
+  * `go vet`: the same two commands, `go vet ./...` and `( cd cmd/generate && go vet ./... )`. CI runs them in the
+    "vet, gofmt, tidy, lint" step, `if: runner.os == 'Linux' && !matrix.floor`; `docs/architecture.md` says "on Linux
+    but not at the floor Go, and not through `make`", which holds.
+  * `go mod tidy -diff` against `make tidy`: different. CI runs `go mod tidy -diff` in the root and in `cmd/generate`,
+    which writes nothing and fails on a difference, in the same step. `make tidy` runs `go mod tidy`, which rewrites.
+    The sentence says so.
+  * govulncheck against `make vuln`: the same command lines, `go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...` in
+    the root and in `cmd/generate`. `make` takes the version from `ci.yml` (`grep` of the `govulncheck@v` token) and
+    stops without one; CI writes `@v1.9.0` itself. CI's step is `if: runner.os == 'Linux'`, floor jobs included;
+    the sentence says "on Linux at that version itself", which holds.
+  * `make lint`: CI calls `make lint` itself, in the same step, with `GOLANGCI_LINT` set to the binary it installed;
+    the sentence says so.
+* **Out of scope, read from source and not run, by the owner's ruling:** `remote.py` (all subcommands: they need an
+  SSH host), `leftovers.py` (the Windows host), `interop.py` (the hosts' `node`, `npm`, `npx`, `uv` and `localhost:8000`),
+  `gates.py`'s `windows` and `linux` gates (hosts), and `example/gemini`'s and `example/claude-code`'s flags (they need
+  the Gemini CLI and the Claude Code adapter). `--help` of the first three and of `gates.py` ran, as above, and reached
+  no host. No offline test covers the two examples' flags: their `main_test.go` files test the file write, the terminal
+  methods and the tool-call line.
+* **Sentences found false: none.** No doc, source, workflow, script or `Makefile` was edited in this run.
+* **Observations that are not a doc defect.** `ci_jobs.py failure` and `env` read a job's log from GitHub, which
+  expires: a run of 2026-10-29 answered "HTTP 410" and the tool exited 1 naming the job; runs of 2026-11-09 and later
+  read. `make` reports a failed recipe as its own exit 2, whatever status the recipe's `exit 1` had.
+* **Not verified.** That the tools' `--help` and sentences agree on a host: `remote.py`, `leftovers.py`, `interop.py`
+  and the hosts' gates were not run. `watch_ci.py`'s 20-minute default and `--settle` and `--every` were not waited
+  out; `ci_jobs.py`'s `--created` was run with one value.
+* **Files.** This PLAN only. No `.go` file, workflow, script, `Makefile` or other doc changed.
