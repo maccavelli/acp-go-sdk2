@@ -154,7 +154,14 @@ the schema files, `internal/model` resolves them into types, unions, and
 protocol methods, `internal/emit` builds the files as `go/ast` and prints them
 through `go/format` into memory, `internal/output` type-checks and writes them,
 and `internal/util` holds naming helpers. `make version` downloads the schema
-for the stamp in `schema/version` and runs the generator.
+for the stamp in `schema/version` and runs the generator. The generator takes
+`-schema DIR`, the directory that holds the schema files. It takes `-out DIR`,
+the directory it writes the generated files to, by default the repository
+root, which must exist and hold the hand-written package it type-checks them
+with. A flag left out is found by walking up from the working directory to the
+first directory that holds `schema/meta.json` and `schema/schema.json`: the
+default `-schema` is that directory's `schema`, and the default `-out` the
+directory itself, the repository root.
 
 Every line of a generated comment, a schema description's included, is
 written as a line comment, so no description can become code or a directive.
@@ -864,7 +871,25 @@ Checks that guard this:
 - `make mutation-engine` and `make mutation-generated` run
   `cmd/generate/internal/mutate`: one operator changed at a time, compiled
   through `go test -overlay`, reported and never gating. The engine run skips
-  `TestGeneratedFilesUpToDate`.
+  `TestGeneratedFilesUpToDate`. `make mutation-engine` passes `-dir .`, that
+  skip as `-skip`, and the generator's `internal/load`, `internal/model`,
+  `internal/emit` and `internal/output` files as `-files`;
+  `make mutation-generated` passes `-dir ../..`, `-pkgs .` and the four
+  generated files `types_gen.go`, `agent_gen.go`, `client_gen.go` and
+  `helpers_gen.go` as `-files`. The tool, run in `cmd/generate` as
+  `go run ./internal/mutate`, takes these flags. `-dir DIR` is the module whose
+  tests run, `.` by default. `-files GLOBS` is the comma-separated globs
+  of the files to mutate, by default every non-test `.go` file of `-pkgs`,
+  relative to `-dir`. `-pkgs PATTERN` is the packages tested, `./...` by default.
+  `-skip REGEXP` is what `go test -skip` takes, the tests not run against the
+  mutants, none by default. `-only SITES` is comma-separated `file:line:col`
+  sites as a report lists them, which run in place of a sample, every site by
+  default. `-n COUNT` is how many mutants to run, sampled with the seed, and
+  the default, `0`, runs every one. `-j COUNT` is how many mutants run at once,
+  each through its own overlay, 1 by default. `-seed N` is the sample's seed, 1
+  by default. `-timeout D` is `go test`'s timeout for each mutant, `3m` by
+  default. `-o FILE` is where the JSON report is written, by default a new file
+  in the temporary directory.
 - `json_parity_test.go` compares encodings with the goldens in
   `testdata/json_golden/`. `json_v1_pin_test.go` pins HTML escaping and sorted map
   keys. `generated_output_test.go` covers the encoding rules above, and
@@ -937,6 +962,57 @@ Checks that guard this:
   packages: their incompatible changes are listed under a heading of their own
   and do not fail, and their compatible ones are counted with the rest
   (0039-PLAN-five-adopter-additions-on-schema-1-25-0.md, 2e).
+
+The Makefile's other targets, each with what it runs and whether CI runs it:
+
+- `make all` runs `make help`, which prints each target that has a `##`
+  comment, with that text. CI runs neither.
+- `make vet` runs `go vet ./...` in the root module and in `cmd/generate`.
+  CI runs those two commands itself, in its "vet, gofmt, tidy, lint" step, on
+  Linux but not at the floor Go, and not through `make`.
+- `make lint` runs golangci-lint, at `GOLANGCI_LINT`, with `.golangci.yml`
+  over both modules, for the host's `GOOS` and for `windows`, and stops with the
+  install command when the binary is missing. CI runs it, on Linux but not at
+  the floor Go, with `GOLANGCI_LINT` set to the golangci-lint v2.14.0 it
+  installs.
+- `make tidy` runs `go mod tidy` in both modules, which rewrites `go.mod` and
+  `go.sum`. CI and `make pre-add-check` run `go mod tidy -diff`, which writes
+  nothing, and not this.
+- `make vuln` runs govulncheck over both modules, at the version pinned in
+  `.github/workflows/ci.yml`, which it reads from there and refuses to run
+  without. It runs govulncheck with `go run`, so it needs that version in the
+  module cache or the network. CI runs govulncheck on Linux at that version
+  itself, and not through `make`.
+- `make bench` runs the root package's benchmarks six times, with allocations,
+  and reports; it never gates, and CI does not run it.
+
+The Makefile's variables, and who reads each:
+
+- `GOLANGCI_LINT` is the golangci-lint binary. `make lint`,
+  `scripts/go-precheck.sh`, which `make pre-add-check` runs, and
+  `tools/platforms.py` read it, and each defaults to `golangci-lint` in
+  `$(go env GOPATH)/bin`.
+- `MUTANTS`, `SEED` and `JOBS` are read by the two mutation targets, which pass
+  them to the tool as `-n`, `-seed` and `-j`: `MUTANTS` is how many mutants to
+  sample, and empty, the default, runs every one; `SEED` is the sample's seed,
+  1 by default; `JOBS` is how many run at once, 1 by default.
+- `GIT_BASH` is read on Windows only. It is the bash that `make` uses as its
+  shell, and its directory goes first on `PATH`; it defaults to
+  `C:/PROGRA~1/Git/usr/bin/bash.exe`. Other hosts use `/bin/bash`.
+
+The scripts' flags, which `make` and CI do not pass:
+
+- `scripts/check_records.py` takes `--check`, which validates the numbered
+  records, their names, structure and relative links; `--check-all`, which is
+  `--check` plus the links of the unnumbered docs, and is what
+  `make check-records` runs; and `--next`, which prints the next record number.
+  With none of the three it prints its usage and exits 2.
+- `scripts/check_ci_filters.py` and `scripts/check_disclosure.py` take
+  `--root DIR`, the repository whose workflows, or whose tracked files, they
+  read; each defaults to the repository that holds the script.
+- `scripts/push_guard.py` takes `--guard FILE`, the global pre-push guard it
+  runs, by default `github-disclosure.py` in the `.global-git-hooks` directory
+  of the user's home; it exits 1 when that file is missing.
 
 The schema stamp lives in `schema/version`, and `make version` copies it to
 `version`, which `make release` compares with it. The Makefile reads it with
@@ -1414,7 +1490,7 @@ README.md                 repository entry; links here
 RELEASING.md              schema bump and release steps
 CHANGELOG.md              the changelog: Unreleased and the newest tag; older releases are in docs/reports/
 AGENTS.md                 agent instructions
-Makefile                  version, test, lint, pre-add-check, fuzz, mutation, docs gates, check-tools
+Makefile                  all, version, release, clean, test, fmt, vet, lint, tidy, vuln, api, fuzz, bench, mutation, pre-add-check, push-guard, docs gates, check-tools, help
 go.mod                    the SDK module
 *.go                      package acp: hand-written and *_gen.go files
 agentproc/                package agentproc: an agent as a child process or in this process, started and stopped
@@ -1456,6 +1532,7 @@ tools/                    the verification tools; tools/README.md
 .github/workflows/docs.yml  the documentation gates, for docs-only changes
 .markdownlint-cli2.jsonc  fleet Markdown style
 .gitattributes            LF on every platform
+opencode.json             opencode's config: its `instructions` key lists `.opencode/rules.md`
 docs/
   README.md               ToC and the "I want to…" matrix
   architecture.md         this file

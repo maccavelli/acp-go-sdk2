@@ -12,6 +12,11 @@
   no capability.
 - Added this file. `RELEASING.md` now names it as the changelog, beside the release-notes reports, and describes the
   release tools as they are used.
+- Documented what no doc described: `README.md` now covers the connection's logging (`WithLogger`, `SetLogger`), the
+  drop handler, the `ConnectionOptions` of `agentproc`, the five remaining error constructors, `ToolCallStream.Entity`
+  and `ErrToolCallStreamFinished`, and the example programs' flags; `docs/architecture.md` the Make targets and
+  variables, the generator's, the mutation tool's and the scripts' flags, and `opencode.json`; `tools/README.md` the
+  tools' flags, with their defaults.
 
 ## v1.36.0 — 2026-11-11
 

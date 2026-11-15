@@ -317,6 +317,19 @@ own description is missing from its `doc.go` goes to phase 4a. The survey found 
      flags are `-schema`, `-yolo` and the 13 of the tools and scripts (M3a, M3b, M3c). The standard changes none of
      the report's other rows. It does not apply to positional arguments.
 
+     *Annotated 2026-11-15, by the coordinator's decision, reported to the owner (Execution record, "2026-11-15: the
+     coordinator's decision on phase 3's audit"; it is not the owner's decision).* Phase 3's audit, run on `8f4cc9a`,
+     found one flag short under this standard that the 15 rows above do not list. It joins by this amendment, as the
+     sentence "a flag a later reading finds short is a new row by amendment" above provides. So there are 16 further
+     rows, 31 flags for the standard (15 and 16), 46 flags with the report's 15, and 71 items for the audit to print
+     on the tree.
+
+     | Flag | Defined at | What the docs lack |
+     | :--- | :--- | :--- |
+     | `tools/remote.py --tree`, of `pkg` and of `test` | `tools/remote.py:270` (`pkg`, help "build from this tree instead of the repository"), `:277` (`test`, help "copy this tree instead of the repository"); neither has an argparse default, so the default is the repository | `tools/README.md:33` (the `pkg` row) does not show `--tree` at all; `:34` (the `test` row) shows `[--tree DIR]` in the synopsis cell only, and its sentence says "the tree copied to a test host" without naming the flag or its default; no other doc names `remote.py`'s `--tree` |
+
+     The row is one item for the audit, since a reader sees one flag; phase 3 gives it its sentence in both rows.
+
 **Verification**
 
 * The audit on the tree: exit 0, no item printed.
@@ -891,5 +904,201 @@ Provenance: run by a mainstream model at medium effort, as the phase's row price
   one-off script and not by `check_records.py` until phase 5b.
 * **Files.** `CHANGELOG.md` (new); `RELEASING.md`; `docs/architecture.md` (the Tree line); `docs/README.md` (this
   PLAN's row text); this record. No file outside the phase's list changed, and no deviation was needed.
+* **Commit.** Staged, not committed. The coordinator commits and pushes after the disclosure guard. The plan pauses
+  until the owner says to continue.
+
+### 2026-11-15: the coordinator's decision on phase 3's audit
+
+Provenance: written by a mainstream model at medium effort, on the coordinator's brief. This is the coordinator's
+decision, made under the coordinator skill's rule that a conflict is resolved only when every assertion it rests on is
+proven on evidence, and reported to the owner. It is not the owner's decision.
+
+* **What was found.** Phase 3's inventory audit, run on `8f4cc9a` before any doc was written, printed 71 items. The
+  phase's rows come to 70, and 70 of the 71 match exactly. The one extra is `tools/remote.py --tree`. The phase stopped
+  at its step 3, as the Stop condition requires, with the tree clean and nothing staged.
+* **The assertions and their evidence** (read in the tree at `8f4cc9a`):
+  1. `tools/remote.py` defines `--tree` for `pkg` (`tools/remote.py:270`, help "build from this tree instead of the
+     repository") and for `test` (`:277`, help "copy this tree instead of the repository"); neither has an argparse
+     default, so the default is the repository.
+  2. No doc describes it: `tools/README.md:33` (the `pkg` row) does not show `--tree` at all; `:34` (the `test` row)
+     shows `[--tree DIR]` in the synopsis cell only, and its sentence says "the tree copied to a test host" without
+     naming the flag or its default; a search of `README.md`, `docs/architecture.md`, `RELEASING.md`, `AGENTS.md` and
+     `tools/README.md` finds no other mention of `remote.py`'s `--tree`.
+  3. The owner's standard of 2026-11-15, "Meaning and default for each": "Every flag gets at least a sentence saying what
+     it does, with its default, where its reader would look." Under it this flag is undescribed, by the same reading
+     the PLAN already applied to `platforms.py --tree` and `plants.py --tree`.
+  4. The PLAN provides for this (phase 3's amendment of 2026-11-15): "a flag a later reading finds short is a new row
+     by amendment, not a silent addition."
+* **Decision.** `tools/remote.py --tree` (`:270`, `:277`) joins phase 3's rows by the dated annotation under "The
+  stricter standard adds 15 more rows": the further rows become 16, the flags 46, the phase's items 71, and the audit's
+  list on the tree then equals the phase's rows. Nothing is judged "described by reading" to make the lists meet.
+  `tools/README.md` gives the flag its sentence in both the `pkg` and the `test` rows. The MADR asserts no fact this
+  changes: D1's standard stands as annotated, so the MADR is not amended.
+* **Files.** This PLAN only. Phase 3 resumes at step 3 with the audit unchanged.
+
+### 2026-11-15: phase 3
+
+Provenance: run by a mainstream model at medium effort, as the phase's row prices it, on the coordinator's brief.
+
+* **Approval.** The owner, 2026-11-15: "Resume the next phase of the acp-go-sdk2 docs plan, then pause". By Timing's
+  order (1, 2, 5a, 3, 6, 5b, 4a, 4b) that is phase 3. This phase alone is approved to run; the plan pauses again when it
+  is done.
+* **Base.** `git rev-parse HEAD`: `8f4cc9a294d3292f0e4554761bd224224d534868`, on `main`; CI had passed on it.
+  `git status --short` was empty. `git describe --tags --abbrev=0`: `v1.36.0`. `git diff --stat v1.36.0 HEAD -- '*.go'
+  Makefile go.mod` printed nothing, so no `.go` file, the `Makefile` or `go.mod` has changed since `v1.36.0`, and the
+  report's rows were re-checked against the same code. No release step had started: no PLAN but this one is
+  `in-progress`, and no tag is being prepared.
+* **A stop and a decision (steps 1 to 3).** The first run of the audit, on `8f4cc9a` before any doc was written,
+  printed 71 items against the phase's 70 rows. The phase stopped at step 3, with the tree clean and nothing staged.
+  The one extra was `tools/remote.py --tree`. The coordinator's decision, reported to the owner, is the entry above
+  ("2026-11-15: the coordinator's decision on phase 3's audit"), and the annotation under the PLAN's "15 more rows". It
+  joins the phase's rows, so the phase has 16 further rows and 71 items. The phase resumed at step 3 with the audit
+  unchanged. This is a deviation, recorded there and not repeated here.
+* **The audit (steps 1 and 2).** A scratch script, not committed, in the session's scratch folder (`acp-0056-p3/`),
+  started from phase 1's. It rebuilds phase 1's inventory from the code: 21 packages, the commands, the flags, the
+  environment and Make variables, `opencode.json`'s keys, the root's `With…` options and the option structs' fields, and
+  the Make targets. It adds four classes the report found by reading (M12, M13, M4): the root's `New…` functions that
+  return `*RequestError`, the root's exported `Err…` variables, `ToolCallStream`'s exported methods, and the
+  hand-written `SetLogger` methods. A flag is one item per file and flag, so a flag two subcommands share
+  (`remote.py`'s `--host`, `--tree` and `--out`, `ci_jobs.py`'s `--attempt`) counts once. The docs it searches are D1's:
+  `README.md`, `docs/architecture.md`, `RELEASING.md`, `tools/README.md`, `AGENTS.md` and every package comment.
+  * **The rule for a flag** (the standard of 2026-11-15: "a sentence and, where it has one, its default"). A flag is
+    described when a block (a paragraph, a list item or a table row) of those docs that names its command has an
+    occurrence of the flag that is: in prose, which is not in a fenced block, not in a table row's first cell (the
+    synopsis), not inside a code span that is a command line, and not in a bare list (two or more flag tokens of the
+    command in a run separated only by commas, "and", "or", `|`, brackets and one placeholder argument each, with no
+    digit between them); in a sentence of at least 4 plain words (letters outside code spans), the next sentence counted
+    too when its own has fewer; and, where the code gives the flag a default (a literal other than `""`, `false` or
+    `None`, an expression, or a usage text that says "default"), followed, up to the next flag token of the command or
+    the end of the block, by the word "default" or the default's literal as a whole token. `--out DIR` of the tools is
+    taken as described by `tools/README.md:21`, which says it once for every tool. The other classes keep phase 1's rule:
+    the name as written, in any of the docs.
+  * **What the script cannot decide.** That a sentence says what the flag does, or says it truly. It prints the sentence
+    it matched with `--all`, and I read all of them. Its matches can also be wrong in the other direction: for `-skip`
+    of the mutation tool it matched the sentence about the `make` target's call, which names `-skip`, and not the
+    sentence of its own, which is present (`docs/architecture.md:880`ff.).
+  * **Settled by reading, not by the script** (`judged.json`, each with the doc line; the first six take the PLAN's own
+    reading of the line, recorded in its list of flags that need no row):
+    * `push_guard.py --remote` and `--branch`: `AGENTS.md:150`-`:151`, "`--remote` and `--branch` default to `origin`
+      and `main`".
+    * `check_ci_filters.py --docs-safe`: `docs/architecture.md:931`-`:932`, "as `scripts/check_ci_filters.py
+      --docs-safe` reads CI's list".
+    * `check_records.py --next`: `AGENTS.md:91`, "**Next number** comes from `python3 scripts/check_records.py --next`";
+      `RELEASING.md:133`.
+    * `ci_jobs.py --expect` and `--others`: `tools/README.md:44`, "a variable's value in each step's environment,
+      checked with `--expect` and `--others`".
+    * **Three on my own reading, which the PLAN's list does not name; each quoted so it can be checked.**
+      * `tools/consumer_probe.py --tree`: `tools/README.md:41`, "requires the SDK through a `replace` onto the
+        repository, or onto `DIR`, such as a planted break's copy". It says what the flag is for and its default, the
+        repository, without the flag's name. It is the reading least firmly held: the row names the flag only in its
+        synopsis cell.
+      * `tools/remote.py --host`: `tools/README.md:12`-`:13`, "`ACP_LINUX_HOST` | `remote.py --host linux`, the `linux`
+        gate | an SSH host or alias with Go", and the same for `windows`. The flag is required and has no default; the
+        lines say which host each value names.
+      * `ToolCallStream.Write` and `WriteString`: `README.md:857`, "The stream is an `io.Writer`: `cmd.Stdout = stream`,
+        `io.Copy`, or `io.MultiWriter` with a buffer of the agent's own". `WriteString` is not named by any doc; I judged
+        it covered as the same writer's string form (`toolstream.go:164`, "WriteString is Write for a string").
+  * **Planted breaks, seen to fail in this run before any result counted** (scratch clones; the first on the unedited
+    tree, the rest on the final one):
+    * the PLAN's plant, every `make api` and `` `api` `` removed from the docs and the Go package comments, before any
+      edit: exit 1, `UNDESCRIBED target: api`, one more than the baseline's 71;
+    * `idscan.py`'s sentence removed, leaving its flags in the synopsis only (before any edit, on the sentence that
+      stood): exit 1, `UNDESCRIBED flag: tools/idscan.py --range`;
+    * on the final tree, `plants_final.out`: control, no plant, exit 0, "254 items, 0 not described"; `make api`
+      removed from the docs and package comments (4 files): exit 1, `UNDESCRIBED target: api`; `idscan.py`'s sentence
+      about `--all`, `--paths` and `--range` removed: exit 1, those three flags named; `watch_ci.py`'s sentence about
+      `--minutes` and `--more` replaced by "(flags: `--minutes`, `--more`)", a flag left named in a list with no
+      sentence: exit 1, `UNDESCRIBED flag: tools/watch_ci.py --minutes` and `--more`; `example/gemini`'s five flags put
+      back as "(flags: -model, -sandbox, -yolo, -debug, -gemini /path/to/gemini)", as `README.md` had them: exit 1, the
+      five named.
+  * **On the tree, before any edit:** exit 1, 71 undescribed, and the list equals the phase's 70 rows plus
+    `tools/remote.py --tree`: the 7 targets, `GOLANGCI_LINT`, `MUTANTS`, `SEED`, `JOBS` and `GIT_BASH`, 46 flags (the
+    report's 15, the PLAN's 15 and the 16th), and 13 name-level items. **On the tree after the edits:** exit 0,
+    "254 items, 0 not described" (`final_tree.out`).
+* **Step 4: each row, where it is now described, and the code behind it.** Line numbers are those of the staged files.
+  * M1, the Make targets `all`, `vet`, `lint`, `tidy`, `vuln`, `bench` and `help`: `docs/architecture.md:966`-`:987`.
+    Each says what it runs (`Makefile:69`, `:83`, `:88`, `:103`, `:107`, `:138`, `:163`) and whether CI runs it, read
+    from `.github/workflows/ci.yml:112`-`:166`: CI runs `make api`, `make lint`, `make markdownlint`, `make
+    check-records`, `make disclosure-check` and `make check-tools`, and runs `go vet`, `go mod tidy -diff` and
+    govulncheck itself, not through `make vet`, `tidy` or `vuln`; `make all`, `help` and `bench` are not run.
+    `make lint` needs the binary at `GOLANGCI_LINT` and prints its install command when it is missing
+    (`Makefile:89`-`:94`); `make vuln` reads its pin from `ci.yml` and exits 1 without one (`Makefile:107`-`:112`), and
+    fetches govulncheck with `go run`.
+  * M2, the variables: `docs/architecture.md:989`-`:1001`. `GOLANGCI_LINT` (`Makefile:50`,
+    `scripts/go-precheck.sh:102`, `tools/platforms.py:31`), each defaulting to `golangci-lint` in `$(go env GOPATH)/bin`;
+    `MUTANTS`, `SEED` and `JOBS` (`Makefile:145`-`:148`, passed as `-n`, `-seed` and `-j`; defaults empty, 1, 1);
+    `GIT_BASH` (`Makefile:4`-`:8`, Windows only, default `C:/PROGRA~1/Git/usr/bin/bash.exe`).
+  * M3a, `cmd/generate -schema` (`main.go:41`) and the 16-row set's `-out` (`:42`): `docs/architecture.md:157`-`:164`.
+    Both default from `findRepoRoot` (`main.go:197`-`:216`), the first directory upward that holds `schema/meta.json` and
+    `schema/schema.json`; `-out` must exist (`main.go:25`-`:28`).
+  * M3b, `example/claude-code -yolo` (`main.go:209`): `README.md:73`-`:77`; the selection is `RequestPermission`'s
+    `autoApprove` branch (`main.go:49`-`:60`).
+  * M3c, 13 flags: `tools/README.md` and `docs/architecture.md`. The scripts: `check_records.py --check` and
+    `--check-all` (`:256`-`:257`, `docs/architecture.md:1005`ff.), `--root` of `check_ci_filters.py` (`:339`) and
+    `check_disclosure.py` (`:100`), `push_guard.py --guard` (`:40`), all in `docs/architecture.md:1003`-`:1016`. The tools:
+    `ci_jobs.py --runs`, `--created`, `--markdown`, `--attempt` (`tools/ci_jobs.py:278`-`:288`, row `tools/README.md:44`),
+    `leftovers.py --name` (`:39`, row `:35`), `plants.py --keep` (`:136`, row `:37`), `remote.py --goarch` (`:269`,
+    row `:33`), `watch_ci.py --minutes` and `--more` (`:86`-`:87`, row `:43`).
+  * The mutation tool's 10 flags (`mutate/main.go:65`-`:74`): `docs/architecture.md:880`-`:892`, each with its default;
+    `make mutation-engine` and `make mutation-generated` pass `-dir`, `-skip`, `-pkgs` and `-files` as `Makefile:151`,
+    `:154` show.
+  * `example/gemini`'s 5 flags (`main.go:209`-`:213`): `README.md:82`-`:89`; they become the arguments of the Gemini
+    command (`main.go:216`-`:224`), and `-yolo` is the client's `autoApprove`.
+  * The 16 further rows: `cmd/generate -out` as above; `example/remote serve -addr` (`main.go:63`, default
+    `127.0.0.1:7331`), `README.md:91`-`:93`; `check_records.py --check-all` as above; `ci_jobs.py tally --branch`
+    (`:277`, default `main`), `tools/README.md:44`; `consumer_probe.py --run` (`:65`), `:41`; `gates.py --all` (`:147`,
+    `selected` at `tools/gates.py:134`-`:142`), `:29`; `idscan.py --all` and `--paths` (`:90`, `:92`; the default mode is
+    the files changed since `HEAD` and the untracked ones, `:125`), `:36`; `interop.py --ts`, `--py` and `--tree`
+    (`:265`-`:268`, defaults `TS_REV`, `PY_REV` and the repository), `:42`; `platforms.py --tree` (`:47`), `:31`;
+    `plants.py --tree` (`:135`), `:37`; `remote.py test --module` (`:276`, default `.`) and `--timeout` (`:278`, default
+    3600), `:34`; and the 16th, `remote.py --tree` (`:270`, `:277`), in the `pkg` row `:33` and the `test` row `:34`.
+  * M4, `WithLogger` and `Connection.SetLogger` (`connection.go:906`-`:913`, `:1440`-`:1444`, `:1094`-`:1096`,
+    `:1446`-`:1451`; the generated `SetLogger`s, `agent_gen.go:89`, `client_gen.go:83`): `README.md:1167`-`:1177`. Every
+    diagnostic goes through `loggerOrDefault` (the only `slog.Default()` in `connection.go` is `:1450`).
+  * M9, `opencode.json`: `docs/architecture.md:1535`, one line in the Tree. It states the key and its value
+    (`opencode.json:3`, `"instructions": [".opencode/rules.md"]`) and nothing of how the harness reads it, which the
+    repository does not show.
+  * M10, `WithNotificationDropHandler` (`connection.go:892`-`:899`, `:1428`-`:1432`): `README.md:1125`-`:1130`, beside
+    `OverflowDropNewest`.
+  * M11, `Command.ConnectionOptions` and `InProcess.ConnectionOptions` (`agentproc/agentproc.go:52`, `:251`;
+    `agentproc/inprocess.go:54`-`:55`, `:89`): `README.md:998`-`:1002`, beside `agentproc`.
+  * M12, the five error constructors (`errors.go:310`-`:342`): `README.md:1592`-`:1603`, which lists all eight with their
+    codes and messages, the three already named included.
+  * M13, `ToolCallStream.Entity` (`toolstream.go:216`-`:221`) and `ErrToolCallStreamFinished` (`errors.go:227`-`:231`):
+    `README.md:885`-`:889`. The methods that return it after `Finish` are `Write`, `WriteString`, `SetStatus`, `Update`,
+    `Flush` and a second `Finish` (`toolstream.go:152`, `:274`, `:302`, `:379`).
+  * The Tree's `Makefile` line (`docs/architecture.md:1493`) now lists the targets this phase describes.
+* **Step 5.** `CHANGELOG.md`'s `Unreleased` gains one line for this phase.
+* **Counts.** `docs/architecture.md`: 12 new list entries (6 targets, 3 variables and 3 script entries), two new
+  passages for the generator's and the mutation tool's flags (the latter 10 flags, one sentence each), and one Tree
+  line (`opencode.json`), with the Tree's `Makefile` line extended. `tools/README.md`: 11 rows changed (29, 31, 33, 34, 35, 36, 37, 41, 42, 43, 44).
+* **Docs step.** Searched `README.md`, `docs/architecture.md`, `tools/README.md`, `RELEASING.md`, `AGENTS.md`,
+  `docs/README.md` and the package comments for a list of Make targets, variables, flags or tools that claims to be
+  complete, and for a count. Fixed: the Tree's `Makefile` line (`docs/architecture.md:1493`), which listed seven target
+  groups and left out `vet`, `tidy`, `vuln`, `bench` and `help`. Nothing else was made false or incomplete, and no
+  Go-file row is opened: `mutate/main.go`'s package comment lists the flags in its usage line and says nothing the new
+  text contradicts. `AGENTS.md` is not changed.
+
+  *Added 2026-11-15, after the coordinator's review of the staged phase.* The review found the Tree's `Makefile` line
+  (`docs/architecture.md:1493`), as extended above, still short: it read as the list of targets, and `make help`
+  prints two it did not name, `all` (`Makefile:69`) and `clean` (`Makefile:219`). Comparing `make help`'s 22 targets
+  with the line, counting `docs gates` as `check-records`, `markdownlint` and `disclosure-check` and `mutation` as
+  `mutation-engine` and `mutation-generated`, those two were the whole difference. The line now reads "Makefile
+  all, version, release, clean, test, fmt, vet, lint, tidy, vuln, api, fuzz, bench, mutation, pre-add-check,
+  push-guard, docs gates, check-tools, help". Only Markdown changed, so no heavy run was repeated; the earlier
+  `pre-add-check` run covered `README.md`, which this addition does not touch. The `docs/README.md` row needs no change.
+* **Verification.** Each output went to a scratch file and its exit status was taken before it was read.
+  * The audit on the tree: exit 0, "254 items, 0 not described".
+  * `python3 -B scripts/check_records.py --check-all`: exit 0, no output.
+  * `python3 -B scripts/check_disclosure.py`: exit 0, "840 tracked file(s), 0 finding(s)".
+  * Offline `markdownlint-cli2` v0.23.2, the version the Makefile pins: exit 0, 57 files, 0 issues.
+  * `run-heavy -- make pre-add-check FILES="…"`: exit 0, `go-precheck`: 0 `.go` files to format; both modules linted, vetted and tested (`-race -shuffle=on`, uncached), tidy and govulncheck, clean. It waited 0 s in the queue and ran 115 s, 13:18:57 to 13:20:51 local, started once the four docs were final.
+* **Not verified.** `opencode.json`'s semantics for the harness, which the repository does not hold. That the tools'
+  and scripts' behaviour matches each new sentence was read from their source and not run: the tools need hosts, `gh`
+  or a network. `make vuln` and `make lint` were not run. Whether CI's three direct `go` commands equal `make vet`,
+  `tidy` and `vuln` was read, not run. The audit decides the presence of a sentence and a default, not their truth.
+* **Files.** `README.md`; `docs/architecture.md`; `tools/README.md`; `CHANGELOG.md`; `docs/README.md` (this PLAN's row
+  text); this PLAN, its annotation under the 15 rows, and this record. No `.go` file, workflow, script or `Makefile`
+  changed.
 * **Commit.** Staged, not committed. The coordinator commits and pushes after the disclosure guard. The plan pauses
   until the owner says to continue.

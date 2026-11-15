@@ -71,16 +71,26 @@ You can run them from your terminal or connect to external ACP agents.
 
 - `go run ./example/agent` starts a minimal ACP agent over stdio.
 - `go run ./example/claude-code` bridges to Claude Code through its ACP adapter,
-  `@agentclientprotocol/claude-agent-acp`, which it runs with `npx`.
+  `@agentclientprotocol/claude-agent-acp`, which it runs with `npx`. With
+  `-yolo`, off by default, the client answers each permission request itself:
+  it selects the first allow-once or allow-always option the request offers,
+  or its first option when it offers neither, and cancels it when it offers
+  none.
 - `go run ./example/client` starts the example agent with `go run` (from a
   source checkout) or the agent command given as its arguments, sends one
   prompt, and prints the streamed turn and its stop reason.
-- `go run ./example/gemini` bridges to the Gemini CLI in ACP mode, `gemini --acp`
-  (flags: -model, -sandbox, -yolo, -debug, -gemini /path/to/gemini).
+- `go run ./example/gemini` bridges to the Gemini CLI in ACP mode, `gemini --acp`.
+  `-gemini PATH` names the Gemini CLI binary to run, `gemini` by default;
+  `-model NAME` passes that model to it as `--model`, and none is passed by
+  default; `-sandbox` passes it `--sandbox`, off by default; `-debug` passes it
+  `--debug`, off by default; and `-yolo`, off by default, makes the client
+  answer each permission request itself, as `example/claude-code`'s `-yolo`
+  does.
 - `go run ./example/remote serve -addr 127.0.0.1:7331` serves an echo agent over
   the network, and `go run ./example/remote dial http://127.0.0.1:7331/acp`
   (or `ws://…`) prompts it and loads the session again
-  ([Remote agents](#remote-agents)).
+  ([Remote agents](#remote-agents)). `-addr ADDR` is the address `serve`
+  listens on, `127.0.0.1:7331` by default.
 
 The example clients, `example/remote`'s apart, advertise the file-system
 capability and not the terminal one, and write only inside the session's
@@ -872,6 +882,11 @@ return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, nil
   streams are written before the turn is answered, their status as it was.
   Under `PromptOverlapConcurrent` each turn waits for its own streams alone. A
   stream started on another context belongs to no turn.
+- **State.** `Entity` returns the call's state as the stream holds it, the live
+  text as its last content item, as an `acp.ToolCallEntity` that shares nothing
+  with the stream. Once `Finish` has written the final update, `Write`,
+  `WriteString`, `SetStatus`, `Update`, `Flush` and a second `Finish` return
+  `acp.ErrToolCallStreamFinished`, and the stream sends nothing more.
 - **Cost.** Each update resends the whole state. A tool that prints without
   pause costs at most its content and 1 MiB of text four times a second.
 - **Not done.** No append or delta on the wire; no terminal output, since a
@@ -979,6 +994,12 @@ if _, err := p.Conn().Initialize(ctx, acp.InitializeRequest{}); err != nil {
 }
 ```
 <!-- /example -->
+
+`Command.ConnectionOptions`, and `InProcess.ConnectionOptions` for an agent
+run in this process (below), are the `acp.ConnectionOption`s of the client's
+connection to the agent: `Start` passes them to `acp.NewClientSideConnection`
+with the client, so the options this document names, `acp.WithLogger` among
+them, apply to it.
 
 `Command.OutputTap` and `Command.InputTap` are writers that receive a copy of
 every byte the agent writes to its output, and of what the connection writes to
@@ -1101,6 +1122,12 @@ whichever limit is reached first counts (see "The byte budget", below).
   closes as `Close` does, and `Err()` wraps `acp.ErrNotificationQueueOverflow`.
 - `acp.OverflowDropNewest`: the notification is dropped and counted by
   `DroppedNotifications()`, and the connection stays open.
+  `acp.WithNotificationDropHandler(fn)` also calls `fn(method, totalDropped)`
+  once for each notification dropped, with its method and the number dropped
+  on this connection so far, this one included. `fn` runs on the goroutine
+  that reads from the peer, so no message is read until it returns: it must
+  return quickly, and it must not send a request on the connection, whose
+  answer only that goroutine can read.
 
 While the reader is paused, nothing else is read either. A request from the
 peer, such as a permission request, waits behind the queue, and so does a
@@ -1136,6 +1163,17 @@ for a response only the reader delivers. Nor does it wait for the peer to read
 the refusal, which another goroutine of the connection's writes, so two peers
 that refuse each other's requests both go on reading. Notifications and
 `$/cancel_request` do not count. The default is no limit.
+
+The connection writes its own diagnostics, such as the discarded line, the
+unmatched response and the paused reader named above, to a `*slog.Logger`, the
+`slog.Default()` one unless you give it another. `acp.WithLogger(l)` gives it
+`l` from the start, before any message is read, and is the way to set one
+without a race: a connection's goroutines begin reading the peer inside its
+constructor, so a diagnostic can be logged before a later `SetLogger` call
+returns. `SetLogger(l)`, a method of the connection and of
+`ClientSideConnection` and `AgentSideConnection`, installs a logger while the
+connection runs, and what was logged before it returned went to the previous
+one. A nil logger, given to either, leaves the default.
 
 #### The byte budget
 
@@ -1550,6 +1588,20 @@ answered: one that matches no pending call is logged at Debug, and one that
 holds neither or both of `result` and `error`, or another `jsonrpc`, fails the
 call it answers. `acp.NewResourceNotFound(uri)` builds the `-32002` error ACP
 defines for a resource, such as a file, that does not exist.
+
+Each constructor returns a `*acp.RequestError` with its code and message, and
+the `data` you give as its `Data`:
+
+- `acp.NewParseError(data)`: `-32700`, "Parse error";
+- `acp.NewInvalidRequest(data)`: `-32600`, "Invalid request";
+- `acp.NewMethodNotFound(method)`: `-32601`, "Method not found", with
+  `{"method": method}` as its `Data`;
+- `acp.NewInvalidParams(data)`: `-32602`, "Invalid params";
+- `acp.NewInternalError(data)`: `-32603`, "Internal error";
+- `acp.NewRequestCancelled(data)`: `-32800`, "Request cancelled";
+- `acp.NewAuthRequired(data)`: `-32000`, "Authentication required";
+- `acp.NewResourceNotFound(uri)`: `-32002`, "Resource not found", with
+  `{"uri": uri}` as its `Data`.
 
 `params` left out, or `null`, which ACP's schema allows, read as empty params:
 a method whose params have no required property, such as `logout` or
